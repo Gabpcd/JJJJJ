@@ -154,15 +154,26 @@ final class SupabaseAuditGatewayTests: XCTestCase {
         XCTAssertEqual(resultat, .nonEnregistre)
     }
 
-    func testEcritureSansSessionEstUneSessionExpiree() async throws {
+    func testEcritureSansSessionNEstPasUneSessionExpiree() async throws {
+        // `RAISE EXCEPTION 'Non authentifié'` (l.31815) est avalé par la fonction elle-même
+        // (l.31831-31833) : `{success:false, error:'Non authentifié'}`. L'audit suit un ACCEPTER
+        // réussi ; il ne doit jamais faire afficher « session expirée » après ce succès.
         registry.add("POST", "/rest/v1/rpc/fn_ecrire_audit_safe",
                      respond: .json(200, #"{"success":false,"error":"Non authentifié"}"#))
-        do {
-            _ = try await gateway().ecrire(action: .missionAssignation, typeRessource: "mission", idRessource: missionId,
-                                           details: [:], context: TestClient.context)
-            XCTFail("attendu : session expirée")
-        } catch let error as JoleneError {
-            XCTAssertEqual(error.kind, .unauthorized)
+        let resultat = try await gateway().ecrire(action: .missionAssignation, typeRessource: "mission", idRessource: missionId,
+                                                  details: [:], context: TestClient.context)
+        XCTAssertEqual(resultat, .nonEnregistre)
+        XCTAssertEqual(registry.requests(to: "/rest/v1/rpc/fn_ecrire_audit_safe").count, 1, "aucun renvoi automatique")
+    }
+
+    func testSuccesFalseAvecMessageNEstJamaisUneErreur() async throws {
+        // Quel que soit le texte joint à `success:false`, l'audit best-effort rend `.nonEnregistre`.
+        for corps in [#"{"success":false,"error":"Non authentifié"}"#, #"{"success":false,"error":"Action non autorisée"}"#,
+                      #"{"success":false,"ok":false,"code":"X","error":"Refus"}"#] {
+            registry.reset()
+            registry.add("POST", "/rest/v1/rpc/fn_audit_connexion", respond: .json(200, corps))
+            let resultat = try await gateway().deconnexion()
+            XCTAssertEqual(resultat, .nonEnregistre, corps)
         }
     }
 

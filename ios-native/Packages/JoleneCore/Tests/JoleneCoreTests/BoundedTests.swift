@@ -144,6 +144,28 @@ final class BoundedTests: XCTestCase {
         XCTAssertEqual(entrees, ["travail annulé"], "le travail en vol est annulé avec l'appelant")
     }
 
+    func testUnDelaiInfiniOuDemesureNePlantePas() async throws {
+        // `UInt64(.infinity)` ou `UInt64(x)` au-delà de UInt64.max piège : le helper est public,
+        // le délai est donc borné avant la conversion. La réponse gagne toujours.
+        for delai in [TimeInterval.infinity, 1e30, 1.9e10, TimeInterval.greatestFiniteMagnitude] {
+            let valeur = try await bounded(timeout: delai) { 42 }
+            XCTAssertEqual(valeur, 42, "délai \(delai)")
+        }
+    }
+
+    func testConversionDuDelaiEnNanosecondes() {
+        XCTAssertEqual(delaiEnNanosecondes(0.05), 50_000_000)
+        XCTAssertEqual(delaiEnNanosecondes(15), 15_000_000_000)
+        for nul in [0, -1, -TimeInterval.infinity, TimeInterval.nan] {
+            XCTAssertEqual(delaiEnNanosecondes(nul), 0, "délai \(nul) : immédiat")
+        }
+        for demesure in [TimeInterval.infinity, TimeInterval.greatestFiniteMagnitude, 1e30, 1.9e10, 9.3e9] {
+            XCTAssertEqual(delaiEnNanosecondes(demesure), plafondDelaiNanosecondes, "délai \(demesure) : plafonné")
+        }
+        XCTAssertEqual(plafondDelaiNanosecondes, UInt64.max / 2, "≈ 292 ans : jamais atteint, jamais un piège")
+        XCTAssertLessThan(delaiEnNanosecondes(9.2e9), plafondDelaiNanosecondes, "juste sous le plafond : converti")
+    }
+
     func testLeControleurExposeSonDelaiSansIsolation() {
         let socle = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
         // `nonisolated` : lisible par un modèle d'écran @MainActor sans `await`.

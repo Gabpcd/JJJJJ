@@ -6,9 +6,10 @@ import XCTest
 
 /// Réponses jsonb renvoyées en HTTP 200 (blueprint lot 1 §2.4) : `{error}` seul est une
 /// erreur levée (« Non authentifié » → session expirée, sinon message serveur verbatim) ;
-/// `{success:false|ok:false, …}`, `{choix_requis:true, …}` et `{documents_requis_pour, …}` sans
-/// `success:true` sont des refus structurés traduits en issue métier ; aucune clé n'est exigée
-/// sauf celles qui conditionnent une action.
+/// `{success:false|ok:false, …}`, `{choix_requis:true, …}`, `{documents_requis_pour, …}` et
+/// `{error, code, …}` sans drapeau vrai sont des refus structurés traduits en issue métier, de
+/// même que l'exception PostgREST `[CODE DU TRAVAIL]` (HTTP 400) restituée mot pour mot ; aucune
+/// clé n'est exigée sauf celles qui conditionnent une action.
 final class RPCResponseTests: XCTestCase {
     private let registry = StubRegistry.shared
     private let fallback = "Impossible de traiter votre demande. Réessayez."
@@ -129,27 +130,102 @@ final class RPCResponseTests: XCTestCase {
     }
 
     func testPlanningAReconfirmer() throws {
-        // `fn_confirmer_action_planning_v1` l.24199 et l.24247 du dump.
-        for code in ["PLANNING_A_RECONFIRMER", "PLANNING_MODIFIE_RECONFIRMER"] {
-            let message = "Le planning a changé depuis son affichage. Vérifiez à nouveau toutes les dates et tous les horaires."
+        // `fn_confirmer_action_planning_v1` du dump, un message exact par code :
+        // l.24199-24200 (créneaux confirmés inexploitables) et l.24247-24248 (planning modifié).
+        let vecteurs = [
+            ("PLANNING_A_RECONFIRMER",
+             "Le planning confirmé n'est pas exploitable. Rechargez la mission avant de continuer."),
+            ("PLANNING_MODIFIE_RECONFIRMER",
+             "Le planning a changé depuis son affichage. Vérifiez à nouveau toutes les dates et tous les horaires."),
+        ]
+        for (code, message) in vecteurs {
             let r = try reponse(#"{"success":false,"ok":false,"code":"\#(code)","error":"\#(message)"}"#)
             XCTAssertEqual(r.code, code)
             XCTAssertEqual(r.issueCandidatureRefusee(fallback: fallback), .planningAReconfirmer(code: code, message: message))
         }
     }
 
-    func testConflitEtCodeDuTravailRestentVerbatim() throws {
-        let conflit = try reponse("""
-        {"success":false,"ok":false,"code":"REPOS_11H","error":"[CODE DU TRAVAIL] Repos quotidien de 11 h non respecté."}
-        """)
-        XCTAssertEqual(conflit.issueCandidatureRefusee(fallback: fallback),
-                       .refusee(code: "REPOS_11H", message: "[CODE DU TRAVAIL] Repos quotidien de 11 h non respecté.",
-                                documentsRequisPour: nil))
-        let codeErreur = try reponse(#"{"success":false,"error_code":"PROFESSION_NON_ELIGIBLE","code":"AUTRE","error":"Refus"}"#)
-        XCTAssertEqual(codeErreur.code, "PROFESSION_NON_ELIGIBLE", "error_code prime sur code")
+    func testConflitDePlanningRestentVerbatim() throws {
+        // `fn_confirmer_action_planning_v1` l.24256-24264 relaie `fn_conflit_planning_soignant` :
+        // REPOS_11H (l.24921-24929, message sans préfixe « [CODE DU TRAVAIL] ») et chevauchement
+        // sans code (l.24858-24869 → `CONFLIT_PLANNING`, tutoiement serveur conservé tel quel).
+        let vecteurs = [
+            ("REPOS_11H", "Repos insuffisant avec « Nuit USIC » : 8.5 h au lieu de 11 h minimum."),
+            ("CONFLIT_PLANNING",
+             "Tu es déjà confirmé(e) sur « Nuit USIC » le 03/11 19h00–04/11 07h00. Ce créneau chevauche la mission."),
+        ]
+        for (code, message) in vecteurs {
+            let r = try reponse(#"{"success":false,"ok":false,"code":"\#(code)","error":"\#(message)"}"#)
+            XCTAssertNil(leve(r), code)
+            XCTAssertEqual(r.issueCandidatureRefusee(fallback: fallback),
+                           .refusee(code: code, message: message, documentsRequisPour: nil), code)
+        }
         let sansMessage = try reponse(#"{"success":false}"#)
         XCTAssertEqual(sansMessage.issueCandidatureRefusee(fallback: fallback),
                        .refusee(code: nil, message: fallback, documentsRequisPour: nil))
+    }
+
+    func testCodeLitCodeSansSeRabattreSurErrorCode() throws {
+        // Fiche T0 de `fn_confirmer_action_planning_v1` : le décodeur lit `code` et ne se rabat pas
+        // sur `error_code`. `error_code` (seule `fn_annuler_candidature_soignant` le pose au lot 1,
+        // l.17557-17590) se lit par `codeErreur` (T7).
+        let annulation = try reponse("""
+        {"success":false,"error_code":"CANDIDATURE_INTROUVABLE","error":"Candidature introuvable"}
+        """)
+        XCTAssertNil(annulation.code, "error_code n'est jamais lu comme code")
+        XCTAssertEqual(annulation.codeErreur, "CANDIDATURE_INTROUVABLE")
+        XCTAssertEqual(annulation.issueCandidatureRefusee(fallback: fallback),
+                       .refusee(code: nil, message: "Candidature introuvable", documentsRequisPour: nil))
+        let lesDeux = try reponse(#"{"success":false,"error_code":"X","code":"Y","error":"Refus"}"#)
+        XCTAssertEqual(lesDeux.code, "Y")
+        XCTAssertEqual(lesDeux.codeErreur, "X")
+        let vides = try reponse(#"{"success":false,"error_code":" ","code":"","error":"Refus"}"#)
+        XCTAssertNil(vides.code, "code vide : absent")
+        XCTAssertNil(vides.codeErreur, "error_code vide : absent")
+    }
+
+    func testPlafondHebdomadaireSansDrapeauAccepterProposition() throws {
+        // ACCEPTER (`fn_accepter_mission` l.5136-5137) et PROPOSITION (`fn_repondre_proposition`
+        // l.53636-53637) relaient tels quels les refus de `fn_finaliser_attribution_mission`
+        // l.36788-36793 et l.36811-36825 : `{error, code, …}` SANS `success` ni `ok`.
+        let incomplet = try reponse("""
+        {"error":"Planning hebdomadaire incomplet : impossible de vérifier le plafond de 48 h.",
+         "code":"PLANNING_HEBDOMADAIRE_INDISPONIBLE","creneaux_valides":3,"creneaux_attendus":5}
+        """)
+        let depassement = try reponse("""
+        {"error":"Dépassement du plafond de 48 h pour la semaine du 02/11/2026 (40.0 h déjà planifiées + 12.0 h pour cette mission + 0.0 h ailleurs).",
+         "code":"PLAFOND_48H_HEBDO","semaine_du":"2026-11-02","heures_existantes":40.00,"heures_mission":12.00,
+         "heures_externes":0.00,"total":52.00}
+        """)
+        let attendus: [(RPCResponse, String, String)] = [
+            (incomplet, "PLANNING_HEBDOMADAIRE_INDISPONIBLE",
+             "Planning hebdomadaire incomplet : impossible de vérifier le plafond de 48 h."),
+            (depassement, "PLAFOND_48H_HEBDO",
+             "Dépassement du plafond de 48 h pour la semaine du 02/11/2026 (40.0 h déjà planifiées + 12.0 h pour cette mission + 0.0 h ailleurs)."),
+        ]
+        for (r, code, message) in attendus {
+            XCTAssertNil(r.success, code)
+            XCTAssertNil(r.ok, code)
+            XCTAssertTrue(r.estRefus, "\(code) : `code` + `error` sans drapeau est un refus structuré")
+            XCTAssertFalse(r.estSucces, code)
+            XCTAssertNil(leve(r), "\(code) : un refus structuré ne lève pas, le code n'est pas perdu")
+            XCTAssertEqual(r.issueCandidatureRefusee(fallback: fallback),
+                           .refusee(code: code, message: message, documentsRequisPour: nil), code)
+        }
+        XCTAssertEqual(incomplet.int("creneaux_attendus"), 5)
+        XCTAssertEqual(depassement.double("total"), 52)
+    }
+
+    func testCodeSansMessageOuAvecSuccesNEstPasUnRefus() throws {
+        // Un `code` seul ne porte aucun message à afficher ; accompagné de `success:true` ou
+        // `ok:true`, c'est un succès. Seul `code` + `error` sans drapeau vrai est un refus.
+        for json in [#"{"code":"X"}"#, #"{"code":"X","error":""}"#, #"{"code":"","error":"Refus"}"#] {
+            XCTAssertFalse(try reponse(json).estRefus, json)
+        }
+        XCTAssertEqual(leve(try reponse(#"{"code":"","error":"Refus"}"#)), JoleneError(.unknown, "Refus"),
+                       "code vide : `{error}` seul, levé verbatim")
+        XCTAssertTrue(try reponse(#"{"success":true,"code":"X"}"#).estSucces)
+        XCTAssertFalse(try reponse(#"{"ok":true,"code":"X","error":"Refus"}"#).estRefus)
     }
 
     // Vecteurs « documents requis » et « choix de contrat » copiés des RETURN du dump
@@ -291,6 +367,95 @@ final class RPCResponseTests: XCTestCase {
             XCTAssertFalse(error.message.contains("PGRST"))
         }
         XCTAssertEqual(registry.requests(to: "/rest/v1/rpc/fn_test_jsonb").count, 1)
+    }
+
+    // MARK: - Exception `[CODE DU TRAVAIL]` (HTTP 400)
+
+    /// Refus des triggers du Code du travail, au format exact des `RAISE EXCEPTION` du dump
+    /// (valeurs plausibles à la place des `%`). Ils se déclenchent sur l'`UPDATE public.missions`
+    /// de `fn_finaliser_attribution_mission` (l.36840), donc sur ACCEPTER et PROPOSITION, et
+    /// remontent en exception PostgREST HTTP 400, jamais en jsonb HTTP 200. Le repos de 11 h lève
+    /// `check_violation` (23514) avec un DETAIL, les trois autres le SQLSTATE par défaut P0001.
+    private let refusCodeDuTravail: [(trigger: String, sqlstate: String, details: String?, message: String)] = [
+        ("dec_verifier_plafond_48h l.4477-4481", "P0001", nil,
+         "[CODE DU TRAVAIL] Semaine du 02/11/2026 : 40.0h Jolene + 10.0h ailleurs = 50.0h total (max 48h, Art. L3121-20)"),
+        ("dec_verifier_repos_11h l.4614-4618", "23514", "mission_conflictuelle=6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+         "[CODE DU TRAVAIL] Repos insuffisant avant mission : 8.5 heures au lieu de 11h minimum (Art. L3131-1). Assignation bloquée."),
+        ("dec_verifier_moyenne_44h_12_semaines l.4321-4325", "P0001", nil,
+         "[CODE DU TRAVAIL] Moyenne dépassée du 10/08/2026 au 01/11/2026 : 45.2h/semaine sur 12 semaines (max 44h, Art. L3121-22). Assignation bloquée."),
+        ("dec_verifier_repos_hebdo_35h l.4706-4708", "P0001", nil,
+         "[CODE DU TRAVAIL] Repos hebdomadaire insuffisant : plage max de 30.5h consécutives sans travail (minimum légal 35h, Art. L3132-2 = 24h + 11h repos quotidien). Assignation bloquée."),
+    ]
+
+    private let planningRPC = "/rest/v1/rpc/fn_confirmer_action_planning_v1"
+
+    private func exceptionPostgREST(sqlstate: String, details: String?, message: String) -> String {
+        let detail = details.map { #""\#($0)""# } ?? "null"
+        return #"{"code":"\#(sqlstate)","details":\#(detail),"hint":null,"message":"\#(message)"}"#
+    }
+
+    func testExceptionCodeDuTravailRestitueeVerbatimEnRefusStructure() async throws {
+        // Décision 2 / HARD STOP n°4 : le texte légal du serveur est affiché mot pour mot, jamais
+        // remplacé par le message générique de `SupabaseErrorMapping`.
+        for vecteur in refusCodeDuTravail {
+            registry.reset()
+            registry.add("POST", planningRPC, respond: .json(400, exceptionPostgREST(sqlstate: vecteur.sqlstate,
+                                                                                     details: vecteur.details,
+                                                                                     message: vecteur.message)))
+            let r = try await RPCResponse.appeler(TestClient.make(), "fn_confirmer_action_planning_v1",
+                                                  params: ["p_action": .string("ACCEPTER")], fallback: fallback)
+            XCTAssertTrue(r.estRefus, vecteur.trigger)
+            XCTAssertFalse(r.estSucces, vecteur.trigger)
+            XCTAssertNil(leve(r), "\(vecteur.trigger) : refus structuré, jamais une erreur générique")
+            XCTAssertEqual(r.erreur, vecteur.message, "\(vecteur.trigger) : mot pour mot, préfixe compris")
+            XCTAssertEqual(r.code, CandidatureOutcome.codeRefusCodeDuTravail, vecteur.trigger)
+            XCTAssertEqual(r.issueCandidatureRefusee(fallback: fallback),
+                           .refusee(code: CandidatureOutcome.codeRefusCodeDuTravail, message: vecteur.message,
+                                    documentsRequisPour: nil), vecteur.trigger)
+            XCTAssertFalse(r.erreur?.contains("mission_conflictuelle") ?? true, "le DETAIL technique n'est jamais repris")
+            XCTAssertEqual(registry.requests(to: planningRPC).count, 1, "\(vecteur.trigger) : une seule requête, aucun renvoi")
+            XCTAssertTrue(registry.unmatched.isEmpty)
+        }
+    }
+
+    func testExceptionCodeDuTravailInterceptéeAussiSansParametre() async throws {
+        let message = refusCodeDuTravail[0].message
+        registry.add("POST", "/rest/v1/rpc/fn_test_jsonb",
+                     respond: .json(400, exceptionPostgREST(sqlstate: "P0001", details: nil, message: message)))
+        let r = try await RPCResponse.appeler(TestClient.make(), "fn_test_jsonb", fallback: fallback)
+        XCTAssertEqual(r.issueCandidatureRefusee(fallback: fallback),
+                       .refusee(code: CandidatureOutcome.codeRefusCodeDuTravail, message: message, documentsRequisPour: nil))
+        XCTAssertEqual(registry.requests(to: "/rest/v1/rpc/fn_test_jsonb").count, 1)
+    }
+
+    func testExceptionSansMarqueurResteUneErreurGenerique() async throws {
+        // `fn_confirmer_action_planning_v1` l.24311 : texte technique, jamais affiché.
+        registry.add("POST", planningRPC,
+                     respond: .json(400, exceptionPostgREST(sqlstate: "P0001", details: nil, message: "Action planning non traitée")))
+        do {
+            _ = try await RPCResponse.appeler(TestClient.make(), "fn_confirmer_action_planning_v1",
+                                              params: ["p_action": .string("ACCEPTER")], fallback: fallback)
+            XCTFail("attendu : erreur générique")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error, JoleneError(.unknown, fallback))
+        }
+        XCTAssertEqual(registry.requests(to: planningRPC).count, 1)
+    }
+
+    func testMarqueurCodeDuTravailCommeLeWeb() {
+        // Parité `estBlocageCodeTravail` (`src/lib/erreurs.ts` l.586-588) : `includes`, sensible à la casse.
+        XCTAssertTrue(RPCResponse.estRefusCodeDuTravail(refusCodeDuTravail[1].message))
+        XCTAssertTrue(RPCResponse.estRefusCodeDuTravail("ERREUR : [CODE DU TRAVAIL] Semaine du 02/11/2026"))
+        XCTAssertFalse(RPCResponse.estRefusCodeDuTravail("CODE DU TRAVAIL Semaine du 02/11/2026"))
+        XCTAssertFalse(RPCResponse.estRefusCodeDuTravail("[code du travail] Semaine du 02/11/2026"))
+        XCTAssertFalse(RPCResponse.estRefusCodeDuTravail(
+            "[PLANNING_HEBDOMADAIRE_INDISPONIBLE] Mission 6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b : 3 créneau(x) valide(s) sur 5 attendu(s)"))
+    }
+
+    func testSupabaseErrorMappingResteInchange() {
+        // L'interception vit dans `RPCResponse.appeler`, avant le mapping du lot 0, qui reste tel quel.
+        let erreur = PostgrestError(code: "P0001", message: refusCodeDuTravail[0].message)
+        XCTAssertEqual(SupabaseErrorMapping.map(erreur, fallback: fallback), JoleneError(.unknown, fallback))
     }
 
     func testAppelReseauIndisponible() async throws {

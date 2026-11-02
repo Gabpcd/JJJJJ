@@ -70,6 +70,19 @@ final class Lot1ResultsTests: XCTestCase {
         XCTAssertNil(minimal.nbMissionsOuvertes)
     }
 
+    func testCodeDuRefusCodeDuTravailNeCollisionneAucunCodeServeur() {
+        // Posé par le client sur l'exception `[CODE DU TRAVAIL]` des triggers (SQLSTATE P0001 ou
+        // 23514, sans code métier) : il ne doit valoir aucun code jsonb du lot 1, sinon un écran
+        // confondrait un refus légal avec un refus de planning.
+        let codesServeur: Set<String> = [
+            "PLANNING_A_RECONFIRMER", "PLANNING_MODIFIE_RECONFIRMER", "PLANNING_DETAILLE_INDISPONIBLE",
+            "PLANNING_EXISTANT_INDISPONIBLE", "REPOS_11H", "CONFLIT_PLANNING", "PLANNING_HEBDOMADAIRE_INDISPONIBLE",
+            "PLAFOND_48H_HEBDO", "P0001", "23514",
+        ]
+        XCTAssertEqual(CandidatureOutcome.codeRefusCodeDuTravail, "CODE_DU_TRAVAIL")
+        XCTAssertFalse(codesServeur.contains(CandidatureOutcome.codeRefusCodeDuTravail))
+    }
+
     func testIssuesSontComparables() {
         XCTAssertNotEqual(CandidatureOutcome.planningAReconfirmer(code: "PLANNING_MODIFIE_RECONFIRMER", message: "a"),
                           CandidatureOutcome.refusee(code: "PLANNING_MODIFIE_RECONFIRMER", message: "a", documentsRequisPour: nil))
