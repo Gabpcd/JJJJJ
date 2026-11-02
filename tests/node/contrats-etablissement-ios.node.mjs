@@ -117,6 +117,9 @@ const ATTENDUES = {
   fn_soignant_pour_etablissement: [],
 };
 
+/** Texte Markdown aplati : les retours à la ligne d'un paragraphe sont des espaces au rendu. */
+const plat = texte => texte.replace(/\s+/g, ' ');
+
 /** Texte d'une section `## <titre>` d'un document Markdown, jusqu'à la section suivante. */
 function section(doc, heading) {
   const start = doc.indexOf(`\n## ${heading}`);
@@ -303,7 +306,7 @@ test('CONTRATS_RPC_ETABLISSEMENT.md : une fiche et une ligne de synthèse par RP
     assert.ok(synthese.includes(`| \`${name}\` |`), `ligne de synthèse manquante pour ${name}`);
   }
   for (const name of LOT5) {
-    const fiche = section(doc, `${name}\n`);
+    const fiche = plat(section(doc, `${name}\n`));
     const sql = contratParNom.get(name).sql[0];
     assert.ok(fiche.includes(`"public"."${name}"(`), `${name} : signature SQL absente`);
     assert.ok(fiche.includes(sql.returns), `${name} : type de retour ${sql.returns} absent`);
@@ -333,9 +336,11 @@ test('CONTRATS_RPC_ETABLISSEMENT.md : 18 clés du tableau de bord, montants et i
   assert.equal(cles.length, 18);
   const fiche = section(doc, 'fn_stats_dashboard_etablissement\n');
   for (const cle of cles) assert.ok(fiche.includes(`\`${cle}\``), `clé ${cle} absente de la fiche`);
-  const profil = section(doc, 'fn_mon_etablissement_complet\n');
+  const profil = plat(section(doc, 'fn_mon_etablissement_complet\n'));
+  const exclus = profil.slice(profil.indexOf('**Jamais décodé**'));
+  assert.ok(exclus.length < profil.length, 'rubrique « Jamais décodé » absente');
   for (const champ of ['stripe_customer_id', 'stripe_account_id', 'iban_last4', 'rib_s3_key', 'siret']) {
-    assert.ok(profil.includes(`\`${champ}\``) && /jamais décodé/.test(profil), `${champ} : exclusion non consignée`);
+    assert.ok(exclus.includes(`\`${champ}\``), `${champ} : exclusion non consignée`);
   }
 });
 
@@ -346,7 +351,7 @@ test('CONTRATS_RPC_ETABLISSEMENT.md : RPC jamais appelées par l espace établis
     'fn_annuler_mission_etablissement', 'fn_ouvrir_litige_rate_limited', 'notations_missions']) {
     assert.ok(jamais.includes(`\`${nom}\``), `${nom} absente de la fiche « jamais »`);
   }
-  const traiter = section(doc, 'fn_traiter_candidature_planning_v1\n');
+  const traiter = plat(section(doc, 'fn_traiter_candidature_planning_v1\n'));
   assert.ok(traiter.includes('D26') && traiter.includes('pourAction'), 'écart D26 avec CreneauxConfirmes.pourAction non consigné');
   for (const code of ['CADRE_ETUDIANT_A_CONFIRMER', 'CADRE_ETUDIANT_PROFESSION_INVALIDE', 'CADRE_ETUDIANT_SALARIAT_REQUIS',
     'CADRE_ETUDIANT_STRUCTURE_INELIGIBLE', 'PLANNING_A_RECONFIRMER', 'PLANNING_MODIFIE_RECONFIRMER']) {
@@ -354,14 +359,31 @@ test('CONTRATS_RPC_ETABLISSEMENT.md : RPC jamais appelées par l espace établis
     assert.ok(corpsFonction(schema, 'fn_traiter_candidature_planning_v1').corps.includes(code)
       || corpsFonction(schema, 'fn_traiter_candidature_planning_v1_internal_20260810').corps.includes(code), `${code} absent du dump`);
   }
-  const fin = section(doc, 'fn_declarer_fin_retroactive\n');
+  const fin = plat(section(doc, 'fn_declarer_fin_retroactive\n'));
   assert.ok(fin.includes('sans clé `success`') && fin.includes('`nouveau_code`'), 'succès sans `success` et nouveau_code non consignés');
 });
 
+test('CONTRATS_RPC_ETABLISSEMENT.md : chaque code de fn_blocage_publication_etab avec son message (correction 8)', () => {
+  const fiche = plat(section(read('docs/mobile-swift/CONTRATS_RPC_ETABLISSEMENT.md'), 'fn_creer_mission_multi_jours_v4\n'));
+  const corps = corpsFonction(schema, 'fn_blocage_publication_etab').corps;
+  const codes = [...corps.matchAll(/'error', '([A-Z_]+)',\s*'message', '((?:[^']|'')*)'/g)]
+    .map(m => ({ code: m[1], message: m[2].replaceAll("''", "'") }));
+  assert.equal(codes.length, 5, 'codes de blocage lus dans le dump');
+  for (const { code, message } of codes) {
+    assert.ok(fiche.includes(`\`${code}\` (« ${message} »)`), `${code} : code ou message absent de la fiche`);
+  }
+  assert.ok(fiche.includes('`message` prioritaire') && fiche.includes('CREATION_MISSION_INDISPONIBLE'));
+});
+
 test('CONTRATS_RPC_SOIGNANT.md : fn_generer_qr_mission non exposée par le web (correction 1 du lot 5)', () => {
-  const fiche = section(read('docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md'), 'fn_generer_qr_mission\n');
-  assert.ok(!fiche.includes('Génération du QR côté établissement (lot 5)'), 'usage « lot 5 » encore annoncé');
-  assert.ok(fiche.includes('non exposée par le web') && fiche.includes('QRPointageEtab.tsx'), 'correction 1 non consignée');
+  // Depuis le lot 2 (#1131), la fiche individuelle a fusionné dans « système de pointage ① » (interdit
+  // côté natif) : le QR de l'établissement y est consigné comme `code_pointage_actif`, QRPointageEtab non monté.
+  const doc = read('docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md');
+  assert.ok(!doc.includes('Génération du QR côté établissement (lot 5)'), 'usage « lot 5 » encore annoncé');
+  const fiche = section(doc, 'Interdit côté natif : système de pointage ①');
+  assert.ok(fiche.includes('`fn_generer_qr_mission`') && fiche.includes('`code_pointage_actif`')
+    && fiche.includes("`QRPointageEtab` (seul appelant de `fn_generer_code_secours_mission` et de\n  `fn_generer_qr_mission`) n'est monté par aucun écran"),
+  'correction 1 non consignée');
   assert.ok(read('src/components/etablissement/QRPointageEtab.tsx').includes("supabase.rpc('fn_generer_qr_mission'"));
   assert.ok(read('src/components/pointage/AffichageCodeRotatifEtab.tsx').includes('<QRCodeSVG value={code}'));
 });
@@ -459,8 +481,10 @@ test('TextesWeb.swift : textes du lot 5 annotés à leur source web, mention art
     assert.ok(lireWeb(c.source.fichier).unites.some(u => u.valeur === c.valeur && u.debut === c.source.debut), `${nom} : texte web`);
     assert.ok(lu.catalogue.some(e => e.cle === nom), `${nom} absente du catalogue`);
   }
-  // La mention OTP art. 1366-1367 (ContratMission.tsx l.743) est celle du lot 2 : jamais dupliquée.
-  const otp = lu.constantes.filter(c => c.source.fichier === 'src/pages/ContratMission.tsx' && c.source.debut === 743);
+  // La mention OTP art. 1366-1367 de ContratMission.tsx est celle du lot 2 : jamais dupliquée
+  // (repérée par son texte, la ligne web bouge avec les PR du lot 2).
+  const otp = lu.constantes.filter(c => c.source.fichier === 'src/pages/ContratMission.tsx'
+    && c.valeur.includes('Conforme art. 1366-1367 Code civil'));
   assert.deepEqual(otp.map(c => c.nom), ['Contrat.otpDescription']);
 });
 
