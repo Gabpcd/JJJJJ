@@ -1,0 +1,32 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "etablissements": [
+    {
+      "id": "demo-etab-1",
+      "nom": "Établissement fictif République",
+      "adresse_ville": "Paris",
+      "adresse_code_postal": "75011",
+      "adresse_lat": 48.867,
+      "adresse_lng": 2.363,
+      "type": "CLINIQUE"
+    },
+    {
+      "id": "demo-etab-2",
+      "nom": "Établissement fictif des Lilas",
+      "adresse_ville": "Les Lilas",
+      "adresse_code_postal": "93260",
+      "adresse_lat": 48.879,
+      "adresse_lng": 2.421,
+      "type": "EHPAD"
+    },
+    {
+      "id": "demo-etab-3",
+      "nom": "Cabinet fictif du Parc",
+      "adresse_ville": "Vincennes",
+      "adresse_code_postal": "94300",
+      "adresse_lat": 48.848,
+      "adresse_lng": 2.439,
+      "type": "CABINET"
+    }
+  ]
+}

@@ -1,0 +1,570 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0D698398E212FA5FBDD89C50 /* JoleneCore in Frameworks */ = {isa = PBXBuildFile; productRef = 321C808452B052BEA85F8CB7 /* JoleneCore */; };
+		12E6B9193B807F15C95D84AE /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8871298678DD982E3D6C3C26 /* RootView.swift */; };
+		289DFEBCA9517E61F75FA230 /* MissionDetailScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC60681A6810F2F29BDDBCC0 /* MissionDetailScreen.swift */; };
+		2A94C1A0F00563A7348B0C89 /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BA24C6A7F18C51C527F02B8 /* PlaceholderScreen.swift */; };
+		35B21204F757910A731C8D4B /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57522BC17747DB1695651ECD /* MainTabView.swift */; };
+		496EB218D427D36B5164DC14 /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B12ED2CF03F5935EB224B9A /* AppContainer.swift */; };
+		55081F4F43971CF1AF949846 /* ResumePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F564268833C084BE055A9D3 /* ResumePolicy.swift */; };
+		5E0893D0CB68B03799F6D7D9 /* StagingConnexionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */; };
+		78268B78D4B307017EBE8941 /* JoleneSupabase in Frameworks */ = {isa = PBXBuildFile; productRef = 1711BDF2D3665B719A9D26AE /* JoleneSupabase */; };
+		7D9EC7EEACF825A03C5D6935 /* JoleneDesign in Frameworks */ = {isa = PBXBuildFile; productRef = AD05F490DB7A1E31B77DE468 /* JoleneDesign */; };
+		7EE48E9A00576297AD1657A1 /* ProfileScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E98C75CA1BDE25BD8822BDE0 /* ProfileScreen.swift */; };
+		8F1F3B7AC29459F237E608AE /* DemoConsultationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07388306B298067BAF72F868 /* DemoConsultationTests.swift */; };
+		8FF2D016E024DEC2B0131A7E /* EnvironmentGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8934442A0F8427B109291C /* EnvironmentGuardTests.swift */; };
+		B13F80A62CBEABBC35FD66EE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 246F44BC2A339EC8645FD77E /* Assets.xcassets */; };
+		B3446B6871D7FBE2076E8D6B /* EnvironmentBlockedScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A24F006640FB3D9605D893FA /* EnvironmentBlockedScreen.swift */; };
+		B63D824E311B24377F19A806 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D05CBBCD86659DF4895A2323 /* PrivacyInfo.xcprivacy */; };
+		BA3D823586A58A6220538174 /* LoginScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACC4653075CBE00DD3130FD3 /* LoginScreen.swift */; };
+		C4E13AFC9C0C982BCDCF06D0 /* UITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E960FB56B5063137621FDF /* UITestSupport.swift */; };
+		C58B6F5E0E8386082C59403E /* MissionsListScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AB01F07311DA9F04A88388A /* MissionsListScreen.swift */; };
+		D3C7C3722CF27996A3A3CA9F /* JoleneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C216B466C241777BFC4541 /* JoleneApp.swift */; };
+		DD5D9790C224E0A18AFCB9DC /* NetworkSentinel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		AFB23FE8563E11E657ACFC34 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 48386D87DAAF148819CDF4DD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 555F9E61A5F87E2B683269B6;
+			remoteInfo = Jolene;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		07388306B298067BAF72F868 /* DemoConsultationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoConsultationTests.swift; sourceTree = "<group>"; };
+		092224AB4FC11F33F59E094D /* JoleneDesign */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JoleneDesign; path = Packages/JoleneDesign; sourceTree = SOURCE_ROOT; };
+		0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkSentinel.swift; sourceTree = "<group>"; };
+		1A8E49868C321275FFB1BD6C /* Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Staging.xcconfig; sourceTree = "<group>"; };
+		1B12ED2CF03F5935EB224B9A /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
+		23E960FB56B5063137621FDF /* UITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestSupport.swift; sourceTree = "<group>"; };
+		246F44BC2A339EC8645FD77E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2AB01F07311DA9F04A88388A /* MissionsListScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionsListScreen.swift; sourceTree = "<group>"; };
+		2BA24C6A7F18C51C527F02B8 /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
+		3F564268833C084BE055A9D3 /* ResumePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResumePolicy.swift; sourceTree = "<group>"; };
+		41D47AC775A9BD1F3BA87C34 /* JoleneUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = JoleneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		57522BC17747DB1695651ECD /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		65406E8F54F9DFF36EF8782E /* JoleneSupabase */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JoleneSupabase; path = Packages/JoleneSupabase; sourceTree = SOURCE_ROOT; };
+		6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StagingConnexionTests.swift; sourceTree = "<group>"; };
+		6F98E168F9C28FBB06551D7B /* Production.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Production.xcconfig; sourceTree = "<group>"; };
+		7467C13956527741B132313A /* JoleneCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JoleneCore; path = Packages/JoleneCore; sourceTree = SOURCE_ROOT; };
+		8849E363C23BD3AB5AC2ABB6 /* Jolene.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Jolene.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8871298678DD982E3D6C3C26 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		A24F006640FB3D9605D893FA /* EnvironmentBlockedScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentBlockedScreen.swift; sourceTree = "<group>"; };
+		A82414C2B39FC0B682E516B6 /* Jolene.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Jolene.entitlements; sourceTree = "<group>"; };
+		ACC4653075CBE00DD3130FD3 /* LoginScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginScreen.swift; sourceTree = "<group>"; };
+		B5C216B466C241777BFC4541 /* JoleneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JoleneApp.swift; sourceTree = "<group>"; };
+		CA8934442A0F8427B109291C /* EnvironmentGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentGuardTests.swift; sourceTree = "<group>"; };
+		D05CBBCD86659DF4895A2323 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		E98C75CA1BDE25BD8822BDE0 /* ProfileScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileScreen.swift; sourceTree = "<group>"; };
+		FC60681A6810F2F29BDDBCC0 /* MissionDetailScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionDetailScreen.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8B1ACD778435A116790E5C88 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0D698398E212FA5FBDD89C50 /* JoleneCore in Frameworks */,
+				78268B78D4B307017EBE8941 /* JoleneSupabase in Frameworks */,
+				7D9EC7EEACF825A03C5D6935 /* JoleneDesign in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		176231BB6EC11E752856E161 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				6F98E168F9C28FBB06551D7B /* Production.xcconfig */,
+				1A8E49868C321275FFB1BD6C /* Staging.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		53D71A6BA46F467ED9690396 /* Composition */ = {
+			isa = PBXGroup;
+			children = (
+				1B12ED2CF03F5935EB224B9A /* AppContainer.swift */,
+				0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */,
+				3F564268833C084BE055A9D3 /* ResumePolicy.swift */,
+			);
+			path = Composition;
+			sourceTree = "<group>";
+		};
+		555F53792F55813476815AB2 /* Screens */ = {
+			isa = PBXGroup;
+			children = (
+				A24F006640FB3D9605D893FA /* EnvironmentBlockedScreen.swift */,
+				ACC4653075CBE00DD3130FD3 /* LoginScreen.swift */,
+				57522BC17747DB1695651ECD /* MainTabView.swift */,
+				FC60681A6810F2F29BDDBCC0 /* MissionDetailScreen.swift */,
+				2AB01F07311DA9F04A88388A /* MissionsListScreen.swift */,
+				2BA24C6A7F18C51C527F02B8 /* PlaceholderScreen.swift */,
+				E98C75CA1BDE25BD8822BDE0 /* ProfileScreen.swift */,
+				8871298678DD982E3D6C3C26 /* RootView.swift */,
+			);
+			path = Screens;
+			sourceTree = "<group>";
+		};
+		59C1FC78F45B2483EF7F238B /* Jolene */ = {
+			isa = PBXGroup;
+			children = (
+				53D71A6BA46F467ED9690396 /* Composition */,
+				768F86A75B0DAED365E2B639 /* Resources */,
+				555F53792F55813476815AB2 /* Screens */,
+				246F44BC2A339EC8645FD77E /* Assets.xcassets */,
+				A82414C2B39FC0B682E516B6 /* Jolene.entitlements */,
+				B5C216B466C241777BFC4541 /* JoleneApp.swift */,
+				D05CBBCD86659DF4895A2323 /* PrivacyInfo.xcprivacy */,
+			);
+			path = Jolene;
+			sourceTree = "<group>";
+		};
+		6A2AED5AE18D5B5DB1E97607 = {
+			isa = PBXGroup;
+			children = (
+				176231BB6EC11E752856E161 /* Config */,
+				59C1FC78F45B2483EF7F238B /* Jolene */,
+				DD07267F49D6B18F4BFDF4F6 /* JoleneUITests */,
+				7A09E4BA68B46B478DB095F6 /* Packages */,
+				9A8AC4BD27CE63DF2D84823A /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		768F86A75B0DAED365E2B639 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		7A09E4BA68B46B478DB095F6 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				7467C13956527741B132313A /* JoleneCore */,
+				092224AB4FC11F33F59E094D /* JoleneDesign */,
+				65406E8F54F9DFF36EF8782E /* JoleneSupabase */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
+		9A8AC4BD27CE63DF2D84823A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8849E363C23BD3AB5AC2ABB6 /* Jolene.app */,
+				41D47AC775A9BD1F3BA87C34 /* JoleneUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		DD07267F49D6B18F4BFDF4F6 /* JoleneUITests */ = {
+			isa = PBXGroup;
+			children = (
+				07388306B298067BAF72F868 /* DemoConsultationTests.swift */,
+				CA8934442A0F8427B109291C /* EnvironmentGuardTests.swift */,
+				6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */,
+				23E960FB56B5063137621FDF /* UITestSupport.swift */,
+			);
+			path = JoleneUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		555F9E61A5F87E2B683269B6 /* Jolene */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B979C88195C691A782D5F205 /* Build configuration list for PBXNativeTarget "Jolene" */;
+			buildPhases = (
+				AA9BAC464396802F6898C422 /* Sources */,
+				7AFF1679CBB80BF2E16E0352 /* Resources */,
+				8B1ACD778435A116790E5C88 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Jolene;
+			packageProductDependencies = (
+				321C808452B052BEA85F8CB7 /* JoleneCore */,
+				1711BDF2D3665B719A9D26AE /* JoleneSupabase */,
+				AD05F490DB7A1E31B77DE468 /* JoleneDesign */,
+			);
+			productName = Jolene;
+			productReference = 8849E363C23BD3AB5AC2ABB6 /* Jolene.app */;
+			productType = "com.apple.product-type.application";
+		};
+		6D5167198BFC55BA15340850 /* JoleneUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 90638327C2F5E9C8BE57DA3F /* Build configuration list for PBXNativeTarget "JoleneUITests" */;
+			buildPhases = (
+				AEA0A4BFD66DD85F5E1A7B3A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				198F12B4FF609E683A61E094 /* PBXTargetDependency */,
+			);
+			name = JoleneUITests;
+			packageProductDependencies = (
+			);
+			productName = JoleneUITests;
+			productReference = 41D47AC775A9BD1F3BA87C34 /* JoleneUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		48386D87DAAF148819CDF4DD /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					555F9E61A5F87E2B683269B6 = {
+						DevelopmentTeam = GDU5AA28M9;
+						ProvisioningStyle = Manual;
+					};
+					6D5167198BFC55BA15340850 = {
+						DevelopmentTeam = GDU5AA28M9;
+						ProvisioningStyle = Manual;
+						TestTargetID = 555F9E61A5F87E2B683269B6;
+					};
+				};
+			};
+			buildConfigurationList = CC6B96835E1D6009E7E4CC1B /* Build configuration list for PBXProject "Jolene" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 6A2AED5AE18D5B5DB1E97607;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DAFA15C1D2F36A114BCDB722 /* XCLocalSwiftPackageReference "Packages/JoleneCore" */,
+				66F2EF7D27B075F7EED927E6 /* XCLocalSwiftPackageReference "Packages/JoleneDesign" */,
+				D97B92E08169C987D6879B30 /* XCLocalSwiftPackageReference "Packages/JoleneSupabase" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 9A8AC4BD27CE63DF2D84823A /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				555F9E61A5F87E2B683269B6 /* Jolene */,
+				6D5167198BFC55BA15340850 /* JoleneUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		7AFF1679CBB80BF2E16E0352 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B13F80A62CBEABBC35FD66EE /* Assets.xcassets in Resources */,
+				B63D824E311B24377F19A806 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA9BAC464396802F6898C422 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				496EB218D427D36B5164DC14 /* AppContainer.swift in Sources */,
+				B3446B6871D7FBE2076E8D6B /* EnvironmentBlockedScreen.swift in Sources */,
+				D3C7C3722CF27996A3A3CA9F /* JoleneApp.swift in Sources */,
+				BA3D823586A58A6220538174 /* LoginScreen.swift in Sources */,
+				35B21204F757910A731C8D4B /* MainTabView.swift in Sources */,
+				289DFEBCA9517E61F75FA230 /* MissionDetailScreen.swift in Sources */,
+				C58B6F5E0E8386082C59403E /* MissionsListScreen.swift in Sources */,
+				DD5D9790C224E0A18AFCB9DC /* NetworkSentinel.swift in Sources */,
+				2A94C1A0F00563A7348B0C89 /* PlaceholderScreen.swift in Sources */,
+				7EE48E9A00576297AD1657A1 /* ProfileScreen.swift in Sources */,
+				55081F4F43971CF1AF949846 /* ResumePolicy.swift in Sources */,
+				12E6B9193B807F15C95D84AE /* RootView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AEA0A4BFD66DD85F5E1A7B3A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8F1F3B7AC29459F237E608AE /* DemoConsultationTests.swift in Sources */,
+				8FF2D016E024DEC2B0131A7E /* EnvironmentGuardTests.swift in Sources */,
+				5E0893D0CB68B03799F6D7D9 /* StagingConnexionTests.swift in Sources */,
+				C4E13AFC9C0C982BCDCF06D0 /* UITestSupport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		198F12B4FF609E683A61E094 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 555F9E61A5F87E2B683269B6 /* Jolene */;
+			targetProxy = AFB23FE8563E11E657ACFC34 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		05A6BA5F6C010278F88F81B2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6F98E168F9C28FBB06551D7B /* Production.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		32B932AA6CD7E52C0612476E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Jolene/Jolene.entitlements;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = Jolene/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+			};
+			name = Release;
+		};
+		8F38852567F5CF393CB3E0E3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.jolene.uitests;
+				SDKROOT = iphoneos;
+				TEST_TARGET_NAME = Jolene;
+			};
+			name = Release;
+		};
+		B0109D16E346689CBA5504A5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1A8E49868C321275FFB1BD6C /* Staging.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		DFBA29FE28778DC6EDBF78C6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.jolene.uitests;
+				SDKROOT = iphoneos;
+				TEST_TARGET_NAME = Jolene;
+			};
+			name = Debug;
+		};
+		F071CCEA51ED6C3D1FE073F9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Jolene/Jolene.entitlements;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = Jolene/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		90638327C2F5E9C8BE57DA3F /* Build configuration list for PBXNativeTarget "JoleneUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DFBA29FE28778DC6EDBF78C6 /* Debug */,
+				8F38852567F5CF393CB3E0E3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B979C88195C691A782D5F205 /* Build configuration list for PBXNativeTarget "Jolene" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F071CCEA51ED6C3D1FE073F9 /* Debug */,
+				32B932AA6CD7E52C0612476E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CC6B96835E1D6009E7E4CC1B /* Build configuration list for PBXProject "Jolene" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B0109D16E346689CBA5504A5 /* Debug */,
+				05A6BA5F6C010278F88F81B2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		66F2EF7D27B075F7EED927E6 /* XCLocalSwiftPackageReference "Packages/JoleneDesign" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/JoleneDesign;
+		};
+		D97B92E08169C987D6879B30 /* XCLocalSwiftPackageReference "Packages/JoleneSupabase" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/JoleneSupabase;
+		};
+		DAFA15C1D2F36A114BCDB722 /* XCLocalSwiftPackageReference "Packages/JoleneCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/JoleneCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1711BDF2D3665B719A9D26AE /* JoleneSupabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JoleneSupabase;
+		};
+		321C808452B052BEA85F8CB7 /* JoleneCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JoleneCore;
+		};
+		AD05F490DB7A1E31B77DE468 /* JoleneDesign */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JoleneDesign;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 48386D87DAAF148819CDF4DD /* Project object */;
+}

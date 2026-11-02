@@ -1,0 +1,2876 @@
+[
+  {
+    "name": "estMissionDeNuit/jour-06h45-14h15",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T06:45:00+02:00",
+        "fin_le": "2026-07-02T14:15:00+02:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMissionDeNuit/jour-08h-18h",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/jour-13h-21h-sans-duree",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T13:00:00+02:00",
+        "fin_le": "2026-07-02T21:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/jour-19h59-limite-jour",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T19:59:00+02:00",
+        "fin_le": "2026-07-03T05:59:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/jour-debut-07h-limite-jour",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T07:00:00+02:00",
+        "fin_le": "2026-07-02T15:00:00+02:00",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/jour-dst-mars-23h-reelles",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-03-28T20:00:00+01:00",
+        "fin_le": "2026-03-29T08:00:00+02:00",
+        "duree_heures": 11,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMissionDeNuit/jour-dst-octobre-25h-reelles",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-10-24T20:00:00+02:00",
+        "fin_le": "2026-10-25T08:00:00+01:00",
+        "duree_heures": 13,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMissionDeNuit/jour-duree-string",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:30:00+02:00",
+        "duree_heures": "7.5",
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/jour-duree-string-vide",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:30:00+02:00",
+        "duree_heures": "",
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/jour-duree-tiers",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:20:00+02:00",
+        "duree_heures": 7.3333,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/jour-pause-deduite",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 9,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/jour-utc-en-hiver",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-01-12T07:00:00.000Z",
+        "fin_le": "2026-01-12T15:00:00.000Z",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/legacy-sans-offset",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-09-03T08:00:00",
+        "fin_le": "2026-09-03T15:30:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/multi-2-creneaux-sans-duree",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-09-03T19:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": 2
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/multi-annees-differentes",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-12-28T07:00:00+01:00",
+        "fin_le": "2027-01-03T19:00:00+01:00",
+        "duree_heures": 48,
+        "nb_creneaux": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/multi-duree-string",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": "80",
+        "nb_creneaux": 10
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/multi-fin-mois-fevrier-bissextile",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2024-02-26T08:00:00+01:00",
+        "fin_le": "2024-03-01T16:00:00+01:00",
+        "duree_heures": 40,
+        "nb_creneaux": 5
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/multi-heures-par-jour-decimales",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-20T08:00:00+02:00",
+        "fin_le": "2026-07-24T15:30:00+02:00",
+        "duree_heures": 37.5,
+        "nb_creneaux": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/multi-meme-mois-10-creneaux",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": 80,
+        "nb_creneaux": 10
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/multi-meme-mois-sans-creneaux",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": 80,
+        "nb_creneaux": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/multi-meme-mois-sans-duree",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/multi-mois-differents",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-28T07:00:00+02:00",
+        "fin_le": "2026-08-03T19:00:00+02:00",
+        "duree_heures": 60,
+        "nb_creneaux": 5
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/multi-nuits-4-creneaux",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-20T21:00:00+02:00",
+        "fin_le": "2026-07-24T07:00:00+02:00",
+        "duree_heures": 40,
+        "nb_creneaux": 4
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMissionDeNuit/multi-nuits-sans-creneaux",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-20T21:00:00+02:00",
+        "fin_le": "2026-07-24T07:00:00+02:00",
+        "duree_heures": 40,
+        "nb_creneaux": null
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMissionDeNuit/multi-semaine-dst-mars",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-03-23T08:00:00+01:00",
+        "fin_le": "2026-03-30T16:00:00+02:00",
+        "duree_heures": 48,
+        "nb_creneaux": 6
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/nuit-06h59-limite-nuit",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T06:59:00+02:00",
+        "fin_le": "2026-07-02T14:59:00+02:00",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMissionDeNuit/nuit-20h00-limite-nuit",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T20:00:00+02:00",
+        "fin_le": "2026-07-03T06:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMissionDeNuit/nuit-23h30-00h30",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T23:30:00+02:00",
+        "fin_le": "2026-07-03T00:30:00+02:00",
+        "duree_heures": 1,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMissionDeNuit/nuit-utc-en-ete",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T19:00:00.000Z",
+        "fin_le": "2026-07-03T05:00:00.000Z",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMissionDeNuit/plage-24h-exactes",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-03T08:00:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/plage-24h-plus-1min",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-03T08:01:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/sans-debut",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": null,
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/sans-fin",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": null,
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/sans-rien",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": null,
+        "fin_le": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/vitest-legacy-sans-creneaux",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-09-03T07:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/vitest-multi-creneaux-nuit",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-09-03T19:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": 13,
+        "nb_creneaux": 2
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMissionDeNuit/vitest-une-journee",
+    "input": {
+      "fonction": "estMissionDeNuit",
+      "mission": {
+        "debut_le": "2026-09-03T08:00:00+02:00",
+        "fin_le": "2026-09-03T15:30:00+02:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/jour-06h45-14h15",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T06:45:00+02:00",
+        "fin_le": "2026-07-02T14:15:00+02:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/jour-08h-18h",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/jour-13h-21h-sans-duree",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T13:00:00+02:00",
+        "fin_le": "2026-07-02T21:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/jour-19h59-limite-jour",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T19:59:00+02:00",
+        "fin_le": "2026-07-03T05:59:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/jour-debut-07h-limite-jour",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T07:00:00+02:00",
+        "fin_le": "2026-07-02T15:00:00+02:00",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/jour-dst-mars-23h-reelles",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-03-28T20:00:00+01:00",
+        "fin_le": "2026-03-29T08:00:00+02:00",
+        "duree_heures": 11,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/jour-dst-octobre-25h-reelles",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-10-24T20:00:00+02:00",
+        "fin_le": "2026-10-25T08:00:00+01:00",
+        "duree_heures": 13,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/jour-duree-string",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:30:00+02:00",
+        "duree_heures": "7.5",
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/jour-duree-string-vide",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:30:00+02:00",
+        "duree_heures": "",
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/jour-duree-tiers",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:20:00+02:00",
+        "duree_heures": 7.3333,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/jour-pause-deduite",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 9,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/jour-utc-en-hiver",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-01-12T07:00:00.000Z",
+        "fin_le": "2026-01-12T15:00:00.000Z",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/legacy-sans-offset",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-09-03T08:00:00",
+        "fin_le": "2026-09-03T15:30:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/multi-2-creneaux-sans-duree",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-09-03T19:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": 2
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/multi-annees-differentes",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-12-28T07:00:00+01:00",
+        "fin_le": "2027-01-03T19:00:00+01:00",
+        "duree_heures": 48,
+        "nb_creneaux": null
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/multi-duree-string",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": "80",
+        "nb_creneaux": 10
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/multi-fin-mois-fevrier-bissextile",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2024-02-26T08:00:00+01:00",
+        "fin_le": "2024-03-01T16:00:00+01:00",
+        "duree_heures": 40,
+        "nb_creneaux": 5
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/multi-heures-par-jour-decimales",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-20T08:00:00+02:00",
+        "fin_le": "2026-07-24T15:30:00+02:00",
+        "duree_heures": 37.5,
+        "nb_creneaux": null
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/multi-meme-mois-10-creneaux",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": 80,
+        "nb_creneaux": 10
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/multi-meme-mois-sans-creneaux",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": 80,
+        "nb_creneaux": null
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/multi-meme-mois-sans-duree",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": null
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/multi-mois-differents",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-28T07:00:00+02:00",
+        "fin_le": "2026-08-03T19:00:00+02:00",
+        "duree_heures": 60,
+        "nb_creneaux": 5
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/multi-nuits-4-creneaux",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-20T21:00:00+02:00",
+        "fin_le": "2026-07-24T07:00:00+02:00",
+        "duree_heures": 40,
+        "nb_creneaux": 4
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/multi-nuits-sans-creneaux",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-20T21:00:00+02:00",
+        "fin_le": "2026-07-24T07:00:00+02:00",
+        "duree_heures": 40,
+        "nb_creneaux": null
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/multi-semaine-dst-mars",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-03-23T08:00:00+01:00",
+        "fin_le": "2026-03-30T16:00:00+02:00",
+        "duree_heures": 48,
+        "nb_creneaux": 6
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/nuit-06h59-limite-nuit",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T06:59:00+02:00",
+        "fin_le": "2026-07-02T14:59:00+02:00",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/nuit-20h00-limite-nuit",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T20:00:00+02:00",
+        "fin_le": "2026-07-03T06:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/nuit-23h30-00h30",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T23:30:00+02:00",
+        "fin_le": "2026-07-03T00:30:00+02:00",
+        "duree_heures": 1,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/nuit-utc-en-ete",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T19:00:00.000Z",
+        "fin_le": "2026-07-03T05:00:00.000Z",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/plage-24h-exactes",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-03T08:00:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/plage-24h-plus-1min",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-03T08:01:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/sans-debut",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": null,
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/sans-fin",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": null,
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/sans-rien",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": null,
+        "fin_le": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "estMultiJours/vitest-legacy-sans-creneaux",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-09-03T07:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/vitest-multi-creneaux-nuit",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-09-03T19:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": 13,
+        "nb_creneaux": 2
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "estMultiJours/vitest-une-journee",
+    "input": {
+      "fonction": "estMultiJours",
+      "mission": {
+        "debut_le": "2026-09-03T08:00:00+02:00",
+        "fin_le": "2026-09-03T15:30:00+02:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "formatDateMission/jour-06h45-14h15",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T06:45:00+02:00",
+        "fin_le": "2026-07-02T14:15:00+02:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/jour-08h-18h",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/jour-13h-21h-sans-duree",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T13:00:00+02:00",
+        "fin_le": "2026-07-02T21:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/jour-19h59-limite-jour",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T19:59:00+02:00",
+        "fin_le": "2026-07-03T05:59:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/jour-debut-07h-limite-jour",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T07:00:00+02:00",
+        "fin_le": "2026-07-02T15:00:00+02:00",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/jour-dst-mars-23h-reelles",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-03-28T20:00:00+01:00",
+        "fin_le": "2026-03-29T08:00:00+02:00",
+        "duree_heures": 11,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "samedi 28 mars 2026"
+  },
+  {
+    "name": "formatDateMission/jour-dst-octobre-25h-reelles",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-10-24T20:00:00+02:00",
+        "fin_le": "2026-10-25T08:00:00+01:00",
+        "duree_heures": 13,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "samedi 24 octobre 2026"
+  },
+  {
+    "name": "formatDateMission/jour-duree-string",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:30:00+02:00",
+        "duree_heures": "7.5",
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/jour-duree-string-vide",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:30:00+02:00",
+        "duree_heures": "",
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/jour-duree-tiers",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:20:00+02:00",
+        "duree_heures": 7.3333,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/jour-pause-deduite",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 9,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/jour-utc-en-hiver",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-01-12T07:00:00.000Z",
+        "fin_le": "2026-01-12T15:00:00.000Z",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "lundi 12 janvier 2026"
+  },
+  {
+    "name": "formatDateMission/legacy-sans-offset",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-09-03T08:00:00",
+        "fin_le": "2026-09-03T15:30:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 3 septembre 2026"
+  },
+  {
+    "name": "formatDateMission/multi-2-creneaux-sans-duree",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-09-03T19:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": 2
+      }
+    },
+    "expected": "3 → 4 septembre 2026"
+  },
+  {
+    "name": "formatDateMission/multi-annees-differentes",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-12-28T07:00:00+01:00",
+        "fin_le": "2027-01-03T19:00:00+01:00",
+        "duree_heures": 48,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "28 déc. → 3 janv. 2027"
+  },
+  {
+    "name": "formatDateMission/multi-duree-string",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": "80",
+        "nb_creneaux": 10
+      }
+    },
+    "expected": "20 → 31 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/multi-fin-mois-fevrier-bissextile",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2024-02-26T08:00:00+01:00",
+        "fin_le": "2024-03-01T16:00:00+01:00",
+        "duree_heures": 40,
+        "nb_creneaux": 5
+      }
+    },
+    "expected": "26 févr. → 1 mars 2024"
+  },
+  {
+    "name": "formatDateMission/multi-heures-par-jour-decimales",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-20T08:00:00+02:00",
+        "fin_le": "2026-07-24T15:30:00+02:00",
+        "duree_heures": 37.5,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "20 → 24 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/multi-meme-mois-10-creneaux",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": 80,
+        "nb_creneaux": 10
+      }
+    },
+    "expected": "20 → 31 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/multi-meme-mois-sans-creneaux",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": 80,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "20 → 31 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/multi-meme-mois-sans-duree",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "20 → 31 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/multi-mois-differents",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-28T07:00:00+02:00",
+        "fin_le": "2026-08-03T19:00:00+02:00",
+        "duree_heures": 60,
+        "nb_creneaux": 5
+      }
+    },
+    "expected": "28 juil. → 3 août 2026"
+  },
+  {
+    "name": "formatDateMission/multi-nuits-4-creneaux",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-20T21:00:00+02:00",
+        "fin_le": "2026-07-24T07:00:00+02:00",
+        "duree_heures": 40,
+        "nb_creneaux": 4
+      }
+    },
+    "expected": "20 → 24 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/multi-nuits-sans-creneaux",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-20T21:00:00+02:00",
+        "fin_le": "2026-07-24T07:00:00+02:00",
+        "duree_heures": 40,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "20 → 24 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/multi-semaine-dst-mars",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-03-23T08:00:00+01:00",
+        "fin_le": "2026-03-30T16:00:00+02:00",
+        "duree_heures": 48,
+        "nb_creneaux": 6
+      }
+    },
+    "expected": "23 → 30 mars 2026"
+  },
+  {
+    "name": "formatDateMission/nuit-06h59-limite-nuit",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T06:59:00+02:00",
+        "fin_le": "2026-07-02T14:59:00+02:00",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/nuit-20h00-limite-nuit",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T20:00:00+02:00",
+        "fin_le": "2026-07-03T06:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/nuit-23h30-00h30",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T23:30:00+02:00",
+        "fin_le": "2026-07-03T00:30:00+02:00",
+        "duree_heures": 1,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/nuit-utc-en-ete",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T19:00:00.000Z",
+        "fin_le": "2026-07-03T05:00:00.000Z",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/plage-24h-exactes",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-03T08:00:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/plage-24h-plus-1min",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-03T08:01:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "2 → 3 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/sans-debut",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": null,
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "—"
+  },
+  {
+    "name": "formatDateMission/sans-fin",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": null,
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 2 juillet 2026"
+  },
+  {
+    "name": "formatDateMission/sans-rien",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": null,
+        "fin_le": null
+      }
+    },
+    "expected": "—"
+  },
+  {
+    "name": "formatDateMission/vitest-legacy-sans-creneaux",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-09-03T07:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "3 → 4 septembre 2026"
+  },
+  {
+    "name": "formatDateMission/vitest-multi-creneaux-nuit",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-09-03T19:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": 13,
+        "nb_creneaux": 2
+      }
+    },
+    "expected": "3 → 4 septembre 2026"
+  },
+  {
+    "name": "formatDateMission/vitest-une-journee",
+    "input": {
+      "fonction": "formatDateMission",
+      "mission": {
+        "debut_le": "2026-09-03T08:00:00+02:00",
+        "fin_le": "2026-09-03T15:30:00+02:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "jeudi 3 septembre 2026"
+  },
+  {
+    "name": "formatDureeCompacte/jour-06h45-14h15",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T06:45:00+02:00",
+        "fin_le": "2026-07-02T14:15:00+02:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "7,5h"
+  },
+  {
+    "name": "formatDureeCompacte/jour-08h-18h",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "10h"
+  },
+  {
+    "name": "formatDureeCompacte/jour-13h-21h-sans-duree",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T13:00:00+02:00",
+        "fin_le": "2026-07-02T21:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "—"
+  },
+  {
+    "name": "formatDureeCompacte/jour-19h59-limite-jour",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T19:59:00+02:00",
+        "fin_le": "2026-07-03T05:59:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "10h"
+  },
+  {
+    "name": "formatDureeCompacte/jour-debut-07h-limite-jour",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T07:00:00+02:00",
+        "fin_le": "2026-07-02T15:00:00+02:00",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "8h"
+  },
+  {
+    "name": "formatDureeCompacte/jour-dst-mars-23h-reelles",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-03-28T20:00:00+01:00",
+        "fin_le": "2026-03-29T08:00:00+02:00",
+        "duree_heures": 11,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "11h"
+  },
+  {
+    "name": "formatDureeCompacte/jour-dst-octobre-25h-reelles",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-10-24T20:00:00+02:00",
+        "fin_le": "2026-10-25T08:00:00+01:00",
+        "duree_heures": 13,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "13h"
+  },
+  {
+    "name": "formatDureeCompacte/jour-duree-string",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:30:00+02:00",
+        "duree_heures": "7.5",
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "7,5h"
+  },
+  {
+    "name": "formatDureeCompacte/jour-duree-string-vide",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:30:00+02:00",
+        "duree_heures": "",
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "—"
+  },
+  {
+    "name": "formatDureeCompacte/jour-duree-tiers",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:20:00+02:00",
+        "duree_heures": 7.3333,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "7,3h"
+  },
+  {
+    "name": "formatDureeCompacte/jour-pause-deduite",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 9,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "9h"
+  },
+  {
+    "name": "formatDureeCompacte/jour-utc-en-hiver",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-01-12T07:00:00.000Z",
+        "fin_le": "2026-01-12T15:00:00.000Z",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "8h"
+  },
+  {
+    "name": "formatDureeCompacte/legacy-sans-offset",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-09-03T08:00:00",
+        "fin_le": "2026-09-03T15:30:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "7,5h"
+  },
+  {
+    "name": "formatDureeCompacte/multi-2-creneaux-sans-duree",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-09-03T19:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": 2
+      }
+    },
+    "expected": "2 créneaux"
+  },
+  {
+    "name": "formatDureeCompacte/multi-annees-differentes",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-12-28T07:00:00+01:00",
+        "fin_le": "2027-01-03T19:00:00+01:00",
+        "duree_heures": 48,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "4 jours · 48 h au total"
+  },
+  {
+    "name": "formatDureeCompacte/multi-duree-string",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": "80",
+        "nb_creneaux": 10
+      }
+    },
+    "expected": "10 créneaux · 80 h au total"
+  },
+  {
+    "name": "formatDureeCompacte/multi-fin-mois-fevrier-bissextile",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2024-02-26T08:00:00+01:00",
+        "fin_le": "2024-03-01T16:00:00+01:00",
+        "duree_heures": 40,
+        "nb_creneaux": 5
+      }
+    },
+    "expected": "5 créneaux · 40 h au total"
+  },
+  {
+    "name": "formatDureeCompacte/multi-heures-par-jour-decimales",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-20T08:00:00+02:00",
+        "fin_le": "2026-07-24T15:30:00+02:00",
+        "duree_heures": 37.5,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "5 jours · 37,5 h au total"
+  },
+  {
+    "name": "formatDureeCompacte/multi-meme-mois-10-creneaux",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": 80,
+        "nb_creneaux": 10
+      }
+    },
+    "expected": "10 créneaux · 80 h au total"
+  },
+  {
+    "name": "formatDureeCompacte/multi-meme-mois-sans-creneaux",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": 80,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "10 jours · 80 h au total"
+  },
+  {
+    "name": "formatDureeCompacte/multi-meme-mois-sans-duree",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "12 jours"
+  },
+  {
+    "name": "formatDureeCompacte/multi-mois-differents",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-28T07:00:00+02:00",
+        "fin_le": "2026-08-03T19:00:00+02:00",
+        "duree_heures": 60,
+        "nb_creneaux": 5
+      }
+    },
+    "expected": "5 créneaux · 60 h au total"
+  },
+  {
+    "name": "formatDureeCompacte/multi-nuits-4-creneaux",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-20T21:00:00+02:00",
+        "fin_le": "2026-07-24T07:00:00+02:00",
+        "duree_heures": 40,
+        "nb_creneaux": 4
+      }
+    },
+    "expected": "4 créneaux · 40 h au total"
+  },
+  {
+    "name": "formatDureeCompacte/multi-nuits-sans-creneaux",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-20T21:00:00+02:00",
+        "fin_le": "2026-07-24T07:00:00+02:00",
+        "duree_heures": 40,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "4 jours · 40 h au total"
+  },
+  {
+    "name": "formatDureeCompacte/multi-semaine-dst-mars",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-03-23T08:00:00+01:00",
+        "fin_le": "2026-03-30T16:00:00+02:00",
+        "duree_heures": 48,
+        "nb_creneaux": 6
+      }
+    },
+    "expected": "6 créneaux · 48 h au total"
+  },
+  {
+    "name": "formatDureeCompacte/nuit-06h59-limite-nuit",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T06:59:00+02:00",
+        "fin_le": "2026-07-02T14:59:00+02:00",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "8h"
+  },
+  {
+    "name": "formatDureeCompacte/nuit-20h00-limite-nuit",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T20:00:00+02:00",
+        "fin_le": "2026-07-03T06:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "10h"
+  },
+  {
+    "name": "formatDureeCompacte/nuit-23h30-00h30",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T23:30:00+02:00",
+        "fin_le": "2026-07-03T00:30:00+02:00",
+        "duree_heures": 1,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "1h"
+  },
+  {
+    "name": "formatDureeCompacte/nuit-utc-en-ete",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T19:00:00.000Z",
+        "fin_le": "2026-07-03T05:00:00.000Z",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "10h"
+  },
+  {
+    "name": "formatDureeCompacte/plage-24h-exactes",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-03T08:00:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "24h"
+  },
+  {
+    "name": "formatDureeCompacte/plage-24h-plus-1min",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-03T08:01:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "1440 jours · 24 h au total"
+  },
+  {
+    "name": "formatDureeCompacte/sans-debut",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": null,
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "—"
+  },
+  {
+    "name": "formatDureeCompacte/sans-fin",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": null,
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "—"
+  },
+  {
+    "name": "formatDureeCompacte/sans-rien",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": null,
+        "fin_le": null
+      }
+    },
+    "expected": "—"
+  },
+  {
+    "name": "formatDureeCompacte/vitest-legacy-sans-creneaux",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-09-03T07:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "2 jours · 24 h au total"
+  },
+  {
+    "name": "formatDureeCompacte/vitest-multi-creneaux-nuit",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-09-03T19:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": 13,
+        "nb_creneaux": 2
+      }
+    },
+    "expected": "2 créneaux · 13 h au total"
+  },
+  {
+    "name": "formatDureeCompacte/vitest-une-journee",
+    "input": {
+      "fonction": "formatDureeCompacte",
+      "mission": {
+        "debut_le": "2026-09-03T08:00:00+02:00",
+        "fin_le": "2026-09-03T15:30:00+02:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "7,5h"
+  },
+  {
+    "name": "formatHorairesMission/jour-06h45-14h15",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T06:45:00+02:00",
+        "fin_le": "2026-07-02T14:15:00+02:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "06h45 → 14h15 (7,5 h)"
+  },
+  {
+    "name": "formatHorairesMission/jour-08h-18h",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "08h00 → 18h00 (10 h)"
+  },
+  {
+    "name": "formatHorairesMission/jour-13h-21h-sans-duree",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T13:00:00+02:00",
+        "fin_le": "2026-07-02T21:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "13h00 → 21h00 (8 h)"
+  },
+  {
+    "name": "formatHorairesMission/jour-19h59-limite-jour",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T19:59:00+02:00",
+        "fin_le": "2026-07-03T05:59:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "19h59 → 05h59 (10 h)"
+  },
+  {
+    "name": "formatHorairesMission/jour-debut-07h-limite-jour",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T07:00:00+02:00",
+        "fin_le": "2026-07-02T15:00:00+02:00",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "07h00 → 15h00 (8 h)"
+  },
+  {
+    "name": "formatHorairesMission/jour-dst-mars-23h-reelles",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-03-28T20:00:00+01:00",
+        "fin_le": "2026-03-29T08:00:00+02:00",
+        "duree_heures": 11,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "20h00 → 08h00 (11 h)"
+  },
+  {
+    "name": "formatHorairesMission/jour-dst-octobre-25h-reelles",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-10-24T20:00:00+02:00",
+        "fin_le": "2026-10-25T08:00:00+01:00",
+        "duree_heures": 13,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "20h00 → 08h00 (13 h)"
+  },
+  {
+    "name": "formatHorairesMission/jour-duree-string",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:30:00+02:00",
+        "duree_heures": "7.5",
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "08h00 → 15h30 (7,5 h)"
+  },
+  {
+    "name": "formatHorairesMission/jour-duree-string-vide",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:30:00+02:00",
+        "duree_heures": "",
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "08h00 → 15h30 (7,5 h)"
+  },
+  {
+    "name": "formatHorairesMission/jour-duree-tiers",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:20:00+02:00",
+        "duree_heures": 7.3333,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "08h00 → 15h20 (7,3 h)"
+  },
+  {
+    "name": "formatHorairesMission/jour-pause-deduite",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 9,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "08h00 → 18h00 (9 h)"
+  },
+  {
+    "name": "formatHorairesMission/jour-utc-en-hiver",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-01-12T07:00:00.000Z",
+        "fin_le": "2026-01-12T15:00:00.000Z",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "08h00 → 16h00 (8 h)"
+  },
+  {
+    "name": "formatHorairesMission/legacy-sans-offset",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-09-03T08:00:00",
+        "fin_le": "2026-09-03T15:30:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "08h00 → 15h30 (7,5 h)"
+  },
+  {
+    "name": "formatHorairesMission/multi-2-creneaux-sans-duree",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-09-03T19:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": 2
+      }
+    },
+    "expected": "2 jours · 24 h/j · 19h–19h"
+  },
+  {
+    "name": "formatHorairesMission/multi-annees-differentes",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-12-28T07:00:00+01:00",
+        "fin_le": "2027-01-03T19:00:00+01:00",
+        "duree_heures": 48,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "4 jours · 12 h/j · 07h–19h"
+  },
+  {
+    "name": "formatHorairesMission/multi-duree-string",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": "80",
+        "nb_creneaux": 10
+      }
+    },
+    "expected": "10 jours · 8 h/j · 13h–21h"
+  },
+  {
+    "name": "formatHorairesMission/multi-fin-mois-fevrier-bissextile",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2024-02-26T08:00:00+01:00",
+        "fin_le": "2024-03-01T16:00:00+01:00",
+        "duree_heures": 40,
+        "nb_creneaux": 5
+      }
+    },
+    "expected": "5 jours · 8 h/j · 08h–16h"
+  },
+  {
+    "name": "formatHorairesMission/multi-heures-par-jour-decimales",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-20T08:00:00+02:00",
+        "fin_le": "2026-07-24T15:30:00+02:00",
+        "duree_heures": 37.5,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "5 jours · 7,5 h/j · 08h–15h30"
+  },
+  {
+    "name": "formatHorairesMission/multi-meme-mois-10-creneaux",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": 80,
+        "nb_creneaux": 10
+      }
+    },
+    "expected": "10 jours · 8 h/j · 13h–21h"
+  },
+  {
+    "name": "formatHorairesMission/multi-meme-mois-sans-creneaux",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": 80,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "10 jours · 8 h/j · 13h–21h"
+  },
+  {
+    "name": "formatHorairesMission/multi-meme-mois-sans-duree",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "12 jours · 8 h/j · 13h–21h"
+  },
+  {
+    "name": "formatHorairesMission/multi-mois-differents",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-28T07:00:00+02:00",
+        "fin_le": "2026-08-03T19:00:00+02:00",
+        "duree_heures": 60,
+        "nb_creneaux": 5
+      }
+    },
+    "expected": "5 jours · 12 h/j · 07h–19h"
+  },
+  {
+    "name": "formatHorairesMission/multi-nuits-4-creneaux",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-20T21:00:00+02:00",
+        "fin_le": "2026-07-24T07:00:00+02:00",
+        "duree_heures": 40,
+        "nb_creneaux": 4
+      }
+    },
+    "expected": "4 jours · 10 h/j · 21h–07h"
+  },
+  {
+    "name": "formatHorairesMission/multi-nuits-sans-creneaux",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-20T21:00:00+02:00",
+        "fin_le": "2026-07-24T07:00:00+02:00",
+        "duree_heures": 40,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "4 jours · 10 h/j · 21h–07h"
+  },
+  {
+    "name": "formatHorairesMission/multi-semaine-dst-mars",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-03-23T08:00:00+01:00",
+        "fin_le": "2026-03-30T16:00:00+02:00",
+        "duree_heures": 48,
+        "nb_creneaux": 6
+      }
+    },
+    "expected": "6 jours · 8 h/j · 08h–16h"
+  },
+  {
+    "name": "formatHorairesMission/nuit-06h59-limite-nuit",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T06:59:00+02:00",
+        "fin_le": "2026-07-02T14:59:00+02:00",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "06h59 → 14h59 (8 h)"
+  },
+  {
+    "name": "formatHorairesMission/nuit-20h00-limite-nuit",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T20:00:00+02:00",
+        "fin_le": "2026-07-03T06:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "20h00 → 06h00 (10 h)"
+  },
+  {
+    "name": "formatHorairesMission/nuit-23h30-00h30",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T23:30:00+02:00",
+        "fin_le": "2026-07-03T00:30:00+02:00",
+        "duree_heures": 1,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "23h30 → 00h30 (1 h)"
+  },
+  {
+    "name": "formatHorairesMission/nuit-utc-en-ete",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T19:00:00.000Z",
+        "fin_le": "2026-07-03T05:00:00.000Z",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "21h00 → 07h00 (10 h)"
+  },
+  {
+    "name": "formatHorairesMission/plage-24h-exactes",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-03T08:00:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "08h00 → 08h00 (24 h)"
+  },
+  {
+    "name": "formatHorairesMission/plage-24h-plus-1min",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-03T08:01:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "1440 jours · 0 h/j · 08h–08h01"
+  },
+  {
+    "name": "formatHorairesMission/sans-debut",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": null,
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "—"
+  },
+  {
+    "name": "formatHorairesMission/sans-fin",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": null,
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "—"
+  },
+  {
+    "name": "formatHorairesMission/sans-rien",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": null,
+        "fin_le": null
+      }
+    },
+    "expected": "—"
+  },
+  {
+    "name": "formatHorairesMission/vitest-legacy-sans-creneaux",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-09-03T07:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": "2 jours · 12 h/j · 07h–19h"
+  },
+  {
+    "name": "formatHorairesMission/vitest-multi-creneaux-nuit",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-09-03T19:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": 13,
+        "nb_creneaux": 2
+      }
+    },
+    "expected": "2 jours · 24 h/j · 19h–19h"
+  },
+  {
+    "name": "formatHorairesMission/vitest-une-journee",
+    "input": {
+      "fonction": "formatHorairesMission",
+      "mission": {
+        "debut_le": "2026-09-03T08:00:00+02:00",
+        "fin_le": "2026-09-03T15:30:00+02:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": "08h00 → 15h30 (7,5 h)"
+  },
+  {
+    "name": "nbJoursTravailles/jour-06h45-14h15",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T06:45:00+02:00",
+        "fin_le": "2026-07-02T14:15:00+02:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/jour-08h-18h",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/jour-13h-21h-sans-duree",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T13:00:00+02:00",
+        "fin_le": "2026-07-02T21:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": null
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/jour-19h59-limite-jour",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T19:59:00+02:00",
+        "fin_le": "2026-07-03T05:59:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/jour-debut-07h-limite-jour",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T07:00:00+02:00",
+        "fin_le": "2026-07-02T15:00:00+02:00",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/jour-dst-mars-23h-reelles",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-03-28T20:00:00+01:00",
+        "fin_le": "2026-03-29T08:00:00+02:00",
+        "duree_heures": 11,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/jour-dst-octobre-25h-reelles",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-10-24T20:00:00+02:00",
+        "fin_le": "2026-10-25T08:00:00+01:00",
+        "duree_heures": 13,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/jour-duree-string",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:30:00+02:00",
+        "duree_heures": "7.5",
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/jour-duree-string-vide",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:30:00+02:00",
+        "duree_heures": "",
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/jour-duree-tiers",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T15:20:00+02:00",
+        "duree_heures": 7.3333,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/jour-pause-deduite",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 9,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/jour-utc-en-hiver",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-01-12T07:00:00.000Z",
+        "fin_le": "2026-01-12T15:00:00.000Z",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/legacy-sans-offset",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-09-03T08:00:00",
+        "fin_le": "2026-09-03T15:30:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/multi-2-creneaux-sans-duree",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-09-03T19:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": 2
+      }
+    },
+    "expected": 2
+  },
+  {
+    "name": "nbJoursTravailles/multi-annees-differentes",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-12-28T07:00:00+01:00",
+        "fin_le": "2027-01-03T19:00:00+01:00",
+        "duree_heures": 48,
+        "nb_creneaux": null
+      }
+    },
+    "expected": 4
+  },
+  {
+    "name": "nbJoursTravailles/multi-duree-string",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": "80",
+        "nb_creneaux": 10
+      }
+    },
+    "expected": 10
+  },
+  {
+    "name": "nbJoursTravailles/multi-fin-mois-fevrier-bissextile",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2024-02-26T08:00:00+01:00",
+        "fin_le": "2024-03-01T16:00:00+01:00",
+        "duree_heures": 40,
+        "nb_creneaux": 5
+      }
+    },
+    "expected": 5
+  },
+  {
+    "name": "nbJoursTravailles/multi-heures-par-jour-decimales",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-20T08:00:00+02:00",
+        "fin_le": "2026-07-24T15:30:00+02:00",
+        "duree_heures": 37.5,
+        "nb_creneaux": null
+      }
+    },
+    "expected": 5
+  },
+  {
+    "name": "nbJoursTravailles/multi-meme-mois-10-creneaux",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": 80,
+        "nb_creneaux": 10
+      }
+    },
+    "expected": 10
+  },
+  {
+    "name": "nbJoursTravailles/multi-meme-mois-sans-creneaux",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": 80,
+        "nb_creneaux": null
+      }
+    },
+    "expected": 10
+  },
+  {
+    "name": "nbJoursTravailles/multi-meme-mois-sans-duree",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-20T13:00:00+02:00",
+        "fin_le": "2026-07-31T21:00:00+02:00",
+        "duree_heures": null,
+        "nb_creneaux": null
+      }
+    },
+    "expected": 12
+  },
+  {
+    "name": "nbJoursTravailles/multi-mois-differents",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-28T07:00:00+02:00",
+        "fin_le": "2026-08-03T19:00:00+02:00",
+        "duree_heures": 60,
+        "nb_creneaux": 5
+      }
+    },
+    "expected": 5
+  },
+  {
+    "name": "nbJoursTravailles/multi-nuits-4-creneaux",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-20T21:00:00+02:00",
+        "fin_le": "2026-07-24T07:00:00+02:00",
+        "duree_heures": 40,
+        "nb_creneaux": 4
+      }
+    },
+    "expected": 4
+  },
+  {
+    "name": "nbJoursTravailles/multi-nuits-sans-creneaux",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-20T21:00:00+02:00",
+        "fin_le": "2026-07-24T07:00:00+02:00",
+        "duree_heures": 40,
+        "nb_creneaux": null
+      }
+    },
+    "expected": 4
+  },
+  {
+    "name": "nbJoursTravailles/multi-semaine-dst-mars",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-03-23T08:00:00+01:00",
+        "fin_le": "2026-03-30T16:00:00+02:00",
+        "duree_heures": 48,
+        "nb_creneaux": 6
+      }
+    },
+    "expected": 6
+  },
+  {
+    "name": "nbJoursTravailles/nuit-06h59-limite-nuit",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T06:59:00+02:00",
+        "fin_le": "2026-07-02T14:59:00+02:00",
+        "duree_heures": 8,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/nuit-20h00-limite-nuit",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T20:00:00+02:00",
+        "fin_le": "2026-07-03T06:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/nuit-23h30-00h30",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T23:30:00+02:00",
+        "fin_le": "2026-07-03T00:30:00+02:00",
+        "duree_heures": 1,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/nuit-utc-en-ete",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T19:00:00.000Z",
+        "fin_le": "2026-07-03T05:00:00.000Z",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/plage-24h-exactes",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-03T08:00:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/plage-24h-plus-1min",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": "2026-07-03T08:01:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": 1440
+  },
+  {
+    "name": "nbJoursTravailles/sans-debut",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": null,
+        "fin_le": "2026-07-02T18:00:00+02:00",
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/sans-fin",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-07-02T08:00:00+02:00",
+        "fin_le": null,
+        "duree_heures": 10,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/sans-rien",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": null,
+        "fin_le": null
+      }
+    },
+    "expected": 1
+  },
+  {
+    "name": "nbJoursTravailles/vitest-legacy-sans-creneaux",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-09-03T07:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": 24,
+        "nb_creneaux": null
+      }
+    },
+    "expected": 2
+  },
+  {
+    "name": "nbJoursTravailles/vitest-multi-creneaux-nuit",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-09-03T19:00:00+02:00",
+        "fin_le": "2026-09-04T19:00:00+02:00",
+        "duree_heures": 13,
+        "nb_creneaux": 2
+      }
+    },
+    "expected": 2
+  },
+  {
+    "name": "nbJoursTravailles/vitest-une-journee",
+    "input": {
+      "fonction": "nbJoursTravailles",
+      "mission": {
+        "debut_le": "2026-09-03T08:00:00+02:00",
+        "fin_le": "2026-09-03T15:30:00+02:00",
+        "duree_heures": 7.5,
+        "nb_creneaux": 1
+      }
+    },
+    "expected": 1
+  }
+]

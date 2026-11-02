@@ -1,0 +1,6 @@
+#include "Base.xcconfig"
+// Configuration Release : production Supabase. La clé publishable est publique par construction.
+JOLENE_ENVIRONMENT = production
+JOLENE_SUPABASE_URL = https:/$()/flripxtsyegjshnhzjkz.supabase.co
+JOLENE_SUPABASE_PUBLISHABLE_KEY = sb_publishable_wrR-KGZqiovTPBym6mjXPw_V8l4ae-C
+APS_ENVIRONMENT = production

@@ -1,0 +1,823 @@
+#!/usr/bin/env node
+/**
+ * Export des vecteurs golden pour le port Swift des règles pures (plan §4.1).
+ *
+ * Lit directement les modules TypeScript de `src/lib` (type stripping natif de
+ * Node, aucune dépendance supplémentaire) et écrit, par règle, un JSON de
+ * vecteurs `{ name, input, expected }` dans
+ * `ios-native/Packages/JoleneCore/Tests/JoleneCoreTests/Resources/golden/`.
+ *
+ * Les vecteurs proviennent des tests vitest existants ET de grilles
+ * systématiques (changements d'heure Europe/Paris, fins de mois, années
+ * bissextiles, pauses, créneaux chevauchant minuit, fenêtre de 15 minutes du
+ * pointage). La sortie est déterministe : horloge toujours explicite, fuseau du
+ * processus forcé sur Europe/Paris, vecteurs triés par nom, noms uniques.
+ *
+ * Prérequis : Node >= 22.6 (type stripping). Sous Node 22.x le script se
+ * relance seul avec `--experimental-strip-types` ; sous Node 23.6+ et 24 le
+ * support est natif.
+ *
+ * Usage : node scripts/mobile/export-golden-vectors.mjs [--check]
+ *   --check : ne réécrit rien, échoue si les fichiers existants diffèrent.
+ */
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// Le formateur de mission lit l'heure locale du processus (`getHours`) : le
+// fuseau doit être celui de la France avant toute construction de Date.
+process.env.TZ = 'Europe/Paris';
+
+const [major, minor] = process.versions.node.split('.').map(Number);
+if (!process.features.typescript) {
+  if (major < 22 || (major === 22 && minor < 6)) {
+    console.error('Node >= 22.6 requis (type stripping natif). Version locale :', process.versions.node);
+    process.exit(2);
+  }
+  const relance = spawnSync(process.execPath, ['--experimental-strip-types', ...process.argv.slice(1)], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  process.exit(relance.status ?? 1);
+}
+
+const RACINE = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const DOSSIER_SORTIE = resolve(
+  RACINE,
+  'ios-native/Packages/JoleneCore/Tests/JoleneCoreTests/Resources/golden',
+);
+const MODE_CHECK = process.argv.includes('--check');
+
+// ---------------------------------------------------------------------------
+// date-fns réel (format + locale fr), celui que `src/lib/format-mission.ts`
+// utilise en production. Aucun shim : les vecteurs comparent Swift à la
+// dépendance réelle, résolue depuis node_modules (`npm ci` avant l'export).
+// ---------------------------------------------------------------------------
+try {
+  await import('date-fns');
+  await import('date-fns/locale');
+} catch (erreur) {
+  console.error("date-fns introuvable : exécutez `npm ci` avant l'export (les vecteurs format-mission doivent être produits contre la dépendance réelle, jamais contre un shim).", String(erreur?.message ?? erreur));
+  process.exit(2);
+}
+
+const lib = (nom) => import(pathToFileURL(resolve(RACINE, 'src/lib', nom)).href);
+const dateHeure = await lib('date-heure-paris.ts');
+const formatMission = await lib('format-mission.ts');
+const hebdo = await lib('heures-hebdomadaires-mission.ts');
+const pointage = await lib('disponibilite-pointage.ts');
+
+// ---------------------------------------------------------------------------
+// Outils
+// ---------------------------------------------------------------------------
+const iso = (d) => (d instanceof Date && Number.isFinite(d.getTime()) ? d.toISOString() : null);
+const pad2 = (n) => String(n).padStart(2, '0');
+const jourCivil = (annee, mois, jour) => `${annee}-${pad2(mois)}-${pad2(jour)}`;
+
+/** Exécute `fn` et renvoie soit la valeur, soit `{ erreur }` typée. */
+function capture(fn) {
+  try {
+    return fn();
+  } catch (erreur) {
+    const message = String(erreur?.message ?? erreur);
+    if (/inexistante/.test(message)) return { erreur: 'INEXISTANTE' };
+    if (/ambigu/.test(message)) return { erreur: 'AMBIGUE' };
+    return { erreur: 'INVALIDE' };
+  }
+}
+
+/** Dernier dimanche d'un mois (changements d'heure européens). */
+function dernierDimanche(annee, mois) {
+  for (let jour = 31; jour >= 25; jour -= 1) {
+    const d = new Date(Date.UTC(annee, mois - 1, jour, 12));
+    if (d.getUTCMonth() === mois - 1 && d.getUTCDay() === 0) return jour;
+  }
+  throw new Error('dernier dimanche introuvable');
+}
+
+function dernierJourDuMois(annee, mois) {
+  return new Date(Date.UTC(annee, mois, 0, 12)).getUTCDate();
+}
+
+class Collecteur {
+  constructor(regle) {
+    this.regle = regle;
+    this.vecteurs = [];
+    this.noms = new Set();
+    this.entrees = new Map();
+    this.fusionnes = [];
+  }
+
+  ajoute(name, input, expected) {
+    if (this.noms.has(name)) throw new Error(`${this.regle}: nom de vecteur dupliqué « ${name} »`);
+    // Une entrée identique (même JSON) n'apporte aucune couverture : elle est fusionnée
+    // avec le premier vecteur qui la porte (les cas vitest précèdent les grilles). Un
+    // attendu différent pour la même entrée serait une incohérence de l'export.
+    const cle = JSON.stringify(input);
+    const existant = this.entrees.get(cle);
+    if (existant) {
+      if (JSON.stringify(existant.expected) !== JSON.stringify(expected)) {
+        throw new Error(`${this.regle}: entrée identique avec attendus différents (« ${existant.name} », « ${name} »)`);
+      }
+      this.fusionnes.push(`${name} → ${existant.name}`);
+      return;
+    }
+    this.noms.add(name);
+    this.entrees.set(cle, { name, expected });
+    this.vecteurs.push({ name, input, expected });
+  }
+
+  tries() {
+    for (const fusion of this.fusionnes) console.log(`${this.regle}: entrée déjà couverte, vecteur fusionné ${fusion}`);
+    return [...this.vecteurs].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Règle 1 : date-heure-paris
+// ---------------------------------------------------------------------------
+function vecteursDateHeureParis() {
+  const c = new Collecteur('date-heure-paris');
+  const fn = (fonction, args, calcul) => c.ajoute(
+    `${fonction}/${args.__nom}`,
+    { fonction, ...Object.fromEntries(Object.entries(args).filter(([k]) => k !== '__nom')) },
+    capture(calcul),
+  );
+
+  // --- Issus des tests vitest -------------------------------------------
+  fn('cleMoisParis', { __nom: 'vitest-fin-juillet-utc', valeur: '2026-07-31T22:30:00.000Z' },
+    () => dateHeure.cleMoisParis('2026-07-31T22:30:00.000Z'));
+  fn('formatParis', { __nom: 'vitest-lundi-31-aout', valeur: '2026-08-31T06:00:00.000Z', masque: "EEEE d MMMM yyyy 'à' HH:mm" },
+    () => dateHeure.formatParis('2026-08-31T06:00:00.000Z', "EEEE d MMMM yyyy 'à' HH:mm"));
+  fn('instantDepuisSaisieParis', { __nom: 'vitest-31-aout-08h', valeur: '2026-08-31T08:00' },
+    () => iso(dateHeure.instantDepuisSaisieParis('2026-08-31T08:00')));
+  fn('formatParis', { __nom: 'vitest-legacy-sans-offset', valeur: '2026-08-31T08:00:00', masque: "EEEE d MMMM yyyy 'à' HH:mm" },
+    () => dateHeure.formatParis('2026-08-31T08:00:00', "EEEE d MMMM yyyy 'à' HH:mm"));
+  fn('instantJolene', { __nom: 'vitest-legacy-sans-offset', valeur: '2026-08-31T08:00:00' },
+    () => iso(dateHeure.instantJolene('2026-08-31T08:00:00')));
+  fn('formatParis', { __nom: 'vitest-legacy-millisecondes', valeur: '2026-08-31T08:00:00.250', masque: 'HH:mm:ss' },
+    () => dateHeure.formatParis('2026-08-31T08:00:00.250', 'HH:mm:ss'));
+  fn('formatParis', { __nom: 'vitest-trou-dst-londres', valeur: '2026-03-29T00:30:00.000Z', masque: 'EEEE d MMMM yyyy · HH:mm' },
+    () => dateHeure.formatParis('2026-03-29T00:30:00.000Z', 'EEEE d MMMM yyyy · HH:mm'));
+  fn('instantDepuisSaisieParis', { __nom: 'vitest-inexistante-2026', valeur: '2026-03-29T02:30' },
+    () => iso(dateHeure.instantDepuisSaisieParis('2026-03-29T02:30')));
+  fn('instantDepuisSaisieParis', { __nom: 'vitest-ambigue-2026', valeur: '2026-10-25T02:30' },
+    () => iso(dateHeure.instantDepuisSaisieParis('2026-10-25T02:30')));
+  fn('instantDepuisSaisieParis', { __nom: 'vitest-avant-trou', valeur: '2026-03-29T01:59' },
+    () => iso(dateHeure.instantDepuisSaisieParis('2026-03-29T01:59')));
+  fn('instantDepuisSaisieParis', { __nom: 'vitest-apres-trou', valeur: '2026-03-29T03:00' },
+    () => iso(dateHeure.instantDepuisSaisieParis('2026-03-29T03:00')));
+
+  // --- Grille changements d'heure 2024 → 2028 ----------------------------
+  for (const annee of [2024, 2025, 2026, 2027, 2028]) {
+    for (const [mois, libelle] of [[3, 'mars'], [10, 'octobre']]) {
+      const jour = dernierDimanche(annee, mois);
+      const date = jourCivil(annee, mois, jour);
+      const midi = `${date}T12:00:00.000Z`;
+      const nom = `dst-${libelle}-${annee}`;
+
+      fn('debutJourParis', { __nom: nom, valeur: midi }, () => iso(dateHeure.debutJourParis(midi)));
+      fn('ajouterJoursCivilsParis', { __nom: `${nom}-plus-1`, valeur: midi, jours: 1 },
+        () => iso(dateHeure.ajouterJoursCivilsParis(midi, 1)));
+      fn('ajouterJoursCivilsParis', { __nom: `${nom}-moins-1`, valeur: midi, jours: -1 },
+        () => iso(dateHeure.ajouterJoursCivilsParis(midi, -1)));
+      fn('debutSemaineParis', { __nom: nom, valeur: midi }, () => iso(dateHeure.debutSemaineParis(midi)));
+      fn('semaineSuivanteParis', { __nom: nom, valeur: midi }, () => iso(dateHeure.semaineSuivanteParis(midi)));
+
+      for (const heure of ['01:00', '01:59', '02:00', '02:30', '02:59', '03:00', '03:30', '04:00']) {
+        const saisie = `${date}T${heure}`;
+        fn('instantDepuisSaisieParis', { __nom: `${nom}-${heure.replace(':', 'h')}`, valeur: saisie },
+          () => iso(dateHeure.instantDepuisSaisieParis(saisie)));
+      }
+      for (const utc of ['00:30', '00:59', '01:00', '01:30', '01:59', '02:00']) {
+        const instant = `${date}T${utc}:00.000Z`;
+        fn('formatParis', { __nom: `${nom}-utc-${utc.replace(':', 'h')}`, valeur: instant, masque: 'EEEE d MMMM yyyy · HH:mm' },
+          () => dateHeure.formatParis(instant, 'EEEE d MMMM yyyy · HH:mm'));
+        fn('heureDecimaleParis', { __nom: `${nom}-utc-${utc.replace(':', 'h')}`, valeur: instant },
+          () => dateHeure.heureDecimaleParis(instant));
+      }
+      fn('partiesDateHeureParis', { __nom: `${nom}-utc-01h30`, valeur: `${date}T01:30:45.000Z` },
+        () => dateHeure.partiesDateHeureParis(`${date}T01:30:45.000Z`));
+      fn('instantJolene', { __nom: `${nom}-legacy-02h30`, valeur: `${date}T02:30:00` },
+        () => iso(dateHeure.instantJolene(`${date}T02:30:00`)));
+    }
+  }
+
+  // --- Fins de mois 2026 + février bissextile ------------------------------
+  const moisTestes = [
+    ...Array.from({ length: 12 }, (_, i) => [2026, i + 1]),
+    [2024, 2], [2028, 2], [2100, 2], [2000, 2],
+  ];
+  for (const [annee, mois] of moisTestes) {
+    const dernier = dernierJourDuMois(annee, mois);
+    const finMoisUtc = `${jourCivil(annee, mois, dernier)}T22:30:00.000Z`;
+    const nom = `fin-mois-${annee}-${pad2(mois)}`;
+    fn('cleMoisParis', { __nom: nom, valeur: finMoisUtc }, () => dateHeure.cleMoisParis(finMoisUtc));
+    fn('cleJourParis', { __nom: nom, valeur: finMoisUtc }, () => dateHeure.cleJourParis(finMoisUtc));
+    fn('finMoisParis', { __nom: nom, valeur: finMoisUtc }, () => iso(dateHeure.finMoisParis(finMoisUtc)));
+    fn('debutMoisParis', { __nom: nom, valeur: finMoisUtc }, () => iso(dateHeure.debutMoisParis(finMoisUtc)));
+    fn('ajouterMoisCivilsParis', { __nom: `${nom}-plus-1`, valeur: finMoisUtc, mois: 1 },
+      () => iso(dateHeure.ajouterMoisCivilsParis(finMoisUtc, 1)));
+    fn('ajouterMoisCivilsParis', { __nom: `${nom}-moins-13`, valeur: finMoisUtc, mois: -13 },
+      () => iso(dateHeure.ajouterMoisCivilsParis(finMoisUtc, -13)));
+    fn('memeMoisParis', { __nom: `${nom}-22h30-vs-23h30-utc`, a: finMoisUtc, b: `${jourCivil(annee, mois, dernier)}T23:30:00.000Z` },
+      () => dateHeure.memeMoisParis(finMoisUtc, `${jourCivil(annee, mois, dernier)}T23:30:00.000Z`));
+    fn('formatParis', { __nom: `${nom}-dernier-jour`, valeur: `${jourCivil(annee, mois, dernier)}T10:00:00.000Z`, masque: 'EEEE d MMMM yyyy' },
+      () => dateHeure.formatParis(`${jourCivil(annee, mois, dernier)}T10:00:00.000Z`, 'EEEE d MMMM yyyy'));
+  }
+
+  // --- 29 février et bornes séculaires ------------------------------------
+  for (const [nom, date] of [
+    ['bissextile-2024', '2024-02-29'], ['bissextile-2028', '2028-02-29'],
+    ['bissextile-2000', '2000-02-29'], ['non-bissextile-2100', '2100-02-28'],
+    ['non-bissextile-2027', '2027-02-28'],
+  ]) {
+    const instant = `${date}T10:00:00.000Z`;
+    fn('ajouterJoursCivilsParis', { __nom: `${nom}-plus-1`, valeur: instant, jours: 1 },
+      () => iso(dateHeure.ajouterJoursCivilsParis(instant, 1)));
+    fn('ajouterJoursCivilsParis', { __nom: `${nom}-plus-365`, valeur: instant, jours: 365 },
+      () => iso(dateHeure.ajouterJoursCivilsParis(instant, 365)));
+    fn('formatParis', { __nom: nom, valeur: instant, masque: 'EEE d MMM yyyy' },
+      () => dateHeure.formatParis(instant, 'EEE d MMM yyyy'));
+    fn('cleSemaineParis', { __nom: nom, valeur: instant }, () => dateHeure.cleSemaineParis(instant));
+  }
+  fn('instantDepuisSaisieParis', { __nom: '29-fevrier-2027-inexistant', valeur: '2027-02-29T10:00' },
+    () => iso(dateHeure.instantDepuisSaisieParis('2027-02-29T10:00')));
+  fn('instantDepuisSaisieParis', { __nom: '30-fevrier-2026-inexistant', valeur: '2026-02-30T10:00' },
+    () => iso(dateHeure.instantDepuisSaisieParis('2026-02-30T10:00')));
+  fn('instantDepuisSaisieParis', { __nom: 'mois-13-inexistant', valeur: '2026-13-01T10:00' },
+    () => iso(dateHeure.instantDepuisSaisieParis('2026-13-01T10:00')));
+  fn('instantDepuisSaisieParis', { __nom: 'format-invalide', valeur: '31/12/2026 10:00' },
+    () => iso(dateHeure.instantDepuisSaisieParis('31/12/2026 10:00')));
+  fn('instantDepuisSaisieParis', { __nom: 'avec-secondes', valeur: '2026-12-31T23:59:59' },
+    () => iso(dateHeure.instantDepuisSaisieParis('2026-12-31T23:59:59')));
+  fn('instantJolene', { __nom: 'chaine-invalide', valeur: 'pas une date' },
+    () => iso(dateHeure.instantJolene('pas une date')));
+  fn('instantJolene', { __nom: 'offset-plus-02', valeur: '2026-07-31T08:00:00+02:00' },
+    () => iso(dateHeure.instantJolene('2026-07-31T08:00:00+02:00')));
+  fn('instantJolene', { __nom: 'offset-plus-01-hiver', valeur: '2026-01-15T08:00:00+01:00' },
+    () => iso(dateHeure.instantJolene('2026-01-15T08:00:00+01:00')));
+  fn('instantJolene', { __nom: 'offset-postgres-microsecondes', valeur: '2026-07-31T08:00:00.123456+00:00' },
+    () => iso(dateHeure.instantJolene('2026-07-31T08:00:00.123456+00:00')));
+  fn('instantJolene', { __nom: 'legacy-sans-secondes', valeur: '2026-07-31T08:05' },
+    () => iso(dateHeure.instantJolene('2026-07-31T08:05')));
+  fn('instantJolene', { __nom: 'legacy-ms-1-chiffre', valeur: '2026-07-31T08:05:07.5' },
+    () => iso(dateHeure.instantJolene('2026-07-31T08:05:07.5')));
+  fn('instantJolene', { __nom: 'legacy-ms-2-chiffres', valeur: '2026-07-31T08:05:07.25' },
+    () => iso(dateHeure.instantJolene('2026-07-31T08:05:07.25')));
+  fn('instantJolene', { __nom: 'legacy-trou-dst', valeur: '2026-03-29T02:15:00' },
+    () => iso(dateHeure.instantJolene('2026-03-29T02:15:00')));
+  fn('instantJolene', { __nom: 'legacy-ambigu-dst', valeur: '2026-10-25T02:15:00' },
+    () => iso(dateHeure.instantJolene('2026-10-25T02:15:00')));
+  fn('instantJolene', { __nom: 'date-seule-utc', valeur: '2026-07-31' },
+    () => iso(dateHeure.instantJolene('2026-07-31')));
+
+  // --- Semaines : frontière d'année + semaine DST ---------------------------
+  const semaines = [
+    ['2026-12-28', '2026-12-29', '2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02', '2027-01-03'],
+    ['2026-03-23', '2026-03-24', '2026-03-25', '2026-03-26', '2026-03-27', '2026-03-28', '2026-03-29'],
+    ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01'],
+  ];
+  for (const jours of semaines) {
+    for (const jour of jours) {
+      const instant = `${jour}T22:30:00.000Z`; // déjà le lendemain à Paris en été
+      fn('debutSemaineParis', { __nom: `semaine-${jour}`, valeur: instant }, () => iso(dateHeure.debutSemaineParis(instant)));
+      fn('cleSemaineParis', { __nom: `semaine-${jour}`, valeur: instant }, () => dateHeure.cleSemaineParis(instant));
+      fn('semaineSuivanteParis', { __nom: `semaine-${jour}`, valeur: instant }, () => iso(dateHeure.semaineSuivanteParis(instant)));
+    }
+  }
+
+  // --- Même jour / minuit Paris vs minuit UTC -------------------------------
+  const paires = [
+    ['ete-avant-minuit-paris', '2026-07-31T21:59:59.000Z', '2026-07-31T12:00:00.000Z', true],
+    ['ete-apres-minuit-paris', '2026-07-31T22:00:00.000Z', '2026-07-31T12:00:00.000Z', false],
+    ['hiver-avant-minuit-paris', '2026-01-31T22:59:59.000Z', '2026-01-31T12:00:00.000Z', true],
+    ['hiver-apres-minuit-paris', '2026-01-31T23:00:00.000Z', '2026-01-31T12:00:00.000Z', false],
+    ['legacy-vs-offset', '2026-07-31T23:30:00', '2026-07-31T21:30:00.000Z', true],
+  ];
+  for (const [nom, a, b] of paires) {
+    fn('memeJourParis', { __nom: nom, a, b }, () => dateHeure.memeJourParis(a, b));
+  }
+
+  // --- Jetons de format ----------------------------------------------------
+  const instantFormat = '2026-01-05T07:08:09.000Z'; // lundi 5 janvier 08:08:09 Paris
+  const masques = [
+    'yyyy-MM-dd HH:mm:ss', 'd/M/yyyy H:m:s', 'EEE d MMM', 'EEEE d MMMM yyyy', 'MMMM', 'MMM',
+    "HH'h'mm", "HH'h'", "'jour' d 'à' HH'h'mm", "yyyy-MM-dd'T'HH:mm", "''", "d 'o''clock'", 'dd/MM/yyyy',
+  ];
+  masques.forEach((masque, index) => {
+    fn('formatParis', { __nom: `jetons-${index}`, valeur: instantFormat, masque },
+      () => dateHeure.formatParis(instantFormat, masque));
+  });
+  fn('formatParis', { __nom: 'jetons-ete-14h', valeur: '2026-07-14T12:00:00.000Z', masque: 'EEEE d MMMM yyyy HH:mm' },
+    () => dateHeure.formatParis('2026-07-14T12:00:00.000Z', 'EEEE d MMMM yyyy HH:mm'));
+  for (const [nom, valeur] of [
+    ['hiver', '2026-01-15T07:05:00.000Z'], ['ete', '2026-07-15T06:05:00.000Z'], ['minuit-paris', '2026-07-14T22:00:00.000Z'],
+  ]) {
+    fn('valeurSaisieDateHeureParis', { __nom: nom, valeur }, () => dateHeure.valeurSaisieDateHeureParis(valeur));
+  }
+
+  // --- Parties + instant (aller-retour) ------------------------------------
+  const partiesCas = [
+    ['hiver', { annee: 2026, mois: 1, jour: 15, heure: 8, minute: 30, seconde: 0 }],
+    ['ete', { annee: 2026, mois: 7, jour: 15, heure: 8, minute: 30, seconde: 15 }],
+    ['minuit', { annee: 2026, mois: 7, jour: 15, heure: 0, minute: 0, seconde: 0 }],
+    ['trou-dst', { annee: 2026, mois: 3, jour: 29, heure: 2, minute: 0, seconde: 0 }],
+    ['ambigu-dst', { annee: 2026, mois: 10, jour: 25, heure: 2, minute: 59, seconde: 59 }],
+    ['heure-24-normalisee', { annee: 2026, mois: 7, jour: 15, heure: 24, minute: 0, seconde: 0 }],
+    ['29-fevrier-2024', { annee: 2024, mois: 2, jour: 29, heure: 23, minute: 59, seconde: 59 }],
+  ];
+  for (const [nom, parties] of partiesCas) {
+    fn('instantDateHeureParis', { __nom: nom, parties }, () => iso(dateHeure.instantDateHeureParis(parties)));
+  }
+  for (const [nom, valeur] of [
+    ['hiver', '2026-01-15T07:30:00.000Z'], ['ete', '2026-07-15T06:30:15.000Z'], ['fin-annee', '2026-12-31T23:30:00.000Z'],
+  ]) {
+    fn('partiesDateHeureParis', { __nom: nom, valeur }, () => dateHeure.partiesDateHeureParis(valeur));
+  }
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 2 : format-mission
+// ---------------------------------------------------------------------------
+function vecteursFormatMission() {
+  const c = new Collecteur('format-mission');
+  const toutes = (nom, mission) => {
+    c.ajoute(`estMissionDeNuit/${nom}`, { fonction: 'estMissionDeNuit', mission }, capture(() => formatMission.estMissionDeNuit(mission.debut_le)));
+    c.ajoute(`estMultiJours/${nom}`, { fonction: 'estMultiJours', mission }, capture(() => formatMission.estMultiJours(mission)));
+    c.ajoute(`nbJoursTravailles/${nom}`, { fonction: 'nbJoursTravailles', mission }, capture(() => formatMission.nbJoursTravailles(mission)));
+    c.ajoute(`formatDateMission/${nom}`, { fonction: 'formatDateMission', mission }, capture(() => formatMission.formatDateMission(mission)));
+    c.ajoute(`formatHorairesMission/${nom}`, { fonction: 'formatHorairesMission', mission }, capture(() => formatMission.formatHorairesMission(mission)));
+    c.ajoute(`formatDureeCompacte/${nom}`, { fonction: 'formatDureeCompacte', mission }, capture(() => formatMission.formatDureeCompacte(mission)));
+  };
+
+  // Issus des tests vitest
+  toutes('vitest-multi-creneaux-nuit', { debut_le: '2026-09-03T19:00:00+02:00', fin_le: '2026-09-04T19:00:00+02:00', duree_heures: 13, nb_creneaux: 2 });
+  toutes('vitest-legacy-sans-creneaux', { debut_le: '2026-09-03T07:00:00+02:00', fin_le: '2026-09-04T19:00:00+02:00', duree_heures: 24, nb_creneaux: null });
+  toutes('vitest-une-journee', { debut_le: '2026-09-03T08:00:00+02:00', fin_le: '2026-09-03T15:30:00+02:00', duree_heures: 7.5, nb_creneaux: 1 });
+
+  // Journées simples : jour / nuit / minuit / pause déduite
+  toutes('jour-08h-18h', { debut_le: '2026-07-02T08:00:00+02:00', fin_le: '2026-07-02T18:00:00+02:00', duree_heures: 10, nb_creneaux: 1 });
+  toutes('jour-13h-21h-sans-duree', { debut_le: '2026-07-02T13:00:00+02:00', fin_le: '2026-07-02T21:00:00+02:00', duree_heures: null, nb_creneaux: null });
+  toutes('jour-06h45-14h15', { debut_le: '2026-07-02T06:45:00+02:00', fin_le: '2026-07-02T14:15:00+02:00', duree_heures: 7.5, nb_creneaux: 1 });
+  toutes('jour-duree-string', { debut_le: '2026-07-02T08:00:00+02:00', fin_le: '2026-07-02T15:30:00+02:00', duree_heures: '7.5', nb_creneaux: 1 });
+  toutes('jour-duree-string-vide', { debut_le: '2026-07-02T08:00:00+02:00', fin_le: '2026-07-02T15:30:00+02:00', duree_heures: '', nb_creneaux: 1 });
+  toutes('jour-pause-deduite', { debut_le: '2026-07-02T08:00:00+02:00', fin_le: '2026-07-02T18:00:00+02:00', duree_heures: 9, nb_creneaux: 1 });
+  toutes('jour-duree-tiers', { debut_le: '2026-07-02T08:00:00+02:00', fin_le: '2026-07-02T15:20:00+02:00', duree_heures: 7.3333, nb_creneaux: 1 });
+  toutes('jour-debut-07h-limite-jour', { debut_le: '2026-07-02T07:00:00+02:00', fin_le: '2026-07-02T15:00:00+02:00', duree_heures: 8, nb_creneaux: 1 });
+  toutes('nuit-06h59-limite-nuit', { debut_le: '2026-07-02T06:59:00+02:00', fin_le: '2026-07-02T14:59:00+02:00', duree_heures: 8, nb_creneaux: 1 });
+  toutes('nuit-20h00-limite-nuit', { debut_le: '2026-07-02T20:00:00+02:00', fin_le: '2026-07-03T06:00:00+02:00', duree_heures: 10, nb_creneaux: 1 });
+  toutes('jour-19h59-limite-jour', { debut_le: '2026-07-02T19:59:00+02:00', fin_le: '2026-07-03T05:59:00+02:00', duree_heures: 10, nb_creneaux: 1 });
+  toutes('nuit-23h30-00h30', { debut_le: '2026-07-02T23:30:00+02:00', fin_le: '2026-07-03T00:30:00+02:00', duree_heures: 1, nb_creneaux: 1 });
+  toutes('nuit-utc-en-ete', { debut_le: '2026-07-02T19:00:00.000Z', fin_le: '2026-07-03T05:00:00.000Z', duree_heures: 10, nb_creneaux: 1 });
+  toutes('jour-utc-en-hiver', { debut_le: '2026-01-12T07:00:00.000Z', fin_le: '2026-01-12T15:00:00.000Z', duree_heures: 8, nb_creneaux: 1 });
+  toutes('legacy-sans-offset', { debut_le: '2026-09-03T08:00:00', fin_le: '2026-09-03T15:30:00', duree_heures: 7.5, nb_creneaux: 1 });
+  toutes('plage-24h-exactes', { debut_le: '2026-07-02T08:00:00+02:00', fin_le: '2026-07-03T08:00:00+02:00', duree_heures: 24, nb_creneaux: null });
+  toutes('plage-24h-plus-1min', { debut_le: '2026-07-02T08:00:00+02:00', fin_le: '2026-07-03T08:01:00+02:00', duree_heures: 24, nb_creneaux: null });
+  toutes('jour-dst-mars-23h-reelles', { debut_le: '2026-03-28T20:00:00+01:00', fin_le: '2026-03-29T08:00:00+02:00', duree_heures: 11, nb_creneaux: 1 });
+  toutes('jour-dst-octobre-25h-reelles', { debut_le: '2026-10-24T20:00:00+02:00', fin_le: '2026-10-25T08:00:00+01:00', duree_heures: 13, nb_creneaux: 1 });
+
+  // Multi-jours
+  toutes('multi-meme-mois-10-creneaux', { debut_le: '2026-07-20T13:00:00+02:00', fin_le: '2026-07-31T21:00:00+02:00', duree_heures: 80, nb_creneaux: 10 });
+  toutes('multi-meme-mois-sans-creneaux', { debut_le: '2026-07-20T13:00:00+02:00', fin_le: '2026-07-31T21:00:00+02:00', duree_heures: 80, nb_creneaux: null });
+  toutes('multi-meme-mois-sans-duree', { debut_le: '2026-07-20T13:00:00+02:00', fin_le: '2026-07-31T21:00:00+02:00', duree_heures: null, nb_creneaux: null });
+  toutes('multi-mois-differents', { debut_le: '2026-07-28T07:00:00+02:00', fin_le: '2026-08-03T19:00:00+02:00', duree_heures: 60, nb_creneaux: 5 });
+  toutes('multi-annees-differentes', { debut_le: '2026-12-28T07:00:00+01:00', fin_le: '2027-01-03T19:00:00+01:00', duree_heures: 48, nb_creneaux: null });
+  toutes('multi-semaine-dst-mars', { debut_le: '2026-03-23T08:00:00+01:00', fin_le: '2026-03-30T16:00:00+02:00', duree_heures: 48, nb_creneaux: 6 });
+  toutes('multi-nuits-4-creneaux', { debut_le: '2026-07-20T21:00:00+02:00', fin_le: '2026-07-24T07:00:00+02:00', duree_heures: 40, nb_creneaux: 4 });
+  toutes('multi-nuits-sans-creneaux', { debut_le: '2026-07-20T21:00:00+02:00', fin_le: '2026-07-24T07:00:00+02:00', duree_heures: 40, nb_creneaux: null });
+  toutes('multi-duree-string', { debut_le: '2026-07-20T13:00:00+02:00', fin_le: '2026-07-31T21:00:00+02:00', duree_heures: '80', nb_creneaux: 10 });
+  toutes('multi-fin-mois-fevrier-bissextile', { debut_le: '2024-02-26T08:00:00+01:00', fin_le: '2024-03-01T16:00:00+01:00', duree_heures: 40, nb_creneaux: 5 });
+  toutes('multi-heures-par-jour-decimales', { debut_le: '2026-07-20T08:00:00+02:00', fin_le: '2026-07-24T15:30:00+02:00', duree_heures: 37.5, nb_creneaux: null });
+  toutes('multi-2-creneaux-sans-duree', { debut_le: '2026-09-03T19:00:00+02:00', fin_le: '2026-09-04T19:00:00+02:00', duree_heures: null, nb_creneaux: 2 });
+
+  // Données incomplètes
+  toutes('sans-debut', { debut_le: null, fin_le: '2026-07-02T18:00:00+02:00', duree_heures: 10, nb_creneaux: 1 });
+  toutes('sans-fin', { debut_le: '2026-07-02T08:00:00+02:00', fin_le: null, duree_heures: 10, nb_creneaux: 1 });
+  toutes('sans-rien', { debut_le: null, fin_le: null });
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 3 : heures-hebdomadaires-mission
+// ---------------------------------------------------------------------------
+function vecteursHeuresHebdomadaires() {
+  const c = new Collecteur('heures-hebdomadaires-mission');
+  const semaine = (s) => ({ cleSemaine: s.cleSemaine, debutSemaine: iso(s.debutSemaine), heures: s.heures });
+  const semaines = (liste) => liste.map(semaine);
+  const carte = (map) => Object.fromEntries([...map.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => [k, semaine(v)]));
+
+  const mission = { id: 'mission-ete', debut_le: '2026-07-20T13:00:00+02:00', fin_le: '2026-07-31T21:00:00+02:00', duree_heures: 80 };
+  const creneau = (jour, type = 'PREVISIONNEL', missionId = mission.id) => ({
+    mission_id: missionId, debut: `${jour}T13:00:00+02:00`, fin: `${jour}T21:00:00+02:00`, est_pause: false, type_creneau: type,
+  });
+
+  const parSemaine = (nom, m, creneaux) => c.ajoute(`heuresMissionParSemaine/${nom}`,
+    { fonction: 'heuresMissionParSemaine', mission: m, creneaux }, capture(() => semaines(hebdo.heuresMissionParSemaine(m, creneaux))));
+  const disponible = (nom, m, creneaux) => c.ajoute(`planningMissionHebdomadaireDisponible/${nom}`,
+    { fonction: 'planningMissionHebdomadaireDisponible', mission: m, creneaux }, capture(() => hebdo.planningMissionHebdomadaireDisponible(m, creneaux)));
+  const addition = (nom, missions, creneaux) => c.ajoute(`additionnerHeuresParSemaine/${nom}`,
+    { fonction: 'additionnerHeuresParSemaine', missions, creneaux }, capture(() => carte(hebdo.additionnerHeuresParSemaine(missions, creneaux))));
+  const additionSalariee = (nom, missions, creneaux) => c.ajoute(`additionnerHeuresSalarieesParSemaine/${nom}`,
+    { fonction: 'additionnerHeuresSalarieesParSemaine', missions, creneaux }, capture(() => carte(hebdo.additionnerHeuresSalarieesParSemaine(missions, creneaux))));
+
+  // --- Issus des tests vitest ---------------------------------------------
+  const dixJours = ['2026-07-20', '2026-07-21', '2026-07-22', '2026-07-23', '2026-07-24',
+    '2026-07-27', '2026-07-28', '2026-07-29', '2026-07-30', '2026-07-31'];
+  parSemaine('vitest-40h-plus-40h', mission, dixJours.map((j) => creneau(j)));
+  parSemaine('vitest-pas-de-double-effectif', mission, [creneau('2026-07-20'), creneau('2026-07-20', 'EFFECTIF')]);
+  parSemaine('vitest-terminee-effectif', { ...mission, statut: 'TERMINEE' }, [
+    creneau('2026-07-20'), { ...creneau('2026-07-20', 'EFFECTIF'), fin: '2026-07-20T20:00:00+02:00' },
+  ]);
+  const nuitLundi = { ...mission, debut_le: '2026-07-26T20:00:00+02:00', fin_le: '2026-07-27T08:00:00+02:00', duree_heures: 12 };
+  parSemaine('vitest-nuit-franchit-lundi', nuitLundi, [{
+    mission_id: mission.id, debut: '2026-07-26T20:00:00+02:00', fin: '2026-07-27T08:00:00+02:00', est_pause: false, type_creneau: 'PREVISIONNEL',
+  }]);
+  const autre = { ...mission, id: 'mission-existante', duree_heures: 8 };
+  addition('vitest-deux-missions', [mission, autre], [creneau('2026-07-20'), creneau('2026-07-20', 'PREVISIONNEL', autre.id)]);
+  parSemaine('vitest-multi-creneaux-sans-lignes', { ...mission, nb_creneaux: 10 }, []);
+  const pause = { mission_id: mission.id, debut: '2026-07-20T16:00:00+02:00', fin: '2026-07-20T16:30:00+02:00', est_pause: true, type_creneau: 'PREVISIONNEL' };
+  const missionAvecPause = { ...mission, nb_creneaux: 2 };
+  disponible('vitest-pause-incomplet', missionAvecPause, [creneau('2026-07-20'), pause]);
+  parSemaine('vitest-pause-incomplet', missionAvecPause, [creneau('2026-07-20'), pause]);
+  disponible('vitest-pause-complet', missionAvecPause, [creneau('2026-07-20'), creneau('2026-07-21'), pause]);
+  parSemaine('vitest-pause-complet', missionAvecPause, [creneau('2026-07-20'), creneau('2026-07-21'), pause]);
+  const salariee = { ...mission, id: 'mission-salariee', type_contrat_applique: 'SALARIE' };
+  const liberale = { ...mission, id: 'mission-liberale', type_contrat_applique: 'LIBERAL' };
+  additionSalariee('vitest-exclut-liberale', [salariee, liberale], [
+    creneau('2026-07-20', 'PREVISIONNEL', salariee.id), creneau('2026-07-20', 'PREVISIONNEL', liberale.id),
+  ]);
+
+  // --- Semaines civiles : DST, frontière d'année, bissextile -------------
+  const jours = [
+    '2026-03-23', '2026-03-24', '2026-03-25', '2026-03-26', '2026-03-27', '2026-03-28', '2026-03-29',
+    '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01',
+    '2026-12-28', '2026-12-31', '2027-01-01', '2027-01-03',
+    '2024-02-26', '2024-02-29', '2024-03-03',
+  ];
+  for (const jour of jours) {
+    const instant = `${jour}T22:30:00.000Z`;
+    c.ajoute(`debutSemaineCivile/${jour}`, { fonction: 'debutSemaineCivile', valeur: instant },
+      capture(() => iso(hebdo.debutSemaineCivile(new Date(instant)))));
+    c.ajoute(`cleSemaineCivile/${jour}`, { fonction: 'cleSemaineCivile', valeur: instant },
+      capture(() => hebdo.cleSemaineCivile(new Date(instant))));
+    c.ajoute(`semaineSuivante/${jour}`, { fonction: 'semaineSuivante', valeur: instant },
+      capture(() => iso(hebdo.semaineSuivante(new Date(instant)))));
+  }
+
+  // --- Créneaux traversant un changement d'heure ou minuit ----------------
+  const slot = (debut, fin, extra = {}) => ({ mission_id: mission.id, debut, fin, est_pause: false, type_creneau: 'PREVISIONNEL', ...extra });
+  parSemaine('dst-mars-nuit-11h-reelles', { ...mission, debut_le: '2026-03-28T20:00:00+01:00', fin_le: '2026-03-29T08:00:00+02:00', duree_heures: 11 },
+    [slot('2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00')]);
+  parSemaine('dst-octobre-nuit-13h-reelles', { ...mission, debut_le: '2026-10-24T20:00:00+02:00', fin_le: '2026-10-25T08:00:00+01:00', duree_heures: 13 },
+    [slot('2026-10-24T20:00:00+02:00', '2026-10-25T08:00:00+01:00')]);
+  parSemaine('dst-mars-lundi-suivant', { ...mission, debut_le: '2026-03-29T20:00:00+02:00', fin_le: '2026-03-30T08:00:00+02:00', duree_heures: 12 },
+    [slot('2026-03-29T20:00:00+02:00', '2026-03-30T08:00:00+02:00')]);
+  parSemaine('dst-octobre-lundi-suivant', { ...mission, debut_le: '2026-10-25T20:00:00+01:00', fin_le: '2026-10-26T08:00:00+01:00', duree_heures: 12 },
+    [slot('2026-10-25T20:00:00+01:00', '2026-10-26T08:00:00+01:00')]);
+  parSemaine('frontiere-annee-dimanche-lundi', { ...mission, debut_le: '2027-01-03T20:00:00+01:00', fin_le: '2027-01-04T08:00:00+01:00', duree_heures: 12 },
+    [slot('2027-01-03T20:00:00+01:00', '2027-01-04T08:00:00+01:00')]);
+  parSemaine('creneau-de-3-semaines', { ...mission, debut_le: '2026-07-05T20:00:00+02:00', fin_le: '2026-07-20T08:00:00+02:00', duree_heures: 348 },
+    [slot('2026-07-05T20:00:00+02:00', '2026-07-20T08:00:00+02:00')]);
+  parSemaine('creneau-exactement-minuit-lundi', { ...mission, debut_le: '2026-07-26T22:00:00+02:00', fin_le: '2026-07-27T00:00:00+02:00', duree_heures: 2 },
+    [slot('2026-07-26T22:00:00+02:00', '2026-07-27T00:00:00+02:00')]);
+  parSemaine('creneau-debut-minuit-lundi', { ...mission, debut_le: '2026-07-27T00:00:00+02:00', fin_le: '2026-07-27T02:00:00+02:00', duree_heures: 2 },
+    [slot('2026-07-27T00:00:00+02:00', '2026-07-27T02:00:00+02:00')]);
+  parSemaine('creneau-utc-minuit-lundi-paris', { ...mission, debut_le: '2026-07-26T21:00:00.000Z', fin_le: '2026-07-27T03:00:00.000Z', duree_heures: 6 },
+    [slot('2026-07-26T21:00:00.000Z', '2026-07-27T03:00:00.000Z')]);
+  parSemaine('creneau-minutes-arrondi-2-decimales', { ...mission, duree_heures: 7.75 },
+    [slot('2026-07-20T13:00:00+02:00', '2026-07-20T20:45:00+02:00'), slot('2026-07-21T13:00:00+02:00', '2026-07-21T20:20:00+02:00')]);
+
+  // --- Filtrage des créneaux de référence ---------------------------------
+  parSemaine('creneau-fin-null-ignore', mission, [slot('2026-07-20T13:00:00+02:00', null)]);
+  parSemaine('creneau-fin-null-plus-un-complet', mission, [slot('2026-07-20T13:00:00+02:00', null), creneau('2026-07-21')]);
+  parSemaine('creneau-fin-avant-debut-ignore', mission, [slot('2026-07-20T21:00:00+02:00', '2026-07-20T13:00:00+02:00')]);
+  parSemaine('creneau-date-invalide-ignore', mission, [slot('pas une date', '2026-07-20T21:00:00+02:00')]);
+  parSemaine('creneau-autre-mission-ignore', mission, [creneau('2026-07-20', 'PREVISIONNEL', 'autre-mission')]);
+  parSemaine('creneau-sans-mission-id-ignore', mission, [{ debut: '2026-07-20T13:00:00+02:00', fin: '2026-07-20T21:00:00+02:00', est_pause: false, type_creneau: 'PREVISIONNEL' }]);
+  parSemaine('effectif-seul-repli', mission, [creneau('2026-07-20', 'EFFECTIF')]);
+  parSemaine('pause-seule-previsionnelle-repli-effectif', mission, [pause, creneau('2026-07-20', 'EFFECTIF')]);
+  parSemaine('terminee-sans-effectif-travail', { ...mission, statut: 'TERMINEE' }, [creneau('2026-07-20'), { ...pause, type_creneau: 'EFFECTIF' }]);
+  parSemaine('terminee-effectif-fin-null', { ...mission, statut: 'TERMINEE' }, [creneau('2026-07-20'), slot('2026-07-20T13:00:00+02:00', null, { type_creneau: 'EFFECTIF' })]);
+  parSemaine('en-cours-ignore-effectif-partiel', { ...mission, statut: 'EN_COURS' }, [creneau('2026-07-20'), { ...creneau('2026-07-20', 'EFFECTIF'), fin: '2026-07-20T18:00:00+02:00' }]);
+  parSemaine('nb-creneaux-2-une-ligne', { ...mission, nb_creneaux: 2 }, [creneau('2026-07-20')]);
+  parSemaine('nb-creneaux-2-trois-lignes', { ...mission, nb_creneaux: 2 }, [creneau('2026-07-20'), creneau('2026-07-21'), creneau('2026-07-22')]);
+  parSemaine('nb-creneaux-1-sans-ligne-repli-duree', { ...mission, nb_creneaux: 1 }, []);
+  parSemaine('nb-creneaux-null-sans-ligne-repli-duree', mission, []);
+  parSemaine('repli-duree-string', { ...mission, duree_heures: '8' }, []);
+  parSemaine('repli-duree-zero', { ...mission, duree_heures: 0 }, []);
+  parSemaine('repli-duree-null', { ...mission, duree_heures: null }, []);
+  parSemaine('repli-duree-invalide', { ...mission, duree_heures: 'abc' }, []);
+  parSemaine('repli-debut-invalide', { ...mission, debut_le: 'pas une date' }, []);
+  parSemaine('repli-debut-dimanche-soir', { ...mission, debut_le: '2026-07-26T22:30:00.000Z', duree_heures: 8 }, []);
+  parSemaine('repli-debut-dst-hiver', { ...mission, debut_le: '2026-10-25T00:30:00.000Z', duree_heures: 8 }, []);
+
+  disponible('ponctuelle-sans-ligne', mission, []);
+  disponible('ponctuelle-ligne-ouverte', mission, [slot('2026-07-20T13:00:00+02:00', null)]);
+  disponible('ponctuelle-ligne-complete', mission, [creneau('2026-07-20')]);
+  disponible('ponctuelle-pause-seule', mission, [pause]);
+  disponible('multi-sans-ligne', { ...mission, nb_creneaux: 3 }, []);
+  disponible('multi-lignes-incompletes', { ...mission, nb_creneaux: 3 }, [creneau('2026-07-20'), creneau('2026-07-21')]);
+  disponible('multi-lignes-completes', { ...mission, nb_creneaux: 3 }, [creneau('2026-07-20'), creneau('2026-07-21'), creneau('2026-07-22')]);
+  disponible('multi-effectif-seul', { ...mission, nb_creneaux: 2 }, [creneau('2026-07-20', 'EFFECTIF'), creneau('2026-07-21', 'EFFECTIF')]);
+
+  addition('vide', [], []);
+  addition('trois-missions-deux-semaines', [mission, autre, { ...mission, id: 'm3', duree_heures: 12 }], [
+    creneau('2026-07-20'), creneau('2026-07-27', 'PREVISIONNEL', autre.id), slot('2026-07-26T20:00:00+02:00', '2026-07-27T08:00:00+02:00', { mission_id: 'm3' }),
+  ]);
+  addition('repli-duree-sans-lignes', [mission, { ...mission, id: 'm2', duree_heures: 4 }], []);
+  additionSalariee('toutes-liberales', [liberale, { ...liberale, id: 'l2' }], [creneau('2026-07-20', 'PREVISIONNEL', liberale.id), creneau('2026-07-20', 'PREVISIONNEL', 'l2')]);
+  additionSalariee('tous-sans-choix-compte', [{ ...mission, type_contrat_recherche: 'TOUS' }], [creneau('2026-07-20')]);
+
+  // --- Résolution du régime : matrice systématique ------------------------
+  const libelle = (v) => (v === null ? 'null' : v === undefined ? 'absent' : v === '' ? 'vide' : v.trim() === '' ? 'blanc' : v.trim().toLowerCase().replace(/\s+/g, '-') + (v !== v.trim() ? '-espaces' : ''));
+  const appliques = [undefined, null, 'SALARIE', 'LIBERAL', ''];
+  const choix = [undefined, null, 'LIBERAL', ' liberal ', 'SALARIE', ' '];
+  const recherches = [undefined, null, 'LIBERAL', 'TOUS', 'SALARIE'];
+  for (const applique of appliques) {
+    for (const ch of choix) {
+      for (const recherche of recherches) {
+        const m = { ...mission };
+        if (applique !== undefined) m.type_contrat_applique = applique;
+        if (ch !== undefined) m.choix_contrat_soignant = ch;
+        if (recherche !== undefined) m.type_contrat_recherche = recherche;
+        const nom = `applique-${libelle(applique)}/choix-${libelle(ch)}/recherche-${libelle(recherche)}`;
+        c.ajoute(`missionComptePourPlafond48h/${nom}`, { fonction: 'missionComptePourPlafond48h', mission: m },
+          capture(() => hebdo.missionComptePourPlafond48h(m)));
+        c.ajoute(`missionPlafond48hConditionnel/${nom}`, { fonction: 'missionPlafond48hConditionnel', mission: m },
+          capture(() => hebdo.missionPlafond48hConditionnel(m)));
+      }
+    }
+  }
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 4 : disponibilite-pointage
+// ---------------------------------------------------------------------------
+function vecteursDisponibilitePointage() {
+  const c = new Collecteur('disponibilite-pointage');
+  const creneau = (debut, fin, type_creneau = 'PREVISIONNEL', extra = {}) => ({ debut, fin, type_creneau, est_pause: false, ...extra });
+  const dispo = (nom, args) => c.ajoute(`evaluerDisponibilitePointage/${nom}`,
+    { fonction: 'evaluerDisponibilitePointage', ...args },
+    capture(() => pointage.evaluerDisponibilitePointage({ ...args, maintenant: new Date(args.maintenant) })));
+  const terminaison = (nom, args) => c.ajoute(`evaluerTerminaisonMission/${nom}`,
+    { fonction: 'evaluerTerminaisonMission', ...args },
+    capture(() => {
+      const r = pointage.evaluerTerminaisonMission({ ...args, maintenant: new Date(args.maintenant) });
+      return { peutTerminer: r.peutTerminer, motif: r.motif, finReference: iso(r.finReference) };
+    }));
+  const cloture = (nom, args) => c.ajoute(`evaluerClotureAdminMission/${nom}`,
+    { fonction: 'evaluerClotureAdminMission', ...args },
+    capture(() => {
+      const t = pointage.evaluerTerminaisonMission({ ...args.terminaison, maintenant: new Date(args.terminaison.maintenant) });
+      const r = pointage.evaluerClotureAdminMission({ terminaison: t, estAdmin: args.estAdmin, litigeActif: args.litigeActif });
+      return { peutTerminer: r.peutTerminer, motif: r.motif, finReference: iso(r.finReference), clotureAnticipee: r.clotureAnticipee };
+    }));
+
+  // --- Issus des tests vitest ---------------------------------------------
+  c.ajoute('ajouterRepliMissionPonctuelle/vitest-ponctuelle', {
+    fonction: 'ajouterRepliMissionPonctuelle', creneaux: [], mission: { id: 'ponctuelle', debut_le: '2026-07-31T08:00:00+02:00', fin_le: '2026-07-31T16:00:00+02:00' },
+  }, capture(() => pointage.ajouterRepliMissionPonctuelle([], { id: 'ponctuelle', debut_le: '2026-07-31T08:00:00+02:00', fin_le: '2026-07-31T16:00:00+02:00' })));
+  c.ajoute('ajouterRepliMissionPonctuelle/vitest-longue', {
+    fonction: 'ajouterRepliMissionPonctuelle', creneaux: [], mission: { id: 'longue', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-08-31T16:00:00+02:00' },
+  }, capture(() => pointage.ajouterRepliMissionPonctuelle([], { id: 'longue', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-08-31T16:00:00+02:00' })));
+  const contratsVitest = [
+    { id: 'annule', statut: 'ANNULE', cree_le: '2026-07-31T10:00:00Z' },
+    { id: 'attente', statut: 'EN_ATTENTE_SIGNATURES', cree_le: '2026-07-30T10:00:00Z' },
+    { id: 'signe', statut: 'SIGNE_COMPLET', cree_le: '2026-07-01T10:00:00Z' },
+  ];
+  c.ajoute('choisirContratPointage/vitest-signe-prioritaire', { fonction: 'choisirContratPointage', contrats: contratsVitest },
+    capture(() => pointage.choisirContratPointage(contratsVitest)?.id ?? null));
+  c.ajoute('filtrerMissionsEnCours/vitest-en-cours-sans-presence', { fonction: 'filtrerMissionsEnCours', missions: [{ id: 'mission-longue', statut: 'EN_COURS' }] },
+    capture(() => pointage.filtrerMissionsEnCours([{ id: 'mission-longue', statut: 'EN_COURS' }]).map((m) => m.id)));
+  dispo('vitest-15-min-avant', { creneaux: [creneau('2026-07-31T08:00:00.000Z', '2026-07-31T16:00:00.000Z')], contratStatut: 'SIGNE_COMPLET', maintenant: '2026-07-31T07:45:00.000Z' });
+  dispo('vitest-avant-h-moins-15', { creneaux: [creneau('2026-07-31T08:00:00.000Z', '2026-07-31T16:00:00.000Z')], contratStatut: 'SIGNE_COMPLET', maintenant: '2026-07-31T07:44:59.000Z' });
+  dispo('vitest-entre-deux-creneaux', {
+    creneaux: [creneau('2026-07-06T06:00:00.000Z', '2026-07-06T14:00:00.000Z'), creneau('2026-08-31T06:00:00.000Z', '2026-08-31T14:00:00.000Z')],
+    contratStatut: 'SIGNE_COMPLET', maintenant: '2026-07-31T12:00:00.000Z',
+  });
+  dispo('vitest-contrat-manquant', { creneaux: [creneau('2026-07-31T08:00:00.000Z', '2026-07-31T16:00:00.000Z')], contratStatut: null, maintenant: '2026-07-31T09:00:00.000Z' });
+  dispo('vitest-segment-ouvert', { creneaux: [creneau('2026-07-31T08:00:00.000Z', null, 'EFFECTIF')], contratStatut: null, maintenant: '2026-07-31T18:00:00.000Z' });
+  const nuit = creneau('2026-07-30T20:00:00.000Z', '2026-07-31T06:00:00.000Z');
+  const lendemain = creneau('2026-08-01T08:00:00.000Z', '2026-08-01T16:00:00.000Z');
+  c.ajoute('creneauChevauchePeriode/vitest-nuit-chevauche', { fonction: 'creneauChevauchePeriode', creneau: nuit, debutPeriode: '2026-07-31T00:00:00.000Z', finPeriode: '2026-08-01T00:00:00.000Z' },
+    capture(() => pointage.creneauChevauchePeriode(nuit, new Date('2026-07-31T00:00:00.000Z'), new Date('2026-08-01T00:00:00.000Z'))));
+  c.ajoute('prochainCreneauPointage/vitest-lendemain', { fonction: 'prochainCreneauPointage', creneaux: [nuit, lendemain], maintenant: '2026-07-31T12:00:00.000Z' },
+    capture(() => pointage.prochainCreneauPointage([nuit, lendemain], new Date('2026-07-31T12:00:00.000Z'))));
+  terminaison('vitest-segment-ouvert', {
+    creneaux: [creneau('2026-07-31T08:00:00.000Z', '2026-07-31T16:00:00.000Z'), creneau('2026-07-31T08:05:00.000Z', null, 'EFFECTIF')],
+    finMission: '2026-07-31T16:00:00.000Z', maintenant: '2026-07-31T17:00:00.000Z',
+  });
+  terminaison('vitest-apres-dernier-creneau', {
+    creneaux: [creneau('2026-07-31T08:00:00.000Z', '2026-07-31T16:00:00.000Z'), creneau('2026-07-31T08:05:00.000Z', '2026-07-31T15:55:00.000Z', 'EFFECTIF')],
+    finMission: '2026-07-31T16:00:00.000Z', maintenant: '2026-07-31T17:00:00.000Z',
+  });
+  terminaison('vitest-segment-ouvert-prioritaire', {
+    creneaux: [creneau('2026-09-03T17:00:00.000Z', '2026-09-03T18:00:00.000Z'), creneau('2026-09-04T05:00:00.000Z', '2026-09-04T17:00:00.000Z'), creneau('2026-09-03T17:05:00.000Z', null, 'EFFECTIF')],
+    finMission: '2026-09-04T17:00:00.000Z', maintenant: '2026-09-03T17:30:00.000Z',
+  });
+  const terminaisonLitige = {
+    creneaux: [creneau('2026-09-03T17:00:00.000Z', '2026-09-03T18:00:00.000Z'), creneau('2026-09-04T05:00:00.000Z', '2026-09-04T17:00:00.000Z'), creneau('2026-09-03T17:05:00.000Z', '2026-09-03T17:25:00.000Z', 'EFFECTIF')],
+    finMission: '2026-09-04T17:00:00.000Z', maintenant: '2026-09-03T17:30:00.000Z',
+  };
+  cloture('vitest-admin-litige', { terminaison: terminaisonLitige, estAdmin: true, litigeActif: true });
+  cloture('vitest-non-admin-litige', { terminaison: terminaisonLitige, estAdmin: false, litigeActif: true });
+  cloture('vitest-admin-sans-litige', { terminaison: terminaisonLitige, estAdmin: true, litigeActif: false });
+
+  // --- Fenêtre de 15 minutes : grille fine -------------------------------
+  const slot = creneau('2026-07-31T08:00:00.000Z', '2026-07-31T16:00:00.000Z', 'PREVISIONNEL', { id: 'slot-jour' });
+  const instants = [
+    ['h-moins-16min', '2026-07-31T07:44:00.000Z'], ['h-moins-15min-1s', '2026-07-31T07:44:59.000Z'],
+    ['h-moins-15min-1ms', '2026-07-31T07:44:59.999Z'], ['h-moins-15min-exact', '2026-07-31T07:45:00.000Z'],
+    ['h-moins-14min-59s', '2026-07-31T07:45:01.000Z'], ['h-moins-1s', '2026-07-31T07:59:59.000Z'],
+    ['h-exact', '2026-07-31T08:00:00.000Z'], ['h-plus-1s', '2026-07-31T08:00:01.000Z'], ['milieu', '2026-07-31T12:00:00.000Z'],
+    ['fin-moins-1s', '2026-07-31T15:59:59.000Z'], ['fin-exacte', '2026-07-31T16:00:00.000Z'],
+    ['fin-plus-1ms', '2026-07-31T16:00:00.001Z'], ['fin-plus-1s', '2026-07-31T16:00:01.000Z'], ['fin-plus-1h', '2026-07-31T17:00:00.000Z'],
+  ];
+  for (const [nom, maintenant] of instants) {
+    for (const [libelle, contratStatut] of [['signe', 'SIGNE_COMPLET'], ['attente', 'EN_ATTENTE_SIGNATURES'], ['sans-contrat', null]]) {
+      dispo(`fenetre-${nom}-${libelle}`, { creneaux: [slot], contratStatut, maintenant });
+    }
+    c.ajoute(`prochainCreneauPointage/fenetre-${nom}`, { fonction: 'prochainCreneauPointage', creneaux: [slot], maintenant },
+      capture(() => pointage.prochainCreneauPointage([slot], new Date(maintenant))));
+  }
+
+  // --- Créneau de nuit traversant minuit Paris et le changement d'heure ---
+  const nuitDst = creneau('2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00', 'PREVISIONNEL', { id: 'nuit-dst' });
+  for (const [nom, maintenant] of [
+    ['avant-fenetre', '2026-03-28T18:44:00.000Z'], ['ouverture-fenetre', '2026-03-28T18:45:00.000Z'],
+    ['minuit-paris', '2026-03-28T23:00:00.000Z'], ['pendant-saut-dst', '2026-03-29T01:00:00.000Z'],
+    ['fin-exacte', '2026-03-29T06:00:00.000Z'], ['apres-fin', '2026-03-29T06:00:01.000Z'],
+  ]) {
+    dispo(`nuit-dst-${nom}`, { creneaux: [nuitDst], contratStatut: 'SIGNE_COMPLET', maintenant });
+  }
+  const nuitHiver = creneau('2026-10-24T20:00:00+02:00', '2026-10-25T08:00:00+01:00', 'PREVISIONNEL', { id: 'nuit-hiver' });
+  for (const [nom, maintenant] of [
+    ['heure-repetee-premiere', '2026-10-25T00:30:00.000Z'], ['heure-repetee-seconde', '2026-10-25T01:30:00.000Z'], ['fin-exacte', '2026-10-25T07:00:00.000Z'],
+  ]) {
+    dispo(`nuit-hiver-${nom}`, { creneaux: [nuitHiver], contratStatut: 'SIGNE_COMPLET', maintenant });
+  }
+
+  // --- Plusieurs créneaux, pauses, ordre non trié -------------------------
+  const matin = creneau('2026-07-31T06:00:00.000Z', '2026-07-31T10:00:00.000Z', 'PREVISIONNEL', { id: 'matin' });
+  const pauseMidi = creneau('2026-07-31T10:00:00.000Z', '2026-07-31T10:30:00.000Z', 'PREVISIONNEL', { id: 'pause', est_pause: true });
+  const apresMidi = creneau('2026-07-31T10:30:00.000Z', '2026-07-31T14:30:00.000Z', 'PREVISIONNEL', { id: 'apres-midi' });
+  const ouvert = creneau('2026-07-31T06:02:00.000Z', null, 'PREVISIONNEL', { id: 'ouvert' });
+  const effectifFerme = creneau('2026-07-31T06:02:00.000Z', '2026-07-31T10:01:00.000Z', 'EFFECTIF', { id: 'eff-1' });
+  const journee = [apresMidi, pauseMidi, matin];
+  for (const [nom, maintanant] of [
+    ['avant-matin', '2026-07-31T05:00:00.000Z'], ['fenetre-matin', '2026-07-31T05:45:00.000Z'], ['pendant-matin', '2026-07-31T08:00:00.000Z'],
+    ['pendant-pause', '2026-07-31T10:10:00.000Z'], ['fenetre-apres-midi-dans-pause', '2026-07-31T10:16:00.000Z'],
+    ['pendant-apres-midi', '2026-07-31T12:00:00.000Z'], ['apres-journee', '2026-07-31T15:00:00.000Z'],
+  ]) {
+    dispo(`journee-${nom}`, { creneaux: journee, contratStatut: 'SIGNE_COMPLET', maintenant: maintanant });
+    c.ajoute(`prochainCreneauPointage/journee-${nom}`, { fonction: 'prochainCreneauPointage', creneaux: journee, maintenant: maintanant },
+      capture(() => pointage.prochainCreneauPointage(journee, new Date(maintanant))));
+  }
+  dispo('journee-pause-seule-aucun-creneau', { creneaux: [pauseMidi], contratStatut: 'SIGNE_COMPLET', maintenant: '2026-07-31T10:10:00.000Z' });
+  dispo('journee-previsionnel-ouvert-ignore', { creneaux: [ouvert], contratStatut: 'SIGNE_COMPLET', maintenant: '2026-07-31T08:00:00.000Z' });
+  dispo('journee-effectif-ferme-puis-apres-midi', { creneaux: [...journee, effectifFerme], contratStatut: 'SIGNE_COMPLET', maintenant: '2026-07-31T12:00:00.000Z' });
+  dispo('journee-deux-segments-ouverts-plus-recent', {
+    creneaux: [creneau('2026-07-31T06:02:00.000Z', null, 'EFFECTIF', { id: 'eff-ancien' }), creneau('2026-07-31T10:31:00.000Z', null, 'EFFECTIF', { id: 'eff-recent' })],
+    contratStatut: 'SIGNE_COMPLET', maintenant: '2026-07-31T12:00:00.000Z',
+  });
+  dispo('journee-pause-effective-ouverte-ignoree', {
+    creneaux: [...journee, creneau('2026-07-31T10:00:00.000Z', null, 'EFFECTIF', { id: 'pause-eff', est_pause: true })],
+    contratStatut: 'SIGNE_COMPLET', maintenant: '2026-07-31T10:05:00.000Z',
+  });
+  dispo('aucun-creneau-signe', { creneaux: [], contratStatut: 'SIGNE_COMPLET', maintenant: '2026-07-31T10:05:00.000Z' });
+  dispo('aucun-creneau-sans-contrat', { creneaux: [], contratStatut: null, maintenant: '2026-07-31T10:05:00.000Z' });
+
+  c.ajoute('creneauxPrevisionnels/tri-et-filtrage', { fonction: 'creneauxPrevisionnels', creneaux: [...journee, ouvert, effectifFerme] },
+    capture(() => pointage.creneauxPrevisionnels([...journee, ouvert, effectifFerme])));
+  c.ajoute('creneauxPrevisionnels/vide', { fonction: 'creneauxPrevisionnels', creneaux: [] }, capture(() => pointage.creneauxPrevisionnels([])));
+  c.ajoute('creneauxPrevisionnels/ordre-stable-meme-debut', {
+    fonction: 'creneauxPrevisionnels',
+    creneaux: [creneau('2026-07-31T06:00:00.000Z', '2026-07-31T10:00:00.000Z', 'PREVISIONNEL', { id: 'b' }), creneau('2026-07-31T06:00:00.000Z', '2026-07-31T09:00:00.000Z', 'PREVISIONNEL', { id: 'a' })],
+  }, capture(() => pointage.creneauxPrevisionnels([
+    creneau('2026-07-31T06:00:00.000Z', '2026-07-31T10:00:00.000Z', 'PREVISIONNEL', { id: 'b' }), creneau('2026-07-31T06:00:00.000Z', '2026-07-31T09:00:00.000Z', 'PREVISIONNEL', { id: 'a' }),
+  ])));
+
+  // --- Repli mission ponctuelle --------------------------------------------
+  const repli = (nom, creneaux, mission) => c.ajoute(`ajouterRepliMissionPonctuelle/${nom}`, { fonction: 'ajouterRepliMissionPonctuelle', creneaux, mission },
+    capture(() => pointage.ajouterRepliMissionPonctuelle(creneaux, mission)));
+  repli('24h-exactes', [], { id: 'm', debut_le: '2026-07-31T08:00:00+02:00', fin_le: '2026-08-01T08:00:00+02:00' });
+  repli('24h-plus-1s', [], { id: 'm', debut_le: '2026-07-31T08:00:00+02:00', fin_le: '2026-08-01T08:00:01+02:00' });
+  repli('nuit-dst-23h', [], { id: 'm', debut_le: '2026-03-28T20:00:00+01:00', fin_le: '2026-03-29T20:00:00+02:00' });
+  repli('duree-nulle', [], { id: 'm', debut_le: '2026-07-31T08:00:00+02:00', fin_le: '2026-07-31T08:00:00+02:00' });
+  repli('fin-avant-debut', [], { id: 'm', debut_le: '2026-07-31T16:00:00+02:00', fin_le: '2026-07-31T08:00:00+02:00' });
+  repli('date-invalide', [], { id: 'm', debut_le: 'pas une date', fin_le: '2026-07-31T08:00:00+02:00' });
+  repli('sans-id', [], { debut_le: '2026-07-31T08:00:00+02:00', fin_le: '2026-07-31T16:00:00+02:00' });
+  repli('previsionnel-existant-inchange', [matin], { id: 'm', debut_le: '2026-07-31T08:00:00+02:00', fin_le: '2026-07-31T16:00:00+02:00' });
+  repli('pause-seule-ajoute-repli', [pauseMidi], { id: 'm', debut_le: '2026-07-31T08:00:00+02:00', fin_le: '2026-07-31T16:00:00+02:00' });
+  repli('effectif-seul-ajoute-repli', [effectifFerme], { id: 'm', debut_le: '2026-07-31T08:00:00+02:00', fin_le: '2026-07-31T16:00:00+02:00' });
+
+  // --- Chevauchement de période -------------------------------------------
+  const chevauche = (nom, cr, debut, fin) => c.ajoute(`creneauChevauchePeriode/${nom}`, { fonction: 'creneauChevauchePeriode', creneau: cr, debutPeriode: debut, finPeriode: fin },
+    capture(() => pointage.creneauChevauchePeriode(cr, new Date(debut), new Date(fin))));
+  chevauche('fin-egale-debut-periode', matin, '2026-07-31T10:00:00.000Z', '2026-07-31T12:00:00.000Z');
+  chevauche('debut-egal-fin-periode', matin, '2026-07-31T04:00:00.000Z', '2026-07-31T06:00:00.000Z');
+  chevauche('inclus', matin, '2026-07-31T00:00:00.000Z', '2026-08-01T00:00:00.000Z');
+  chevauche('englobe', matin, '2026-07-31T07:00:00.000Z', '2026-07-31T08:00:00.000Z');
+  chevauche('pause-ignoree', pauseMidi, '2026-07-31T00:00:00.000Z', '2026-08-01T00:00:00.000Z');
+  chevauche('effectif-ignore', effectifFerme, '2026-07-31T00:00:00.000Z', '2026-08-01T00:00:00.000Z');
+  chevauche('fin-null-ignore', ouvert, '2026-07-31T00:00:00.000Z', '2026-08-01T00:00:00.000Z');
+  chevauche('jour-civil-paris-ete', creneau('2026-07-31T21:30:00.000Z', '2026-08-01T05:00:00.000Z'), '2026-07-30T22:00:00.000Z', '2026-07-31T22:00:00.000Z');
+
+  // --- Contrats ------------------------------------------------------------
+  const contrats = (nom, liste) => c.ajoute(`choisirContratPointage/${nom}`, { fonction: 'choisirContratPointage', contrats: liste },
+    capture(() => pointage.choisirContratPointage(liste)?.id ?? null));
+  contrats('vide', []);
+  contrats('tous-terminaux', [
+    { id: 'a', statut: 'ANNULE' }, { id: 'b', statut: 'EXPIRE' }, { id: 'c', statut: 'REFUSE' }, { id: 'd', statut: 'RUPTURE_ETAB' }, { id: 'e', statut: 'RUPTURE_SOIGNANT' },
+  ]);
+  contrats('plus-recent-sans-signature', [
+    { id: 'ancien', statut: 'EN_ATTENTE_SIGNATURES', cree_le: '2026-07-01T10:00:00Z' }, { id: 'recent', statut: 'EN_ATTENTE_SIGNATURES', cree_le: '2026-07-02T10:00:00Z' },
+  ]);
+  contrats('deux-signes-plus-recent', [
+    { id: 'signe-ancien', statut: 'SIGNE_COMPLET', cree_le: '2026-07-01T10:00:00Z' }, { id: 'signe-recent', statut: 'SIGNE_COMPLET', cree_le: '2026-07-02T10:00:00Z' },
+  ]);
+  contrats('sans-cree-le-stable', [{ id: 'premier', statut: 'EN_ATTENTE_SIGNATURES' }, { id: 'second', statut: 'EN_ATTENTE_SIGNATURES' }]);
+  contrats('cree-le-null-vs-date', [{ id: 'sans-date', statut: 'EN_ATTENTE_SIGNATURES', cree_le: null }, { id: 'avec-date', statut: 'EN_ATTENTE_SIGNATURES', cree_le: '2026-07-02T10:00:00Z' }]);
+  contrats('signe-ancien-prime-sur-recent-non-signe', [
+    { id: 'recent', statut: 'SIGNE_SOIGNANT', cree_le: '2026-07-31T10:00:00Z' }, { id: 'signe', statut: 'SIGNE_COMPLET', cree_le: '2026-01-01T10:00:00Z' },
+  ]);
+  contrats('statut-inconnu-conserve', [{ id: 'x', statut: 'BROUILLON', cree_le: '2026-07-31T10:00:00Z' }]);
+
+  c.ajoute('filtrerMissionsEnCours/melange', { fonction: 'filtrerMissionsEnCours', missions: [{ id: 'a', statut: 'EN_COURS' }, { id: 'b', statut: 'TERMINEE' }, { id: 'c', statut: 'ASSIGNEE' }, { id: 'd', statut: 'EN_COURS' }] },
+    capture(() => pointage.filtrerMissionsEnCours([{ id: 'a', statut: 'EN_COURS' }, { id: 'b', statut: 'TERMINEE' }, { id: 'c', statut: 'ASSIGNEE' }, { id: 'd', statut: 'EN_COURS' }]).map((m) => m.id)));
+  c.ajoute('filtrerMissionsEnCours/vide', { fonction: 'filtrerMissionsEnCours', missions: [] }, capture(() => pointage.filtrerMissionsEnCours([]).map((m) => m.id)));
+
+  // --- Terminaison ---------------------------------------------------------
+  const prev = creneau('2026-07-31T08:00:00.000Z', '2026-07-31T16:00:00.000Z');
+  const prev2 = creneau('2026-08-01T08:00:00.000Z', '2026-08-01T16:00:00.000Z');
+  const effOk = creneau('2026-07-31T08:05:00.000Z', '2026-07-31T15:55:00.000Z', 'EFFECTIF');
+  terminaison('planning-incomplet-prime', { creneaux: [prev, creneau('2026-08-01T08:00:00.000Z', null), creneau('2026-07-31T08:05:00.000Z', null, 'EFFECTIF')], finMission: '2026-07-31T16:00:00.000Z', maintenant: '2026-08-02T17:00:00.000Z' });
+  terminaison('aucun-depart', { creneaux: [prev], finMission: '2026-07-31T16:00:00.000Z', maintenant: '2026-07-31T17:00:00.000Z' });
+  terminaison('depart-par-presence-legacy', { creneaux: [prev], finMission: '2026-07-31T16:00:00.000Z', presences: [{ pointage_depart_le: '2026-07-31T15:50:00.000Z' }], maintenant: '2026-07-31T17:00:00.000Z' });
+  terminaison('presence-sans-depart', { creneaux: [prev], finMission: '2026-07-31T16:00:00.000Z', presences: [{ pointage_depart_le: null }], maintenant: '2026-07-31T17:00:00.000Z' });
+  terminaison('avant-dernier-creneau', { creneaux: [prev, prev2, effOk], finMission: '2026-08-01T16:00:00.000Z', maintenant: '2026-07-31T17:00:00.000Z' });
+  terminaison('fin-reference-exacte', { creneaux: [prev, prev2, effOk], finMission: '2026-08-01T16:00:00.000Z', maintenant: '2026-08-01T16:00:00.000Z' });
+  terminaison('fin-reference-moins-1ms', { creneaux: [prev, prev2, effOk], finMission: '2026-08-01T16:00:00.000Z', maintenant: '2026-08-01T15:59:59.999Z' });
+  terminaison('fin-reference-max-des-creneaux', { creneaux: [prev2, prev, effOk], finMission: '2026-07-01T00:00:00.000Z', maintenant: '2026-08-01T17:00:00.000Z' });
+  terminaison('sans-previsionnel-fin-mission', { creneaux: [effOk], finMission: '2026-07-31T16:00:00.000Z', maintenant: '2026-07-31T17:00:00.000Z' });
+  terminaison('sans-previsionnel-fin-mission-invalide', { creneaux: [effOk], finMission: 'pas une date', maintenant: '2026-07-31T17:00:00.000Z' });
+  terminaison('pause-effective-ouverte-ignoree', { creneaux: [prev, effOk, creneau('2026-07-31T12:00:00.000Z', null, 'EFFECTIF', { est_pause: true })], finMission: '2026-07-31T16:00:00.000Z', maintenant: '2026-07-31T17:00:00.000Z' });
+  terminaison('pause-previsionnelle-ouverte-ignoree', { creneaux: [prev, effOk, creneau('2026-07-31T12:00:00.000Z', null, 'PREVISIONNEL', { est_pause: true })], finMission: '2026-07-31T16:00:00.000Z', maintenant: '2026-07-31T17:00:00.000Z' });
+  terminaison('vide', { creneaux: [], finMission: '2026-07-31T16:00:00.000Z', maintenant: '2026-07-31T17:00:00.000Z' });
+
+  for (const estAdmin of [true, false]) {
+    for (const litigeActif of [true, false]) {
+      const suffixe = `${estAdmin ? 'admin' : 'non-admin'}-${litigeActif ? 'litige' : 'sans-litige'}`;
+      cloture(`avant-dernier-creneau-${suffixe}`, { terminaison: { creneaux: [prev, prev2, effOk], finMission: '2026-08-01T16:00:00.000Z', maintenant: '2026-07-31T17:00:00.000Z' }, estAdmin, litigeActif });
+      cloture(`segment-ouvert-${suffixe}`, { terminaison: { creneaux: [prev, creneau('2026-07-31T08:05:00.000Z', null, 'EFFECTIF')], finMission: '2026-07-31T16:00:00.000Z', maintenant: '2026-07-31T17:00:00.000Z' }, estAdmin, litigeActif });
+      cloture(`deja-terminable-${suffixe}`, { terminaison: { creneaux: [prev, effOk], finMission: '2026-07-31T16:00:00.000Z', maintenant: '2026-07-31T17:00:00.000Z' }, estAdmin, litigeActif });
+      cloture(`aucun-depart-${suffixe}`, { terminaison: { creneaux: [prev], finMission: '2026-07-31T16:00:00.000Z', maintenant: '2026-07-31T17:00:00.000Z' }, estAdmin, litigeActif });
+    }
+  }
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Écriture
+// ---------------------------------------------------------------------------
+const fichiers = {
+  'date-heure-paris.json': vecteursDateHeureParis(),
+  'format-mission.json': vecteursFormatMission(),
+  'heures-hebdomadaires-mission.json': vecteursHeuresHebdomadaires(),
+  'disponibilite-pointage.json': vecteursDisponibilitePointage(),
+};
+
+let total = 0;
+let divergences = 0;
+mkdirSync(DOSSIER_SORTIE, { recursive: true });
+for (const [nom, vecteurs] of Object.entries(fichiers)) {
+  total += vecteurs.length;
+  const contenu = `${JSON.stringify(vecteurs, null, 2)}\n`;
+  const chemin = resolve(DOSSIER_SORTIE, nom);
+  if (MODE_CHECK) {
+    const actuel = existsSync(chemin) ? readFileSync(chemin, 'utf8') : null;
+    const identique = actuel === contenu;
+    if (!identique) divergences += 1;
+    console.log(`${identique ? 'OK ' : 'DIFF'} ${nom} (${vecteurs.length} vecteurs)`);
+  } else {
+    writeFileSync(chemin, contenu, 'utf8');
+    console.log(`écrit ${nom} (${vecteurs.length} vecteurs)`);
+  }
+}
+console.log(`total : ${total} vecteurs golden`);
+if (total < 200) {
+  console.error('Moins de 200 vecteurs : critère du lot 0 non atteint.');
+  process.exit(1);
+}
+if (MODE_CHECK && divergences > 0) {
+  console.error(`${divergences} fichier(s) divergent(s) : relancer sans --check.`);
+  process.exit(1);
+}

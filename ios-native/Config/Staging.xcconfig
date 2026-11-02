@@ -1,0 +1,5 @@
+#include "Base.xcconfig"
+// Scheme Jolene-Staging : STAGING Supabase (mejpriaetwgtcstbgfid), clé injectée par la CI, jamais versionnée.
+JOLENE_ENVIRONMENT = staging
+JOLENE_SUPABASE_URL = https:/$()/mejpriaetwgtcstbgfid.supabase.co
+APS_ENVIRONMENT = development
