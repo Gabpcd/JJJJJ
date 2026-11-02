@@ -111,6 +111,8 @@ const dateHeure = await lib('date-heure-paris.ts');
 const formatMission = await lib('format-mission.ts');
 const hebdo = await lib('heures-hebdomadaires-mission.ts');
 const pointage = await lib('disponibilite-pointage.ts');
+// Lot 5, T3 : dérivation structurelle du planning de publication établissement.
+const planningDerive = await lib('planning-derive.ts');
 const planningCandidat = await planningComposant('planning-candidat.ts');
 const selectionSerie = await planningComposant('selection-serie-candidat.ts');
 const completude = await lib('completude-planning-mission.ts');
@@ -833,6 +835,236 @@ function vecteursDisponibilitePointage() {
 }
 
 // ---------------------------------------------------------------------------
+// Règle lot 5, T3 : planning-derive (src/lib/planning-derive.ts), dérivation
+// STRUCTURELLE seulement : dates d'une période, jour ISO, fin de créneau,
+// matérialisation (heure d'été/d'hiver Europe/Paris) et, de `validerPlanningDates`,
+// les seules erreurs structurelles CRENEAU_MANQUANT, CRENEAU_INVALIDE, CHEVAUCHEMENT.
+// Exclus par construction (blueprint lot 5 §2.9, D9) : PLAFOND_48H, REPOS_11H et
+// DUREE_LONGUE (règles et recommandation du droit du travail, appliquées par le
+// serveur `fn_valider_creneaux_mission_json` et affichées verbatim), les semaines
+// civiles et `calculerHeuresNuitParis` (estimation de coût, non portée).
+// ---------------------------------------------------------------------------
+const TYPES_PLANNING_STRUCTURELS = new Set(['CRENEAU_MANQUANT', 'CRENEAU_INVALIDE', 'CHEVAUCHEMENT']);
+
+function vecteursPlanningDerive() {
+  const c = new Collecteur('planning-derive');
+  const creneauDerive = (clientId, heureDebut = '07:00', heureFin = '19:00', finJourSuivant = false, extra = {}) => (
+    { clientId, heureDebut, heureFin, finJourSuivant, ...extra }
+  );
+  const jourDerive = (date, actif = true, creneaux = [creneauDerive(date)]) => ({ date, actif, creneaux });
+
+  const ajouter = (nom, date, nombre) => c.ajoute(`ajouterJoursDate/${nom}`,
+    { fonction: 'ajouterJoursDate', date, nombre }, capture(() => planningDerive.ajouterJoursDate(date, nombre)));
+  const plage = (nom, dateDebut, dateFin) => c.ajoute(`datesDansPlage/${nom}`,
+    { fonction: 'datesDansPlage', dateDebut, dateFin }, capture(() => planningDerive.datesDansPlage(dateDebut, dateFin)));
+  // `NaN` (date illisible) devient `null` dans le JSON, comme `JSON.stringify`.
+  const jourIso = (nom, date) => c.ajoute(`jourSemaineISO/${nom}`,
+    { fonction: 'jourSemaineISO', date }, capture(() => {
+      const valeur = planningDerive.jourSemaineISO(date);
+      return Number.isFinite(valeur) ? valeur : null;
+    }));
+  const finCreneau = (nom, date, finJourSuivant) => c.ajoute(`dateFinCreneau/${nom}`,
+    { fonction: 'dateFinCreneau', date, finJourSuivant }, capture(() => planningDerive.dateFinCreneau(date, { finJourSuivant })));
+  const materialiser = (nom, date, creneau) => c.ajoute(`materialiserCreneau/${nom}`,
+    { fonction: 'materialiserCreneau', date, creneau }, capture(() => planningDerive.materialiserCreneau(date, creneau)));
+  const planning = (nom, jours) => c.ajoute(`materialiserPlanning/${nom}`,
+    { fonction: 'materialiserPlanning', jours }, capture(() => planningDerive.materialiserPlanning(jours)));
+  const structure = (nom, jours) => c.ajoute(`validerPlanningDates/${nom}`,
+    { fonction: 'validerPlanningDates', jours }, capture(() => ({
+      erreursStructurelles: planningDerive.validerPlanningDates(jours).erreurs
+        .filter((erreur) => TYPES_PLANNING_STRUCTURELS.has(erreur.type)),
+    })));
+
+  // --- Issus des tests vitest (planning-derive.test.ts), partie structurelle ----
+  // Les deux cas `calculerHeuresNuitParis` (fractions de nuit, nuit à l'heure d'été)
+  // ne sont pas portés ; les cas 48 h et repos 11 h ne gardent que leur part structurelle.
+  plage('vitest-dates-reelles', '2026-07-22', '2026-07-29');
+  planning('vitest-dates-repos-exclues', [
+    jourDerive('2026-07-22'),
+    jourDerive('2026-07-23', false),
+    jourDerive('2026-07-29', true, [creneauDerive('dernier', '09:00', '13:00')]),
+  ]);
+  const deuxCreneauxJour = [jourDerive('2026-08-03', true, [creneauDerive('matin', '07:00', '11:00'), creneauDerive('soir', '15:00', '19:00')])];
+  structure('vitest-deux-creneaux-non-chevauchants', deuxCreneauxJour);
+  planning('vitest-deux-creneaux-non-chevauchants', deuxCreneauxJour);
+  structure('vitest-chevauchement', [jourDerive('2026-08-03', true, [creneauDerive('un', '07:00', '12:00'), creneauDerive('deux', '11:30', '16:00')])]);
+  materialiser('vitest-nuit-sans-lendemain', '2026-08-02', creneauDerive('nuit', '20:00', '08:00', false));
+  materialiser('vitest-nuit-lendemain', '2026-08-02', creneauDerive('nuit', '20:00', '08:00', true));
+  structure('vitest-repos-dimanche-lundi-structurel', [
+    jourDerive('2026-08-02', true, [creneauDerive('dimanche-nuit', '20:00', '08:00', true)]),
+    jourDerive('2026-08-03', true, [creneauDerive('lundi', '09:00', '17:00')]),
+  ]);
+  materialiser('vitest-dst-ete-duree-absolue', '2026-03-29', creneauDerive('dst', '01:00', '05:00'));
+  materialiser('vitest-trou-dst', '2026-03-29', creneauDerive('trou-dst', '02:30', '05:00'));
+  structure('vitest-trou-dst', [jourDerive('2026-03-29', true, [creneauDerive('trou-dst', '02:30', '05:00')])]);
+  materialiser('vitest-automne-occurrence-initiale', '2026-10-25', creneauDerive('heure-repetee', '02:30', '03:30', false, {
+    debutInitial: '2026-10-25T00:30:00.000Z', finInitial: '2026-10-25T02:30:00.000Z',
+  }));
+  materialiser('vitest-automne-saisie-ambigue', '2026-10-25', creneauDerive('heure-repetee-nouvelle', '02:30', '03:30'));
+  materialiser('vitest-automne-borne-initiale-preservee', '2026-10-25', creneauDerive('heure-repetee-modifiee', '02:30', '04:30', false, {
+    debutInitial: '2026-10-25T00:30:00.000Z', finInitial: '2026-10-25T02:30:00.000Z',
+  }));
+  const cinqJours = ['2026-07-20', '2026-07-21', '2026-07-22', '2026-07-23', '2026-07-24']
+    .map((date) => jourDerive(date, true, [creneauDerive(date, '07:00', '17:00')]));
+  structure('vitest-50h-semaine-structurel', cinqJours);
+  planning('vitest-50h-semaine', cinqJours);
+  materialiser('vitest-garde-dimanche-lundi', '2026-08-02', creneauDerive('nuit', '22:00', '06:00', true));
+  structure('vitest-garde-dimanche-lundi-structurel', [jourDerive('2026-08-02', true, [creneauDerive('nuit', '22:00', '06:00', true)])]);
+
+  // --- Périodes de 0, 1, 7, 31, 366, 367 jours (et au-delà, plafonnée) ---------
+  const avant = (date, n) => planningDerive.ajouterJoursDate(date, n);
+  for (const debut of ['2026-01-01', '2026-03-23', '2026-10-19', '2027-12-31', '2028-02-27']) {
+    plage(`${debut}-0-jour-fin-avant-debut`, debut, avant(debut, -1));
+    for (const jours of [1, 2, 7, 31]) {
+      plage(`${debut}-${jours}-jours`, debut, avant(debut, jours - 1));
+    }
+  }
+  // Plafond de la boucle (`dates.length <= 366` : 367 dates au plus, que le formulaire
+  // refuse ensuite), sur une année qui traverse les deux changements d'heure et sur
+  // une année bissextile.
+  for (const debut of ['2026-03-23', '2027-12-31']) {
+    for (const jours of [366, 367, 368]) plage(`${debut}-${jours}-jours`, debut, avant(debut, jours - 1));
+  }
+  plage('annee-bissextile-2028', '2028-01-01', '2028-12-31');
+  plage('fevrier-bissextile', '2028-02-27', '2028-03-02');
+  plage('fevrier-non-bissextile', '2027-02-27', '2027-03-02');
+  for (const [nom, dateDebut, dateFin] of [
+    ['format-mois-sans-zero', '2026-7-1', '2026-07-03'], ['format-fin-illisible', '2026-07-01', 'demain'],
+    ['chaines-vides', '', ''], ['debut-vide', '', '2026-07-03'], ['avec-heure', '2026-07-01T08:00', '2026-07-03'],
+    ['date-impossible-debut', '2026-02-30', '2026-03-02'], ['date-impossible-fin-non-atteinte', '2026-02-27', '2026-02-30'],
+    ['meme-jour', '2026-11-02', '2026-11-02'], ['jour-13-mois', '2026-13-01', '2026-13-02'],
+  ]) {
+    plage(nom, dateDebut, dateFin);
+  }
+
+  // --- ajouterJoursDate : fins de mois, d'année, heure d'été/d'hiver -----------
+  for (const date of ['2026-01-31', '2026-02-28', '2028-02-28', '2026-03-28', '2026-03-29', '2026-10-24', '2026-10-25',
+    '2026-12-31', '2027-03-27', '2027-03-28', '2027-10-30', '2027-10-31']) {
+    for (const nombre of [-366, -31, -1, 0, 1, 2, 7, 31, 365, 366]) ajouter(`${date}-plus-${nombre}`, date, nombre);
+  }
+  for (const [nom, date] of [['illisible', 'pas une date'], ['vide', ''], ['impossible', '2026-02-30'], ['mois-13', '2026-13-01'], ['avec-heure', '2026-07-01T08:00']]) {
+    ajouter(`entree-${nom}`, date, 1);
+  }
+
+  // --- jourSemaineISO : une semaine complète, bissextile, normalisation Date.UTC --
+  for (const date of ['2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06', '2026-08-07', '2026-08-08', '2026-08-09',
+    '2028-02-29', '2026-03-29', '2026-10-25', '2027-01-01', '2026-02-30', '2026-12-32']) {
+    jourIso(date, date);
+  }
+  jourIso('illisible', 'pas une date');
+  jourIso('vide', '');
+
+  // --- dateFinCreneau -----------------------------------------------------------
+  for (const date of ['2026-08-02', '2026-08-31', '2026-12-31', '2028-02-28', '2026-03-28', '2026-10-24']) {
+    finCreneau(`${date}-meme-jour`, date, false);
+    finCreneau(`${date}-lendemain`, date, true);
+  }
+  finCreneau('illisible-meme-jour', 'pas une date', false);
+  finCreneau('illisible-lendemain', 'pas une date', true);
+  finCreneau('impossible-lendemain', '2026-02-30', true);
+
+  // --- materialiserCreneau : grilles des deux transitions de l'hiver 2026-2027 ---
+  // Pour la veille et le jour du changement d'heure (25/10/2026 et 28/03/2027), chaque
+  // heure de début de 00:00 à 23:30 au pas de 30 min, avec une fin 1 h plus tard le
+  // même jour, ou à la même heure murale le lendemain (« lendemain »).
+  const hhmm = (minutes) => `${pad2(Math.floor(minutes / 60))}:${pad2(minutes % 60)}`;
+  for (const dst of ['2026-10-25', '2027-03-28']) {
+    for (const date of [avant(dst, -1), dst]) {
+      for (let minutes = 0; minutes < 24 * 60; minutes += 30) {
+        const debut = hhmm(minutes);
+        const finMemeJour = minutes + 60 < 24 * 60 ? hhmm(minutes + 60) : hhmm(minutes + 60 - 24 * 60);
+        materialiser(`grille-${date}-${debut}-plus-1h`, date, creneauDerive(`g-${date}-${debut}`, debut, finMemeJour, minutes + 60 >= 24 * 60));
+        materialiser(`grille-${date}-${debut}-lendemain-meme-heure`, date, creneauDerive(`g-${date}-${debut}-l`, debut, debut, true));
+      }
+    }
+  }
+
+  // --- materialiserCreneau : saisies invalides et bornes initiales --------------
+  const cas = (nom, date, ...args) => materialiser(nom, date, creneauDerive(nom, ...args));
+  cas('heure-un-chiffre', '2026-08-03', '7:00', '19:00');
+  cas('heure-24', '2026-08-03', '07:00', '24:00');
+  cas('minute-60', '2026-08-03', '07:60', '19:00');
+  cas('heure-vide', '2026-08-03', '', '19:00');
+  cas('fin-vide', '2026-08-03', '07:30', '');
+  cas('heure-avec-secondes', '2026-08-03', '07:00:00', '19:00');
+  cas('date-mal-formee', '2026-8-3', '07:00', '19:00');
+  cas('date-vide', '', '07:00', '19:00');
+  cas('date-impossible-meme-jour', '2026-02-30', '07:00', '19:00');
+  cas('date-impossible-lendemain', '2026-02-30', '20:00', '08:00', true);
+  cas('fin-egale-debut', '2026-08-03', '08:00', '08:00');
+  cas('fin-avant-debut', '2026-08-03', '19:00', '07:00');
+  cas('lendemain-plus-de-24h', '2026-08-03', '08:00', '09:00', true);
+  cas('lendemain-24h-exactes', '2026-08-03', '08:00', '08:00', true);
+  cas('lendemain-une-minute', '2026-08-03', '23:59', '00:00', true);
+  cas('journee-23h59', '2026-08-03', '00:00', '23:59');
+  cas('minuit-reveillon', '2026-12-31', '20:00', '08:00', true);
+  cas('fin-fevrier-bissextile', '2028-02-28', '20:00', '08:00', true);
+  cas('avec-id-persiste', '2026-08-03', '07:00', '19:00', false, { id: 'creneau-persiste' });
+  const initial = (nom, date, heureDebut, heureFin, finJourSuivant, debutInitial, finInitial) => materialiser(nom, date,
+    creneauDerive(nom, heureDebut, heureFin, finJourSuivant, { id: `id-${nom}`, debutInitial, finInitial }));
+  initial('initiale-offset-conservee', '2026-08-03', '09:00', '17:00', false, '2026-08-03T09:00:00+02:00', '2026-08-03T17:00:00+02:00');
+  initial('initiale-heure-modifiee', '2026-08-03', '10:00', '17:00', false, '2026-08-03T09:00:00+02:00', '2026-08-03T17:00:00+02:00');
+  initial('initiale-autre-date', '2026-08-04', '09:00', '17:00', false, '2026-08-03T09:00:00+02:00', '2026-08-03T17:00:00+02:00');
+  initial('initiale-utc-microsecondes', '2026-08-03', '09:00', '17:00', false, '2026-08-03T07:00:00.123456+00:00', '2026-08-03T15:00:00+00:00');
+  initial('initiale-legacy-sans-offset', '2026-08-03', '09:00', '17:00', false, '2026-08-03T09:00:00', '2026-08-03T17:00:00');
+  initial('initiale-illisible', '2026-08-03', '09:00', '17:00', false, 'pas une date', '2026-08-03T17:00:00+02:00');
+  initial('initiale-legacy-ambigue', '2026-10-25', '02:30', '03:30', false, '2026-10-25T02:30:00', undefined);
+  initial('initiale-seconde-occurrence-automne', '2026-10-25', '02:30', '04:00', false, '2026-10-25T01:30:00.000Z', undefined);
+  initial('initiale-nuit-lendemain', '2026-08-02', '20:00', '08:00', true, '2026-08-02T18:00:00.000Z', '2026-08-03T06:00:00.000Z');
+  initial('initiale-fin-seule', '2026-10-25', '01:00', '02:30', false, undefined, '2026-10-25T00:30:00.000Z');
+
+  // --- materialiserPlanning : filtre des jours, invalides écartés, tri par début ----
+  planning('vide', []);
+  planning('tous-inactifs', [jourDerive('2026-08-03', false), jourDerive('2026-08-04', false)]);
+  planning('jour-actif-sans-creneau', [jourDerive('2026-08-03', true, [])]);
+  planning('tri-par-debut-entre-jours', [
+    jourDerive('2026-08-05', true, [creneauDerive('c', '07:00', '12:00')]),
+    jourDerive('2026-08-03', true, [creneauDerive('a', '14:00', '18:00'), creneauDerive('b', '07:00', '12:00')]),
+  ]);
+  planning('creneau-invalide-ecarte', [jourDerive('2026-08-03', true, [creneauDerive('ok', '07:00', '12:00'), creneauDerive('ko', '12:00', '11:00')])]);
+  planning('nuit-puis-matin', [
+    jourDerive('2026-08-02', true, [creneauDerive('nuit', '20:00', '08:00', true)]),
+    jourDerive('2026-08-03', true, [creneauDerive('matin', '06:00', '07:00')]),
+  ]);
+  planning('meme-debut-ordre-stable', [jourDerive('2026-08-03', true, [creneauDerive('long', '07:00', '19:00'), creneauDerive('court', '07:00', '09:00')])]);
+  planning('transition-automne', [jourDerive('2026-10-24', true, [creneauDerive('veille', '20:00', '08:00', true)]), jourDerive('2026-10-25', true, [creneauDerive('jour', '09:00', '17:00')])]);
+  planning('transition-printemps', [jourDerive('2027-03-27', true, [creneauDerive('veille', '20:00', '08:00', true)]), jourDerive('2027-03-28', true, [creneauDerive('trou', '02:00', '05:00')])]);
+  planning('date-impossible-lendemain-leve', [jourDerive('2026-02-30', true, [creneauDerive('x', '20:00', '08:00', true)])]);
+
+  // --- validerPlanningDates : erreurs structurelles seulement ---------------------
+  structure('vide', []);
+  structure('tous-inactifs', [jourDerive('2026-08-03', false, [])]);
+  structure('jour-actif-sans-creneau', [jourDerive('2026-08-03', true, [])]);
+  structure('deux-jours-sans-creneau', [jourDerive('2026-08-03', true, []), jourDerive('2026-08-04', false, []), jourDerive('2026-08-05', true, [])]);
+  structure('creneau-invalide-et-valide', [jourDerive('2026-08-03', true, [creneauDerive('ok', '07:00', '12:00'), creneauDerive('ko', '19:00', '07:00')])]);
+  structure('heure-mal-formee', [jourDerive('2026-08-03', true, [creneauDerive('ko', '7:00', '12:00')])]);
+  structure('heure-ambigue', [jourDerive('2026-10-25', true, [creneauDerive('ko', '02:30', '05:00')])]);
+  structure('plus-de-24h', [jourDerive('2026-08-03', true, [creneauDerive('ko', '08:00', '09:00', true)])]);
+  structure('chevauchement-nuit-sur-lendemain', [
+    jourDerive('2026-08-02', true, [creneauDerive('nuit', '20:00', '08:00', true)]),
+    jourDerive('2026-08-03', true, [creneauDerive('matin', '07:00', '12:00')]),
+  ]);
+  structure('creneaux-contigus-sans-chevauchement', [jourDerive('2026-08-03', true, [creneauDerive('a', '07:00', '12:00'), creneauDerive('b', '12:00', '16:00')])]);
+  structure('trois-chevauchements-en-chaine', [jourDerive('2026-08-03', true, [
+    creneauDerive('a', '07:00', '12:00'), creneauDerive('b', '11:00', '15:00'), creneauDerive('c', '14:00', '18:00'),
+  ])]);
+  structure('creneau-englobant', [jourDerive('2026-08-03', true, [creneauDerive('long', '07:00', '19:00'), creneauDerive('court', '09:00', '10:00')])]);
+  structure('ordre-des-erreurs', [
+    jourDerive('2026-08-03', true, [creneauDerive('a', '07:00', '12:00'), creneauDerive('b', '11:00', '15:00')]),
+    jourDerive('2026-08-04', true, []),
+    jourDerive('2026-08-05', true, [creneauDerive('ko', '18:00', '17:00')]),
+  ]);
+  structure('jour-inactif-invalide-ignore', [jourDerive('2026-08-03', false, [creneauDerive('ko', '18:00', '17:00')]), jourDerive('2026-08-04')]);
+  structure('journee-13h-avertissement-exclu', [jourDerive('2026-08-03', true, [creneauDerive('long', '06:00', '19:00')])]);
+  structure('repos-court-exclu', [jourDerive('2026-08-03', true, [creneauDerive('soir', '14:00', '22:00')]), jourDerive('2026-08-04', true, [creneauDerive('matin', '06:00', '14:00')])]);
+  structure('transition-printemps-trou', [jourDerive('2027-03-28', true, [creneauDerive('trou', '02:00', '05:00')])]);
+  structure('date-illisible-leve', [jourDerive('pas une date', true, [creneauDerive('x')])]);
+  structure('date-impossible-lendemain-leve', [jourDerive('2026-02-30', true, [creneauDerive('x', '20:00', '08:00', true)])]);
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
 // Règles 5 à 7 : planning candidat, sélection de série, complétude (lot 1, T2)
 // ---------------------------------------------------------------------------
 
@@ -1241,6 +1473,8 @@ const fichiers = {
   'format-mission.json': vecteursFormatMission(),
   'heures-hebdomadaires-mission.json': vecteursHeuresHebdomadaires(),
   'disponibilite-pointage.json': vecteursDisponibilitePointage(),
+  // Lot 5, T3 : dérivation structurelle du planning établissement.
+  'planning-derive.json': vecteursPlanningDerive(),
   'planning-candidat.json': vecteursPlanningCandidat(),
   'selection-serie-candidat.json': vecteursSelectionSerie(),
   'completude-planning-mission.json': vecteursCompletudePlanning(),

@@ -93,6 +93,8 @@ struct VecteurGolden: Decodable {
 /// on corrige le port Swift, jamais le vecteur).
 enum Golden {
     static let fichiers = ["date-heure-paris", "format-mission", "heures-hebdomadaires-mission", "disponibilite-pointage",
+                           // Lot 5, T3 : dérivation structurelle du planning de publication établissement.
+                           "planning-derive",
                            // Lot 1, T2 : planning candidat, sélection de série, complétude du planning.
                            "planning-candidat", "selection-serie-candidat", "completude-planning-mission"]
     static let minimumTotal = 200
