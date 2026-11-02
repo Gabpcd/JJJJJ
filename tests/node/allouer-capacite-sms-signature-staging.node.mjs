@@ -7,7 +7,7 @@ import {readFileSync} from 'node:fs';
 import {signatureSmsStagingConfig} from '../../supabase/functions/_shared/signature-sms-staging-test.ts';
 import {sourceClosure,canonical} from '../../scripts/ci/install-sms-staging-closed.mjs';
 import {PROJET,DEPOT,WORKFLOW,CONTRAT_INSTALLATION,SECRET_EDGE,FONCTION,VERROU,Refus,verifierProjet,lireEntrees,
- configurationEdge,litteral,sqlInstallation,sqlPreconditions,sqlAllocation,sqlActivation,sqlEtat,sqlRevocation,
+ configurationEdge,litteral,sqlInstallation,sqlPreconditions,sqlAllocation,sqlActivation,sqlEtat,sqlRevocation,sqlRevocationActives,
  IDENTITE_ROUTINE,METADONNEES_ROUTINE,allouerCapacite,revoquerDepuisRecu,resumeRecu} from '../../scripts/ci/allouer-capacite-sms-signature-staging.mjs';
 
 const lire=chemin=>readFileSync(new URL('../../'+chemin,import.meta.url),'utf8');
@@ -42,6 +42,7 @@ const json=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{'cont
 const erreurSql=texte=>json({message:`Failed to run sql query: ERROR:  ${texte} ${CANARI}`},400);
 const routinesInstallees=()=>INSTALLATION.afterRoutines.map(r=>({...structuredClone(r),
  definition_md5:r.definition_md5??createHash('md5').update('definition:'+r.signature).digest('hex')}));
+const TOUTES='UPDATE private.signature_sms_test_capacities SET enabled=false,revoked_at=clock_timestamp() WHERE enabled AND revoked_at IS NULL;';
 const sansLitteraux=q=>q.replace(/'(?:[^']|'')*'/g,"''");
 
 function harnais(o={}){
@@ -76,7 +77,7 @@ function harnais(o={}){
    return {preuve:{maintenant:new Date(s.horloge).toISOString(),capacite:s.capacite?projection():null,
     contrat:{statut:statut(n),signatureSoignant:sig.some(x=>x.role==='soignant'&&x.signee),
      signatureEtablissement:sig.some(x=>x.role==='etablissement'&&x.signee),empreinteInchangee:o.empreinte?.(n)??true},signatures:sig}};},
-  revocation:q=>{if(s.capacite&&(q.includes(`'${s.capacite.id}'::uuid`)||q.includes('WHERE enabled AND revoked_at IS NULL'))){
+  revocation:q=>{if(s.capacite&&(q.includes(`'${s.capacite.id}'::uuid`)||q.includes(TOUTES))){
     s.capacite.enabled=false;s.capacite.revoquee=true;}
    return {preuve:{presente:!!s.capacite,enabled:s.capacite?s.capacite.enabled:null,revoquee:s.capacite?s.capacite.revoquee:null,
     capacitesActives:actives()}};},
@@ -227,7 +228,7 @@ test('parcours nominal : aperçu annulé, insertion fermée, secret Edge, activa
  avant('recu:insertion:true','sql:insertion');avant('recu:secret_edge:true:true','POST /secrets');avant('recu:activation:true:true:true','sql:activation');
  // État final : capacité révoquée, secret retiré, preuve P5 relue.
  assert.equal(s.capacite.enabled,false);assert.equal(s.capacite.revoquee,true);assert.equal(s.secrets.has(SECRET_EDGE),false);
- assert.deepEqual(recu.revocation,{capacite:'revoquee',secret:'absent',confirmee:true,essaisSql:1,essaisSecret:1});
+ assert.deepEqual(recu.revocation,{capacite:'revoquee',secret:'absent',confirmee:true,essaisSql:1,essaisSecret:1,autresCapacitesActives:0});
  assert.equal(recu.preuveP5,true);assert.equal(recu.final.signatureSoignant.statut,'signe');
  // Le secret Edge est exactement celui qu'accepte le vrai assistant send-sms, et il égale la ligne insérée.
  assert.equal(s.secretsEcrits.length,1);const [ecrit]=s.secretsEcrits;assert.equal(ecrit.name,SECRET_EDGE);
@@ -245,7 +246,7 @@ test('parcours nominal : aperçu annulé, insertion fermée, secret Edge, activa
 });
 
 test('chaque requête SQL est bornée : lecture seule vérifiée, écritures limitées à la table de capacités, verrous et garde STAGING',()=>{
- const p={capaciteId:CAPACITE,runId:'sms-signature-gh-1-1',sourceSha:SHA,manifestSha256:'a'.repeat(64),dureeMinutes:45,contratId:CONTRAT,
+ const p={capaciteId:CAPACITE,runId:'sms-signature-gh-12345-1',sourceSha:SHA,manifestSha256:'a'.repeat(64),dureeMinutes:45,contratId:CONTRAT,
   missionId:MISSION,soignantId:SOIGNANT,etablissementId:ETAB,documentSha256:DOC,telephoneSoignant:TEL_S,telephoneEtablissement:TEL_E,
   twilioAccountSid:SID,expediteur:EXPEDITEUR};
  const lectures=[sqlInstallation(INSTALLATION.afterRoutines.map(r=>r.signature)),sqlPreconditions({contratId:CONTRAT,telephoneSoignant:TEL_S,telephoneEtablissement:TEL_E}),sqlEtat(p)];
@@ -263,6 +264,10 @@ test('chaque requête SQL est bornée : lecture seule vérifiée, écritures lim
   assert.ok(cibles.length>0&&cibles.every(c=>c==='private.signature_sms_test_capacities'),cibles.join(','));
   assert.doesNotMatch(sansLitteraux(q),/\b(DELETE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE)\b/);
  }
+ const toutes=sqlRevocationActives();
+ assert.match(toutes,/^-- sms-capacite:revocation\nBEGIN;/);assert.ok(toutes.endsWith('COMMIT;')&&toutes.includes(TOUTES)&&toutes.includes(VERROU));
+ assert.ok(toutes.includes('SMS_CAPACITE_CONTEXTE_ECRITURE')&&!toutes.includes('contrats_mission'));
+ assert.doesNotMatch(sansLitteraux(toutes),/\b(DELETE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|INSERT)\b/);
  assert.ok(sqlActivation(p).includes(`PERFORM private.fn_signature_sms_test_scope('${CONTRAT}'::uuid,'${SOIGNANT}'::uuid);`));
  assert.ok(sqlAllocation(p,{apercu:true}).includes('PERFORM private.fn_signature_sms_test_scope'));
  assert.equal(sqlAllocation(p,{apercu:false}).includes('SET enabled=true'),false,'insertion fermée sans activation');
@@ -328,6 +333,15 @@ test('la révocation est réessayée puis confirmée, ou déclarée incertaine s
  assert.ok(Date.parse(jamais.recu.expiresAt)>0,'l’échéance serveur reste la borne écrite dans le reçu');
 });
 
+test('une autre capacité active est comptée sans annuler la révocation de la nôtre',async()=>{
+ const autre=await lancer({erreurSql:{revocation:(n,s)=>{s.capacite.enabled=false;s.capacite.revoquee=true;
+  return json([{preuve:{presente:true,enabled:false,revoquee:true,capacitesActives:1}}]);}}});
+ assert.equal(autre.recu.status,'succes');assert.equal(autre.recu.revocation.autresCapacitesActives,1);
+ assert.equal(autre.s.compte.revocation,1);
+ const garde=/\$sms_capacite_revocation\$ BEGIN([\s\S]*?)END; \$sms_capacite_revocation\$/.exec(sqlRevocation({capaciteId:CAPACITE,contratId:CONTRAT}))[1];
+ assert.ok(garde.includes(`id='${CAPACITE}'::uuid`));assert.equal(garde.includes('enabled AND revoked_at IS NULL'),false);
+});
+
 test('le mode révocation referme la capacité du reçu, retire le secret et refuse un reçu étranger',async()=>{
  const base=await lancer({erreurSql:{revocation:()=>'transport'}});
  assert.equal(base.recu.status,'incertain');
@@ -342,7 +356,7 @@ test('le mode révocation referme la capacité du reçu, retire le secret et ref
  const illisible=harnais();
  const rIllisible=await revoquerDepuisRecu({env:ENV,local:LOCAL,recu:null,recuIllisible:true,fetchImpl:illisible.fetchImpl,attendre:illisible.attendre,delaiMs:1});
  assert.equal(rIllisible.status,'incertain');assert.deepEqual(illisible.s.etapes,['revocation']);
- assert.ok(illisible.s.sql[0].includes('WHERE enabled AND revoked_at IS NULL'));
+ assert.ok(illisible.s.sql[0].includes(TOUTES));
  for(const recu of [{...base.recu,projectRef:PRODUCTION},{...base.recu,capaciteId:"x'"},{...base.recu,mode:'revoquer'}]){
   const x=harnais();const refus=await revoquerDepuisRecu({env:ENV,local:LOCAL,recu,fetchImpl:x.fetchImpl,attendre:x.attendre,delaiMs:1});
   assert.equal(refus.code,'RECU_REFUSE');assert.equal(x.s.appels.length,0);
