@@ -651,6 +651,10 @@ function webFiles(dir = join(root, 'src')) {
   return out;
 }
 const relatif = file => file.slice(root.length + 1);
+/** Texte Markdown aplati : un retour à la ligne dans un paragraphe vaut une espace. */
+const aplati = texte => texte.replace(/\s+/g, ' ');
+/** Section `## <titre>` de CONTRATS_RPC_SOIGNANT.md, aplatie. */
+const sectionContrats = heading => aplati(section(read(DOC_CONTRATS), heading));
 
 test('RPC_SUIVIES lot 2 : système rotatif, justificatifs, contrats et admission de recette, dans l ordre', () => {
   const lot2 = RPC_SUIVIES.filter(r => r.lot === 2);
@@ -687,7 +691,7 @@ test('RPC_JAMAIS_SUIVIES : fn_creer_notification refusée (décision 9) et fiche
   // Témoins : le trigger notifie déjà l'établissement à l'ouverture d'un litige ; le web appelle encore la RPC.
   assert.ok(schema.includes('CREATE OR REPLACE TRIGGER "trg_notifier_creation_litige" AFTER INSERT ON "public"."litiges"'));
   assert.ok(read('src/components/PanneauContestation.tsx').includes("supabase.rpc('fn_creer_notification'"));
-  const fiche = section(read(DOC_CONTRATS), 'Interdite côté natif : `fn_creer_notification`');
+  const fiche = sectionContrats('Interdite côté natif : `fn_creer_notification`');
   for (const temoin of ['trg_notifier_creation_litige', 'CONTESTATION_PRESENCE', 'PanneauContestation.tsx']) {
     assert.ok(fiche.includes(temoin), `fiche fn_creer_notification : ${temoin} absent`);
   }
@@ -712,7 +716,7 @@ test('fn_admission_otp_signature_recette : staging_seulement, définie par le su
   assert.match(supplement, /REVOKE ALL ON FUNCTION public\.fn_admission_otp_signature_recette\(uuid\) FROM PUBLIC,anon,service_role;/);
   // Réponse : clés de l'objet renvoyé, toutes citées par la fiche ; `{admitted:false}` sur toute erreur.
   const corps = supplement.slice(supplement.indexOf('CREATE FUNCTION public.fn_admission_otp_signature_recette('), supplement.indexOf('END; $admission$;'));
-  const fiche = section(read(DOC_CONTRATS), 'fn_admission_otp_signature_recette');
+  const fiche = sectionContrats('fn_admission_otp_signature_recette');
   for (const cle of ['admitted', 'can_send', 'can_validate', 'otp_expires_at', 'expires_at', 'remaining']) {
     assert.ok(corps.includes(`'${cle}'`), `témoin SQL : clé ${cle}`);
     assert.ok(fiche.includes(`\`${cle}\``), `fiche : clé ${cle} absente`);
@@ -759,7 +763,7 @@ test('CONTRATS fn_scanner_code_pointage : exceptions de la RPC et des triggers d
   const fenetre = sqlRaises(corpsSql(schema, enteteFn('dec_fenetre_pointage')));
   assert.deepEqual(fenetre, [{ sqlstate: 'P0001', message: 'Pointage trop tôt. La mission commence à %.' }]);
   assert.deepEqual([...new Set(conformite.map(r => r.sqlstate))].sort(), ['22023', '23503', '23514', '42501']);
-  const fiche = section(read(DOC_CONTRATS), 'fn_scanner_code_pointage');
+  const fiche = sectionContrats('fn_scanner_code_pointage');
   for (const { sqlstate, message } of [...scanner, ...conformite, ...fenetre]) {
     assert.ok(fiche.includes(message), `message absent de la fiche : « ${message} »`);
     assert.ok(fiche.includes(`\`${sqlstate}\``), `SQLSTATE ${sqlstate} absent de la fiche`);
@@ -779,7 +783,7 @@ test('CONTRATS fn_scanner_code_pointage : nouveau_code renvoyé tant que B1 n es
   // Bascule avec B1 (LOT2_PLAN §3 B1) : la PR B1 met à jour cette garde et la fiche dans la même PR.
   assert.ok(body.includes("'nouveau_code', v_new_code") && body.includes("'nouveau_hmac', v_new_hmac"),
     'nouveau_code n est plus renvoyé : B1 mergée, basculer la fiche « nouveau_code jamais lu » et cette garde');
-  const fiche = section(read(DOC_CONTRATS), '`fn_scanner_code_pointage` : `nouveau_code` jamais lu');
+  const fiche = sectionContrats('`fn_scanner_code_pointage` : `nouveau_code` jamais lu');
   assert.ok(fiche.includes('B1') && fiche.includes('liste blanche'), 'fiche nouveau_code : B1 / liste blanche absents');
   for (const cle of ['type_scan_effectue', 'prochain_type_scan', 'creneau_effectif_id', 'horodatage_effectif',
     'horodatage_arrondi', 'numero_scan', 'validation_etab_requise']) {
@@ -797,7 +801,7 @@ test('CONTRATS fn_scanner_code_pointage : nouveau_code renvoyé tant que B1 n es
 
 test('CONTRATS fn_etat_pointage_mission : clés de réponse et refus du dump, code_pointage_actif jamais décodé', () => {
   const body = corpsSql(read(SOURCES.schema), enteteFn('fn_etat_pointage_mission'));
-  const fiche = section(read(DOC_CONTRATS), 'fn_etat_pointage_mission');
+  const fiche = sectionContrats('fn_etat_pointage_mission');
   assert.deepEqual(sqlErrors(body), ['Mission introuvable', 'Accès interdit']);
   for (const message of sqlErrors(body)) assert.ok(fiche.includes(`'${message}'`), `refus absent : ${message}`);
   for (const cle of ['statut', 'intitule', 'prochain_type_scan', 'nb_scans', 'segment_ouvert', 'segments', 'code_pointage_actif', 'est_etab']) {
@@ -820,7 +824,7 @@ test('CONTRATS lot 2 : refus, codes, messages et exceptions de chaque RPC confro
   let total = 0;
   for (const name of FICHES_CONFRONTEES) {
     const body = corpsSql(schema, enteteFn(name));
-    const fiche = section(doc, name);
+    const fiche = aplati(section(doc, name));
     for (const message of [...sqlErrors(body), ...sqlMessages(body)]) {
       total++;
       assert.ok(fiche.includes(message), `${name} : « ${message} » absent de la fiche`);
@@ -841,7 +845,8 @@ test('CONTRATS lot 2 : refus, codes, messages et exceptions de chaque RPC confro
 
 test('CONTRATS fn_ouvrir_litige_rate_limited : une sous-fiche par surcharge, appel du web à trois clés exactes', () => {
   const schema = read(SOURCES.schema);
-  const fiche = section(read(DOC_CONTRATS), 'fn_ouvrir_litige_rate_limited');
+  const ficheBrute = section(read(DOC_CONTRATS), 'fn_ouvrir_litige_rate_limited'); // brute : sous-sections lues ensuite
+  const fiche = aplati(ficheBrute);
   const surcharges = [
     ['"p_mission_id" "uuid", "p_motif" "text")', '(uuid, text)'],
     ['"p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text")', '(uuid, type_litige, text)'],
@@ -849,7 +854,7 @@ test('CONTRATS fn_ouvrir_litige_rate_limited : une sous-fiche par surcharge, app
   ];
   for (const [args, titre] of surcharges) {
     const body = corpsSql(schema, `${enteteFn('fn_ouvrir_litige_rate_limited')}${args}`);
-    const sous = sousSection(fiche, `Surcharge \`${titre}\``);
+    const sous = aplati(sousSection(ficheBrute, `Surcharge \`${titre}\``));
     for (const message of sqlErrors(body)) assert.ok(sous.includes(message), `${titre} : « ${message} » absent`);
   }
   // La surcharge à deux clés ouvre un litige AUTRE, dont la fenêtre est toujours ouverte.
@@ -867,7 +872,7 @@ test('CONTRATS fn_fenetre_contestation_ouverte : délai lu au serveur (défaut 4
   const body = corpsSql(read(SOURCES.schema), enteteFn('fn_fenetre_contestation_ouverte'));
   assert.match(body, /SELECT COALESCE\(valeur::integer, 48\) INTO v_delai_pointage\s+FROM public\.parametres_litiges WHERE cle = 'delai_contestation_pointage_h';/);
   assert.match(body, /IF v_presence_validee IS NULL THEN RETURN TRUE; END IF;/);
-  const fiche = section(read(DOC_CONTRATS), 'fn_fenetre_contestation_ouverte');
+  const fiche = sectionContrats('fn_fenetre_contestation_ouverte');
   for (const temoin of ['delai_contestation_pointage_h', '48 h', 'INVOKER', 'valide_le', 'fail-closed', 'HARD STOP']) {
     assert.ok(fiche.includes(temoin), `fiche fenêtre de contestation : ${temoin} absent`);
   }
@@ -894,21 +899,21 @@ test('Web : le système ① reste mort (sinon la décision 1 du lot 2 est à rev
     ['fn_etat_pointage_mission', 'fn_scanner_code_pointage']);
   assert.ok(rotatif.includes('let meta: Record<string, unknown> = { id_terminal: genererIdTerminal() };'));
   assert.ok(rotatif.includes('meta = { ...meta, latitude: pos.lat, longitude: pos.lng, precision_gps_m: pos.precisionM };'));
-  const fiche = section(read(DOC_CONTRATS), 'Interdit côté natif : système de pointage ①');
+  const fiche = sectionContrats('Interdit côté natif : système de pointage ①');
   for (const name of POINTAGE_SYSTEME_1) assert.ok(fiche.includes(`\`${name}\``), `fiche système ① : ${name} absente`);
   for (const temoin of ['qr-offline-queue.ts', 'SyncHorsLigne', '#664', 'contrat signé']) assert.ok(fiche.includes(temoin), `fiche système ① : ${temoin}`);
 });
 
 test('CONTRATS edge verify-document : chaque statut et chaque message de index.ts, un seul appel par document', () => {
   const index = read('supabase/functions/verify-document/index.ts');
-  const fiche = section(read(DOC_CONTRATS), 'Edge `verify-document`');
+  const fiche = sectionContrats('Edge `verify-document`');
   const messages = [...index.matchAll(/error:\s*(['"])((?:(?!\1).)+)\1/g)].map(m => m[2]);
   messages.push(...[...index.matchAll(/e\?\.message \|\| "([^"]+)"/g)].map(m => m[1]));
   messages.push(...[...index.matchAll(/throw new Error\("([^"$`]+)"\)/g)].map(m => m[1]));
   assert.ok(messages.length >= 12, `messages lus : ${messages.length}`);
   for (const message of new Set(messages)) assert.ok(fiche.includes(message), `message absent de la fiche : « ${message} »`);
   const statuts = new Set([...index.matchAll(/status:\s*(\d{3})/g)].map(m => m[1]));
-  assert.deepEqual([...statuts].sort(), ['429', '500']);
+  assert.deepEqual([...statuts].sort(), ['403', '409', '429', '500', '503']);
   for (const statut of ['200', '401', '403', '409', '429', '500', '503']) assert.ok(fiche.includes(`**${statut}**`), `statut ${statut} absent`);
   for (const verdict of ['VERIFIE', 'REJETE', 'EN_ATTENTE', 'REVUE_MANUELLE_REQUISE']) assert.ok(fiche.includes(`\`${verdict}\``), `verdict ${verdict}`);
   assert.ok(index.includes('verification_attempt_id') && fiche.includes('verification_attempt_id'));
@@ -920,7 +925,7 @@ test('CONTRATS edge verify-document : chaque statut et chaque message de index.t
 
 test('CONTRATS edge generate-contrat-mission-pdf : statuts, messages et codes de index.ts ; HTML, pas PDF', () => {
   const index = read('supabase/functions/generate-contrat-mission-pdf/index.ts');
-  const fiche = section(read(DOC_CONTRATS), 'Edge `generate-contrat-mission-pdf`');
+  const fiche = sectionContrats('Edge `generate-contrat-mission-pdf`');
   const reponses = [...index.matchAll(/repondre\((\d{3}),\s*\{\s*error:\s*'([^']+)'/g)].map(m => [m[1], m[2]]);
   assert.ok(reponses.length >= 15, `réponses lues : ${reponses.length}`);
   for (const [statut, message] of reponses) {
@@ -953,7 +958,7 @@ test('CONTRATS Storage du lot 2 : jolene-documents INSERT/SELECT sans UPDATE/DEL
     const etat = derniere(politique);
     assert.ok(etat === null || etat.verbe === 'DROP', `${politique} recréée par ${etat?.m} : la fiche Storage est à revoir`);
   }
-  const fiche = section(read(DOC_CONTRATS), 'Storage du lot 2');
+  const fiche = sectionContrats('Storage du lot 2');
   for (const temoin of ['jolene-documents', 'contrats-signes', 'pol_storage_jolene_insert', 'pol_storage_jolene_select',
     'pol_contrats_signes_select', 'upsert: false', 'exists(path:)', '20260729143000']) {
     assert.ok(fiche.includes(temoin), `fiche Storage : ${temoin} absent`);
@@ -971,7 +976,7 @@ test('CONTRATS : sources lues par la garde du lot 2 listées dans l en-tête', (
   ]) assert.ok(entete.includes(source), `en-tête : source ${source} non listée`);
   // Les MESSAGES_ERREUR du web cités par la fiche OTP existent toujours tels quels.
   const otp = read('src/components/SignerContratOtp.tsx');
-  const fiche = section(doc, 'fn_envoyer_otp_signature');
+  const fiche = aplati(section(doc, 'fn_envoyer_otp_signature'));
   for (const [, code, message] of otp.slice(otp.indexOf('const MESSAGES_ERREUR'), otp.indexOf('function messageDepuisCode')).matchAll(/([A-Z_]+): '((?:[^'\\]|\\')+)'/g)) {
     assert.ok(fiche.includes(`\`${code}\``) && fiche.includes(message.replaceAll("\\'", "'")), `MESSAGES_ERREUR ${code} absent de la fiche OTP`);
   }

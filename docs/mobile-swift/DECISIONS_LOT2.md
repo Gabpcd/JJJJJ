@@ -1,0 +1,210 @@
+# Décisions du lot 2 — application iOS Swift native
+
+> Tranchées le 2 novembre 2026 sur le mandat de Gabrielle (« finis et prends les décisions seul », « je suis tous
+> tes conseils », consigné dans `LOTS_2_5_DECISIONS.md` de la session principale) pour les vingt-cinq questions du
+> §7 de `docs/mobile-swift/LOT2_PLAN.md` (blueprint du lot 2, v2 du 2026-11-02). Règle générale : **toutes les
+> recommandations fermes du §7 sont adoptées telles quelles**, y compris Q1 (système de pointage ① non porté, garde
+> qui l'interdit côté Swift) et Q2 (aucune file hors ligne pour le code rotatif). Ce mémo fait foi ; le plan
+> `docs/PLAN_APP_NATIVE_SWIFT.md` n'est pas réécrit (l.62, l.180, l.183 et l.186 portent un renvoi ici).
+> Les décisions juridiques que le blueprint renvoie à Gabrielle (HARD STOP n°4) et les PR de catégorie B9 **ne sont
+> pas implémentées** : elles sont listées sous « En attente de Gabrielle ».
+
+## Règles d'application
+
+- **HARD STOP n°4 (juridique exposé)** : le natif n'affiche que des textes **verbatim** du web ou du serveur, chacun
+  relié à sa source (fichier:ligne) et gardé par un test (tranche TL, `JoleneCore/Legal/TextesWeb.swift`). Aucune
+  reformulation, aucun texte juridique nouveau, aucun changement de délai ou de règle juridique côté serveur.
+- **B9** (paiements, migrations destructives, RLS/auth/GRANT/SECURITY DEFINER, légal, données prod) : la PR est
+  préparée et poussée, tests compris, mais jamais mergée sans le go explicite de Gabrielle (B1, S1, dispatch de T11).
+- **Aucune écriture** en production ni sur STAGING par les agents ; lecture seule en production seulement pour
+  relire une définition live dans une PR backend (`pg_get_functiondef`, `list_migrations`).
+- Merges sur `main` sériels, CI verte et revue fraîche B8 clôturable, par la file de merge de la session principale.
+
+## Décisions (§7 du blueprint)
+
+1. **Système de pointage ① : non porté.** `fn_pointer_*`, `fn_valider_scan_qr`, `fn_generer_qr_mission`,
+   `fn_valider_code_secours`, `fn_codes_pointage_mission` et `qr-offline-queue.ts` ne sont jamais appelés par le
+   Swift : liste `RPC_POINTAGE_SYSTEME_1` refusée par `verifierExclusions` et par la garde des littéraux `"fn_…"`
+   (T0). Motifs : plus monté côté web depuis la PR #664, aucun contrôle « contrat signé » côté `fn_valider_scan_qr`,
+   missions multi-jours bloquées. Critères amendés : P2 (QR rotatif décodé, niveau 1, puis scanné sur iPhone,
+   niveau 5) remplace « QR `fn_generer_qr_mission` accepté par `fn_valider_scan_qr` » ; P6 (« aucun scan mis en
+   file ni rejoué ») remplace « QR expiré jamais remis en file ». Une garde Node rougit si le web rappelle le
+   système ① (la décision est alors à revoir). Le commentaire de `Rules/DisponibilitePointage.swift` l.106-107, qui
+   cite encore `fn_pointer_arrivee` / `fn_pointer_depart`, est corrigé par T3 (T0 n'écrit aucune ligne Swift).
+2. **Hors connexion : aucune file pour le code rotatif.** Bouton désactivé et bandeau hors ligne ; reçu `not_sent` ;
+   réponse perdue → réconciliation par relecture de `scans_pointage` (verdict « non reçu » seulement ≥ 8 s après le
+   passage `started`) ; jamais de renvoi automatique. Le pointage « sans téléphone » reste la déclaration de fin
+   rétroactive côté établissement (web). `PRINCIPES.md` §4 est amendé en conséquence.
+3. **QR : `AVCaptureMetadataOutput`**, pas VisionKit ; payload accepté seulement s'il vaut exactement six chiffres
+   après `trim` (plus strict que le web) ; refus caméra → saisie manuelle, toujours disponible.
+4. **Consentement GPS : texte verbatim de `ConsentementGPS.tsx` au premier pointage** quand `consentement_gps IS NULL`,
+   enregistré par `fn_consentir_gps` puis relu, audit `RGPD_CONSENTEMENT_DONNE` (parité web) ; autorisation iOS
+   « Lorsque l'app est active » demandée seulement après « Autoriser » ; un refus ne bloque jamais le pointage.
+   **Retrait et réactivation depuis le Profil natif portés au lot 2** (T4b : le texte promet le retrait « depuis
+   votre profil ») avec les textes de `SectionPreferences.tsx` (tutoyés, verbatim tant que non validés) et sans
+   audit `GPS_CONSENTEMENT_*` (absent du CHECK `journaux_audit_action_check`).
+5. **Précision réduite iOS : aucune coordonnée envoyée** quand `accuracyAuthorization == .reducedAccuracy` (scan sans
+   GPS + encart « Position exacte ») ; pas de `requestTemporaryFullAccuracyAuthorization` (nouvelle chaîne
+   `Info.plist`, donc nouveau texte).
+6. **Messages de refus du pointage : messages serveur verbatim** (décision 9 du lot 1) ; une seule surcharge, celle
+   du web pour `P0002`, en vouvoiement : « Code de pointage invalide ou expiré. Demandez le code actuel à
+   l'établissement. ».
+7. **Identifiant terminal : `TERM_IOS_` + 20 caractères base32 aléatoires**, générés une fois, Keychain
+   `ThisDeviceOnly`, non synchronisé, conservé à la déconnexion ; jamais `identifierForVendor` ni empreinte d'appareil.
+8. **`nouveau_code` : faire B1** (PR backend séparée, B9 → en attente du go) ; d'ici là le décodeur Swift est une liste
+   blanche qui ne lit jamais `nouveau_code` ni `nouveau_hmac` (fiche dédiée de `CONTRATS_RPC_SOIGNANT.md`, garde
+   Node qui bascule avec B1).
+9. **Litige depuis une présence : ouverture portée, fenêtre décidée par le serveur, aucun texte de délai.** Bouton si
+   `valide_le` est non nul, qu'aucun litige n'existe et que `fn_fenetre_contestation_ouverte('DESACCORD_HEURES_POINTAGE',
+   mission)` renvoie vrai (aucune constante 72 h dans le Swift) ; appel de `fn_ouvrir_litige_rate_limited` par trois
+   clés exactes, audit `PRESENCE_CONTESTATION`, **sans** l'appel client `fn_creer_notification` (`RPC_JAMAIS_SUIVIES`) ;
+   réponse et clôture : renvoi web. Les textes de délai du panneau web (l.347, l.354, l.394) ne sont pas affichés.
+   La décision juridique (aligner `delai_contestation_pointage_h` sur 72 h, retirer la phrase d'escalade du web)
+   relève de Gabrielle : **non implémentée**, voir « En attente de Gabrielle ». T5b attend ce go ; le reste du lot
+   n'en dépend pas.
+10. **Notation rapide : parité web** (une fois par mission, après une FERMETURE quand `now ≥ fin_le − 30 min`, note
+    globale répliquée sur les quatre critères, détail optionnel, « Plus tard ») ; mémoire locale par utilisateur ;
+    aucune lecture de `notations_missions` ; pas d'invite de parrainage (lot 4).
+11. **Détail des présences : synthèse, segments et relance en natif** (avec `fn_presences_detail_mission` en lecture
+    tolérante) ; **récapitulatif financier non porté** (calculé côté client sur le web) → lien Revenus (renvoi web
+    jusqu'au lot 3).
+12. **Exigences documentaires : faire W1** (extraction web sans changement de comportement) et porter le filtre avec
+    vecteurs golden (T2b) ; candidat à une RPC serveur plus tard.
+13. **Médias** : caméra `UIImagePickerController`, photothèque `PHPickerViewController` (sans permission), Fichiers
+    `UIDocumentPickerViewController` ; HEIC/HEIF → JPEG 0,8, orientation appliquée, métadonnées GPS retirées ;
+    au-delà de 10 Mo, réduction à 4 096 px puis qualité 0,6, sinon refus avec le message du web.
+14. **Reçus d'envoi** : reçu avant Storage avec la clé déterministe ; réconciliation par `s3_cle` (et `exists(path:)`) ;
+    seule `fn_remplacer_document_soignant` (idempotente) peut être rejouée après relecture ; `verify-document` une
+    seule fois par document ; aucun octet de document conservé sur disque.
+15. **Attestation santé : portée verbatim dans l'onglet Justificatifs** (deux cases, `fn_signer_attestation_sante`,
+    relecture), textes en TL.
+16. **DPAE et Conformité : renvoi web au lot 2**, port en lecture au lot 4 avec revue HARD STOP des libellés.
+17. **Lecture du contrat : HTML serveur dans un lecteur `WKWebView` isolé** (sans script, sans réseau, navigation
+    bloquée, data store non persistant) après triple contrôle de l'empreinte ; pas de PDFKit ; partage = fichier HTML
+    original contrôlé ; impression par la feuille système. Ce lecteur ne charge jamais d'URL.
+18. **Mode de signature : OTP SMS seulement** (seul mode lié à l'empreinte) ; signature manuscrite non portée ; compte
+    TEST sans admission de recette → « continuer sur jolene.app » (renvoi web vers `/contrat/:id`).
+19. **CDD sans original : message du web** (« Le contrat doit être préparé et confirmé par un représentant autorisé de
+    l'employeur avant les signatures. », `ContratMission.tsx` l.603), aucune action soignant, aucun `donnees_cdd`
+    envoyé par l'app.
+20. **Preuve OTP STAGING : S1 + numéros de recette** (soignant : Gabrielle ; établissement : second numéro) ;
+    capacité allouée après le rendu du contrat, une par contrat et par séance ; l'XCUITest STAGING prouve l'envoi
+    (`otp_envoye`) ; la signature complète est faite par Gabrielle sur iPhone (T12) sur une fixture « appareil » et
+    une capacité dédiées, puis relue en SQL. Sans S1, P5 reste ouvert et le lot n'est pas livré.
+    `fn_admission_otp_signature_recette` est suivie avec le statut `staging_seulement` (jamais en production).
+21. **Preuve GPS** : « comparée à une présence issue de la coquille » est remplacé par « clés de `p_metadata`
+    identiques à `PointageRotatifSoignant.tsx` l.122-126 (test de forme) + précision relue dans `scans_pointage` et
+    `presences` sur STAGING » ; aucune donnée de production.
+22. **Durée de la CI UI** : matrice actuelle conservée (3 formats, une étape) ; découpage en éclats par domaine
+    (`-only-testing` Présences / Documents / Contrats) dès qu'un format dépasse 20 min mesurées.
+23. **Journal de reçus : celui du lot 1 T7 est réutilisé** ; si T1 du lot 2 démarrait avant son intégration, T1
+    livrerait le journal générique et T7 le consommerait sans changer son API. Ordonnancement retenu : **T1 attend
+    l'intégration de T7** et démarre dans la vague 1 du lot 2, pas dans la vague 0.
+24. **Points d'entrée : pas de sixième onglet** ; section « Mon espace » du Profil (Présences, Documents, Contrats),
+    widget « Aller pointer » et bandeau d'oubli de départ sur l'Accueil, boutons du détail de mission, liens
+    universels.
+25. **Horloge de la fenêtre de pointage : horloge de l'appareil**, comme le web ; le serveur fait foi et son refus
+    s'affiche ; pas d'horloge serveur.
+
+## D-FLAGS — drapeaux d'écran du lot 2
+
+- **Clés** : `ios_natif_presences_actif` (présences et pointage : Profil › Mes présences, widget « Aller pointer »,
+  boutons du détail de mission), `ios_natif_documents_actif` (Mes documents, onglet Justificatifs),
+  `ios_natif_contrats_actif` (liste, lecteur et signature des contrats). Absentes du blueprint, ajoutées pour que le
+  lot 6 dispose d'un coupe-circuit sur le pointage et la signature.
+- **Migration** : une seule migration non-B9 pose tous les drapeaux d'écran des lots 2, 4 et 5 (`INSERT … ON CONFLICT
+  (cle) DO NOTHING`), sur le modèle de B0 `supabase/migrations/20261102150000_drapeaux_ios_natif.sql` ; PR séparée,
+  hors chantier iOS (aucune écriture sous `supabase/` par les tranches iOS). Catégorie `OPERATIONS`, aucun GRANT `anon`.
+- **Client** : la tranche T1 du lot 2 étend `EcranNatif` (lot 1, `JoleneCore/Ports/Lot1Ports.swift`) avec ces trois
+  écrans ; lecture par `fn_param_bool` après `.ready` et à la reprise, **fail-open** comme au lot 1 (toute erreur ou
+  clé absente → écran natif actif) ; `false` → renvoi web de l'écran concerné.
+
+## Scission T2 / T2b
+
+- **T2** (vague 0, dès l'intégration de lot 1 T2) livre les vecteurs golden qui ne dépendent pas de W1 :
+  `synthese-presence-mission.ts`, `presencesSoignantUi.ts`, `documentUpload.ts`, `documents.ts`,
+  `contratMissionUi.ts`, `signatureSmsStagingAdmission.ts`, plus les règles natives sans golden (`PayloadQR`,
+  `CompteARebours72h`).
+- **T2b** (après le merge de W1 sur `main`) vectorise les deux règles extraites par W1 : `src/lib/documents-requis.ts`
+  (`filtrerDocumentsRequis`, `documentValidePourExigence`) et `src/lib/presences-soignant-listes.ts`
+  (`construireListesPresences`). **W1** (lot 2) et **W0** (lot 4) forment une seule PR web d'extraction de règles
+  pures, comportement inchangé, tests vitest.
+
+## Ordonnancement et branches
+
+- **T0** (cette tranche) est préalable à toutes les autres ; **B1 se merge après T0** (elle bascule deux fichiers de T0 :
+  la fiche « `nouveau_code` jamais lu » et la garde correspondante).
+- **T1** attend l'intégration du journal de reçus de lot 1 T7 (décision 23) : vague 1.
+- Branche d'intégration `feat/ios-lot2`, créée depuis `origin/feat/ios-lot1` ; elle reprend `main` puis `feat/ios-lot1`
+  par merge (jamais de rebase ni de force-push). Aucune PR n'est ouverte sur cette branche avant la fin du lot 1
+  (chaque PR lance la recette Playwright sur la base partagée).
+
+## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
+
+| Ligne du plan | Formulation initiale | Critère retenu | Décision |
+|---|---|---|---|
+| l.62 | « deux systèmes … Les deux doivent être reproduits » | seul le système rotatif est porté ; ① interdit par garde | 1 |
+| l.180 | pointage par `fn_pointer_*`, QR `fn_generer_qr_mission` / `fn_valider_scan_qr`, file hors ligne, « PDF serveur » | `fn_scanner_code_pointage` seul, pauses par alternance, code de secours = six chiffres, aucune file ; HTML serveur contrôlé | 1, 2, 3, 17 |
+| l.183 | QR `fn_generer_qr_mission` accepté ; précision « comparée à une présence issue de la coquille » | P2 (QR rotatif, niveaux 1 et 5) ; P3 (clés `p_metadata` + précision relue sur STAGING) | 1, 21 |
+| l.186 | « File hors-ligne testée … QR expiré jamais remis en file » | P6 : aucun scan mis en file ni rejoué, réconciliation par relecture | 2 |
+
+## En attente de Gabrielle
+
+Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranche indiquée.
+
+### HARD STOP n°4 (juridique exposé à l'utilisateur)
+
+- **TL** : validation écrite des textes juridiques et de consentement listés avec leur source dans la PR TL
+  (consentement GPS et retrait, attestation santé avec la mention de l'art. 441-7 du Code pénal, bandeaux et mentions
+  du contrat, art. 1366-1367 du Code civil, art. L.1242-12 du Code du travail, `MESSAGES_ERREUR`, compte à rebours
+  72 h, certificat) avant que T4b, T7, T9a et T9b soient déclarées livrées. Les textes tutoyés du web restent verbatim
+  tant qu'un wording vouvoyé n'est pas validé.
+- **T9b** (écran de signature OTP) : go explicite avant merge (captures xcresult des trois formats, liste des textes).
+- **T5b** (contestation depuis une présence) : go explicite avant merge.
+- **Décision Q9 — délai de contestation** (sources primaires : `PanneauContestation.tsx` l.43-46 et l.347, l.354,
+  l.394 ; `fn_fenetre_contestation_ouverte` l.36600-36622 ; `fn_litiges_escalader_auto` l.40712, l.40726-40730 ;
+  `PageCGU.tsx` l.114-115). Le web affiche 72 h, le serveur applique `parametres_litiges.delai_contestation_pointage_h`,
+  défaut **48 h**, et la « CGU §4.6 » invoquée ne fixe aucun délai de contestation. Recommandation soumise (non
+  implémentée) : aligner `delai_contestation_pointage_h` sur 72 h par une PR de paramétrage séparée (`INSERT … ON
+  CONFLICT (cle) DO UPDATE`, B9 données prod) et retirer côté web la phrase d'escalade « l'admin plateforme
+  tranchera » (fausse en salarié), sans la remplacer tant qu'aucun texte n'est validé.
+- **P9** : revue sur iPhone des écrans de consentement GPS, d'attestation santé et de signature avant de déclarer le
+  lot livré.
+
+### B9 (PR préparées et poussées, jamais mergées sans go)
+
+- **B1** — `fn_scanner_code_pointage` sans `nouveau_code` ni `nouveau_hmac` (fonction `SECURITY DEFINER`, depuis la
+  définition live), mergée après T0.
+- **S1** — allocateur STAGING de capacité SMS de signature (`scripts/ci/allouer-capacite-sms-signature-staging.mjs`,
+  workflow protégé) : secrets STAGING, fonctions `SECURITY DEFINER` du supplément, données.
+- **T11** — go au dispatch du workflow STAGING du lot 2 et du mode `--appareil` de sa fixture pour T12 (secrets
+  service_role et comptes TEST exposés à l'environnement protégé, création et nettoyage de données STAGING).
+- **Constat T0 (nouveau, RLS/auth)** : `fn_presences_detail_mission` (l.48920-48923) et `fn_etat_pointage_mission`
+  (l.35165-35170) ont une garde d'accès en logique ternaire (`mon_etablissement_id()` NULL pour un soignant) : un
+  soignant non assigné qui connaît l'identifiant d'une mission lit la synthèse de présence d'un autre soignant
+  (horaires, distance, alertes) ou ses segments de pointage. Constat sur le dump `public.sql` ; une PR backend séparée
+  (B9) doit le confirmer sur la définition live et corriger la garde. Le natif n'appelle ces RPC que pour ses
+  missions et n'en dépend pas.
+
+### Actions manuelles (STAGING, appareil, Apple)
+
+- Dispatcher `install-sms-staging-closed.yml` (supplément de recette, jamais fait par un agent) puis le workflow de S1 ;
+  relire en lecture seule le MD5 de `fn_envoyer_otp_signature` STAGING épinglé par le supplément.
+- Fournir deux numéros de téléphone réels (soignant et établissement de recette) et le compte Twilio de recette en
+  secrets d'environnement ; confirmer `canal_sms` et des comptes TEST confirmés pour la portée.
+- Indiquer si `ANTHROPIC_API_KEY` est configurée sur STAGING (sinon P4 se prouve par la file de revue manuelle).
+- Relever `parametres_litiges.delai_contestation_pointage_h` sur STAGING et en production (lecture seule).
+- Recette appareil T12 : iPhone avec TestFlight Staging 2.0.0 (26), front web lancé localement contre STAGING pour
+  afficher le QR, SMS reçu, arrêts forcés, photo HEIC non identitaire ; archive et upload du build 26.
+- Hors lot 2, à anticiper : clé APNs sous `GDU5AA28M9` (lot 3) ; compte de démonstration capable de signer, ou mention
+  dans les notes de review Apple (lot 6).
+
+## Points consignés hors lot 2
+
+- `dec_fenetre_pointage` (`public.sql` l.1961) formate l'heure sans fuseau (UTC) dans « Pointage trop tôt. La mission
+  commence à %. » : affiché verbatim ; correctif backend à proposer (consigné dans `PORTE_LOT2.md` à la clôture).
+- `SyncHorsLigne` (monté par `LayoutApp.tsx`) rejoue `fn_pointer_*` depuis `src/lib/horsLigne.ts`, alimenté seulement
+  par des fonctions web mortes : résidu web du système ①, non reproduit (retrait à proposer côté web).
+- Le web journalise le retrait du consentement GPS sous `GPS_CONSENTEMENT_ACTIVE` / `GPS_CONSENTEMENT_RETIRE`, absents
+  du CHECK `journaux_audit_action_check` : son audit échoue en silence (la trace serveur `DONNEES_PERSO_MODIFICATION`
+  existe).

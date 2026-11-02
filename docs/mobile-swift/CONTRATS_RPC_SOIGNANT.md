@@ -1,9 +1,12 @@
-# Contrats RPC du parcours soignant (lot 0, plan §11 jour 8 ; lot 1, T0)
+# Contrats RPC du parcours soignant (lot 0, plan §11 jour 8 ; lot 1, T0 ; lot 2, T0)
 
-Document de référence des vingt-sept RPC que le client Swift consomme ou consommera (seize au lot 0,
-onze ajoutées par la tranche T0 du lot 1, `docs/mobile-swift/LOT1_PLAN.md` §3), plus deux fiches hors
-RPC : l'edge function `delete-account` (suppression de compte, Apple 5.1.1) et l'interdiction de
-`fn_etablissement_public` côté natif. Pour chaque RPC : la
+Document de référence des trente-trois RPC que le client Swift consomme ou consommera (seize au lot 0,
+onze ajoutées par la tranche T0 du lot 1, `docs/mobile-swift/LOT1_PLAN.md` §3 ; la tranche T0 du lot 2,
+`docs/mobile-swift/LOT2_PLAN.md` §3, retire les quatre RPC du système de pointage ① et en ajoute dix,
+dont une RPC de recette STAGING), plus des fiches hors RPC : l'edge function `delete-account`
+(suppression de compte, Apple 5.1.1), l'interdiction de `fn_etablissement_public` côté natif et, au lot 2,
+la fiche « `nouveau_code` jamais lu », les edges `verify-document` et `generate-contrat-mission-pdf`, le
+Storage du lot 2, l'interdiction du système de pointage ① et celle de `fn_creer_notification`. Pour chaque RPC : la
 signature SQL exacte extraite de `supabase/schema/public.sql` (dump de production re-baseliné par
 `schema-snapshot.yml`), la classe d'authentification du manifeste `supabase/SECURITY_DEFINER_MANIFEST.json`
 (capture production du 2026-07-29, 422 fonctions), le GRANT connu, la signature TypeScript de
@@ -18,7 +21,7 @@ confrontées à `public.sql` et à l'edge `delete-account`), exécuté sur toute
 livraison mobile » du check requis « Typecheck + build » de `.github/workflows/validate-pr.yml`.
 
 **Re-baseline du schéma (procédure).** Parce que cette garde tourne dans un check requis, une PR
-automatique `auto/schema-baseline` (`schema-snapshot.yml`) qui modifie l'une des vingt-sept RPC suivies
+automatique `auto/schema-baseline` (`schema-snapshot.yml`) qui modifie l'une des trente-trois RPC suivies
 (signature, GRANT, ou corps dont une fiche cite les réponses) reste bloquée — c'est voulu, fail-closed — et
 `drift-check.yml` reste rouge tant qu'elle n'est pas mergée. Ne jamais corriger sur `auto/schema-baseline` :
 le `git push --force` du run suivant efface tout commit manuel. Procédure : une **PR humaine**, depuis une
@@ -29,7 +32,9 @@ Swift concernées, elle ajoute `node scripts/mobile/check-rpc-contracts.mjs --up
 puis fermeture de la PR automatique devenue sans objet (le run suivant de `schema-snapshot.yml` ne trouve
 plus de diff).
 
-**Autres sources lues par la garde.** Outre les vingt-sept RPC suivies, la garde lit : les corps de six fonctions non suivies (`fn_conflit_planning_soignant`, `fn_postuler_mission`, `fn_postuler_mission_rate_limited`, `fn_finaliser_attribution_mission`, `fn_resoudre_contrat_mission`, `fn_demander_confirmations_presence`) ; le web `src/pages/DetailMissionSoignant.tsx` (chaînes de présence, tests `data?.choix_requis`, classement « mission perdue ») et `src/lib/erreurs.ts` (`estBlocageCodeTravail`) ; l'edge `supabase/functions/delete-account/index.ts` et `supabase/functions/_shared/admin-auth.ts` ; tout littéral `"fn_…"` des fichiers `ios-native/**/*.swift`. Une PR web, edge ou de re-baseline qui modifie l'une de ces sources met la fiche concernée à jour **dans la même PR**.
+**Autres sources lues par la garde.** Outre les trente-trois RPC suivies, la garde lit : les corps de six fonctions non suivies (`fn_conflit_planning_soignant`, `fn_postuler_mission`, `fn_postuler_mission_rate_limited`, `fn_finaliser_attribution_mission`, `fn_resoudre_contrat_mission`, `fn_demander_confirmations_presence`) ; le web `src/pages/DetailMissionSoignant.tsx` (chaînes de présence, tests `data?.choix_requis`, classement « mission perdue ») et `src/lib/erreurs.ts` (`estBlocageCodeTravail`) ; l'edge `supabase/functions/delete-account/index.ts` et `supabase/functions/_shared/admin-auth.ts` ; tout littéral `"fn_…"` des fichiers `ios-native/**/*.swift`. Une PR web, edge ou de re-baseline qui modifie l'une de ces sources met la fiche concernée à jour **dans la même PR**.
+
+**Sources ajoutées par le lot 2 (T0).** Les corps de `fn_exiger_conformite_demarrage_mission`, `trg_exiger_conformite_premier_pointage` et `dec_fenetre_pointage` (exceptions de la première OUVERTURE) et les triggers `dec_fenetre_pointage`, `trg_01_exiger_conformite_premier_pointage`, `trg_01_exiger_conformite_mission_en_cours`, `trg_notifier_creation_litige` ; le supplément `scripts/ci/sms-signature-staging.sql` (`fn_admission_otp_signature_recette`, statut `staging_seulement`) ; le web `src/components/pointage/PointageRotatifSoignant.tsx` (RPC appelées, clés `p_metadata`, surcharge du message `P0002`), `src/pages/PresencesSoignant.tsx` et `src/components/pointage/BlocPointageMission.tsx` (système ① non appelé), `src/components/CartePointage.tsx` et `src/lib/qr-offline-queue.ts` (importeurs), `src/components/PanneauContestation.tsx` (trois clés, `fn_creer_notification`, constante 72 h), `src/components/SignerContratOtp.tsx` (`MESSAGES_ERREUR`) et `src/lib/signatureSmsStagingAdmission.ts` (garde d'URL STAGING) ; les edges `supabase/functions/verify-document/index.ts` et `supabase/functions/generate-contrat-mission-pdf/index.ts` et leur ligne `verify_jwt` de `supabase/config.toml` ; les politiques Storage de `supabase/migrations/*.sql` ; aucun `nouveau_code` dans les sources Swift.
 
 Règles (plan §4.4) : montants, net estimé et règles juridiques sont des valeurs serveur jamais recalculées ;
 chaque gateway relit l'objet après mutation ; les erreurs PostgREST PGRST202 et 300 à 303 sont des refus
@@ -46,6 +51,18 @@ dans l'ordre du web (`LOT1_PLAN.md` §2.4 : `choix_requis` → `code` → `docum
 afficherait un faux succès, d'où un test par RPC et par forme de réponse. Chaque appel est borné à
 `SessionController.resolutionTimeout` (15 s) ; un timeout client sur une mutation ne prouve pas que le
 serveur n'a pas agi : relecture obligatoire, jamais de renvoi automatique.
+
+Règles ajoutées au lot 2 (`LOT2_PLAN.md` §2.4, `DECISIONS_LOT2.md`) : les refus du pointage sont des
+**exceptions PostgREST** (`{code, message}`), pas du jsonb. Chaque RPC qui en lève déclare son ensemble de
+SQLSTATE métier (`exceptionsMetier`) ; le message `PostgrestError.message` est lu **avant**
+`SupabaseErrorMapping` (ordre : `[CODE DU TRAVAIL]` → exceptions métier → mapping du lot 0), restitué
+verbatim, jamais `details` ni `hint`. Un `42501` métier n'est jamais une session expirée ; « permission denied
+for … » (GRANT manquant) reste une erreur de contrat. Toute `PostgrestError` décodée prouve un rollback : refus,
+jamais `.incertain` ; seuls `URLError`, le délai `bounded` et un statut HTTP sans corps PostgREST (502/504) sont
+incertains, réconciliés par relecture. Statut `staging_seulement` : RPC de recette définie par un supplément
+STAGING (`source`), absente de `public.sql` et de `types.ts` ; `buildContracts` échoue si elle apparaît en
+production. Les RPC du système de pointage ① (`RPC_POINTAGE_SYSTEME_1`) et `fn_creer_notification`
+(`RPC_JAMAIS_SUIVIES`) ne sont jamais suivies.
 
 ## Synthèse
 
@@ -68,15 +85,21 @@ serveur n'a pas agi : relecture obligatoire, jamais de renvoi automatique.
 | `fn_supprimer_compte_rate_limited` | à venir | 1 (T8, via edge `delete-account`) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_param_bool` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_confirmer_presence_mission` | à venir | 1 (T6c) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_pointer_arrivee` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_pointer_depart` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_scanner_code_pointage` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_valider_scan_qr` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_generer_qr_mission` | à venir | 2 | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
-| `fn_etat_pointage_mission` | à venir | 2 | MIXTE_TENANT_ADMIN | authenticated, service_role | absente |
-| `fn_envoyer_otp_signature` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_signer_contrat_otp` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_remplacer_document_soignant` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_scanner_code_pointage` | à venir | 2 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_etat_pointage_mission` | à venir | 2 (T3) | MIXTE_TENANT_ADMIN | authenticated, service_role | absente |
+| `fn_envoyer_otp_signature` | à venir | 2 (T8) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_signer_contrat_otp` | à venir | 2 (T8) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_remplacer_document_soignant` | à venir | 2 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_consentir_gps` | à venir | 2 (T3, T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_relancer_validation_presence` | à venir | 2 (T3, T5a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_presences_detail_mission` | à venir | 2 (T3, T5a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_fenetre_contestation_ouverte` | à venir | 2 (T5b) | hors manifeste (SECURITY INVOKER) | authenticated, service_role | déclarée |
+| `fn_ouvrir_litige_rate_limited` | à venir | 2 (T5b, surcharge `(uuid, type_litige, text)`) | RPC_UTILISATEUR_AUTH_INTERNE (deux surcharges sur trois) | authenticated, service_role | absente |
+| `fn_creer_notation_mission` | à venir | 2 (T5a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_demander_revue_document` | à venir | 2 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | absente |
+| `fn_verifier_coherence_documents` | à venir | 2 (T6) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_signer_attestation_sante` | à venir | 2 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_admission_otp_signature_recette` | STAGING seulement | 2 (T8) | hors manifeste (supplément STAGING) | authenticated | absente (jamais en production) |
 | `fn_upsert_token_push` | à venir | 3 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 
 Quatre RPC sont absentes de `types.ts` (`fn_confirmer_action_planning_v1`, `fn_param_bool`,
@@ -87,11 +110,21 @@ après la capture du 2026-07-29) : **classée manuellement `RPC_UTILISATEUR_AUTH
 du lot 1 (`LOT1_PLAN.md` §7), sans régénération du manifeste — voir sa fiche. `ios-native/rpc-contracts.json`
 garde `manifeste: null` pour elle : c'est le fait observé, le classement est documentaire.
 
-Deux RPC ne sont pas suivies, pour des raisons différentes, et `verifierExclusions`
-(`scripts/mobile/check-rpc-contracts.mjs`) fait échouer la CI si l'une d'elles y entre trop tôt :
-**jamais** `fn_etablissement_public` (fiche « Interdite côté natif » en fin de document) ; **pas avant le
-lot 4** `fn_retirer_candidature` (swipe), suivie au plus tôt avec `lot: 4`. À part, `fn_mon_profil_soignant_complet`
-reste suivie mais est reclassée lot 3 (voir sa fiche).
+Lot 2 : trois RPC de plus sont absentes de `types.ts` (`fn_relancer_validation_presence`,
+`fn_ouvrir_litige_rate_limited`, `fn_demander_revue_document`), appelées par le web avec `as any`.
+`fn_admission_otp_signature_recette` n'y figure pas par construction (recette STAGING, jamais en production).
+Hors manifeste : `fn_fenetre_contestation_ouverte` est `SECURITY INVOKER` (le manifeste ne recense que les
+fonctions `SECURITY DEFINER`), `fn_admission_otp_signature_recette` n'existe que sur STAGING, et la troisième
+surcharge `fn_ouvrir_litige_rate_limited(uuid, type_litige, text, uuid)` est absente de la capture du
+2026-07-29 (elle n'est pas appelée par le natif).
+
+Plusieurs RPC ne sont pas suivies, pour des raisons différentes, et `verifierExclusions`
+(`scripts/mobile/check-rpc-contracts.mjs`) fait échouer la CI si l'une d'elles y entre :
+**jamais** `fn_etablissement_public` et `fn_creer_notification` (`RPC_JAMAIS_SUIVIES`, fiches « Interdite côté
+natif » en fin de document) ; **jamais** les huit RPC du système de pointage ① (`RPC_POINTAGE_SYSTEME_1`, fiche
+« Interdit côté natif : système de pointage ① ») ; **pas avant le lot 4** `fn_retirer_candidature` (swipe),
+suivie au plus tôt avec `lot: 4`. À part, `fn_mon_profil_soignant_complet` reste suivie mais est reclassée
+lot 3 (voir sa fiche).
 
 ## fn_get_my_role
 
@@ -276,44 +309,14 @@ CREATE OR REPLACE FUNCTION "public"."fn_suggestions_missions_pour_soignant"("p_l
 - **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: { p_limit?: number }` ; `Returns: Json`.
 - **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
 
-## fn_pointer_arrivee
-
-- **Statut natif** : à venir (lot 2).
-- **Usage prévu** : Pointage d'arrivée (GPS, terminal, code de secours) ; reçu durable écrit avant l'appel.
-- **Signature SQL** (`supabase/schema/public.sql` l.47421) :
-
-```sql
-CREATE OR REPLACE FUNCTION "public"."fn_pointer_arrivee"("p_mission_id" "uuid", "p_lat" numeric DEFAULT NULL::numeric, "p_lng" numeric DEFAULT NULL::numeric, "p_precision" numeric DEFAULT NULL::numeric, "p_terminal_id" "text" DEFAULT NULL::"text", "p_modele" "text" DEFAULT NULL::"text", "p_code_arrivee" "text" DEFAULT NULL::"text") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-```
-
-- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_pointer_arrivee(uuid,numeric,numeric,numeric,text,text,text)` — RPC utilisateur : identité `auth.uid()` lue en interne, appel avec le JWT du soignant.
-- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
-- **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: { p_code_arrivee?: string; p_lat?: number; p_lng?: number; p_mission_id: string; p_modele?: string; p_precision?: number; p_terminal_id?: string }` ; `Returns: Json`.
-- **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
-
-## fn_pointer_depart
-
-- **Statut natif** : à venir (lot 2).
-- **Usage prévu** : Pointage de départ sur une présence ouverte ; reçu durable écrit avant l'appel.
-- **Signature SQL** (`supabase/schema/public.sql` l.47563) :
-
-```sql
-CREATE OR REPLACE FUNCTION "public"."fn_pointer_depart"("p_presence_id" "uuid", "p_lat" numeric DEFAULT NULL::numeric, "p_lng" numeric DEFAULT NULL::numeric, "p_precision" numeric DEFAULT NULL::numeric, "p_terminal_id" "text" DEFAULT NULL::"text", "p_modele" "text" DEFAULT NULL::"text", "p_code_depart" "text" DEFAULT NULL::"text") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-```
-
-- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_pointer_depart(uuid,numeric,numeric,numeric,text,text,text)` — RPC utilisateur : identité `auth.uid()` lue en interne, appel avec le JWT du soignant.
-- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
-- **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: { p_code_depart?: string; p_lat?: number; p_lng?: number; p_modele?: string; p_precision?: number; p_presence_id: string; p_terminal_id?: string }` ; `Returns: Json`.
-- **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
-
 ## fn_scanner_code_pointage
 
-- **Statut natif** : à venir (lot 2).
-- **Usage prévu** : Code rotatif affiché par l'établissement ; `p_metadata` porte terminal et précision GPS.
+- **Statut natif** : à venir (lot 2, T3 gateway, T4b écran ; décisions 1, 2, 6 de `DECISIONS_LOT2.md`).
+- **Usage prévu** : seul système de pointage du natif (code rotatif à six chiffres affiché par l'établissement,
+  saisi ou lu dans le QR de `AffichageCodeRotatifEtab`). Arrivée, départ et pauses alternent OUVERTURE et
+  FERMETURE d'un segment `mission_creneaux` `EFFECTIF`. Reçu `RecuScan` écrit avant l'appel (`LOT2_PLAN.md`
+  §2.6), **une seule requête**, jamais de renvoi automatique, aucune file hors ligne (décision 2) ; succès
+  affiché seulement après relecture de `fn_etat_pointage_mission` et de `scans_pointage`.
 - **Signature SQL** (`supabase/schema/public.sql` l.55622) :
 
 ```sql
@@ -325,46 +328,61 @@ CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", 
 - **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_scanner_code_pointage(text,jsonb)` — RPC utilisateur : identité `auth.uid()` lue en interne, appel avec le JWT du soignant.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: { p_code: string; p_metadata?: Json }` ; `Returns: Json`.
-- **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
-
-## fn_valider_scan_qr
-
-- **Statut natif** : à venir (lot 2).
-- **Usage prévu** : QR généré par `fn_generer_qr_mission` ; file hors-ligne à sémantique identique à `src/lib/qr-offline-queue.ts`.
-- **Signature SQL** (`supabase/schema/public.sql` l.65545) :
-
-```sql
-CREATE OR REPLACE FUNCTION "public"."fn_valider_scan_qr"("p_token" "text", "p_lat" numeric DEFAULT NULL::numeric, "p_lng" numeric DEFAULT NULL::numeric, "p_precision" numeric DEFAULT NULL::numeric, "p_terminal_id" "text" DEFAULT NULL::"text") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-```
-
-- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_valider_scan_qr(text,numeric,numeric,numeric,text)` — RPC utilisateur : identité `auth.uid()` lue en interne, appel avec le JWT du soignant.
-- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
-- **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: { p_lat?: number; p_lng?: number; p_precision?: number; p_terminal_id?: string; p_token: string }` ; `Returns: Json`.
-- **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
-
-## fn_generer_qr_mission
-
-- **Statut natif** : à venir (lot 2).
-- **Usage prévu** : Génération du QR côté établissement (lot 5) ; listée ici car le soignant en consomme le token.
-- **Signature SQL** (`supabase/schema/public.sql` l.37981) :
-
-```sql
-CREATE OR REPLACE FUNCTION "public"."fn_generer_qr_mission"("p_mission_id" "uuid", "p_type" "text" DEFAULT 'UNIVERSEL'::"text") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-```
-
-- **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_generer_qr_mission(uuid,text)` — Mixte tenant / admin : la fonction distingue en interne soignant, établissement et admin ; appel avec le JWT utilisateur.
-- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
-- **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: { p_mission_id: string; p_type?: string }` ; `Returns: Json`.
-- **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
+- **Requête** : corps `{"p_code":"<6 chiffres>","p_metadata":{…}}` ; clés de `p_metadata` identiques au web
+  (`src/components/pointage/PointageRotatifSoignant.tsx` l.122-126) : `id_terminal` toujours (`TERM_IOS_` +
+  20 caractères base32, décision 7), `latitude`, `longitude`, `precision_gps_m` seulement si le consentement
+  GPS est donné **et** la position précise disponible (décision 5) ; jamais `ip_address` (lue par le serveur
+  l.55731 et l.55806 mais non envoyée par le web). Le serveur horodate (`v_now := now()`, l.55628) : un code rejoué plus
+  tard serait un faux pointage, d'où l'absence de file.
+- **Contrat de réponse (HTTP 200)** : `{type_scan_effectue, prochain_type_scan, creneau_effectif_id,
+  horodatage_effectif, horodatage_arrondi, numero_scan, validation_etab_requise, nouveau_code, nouveau_hmac}`
+  (l.55871-55886). Le décodeur Swift est une **liste blanche** sans `nouveau_code` ni `nouveau_hmac` (fiche
+  « `fn_scanner_code_pointage` : `nouveau_code` jamais lu »). Aucun refus en jsonb : tous les refus sont des
+  exceptions.
+- **Exceptions PostgREST de la RPC** (message `PostgrestError.message` verbatim ; `%` = valeur formatée par le
+  serveur) :
+  - `P0002` (`no_data_found`) « Code de pointage invalide ou expiré. » (l.55649) — seule surcharge client,
+    celle du web l.135-137, en vouvoiement (décision 6) : « Code de pointage invalide ou expiré. Demandez le code actuel à l'établissement. » ;
+  - `42501` (`insufficient_privilege`) « Vous n'êtes pas assigné(e) à cette mission. » (l.55652) — **refus métier, jamais une session expirée** ;
+  - `23514` (`check_violation`) « Scan déjà pris en compte. Prochain scan possible dans % secondes. » (l.55662, anti-rejeu de 2 min) ;
+  - `23514` « Le contrat doit être signé avant le pointage. » (l.55677, OUVERTURE seulement) ;
+  - `23514` « Pointage trop tôt. Mission commence à %. Possible à partir de %. » (l.55686, 15 min avant le premier créneau PREVISIONNEL, heures `Europe/Paris`) ;
+  - `P0002` « Aucun créneau effectif ouvert à fermer. » (l.55775, FERMETURE) ;
+  - `23514` « La fin réelle doit être postérieure au début réel du créneau. » (l.55778, FERMETURE).
+- **Exceptions des triggers de la première OUVERTURE** (INSERT `presences`, puis UPDATE `missions` vers
+  `EN_COURS`) : `trg_01_exiger_conformite_premier_pointage` (l.75592) et `trg_01_exiger_conformite_mission_en_cours`
+  (l.75588) appellent `fn_exiger_conformite_demarrage_mission` (l.35858) :
+  - `22023` « Mission et soignant requis » ;
+  - `42501` « Le soignant n'est pas affecté à cette mission. » ;
+  - `23514` « La mission ne peut pas être démarrée dans son état actuel. » ;
+  - `23503` « Profil soignant introuvable. » ;
+  - `23514` « Le contrat signé par les deux parties est requis avant le pointage. » ;
+  - `23514` « Les justificatifs requis ne sont plus tous vérifiés. Déposez ou faites valider la preuve courante avant de démarrer. » ;
+  - `dec_fenetre_pointage` (BEFORE INSERT `presences`, l.75384) : `P0001` « Pointage trop tôt. La mission commence à %. »
+    (l.1961, 30 min avant `missions.debut_le`, heure formatée **sans** fuseau, donc en UTC : affiché verbatim,
+    correctif backend à proposer hors lot 2, `LOT2_PLAN.md` §5).
+  - Liste non exhaustive des autres triggers qui peuvent lever (`LOT2_PLAN.md` correction 10) : tout autre
+    SQLSTATE reste un **refus** (message générique), jamais un incertain.
+- **Interception** (`RPCResponse.appeler(…, exceptionsMetier:)`, T1) : ensemble déclaré pour cette RPC
+  `["P0001", "P0002", "22023", "23503", "23514", "42501"]`, restitué `{success:false, ok:false,
+  code:"SQLSTATE_<code>", error:<message>}` avant `SupabaseErrorMapping`. « permission denied for function
+  fn_scanner_code_pointage » (GRANT manquant) → `.contract` ; PGRST202, 300-303 → mapping du lot 0. Statuts
+  HTTP des stubs de test : `42501` → 403, `23503` → 409, `P0001`, `22023`, `23514` → 400, `P0002` → 500
+  (comportement de PostgREST).
+- **Relecture** : `fn_etat_pointage_mission` (`nb_scans` = `numero_scan`, `prochain_type_scan` basculé) puis
+  `scans_pointage?select=id,numero_scan,type_scan,scanne_le,id_terminal,precision_gps_m&mission_id=eq.<id>&order=numero_scan.desc`
+  (une preuve hors de la base du reçu, même `id_terminal`) ; jamais `code_saisi`, `ip_address`, `latitude`,
+  `longitude` (lisibles par `sp_select` l.79931 mais inutiles). Réconciliation « non reçu » seulement ≥ 8 s
+  après `started` (décision 2).
+- **Preuve STAGING** : T11 — deux lignes `scans_pointage` (OUVERTURE puis FERMETURE, `numero_scan` 1 puis 2,
+  `id_terminal ~ '^TERM_IOS_[A-Z2-7]{20}$'`, `precision_gps_m` non nul), segment `EFFECTIF` fermé,
+  `missions.statut = 'EN_COURS'`, `presences.perimetre_gps_valide = true`.
 
 ## fn_etat_pointage_mission
 
-- **Statut natif** : à venir (lot 2).
-- **Usage prévu** : Relecture de l'état de pointage après chaque mutation (règle « aucun succès fabriqué »).
+- **Statut natif** : à venir (lot 2, T3).
+- **Usage prévu** : état du pointage d'une mission, relu toutes les 15 s quand le bloc est visible
+  (`PointageRotatifSoignant.tsx` l.64-72) et après chaque scan (règle « aucun succès fabriqué »).
 - **Signature SQL** (`supabase/schema/public.sql` l.35145) :
 
 ```sql
@@ -376,12 +394,26 @@ CREATE OR REPLACE FUNCTION "public"."fn_etat_pointage_mission"("p_mission_id" "u
 - **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_etat_pointage_mission(uuid)` — Mixte tenant / admin : la fonction distingue en interne soignant, établissement et admin ; appel avec le JWT utilisateur.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : absente (types.ts en retard sur le schéma).
-- **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
+- **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}` (l.35162) ; `{error:'Accès interdit'}`
+  (l.35169) ; succès `{statut, intitule, prochain_type_scan, nb_scans, segment_ouvert, segments, code_pointage_actif, est_etab}`
+  (l.35180-35190) : `statut`, `intitule`, `prochain_type_scan` (`OUVERTURE`/`FERMETURE`), `nb_scans`,
+  `segment_ouvert`, `segments` (`[{id, debut, fin}]`, créneaux `EFFECTIF` triés par début), `code_pointage_actif`
+  (non nul pour l'établissement seulement, l.35188), `est_etab`. Décodeur en liste blanche : **`code_pointage_actif`
+  jamais décodé** côté soignant, même présent. `{error}` → refus verbatim (parité `PointageRotatifSoignant.tsx` l.81-92).
+- **Écart constaté (hors lot 2, B9 RLS/auth)** : la garde d'accès (l.35165-35170) est en logique ternaire.
+  Pour un utilisateur sans établissement, `mon_etablissement_id()` vaut NULL, donc `v_is_etab` vaut NULL et
+  `NOT v_is_etab AND NOT v_is_soignant` vaut NULL : le refus « Accès interdit » n'est jamais renvoyé à un
+  soignant **non assigné**, qui lit statut, intitulé et segments (le code reste masqué). Constat sur le dump
+  `public.sql` (#1097), à confirmer sur la définition live par une PR backend séparée (B9) ; le natif n'appelle
+  la RPC que pour ses missions et n'en dépend pas.
+- **Preuve STAGING** : T11 (relecture après OUVERTURE et FERMETURE).
 
 ## fn_envoyer_otp_signature
 
-- **Statut natif** : à venir (lot 2).
-- **Usage prévu** : Envoi du code OTP SMS avant signature de contrat.
+- **Statut natif** : à venir (lot 2, T8 gateway, T9b écran ; décisions 18 et 20).
+- **Usage prévu** : envoi du code OTP SMS après consentement lié à la révision affichée (clé
+  `(contratId, empreinte, documentPrêt)`) ; minuteur 10 min ; un succès ne prouve pas l'envoi réel du SMS
+  (`net.http_post` sans retour, l.33266-33283).
 - **Signature SQL** (`supabase/schema/public.sql` l.33098) :
 
 ```sql
@@ -393,12 +425,43 @@ CREATE OR REPLACE FUNCTION "public"."fn_envoyer_otp_signature"("p_contrat_id" "u
 - **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_envoyer_otp_signature(uuid)` — RPC utilisateur : identité `auth.uid()` lue en interne, appel avec le JWT du soignant.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: { p_contrat_id: string }` ; `Returns: Json`.
-- **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
+- **Contrat de réponse (HTTP 200)** — refus `{success:false, error_code, error}` (valeurs JSON réelles) :
+  `NON_AUTHENTIFIE` « Non authentifié » (l.33120) ; `NON_AUTORISE` « Non autorisé à signer ce contrat »
+  (l.33124, l.33154) ; `CONTRAT_INTROUVABLE` « Contrat introuvable » (l.33136) ; `CONTRAT_INACTIF`
+  « Ce contrat n'est plus actif (statut : <statut>). » (l.33139) ; `CONTRAT_DEJA_COMPLET` « Ce contrat est déjà
+  entièrement signé. » (l.33142) ; `DEJA_SIGNE` « Vous avez déjà signé ce contrat. » (l.33160, l.33206, l.33258) ;
+  `TROP_DE_SMS_IP` « Trop de demandes de signature depuis votre IP. Réessayez dans 1h. » + `envois_courant`, `max`
+  (l.33166-33169) ; `TELEPHONE_MANQUANT` « Numéro de téléphone manquant. Mettez à jour votre profil avant de
+  signer. » (l.33174) ; `CONFIGURATION_SMS_INDISPONIBLE` « Envoi du code indisponible. Réessayez plus tard. »
+  (l.33187-33189) ; `TROP_DE_SMS` « Trop de SMS envoyés (3 max / 24h). » + `sms_envoyes`, `reset_le`
+  (l.33216-33220). **STAGING seulement** (le supplément remplace la fonction, `scripts/ci/sms-signature-staging-render.mjs`
+  l.11-23) : `SMS_RECETTE_INDISPONIBLE` « Envoi du code indisponible pour cette recette. » pour un compte TEST
+  sans capacité. Succès `{success:true, role, telephone_masked, expire_dans_minutes:10, sms_envoyes, sms_restants}`
+  (l.33286-33293) ; seul `telephone_masked` serveur est affiché, jamais un numéro en clair.
+- **Messages affichés** (web `src/components/SignerContratOtp.tsx` l.30-44, `MESSAGES_ERREUR`, déjà vouvoyés ;
+  centralisés par TL) : `NON_AUTHENTIFIE` « Session expirée. Reconnectez-vous puis réessayez. » ;
+  `NON_AUTORISE` « Vous n'êtes pas autorisé(e) à signer ce contrat. » ; `CONTRAT_INTROUVABLE` « Contrat
+  introuvable. Rechargez la page. » ; `CONTRAT_INACTIF` « Ce contrat a été annulé ou a expiré et ne peut plus
+  être signé. » ; `CONTRAT_DEJA_COMPLET` « Ce contrat est déjà entièrement signé par les deux parties. » ;
+  `TELEPHONE_MANQUANT` « Votre numéro de téléphone est manquant. Mettez à jour votre profil avant de signer. » ;
+  `TROP_DE_SMS` « Trop de SMS envoyés (3 max / 24h). Réessayez plus tard ou contactez le support. » ;
+  `OTP_NON_DEMANDE` « Demandez d'abord un code SMS en cliquant sur le bouton. » ; `OTP_EXPIRE` « Le code SMS a
+  expiré (10 min). Demandez un nouveau code. » ; `OTP_INCORRECT` « Code incorrect. Vérifiez votre SMS et
+  réessayez. » ; `TROP_DE_TENTATIVES` « Trop de tentatives. Renvoyez un nouveau code SMS. » ; `DEJA_SIGNE`
+  « Vous avez déjà signé ce contrat. » ; `HASH_DOCUMENT_CHANGE` « Le contrat a été modifié depuis votre
+  chargement. Rechargez la page avant de signer. ». Code absent de la table (`TROP_DE_SMS_IP`,
+  `CONFIGURATION_SMS_INDISPONIBLE`, `SMS_RECETTE_INDISPONIBLE`) → `error` serveur verbatim (`messageDepuisCode`
+  l.46-49), sinon « Une erreur est survenue. Réessayez. ». Bloquants (l.115-120) : `TELEPHONE_MANQUANT`,
+  `TROP_DE_SMS`, `CONTRAT_INACTIF`, `CONTRAT_DEJA_COMPLET`, `DEJA_SIGNE`, `NON_AUTORISE`, `HASH_DOCUMENT_CHANGE`.
+- **Preuve STAGING** : T11 temps 3 (capacité S1 allouée après le rendu) : `signatures_contrats.statut_signature
+  = 'otp_envoye'`, `sms_envoyes_count = 1`.
 
 ## fn_signer_contrat_otp
 
-- **Statut natif** : à venir (lot 2).
-- **Usage prévu** : Signature du contrat avec le code OTP et le hash du document affiché.
+- **Statut natif** : à venir (lot 2, T8 gateway, T9b écran — HARD STOP n°4 de l'écran de signature).
+- **Usage prévu** : signature avec le code OTP et l'empreinte SHA-256 du HTML original affiché
+  (`p_hash_document`) ; `p_signature_image` **toujours NULL** (OTP seul, décision 18) ; relecture
+  `contrats_mission.signature_soignant` et `signatures_contrats.statut_signature = 'signe'`.
 - **Signature SQL** (`supabase/schema/public.sql` l.56473) :
 
 ```sql
@@ -410,12 +473,31 @@ CREATE OR REPLACE FUNCTION "public"."fn_signer_contrat_otp"("p_contrat_id" "uuid
 - **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_signer_contrat_otp(uuid,text,text,text)` — RPC utilisateur : identité `auth.uid()` lue en interne, appel avec le JWT du soignant.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: { p_contrat_id: string; p_hash_document?: string; p_otp_code: string; p_signature_image?: string }` ; `Returns: Json`.
-- **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
+- **Contrat de réponse (HTTP 200)** — refus `{success:false, error_code, error}` : `NON_AUTHENTIFIE` « Non
+  authentifié » (l.56489) ; `NON_AUTORISE` « Non autorisé à signer ce contrat » (l.56493, l.56529) ;
+  `CONTRAT_INTROUVABLE` « Contrat introuvable » (l.56503) ; `CONTRAT_INACTIF` « Ce contrat ne peut plus être
+  signé. » (l.56506) ; `OTP_NON_DEMANDE` « Aucune demande OTP en cours. Cliquez d'abord sur "Recevoir un code SMS". »
+  (l.56515) ; `DEJA_SIGNE` « Vous avez déjà signé ce contrat. » + `signe_a` (l.56521) ; `TROP_DE_TENTATIVES`
+  « Trop de tentatives. Renvoyez un nouveau code SMS. » (l.56532) ; `OTP_EXPIRE` « Code expiré. Renvoyez un nouveau
+  code SMS. » (l.56536) ; `OTP_INCORRECT` « Code incorrect. » + `tentatives_restantes` (l.56544, cinq essais) ;
+  `HASH_DOCUMENT_CHANGE` « Le document a change ou sa preuve est indisponible. Rechargez la page avant de signer. »
+  (l.56563-56564, sans accent dans la source). Messages affichés : table `MESSAGES_ERREUR` (fiche
+  `fn_envoyer_otp_signature`). Exception : `23514` « Rôle de signature invalide » (l.56600, incohérence interne,
+  refus définitif). Succès `{success:true, role, contrat_complet}` (l.56607).
+- **Empreinte** (l.56549-56565) : SHA-256 hexadécimal des octets UTF-8 de `contrats_mission.contenu_html` ; le
+  serveur exige `hash_document` sur 64 hex, `p_hash_document` égal, `storage_path` et `contenu_html_rendu_le`
+  non nuls, aucune variable `{{…}}`, et aucune signature antérieure sur une autre empreinte. Un code non numérique
+  ou de longueur ≠ 6 n'est jamais envoyé (refus local, aucune requête).
+- **Preuve** : signature complète par Gabrielle sur iPhone (T12, P5), relue en SQL (`signatures_contrats.statut_signature
+  = 'signe'`, `hash_document` = `contrats_mission.hash_document`).
 
 ## fn_remplacer_document_soignant
 
-- **Statut natif** : à venir (lot 2).
-- **Usage prévu** : Enregistrement d'un document après upload Storage sous `auth.uid()/` ; déclenche `verify-document` une seule fois.
+- **Statut natif** : à venir (lot 2, T6 ; décision 14).
+- **Usage prévu** : enregistrement atomique d'un justificatif après l'upload Storage sous
+  `<uid>/documents/<TYPE>/<ms>-<nom assaini>` (`DocumentsSoignant.tsx` l.404) ; reçu `RecuDocument` écrit avant
+  l'upload ; puis `verify-document` **une seule fois** pour ce `document_id`. Seule mutation **rejouable** du lot 2 :
+  idempotente sur `s3_cle` (verrou consultatif l.53119-53120, ligne existante active → `idempotent:true`).
 - **Signature SQL** (`supabase/schema/public.sql` l.53079) :
 
 ```sql
@@ -427,7 +509,299 @@ CREATE OR REPLACE FUNCTION "public"."fn_remplacer_document_soignant"("p_type_doc
 - **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_remplacer_document_soignant(text,text,text,text,text,bigint)` — RPC utilisateur : identité `auth.uid()` lue en interne, appel avec le JWT du soignant.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : absente (types.ts en retard sur le schéma).
-- **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
+- **Contrat de réponse (HTTP 200)** — refus `{success:false, error_code}` **sans** `error` : `NON_AUTHENTIFIE`
+  (l.53090) ; `TYPE_DOCUMENT_INVALIDE` (l.53099, valeur hors enum `type_document`) ; `CHEMIN_DOCUMENT_INVALIDE`
+  (l.53109 : préfixe `<uid>/documents/<type>/`, ≤ 512 caractères, sans `..` ni `\`, quatrième segment
+  `^[A-Za-z0-9._-]+$`) ; `METADONNEES_DOCUMENT_INVALIDES` (l.53117 : MIME `application/pdf`, `image/jpeg`,
+  `image/png`, `image/webp` ; 1 à 10 485 760 octets ; nom ≤ 255 ; libellé ≤ 500) ; `DOCUMENT_INACTIF` (l.53131,
+  clé déjà prise par une preuve supprimée ou révoquée). Succès `{success:true, document_id, idempotent}`
+  (l.53134 rejoué, l.53162 créé, statut `EN_ATTENTE`, audit serveur `DOCUMENT_TELEVERSEMENT`).
+- **Exceptions des triggers** (INSERT `documents_soignants`) : `trg_bloquer_documents_sante` (l.75716 →
+  `fn_trg_bloquer_documents_sante` l.62571) lève `P0001` pour `VACCINATIONS`, `MEDECINE_TRAVAIL`, `ARRET_MALADIE`
+  (types jamais proposés par l'app) ; `trg_10_remplacer_preuves_documentaires_actives` (l.75608) révoque la
+  preuve active du même type.
+- **Refus côté app** : `cleanup_orphan` (edge `verify-document`) puis message du web (`DocumentsSoignant.tsx`
+  l.427-436 : « Le document ne peut pas être enregistré. Vérifie son format puis réessaie. » pour
+  `CHEMIN_DOCUMENT_INVALIDE` / `METADONNEES_DOCUMENT_INVALIDES`, vouvoyé côté natif, décision 9 du lot 1).
+- **Preuve STAGING** : T11 (P4) — une ligne `documents_soignants` `type_mime = 'image/jpeg'` pour une source HEIC.
+
+## fn_consentir_gps
+
+- **Statut natif** : à venir (lot 2, T3 gateway, T4b consentement et Profil ; décision 4).
+- **Usage prévu** : premier consentement GPS (`soignants.consentement_gps IS NULL`) avant le premier pointage,
+  texte verbatim de `ConsentementGPS.tsx` ; retrait et réactivation depuis le Profil natif (`SectionPreferences.tsx`
+  l.128-168). Relecture `soignants.consentement_gps` (SELECT direct, comme `PresencesSoignant.tsx` l.58) ; audit
+  client `RGPD_CONSENTEMENT_DONNE` au premier consentement (parité `PresencesSoignant.tsx` l.74-80, l.93-99) ; aucun
+  audit `GPS_CONSENTEMENT_ACTIVE` / `GPS_CONSENTEMENT_RETIRE` (absents de `journaux_audit_action_check` l.70243 :
+  l'audit du web échoue en silence).
+- **Signature SQL** (`supabase/schema/public.sql` l.25474) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_consentir_gps"("p_accepte" boolean) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_consentir_gps(boolean)`.
+- **GRANT connu** : `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_accepte: boolean }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{success:true}` seulement (l.25489), y compris quand aucune ligne
+  `soignants` n'est modifiée : le succès n'est donc jamais une preuve, **relecture obligatoire**. Le serveur pose
+  `consentement_gps`, `consentement_gps_le` et journalise `DONNEES_PERSO_MODIFICATION` (l.25484-25486).
+- **Preuve STAGING** : T11 (consentement accepté dans l'app, `soignants.consentement_gps = true` relu).
+
+## fn_relancer_validation_presence
+
+- **Statut natif** : à venir (lot 2, T3 gateway, T5a écran).
+- **Usage prévu** : relance de l'établissement quand une présence à pointage complet attend sa validation
+  (`DetailPresencesMission.tsx` l.116-124).
+- **Signature SQL** (`supabase/schema/public.sql` l.53013) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_relancer_validation_presence"("p_mission_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_relancer_validation_presence(uuid)` ; filtre `soignant_assigne_id = auth.uid()`.
+- **GRANT connu** : `GRANT ALL … TO "service_role", "authenticated"`.
+- **Signature TypeScript** : absente (le web appelle avec `as any`).
+- **Contrat de réponse (HTTP 200)** : refus `{success:false, error}` dont `error` est un **code** :
+  `NON_AUTHENTIFIE` (l.53023), `MISSION_INCONNUE` (l.53030), `RIEN_A_VALIDER` (l.53041), `DEJA_RELANCE` avec
+  `message` « Tu as déjà relancé cet établissement aujourd'hui. Il a été notifié. » (l.53051-53052, une relance par
+  24 h). Succès `{success:true, message}` avec « Établissement relancé. Il a été notifié de valider tes présences. »
+  (l.53070-53071), notification `RAPPEL_VALIDATION_PRESENCE` à l'établissement et audit `PRESENCE_RELANCE_VALIDATION`.
+- **Messages affichés** : `message` serveur verbatim quand il existe (tutoyé côté serveur, décision 9 du lot 1) ;
+  code sans message → repli du web « Relance impossible. » (l.123), jamais le code brut.
+
+## fn_presences_detail_mission
+
+- **Statut natif** : à venir (lot 2, T3 gateway, T5a écran ; `LOT2_PLAN.md` correction 16).
+- **Usage prévu** : carte de synthèse du détail des présences (`DetailPresencesMission.tsx` l.140, l.338-344) ;
+  lecture tolérante, `heures_reelles` jamais affichée (les segments `EFFECTIF` fermés font foi, web l.341-344).
+- **Signature SQL** (`supabase/schema/public.sql` l.48908) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_presences_detail_mission"("p_mission_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_presences_detail_mission(uuid)`.
+- **GRANT connu** : `GRANT ALL … TO "authenticated", "service_role"` (l.84091-84092).
+- **Signature TypeScript** : `Args: { p_mission_id: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}` (l.48918) ; `{error:'Accès refusé'}`
+  (l.48922) ; sans présence `{pointage_effectue:false, heures_planifiees}` (l.48928) ; sinon `{pointage_effectue:true,
+  heures_planifiees, heures_reelles, pointage_arrivee, pointage_depart, methode_arrivee, methode_depart, retard_min,
+  depart_anticipe_min, duree_brute_min, duree_pause_min, duree_nette_min, nb_pauses, pauses, distance_m,
+  perimetre_valide, alerte_teleportation, alertes, valide}` (l.48938-48958 ; `pauses` vient de `pauses_presence`,
+  table du système ①, vide en système rotatif). `{error}` → carte masquée, reste de l'écran rendu.
+- **Écart constaté (hors lot 2, B9 RLS/auth)** : même garde ternaire que `fn_etat_pointage_mission`
+  (l.48920-48923) : pour un soignant, `v_mission.etablissement_id != mon_etablissement_id()` vaut NULL et le refus
+  « Accès refusé » n'est jamais renvoyé ; un soignant non assigné qui connaît l'identifiant d'une mission lit la
+  synthèse de présence d'un autre soignant (horaires, `distance_m`, `alertes`). Constat sur le dump, à confirmer
+  sur la définition live par une PR backend séparée (B9, `DECISIONS_LOT2.md` « En attente de Gabrielle ») ; le
+  natif n'appelle la RPC que pour ses missions.
+
+## fn_fenetre_contestation_ouverte
+
+- **Statut natif** : à venir (lot 2, T5b — HARD STOP n°4, décision 9).
+- **Usage prévu** : décider l'affichage du bouton « contester » d'une présence validée avec le **même prédicat que
+  le refus serveur** : appel `{p_type_litige:'DESACCORD_HEURES_POINTAGE', p_mission_id}` ; le bouton exige en plus
+  `valide_le` non nul et aucun litige existant (parité `PanneauContestation.tsx` l.103-108). Erreur → bouton
+  masqué (fail-closed). Aucune constante de délai dans le Swift : le web garde `DELAI_CONTESTATION_MS` = 72 h
+  (`PanneauContestation.tsx` l.46), le serveur lit `parametres_litiges.delai_contestation_pointage_h`, défaut 48 h
+  (l.36600) — divergence remontée à Gabrielle (HARD STOP n°4), aucun texte de délai affiché avant sa décision.
+- **Signature SQL** (`supabase/schema/public.sql` l.36578) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_fenetre_contestation_ouverte"("p_type_litige" "public"."type_litige", "p_mission_id" "uuid", "p_facture_id" "uuid" DEFAULT NULL::"uuid") RETURNS boolean
+    LANGUAGE "plpgsql" STABLE
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification** : hors manifeste — fonction `SECURITY INVOKER` (`STABLE`) : elle lit `presences`
+  sous RLS du soignant et `parametres_litiges` (lisible par `authenticated`, `pol_param_litiges_select` l.79455).
+- **GRANT connu** : `GRANT ALL … TO "authenticated", "service_role"` (l.82942-82943).
+- **Signature TypeScript** : `Args: { p_facture_id?: string; p_mission_id: string; p_type_litige: Database["public"]["Enums"]["type_litige"] }` ; `Returns: boolean`.
+- **Contrat de réponse (HTTP 200)** : un booléen nu. `SECURITE_DANGER`, `NON_PAIEMENT`, `AUTRE` → toujours vrai
+  (l.36596) ; `DESACCORD_HEURES_POINTAGE` → vrai si aucune présence n'est validée (l.36621), sinon
+  `valide_le + delai_contestation_pointage_h > now()` (défaut 48 h, l.36600-36622).
+
+## fn_ouvrir_litige_rate_limited
+
+- **Statut natif** : à venir (lot 2, T5b — HARD STOP n°4, décision 9 ; réponse et clôture : renvoi web, lot 4).
+- **Usage prévu** : contester une présence validée. Appel par **trois clés exactes**
+  `{p_mission_id, p_type_litige:'DESACCORD_HEURES_POINTAGE', p_motif}` (comme `PanneauContestation.tsx` l.127-131),
+  pour que PostgREST retienne la surcharge canonique : sans `p_type_litige`, il choisirait en silence la surcharge à
+  deux clés, qui ouvre un litige `AUTRE` à fenêtre toujours ouverte ; la surcharge à quatre clés exige
+  `p_facture_id` sans défaut ; seule une ambiguïté réelle donnerait `PGRST203` → `.contract`. Motif nettoyé comme
+  `sanitizeText` (balises retirées, `trim`), 10 à 2 000 caractères. Audit client `PRESENCE_CONTESTATION` (dans le
+  CHECK l.70243) ; **aucun** appel `fn_creer_notification` (fiche « Interdite côté natif »). Relecture `litiges`
+  par `presence_id` (le serveur rattache la dernière présence de la mission, l.46521-46527).
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_ouvrir_litige_rate_limited(uuid,text)`
+  et `(uuid,type_litige,text)` ; la surcharge `(uuid,type_litige,text,uuid)` est absente de la capture du 2026-07-29.
+- **GRANT connu** : `GRANT ALL … TO "authenticated", "service_role"` sur les trois surcharges (l.83909-83922).
+- **Signature TypeScript** : absente (le web appelle avec `as any`).
+- **Contrat de réponse (HTTP 200)** : refus `{error}` verbatim (surcharge appelée, ci-dessous) ; succès
+  `{success:true, litige_id, est_informatif, facture_id}` (l.46551-46556). Plafond : `rate_limit_litiges_par_heure`
+  de `parametres_litiges`, défaut 3 par heure.
+
+### Surcharge `(uuid, text)`
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_motif" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+`supabase/schema/public.sql` l.46354, commentaire « DEPRECATED + AUDITED » (l.46375) : refus `{error:'Accès refusé'}`
+(l.46362), sinon délégation à la surcharge canonique avec `'AUTRE'::public.type_litige`. Jamais appelée par le natif.
+
+### Surcharge `(uuid, type_litige, text)`
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+`supabase/schema/public.sql` l.46379, **surcharge appelée par le natif**. Refus `{error}` : « Accès refusé »
+(l.46400) ; « Le motif doit contenir entre 10 et 2 000 caractères. » (l.46405) ; « Mission introuvable » (l.46416) ;
+« Vous n'êtes pas partie prenante de cette mission. » (l.46432) ; « Un litige de ce type est déjà ouvert pour cette
+mission. » (l.46447) ; « Trop de litiges ouverts récemment. Réessayez plus tard. » (l.46469) ; « Aucune facture
+contestable (ÉMISE, EN RETARD ou PAYÉE) pour cette mission. » (l.46488, types de facture seulement, jamais pour
+`DESACCORD_HEURES_POINTAGE`) ; « Fenêtre de contestation fermée pour ce type de litige. Contactez le support. »
+(l.46518, prédicat `fn_fenetre_contestation_ouverte`).
+
+### Surcharge `(uuid, type_litige, text, uuid)`
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text", "p_facture_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+```
+
+`supabase/schema/public.sql` l.46568 (contestation d'une facture, lot 3/4, jamais appelée au lot 2). Refus
+`{success:false, error}` : « Accès refusé » (l.46584) ; « Le motif doit contenir entre 10 et 2 000 caractères. »
+(l.46594) ; « Vous n’êtes pas autorisé à contester cette facture. » (l.46613) ; « La facture sélectionnée est
+introuvable ou non contestable. » (l.46633) ; « Cette facture n’est pas encore émise. Signalez plutôt un désaccord
+sur les heures. » (l.46641) ; « La fenêtre de contestation de cette facture est fermée. Contactez le support. »
+(l.46649) ; « Un litige de ce type est déjà ouvert pour cette facture. » (l.46665) ; « Trop de litiges ouverts
+récemment. Réessayez plus tard. » (l.46687) ; `p_facture_id` NULL → délégation à la surcharge canonique.
+
+## fn_creer_notation_mission
+
+- **Statut natif** : à venir (lot 2, T5a ; décision 10).
+- **Usage prévu** : notation rapide proposée une fois par mission au départ final (FERMETURE quand
+  `now ≥ fin_le − 30 min`, `PointageRotatifSoignant.tsx` l.152-163), `p_sens = 'SOIGNANT_VERS_ETAB'`, note globale
+  répliquée sur les quatre critères (`NotationRapide.tsx` l.47-53), commentaire optionnel ou NULL. **Écriture
+  seule** : aucune lecture de `notations_missions` (double-aveugle, filtre centralisé `evaluations_publiees`).
+- **Signature SQL** (`supabase/schema/public.sql` l.27282) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_creer_notation_mission"("p_mission_id" "uuid", "p_sens" "text", "p_critere_1" integer, "p_critere_2" integer, "p_critere_3" integer, "p_critere_4" integer, "p_commentaire" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+```
+
+- **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_creer_notation_mission(uuid,text,integer,integer,integer,integer,text)`.
+- **GRANT connu** : `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_commentaire?: string; p_critere_1: number; p_critere_2: number; p_critere_3: number; p_critere_4: number; p_mission_id: string; p_sens: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : refus `{success:false, error}` : « Non authentifié » (l.27300) ; « Compte
+  suspendu, supprimé ou désactivé » (l.27304) ; « Sens invalide » (l.27311, l.27315) ; « Accès non autorisé à cette
+  mission. » (l.27326, l.27347) ; « Critères doivent être entre 1 et 5 » (l.27331) ; « Commentaire max 2000
+  caractères » (l.27335) ; « Seules les missions TERMINEE peuvent être notées » (l.27359 ; une mission `EN_COURS`
+  dont le départ est pointé est acceptée, l.27351-27357) ; « Notation impossible pendant un litige en médiation ou
+  en revue admin. Vous pourrez noter après résolution. » (l.27368-27369) ; « Mission sans soignant assigné »
+  (l.27375, sens établissement) ; « Mission déjà notée pour ce sens » (l.27399) → `.dejaNotee` silencieux (parité
+  `NotationRapide.tsx` l.61). Exception `P0001` « La notation n’a pas pu être enregistrée. Veuillez réessayer. »
+  (l.27425, l.27439 : audit refusé, transaction annulée). Succès `{success:true, id, tardive}` (l.27442).
+
+## fn_demander_revue_document
+
+- **Statut natif** : à venir (lot 2, T6).
+- **Usage prévu** : revue humaine d'un justificatif à la demande du soignant (`DocumentsSoignant.tsx` l.369-391),
+  motif fixe du web « Contestation du verdict automatique depuis l’espace Documents ».
+- **Signature SQL** (`supabase/schema/public.sql` l.30015) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_demander_revue_document"("p_document_id" "uuid", "p_motif" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_demander_revue_document(uuid,text)`.
+- **GRANT connu** : `GRANT ALL … TO "authenticated"` seulement (l.82430).
+- **Signature TypeScript** : absente (le web appelle avec `as any`).
+- **Contrat de réponse (HTTP 200)** : refus `{success:false, error_code}` : `NON_AUTHENTIFIE` (l.30026),
+  `MOTIF_INVALIDE` (l.30029, motif < 10 caractères après `btrim`), `DOCUMENT_INTROUVABLE` (l.30038, document
+  remplacé, supprimé ou révoqué). Succès `{success:true, revue_id, message}` avec « Demande transmise — en attente
+  d'attribution. » (l.30087-30091) ; le document passe `REVUE_MANUELLE_REQUISE` et `verification_attempt_id`
+  repasse à NULL.
+- **Messages affichés** : ceux du web (l.375-381), vouvoyés côté natif (décision 9 du lot 1).
+
+## fn_verifier_coherence_documents
+
+- **Statut natif** : à venir (lot 2, T6).
+- **Usage prévu** : bannière de cohérence des noms entre justificatifs et profil, **lecture best-effort** : appel
+  **sans** `p_soignant_id` (parité web `DocumentsSoignant.tsx` l.328), toute erreur avalée (l.328-338).
+- **Signature SQL** (`supabase/schema/public.sql` l.65809) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_verifier_coherence_documents"("p_soignant_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_verifier_coherence_documents(uuid)`.
+- **GRANT connu** : `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_soignant_id?: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Soignant introuvable'}` (l.65850) ; aucun document vérifié ou en
+  attente → `{coherent:true, message, documents:[]}` avec « Pas assez de documents vérifiés » (l.65868-65872) ;
+  sinon `{coherent, problemes, documents, profil_nom, profil_prenom, docs_sans_nom_lisible}` (l.65963-65970),
+  `problemes` étant des textes serveur affichés tels quels.
+- **Exception** : `42501` « Accès refusé » (l.65833 compte inactif, l.65839 `p_soignant_id` ≠ appelant sans droit
+  admin) — interceptée (`exceptionsMetier: ["42501"]`) : aucune bannière, jamais `.unauthorized`.
+
+## fn_signer_attestation_sante
+
+- **Statut natif** : à venir (lot 2, T6 gateway, T7 écran ; décision 15, textes TL).
+- **Usage prévu** : signature des deux attestations sur l'honneur de l'onglet Justificatifs ; relecture
+  `soignants.attestation_sante_signee_le`.
+- **Signature SQL** (`supabase/schema/public.sql` l.56311) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_signer_attestation_sante"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_signer_attestation_sante()`.
+- **GRANT connu** : `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: never` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` (l.56322) ; `{error:'Soignant introuvable'}`
+  (l.56326) ; succès `{success:true, signe_le}` (l.56354) ; le serveur capture IP et User-Agent et journalise
+  `ATTESTATION_SANTE_SIGNEE`.
+
+## fn_admission_otp_signature_recette
+
+- **Statut natif** : **STAGING seulement** (`statut: 'staging_seulement'`, lot 2, T8 ; décisions 18 et 20).
+- **Source** : `scripts/ci/sms-signature-staging.sql` l.120-142 (supplément « STAGING-ONLY », installé sur STAGING
+  par `scripts/ci/install-sms-staging-closed-sql.mjs`, jamais en production) ; absente de `public.sql` et de
+  `types.ts` : `buildContracts` échoue si elle y apparaît.
+- **Usage prévu** : admettre un compte TEST à l'OTP réel sur STAGING (capacité S1). Appelée **uniquement** si
+  l'environnement est STAGING et l'URL Supabase `https://mejpriaetwgtcstbgfid.supabase.co` (garde du web
+  `src/lib/signatureSmsStagingAdmission.ts` l.1, l.6) ; en production elle n'existe pas (`PGRST202`) et n'est
+  jamais appelée. Sans admission, un compte TEST est renvoyé vers le web pour signer (décision 18).
+- **Signature SQL** (supplément, `CREATE FUNCTION public.fn_admission_otp_signature_recette(p_contrat_id uuid)`) :
+  `RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=''`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC,anon,service_role` puis `GRANT EXECUTE … TO authenticated` (l.141-142).
+- **Contrat de réponse (HTTP 200)** : `{admitted:false}` pour tout refus ou erreur (`EXCEPTION WHEN OTHERS`) ;
+  sinon `{admitted, can_send, can_validate, otp_expires_at, expires_at, remaining}` : `admitted`, `can_send`
+  (`remaining > 0`), `can_validate` (OTP envoyé il y a moins de 10 min et encore valide), `otp_expires_at`,
+  `expires_at` (fin de la capacité, ≤ 60 min), `remaining` (0 à 2 envois restants pour l'acteur). Validation
+  stricte du web (l.9-24) reprise telle quelle : toute incohérence → pas d'admission, jamais une erreur de contrat.
 
 ## fn_upsert_token_push
 
@@ -782,6 +1156,169 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   `RPC_SUIVIES` ; ce test tourne sur toute PR (étape « Garde de livraison mobile » de
   `.github/workflows/validate-pr.yml`, sans filtre de chemins). Un `git grep fn_etablissement_public ios-native/`
   doit rester vide.
+
+## `fn_scanner_code_pointage` : `nouveau_code` jamais lu
+
+- **Constat** (`LOT2_PLAN.md` correction 9) : la réponse de `fn_scanner_code_pointage` contient encore le code
+  suivant de la mission (`'nouveau_code', v_new_code` et `'nouveau_hmac', v_new_hmac`, `public.sql` l.55872-55873).
+  Un soignant qui le lirait pourrait fermer son segment hors de l'établissement. Le web l'ignore
+  (`PointageRotatifSoignant.tsx` ne lit que `type_scan_effectue`) ; le pilote RN l'écartait explicitement.
+- **Règle native** : décodeur en **liste blanche** — `type_scan_effectue`, `prochain_type_scan`,
+  `creneau_effectif_id`, `horodatage_effectif`, `horodatage_arrondi`, `numero_scan`, `validation_etab_requise` ;
+  `nouveau_code` et `nouveau_hmac` ne sont ni décodés, ni conservés, ni journalisés, ni joints à un rapport
+  (tests de T3 : absents du modèle et de tout `attachText`). Aucun fichier source Swift (hors tests) ne mentionne
+  ces clés ; garde `tests/node/check-rpc-contracts.node.mjs`.
+- **Correctif serveur** : PR backend **B1** (B9, `SECURITY DEFINER` → go explicite de Gabrielle,
+  `DECISIONS_LOT2.md` décision 8) qui retire les deux clés depuis la définition live. La garde « `nouveau_code`
+  présent dans le dump » de `tests/node/check-rpc-contracts.node.mjs` rougit à la re-baseline qui suit B1 : la
+  PR B1 bascule cette garde et la présente fiche dans la même PR (B1 se merge **après** T0).
+
+## Edge `verify-document`
+
+- **Statut natif** : à venir (lot 2, T6). Pas une RPC : `supabase/functions/verify-document/index.ts`, appelée par
+  `client.functions.invoke("verify-document")` avec le JWT du soignant (`Authorization: Bearer <access_token>`),
+  comme le web (`DocumentsSoignant.tsx` l.343, l.427, l.445). `supabase/config.toml` : `verify_jwt = false` — la
+  vérification est faite **dans** la fonction (`verifyUserOrServiceRole`, mêmes réponses 401/403/500 que la fiche
+  `delete-account`).
+- **Deux actions** :
+  1. **Vérification** — corps `{document_id}`, envoyée **une seule fois** par `document_id`, jamais relancée
+     automatiquement : chaque appel crée une nouvelle tentative (`verification_attempt_id`, l.434-442) qui
+     invalide la précédente et consomme un appel IA ; « Revérifier » est un geste manuel (parité
+     `DocumentsSoignant.tsx` l.340-366). La réconciliation lit `statut_verification`, `resultat_ia` et
+     `verification_attempt_id` avant tout appel.
+  2. **`cleanup_orphan`** — corps `{action:'cleanup_orphan', s3_cle}`, appelée seulement si
+     `fn_remplacer_document_soignant` a refusé l'enregistrement (parité l.427-429) ; chemin contrôlé comme le
+     serveur (quatre segments `<uuid>/documents/<TYPE>/<nom>`, ≤ 512 caractères, sans `..` ni `\`, l.333-343).
+- **Codes HTTP et corps** (messages verbatim de `index.ts`) :
+  - **200** vérification : `{success:true, verdict, analysis:{motif_rejet, type_detecte, confiance, date_expiration,
+    profession_certifiee}}` (l.1345-1359), `verdict` ∈ `VERIFIE`, `REJETE`, `EN_ATTENTE`, `REVUE_MANUELLE_REQUISE` ;
+    formes courtes `{success:true, verdict:"REJETE", reason}` (MIME ou signature binaire refusés, l.488, l.502) et
+    `{success:true, verdict:"REVUE_MANUELLE_REQUISE", reason}` (IA en délai, indisponible ou réponse illisible,
+    l.653, l.680, l.710) ; `cleanup_orphan` : `{success:true}` (l.379).
+  - **401** `verifyUserOrServiceRole` (jeton absent, invalide ou expiré).
+  - **403** `{error:"Chemin de document non autorisé"}` (l.344, l.408) ; `{error:"Accès refusé"}` (l.354
+    nettoyage d'un objet d'autrui, l.395 document d'autrui) ; et le 403 de `verifyUserOrServiceRole`.
+  - **409** `{error:"Ce document est encore référencé"}` (l.370, nettoyage d'un objet rattaché) ;
+    `{error:"Le profil ou le document a changé pendant la vérification. Relancez le contrôle."}` (l.1275-1279,
+    conflit de sérialisation `40001`, sinon **503**).
+  - **429** `{error:'Trop de vérifications. Réessayez dans 1 minute.'}` (l.322-329, 10 appels par minute et par IP,
+    compteur en mémoire de l'instance, nettoyage compris) → aucun renvoi, verdict « vérification manuelle en
+    attente » affiché, « Revérifier » plus tard.
+  - **500** `{error:<message>}` (l.1359-1376) pour toute exception : « Tentative de vérification absente »,
+    « Document introuvable », « Nettoyage du document incomplet », « document_id requis », « Impossible de
+    télécharger le fichier », « Fichier vide ou trop volumineux », messages techniques d'écriture ou de lecture,
+    à défaut « Une erreur interne est survenue. » ; le document est alors placé en revue manuelle.
+  - **503** `{error:"Service de vérification automatique non configuré"}` (l.444-457, clé IA absente : document en
+    revue manuelle) ; second cas du 409 ci-dessus.
+- **Règle app** : tout statut ≠ 200 est un refus, jamais rejoué ; le verdict affiché est **relu** dans
+  `documents_soignants` (polling 5 s pendant 60 s, `DocumentsSoignant.tsx` l.277-284).
+- **Preuve STAGING** : T11 (P4) — 1 ligne `journaux_audit` `DOCUMENT_VERIFICATION_AUTO` pour le `document_id`
+  (l.1322-1330) ou 1 ligne `file_revue_manuelle`, et 1 seule invocation dans les logs edge du run.
+
+## Edge `generate-contrat-mission-pdf`
+
+- **Statut natif** : à venir (lot 2, T8). Malgré son nom, l'edge stocke et renvoie du **HTML** (`text/html`,
+  `upload(path, …, { contentType: 'text/html', upsert: false })`, `index.ts` l.261-262), jamais un PDF
+  (`LOT2_PLAN.md` correction 6). Corps `{contrat_id}` seulement : **jamais** de `donnees_cdd` côté soignant
+  (décision 19). Demandée seulement si le contrat n'est pas signé, n'est pas un CDD et n'a pas d'original
+  (`contratNecessiteRenduServeur`, `src/lib/contratMissionUi.ts` l.21-28), une seule fois, puis relecture de
+  `contrats_mission`. `supabase/config.toml` : `verify_jwt = false` (contrôle par `auth.getUser()` puis
+  `fn_contrat_storage_path` dans la fonction).
+- **Codes HTTP et corps** (messages verbatim de `index.ts`) :
+  - **200** `{success:true, contrat_id, storage_path, hash_document, signed_url, ttl_seconds}` (l.203-204 ; clés
+    `contrat_id`, `storage_path`, `hash_document`, `signed_url`, `ttl_seconds`) ; l'URL signée vaut 24 h (`ttl_seconds` = 86 400) ; le natif ne l'utilise pas pour afficher : il télécharge
+    l'objet `contrats-signes/<storage_path>` et contrôle l'empreinte (triple contrôle, `LOT2_PLAN.md` §2.5).
+  - **400** `{error:'Identifiant de contrat invalide'}` (l.155).
+  - **401** `{error:'Non authentifié'}` (l.171).
+  - **403** `{error:'Accès au contrat refusé.'}` (l.281).
+  - **404** `{error:'Contrat indisponible.'}` (l.282).
+  - **405** `{error:'Méthode interdite'}` (l.150).
+  - **409** `{error:'Le document original est indisponible. Aucune régénération automatique n’est possible.'}`
+    (l.191) ; `{error:'Le contrat a changé. Rechargez la page.'}` (l.194, l.201) ; `{error:'Ce contrat ne peut plus
+    être préparé.'}` (l.212, contrat `ANNULE`, `EXPIRE` ou `REFUSE`) ; `{error:'Le contrat a changé pendant sa
+    préparation. Rechargez la page.'}` (l.278).
+  - **422** `{error:'Informations contractuelles à compléter et confirmer par l’employeur.', code:'CDD_DONNEES_EMPLOYEUR_REQUISES', champs}`
+    (l.228-231, code `CDD_DONNEES_EMPLOYEUR_REQUISES` ; CDD : le natif ne l'atteint pas, message du web l.603 à la
+    place) ; `{error:'Les données nécessaires au contrat ne sont pas disponibles.'}` (l.244) ; `{error:'Les
+    informations du contrat libéral sont incomplètes. Complétez-les avant de signer.', code:'CONTRAT_LIBERAL_DONNEES_REQUISES', champs}`
+    (l.250-252, code `CONTRAT_LIBERAL_DONNEES_REQUISES`).
+  - **503** `{error:'Service indisponible'}` (l.160) ; `{error:'Le document original ne peut pas être ouvert.
+    Réessayez.'}` (l.197) ; `{error:'La préparation du contrat a échoué. Réessayez.'}` (l.241) ; `{error:'Le document
+    n’a pas pu être enregistré. Réessayez.'}` (l.263) ; `{error:'L’enregistrement du contrat n’a pas été confirmé.
+    Réessayez.'}` (l.277) ; `{error:'Le service contrat est indisponible. Réessayez.'}` (l.283).
+- **Règle app** : tout statut ≠ 200 est un refus affiché avec le message serveur verbatim, jamais rejoué
+  automatiquement ; un 409 « Le contrat a changé » impose une relecture du contrat (et remet le consentement à zéro,
+  `SessionSignatureOtp`).
+
+## Storage du lot 2
+
+- **`jolene-documents`** (justificatifs, T6) : politiques `pol_storage_jolene_insert` (`FOR INSERT TO authenticated`,
+  `fn_peut_gerer_objet_jolene(name)`) et `pol_storage_jolene_select` (`FOR SELECT TO authenticated`,
+  `fn_peut_lire_objet_jolene(name)`), toutes deux sous `fn_compte_auth_actif()`, dans leur dernière version
+  `supabase/migrations/20260729143000_reinstaller_dependances_auth_storage_apres_bootstrap.sql` l.90-106 (première
+  version `20260713222000` l.1400-1406). **Aucune politique UPDATE ni DELETE** côté client
+  (`pol_storage_jolene_update` et `pol_storage_jolene_delete` supprimées par `20260713222000` l.1397-1398, jamais
+  recréées) : un objet n'est jamais écrasé (`upload(_:data:options:)` avec `FileOptions(contentType:, upsert: false)` —
+  jamais `upload(path:file:options:)`, déprécié dans supabase-swift 2.55.5, `LOT2_PLAN.md` correction 18) ; un
+  orphelin est nettoyé par l'edge (`cleanup_orphan`, service_role) ou reste non référencé. Réconciliation de
+  l'objet par `exists(path:)` (HEAD). Chemin `<uid>/documents/<TYPE>/<ms>-<nom assaini>`. Consultation par
+  `createSignedURL(path:expiresIn: 3600)` + audit `DOCUMENT_CONSULTATION` (présent dans le CHECK l.70243).
+- **`contrats-signes`** (originaux de contrat, T8) : `pol_contrats_signes_select` (`FOR SELECT TO authenticated`,
+  compte actif, admin ou `contrats_mission.storage_path = name` pour le soignant ou l'établissement du contrat),
+  `20260729143000` l.126-142. Aucune écriture client ; l'objet est écrit par l'edge `generate-contrat-mission-pdf`
+  (service_role). Téléchargement `download(path:)` borné à 2 Mo, empreinte SHA-256 comparée à `hash_document`.
+- **Garde** : `tests/node/check-rpc-contracts.node.mjs` parcourt `supabase/migrations/*.sql` dans l'ordre et échoue si
+  l'une des trois politiques disparaît ou si une politique UPDATE/DELETE `jolene-documents` est recréée.
+
+## Interdit côté natif : système de pointage ①
+
+- **Statut natif** : **jamais** (`RPC_POINTAGE_SYSTEME_1`, `scripts/mobile/check-rpc-contracts.mjs` ;
+  `DECISIONS_LOT2.md` décision 1). `verifierExclusions` refuse toute entrée de `RPC_SUIVIES` qui en fait partie et la
+  garde des littéraux `"fn_…"` du Swift la signale avec un message dédié.
+- **RPC concernées** (huit, toutes présentes au dump, la garde échoue si l'une disparaît sans mise à jour de cette
+  fiche) : `fn_pointer_arrivee` (l.47421), `fn_pointer_depart` (l.47563), `fn_pointer_debut_pause` (l.47529),
+  `fn_pointer_fin_pause` (l.47620), `fn_valider_scan_qr` (l.65545), `fn_generer_qr_mission` (l.37981),
+  `fn_valider_code_secours` (l.64991), `fn_codes_pointage_mission` (l.23784).
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_pointer_arrivee"("p_mission_id" "uuid", "p_lat" numeric DEFAULT NULL::numeric, "p_lng" numeric DEFAULT NULL::numeric, "p_precision" numeric DEFAULT NULL::numeric, "p_terminal_id" "text" DEFAULT NULL::"text", "p_modele" "text" DEFAULT NULL::"text", "p_code_arrivee" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."fn_pointer_depart"("p_presence_id" "uuid", "p_lat" numeric DEFAULT NULL::numeric, "p_lng" numeric DEFAULT NULL::numeric, "p_precision" numeric DEFAULT NULL::numeric, "p_terminal_id" "text" DEFAULT NULL::"text", "p_modele" "text" DEFAULT NULL::"text", "p_code_depart" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."fn_pointer_debut_pause"("p_presence_id" "uuid", "p_motif" "text" DEFAULT 'DEJEUNER'::"text") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."fn_pointer_fin_pause"("p_presence_id" "uuid") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."fn_valider_scan_qr"("p_token" "text", "p_lat" numeric DEFAULT NULL::numeric, "p_lng" numeric DEFAULT NULL::numeric, "p_precision" numeric DEFAULT NULL::numeric, "p_terminal_id" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."fn_generer_qr_mission"("p_mission_id" "uuid", "p_type" "text" DEFAULT 'UNIVERSEL'::"text") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."fn_valider_code_secours"("p_mission_id" "uuid", "p_code" "text", "p_lat" numeric DEFAULT NULL::numeric, "p_lng" numeric DEFAULT NULL::numeric, "p_precision" numeric DEFAULT NULL::numeric, "p_terminal_id" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."fn_codes_pointage_mission"("p_mission_id" "uuid") RETURNS "jsonb"
+```
+
+- **Pourquoi** (`LOT2_PLAN.md` corrections 1 à 3) : depuis la PR #664 (22/06/2026), le seul composant de pointage
+  monté côté soignant est `PointageRotatifSoignant` (via `BlocPointageMission`, `PresencesSoignant.tsx`), qui
+  n'appelle que `fn_etat_pointage_mission` et `fn_scanner_code_pointage`. `pointerArrivee` et `pointerDepart`
+  (`PresencesSoignant.tsx`) ne sont appelés nulle part ; `CartePointage` (qui monte `ScannerQRPointageSoignant` et
+  `SaisieCodeSecours`) n'est importé par aucune page ; `src/lib/qr-offline-queue.ts` n'est importé que par
+  `CartePointage.tsx`. `SyncHorsLigne` reste monté (`LayoutApp.tsx`) et rejoue `fn_pointer_*` depuis
+  `src/lib/horsLigne.ts`, alimenté seulement par les fonctions mortes : résidu web, non reproduit. Côté
+  établissement, le QR affiché par `AffichageCodeRotatifEtab` encode `code_pointage_actif`, pas un jeton de
+  `fn_generer_qr_mission`. Porter ① ajouterait un chemin sans contrôle « contrat signé » (`fn_valider_scan_qr`
+  ne le vérifie pas, contrairement à `fn_scanner_code_pointage`), bloquant pour les missions multi-jours, et une file
+  hors ligne qui rejoue automatiquement (contraire à `PRINCIPES.md` §4).
+- **Équivalents natifs** : pauses = FERMETURE puis OUVERTURE de `fn_scanner_code_pointage` ; code de secours =
+  saisie manuelle des six chiffres du code rotatif ; « pointage sans téléphone » = déclaration de fin
+  rétroactive côté établissement (web).
+- **Garde de revue** : `tests/node/check-rpc-contracts.node.mjs` échoue si `pointerArrivee` ou `pointerDepart`
+  redevient appelé dans `PresencesSoignant.tsx`, si `CartePointage` est de nouveau importé, si
+  `qr-offline-queue` gagne un importeur ou si `PointageRotatifSoignant` appelle une autre RPC : la décision 1 est
+  alors à revoir.
+
+## Interdite côté natif : `fn_creer_notification`
+
+- **Statut natif** : **jamais** (`RPC_JAMAIS_SUIVIES` ; `DECISIONS_LOT2.md` décision 9).
+- **Pourquoi** : après une contestation de présence, le web appelle `fn_creer_notification` (`PanneauContestation.tsx`
+  l.147-155, type `CONTESTATION_PRESENCE`) pour prévenir l'autre partie. L'insertion du litige déclenche déjà
+  `trg_notifier_creation_litige` (`AFTER INSERT ON litiges`, `public.sql` l.76080) : l'appel client crée un doublon
+  et suppose le droit, pour tout compte authentifié, d'écrire une notification arbitraire à un destinataire de son
+  choix (`fn_creer_notification` l.27450). Le natif ne reproduit pas cet appel ; la relecture du litige suffit.
+- **Garde** : `verifierExclusions` refuse son entrée dans `RPC_SUIVIES` ; la garde des littéraux Swift la signale.
 
 ## Hors périmètre de ce document
 

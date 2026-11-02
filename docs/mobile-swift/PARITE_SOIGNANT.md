@@ -12,6 +12,11 @@ routeur de liens (`JoleneCore/Links/LinkRouter.swift`) envoie l'alias vers l éc
 Dernière mise à jour : 2026-11-02 (lot 1, T0 : sous-lignes Mes missions / Favoris / détail mission,
 cibles alignées sur `LOT1_PLAN.md` §1 et §7 ; aucune ligne statuée « natif » avant les preuves des tranches).
 
+Lot 2, T0 (2026-11-02, `LOT2_PLAN.md` §3 T0, `DECISIONS_LOT2.md`) : lignes présences, documents (sous-lignes
+Justificatifs / Contrats / DPAE), conformité et alias du lot 2 précisées, lignes `/contrat/:id` et
+`/contrat/:id/certificat` ajoutées (routes hors `/soignant/*` du parcours soignant, `src/App.tsx` l.437-438),
+sous-lignes des renvois web du lot 2 ; aucune ligne statuée « natif » avant les preuves des tranches.
+
 Sous-lignes (préfixées `›`) : une route web qui regroupe plusieurs onglets ou vues est détaillée pour que
 chaque preuve soit attribuable ; la ligne de la route passe « natif » quand toutes ses sous-lignes le sont.
 
@@ -30,12 +35,21 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
 | `/soignant/swipe-missions` (l.317) | `RedirectionSwipeMissions` | à faire (routé vers Explorer liste par `LinkRouter`, swipe lot 4) | 4 | — |
 | `/soignant/missions/serie/:serieId` (l.318) | `DetailSerieSoignant` | renvoi web assumé au lot 1 (décision 11 : vecteurs golden de sélection de série portés en T2, détail de série natif au lot 4) | 4 (port), 1 (golden) | — (prévu : `RulesSelectionSerieTests`) |
 | `/soignant/missions/:id` (l.319) | `DetailMissionSoignant` | en cours lot 0 (détail mission, lecture) | 0 (lecture), 1 (candidature, présence), 2 (pointage) | XCUITest démo JoleneUITests (ios-swift-ci.yml, 3 formats) — en cours |
-| `/soignant/missions/:id` › lecture + candidature + confirmation de présence (lot 1), pointage (lot 2) | `DetailMissionSoignant` : POSTULER / ACCEPTER / PROPOSITION via `fn_confirmer_action_planning_v1`, choix de contrat, récapitulatif des créneaux, soft-gate `peut_candidater` (décision 3), bloc « Confirme ta présence » via `fn_confirmer_presence_mission` (décision 16), « Annuler ma participation » via `fn_annuler_mission_soignant` / `fn_annuler_candidature_soignant` (décision 4) ; `BlocConformite` non porté, refus `[CODE DU TRAVAIL]` verbatim (décision 2) | à faire (lot 1 T6a/T6b/T6c/T7) ; pointage `fn_pointer_*` lot 2 | 1 (candidature, présence, annulation), 2 (pointage) | — (prévu : `DemoCandidatureTests`, `DemoPresenceTests`, `DemoAnnulationTests` + STAGING T11 : candidature posée puis relue, proposition acceptée relue, présence relue, annulation relue) |
-| `/soignant/mes-documents` (l.320) | `MesDocuments` | à faire | 2 | — |
+| `/soignant/missions/:id` › lecture + candidature + confirmation de présence (lot 1), pointage (lot 2) | `DetailMissionSoignant` : POSTULER / ACCEPTER / PROPOSITION via `fn_confirmer_action_planning_v1`, choix de contrat, récapitulatif des créneaux, soft-gate `peut_candidater` (décision 3), bloc « Confirme ta présence » via `fn_confirmer_presence_mission` (décision 16), « Annuler ma participation » via `fn_annuler_mission_soignant` / `fn_annuler_candidature_soignant` (décision 4) ; `BlocConformite` non porté, refus `[CODE DU TRAVAIL]` verbatim (décision 2) | à faire (lot 1 T6a/T6b/T6c/T7) ; pointage lot 2 par le seul système rotatif `fn_scanner_code_pointage` (boutons « Présences et pointage » et « Voir mes heures pointées et mes pauses », T5a ; `DECISIONS_LOT2.md` décision 1) | 1 (candidature, présence, annulation), 2 (pointage) | — (prévu : `DemoCandidatureTests`, `DemoPresenceTests`, `DemoAnnulationTests` + STAGING T11 : candidature posée puis relue, proposition acceptée relue, présence relue, annulation relue ; lot 2 : `DemoPresenceDetailTests`) |
+| `/soignant/missions/:id` › Contrat de travail externe | `BlocContratTravailMission` (contrat déposé par l'établissement, edge `verify-contrat-travail`) | renvoi web assumé au lot 2 (`LOT2_PLAN.md` §1.2) | au-delà du lot 2 | — |
+| `/soignant/missions/:id` › Empêchement impérieux | `DeclarationEmpechement` | renvoi web assumé au lot 2 (`LOT2_PLAN.md` §1.2 ; attestation sur l'honneur, wording HARD STOP) | au-delà du lot 2 | — |
+| `/soignant/mes-documents` (l.320) | `MesDocuments` (onglets `contrats`, `justificatifs`, `dpae`, défaut `justificatifs`, `MesDocuments.tsx` l.12-24) | à faire (lot 2 T7 : écran à trois onglets, DPAE en renvoi web) | 2 | — (prévu : `DemoDocumentsTests`, `DemoLiensLot2Tests`) |
+| `/soignant/mes-documents` › Justificatifs | `DocumentsSoignant` : exigences par profession et `type_exercice` (table paramétrée), statuts REJETE avant EXPIRE, téléversement caméra / photothèque / Fichiers, HEIC → JPEG, `fn_remplacer_document_soignant`, `verify-document` une seule fois, revue humaine, attestation santé | à faire (lot 2 T6, T7 ; décisions 12 à 15) | 2 | — (prévu : `DemoDocumentsTests` 3 formats, `SupabaseDocumentsGatewayTests`, STAGING T11 P4 : ligne `documents_soignants` `image/jpeg` + 1 vérification relue en SQL) |
+| `/soignant/mes-documents` › Contrats | `ListeContrats` → `/contrat/:id` | à faire (lot 2 T9a ; décision 17) | 2 | — (prévu : `DemoContratsTests`) |
+| `/soignant/mes-documents` › DPAE | `fn_mes_dpae` | renvoi web assumé au lot 2 (décision 16 ; port en lecture au lot 4 avec revue HARD STOP des libellés) | 4 (port), 2 (renvoi) | — (prévu : `DemoDocumentsTests` asserte le renvoi web) |
+| `/soignant/mes-documents` › Suppression de justificatif | `DocumentsSoignant.tsx` l.496-514 (`supprime_le`, audit `DOCUMENT_SUPPRESSION`) | renvoi web assumé au lot 2 (`LOT2_PLAN.md` §1.2 : retirer une preuve VERIFIE peut casser la conformité d'une mission assignée) | au-delà du lot 2 | — |
 | `/soignant/disponibilites` (l.321) | `MesDisponibilites` | à faire | 4 | — |
-| `/soignant/conformite` (l.322) | `ConformiteSoignant` | à faire | 2 | — |
-| `/soignant/presences` (l.323) | `PresencesSoignant` | à faire | 2 | — |
-| `/soignant/presences/mission/:id` (l.324) | `DetailPresencesMission` | à faire | 2 | — |
+| `/soignant/conformite` (l.322) | `ConformiteSoignant` | renvoi web assumé au lot 2 (décision 16 ; port en lecture au lot 4, revue HARD STOP des libellés) | 4 (port), 2 (renvoi) | — (prévu : `LinksRouterLot2Tests` : `/soignant/conformite` → Safari) |
+| `/soignant/presences` (l.323) | `PresencesSoignant` : onglets À venir / Actives / Aujourd'hui / Historique, `BlocPointageMission` → `PointageRotatifSoignant` (système rotatif seul, décision 1), consentement GPS (décision 4) | à faire (lot 2 T3, T4a, T4b) | 2 | — (prévu : `DemoPresencesTests`, `DemoPointageTests` 3 formats, STAGING T11 P1/P3 : deux `scans_pointage` relus en SQL) |
+| `/soignant/presences` › Contestation d'une présence validée | `PanneauContestation` (ouverture) | à faire (lot 2 T5b, HARD STOP n°4 : fenêtre lue au serveur, aucun texte de délai, décision 9) | 2 | — (prévu : `DemoPresenceDetailTests`, `SupabaseContestationGatewayTests`) |
+| `/soignant/presences` › Réponse et clôture de litige | `PanneauContestation` (`fn_repondre_litige`, `fn_proposer_cloture_litige`, `fn_resoudre_litige`) | renvoi web assumé au lot 2 (vers `/soignant/litiges`) | 4 | — |
+| `/soignant/presences/mission/:id` (l.324) | `DetailPresencesMission` (rôle soignant) : synthèse heures planifiées / travaillées, segments `EFFECTIF`, `fn_presences_detail_mission`, relance `fn_relancer_validation_presence`, notation rapide | à faire (lot 2 T5a ; décisions 10 et 11) | 2 | — (prévu : `DemoPresenceDetailTests`) |
+| `/soignant/presences/mission/:id` › Récapitulatif financier | `DetailPresencesMission.tsx` l.705-800 (taux, bruts, IFM/ICP calculés côté client) | renvoi web assumé au lot 2 (montants serveur jamais recalculés, `PRINCIPES.md` §3 ; décision 11) : lien vers Revenus (lot 3) | 3 | — |
 | `/soignant/mes-gains` (l.325) | `MesGains` | à faire | 3 | — |
 | `/soignant/mandat-facturation` (l.326) | `MandatFacturation` | à faire | 4 (renvoi web proposé, décision 3) | — |
 | `/soignant/score` (l.327) | `PageScoreSoignant` | à faire | 4 | — |
@@ -59,7 +73,7 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
 | `/soignant/mes-favoris` › Missions | `MesFavorisSoignant` onglet missions (`BoutonSauvegarderMission`) | à faire (lot 1 T4b : ajout/retrait via PostgREST `missions_sauvegardees` sous RLS, étoile sur carte et détail, décision 8) | 1 | — (prévu : `DemoFavorisTests`, `SupabaseFavorisGatewayTests`) |
 | `/soignant/mes-favoris` › Établissements | `MesFavorisSoignant` onglet établissements | à faire (lot 1 T4b : lecture `fn_mes_favoris_etablissements` + retrait `fn_toggle_favori_etablissement(false)` ; **pas d'ajout** en natif, non exposé sur le web, décision 8) | 1 | — (prévu : `DemoFavorisTests`) |
 | `/soignant/mes-matches` (l.384) | redirection vers `/soignant/missions` | à faire | 1 (alias de /soignant/missions) | — |
-| `/soignant/documents` (l.385) | redirection vers `/soignant/mes-documents?tab=justificatifs` | à faire | 2 (alias de /soignant/mes-documents) | — |
+| `/soignant/documents` (l.385) | redirection vers `/soignant/mes-documents?tab=justificatifs` | à faire (lot 2 T10 : `LinkRouter` → onglet Justificatifs natif) | 2 (alias de /soignant/mes-documents) | — (prévu : `LinksRouterLot2Tests`) |
 | `/soignant/planning` (l.390) | redirection vers `/soignant/missions?tab=a-venir` | à faire | 1 (alias de /soignant/missions) | — |
 | `/soignant/calendrier-sync` (l.391) | redirection vers `/soignant/missions?tab=a-venir` | à faire | 1 (alias de /soignant/missions) | — |
 | `/soignant/reputation` (l.393) | redirection vers `/soignant/profil` | à faire | 3 (alias de /soignant/profil) | — |
@@ -70,11 +84,14 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
 | `/soignant/fiabilite` (l.399) | redirection vers `/soignant/score` | à faire | 4 (alias de /soignant/score) | — |
 | `/soignant/fiabilite-legacy` (l.400) | redirection vers `/soignant/score` | à faire | 4 (alias de /soignant/score) | — |
 | `/soignant/parcours-3200h` (l.401) | redirection vers `/soignant/passer-en-liberal` | à faire | 4 (alias de /soignant/passer-en-liberal) | — |
-| `/soignant/dpae` (l.402) | redirection vers `/soignant/mes-documents?tab=dpae` | à faire | 2 (alias de /soignant/mes-documents) | — |
+| `/soignant/dpae` (l.402) | redirection vers `/soignant/mes-documents?tab=dpae` | renvoi web assumé au lot 2 (décision 16 ; `LinkRouter` → Safari, T10) | 4 (port), 2 (renvoi ; alias de /soignant/mes-documents) | — (prévu : `LinksRouterLot2Tests`, `DemoLiensLot2Tests`) |
 | `/soignant/reclamations` (l.403) | redirection vers `/soignant/litiges?tab=reclamations` | à faire | 4 (alias de /soignant/litiges) | — |
-| `/soignant/contrats` (l.404) | redirection vers `/soignant/mes-documents?tab=contrats` | à faire | 2 (alias de /soignant/mes-documents) | — |
+| `/soignant/contrats` (l.404) | redirection vers `/soignant/mes-documents?tab=contrats` | à faire (lot 2 T10 : `LinkRouter` → onglet Contrats natif) | 2 (alias de /soignant/mes-documents) | — (prévu : `LinksRouterLot2Tests`) |
 | `/soignant/parametres-complet` (l.417) | redirection vers `/soignant/mon-compte` | à faire | 1 (alias de /soignant/mon-compte) | — |
 | `/soignant/parametres` (l.418) | redirection vers `/soignant/mon-compte` | à faire | 1 (alias de /soignant/mon-compte) | — |
+| `/contrat/:id` (l.437) | `ContratMission` (rôles `SOIGNANT`, `ADMIN_ETABLISSEMENT`) : bandeaux de statut, compte à rebours 72 h, HTML serveur contrôlé par empreinte, signature OTP | à faire (lot 2 T8, T9a lecture, T9b signature — HARD STOP n°4 ; décisions 17 à 19 ; `LinkRouter` n'envoie plus vers Safari, T10) | 2 | — (prévu : `DemoContratsTests`, `DemoSignatureTests` 3 formats, STAGING T11 P5 partiel `otp_envoye`, appareil T12 P5) |
+| `/contrat/:id` › Signature manuscrite | `ContratMission` canvas (`fn_signer_contrat_soignant`, comptes TEST sans SMS) | renvoi web assumé (décision 18 : signature native par OTP seul ; un compte TEST sans admission de recette est renvoyé vers `/contrat/:id` sur le web) | — | — (prévu : `DemoSignatureTests` asserte le renvoi web) |
+| `/contrat/:id/certificat` (l.438) | `CertificatSignaturePage` → `CertificatSignature` | à faire (lot 2 T9a : certificat natif ; export PDF jsPDF en renvoi web, `LOT2_PLAN.md` §1.2) | 2 | — (prévu : `DemoContratsTests`, `DemoLiensLot2Tests`) |
 
 ## Lecture
 
@@ -88,7 +105,12 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
   Universal Links et reset mot de passe (`token_hash` et implicit seulement, décision 7). Les séries restent
   « renvoi web assumé » au lot 1 (décision 11). Comptage du critère « ≥ 45 % renseignée » : sur les 50 routes
   (les sous-lignes `›` précisent la preuve d'une route, elles ne comptent pas comme routes).
-- **Lot 2** : présences et pointage, documents, conformité, contrats OTP (alias `/soignant/contrats`, `/soignant/dpae`).
+- **Lot 2** (`LOT2_PLAN.md` §1, `DECISIONS_LOT2.md`) : présences et pointage par le seul système rotatif
+  (système ① non porté, décision 1), justificatifs, contrats lus en HTML serveur contrôlé et signés par OTP
+  (`/contrat/:id`, `/contrat/:id/certificat`), alias `/soignant/documents` et `/soignant/contrats` ; renvois web
+  assumés : conformité et DPAE (décision 16), récapitulatif financier (décision 11), réponse et clôture de litige,
+  contrat de travail externe, empêchement impérieux, suppression de justificatif, signature manuscrite
+  (décision 18). Les deux routes `/contrat/*` s'ajoutent au comptage des routes (52 au lieu de 50).
 - **Lot 3** : profil, revenus, Stripe Connect, notifications et préférences push, inscription
   native avec le repli `parcours_inscription` du rôle `INCONNU` (`useRole.ts` l.150-165) :
   jusque-là, un compte en cours d'inscription est **renvoyé vers le web** (écart assumé,

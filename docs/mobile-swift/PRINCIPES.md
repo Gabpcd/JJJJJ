@@ -63,8 +63,10 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
 - Règle : **aucun renvoi automatique**. Après un arrêt forcé ou une coupure, l'app
   réconcilie par relecture serveur (état de la présence, ligne `documents_soignants`)
   et ne rejoue une action que si la relecture prouve qu'elle n'a pas été reçue.
-- La file hors-ligne QR garde la sémantique de `src/lib/qr-offline-queue.ts` : un QR
-  expiré n'est jamais remis en file.
+- Aucun scan n'est mis en file : le code rotatif est horodaté par le serveur ; un scan hors ligne est refusé avant envoi, un scan incertain est réconcilié par relecture de `scans_pointage`.
+  (Amendé le 2026-11-02, décisions 1 et 2 de `docs/mobile-swift/DECISIONS_LOT2.md` : la file
+  `src/lib/qr-offline-queue.ts` n'existe que pour le système de pointage ①, non porté, et rejoue
+  automatiquement ; un code rejoué serait horodaté à l'heure du rejeu.)
 
 ## 5. Session et epoch d'identité
 
