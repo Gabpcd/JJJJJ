@@ -59,13 +59,107 @@ struct FakePresence: PresencePort {
     func confirmerPresence(missionId: String, context: MissionReadContext) async throws -> PresenceOutcome { throw nonScripte }
 }
 
+/// Favoris (T4b). Sans scénario : lectures vides, mutations refusées (`nonScripte`), comme posé par T1.
+/// Avec `scenario` : réponses scriptées par opération, journal des appels (`FavorisScenario`).
 struct FakeFavoris: FavorisPort {
-    func missionsSauvegardees(context: MissionReadContext) async throws -> [MissionSauvegardee] { [] }
-    func sauvegarder(missionId: String, context: MissionReadContext) async throws -> [MissionSauvegardee] { throw nonScripte }
-    func retirer(missionId: String, context: MissionReadContext) async throws -> [MissionSauvegardee] { throw nonScripte }
-    func etablissementsFavoris(context: MissionReadContext) async throws -> [EtablissementFavori] { [] }
+    var scenario: FavorisScenario?
+
+    func missionsSauvegardees(context: MissionReadContext) async throws -> [MissionSauvegardee] {
+        guard let scenario else { return [] }
+        return try await scenario.missions("lire")
+    }
+    func sauvegarder(missionId: String, context: MissionReadContext) async throws -> [MissionSauvegardee] {
+        guard let scenario else { throw nonScripte }
+        return try await scenario.missions("sauvegarder(\(missionId))")
+    }
+    func retirer(missionId: String, context: MissionReadContext) async throws -> [MissionSauvegardee] {
+        guard let scenario else { throw nonScripte }
+        return try await scenario.missions("retirer(\(missionId))")
+    }
+    func etablissementsFavoris(context: MissionReadContext) async throws -> [EtablissementFavori] {
+        guard let scenario else { return [] }
+        return try await scenario.etablissements("etablissements")
+    }
     func basculerEtablissement(id: String, actif: Bool, context: MissionReadContext) async throws -> [EtablissementFavori] {
-        throw nonScripte
+        guard let scenario else { throw nonScripte }
+        return try await scenario.etablissements("basculer(\(id),\(actif))")
+    }
+}
+
+/// Scénario du port favoris : une file de réponses par opération (clé = nom d'opération sans argument :
+/// `lire`, `sauvegarder`, `retirer`, `etablissements`, `basculer`), consommées dans l'ordre d'appel ;
+/// file vide → lecture vide, mutation `nonScripte`. Chaque appel est journalisé avec son argument.
+final class FavorisScenario: @unchecked Sendable {
+    indirect enum Reponse: Sendable {
+        case missions([MissionSauvegardee])
+        case etablissements([EtablissementFavori])
+        case echec(JoleneError)
+        /// L'appelant est annulé (`CancellationError`).
+        case annulation
+        /// Attente muette de 30 s, interrompue seulement par une annulation.
+        case silence
+        /// Attend l'ouverture de la barrière, puis rend la réponse suivante.
+        case apres(Gate, Reponse)
+    }
+
+    private let lock = NSLock()
+    private var files: [String: [Reponse]] = [:]
+    private var journal: [String] = []
+
+    init(_ files: [String: [Reponse]] = [:]) { self.files = files }
+
+    /// Appels reçus, dans l'ordre (ex. `sauvegarder(m-1)`).
+    var appels: [String] { lock.lock(); defer { lock.unlock() }; return journal }
+
+    func nombre(_ prefixe: String) -> Int { appels.filter { $0.hasPrefix(prefixe) }.count }
+
+    func ajouter(_ operation: String, _ reponse: Reponse) {
+        lock.lock(); defer { lock.unlock() }
+        files[operation, default: []].append(reponse)
+    }
+
+    func missions(_ appel: String) async throws -> [MissionSauvegardee] {
+        switch try await resoudre(suivante(appel)) {
+        case let .missions(lignes): return lignes
+        default: throw nonScripte
+        }
+    }
+
+    func etablissements(_ appel: String) async throws -> [EtablissementFavori] {
+        switch try await resoudre(suivante(appel)) {
+        case let .etablissements(lignes): return lignes
+        default: throw nonScripte
+        }
+    }
+
+    private func suivante(_ appel: String) -> Reponse {
+        let operation = String(appel.prefix { $0 != "(" })
+        lock.lock(); defer { lock.unlock() }
+        journal.append(appel)
+        if var file = files[operation], !file.isEmpty {
+            let reponse = file.removeFirst()
+            files[operation] = file
+            return reponse
+        }
+        switch operation {
+        case "lire": return .missions([])
+        case "etablissements": return .etablissements([])
+        default: return .echec(nonScripte)
+        }
+    }
+
+    private func resoudre(_ reponse: Reponse) async throws -> Reponse {
+        switch reponse {
+        case let .echec(erreur): throw erreur
+        case .annulation: throw CancellationError()
+        case .silence:
+            try await Task.sleep(nanoseconds: 30_000_000_000)
+            throw nonScripte
+        case let .apres(barriere, suite):
+            await barriere.wait()
+            return try await resoudre(suite)
+        case .missions, .etablissements: return reponse
+        }
     }
 }
 
