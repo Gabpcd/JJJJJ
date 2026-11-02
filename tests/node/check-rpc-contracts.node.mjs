@@ -46,8 +46,9 @@ const LOT1 = [
 ];
 
 // Jamais côté natif : exclut `est_compte_test = true` (NULL pour tout établissement de recette
-// STAGING) ; le nom d'établissement vient exclusivement de fn_etablissements_safe.
-const INTERDITES_NATIF = ['fn_etablissement_public'];
+// STAGING) ; le nom d'établissement vient exclusivement de fn_etablissements_safe. Lot 3 (T0) :
+// fn_lier_iban_verifie_document, service_role seul (garde détaillée : check-rpc-contracts-lot3.node.mjs).
+const INTERDITES_NATIF = ['fn_etablissement_public', 'fn_lier_iban_verifie_document'];
 // Lot 4 (swipe) : pas avant.
 const PAS_AVANT_LOT4 = ['fn_retirer_candidature'];
 

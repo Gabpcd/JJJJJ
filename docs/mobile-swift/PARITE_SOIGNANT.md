@@ -15,6 +15,8 @@ web masqués jusqu'à T10 et écarts avec le web complétés, preuve de la révi
 sous-lignes Mes missions / Favoris / détail mission, cibles alignées sur `LOT1_PLAN.md` §1 et §7). Aucune ligne n'est statuée « natif » sans l'URL d'un run vert de `ios-swift-ci.yml` (gate
 `Passed`, `skipped = 0`, iPhone, iPad portrait et iPad paysage) qui contient sa preuve : « mergé » ou
 « compile » n'est pas « livré » (CLAUDE.md, PRINCIPES §7).
+Lot 3, T0 (2026-11-02) : lignes profil, revenus, notifications, Stripe Connect et préférences alignées sur
+`LOT3_PLAN.md` §1 et `DECISIONS_LOT3.md` ; factures, avances et bulletins en renvoi web assumé jusqu'au lot 4.
 
 Sous-lignes (préfixées `›`) : une route web qui regroupe plusieurs onglets ou vues est détaillée pour que
 chaque preuve soit attribuable ; la ligne de la route passe « natif » quand toutes ses sous-lignes le sont.
@@ -22,10 +24,17 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
 | Route | Écran web (src/App.tsx) | Statut natif | Lot cible | Preuve |
 |---|---|---|---|---|
 | `/soignant/tableau-de-bord` (l.312) | `DashboardSoignant` | en cours (lot 1 T3, revue B8 2e passe : « natif » dès le run vert de la révision corrigée. Porté : salutation, mes prochaines missions, missions pour vous, missions proposées (lecture et ouverture du détail), gains du mois relus mission par mission, compteurs de notifications non lues et d'oubli de pointage, état d'erreur et reprise, « Vérifier ma session » qui relit le tableau ; bandeaux `BandeauAlerte48h` et « cumul d'activité » exclus, HARD STOP ; non portés : checklist d'activation, litiges, documents expirants, parrainage, widget de pointage (lot 2). Écarts avec le web, à signer : (1) une fiche mission non relue ne rend « à confirmer » que sa mission (le web : tout le planning) ; (2) carte des gains masquée si aucun montant n'est positif (le web : « Ce mois :  sur N missions ») ; (3) « Missions pour vous » sans l'estimation « ~X € brut indicatif / net estimé » du web (`montantFinanceAfficheMission`, l.579-592 et l.635) : taux horaire seul ; (4) durée du créneau (« · 8 h », l.542) absente des prochaines missions ; (5) carte des gains non cliquable (le web mène à `/soignant/mes-gains`, l.677 ; onglet Revenus encore placeholder) ; (6) début du mois des gains en heure de Paris (le web : heure locale de l'appareil, l.94-98 ; identiques sur un appareil réglé sur la France) ; (7) propositions sans Accepter / Refuser avant T6b : la carte ouvre le détail de la mission, qui ne permet pas encore de répondre (point de fusion T6b, verrou T12 n°5) ; (8) aucun rafraîchissement automatique toutes les 60 s (le web : `refetchInterval: 60_000`, l.237) : relecture à l'apparition au-delà de 60 s et tirer-pour-rafraîchir seulement ; (9) notifications non lues et oubli de pointage : compteur sans bouton de renvoi web jusqu'à T10 (présentateur `.safari` `SFSafariViewController` ; un `openURL` d'un chemin `/soignant/*` reviendrait dans l'app par lien universel, sans effet), verrou T12 n°2 ; (10) bouton calendrier absent jusqu'à T5 (point d'extension), verrou T12 n°1) | 1 | à acquérir sur la révision corrigée : `DemoAccueilTests.testAccueilDemo` (dont absences affirmées de `accueil-calendrier-demo-assignee-001`, `accueil-notifications-action`, `accueil-oubli-pointage-action`) et `.testAccueilErreurPuisReprise` sur iphone / ipad-portrait / ipad-landscape, gate `Passed`, `skipped = 0`. Révision précédente (`2afad001`, renvois web par `openURL`) : run [41525050437](https://github.com/Gabpcd/JJJJJ/actions/runs/41525050437), gate `Passed` sur les trois formats (277 réussis, 0 échoué, 0 ignoré) — ne prouve pas la révision corrigée. Unitaires (`swift test` local vert, 02/11/2026) : `DemoDashboardTests`, `AccueilAssemblageTests`, `AccueilModelTests` (délai unique, chargements sérialisés, « Vérifier ma session »), `DashboardDecodingTests`, `SupabaseDashboardGatewayTests` |
-| `/soignant/profil` (l.313) | `ProfilSoignant` | à faire (lot 1 : soignant au profil incomplet renvoyé vers le web via Safari, décision 3) | 3 | — |
+| `/soignant/profil` (l.313) | `ProfilSoignant` | à faire (lot 3 T9 : lecture en liste blanche + édition, T10 : avatar et localisation ; lot 1 : soignant au profil incomplet renvoyé vers le web via Safari, décision 3) | 3 | — |
+| `/soignant/profil` › Identité, coordonnées, recherche | `ProfilSoignant` (l.153-200, l.246-297) | à faire (lot 3 T9 : `fn_mon_profil_soignant_complet` décodée en liste blanche, `fn_modifier_mon_profil` puis relecture ; aucun champ vidable, `COALESCE` serveur) | 3 | — (prévu : `DemoProfilTests`, `SupabaseProfilGatewayTests`, STAGING T16 profil relu) |
+| `/soignant/profil` › Avatar et localisation | `AvatarUpload`, `SectionProfilPrincipal` | à faire (lot 3 T10 : JPEG 256 px, URL signée 5 ans, reçu durable, D14 ; localisation après L2-T1, géocodage `api-adresse.data.gouv.fr`, D15) | 3 | — (prévu : `DemoProfilTests`, STAGING objet Storage + `avatar_url` relus, recette HEIC réel) |
+| `/soignant/profil` › Type d'exercice et cumul d'activité | `ProfilSoignant` l.252-256, l.274-278 (art. L1222-5) | renvoi web assumé (HARD STOP n°4, correction 8 du blueprint : règle juridique exposée, non portée ; D12) | 3 (renvoi) | — (prévu : `profil-exercice-web` ouvre Safari) |
 | `/soignant/mon-compte` (l.314) | `MonCompteSoignant` | à faire | 1 | — |
 | `/soignant/mon-compte` › Suppression de compte (`SectionConfidentialite`) | edge `delete-account` | natif (lot 1 T8, Apple 5.1.1 : onglet Profil › Suppression de compte ; texte RGPD verbatim web en tutoiement tant que non validé, HARD STOP n°4) | 1 | Niveau 1 : `SupabaseAccountGatewayTests` (une réponse de l'edge = un test), `CompteModelTests`, `CompteSuppressionVerbatimTests` ; niveau 2 : `DemoCompteTests` (ios-swift-ci.yml, 3 formats) ; niveau 3 à venir (T11) : STAGING `soignants.nom = 'Supprimé'` relu, B9 données, décision 13 |
 | `/soignant/mon-compte` › Sécurité (biométrie) | — (natif seulement, verrou `LAContext`, décision 1) | à faire | 1 (T9) | — (prévu : `DemoSessionTests`, `BiometricGateTests`, recette appareil Face ID) |
+| `/soignant/mon-compte` › Mot de passe | `ChangementMotDePasse` (l.44-100, l.198-208) | à faire (lot 3 T11 : ancien vérifié par `signIn`, 12 caractères et 5 critères ; nonce exigé → refus verrouillé vers « Mot de passe oublié ? », D13) | 3 | — (prévu : `DemoCompteLot3Tests`, `ForceMotDePasseTests`) |
+| `/soignant/mon-compte` › Thème | — (natif : Système / Clair / Sombre par appareil, D16) | à faire (lot 3 T11) | 3 | — (prévu : `DemoCompteLot3Tests`, recette thème sombre) |
+| `/soignant/mon-compte` › Export RGPD | `SectionConfidentialite` l.30-78 (monté par `ProfilSoignant.tsx` l.506) | à faire (lot 3 T11 : `fn_rgpd_exporter_rate_limited`, JSON et CSV par la feuille de partage, aucun fichier sur `{error}` ; rangé dans le hub, écart de placement assumé) | 3 | — (prévu : `DemoCompteLot3Tests` + STAGING export non vide) |
+| `/soignant/mon-compte` › Entrées Notifications, Paiements, Coordonnées bancaires | `MonCompteSoignant` l.37-48 | à faire (lot 3 T11 : entrées du hub `ProfileScreen.swift` vers les écrans de T5, T6, T14a et T14b, renvoi Safari tant que l'écran cible n'a pas basculé) | 3 | — (prévu : `DemoCompteLot3Tests`) |
 | `/soignant/missions` (l.315) | `MissionsSoignant` | à faire | 1 | — |
 | `/soignant/missions` › Candidatures | `MissionsSoignant` onglet `candidatures` | à faire (lot 1 T5 : liste PostgREST `candidatures`, pagination 50, noms via `fn_etablissements_safe`) | 1 | — (prévu : `DemoMesMissionsTests`, `SupabaseMesMissionsGatewayTests`) |
 | `/soignant/missions` › À venir | `MissionsSoignant` onglet `a-venir` | à faire (lot 1 T5 : missions ASSIGNEE, ajout au calendrier EventKit un événement par créneau PREVISIONNEL, décision 18) | 1 | — (prévu : `DemoMesMissionsTests`, `CalendarWriterTests`, recette appareil EventKit) |
@@ -40,7 +49,11 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
 | `/soignant/conformite` (l.322) | `ConformiteSoignant` | à faire | 2 | — |
 | `/soignant/presences` (l.323) | `PresencesSoignant` | à faire | 2 | — |
 | `/soignant/presences/mission/:id` (l.324) | `DetailPresencesMission` | à faire | 2 | — |
-| `/soignant/mes-gains` (l.325) | `MesGains` | à faire | 3 | — |
+| `/soignant/mes-gains` (l.325) | `MesGains` | à faire (lot 3 T12 : onglet Revenus, totaux serveur `fn_mes_revenus_connect` ; T13 paiements déclarés ; T14b IBAN ; factures, bulletins et avances en renvoi web, D4) | 3 | — |
+| `/soignant/mes-gains` › Missions terminées | `MesGains` onglet `apercu` (l.92-153) | à faire (lot 3 T12 : montant par `montantFinanceAfficheMission` en vecteurs golden, colonnes de `MesGains.tsx` l.95 exactement, D5 ; B9) | 3 | — (prévu : `DemoRevenusTests`, vecteurs golden) |
+| `/soignant/mes-gains` › Paiements rapides (escrow) | `PaiementsEscrowAVenir` (l.44-80) | à faire (lot 3 T12 : `fn_mes_paiements_escrow`, sept états, libellés verbatim ; B9) | 3 | — (prévu : `DemoRevenusTests`) |
+| `/soignant/mes-gains` › Paiements à confirmer | `BandeauPaiementDeclare` (l.47-206) | à faire (lot 3 T13 : confirmer ; contester **verrouillé** jusqu'à la PR backend B3, D19 ; cible du push `PAIEMENT_RECU`, correction 15 ; B9) | 3 | — (prévu : `DemoPaiementsTests` + STAGING `CONFIRME` relu) |
+| `/soignant/mes-gains` › IBAN | `SectionPaiements` l.212-273 | à faire (lot 3 T14b : IBAN du RIB vérifié, succès strict puis relecture, D20 ; B9) | 3 | — (prévu : `DemoIbanTests` + STAGING `iban_last4` relu) |
 | `/soignant/mandat-facturation` (l.326) | `MandatFacturation` | à faire | 4 (renvoi web proposé, décision 3) | — |
 | `/soignant/score` (l.327) | `PageScoreSoignant` | à faire | 4 | — |
 | `/soignant/evaluations` (l.328) | `EvaluationsSoignant` | à faire | 4 | — |
@@ -50,13 +63,13 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
 | `/soignant/exclusions` (l.332) | `ExclusionsSoignant` | à faire | 4 | — |
 | `/soignant/premium` (l.333) | `PremiumSoignant` | à faire | 4 (renvoi web proposé, décision 3) | — |
 | `/soignant/charges` (l.334) | `ChargesSociales` | à faire | 4 (renvoi web proposé, décision 3) | — |
-| `/soignant/notifications` (l.335) | `PageNotifications` | à faire | 3 | — |
+| `/soignant/notifications` (l.335) | `PageNotifications` | à faire (lot 3 T5 : 200 dernières, marquer lue, tap → route ; ni suppression ni Realtime, D23) | 3 | — (prévu : `DemoNotificationsTests`) |
 | `/soignant/parrainage` (l.336) | `PageParrainage` | à faire | 4 | — |
 | `/soignant/messagerie` (l.337) | `PageMessagerie` | à faire | 4 | — |
 | `/soignant/litiges` (l.338) | `LitigesContestationsSoignant` | à faire | 4 | — |
-| `/soignant/stripe-connect` (l.339) | `PageStripeConnect` | à faire | 3 | — |
+| `/soignant/stripe-connect` (l.339) | `PageStripeConnect` | à faire (lot 3 T14a : statut relu avec `force=true`, onboarding hébergé avec `Origin: https://jolene.app`, compte test sans appel d'edge, D6-D7 ; B9) | 3 | — (prévu : `DemoStripeTests` + STAGING compte test, D5-R) |
 | `/soignant/classement` (l.340) | `ClassementSoignants` | à faire | 4 | — |
-| `/soignant/parametres/notifications` (l.341) | `PageParametresNotifications` | à faire | 3 | — |
+| `/soignant/parametres/notifications` (l.341) | `PageParametresNotifications` | à faire (lot 3 T6 : quatre canaux, matrice `EVENTS_SOIGNANT`, alertes SMS, état d'autorisation de l'appareil) | 3 | — (prévu : `DemoPreferencesTests` + STAGING préférences relues) |
 | `/soignant/parametres/recherches-sauvegardees` (l.342) | `PageRecherchesSauvegardees` | à faire | 4 | — |
 | `/soignant/pool-urgence` (l.343) | `PoolUrgenceSoignant` | à faire | 4 | — |
 | `/soignant/mes-favoris` (l.344) | `MesFavorisSoignant` | à faire | 1 | — |
@@ -66,10 +79,10 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
 | `/soignant/documents` (l.385) | redirection vers `/soignant/mes-documents?tab=justificatifs` | à faire | 2 (alias de /soignant/mes-documents) | — |
 | `/soignant/planning` (l.390) | redirection vers `/soignant/missions?tab=a-venir` | à faire | 1 (alias de /soignant/missions) | — |
 | `/soignant/calendrier-sync` (l.391) | redirection vers `/soignant/missions?tab=a-venir` | à faire | 1 (alias de /soignant/missions) | — |
-| `/soignant/reputation` (l.393) | redirection vers `/soignant/profil` | à faire | 3 (alias de /soignant/profil) | — |
-| `/soignant/mes-factures-honoraires` (l.395) | redirection vers `/soignant/mes-gains?tab=factures` | à faire | 3 (alias de /soignant/mes-gains) | — |
-| `/soignant/mes-avances` (l.396) | redirection vers `/soignant/mes-gains?tab=avances` | à faire | 3 (alias de /soignant/mes-gains) | — |
-| `/soignant/bulletins-paie` (l.397) | redirection vers `/soignant/mes-gains?tab=bulletins` | à faire | 3 (alias de /soignant/mes-gains) | — |
+| `/soignant/reputation` (l.393) | redirection vers `/soignant/profil` | à faire (lot 3 T9 : alias routé vers le profil natif) | 3 (alias de /soignant/profil) | — |
+| `/soignant/mes-factures-honoraires` (l.395) | redirection vers `/soignant/mes-gains?tab=factures` | renvoi web assumé jusqu'au lot 4 (factures d'honoraires, D4) | 4 (alias de /soignant/mes-gains ; renvoi web au lot 3) | — |
+| `/soignant/mes-avances` (l.396) | redirection vers `/soignant/mes-gains?tab=avances` | renvoi web assumé jusqu'au lot 4 (avances, D4) | 4 (alias de /soignant/mes-gains ; renvoi web au lot 3) | — |
+| `/soignant/bulletins-paie` (l.397) | redirection vers `/soignant/mes-gains?tab=bulletins` | renvoi web assumé jusqu'au lot 4 (bulletins, D4) | 4 (alias de /soignant/mes-gains ; renvoi web au lot 3) | — |
 | `/soignant/historique-missions` (l.398) | redirection vers `/soignant/missions?tab=passees` | à faire | 1 (alias de /soignant/missions) | — |
 | `/soignant/fiabilite` (l.399) | redirection vers `/soignant/score` | à faire | 4 (alias de /soignant/score) | — |
 | `/soignant/fiabilite-legacy` (l.400) | redirection vers `/soignant/score` | à faire | 4 (alias de /soignant/score) | — |
@@ -96,7 +109,10 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
 - **Lot 3** : profil, revenus, Stripe Connect, notifications et préférences push, inscription
   native avec le repli `parcours_inscription` du rôle `INCONNU` (`useRole.ts` l.150-165) :
   jusque-là, un compte en cours d'inscription est **renvoyé vers le web** (écart assumé,
-  `PRINCIPES.md` §5, `DECISIONS_LOT0.md`).
+  `PRINCIPES.md` §5, `DECISIONS_LOT0.md`). Cibles fixées par `LOT3_PLAN.md` §1 et `DECISIONS_LOT3.md` (T0) ;
+  hors matrice `/soignant/*`, les routes `/inscription/soignant`, `/inscription/reprendre`, `/inscription/completer`
+  et `/inscription/confirmer` deviennent natives (T7, T8), `/inscription/etablissement` reste en renvoi web et PSC
+  n'est pas construit (D8).
 - **Lot 4** : parcours secondaires ; renvoi web assumé proposé pour premium, prévoyance, mandat et charges
   sociales (décision 3 : WebView bornée ou Safari, à trancher par Gabrielle).
 - Aucune ligne n'est « abandonné » à l initialisation ; ce statut exige une décision écrite de Gabrielle.

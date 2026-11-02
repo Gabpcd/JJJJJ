@@ -1,9 +1,11 @@
-# Contrats RPC du parcours soignant (lot 0, plan §11 jour 8 ; lot 1, T0)
+# Contrats RPC du parcours soignant (lot 0, plan §11 jour 8 ; lots 1 et 3, T0)
 
-Document de référence des vingt-sept RPC que le client Swift consomme ou consommera (seize au lot 0,
-onze ajoutées par la tranche T0 du lot 1, `docs/mobile-swift/LOT1_PLAN.md` §3), plus deux fiches hors
-RPC : l'edge function `delete-account` (suppression de compte, Apple 5.1.1) et l'interdiction de
-`fn_etablissement_public` côté natif. Pour chaque RPC : la
+Document de référence des quarante et une RPC que le client Swift consomme ou consommera (seize au lot 0,
+onze ajoutées par la tranche T0 du lot 1, `docs/mobile-swift/LOT1_PLAN.md` §3, quatorze par la tranche T0 du
+lot 3, `docs/mobile-swift/LOT3_PLAN.md` §3), plus des fiches hors RPC : l'edge function `delete-account`
+(suppression de compte, Apple 5.1.1) et l'interdiction de `fn_etablissement_public` côté natif (lot 1) ; les
+edges `register-soignant`, `stripe-connect-status` et `stripe-connect-onboard`, le payload de `send-push`,
+l'interdiction de `fn_lier_iban_verifie_document` et PSC non consommé (lot 3). Pour chaque RPC : la
 signature SQL exacte extraite de `supabase/schema/public.sql` (dump de production re-baseliné par
 `schema-snapshot.yml`), la classe d'authentification du manifeste `supabase/SECURITY_DEFINER_MANIFEST.json`
 (capture production du 2026-07-29, 422 fonctions), le GRANT connu, la signature TypeScript de
@@ -14,11 +16,13 @@ Le fichier machine correspondant est `ios-native/rpc-contracts.json`, régénér
 `.github/workflows/ios-swift-ci.yml`. Toute dérive de signature, de GRANT ou de classe fait échouer la CI ;
 `--update` réécrit le JSON après relecture des gateways Swift. Le présent document est lui-même gardé par
 `tests/node/check-rpc-contracts.node.mjs` (une fiche par RPC suivie, RPC interdites, formes de réponse
-confrontées à `public.sql` et à l'edge `delete-account`), exécuté sur toute PR par l'étape « Garde de
+confrontées à `public.sql` et à l'edge `delete-account`) et, pour le lot 3, par
+`tests/node/check-rpc-contracts-lot3.node.mjs` (formes de réponse confrontées aux corps SQL, aux edges et aux
+pages web citées), exécutés sur toute PR par l'étape « Garde de
 livraison mobile » du check requis « Typecheck + build » de `.github/workflows/validate-pr.yml`.
 
 **Re-baseline du schéma (procédure).** Parce que cette garde tourne dans un check requis, une PR
-automatique `auto/schema-baseline` (`schema-snapshot.yml`) qui modifie l'une des vingt-sept RPC suivies
+automatique `auto/schema-baseline` (`schema-snapshot.yml`) qui modifie l'une des RPC suivies
 (signature, GRANT, ou corps dont une fiche cite les réponses) reste bloquée — c'est voulu, fail-closed — et
 `drift-check.yml` reste rouge tant qu'elle n'est pas mergée. Ne jamais corriger sur `auto/schema-baseline` :
 le `git push --force` du run suivant efface tout commit manuel. Procédure : une **PR humaine**, depuis une
@@ -29,7 +33,7 @@ Swift concernées, elle ajoute `node scripts/mobile/check-rpc-contracts.mjs --up
 puis fermeture de la PR automatique devenue sans objet (le run suivant de `schema-snapshot.yml` ne trouve
 plus de diff).
 
-**Autres sources lues par la garde.** Outre les vingt-sept RPC suivies, la garde lit : les corps de six fonctions non suivies (`fn_conflit_planning_soignant`, `fn_postuler_mission`, `fn_postuler_mission_rate_limited`, `fn_finaliser_attribution_mission`, `fn_resoudre_contrat_mission`, `fn_demander_confirmations_presence`) ; le web `src/pages/DetailMissionSoignant.tsx` (chaînes de présence, tests `data?.choix_requis`, classement « mission perdue ») et `src/lib/erreurs.ts` (`estBlocageCodeTravail`) ; l'edge `supabase/functions/delete-account/index.ts` et `supabase/functions/_shared/admin-auth.ts` ; tout littéral `"fn_…"` des fichiers `ios-native/**/*.swift`. Une PR web, edge ou de re-baseline qui modifie l'une de ces sources met la fiche concernée à jour **dans la même PR**.
+**Autres sources lues par la garde.** Outre les RPC suivies, la garde du lot 1 lit : les corps de six fonctions non suivies (`fn_conflit_planning_soignant`, `fn_postuler_mission`, `fn_postuler_mission_rate_limited`, `fn_finaliser_attribution_mission`, `fn_resoudre_contrat_mission`, `fn_demander_confirmations_presence`) ; le web `src/pages/DetailMissionSoignant.tsx` (chaînes de présence, tests `data?.choix_requis`, classement « mission perdue ») et `src/lib/erreurs.ts` (`estBlocageCodeTravail`) ; l'edge `supabase/functions/delete-account/index.ts` et `supabase/functions/_shared/admin-auth.ts` ; tout littéral `"fn_…"` des fichiers `ios-native/**/*.swift`. La garde du lot 3 (`tests/node/check-rpc-contracts-lot3.node.mjs`) lit en outre : les corps de `fn_reserver_type_compte` et `fn_lier_iban_verifie_document`, les contraintes `notifications_type_check` et `stripe_connect_onboarding_statut_check`, `journaux_audit_action_check`, l'index `uq_litige_mission_type_ouvert_legacy`, les enums `canal_notification` et `type_evenement_notification` ; les edges `supabase/functions/register-soignant/index.ts`, `supabase/functions/stripe-connect-status/index.ts`, `supabase/functions/stripe-connect-onboard/index.ts`, `supabase/functions/send-push/index.ts`, `supabase/functions/_shared/apns-client.ts`, `supabase/functions/_shared/errors.ts` et `supabase/functions/_shared/admin-auth.ts` ; le web `src/pages/InscriptionRapide.tsx` (message du 23505) et `src/pages/PageStripeConnect.tsx` (texte du compte de test) ; `ios-native/Packages/JoleneCore/Sources/JoleneCore/Links/LinkRouter.swift` (route PSC vers Safari). Une PR web, edge ou de re-baseline qui modifie l'une de ces sources met la fiche concernée à jour **dans la même PR**.
 
 Règles (plan §4.4) : montants, net estimé et règles juridiques sont des valeurs serveur jamais recalculées ;
 chaque gateway relit l'objet après mutation ; les erreurs PostgREST PGRST202 et 300 à 303 sont des refus
@@ -46,6 +50,19 @@ dans l'ordre du web (`LOT1_PLAN.md` §2.4 : `choix_requis` → `code` → `docum
 afficherait un faux succès, d'où un test par RPC et par forme de réponse. Chaque appel est borné à
 `SessionController.resolutionTimeout` (15 s) ; un timeout client sur une mutation ne prouve pas que le
 serveur n'a pas agi : relecture obligatoire, jamais de renvoi automatique.
+
+Règles ajoutées au lot 3 (`LOT3_PLAN.md` §2.4, corrections 12 et 16) : les exceptions métier PostgREST (22023,
+23505, P0002 de `fn_demarrer_inscription`, `fn_enregistrer_parcours_inscription` et `fn_upsert_token_push`) sont
+lues **avant** `SupabaseErrorMapping` par une liste `exceptionsMetier` propre à chaque appel, comme
+`[CODE DU TRAVAIL]` au lot 1 ; 42501 reste `.unauthorized` et PGRST202 `.contract`. Une RPC qui renvoie `void`
+(`fn_upsert_token_push`) répond sans corps JSON : elle est appelée par `execute()` sans décodage (204 ou 200 à
+corps vide = succès), jamais par `RPCResponse.appeler`. Les edges (`register-soignant`, `stripe-connect-status`,
+`stripe-connect-onboard`) sont décodées par `EdgeResponse`, qui lit le corps de `FunctionsError.httpError` avant
+tout mapping. Un succès n'est admis que sur le drapeau serveur (`success == true`, `ok == true`) suivi d'une
+relecture ; un `error_code` sans `error` est un refus, jamais un succès (IBAN). Aucune RPC réservée au
+`service_role` n'est appelée (fiche « Interdite côté natif : `fn_lier_iban_verifie_document` »). Les trois actions
+d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERSO_MODIFICATION`,
+`RGPD_EXPORT_DONNEES`, via `fn_ecrire_audit_safe`) figurent dans `journaux_audit_action_check`.
 
 ## Synthèse
 
@@ -77,7 +94,21 @@ serveur n'a pas agi : relecture obligatoire, jamais de renvoi automatique.
 | `fn_envoyer_otp_signature` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_signer_contrat_otp` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_remplacer_document_soignant` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_upsert_token_push` | à venir | 3 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_upsert_token_push` | à venir | 3 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_desactiver_mon_token_push` | à venir | 3 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_obtenir_mes_preferences_notifications` | à venir | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_modifier_preferences_notifications` | à venir | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_demarrer_inscription` | à venir | 3 (T7, B9) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
+| `fn_enregistrer_parcours_inscription` | à venir | 3 (T8, B9) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
+| `fn_types_exercice_autorises` | à venir | 3 (T8, T9) | PUBLIC_VOLONTAIRE | anon, authenticated, service_role | déclarée |
+| `fn_modifier_mon_profil` | à venir | 3 (T9, T10) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_rgpd_exporter_rate_limited` | à venir | 3 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_confirmer_paiement_soignant` | à venir | 3 (T13, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_contester_paiement_soignant` | à venir | 3 (T13 après B3, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_consulter_mon_iban` | à venir | 3 (T14b, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_enregistrer_mon_iban` | à venir | 3 (T14b, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mes_revenus_connect` | à venir | 3 (T12, T14a, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mes_paiements_escrow` | à venir | 3 (T12, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 
 Quatre RPC sont absentes de `types.ts` (`fn_confirmer_action_planning_v1`, `fn_param_bool`,
 `fn_etat_pointage_mission`, `fn_remplacer_document_soignant`) : leur contrat est tenu par `public.sql` seul
@@ -87,10 +118,18 @@ après la capture du 2026-07-29) : **classée manuellement `RPC_UTILISATEUR_AUTH
 du lot 1 (`LOT1_PLAN.md` §7), sans régénération du manifeste — voir sa fiche. `ios-native/rpc-contracts.json`
 garde `manifeste: null` pour elle : c'est le fait observé, le classement est documentaire.
 
-Deux RPC ne sont pas suivies, pour des raisons différentes, et `verifierExclusions`
+Lot 3 (T0, correction 13 du blueprint) : trois RPC de plus sont absentes de `types.ts` (`fn_demarrer_inscription`,
+`fn_enregistrer_parcours_inscription`, `fn_mes_paiements_escrow`) ; deux sont hors manifeste
+(`fn_demarrer_inscription`, `fn_enregistrer_parcours_inscription`, créées après la capture du 2026-07-29) et
+**classées manuellement `RPC_UTILISATEUR_AUTH_INTERNE` dans leur fiche**, avec `manifeste: null` dans le JSON et
+aucun fichier sous `supabase/` (PRINCIPES §1). `fn_types_exercice_autorises` est `PUBLIC_VOLONTAIRE` (GRANT `anon`) :
+le natif l'appelle avec le JWT de la session d'inscription, jamais en anonyme.
+
+Trois RPC ne sont pas suivies, pour des raisons différentes, et `verifierExclusions`
 (`scripts/mobile/check-rpc-contracts.mjs`) fait échouer la CI si l'une d'elles y entre trop tôt :
-**jamais** `fn_etablissement_public` (fiche « Interdite côté natif » en fin de document) ; **pas avant le
-lot 4** `fn_retirer_candidature` (swipe), suivie au plus tôt avec `lot: 4`. À part, `fn_mon_profil_soignant_complet`
+**jamais** `fn_etablissement_public` et `fn_lier_iban_verifie_document` (lot 3 : service_role seul ; fiches
+« Interdite côté natif » en fin de document) ; **pas avant le lot 4** `fn_retirer_candidature` (swipe), suivie au
+plus tôt avec `lot: 4`. À part, `fn_mon_profil_soignant_complet`
 reste suivie mais est reclassée lot 3 (voir sa fiche).
 
 ## fn_get_my_role
@@ -146,6 +185,13 @@ CREATE OR REPLACE FUNCTION "public"."fn_mon_profil_soignant_complet"() RETURNS "
 - **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_mon_profil_soignant_complet()` — RPC utilisateur : identité `auth.uid()` lue en interne, appel avec le JWT du soignant.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: never` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200, lot 3 T9)** : `{error:'Non authentifié'}` (l.44665) ; `{error:'Profil introuvable'}`
+  (l.44681, aucune ligne `soignants`) ; sinon la ligne en jsonb (l.44667-44679). Décodage `ProfilComplet` en
+  **liste blanche** stricte, avec test-garde par `Mirror` (T9, correction 7) : les clés sensibles `numero_secu`,
+  `numero_adeli`, `siret_liberal`, `code_ape`, `assujetti_tva`, `numero_tva`, `stripe_account_id`, `iban_last4` sont
+  renvoyées par le serveur et **jamais décodées** ; `adresse_lat` / `adresse_lng` sont décodées pour la localisation,
+  jamais affichées ni journalisées. La RPC ne renvoie pas les clés `specialite_*` que lit le web (spécialité non
+  éditée en natif). Audit `DONNEES_PERSO_CONSULTATION` best-effort à la lecture (web `ProfilSoignant.tsx` l.157-163).
 - **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
 
 ## fn_dashboard_soignant_complet
@@ -484,6 +530,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_upsert_token_push"("p_token" "text", "p_
 - **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_upsert_token_push(text,text)` — RPC utilisateur : identité `auth.uid()` lue en interne, appel avec le JWT du soignant.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: { p_plateforme?: string; p_token: string }` ; `Returns: undefined`.
+- **Contrat de réponse (lot 3, T4)** : la fonction renvoie `void` — succès = réponse PostgREST **sans corps JSON**
+  (204, ou 200 à corps vide). `RPCResponse.appeler` décode toujours `AnyJSON` et lèverait une erreur de décodage sur
+  ce succès : la gateway appelle `execute()` sans type de retour (correction 16, variante sans corps de T1).
+  Exceptions, jamais `{error}` en HTTP 200 : **42501** `'Non authentifie'` (l.64642 : `auth.uid()` nul ou compte
+  inactif → `.unauthorized` par le mapping) ; **22023** `'Token push invalide'` (l.64645, longueur hors 16-4096),
+  `'Plateforme push invalide'` (l.64648, hors `WEB`, `IOS`, `ANDROID`), `'Abonnement Web Push JSON invalide'`
+  (l.64661), `'Abonnement Web Push incomplet'` (l.64671), `'Abonnement Web Push JSON requis'` (l.64674) — les trois
+  dernières ne concernent que le Web Push (token commençant par `{`) ; le natif envoie le token APNs en
+  hexadécimal minuscule avec `p_plateforme = 'IOS'`. 22023 est lu par `exceptionsMetier` avant
+  `SupabaseErrorMapping` → `.contract`, sans renvoi. `ON CONFLICT (token)` (l.64684) : un token réattribué à un autre
+  utilisateur change de propriétaire et redevient `actif`. Best-effort côté app (`PushCoordinator`) : un échec
+  n'entraîne jamais de déconnexion.
+- **Preuve STAGING** : token factice DEBUG upserté puis `tokens_push` relu (`plateforme = 'IOS'`, `actif = true`),
+  puis `actif = false` après déconnexion (T16).
 - **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
 
 ## fn_annuler_candidature_soignant
@@ -771,6 +831,404 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
 - **Titre du push** (pas un texte d'écran) : « Ta mission demain — Je serai là ✓ » est le titre du push
   serveur `RAPPEL_MISSION` (`fn_demander_confirmations_presence` l.29924/29934) ; aucune assertion d'écran ne le cherche.
 
+## fn_desactiver_mon_token_push
+
+- **Statut natif** : à venir (lot 3, T4).
+- **Usage prévu** : Déconnexion volontaire : désactivation du token APNs mémorisé (`KeychainPushTokenStore`,
+  service `app.jolene.push`) **avant** `controller.signOut()` — le JWT est requis (correction 11) —, bornée à
+  **2,5 s** comme le web (`src/lib/pushDeviceToken.ts` l.90-92, l.113 ; décision D3), puis
+  `unregisterForRemoteNotifications()` et oubli du token, que la RPC ait répondu ou non. Déconnexion subie
+  (`.signedOut` du SDK) et suppression de compte : désinscription locale seule, sans appel (JWT absent).
+- **Signature SQL** (`supabase/schema/public.sql` l.30176) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_desactiver_mon_token_push"("p_token" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_desactiver_mon_token_push(text)` ; périmètre strict `utilisateur_id = auth.uid()`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_token: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{success:false, error:'Non authentifie'}` (l.30187 : `auth.uid()` nul ou
+  compte inactif) ; `{success:false, error:'Token push invalide'}` (l.30190 : longueur hors 16-4096) ;
+  `{success:true, tokens_desactives:<n>, scope:'CURRENT_DEVICE'}` (l.30214-30218 ; `n` vaut 0 si le token
+  n'appartient pas à l'utilisateur ou n'existe plus). Messages sans accent, comme la source. Refus, délai dépassé
+  ou erreur de transport : journal DEBUG, la déconnexion locale a lieu quand même (jamais bloquant).
+- **Preuve STAGING** : `tokens_push.actif = false` relu pour le token factice DEBUG du run, après déconnexion (T16).
+
+## fn_obtenir_mes_preferences_notifications
+
+- **Statut natif** : à venir (lot 3, T6).
+- **Usage prévu** : Écran `/soignant/parametres/notifications` : lecture des quatre canaux globaux et des exceptions
+  par événement (web `PageParametresNotifications.tsx` l.105-138) ; relue après chaque enregistrement.
+- **Signature SQL** (`supabase/schema/public.sql` l.45986) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_obtenir_mes_preferences_notifications"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_obtenir_mes_preferences_notifications()`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: never` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` (l.45995) ; sinon
+  `{global:{canal_email, canal_sms, canal_push, canal_in_app, cree_le, mis_a_jour_le}, par_evenement:[{type_evenement, canal, actif}]}`
+  (l.46015 : `global` = ligne `preferences_notifications` sans `utilisateur_id` ; `par_evenement` = `[]` sans
+  exception). **Effet de bord** : la lecture crée la ligne par défaut si elle manque (l.46001-46006,
+  `INSERT … ON CONFLICT DO NOTHING` ; défauts e-mail `true`, SMS `false`, push `true`, in-app `true`) — ce n'est
+  pas une lecture pure, mais elle est idempotente. Les quatre booléens `canal_*` sont exigés (web l.117) : absents
+  ou non booléens → erreur d'écran, jamais des défauts affichés.
+- **Preuve STAGING** : préférences relues après enregistrement (T16).
+
+## fn_modifier_preferences_notifications
+
+- **Statut natif** : à venir (lot 3, T6).
+- **Usage prévu** : Enregistrement des canaux et de la matrice par événement ; l'app n'envoie que les types du
+  catalogue soignant `EVENTS_SOIGNANT` (web `PageParametresNotifications.tsx` l.42-56, filtre de régime) puis relit
+  `fn_obtenir_mes_preferences_notifications` après `{success:true}`. L'alerte SMS (`soignants.sms_alertes_actives`,
+  GRANT de colonne) s'écrit à part, jamais par cette RPC. Préférence, pas un consentement juridique (D18 : non B9).
+- **Signature SQL** (`supabase/schema/public.sql` l.44100) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_modifier_preferences_notifications"("p_canal_email" boolean DEFAULT NULL::boolean, "p_canal_sms" boolean DEFAULT NULL::boolean, "p_canal_push" boolean DEFAULT NULL::boolean, "p_canal_in_app" boolean DEFAULT NULL::boolean, "p_par_evenement" "jsonb" DEFAULT NULL::"jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_modifier_preferences_notifications(boolean,boolean,boolean,boolean,jsonb)`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_canal_email?: boolean; p_canal_in_app?: boolean; p_canal_push?: boolean; p_canal_sms?: boolean; p_par_evenement?: Json }` ; `Returns: Json`.
+- **Contrat de réponse** : `{error:'Non authentifié'}` (l.44108) ; `{success:true}` (l.44147). Un canal `NULL`
+  reste inchangé (`COALESCE`, l.44118-44121). `p_par_evenement` = tableau `[{type_evenement, canal, actif}]`
+  casté en enums (l.44130-44131) : une valeur hors enum lève **22P02** (exception PostgREST, transaction annulée)
+  → `.contract`, jamais un succès. `canal` ∈ `EMAIL`, `SMS`, `PUSH`, `IN_APP` (`canal_notification`) ;
+  `type_evenement` ∈ les dix-huit valeurs de `type_evenement_notification` : `NOUVELLE_MISSION_MATCHANT_FILTRE`,
+  `CANDIDATURE_RECUE`, `CANDIDATURE_ACCEPTEE`, `MISSION_ASSIGNEE`, `RAPPEL_J1_MISSION`, `POINTAGE_MANQUANT`,
+  `FACTURE_EMISE`, `PAIEMENT_RECU`, `CONTRAT_TRAVAIL_DEPOSE`, `LITIGE_OUVERT`, `LITIGE_RESOLU`, `DOCUMENT_EXPIRANT`,
+  `MANDAT_RE_SIGNATURE`, `SERIE_ONBOARDING`, `URGENCE`, `NOUVEAU_SOIGNANT_MATCHANT_FILTRE`,
+  `FAVORI_NOUVELLE_MISSION`, `NOTATION_RAPPEL`. Audit `PREFERENCE_NOTIFICATION_MODIFIEE` écrit par la RPC
+  (l.44138-44145, action présente dans `journaux_audit_action_check`) : l'app n'en écrit pas.
+- **Preuve STAGING** : préférences enregistrées puis relues (T16).
+
+## fn_demarrer_inscription
+
+- **Statut natif** : à venir (lot 3, T7) — **B9** (consentement CGU relayé, D18).
+- **Usage prévu** : Création du parcours d'inscription après un `signUp` qui ouvre la session, ou à la première
+  session au rôle `INCONNU` portant l'intention `user_metadata.inscription_progressive` (repli de `useRole.ts`
+  l.150-170) ; paramètres de l'intention web (`src/lib/inscriptionProgressive.ts` l.26-39) : `p_type_compte = 'SOIGNANT'`,
+  `p_profession`, `p_nom = null`, `p_cgu = true` (case CGU cochée, texte verbatim), `p_cgv = false`.
+- **Signature SQL** (`supabase/schema/public.sql` l.30099) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_demarrer_inscription"("p_type_compte" "text", "p_profession" "text" DEFAULT NULL::"text", "p_nom" "text" DEFAULT NULL::"text", "p_cgu" boolean DEFAULT false, "p_cgv" boolean DEFAULT false) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+```
+
+- **Classe d'authentification (manifeste)** : hors manifeste (absente de la capture du 2026-07-29) — classée manuellement `RPC_UTILISATEUR_AUTH_INTERNE` par la T0 du lot 3 (`SECURITY DEFINER`, identité `auth.uid()` lue en interne l.30104, GRANT `authenticated`) ; classement documentaire dans cette fiche seulement (correction 13) : `manifeste: null` dans `ios-native/rpc-contracts.json`, aucun fichier sous `supabase/` modifié (PRINCIPES §1).
+- **GRANT connu** : `GRANT ALL … TO "service_role"` et `TO "authenticated"` (l.82435-82436).
+- **Signature TypeScript** : absente de `types.ts` (le web appelle avec `as any`).
+- **Contrat de réponse** : succès = la ligne `parcours_inscription` en jsonb (`to_jsonb`, l.30138) :
+  `{user_id, type_compte, donnees:{profession}, consentement_cgu_le, consentement_cgv_le, cree_le, modifie_le}`.
+  `consentement_cgu_le` est posé par le défaut de colonne à l'INSERT (table l.70971) : c'est la preuve serveur du
+  consentement que `register-soignant` reprend dans l'audit `RGPD_CONSENTEMENT_DONNE`, d'où B9. `ON CONFLICT (user_id)
+  DO NOTHING` (l.30134) : un second appel rend la ligne existante, sans erreur. **Exceptions** (jamais `{error}` en
+  HTTP 200), lues par `exceptionsMetier` avant `SupabaseErrorMapping` (correction 12) :
+  - **42501** `'Session invalide.'` (l.30110) → `.unauthorized` ;
+  - **22023** `'Vérifiez le type de compte et les conditions acceptées.'` (l.30114), `'Choisissez votre profession.'`
+    (l.30118), `'Indiquez le nom de votre établissement.'` (l.30120, établissement seulement) → message verbatim ;
+  - **23505** dont le message **est** le code de réservation de `fn_reserver_type_compte`
+    (`RAISE EXCEPTION '%', v_reservation ->> 'code'`, l.30127) : `ACCOUNT_TYPE_INVALID`, `ACCOUNT_AUTH_INACTIVE`,
+    `ACCOUNT_PROFILE_CONFLICT`, `ACCOUNT_TYPE_MISMATCH`, `ACCOUNT_ALREADY_REGISTERED`,
+    `ACCOUNT_REGISTRATION_INCOMPLETE`, `ACCOUNT_REGISTRATION_IN_PROGRESS` (`fn_reserver_type_compte` l.54203-54296).
+    Le web (`src/pages/InscriptionRapide.tsx` l.98-101) affiche « Ce compte possède déjà un espace Jolene. Connectez-vous pour le retrouver. »
+    pour `ACCOUNT_ALREADY_REGISTERED`, `ACCOUNT_TYPE_MISMATCH` et `ACCOUNT_REGISTRATION_INCOMPLETE`, et son message
+    générique (`mapperErreurInscription`) pour les autres ; le natif reprend les mêmes textes.
+- **Preuve STAGING** : ligne `parcours_inscription` relue après le `signUp` de l'app (T16).
+
+## fn_enregistrer_parcours_inscription
+
+- **Statut natif** : à venir (lot 3, T8) — **B9** (inscription, D18).
+- **Usage prévu** : Brouillon **serveur** de la complétion (`/inscription/completer`), enregistré à chaque étape
+  (jamais de brouillon local, `LOT3_PLAN.md` §2.6) ; l'app n'envoie que des clés de la liste blanche (web
+  `inscriptionProgressive.ts` l.117-124), jamais mot de passe, email, jeton ni coordonnées (`lat`, `lng` sont aussi
+  exclues par `restaurerFormulaire`, l.132).
+- **Signature SQL** (`supabase/schema/public.sql` l.32423) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_enregistrer_parcours_inscription"("p_donnees" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+```
+
+- **Classe d'authentification (manifeste)** : hors manifeste (absente de la capture du 2026-07-29) — classée manuellement `RPC_UTILISATEUR_AUTH_INTERNE` par la T0 du lot 3 (`SECURITY DEFINER`, `auth.uid()` lu en interne l.32429 et l.32455, GRANT `authenticated`) ; classement documentaire dans cette fiche seulement (correction 13) : `manifeste: null` dans `ios-native/rpc-contracts.json`, aucun fichier sous `supabase/` modifié (PRINCIPES §1).
+- **GRANT connu** : `GRANT ALL … TO "service_role"` et `TO "authenticated"` (l.82591-82592).
+- **Signature TypeScript** : absente de `types.ts`.
+- **Contrat de réponse** : succès = la ligne `parcours_inscription` mise à jour (`donnees = donnees || p_donnees`,
+  fusion de premier niveau, l.32454-32457). **Exceptions** :
+  - **42501** `'Session invalide.'` (l.32430) ;
+  - **22023** `'Brouillon invalide.'` (l.32433 : non-objet ou plus de 32 768 octets), `'Champ non autorisé dans le brouillon.'`
+    (l.32442), `'Brouillon de mission invalide.'` (l.32448), `'Choix des internes invalide dans le brouillon.'`
+    (l.32453) — les deux derniers ne concernent que le parcours établissement ;
+  - **P0002** `'Inscription introuvable.'` (l.32456 : aucun parcours, `fn_demarrer_inscription` jamais appelée).
+  Liste blanche des clés de premier niveau (l.32436-32441) : `profession`, `prenom`, `nom`, `telephone`,
+  `dateNaissance`, `typesContrat`, `rpps`, `rayon`, `estSalarieEtablissement`, `estEtudiant`, `scolariteFormation`,
+  `scolariteAnnee`, `siret`, `finess`, `type`, `rue`, `ville`, `codePostal`, `departement`, `emailContact`,
+  `telephoneContact`, `numeroLicence`, `missionProfession`, `missionVille`, `missionDate`, `missionDebut`,
+  `missionFin`, `missionChoisie`, `brouillonMission`, `missionFormulaire`. Clés soignant envoyées par le natif :
+  `prenom`, `nom`, `telephone`, `dateNaissance`, `typesContrat`, `rpps`, `rayon` ; `estSalarieEtablissement` n'est
+  qu'un affichage côté web, jamais transmis à `register-soignant` (correction 21).
+- **Preuve STAGING** : brouillon relu dans `parcours_inscription.donnees` pendant la complétion (T16).
+
+## fn_types_exercice_autorises
+
+- **Statut natif** : à venir (lot 3, T8 ; réutilisée par T9).
+- **Usage prévu** : Contrats proposés à la complétion selon la profession du parcours (lecture seule de
+  `parcours.donnees.profession`), depuis la **table paramétrée** `regles_exercice_profession` (zéro règle en dur) ;
+  web `src/hooks/useTypesExerciceAutorises.ts` l.30, `InscriptionSoignant.tsx` l.92-97 et l.192-199.
+- **Signature SQL** (`supabase/schema/public.sql` l.64333) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_types_exercice_autorises"("p_profession" "text") RETURNS "text"[]
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `PUBLIC_VOLONTAIRE` pour `fn_types_exercice_autorises(text)` — référentiel public (commentaire SQL « SECURITY DEFINER anonyme revue : référentiel public. »), d'où le GRANT `anon` ; le natif l'appelle **avec le JWT** de la session d'inscription, jamais en anonyme.
+- **GRANT connu** : `GRANT ALL … TO "authenticated"`, `TO "anon"`, `TO "service_role"` (l.85428-85430).
+- **Signature TypeScript** : `Args: { p_profession: string }` ; `Returns: string[]`.
+- **Contrat de réponse** : un tableau `text[]` nu, jamais `{error}` ; `COALESCE(v_result, ARRAY['SALARIE', 'LIBERAL', 'MIXTE'])`
+  (l.64342) : une profession absente de la table rend `SALARIE`, `LIBERAL`, `MIXTE` (défaut serveur, pas un refus).
+  Indisponible (transport, délai) → message web verbatim de `InscriptionSoignant.tsx` l.92-97 et `LIBERAL` retiré
+  tant que non confirmé (l.192-199).
+
+## fn_modifier_mon_profil
+
+- **Statut natif** : à venir (lot 3, T9 ; T10 pour `p_avatar_url` et l'adresse).
+- **Usage prévu** : Édition du profil natif (identité, téléphone, date de naissance, RPPS non vérifié, rayon, ville
+  de recherche, taux minimum, contrats acceptés, bio, années d'expérience ; avatar et adresse en T10) puis relecture
+  `fn_mon_profil_soignant_complet`. **Jamais** envoyés par le natif : `p_type_exercice`, `p_attestation_cumul_activite`,
+  `p_est_cumul_activite`, `p_est_salarie_etablissement` (règle L1222-5 exposée → HARD STOP n°4, correction 8),
+  `p_consentement_gps` (lot 2), `p_disponible_urgence`, `p_urgence_rayon_km`, `p_ville_urgence` (lot 4),
+  `p_specialites`, `p_profession`, `p_numero_adeli`.
+- **Signature SQL** (`supabase/schema/public.sql` l.43891) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_modifier_mon_profil"("p_prenom" "text" DEFAULT NULL::"text", "p_nom" "text" DEFAULT NULL::"text", "p_telephone" "text" DEFAULT NULL::"text", "p_date_naissance" "date" DEFAULT NULL::"date", "p_adresse_rue" "text" DEFAULT NULL::"text", "p_adresse_ville" "text" DEFAULT NULL::"text", "p_adresse_code_postal" "text" DEFAULT NULL::"text", "p_adresse_lat" numeric DEFAULT NULL::numeric, "p_adresse_lng" numeric DEFAULT NULL::numeric, "p_rayon_deplacement_km" integer DEFAULT NULL::integer, "p_numero_rpps" "text" DEFAULT NULL::"text", "p_numero_adeli" "text" DEFAULT NULL::"text", "p_avatar_url" "text" DEFAULT NULL::"text", "p_types_contrat" "text"[] DEFAULT NULL::"text"[], "p_bio" "text" DEFAULT NULL::"text", "p_annees_experience" integer DEFAULT NULL::integer, "p_specialites" "text"[] DEFAULT NULL::"text"[], "p_taux_horaire_minimum" numeric DEFAULT NULL::numeric, "p_type_exercice" "text" DEFAULT NULL::"text", "p_ville_recherche" "text" DEFAULT NULL::"text", "p_ville_urgence" "text" DEFAULT NULL::"text", "p_disponible_urgence" boolean DEFAULT NULL::boolean, "p_urgence_rayon_km" integer DEFAULT NULL::integer, "p_attestation_cumul_activite" boolean DEFAULT NULL::boolean, "p_est_cumul_activite" boolean DEFAULT NULL::boolean, "p_est_salarie_etablissement" boolean DEFAULT NULL::boolean, "p_consentement_gps" boolean DEFAULT NULL::boolean, "p_types_contrat_acceptes" "text" DEFAULT NULL::"text", "p_profession" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_modifier_mon_profil(text,text,text,date,text,text,text,numeric,numeric,integer,text,text,text,text[],text,integer,text[],numeric,text,text,text,boolean,integer,boolean,boolean,boolean,boolean,text,text)`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : vingt-neuf paramètres optionnels (`types.ts`, section `Functions`, mêmes noms que la signature SQL) ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` (l.43904) ; `{error:'Le prénom ne peut pas être vide'}`
+  (l.43906) ; `{error:'Le nom ne peut pas être vide'}` (l.43909) ; `{success:true}` (l.44015). **`COALESCE` partout**
+  (l.43933-43985) : un paramètre `NULL` ne change rien et **aucun champ ne peut être vidé** — l'app n'offre pas
+  « effacer ». `numero_rpps` n'est modifiable que tant que `rpps_verifie` est faux (l.43949-43952), sans erreur
+  sinon : relecture obligatoire. Sans ligne `soignants`, la RPC en **crée** une (l.43917-43930) : chemin jamais
+  emprunté par le natif, qui n'ouvre l'écran profil qu'au rôle `SOIGNANT` résolu. Audit `MODIFICATION_PROFIL` écrit
+  par la RPC (l.44005-44014).
+- **Preuve STAGING** : profil modifié puis relu par `fn_mon_profil_soignant_complet` (T16).
+
+## fn_rgpd_exporter_rate_limited
+
+- **Statut natif** : à venir (lot 3, T11).
+- **Usage prévu** : Export RGPD (JSON, et CSV aplati comme le web, sans recalcul) depuis le hub Compte — écart de
+  placement assumé : le web le monte dans l'onglet confidentialité du profil (`SectionConfidentialite.tsx` l.30-78,
+  monté par `ProfilSoignant.tsx` l.506) ; fichier temporaire `NSFileProtectionComplete`, supprimé à la fermeture de
+  la feuille de partage ; le contenu n'est jamais affiché ni journalisé par l'app.
+- **Signature SQL** (`supabase/schema/public.sql` l.55321) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_rgpd_exporter_rate_limited"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_rgpd_exporter_rate_limited()`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: never` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` (l.55330) ;
+  `{error:"Trop d'exports en peu de temps. Réessayez dans quelques minutes."}` (l.55336 : 30 exports par heure,
+  `fn_verifier_rate_limit(…, 'rgpd_export', 30, 3600)` l.55334 ; valeur JSON réelle, le littéral SQL double
+  l'apostrophe) ; sinon le jsonb de `fn_rgpd_exporter_donnees_soignant` (l.55339), écrit tel quel. Un `{error}` est
+  affiché verbatim et **aucun fichier n'est écrit**.
+- **Audit** : `fn_rgpd_exporter_donnees_soignant` écrit déjà `RGPD_EXPORT_DONNEES` (l.55304-55311) ; le web en ajoute
+  un second par `fn_ecrire_audit_safe` (`SectionConfidentialite.tsx` l.44). T11 suit le blueprint (audit
+  `RGPD_EXPORT_DONNEES` best-effort, parité web) : doublon consigné, sans effet utilisateur.
+- **Signalement (hors lot 3, non corrigé ici)** : la clé `notations_recues` de l'export (l.55300) lit
+  `notations_missions` avec `masque = false` **sans** `publie_le IS NOT NULL` : l'export d'un soignant contient les
+  notes reçues **non publiées** (double-aveugle D8), contrairement à la vue canonique `evaluations_publiees`
+  (l.69517, principe « Publication différée » de `CLAUDE.md`). Dump du 01/11/2026, à confirmer sur la définition
+  live ; PR backend séparée à décider par Gabrielle (droit d'accès RGPD contre double-aveugle), voir
+  `DECISIONS_LOT3.md`.
+- **Preuve STAGING** : export non vide (T16).
+
+## fn_confirmer_paiement_soignant
+
+- **Statut natif** : à venir (lot 3, T13) — **B9** (paiements, D18).
+- **Usage prévu** : « Confirmer la réception » d'un paiement manuel `DECLARE` (web `BandeauPaiementDeclare.tsx`
+  l.178-206) ; bouton désactivé pendant l'appel ; état « confirmé » affiché seulement après relecture
+  `paiements_soignant` (`statut = 'CONFIRME'`, `confirme_par_soignant = true`), jamais de retrait local d'office.
+- **Signature SQL** (`supabase/schema/public.sql` l.24548) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_confirmer_paiement_soignant"("p_paiement_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_temp'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_confirmer_paiement_soignant(uuid)`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_paiement_id: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` (l.24557) ; `{error:'Paiement introuvable'}`
+  (l.24565) ; `{error:'Accès refusé'}` (l.24568) ; `{error:'Paiement déjà confirmé'}` (l.24571) ;
+  `{error:'Ce paiement ne peut plus être confirmé (statut: <statut>)'}` (l.24574-24577, statut hors `DECLARE`,
+  `EN_ATTENTE`) ; `{success:true, confirme_le, facture_honoraires_id}` (l.24596-24600). Verrou `FOR UPDATE`
+  (l.24563) et refus « déjà confirmé » : un second appel ne double rien. Effet serveur : la facture d'honoraires liée
+  passe `PAYEE` si elle était `EMISE` ou `EN_RETARD` (l.24587-24594). Refus affichés verbatim ; un délai dépassé
+  impose une relecture, jamais un renvoi.
+- **Preuve STAGING** : paiement `DECLARE` de la fixture D5 confirmé puis `CONFIRME` relu (T16).
+
+## fn_contester_paiement_soignant
+
+- **Statut natif** : à venir (lot 3, T13) — **B9** ; bouton **verrouillé** tant que la PR backend **B3** n'est pas
+  sur `main` (D19, correction 3).
+- **Usage prévu** : « Contester » avec un motif non vide de 500 caractères au plus ; relecture
+  `paiements_soignant.statut = 'CONTESTE'` et de la ligne `litiges` ; bouton désactivé pendant l'appel.
+- **Signature SQL** (`supabase/schema/public.sql` l.25741) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_contester_paiement_soignant"("p_paiement_id" "uuid", "p_motif" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_contester_paiement_soignant(uuid,text)` ; aucune garde `auth.uid() IS NOT NULL` dans le corps (B3 l'ajoute).
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_motif: string; p_paiement_id: string }` ; `Returns: Json`.
+- **Contrat de réponse** (dump du 01/11/2026, à confirmer sur la définition live avant B3, garde-fou 9.0 n°2) :
+  `{error:'Paiement introuvable'}` (l.25750) ; `{error:'Accès refusé'}` (l.25751) ; sinon UPDATE
+  **inconditionnel** (l.25754-25759 : ni garde de statut, ni idempotence, ni contrôle du motif), INSERT `litiges`
+  (l.25762-25774), puis INSERT `notifications` de type `'CONTESTATION_PAIEMENT'` (l.25776-25784) **absent** de
+  `notifications_type_check` (l.70815) → **23514**, transaction annulée : la contestation échoue aujourd'hui, sur le
+  web comme en natif. Second échec possible : **23505** sur `uq_litige_mission_type_ouvert_legacy` (l.75280) dès
+  qu'un litige `AUTRE` sans facture est déjà ouvert sur la mission (y compris au second appel). Succès théorique
+  `{success:true, litige_id}` (l.25794). Le trigger `trg_notifier_creation_litige` (l.76080) notifie déjà
+  l'établissement en `LITIGE_OUVERT` : la notification explicite est redondante.
+- **Verrou côté app** (T13, « un gap connu reste verrouillé ») : tant que B3 n'est pas mergée, « Contester » est
+  remplacé par un message explicite (texte nouveau, non juridique, à relire, §6.7 du blueprint) et un renvoi à cette
+  fiche ; aucun appel. B3 (option D19 : retrait de l'INSERT redondant, garde de statut et d'idempotence, `{error}`
+  explicite si un litige est déjà ouvert) rouvre le bouton dans la PR qui la suit.
+- **Preuve STAGING** : après B3, `CONTESTE` + une ligne `litiges` + notification établissement `LITIGE_OUVERT`
+  relues (T16) ; second appel → `{error}` sans second litige.
+
+## fn_consulter_mon_iban
+
+- **Statut natif** : à venir (lot 3, T14b) — **B9** (données bancaires, D18).
+- **Usage prévu** : Affichage `•••• {iban_last4}`, titulaire et état de vérification ; relue après
+  `fn_enregistrer_mon_iban`.
+- **Signature SQL** (`supabase/schema/public.sql` l.25539) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_consulter_mon_iban"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_consulter_mon_iban()`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: never` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` (l.25549) ; profil absent ou supprimé →
+  `{iban_renseigne:false, iban_verifie:false}` sans autre clé (l.25554) ; sinon
+  `{iban_renseigne, iban_verifie, verification_requise, iban_last4, iban_titulaire}` (l.25576-25582).
+  `iban_verifie` exige l'empreinte, le RIB et la pièce d'identité `VERIFIE` encore valides (l.25556-25575). L'IBAN
+  complet n'est jamais renvoyé.
+
+## fn_enregistrer_mon_iban
+
+- **Statut natif** : à venir (lot 3, T14b) — **B9** (données bancaires, D18).
+- **Usage prévu** : Confirmation de l'IBAN **du RIB vérifié** (règle serveur, correction 4) : contrôle mod 97 local
+  avant envoi (`IbanRules`, port de `SectionPaiements.tsx` l.212-225) ; titulaire = « prénom nom » ou « nom prénom »
+  normalisés (l.32273-32289) ; succès admis seulement sur `success == true` **puis** relecture `fn_consulter_mon_iban`
+  (`iban_verifie == true`). Le web affiche un faux succès quand le refus ne porte que `error_code`
+  (`SectionPaiements.tsx` l.259-262 ne teste que `result?.error`) : écart non reproduit, PR web séparée (D20, B9).
+- **Signature SQL** (`supabase/schema/public.sql` l.32251) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_enregistrer_mon_iban"("p_iban" "text", "p_titulaire" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_enregistrer_mon_iban(text,text)` ; délègue la liaison à `fn_lier_iban_verifie_document` (l.32305), interdite côté natif (fiche en fin de document).
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_iban: string; p_titulaire: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : refus `{success:false, error_code, error?}`, neuf codes :
+  `NON_AUTHENTIFIE` (l.32264) ; `PROFIL_INTROUVABLE` (l.32270) ; `TITULAIRE_NON_CONCORDANT` avec
+  `error:'Le titulaire doit correspondre exactement à votre identité vérifiée.'` (l.32283-32287) ;
+  `RIB_VERIFIE_REQUIS` avec `error:'Téléversez puis faites vérifier le RIB correspondant.'` (l.32299-32303) ;
+  puis, dans `fn_lier_iban_verifie_document` : `IBAN_INVALIDE` (l.39421), `RIB_COURANT_REQUIS` (l.39433),
+  `IDENTITE_VERIFIEE_REQUISE` (l.39443 : identité non vérifiée ou `coherence_identite` ≠ `COHERENT`),
+  `IDENTITE_COURANTE_REQUISE` (l.39461 : pièce d'identité `VERIFIE` sans `coherence_nom` ou noms discordants),
+  `RIB_NON_CONCORDANT` (l.39477 : `resultat_ia.verdict_serveur`, `iban_valide`, `iban_last4`,
+  `iban_preuve_hash_v1 = sha256(iban || ':' || doc_id)`, `coherence_nom`, noms extraits). Sept codes sur neuf
+  arrivent **sans** `error` : messages natifs nouveaux (non juridiques, à relire, §6.7 du blueprint), jamais
+  « IBAN enregistré ». Succès `{success:true, iban_last4, titulaire, source_document_id}` (l.39511-39516) ; audit
+  `IBAN_RENSEIGNE` / `IBAN_MODIFIE` écrit par le serveur. L'IBAN n'est ni journalisé ni persisté côté app.
+- **Preuve STAGING** : `iban_last4` relu sur la fixture D5 (RIB et pièce d'identité `VERIFIE` seedés avec toutes les
+  conditions ci-dessus) (T16).
+
+## fn_mes_revenus_connect
+
+- **Statut natif** : à venir (lot 3, T12 ; T14a pour l'écran Stripe Connect) — **B9** (paiements, D18).
+- **Usage prévu** : Totaux serveur de l'onglet Revenus et de l'écran Stripe Connect (web `PageStripeConnect.tsx`
+  l.70-82), affichés tels quels, jamais recalculés (D4) ; aucun KPI calculé côté client.
+- **Signature SQL** (`supabase/schema/public.sql` l.42347) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_mes_revenus_connect"("p_mois_debut" "date" DEFAULT NULL::"date") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_mes_revenus_connect(date)`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_mois_debut?: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{mois_en_cours, total, en_attente, stripe_connect_actif}` (l.42411-42416) :
+  `mois_en_cours`, `total` et `en_attente` en euros (transferts Connect, paiements manuels `CONFIRME` hors Connect,
+  escrow `PAYE` ; l'attente additionne Connect `EN_ATTENTE` et l'escrow en cours) ; `stripe_connect_actif` booléen.
+  Ni garde `auth.uid()` ni `{error}` : sans identité les sommes valent 0 (inatteignable avec le seul GRANT
+  `authenticated`). Les trois nombres doivent être finis (web l.73-76), sinon section en erreur. `p_mois_debut`
+  omis = mois courant.
+
+## fn_mes_paiements_escrow
+
+- **Statut natif** : à venir (lot 3, T12) — **B9** (paiements/escrow, D18).
+- **Usage prévu** : « Paiements rapides » de l'onglet Revenus, libellés verbatim web (`PaiementsEscrowAVenir.tsx`
+  l.44-80, invariant « jamais garanti ») ; `etablissement_nom` est fourni par la RPC pour les missions du soignant
+  (JOIN sans filtre de cohorte, l.42205), sans passer par `fn_etablissements_safe`.
+- **Signature SQL** (`supabase/schema/public.sql` l.42184) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_mes_paiements_escrow"() RETURNS "jsonb"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_mes_paiements_escrow()` ; filtre `pe.soignant_id = auth.uid()`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : absente de `types.ts` (correction 13).
+- **Contrat de réponse (HTTP 200)** : un tableau jsonb, jamais `{error}` (`[]` sans ligne). Chaque élément :
+  `mission_id`, `mission_intitule`, `etablissement_nom`, `honoraires_cents`, `etat`, `date_affichee`,
+  `mission_date`, `a_litige` (l.42234-42248). `etat` ∈ `VERSE`, `ANNULE`, `RETARDE`, `LITIGE`,
+  `VERSEMENT_EN_COURS`, `ATTENTE_VALIDATION`, `RESERVE` (l.42220-42230, dérivé de `paiements_escrow.statut` et des
+  présences) ; `date_affichee` nulle hors `VERSE`, `VERSEMENT_EN_COURS` et `RETARDE`. Ordre serveur conservé.
+  `honoraires_cents` est figé à la confirmation (règle #11 de `CLAUDE.md`) : affiché sans recalcul.
+
 ## Edge `delete-account` (suppression de compte, Apple 5.1.1)
 
 - **Statut natif** : câblée (lot 1, T8) — `JoleneSupabase/Compte/SupabaseAccountGateway.swift`
@@ -818,6 +1276,144 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
 - **Preuve STAGING** : compte jetable créé par la fixture du run uniquement (garde équivalente à
   `createDeletionSafetyGate`), `soignants.nom = 'Supprimé'` relu en SQL ; B9 « données » → go explicite (décision 13).
 
+## Edge `register-soignant` (finalisation de l'inscription, lot 3)
+
+- **Statut natif** : à venir (lot 3, T8) — **B9** (inscription, consentement relayé, D18). Pas une RPC :
+  `supabase/functions/register-soignant/index.ts`, appelée par `client.functions.invoke("register-soignant")`
+  comme le web (`src/lib/inscriptionProgressive.ts` l.169-238).
+- **Transport** : `POST`, corps JSON `{prenom, nom, telephone, dateNaissance, profession, typesContrat, rpps, rayon,
+  lat?, lng?, navigateur?, attribution?}` (champs lus l.230), en-tête `Authorization: Bearer <access_token>` de la
+  session ouverte par `signUp` ou par la confirmation ; `supabase/config.toml` l.48-49 : `verify_jwt = false` (JWT
+  vérifié dans la fonction, l.149-158). Limite **5 appels / 10 min** par IP (`x-forwarded-for`, compteur en mémoire
+  de l'instance, l.29-44) : une seule inscription par run STAGING. Le natif n'envoie ni `est_etudiant` ni
+  `etudiant_details` (parcours étudiant en renvoi web, D11) ; rayon 30 km par défaut comme le web (l.295,
+  correction 21).
+- **Décodage** : supabase-swift lève `FunctionsError.httpError` (code HTTP et corps) sur tout statut non 2xx ;
+  `EdgeResponse` (T1) lit ce corps avant tout mapping : `{ok:false, code, message, error, details?}`
+  (`supabase/functions/_shared/errors.ts` l.34-46, `error` = miroir de `message`). `message` affiché verbatim ;
+  aucune nouvelle tentative automatique.
+- **Réponses** — liste exhaustive de `index.ts`, confrontée au source par `tests/node/check-rpc-contracts-lot3.node.mjs` :
+  - **200** `{ok:true, success:true, soignant_id}` (l.401-403) → `refreshSession()` puis `SessionStore.start()` : seul
+    `.ready` relu prouve le succès.
+  - **429** `'RATE_LIMITED'` « Trop de tentatives. Réessayez dans quelques minutes. » (l.144).
+  - **401** `'UNAUTHORIZED'` « Non authentifié. » (l.151, en-tête absent) ; `'INVALID_TOKEN'` « Session invalide. Reconnectez-vous et réessayez. »
+    (l.157) ; `ACCOUNT_AUTH_INACTIVE` (réservation refusée, l.206).
+  - **409** réservation refusée (l.204-212), code = celui de `fn_reserver_type_compte` : `ACCOUNT_ALREADY_REGISTERED`
+    « Ce compte soignant existe déjà. Connectez-vous pour continuer. » ; `ACCOUNT_REGISTRATION_IN_PROGRESS`
+    « Une inscription est déjà en cours pour ce compte. Patientez quelques instants puis réessayez. » ; tout autre
+    code (`ACCOUNT_TYPE_MISMATCH`, `ACCOUNT_PROFILE_CONFLICT`, `ACCOUNT_REGISTRATION_INCOMPLETE`,
+    `ACCOUNT_TYPE_INVALID`) « Ce compte est déjà associé à un autre espace Jolene. Utilisez une autre adresse ou contactez le support. » ;
+    `'RPPS_ALREADY_REGISTERED'` « Ce numéro RPPS est déjà associé à un compte Jolene. Connectez-vous à ce compte, ou contactez le support si ce n'est pas vous. »
+    (l.328) ; `'USER_ALREADY_REGISTERED'` « Un compte existe déjà avec cet email. Connectez-vous ou utilisez une autre adresse. »
+    (l.332).
+  - **400** `'MISSING_REQUIRED_FIELDS'` « Champs obligatoires manquants (prénom, nom, profession). » avec
+    `details.champs_manquants` (l.237) ou « Date de naissance requise. » (l.241) ; `'UNDERAGE'` « Vous devez avoir au moins 18 ans pour vous inscrire. »
+    (l.252) ; `'RPPS_FORMAT_INVALID'` « Numéro RPPS invalide (11 chiffres attendus). » (l.266) ou « Le numéro RPPS est obligatoire pour votre profession (11 chiffres). »
+    (l.270 : professions de `PROFESSIONS_RPPS_REQUIS` = `['MEDECIN', 'DENTISTE', 'SAGE_FEMME', 'PHARMACIEN']`,
+    l.260, correction 20) ; `'RPPS_TRAITS_MISMATCH'` avec le message de l'annuaire « Les informations saisies (nom, prénom) ne correspondent pas au numéro RPPS. »
+    (l.127, `RPPS_TRAITS_MISMATCH`), repli « Ce numéro RPPS ne correspond pas à votre identité. » (l.287) ;
+    `'RPPS_PROFESSION_MISMATCH'` avec « Ce numéro RPPS correspond à la profession « <profession de l'annuaire> », différente de celle que vous avez déclarée. »
+    (l.129, gabarit), repli « Ce numéro RPPS correspond à une autre profession que celle déclarée. » (l.291).
+    `RPPS_NOT_FOUND` (« Aucun professionnel trouvé avec ce numéro RPPS dans l'Annuaire Santé. », l.124) et
+    `RPPS_API_UNAVAILABLE` (« Impossible de vérifier le numéro RPPS pour le moment. Réessayez dans quelques minutes. »,
+    l.121, l.135) ne bloquent pas : inscription acceptée avec `rpps_verifie = false`.
+  - **500** `'INTERNAL_ERROR'` « Erreur lors de la création du profil soignant. Notre équipe a été notifiée. Réessayez dans quelques minutes. »
+    (l.338) ; « Erreur lors de la configuration du compte. Réessayez dans quelques minutes. » (l.348) ;
+    « Erreur serveur. Notre équipe a été notifiée. Réessayez dans quelques minutes. » (l.407).
+  - **503** `'ACCOUNT_RESERVATION_UNAVAILABLE'` « Inscription momentanément indisponible. Réessayez dans quelques minutes. »
+    (l.201) ou « Votre inscription est conservée. Réessayez dans quelques instants. » (l.221) ;
+    `'ACCOUNT_FINALIZATION_PENDING'` « Votre profil est enregistré. Reconnectez-vous pour reprendre votre espace. »
+    (l.366-367) → déconnexion locale puis message serveur.
+- **Effets serveur** (aucun côté app) : ligne `soignants`, `app_metadata.role = 'SOIGNANT'`, audits `INSCRIPTION` et,
+  si `parcours_inscription.consentement_cgu_le` existe, `RGPD_CONSENTEMENT_DONNE` (l.370-387), e-mail de bienvenue et
+  série d'onboarding (best-effort).
+- **Preuve STAGING** : ligne `soignants` relue après la complétion (T16), compte jetable
+  `native-insc-<uuid>@example.invalid` nettoyé (B9 données, go au dispatch).
+
+## Edge `stripe-connect-status` (lot 3)
+
+- **Statut natif** : à venir (lot 3, T14a) — **B9** (Stripe, D18).
+- **Transport** : `POST` seulement (l.30 : toute autre méthode → **405**), corps vide, Bearer utilisateur
+  (`verifyUserOrServiceRole`, service_role refusé) ; `verify_jwt = false` (`supabase/config.toml` l.102-103). Cache
+  serveur de **5 min** (`CACHE_TTL_MS`, l.13, l.78-110) contourné par `?force=true` (l.80) :
+  `FunctionInvokeOptions(query: [URLQueryItem(name: "force", value: "true")])` au retour de Stripe et sur
+  « Actualiser », comme le web (`PageStripeConnect.tsx` l.48-51, l.158 ; correction 17). Sans `force`, l'app peut
+  relire `EN_COURS` jusqu'à 5 min après un onboarding terminé.
+- **Réponses** (décodées par `EdgeResponse`) :
+  - **200** `{statut, onboarding_complete, charges_enabled, payouts_enabled, iban_last4, requirements, disabled_reason, cached, cache_age_seconds?, message?}`.
+    `statut` ∈ les six valeurs de `stripe_connect_onboarding_statut_check` (`public.sql` l.72036) : `NON_DEMANDE`,
+    `EN_COURS`, `COMPLET`, `SUSPENDU`, `REJETE`, `SUPPRIME`. `NON_DEMANDE` sans appel Stripe si aucune ligne
+    d'onboarding (l.56-60) ; `SUPPRIME` avec `disabled_reason:'account_deleted'` et le message « Votre compte Stripe Connect a été supprimé. Contactez le support ou recommencez l'onboarding. »
+    (l.64-76, l.168-177). Règle app (web l.53-54) : `COMPLET` accepté seulement si `onboarding_complete`,
+    `charges_enabled` et `payouts_enabled` valent `true`, sinon statut indisponible ; tout statut hors des six
+    valeurs → erreur d'écran.
+  - **401** `{error:'Authorization Bearer manquant'}` (`_shared/admin-auth.ts` l.111) ; `{error:'Token invalide ou expiré'}` (l.145).
+  - **403** `{error:'Consultation utilisateur uniquement'}` (`index.ts` l.36 : service_role ou JWT sans utilisateur) ;
+    `{error:'Compte desactive'}` (`admin-auth.ts` l.150, l.155).
+  - **405** `{error:'Methode non autorisee'}` (l.30).
+  - **500** `{error:'Configuration serveur incomplète (SUPABASE_URL/ANON_KEY)'}` (`admin-auth.ts` l.139).
+  - **503** `{error:'Configuration serveur incomplete'}` (l.42) ; `{error:'STRIPE_STATUS_UNAVAILABLE', message:'Statut de paiement temporairement indisponible.'}`
+    (l.53, l.148, l.224) ; `{error:'STRIPE_NOT_CONFIGURED', message:'Service Stripe temporairement indisponible.'}` (l.115).
+  - Erreur Stripe : `{error:<code>, message:<message utilisateur>}` au statut de `mapStripeError`
+    (`_shared/stripe-errors.ts`, l.237-244) → message verbatim.
+- **Preuve STAGING** : compte test de la fixture D5 → `NON_DEMANDE` relu ; cohorte non-test D5-R → statut relu après
+  l'onboarding (T16, T17).
+
+## Edge `stripe-connect-onboard` (lot 3)
+
+- **Statut natif** : à venir (lot 3, T14a) — **B9** (Stripe, D18).
+- **Transport** : `POST` (la fonction ne contrôle pas la méthode ; l'app n'envoie que `POST`), Bearer utilisateur,
+  **en-tête `Origin: https://jolene.app` obligatoire** (correction 1, D6) : `getTrustedStripeReturnOrigin`
+  (l.21-32) rend `null` si `Origin` est absente — un client URLSession n'en envoie pas — ou non reconnue par
+  `_shared/cors.ts` (l.19-42) → **403** `ORIGINE_NON_AUTORISEE`. Avec cet en-tête, `return_url` =
+  `https://jolene.app/soignant/stripe-connect?success=true` et `refresh_url` =
+  `https://jolene.app/soignant/stripe-connect?refresh=true` (l.200-205) : retour par Universal Link
+  (`ASWebAuthenticationSession` à rappel `.https` dès iOS 17.4, `SFSafariViewController` en dessous, D7,
+  correction 6). `verify_jwt = false` (`supabase/config.toml` l.99-100). Avant tout appel, l'app lit
+  `soignants.est_compte_test, type_exercice, statut_liberal` comme le web (`PageStripeConnect.tsx` l.94-111) :
+  compte test → écran « Stripe désactivé sur ce compte de test » (texte web l.307) **sans** appel d'edge ; non
+  éligible → message web, sans appel.
+- **Réponses** (décodées par `EdgeResponse`) :
+  - **200** `{success:true, url, account_id}` (l.207-212) → `ExternalFlowPort.ouvrir(url)` ; l'issue du flux n'est
+    jamais un succès : relecture `stripe-connect-status?force=true`.
+  - **401** `{error:"Non autorisé"}` (l.49-52 en-tête absent ; l.63-67 jeton refusé).
+  - **403** `{error:"ORIGINE_NON_AUTORISEE"}` (l.71-75) → erreur de contrat (bug de l'app, jamais affiché tel quel) ;
+    `{error:"TEST_ACCOUNT_PAYMENT_DISABLED"}` (l.106-113, cohorte test, correction 2) → écran compte test ;
+    `{error:"Stripe Connect est réservé aux soignants en exercice libéral ou mixte"}` (l.120-131 : ni `LIBERAL`, ni
+    `MIXTE`, ni `statut_liberal = 'ACTIF'`).
+  - **404** `{error:"Soignant introuvable"}` (l.87-92).
+  - **503** `{error:"TEST_ACCOUNT_CLASSIFICATION_UNAVAILABLE"}` (l.98-105).
+  - Erreur Stripe : `{error:<code>, message:<message utilisateur>}` au statut de `mapStripeError` (l.218-231).
+- **Preuve STAGING** : compte test → 403 `TEST_ACCOUNT_PAYMENT_DISABLED` (résultat attendu, niveau 3) ; cohorte
+  non-test D5-R → URL d'onboarding obtenue (T16) ; retour par Universal Link sur iPhone en iOS ≥ 17.4 (T17).
+
+## Payload `send-push` (taps de notification)
+
+- **Statut natif** : lecture seule (lot 3, T5) ; l'app n'appelle jamais `send-push` (service_role, admin ou
+  établissement autorisé uniquement).
+- **Payload APNs** (`supabase/functions/_shared/apns-client.ts` l.103-109) :
+  `{aps:{alert:{title, body}, sound:'default'}, …données}` — **aucun badge** (le serveur n'en envoie pas,
+  `LOT3_PLAN.md` §1.2), pas de `mutable-content`. Les données sont des clés **racine** à côté de `aps`
+  (`userInfo` en `[String: String]`) : `type_evenement` (toujours présent, chaîne vide possible ; motif
+  `^[A-Z0-9_:-]{1,100}$` exigé à l'émission, l.326-327), `lien` (seulement s'il est fourni : chemin relatif ou URL
+  `https://jolene.app` / `www.jolene.app` normalisée par `safeNotificationLink`, l.55-73 ; tout autre lien est
+  refusé à l'émission, 400 « Lien de notification interdit », l.323-325), et les seules clés de `ALLOWED_DATA_KEYS`
+  (`supabase/functions/send-push/index.ts` l.75-79) : `mission_id`, `contrat_id`, `candidature_id`, `facture_id`,
+  `litige_id`, `presence_id`, `conversation_id`, `etablissement_id`, `soignant_id`, `notification_id`, `action`,
+  `statut`, `tab`, `source` — scalaires convertis en chaîne, 500 caractères, 30 clés et 2 500 octets au plus
+  (`safeScalarData`, l.93-110).
+- **Routage natif** : `PushRouting.path(data:role:)` porte `navigationPathForEvent` (`src/lib/pushNative.ts`
+  l.251-315) : lien explicite d'abord, puis table par `type_evenement`, rôle lu dans le snapshot ; vecteurs golden
+  tirés de `src/lib/pushNative.test.ts` (T2). Correction 15 : `PAIEMENT_RECU` ouvre la section « Paiements à
+  confirmer » de Revenus (le web vise `?tab=paiements`, onglet inexistant).
+- **Émission (rappel pour la recette)** : `send-push` saute tout destinataire de la cohorte test
+  (`reason: 'test_account'`, l.416) et toute source test (`reason: 'test_source'`, l.446) — correction 2 ; un token
+  `IOS` qui reçoit `BadDeviceToken`, `Unregistered` ou 410 passe `tokens_push.actif = false` (l.725) ; sans secrets
+  APNs (`apnsReady` faux), tout token `IOS` est désactivé (l.717-730). Un seul `APNS_ENVIRONMENT` par projet
+  (`apns-client.ts` l.97-99, défaut `production`) : recette avec un build Debug (token sandbox) sur STAGING réglé
+  en `sandbox` (correction 5).
+- **Preuve** : niveau 5 sur iPhone (T17), push émis par le script service_role de T16 vers la cohorte D5-R.
+
 ## Interdite côté natif : `fn_etablissement_public`
 
 - **Statut natif** : **jamais** (non suivie dans `RPC_SUIVIES`, aucun gateway ne doit l'appeler).
@@ -839,6 +1435,31 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   `RPC_SUIVIES` ; ce test tourne sur toute PR (étape « Garde de livraison mobile » de
   `.github/workflows/validate-pr.yml`, sans filtre de chemins). Un `git grep fn_etablissement_public ios-native/`
   doit rester vide.
+
+## Interdite côté natif : `fn_lier_iban_verifie_document`
+
+- **Statut natif** : **jamais** (`RPC_JAMAIS_SUIVIES` de `scripts/mobile/check-rpc-contracts.mjs`, lot 3 T0 ;
+  `verifierExclusions` fait échouer la CI si elle entre dans `RPC_SUIVIES`).
+- **Pourquoi** : GRANT au seul `service_role` (`REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "service_role"`,
+  `public.sql` l.83209-83210) et garde interne `RAISE EXCEPTION 'Service role requis' USING ERRCODE = '42501'`
+  (l.39417) : un appel avec le JWT soignant est un 42501. Elle lie un IBAN au RIB désigné **sans** contrôler que le
+  document appartient à l'appelant ni le titulaire saisi ; elle n'est sûre que derrière `fn_enregistrer_mon_iban`
+  (titulaire normalisé, RIB `VERIFIE` du soignant connecté), qui l'appelle elle-même côté serveur (l.32305, fonction
+  `SECURITY DEFINER` dont le propriétaire passe la garde). Un appel direct contournerait cette garde.
+- **Garde** : `tests/node/check-rpc-contracts.node.mjs` (liste `INTERDITES_NATIF`, littéraux `"fn_…"` du Swift) et
+  `tests/node/check-rpc-contracts-lot3.node.mjs` (GRANT et garde relus dans le dump) ; un
+  `git grep fn_lier_iban_verifie_document ios-native/` doit rester vide.
+
+## PSC (Pro Santé Connect) : non consommé au lot 3
+
+- **Statut natif** : **non consommé** (décision 8 du lot 3) : ni `psc-authorize`, ni `psc-callback`, ni `psc-logout`,
+  ni `psc-test-connexion` (`supabase/functions/psc-*`) ne sont appelés par l'app ; la route `/auth/psc/callback`
+  reste `.safari` (`JoleneCore/Links/LinkRouter.swift` l.23), comme `/inscription/soignant/completion`.
+- **Pourquoi** : credentials ANS absents (`docs/PSC-BASCULE-PROD.md` l.3, l.29-30), aucun environnement PSC hors
+  production (l.4), et le rappel `https` d'`ASWebAuthenticationSession` exige iOS 17.4 alors que la cible est iOS 16
+  (correction 6 ; le plan interdit les schemes custom, §4.5).
+- **Réouverture** : tranche dédiée le jour où les credentials ANS existent ; les edges et RPC PSC entrent alors dans
+  `RPC_SUIVIES` et dans ce document dans la même PR, jamais avant.
 
 ## Hors périmètre de ce document
 
