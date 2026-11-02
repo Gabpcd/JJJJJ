@@ -125,9 +125,17 @@ les règles générales.
    l'en-tête et les sous-fiches par surcharge du lot 2, y déplacer telle quelle la sous-section « Usage du
    lot 4 », supprimer l'en-tête provisoire du lot 4, puis `node scripts/mobile/check-rpc-contracts.mjs --update`
    (l'entrée du JSON passe en `lot: 2`) ; la garde exige un seul titre `## fn_ouvrir_litige_rate_limited`.
-   `RPC_SUIVIES` se fusionne sans doublon, le bloc du lot 4 n'y écrivant plus cette RPC ; les autres
-   recouvrements de texte avec les T0 des lots 2, 3 et 5 (synthèses, en-têtes, fin de document) restent des
-   ajouts juxtaposés, et `ios-native/rpc-contracts.json` se régénère après toute fusion.
+   `RPC_SUIVIES` se fusionne sans doublon, le bloc du lot 4 n'y écrivant plus cette RPC. Autres
+   recouvrements, relevés par fusions d'essai locales (non poussées) avec `origin/lot2/l2-t0`,
+   `origin/lot3/l3-t0` et `origin/lot5/l5-t0` : juxtaposition des deux côtés pour les blocs ajoutés (fin de
+   `RPC_SUIVIES`, sections de `CONTRATS_RPC_SOIGNANT.md`, tests node) ; **fusion de sens**, et non « garder
+   les deux côtés », pour (a) le test « tout littéral "fn_…" du Swift », réécrit par les T0 des lots 2 et 4
+   (contrôle du système de pointage ① d'abord, puis `verdictLitteralSwift`), (b) le paragraphe des exclusions
+   en tête de `CONTRATS_RPC_SOIGNANT.md` (version du lot 2 ou 3, plus la mention du T0 du lot 4), (c) la ligne
+   « Dernière mise à jour » de `PARITE_SOIGNANT.md` avec le lot 3 (les deux mentions gardées) ;
+   `ios-native/rpc-contracts.json` se régénère (`--update`) après toute fusion, jamais à la main. Ainsi
+   résolues, les fusions d'essai passent : lot 2, 75 tests de `check-rpc-contracts.node.mjs`, une seule fiche,
+   entrée `lot: 2` ; lot 3, 52 + 27 tests ; lot 5, seul le JSON en conflit, 52 + 20 tests.
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 4 », l.202-210)
 
