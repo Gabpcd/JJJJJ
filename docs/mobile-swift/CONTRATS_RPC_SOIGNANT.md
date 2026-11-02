@@ -12,7 +12,10 @@ signature SQL exacte extraite de `supabase/schema/public.sql` (dump de productio
 Le fichier machine correspondant est `ios-native/rpc-contracts.json`, régénéré et comparé par
 `node scripts/mobile/check-rpc-contracts.mjs` dans le job « Cœur — golden et contrats » de
 `.github/workflows/ios-swift-ci.yml`. Toute dérive de signature, de GRANT ou de classe fait échouer la CI ;
-`--update` réécrit le JSON après relecture des gateways Swift.
+`--update` réécrit le JSON après relecture des gateways Swift. Le présent document est lui-même gardé par
+`tests/node/check-rpc-contracts.node.mjs` (une fiche par RPC suivie, RPC interdites, formes de réponse
+confrontées à `public.sql` et à l'edge `delete-account`), exécuté sur toute PR par l'étape « Garde de
+livraison mobile » de `.github/workflows/validate-pr.yml`.
 
 Règles (plan §4.4) : montants, net estimé et règles juridiques sont des valeurs serveur jamais recalculées ;
 chaque gateway relit l'objet après mutation ; les erreurs PostgREST PGRST202 et 300 à 303 sont des refus
@@ -149,12 +152,41 @@ CREATE OR REPLACE FUNCTION "public"."fn_dashboard_soignant_complet"() RETURNS "j
   `CreneauxConfirmes`, T2) et relecture après la réponse : `candidatures` (id retourné) pour POSTULER,
   `mission(id:)` (`ASSIGNEE`, `soignant_assigne_id == userId`) pour ACCEPTER/PROPOSITION. L'annulation
   **ne passe pas** par cette RPC (voir `fn_annuler_candidature_soignant` / `fn_annuler_mission_soignant`).
-- **Formes de réponse** (HTTP 200) à décoder par `RPCResponse` : `{success:true, candidature_id?, contrat_id?}` ;
-  `{success:false, ok:false, code:'PLANNING_MODIFIE_RECONFIRMER'}` (relire et redemander, jamais renvoyer) ;
-  `{success:false, choix_requis:true, options:[…]}` → sheet de choix de contrat ; `{error, documents_requis_pour?}` ;
-  exception PostgREST `[CODE DU TRAVAIL] …` / `0 rows` / `déjà prise` → `.refusee(message verbatim)` (HARD STOP n°4 :
-  aucun texte juridique reformulé). Rate-limit 20 candidatures/h (`fn_postuler_mission_rate_limited`) consommé
-  même en `choix_requis`.
+- **Formes de réponse** (HTTP 200) à décoder par `RPCResponse`, une forme = un test dans T6a. Valeurs JSON
+  réelles (apostrophes simples, pas l'échappement `''` du littéral SQL), relues dans le corps l.24141-24318.
+  - **Refus propres à cette RPC** : toujours `success:false, ok:false, error` ; les refus de planning portent
+    en plus la clé `code` (jamais `error_code` : ni ce corps ni `fn_conflit_planning_soignant` ne la posent, le
+    décodeur lit `code` et ne se rabat pas sur `error_code`).
+    1. `{success:false, ok:false, error:'Accès réservé aux soignants authentifiés.'}` — l.24153-24157 :
+       `auth.uid()` nul ou `est_soignant()` faux.
+    2. `{success:false, ok:false, error:'Action de candidature invalide.'}` — l.24162-24168 : `p_action` hors
+       `POSTULER, ACCEPTER, SWIPE_LIKE, URGENCE, PROPOSITION`.
+    3. `{success:false, ok:false, error:"Cette mission n'est plus disponible."}` — l.24177-24181 : mission absente
+       ou statut ≠ `OUVERTE`.
+    4. `{success:false, ok:false, code:'PLANNING_A_RECONFIRMER', error:"Le planning confirmé n'est pas exploitable. Rechargez la mission avant de continuer."}`
+       — l.24195-24200 : `fn_valider_creneaux_mission_json` refuse `p_creneaux_confirmes` → relire la mission et
+       reconstruire `CreneauxConfirmes`, jamais renvoyer la même charge.
+    5. `{success:false, ok:false, code:'PLANNING_MODIFIE_RECONFIRMER', error:'Le planning a changé depuis son affichage. Vérifiez à nouveau toutes les dates et tous les horaires.'}`
+       — l.24237-24248 : nombre ou contenu des créneaux différent du planning live → relire et redemander,
+       jamais renvoyer.
+    6. Conflit avec une mission déjà confirmée — l.24256-24264 :
+       `{success:false, ok:false, code: COALESCE(v_conflit->>'code', 'CONFLIT_PLANNING'), error: COALESCE(v_conflit->>'message', 'Ce planning entre en conflit avec une mission déjà confirmée.')}`.
+       `code` vaut `'PLANNING_DETAILLE_INDISPONIBLE'` (l.24787), `'PLANNING_EXISTANT_INDISPONIBLE'` (l.24828),
+       `'REPOS_11H'` (l.24923) ou, sans code dans `fn_conflit_planning_soignant` (chevauchement, l.24859),
+       `'CONFLIT_PLANNING'`. Le message vient du serveur (tutoiement « Tu es déjà confirmé(e) sur … » pour le
+       chevauchement) et s'affiche verbatim (HARD STOP n°4).
+    7. `{success:false, ok:false, error:'Proposition introuvable.'}` — l.24295-24306 : `PROPOSITION` sans
+       `p_candidature_id`, ou candidature qui n'est pas `PROPOSEE`, au soignant et pour cette mission.
+  - **Réponses des délégués**, renvoyées telles quelles une fois les contrôles passés : `POSTULER` →
+    `fn_postuler_mission_rate_limited` (l.48080) ; `ACCEPTER` → `fn_accepter_mission` (l.5120) →
+    `fn_finaliser_attribution_mission` (l.36703) ; `PROPOSITION` → `fn_repondre_proposition(p_candidature_id, true)`
+    (l.53577). Formes : `{success:true, candidature_id, choix_contrat, profession_requise, docs_a_completer, documents_requis_pour}`
+    (POSTULER) ou `{success:true, contrat_id, …}` (ACCEPTER, PROPOSITION + `message:'Proposition acceptée'`) ;
+    `{choix_requis:true, error:'Choisissez votre mode de contrat.', options:[…]}` **sans clé `success`**
+    (`v_resolution - 'ok'`) → sheet de choix de contrat ; `{error}` seul (dont
+    `'Trop de candidatures en peu de temps. Réessayez plus tard.'` : rate-limit 20 candidatures/h, consommé même
+    en `choix_requis`) ; `{error, documents_requis_pour}` ; exception PostgREST `[CODE DU TRAVAIL] …` / `0 rows` /
+    `déjà prise` → `.refusee(message verbatim)` (HARD STOP n°4 : aucun texte juridique reformulé).
 - **Classement manuel (décision 6, `LOT1_PLAN.md` §7)** : `RPC_UTILISATEUR_AUTH_INTERNE` — SECURITY DEFINER,
   `search_path` vide, GRANT `authenticated`, identité lue via `auth.uid()` dans le corps (l.24141-24318 du dump) ;
   manifeste non régénéré, `rpc-contracts.json` garde `manifeste: null`.
@@ -477,8 +509,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "j
 - **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` **ou** un tableau (pas d'objet enveloppe) :
   `[{etablissement_id, nom, ville, logo_url, type_etablissement, nb_missions_ouvertes, cree_le}]` trié par
   `cree_le DESC`, `[]` si aucun favori. Le décodeur doit accepter les deux formes (objet d'erreur / tableau).
-  Note : la RPC joint `etablissements` sans filtre de cohorte TEST ; le nom affiché reste celui de
-  `fn_etablissements_safe` quand la ligne existe (règle « nom d'établissement », `LOT1_PLAN.md` §2.6).
+  Note : la RPC fait un **JOIN interne** sur `etablissements` (l.41859), sans filtre de cohorte TEST ni de
+  `supprime_le` : un favori dont l'établissement n'existe plus est absent du tableau (jamais présent avec
+  un `nom` nul). Le nom affiché reste celui de `fn_etablissements_safe` quand la ligne existe (règle « nom
+  d'établissement », `LOT1_PLAN.md` §2.6).
 - **Exemple de réponse STAGING** : à enregistrer en T11.
 
 ## fn_audit_connexion
@@ -542,12 +576,13 @@ CREATE OR REPLACE FUNCTION "public"."fn_ecrire_audit_safe"("p_acteur_id" "uuid",
     SET "search_path" TO 'public'
 ```
 
-- **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_ecrire_audit_safe(uuid,text,text,text,uuid,text,jsonb,inet,text)` — pour un appelant non admin / non service_role, `p_acteur_id` est **écrasé par `auth.uid()`** (anti-impersonation) ; `auth.uid()` nul → exception `28000`.
+- **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_ecrire_audit_safe(uuid,text,text,text,uuid,text,jsonb,inet,text)` — pour un appelant non admin / non service_role, `p_acteur_id` est **écrasé par `auth.uid()`** (anti-impersonation). Sans JWT utilisateur (`auth.uid()` nul), le `RAISE EXCEPTION 'Non authentifié' USING ERRCODE = '28000'` (l.31815) est intercepté par le `EXCEPTION WHEN OTHERS` de la fonction (l.31831-31832) : réponse HTTP 200 `{success:false, error:'Non authentifié'}`, **aucune** erreur PostgREST (voir « Contrat de réponse »).
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** : `Args: { p_acteur_id: string; p_action: string; p_cle_s3?: string; p_details?: Json; p_id_ressource: string; p_ip?: unknown; p_navigateur?: string; p_type_acteur: string; p_type_ressource: string }` ; `Returns: Json`.
 - **Contrat de réponse (HTTP 200)** : `{success:true, id}` ou `{success:false, error: SQLERRM}` (toute exception
-  avalée : un `p_action` hors `journaux_audit_action_check` ou un `p_type_acteur` hors
-  `journaux_audit_type_acteur_check` renvoie `success:false` sans erreur PostgREST). `MISSION_ASSIGNATION`,
+  avalée : `{success:false, error:'Non authentifié'}` sans JWT utilisateur, et un `p_action` hors
+  `journaux_audit_action_check` ou un `p_type_acteur` hors `journaux_audit_type_acteur_check` renvoie
+  `success:false` sans erreur PostgREST). `MISSION_ASSIGNATION`,
   `MISSION_ANNULATION`, `SOIGNANT` figurent dans les CHECK du dump (l.70243-70244). Best-effort : jamais une
   erreur utilisateur.
 - **Preuve STAGING** : assertion relative `n_avant + 1` sur `action = 'MISSION_ASSIGNATION'` après la
@@ -621,7 +656,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** : `Args: { p_mission_id: string }` ; `Returns: Json`.
 - **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}` (inexistante ou non assignée au
-  soignant) ; `{error:'Cette mission n''est plus active.'}` (statut ∉ `ASSIGNEE, EN_COURS`) ; `{success:true}`.
+  soignant) ; `{error:"Cette mission n'est plus active."}` (statut ∉ `ASSIGNEE, EN_COURS`) ; `{success:true}`.
+  Valeurs JSON réelles, à copier telles quelles dans les vecteurs Swift : le littéral SQL de la l.24617 double
+  l'apostrophe (échappement SQL `''`), ce doublement n'existe pas dans la réponse.
   **Aucune idempotence ni fenêtre serveur** : chaque appel réécrit `presence_confirmee_le = NOW()` et insère
   une notification étab `SYSTEM` « Présence confirmée ✓ » → bouton désactivé pendant l'appel, masqué après
   relecture ; bloc limité à `ASSIGNEE` côté app (la RPC accepte aussi `EN_COURS`).
@@ -639,15 +676,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   (`verifyUserOrServiceRole`), pas par l'API Gateway ; le mode `--use-api` du déploiement ne lit pas ce
   fichier (`CLAUDE.md` « verify_jwt »), donc l'app ne suppose rien de la Gateway et traite un 401 comme
   un refus quelle qu'en soit l'origine.
-- **Codes HTTP et corps** (lus dans `index.ts`) :
-  - **200** `{success:true, auth_deleted:true, anonymisation:{success:true, deja_anonymise?:boolean, profil_incomplet?:boolean}}` → seul succès admis ; **aucune relecture possible** (refresh tokens révoqués, utilisateur Auth soft-deleted) : purge locale (`signOut(scope: .local)` tolérant) → `SessionController.signOut()` → écran « Compte supprimé » **avant** l'événement SDK (sinon « Votre session a expiré »).
-  - **401** `{error:'Authorization Bearer manquant'}` ou JWT invalide (`_shared/admin-auth.ts`).
-  - **403** `{error:'Suppression self-service uniquement'}` (service_role) ; `{error:'Un compte administrateur doit etre retire par un autre administrateur'}` (rôle ADMIN / ADMIN_PLATEFORME).
-  - **405** `{error:'Methode non autorisee'}` (autre que POST).
-  - **409** `{error, error_code:'ACCOUNT_PROFILE_CONFLICT'}` (profils soignant et établissement simultanés) ; `{error, error_code:'DERNIER_PROPRIETAIRE'|'DERNIER_PROPRIETAIRE_GROUPE'}` ; `{error:<message RPC>}` quand `fn_supprimer_compte_rate_limited` lève une erreur PostgREST ; `{…, success:false, error:<error RPC ou 'Anonymisation non confirmée'>}` quand la RPC répond `{error}` (dont `'Demande de suppression déjà en cours.'`).
-  - **429** `{error:'Demande deja en cours'}` (3 appels / 60 s par `userId:ip`).
-  - **500** `{error:'Configuration serveur incomplete'|'Retrait des equipes impossible'|'Retrait des groupes impossible'|'Erreur interne'}`.
-  - **503** `{error:'Verification du compte impossible'}` ; `{success:false, auth_deleted:false, error:'Anonymisation du profil non confirmée ; suppression Auth non effectuée.', error_code:'ANONYMISATION_NON_CONFIRMEE'}` ; `{error:'Compte bloque et anonymise; suppression Auth en cours de finalisation', error_code:'AUTH_DELETE_PENDING'}` — ces deux derniers cas laissent un compte **banni ou anonymisé** : l'app force aussi la déconnexion locale (`LOT1_PLAN.md` §3 T8).
+- **Codes HTTP et corps** — liste exhaustive des réponses de `supabase/functions/delete-account/index.ts` et
+  de `verifyUserOrServiceRole` (`supabase/functions/_shared/admin-auth.ts` l.106-169), dont `index.ts` l.23
+  relaie le statut et le message (`{ error: auth.error }, auth.status`). Messages verbatim, sans accents quand
+  la source n'en a pas ; la garde `tests/node/check-rpc-contracts.node.mjs` relit les deux fichiers et échoue
+  si un statut ou un message manque ici. Base des tests de T8 (une réponse = un test).
+  - **200** `{success:true, auth_deleted:true, anonymisation:{success:true, deja_anonymise?:boolean, profil_incomplet?:boolean}}` (`index.ts` l.253-257) → seul succès admis ; **aucune relecture possible** (refresh tokens révoqués, utilisateur Auth soft-deleted) : purge locale (`signOut(scope: .local)` tolérant) → `SessionController.signOut()` → écran « Compte supprimé » **avant** l'événement SDK (sinon « Votre session a expiré »).
+  - **401** `{error:'Authorization Bearer manquant'}` (`admin-auth.ts` l.111, en-tête absent ou vide) ; `{error:'Token invalide ou expiré'}` (l.145, `auth.getUser` refuse le jeton).
+  - **403** `{error:'Compte desactive'}` (`admin-auth.ts` l.150 : utilisateur Auth `deleted_at` posé ; l.155 : `banned_until` dans le futur ou illisible — cas d'un second appel après une suppression réussie ou après `AUTH_DELETE_PENDING`) ; `{error:'Suppression self-service uniquement'}` (`index.ts` l.25, service_role ou JWT sans utilisateur) ; `{error:'Un compte administrateur doit etre retire par un autre administrateur'}` (l.28, rôle `ADMIN` / `ADMIN_PLATEFORME`).
+  - **405** `{error:'Methode non autorisee'}` (`index.ts` l.19, toute méthode autre que `POST` ; `OPTIONS` = préflight CORS, jamais émis par l'app).
+  - **409** `{error:'Votre compte nécessite une vérification manuelle avant suppression.', error_code:'ACCOUNT_PROFILE_CONFLICT'}` (l.85-88, profils soignant et établissement simultanés) ; `{error:"Transferez d'abord le role de proprietaire a un autre membre.", error_code:'DERNIER_PROPRIETAIRE'}` (l.108-111) ; `{error:"Transferez d'abord la propriete du groupe de sante.", error_code:'DERNIER_PROPRIETAIRE_GROUPE'}` (l.124-127) ; `{error:<message PostgREST>}` quand `fn_supprimer_compte_rate_limited` lève une erreur (l.137) ; `{…<jsonb RPC>, success:false, error:<error RPC> || 'Anonymisation non confirmée'}` quand la RPC répond `{error}` ou sans `success === true` (l.139-140, dont `'Demande de suppression déjà en cours.'`). Mêmes formes l.144-147 pour `fn_supprimer_compte_etablissement_rate_limited` (compte établissement, sans objet pour un soignant).
+  - **429** `{error:'Demande deja en cours'}` (`index.ts` l.30-31 : 3 appels / 60 s par `userId:ip`, compteur en mémoire de l'instance).
+  - **500** `{error:'Configuration serveur incomplète (SUPABASE_URL/ANON_KEY)'}` (`admin-auth.ts` l.139) ; `{error:'Configuration serveur incomplete'}` (`index.ts` l.38) ; `{error:'Retrait des equipes impossible'}` (l.181) ; `{error:'Retrait des groupes impossible'}` (l.196) ; `{error:'Erreur interne'}` (l.260, toute exception, y compris dans `verifyUserOrServiceRole`).
+  - **503** `{error:'Verification du compte impossible'}` (`index.ts` l.71, lecture des profils impossible) ; `{error:'Verification des responsabilites impossible'}` (l.105, comptage des propriétaires d'établissement) ; `{error:'Verification des responsabilites groupe impossible'}` (l.122, comptage des propriétaires de groupe) ; `{success:false, auth_deleted:false, error:'Anonymisation du profil non confirmée ; suppression Auth non effectuée.', error_code:'ANONYMISATION_NON_CONFIRMEE'}` (l.166-171) ; `{error:'Compte bloque et anonymise; suppression Auth en cours de finalisation', error_code:'AUTH_DELETE_PENDING'}` (l.247-250) — ces deux derniers cas laissent un compte **banni ou anonymisé** : l'app force aussi la déconnexion locale (`LOT1_PLAN.md` §3 T8). Les trois premiers 503 n'ont rien modifié : refus affiché, aucune nouvelle tentative automatique.
+  - Hors fonction : une erreur de la plateforme (passerelle, délai) peut renvoyer un autre statut ou un corps non JSON ; la règle ci-dessous s'applique (refus, message générique si aucun `error` lisible).
 - **Règle app** : tout code ≠ 200, ou 200 sans `success === true`, est un refus affiché avec le message
   serveur verbatim (`DeleteAccountOutcome.refused(message, code)`) ; aucune nouvelle tentative automatique.
   Texte RGPD de l'écran de confirmation verbatim web (`SectionConfidentialite.tsx` l.155-156, l.171-172,
@@ -668,10 +710,14 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   `MissionQuery.etablissementsRPC`, `SupabaseMissionsGateway.etablissements(ids:)`), qui applique la
   cohorte et ne renvoie la ligne que si la mission est assignée au soignant ou OUVERTE. Repli d'affichage
   « Établissement » conservé, mais toute assertion STAGING porte sur l'**égalité** avec le nom de fixture.
-  `fn_dashboard_soignant_complet.mes_missions.etab_nom` et `fn_mes_favoris_etablissements.nom` (LEFT
-  JOIN sans filtre cohorte) ne servent que si la ligne safe manque ; une divergence est un bug de fixture.
+  `fn_dashboard_soignant_complet.mes_missions.etab_nom` (LEFT JOIN sans filtre cohorte, l.27970 : nom nul si
+  l'établissement manque) et `fn_mes_favoris_etablissements.nom` (JOIN interne sans filtre cohorte ni
+  `supprime_le`, l.41859 : un favori dont l'établissement n'existe plus disparaît de la liste au lieu d'y
+  figurer avec un nom nul) ne servent que si la ligne safe manque ; une divergence est un bug de fixture.
 - **Garde** : `tests/node/check-rpc-contracts.node.mjs` échoue si `fn_etablissement_public` entre dans
-  `RPC_SUIVIES` ; un `git grep fn_etablissement_public ios-native/` doit rester vide.
+  `RPC_SUIVIES` ; ce test tourne sur toute PR (étape « Garde de livraison mobile » de
+  `.github/workflows/validate-pr.yml`, sans filtre de chemins). Un `git grep fn_etablissement_public ios-native/`
+  doit rester vide.
 
 ## Hors périmètre de ce document
 
