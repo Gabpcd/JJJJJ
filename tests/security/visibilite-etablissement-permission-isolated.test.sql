@@ -168,7 +168,10 @@ BEGIN
     AND acteur IN ('proprietaire', 'admin_groupe', 'lecture_seule', 'proprietaire_historique');
   IF nb <> 4 THEN RAISE EXCEPTION 'VISIBILITE_ETAB_FINANCES_PERDUES_POUR_HABILITE'; END IF;
   SELECT count(*) INTO nb FROM observations
-  WHERE phase = 'apres' AND rpc = 'stats' AND jsonb_array_length(resultat->'candidatures_recentes') = 1
+  WHERE phase = 'apres' AND rpc = 'stats'
+    -- CASE : jsonb_array_length lève sur un null JSON (POINTAGE_ONLY après migration).
+    AND CASE WHEN jsonb_typeof(resultat->'candidatures_recentes') = 'array'
+             THEN jsonb_array_length(resultat->'candidatures_recentes') END = 1
     AND acteur IN ('proprietaire', 'admin_groupe', 'rh', 'lecture_seule');
   IF nb <> 4 THEN RAISE EXCEPTION 'VISIBILITE_ETAB_CANDIDATS_PERDUS_POUR_HABILITE'; END IF;
   -- Compteur sans montant volontairement conservé pour tous les membres (voir PR).

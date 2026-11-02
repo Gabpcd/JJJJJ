@@ -83,7 +83,7 @@ test('une seule migration B5b, horodatée après la dernière version distante, 
   assert.ok(migrations[0].slice(0, 14) > '20261102150000');
   assert.doesNotMatch(migration, /^\s*(BEGIN|COMMIT|ROLLBACK)\s*;/im);
   assert.doesNotMatch(migration, /\$\$/, 'dollar-quoting anonyme interdit');
-  const tags = [...migration.matchAll(/\bAS (\$[a-z_]+\$)|DO (\$[a-z_]+\$)/g)].map(m => m[1] ?? m[2]);
+  const tags = [...migration.matchAll(/\bAS (\$[a-z_0-9]+\$)|DO (\$[a-z_0-9]+\$)/g)].map(m => m[1] ?? m[2]);
   assert.deepEqual(tags, ['$preflight_b5b$', '$etat_pointage$', '$stats_dashboard$', '$etablissement_complet$', '$postflight_b5b$']);
   assert.equal(new Set(tags).size, tags.length);
 });
@@ -93,7 +93,10 @@ test('aucun GRANT, REVOKE, DROP, ALTER, INSERT ni DELETE ; trois redéfinitions 
   for (const tag of ['etat_pointage', 'stats_dashboard', 'etablissement_complet']) {
     squelette = squelette.replace(new RegExp(`\\$${tag}\\$[\\s\\S]*?\\$${tag}\\$`), "'corps'");
   }
-  assert.doesNotMatch(squelette, /\b(GRANT|REVOKE|DROP|ALTER|TRUNCATE|DELETE|INSERT)\b/i);
+  // Seule table : la copie temporaire des ACL, détruite à la fin de la transaction.
+  assert.equal(squelette.split('CREATE TEMP TABLE _visibilite_etab_acl_avant ON COMMIT DROP AS').length - 1, 1);
+  squelette = squelette.replace('CREATE TEMP TABLE _visibilite_etab_acl_avant ON COMMIT DROP AS', 'CREATE_TEMP_ACL');
+  assert.doesNotMatch(squelette, /\b(GRANT|REVOKE|DROP|ALTER|TRUNCATE|DELETE|INSERT|CREATE (?!OR REPLACE FUNCTION))\b/i);
   assert.deepEqual([...squelette.matchAll(/CREATE OR REPLACE FUNCTION public\.(\w+)\(/g)].map(m => m[1]),
     CIBLES.map(nomDe));
   assert.deepEqual([...squelette.matchAll(/\bUPDATE\s+([\w.]+)/gi)].map(m => m[1]), ['private.security_definer_inventory']);
