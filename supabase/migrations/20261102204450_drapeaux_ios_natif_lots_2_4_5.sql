@@ -7,24 +7,25 @@
 -- après ouverture de session (aucun GRANT anon ; grants existants : authenticated
 -- + service_role). Sans ligne en base, fn_param_bool renvoie p_defaut et
 -- fn_admin_maj_parametre répond « Paramètre inconnu » : l'administrateur ne peut
--- pas créer la clé depuis l'interface, d'où ces vingt lignes.
+-- pas créer la clé depuis l'interface, d'où ces vingt-trois lignes.
 --
 -- ON CONFLICT (cle) DO NOTHING, jamais DO UPDATE : un rejeu ne doit pas réarmer
 -- un écran coupé en urgence par l'administrateur. Catégorie OPERATIONS : seule
 -- façon d'apparaître dans AdminConfig (src/pages/admin/AdminConfig.tsx,
--- CATEGORIES). Bornes 0/1 : fn_admin_maj_parametre refuse toute autre valeur ;
--- fn_param_bool lit « valeur <> 0 ». valeur 1 = écran actif (défaut fail-open
--- côté app).
+-- CATEGORIES). Bornes 0/1 : fn_admin_maj_parametre refuse toute valeur hors
+-- [0, 1] ; fn_param_bool lit « valeur <> 0 ». valeur 1 = écran actif (défaut
+-- fail-open côté app).
 --
--- Écrans :
+-- Écrans (blueprints v2) :
 -- - lot 2 (soignant : pointage, justificatifs, contrats OTP) : presences,
 --   documents, contrats — coupe-circuit du pointage et de la signature ;
--- - lot 4 (soignant, parcours secondaires, B0-bis) : swipe, recherches,
---   disponibilites, parrainage, litiges, reclamations, messagerie, bulletins,
---   evaluations, score, pool_urgence ;
--- - lot 5 (espace établissement, B5a) : etab_accueil, etab_missions,
---   etab_publier, etab_presences, etab_messages, etab_compte.
--- Garde : src/lib/__tests__/drapeauxIosNatifMigration.test.ts (25 clés au total
+-- - lot 4 (soignant, parcours secondaires, B0-bis et D18, 13 clés) : swipe,
+--   recherches, disponibilites, parrainage, litiges, reclamations, messagerie,
+--   bulletins, evaluations, score, pool_urgence, exclusions, serie ;
+-- - lot 5 (espace établissement, B5a et D14, 7 clés) : etab_accueil,
+--   etab_missions, etab_publier, etab_presences, etab_pointage (coupe-circuit
+--   du polling 5 s du code rotatif), etab_messages, etab_compte.
+-- Garde : src/lib/__tests__/drapeauxIosNatifMigration.test.ts (28 clés au total
 -- avec B0).
 
 -- Lot 2 — soignant
@@ -111,7 +112,19 @@ ON CONFLICT(cle) DO NOTHING;
 
 INSERT INTO public.parametres_systeme(cle,valeur,label,description,unite,val_min,val_max,categorie,avertissement,cablee)
 VALUES('ios_natif_pool_urgence_actif',1,'App iOS — écran Pool urgence actif',
- 'Autorise l''écran natif Pool urgence (missions urgentes et établissements exclus) de l''application iOS. À 0, l''app affiche un renvoi vers la version web à la place de cet écran.',
+ 'Autorise l''écran natif Pool urgence (missions urgentes) de l''application iOS. À 0, l''app affiche un renvoi vers la version web à la place de cet écran.',
+ 'booléen',0,1,'OPERATIONS','Coupe-circuit : passez à 0 uniquement si l''écran natif est cassé. Lu par l''app à l''ouverture de session et au retour au premier plan.',true)
+ON CONFLICT(cle) DO NOTHING;
+
+INSERT INTO public.parametres_systeme(cle,valeur,label,description,unite,val_min,val_max,categorie,avertissement,cablee)
+VALUES('ios_natif_exclusions_actif',1,'App iOS — écran Établissements exclus actif',
+ 'Autorise l''écran natif Établissements exclus (exclusions envoyées et reçues) de l''application iOS. À 0, l''app affiche un renvoi vers la version web à la place de cet écran.',
+ 'booléen',0,1,'OPERATIONS','Coupe-circuit : passez à 0 uniquement si l''écran natif est cassé. Lu par l''app à l''ouverture de session et au retour au premier plan.',true)
+ON CONFLICT(cle) DO NOTHING;
+
+INSERT INTO public.parametres_systeme(cle,valeur,label,description,unite,val_min,val_max,categorie,avertissement,cablee)
+VALUES('ios_natif_serie_actif',1,'App iOS — écran Détail de série actif',
+ 'Autorise l''écran natif Détail de série (acceptation des missions d''une série) de l''application iOS. À 0, l''app affiche un renvoi vers la version web à la place de cet écran.',
  'booléen',0,1,'OPERATIONS','Coupe-circuit : passez à 0 uniquement si l''écran natif est cassé. Lu par l''app à l''ouverture de session et au retour au premier plan.',true)
 ON CONFLICT(cle) DO NOTHING;
 
@@ -137,7 +150,13 @@ ON CONFLICT(cle) DO NOTHING;
 
 INSERT INTO public.parametres_systeme(cle,valeur,label,description,unite,val_min,val_max,categorie,avertissement,cablee)
 VALUES('ios_natif_etab_presences_actif',1,'App iOS — écran établissement Présences actif',
- 'Autorise l''écran natif Présences de l''espace établissement (code de pointage, validation et contestation) de l''application iOS. À 0, l''app affiche un renvoi vers la version web à la place de cet écran.',
+ 'Autorise l''écran natif Présences de l''espace établissement (validation et contestation) de l''application iOS. À 0, l''app affiche un renvoi vers la version web à la place de cet écran.',
+ 'booléen',0,1,'OPERATIONS','Coupe-circuit : passez à 0 uniquement si l''écran natif est cassé. Lu par l''app à l''ouverture de session et au retour au premier plan.',true)
+ON CONFLICT(cle) DO NOTHING;
+
+INSERT INTO public.parametres_systeme(cle,valeur,label,description,unite,val_min,val_max,categorie,avertissement,cablee)
+VALUES('ios_natif_etab_pointage_actif',1,'App iOS — écran établissement Pointage actif',
+ 'Autorise l''écran natif Pointage de l''espace établissement (code de pointage rotatif et QR plein écran) de l''application iOS. À 0, l''app affiche un renvoi vers la version web à la place de cet écran.',
  'booléen',0,1,'OPERATIONS','Coupe-circuit : passez à 0 uniquement si l''écran natif est cassé. Lu par l''app à l''ouverture de session et au retour au premier plan.',true)
 ON CONFLICT(cle) DO NOTHING;
 
