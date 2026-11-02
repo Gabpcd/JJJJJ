@@ -4,20 +4,27 @@ import XCTest
 /// Textes juridiques et de consentement du lot 2 (`Legal/TextesWeb.swift`, LOT2_PLAN §3 TL,
 /// HARD STOP n°4). L'égalité de chaque constante avec le texte du web est prouvée par la garde
 /// Node `tests/node/textes-juridiques-ios.node.mjs` (qui vérifie aussi que `catalogue` liste
-/// toutes les constantes) ; ce test vérifie la forme des textes et les assemblages, qui
-/// reproduisent le rendu React des écrans sources.
+/// toutes les constantes, que le code web de chaque assemblage n'a pas changé et que chaque rendu
+/// de `scripts/mobile/textes-web-ios-rendus.json` est asserté ici mot pour mot) ; ce test vérifie
+/// la forme des textes et les rendus assemblés montrés à Gabrielle.
 final class TextesWebTests: XCTestCase {
     private let catalogue = TextesWeb.catalogue
+
+    /// Les deux catalogues (HARD STOP et libellés), clés préfixées par leur fichier.
+    static let tousLesTextes: [EntreeTexteWeb] =
+        TextesWeb.catalogue.map { EntreeTexteWeb(cle: "TextesWeb." + $0.cle, texte: $0.texte) }
+        + LibellesWeb.catalogue.map { EntreeTexteWeb(cle: "LibellesWeb." + $0.cle, texte: $0.texte) }
 
     func testCatalogueCompletEtClesUniques() {
         XCTAssertGreaterThanOrEqual(catalogue.count, 60)
         XCTAssertEqual(Set(catalogue.map(\.cle)).count, catalogue.count, "clé dupliquée dans le catalogue")
         XCTAssertTrue(catalogue.contains(EntreeTexteWeb(cle: "ConsentementGps.baseLegale",
                                                         texte: TextesWeb.ConsentementGps.baseLegale)))
+        XCTAssertEqual(Set(Self.tousLesTextes.map(\.cle)).count, Self.tousLesTextes.count)
     }
 
     func testAucuneConstanteVideNiEspaceDeBordNiRetourALaLigne() {
-        for entree in catalogue {
+        for entree in Self.tousLesTextes {
             XCTAssertFalse(entree.texte.isEmpty, entree.cle)
             XCTAssertEqual(entree.texte, entree.texte.trimmingCharacters(in: .whitespacesAndNewlines), entree.cle)
             XCTAssertFalse(entree.texte.contains("\n"), entree.cle)
@@ -26,32 +33,33 @@ final class TextesWebTests: XCTestCase {
     }
 
     func testAucuneVariableDeGabarit() {
-        // Les valeurs (date, empreinte) sont assemblées par les fonctions de TextesWeb, jamais
-        // par un gabarit à remplir dans un texte juridique.
+        // Les valeurs (date, empreinte) sont assemblées par les fonctions de TextesWeb et de
+        // LibellesWeb, jamais par un gabarit à remplir dans un texte.
         let marqueurs = ["{", "}", "${", "%@", "%d", "%s", "%1$", "\\(", "<", ">"]
-        for entree in catalogue {
+        for entree in Self.tousLesTextes {
             for marqueur in marqueurs {
                 XCTAssertFalse(entree.texte.contains(marqueur), "\(entree.cle) contient « \(marqueur) »")
             }
         }
     }
 
-    /// Le web tutoie dans huit textes : les reprendre au vouvoiement serait une reformulation
-    /// (HARD STOP n°4). Ils restent verbatim, en attente de la décision de Gabrielle ; tout
-    /// autre tutoiement fait échouer ce test, et une exception qui ne tutoie plus aussi.
+    /// Le web tutoie dans huit textes, tous HARD STOP : les reprendre au vouvoiement serait une
+    /// reformulation (HARD STOP n°4). Ils restent verbatim, en attente de la décision de Gabrielle ;
+    /// tout autre tutoiement (dans l'un ou l'autre fichier) fait échouer ce test, et une exception
+    /// qui ne tutoie plus aussi.
     func testVouvoiementSaufTextesDuWebEnAttenteDeGabrielle() {
         let exceptions: Set<String> = [
-            "BandeauSansGps.texte",
-            "Presences.pointageSansGpsActive",
-            "Presences.relanceTitre",
-            "Presences.relanceExplication",
-            "AttestationSante.documentsOriginaux",
-            "ProfilConsentementGps.explicationActive",
-            "ProfilConsentementGps.explicationRetiree",
-            "ProfilConsentementGps.retire",
+            "TextesWeb.BandeauSansGps.texte",
+            "TextesWeb.Presences.pointageSansGpsActive",
+            "TextesWeb.Presences.relanceTitre",
+            "TextesWeb.Presences.relanceExplication",
+            "TextesWeb.AttestationSante.documentsOriginaux",
+            "TextesWeb.ProfilConsentementGps.explicationActive",
+            "TextesWeb.ProfilConsentementGps.explicationRetiree",
+            "TextesWeb.ProfilConsentementGps.retire",
         ]
         let marques: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
-        for entree in catalogue {
+        for entree in Self.tousLesTextes {
             let mots = entree.texte.lowercased()
                 .components(separatedBy: CharacterSet.letters.inverted)
                 .filter { !$0.isEmpty }
@@ -62,7 +70,7 @@ final class TextesWebTests: XCTestCase {
                 XCTAssertFalse(tutoie, "\(entree.cle) tutoie : « \(entree.texte) »")
             }
         }
-        XCTAssertTrue(exceptions.isSubset(of: Set(catalogue.map(\.cle))))
+        XCTAssertTrue(exceptions.isSubset(of: Set(Self.tousLesTextes.map(\.cle))))
     }
 
     func testListesDuConsentementGpsDansLOrdreDuWeb() {
@@ -90,40 +98,39 @@ final class TextesWebTests: XCTestCase {
     }
 
     /// `messageDepuisCode(code, result?.error || fallback)` (`SignerContratOtp.tsx` l.46-49,
-    /// l.112-114) : message du code connu, sinon message serveur verbatim, sinon repli.
+    /// l.112-114) : message du code connu, sinon message serveur verbatim, sinon repli, sinon défaut.
     func testMessageDepuisCodeReproduitLeWeb() {
         let otp = TextesWeb.SignatureOtp.self
-        XCTAssertEqual(otp.message(code: "OTP_EXPIRE", erreurServeur: "texte serveur", repli: otp.repliSignature),
-                       otp.otpExpire)
+        let libelles = LibellesWeb.SignatureOtp.self
+        XCTAssertEqual(otp.message(code: "OTP_EXPIRE", erreurServeur: "texte serveur", repli: libelles.repliSignature),
+                       "Le code SMS a expiré (10 min). Demandez un nouveau code.")
         XCTAssertEqual(otp.message(code: "TROP_DE_SMS_IP", erreurServeur: "Message serveur verbatim.",
-                                   repli: otp.repliEnvoi), "Message serveur verbatim.")
-        XCTAssertEqual(otp.message(code: "CONFIGURATION_SMS_INDISPONIBLE", erreurServeur: nil, repli: otp.repliEnvoi),
-                       otp.repliEnvoi)
-        XCTAssertEqual(otp.message(code: nil, erreurServeur: "", repli: otp.repliSignature), otp.repliSignature)
-        XCTAssertEqual(otp.message(code: "", erreurServeur: nil, repli: ""), otp.messageParDefaut)
+                                   repli: libelles.repliEnvoi), "Message serveur verbatim.")
+        XCTAssertEqual(otp.message(code: "CONFIGURATION_SMS_INDISPONIBLE", erreurServeur: nil, repli: libelles.repliEnvoi),
+                       libelles.repliEnvoi)
+        XCTAssertEqual(otp.message(code: nil, erreurServeur: "", repli: libelles.repliSignature), libelles.repliSignature)
+        XCTAssertEqual(otp.message(code: nil, erreurServeur: nil, repli: ""), "Une erreur est survenue. Réessayez.")
+        XCTAssertEqual(otp.message(code: "", erreurServeur: nil, repli: ""), libelles.messageParDefaut)
     }
 
+    /// Confirmation de `SignerContratOtp.tsx` l.195-198 (gabarit de la l.197), affichée l.214.
     func testConfirmationDeSignatureCommeLeRenduWeb() {
         let otp = TextesWeb.SignatureOtp.self
         XCTAssertEqual(otp.confirmationSignature(contratComplet: false), "Contrat signé ✅")
-        XCTAssertEqual(otp.confirmationSignature(contratComplet: true),
-                       "Contrat signé ✅ — Mission confirmée par les 2 parties.")
+        XCTAssertEqual(otp.confirmationSignature(contratComplet: true), "Contrat signé ✅ — Mission confirmée par les 2 parties.")
+        XCTAssertEqual(otp.contratSigneMessage, otp.contratSigne)
     }
 
     /// Pied de page de `ContratMission.tsx` l.831-837 : la mention choisie, puis « Signature
-    /// électronique simple. », puis la régularisation des montants sauf cadre employeur.
+    /// électronique simple. », puis la régularisation des montants sauf cadre employeur
+    /// (`{!texteEmployeur && …}`, l.836 ; zone gardée par la garde Node).
     func testPiedDePageDuContratCommeLeRenduWeb() {
         let contrat = TextesWeb.Contrat.self
-        XCTAssertEqual(contrat.piedDePage(.salarieEcrit),
-                       "Contrat salarié écrit — art. L.1242-12 du Code du travail. Signature électronique simple. "
-                       + "Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles "
-                       + "corrections contradictoires.")
-        XCTAssertEqual(contrat.piedDePage(.prestationLiberale),
-                       "Contrat de prestation entre l’établissement et le professionnel libéral. Signature "
-                       + "électronique simple. Les montants prévisionnels sont régularisés selon les heures "
-                       + "validées et les éventuelles corrections contradictoires.")
-        XCTAssertEqual(contrat.piedDePage(.cadreEmployeur),
-                       "Contrat salarié préparé selon le cadre déclaré par l’employeur. Signature électronique simple.")
+        XCTAssertEqual(contrat.MentionPiedDePage.salarieEcrit.texte, "Contrat salarié écrit — art. L.1242-12 du Code du travail.")
+        XCTAssertEqual(contrat.piedDePage(.salarieEcrit), "Contrat salarié écrit — art. L.1242-12 du Code du travail. Signature électronique simple. Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires.")
+        XCTAssertEqual(contrat.piedDePage(.prestationLiberale), "Contrat de prestation entre l’établissement et le professionnel libéral. Signature électronique simple. Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires.")
+        XCTAssertEqual(contrat.piedDePage(.cadreEmployeur), "Contrat salarié préparé selon le cadre déclaré par l’employeur. Signature électronique simple.")
+        XCTAssertEqual(contrat.MentionPiedDePage.allCases.count, 3)
     }
 
     func testDocumentOfficielFigeCommeLeRenduWeb() {
@@ -144,15 +151,22 @@ final class TextesWebTests: XCTestCase {
 
     /// Q9 (LOT2_PLAN §7, DECISIONS_LOT2, en attente de Gabrielle) : aucun texte de délai de
     /// contestation n'est repris (le web annonce 72 h, le serveur lit
-    /// `parametres_litiges.delai_contestation_pointage_h`, 48 h par défaut). Seuls les libellés de
-    /// statut et les boutons du panneau sont portés ; le refus serveur s'affiche tel quel.
+    /// `parametres_litiges.delai_contestation_pointage_h`, 48 h par défaut), ni dans le groupe
+    /// Contestation ni ailleurs, dans l'un ou l'autre fichier.
     func testAucunTexteDeDelaiDeContestation() {
-        let contestation = catalogue.filter { $0.cle.hasPrefix("Contestation.") }
+        let contestation = Self.tousLesTextes.filter { $0.cle.contains(".Contestation.") }
         XCTAssertFalse(contestation.isEmpty)
         for entree in contestation {
             for marque in ["72", "48", "délai", "tranchera", "pour répondre", "pour contester"] {
                 XCTAssertFalse(entree.texte.lowercased().contains(marque), "\(entree.cle) contient « \(marque) »")
             }
+        }
+        for entree in Self.tousLesTextes {
+            let texte = entree.texte.lowercased()
+            let sujet = texte.contains("contest") || texte.contains("litige")
+            let delai = texte.contains("délai")
+                || texte.range(of: #"\d+\s?(h|heures?|jours?)\b"#, options: .regularExpression) != nil
+            XCTAssertFalse(sujet && delai, "\(entree.cle) associe contestation et délai : « \(entree.texte) »")
         }
     }
 
@@ -166,17 +180,17 @@ final class TextesWebTests: XCTestCase {
         XCTAssertEqual(contestation.libelleStatut(code: "STATUT_INCONNU"), "STATUT_INCONNU")
     }
 
-    /// Interrupteur du Profil (`SectionPreferences.tsx` l.133-136) et retour après bascule (l.161).
+    /// Interrupteur du Profil (`SectionPreferences.tsx` l.134-136) et retour après bascule (l.159-162).
     func testConsentementGpsDuProfilCommeLeRenduWeb() {
         let profil = TextesWeb.ProfilConsentementGps.self
-        XCTAssertEqual(profil.explication(consentementActif: true), profil.explicationActive)
-        XCTAssertEqual(profil.explication(consentementActif: false), profil.explicationRetiree)
+        XCTAssertEqual(profil.explication(consentementActif: true), "Ta position sera capturée uniquement au moment de l'arrivée et du départ.")
+        XCTAssertEqual(profil.explication(consentementActif: false), "Sans GPS, tes pointages seront validés manuellement par l'établissement — rien à faire de ton côté.")
         XCTAssertEqual(profil.retourBascule(consentementActif: true), "Consentement GPS activé.")
-        XCTAssertEqual(profil.retourBascule(consentementActif: false), profil.retire)
+        XCTAssertEqual(profil.retourBascule(consentementActif: false), "Consentement GPS retiré — tes pointages seront validés manuellement par l'établissement.")
         XCTAssertEqual(profil.libelleAccessibilite, profil.libelle)
     }
 
-    /// Message des tentatives restantes (`SignerContratOtp.tsx` l.322-327) : affiché sous 5 ;
+    /// Message des tentatives restantes (`SignerContratOtp.tsx` l.322-328) : affiché sous 5 ;
     /// pluriel au-delà de 1 ; à 0, le message des tentatives épuisées.
     func testTentativesRestantesCommeLeRenduWeb() {
         let otp = TextesWeb.SignatureOtp.self
@@ -188,47 +202,30 @@ final class TextesWebTests: XCTestCase {
         XCTAssertNil(otp.tentativesRestantes(n: 6))
     }
 
-    /// Envoi du code (`SignerContratOtp.tsx` l.151, l.296, l.299) et minuteur (l.110, l.305).
-    func testEnvoiDuCodeEtMinuteurCommeLeRenduWeb() {
-        let otp = TextesWeb.SignatureOtp.self
-        XCTAssertEqual(otp.codeEnvoye(telephoneMasque: "06 •• •• •• 12", minutes: 10),
-                       "Code envoyé au 06 •• •• •• 12. Valide 10 min.")
-        XCTAssertEqual(otp.codeEnvoyeAu(telephoneMasque: "06 •• •• •• 12"), "Code envoyé au 06 •• •• •• 12")
-        XCTAssertEqual(otp.codeEnvoyeAu(telephoneMasque: nil), "Code envoyé au numéro masqué")
-        XCTAssertEqual(otp.codeEnvoyeAu(telephoneMasque: ""), "Code envoyé au numéro masqué")
-        XCTAssertEqual(otp.smsRestants(n: 0), "(dernier envoi possible)")
-        XCTAssertEqual(otp.smsRestants(n: 1), "(1 envoi restant)")
-        XCTAssertEqual(otp.smsRestants(n: 2), "(2 envois restants)")
-        XCTAssertEqual(otp.minuteur(secondesRestantes: 600), "10:00")
-        XCTAssertEqual(otp.minuteur(secondesRestantes: 65), "01:05")
-        XCTAssertEqual(otp.minuteur(secondesRestantes: 0), "Expiré")
-        XCTAssertEqual(otp.erreurReseauEnvoi, "Erreur réseau. Réessayez.")
-        XCTAssertEqual(otp.erreurReseauSignature, otp.erreurReseauEnvoi)
-        XCTAssertEqual(otp.renvoi(otpExpire: true), "Recevoir un nouveau code")
-        XCTAssertEqual(otp.renvoi(otpExpire: false), "Renvoyer le code")
-    }
-
-    /// Durée restante du compte à rebours (`Countdown72hSignature.tsx` l.49-51, l.72).
-    func testDureeDuCompteAReboursCommeLeRenduWeb() {
+    /// Compte à rebours (`Countdown72hSignature.tsx` l.38-75) : expiré à zéro, alerte urgente sous
+    /// 24 h (couleur `destructive`), sinon « Signature à finaliser sous », suivi de la durée.
+    func testCompteAReboursCommeLeRenduWeb() {
         let rebours = TextesWeb.CompteARebours.self
-        XCTAssertEqual(rebours.duree(restantSecondes: 62 * 3600), "62h 00m 00s")
-        XCTAssertEqual(rebours.duree(restantSecondes: 3661), "1h 01m 01s")
-        XCTAssertEqual(rebours.duree(restantSecondes: 59), "0h 00m 59s")
+        XCTAssertEqual(rebours.texte(restantSecondes: 0), "⚠\u{FE0F} Délai de signature expiré (72h dépassées).")
+        XCTAssertEqual(rebours.texte(restantSecondes: -5), rebours.expire)
+        XCTAssertEqual(rebours.texte(restantSecondes: 62 * 3600), "Signature à finaliser sous 62h 00m 00s")
+        XCTAssertEqual(rebours.texte(restantSecondes: 24 * 3600), "Signature à finaliser sous 24h 00m 00s")
+        XCTAssertEqual(rebours.texte(restantSecondes: 23 * 3600 + 59 * 60 + 59), "Signature urgente — moins de 24h restantes ! 23h 59m 59s")
     }
 
-    /// Relance de l'établissement (`DetailPresencesMission.tsx` l.120-123) : message serveur
-    /// s'il existe (`??` : seul un message absent est remplacé), sinon le repli du web.
-    func testMessageDeRelanceCommeLeWeb() {
-        let presences = TextesWeb.Presences.self
-        XCTAssertEqual(presences.messageRelance(succes: true, message: nil, erreur: nil), "Établissement relancé.")
-        XCTAssertEqual(presences.messageRelance(succes: true, message: "Relance envoyée.", erreur: nil), "Relance envoyée.")
-        XCTAssertEqual(presences.messageRelance(succes: false, message: nil, erreur: "Déjà relancé."), "Déjà relancé.")
-        XCTAssertEqual(presences.messageRelance(succes: false, message: nil, erreur: nil), "Relance impossible.")
-        XCTAssertEqual(presences.relancer, "Relancer l'établissement")
-    }
-
-    /// Pied de la page `/contrat/:id/certificat` (`CertificatSignaturePage.tsx` l.214-215).
-    func testMentionDeLaPageCertificat() {
-        XCTAssertTrue(TextesWeb.Certificat.mentionPage.hasPrefix("Conforme art. 1366-1367 Code civil — "))
+    /// Certificat (`CertificatSignature.tsx` l.121, l.162-165) et bloc « Empreinte du document
+    /// signé » de la page `/contrat/:id/certificat` (`CertificatSignaturePage.tsx` l.203-208).
+    func testCertificatCommeLeRenduWeb() {
+        let certificat = TextesWeb.Certificat.self
+        XCTAssertEqual(certificat.statut(estSigne: true, codeBrut: "signe"), "✅ Signé")
+        XCTAssertEqual(certificat.statut(estSigne: false, codeBrut: "en_attente"), "en_attente")
+        XCTAssertEqual(certificat.rpps(verifie: true), "✓")
+        XCTAssertEqual(certificat.rpps(verifie: false), "—")
+        XCTAssertEqual(certificat.psc(actif: true), "✓")
+        XCTAssertEqual(certificat.psc(actif: false), "—")
+        XCTAssertEqual(certificat.explicationEmpreinte(storagePath: "contrats/2026/c-001.html"), "SHA-256 du contrat figé au moment de la signature. Si vous recalculez le hash du contenu HTML stocké (storage_path : contrats/2026/c-001.html), vous devez retrouver cette empreinte — c'est la preuve que le document n'a pas été modifié depuis la signature.")
+        XCTAssertEqual(certificat.explicationEmpreinte(storagePath: nil), "SHA-256 du contrat figé au moment de la signature. Si vous recalculez le hash du contenu HTML stocké (storage_path : —), vous devez retrouver cette empreinte — c'est la preuve que le document n'a pas été modifié depuis la signature.")
+        XCTAssertEqual(certificat.explicationEmpreinte(storagePath: ""), certificat.explicationEmpreinte(storagePath: nil))
+        XCTAssertTrue(certificat.mentionPage.hasPrefix("Conforme art. 1366-1367 Code civil — "))
     }
 }
