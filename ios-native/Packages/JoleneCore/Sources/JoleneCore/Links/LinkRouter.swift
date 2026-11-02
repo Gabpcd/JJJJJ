@@ -15,6 +15,7 @@ import Foundation
 /// | `/soignant/tableau-de-bord`                       | `.accueil`                        |
 /// | `/soignant/recherche-missions`, `/soignant/swipe-missions` | `.explorer`              |
 /// | `/soignant/missions` et alias (`mes-matches`, `planning`, `calendrier-sync`, `historique-missions`) | `.missions` |
+/// | `/soignant/mes-favoris` (lot 1, T4b)              | `.favoris`                        |
 /// | `/soignant/missions/serie/{id}`                   | `.serieDetail(id:)`               |
 /// | `/soignant/missions/{id}`, `/mission/{id}`        | `.missionDetail(id:)`             |
 /// | `/soignant/mes-gains` et alias (`mes-factures-honoraires`, `mes-avances`, `bulletins-paie`) | `.revenus` |
@@ -63,6 +64,7 @@ public enum LinkRouter {
         case "/soignant/missions", "/soignant/mes-matches", "/soignant/planning",
              "/soignant/calendrier-sync", "/soignant/historique-missions":
             return .missions
+        case "/soignant/mes-favoris": return .favoris
         case "/soignant/mes-gains", "/soignant/mes-factures-honoraires", "/soignant/mes-avances", "/soignant/bulletins-paie":
             return .revenus
         case "/soignant/profil", "/soignant/mon-compte", "/soignant/parametres", "/soignant/parametres-complet",

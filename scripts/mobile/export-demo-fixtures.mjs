@@ -5,7 +5,7 @@
  * Reproduit à l'identique l'algorithme de `mobile-native/src/data/demoGateway.ts`
  * (30 missions, 3 établissements fictifs, profil DEMO_CONTEXT) avec une horloge
  * fixée, puis écrit les fichiers JSON à clés snake_case (contrat PostgREST),
- * lus par `JoleneCore` (DemoMissionsGateway, DemoDashboardGateway) et par les XCUITest.
+ * lus par `JoleneCore` (DemoMissionsGateway, DemoDashboardGateway, DemoFavorisGateway) et par les XCUITest.
  *
  * Horloge fixée : 2026-11-02T00:00:00Z. Les missions démarrent donc du
  * 2026-11-03 au 2026-12-02 (07:00 UTC, ou 20:00 UTC une mission sur quatre).
@@ -231,12 +231,48 @@ export function buildDemoDashboard(now = new Date(FIXED_NOW), missions = buildDe
   };
 }
 
+/**
+ * Favoris démo (lot 1, T4b) : une ligne `missions_sauvegardees` (demo-mission-002, sauvegardée la
+ * veille de l'horloge fixée) avec sa jointure `missions(...)` sous la forme PostgREST de
+ * `SupabaseFavorisGateway.selectSauvegardees`, et un élément de `fn_mes_favoris_etablissements`
+ * (l.41835 du dump) pour l'établissement des Lilas : `nb_missions_ouvertes` = missions OUVERTE de
+ * l'établissement dont `debut_le > now`, comme le SQL.
+ */
+export function buildDemoFavoris(now = new Date(FIXED_NOW), missions = buildDemoMissions(now)) {
+  const sauvegardee = missions.find((m) => m.id === 'demo-mission-002');
+  const etablissement = DEMO_ETABLISSEMENTS.find((e) => e.id === 'demo-etab-2');
+  const ouvertes = missions.filter((m) => m.etablissement_id === etablissement.id && m.statut === 'OUVERTE'
+    && new Date(m.debut_le).getTime() > now.getTime());
+  return {
+    fixed_now: now.toISOString(),
+    missions_sauvegardees: [{
+      id: 'demo-sauvegarde-001',
+      mission_id: sauvegardee.id,
+      cree_le: instantDemo(now, -1, 9).toISOString(),
+      missions: {
+        id: sauvegardee.id, intitule: sauvegardee.intitule, debut_le: sauvegardee.debut_le, fin_le: sauvegardee.fin_le,
+        duree_heures: sauvegardee.duree_heures, nb_creneaux: sauvegardee.nb_creneaux, statut: sauvegardee.statut,
+      },
+    }],
+    etablissements_favoris: [{
+      etablissement_id: etablissement.id,
+      nom: etablissement.nom,
+      ville: etablissement.adresse_ville,
+      logo_url: null,
+      type_etablissement: etablissement.type,
+      nb_missions_ouvertes: ouvertes.length,
+      cree_le: instantDemo(now, -18, 9).toISOString(),
+    }],
+  };
+}
+
 export function buildFixtures() {
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
     'demo-etablissements.json': { fixed_now: FIXED_NOW, etablissements: DEMO_ETABLISSEMENTS },
     'demo-profile.json': { fixed_now: FIXED_NOW, ...DEMO_PROFILE },
     'demo-dashboard.json': buildDemoDashboard(),
+    'demo-favoris.json': buildDemoFavoris(),
   };
 }
 

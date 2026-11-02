@@ -12,14 +12,20 @@ import JoleneDesign
 /// `FiltresSheet`, état vide avec l'action secondaire du web (`missions-empty-action`) ET
 /// « Actualiser » (`missions-refresh`, toujours présent), tirer pour actualiser sur l'état vide
 /// comme sur la liste (`usePullToRefresh(recharger)` couvre toute la page web).
+///
+/// Lot 1 (T4b) : étoile « sauvegarder » sur chaque carte (`favori-toggle-<id>`), « Mes favoris »
+/// (`explorer-favoris-ouvrir` → `MesFavorisScreen`), bandeau du filtre établissement retirable
+/// (`explorer-filtre-etablissement`) ; un seul `FavorisModel` pour la liste, le détail et l'écran.
 struct MissionRoute: Hashable {
     let id: String
 }
 
 struct MissionsListScreen: View {
     @StateObject private var model: MissionsListModel
+    @StateObject private var favoris: FavorisModel
     @ObservedObject private var session: SessionStore
     @State private var filtresOuverts = false
+    @State private var favorisOuverts = false
     private let controller: SessionController
     private let snapshot: SessionSnapshot
 
@@ -28,11 +34,15 @@ struct MissionsListScreen: View {
         self.controller = session.controller
         self.snapshot = snapshot
         _model = StateObject(wrappedValue: MissionsListModel(controller: session.controller, snapshot: snapshot))
+        _favoris = StateObject(wrappedValue: FavorisModel(controller: session.controller, snapshot: snapshot))
     }
 
     var body: some View {
         VStack(spacing: 0) {
             chipsRapides
+            bandeauEtablissement
+            AvisFavoris(favoris: favoris, identifier: "favoris-action-erreur")
+                .padding(.horizontal, JoleneSpacing.lg)
             contenu
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -42,6 +52,7 @@ struct MissionsListScreen: View {
         // titre ne se replierait pas au défilement de la liste.
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .primaryAction) { boutonFavoris }
             ToolbarItem(placement: .primaryAction) { boutonFiltres }
         }
         .sheet(isPresented: $filtresOuverts) {
@@ -50,10 +61,20 @@ struct MissionsListScreen: View {
             }
         }
         .navigationDestination(for: MissionRoute.self) { route in
-            MissionDetailScreen(route: route, initial: model.mission(id: route.id), session: session, snapshot: snapshot)
+            MissionDetailScreen(route: route, initial: model.mission(id: route.id), session: session, snapshot: snapshot,
+                                favoris: favoris)
+        }
+        .navigationDestination(isPresented: $favorisOuverts) {
+            MesFavorisScreen(favoris: favoris, session: session) { etablissement in
+                // Web : `/soignant/recherche-missions?etablissement=<id>`, filtres initiaux du profil.
+                favorisOuverts = false
+                Task { await model.appliquer(ExplorerFiltres.initiaux(profile: model.profile, etablissementId: etablissement.id)) }
+            }
         }
         // Une tâche annulée (changement d'onglet, retour) laisse l'état à .loading : relance ici.
         .task { if case .loading = model.state { await model.load() } }
+        // État des étoiles, lu une fois par epoch (les mutations rendent ensuite la liste relue).
+        .task { await favoris.chargerMissionsSiNecessaire() }
     }
 
     // MARK: Filtres
@@ -67,6 +88,31 @@ struct MissionsListScreen: View {
             }
         }
         .padding(.vertical, JoleneSpacing.xs)
+    }
+
+    private var boutonFavoris: some View {
+        Button {
+            favorisOuverts = true
+        } label: {
+            Image(systemName: "star")
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .tint(JoleneColor.rose700)
+        .accessibilityLabel(FavorisPresentation.titreEcran)
+        .accessibilityIdentifier("explorer-favoris-ouvrir")
+    }
+
+    /// Filtre établissement (« Voir les missions ouvertes ») : nom du favori, sinon celui des missions lues.
+    @ViewBuilder private var bandeauEtablissement: some View {
+        if let id = model.filtres.etablissementId {
+            let nom = favoris.etablissement(id: id)?.nom
+                ?? model.missions.first(where: { $0.record.etablissementId == id })?.etablissement?.nom
+            FiltreEtablissementBandeau(libelle: FavorisPresentation.libelleFiltreEtablissement(nom: nom)) {
+                Task { await model.appliquer(model.filtres.filtrantEtablissement(nil)) }
+            }
+            .padding(.bottom, JoleneSpacing.xs)
+        }
     }
 
     private var boutonFiltres: some View {
@@ -184,10 +230,16 @@ struct MissionsListScreen: View {
                     NavigationLink(value: MissionRoute(id: mission.id)) {
                         MissionCard(MissionsListScreen.cardContent(mission))
                     }
+                    .accessibilityIdentifier("mission-row-\(mission.id)")
+                    // Lot 1 (T4b) : étoile hors du lien, cible propre (`.borderless`), en bas à droite de la carte.
+                    .overlay(alignment: .bottomTrailing) {
+                        BoutonFavoriMission(favoris: favoris, missionId: mission.id)
+                            .padding(.trailing, JoleneSpacing.sm)
+                            .padding(.bottom, JoleneSpacing.xs)
+                    }
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: JoleneSpacing.xs, leading: JoleneSpacing.lg, bottom: JoleneSpacing.xs, trailing: JoleneSpacing.lg))
-                    .accessibilityIdentifier("mission-row-\(mission.id)")
                 }
             } header: {
                 HStack(spacing: JoleneSpacing.sm) {
