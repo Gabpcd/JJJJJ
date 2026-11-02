@@ -46,6 +46,7 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.audit is SupabaseAuditGateway)
         XCTAssertTrue(gateways.flags is SupabaseFlagsGateway)
         XCTAssertTrue(gateways.compte is SupabaseAccountGateway)
+        XCTAssertTrue(gateways.favoris is SupabaseFavorisGateway)
         XCTAssertTrue(gateways.push is SupabasePushGateway, "lot 3, T4 : enregistrement et désactivation du token APNs")
     }
 
@@ -65,6 +66,7 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(supabase.contains("flags"), "T1 câble les drapeaux")
         XCTAssertFalse(supabase.contains("dashboard"), "T3 câble le tableau de bord")
         XCTAssertFalse(supabase.contains("compte"), "T8 câble la suppression de compte")
+        XCTAssertFalse(supabase.contains("favoris"), "T4b câble les favoris")
         XCTAssertFalse(supabase.contains("pointage"), "lot 2 T3 câble le pointage")
         XCTAssertFalse(supabase.contains("contrats"), "lot 2, T8 câble les contrats")
         XCTAssertFalse(supabase.contains("notation"), "lot 2, T5a câble la notation")
