@@ -80,6 +80,16 @@ Observation en cours (`pgrst.log_level = info` posé sur `authenticator` à
 04:24 UTC pour journaliser l'appelant si la boucle reprend ; à remettre à
 `error` ensuite).
 
+Appelant identifié par le journal PostgREST (`pgrst.log_level = info`, 04:24 → 04:40 UTC,
+remis à `error` ensuite) : `127.0.0.1 - service_role "POST /rpc/fn_finaliser_document_verification"`
+avec l'agent `Deno/2.1.4 (variant; SupabaseEdgeRuntime/1.77.8; ref=flripxtsyegjshnhzjkz)`.
+Les requêtes viennent donc du runtime Edge Supabase du projet, par le chemin interne
+(`127.0.0.1`), ce qui explique leur absence de `edge_logs`. Les deux dernières ont reçu
+un 503 à 04:25:15 (sessions terminées) et la boucle ne s'est pas reconstituée. Le code
+déployé de `verify-document` (seul appelant de cette RPC dans le dépôt) est identique au
+dépôt et ne contient aucune boucle : l'origine exacte (invocation interne répétée,
+isolat résident, relance par un intermédiaire) reste à établir.
+
 Piste principale : la fonction utilise l'ERRCODE `40001`
 (`serialization_failure`) pour un refus métier définitif. Ce code est celui
 que les couches de transport considèrent comme rejouable ; un client ou un
