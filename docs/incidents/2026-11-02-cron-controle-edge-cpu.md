@@ -76,8 +76,9 @@ Migration `20261102040000_controle_crons_edge_sans_balayage_reponses.sql` :
   lignes sont marquées `controle_le` + `erreur_transport = NON_CONTROLE …`,
   statut HTTP et erreur de transport conservés quand la réponse existe
   encore ; les sondes du déploiement, postérieures à la migration, ne sont
-  pas concernées. Depuis 05:00 UTC, 0 échec sur ≈ 300 appels Edge (tous les
-  crons, toutes les heures) : les échecs étaient confinés à la saturation ;
+  pas concernées. Depuis 05:00 UTC, 0 échec sur ≈ 220 appels Edge (mesure à
+  07:19 UTC, tous les crons) : les échecs étaient confinés à la saturation,
+  avec des `statement timeout` résiduels jusqu'à ≈ 04:54 UTC ;
 - réactivation du job `jolene-monitor-crons-edge-critiques` uniquement là où
   `email-cron-hourly-immediate` est actif (prod), pour ne pas réveiller une
   base de preview.
