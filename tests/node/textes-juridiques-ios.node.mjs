@@ -110,6 +110,9 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
   assert.ok(hardStop.length >= 60, `au moins 60 textes HARD STOP attendus, ${hardStop.length} lus`);
   assert.ok(constantes.length > hardStop.length, 'LibellesWeb.swift ne porte aucun libellé');
   const fichiers = new Set(constantes.map(c => c.source.fichier));
+  // Lot 5, tranche T0 (LOT5_PLAN §2.9, D30) : textes de l'espace établissement, même mécanisme.
+  const lot5 = ['src/components/BandeauBlocageAuto.tsx', 'src/components/FormulaireMission.tsx',
+    'src/components/ListeCandidatures.tsx', 'src/pages/DashboardEtablissement.tsx'];
   assert.deepEqual([...fichiers].sort(), [
     'src/components/AccesEtablissement.tsx', // T9a : erreur de chargement de la liste des contrats
     'src/components/BandeauHorsLigne.tsx', // T4b : bandeau hors ligne de la page Présences
@@ -136,7 +139,7 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
     'src/pages/ListeContrats.tsx', // T4a (titre « Mes contrats ») et T9a (liste des contrats)
     'src/pages/MesDocuments.tsx',
     'src/pages/PresencesSoignant.tsx',
-  ]);
+  ].concat(lot5).sort());
 });
 
 // Textes exigés par LOT2_PLAN v2 §3 « TL », item par item, par NOM de constante (les lignes du
@@ -203,6 +206,20 @@ const EXIGES = {
   'src/components/CertificatSignature.tsx': ['Certificat.mention'],
   // CertificatSignaturePage.tsx l.214 (texte l.214-215 de la page /contrat/:id/certificat).
   'src/pages/CertificatSignaturePage.tsx': ['Certificat.mentionPage'],
+  // Lot 5, T0 (LOT5_PLAN §2.9, D30) : mention CGV art. 8 de la revue des candidatures (l.393-397,
+  // lien l.394), titre de suspension (l.61), bandeau de vérification (l.564-565), option « Salarié »
+  // du récapitulatif de publication (l.766).
+  'src/components/ListeCandidatures.tsx': [
+    'CandidaturesEtablissement.cgvAvantLien', 'CandidaturesEtablissement.cgvCheminLien',
+    'CandidaturesEtablissement.cgvLien', 'CandidaturesEtablissement.cgvApresLien',
+  ],
+  'src/components/BandeauBlocageAuto.tsx': ['BlocageEtablissement.publicationSuspendue'],
+  'src/pages/DashboardEtablissement.tsx': [
+    'BlocageEtablissement.verificationEnCoursTitre', 'BlocageEtablissement.verificationEnCoursDetail',
+  ],
+  'src/components/FormulaireMission.tsx': [
+    'PublicationEtablissement.optionSalarieLibelle', 'PublicationEtablissement.optionSalarieDescription',
+  ],
 };
 
 // Libellés et textes repris en plus du blueprint (revues fraîches de TL), pour que les écrans du

@@ -252,4 +252,10 @@ final class TextesWebTests: XCTestCase {
         XCTAssertEqual(certificat.explicationEmpreinte(storagePath: ""), certificat.explicationEmpreinte(storagePath: nil))
         XCTAssertTrue(certificat.mentionPage.hasPrefix("Conforme art. 1366-1367 Code civil — "))
     }
+
+    /// Lot 5 (T0, D10) : mention CGV art. 8 de la revue des candidatures (`ListeCandidatures.tsx`
+    /// l.393-397) : texte, `{' '}`, lien, puis la suite collée au lien.
+    func testMentionCgvCandidaturesCommeLeRenduWeb() {
+        XCTAssertEqual(TextesWeb.CandidaturesEtablissement.cgvMention, "Avant d’accepter un candidat, consultez les conditions de non-contournement et de recrutement direct — CGV art. 8. Elles précisent les situations concernées, les durées applicables et le calcul des frais de recrutement.")
+    }
 }
