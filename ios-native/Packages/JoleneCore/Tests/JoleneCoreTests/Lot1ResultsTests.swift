@@ -17,10 +17,16 @@ final class Lot1ResultsTests: XCTestCase {
         XCTAssertEqual(try decode([CreneauConfirmePayload].self, String(decoding: encoded, as: UTF8.self)), [creneau])
     }
 
+    func testCreneauConfirmePayloadEstLeTypeDeT2() {
+        // Unification faite à l'intégration du lot 1 (T1 + T2, branche `feat/ios-lot1`) : le port
+        // `CandidaturePort.confirmer` consomme directement `CreneauxConfirmes.pourAction(_:)`.
+        XCTAssertTrue(CreneauConfirmePayload.self == CreneauConfirme.self,
+                      "CreneauConfirmePayload doit être un typealias de CreneauConfirme (T2)")
+    }
+
     func testCreneauConfirmeMemeContratQueLeTypeDeT2() {
         // Même forme que `CreneauConfirme` de T2 (`Missions/CreneauxConfirmes.swift` :
-        // `debut`/`fin` String, `init(debut:fin:)`, Codable + Hashable + Sendable) : la PR mergée
-        // en second remplace l'un des deux par un `public typealias`, sans conversion en T6a.
+        // `debut`/`fin` String, `init(debut:fin:)`, Codable + Hashable + Sendable).
         let a = CreneauConfirmePayload(debut: "2026-11-03T07:00:00Z", fin: "2026-11-03T15:00:00Z")
         var b = a
         b.fin = "2026-11-03T16:00:00Z"
