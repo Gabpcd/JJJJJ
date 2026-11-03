@@ -32,7 +32,10 @@ public protocol NotificationsCenterPort: Sendable {
 public protocol NotificationPreferencesPort: Sendable {
     func lire(context: MissionReadContext) async throws -> PreferencesNotifications
     /// N'envoie que les types du catalogue soignant ; rend les préférences relues après `{success:true}`.
-    func enregistrer(_ preferences: PreferencesNotifications, smsAlertes: Bool?,
+    /// Alerte SMS : `preferences.smsAlertesActives` est sa seule source (État dérivé, aucun second
+    /// paramètre qui pourrait diverger) ; non nil → `soignants.sms_alertes_actives` écrit puis relu,
+    /// nil → colonne non écrite (parité web `profilSmsPresent`, `PageParametresNotifications.tsx` l.230).
+    func enregistrer(_ preferences: PreferencesNotifications,
                      context: MissionReadContext) async throws -> PreferencesNotifications
 }
 
@@ -161,7 +164,7 @@ public struct UnwiredNotificationPreferencesPort: NotificationPreferencesPort, U
     public init() {}
     private var erreur: JoleneError { Lot3.erreur("préférences de notifications", "T6") }
     public func lire(context: MissionReadContext) async throws -> PreferencesNotifications { throw erreur }
-    public func enregistrer(_ preferences: PreferencesNotifications, smsAlertes: Bool?,
+    public func enregistrer(_ preferences: PreferencesNotifications,
                             context: MissionReadContext) async throws -> PreferencesNotifications { throw erreur }
 }
 

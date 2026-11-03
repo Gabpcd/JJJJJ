@@ -14,10 +14,20 @@ import Supabase
 /// `{success:false, ok:false, code:"SQLSTATE_<code>", error:<PostgrestError.message brut>}` — ni
 /// `details` ni `hint`. Ordre : `[CODE DU TRAVAIL]` → exceptions métier → `SupabaseErrorMapping`
 /// (inchangé) ; une exception hors ensemble garde le comportement du lot 1 (42501 → session
-/// expirée, PGRST202 → contrat, autre → `fallback`). Une seule requête, aucun renvoi.
+/// expirée, PGRST202 → contrat, autre → `fallback`). Exception déclarée dont le message commence
+/// par « permission denied for » (GRANT manquant, incident #835) : `.contract`, jamais restituée
+/// (blueprint du lot 2 §2.4 et liste de tests de son T1). Une seule requête, aucun renvoi.
 extension RPCResponse {
     /// Préfixe du `code` d'un refus restitué depuis une exception PostgREST.
     public static let prefixeSQLState = "SQLSTATE_"
+
+    /// Début du message PostgreSQL d'un privilège manquant sur un objet (`42501`, GRANT absent).
+    public static let prefixePrivilegeManquant = "permission denied for"
+
+    /// Vrai pour « permission denied for function|table|… » (sensible à la casse, comme PostgreSQL).
+    public static func estPrivilegeManquant(_ message: String) -> Bool {
+        message.hasPrefix(prefixePrivilegeManquant)
+    }
 
     /// SQLSTATE d'un refus restitué par `exceptionsMetier` ; nil pour toute autre réponse.
     public var sqlstate: String? {
@@ -54,7 +64,8 @@ extension RPCResponse {
 
     /// Restitue les exceptions déclarées en corps de refus, puis délègue à `executer(fallback:_:)`
     /// (lot 1) : l'interception `[CODE DU TRAVAIL]` et `SupabaseErrorMapping` restent les seuls
-    /// traitements de tout le reste.
+    /// traitements de tout le reste. Un privilège manquant déclaré (`estPrivilegeManquant`) est une
+    /// erreur de contrat : la version de l'app ne correspond plus aux GRANT du backend.
     static func executer(fallback: String, exceptionsMetier: Set<String>,
                          _ requete: () async throws -> AnyJSON) async throws -> RPCResponse {
         try await executer(fallback: fallback) {
@@ -62,6 +73,9 @@ extension RPCResponse {
                 return try await requete()
             } catch let postgrest as PostgrestError
                         where !estRefusCodeDuTravail(postgrest.message) && exceptionsMetier.contains(postgrest.code ?? "") {
+                if estPrivilegeManquant(postgrest.message) {
+                    throw JoleneError(.contract, SupabaseErrorMapping.contractMessage)
+                }
                 return refusMetier(sqlstate: postgrest.code ?? "", message: postgrest.message).raw
             }
         }

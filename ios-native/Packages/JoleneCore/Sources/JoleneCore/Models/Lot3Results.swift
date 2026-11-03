@@ -69,7 +69,9 @@ public struct PreferenceEvenement: Equatable, Sendable {
 }
 
 /// Préférences relues : les quatre canaux globaux sont exigés (jamais de défaut affiché) ;
-/// `smsAlertesActives` vient de `soignants.sms_alertes_actives`, écrit à part de la RPC.
+/// `smsAlertesActives` vient de `soignants.sms_alertes_actives`, écrit à part de la RPC ; nil =
+/// ligne `soignants` non lue (web `profilSmsPresent` faux : alerte ni affichée ni écrite). Seule
+/// source de l'alerte SMS pour `NotificationPreferencesPort.enregistrer(_:context:)`.
 public struct PreferencesNotifications: Equatable, Sendable {
     public var canalEmail: Bool
     public var canalSms: Bool

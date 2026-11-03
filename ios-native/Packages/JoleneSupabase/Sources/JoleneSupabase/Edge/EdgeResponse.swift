@@ -17,7 +17,9 @@ import Supabase
 /// Règles : supabase-swift lève `FunctionsError.httpError(code:data:)` sur tout statut hors 2xx —
 /// `invoquer` en lit le corps AVANT tout mapping et le rend comme une réponse ; 401 → session
 /// expirée quel que soit le corps (passerelle comprise, revue B8 de T0, constat 5) ; refus
-/// structuré sinon, texte serveur verbatim, `fallback` si le corps n'est pas lisible ; un code
+/// structuré sinon, texte serveur verbatim, `fallback` si le corps n'est pas lisible ; un 2xx dont
+/// le corps n'est pas un objet JSON (portail captif, proxy, corps vide, `null`, tableau, scalaire)
+/// est un refus au `fallback`, jamais un succès fabriqué (PRINCIPES §3, revue B8 de T1) ; un code
 /// machine n'est jamais affiché. Une seule requête, aucun renvoi. Chaque gateway exige ensuite les
 /// clés qui conditionnent son succès (ex. `success === true` pour `delete-account`).
 public struct EdgeResponse: Equatable, Sendable {
@@ -30,11 +32,14 @@ public struct EdgeResponse: Equatable, Sendable {
         self.raw = raw
     }
 
-    /// Corps lu sans exigence : vide, non JSON (page de passerelle) ou scalaire → `null`.
+    /// Corps lu sans exigence (`lire`) ; l'interprétation (`estRefus`) écarte tout corps non objet.
     public init(statut: Int, corps: Data) {
         self.init(statut: statut, raw: Self.lire(corps))
     }
 
+    /// Corps vide ou qui n'est pas du JSON (page HTML de passerelle ou de portail captif) → `null` ;
+    /// tout JSON valide est rendu tel quel, objet ou non (`[…]`, `42`, `"x"`, `true`, `null`). Seul
+    /// un objet peut échapper au refus (`estRefus`).
     public static func lire(_ corps: Data) -> AnyJSON {
         (try? JSONDecoder().decode(AnyJSON.self, from: corps)) ?? .null
     }
@@ -82,19 +87,25 @@ public struct EdgeResponse: Equatable, Sendable {
         return erreur
     }
 
-    /// Refus : statut hors 2xx, drapeau `ok:false` / `success:false`, ou `error` sans drapeau vrai
-    /// (parité web `data?.error`). Une réponse 2xx sans drapeau ni `error` n'est pas un refus
-    /// (`stripe-connect-status` ne pose aucun drapeau).
+    /// Refus : statut hors 2xx, corps qui n'est pas un objet JSON (page HTML d'un portail captif ou
+    /// d'un proxy, corps vide, `null`, tableau, scalaire : jamais un succès fabriqué, PRINCIPES §3),
+    /// drapeau `ok:false` / `success:false`, ou `error` sans drapeau vrai (parité web `data?.error`).
+    /// Un objet 2xx sans drapeau ni `error` n'est pas un refus (`stripe-connect-status` ne pose
+    /// aucun drapeau).
     public var estRefus: Bool {
-        !(200..<300).contains(statut) || ok == false || success == false
+        !(200..<300).contains(statut) || raw.objectValue == nil || ok == false || success == false
             || (erreur != nil && ok != true && success != true)
     }
 
+    /// Absence de refus : 2xx ET objet JSON, sans drapeau faux ni `error`. Plus faible que
+    /// `RPCResponse.estSucces`, qui exige un drapeau vrai : `stripe-connect-status` n'en pose pas,
+    /// si bien que chaque gateway exige ensuite les clés qui conditionnent SON succès.
     public var estSucces: Bool { !estRefus }
     public var estNonAutorise: Bool { statut == 401 }
 
-    /// nil = succès ; 401 → `JoleneError(.unauthorized)` (jamais un refus affiché) ; sinon refus
-    /// structuré, texte serveur verbatim ou `fallback`.
+    /// nil = 2xx à corps objet sans refus (la gateway vérifie ensuite ses clés) ; 401 →
+    /// `JoleneError(.unauthorized)` (jamais un refus affiché) ; sinon refus structuré, texte serveur
+    /// verbatim ou `fallback` (corps illisible ou non objet compris, `code` nil).
     public func refus(fallback: String) throws -> RefusEdge? {
         if estNonAutorise { throw JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage) }
         guard estRefus else { return nil }

@@ -40,7 +40,9 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   (`DemoWorldTests.portsEnAttenteLot1`) ; `SupabaseGatewaysTests` compare le monde Supabase
   au monde démo, si bien qu'un port câblé dans un seul monde rougit un test. Chaque tranche
   câble son port dans les deux mondes et le retire de la liste dans la même PR ; elle est
-  vide à la clôture du lot (`unwiredPorts.isEmpty`, T12).
+  vide à la clôture du lot : aucun nom du lot 1 dans `unwiredPorts`
+  (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`, T12). Pas
+  `unwiredPorts.isEmpty` : cette liste nomme aussi les ports du lot 3 tant que ce lot est ouvert.
 - Lot 3 (T1, `docs/mobile-swift/LOT3_PLAN.md` §2.2) : treize champs ajoutés dans un bloc
   « Lot 3 » du corps de `Gateways`, même règle (stubs de `Ports/Lot3Ports.swift`, message
   `UnwiredPorts.erreur(port:tranche:lot:)` qui cite la tranche, le lot et son plan). Pas de

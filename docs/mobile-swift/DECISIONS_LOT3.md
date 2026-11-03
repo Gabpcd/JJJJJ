@@ -115,7 +115,8 @@ tranches qui la mettent en œuvre (§3 du blueprint).
 - **Merges sur `main`** : sériels, CI verte et revue fraîche B8 clôturable, par la file de merge de la session
   principale.
 - **Surcharge `UnwiredPorts.erreur(port:tranche:lot:)`** : ajoutée par la première T1 mergée (lot 2 ou lot 3),
-  réutilisée par l'autre (deux déclarations identiques ne compilent pas).
+  réutilisée par l'autre (deux déclarations identiques ne compilent pas). L3-T1 la pose dans
+  `JoleneCore/Ports/Lot1Ports.swift` ; L2-T1 ne la redéclare pas dans `Lot2Ports.swift` (`REVUES_LOT3.md`, L3-T1).
 
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
