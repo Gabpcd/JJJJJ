@@ -5491,7 +5491,7 @@ DECLARE v_m RECORD;
 BEGIN
   SELECT * INTO v_m FROM missions WHERE id = p_mission_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Mission introuvable'); END IF;
-  IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN
+  IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN
     RETURN jsonb_build_object('error', 'Non autorisé');
   END IF;
   IF v_m.statut NOT IN ('OUVERTE', 'ASSIGNEE') THEN
@@ -18433,7 +18433,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_annuler_serie"("p_serie_id" "uuid") RETU
 DECLARE
     v_count INTEGER;
 BEGIN
-    IF NOT est_admin_etablissement() AND NOT est_admin() THEN
+    IF NOT COALESCE(est_admin_etablissement(), false) AND NOT est_admin() THEN
         RETURN '{"error":"Accès refusé"}'::JSONB;
     END IF;
 
@@ -19673,7 +19673,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_assigner_mission_admin"("p_mission_id" "
 DECLARE
   v_etablissement_id uuid;
 BEGIN
-  IF NOT (public.est_admin() OR public.est_admin_etablissement()) THEN
+  IF NOT (public.est_admin() OR COALESCE(public.est_admin_etablissement(), false)) THEN
     RETURN jsonb_build_object('error', 'Non autorisé');
   END IF;
   SELECT etablissement_id INTO v_etablissement_id
@@ -20961,7 +20961,7 @@ BEGIN
     JOIN public.etablissements e ON e.id = m.etablissement_id
    WHERE m.id = p_mission_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Mission introuvable'); END IF;
-  IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN
+  IF NOT COALESCE(v_m.etablissement_id = public.mon_etablissement_id(), false) AND NOT public.est_admin() THEN
     RETURN jsonb_build_object('error', 'Non autorisé');
   END IF;
   IF v_m.statut <> 'OUVERTE' THEN
@@ -23796,7 +23796,7 @@ BEGIN
     RETURN jsonb_build_object('error', 'Mission introuvable');
   END IF;
 
-  IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN
+  IF NOT est_admin() AND NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) THEN
     RETURN jsonb_build_object('error', 'Accès interdit');
   END IF;
 
@@ -27531,7 +27531,7 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE',
                                 'error', 'Vous n''êtes pas concerné par cet événement');
   END IF;
-  IF p_evenement_type = 'ETAB' AND v_proprio_id != mon_etablissement_id() THEN
+  IF p_evenement_type = 'ETAB' AND NOT COALESCE(v_proprio_id = mon_etablissement_id(), false) THEN
     RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE',
                                 'error', 'Vous n''êtes pas concerné par cet événement');
   END IF;
@@ -29082,7 +29082,7 @@ DECLARE
 BEGIN
   SELECT * INTO v_m FROM missions WHERE id = p_mission_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Mission introuvable'); END IF;
-  IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN
+  IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN
     RETURN jsonb_build_object('error', 'Non autorisé');
   END IF;
   IF v_m.mode_remuneration != 'RETROCESSION' THEN
@@ -29751,7 +29751,7 @@ DECLARE v_m RECORD;
 BEGIN
   SELECT * INTO v_m FROM missions WHERE id = p_mission_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Mission introuvable'); END IF;
-  IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN
+  IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN
     RETURN jsonb_build_object('error', 'Non autorisé');
   END IF;
   IF v_m.statut != 'OUVERTE' THEN
@@ -30152,7 +30152,7 @@ DECLARE
 BEGIN
     SELECT * INTO v_facture FROM factures WHERE id = p_facture_id;
     IF v_facture IS NULL THEN RETURN '{"error":"Facture introuvable"}'::JSONB; END IF;
-    IF v_facture.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN
+    IF NOT COALESCE(v_facture.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN
         RETURN '{"error":"Accès refusé"}'::JSONB;
     END IF;
 
@@ -31425,7 +31425,7 @@ BEGIN
   END IF;
   IF NOT (
     public.est_admin()
-    OR v_etablissement_id = public.mon_etablissement_id()
+    OR COALESCE(v_etablissement_id = public.mon_etablissement_id(), false)
   ) THEN
     RETURN 0;
   END IF;
@@ -32357,7 +32357,7 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Contrat introuvable');
   END IF;
 
-  IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN
+  IF NOT (est_admin() OR COALESCE(v_etab_id = mon_etablissement_id(), false)) THEN
     RETURN jsonb_build_object('success', false, 'error', 'Non autorisé');
   END IF;
 
@@ -34900,7 +34900,7 @@ BEGIN
         SELECT 1 FROM missions 
         WHERE etablissement_id = p_etablissement_id 
         AND (statut = 'OUVERTE' OR soignant_assigne_id = auth.uid())
-    ) AND mon_etablissement_id() != p_etablissement_id AND NOT est_admin() THEN
+    ) AND NOT COALESCE(mon_etablissement_id() = p_etablissement_id, false) AND NOT est_admin() THEN
         RETURN jsonb_build_object('error', 'Accès refusé');
     END IF;
 
@@ -35162,8 +35162,8 @@ BEGIN
     RETURN jsonb_build_object('error', 'Mission introuvable');
   END IF;
 
-  v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id();
-  v_is_soignant := v_mission.soignant_assigne_id = auth.uid();
+  v_is_etab := est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false);
+  v_is_soignant := COALESCE(v_mission.soignant_assigne_id = auth.uid(), false);
 
   IF NOT v_is_etab AND NOT v_is_soignant THEN
     RETURN jsonb_build_object('error', 'Accès interdit');
@@ -37475,7 +37475,7 @@ BEGIN
   IF v_mission IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error_code', 'MISSION_INTROUVABLE');
   END IF;
-  IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN
+  IF NOT (est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false)) THEN
     RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE');
   END IF;
 
@@ -37544,7 +37544,7 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Contrat introuvable');
   END IF;
 
-  IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN
+  IF NOT (est_admin() OR COALESCE(v_etab_id = mon_etablissement_id(), false)) THEN
     RETURN jsonb_build_object('success', false, 'error', 'Non autorisé');
   END IF;
 
@@ -37626,7 +37626,7 @@ DECLARE
 BEGIN
     SELECT * INTO v_mission FROM missions WHERE id = p_mission_id;
     IF v_mission IS NULL THEN RETURN '{"error":"Mission introuvable"}'::JSONB; END IF;
-    IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN
+    IF NOT est_admin() AND NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) THEN
         RETURN '{"error":"Accès refusé"}'::JSONB;
     END IF;
     IF v_mission.statut != 'TERMINEE' THEN
@@ -38003,7 +38003,7 @@ BEGIN
   END IF;
 
   -- Auth : étab admin de la mission ou admin Jolene
-  IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN
+  IF NOT (est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false)) THEN
     RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE');
   END IF;
 
@@ -48917,8 +48917,8 @@ BEGIN
     SELECT * INTO v_mission FROM missions WHERE id = p_mission_id;
     IF v_mission IS NULL THEN RETURN jsonb_build_object('error', 'Mission introuvable'); END IF;
 
-    IF v_mission.etablissement_id != mon_etablissement_id() AND NOT est_admin() 
-       AND v_mission.soignant_assigne_id != auth.uid() THEN
+    IF NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin()
+       AND NOT COALESCE(v_mission.soignant_assigne_id = auth.uid(), false) THEN
         RETURN jsonb_build_object('error', 'Accès refusé');
     END IF;
 
@@ -51623,7 +51623,7 @@ DECLARE
 BEGIN
   SELECT * INTO v_m FROM public.missions WHERE id = p_mission_modele_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Mission modèle introuvable'); END IF;
-  IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN
+  IF NOT COALESCE(v_m.etablissement_id = public.mon_etablissement_id(), false) AND NOT public.est_admin() THEN
     RETURN jsonb_build_object('error', 'Non autorisé');
   END IF;
   IF p_debut IS NULL OR p_fin IS NULL OR p_fin <= p_debut OR p_debut < now() THEN
@@ -57321,7 +57321,7 @@ BEGIN
     JOIN public.etablissements e ON e.id = m.etablissement_id
    WHERE m.id = p_mission_id;
   IF NOT FOUND THEN RETURN; END IF;
-  IF NOT (public.est_admin() OR v_mission.etablissement_id = public.mon_etablissement_id()) THEN
+  IF NOT (public.est_admin() OR COALESCE(v_mission.etablissement_id = public.mon_etablissement_id(), false)) THEN
     RETURN;
   END IF;
 
@@ -64971,7 +64971,7 @@ BEGIN
     
     IF v_presence IS NULL THEN RETURN jsonb_build_object('error', 'Présence introuvable'); END IF;
     
-    IF v_presence.etablissement_id != v_etab_id AND NOT est_admin() THEN
+    IF NOT COALESCE(v_presence.etablissement_id = v_etab_id, false) AND NOT est_admin() THEN
         RETURN jsonb_build_object('error', 'Accès refusé');
     END IF;
     
