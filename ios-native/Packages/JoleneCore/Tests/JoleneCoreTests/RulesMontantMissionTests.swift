@@ -43,11 +43,28 @@ final class RulesMontantMissionTests: XCTestCase {
                                                    libelleCourt: "brut indicatif", approximatif: true))
     }
 
-    func testColonnesDeMesGainsSansRistLaissentLeMontantIntact() {
-        // Décision 5 du lot 3 : l'écran lit les colonnes de MesGains.tsx l.95 (sans colonnes Rist) ;
+    func testColonnesDeMesGainsSansRistLaissentLeMontantIntact() throws {
+        // Décision 5 du lot 3 : l'écran lit exactement le select de MesGains.tsx l.95, dont les colonnes
+        // financières sont `taux_horaire_base, net_a_payer, net_estime, total_brut, type_contrat_applique,
+        // type_contrat_recherche` (ni colonnes Rist, ni `soignant_assigne_id`, qui n'est qu'un filtre) ;
         // la correction reste inactive et aucun montant n'est recalculé.
-        let mission = MissionFinanceAffichee(typeContratRecherche: "LIBERAL", netAPayer: 280.80)
+        let ligne = Data(#"""
+        {"id":"m1","intitule":"Infirmier de nuit","debut_le":"2026-10-12T19:00:00+00:00","fin_le":"2026-10-13T07:00:00+00:00",
+         "duree_heures":7.8,"nb_creneaux":1,"taux_horaire_base":36,"net_a_payer":280.8,"net_estime":null,"total_brut":280.8,
+         "statut":"TERMINEE","etablissement_id":"e1","service":"Urgences","type_contrat_applique":null,
+         "type_contrat_recherche":"LIBERAL","presences":[{"valide_par_etablissement":true,"valide_auto_72h_le":null,"valide_le":null}]}
+        """#.utf8)
+        let mission = try JSONDecoder().decode(MissionFinanceAffichee.self, from: ligne)
+        XCTAssertEqual(mission, MissionFinanceAffichee(typeContratRecherche: "LIBERAL", tauxHoraireBase: 36,
+                                                       netAPayer: 280.80, totalBrut: 280.80))
         XCTAssertEqual(MontantMission.montantAffiche(mission)?.montant, 280.80)
+        XCTAssertNil(MontantMission.netEstimeAffiche(mission))
+
+        // Témoin : les mêmes colonnes complétées de celles du plafond Rist déclencheraient la correction.
+        var avecRist = mission
+        avecRist.ristPlafondApplique = true
+        avecRist.tauxRistPlafonne = 30
+        XCTAssertEqual(MontantMission.montantAffiche(avecRist)?.montant, 336.96)
     }
 
     func testUnMontantTexteSortDuDomaineType() {

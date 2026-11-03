@@ -213,6 +213,43 @@ function dernierJourDuMois(annee, mois) {
   return new Date(Date.UTC(annee, mois, 0, 12)).getUTCDate();
 }
 
+// Garde de `canon` (revue de L3-T2) : la clé de fusion des vecteurs doit suivre le JSON
+// réellement écrit (`JSON.stringify`), que relit le contrôle Swift de `RulesGoldenTests`.
+// Une clé d'objet de valeur `undefined` n'est pas écrite (≡ clé absente, ≢ `null`) ; dans un
+// tableau, `undefined` s'écrit `null` ; `toJSON` (Date) s'applique ; un nombre non fini s'écrit `null`.
+for (const [a, b, identiques] of [
+  [{ data: undefined }, {}, true],
+  [{ data: undefined }, { data: null }, false],
+  [{ data: null }, {}, false],
+  [{ reponse: { data: undefined, error: null } }, { reponse: { error: null } }, true],
+  [[undefined], [null], true],
+  [[undefined], [], false],
+  [{ b: 1, a: { d: 2, c: 3 } }, { a: { c: 3, d: 2 }, b: 1 }, true],
+  [{ instant: new Date(0) }, { instant: '1970-01-01T00:00:00.000Z' }, true],
+  [{ n: Number.NaN }, { n: null }, true],
+  [{ n: -0 }, { n: 0 }, true],
+]) {
+  if ((canon(a) === canon(b)) !== identiques) {
+    console.error(`export golden : canon() ne suit pas JSON.stringify (${canon(a)} ${identiques ? '≠' : '='} ${canon(b)}).`);
+    process.exit(2);
+  }
+}
+
+/**
+ * JSON canonique d'une valeur écrite dans un vecteur. Refuse ce que `JSON.stringify` n'écrit pas
+ * (`undefined` : la clé `input` ou `expected` disparaîtrait du fichier) et vérifie que `canon`
+ * coïncide avec la forme relue du JSON écrit (garde : l'export échoue sinon).
+ */
+function canonEcrit(regle, quoi, valeur) {
+  if (valeur === undefined) throw new Error(`${regle}: ${quoi} vaut undefined, que JSON.stringify n'écrit pas.`);
+  const ecrit = canon(valeur);
+  const relu = canon(JSON.parse(JSON.stringify(valeur)));
+  if (ecrit !== relu) {
+    throw new Error(`${regle}: ${quoi} : le JSON canonique ${ecrit} ne suit pas le JSON écrit ${relu}.`);
+  }
+  return ecrit;
+}
+
 class Collecteur {
   constructor(regle) {
     this.regle = regle;
@@ -224,21 +261,22 @@ class Collecteur {
 
   ajoute(name, input, expected) {
     if (this.noms.has(name)) throw new Error(`${this.regle}: nom de vecteur dupliqué « ${name} »`);
-    // Une entrée identique (même JSON canonique, clés triées, comme le contrôle Swift de
-    // `RulesGoldenTests`) n'apporte aucune couverture : elle est fusionnée avec le premier
-    // vecteur qui la porte (les cas vitest précèdent les grilles). Un attendu différent pour
-    // la même entrée serait une incohérence de l'export.
-    const cle = canon(input);
+    // Une entrée identique (même JSON écrit, rendu canonique à clés triées, comme le contrôle
+    // Swift de `RulesGoldenTests` qui relit ce JSON) n'apporte aucune couverture : elle est
+    // fusionnée avec le premier vecteur qui la porte (les cas vitest précèdent les grilles).
+    // Un attendu différent pour la même entrée serait une incohérence de l'export.
+    const cle = canonEcrit(this.regle, `« ${name} » (input)`, input);
+    const attendu = canonEcrit(this.regle, `« ${name} » (expected)`, expected);
     const existant = this.entrees.get(cle);
     if (existant) {
-      if (canon(existant.expected) !== canon(expected)) {
+      if (existant.attendu !== attendu) {
         throw new Error(`${this.regle}: entrée identique avec attendus différents (« ${existant.name} », « ${name} »)`);
       }
       this.fusionnes.push(`${name} → ${existant.name}`);
       return;
     }
     this.noms.add(name);
-    this.entrees.set(cle, { name, expected });
+    this.entrees.set(cle, { name, attendu });
     this.vecteurs.push({ name, input, expected });
   }
 
@@ -1481,7 +1519,11 @@ async function vecteursSessionCount() {
     ['espaces-trois', '  3'], ['nbsp-deux', ' 2'], ['deux-suffixe-texte', '2abc'], ['un-virgule-neuf', '1.9'],
     ['deux-virgule-cinq', '2.5'], ['moins-un', '-1'], ['moins-zero', '-0'], ['plus-deux', '+2'], ['exposant', '1e3'],
     ['hexadecimal', '0x10'], ['texte', 'abc'], ['chiffre-arabe', '٢'], ['blanc', '   '],
-    ['au-dela-2-puissance-53', '9007199254740993'], ['vingt-chiffres', '99999999999999999999']];
+    ['au-dela-2-puissance-53', '9007199254740993'], ['vingt-chiffres', '99999999999999999999'],
+    // Au-delà de 2^53, `String(n)` écrit les chiffres les plus courts, pas la valeur exacte du
+    // Double (2^60 → « 1152921504606847000 », non « 1152921504606846976 »).
+    ['deux-puissance-60', '1152921504606846976'], ['deux-puissance-69', '590295810358705651712'],
+    ['vingt-et-un-chiffres', '123456789012345678901']];
   try {
     for (const [nom, brut] of COMPTEURS) {
       const entrees = brut === null ? [] : [['jolene_session_count', brut]];
