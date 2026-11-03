@@ -32,6 +32,12 @@ final class JoleneDesignLot3Tests: XCTestCase {
         (encre.light.rgb.contrastRatio(with: fond.light.rgb), encre.dark.rgb.contrastRatio(with: fond.dark.rgb))
     }
 
+    /// Encre vue à travers un voile d'opacité (composition sRGB, comme `opacity` sur un fond opaque).
+    static func voile(_ encre: JoleneHex, sur fond: JoleneHex, opacite: Double) -> JoleneHex {
+        JoleneHex(red: encre.red * opacite + fond.red * (1 - opacite), green: encre.green * opacite + fond.green * (1 - opacite),
+                  blue: encre.blue * opacite + fond.blue * (1 - opacite))
+    }
+
     /// Surfaces d'un composant posé sur une carte (`cloud`) ou un écran (`lavender`), jamais sur le
     /// bas du `softGradient` (`rose100`, où `bubblegum` tombe à 4,44:1).
     static let cartesEtEcrans = [JoleneColor.cloudHSL, JoleneColor.lavenderHSL]
@@ -46,7 +52,10 @@ final class JoleneDesignLot3Tests: XCTestCase {
         XCTAssertTrue(web.contains("${disabled ? 'opacity-50' : ''}"), "Opacité du canal désactivé")
         XCTAssertTrue(web.contains("onClick={() => !disabled && onChange(!actif)}"), "Clic ignoré quand désactivé")
         XCTAssertEqual(ToggleRow.disabledOpacity, 0.5)
-        XCTAssertEqual(ToggleRow.minimumHeight, 44, "Cible tactile 44 pt (min-h-11 du web)")
+        // `ToggleCanal` n'a pas de hauteur minimale (interrupteur `h-6 w-11`, ligne `p-3`) : les 44 pt viennent
+        // de la cible tactile minimale d'Apple, pas du web.
+        XCTAssertTrue(web.contains("relative inline-flex h-6 w-11 shrink-0"))
+        XCTAssertEqual(ToggleRow.minimumHeight, 44, "Cible tactile 44 pt (recommandation Apple)")
 
         let actif = ToggleRow.Presentation.resolve(title: "Email", description: nil, isDisabled: false, disabledReason: nil)
         XCTAssertEqual(actif.accessibilityLabel, "Email")
@@ -62,16 +71,28 @@ final class JoleneDesignLot3Tests: XCTestCase {
         XCTAssertEqual(evenement.accessibilityHint, "Rappel la veille du début de mission")
         XCTAssertNil(evenement.visibleReason, "La raison n'est montrée que si la ligne est bloquée")
 
-        // Bloquée : la raison fournie par l'écran (texte web du `title`) est affichée ET lue avant la description.
+        // Bloquée : la raison fournie par l'écran (texte web du `title`) est affichée hors du voile d'opacité ET
+        // vocalisée dans le libellé, comme l'`aria-label` de la matrice web (l.410 : « canal global désactivé »),
+        // donc lue même quand les indices VoiceOver sont coupés ; la description reste en indice.
+        XCTAssertTrue(web.contains("${!canalGlobalActif ? 'canal global désactivé'"), "Blocage vocalisé dans l'aria-label web")
         let bloquee = ToggleRow.Presentation.resolve(title: "Rappel mission J-1", description: "Rappel la veille du début de mission",
                                                      isDisabled: true, disabledReason: "Canal SMS désactivé dans les canaux globaux")
-        XCTAssertEqual(bloquee.accessibilityHint, "Canal SMS désactivé dans les canaux globaux. Rappel la veille du début de mission")
+        XCTAssertEqual(bloquee.accessibilityLabel, "Rappel mission J-1, Canal SMS désactivé dans les canaux globaux")
+        XCTAssertEqual(bloquee.accessibilityHint, "Rappel la veille du début de mission", "La raison n'est pas répétée en indice")
         XCTAssertEqual(bloquee.visibleReason, "Canal SMS désactivé dans les canaux globaux")
         XCTAssertEqual(bloquee.opacity, ToggleRow.disabledOpacity)
         XCTAssertFalse(bloquee.allowsToggle)
+        let bloqueeSansDescription = ToggleRow.Presentation.resolve(title: "Email", description: nil, isDisabled: true,
+                                                                    disabledReason: "Canal EMAIL désactivé dans les canaux globaux")
+        XCTAssertEqual(bloqueeSansDescription.accessibilityLabel, "Email, Canal EMAIL désactivé dans les canaux globaux")
+        XCTAssertNil(bloqueeSansDescription.accessibilityHint)
         let bloqueeSansRaison = ToggleRow.Presentation.resolve(title: "Email", description: nil, isDisabled: true, disabledReason: nil)
+        XCTAssertEqual(bloqueeSansRaison.accessibilityLabel, "Email")
         XCTAssertNil(bloqueeSansRaison.accessibilityHint)
         XCTAssertNil(bloqueeSansRaison.visibleReason)
+        let raisonVide = ToggleRow.Presentation.resolve(title: "Email", description: nil, isDisabled: true, disabledReason: "  ")
+        XCTAssertEqual(raisonVide.accessibilityLabel, "Email", "Une raison vide n'est ni affichée ni lue")
+        XCTAssertNil(raisonVide.visibleReason)
 
         // Tap sur le libellé : bascule seulement si la ligne est active (double garde, comme le web).
         XCTAssertTrue(ToggleRow.toggled(false, allowsToggle: true))
@@ -101,6 +122,20 @@ final class JoleneDesignLot3Tests: XCTestCase {
                 XCTAssertGreaterThanOrEqual(clair, 4.5)
                 XCTAssertGreaterThanOrEqual(sombre, 4.5)
             }
+        }
+    }
+
+    func testToggleRowRaisonDuBlocageLisibleHorsDuVoile() {
+        // Le voile `opacity-50` du web fait passer `bubblegum` sous 4,5:1 : acceptable pour un contrôle inactif
+        // (WCAG 1.4.3, exception), pas pour la raison du blocage, qui est une information. Elle est donc
+        // dessinée hors du voile, en encre pleine, sur carte et écran.
+        XCTAssertEqual(ToggleRow.reasonInkHSL, JoleneColor.bubblegumHSL)
+        for surface in Self.cartesEtEcrans {
+            let (clair, sombre) = Self.contrastes(ToggleRow.reasonInkHSL, sur: surface)
+            XCTAssertGreaterThanOrEqual(clair, 4.5, "raison, clair, \(surface.light)")
+            XCTAssertGreaterThanOrEqual(sombre, 4.5, "raison, sombre, \(surface.dark)")
+            let voilee = Self.voile(ToggleRow.reasonInkHSL.light.rgb, sur: surface.light.rgb, opacite: ToggleRow.disabledOpacity)
+            XCTAssertLessThan(voilee.contrastRatio(with: surface.light.rgb), 4.5, "Sous le voile, la raison serait sous AA")
         }
     }
 
@@ -260,6 +295,7 @@ final class JoleneDesignLot3Tests: XCTestCase {
         // MesGains.tsx l.748 : `${finance.approximatif ? '~' : ''}${fmt(finance.montant)}`, `'—'` sans montant.
         let web = try Self.sourceWeb("src/pages/MesGains.tsx")
         XCTAssertTrue(web.contains("{finance ? `${finance.approximatif ? '~' : ''}${fmt(finance.montant)}` : '—'}"))
+        XCTAssertTrue(web.contains("'* Net salarié estimé après cotisations salariales (~22 %). '"), "Note « net estimé » (l.664)")
         XCTAssertEqual(AmountRow.approximatePrefix, "~")
         XCTAssertEqual(AmountRow.unavailableAmount, "—")
 
@@ -287,7 +323,9 @@ final class JoleneDesignLot3Tests: XCTestCase {
         XCTAssertEqual(salarie.spokenNature, "Net salarié estimé")
         XCTAssertEqual(salarie.accessibilityLabel,
                        "Infirmier(e) de nuit, Clinique du Parc, environ 1 234,56 €, Net salarié estimé, brut : 1 580,00 €")
-        XCTAssertEqual(salarie.accessibilityHint, "* Net salarié estimé après cotisations salariales (~22 %).")
+        XCTAssertEqual(salarie.footnote, "* Net salarié estimé après cotisations salariales (~22 %).", "Affichée verbatim")
+        XCTAssertEqual(salarie.accessibilityHint, "Net salarié estimé après cotisations salariales (environ 22 %).",
+                       "Indice sans « astérisque » ni « tilde »")
         let liberal = AmountRow.Content(title: "Mission", montant: "980,00 €", approximatif: false,
                                         nature: "Honoraires prévisionnels du planning", identifier: "m2")
         XCTAssertFalse(liberal.hasFootnoteMarker)
@@ -297,8 +335,19 @@ final class JoleneDesignLot3Tests: XCTestCase {
         let indisponible = AmountRow.Content(title: "Mission", montant: nil, approximatif: true, identifier: "m3")
         XCTAssertEqual(indisponible.spokenAmount, "Montant indisponible")
         XCTAssertEqual(indisponible.accessibilityLabel, "Mission, Montant indisponible")
-        let etoileSeule = AmountRow.Content(title: "T", montant: "1 €", approximatif: false, nature: " * ", identifier: "m5")
+        let etoileSeule = AmountRow.Content(title: "T", montant: "1 €", approximatif: false, nature: " * ", footnote: " ** ",
+                                            identifier: "m5")
         XCTAssertNil(etoileSeule.spokenNature, "Un libellé réduit à l'astérisque n'est pas lu")
+        XCTAssertNil(etoileSeule.accessibilityHint, "Une note réduite à l'astérisque n'est pas lue")
+        // Règle de vocalisation commune au libellé de nature et à la note : marques « * » de tête et de fin
+        // retirées, « ~ » lu « environ », texte affiché inchangé.
+        XCTAssertEqual(AmountRow.spokenText("Net salarié estimé*"), "Net salarié estimé")
+        XCTAssertEqual(AmountRow.spokenText("** Note"), "Note")
+        XCTAssertEqual(AmountRow.spokenText("(~22 %)"), "(environ 22 %)")
+        XCTAssertEqual(AmountRow.spokenText("~ 5 %"), "environ 5 %")
+        XCTAssertEqual(AmountRow.spokenText("Sans symbole"), "Sans symbole")
+        XCTAssertNil(AmountRow.spokenText(nil))
+        XCTAssertNil(AmountRow.spokenText("  "))
     }
 
     func testAmountRowEncresEtDisposition() {
@@ -372,6 +421,23 @@ final class JoleneDesignLot3Tests: XCTestCase {
         XCTAssertEqual(StatusPill.defaultSize, .md)
     }
 
+    func testStatusPillCapsuleSurUneLigneRectangleArrondiAuDela() throws {
+        // BadgeY2K garde le badge sur une ligne (`whitespace-nowrap`, `rounded-full`). Le natif ne tronque jamais
+        // un libellé serveur : il passe à la ligne, et une capsule (rayon = demi-hauteur) rognerait alors les
+        // lettres des lignes extrêmes. Capsule sur une ligne, rectangle arrondi à rayon fixe au-delà.
+        let web = try Self.sourceWeb("src/components/y2k/BadgeY2K.tsx")
+        XCTAssertTrue(web.contains("'inline-flex items-center gap-1 font-medium whitespace-nowrap'"))
+        XCTAssertTrue(web.contains("admin ? 'rounded-md shadow-none' : 'rounded-full'"))
+        XCTAssertEqual(StatusPill.outline(isMultiline: false), .capsule)
+        XCTAssertEqual(StatusPill.outline(isMultiline: true), .rounded(cornerRadius: StatusPill.multilineCornerRadius))
+        XCTAssertEqual(StatusPill.multilineCornerRadius, 8)
+        // Un coin de rayon r ne découpe que la zone à moins de r des deux bords : avec r ≤ marge horizontale,
+        // aucun glyphe (ni l'icône) n'est rogné, quelle que soit la taille.
+        for taille in StatusPill.Size.allCases {
+            XCTAssertLessThanOrEqual(StatusPill.multilineCornerRadius, taille.horizontalPadding, "\(taille)")
+        }
+    }
+
     func testStatusPillLibelleVerbatimEtIdentifiant() {
         // Le libellé arrive du cœur tel quel (ex. PaiementsEscrowAVenir.tsx : « Versement en cours — estimé le 05/11 ») ;
         // il est vocalisé seul, l'icône est décorative.
@@ -416,22 +482,43 @@ final class JoleneDesignLot3Tests: XCTestCase {
         XCTAssertEqual(contenu.messageIdentifier, "push-preprompt-message")
         XCTAssertEqual(contenu.benefitsIdentifier, "push-preprompt-benefits")
         XCTAssertEqual(contenu.footnoteIdentifier, "push-preprompt-footnote")
-        XCTAssertEqual(contenu.primaryIdentifier, "push-preprompt-primary")
-        XCTAssertEqual(contenu.secondaryIdentifier, "push-preprompt-secondary")
+        // Contrat d'identifiants du pré-prompt T5 (blueprint §3 T5 : `push-preprompt-activer`, `push-preprompt-plus-tard`).
+        XCTAssertEqual(contenu.primaryIdentifier, "push-preprompt-activer")
+        XCTAssertEqual(contenu.secondaryIdentifier, "push-preprompt-plus-tard")
         XCTAssertEqual(contenu.benefitIdentifier(index: 0), "push-preprompt-benefit-1")
         XCTAssertEqual(contenu.benefitIdentifier(index: 2), "push-preprompt-benefit-3")
-        // Carte d'état (préférences, T6) : sans avantages, sans action secondaire ; textes de l'appelant.
+        // Sans surcharge : dérivation `<id>-primary` / `<id>-secondary`, qui suit l'identifiant racine.
+        var generique = PermissionCard.Content(title: "T", message: "M", primaryTitle: "P", secondaryTitle: "S", identifier: "carte")
+        XCTAssertEqual(generique.primaryIdentifier, "carte-primary")
+        XCTAssertEqual(generique.secondaryIdentifier, "carte-secondary")
+        generique.identifier = "autre"
+        XCTAssertEqual(generique.primaryIdentifier, "autre-primary")
+        generique.secondaryIdentifier = "autre-plus-tard"
+        XCTAssertEqual(generique.secondaryIdentifier, "autre-plus-tard")
+        XCTAssertEqual(generique.primaryIdentifier, "autre-primary", "Surcharger l'un ne touche pas l'autre")
+        // Carte d'état d'autorisation (T4, `EtatNotificationsAppareilRow`, reprise par T6) : sans avantages, sans
+        // action secondaire ; textes de l'appelant ; bouton `push-ouvrir-reglages` du blueprint (§3 T4).
         let etat = PermissionCard.Content(title: "Autorisation du téléphone", message: "Message serveur ou web verbatim.",
-                                          primaryTitle: "Ouvrir les réglages", identifier: "push-etat-appareil")
+                                          primaryTitle: "Ouvrir les réglages", identifier: "push-etat-appareil",
+                                          primaryIdentifier: "push-ouvrir-reglages")
         XCTAssertTrue(etat.benefits.isEmpty)
         XCTAssertNil(etat.footnote)
         XCTAssertNil(etat.secondaryTitle)
         XCTAssertEqual(etat.systemImage, "bell")
-        XCTAssertEqual(etat.primaryIdentifier, "push-etat-appareil-primary")
+        XCTAssertEqual(etat.identifier, "push-etat-appareil")
+        XCTAssertEqual(etat.primaryIdentifier, "push-ouvrir-reglages")
+        XCTAssertEqual(etat.titleIdentifier, "push-etat-appareil-title", "Les autres identifiants restent dérivés")
         // Pas de double envoi : l'action principale est bloquée pendant l'appel (comme ConfirmationSheet).
         XCTAssertTrue(PermissionCard.isPrimaryEnabled(isLoading: false))
         XCTAssertFalse(PermissionCard.isPrimaryEnabled(isLoading: true))
         XCTAssertFalse(PermissionCard.isSecondaryEnabled(isLoading: true), "« Plus tard » attend aussi la fin de la demande système")
+    }
+
+    func testPermissionCardLargeurMaximaleDeLaCarteEntiere() throws {
+        // Le web limite tout le dialogue (`sm:max-w-md`) : sur iPad, fond et arrondi sont bornés avec le contenu.
+        let web = try Self.sourceWeb("src/components/DemandePermissionPush.tsx")
+        XCTAssertTrue(web.contains("<DialogContent className=\"sm:max-w-md\">"))
+        XCTAssertEqual(PermissionCard.maxWidth, 480)
     }
 
     func testPermissionCardEncresLisibles() {
@@ -497,9 +584,9 @@ final class JoleneDesignLot3Tests: XCTestCase {
         XCTAssertEqual(vide.progress, 0)
         XCTAssertEqual(vide.strengthLabel, "Très faible")
         // Identifiants et libellés vocalisés.
-        XCTAssertEqual(PasswordCriteriaList.strengthIdentifier("compte-mdp-criteres"), "compte-mdp-criteres-force")
-        XCTAssertEqual(PasswordCriteriaList.criterionIdentifier("compte-mdp-criteres", criterionID: "special"),
-                       "compte-mdp-criteres-critere-special")
+        // T11 passe `compte-mdp` : ids `compte-mdp-critere-<cle>` du blueprint (§3 T11).
+        XCTAssertEqual(PasswordCriteriaList.strengthIdentifier("compte-mdp"), "compte-mdp-force")
+        XCTAssertEqual(PasswordCriteriaList.criterionIdentifier("compte-mdp", criterionID: "special"), "compte-mdp-critere-special")
         XCTAssertEqual(PasswordCriteriaList.criterionAccessibilityLabel(.init(id: "chiffre", label: "1 chiffre", isMet: true)),
                        "1 chiffre, critère rempli")
         XCTAssertEqual(PasswordCriteriaList.criterionAccessibilityLabel(.init(id: "chiffre", label: "1 chiffre", isMet: false)),
@@ -555,12 +642,15 @@ final class JoleneDesignLot3Tests: XCTestCase {
                     StatusPill("Paiement retardé", tone: ton, systemImage: "exclamationmark.triangle", identifier: "pill-\(ton)")
                 }
                 StatusPill("Réservé", size: .sm)
+                StatusPill("Versement en cours — estimé le 05/11, après validation des présences par l'établissement",
+                           tone: .neutral, systemImage: "clock", size: .sm, identifier: "pill-longue")
             })),
             ("pré-prompt", AnyView(PermissionCard(.pushSoignant(identifier: "push-preprompt"), onPrimary: {}, onSecondary: {}))),
             ("pré-prompt en cours", AnyView(PermissionCard(.pushSoignant(identifier: "push-preprompt"), isLoading: true,
                                                            onPrimary: {}, onSecondary: {}))),
             ("carte d'état", AnyView(PermissionCard(.init(title: "Autorisation du téléphone", message: "Message.",
-                                                          primaryTitle: "Ouvrir les réglages", identifier: "etat"), onPrimary: {}))),
+                                                          primaryTitle: "Ouvrir les réglages", identifier: "push-etat-appareil",
+                                                          primaryIdentifier: "push-ouvrir-reglages"), onPrimary: {}))),
             ("critères", AnyView(PasswordCriteriaList(criteria: criteres, identifier: "mdp"))),
             ("critères vides", AnyView(PasswordCriteriaList(criteria: [], identifier: "mdp-vide"))),
         ]
@@ -595,5 +685,21 @@ final class JoleneDesignLot3Tests: XCTestCase {
         XCTAssertGreaterThanOrEqual(segmentLargeur, 44, "Un segment court (« Clair ») garde 44 pt de large")
         XCTAssertGreaterThanOrEqual(hauteur(SegmentedChoice.Segment(option: .init(id: "sombre", title: "Sombre"), isSelected: true,
                                                                     identifier: "s-sombre") {}), 44)
+    }
+
+    @MainActor
+    func testStatusPillLonguePasseALaLigneSansDepasserLaLargeurProposee() {
+        // Libellé serveur trop long pour une ligne : la pastille passe à la ligne (rectangle arrondi), sans
+        // tronquer ni déborder de la largeur proposée ; un libellé court reste sur une ligne.
+        func taille(_ vue: some View, largeur: CGFloat) -> CGSize {
+            UIHostingController(rootView: vue).sizeThatFits(in: CGSize(width: largeur, height: 2000))
+        }
+        let longue = StatusPill("Versement en cours — estimé le 05/11, après validation des présences par l'établissement")
+        let courte = StatusPill("Réservé")
+        let etroite = taille(longue, largeur: 200)
+        XCTAssertLessThanOrEqual(etroite.width, 200, "Jamais plus large que la place proposée")
+        XCTAssertGreaterThan(etroite.height, taille(courte, largeur: 200).height * 1.5, "Plusieurs lignes, rien de tronqué")
+        XCTAssertEqual(taille(courte, largeur: 200).height, taille(courte, largeur: 390).height, accuracy: 0.5,
+                       "Un libellé court garde une seule ligne")
     }
 }
