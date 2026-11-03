@@ -19,6 +19,7 @@ import {
   matricePermissionsEtablissement,
 } from '../../scripts/mobile/check-rpc-contracts.mjs';
 import { lecteurWeb, lireTextesSwift, TEXTES_SWIFT } from '../../scripts/mobile/check-textes-juridiques-ios.mjs';
+import { buildDemoEtabPermissions, FIXTURES_DIR } from '../../scripts/mobile/export-demo-fixtures.mjs';
 
 // Garde du lot 5, tranche T0 (docs/mobile-swift/LOT5_PLAN.md §3 T0) : les RPC de l'espace
 // établissement sont sous contrat avant toute gateway Swift, leurs exceptions interceptées sont des
@@ -52,6 +53,8 @@ const LOT5 = [
   'fn_creer_mission_multi_jours_v4',
   'fn_obtenir_conversation',
 ];
+// Chaque tranche qui câble une gateway passe sa RPC en `consommee` et l'ajoute ici (modèle LOT1_CONSOMMEES).
+const LOT5_CONSOMMEES = ['fn_mes_permissions_etab', 'fn_mon_etablissement_complet']; // T1 : SupabaseEtabSessionGateway
 // Déjà suivies par un lot soignant, consommées aussi par l'établissement (annotation, jamais doublon).
 const PARTAGEES = [
   'fn_get_my_role', 'fn_audit_connexion', 'fn_ecrire_audit_safe', 'fn_param_bool',
@@ -84,6 +87,11 @@ const VALIDATION = [
 const paiement = message => ({
   sqlstate: 'P0001', message, fonction: 'fn_trg_gate_assignation_paiement', declencheur: 'trg_gate_assignation_paiement',
 });
+// T1 (revue B8 de T0, mineur 3) : triggers RBAC des tables écrites, `%` instancié par l'argument du trigger.
+const rbac = (permission, declencheur) => ({
+  sqlstate: '42501', message: `Permission etablissement ${permission} requise`,
+  fonction: 'fn_enforce_etablissement_rbac_trigger', declencheur,
+});
 const ATTENDUES = {
   fn_lire_candidatures_mission_habilitee: [
     { sqlstate: '42501', message: 'Mission indisponible ou accès refusé', fonction: 'fn_lire_candidatures_mission_habilitee' },
@@ -98,12 +106,17 @@ const ATTENDUES = {
     { sqlstate: 'P0001', message: "Notification d'acceptation impossible : %", fonction: 'fn_traiter_candidature' },
     paiement("Cette mission ne peut pas être attribuée : l'établissement doit d'abord configurer un mode de paiement (Paramètres → Facturation)."),
     paiement("Cette mission ne peut pas être attribuée : le mandat SEPA de l'établissement n'est pas encore posé (IBAN à ajouter dans Paramètres → Facturation)."),
+    rbac('missions', 'trg_p0_rbac_missions'),
+    rbac('contrats', 'trg_p0_rbac_contrats_mission'),
+    rbac('candidatures', 'trg_p0_rbac_candidatures'),
   ],
   fn_declarer_fin_retroactive: [
     { sqlstate: 'P0002', message: 'Mission % introuvable ou dans un statut incompatible.', fonction: 'fn_declarer_fin_retroactive' },
     { sqlstate: '42501', message: "Vous n'êtes pas autorisé(e) à déclarer une fin rétroactive sur cette mission.", fonction: 'fn_declarer_fin_retroactive' },
     { sqlstate: 'P0002', message: 'Aucun créneau effectif ouvert à fermer pour cette mission.', fonction: 'fn_declarer_fin_retroactive' },
     { sqlstate: '23514', message: "L'heure de fin (%) doit être postérieure au début du créneau (%).", fonction: 'fn_declarer_fin_retroactive' },
+    rbac('pointage', 'trg_p0_rbac_presences'),
+    rbac('missions', 'trg_p0_rbac_missions'),
   ],
   fn_creer_mission_multi_jours_v4: [
     { sqlstate: '28000', message: 'Non authentifié', fonction: 'fn_creer_mission_multi_jours_v4' },
@@ -132,9 +145,13 @@ function section(doc, heading) {
 // RPC_SUIVIES
 // ---------------------------------------------------------------------------------------------
 
-test('lot 5 : les 14 RPC établissement sont suivies, a_venir lot 5 sauf si un lot antérieur les suit déjà', () => {
+test('lot 5 : les 14 RPC établissement sont suivies, a_venir lot 5 (consommee une fois câblées) sauf si un lot antérieur les suit déjà', () => {
   assert.deepEqual(RPC_SUIVIES_ETABLISSEMENT.map(r => r.name), LOT5);
-  for (const r of RPC_SUIVIES_ETABLISSEMENT) assert.deepEqual(r, { name: r.name, statut: 'a_venir', lot: 5 });
+  for (const r of RPC_SUIVIES_ETABLISSEMENT) {
+    const statut = LOT5_CONSOMMEES.includes(r.name) ? 'consommee' : 'a_venir';
+    assert.deepEqual(r, { name: r.name, statut, lot: 5 });
+  }
+  for (const name of LOT5_CONSOMMEES) assert.equal(contratParNom.get(name)?.statut, 'consommee', `${name} : JSON non régénéré`);
   assert.equal(new Set(RPC_SUIVIES.map(r => r.name)).size, RPC_SUIVIES.length, 'doublon dans RPC_SUIVIES');
   for (const name of LOT5) {
     const suivie = suivieParNom.get(name);
@@ -277,6 +294,15 @@ test('permissions : 11 clés identiques dans fn_mes_permissions_etab et useEtabP
   assert.deepEqual(vraies('LECTURE_SEULE'), ['lecture_paiement', 'lecture']);
   assert.deepEqual(vraies('RH'), ['missions', 'candidatures', 'contrats', 'pointage', 'rh', 'lecture']);
   assert.deepEqual(vraies('PROPRIETAIRE'), CLES);
+});
+
+test('demo-etab-permissions.json : permissions démo générées depuis le CASE de fn_a_permission_etablissement (T1)', () => {
+  const matrice = matricePermissionsEtablissement(schema);
+  const genere = buildDemoEtabPermissions(schema);
+  assert.deepEqual(genere.cles, matrice.cles);
+  assert.deepEqual(genere.roles, matrice.roles);
+  const versionne = JSON.parse(readFileSync(join(FIXTURES_DIR, 'demo-etab-permissions.json'), 'utf8'));
+  assert.deepEqual(versionne, genere, 'fixture démo à régénérer (export-demo-fixtures.mjs)');
 });
 
 test('CONTRATS_RPC_ETABLISSEMENT.md : la matrice rôle × permission égale le CASE de fn_a_permission_etablissement', () => {
