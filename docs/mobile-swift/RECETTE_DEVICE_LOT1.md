@@ -86,9 +86,11 @@ compte, T8). La CI ne prouve que la démo (calendrier en mémoire, `DemoMesMissi
 | Premier tap `calendrier-{id}` (Mes missions › À venir ou Accueil) | demande d'accès système (iOS 16 `requestAccess(to:)`, iOS 17+ `requestWriteOnlyAccessToEvents`) | — |
 | Refus | message, aucun événement, pas de nouvelle demande forcée | — |
 | Accord | exactement N événements dans Calendrier (N noté avec la mission), un par créneau, alarmes -1440 / -60 min, URL `https://jolene.app/soignant/missions/{id}` | — |
-| Second tap, mêmes horaires | 0 nouvel événement (toujours N dans Calendrier), message d'information de l'app | — |
+| Second tap, mêmes horaires | 0 nouvel événement (toujours N dans Calendrier), bandeau d'information « Les créneaux de cette mission ont déjà été ajoutés à votre calendrier depuis Jolene sur cet appareil. » (l'app ne relit pas le calendrier : elle ne sait que ce qu'elle a ajouté) | — |
+| Événement supprimé dans Calendrier par l'utilisateur, puis tap | 0 nouvel événement : le journal local note le créneau comme déjà ajouté et l'écriture seule ne permet pas de constater la suppression ; même bandeau d'information, **aucune action pour forcer un nouvel ajout** au lot 1 — consigné (revue B8 de T5) | — |
 | Créneau modifié par l'établissement, puis tap | 1 événement ajouté pour ce créneau ; l'ancien reste (écriture seule : ni relecture ni suppression possibles) — consigné | — |
 | Réinstallation de l'app, puis tap | journal local vide : N doublons possibles, comme un second import du fichier ICS web — consigné | — |
+| Ligne basse d'À venir (après « Charger plus »), tap | bandeau d'issue visible en haut de la liste sans défilement, liste non décalée ; « Fermer » le retire | — |
 
 ## 5. Push `RAPPEL_MISSION` reçu par la coquille 1.0.7 → écran natif (T6c)
 
