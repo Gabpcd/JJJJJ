@@ -183,3 +183,117 @@ Aucune correction n'est exigée avant le merge. Les points 1 à 4 et 6 peuvent �
 - Les mineurs des deux revues restent ouverts : ils sont à traiter par la tranche (correctif) ou par la tranche
   consommatrice qui touche le fichier (T1, T7, T8, T9), pas par l'intégration. Aucune PR n'est ouverte et rien n'est
   mergé ; HARD STOP n°4 et B9 restent tels que décrits par les revues.
+
+## L5-T1
+
+### Revue fraîche B8 — L5-T1
+
+**Verdict : CLÔTURABLE.** 0 bloquant, 0 majeur, 7 mineurs.
+
+**Revue lue :** `git diff origin/feat/ios-lot5...origin/lot5/l5-t1`, soit 38 fichiers et +3126/−31. La base est `ae58ed8f`, qui est aussi le merge-base. Deux commits, tests d'abord : `cc8e1c64` (tests et garde Node seulement), puis `142ac70d` (implémentation).
+
+**Méthode :**
+- lecture seule : aucun build, aucun test, aucun appel MCP ;
+- les références du dump ont été recoupées dans `supabase/schema/public.sql` de la branche ;
+- j'ai vu les journaux locaux de l'auteur (JoleneCore 423 tests, JoleneSupabase 208 tests, 0 échec, 0 avertissement), mais je ne les ai pas reproduits. La CI doit le confirmer.
+
+#### Ce qui a été vérifié (conforme)
+
+##### Blueprint v2 §2.3, §2.4 et §3 T1
+- Un seul champ additif `Gateways.etablissement = .nonCable`.
+- 8 ports `Sendable`, avec 8 stubs `.contract` qui citent leur tranche et LOT5_PLAN.
+- `SupabaseGateways.make` garde sa signature ; `.etablissement` est assigné après l'init.
+- `unwiredPorts` vient d'une source unique (`DemoWorldTests.portsEnAttenteLot5`), comparée au monde Supabase.
+- La liste du lot 1 est inchangée, et c'est testé.
+
+##### Interceptions avant `SupabaseErrorMapping`
+`executer` est équivalent au lot 1 par défaut (`parDefaut = [.codeDuTravail]`). Une `PostgrestError` non interceptée retombe dans `map`, à l'identique.
+- 42501 hors liste → `.unauthorized` (lot 0).
+- RBAC → message neutre.
+- 28000 → `.unauthorized`.
+- P0001 « Notification… » → générique (mineur 5 de T0 traité).
+- `[CODE DU TRAVAIL]` est toujours l'interception de tête.
+- Les jokers `%` ne correspondent jamais à un texte vide, avec retour arrière correct (j'ai déroulé l'algorithme).
+- Les listes Swift sont égales au JSON, dans le même ordre. J'ai relu toutes les lignes citées du dump (l.1052-1114, 39533, 61834, 63314/63317, 25874, 27425, 28687-28713, 27258, 45636-45679) : textes exacts.
+- Les triggers RBAC (mineur 3 de T0) sont confirmés par `fn_enforce_etablissement_rbac_trigger` (l.32239). Aucune table protégée par RBAC n'est oubliée sur les chemins valider, contester et traiter.
+
+##### Décodage tolérant et fail-closed
+- `PermissionsEtab` : clé absente, nulle ou non booléenne → `false`.
+- `PermissionsEtabResult` : `success` est exigé. Sans `success:true` ou sans rôle, aucune permission n'est retenue.
+- `EtablissementProfil` : 9 clés seulement. Aucun champ Stripe, IBAN, RIB, SIRET, commission ou note ; c'est prouvé par Mirror et par réencodage.
+- `{error}` en HTTP 200 → message verbatim. Toute forme inattendue → `.contract`.
+- `issueTraitementCandidature` suit §2.5. Aucun succès n'est annoncé sans `success:true`, et la relecture est renvoyée à T6.
+
+##### Audit de consultation
+Les paramètres sont identiques au web (`DashboardEtablissement.tsx` l.421-425) et la signature de `fn_ecrire_audit_safe` est respectée (l.31802). L'uuid nul ou invalide et le contexte incohérent sont refusés avant le réseau. Le mode best-effort reprend le contrat du lot 1.
+
+##### Concurrence Swift 6
+Tous les types sont `Sendable`. Les fermetures `identite` sont `@Sendable` et capturent un `DemoAuthGateway` (struct + actor). Aucun `@MainActor` en jeu.
+
+##### Monde démo
+- Aucun import réseau, et pas de « URLSession » : `DemoNoNetworkTests` ne bouge pas.
+- Le compte soignant fictif, ou l'absence de session, est refusé (`.demoOnly`), et c'est testé.
+- Les permissions démo sont dérivées du `CASE` (l.4916-4934) par `matricePermissionsEtablissement`. La garde Node compare le fichier versionné à l'export.
+- Le job Cœur diffe l'export, et `public.sql` est bien dans les filtres de chemins.
+
+##### Gardes
+- `check-litteraux-juridiques` : aucun littéral interdit dans les Sources (les `*Tests` sont exclus).
+- Tous les littéraux `"fn_…"` du Swift sont des RPC suivies. Les noms fictifs (`rpc_fictive_etab`) et le nom découpé `"fn_" + …` sont corrects.
+
+##### Régressions lots 0 et 1
+- Aucun fichier de l'app, d'XCUITest ni d'identifiant d'accessibilité n'est touché : aucun risque iPad pour cette tranche.
+- `RPCResponse.swift` n'est modifié que de façon additive, avec un paramètre par défaut.
+
+##### Juridique, B9 et secrets
+- HARD STOP n°4 non atteint : messages serveur mot pour mot, aucun texte juridique nouveau.
+- Aucune catégorie B9 n'est touchée et rien n'est écrit côté serveur.
+- `cus_fictif` et `acct_fictif` n'apparaissent que dans les tests ; aucun autre littéral ne ressemble à un secret.
+
+##### Écarts au blueprint
+Les 6 écarts sont consignés dans DECISIONS_LOT5 (« Précisions T1 ») et justifiés : identité démo injectée, `demo-etab-1` (un seul nom par id), `DemoEtabAuditGateway`, issues complétées, traitements par entrée, `fn_ecrire_audit_safe` laissé au lot 1.
+
+#### Mineurs (non bloquants)
+1. **`RPCResponse+Etablissement.swift:28-30`** — un code de blocage sans `message` serait affiché tel quel. Rendre nil et ajouter le test.
+2. **`CONTRATS_RPC_ETABLISSEMENT.md:467-471`** (et `DECISIONS_LOT5.md:132`) — l'option 1 de l'amendement T8 écrirait en Swift la liste de rôles de `est_admin_etablissement()`. Ne garder que « afficher sous `pointage`, 42501 verbatim, relecture », ou exiger un booléen servi par le serveur (B9).
+3. **`EtabAuditGatewayTests.swift:63`** — assertion `.contract || .unauthorized` trop large : asserter l'erreur exacte de chaque cas. `Lot5PortsTests.swift:89` ne vérifie que la compilation.
+4. **Mineurs 1 et 7 de T0 encore ouverts** dans des fichiers que T1 édite : `DECISIONS_LOT5.md:97` (« 6 clés », D-FLAGS #1111 désormais mergé avec 7), `CONTRATS…:583` (« refuse déjà »), renvois « (D8) » au lieu de §2.8.
+5. **`CONTRATS…:106`** — 22023 (« Interlocuteur invalide ») manque dans la liste `.refusMetier`.
+6. **Résumé de l'auteur** — d'autres textes natifs que `messageRoleInsuffisant` sont ajoutés : `contexteInvalideMessage`, `messageDemoSeulement`, les deux fallbacks, le message des ports non câblés. Aucun n'est juridique ; les lister dans le corps de la PR.
+7. **`DemoEtabSessionGateway.swift:25`** — accepte un identifiant non-uuid, alors que Supabase le refuse. Sans impact (T2 passe nil), mais à aligner ou documenter. À mettre dans la check-list de T2 : le rôle démo doit servir `demo-etab-1` pour le compte legacy, sinon ETAB_SCOPE_DIVERGENT.
+
+#### Notes pour les tranches suivantes (pas des constats T1)
+- **T8 :** les refus verbatim P0002 « Mission % introuvable… » et 23514 « L'heure de fin (%)… » affichent un uuid et des horodatages Postgres bruts. C'est la parité web, mais il faut le décider en T8.
+- **T2 :** relire les permissions après tout `estAccesRefuse`. `EtablissementReadContext.verifier()` lève `.unauthorized` : seule une gateway alimentée par un contexte construit par T2 doit pouvoir l'atteindre.
+
+#### Points d'arrêt maintenus
+- **Rien n'est mergé :** pas de PR ouverte, merge sériel après une CI verte.
+- **HARD STOP n°4 :** les textes du lot 5 attendent la validation d'écran de Gabrielle dans leur tranche.
+- **B9 :** T8 (escrow) et B5b restent soumis au go humain.
+
+## Intégration de L5-T1 sur `feat/ios-lot5` (intégrateur, 2026-11-03)
+
+- Branche `int-lot5` créée depuis `origin/feat/ios-lot5` (`ae58ed8f`, qui porte déjà `main` avec D-FLAGS #1111).
+  `git merge --no-ff origin/feat/ios-lot1` : déjà à jour (aucun commit du lot 1 postérieur à `3c0eed95`), donc
+  aucun commit de fusion. Puis `git merge --no-ff origin/lot5/l5-t1` (`142ac70d`, commit de fusion `19393823`).
+- **Aucun conflit.** `ae58ed8f` est le merge-base de T1 : la fusion n'apporte que les 38 fichiers de la tranche.
+  `project.pbxproj` n'est pas touché (pas de `xcodegen generate`). `rpc-contracts.json`, les vecteurs et les fixtures
+  démo (`demo-etablissement.json`, `demo-etab-permissions.json`) se régénèrent à l'identique.
+- **Vérifications après la fusion** (reproduisent les journaux de l'auteur que la revue n'avait pas relancés) :
+  - `node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs
+    tests/node/textes-juridiques-ios.node.mjs tests/node/contrats-etablissement-ios.node.mjs
+    scripts/mobile/check-litteraux-juridiques.test.mjs` : 147 tests, 147 verts, 0 échec ;
+  - `node scripts/mobile/check-rpc-contracts.mjs` : 41 RPC, aucune dérive ;
+  - `node scripts/mobile/check-litteraux-juridiques.mjs` : 119 fichiers Swift livrés sans littéral juridique ;
+    `node scripts/mobile/check-textes-juridiques-ios.mjs` : 102 textes identiques au web ;
+  - `export-golden-vectors.mjs` (2 271 vecteurs) et `export-demo-fixtures.mjs` (3 fixtures `OK`) : aucun diff ;
+  - JoleneCore : `swift build --build-tests -Xswiftc -strict-concurrency=complete` sans avertissement, puis
+    `swift test -Xswiftc -strict-concurrency=complete` : 423 tests XCTest, 0 échec ;
+  - JoleneSupabase : même séquence, sans avertissement hors `.build/checkouts/` : 208 tests XCTest, 0 échec ;
+  - app : `xcodebuild build-for-testing` (scheme Jolene, Debug, simulateur iPhone existant, `-derivedDataPath` dans
+    le worktree, sans signature, `COMPILER_INDEX_STORE_ENABLE=NO` faute de place disque) : `TEST BUILD SUCCEEDED`,
+    0 avertissement Swift. Aucun test UI lancé, aucun simulateur démarré.
+  - Non relancés : `npx tsc -b` et vitest — aucun fichier sous `src/` ni `supabase/` n'est modifié.
+- Aucun correctif d'intégration n'a été nécessaire. Les 7 mineurs de la revue L5-T1 restent ouverts, à traiter par
+  la tranche ou par la tranche consommatrice qui touche le fichier (T2, T6, T8). Le point ouvert de l'intégration
+  précédente (reprise de `origin/lot2/l2-tl` et conflit annoncé dans `Legal/TextesWeb.swift`) reste ouvert. Aucune PR
+  n'est ouverte et rien n'est mergé ; HARD STOP n°4 et B9 restent tels que décrits par les revues.
