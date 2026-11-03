@@ -94,7 +94,11 @@ struct VecteurGolden: Decodable {
 enum Golden {
     static let fichiers = ["date-heure-paris", "format-mission", "heures-hebdomadaires-mission", "disponibilite-pointage",
                            // Lot 1, T2 : planning candidat, sélection de série, complétude du planning.
-                           "planning-candidat", "selection-serie-candidat", "completude-planning-mission"]
+                           "planning-candidat", "selection-serie-candidat", "completude-planning-mission",
+                           // Lot 3, T2 : routage push, compteur de sessions, montants et paiements, profil,
+                           // modes d'exercice, listes RPPS.
+                           "push-routing", "session-count", "mission-finance-display", "paiement-soignant-ui",
+                           "valider-profil-soignant", "preferences-modes-exercice", "professions-rpps"]
     static let minimumTotal = 200
 
     struct FichierIntrouvable: Error, CustomStringConvertible {
