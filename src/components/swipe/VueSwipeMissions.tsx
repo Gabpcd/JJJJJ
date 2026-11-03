@@ -1,5 +1,5 @@
 import { useRole } from '@/hooks/useRole';
-import { missionCorrespondProfessionInscription, chargerMissionsInscription, preparerCandidatureInscription, sauvegarderFavoriInscription, chargerOffresSauvegardeesInscription } from '@/lib/explorationInscription';
+import { chargerMissionsInscription, preparerCandidatureInscription, sauvegarderFavoriInscription, chargerOffresSauvegardeesInscription } from '@/lib/explorationInscription';
 /**
  * VueSwipeMissions — Session G1, sémantique D1/D2 (Lot 6c)
  *
@@ -32,7 +32,6 @@ import {
   associerCreneauxAuxMissions,
   construirePlanningCandidat,
   creneauxConfirmesPourAction,
-  planningCorrespondAuFiltre,
 } from '@/components/planning/planning-candidat';
 import {
   DialogResponsive,
@@ -46,6 +45,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
+import { filtrerPaquetSwipe, type FiltrePaquetSwipe } from '@/lib/filtre-paquet-swipe';
 
 type SwipeDirEnum = 'LIKE' | 'DISLIKE' | 'FAVORI';
 
@@ -73,15 +73,7 @@ interface VueSwipeMissionsProps {
   onElargirRayon?: () => void;
   /** Chips rapides du parent appliquées au deck (6c.1) : le deck respecte
       les mêmes filtres 1-tap que la liste. */
-  filtreDeck?: {
-    urgentesOnly: boolean;
-    horaire: 'TOUS' | 'JOUR' | 'NUIT' | 'WEEKEND';
-    profession: string;
-    ville: string;
-    rayonKm: number;
-    tauxMin: number;
-    typeContrat: string;
-  };
+  filtreDeck?: FiltrePaquetSwipe;
 }
 
 export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayon, filtreDeck }: VueSwipeMissionsProps) {
@@ -370,25 +362,10 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
   }, [handleSwipe]);
 
   // 6c.1 : le deck respecte les chips rapides (urgentes / jour / nuit / weekend).
+  // Règle partagée avec l'app iOS native (`filtre-paquet-swipe`).
   const stackFiltre = useMemo(() => {
     if (!filtreDeck) return localStack;
-    return localStack.filter((m) => {
-      if (parcours ? !missionCorrespondProfessionInscription(m.profession_requise, filtreDeck.profession, String(parcours.donnees.profession || ''))
-        : filtreDeck.profession && m.profession_requise !== filtreDeck.profession) return false;
-      const ville = filtreDeck.ville.trim().toLowerCase();
-      if (ville) {
-        const missionVille = (m.etablissement_ville || '').toLowerCase();
-        const codePostal = (m.etablissement_code_postal || '').toLowerCase();
-        if (!missionVille.includes(ville) && !codePostal.startsWith(ville)) return false;
-      }
-      if (m.distance_km != null && m.distance_km > filtreDeck.rayonKm) return false;
-      if (filtreDeck.tauxMin > 0 && (m.taux_horaire_base ?? 0) < filtreDeck.tauxMin) return false;
-      if (filtreDeck.typeContrat === 'CDD' && m.type_contrat_recherche === 'LIBERAL') return false;
-      if (filtreDeck.typeContrat === 'LIBERAL' && m.type_contrat_recherche === 'SALARIE') return false;
-      if (filtreDeck.urgentesOnly && !m.est_urgente) return false;
-      if (!planningCorrespondAuFiltre(m, filtreDeck.horaire)) return false;
-      return true;
-    });
+    return filtrerPaquetSwipe(localStack, filtreDeck, parcours ? String(parcours.donnees.profession || '') : null);
   }, [localStack, filtreDeck, parcours]);
 
   const stackItems = useMemo(
