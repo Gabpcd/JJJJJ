@@ -267,6 +267,15 @@ final class ExplorerModelsTests: XCTestCase {
 
     // MARK: Lectures supplantées (revue T4a : rafale de chips)
 
+    /// L'annulation est comptée par l'attente muette interrompue, qui peut se terminer juste après le
+    /// retour de la lecture annulée (course observée sur simulateur CI, run 41556230233,
+    /// `testUnRafraichissementSupplanteParUnFiltreEstAnnule` : 0 au lieu de 1). Attente bornée de ce
+    /// décompte (5 s, bien en deçà des 30 s de l'attente muette) ; les assertions restent inchangées.
+    private func attendreAnnulations(_ attendu: Int, de port: PortExplorer) async {
+        let limite = Date().addingTimeInterval(5)
+        while port.annulations < attendu, Date() < limite { await Task.yield() }
+    }
+
     func testUneLectureSupplanteeEstAnnuleeSansAttendreLeDelai() async throws {
         let port = PortExplorer([.missions([mission("init")]), .silence, .silence, .missions([mission("derniere")])])
         let (controller, snapshot) = try await pret(port)
@@ -283,6 +292,7 @@ final class ExplorerModelsTests: XCTestCase {
         await seconde.value
         XCTAssertLessThan(Date().timeIntervalSince(debut), 5,
                           "les lectures supplantées sont annulées, pas laissées courir jusqu'au délai de 15 s")
+        await attendreAnnulations(2, de: port)
         XCTAssertEqual(port.annulations, 2, "chaque lecture supplantée est interrompue côté port (requête annulée)")
         XCTAssertEqual(model.missions.map(\.id), ["derniere"])
         XCTAssertEqual(model.filtres.horaire, .nuit)
@@ -302,6 +312,7 @@ final class ExplorerModelsTests: XCTestCase {
         await model.appliquer(model.filtres.basculantUrgentes())
         await rafraichissement.value
         XCTAssertLessThan(Date().timeIntervalSince(debut), 5)
+        await attendreAnnulations(1, de: port)
         XCTAssertEqual(port.annulations, 1)
         XCTAssertEqual(model.missions.map(\.id), ["b"])
         XCTAssertNil(model.refreshError, "une lecture supplantée n'est jamais une erreur")
@@ -356,6 +367,7 @@ final class ExplorerModelsTests: XCTestCase {
         tache.cancel()
         await tache.value
         XCTAssertLessThan(Date().timeIntervalSince(debut), 5, "l'annulation de la vue interrompt la lecture sans attendre le délai")
+        await attendreAnnulations(1, de: port)
         XCTAssertEqual(port.annulations, 1, "la requête en vol est annulée côté port")
         XCTAssertEqual(model.state, .loading, "vue disparue : ni erreur ni message de délai, `.task` relancera")
         XCTAssertNil(model.refreshError)

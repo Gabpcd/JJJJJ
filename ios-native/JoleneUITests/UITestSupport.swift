@@ -111,10 +111,17 @@ class JoleneUITestCase: XCTestCase {
         return keyboard.exists && element.frame.maxY > keyboard.frame.minY
     }
 
+    /// Prédicat borné. Sur un simulateur CI chargé, un instantané d'accessibilité peut rester bloqué
+    /// une quinzaine de secondes puis échouer (« Find … (retry 1) », runs 41556230233 : iPhone et iPad,
+    /// classes Mes missions, Compte, Explorer) : une seule évaluation consomme alors tout le délai. Une
+    /// dernière évaluation, après le délai, tranche ; la condition reste exigée (aucune attente ajoutée
+    /// quand elle est vraie, aucune quand elle est fausse au-delà de cette évaluation).
     func require(_ description: String, timeout: TimeInterval = 15, condition: @escaping () -> Bool) {
         let predicate = NSPredicate { _, _ in condition() }
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed, description)
+        let resultat = XCTWaiter.wait(for: [expectation], timeout: timeout)
+        if resultat != .completed, condition() { return }
+        XCTAssertEqual(resultat, .completed, description)
     }
 
     // MARK: Actions
