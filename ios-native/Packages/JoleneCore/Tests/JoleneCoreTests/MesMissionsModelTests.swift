@@ -9,8 +9,10 @@ private let utilisateurMesMissions = AuthenticatedUser(id: "u-1", email: "u-1@ex
 /// Modèle de « Mes missions » (lot 1, T5) : mêmes règles que `AccueilModel` (annulation jamais
 /// affichée en erreur, relecture sans démontage, session expirée, epoch périmé et lecture dépassée
 /// ignorés, borne `resolutionTimeout`), plus la relecture de la première page à chaque sélection
-/// d'onglet (web : `setPage(0)` au changement d'onglet) et « Charger plus » (page suivante, sans
-/// doublon, seulement après une page pleine).
+/// d'onglet (web : `setPage(0)` au changement d'onglet) et la lecture **cumulative** du web (« M1 »,
+/// `range(0, (page + 1) * 50 - 1)`) : « Charger plus » relit les pages 0…n+1 et remplace la liste,
+/// seulement après une lecture pleine ; une relecture (apparition, tirer pour actualiser) garde les
+/// pages déjà chargées.
 @MainActor
 final class MesMissionsModelTests: XCTestCase {
     private struct ModelError: Error {}
@@ -214,28 +216,86 @@ final class MesMissionsModelTests: XCTestCase {
         XCTAssertEqual(model.candidatures.contenu, .chargee([]))
     }
 
-    // MARK: - Pages
+    /// Revue B8 de T5 : une erreur qui n'est pas une `JoleneError`, après une session expirée, n'est
+    /// pas affichée « Session à vérifier » (indicateur baissé, message générique, « Réessayer »).
+    func testErreurGeneriqueApresSessionExpireeBaisseLIndicateur() async throws {
+        let port = ScriptedMesMissions(aVenir: [.echec(JoleneError(.unauthorized, SessionController.sessionExpiredMessage)),
+                                                .echec(ModelError())])
+        let (controller, snapshot) = try await pret(port)
+        let model = MesMissionsModel(controller: controller, snapshot: snapshot)
+        await model.charger()
+        XCTAssertTrue(model.sessionExpired)
+        await model.charger()
+        XCTAssertFalse(model.sessionExpired, "une panne quelconque n'est pas une session expirée")
+        XCTAssertEqual(model.aVenir.contenu, .echec(MesMissionsModel.genericFailureMessage))
+    }
 
-    func testChargerPlusAjouteSansDoublonPuisSArreteApresUnePageIncomplete() async throws {
+    // MARK: - Pages (lecture cumulative du web, « M1 »)
+
+    func testChargerPlusRelitLesPagesCumuleesEtRemplaceLaListe() async throws {
         let port = ScriptedMesMissions(aVenir: [.page(page(["m-1", "m-2"], aSuivre: true)),
-                                                .page(page(["m-2", "m-3"], page: 1, aSuivre: false))])
+                                                .page(page(["m-1", "m-2", "m-3"], page: 1, aSuivre: false))])
         let (controller, snapshot) = try await pret(port)
         let model = MesMissionsModel(controller: controller, snapshot: snapshot)
         await model.charger()
         XCTAssertTrue(model.aVenir.aSuivre)
         await model.chargerPlus()
-        XCTAssertEqual(model.aVenir.elements.map(\.id), ["m-1", "m-2", "m-3"], "page suivante ajoutée, doublon écarté")
+        XCTAssertEqual(model.aVenir.elements.map(\.id), ["m-1", "m-2", "m-3"], "pages 0 et 1 relues ensemble : la liste est remplacée")
         XCTAssertEqual(model.aVenir.page, 1)
         XCTAssertFalse(model.aVenir.aSuivre)
         XCTAssertFalse(model.aVenir.chargementSuite)
         await model.chargerPlus()
-        XCTAssertEqual(port.appels, ["aVenir 0", "aVenir 1"], "aucune lecture après une page incomplète")
+        XCTAssertEqual(port.appels, ["aVenir 0", "aVenir 1"], "aucune lecture après une lecture incomplète")
+    }
+
+    /// Effet (a) de la revue B8 de T5 : une mission terminée entre deux lectures (`fin_le` dépassée)
+    /// sortait de la requête et décalait l'offset d'une page disjointe, si bien que la suivante était
+    /// sautée. En lecture cumulative, la relecture rend toutes les missions restantes.
+    func testMissionTermineeEntreDeuxLecturesAucuneMissionSautee() async throws {
+        let premiere = (1...3).map { "m-\($0)" }
+        let relue = (2...5).map { "m-\($0)" } // m-1 terminée entre-temps, m-4 et m-5 au-delà de la première page
+        let port = ScriptedMesMissions(aVenir: [.page(page(premiere, aSuivre: true)), .page(page(relue, page: 1))])
+        let (controller, snapshot) = try await pret(port)
+        let model = MesMissionsModel(controller: controller, snapshot: snapshot)
+        await model.charger()
+        await model.chargerPlus()
+        XCTAssertEqual(model.aVenir.elements.map(\.id), relue, "m-4 n'est pas sautée et m-1, terminée, disparaît")
+    }
+
+    /// Effet (c) de la revue B8 de T5 : tirer pour actualiser (et chaque apparition de l'écran) relit les
+    /// pages déjà chargées, comme le web qui garde `page` (`refreshTick`) ; seule une sélection d'onglet
+    /// revient à la première page (`setPage(0)`, l.248).
+    func testRelectureGardeLesPagesChargeesEtSelectionRevientALaPremiere() async throws {
+        let port = ScriptedMesMissions(aVenir: [.page(page(["m-1"], aSuivre: true)),
+                                                .page(page(["m-1", "m-2"], page: 1, aSuivre: true)),
+                                                .page(page(["m-1", "m-2"], page: 1, aSuivre: true)),
+                                                .page(page(["m-1"], aSuivre: true))])
+        let (controller, snapshot) = try await pret(port)
+        let model = MesMissionsModel(controller: controller, snapshot: snapshot)
+        await model.charger()
+        await model.chargerPlus()
+        await model.charger()
+        XCTAssertEqual(model.aVenir.elements.map(\.id), ["m-1", "m-2"], "la relecture ne ramène pas à la première page")
+        XCTAssertEqual(model.aVenir.page, 1)
+        XCTAssertNil(model.aVenir.erreurRafraichissement)
+        await model.selectionner(.aVenir)
+        XCTAssertEqual(model.aVenir.elements.map(\.id), ["m-1"])
+        XCTAssertEqual(model.aVenir.page, 0)
+        XCTAssertEqual(port.appels, ["aVenir 0", "aVenir 1", "aVenir 1", "aVenir 0"])
+    }
+
+    func testDoublonDUneRelectureEcarteLaPremiereOccurrenceGardee() async throws {
+        let port = ScriptedMesMissions(aVenir: [.page(page(["m-1", "m-2", "m-1"]))])
+        let (controller, snapshot) = try await pret(port)
+        let model = MesMissionsModel(controller: controller, snapshot: snapshot)
+        await model.charger()
+        XCTAssertEqual(model.aVenir.elements.map(\.id), ["m-1", "m-2"], "identifiants uniques pour la liste (`ForEach`)")
     }
 
     func testChargerPlusEnEchecConserveLaListeEtNExistePasPourLesCandidatures() async throws {
         let port = ScriptedMesMissions(candidatures: [.candidatures([])],
                                        aVenir: [.page(page(["m-1"], aSuivre: true)), .echec(JoleneError(.network, "Connexion impossible.")),
-                                                .page(page(["m-2"], page: 1))])
+                                                .page(page(["m-1", "m-2"], page: 1))])
         let (controller, snapshot) = try await pret(port)
         let model = MesMissionsModel(controller: controller, snapshot: snapshot)
         await model.chargerPlus()
@@ -254,17 +314,17 @@ final class MesMissionsModelTests: XCTestCase {
         XCTAssertEqual(port.appels, ["aVenir 0", "aVenir 1", "aVenir 1", "candidatures"], "aucune page suivante pour les candidatures")
     }
 
-    func testFinancesDesPasseesFusionneesPuisRemplaceesALaRelecture() async throws {
+    func testFinancesDesPasseesRemplaceesParChaqueLecture() async throws {
         let port = ScriptedMesMissions(passees: [.page(page(["m-1"], aSuivre: true, finances: ["m-1": finance("m-1")])),
-                                                 .page(page(["m-2"], page: 1, finances: ["m-2": finance("m-2")])),
+                                                 .page(page(["m-1", "m-2"], page: 1, finances: ["m-1": finance("m-1"), "m-2": finance("m-2")])),
                                                  .page(page(["m-1"], finances: ["m-1": finance("m-1")]))])
         let (controller, snapshot) = try await pret(port)
         let model = MesMissionsModel(controller: controller, snapshot: snapshot, onglet: .passees)
         await model.charger()
         await model.chargerPlus()
-        XCTAssertEqual(Set(model.finances.keys), ["m-1", "m-2"])
-        await model.charger()
-        XCTAssertEqual(Set(model.finances.keys), ["m-1"], "première page relue : colonnes de la page relue seulement")
+        XCTAssertEqual(Set(model.finances.keys), ["m-1", "m-2"], "colonnes des pages relues ensemble")
+        await model.selectionner(.passees)
+        XCTAssertEqual(Set(model.finances.keys), ["m-1"], "première page relue : colonnes de la lecture seulement")
         XCTAssertEqual(model.passees.elements.map(\.id), ["m-1"])
     }
 

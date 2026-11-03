@@ -47,6 +47,27 @@ final class DemoMesMissionsTests: XCTestCase {
         XCTAssertEqual(candidatures.first?.mission?.etablissement?.nom, "Établissement fictif des Lilas")
     }
 
+    /// Point de fusion T6b (revue B8 de T5) : le serveur n'admet qu'une candidature par mission et par
+    /// soignant (`UNIQUE candidatures_mission_id_soignant_id_key`). Une candidature de session sur une
+    /// mission des fixtures la remplace — y compris quand elle n'est plus en attente (annulée) — et la
+    /// liste ne porte jamais deux lignes pour une même mission (`Ligne.id` = id de mission).
+    func testCandidatureDeSessionRemplaceCelleDesFixturesSurLaMemeMission() async throws {
+        let relue = CandidatureRecord(id: "session-1", missionId: "demo-mission-004", statut: "EN_ATTENTE", message: "Super-like",
+                                      typeContratChoisi: "LIBERAL", creeLe: "2026-11-02T00:00:00.000Z")
+        let doublon = CandidatureRecord(id: "session-1b", missionId: "demo-mission-004", statut: "EN_ATTENTE", message: nil,
+                                        typeContratChoisi: nil, creeLe: "2026-11-02T00:00:00.000Z")
+        let gateway = DemoMesMissionsGateway(candidaturesDeSession: { [relue, doublon] })
+        let candidatures = try await gateway.candidatures(context: DemoWorld.context)
+        XCTAssertEqual(candidatures.map(\.id), ["session-1", "demo-candidature-002"], "la session a priorité, une ligne par mission")
+        XCTAssertEqual(candidatures.map(\.missionId), ["demo-mission-004", "demo-mission-009"])
+        XCTAssertEqual(candidatures.first?.typeContratChoisi, "LIBERAL")
+
+        let annulee = CandidatureRecord(id: "session-2", missionId: "demo-mission-004", statut: "ANNULEE", message: nil,
+                                        typeContratChoisi: nil, creeLe: "2026-11-02T00:00:00.000Z")
+        let apresAnnulation = try await DemoMesMissionsGateway(candidaturesDeSession: { [annulee] }).candidatures(context: DemoWorld.context)
+        XCTAssertEqual(apresAnnulation.map(\.id), ["demo-candidature-002"], "la candidature annulée en session masque celle des fixtures")
+    }
+
     func testAVenirLesMissionsAssigneesDeLAccueil() async throws {
         let page = try await port.aVenir(context: DemoWorld.context, page: 0)
         XCTAssertEqual(page.missions.map(\.id), ["demo-assignee-001", "demo-assignee-002"])
@@ -58,7 +79,138 @@ final class DemoMesMissionsTests: XCTestCase {
         XCTAssertEqual(lignes.map(\.lieu), ["Établissement fictif République · Paris", "Établissement fictif des Lilas · Les Lilas"])
         XCTAssertEqual(page.missions.map { CalendrierMission.evenements(pour: $0).count }, [1, 2], "créneaux ajoutables au calendrier")
         let suivante = try await port.aVenir(context: DemoWorld.context, page: 1)
-        XCTAssertEqual(suivante.missions, [], "une seule page en démo")
+        XCTAssertEqual(suivante.missions.map(\.id), ["demo-assignee-001", "demo-assignee-002"], "lecture cumulative : pages 0 et 1")
+        XCTAssertFalse(suivante.aSuivre)
+    }
+
+    /// Surcharge DEBUG `JOLENE_DEMO_MES_MISSIONS_PAGE` : pages d'une mission pour la recette de
+    /// « Charger plus » dans l'interface (`DemoMesMissionsTests.testMesMissionsChargerPlus`).
+    func testTaillePageDemoPourLaRecetteDeChargerPlus() async throws {
+        let gateway = DemoMesMissionsGateway(taillePage: 1)
+        let premiere = try await gateway.aVenir(context: DemoWorld.context, page: 0)
+        XCTAssertEqual(premiere.missions.map(\.id), ["demo-assignee-001"])
+        XCTAssertTrue(premiere.aSuivre)
+        let deux = try await gateway.aVenir(context: DemoWorld.context, page: 1)
+        XCTAssertEqual(deux.missions.map(\.id), ["demo-assignee-001", "demo-assignee-002"])
+        XCTAssertTrue(deux.aSuivre, "lecture pleine (2 = 2 × 1) : « Charger plus » encore proposé, comme le web")
+        let trois = try await gateway.aVenir(context: DemoWorld.context, page: 2)
+        XCTAssertEqual(trois.missions.map(\.id), ["demo-assignee-001", "demo-assignee-002"])
+        XCTAssertFalse(trois.aSuivre, "lecture incomplète : plus de « Charger plus »")
+        let passees = try await gateway.passees(context: DemoWorld.context, page: 0)
+        XCTAssertEqual(passees.missions.map(\.id), ["demo-terminee-001"])
+        XCTAssertEqual(Set(passees.finances.keys), ["demo-terminee-001"], "colonnes des seules missions lues")
+    }
+
+    // MARK: - Recette des états dans l'interface (surcharges DEBUG, revue B8 de T5)
+
+    func testSurchargesAbsentesPortDemoParDefaut() {
+        XCTAssertNil(DemoMesMissionsSurcharges.port(environment: [:], clock: FixedClock(DemoWorld.fixedNow)))
+        for invalide in ["0", "51", "abc", ""] {
+            XCTAssertNil(DemoMesMissionsSurcharges.port(environment: [DemoMesMissionsSurcharges.variableTaillePage: invalide],
+                                                        clock: FixedClock(DemoWorld.fixedNow)), "taille « \(invalide) » ignorée")
+        }
+        XCTAssertNil(DemoMesMissionsSurcharges.port(environment: [DemoMesMissionsSurcharges.variableEchec: "0"],
+                                                    clock: FixedClock(DemoWorld.fixedNow)))
+        XCTAssertEqual(DemoMesMissionsSurcharges.variableEchec, "JOLENE_FORCE_MES_MISSIONS_ECHEC")
+        XCTAssertEqual(DemoMesMissionsSurcharges.variableVide, "JOLENE_FORCE_MES_MISSIONS_VIDE")
+        XCTAssertEqual(DemoMesMissionsSurcharges.variableTaillePage, "JOLENE_DEMO_MES_MISSIONS_PAGE")
+    }
+
+    func testEchecForcePremiereLectureDeChaqueOngletPuisReprise() async throws {
+        let port = try XCTUnwrap(DemoMesMissionsSurcharges.port(environment: [DemoMesMissionsSurcharges.variableEchec: "1"],
+                                                                clock: FixedClock(DemoWorld.fixedNow)))
+        for lecture in [{ _ = try await port.aVenir(context: DemoWorld.context, page: 0) },
+                        { _ = try await port.candidatures(context: DemoWorld.context) },
+                        { _ = try await port.passees(context: DemoWorld.context, page: 0) }] as [() async throws -> Void] {
+            do {
+                try await lecture()
+                XCTFail("la première lecture de chaque onglet échoue")
+            } catch let error as JoleneError {
+                XCTAssertEqual(error, JoleneError(.network, SessionController.timeoutMessage), "panne simulée = délai dépassé")
+            }
+        }
+        let reprise = try await port.aVenir(context: DemoWorld.context, page: 0)
+        XCTAssertEqual(reprise.missions.map(\.id), ["demo-assignee-001", "demo-assignee-002"], "« Réessayer » relit la démo")
+        let candidatures = try await port.candidatures(context: DemoWorld.context)
+        XCTAssertEqual(candidatures.map(\.id), ["demo-candidature-001", "demo-candidature-002"])
+    }
+
+    func testSessionExpireeForceePuisRevalidation() async throws {
+        let port = try XCTUnwrap(DemoMesMissionsSurcharges.port(environment: [DemoMesMissionsSurcharges.variableEchec: "session"],
+                                                                clock: FixedClock(DemoWorld.fixedNow)))
+        do {
+            _ = try await port.aVenir(context: DemoWorld.context, page: 0)
+            XCTFail("la première lecture échoue en session expirée")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error, JoleneError(.unauthorized, SessionController.sessionExpiredMessage))
+        }
+        let relue = try await port.aVenir(context: DemoWorld.context, page: 0)
+        XCTAssertEqual(relue.missions.count, 2, "après « Vérifier ma session », la lecture aboutit")
+    }
+
+    func testEchecForceNonConsommeParUneTacheAnnulee() async throws {
+        let port = DemoMesMissionsEchecGateway()
+        let annulee = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await port.aVenir(context: DemoWorld.context, page: 0)
+        }.result
+        XCTAssertThrowsError(try annulee.get()) { XCTAssertTrue($0 is CancellationError, "\($0)") }
+        do {
+            _ = try await port.aVenir(context: DemoWorld.context, page: 0)
+            XCTFail("l'échec forcé n'a pas été consommé par la tâche annulée")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error.kind, .network)
+        }
+    }
+
+    func testListesVidesForceesEtCombinaisonAvecLEchec() async throws {
+        let vide = try XCTUnwrap(DemoMesMissionsSurcharges.port(environment: [DemoMesMissionsSurcharges.variableVide: "1"],
+                                                                clock: FixedClock(DemoWorld.fixedNow)))
+        let candidatures = try await vide.candidatures(context: DemoWorld.context)
+        let aVenir = try await vide.aVenir(context: DemoWorld.context, page: 0)
+        let passees = try await vide.passees(context: DemoWorld.context, page: 0)
+        XCTAssertEqual(candidatures, [])
+        XCTAssertEqual(aVenir.missions, [])
+        XCTAssertFalse(aVenir.aSuivre)
+        XCTAssertEqual(passees.missions, [])
+        XCTAssertEqual(passees.finances, [:])
+
+        let videEnEchec = try XCTUnwrap(DemoMesMissionsSurcharges.port(
+            environment: [DemoMesMissionsSurcharges.variableVide: "1", DemoMesMissionsSurcharges.variableEchec: "1"],
+            clock: FixedClock(DemoWorld.fixedNow)))
+        do {
+            _ = try await videEnEchec.aVenir(context: DemoWorld.context, page: 0)
+            XCTFail("l'échec forcé précède la liste vide")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error.kind, .network)
+        }
+        let apres = try await videEnEchec.aVenir(context: DemoWorld.context, page: 0)
+        XCTAssertEqual(apres.missions, [])
+
+        let pagine = try XCTUnwrap(DemoMesMissionsSurcharges.port(environment: [DemoMesMissionsSurcharges.variableTaillePage: "1"],
+                                                                  clock: FixedClock(DemoWorld.fixedNow)))
+        let premiere = try await pagine.aVenir(context: DemoWorld.context, page: 0)
+        XCTAssertEqual(premiere.missions.map(\.id), ["demo-assignee-001"])
+        XCTAssertTrue(premiere.aSuivre)
+    }
+
+    func testPortsDeRecetteRefusentToutAutreUtilisateur() async {
+        let autre = Self.autreContexte()
+        let ports: [any MesMissionsPort] = [DemoMesMissionsEchecGateway(), DemoMesMissionsVideGateway()]
+        for port in ports {
+            for appel in [{ _ = try await port.candidatures(context: autre) },
+                          { _ = try await port.aVenir(context: autre, page: 0) },
+                          { _ = try await port.passees(context: autre, page: 0) }] as [() async throws -> Void] {
+                do {
+                    try await appel()
+                    XCTFail("la démo ne sert aucun autre utilisateur, même en recette")
+                } catch let error as JoleneError {
+                    XCTAssertEqual(error, JoleneError(.demoOnly, DemoWorld.messageDemoSeulement))
+                } catch {
+                    XCTFail("type d'erreur inattendu : \(error)")
+                }
+            }
+        }
     }
 
     func testPasseesMontantsServeurEtDetailLisible() async throws {
@@ -108,13 +260,19 @@ final class DemoMesMissionsTests: XCTestCase {
                                           boosteeLe: nil, modeRemuneration: nil, retrocessionPct: nil),
                     etablissement: nil, distanceKm: nil, creneauxPlanifies: [], planningExact: false)
         }
+        // Lecture cumulative du web (« M1 », `range(0, (page + 1) * 50 - 1)`).
         let premiere = DemoMesMissionsGateway.page(missions, page: 0)
         XCTAssertEqual(premiere.missions.map(\.id).first, "m-0")
         XCTAssertEqual(premiere.missions.count, MissionsPage.taille)
-        XCTAssertTrue(premiere.aSuivre, "page pleine : « Charger plus » proposé")
+        XCTAssertTrue(premiere.aSuivre, "lecture pleine : « Charger plus » proposé")
+        let deuxieme = DemoMesMissionsGateway.page(missions, page: 1)
+        XCTAssertEqual(deuxieme.missions.map(\.id), (0..<100).map { "m-\($0)" }, "pages 0 et 1 relues ensemble")
+        XCTAssertTrue(deuxieme.aSuivre)
         let troisieme = DemoMesMissionsGateway.page(missions, page: 2)
-        XCTAssertEqual(troisieme.missions.map(\.id), (100..<120).map { "m-\($0)" })
-        XCTAssertFalse(troisieme.aSuivre)
-        XCTAssertEqual(DemoMesMissionsGateway.page(missions, page: 3).missions, [])
+        XCTAssertEqual(troisieme.missions.map(\.id), (0..<120).map { "m-\($0)" })
+        XCTAssertFalse(troisieme.aSuivre, "120 < 150 : lecture incomplète")
+        XCTAssertEqual(DemoMesMissionsGateway.page(missions, page: 3).missions.count, 120, "au-delà : toutes les missions, sans suite")
+        XCTAssertEqual(DemoMesMissionsGateway.page(missions, page: 1, taille: 60).missions.count, 120)
+        XCTAssertTrue(DemoMesMissionsGateway.page(missions, page: 1, taille: 60).aSuivre, "120 = 2 × 60 : lecture pleine")
     }
 }

@@ -103,7 +103,8 @@ final class MesMissionsPresentationTests: XCTestCase {
         ])
         let ligne = MesMissionsPresentation.ligneAVenir(deux, maintenant: maintenant)
         XCTAssertEqual(ligne.id, "m-1")
-        XCTAssertEqual(ligne.badges.map(\.texte), ["Assignée", "Urgente"])
+        XCTAssertEqual(ligne.badges.map(\.texte), ["Assignée", "🔥 Urgent"], "pastille du web (l.548)")
+        XCTAssertEqual(ligne.badges.map(\.texteAccessible), ["Assignée", "Urgent"], "`aria-label=\"Urgent\"` du web")
         XCTAssertEqual(ligne.horaire, "Prochain créneau : 6 nov. · 08h00 → 15h30 (7,5h)", "créneau terminé ignoré, heure de Paris")
         XCTAssertFalse(ligne.horaireAConfirmer)
         XCTAssertEqual(ligne.jour, AccueilPresentation.Jour(semaine: "ven.", jour: "6", mois: "nov."))
@@ -111,7 +112,7 @@ final class MesMissionsPresentationTests: XCTestCase {
         XCTAssertEqual(ligne.remuneration, "27,00\(euro)/h")
         XCTAssertNil(ligne.montant)
         XCTAssertEqual(ligne.texteAccessible,
-                       "Assignée, Urgente, Mission m-1, Clinique des Tests · Lyon, Prochain créneau : 6 nov. · 08h00 → 15h30 (7,5h), 27,00\(euro)/h")
+                       "Assignée, Urgent, Mission m-1, Clinique des Tests · Lyon, Prochain créneau : 6 nov. · 08h00 → 15h30 (7,5h), 27,00\(euro)/h")
 
         let huit = MesMissionsPresentation.ligneAVenir(mission(record(), [creneau("s-1", "2026-11-05T07:00:00.000Z", "2026-11-05T15:00:00.000Z")]),
                                                        maintenant: maintenant)
@@ -131,6 +132,22 @@ final class MesMissionsPresentationTests: XCTestCase {
         XCTAssertEqual(aConfirmer.horaire, "Planning détaillé à confirmer")
         XCTAssertTrue(aConfirmer.horaireAConfirmer)
         XCTAssertEqual(aConfirmer.jour?.jour, "5")
+    }
+
+    /// Le web n'affiche le taux que s'il est renseigné et non nul (`{m.taux_horaire_base && …}`, l.470 et
+    /// l.562) : un taux à 0 n'est jamais rendu « 0,00 €/h ». Le format natif « 26,00 €/h » (Explorer,
+    /// Accueil, détail) est conservé ; l'écart de format avec le web est consigné dans `PARITE_SOIGNANT.md`.
+    func testTauxNulOuAbsentMasqueCommeLeWeb() throws {
+        let creneaux = [creneau("s-1", "2026-11-05T07:00:00.000Z", "2026-11-05T15:00:00.000Z")]
+        XCTAssertNil(MesMissionsPresentation.ligneAVenir(mission(record(taux: 0), creneaux), maintenant: maintenant).remuneration)
+        XCTAssertNil(MesMissionsPresentation.ligneAVenir(mission(record(taux: nil), creneaux), maintenant: maintenant).remuneration)
+        XCTAssertEqual(MesMissionsPresentation.ligneAVenir(mission(record(taux: 26), creneaux), maintenant: maintenant).remuneration,
+                       "26,00\(euro)/h")
+        var candidature = CandidatureRecord(id: "c-1", missionId: "m-1", statut: "EN_ATTENTE", message: nil, typeContratChoisi: nil, creeLe: nil)
+        candidature.mission = mission(record(taux: 0), creneaux)
+        let ligne = try XCTUnwrap(MesMissionsPresentation.ligne(candidature: candidature, maintenant: maintenant))
+        XCTAssertNil(ligne.remuneration)
+        XCTAssertFalse(ligne.texteAccessible.contains("€"), "aucun taux nul dans le libellé : \(ligne.texteAccessible)")
     }
 
     // MARK: - Candidatures

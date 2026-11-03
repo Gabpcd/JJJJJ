@@ -102,6 +102,12 @@ final class AjoutCalendrierTests: XCTestCase {
         XCTAssertEqual(CalendrierMission.url(missionId: "a b/c")?.absoluteString, "https://jolene.app/soignant/missions/a%20b%2Fc",
                        "comme `encodeURIComponent`")
         XCTAssertNil(CalendrierMission.url(missionId: ""))
+        // Jeu ASCII explicite (revue B8 de T5) : `CharacterSet.alphanumerics` contient des lettres et
+        // chiffres Unicode, que `encodeURIComponent` encode en UTF-8.
+        XCTAssertEqual(CalendrierMission.encodeURIComponent("été-١"), "%C3%A9t%C3%A9-%D9%A1")
+        XCTAssertEqual(CalendrierMission.encodeURIComponent("Az09-_.!~*'()"), "Az09-_.!~*'()", "non réservés de `encodeURIComponent`")
+        XCTAssertEqual(CalendrierMission.encodeURIComponent("a+b&c=d?#%"), "a%2Bb%26c%3Dd%3F%23%25")
+        XCTAssertEqual(CalendrierMission.url(missionId: "été")?.absoluteString, "https://jolene.app/soignant/missions/%C3%A9t%C3%A9")
         let sansId = creneau(nil, "2026-11-05T07:00:00.000Z", "2026-11-05T15:00:00.000Z")
         XCTAssertEqual(CalendrierMission.cle(missionId: "m-1", creneau: sansId, rang: 0),
                        "m-1|rang-1|2026-11-05T07:00:00.000Z|2026-11-05T15:00:00.000Z")
@@ -147,15 +153,20 @@ final class AjoutCalendrierTests: XCTestCase {
         _ = await ajout.ajouter(deuxCreneaux)
         let second = await ajout.ajouter(deuxCreneaux)
         XCTAssertEqual(second, IssueAjoutCalendrier(message: IssueAjoutCalendrier.dejaAjoutes, succes: true, dejaPresents: 2))
+        // Écriture seule : l'app ne relit pas le calendrier, elle ne sait que ce qu'elle a ajouté
+        // (un événement supprimé par l'utilisateur n'est jamais réajouté, RECETTE_DEVICE_LOT1 §4).
+        XCTAssertEqual(IssueAjoutCalendrier.dejaAjoutes,
+                       "Les créneaux de cette mission ont déjà été ajoutés à votre calendrier depuis Jolene sur cet appareil.")
         XCTAssertEqual(appareil.ecrits.count, 2, "mêmes horaires : aucun nouvel événement")
 
-        // L'établissement a déplacé le second créneau : un événement pour ce créneau, l'autre déjà présent.
+        // L'établissement a déplacé le second créneau : un événement pour ce créneau, l'autre déjà ajouté.
         let deplacee = MissionBusiness.enrich(record: record(), context: DemoWorld.context, etablissement: etab, slots: [
             creneau("s-1", "2026-11-05T07:00:00.000Z", "2026-11-05T15:00:00.000Z"),
             creneau("s-2", "2026-11-06T08:00:00.000Z", "2026-11-06T15:00:00.000Z"),
         ])
         let troisieme = await ajout.ajouter(deplacee)
-        XCTAssertEqual(troisieme.message, "1 créneau ajouté à votre calendrier (1 déjà présent).")
+        XCTAssertEqual(troisieme.message, "1 créneau ajouté à votre calendrier (1 déjà ajouté auparavant).",
+                       "jamais « déjà présent » : le calendrier n'est pas relu")
         XCTAssertEqual(appareil.ecrits.count, 3)
     }
 
@@ -168,7 +179,7 @@ final class AjoutCalendrierTests: XCTestCase {
         XCTAssertFalse(partiel.succes)
         XCTAssertEqual(journal.entrees.count, 1, "seul le créneau écrit est noté")
         let complete = await ajout.ajouter(deuxCreneaux)
-        XCTAssertEqual(complete.message, "1 créneau ajouté à votre calendrier (1 déjà présent).")
+        XCTAssertEqual(complete.message, "1 créneau ajouté à votre calendrier (1 déjà ajouté auparavant).")
         XCTAssertEqual(appareil.ecrits.count, 2, "aucun doublon après l'échec partiel")
 
         let enPanne = AppareilFactice(echecs: [0, 1])
@@ -234,5 +245,7 @@ final class AjoutCalendrierTests: XCTestCase {
         let refusee = await AjoutCalendrier(appareil: refus, journal: JournalCalendrierMemoire()).ajouter(deuxCreneaux)
         XCTAssertEqual(refusee.message, IssueAjoutCalendrier.accesRefuse)
         XCTAssertEqual(refus.evenements, [])
+        // Surcharge DEBUG lue par `AppContainer` (liste centralisée des surcharges), jamais ailleurs.
+        XCTAssertEqual(CalendrierAppareilDemo.variableRefus, "JOLENE_FORCE_CALENDRIER_REFUS")
     }
 }

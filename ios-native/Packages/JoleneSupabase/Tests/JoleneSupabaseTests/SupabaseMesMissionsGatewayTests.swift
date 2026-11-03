@@ -6,7 +6,8 @@ import XCTest
 
 /// Mes missions du lot 1 (T5) : requêtes de `MissionsSoignant.tsx` l.177-233 sous le JWT du soignant
 /// — `candidatures` en attente avec la mission embarquée, missions à venir et passées assignées au
-/// soignant, pages de 50 (`range`) — **sans** l'embed `etablissements(...)` du web : noms par
+/// soignant, lecture cumulative des pages de 50 comme le web (`range(0, (page + 1) * 50 - 1)`, départage
+/// par `id`) — **sans** l'embed `etablissements(...)` du web : noms par
 /// `fn_etablissements_safe` seulement (repli « Établissement » en échec, comme le web qui ignore
 /// l'erreur ; session expirée propagée), créneaux PREVISIONNEL par le pager du lot 0 (en échec :
 /// erreur de l'onglet, comme le web). Trois requêtes stubées, chaque paramètre affirmé.
@@ -37,11 +38,20 @@ final class SupabaseMesMissionsGatewayTests: XCTestCase {
     private func stubEnrichissement(_ ids: [String], etablissements: StubResponse = .json(200, TestClient.etablissementJSON),
                                     creneaux: StubResponse? = nil) {
         registry.add("POST", "/rest/v1/rpc/fn_etablissements_safe", respond: etablissements)
-        let slots = ids.map {
-            TestClient.slotJSON(id: "s-\($0)", missionId: $0, debut: "2026-11-05T07:00:00+00:00", fin: "2026-11-05T15:00:00+00:00")
+        if let creneaux {
+            registry.add("GET", "/rest/v1/mission_creneaux", respond: creneaux)
+            return
         }
-        registry.add("GET", "/rest/v1/mission_creneaux", respond: creneaux ?? .json(
-            200, "[\(slots.joined(separator: ","))]", headers: ["Content-Range": "0-\(max(slots.count - 1, 0))/\(slots.count)"]))
+        // Un stub par lot du pager (`MissionSlotPager.batches`, 50 missions) : chaque lot ne reçoit que
+        // les créneaux de ses missions.
+        for lot in MissionSlotPager.batches(ids) {
+            let slots = lot.map {
+                TestClient.slotJSON(id: "s-\($0)", missionId: $0, debut: "2026-11-05T07:00:00+00:00", fin: "2026-11-05T15:00:00+00:00")
+            }
+            let filtre = "in.(\(lot.joined(separator: ",")))"
+            registry.add("GET", "/rest/v1/mission_creneaux", where: { $0.query("mission_id") == filtre }, respond: .json(
+                200, "[\(slots.joined(separator: ","))]", headers: ["Content-Range": "0-\(max(slots.count - 1, 0))/\(slots.count)"]))
+        }
     }
 
     private func requete(_ path: String) throws -> RecordedRequest {
@@ -109,7 +119,8 @@ final class SupabaseMesMissionsGatewayTests: XCTestCase {
         XCTAssertEqual(lecture.query("soignant_assigne_id"), "eq.\(TestClient.userId)")
         XCTAssertEqual(lecture.query("statut"), "in.(ASSIGNEE,EN_COURS)")
         XCTAssertEqual(lecture.query("fin_le"), "gte.2026-11-02T00:00:00.000Z", "missions non terminées (`gte('fin_le', maintenant)`)")
-        XCTAssertEqual(lecture.query("order"), "debut_le.asc.nullslast")
+        XCTAssertEqual(lecture.query("order"), "debut_le.asc.nullslast,id.asc.nullslast",
+                       "`debut_le` comme le web, puis départage par `id` (ordre stable d'une lecture à l'autre)")
         XCTAssertEqual(lecture.query("offset"), "0")
         XCTAssertEqual(lecture.query("limit"), "50")
 
@@ -125,19 +136,40 @@ final class SupabaseMesMissionsGatewayTests: XCTestCase {
         XCTAssertTrue(registry.unmatched.isEmpty)
     }
 
-    func testAVenirPageSuivantePleineAnnonceUneSuite() async throws {
-        let ids = (0..<MissionsPage.taille).map { "m-\($0)" }
+    /// Lecture cumulative du web (« M1 », `range(0, (page + 1) * PAGE_SIZE - 1)`, l.244-246) : la page 1
+    /// relit les lignes 0 à 99 et remplace la liste. Une page disjointe (50-99) sautait une mission quand
+    /// une autre sortait de la requête entre deux lectures (`fin_le` dépassée), revue B8 de T5.
+    func testAVenirPageSuivanteRelitLesPagesCumuleesCommeLeWeb() async throws {
+        let ids = (0..<(2 * MissionsPage.taille)).map { "m-\($0)" }
         registry.add("GET", "/rest/v1/missions", respond: .json(200, "[\(ids.map { missionJSON($0) }.joined(separator: ","))]"))
         stubEnrichissement(ids)
 
         let page = try await gateway().aVenir(context: TestClient.context, page: 1)
 
         let lecture = try requete("/rest/v1/missions")
-        XCTAssertEqual(lecture.query("offset"), "50", "page 1 : lignes 50 à 99")
-        XCTAssertEqual(lecture.query("limit"), "50")
+        XCTAssertEqual(lecture.query("offset"), "0", "page 1 : lignes 0 à 99, jamais 50 à 99")
+        XCTAssertEqual(lecture.query("limit"), "100")
+        XCTAssertEqual(lecture.query("order"), "debut_le.asc.nullslast,id.asc.nullslast")
         XCTAssertEqual(page.page, 1)
-        XCTAssertEqual(page.missions.count, 50)
-        XCTAssertTrue(page.aSuivre, "page pleine : « Charger plus de missions » proposé (web l.623)")
+        XCTAssertEqual(page.missions.map(\.id), ids, "ordre serveur conservé")
+        XCTAssertTrue(page.aSuivre, "lecture pleine (100 = 2 × 50) : « Charger plus de missions » proposé (web l.623)")
+        XCTAssertEqual(registry.requests(to: "/rest/v1/mission_creneaux").count, 2, "créneaux des 100 missions relues, deux lots")
+        XCTAssertEqual(page.missions.map { $0.creneauxPlanifies.map(\.id) }, ids.map { ["s-\($0)"] })
+        XCTAssertTrue(registry.unmatched.isEmpty, "requêtes non stubées : \(registry.unmatched.map(\.path))")
+    }
+
+    func testAVenirLectureCumuleeIncompleteSansSuite() async throws {
+        let ids = (0..<(MissionsPage.taille + 25)).map { "m-\($0)" }
+        registry.add("GET", "/rest/v1/missions", respond: .json(200, "[\(ids.map { missionJSON($0) }.joined(separator: ","))]"))
+        stubEnrichissement(ids)
+        let page = try await gateway().aVenir(context: TestClient.context, page: 1)
+        XCTAssertEqual(page.missions.count, 75)
+        XCTAssertFalse(page.aSuivre, "75 < 100 : plus rien à charger")
+        XCTAssertEqual(SupabaseMesMissionsGateway.bornes(page: 0).debut, 0)
+        XCTAssertEqual(SupabaseMesMissionsGateway.bornes(page: 0).fin, 49)
+        XCTAssertEqual(SupabaseMesMissionsGateway.bornes(page: 2).debut, 0)
+        XCTAssertEqual(SupabaseMesMissionsGateway.bornes(page: 2).fin, 149)
+        XCTAssertEqual(SupabaseMesMissionsGateway.bornes(page: -1).fin, 49, "page négative ramenée à la première")
     }
 
     // MARK: - Passées
@@ -156,8 +188,10 @@ final class SupabaseMesMissionsGatewayTests: XCTestCase {
         XCTAssertEqual(lecture.query("soignant_assigne_id"), "eq.\(TestClient.userId)")
         XCTAssertEqual(lecture.query("statut"), "in.(TERMINEE,ANNULEE_PAR_SOIGNANT,ANNULEE_PAR_ETABLISSEMENT,ABSENCE)")
         XCTAssertNil(lecture.query("fin_le"))
-        XCTAssertEqual(lecture.query("order"), "debut_le.desc.nullsfirst", "`order('debut_le', { ascending: false })`")
+        XCTAssertEqual(lecture.query("order"), "debut_le.desc.nullsfirst,id.asc.nullslast",
+                       "`order('debut_le', { ascending: false })`, puis départage par `id`")
         XCTAssertEqual(lecture.query("offset"), "0")
+        XCTAssertEqual(lecture.query("limit"), "50")
 
         XCTAssertEqual(page.missions.map(\.id), ["m-3", "m-4"])
         XCTAssertEqual(page.finances["m-3"]?.netEstime, 162.4)
