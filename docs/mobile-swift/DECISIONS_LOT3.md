@@ -150,6 +150,10 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   `ProfilSoignant.tsx` l.252-256, l.274-278, correction 8).
 - Textes **sans équivalent web** (non juridiques, à relire par Gabrielle) : messages natifs des sept `error_code`
   IBAN qui arrivent sans `error` (T14b) ; message du verrou de contestation (T13).
+- Textes d'accessibilité **sans équivalent web** (vocalisés seulement, jamais affichés ; non juridiques, à relire
+  par Gabrielle, L3-T1b) : « environ » (lecture de « ~ » devant un montant et dans une note, `AmountRow`) ;
+  « Montant indisponible » (lecture du tiret « — », `AmountRow`) ; « critère rempli » / « critère non rempli »
+  (`PasswordCriteriaList`, le web n'a que la coche). Le texte affiché reste verbatim web.
 - Seuls les textes non juridiques passent du tutoiement web au vouvoiement (décision 9 du lot 1).
 
 ## En attente de Gabrielle (§6 du blueprint)
