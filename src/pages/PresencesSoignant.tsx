@@ -22,15 +22,9 @@ import { genererIdTerminal } from '@/lib/terminal';
 import { stockerPointageHorsLigne } from '@/lib/horsLigne';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { handleErrorSilent } from '@/lib/handleError';
-import {
-  ajouterRepliMissionPonctuelle,
-  creneauChevauchePeriode,
-  creneauxPrevisionnels,
-  choisirContratPointage,
-  filtrerMissionsEnCours,
-  type CreneauPointage,
-} from '@/lib/disponibilite-pointage';
-import { ajouterJoursCivilsParis, debutJourParis, formatParis } from '@/lib/date-heure-paris';
+import { type CreneauPointage } from '@/lib/disponibilite-pointage';
+import { ajouterJoursCivilsParis, formatParis } from '@/lib/date-heure-paris';
+import { construireListesPresences, regrouperCreneauxParMission } from '@/lib/presences-soignant-listes';
 import { CalendarDays, Clock, CheckCircle, History, AlertTriangle, MapPin, Hash, Eye, Activity } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
@@ -110,8 +104,8 @@ export default function PresencesSoignant() {
   } = useQuery({
     queryKey: ['presences-soignant', user?.id],
     queryFn: async () => {
-      const aujourdhui = debutJourParis(new Date());
-      const demain = ajouterJoursCivilsParis(aujourdhui, 1);
+      // Horloge figée au début du chargement : elle borne « aujourd'hui » (Paris).
+      const maintenant = new Date();
       const il7jours = ajouterJoursCivilsParis(new Date(), -7);
       const [missionsResult, valideesResult, historiqueResult, missionsHistoriqueResult] = await Promise.all([
         supabase
@@ -205,75 +199,22 @@ export default function PresencesSoignant() {
       if (creneauxResult.error) throw creneauxResult.error;
       if (contratsResult.error) throw contratsResult.error;
 
-      const creneauxParMission: Record<string, CreneauPointage[]> = {};
-      (creneauxResult.data || []).forEach((creneau: any) => {
-        (creneauxParMission[creneau.mission_id] ||= []).push(creneau);
+      const creneauxParMission: Record<string, CreneauPointage[]> = regrouperCreneauxParMission(creneauxResult.data);
+
+      // Onglets Aujourd'hui / À venir / Actives et contrat de pointage :
+      // règle partagée avec l'app iOS native.
+      const {
+        missionsAujourdhui: missionsList,
+        missionsAVenir: aVenirList,
+        missionsEnCours: enCoursList,
+        contrats: contratsMap,
+      } = construireListesPresences({
+        missions: missionsActives,
+        creneauxParMission,
+        contrats: contratsResult.data,
+        maintenant,
+        etablissements: etabMap,
       });
-
-      const contratsParMission: Record<string, any[]> = {};
-      (contratsResult.data || []).forEach((contrat: any) => {
-        (contratsParMission[contrat.mission_id] ||= []).push(contrat);
-      });
-      const contratsMap: Record<string, any> = {};
-      Object.entries(contratsParMission).forEach(([missionId, contratsMission]) => {
-        const contrat = choisirContratPointage(contratsMission);
-        if (contrat) contratsMap[missionId] = contrat;
-      });
-
-      const missionsEnrichies = missionsActives.map((mission: any) => ({
-        ...mission,
-        creneaux: ajouterRepliMissionPonctuelle(creneauxParMission[mission.id] || [], mission),
-        etablissements: etabMap[mission.etablissement_id] || null,
-      }));
-
-      const missionsList = missionsEnrichies.filter((mission: any) => {
-        const creneaux = mission.creneaux as CreneauPointage[];
-        const aUnSegmentOuvert = creneaux.some((creneau) => (
-          creneau.type_creneau === 'EFFECTIF' && !creneau.est_pause && !creneau.fin
-        ));
-        const planifies = creneauxPrevisionnels(creneaux);
-        const aUnCreneauAujourdhui = planifies.some((creneau) => (
-          creneauChevauchePeriode(creneau, aujourdhui, demain)
-        ));
-        return aUnSegmentOuvert
-          || aUnCreneauAujourdhui;
-      });
-
-      const aVenirList = missionsEnrichies
-        .map((mission: any) => {
-          const prochain = creneauxPrevisionnels(mission.creneaux)
-            .find((creneau) => new Date(creneau.debut) >= demain);
-          const dateAffichage = prochain?.debut ?? null;
-          const dureeAffichageHeures = prochain?.fin
-            ? (new Date(prochain.fin).getTime() - new Date(prochain.debut).getTime()) / 3_600_000
-            : mission.duree_heures;
-          return dateAffichage
-            ? { ...mission, dateAffichage, prochainCreneau: prochain, dureeAffichageHeures }
-            : null;
-        })
-        .filter(Boolean)
-        .concat(missionsEnrichies
-          .filter((mission: any) => (
-            mission.statut === 'ASSIGNEE'
-            && creneauxPrevisionnels(mission.creneaux).length === 0
-          ))
-          .map((mission: any) => ({
-            ...mission,
-            dateAffichage: null,
-            prochainCreneau: null,
-            dureeAffichageHeures: null,
-            planningAConfirmer: true,
-          })))
-        .sort((a: any, b: any) => (
-          a.dateAffichage && b.dateAffichage
-            ? new Date(a.dateAffichage).getTime() - new Date(b.dateAffichage).getTime()
-            : a.dateAffichage ? -1 : b.dateAffichage ? 1 : 0
-        ))
-        .slice(0, 20);
-
-      // Une mission EN_COURS reste visible même sans présence legacy : les
-      // créneaux EFFECTIF sont désormais la source de vérité du pointage.
-      const enCoursList = filtrerMissionsEnCours(missionsEnrichies);
 
       const presencesList = presencesValideesBrutes.map((presence: any) => ({
         ...presence,
