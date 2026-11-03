@@ -1,10 +1,13 @@
 name: iOS Swift — socle natif
 
 # Chaîne de preuve du lot 0 (docs/PLAN_APP_NATIVE_SWIFT.md §4.8, §11 jours 8-10).
-# Trois niveaux : cœur (vecteurs golden, fixtures démo, contrats RPC), packages
+# Trois niveaux : cœur (vecteurs golden, fixtures démo, contrats RPC, groupes UI), packages
 # (swift test macOS, concurrence stricte, 0 avertissement), interface (XCUITest démo plus
 # JoleneCoreTests et JoleneDesignTests exécutés sur le simulateur iOS : iPhone, iPad
 # portrait, iPad paysage ; StagingConnexionTests est réservé à ios-swift-staging.yml).
+# Interface : matrice format × groupe (scripts/mobile/ui-test-groups.mjs, revue B8 de T5,
+# 2e passe) — chaque groupe a son propre budget (étape de 30 min dans un job de 60 min) ;
+# toute classe XCUITest est rangée dans un groupe, sinon le job « Cœur » échoue.
 # Aucune clé, aucun secret, aucune livraison : tout tourne en mode démo.
 
 on:
@@ -15,6 +18,7 @@ on:
       - 'scripts/mobile/export-golden-vectors.mjs'
       - 'scripts/mobile/export-demo-fixtures.mjs'
       - 'scripts/mobile/check-rpc-contracts.mjs'
+      - 'scripts/mobile/ui-test-groups*.mjs'
       - 'src/lib/date-heure-paris.ts'
       - 'src/lib/format-mission.ts'
       - 'src/lib/heures-hebdomadaires-mission.ts'
@@ -38,6 +42,7 @@ on:
       - 'scripts/mobile/export-golden-vectors.mjs'
       - 'scripts/mobile/export-demo-fixtures.mjs'
       - 'scripts/mobile/check-rpc-contracts.mjs'
+      - 'scripts/mobile/ui-test-groups*.mjs'
       - 'src/lib/date-heure-paris.ts'
       - 'src/lib/format-mission.ts'
       - 'src/lib/heures-hebdomadaires-mission.ts'
@@ -114,6 +119,10 @@ jobs:
           fi
       - name: Contrats RPC sans dérive (types.ts, public.sql, manifeste)
         run: node scripts/mobile/check-rpc-contracts.mjs
+      - name: Groupes UI complets (chaque classe XCUITest rangée, matrice identique)
+        run: |
+          node --test scripts/mobile/ui-test-groups.test.mjs
+          node scripts/mobile/ui-test-groups.mjs --verifier | tee -a "$GITHUB_STEP_SUMMARY"
 
   packages:
     name: Packages — swift test macOS
@@ -217,12 +226,15 @@ jobs:
           if-no-files-found: warn
 
   ui:
-    name: UI — ${{ matrix.format }}
+    name: UI — ${{ matrix.format }} · ${{ matrix.groupe }}
     runs-on: macos-26
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
+        format: [iphone, ipad-portrait, ipad-landscape]
+        # Groupes de scripts/mobile/ui-test-groups.mjs, dans le même ordre (contrôlé par le job « Cœur »).
+        groupe: [socle, accueil-explorer, missions]
         include:
           - { format: iphone, famille: iphone, orientation: portrait }
           - { format: ipad-portrait, famille: ipad, orientation: portrait }
@@ -231,7 +243,10 @@ jobs:
       JOLENE_UI_FORMAT: ${{ matrix.format }}
       JOLENE_UI_FAMILLE: ${{ matrix.famille }}
       JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
-      JOLENE_UI_OUTPUT: ${{ github.workspace }}/ios-native/test-results/${{ matrix.format }}
+      JOLENE_UI_GROUPE: ${{ matrix.groupe }}
+      JOLENE_UI_OUTPUT: ${{ github.workspace }}/ios-native/test-results/${{ matrix.format }}-${{ matrix.groupe }}
+      # Alerte budget : 20 min de tests sur les 30 de l'étape — scinder le groupe avant la tranche suivante.
+      JOLENE_UI_BUDGET_ALERTE_S: '1200'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -297,10 +312,12 @@ jobs:
           echo "duree_build_s=$duree" >> "$GITHUB_OUTPUT"
           echo "Durée build-for-testing : ${duree}s (mesure pour la porte go/no-go, docs/mobile-swift/PORTE_LOT0.md)"
           grep -q "TEST BUILD SUCCEEDED" "$JOLENE_UI_OUTPUT/build-for-testing.log" || { echo "::error::build-for-testing a échoué (code $code). Voir build-for-testing.log dans l'artefact."; exit 1; }
-      - name: test-without-building — JoleneUITests + JoleneCoreTests + JoleneDesignTests (${{ matrix.format }})
+      - name: test-without-building — groupe ${{ matrix.groupe }} (${{ matrix.format }})
         id: tests
         # Délai propre à l'étape : un simulateur ou un runner xctest bloqué est interrompu ici,
-        # pas par le timeout du job (60 min), et le xcresult est clos avant le résumé.
+        # pas par le timeout du job (60 min), et le xcresult est clos avant le résumé. Budget par
+        # groupe (scripts/mobile/ui-test-groups.mjs) : une tranche qui ajoute des XCUITest range
+        # ses classes dans un groupe, ou en crée un, sans allonger les autres.
         timeout-minutes: 30
         env:
           UDID: ${{ steps.simulateur.outputs.udid }}
@@ -309,8 +326,17 @@ jobs:
           TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
           TEST_RUNNER_JOLENE_MODE: demo
         run: |
-          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT.xcresult"
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$JOLENE_UI_GROUPE.xcresult"
           echo "xcresult=$resultat" >> "$GITHUB_OUTPUT"
+          # Sélection du groupe : une ligne `-only-testing:` par cible et par classe présente ; les
+          # classes STAGING (HORS_GROUPES) ne sont jamais sélectionnées ici.
+          node scripts/mobile/ui-test-groups.mjs --attendus "$JOLENE_UI_GROUPE" > "$JOLENE_UI_OUTPUT/attendus.json"
+          node scripts/mobile/ui-test-groups.mjs --arguments "$JOLENE_UI_GROUPE" > "$RUNNER_TEMP/selection.txt"
+          selection=()
+          while IFS= read -r ligne; do if [ -n "$ligne" ]; then selection+=("$ligne"); fi; done < "$RUNNER_TEMP/selection.txt"
+          [ "${#selection[@]}" -gt 0 ] || { echo "::error::Groupe $JOLENE_UI_GROUPE : aucune cible ni classe sélectionnée."; exit 1; }
+          printf 'Sélection du groupe %s :\n' "$JOLENE_UI_GROUPE"; printf '  %s\n' "${selection[@]}"
+          debut=$(date +%s)
           set +e
           xcodebuild test-without-building \
             -project ios-native/Jolene.xcodeproj \
@@ -320,10 +346,7 @@ jobs:
             -destination "platform=iOS Simulator,id=$UDID" \
             -derivedDataPath "$RUNNER_TEMP/derived" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
-            -only-testing:JoleneUITests \
-            -only-testing:JoleneCoreTests \
-            -only-testing:JoleneDesignTests \
-            -skip-testing:JoleneUITests/StagingConnexionTests \
+            "${selection[@]}" \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -333,14 +356,17 @@ jobs:
             > "$JOLENE_UI_OUTPUT/test-without-building.log" 2>&1
           code=$?
           set -e
+          duree=$(( $(date +%s) - debut ))
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
-          echo "xcodebuild test-without-building : code $code"
+          echo "duree_tests_s=$duree" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building : code $code, ${duree}s (groupe $JOLENE_UI_GROUPE)"
       - name: Résumé xcresult (assertions, pas de succès fabriqué)
         if: always() && steps.build.outcome == 'success'
         env:
           XCRESULT: ${{ steps.tests.outputs.xcresult }}
           CODE_XCODEBUILD: ${{ steps.tests.outputs.code }}
+          DUREE_TESTS: ${{ steps.tests.outputs.duree_tests_s }}
         run: |
           [ -d "$XCRESULT" ] || { echo "::error::Bundle xcresult absent : aucun test n'a produit de résultat."; exit 1; }
           xcrun xcresulttool get test-results summary --path "$XCRESULT" > "$JOLENE_UI_OUTPUT/xctest-summary.json"
@@ -353,16 +379,33 @@ jobs:
             const out = process.env.JOLENE_UI_OUTPUT;
             const s = JSON.parse(readFileSync(join(out, "xctest-summary.json"), "utf8"));
             const total = s.totalTestCount ?? 0, passed = s.passedTests ?? 0, failed = s.failedTests ?? 0, skipped = s.skippedTests ?? 0;
-            const lignes = [`### UI — ${process.env.JOLENE_UI_FORMAT}`, "",
+            // Groupe de scripts/mobile/ui-test-groups.mjs : cibles entières et cas XCUITest attendus.
+            const groupe = JSON.parse(readFileSync(join(out, "attendus.json"), "utf8"));
+            const lignes = [`### UI — ${process.env.JOLENE_UI_FORMAT} · ${groupe.groupe}`, "",
               `- xcodebuild : code ${process.env.CODE_XCODEBUILD}`,
               `- résultat xcresult : ${s.result} (${passed} réussis, ${failed} échoués, ${skipped} ignorés, ${total} au total)`,
-              `- cibles exécutées sur le simulateur (destination ${process.env.JOLENE_UI_FORMAT}) : JoleneUITests (hors StagingConnexionTests), JoleneCoreTests, JoleneDesignTests`];
+              `- cibles exécutées sur le simulateur (destination ${process.env.JOLENE_UI_FORMAT}) : JoleneUITests (${groupe.classes.join(", ")})${groupe.cibles.length ? ", " + groupe.cibles.join(", ") : ""}`];
             // Chaque cible doit avoir tourné : un plan qui en oublie une n est pas une preuve.
             const bundles = (s.testTargets ?? s.testPlanConfigurations ?? []).map(t => t.name ?? t.testTargetName ?? "").filter(Boolean);
-            const attendus = ["JoleneUITests", "JoleneCoreTests", "JoleneDesignTests"];
+            const attendus = [...(groupe.classes.length ? ["JoleneUITests"] : []), ...groupe.cibles];
             const log = readFileSync(join(out, "test-without-building.log"), "utf8");
             const manquantes = attendus.filter(cible => !bundles.includes(cible) && !new RegExp(`Test Suite \x27${cible}[^\x27]*\x27 (started|passed)`).test(log));
             if (manquantes.length) lignes.push(`- cibles sans aucun test exécuté : ${manquantes.join(", ")}`);
+            // Cas XCUITest : exactement ceux du groupe, tous réussis (ni oubli, ni classe d un autre groupe).
+            const cas = [...log.matchAll(/Test Case \x27-\[JoleneUITests\.(\w+) (\w+)\]\x27 (passed|failed) \(([\d.]+) seconds\)/g)];
+            const reussis = new Set(cas.filter(m => m[3] === "passed").map(m => `${m[1]}/${m[2]}`));
+            const vus = new Set(cas.map(m => `${m[1]}/${m[2]}`));
+            const casManquants = groupe.cas.filter(c => !reussis.has(c));
+            const casInattendus = [...vus].filter(c => !groupe.cas.includes(c));
+            lignes.push(`- XCUITest du groupe : ${reussis.size} réussis sur ${groupe.cas.length} attendus`);
+            if (casManquants.length) lignes.push(`- XCUITest attendus non réussis : ${casManquants.join(", ")}`);
+            if (casInattendus.length) lignes.push(`- XCUITest hors groupe exécutés : ${casInattendus.join(", ")}`);
+            // Budget : durée de l étape et durée par classe, pour répartir les tranches suivantes.
+            const parClasse = {};
+            for (const m of cas) { const c = (parClasse[m[1]] ??= { tests: 0, s: 0 }); c.tests += 1; c.s += Number(m[4]); }
+            const duree = Number(process.env.DUREE_TESTS || 0), alerte = Number(process.env.JOLENE_UI_BUDGET_ALERTE_S || 1200);
+            lignes.push(`- durée de l étape de tests : ${duree}s (alerte à ${alerte}s, délai de l étape 1800s) ; par classe : ${Object.entries(parClasse).map(([c, v]) => `${c} ${Math.round(v.s)}s (${v.tests})`).join(", ") || "aucune"}`);
+            if (duree > alerte) console.log(`::warning::Groupe ${groupe.groupe} (${process.env.JOLENE_UI_FORMAT}) : ${duree}s de tests, au-delà de l alerte ${alerte}s — scinder le groupe dans scripts/mobile/ui-test-groups.mjs et la matrice.`);
             // Contrôle d orientation des captures (mobile-native/scripts/png-dimensions.mjs repris tel quel).
             const attachments = join(out, "attachments");
             const pngs = existsSync(attachments) ? readdirSync(attachments).filter(n => n.toLowerCase().endsWith(".png")) : [];
@@ -380,8 +423,10 @@ jobs:
             appendFileSync(process.env.GITHUB_STEP_SUMMARY, lignes.join("\n") + "\n");
             console.log(lignes.join("\n"));
             // JoleneCoreTests seul dépasse 100 tests : un total inférieur signifie qu une cible n a pas tourné.
-            const ok = process.env.CODE_XCODEBUILD === "0" && s.result === "Passed" && total >= 100 && failed === 0 && skipped === 0 && passed === total && mauvaises.length === 0 && manquantes.length === 0;
-            if (!ok) { console.error("::error::Tests simulateur non concluants (JoleneUITests, JoleneCoreTests, JoleneDesignTests) : voir le résumé ci-dessus et l artefact xcresult."); process.exit(1); }
+            // Groupe sans cible entière : le total est exactement celui des XCUITest attendus.
+            const minimum = groupe.cibles.includes("JoleneCoreTests") ? 100 : groupe.cas.length;
+            const ok = process.env.CODE_XCODEBUILD === "0" && s.result === "Passed" && total >= minimum && total >= 1 && failed === 0 && skipped === 0 && passed === total && mauvaises.length === 0 && manquantes.length === 0 && casManquants.length === 0 && casInattendus.length === 0;
+            if (!ok) { console.error(`::error::Tests simulateur non concluants (groupe ${groupe.groupe}) : voir le résumé ci-dessus et l artefact xcresult.`); process.exit(1); }
           '
       - name: Durée de build dans le résumé (mesure porte go/no-go)
         if: always() && steps.build.outcome == 'success'
@@ -393,10 +438,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ios-swift-ui-${{ matrix.format }}-${{ github.event.pull_request.head.sha || github.sha }}
+          name: ios-swift-ui-${{ matrix.format }}-${{ matrix.groupe }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            ${{ runner.temp }}/ui-${{ matrix.format }}.xcresult
-            ios-native/test-results/${{ matrix.format }}/
+            ${{ runner.temp }}/ui-${{ matrix.format }}-${{ matrix.groupe }}.xcresult
+            ios-native/test-results/${{ matrix.format }}-${{ matrix.groupe }}/
           retention-days: 7
           if-no-files-found: warn
       - name: Éteindre le simulateur
