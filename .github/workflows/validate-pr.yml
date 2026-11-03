@@ -59,7 +59,11 @@ jobs:
         # check-rpc-contracts.node.mjs : contrats RPC du client Swift (RPC_SUIVIES, fiches
         # CONTRATS_RPC_SOIGNANT.md confrontées à public.sql et à l'edge delete-account, décisions
         # du lot 1). Sans filtre de chemins : tourne aussi sur les PR qui ne touchent que la doc.
-        run: node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs
+        # textes-juridiques-ios.node.mjs (lot 2, TL, HARD STOP n°4) : chaque texte de TextesWeb.swift
+        # (juridique) et de LibellesWeb.swift égale le texte du web, et le code web de chaque
+        # assemblage est inchangé ; rougit aussi sur une PR web qui modifie l'un de ces textes ou
+        # une zone de rendu (un simple décalage de lignes est toléré, avec un avertissement).
+        run: node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs tests/node/textes-juridiques-ios.node.mjs
 
       - name: Gardes de la recette financière isolée
         run: node --test tests/node/recette-escrow-safety.node.mjs
