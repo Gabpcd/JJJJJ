@@ -33,8 +33,9 @@ public enum DemoWorld {
     /// câblé ici dans la même PR que sa tranche ; un port encore stub y est nommé explicitement
     /// (`DemoWorldTests.testAucunPortNonCable`).
     public static func gateways(drapeaux: [String: Bool]) -> Gateways {
+        let auth = DemoAuthGateway()
         var gateways = Gateways(
-            auth: DemoAuthGateway(),
+            auth: auth,
             role: DemoRoleGateway(),
             missions: DemoMissionsGateway(),
             clock: FixedClock(fixedNow),
@@ -52,6 +53,9 @@ public enum DemoWorld {
         câblerLot2(&gateways)
         câblerLot3(&gateways)
         DemoLot4.cabler(&gateways) // lot 4 : une fabrique par domaine (`Demo/Lot4/`)
+        // Lot 5 (T1) : ports établissement ; l'identité est celle de la session démo courante, si bien
+        // que le compte soignant fictif y est refusé (`.demoOnly`).
+        gateways.etablissement = DemoEtablissementWorld.gateways(identite: { try? await auth.restoreSession()?.id })
         return gateways
     }
 

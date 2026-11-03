@@ -2,7 +2,8 @@
 
 Document de référence des RPC que l'espace établissement du client Swift consommera au lot 5
 (`docs/mobile-swift/LOT5_PLAN.md` §2.4-§2.5, §3 T0) : quatorze RPC propres à l'établissement, suivies en
-`a_venir` lot 5 dans `RPC_SUIVIES_ETABLISSEMENT` de `scripts/mobile/check-rpc-contracts.mjs`, et sept RPC déjà
+`a_venir` lot 5 dans `RPC_SUIVIES_ETABLISSEMENT` de `scripts/mobile/check-rpc-contracts.mjs` (puis `consommee` dans
+la PR qui câble leur gateway : T1 pour la session établissement), et sept RPC déjà
 suivies par un lot soignant que l'établissement consomme aussi (`RPC_PARTAGEES_ETABLISSEMENT`, champ
 `aussi_etablissement` du JSON). Pour chaque RPC : la signature SQL exacte de `supabase/schema/public.sql`
 (dump de production re-baseliné le 01/11/2026), la classe du manifeste `supabase/SECURITY_DEFINER_MANIFEST.json`,
@@ -41,18 +42,18 @@ Règles de l'espace établissement (`LOT5_PLAN.md` §2.2-§2.8) :
 
 | RPC | Statut natif | Lot (tranche) | Classe manifeste | GRANT | types.ts | Exceptions interceptées |
 |---|---|---|---|---|---|---|
-| `fn_mes_permissions_etab` | à venir | 5 (T1, T2) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | aucune |
-| `fn_mon_etablissement_complet` | à venir | 5 (T1, T2, T12) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | aucune |
+| `fn_mes_permissions_etab` | consommée (T1) | 5 (T1, T2) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | aucune |
+| `fn_mon_etablissement_complet` | consommée (T1) | 5 (T1, T2, T12) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | aucune |
 | `fn_stats_dashboard_etablissement` | à venir | 5 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | aucune |
 | `fn_soignant_pour_etablissement` | à venir | 5 (T5) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | aucune |
 | `fn_lire_candidatures_mission_habilitee` | à venir | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée | `42501` |
-| `fn_traiter_candidature_planning_v1` | à venir | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente | `P0001` ×3 |
+| `fn_traiter_candidature_planning_v1` | à venir | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente | `P0001` ×3, `42501` ×3 (RBAC) |
 | `fn_contrat_signe_pour_pointage` | à venir | 5 (T7) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | absente | `42501` |
 | `fn_valider_presence` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501`, `23503`, `P0001` ×4 |
 | `fn_valider_presences_lot` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501`, `23503`, `P0001` ×4 |
 | `fn_contester_presence` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501` |
 | `fn_creer_notation_mission` | à venir | 5 (T8, best-effort) — partagée si le lot 2 la suit | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | `P0001` |
-| `fn_declarer_fin_retroactive` | à venir | 5 (T8, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | `P0002` ×2, `42501`, `23514` |
+| `fn_declarer_fin_retroactive` | à venir | 5 (T8, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | `P0002` ×2, `42501` ×3 (dont RBAC ×2), `23514` |
 | `fn_creer_mission_multi_jours_v4` | à venir | 5 (T9) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `28000` |
 | `fn_obtenir_conversation` | à venir | 5 (T11, port du lot 4) — partagée si le lot 4 la suit | MIXTE_TENANT_ADMIN | authenticated | déclarée | `28000`, `22023`, `42501` |
 | `fn_get_my_role` | consommée lot 0 — aussi établissement | 0 (lot 5 T2) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | — (fiche soignant) |
@@ -98,14 +99,17 @@ instancié par l'argument littéral du trigger (`'pointage'` pour `trg_p0_rbac_p
 **joker non vide** côté Swift. Fail-closed : message entièrement dynamique, condition inconnue, `%%`, chaîne
 `E''`, trigger ou fonction absents → le script échoue au lieu de produire une liste fausse.
 
-Traitement natif (T1, `RPC/RPCInterception.swift`) : `.accesRefuse` (42501 de la liste) → message serveur, ou
+Traitement natif (T1, `JoleneSupabase/RPC/RPCInterception.swift` et `RPC/ListesBlanchesEtablissement.swift`, listes
+Swift comparées à ce JSON par `ListesBlanchesEtablissementTests`, chaque entrée avec son traitement : verbatim, message
+neutre, générique ou session) : `.accesRefuse` (42501 de la liste) → message serveur, ou
 message neutre « Votre rôle dans cet établissement ne permet pas cette action. » pour le trigger RBAC, puis relecture
 des permissions ; `.refusMetier` (P0001/P0002/23503/23514 de la liste) → verbatim ; `.nonAuthentifie` (28000) →
 `.unauthorized`. Un 42501 hors liste garde le comportement du lot 0 ; `[CODE DU TRAVAIL]` reste intercepté (lot 1).
 
 ## fn_mes_permissions_etab
 
-- **Statut natif** : à venir (lot 5, T1 port `EtabSessionPort.permissions`, T2 résolution de l'espace).
+- **Statut natif** : consommée (lot 5, T1 : `SupabaseEtabSessionGateway.permissions`, port `EtabSessionPort` ; T2
+  résolution de l'espace).
 - **Usage** : source du périmètre (D2) — appel `p_etablissement_id: NULL`, corps exact `{"p_etablissement_id":null}` ;
   relu à l'ouverture, à la revalidation 30 min et après tout refus `accesRefuse`.
 - **Signature SQL** (`supabase/schema/public.sql` l.42265) :
@@ -131,7 +135,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_permissions_etab"("p_etablissement_i
 
 ## fn_mon_etablissement_complet
 
-- **Statut natif** : à venir (lot 5, T1 `EtabSessionPort.profil`, T2 snapshot, T12 compte).
+- **Statut natif** : consommée (lot 5, T1 : `SupabaseEtabSessionGateway.profil`, port `EtabSessionPort` ; T2
+  snapshot, T12 compte).
 - **Usage** : profil de l'établissement courant (`mon_etablissement_id()`), sous-ensemble décodé seulement.
 - **Signature SQL** (`supabase/schema/public.sql` l.44594) :
 
@@ -275,12 +280,18 @@ CREATE OR REPLACE FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_cand
     tel quel).
 - **Exceptions** :
   - `P0001` « Notification d'acceptation impossible : % » (`fn_traiter_candidature`, l.61834) → message générique
-    (préfixe connu, suite non garantie) ;
+    (préfixe connu, suite non garantie) : traitement `générique` de la liste Swift, jamais intercepté ni affiché (T1,
+    revue B8 de T0, mineur 5) ;
   - `P0001` « Cette mission ne peut pas être attribuée : l'établissement doit d'abord configurer un mode de paiement
     (Paramètres → Facturation). » (`fn_trg_gate_assignation_paiement` via `trg_gate_assignation_paiement`, l.63314) →
     `.paiementNonConfigure` verbatim + Safari `/etablissement/facturation` ;
   - `P0001` « Cette mission ne peut pas être attribuée : le mandat SEPA de l'établissement n'est pas encore posé (IBAN
     à ajouter dans Paramètres → Facturation). » (même trigger, l.63317) → idem ;
+  - `42501` « Permission etablissement missions requise » (`trg_p0_rbac_missions`), « Permission etablissement
+    contrats requise » (`trg_p0_rbac_contrats_mission`) et « Permission etablissement candidatures requise »
+    (`trg_p0_rbac_candidatures`), tous de `fn_enforce_etablissement_rbac_trigger` (l.32239), `%` instancié par
+    l'argument du trigger → message neutre + relecture des permissions (T1, revue B8 de T0, mineur 3 : inatteignables
+    avec le `CASE` actuel — `candidatures` est exigée en amont —, mais la matrice est paramétrée) ;
   - `[CODE DU TRAVAIL]` (triggers atteints par `UPDATE missions`) : interception du lot 1, verbatim.
 - **Relecture** : relire `fn_lire_candidatures_mission_habilitee` : candidature `ACCEPTEE` **et** mission
   `ASSIGNEE` (acceptation), candidature `REFUSEE` (refus) ; sinon « non confirmé », jamais succès.
@@ -449,7 +460,15 @@ CREATE OR REPLACE FUNCTION "public"."fn_declarer_fin_retroactive"("p_mission_id"
   - `42501` « Vous n'êtes pas autorisé(e) à déclarer une fin rétroactive sur cette mission. » (l.28696) →
     `accesRefuse` verbatim ;
   - `P0002` « Aucun créneau effectif ouvert à fermer pour cette mission. » (l.28709) → verbatim ;
-  - `23514` « L'heure de fin (%) doit être postérieure au début du créneau (%). » (l.28713) → verbatim, deux jokers.
+  - `23514` « L'heure de fin (%) doit être postérieure au début du créneau (%). » (l.28713) → verbatim, deux jokers ;
+  - `42501` « Permission etablissement pointage requise » (`trg_p0_rbac_presences`, `UPDATE presences` l.28734) et
+    « Permission etablissement missions requise » (`trg_p0_rbac_missions`, `UPDATE missions` l.28775), de
+    `fn_enforce_etablissement_rbac_trigger` → message neutre + relecture des permissions (T1, revue B8 de T0, mineur 3).
+- **Amendement pour T8** (revue B8 de T0, mineur 4) : `est_admin_etablissement()` (l.4841-4846) ne retient que `PROPRIETAIRE`,
+  `ADMIN_GROUPE` et `RH` (contrôle l.28692-28697) ; un membre `POINTAGE_ONLY` reçoit donc **toujours** le 42501 « Vous n'êtes
+  pas autorisé(e)… », alors que §2.7 associe « clôturer » à `pointage`. Le web a le même comportement. T8 n'affiche pas
+  l'action de clôture sans les droits que le serveur exige (un membre `POINTAGE_ONLY` n'y a pas accès), ou l'affiche
+  et rend ce refus verbatim ; décision consignée dans sa PR, aucune règle juridique en jeu.
 - **Relecture** : `fn_etat_pointage_mission.segment_ouvert == false`.
 
 ## fn_creer_mission_multi_jours_v4

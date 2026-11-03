@@ -75,6 +75,13 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   `Lot4/Supabase<Domaine>Factory.swift`), appelées une seule fois par `DemoLot4.cabler` et `SupabaseLot4.cabler` :
   chaque tranche ne touche que sa fabrique et sa ligne de `portsEnAttenteLot4`. Le port des évaluations reçues est le
   champ `evaluationsRecues` (aucun littéral Swift ne vaut exactement le nom d'une table de notations, garde-fou 18).
+- Lot 5 (T1) : un **seul** champ additif de plus, `Gateways.etablissement`
+  (`Ports/EtablissementGateways.swift`), qui regroupe les ports de l'espace établissement, non
+  câblés par défaut (`Ports/Lot5Ports.swift`). Même règle de preuve, liste à part :
+  `DemoWorldTests.portsEnAttenteLot5`, comparée au monde Supabase par `SupabaseGatewaysTests`,
+  vide à la clôture du lot 5 (T14). Les refus 42501 de droit sont interceptés avant
+  `SupabaseErrorMapping` par listes blanches exactes (`RPC/RPCInterception.swift`), le mapping du
+  lot 0 reste inchangé.
 
 ## 3. Aucun succès fabriqué
 
