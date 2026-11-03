@@ -4,10 +4,13 @@ import SwiftUI
 /// - `moi` : à droite, `bg-gradient-hero` (encre `#2B183D`), coin bas-droit réduit (`rounded-br-md`) ;
 /// - `interlocuteur` : à gauche, `bg-card` bordé, coin bas-gauche réduit ;
 /// - `jolene` : message d'un admin Jolene (`est_admin`), à gauche, en-tête « Admin Jolene » ;
-/// - `systeme` : message système (auteur nul `000…`), centré, en italique, sans heure.
-/// Le contenu est affiché **verbatim**, retours à la ligne conservés (`whitespace-pre-wrap`), jamais tronqué ;
-/// l'heure arrive formatée par l'appelant (cœur). L'état `nonConfirme` (décision D8 du lot 4 : envoi sans
-/// renvoi automatique, relecture par l'écran) ajoute la mention « Envoi non confirmé » sous la bulle.
+/// - `systeme` : message système (auteur nul `000…`), centré, en italique, sans heure, sur un fond `cloud`
+///   **opaque** (écart assumé : `bg-card/60` du web dépend du fond du fil ; opaque, son contraste est celui mesuré).
+/// Le contenu est affiché **verbatim**, retours à la ligne conservés (`whitespace-pre-wrap`), jamais tronqué, aligné
+/// à gauche dans la bulle ; seule l'heure est alignée à droite (`text-right`). L'heure arrive formatée par l'appelant
+/// (cœur). L'état `nonConfirme` (décision D8 du lot 4 : envoi sans renvoi automatique, relecture par l'écran) ajoute
+/// sous la bulle la mention « Envoi non confirmé », élément d'accessibilité distinct identifié `chat-non-confirme`
+/// (blueprint lot 4 T7b, injectable), lu juste après le message.
 /// Largeur : `max-w-[80%]` du web rendue par une marge latérale minimale de 48 pt et un plafond de 520 pt (iPad).
 /// « Équipe établissement » (vue établissement) relève du lot 5.
 public struct ChatBubble: View {
@@ -63,6 +66,11 @@ public struct ChatBubble: View {
     nonisolated public static let jolenePrefix = "Admin Jolene"
     /// Mention d'un envoi non confirmé (DECISIONS_LOT4 D8).
     nonisolated public static let nonConfirmeText = "Envoi non confirmé"
+    /// Identifiant par défaut de la mention, blueprint lot 4 T7b.
+    nonisolated public static let defaultNonConfirmeIdentifier = "chat-non-confirme"
+    /// Fond du message système : `cloud` opaque.
+    nonisolated public static let systemBackgroundHSL = JoleneColor.cloudHSL
+    nonisolated public static let systemBackgroundOpacity: Double = 1
     /// Auteur vocalisé de ses propres messages.
     nonisolated public static let selfSpokenName = "Vous"
     /// Aucune limite de lignes : `whitespace-pre-wrap break-words`.
@@ -74,11 +82,10 @@ public struct ChatBubble: View {
     nonisolated public static let maximumBubbleWidth: CGFloat = 520
     nonisolated public static let minimumSideSpacing: CGFloat = 48
 
-    /// Libellé vocalisé (un seul élément par message, identifiant de l'appelant : un XCUITest lit l'état
-    /// « Envoi non confirmé » dans ce libellé, la mention visible étant masquée pour ne pas être lue deux fois) : « Vous : Bonjour, 14:32 », « Clinique Démo : Bonjour, 09:05 », « Admin Jolene : … » ;
-    /// message système : contenu seul ; « . Envoi non confirmé » ajouté si besoin.
-    nonisolated public static func accessibilityLabel(contenu: String, kind: Kind, auteur: String?, heure: String?,
-                                                      delivery: Delivery) -> String {
+    /// Libellé vocalisé de la bulle (un élément par message, identifiant de l'appelant, `chat-message-<id>` en T7b) :
+    /// « Vous : Bonjour, 14:32 », « Clinique Démo : Bonjour, 09:05 », « Admin Jolene : … » ; message système :
+    /// contenu seul. L'état « Envoi non confirmé » n'y figure pas : il est porté par son propre élément, juste après.
+    nonisolated public static func accessibilityLabel(contenu: String, kind: Kind, auteur: String?, heure: String?) -> String {
         let nom: String?
         switch kind {
         case .moi: nom = selfSpokenName
@@ -88,7 +95,6 @@ public struct ChatBubble: View {
         }
         var texte = nom.map { "\($0) : \(contenu)" } ?? contenu
         if kind != .systeme, let heure { texte += ", \(heure)" }
-        if delivery == .nonConfirme { texte += ". \(nonConfirmeText)" }
         return texte
     }
 
@@ -98,14 +104,17 @@ public struct ChatBubble: View {
     private let auteur: String?
     private let delivery: Delivery
     private let identifier: String?
+    private let nonConfirmeIdentifier: String
 
     /// - Parameters:
     ///   - heure: heure déjà formatée par le cœur (`HH:mm` de Paris), absente pour un message système.
     ///   - auteur: nom vocalisé de l'interlocuteur (jamais affiché dans la bulle, comme le web).
+    ///   - identifier: identifiant de la bulle (`chat-message-<id>`).
+    ///   - nonConfirmeIdentifier: identifiant de la mention « Envoi non confirmé » (`chat-non-confirme`).
     public init(_ contenu: String, kind: Kind, heure: String? = nil, auteur: String? = nil, delivery: Delivery = .confirme,
-                identifier: String? = nil) {
+                identifier: String? = nil, nonConfirmeIdentifier: String = ChatBubble.defaultNonConfirmeIdentifier) {
         self.contenu = contenu; self.kind = kind; self.heure = heure; self.auteur = auteur
-        self.delivery = delivery; self.identifier = identifier
+        self.delivery = delivery; self.identifier = identifier; self.nonConfirmeIdentifier = nonConfirmeIdentifier
     }
 
     public var body: some View {
@@ -113,6 +122,9 @@ public struct ChatBubble: View {
             HStack(spacing: 0) {
                 if kind != .interlocuteur && kind != .jolene { Spacer(minLength: Self.minimumSideSpacing) }
                 BubbleWidthLayout(maximum: Self.maximumBubbleWidth) { bulle }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Self.accessibilityLabel(contenu: contenu, kind: kind, auteur: auteur, heure: heure))
+                    .accessibilityIdentifier(identifier ?? "")
                 if kind != .moi { Spacer(minLength: Self.minimumSideSpacing) }
             }
             if delivery == .nonConfirme {
@@ -120,13 +132,13 @@ public struct ChatBubble: View {
                     .font(JoleneFont.caption.weight(.semibold))
                     .foregroundStyle(Color(Self.nonConfirmeInkHSL))
                     .frame(maxWidth: .infinity, alignment: kind == .moi ? .trailing : .leading)
-                    .accessibilityHidden(true)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Self.nonConfirmeText)
+                    .accessibilityIdentifier(nonConfirmeIdentifier)
             }
         }
         .frame(maxWidth: .infinity, alignment: kind.frameAlignment)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.accessibilityLabel(contenu: contenu, kind: kind, auteur: auteur, heure: heure, delivery: delivery))
-        .accessibilityIdentifier(identifier ?? "")
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder private var bulle: some View {
@@ -139,12 +151,12 @@ public struct ChatBubble: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, JoleneSpacing.md)
                 .padding(.vertical, JoleneSpacing.xs)
-                .background(JoleneColor.cloud.opacity(0.6))
+                .background(Color(Self.systemBackgroundHSL).opacity(Self.systemBackgroundOpacity))
                 .clipShape(Capsule())
         } else {
-            // Heure alignée à droite (`text-right`) sans élargir la bulle : la colonne prend la largeur de son
-            // plus large enfant (contenu, en-tête ou heure).
-            VStack(alignment: .trailing, spacing: 2) {
+            // En-tête et contenu à gauche, heure à droite (`text-right`), sans élargir la bulle : la colonne prend la
+            // largeur de son plus large enfant (contenu, en-tête ou heure).
+            BubbleColumnLayout(spacing: 2) {
                 if kind == .jolene {
                     Label(Self.jolenePrefix, systemImage: "shield")
                         .font(Font.system(.caption2).weight(.bold))
@@ -160,6 +172,7 @@ public struct ChatBubble: View {
                     Text(heure)
                         .font(Font.system(.caption2))
                         .foregroundStyle(kind.metaInkHSL.map { Color($0) } ?? encre)
+                        .layoutValue(key: BubbleColumnLayout.AlignedTrailing.self, value: true)
                 }
             }
             .padding(.horizontal, 14)
@@ -191,6 +204,45 @@ struct BubbleWidthLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard let enfant = subviews.first else { return }
         enfant.place(at: bounds.origin, proposal: ProposedViewSize(width: min(bounds.width, maximum), height: bounds.height))
+    }
+}
+
+/// Colonne de la bulle : chaque enfant à sa taille idéale dans la largeur proposée, empilés ; la colonne prend la
+/// largeur du plus large. Enfants alignés à gauche, sauf ceux marqués `AlignedTrailing` (l'heure, `text-right`),
+/// alignés à droite. Contrairement à `VStack(alignment: .trailing)`, un contenu court reste à gauche sous un
+/// en-tête « Admin Jolene » ou une heure plus larges ; contrairement à un cadre `maxWidth: .infinity`, la bulle
+/// n'est pas élargie.
+struct BubbleColumnLayout: Layout {
+    struct AlignedTrailing: LayoutValueKey {
+        static let defaultValue = false
+    }
+
+    var spacing: CGFloat
+
+    /// Abscisse d'un enfant de largeur `width` dans une colonne `bounds` : bord gauche, ou bord droit s'il est marqué.
+    static func originX(width: CGFloat, in bounds: CGRect, alignedTrailing: Bool) -> CGFloat {
+        alignedTrailing ? bounds.maxX - width : bounds.minX
+    }
+
+    private func tailles(_ subviews: Subviews, width: CGFloat?) -> [CGSize] {
+        subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)) }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let mesures = tailles(subviews, width: proposal.width)
+        let largeur = mesures.map(\.width).max() ?? 0
+        let hauteur = mesures.map(\.height).reduce(0, +) + spacing * CGFloat(max(0, mesures.count - 1))
+        return CGSize(width: proposal.width.map { min($0, largeur) } ?? largeur, height: hauteur)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for (enfant, taille) in zip(subviews, tailles(subviews, width: bounds.width)) {
+            let largeur = min(taille.width, bounds.width)
+            let x = Self.originX(width: largeur, in: bounds, alignedTrailing: enfant[AlignedTrailing.self])
+            enfant.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(width: largeur, height: taille.height))
+            y += taille.height + spacing
+        }
     }
 }
 

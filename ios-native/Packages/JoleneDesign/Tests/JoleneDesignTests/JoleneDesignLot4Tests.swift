@@ -106,6 +106,84 @@ final class JoleneDesignLot4Tests: XCTestCase {
         XCTAssertEqual(SwipeCardGesture.axis(for: CGSize(width: 3, height: -10)), .vertical)
     }
 
+    /// Suit un geste comme `SwipeCardStack` : axe figé au premier changement concluant, décalage suivi, décision au
+    /// relâchement sur l'axe figé (jamais sur la translation finale).
+    private static func geste(_ translations: [CGSize]) -> (axe: SwipeCardGesture.Axis, dx: CGFloat, decision: SwipeCardAction?) {
+        var axe = SwipeCardGesture.Axis.undetermined
+        var dx: CGFloat = 0
+        for translation in translations {
+            axe = SwipeCardGesture.frozenAxis(axe, translation: translation)
+            dx = SwipeCardGesture.trackedDx(axis: axe, translation: translation)
+        }
+        let decision = translations.last.flatMap { SwipeCardGesture.decision(frozenAxis: axe, translation: $0) }
+        return (axe, dx, decision)
+    }
+
+    func testSwipeDecideSurLAxeFigeAuDemarrageCommeStackCards() throws {
+        // StackCards.tsx l.81-84 : un départ vertical abandonne le geste ; l.99-110 : ensuite, seule `x` décide.
+        let web = try Self.sourceWeb("src/components/swipe/StackCards.tsx")
+        XCTAssertTrue(web.contains("if (Math.abs(y) >= Math.abs(x)) { dragStartRef.current = null; return; }"))
+        XCTAssertTrue(web.contains("if (Math.abs(x) >= threshold && topCard) {"))
+        // Départ vertical puis 150 pt de côté : la carte n'a jamais bougé, rien n'est décidé (aucun DISLIKE muet).
+        let vertical = Self.geste([CGSize(width: 0, height: 10), CGSize(width: -60, height: 20), CGSize(width: -150, height: 30)])
+        XCTAssertEqual(vertical.axe, .vertical)
+        XCTAssertEqual(vertical.dx, 0, "La carte reste immobile")
+        XCTAssertNil(vertical.decision, "Départ vertical puis 150 pt horizontaux → aucune action")
+        XCTAssertNil(SwipeCardGesture.decision(frozenAxis: .vertical, translation: CGSize(width: -148, height: 30)))
+        XCTAssertNil(SwipeCardGesture.decision(frozenAxis: .vertical, translation: CGSize(width: 150, height: 0)))
+        XCTAssertNil(SwipeCardGesture.decision(frozenAxis: .undetermined, translation: CGSize(width: 150, height: 0)))
+        // Départ horizontal qui finit en diagonale : même décision que l'indicateur affiché à pleine opacité.
+        let diagonale = Self.geste([CGSize(width: 10, height: 0), CGSize(width: 80, height: 60), CGSize(width: 130, height: 140)])
+        XCTAssertEqual(diagonale.axe, .horizontal)
+        XCTAssertEqual(diagonale.dx, 130)
+        XCTAssertEqual(SwipeCardGesture.indicatorOpacity(for: diagonale.dx, toward: .candidater), 1, "« VÉRIFIER » affiché")
+        XCTAssertEqual(diagonale.decision, .candidater, "Départ horizontal puis diagonale → la décision de l'indicateur")
+        let gauche = Self.geste([CGSize(width: -9, height: 2), CGSize(width: -121, height: -200)])
+        XCTAssertEqual(SwipeCardGesture.indicatorOpacity(for: gauche.dx, toward: .passer), 1, "« SUIVANT » affiché")
+        XCTAssertEqual(gauche.decision, .passer)
+        // En deçà du seuil sur l'axe figé : retour au centre, quelle que soit la composante verticale.
+        XCTAssertNil(Self.geste([CGSize(width: 12, height: 0), CGSize(width: 119, height: 300)]).decision)
+        // Un geste encore indéterminé (sous 8 pt) n'en fige aucun.
+        XCTAssertEqual(SwipeCardGesture.frozenAxis(.undetermined, translation: CGSize(width: 4, height: 4)), .undetermined)
+        XCTAssertEqual(SwipeCardGesture.frozenAxis(.horizontal, translation: CGSize(width: 0, height: 400)), .horizontal)
+        XCTAssertEqual(SwipeCardGesture.frozenAxis(.vertical, translation: CGSize(width: 400, height: 0)), .vertical)
+    }
+
+    func testSwipeCarteResteDecaleePendantLAppelServeur() {
+        // Pendant le glissement : le doigt ; après transmission, le décalage du relâchement tant que `isBusy` ; sinon 0.
+        XCTAssertEqual(SwipeCardGesture.displayedOffset(liveDx: 42, retainedDx: nil, isBusy: false), 42)
+        XCTAssertEqual(SwipeCardGesture.displayedOffset(liveDx: nil, retainedDx: -150, isBusy: true), -150,
+                       "Carte gardée décalée (indicateur compris) pendant l'appel")
+        XCTAssertEqual(SwipeCardGesture.indicatorOpacity(for: -150, toward: .passer), 1)
+        XCTAssertEqual(SwipeCardGesture.displayedOffset(liveDx: nil, retainedDx: -150, isBusy: false), 0,
+                       "Refus (fin d'appel, carte conservée) ou aucun appel ouvert : retour au centre")
+        XCTAssertEqual(SwipeCardGesture.displayedOffset(liveDx: nil, retainedDx: nil, isBusy: true), 0,
+                       "Action par bouton : la carte ne bouge pas")
+    }
+
+    @MainActor
+    func testSwipeIdentifiantsAlignesSurLeBlueprintV2() throws {
+        // LOT4_PLAN.md T3b : `swipe-deck`, `swipe-card-<missionId>`, `swipe-passer`… ; PRINCIPES §6 : `mission-card-<id>`.
+        let plan = try Self.sourceWeb("docs/mobile-swift/LOT4_PLAN.md")
+        for attendu in ["`swipe-deck`", "`swipe-card-<missionId>`", "`swipe-passer`", "`swipe-sauvegarder`", "`swipe-candidater`"] {
+            XCTAssertTrue(plan.contains(attendu), "blueprint v2 : \(attendu)")
+        }
+        XCTAssertEqual(SwipeDeckIdentifiers.deck, "swipe-deck")
+        XCTAssertEqual(SwipeDeckIdentifiers.cardPrefix, "swipe-card")
+        XCTAssertEqual(SwipeDeckIdentifiers.actionsPrefix, "swipe")
+        XCTAssertEqual(SwipeDeckIdentifiers.card(itemID: "demo-swipe-1"), "swipe-card-demo-swipe-1")
+        XCTAssertEqual(SwipeDeckIdentifiers.card(prefix: "favori-card", itemID: "m9"), "favori-card-m9", "Préfixe injectable")
+        XCTAssertEqual(SwipeCardAction.allCases.map { $0.identifier(prefix: SwipeDeckIdentifiers.actionsPrefix) },
+                       ["swipe-passer", "swipe-sauvegarder", "swipe-candidater"])
+        // Conteneur et carte sont deux identifiants distincts, tous deux injectables.
+        let cartes = [CarteTest(id: "m1")]
+        let defaut = SwipeCardStack(cartes, onAction: { _, _ in }) { Text($0.id) }
+        XCTAssertEqual(defaut.cardIdentifier(for: cartes[0]), "swipe-card-m1")
+        let injecte = SwipeCardStack(cartes, identifier: "autre-deck", cardIdentifierPrefix: "autre-card",
+                                     cardAccessibility: .contain, onAction: { _, _ in }) { Text($0.id) }
+        XCTAssertEqual(injecte.cardIdentifier(for: cartes[0]), "autre-card-m1")
+    }
+
     func testSwipeRotationIndicateursEtCartesDeFondSuiventStackCards() throws {
         // StackCards.tsx : rotation `dragX / 14` bornée à ±15°, opacité des indicateurs `dragX / 80` bornée.
         XCTAssertEqual(SwipeCardGesture.rotationDegrees(for: 0), 0)
@@ -130,7 +208,6 @@ final class JoleneDesignLot4Tests: XCTestCase {
         // Réduire les animations : aucun mouvement animé (retour au centre, retrait de carte).
         XCTAssertNil(SwipeCardGesture.animation(reduceMotion: true))
         XCTAssertNotNil(SwipeCardGesture.animation(reduceMotion: false))
-        XCTAssertEqual(SwipeCardGesture.cardIdentifier(prefix: "swipe", itemID: "demo-swipe-1"), "swipe-carte-demo-swipe-1")
         // Indicateurs verbatim, décoratifs (aria-hidden) ; encres AA même en grand texte.
         let web = try Self.sourceWeb("src/components/swipe/StackCards.tsx")
         let droite = try XCTUnwrap(SwipeCardGesture.indicator(for: .candidater))
@@ -180,7 +257,8 @@ final class JoleneDesignLot4Tests: XCTestCase {
     @MainActor
     func testSwipeCardStackTransmetUneSeuleActionEtAucunePendantUnAppel() {
         // Une carte n'est retirée qu'après `ok:true` (blueprint §2.5) : le paquet transmet l'action et ne retire rien
-        // lui-même ; pendant l'appel serveur (`isBusy`), gestes, boutons et actions d'accessibilité sont inertes.
+        // lui-même ; pendant l'appel serveur (`isBusy`), geste et boutons sont inertes et les actions d'accessibilité
+        // retirées ; `perform` refuse toute action.
         var recu: [String] = []
         let cartes = [CarteTest(id: "m1"), CarteTest(id: "m2")]
         let libre = SwipeCardStack(cartes, onAction: { action, carte in recu.append("\(action.rawValue):\(carte.id)") }) { Text($0.id) }
@@ -211,23 +289,60 @@ final class JoleneDesignLot4Tests: XCTestCase {
         XCTAssertTrue(web.contains("whitespace-pre-wrap break-words"), "Contenu jamais tronqué")
         XCTAssertNil(ChatBubble.contentLineLimit)
         XCTAssertEqual(ChatBubble.nonConfirmeText, "Envoi non confirmé", "DECISIONS_LOT4 D8")
+        // Message système : `bg-card/60` du web rendu opaque (contraste mesuré = contraste rendu).
+        XCTAssertTrue(web.contains("italic text-muted-foreground bg-card/60"))
+        XCTAssertEqual(ChatBubble.systemBackgroundOpacity, 1)
+        XCTAssertEqual(ChatBubble.systemBackgroundHSL, JoleneColor.cloudHSL)
+        XCTAssertEqual(ChatBubble.Kind.systeme.backgroundHSL, ChatBubble.systemBackgroundHSL)
     }
 
-    func testChatBubbleVocaliseAuteurContenuHeureEtEnvoiNonConfirme() {
-        XCTAssertEqual(ChatBubble.accessibilityLabel(contenu: "Bonjour", kind: .moi, auteur: nil, heure: "14:32", delivery: .confirme),
-                       "Vous : Bonjour, 14:32")
-        XCTAssertEqual(ChatBubble.accessibilityLabel(contenu: "Bonjour", kind: .interlocuteur, auteur: "Clinique Démo", heure: "09:05",
-                                                     delivery: .confirme),
+    func testChatBubbleVocaliseAuteurContenuEtHeure() {
+        XCTAssertEqual(ChatBubble.accessibilityLabel(contenu: "Bonjour", kind: .moi, auteur: nil, heure: "14:32"), "Vous : Bonjour, 14:32")
+        XCTAssertEqual(ChatBubble.accessibilityLabel(contenu: "Bonjour", kind: .interlocuteur, auteur: "Clinique Démo", heure: "09:05"),
                        "Clinique Démo : Bonjour, 09:05")
-        XCTAssertEqual(ChatBubble.accessibilityLabel(contenu: "Bonjour", kind: .interlocuteur, auteur: nil, heure: nil, delivery: .confirme),
-                       "Bonjour")
-        XCTAssertEqual(ChatBubble.accessibilityLabel(contenu: "Bonjour", kind: .jolene, auteur: "Camille", heure: "10:00", delivery: .confirme),
+        XCTAssertEqual(ChatBubble.accessibilityLabel(contenu: "Bonjour", kind: .interlocuteur, auteur: nil, heure: nil), "Bonjour")
+        XCTAssertEqual(ChatBubble.accessibilityLabel(contenu: "Bonjour", kind: .jolene, auteur: "Camille", heure: "10:00"),
                        "Admin Jolene : Bonjour, 10:00", "L'admin est annoncé « Admin Jolene », comme le web")
-        XCTAssertEqual(ChatBubble.accessibilityLabel(contenu: "Conversation ouverte", kind: .systeme, auteur: nil, heure: "10:00",
-                                                     delivery: .confirme),
+        XCTAssertEqual(ChatBubble.accessibilityLabel(contenu: "Conversation ouverte", kind: .systeme, auteur: nil, heure: "10:00"),
                        "Conversation ouverte", "Message système : contenu seul, sans heure (web)")
-        XCTAssertEqual(ChatBubble.accessibilityLabel(contenu: "Bonjour", kind: .moi, auteur: nil, heure: "14:32", delivery: .nonConfirme),
-                       "Vous : Bonjour, 14:32. Envoi non confirmé")
+    }
+
+    func testChatBubbleEnvoiNonConfirmePorteParSonPropreElement() throws {
+        // Blueprint lot 4 v2, T7b : `chat-message-<id>` (bulle, identifiant de l'appelant) et `chat-non-confirme` (mention).
+        let plan = try Self.sourceWeb("docs/mobile-swift/LOT4_PLAN.md")
+        XCTAssertTrue(plan.contains("`chat-message-<id>`") && plan.contains("`chat-non-confirme`"))
+        XCTAssertEqual(ChatBubble.defaultNonConfirmeIdentifier, "chat-non-confirme")
+        // La mention n'est plus dans le libellé de la bulle : un élément distinct, lu juste après, la porte.
+        XCTAssertFalse(ChatBubble.accessibilityLabel(contenu: "Bonjour", kind: .moi, auteur: nil, heure: "14:32")
+            .contains(ChatBubble.nonConfirmeText))
+    }
+
+    func testChatBubbleAligneLeContenuAGaucheEtLHeureADroite() {
+        // `text-right` sur l'heure seule : contenu et en-tête au bord gauche de la colonne, heure au bord droit.
+        let colonne = CGRect(x: 14, y: 8, width: 120, height: 60)
+        XCTAssertEqual(BubbleColumnLayout.originX(width: 20, in: colonne, alignedTrailing: false), 14)
+        XCTAssertEqual(BubbleColumnLayout.originX(width: 36, in: colonne, alignedTrailing: true), 98)
+        XCTAssertEqual(BubbleColumnLayout.originX(width: 120, in: colonne, alignedTrailing: true), 14)
+        XCTAssertFalse(BubbleColumnLayout.AlignedTrailing.defaultValue, "Par défaut, aligné à gauche")
+    }
+
+    @MainActor
+    func testChatBubbleColonneNElargitPasLaBulle() {
+        // La colonne prend la largeur de son plus large enfant, jamais la largeur proposée.
+        let entete = Self.taille(Text(ChatBubble.jolenePrefix).font(Font.system(.caption2).weight(.bold)), largeur: 2000)
+        let colonne = Self.taille(BubbleColumnLayout(spacing: 2) {
+            Text(ChatBubble.jolenePrefix).font(Font.system(.caption2).weight(.bold))
+            Text("ok").font(JoleneFont.callout)
+            Text("09:05").font(Font.system(.caption2)).layoutValue(key: BubbleColumnLayout.AlignedTrailing.self, value: true)
+        }, largeur: 390)
+        XCTAssertEqual(colonne.width, entete.width, accuracy: 0.5, "Largeur = en-tête « Admin Jolene », le plus large")
+        XCTAssertLessThan(colonne.width, 200)
+        let long = Self.taille(BubbleColumnLayout(spacing: 2) {
+            Text(String(repeating: "Mission de nuit confirmée ", count: 12)).font(JoleneFont.callout).fixedSize(horizontal: false, vertical: true)
+            Text("09:05").font(Font.system(.caption2))
+        }, largeur: 320)
+        XCTAssertLessThanOrEqual(long.width, 320)
+        XCTAssertGreaterThan(long.height, colonne.height, "Le contenu long passe à la ligne")
     }
 
     func testChatBubbleEncresAAPourChaqueAuteur() {
@@ -238,6 +353,8 @@ final class JoleneDesignLot4Tests: XCTestCase {
             XCTAssertGreaterThanOrEqual(Self.encreSurDegrade.contrastRatio(with: arret.light.rgb), 4.5)
             XCTAssertGreaterThanOrEqual(Self.encreSurDegrade.contrastRatio(with: arret.dark.rgb), 4.5)
         }
+        // Surface réellement rendue : fonds opaques (le message système compris, `systemBackgroundOpacity` = 1).
+        XCTAssertEqual(ChatBubble.systemBackgroundOpacity, 1, "Contraste mesuré sur la surface composée, donc opaque")
         for kind in [ChatBubble.Kind.interlocuteur, .jolene, .systeme] {
             guard let encre = kind.textInkHSL, let fond = kind.backgroundHSL else {
                 XCTFail("\(kind) : encre et fond attendus")
@@ -295,12 +412,47 @@ final class JoleneDesignLot4Tests: XCTestCase {
                       "{restantes} caractères restants"] {
             XCTAssertTrue(web.contains(texte), "verbatim : \(texte)")
         }
-        let ids = MessageComposer.Identifiers("messagerie-composeur")
-        XCTAssertEqual(ids.field, "messagerie-composeur-champ")
-        XCTAssertEqual(ids.send, "messagerie-composeur-envoyer")
-        XCTAssertEqual(ids.counter, "messagerie-composeur-compteur")
-        XCTAssertEqual(ids.archived, "messagerie-composeur-archivee")
         XCTAssertEqual(MessageComposer.minimumTapTarget, 44)
+    }
+
+    func testMessageComposerIdentifiantsAlignesSurLeBlueprintV2() throws {
+        // LOT4_PLAN.md T7b : `chat-input`, `chat-envoyer`, `chat-archivee`.
+        let plan = try Self.sourceWeb("docs/mobile-swift/LOT4_PLAN.md")
+        for attendu in ["`chat-input`", "`chat-envoyer`", "`chat-archivee`"] {
+            XCTAssertTrue(plan.contains(attendu), "blueprint v2 : \(attendu)")
+        }
+        XCTAssertEqual(MessageComposer.Identifiers.chat,
+                       MessageComposer.Identifiers(field: "chat-input", send: "chat-envoyer", counter: "chat-compteur", archived: "chat-archivee"))
+        let ids = MessageComposer.Identifiers("support")
+        XCTAssertEqual([ids.field, ids.send, ids.counter, ids.archived], ["support-input", "support-envoyer", "support-compteur", "support-archivee"])
+        var injecte = MessageComposer.Identifiers.chat
+        injecte.field = "autre-champ"
+        XCTAssertEqual(injecte.field, "autre-champ", "Chaque identifiant reste injectable")
+    }
+
+    func testMessageComposerVerrouSynchroneEmpecheUnDoubleEnvoi() throws {
+        // InputMessage.tsx l.52-55 : « ce verrou synchrone empêche donc deux Enter/clics dans le même tick ».
+        let web = try Self.sourceWeb("src/components/messagerie/InputMessage.tsx")
+        XCTAssertTrue(web.contains("if (archived || envoiRef.current) return;"))
+        var verrou = MessageComposer.SendLock()
+        XCTAssertTrue(verrou.acquire(text: "Bonjour", isSending: false, isArchived: false), "Premier toucher : envoi transmis")
+        XCTAssertFalse(verrou.acquire(text: "Bonjour", isSending: false, isArchived: false),
+                       "Second toucher du même cycle (isSending encore périmé) : refusé")
+        verrou.observe(isSending: true)
+        XCTAssertTrue(verrou.isHeld, "Appel en cours : verrou gardé")
+        XCTAssertFalse(verrou.acquire(text: "Bonjour", isSending: false, isArchived: false))
+        verrou.observe(isSending: false)
+        XCTAssertFalse(verrou.isHeld, "Fin de l'appel (finally du web) : verrou rendu")
+        XCTAssertTrue(verrou.acquire(text: "Suite", isSending: false, isArchived: false))
+        // Rendu suivant sans appel ouvert par l'écran : verrou rendu, jamais bloqué.
+        verrou.observe(isSending: false)
+        XCTAssertFalse(verrou.isHeld)
+        // Aucun verrou pris quand l'envoi est impossible.
+        var vide = MessageComposer.SendLock()
+        XCTAssertFalse(vide.acquire(text: "  ", isSending: false, isArchived: false))
+        XCTAssertFalse(vide.acquire(text: "Bonjour", isSending: true, isArchived: false))
+        XCTAssertFalse(vide.acquire(text: "Bonjour", isSending: false, isArchived: true))
+        XCTAssertFalse(vide.isHeld)
     }
 
     func testMessageComposerCompteEnUnitesUTF16CommeJavaScript() {
@@ -437,9 +589,6 @@ final class JoleneDesignLot4Tests: XCTestCase {
         XCTAssertFalse(AvailabilityWeekGrid.isToggleEnabled(.init(isAvailable: true, isPending: true), isPast: false))
         XCTAssertEqual(Self.lundi.state(.journee), .init(isAvailable: true))
         XCTAssertEqual(Self.lundi.state(.nuit), .init())
-        XCTAssertEqual(AvailabilityWeekGrid.identifier(prefix: "dispos", dayID: "2026-11-02", creneau: .journee), "dispos-2026-11-02-journee")
-        XCTAssertEqual(AvailabilityWeekGrid.identifier(prefix: "dispos", dayID: "2026-11-02", creneau: .nuit), "dispos-2026-11-02-nuit")
-        XCTAssertEqual(AvailabilityWeekGrid.rowIdentifier(prefix: "dispos", dayID: "2026-11-02"), "dispos-2026-11-02")
         XCTAssertEqual(AvailabilityWeekGrid.titleIdentifier(prefix: "dispos-semaine-1"), "dispos-semaine-1-title")
         XCTAssertEqual(AvailabilityWeekGrid.accessibilityLabel(day: Self.lundi, creneau: .journee), "Lundi 2 Nov., aujourd'hui, Jour")
         XCTAssertEqual(AvailabilityWeekGrid.accessibilityLabel(day: Self.dimanche, creneau: .nuit), "Dimanche 1 Nov., Nuit")
@@ -447,6 +596,21 @@ final class JoleneDesignLot4Tests: XCTestCase {
         XCTAssertEqual(AvailabilityWeekGrid.layout(for: .xxxLarge), .horizontal)
         XCTAssertEqual(AvailabilityWeekGrid.layout(for: .accessibility1), .vertical)
         XCTAssertEqual(AvailabilityWeekGrid.minimumTapTarget, 44, "Web min-h-[36px] relevé à 44 pt (HIG)")
+    }
+
+    func testAvailabilityWeekGridIdentifiantsAlignesSurLeBlueprintV2() throws {
+        // LOT4_PLAN.md T5 : `dispo-<yyyy-MM-dd>-JOURNEE`, `dispo-<yyyy-MM-dd>-NUIT` (créneau en valeur serveur, majuscules).
+        let plan = try Self.sourceWeb("docs/mobile-swift/LOT4_PLAN.md")
+        XCTAssertTrue(plan.contains("`dispo-<yyyy-MM-dd>-JOURNEE`") && plan.contains("`dispo-<yyyy-MM-dd>-NUIT`"))
+        XCTAssertEqual(AvailabilityWeekGrid.defaultSlotPrefix, "dispo")
+        XCTAssertEqual(AvailabilityWeekGrid.identifier(dayID: "2026-11-03", creneau: .journee), "dispo-2026-11-03-JOURNEE")
+        XCTAssertEqual(AvailabilityWeekGrid.identifier(dayID: "2026-11-03", creneau: .nuit), "dispo-2026-11-03-NUIT",
+                       "Cible du XCUITest de T5")
+        XCTAssertEqual(AvailabilityWeekGrid.rowIdentifier(dayID: "2026-11-03"), "dispo-2026-11-03")
+        XCTAssertEqual(AvailabilityWeekGrid.identifier(prefix: "vivier", dayID: "2026-11-03", creneau: .nuit), "vivier-2026-11-03-NUIT",
+                       "Préfixe injectable")
+        // Le conteneur de semaine (`identifier`) ne préfixe plus les bascules : quatre semaines, un seul format.
+        XCTAssertEqual(AvailabilityWeekGrid.titleIdentifier(prefix: "dispos-semaine-2"), "dispos-semaine-2-title")
     }
 
     func testAvailabilityWeekGridEncresAA() throws {
@@ -587,6 +751,20 @@ final class JoleneDesignLot4Tests: XCTestCase {
                           "La taille suit la charge (aucune image figée)")
     }
 
+    func testQRCodeImageReutiliseLImageDejaProduite() throws {
+        // `body` est réévalué à chaque rendu : la même charge (et le même facteur) rend la même image, sans regénérer.
+        let charge = "https://jolene.app/inscription/soignant?ref=DEMO-CACHE"
+        let premiere = try XCTUnwrap(QRCodeImage.cgImage(for: charge))
+        let seconde = try XCTUnwrap(QRCodeImage.cgImage(for: charge))
+        XCTAssertTrue(premiere === seconde, "Image mise en cache par charge")
+        let autreFacteur = try XCTUnwrap(QRCodeImage.cgImage(for: charge, scale: 4))
+        XCTAssertFalse(premiere === autreFacteur)
+        XCTAssertEqual(autreFacteur.width * 2, premiere.width, "Le facteur fait partie de la clé")
+        let autreCharge = try XCTUnwrap(QRCodeImage.cgImage(for: charge + "-2"))
+        XCTAssertFalse(premiere === autreCharge, "Une autre charge produit une autre image")
+        XCTAssertNil(QRCodeImage.cgImage(for: charge, scale: 0))
+    }
+
     // MARK: - ScoreBadge
 
     func testScoreBadgeAfficheLaValeurServeurEtRienSansScore() throws {
@@ -676,15 +854,22 @@ final class JoleneDesignLot4Tests: XCTestCase {
                 Text("Carte \(carte.id)").frame(maxWidth: .infinity, minHeight: 300).background(JoleneColor.cloud)
             })),
             ("paquet occupé", AnyView(SwipeCardStack(cartes, isBusy: true, onAction: { _, _ in }) { Text($0.id) })),
+            ("paquet contenant", AnyView(SwipeCardStack(cartes, cardAccessibility: .contain, onAction: { _, _ in }) { carte in
+                VStack { Text("Carte \(carte.id)"); Text("85/100").accessibilityIdentifier("swipe-score-\(carte.id)") }
+            })),
             ("paquet vide", AnyView(SwipeCardStack([CarteTest](), onAction: { _, _ in }) { Text($0.id) })),
             ("barre swipe", AnyView(SwipeActionBar(onAction: { _ in }))),
             ("barre swipe désactivée", AnyView(SwipeActionBar(isDisabled: true, onAction: { _ in }))),
             ("bulle moi", AnyView(ChatBubble("Bonjour", kind: .moi, heure: "14:32", identifier: "message-1"))),
             ("bulle non confirmée", AnyView(ChatBubble("Bonjour", kind: .moi, heure: "14:32", delivery: .nonConfirme, identifier: "message-2"))),
+            ("bulle non confirmée identifiée", AnyView(ChatBubble("Bonjour", kind: .interlocuteur, heure: "14:32", delivery: .nonConfirme,
+                                                                  identifier: "chat-message-3", nonConfirmeIdentifier: "chat-non-confirme-3"))),
+            ("bulle Jolene courte", AnyView(ChatBubble("ok", kind: .jolene, heure: "10:00"))),
             ("bulle interlocuteur", AnyView(ChatBubble("Bonjour\nà demain", kind: .interlocuteur, heure: "09:05", auteur: "Clinique Démo"))),
             ("bulle Jolene", AnyView(ChatBubble("Votre dossier est complet.", kind: .jolene, heure: "10:00"))),
             ("bulle système", AnyView(ChatBubble("Conversation ouverte", kind: .systeme))),
-            ("composeur", AnyView(MessageComposer(text: .constant("Bonjour"), identifier: "composeur", onSend: {}))),
+            ("composeur", AnyView(MessageComposer(text: .constant("Bonjour"), identifiers: .init("composeur"), onSend: {}))),
+            ("composeur du fil", AnyView(MessageComposer(text: .constant("Bonjour"), onSend: {}))),
             ("composeur compteur", AnyView(MessageComposer(text: .constant(String(repeating: "a", count: 3950)), onSend: {}))),
             ("composeur envoi", AnyView(MessageComposer(text: .constant("Bonjour"), isSending: true, onSend: {}))),
             ("composeur archivé", AnyView(MessageComposer(text: .constant(""), isArchived: true, onSend: {}))),
