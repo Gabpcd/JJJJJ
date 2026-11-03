@@ -101,6 +101,40 @@
     `CASE` de `fn_a_permission_etablissement` par la garde ; `matricePermissionsEtablissement` (export de
     `check-rpc-contracts.mjs`) est le lecteur que T1 réutilise pour `demo-etab-permissions.json`.
 
+## Précisions relevées par la tranche T1
+
+Aucune ne change une décision du §7 ni une règle juridique ; elles fixent ce que le blueprint laissait ouvert.
+
+1. **Session sans contexte, identité démo injectée.** `EtabSessionPort.permissions(etablissementId:)` et `profil()`
+   gardent la signature du blueprint (§2.4 : le serveur lit le JWT). Le monde démo lit l'utilisateur de la session
+   démo courante par une fermeture `identite` (branchée sur `DemoAuthGateway.restoreSession` dans `DemoWorld`) et
+   refuse tout autre compte que `demo-etablissement` (`.demoOnly`) ; aucune valeur d'utilisateur n'est supposée.
+2. **Établissement démo = `demo-etab-1` du monde soignant.** Le blueprint (§2.10) nomme l'établissement « Clinique
+   de démonstration » ; `demo-etab-1` porte déjà le nom « Établissement fictif République » dans
+   `demo-etablissements.json`. L'exporteur dérive l'établissement démo de `DEMO_ETABLISSEMENTS[0]` : un seul nom par
+   identifiant (état dérivé). Le compte legacy démo garde l'utilisateur `demo-etablissement` (identifiant d'utilisateur
+   ≠ identifiant d'établissement, contrairement à un vrai compte legacy) : T2 sert l'établissement confirmé par le rôle
+   démo, comme `fn_get_my_role` le fait pour un legacy réel (correction 2).
+3. **Audit démo.** `DemoEtabAuditGateway` (journal en mémoire) est ajouté au monde démo : un port câblé côté Supabase
+   l'est dans les deux mondes (`SupabaseGatewaysTests`).
+4. **Issues complétées.** `TraitementCandidatureOutcome.refusEnregistre` (refus d'une candidature répondu
+   `success:true`, absent de la liste du §2.4) ; `MotifRenvoiWebCandidature` nomme les trois renvois (D10, D25) ; les
+   contrats de domaine (`EtabDashboardSnapshot`, `EtabMissionResume`, `LectureCandidaturesHabilitee`, `PresenceEtab`,
+   `PublicationMission`…) sont **minimaux**, complétés par leur tranche, sans aucun champ monétaire ni note ;
+   `EtatPointageEtab` réutilise `CodeRotatifRules.Etat` (T3).
+5. **Traitement des exceptions dans les listes Swift.** Chaque entrée de `ListesBlanchesEtablissement` porte son
+   traitement (verbatim, message neutre, générique, session) ; la liste (SQLSTATE, message) est comparée au JSON.
+   « Notification d'acceptation impossible : % » est `générique` : jamais interceptée ni affichée (revue B8 de T0,
+   mineur 5).
+6. **Triggers RBAC des tables écrites** (revue B8 de T0, mineur 3) : `fn_traiter_candidature_planning_v1` →
+   `trg_p0_rbac_missions`, `trg_p0_rbac_contrats_mission`, `trg_p0_rbac_candidatures` ; `fn_declarer_fin_retroactive` →
+   `trg_p0_rbac_presences`, `trg_p0_rbac_missions` ; extraits par `check-rpc-contracts.mjs` (`--update`), message neutre.
+7. **Clôture rétroactive et `POINTAGE_ONLY`** (revue B8 de T0, mineur 4) : amendement pour T8 consigné dans la fiche
+   `fn_declarer_fin_retroactive` de `CONTRATS_RPC_ETABLISSEMENT.md`.
+8. **`fn_ecrire_audit_safe` reste `a_venir` lot 1.** RPC partagée, propriété du lot 1, déjà appelée par
+   `SupabaseAuditGateway` sans être passée en `consommee` ; T1 ne modifie pas l'entrée d'un autre lot (pas de conflit
+   avec les tranches du lot 1). `fn_mes_permissions_etab` et `fn_mon_etablissement_complet` passent en `consommee`.
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.

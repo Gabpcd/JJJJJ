@@ -1,0 +1,40 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "utilisateur": {
+    "id": "demo-etablissement",
+    "email": "etablissement-demonstration@example.invalid",
+    "app_metadata": {
+      "role": "ADMIN_ETABLISSEMENT",
+      "etablissement_id": "demo-etab-1"
+    }
+  },
+  "utilisateur_legacy": {
+    "id": "demo-etablissement",
+    "email": "etablissement-demonstration@example.invalid",
+    "app_metadata": {
+      "role": "ETABLISSEMENT"
+    }
+  },
+  "etablissement": {
+    "id": "demo-etab-1",
+    "nom": "Établissement fictif République",
+    "type": "CLINIQUE",
+    "logo_url": null,
+    "est_secteur_public": false,
+    "peut_publier_missions": true,
+    "statut_verification": "VERIFIE",
+    "contrat_service_signe": true,
+    "bloque_auto_le": null
+  },
+  "etablissement_bloque": {
+    "id": "demo-etab-1",
+    "nom": "Établissement fictif République",
+    "type": "CLINIQUE",
+    "logo_url": null,
+    "est_secteur_public": false,
+    "peut_publier_missions": true,
+    "statut_verification": "VERIFIE",
+    "contrat_service_signe": true,
+    "bloque_auto_le": "2026-11-01T07:00:00.000Z"
+  }
+}
