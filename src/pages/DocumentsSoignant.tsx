@@ -16,10 +16,10 @@ import { Mascotte } from '@/components/mascotte/Mascotte';
 import { ConfettiMini } from '@/components/ConfettiMini';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { TYPES_DOCUMENTS, TYPES_DOCUMENTS_EXCLUS_UPLOAD, STATUTS_VERIFICATION, rppsDispenseDiplome, diplomeCompatibleProfession } from '@/lib/documents';
+import { TYPES_DOCUMENTS, STATUTS_VERIFICATION, diplomeCompatibleProfession } from '@/lib/documents';
+import { documentValidePourExigence, filtrerDocumentsRequis } from '@/lib/documents-requis';
 import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 import { extraireMessageErreur, messageErreurEdgeFn } from '@/lib/erreurs';
-import { PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -208,33 +208,9 @@ export function DocumentsSoignantContent() {
 
       const dr = reglesResultat.data;
       const md = documentsResultat.data;
-      // Filtrage par profession ET type_exercice :
-      // LIBERAL/MIXTE → inclut les documents LIBERAL_ONLY (RCP/RIB/URSSAF)
-      // Un régime salarié renseigné ou MIXTE → inclut SALARIE_ONLY
-      // → un MIXTE cumule LES DEUX (obligations salariées + libérales).
-      const estLiberal = (sg as any).type_exercice === 'LIBERAL' || (sg as any).type_exercice === 'MIXTE';
-      const estSalarie = !!(sg as any).type_exercice && (sg as any).type_exercice !== 'LIBERAL';
-      const professionAvecRpps = !PROFESSIONS_SANS_RPPS.includes((sg as any).profession);
-      const rppsVerifie = professionAvecRpps && !!(sg as any).rpps_verifie;
-      const adeliVerifie = !!(sg as any).adeli_verifie;
-      const registreProfessionnelVerifie = rppsVerifie || adeliVerifie;
-      setDocumentsRequis(
-        (dr || []).filter((d: any) => {
-          if (d.profession !== (sg as any).profession) return false;
-          if (TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(d.type_document)) return false;
-          // Le RPPS ne dispense pas du diplôme spécialisé IADE/IBODE.
-          // Un ADELI seul ne donne pas de dispense de diplôme.
-          if (rppsDispenseDiplome(sg.profession, sg.rpps_verifie) && d.type_document === 'DIPLOME') return false;
-          if (registreProfessionnelVerifie && d.type_document === 'RPPS_ADELI') return false;
-          // Une autorisation d'exercice reste une preuve distincte du diplôme.
-          // Elle n'est masquée que lorsque le registre officiel est déjà validé.
-          if (registreProfessionnelVerifie && d.type_document === 'AUTORISATION_EXERCICE') return false;
-          const exReq = d.type_exercice_requis || 'TOUS';
-          if (exReq === 'LIBERAL_ONLY') return estLiberal;
-          if (exReq === 'SALARIE_ONLY') return estSalarie;
-          return true; // TOUS
-        })
-      );
+      // Profession ET type_exercice (un MIXTE cumule salarié + libéral) et
+      // dispenses par registre : règle partagée avec l'app iOS native.
+      setDocumentsRequis(filtrerDocumentsRequis(dr, sg));
       setMesDocuments(md || []);
       chargementReussi = true;
     } catch (error) {
@@ -259,12 +235,7 @@ export function DocumentsSoignantContent() {
 
   const docsRequis = useMemo(() => documentsRequis.filter(d => d.est_critique), [documentsRequis]);
   const docsValides = useMemo(() => docsRequis.filter(r =>
-    mesDocuments.some(d =>
-      d.type_document === r.type_document &&
-      d.statut_verification === 'VERIFIE' &&
-      (r.type_document !== 'DIPLOME' || diplomeCompatibleProfession(soignant?.profession, d.profession_certifiee)) &&
-      (!d.valide_jusqua || new Date(d.valide_jusqua) > new Date())
-    )
+    mesDocuments.some(d => documentValidePourExigence(d, r, soignant?.profession, new Date()))
   ), [docsRequis, mesDocuments, soignant?.profession]);
 
   const docsManquants = docsRequis.length - docsValides.length;
@@ -292,10 +263,7 @@ export function DocumentsSoignantContent() {
     setDocsEnVerification(prev => prev.filter(id => !termines.some(t => t.id === id)));
     if (termines.some(t => t.statut_verification === 'VERIFIE')) {
       const prochain = docsRequis.find(r => !mesDocuments.some(d =>
-        d.type_document === r.type_document &&
-        d.statut_verification === 'VERIFIE' &&
-        (r.type_document !== 'DIPLOME' || diplomeCompatibleProfession(soignant?.profession, d.profession_certifiee)) &&
-        (!d.valide_jusqua || new Date(d.valide_jusqua) > new Date())
+        documentValidePourExigence(d, r, soignant?.profession, new Date())
       ));
       if (!prochain) {
         // Tous les documents obligatoires sont validés : confetti léger
