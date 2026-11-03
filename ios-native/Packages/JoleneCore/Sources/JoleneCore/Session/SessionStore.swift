@@ -43,6 +43,11 @@ import Combine
 /// transitoire : depuis `.ready`, celle-ci n'arrive qu'avec une autre identité), et avant toute ouverture d'identité
 /// (`signIn`, `ouvrirIdentiteInscription`), comme le navigateur intégré est vidé (T3b). L'identifiant d'un compte ne suit
 /// donc jamais le compte suivant, même vers un espace bloqué.
+/// Lot 5 (T2a) : avant la publication d'un `.readyEtablissement`, les drapeaux d'écran établissement
+/// (`ecransEtablissement`, D14) sont lus — un écran coupé n'est jamais monté — et relus à chaque
+/// reprise ; `refreshEtablissementScope()` relit le périmètre après un refus de droit (D12). Aucune
+/// activité soignant (`fn_maj_activite_soignant`) n'est jamais déclenchée pour un établissement
+/// (correction 12).
 @MainActor
 public final class SessionStore: ObservableObject {
     @Published public private(set) var state: SessionState {
@@ -67,6 +72,8 @@ public final class SessionStore: ObservableObject {
     private(set) var finDeSessionPush: Task<Void, Never>?
     /// Événements d'auth traités par `observeAuthEvents` (preuves des tests ; jamais lu par l'app).
     private(set) var evenementsAuthTraites = 0
+    /// Drapeaux `ios_natif_etab_<ecran>_actif` de la session établissement courante (lot 5, T2a).
+    public let ecransEtablissement = EcransEtablissementModel()
     private var authEventsTask: Task<Void, Never>?
     /// Lot 3, T4 : fins de session voulues en cours (`signOut`, `signOutLocally`) ; le coordinateur y est
     /// déjà prévenu, une publication de `.signedOut` n'est pas une fin subie.
@@ -97,7 +104,7 @@ public final class SessionStore: ObservableObject {
     /// la vérification (pas de `.loading` intermédiaire : reprise après 30 minutes).
     public func start() async {
         if !state.isReady { state = .loading }
-        appliquer(await controller.startPublication())
+        appliquer(await preparerEtablissement(await controller.startPublication(), relire: true))
         canRetryRestore = await controller.canRetryRestore
     }
 
@@ -119,7 +126,38 @@ public final class SessionStore: ObservableObject {
         signalerUtilisateurCrash(nil) // lot 3, T15 (revue B8 n°1, M2) : ni l'identifiant d'une autre identité
         state = .loading
         canRetryRestore = false
-        state = await controller.signIn(email: email, password: password)
+        state = await preparerEtablissement(await controller.signIn(email: email, password: password), relire: true)
+    }
+
+    /// Relecture du périmètre établissement après un refus de droit (`accesRefuse`, lot 5 T2a) : une
+    /// lecture par appel ; l'écran l'appelle une fois par refus. Sans effet hors espace établissement.
+    public func refreshEtablissementScope() async {
+        guard let snapshot = state.snapshotEtablissement else { return }
+        state = await preparerEtablissement(await controller.refreshEtablissementScope(epoch: snapshot.epoch), relire: false)
+    }
+
+    /// Lot 5 (T2a) : avant la publication d'un `.readyEtablissement`, drapeaux lus pour son epoch
+    /// (toujours à la connexion et à la reprise, sinon seulement pour un epoch encore jamais lu), puis
+    /// état courant de l'acteur republié (il a pu changer pendant la lecture). Tout autre état passe tel quel.
+    private func preparerEtablissement(_ resultat: SessionState, relire: Bool) async -> SessionState {
+        guard await chargerDrapeauxEtablissement(resultat, relire: relire) else { return resultat }
+        return await controller.state
+    }
+
+    /// Même règle pour une publication du contrôleur (lot 3, `SessionController.Publication`) : la publication
+    /// courante de l'acteur est republiée après la lecture des drapeaux (état et absences confirmées).
+    private func preparerEtablissement(_ publication: SessionController.Publication,
+                                       relire: Bool) async -> SessionController.Publication {
+        guard await chargerDrapeauxEtablissement(publication.state, relire: relire) else { return publication }
+        return await controller.publication
+    }
+
+    /// Vrai si les drapeaux de l'espace établissement viennent d'être lus pour l'epoch de `resultat`.
+    private func chargerDrapeauxEtablissement(_ resultat: SessionState, relire: Bool) async -> Bool {
+        guard case let .readyEtablissement(snapshot) = resultat else { return false }
+        guard relire || ecransEtablissement.epochCharge != snapshot.epoch else { return false }
+        await ecransEtablissement.charger(snapshot: snapshot, controller: controller)
+        return true
     }
 
     public func signOut() async {
@@ -172,7 +210,7 @@ public final class SessionStore: ObservableObject {
             for await event in controller.authEvents() {
                 let publication = await controller.handleAuthEventPublication(event)
                 guard let self else { return }
-                self.appliquer(publication)
+                self.appliquer(await self.preparerEtablissement(publication, relire: false))
                 self.canRetryRestore = await controller.canRetryRestore
                 self.evenementsAuthTraites += 1
             }
@@ -210,6 +248,13 @@ public final class SessionStore: ObservableObject {
                 await finPrecedente?.value
                 await push.surReady(snapshot)
             }
+        case let .readyEtablissement(snapshot):
+            // Lot 5 (T2a, report sur main) : identité ouverte comme `.ready` (fin subie → désinscription locale,
+            // identifiant au rapport de crash) ; aucun enregistrement push établissement avant la tranche dédiée
+            // (`push.surReady` ne sert que l'espace soignant, LOT5_PLAN « Dépendances », lot 3).
+            identitePubliee = true
+            dernierEpochPret = snapshot.epoch
+            signalerUtilisateurCrash(snapshot.user.id)
         case .blocked:
             identitePubliee = true
             // Lot 3, T15 (revue B8 n°1, M2) : un espace bloqué ne porte aucun identifiant, pas même celui de l'espace prêt
@@ -262,6 +307,7 @@ public final class SessionStore: ObservableObject {
     private func epochDeLIdentiteOuverte() async -> Int? {
         switch state {
         case let .ready(snapshot): return snapshot.epoch
+        case let .readyEtablissement(snapshot): return snapshot.epoch
         case .blocked: return await controller.epoch
         case .idle, .loading, .signedOut: return nil
         }
