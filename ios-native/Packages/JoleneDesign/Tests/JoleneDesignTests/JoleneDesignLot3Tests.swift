@@ -533,7 +533,7 @@ final class JoleneDesignLot3Tests: XCTestCase {
         let options = [SegmentedChoice.Option(id: "systeme", title: "Système"), SegmentedChoice.Option(id: "clair", title: "Clair"),
                        SegmentedChoice.Option(id: "sombre", title: "Sombre", systemImage: "moon")]
         let montant = AmountRow.Content(title: "Infirmier(e) de nuit — une mission au libellé très long pour forcer le retour à la ligne",
-                                        subtitle: "Clinique du Parc", montant: "~12 345,67 €", approximatif: true,
+                                        subtitle: "Clinique du Parc", montant: "12 345,67 €", approximatif: true,
                                         nature: "Net salarié estimé*", details: ["brut : 15 800,00 €"],
                                         footnote: "* Net salarié estimé après cotisations salariales (~22 %).", identifier: "amount")
         let criteres = PasswordCriteriaList.criteresWeb(longueur: true, majuscule: true, minuscule: false, chiffre: false, special: false)
