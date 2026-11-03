@@ -175,6 +175,12 @@ public enum RecoveryOutcome: Equatable, Sendable {
 /// `journaux_audit_action_check` (l.70243 du dump) : une action hors CHECK serait avalée.
 public enum AuditAction: String, CaseIterable, Sendable {
     case missionAssignation = "MISSION_ASSIGNATION"
+    // Lot 3 (T1, blueprint `LOT3_PLAN.md` §2.1) : consultation et modification du profil (T9, T11,
+    // web `ProfilSoignant.tsx` l.157-163) et export RGPD (T11), toutes trois dans le CHECK
+    // (`Lot3PortsTests.testChaqueActionAuditFigureDansLaContrainteDuDump`).
+    case donneesPersoConsultation = "DONNEES_PERSO_CONSULTATION"
+    case donneesPersoModification = "DONNEES_PERSO_MODIFICATION"
+    case rgpdExportDonnees = "RGPD_EXPORT_DONNEES"
 }
 
 /// Issue d'une écriture d'audit best-effort. `nonEnregistre` (`{success:false}`) n'est pas une

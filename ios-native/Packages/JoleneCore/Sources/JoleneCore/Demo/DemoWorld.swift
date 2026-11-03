@@ -33,7 +33,7 @@ public enum DemoWorld {
     /// câblé ici dans la même PR que sa tranche ; un port encore stub y est nommé explicitement
     /// (`DemoWorldTests.testAucunPortNonCable`).
     public static func gateways(drapeaux: [String: Bool]) -> Gateways {
-        Gateways(
+        var gateways = Gateways(
             auth: DemoAuthGateway(),
             role: DemoRoleGateway(),
             missions: DemoMissionsGateway(),
@@ -49,6 +49,28 @@ public enum DemoWorld {
             recovery: UnwiredRecoveryPort(),            // T10
             justificatifs: UnwiredJustificatifStoragePort() // T7
         )
+        câblerLot3(&gateways)
+        return gateways
+    }
+
+    /// Lot 3 (blueprint `LOT3_PLAN.md` §2.2) : seul point d'assignation des ports du lot 3 du monde
+    /// démo, après l'init du lot 1 (aucun troisième init). Chaque tranche y remplace son stub par sa
+    /// gateway démo dans la même PR qu'au monde Supabase (`SupabaseGateways.câblerLot3`) et retire
+    /// le port de `DemoWorldTests.portsEnAttenteLot3`.
+    static func câblerLot3(_ gateways: inout Gateways) {
+        gateways.push = UnwiredPushRegistrationPort()                      // T4
+        gateways.notifications = UnwiredNotificationsCenterPort()          // T5
+        gateways.preferences = UnwiredNotificationPreferencesPort()        // T6
+        gateways.inscription = UnwiredInscriptionPort()                    // T7, T8
+        gateways.profil = UnwiredProfilPort()                              // T9
+        gateways.avatar = UnwiredAvatarStoragePort()                       // T10
+        gateways.geocodage = UnwiredGeocodagePort()                        // T10
+        gateways.motDePasse = UnwiredMotDePassePort()                      // T11
+        gateways.exportRGPD = UnwiredExportRGPDPort()                      // T11
+        gateways.revenus = UnwiredRevenusPort()                            // T12
+        gateways.paiements = UnwiredPaiementsDeclaresPort()                // T13
+        gateways.iban = UnwiredIbanPort()                                  // T14b
+        gateways.stripeConnect = UnwiredStripeConnectPort()                // T14a
     }
 }
 

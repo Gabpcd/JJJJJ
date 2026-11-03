@@ -175,11 +175,12 @@ final class Lot3PortsTests: XCTestCase {
 
     static var dumpURL: URL {
         URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // JoleneCoreTests
-            .deletingLastPathComponent() // Tests
-            .deletingLastPathComponent() // JoleneCore
-            .deletingLastPathComponent() // Packages
-            .deletingLastPathComponent() // ios-native
+            .deletingLastPathComponent() // …/Tests/JoleneCoreTests
+            .deletingLastPathComponent() // …/JoleneCore/Tests
+            .deletingLastPathComponent() // …/Packages/JoleneCore
+            .deletingLastPathComponent() // …/ios-native/Packages
+            .deletingLastPathComponent() // …/ios-native
+            .deletingLastPathComponent() // racine du dépôt
             .appendingPathComponent("supabase/schema/public.sql")
     }
 
