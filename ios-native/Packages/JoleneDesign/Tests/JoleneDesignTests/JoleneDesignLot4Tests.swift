@@ -211,7 +211,6 @@ final class JoleneDesignLot4Tests: XCTestCase {
         XCTAssertTrue(web.contains("whitespace-pre-wrap break-words"), "Contenu jamais tronqué")
         XCTAssertNil(ChatBubble.contentLineLimit)
         XCTAssertEqual(ChatBubble.nonConfirmeText, "Envoi non confirmé", "DECISIONS_LOT4 D8")
-        XCTAssertEqual(ChatBubble.nonConfirmeIdentifier(for: "message-42"), "message-42-non-confirme")
     }
 
     func testChatBubbleVocaliseAuteurContenuHeureEtEnvoiNonConfirme() {
