@@ -1,0 +1,256 @@
+[
+  {
+    "name": "classer/AES",
+    "input": {
+      "fonction": "classer",
+      "profession": "AES"
+    },
+    "expected": {
+      "sansRpps": true,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/AS",
+    "input": {
+      "fonction": "classer",
+      "profession": "AS"
+    },
+    "expected": {
+      "sansRpps": true,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/AUXILIAIRE_PUERICULTURE",
+    "input": {
+      "fonction": "classer",
+      "profession": "AUXILIAIRE_PUERICULTURE"
+    },
+    "expected": {
+      "sansRpps": true,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/DENTISTE",
+    "input": {
+      "fonction": "classer",
+      "profession": "DENTISTE"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": true
+    }
+  },
+  {
+    "name": "classer/DIETETICIEN",
+    "input": {
+      "fonction": "classer",
+      "profession": "DIETETICIEN"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/ERGOTHERAPEUTE",
+    "input": {
+      "fonction": "classer",
+      "profession": "ERGOTHERAPEUTE"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/IADE",
+    "input": {
+      "fonction": "classer",
+      "profession": "IADE"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/IBODE",
+    "input": {
+      "fonction": "classer",
+      "profession": "IBODE"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/IDE",
+    "input": {
+      "fonction": "classer",
+      "profession": "IDE"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/INCONNUE",
+    "input": {
+      "fonction": "classer",
+      "profession": "INCONNUE"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/KINE",
+    "input": {
+      "fonction": "classer",
+      "profession": "KINE"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/MANIPULATEUR_RADIO",
+    "input": {
+      "fonction": "classer",
+      "profession": "MANIPULATEUR_RADIO"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/MEDECIN",
+    "input": {
+      "fonction": "classer",
+      "profession": "MEDECIN"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": true
+    }
+  },
+  {
+    "name": "classer/ORTHOPHONISTE",
+    "input": {
+      "fonction": "classer",
+      "profession": "ORTHOPHONISTE"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/PHARMACIEN",
+    "input": {
+      "fonction": "classer",
+      "profession": "PHARMACIEN"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": true
+    }
+  },
+  {
+    "name": "classer/PREPARATEUR_PHARMA",
+    "input": {
+      "fonction": "classer",
+      "profession": "PREPARATEUR_PHARMA"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/PSYCHOMOTRICIEN",
+    "input": {
+      "fonction": "classer",
+      "profession": "PSYCHOMOTRICIEN"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/SAGE_FEMME",
+    "input": {
+      "fonction": "classer",
+      "profession": "SAGE_FEMME"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": true
+    }
+  },
+  {
+    "name": "classer/as",
+    "input": {
+      "fonction": "classer",
+      "profession": "as"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/medecin",
+    "input": {
+      "fonction": "classer",
+      "profession": "medecin"
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "classer/vide",
+    "input": {
+      "fonction": "classer",
+      "profession": ""
+    },
+    "expected": {
+      "sansRpps": false,
+      "rppsRequis": false
+    }
+  },
+  {
+    "name": "liste/PROFESSIONS_RPPS_REQUIS",
+    "input": {
+      "fonction": "PROFESSIONS_RPPS_REQUIS"
+    },
+    "expected": [
+      "MEDECIN",
+      "DENTISTE",
+      "SAGE_FEMME",
+      "PHARMACIEN"
+    ]
+  },
+  {
+    "name": "liste/PROFESSIONS_SANS_RPPS",
+    "input": {
+      "fonction": "PROFESSIONS_SANS_RPPS"
+    },
+    "expected": [
+      "AS",
+      "AES",
+      "AUXILIAIRE_PUERICULTURE"
+    ]
+  }
+]

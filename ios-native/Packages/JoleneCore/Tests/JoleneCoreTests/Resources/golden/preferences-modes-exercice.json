@@ -1,0 +1,1358 @@
+[
+  {
+    "name": "modeExerciceSelectionne/grille/cdd-liberal/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "CDD",
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/cdd/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "CDD"
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/cdd/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "CDD"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/doublons-liberal/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "LIBERAL",
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/doublons-liberal/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "LIBERAL",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/doublons-salarie/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "SALARIE",
+        "CDD",
+        "SALARIE"
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/doublons-salarie/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "SALARIE",
+        "CDD",
+        "SALARIE"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/inconnu-et-liberal/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "TOUS",
+        "LIBERAL",
+        "AUTRE"
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/inconnu-et-liberal/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "TOUS",
+        "LIBERAL",
+        "AUTRE"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/liberal/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/liberal/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "LIBERAL"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/minuscules/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "salarie",
+        "liberal"
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/minuscules/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "salarie",
+        "liberal"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/mixte/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "MIXTE"
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/mixte/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "MIXTE"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/ordre-liberal-d-abord/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "LIBERAL",
+        "VACATION"
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/ordre-liberal-d-abord/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "LIBERAL",
+        "VACATION"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/quatre-codes/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "CDD",
+        "VACATION",
+        "SALARIE",
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/quatre-codes/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "CDD",
+        "VACATION",
+        "SALARIE",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/salarie/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "SALARIE"
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/salarie/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "SALARIE"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/texte-vide/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        ""
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/texte-vide/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        ""
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/tous/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "TOUS"
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/tous/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "TOUS"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/vacation/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "VACATION"
+      ],
+      "mode": "LIBERAL"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/vacation/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "VACATION"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/vide/LIBERAL",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [],
+      "mode": "LIBERAL"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/grille/vide/SALARIE",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [],
+      "mode": "SALARIE"
+    },
+    "expected": false
+  },
+  {
+    "name": "modeExerciceSelectionne/vitest-CDD-salarie",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "CDD",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/vitest-SALARIE-salarie",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "SALARIE",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": true
+  },
+  {
+    "name": "modeExerciceSelectionne/vitest-VACATION-salarie",
+    "input": {
+      "fonction": "modeExerciceSelectionne",
+      "contrats": [
+        "VACATION",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE"
+    },
+    "expected": true
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/cdd-liberal/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "CDD",
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "CDD",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/cdd-liberal/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "CDD",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": [
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/cdd/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "CDD"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "CDD",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/cdd/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "CDD"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      "CDD"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/cdd/SALARIE/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "CDD"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "CDD"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/cdd/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "CDD"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": []
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/doublons-liberal/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "LIBERAL",
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "LIBERAL",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/doublons-liberal/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "LIBERAL",
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": []
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/doublons-liberal/SALARIE/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "LIBERAL",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "LIBERAL",
+      "LIBERAL",
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/doublons-liberal/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "LIBERAL",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": [
+      "LIBERAL",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/doublons-salarie/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "SALARIE",
+        "CDD",
+        "SALARIE"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "SALARIE",
+      "CDD",
+      "SALARIE",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/doublons-salarie/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "SALARIE",
+        "CDD",
+        "SALARIE"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      "SALARIE",
+      "CDD",
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/doublons-salarie/SALARIE/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "SALARIE",
+        "CDD",
+        "SALARIE"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "SALARIE",
+      "CDD",
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/doublons-salarie/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "SALARIE",
+        "CDD",
+        "SALARIE"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": []
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/inconnu-et-liberal/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "TOUS",
+        "LIBERAL",
+        "AUTRE"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "TOUS",
+      "LIBERAL",
+      "AUTRE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/inconnu-et-liberal/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "TOUS",
+        "LIBERAL",
+        "AUTRE"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      "TOUS",
+      "AUTRE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/inconnu-et-liberal/SALARIE/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "TOUS",
+        "LIBERAL",
+        "AUTRE"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "TOUS",
+      "LIBERAL",
+      "AUTRE",
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/inconnu-et-liberal/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "TOUS",
+        "LIBERAL",
+        "AUTRE"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": [
+      "TOUS",
+      "LIBERAL",
+      "AUTRE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/liberal/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/liberal/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": []
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/liberal/SALARIE/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "LIBERAL"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "LIBERAL",
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/liberal/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "LIBERAL"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": [
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/minuscules/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "salarie",
+        "liberal"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "salarie",
+      "liberal",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/minuscules/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "salarie",
+        "liberal"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      "salarie",
+      "liberal"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/minuscules/SALARIE/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "salarie",
+        "liberal"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "salarie",
+      "liberal",
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/minuscules/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "salarie",
+        "liberal"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": [
+      "salarie",
+      "liberal"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/mixte/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "MIXTE"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "MIXTE",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/mixte/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "MIXTE"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      "MIXTE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/mixte/SALARIE/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "MIXTE"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "MIXTE",
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/mixte/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "MIXTE"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": [
+      "MIXTE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/ordre-liberal-d-abord/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "LIBERAL",
+        "VACATION"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "LIBERAL",
+      "VACATION"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/ordre-liberal-d-abord/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "LIBERAL",
+        "VACATION"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      "VACATION"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/ordre-liberal-d-abord/SALARIE/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "LIBERAL",
+        "VACATION"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "LIBERAL",
+      "VACATION"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/ordre-liberal-d-abord/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "LIBERAL",
+        "VACATION"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": [
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/quatre-codes/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "CDD",
+        "VACATION",
+        "SALARIE",
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "CDD",
+      "VACATION",
+      "SALARIE",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/quatre-codes/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "CDD",
+        "VACATION",
+        "SALARIE",
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      "CDD",
+      "VACATION",
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/quatre-codes/SALARIE/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "CDD",
+        "VACATION",
+        "SALARIE",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "CDD",
+      "VACATION",
+      "SALARIE",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/salarie/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "SALARIE"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/salarie/SALARIE/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "SALARIE"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/salarie/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "SALARIE"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": []
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/texte-vide/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        ""
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/texte-vide/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        ""
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      ""
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/texte-vide/SALARIE/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        ""
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "",
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/texte-vide/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        ""
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": [
+      ""
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/tous/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "TOUS"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "TOUS",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/tous/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "TOUS"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      "TOUS"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/tous/SALARIE/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "TOUS"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "TOUS",
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/tous/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "TOUS"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": [
+      "TOUS"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/vacation/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "VACATION"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "VACATION",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/vacation/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "VACATION"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      "VACATION"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/vacation/SALARIE/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "VACATION"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "VACATION"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/vacation/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "VACATION"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": []
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/vide/LIBERAL/coche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/vide/LIBERAL/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": []
+  },
+  {
+    "name": "modifierPreferenceModeExercice/grille/vide/SALARIE/decoche",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": []
+  },
+  {
+    "name": "modifierPreferenceModeExercice/vitest-CDD-conserve",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "CDD",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "CDD",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/vitest-CDD-retire-liberal",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "CDD",
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      "CDD"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/vitest-SALARIE-conserve",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "SALARIE",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "SALARIE",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/vitest-SALARIE-retire-liberal",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "SALARIE",
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/vitest-VACATION-conserve",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "VACATION",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "VACATION",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/vitest-VACATION-retire-liberal",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "VACATION",
+        "LIBERAL"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": false
+    },
+    "expected": [
+      "VACATION"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/vitest-ajoute-liberal",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "SALARIE"
+      ],
+      "mode": "LIBERAL",
+      "selectionne": true
+    },
+    "expected": [
+      "SALARIE",
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/vitest-ajoute-salarie",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [],
+      "mode": "SALARIE",
+      "selectionne": true
+    },
+    "expected": [
+      "SALARIE"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/vitest-retire-salarie",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "SALARIE",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": [
+      "LIBERAL"
+    ]
+  },
+  {
+    "name": "modifierPreferenceModeExercice/vitest-retire-toutes-variantes-salariees",
+    "input": {
+      "fonction": "modifierPreferenceModeExercice",
+      "contrats": [
+        "CDD",
+        "VACATION",
+        "SALARIE",
+        "LIBERAL"
+      ],
+      "mode": "SALARIE",
+      "selectionne": false
+    },
+    "expected": [
+      "LIBERAL"
+    ]
+  }
+]

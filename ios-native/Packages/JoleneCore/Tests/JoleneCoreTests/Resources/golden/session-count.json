@@ -1,0 +1,1082 @@
+[
+  {
+    "name": "estSessionRecurrente/absent",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": null
+    },
+    "expected": {
+      "numero": 0,
+      "recurrente": false
+    }
+  },
+  {
+    "name": "estSessionRecurrente/au-dela-2-puissance-53",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "9007199254740993"
+    },
+    "expected": {
+      "numero": 9007199254740992,
+      "recurrente": true
+    }
+  },
+  {
+    "name": "estSessionRecurrente/blanc",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "   "
+    },
+    "expected": {
+      "numero": 0,
+      "recurrente": false
+    }
+  },
+  {
+    "name": "estSessionRecurrente/chiffre-arabe",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "٢"
+    },
+    "expected": {
+      "numero": 0,
+      "recurrente": false
+    }
+  },
+  {
+    "name": "estSessionRecurrente/deux",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "2"
+    },
+    "expected": {
+      "numero": 2,
+      "recurrente": true
+    }
+  },
+  {
+    "name": "estSessionRecurrente/deux-puissance-60",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "1152921504606846976"
+    },
+    "expected": {
+      "numero": 1152921504606847000,
+      "recurrente": true
+    }
+  },
+  {
+    "name": "estSessionRecurrente/deux-puissance-69",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "590295810358705651712"
+    },
+    "expected": {
+      "numero": 590295810358705700000,
+      "recurrente": true
+    }
+  },
+  {
+    "name": "estSessionRecurrente/deux-suffixe-texte",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "2abc"
+    },
+    "expected": {
+      "numero": 2,
+      "recurrente": true
+    }
+  },
+  {
+    "name": "estSessionRecurrente/deux-virgule-cinq",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "2.5"
+    },
+    "expected": {
+      "numero": 2,
+      "recurrente": true
+    }
+  },
+  {
+    "name": "estSessionRecurrente/dix",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "10"
+    },
+    "expected": {
+      "numero": 10,
+      "recurrente": true
+    }
+  },
+  {
+    "name": "estSessionRecurrente/espaces-trois",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "  3"
+    },
+    "expected": {
+      "numero": 3,
+      "recurrente": true
+    }
+  },
+  {
+    "name": "estSessionRecurrente/exposant",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "1e3"
+    },
+    "expected": {
+      "numero": 1,
+      "recurrente": false
+    }
+  },
+  {
+    "name": "estSessionRecurrente/hexadecimal",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "0x10"
+    },
+    "expected": {
+      "numero": 0,
+      "recurrente": false
+    }
+  },
+  {
+    "name": "estSessionRecurrente/moins-un",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "-1"
+    },
+    "expected": {
+      "numero": 0,
+      "recurrente": false
+    }
+  },
+  {
+    "name": "estSessionRecurrente/moins-zero",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "-0"
+    },
+    "expected": {
+      "numero": 0,
+      "recurrente": false
+    }
+  },
+  {
+    "name": "estSessionRecurrente/nbsp-deux",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": " 2"
+    },
+    "expected": {
+      "numero": 2,
+      "recurrente": true
+    }
+  },
+  {
+    "name": "estSessionRecurrente/plus-deux",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "+2"
+    },
+    "expected": {
+      "numero": 2,
+      "recurrente": true
+    }
+  },
+  {
+    "name": "estSessionRecurrente/texte",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "abc"
+    },
+    "expected": {
+      "numero": 0,
+      "recurrente": false
+    }
+  },
+  {
+    "name": "estSessionRecurrente/un",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "1"
+    },
+    "expected": {
+      "numero": 1,
+      "recurrente": false
+    }
+  },
+  {
+    "name": "estSessionRecurrente/un-virgule-neuf",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "1.9"
+    },
+    "expected": {
+      "numero": 1,
+      "recurrente": false
+    }
+  },
+  {
+    "name": "estSessionRecurrente/vide",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": ""
+    },
+    "expected": {
+      "numero": 0,
+      "recurrente": false
+    }
+  },
+  {
+    "name": "estSessionRecurrente/vingt-chiffres",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "99999999999999999999"
+    },
+    "expected": {
+      "numero": 100000000000000000000,
+      "recurrente": true
+    }
+  },
+  {
+    "name": "estSessionRecurrente/vingt-et-un-chiffres",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "123456789012345678901"
+    },
+    "expected": {
+      "numero": 123456789012345680000,
+      "recurrente": true
+    }
+  },
+  {
+    "name": "estSessionRecurrente/zero",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "0"
+    },
+    "expected": {
+      "numero": 0,
+      "recurrente": false
+    }
+  },
+  {
+    "name": "incrementerSession/absent/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": null,
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1,
+        1
+      ],
+      "compteurApres": "1",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/absent/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": null,
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        0,
+        0
+      ],
+      "compteurApres": null,
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/au-dela-2-puissance-53/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "9007199254740993",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        9007199254740992,
+        9007199254740992
+      ],
+      "compteurApres": "9007199254740992",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/au-dela-2-puissance-53/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "9007199254740993",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        9007199254740992,
+        9007199254740992
+      ],
+      "compteurApres": "9007199254740993",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/blanc/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "   ",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1,
+        1
+      ],
+      "compteurApres": "1",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/blanc/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "   ",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        0,
+        0
+      ],
+      "compteurApres": "   ",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/chiffre-arabe/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "٢",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1,
+        1
+      ],
+      "compteurApres": "1",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/chiffre-arabe/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "٢",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        0,
+        0
+      ],
+      "compteurApres": "٢",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/deux-puissance-60/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "1152921504606846976",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1152921504606847000,
+        1152921504606847000
+      ],
+      "compteurApres": "1152921504606847000",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/deux-puissance-60/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "1152921504606846976",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1152921504606847000,
+        1152921504606847000
+      ],
+      "compteurApres": "1152921504606846976",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/deux-puissance-69/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "590295810358705651712",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        590295810358705700000,
+        590295810358705700000
+      ],
+      "compteurApres": "590295810358705700000",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/deux-puissance-69/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "590295810358705651712",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        590295810358705700000,
+        590295810358705700000
+      ],
+      "compteurApres": "590295810358705651712",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/deux-suffixe-texte/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "2abc",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        3,
+        3
+      ],
+      "compteurApres": "3",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/deux-suffixe-texte/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "2abc",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        2,
+        2
+      ],
+      "compteurApres": "2abc",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/deux-virgule-cinq/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "2.5",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        3,
+        3
+      ],
+      "compteurApres": "3",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/deux-virgule-cinq/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "2.5",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        2,
+        2
+      ],
+      "compteurApres": "2.5",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/deux/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "2",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        3,
+        3
+      ],
+      "compteurApres": "3",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/deux/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "2",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        2,
+        2
+      ],
+      "compteurApres": "2",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/dix/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "10",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        11,
+        11
+      ],
+      "compteurApres": "11",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/dix/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "10",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        10,
+        10
+      ],
+      "compteurApres": "10",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/espaces-trois/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "  3",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        4,
+        4
+      ],
+      "compteurApres": "4",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/espaces-trois/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "  3",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        3,
+        3
+      ],
+      "compteurApres": "  3",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/exposant/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "1e3",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        2,
+        2
+      ],
+      "compteurApres": "2",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/exposant/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "1e3",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1,
+        1
+      ],
+      "compteurApres": "1e3",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/hexadecimal/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "0x10",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1,
+        1
+      ],
+      "compteurApres": "1",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/hexadecimal/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "0x10",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        0,
+        0
+      ],
+      "compteurApres": "0x10",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/moins-un/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "-1",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1,
+        1
+      ],
+      "compteurApres": "1",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/moins-un/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "-1",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        0,
+        0
+      ],
+      "compteurApres": "-1",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/moins-zero/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "-0",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1,
+        1
+      ],
+      "compteurApres": "1",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/moins-zero/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "-0",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        0,
+        0
+      ],
+      "compteurApres": "-0",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/nbsp-deux/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": " 2",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        3,
+        3
+      ],
+      "compteurApres": "3",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/nbsp-deux/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": " 2",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        2,
+        2
+      ],
+      "compteurApres": " 2",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/plus-deux/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "+2",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        3,
+        3
+      ],
+      "compteurApres": "3",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/plus-deux/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "+2",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        2,
+        2
+      ],
+      "compteurApres": "+2",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/texte/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "abc",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1,
+        1
+      ],
+      "compteurApres": "1",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/texte/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "abc",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        0,
+        0
+      ],
+      "compteurApres": "abc",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/un-virgule-neuf/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "1.9",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        2,
+        2
+      ],
+      "compteurApres": "2",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/un-virgule-neuf/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "1.9",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1,
+        1
+      ],
+      "compteurApres": "1.9",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/un/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "1",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        2,
+        2
+      ],
+      "compteurApres": "2",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/un/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "1",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1,
+        1
+      ],
+      "compteurApres": "1",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/vide/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1,
+        1
+      ],
+      "compteurApres": "1",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/vide/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        0,
+        0
+      ],
+      "compteurApres": "",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/vingt-chiffres/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "99999999999999999999",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        100000000000000000000,
+        100000000000000000000
+      ],
+      "compteurApres": "100000000000000000000",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/vingt-chiffres/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "99999999999999999999",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        100000000000000000000,
+        100000000000000000000
+      ],
+      "compteurApres": "99999999999999999999",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/vingt-et-un-chiffres/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "123456789012345678901",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        123456789012345680000,
+        123456789012345680000
+      ],
+      "compteurApres": "123456789012345680000",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/vingt-et-un-chiffres/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "123456789012345678901",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        123456789012345680000,
+        123456789012345680000
+      ],
+      "compteurApres": "123456789012345678901",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/zero/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "0",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1,
+        1
+      ],
+      "compteurApres": "1",
+      "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/zero/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "0",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        0,
+        0
+      ],
+      "compteurApres": "0",
+      "recurrenteApres": false
+    }
+  }
+]
