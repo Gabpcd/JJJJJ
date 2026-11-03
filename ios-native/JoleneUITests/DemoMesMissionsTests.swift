@@ -260,7 +260,9 @@ final class DemoMesMissionsTests: JoleneUITestCase {
         require("L'issue de la ligne basse est visible sans défilement") {
             self.visible(issue) && !self.recouverte(issue) && issue.label.contains("2 créneaux ajoutés à votre calendrier.")
         }
-        XCTAssertEqual(bouton.frame.minY, avant.minY, accuracy: 1, "le bandeau superposé ne décale pas la liste")
+        // Tolérance d'un reliquat d'inertie du dernier glissement ; un bandeau inséré dans la liste la
+        // décalerait de toute sa hauteur (plus de 40 pt).
+        XCTAssertEqual(bouton.frame.minY, avant.minY, accuracy: 8, "le bandeau superposé ne décale pas la liste")
         record("\(proofPrefix)-mes-missions-calendrier-ligne-basse")
     }
 
