@@ -42,6 +42,10 @@ import JoleneSupabase
 /// Lot 3, T15 : rapport de crash (`CrashReporting`, démarré par `JoleneApp` avant le conteneur sur la même lecture de
 /// l'environnement, `environnementDeLancement`) remis à la session en staging et en production seulement (identifiant
 /// utilisateur) ; jamais en démo.
+///
+/// Lot 5 (T2a, D20) : DEBUG, démo seulement, `-JOLENE_DEMO_ESPACE etablissement` (+ `-JOLENE_DEMO_ROLE_ETAB`,
+/// `-JOLENE_DEMO_LEGACY 1`, `-JOLENE_DEMO_BLOCAGE 1`, `DemoEspaceLancement`) ouvre l'espace établissement fictif ;
+/// `-JOLENE_FLAG_<cle>` surcharge aussi les drapeaux `ios_natif_etab_*` (`DemoEtabSessionTests`).
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -266,7 +270,9 @@ final class AppContainer: ObservableObject {
     /// Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
-        var gateways = DemoWorld.gateways(drapeaux: DemoFlagsGateway.surcharges(arguments: arguments))
+        // Lot 5 (T2a) : espace démo choisi au lancement (soignant par défaut, `DemoEspaceLancement`).
+        var gateways = DemoWorld.gateways(espace: DemoEspaceLancement.espace(arguments: arguments),
+                                          drapeaux: DemoFlagsGateway.surcharges(arguments: arguments))
         // Lot 2 T4b : `-JOLENE_DEMO_SCENARIO scan-incertain` (premier scan appliqué, réponse perdue, réconciliation) ;
         // seconde revue fraîche (m2) : `session-expiree-scan`, `session-expiree-consentement` (pointage et authentification
         // démo liés : « Vérifier ma session » revalide), `consentement-echec`.

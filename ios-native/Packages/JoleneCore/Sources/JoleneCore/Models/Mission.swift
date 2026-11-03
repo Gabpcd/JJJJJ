@@ -28,10 +28,12 @@ public enum UserRole: String, Codable, Sendable, CaseIterable {
     case etablissementLegacy = "ETABLISSEMENT"
 
     /// Rôles que l'app native sert ; les autres reçoivent un écran de renvoi vers jolene.app.
+    /// Lot 5 (T2a, D3, exception consignée dans PRINCIPES §2) : l'espace établissement est servi
+    /// (membre et alias legacy), son périmètre étant confirmé par le serveur (`EspaceResolution`).
     public var isNativelyServed: Bool {
         switch self {
         case .soignant: return true
-        case .adminEtablissement, .etablissementLegacy: return false // lot 5
+        case .adminEtablissement, .etablissementLegacy: return true
         case .adminPlateforme, .adminGroupe: return false
         }
     }
