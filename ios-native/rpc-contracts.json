@@ -781,7 +781,7 @@
     },
     {
       "name": "fn_mes_permissions_etab",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": {
         "args": "{ p_etablissement_id?: string }",
@@ -811,7 +811,7 @@
     },
     {
       "name": "fn_mon_etablissement_complet",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": {
         "args": "never",
@@ -966,6 +966,24 @@
           "message": "Cette mission ne peut pas être attribuée : le mandat SEPA de l'établissement n'est pas encore posé (IBAN à ajouter dans Paramètres → Facturation).",
           "fonction": "fn_trg_gate_assignation_paiement",
           "declencheur": "trg_gate_assignation_paiement"
+        },
+        {
+          "sqlstate": "42501",
+          "message": "Permission etablissement missions requise",
+          "fonction": "fn_enforce_etablissement_rbac_trigger",
+          "declencheur": "trg_p0_rbac_missions"
+        },
+        {
+          "sqlstate": "42501",
+          "message": "Permission etablissement contrats requise",
+          "fonction": "fn_enforce_etablissement_rbac_trigger",
+          "declencheur": "trg_p0_rbac_contrats_mission"
+        },
+        {
+          "sqlstate": "42501",
+          "message": "Permission etablissement candidatures requise",
+          "fonction": "fn_enforce_etablissement_rbac_trigger",
+          "declencheur": "trg_p0_rbac_candidatures"
         }
       ]
     },
@@ -1251,6 +1269,18 @@
           "sqlstate": "23514",
           "message": "L'heure de fin (%) doit être postérieure au début du créneau (%).",
           "fonction": "fn_declarer_fin_retroactive"
+        },
+        {
+          "sqlstate": "42501",
+          "message": "Permission etablissement pointage requise",
+          "fonction": "fn_enforce_etablissement_rbac_trigger",
+          "declencheur": "trg_p0_rbac_presences"
+        },
+        {
+          "sqlstate": "42501",
+          "message": "Permission etablissement missions requise",
+          "fonction": "fn_enforce_etablissement_rbac_trigger",
+          "declencheur": "trg_p0_rbac_missions"
         }
       ]
     },

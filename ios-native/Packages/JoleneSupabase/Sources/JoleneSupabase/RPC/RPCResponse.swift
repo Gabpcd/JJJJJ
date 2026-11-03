@@ -212,23 +212,34 @@ public struct RPCResponse: Equatable, Sendable {
     /// Appel RPC sans paramètre ; erreurs de transport traduites par `SupabaseErrorMapping`
     /// (PGRST202 et 300-303 → `.contract`, refus définitif sans renvoi), sauf l'exception
     /// `[CODE DU TRAVAIL]`, restituée en refus structuré (`refusCodeDuTravail`).
-    static func appeler(_ client: SupabaseClient, _ fonction: String, fallback: String) async throws -> RPCResponse {
-        try await executer(fallback: fallback) { try await client.rpc(fonction).execute().value }
+    /// `interceptions` (lot 5, additif) : par défaut celle du lot 1 seule, comportement inchangé ;
+    /// les gateways établissement passent `ListesBlanchesEtablissement.interceptions(rpc:)`.
+    static func appeler(_ client: SupabaseClient, _ fonction: String, fallback: String,
+                        interceptions: [RPCInterception] = RPCInterception.parDefaut) async throws -> RPCResponse {
+        try await executer(fallback: fallback, interceptions: interceptions) { try await client.rpc(fonction).execute().value }
     }
 
     /// Appel RPC à paramètres nommés (mêmes règles).
     static func appeler(_ client: SupabaseClient, _ fonction: String, params: JSONObject,
-                        fallback: String) async throws -> RPCResponse {
-        try await executer(fallback: fallback) { try await client.rpc(fonction, params: params).execute().value }
+                        fallback: String, interceptions: [RPCInterception] = RPCInterception.parDefaut) async throws -> RPCResponse {
+        try await executer(fallback: fallback, interceptions: interceptions) {
+            try await client.rpc(fonction, params: params).execute().value
+        }
     }
 
-    /// Seul point de traduction des erreurs d'appel : l'interception du Code du travail précède
-    /// `SupabaseErrorMapping.map`, laissé inchangé (lot 0). Une seule requête, aucun renvoi.
-    private static func executer(fallback: String, _ requete: () async throws -> AnyJSON) async throws -> RPCResponse {
+    /// Seul point de traduction des erreurs d'appel : les interceptions (lot 1 : Code du travail ;
+    /// lot 5 : listes blanches) précèdent `SupabaseErrorMapping.map`, laissé inchangé (lot 0). Une
+    /// seule requête, aucun renvoi.
+    private static func executer(fallback: String, interceptions: [RPCInterception],
+                                 _ requete: () async throws -> AnyJSON) async throws -> RPCResponse {
         do {
             return RPCResponse(try await requete())
-        } catch let postgrest as PostgrestError where estRefusCodeDuTravail(postgrest.message) {
-            return refusCodeDuTravail(postgrest.message)
+        } catch let postgrest as PostgrestError {
+            switch RPCInterception.appliquer(interceptions, code: postgrest.code, message: postgrest.message) {
+            case let .reponse(reponse)?: return reponse
+            case let .erreur(erreur)?: throw erreur
+            case nil: throw SupabaseErrorMapping.map(postgrest, fallback: fallback)
+            }
         } catch {
             throw SupabaseErrorMapping.map(error, fallback: fallback)
         }

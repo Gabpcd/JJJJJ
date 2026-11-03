@@ -41,6 +41,13 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   au monde démo, si bien qu'un port câblé dans un seul monde rougit un test. Chaque tranche
   câble son port dans les deux mondes et le retire de la liste dans la même PR ; elle est
   vide à la clôture du lot (`unwiredPorts.isEmpty`, T12).
+- Lot 5 (T1) : un **seul** champ additif de plus, `Gateways.etablissement`
+  (`Ports/EtablissementGateways.swift`), qui regroupe les ports de l'espace établissement, non
+  câblés par défaut (`Ports/Lot5Ports.swift`). Même règle de preuve, liste à part :
+  `DemoWorldTests.portsEnAttenteLot5`, comparée au monde Supabase par `SupabaseGatewaysTests`,
+  vide à la clôture du lot 5 (T14). Les refus 42501 de droit sont interceptés avant
+  `SupabaseErrorMapping` par listes blanches exactes (`RPC/RPCInterception.swift`), le mapping du
+  lot 0 reste inchangé.
 
 ## 3. Aucun succès fabriqué
 

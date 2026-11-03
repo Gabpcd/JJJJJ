@@ -1,0 +1,84 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "source": "supabase/schema/public.sql — fn_a_permission_etablissement, fn_mes_permissions_etab",
+  "cles": [
+    "gerer_equipe",
+    "supprimer_compte",
+    "profil_etab",
+    "paiement",
+    "lecture_paiement",
+    "missions",
+    "candidatures",
+    "contrats",
+    "pointage",
+    "rh",
+    "lecture"
+  ],
+  "roles": {
+    "PROPRIETAIRE": {
+      "gerer_equipe": true,
+      "supprimer_compte": true,
+      "profil_etab": true,
+      "paiement": true,
+      "lecture_paiement": true,
+      "missions": true,
+      "candidatures": true,
+      "contrats": true,
+      "pointage": true,
+      "rh": true,
+      "lecture": true
+    },
+    "ADMIN_GROUPE": {
+      "gerer_equipe": false,
+      "supprimer_compte": false,
+      "profil_etab": true,
+      "paiement": true,
+      "lecture_paiement": true,
+      "missions": true,
+      "candidatures": true,
+      "contrats": true,
+      "pointage": true,
+      "rh": true,
+      "lecture": true
+    },
+    "RH": {
+      "gerer_equipe": false,
+      "supprimer_compte": false,
+      "profil_etab": false,
+      "paiement": false,
+      "lecture_paiement": false,
+      "missions": true,
+      "candidatures": true,
+      "contrats": true,
+      "pointage": true,
+      "rh": true,
+      "lecture": true
+    },
+    "POINTAGE_ONLY": {
+      "gerer_equipe": false,
+      "supprimer_compte": false,
+      "profil_etab": false,
+      "paiement": false,
+      "lecture_paiement": false,
+      "missions": false,
+      "candidatures": false,
+      "contrats": false,
+      "pointage": true,
+      "rh": false,
+      "lecture": true
+    },
+    "LECTURE_SEULE": {
+      "gerer_equipe": false,
+      "supprimer_compte": false,
+      "profil_etab": false,
+      "paiement": false,
+      "lecture_paiement": true,
+      "missions": false,
+      "candidatures": false,
+      "contrats": false,
+      "pointage": false,
+      "rh": false,
+      "lecture": true
+    }
+  }
+}

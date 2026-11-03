@@ -63,6 +63,20 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(supabase.contains("compte"), "T8 câble la suppression de compte")
     }
 
+    /// Lot 5 (T1) : même règle pour les ports de l'espace établissement — aucune liste propre à ce monde,
+    /// comparaison au monde démo (source unique `DemoWorldTests.portsEnAttenteLot5`).
+    func testPortsEtablissementCablesCommeLeMondeDemo() {
+        let supabase = SupabaseGateways.make(client: TestClient.make()).etablissement
+        let demo = DemoWorld.gateways().etablissement
+        XCTAssertEqual(supabase.unwiredPorts, demo.unwiredPorts,
+                       "un port établissement doit être câblé dans SupabaseEtablissementGateways ET DemoEtablissementWorld dans la même PR")
+        XCTAssertTrue(supabase.session is SupabaseEtabSessionGateway, "T1 câble la session établissement")
+        XCTAssertTrue(supabase.audit is SupabaseEtabAuditGateway, "T1 câble l'audit de consultation")
+        XCTAssertFalse(supabase.unwiredPorts.contains("etablissement.session"))
+        XCTAssertFalse(supabase.unwiredPorts.contains("etablissement.audit"))
+        XCTAssertEqual(SupabaseEtablissementGateways.make(client: TestClient.make()).unwiredPorts, supabase.unwiredPorts)
+    }
+
     func testClientOptionsUsePkceInjectedStorageAndJoleneHeader() {
         let storage = InMemoryAuthStorage()
         let session = URLSession(configuration: .ephemeral)

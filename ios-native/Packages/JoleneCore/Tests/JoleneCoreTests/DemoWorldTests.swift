@@ -216,6 +216,25 @@ final class DemoWorldTests: XCTestCase {
         XCTAssertEqual(gateways.clock.now(), DemoWorld.fixedNow)
     }
 
+    // MARK: - Lot 5 (T1)
+
+    /// Ports de l'espace établissement que leur tranche n'a pas encore câblés : SOURCE UNIQUE de la
+    /// liste (`docs/mobile-swift/LOT5_PLAN.md` §2.3), comme `portsEnAttenteLot1`. Chaque PR qui câble un
+    /// port le câble dans les deux mondes et le retire d'ici ; `SupabaseGatewaysTests` compare
+    /// `SupabaseGateways.make(client:).etablissement` au monde démo. Vide à T14.
+    static let portsEnAttenteLot5 = ["etablissement.dashboard", "etablissement.missions", "etablissement.candidatures",
+                                     "etablissement.pointage", "etablissement.presences", "etablissement.publication"]
+
+    func testPortsEtabEnAttente() {
+        let gateways = DemoWorld.gateways()
+        XCTAssertEqual(gateways.etablissement.unwiredPorts, Self.portsEnAttenteLot5,
+                       "tout port établissement livré doit être câblé dans DemoWorld.gateways() dans la même PR")
+        XCTAssertTrue(gateways.etablissement.session is DemoEtabSessionGateway, "T1 câble la session établissement")
+        XCTAssertTrue(gateways.etablissement.audit is DemoEtabAuditGateway, "T1 câble l'audit de consultation")
+        XCTAssertEqual(DemoWorld.gateways(drapeaux: [:]).etablissement.unwiredPorts, Self.portsEnAttenteLot5)
+        XCTAssertEqual(gateways.unwiredPorts, Self.portsEnAttenteLot1, "le champ établissement n'altère pas la liste du lot 1")
+    }
+
     func testAuditDemoJournaliseEnMemoireSansReseau() async throws {
         let gateways = DemoWorld.gateways()
         let audit = try XCTUnwrap(gateways.audit as? DemoAuditGateway)
