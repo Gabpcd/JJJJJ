@@ -112,6 +112,9 @@ jobs:
       - name: Vérifier les empreintes inventaire explicites
         run: node --test tests/node/security-definer-inventory.node.mjs tests/node/litige-resolveur-garde.node.mjs
 
+      - name: Gardes NULL des SECURITY DEFINER — analyse statique du dump
+        run: node --test tests/node/gardes-null-security-definer.node.mjs
+
       - name: Isolation du draft contrat SQL sans réseau
         run: node --test tests/node/contrat-v11-sql-proof.node.mjs
 
@@ -746,6 +749,7 @@ jobs:
             tests/security/avoirs-imputation-staging.test.sql
             tests/security/stripe-disponibilite-connect.test.sql
             tests/security/connect-onboarding-payout-acl.test.sql
+            tests/security/gardes-null-security-definer.test.sql
           )
           # Sans migration, ne pas exiger des fonctions main absentes du
           # staging : cette voie prouve seulement les trois bancs F1 LIVE.
