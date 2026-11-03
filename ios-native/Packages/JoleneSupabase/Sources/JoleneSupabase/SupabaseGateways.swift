@@ -34,7 +34,7 @@ public enum SupabaseGateways {
         clock: any ClockPort = SystemClock(),
         enrich: @escaping MissionQuery.Enricher = MissionQuery.defaultEnrich
     ) -> Gateways {
-        Gateways(
+        var gateways = Gateways(
             auth: SupabaseAuthGateway(client: client),
             role: SupabaseRoleGateway(client: client),
             missions: SupabaseMissionsGateway(client: client, clock: clock, enrich: enrich),
@@ -50,6 +50,9 @@ public enum SupabaseGateways {
             recovery: UnwiredRecoveryPort(),            // T10
             justificatifs: UnwiredJustificatifStoragePort() // T7
         )
+        // Lot 5 (T1) : ports de l'espace établissement, assignés après l'init (signature inchangée).
+        gateways.etablissement = SupabaseEtablissementGateways.make(client: client)
+        return gateways
     }
 
     /// Construction du client : options vérifiées dans `SupabaseClientOptions` de 2.55.5

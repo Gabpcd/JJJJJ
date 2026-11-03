@@ -87,6 +87,10 @@ public struct Gateways: Sendable {
     public var recovery: RecoveryPort = UnwiredRecoveryPort()
     public var justificatifs: JustificatifStoragePort = UnwiredJustificatifStoragePort()
 
+    // Lot 5 — un seul champ additif (`docs/mobile-swift/LOT5_PLAN.md` §2.3) : les ports de l'espace
+    // établissement, regroupés (`Ports/EtablissementGateways.swift`), non câblés par défaut.
+    public var etablissement: EtablissementGateways = .nonCable
+
     public init(auth: AuthPort, role: RolePort, missions: MissionsPort, clock: ClockPort = SystemClock()) {
         self.auth = auth; self.role = role; self.missions = missions; self.clock = clock
     }

@@ -33,8 +33,9 @@ public enum DemoWorld {
     /// câblé ici dans la même PR que sa tranche ; un port encore stub y est nommé explicitement
     /// (`DemoWorldTests.testAucunPortNonCable`).
     public static func gateways(drapeaux: [String: Bool]) -> Gateways {
-        Gateways(
-            auth: DemoAuthGateway(),
+        let auth = DemoAuthGateway()
+        var gateways = Gateways(
+            auth: auth,
             role: DemoRoleGateway(),
             missions: DemoMissionsGateway(),
             clock: FixedClock(fixedNow),
@@ -49,6 +50,10 @@ public enum DemoWorld {
             recovery: UnwiredRecoveryPort(),            // T10
             justificatifs: UnwiredJustificatifStoragePort() // T7
         )
+        // Lot 5 (T1) : ports établissement ; l'identité est celle de la session démo courante, si bien
+        // que le compte soignant fictif y est refusé (`.demoOnly`).
+        gateways.etablissement = DemoEtablissementWorld.gateways(identite: { try? await auth.restoreSession()?.id })
+        return gateways
     }
 }
 

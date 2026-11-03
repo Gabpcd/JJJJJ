@@ -117,14 +117,15 @@ export function verifierExclusions(suivies) {
 // ---------------------------------------------------------------------------------------------
 
 /**
- * RPC de l'espace établissement, suivies en `a_venir` lot 5. L'ajout est dédoublonné : une RPC déjà
+ * RPC de l'espace établissement, suivies en `a_venir` lot 5, puis `consommee` dans la PR qui câble leur
+ * gateway (T1 : session établissement). L'ajout est dédoublonné : une RPC déjà
  * suivie par un lot antérieur (le lot 2 suit `fn_creer_notation_mission`, le lot 4
  * `fn_obtenir_conversation`, LOT2_PLAN/LOT4_PLAN §3 T0) garde son entrée et son lot, et devient
  * « partagée » (`aussi_etablissement`). Les branches parallèles se fusionnent donc sans doublon.
  */
 export const RPC_SUIVIES_ETABLISSEMENT = [
-  { name: 'fn_mes_permissions_etab', statut: 'a_venir', lot: 5 },
-  { name: 'fn_mon_etablissement_complet', statut: 'a_venir', lot: 5 },
+  { name: 'fn_mes_permissions_etab', statut: 'consommee', lot: 5 }, // T1 : SupabaseEtabSessionGateway.permissions
+  { name: 'fn_mon_etablissement_complet', statut: 'consommee', lot: 5 }, // T1 : SupabaseEtabSessionGateway.profil
   { name: 'fn_stats_dashboard_etablissement', statut: 'a_venir', lot: 5 },
   { name: 'fn_soignant_pour_etablissement', statut: 'a_venir', lot: 5 },
   { name: 'fn_lire_candidatures_mission_habilitee', statut: 'a_venir', lot: 5 },
@@ -163,9 +164,13 @@ for (const rpc of RPC_SUIVIES_ETABLISSEMENT) {
 export const EXCEPTIONS_ETABLISSEMENT = {
   // fn_traiter_candidature lève P0001 (notification) ; l'UPDATE missions de
   // fn_finaliser_attribution_mission déclenche la garde de paiement (LOT5_PLAN correction 16).
+  // T1 (revue B8 de T0, mineur 3) : les triggers RBAC des tables écrites (missions, contrats_mission,
+  // candidatures), inatteignables avec le CASE actuel mais paramétrés : leur 42501 ne doit jamais
+  // retomber en « session expirée » si la matrice évolue.
   fn_traiter_candidature_planning_v1: {
     fonctions: ['fn_traiter_candidature'],
-    declencheurs: ['trg_gate_assignation_paiement'],
+    declencheurs: ['trg_gate_assignation_paiement', 'trg_p0_rbac_missions', 'trg_p0_rbac_contrats_mission',
+      'trg_p0_rbac_candidatures'],
   },
   // UPDATE presences : RBAC `pointage` (correction 4) puis garde de fin de planning.
   fn_valider_presence: {
@@ -176,6 +181,8 @@ export const EXCEPTIONS_ETABLISSEMENT = {
   },
   // UPDATE presences.motif_litige : RBAC seulement (valide_par_etablissement inchangé).
   fn_contester_presence: { declencheurs: ['trg_p0_rbac_presences'] },
+  // T1 (revue B8 de T0, mineur 3) : UPDATE presences puis UPDATE missions (l.28734, l.28775).
+  fn_declarer_fin_retroactive: { declencheurs: ['trg_p0_rbac_presences', 'trg_p0_rbac_missions'] },
 };
 
 /** SQLSTATE des noms de condition PL/pgSQL employés par `USING ERRCODE` (PostgreSQL, annexe A). */

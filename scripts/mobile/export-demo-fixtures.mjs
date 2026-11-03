@@ -5,7 +5,8 @@
  * Reproduit à l'identique l'algorithme de `mobile-native/src/data/demoGateway.ts`
  * (30 missions, 3 établissements fictifs, profil DEMO_CONTEXT) avec une horloge
  * fixée, puis écrit les fichiers JSON à clés snake_case (contrat PostgREST),
- * lus par `JoleneCore` (DemoMissionsGateway, DemoDashboardGateway) et par les XCUITest.
+ * lus par `JoleneCore` (DemoMissionsGateway, DemoDashboardGateway, monde démo établissement du
+ * lot 5) et par les XCUITest.
  *
  * Horloge fixée : 2026-11-02T00:00:00Z. Les missions démarrent donc du
  * 2026-11-03 au 2026-12-02 (07:00 UTC, ou 20:00 UTC une mission sur quatre).
@@ -19,6 +20,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { matricePermissionsEtablissement, SOURCES } from './check-rpc-contracts.mjs';
 
 export const FIXED_NOW = '2026-11-02T00:00:00.000Z';
 export const MISSION_COUNT = 30;
@@ -231,12 +233,76 @@ export function buildDemoDashboard(now = new Date(FIXED_NOW), missions = buildDe
   };
 }
 
+// ---------------------------------------------------------------------------------------------
+// Lot 5, T1 — espace établissement (docs/mobile-swift/LOT5_PLAN.md §2.10, D20).
+// ---------------------------------------------------------------------------------------------
+
+/** Compte établissement fictif : seul utilisateur servi par les gateways démo du lot 5. */
+export const DEMO_ETAB_USER_ID = 'demo-etablissement';
+export const DEMO_ETAB_EMAIL = 'etablissement-demonstration@example.invalid';
+
+/**
+ * Établissement du compte démo : le premier établissement fictif du monde soignant (même identifiant,
+ * même nom, même type), vu de l'autre côté. Sous-ensemble exact décodé de `fn_mon_etablissement_complet`
+ * (`EtablissementProfil`), aucune colonne Stripe, bancaire ou de commission. La variante « bloquée »
+ * (`-JOLENE_DEMO_BLOCAGE 1`) ne diffère que par `bloque_auto_le`, veille de l'horloge fixée.
+ */
+export function buildDemoEtablissement(now = new Date(FIXED_NOW)) {
+  const { id, nom, type } = DEMO_ETABLISSEMENTS[0];
+  const etablissement = {
+    id,
+    nom,
+    type,
+    logo_url: null,
+    est_secteur_public: false,
+    peut_publier_missions: true,
+    statut_verification: 'VERIFIE',
+    contrat_service_signe: true,
+    bloque_auto_le: null,
+  };
+  return {
+    fixed_now: now.toISOString(),
+    // Compte membre : rôle signé ADMIN_ETABLISSEMENT et établissement dans app_metadata.
+    utilisateur: {
+      id: DEMO_ETAB_USER_ID,
+      email: DEMO_ETAB_EMAIL,
+      app_metadata: { role: 'ADMIN_ETABLISSEMENT', etablissement_id: id },
+    },
+    // Compte legacy (-JOLENE_DEMO_LEGACY 1) : alias signé ETABLISSEMENT, sans etablissement_id.
+    utilisateur_legacy: {
+      id: DEMO_ETAB_USER_ID,
+      email: DEMO_ETAB_EMAIL,
+      app_metadata: { role: 'ETABLISSEMENT' },
+    },
+    etablissement,
+    etablissement_bloque: { ...etablissement, bloque_auto_le: instantDemo(now, -1, 7).toISOString() },
+  };
+}
+
+/**
+ * Permissions démo par rôle, **dérivées du dump** : clés de `fn_mes_permissions_etab`, rôles du CHECK
+ * `membres_etablissement_role_check` et `CASE` de `fn_a_permission_etablissement`
+ * (`matricePermissionsEtablissement`, lecteur partagé avec `check-rpc-contracts.mjs`). Une dérive du
+ * SQL change ce fichier et rougit le diff du job « Cœur ». Le natif ne lit que les booléens servis.
+ */
+export function buildDemoEtabPermissions(schemaSource = readFileSync(join(ROOT, SOURCES.schema), 'utf8'), now = new Date(FIXED_NOW)) {
+  const { cles, roles } = matricePermissionsEtablissement(schemaSource);
+  return {
+    fixed_now: now.toISOString(),
+    source: `${SOURCES.schema} — fn_a_permission_etablissement, fn_mes_permissions_etab`,
+    cles,
+    roles,
+  };
+}
+
 export function buildFixtures() {
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
     'demo-etablissements.json': { fixed_now: FIXED_NOW, etablissements: DEMO_ETABLISSEMENTS },
     'demo-profile.json': { fixed_now: FIXED_NOW, ...DEMO_PROFILE },
     'demo-dashboard.json': buildDemoDashboard(),
+    'demo-etablissement.json': buildDemoEtablissement(),
+    'demo-etab-permissions.json': buildDemoEtabPermissions(),
   };
 }
 
