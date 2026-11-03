@@ -189,7 +189,8 @@ final class DemoAccueilTests: JoleneUITestCase {
     }
 
     /// Décision 18 (T5) : le bouton calendrier d'une prochaine mission au planning vérifié écrit ses
-    /// créneaux (démo : calendrier en mémoire, aucune demande système) et rend son issue sous la section.
+    /// créneaux (démo : calendrier en mémoire, aucune demande système, mention de la démo dans l'issue,
+    /// `IssueAjoutCalendrier.mentionDemo`) et rend son issue sous la section.
     /// Le même ajout est partagé avec Mes missions (`DemoMesMissionsTests`, journal par session).
     private func ajouterProchaineMissionAuCalendrier(_ ecran: XCUIElement) {
         let bouton = element("accueil-calendrier-demo-assignee-001")
@@ -198,6 +199,8 @@ final class DemoAccueilTests: JoleneUITestCase {
         bouton.tap()
         let issue = element("accueil-calendrier-issue")
         require("L'ajout au calendrier rend son issue") { issue.exists && issue.label.contains("1 créneau ajouté à votre calendrier.") }
+        XCTAssertTrue(issue.label.contains("Démonstration : rien n'est écrit dans le calendrier de l'appareil."),
+                      "mode démo affiché : « \(issue.label) »")
         XCTAssertTrue(dansEcran("accueil-calendrier-demo-assignee-002", ecran).exists, "un bouton par prochaine mission au planning vérifié")
         record("\(proofPrefix)-accueil-calendrier")
     }

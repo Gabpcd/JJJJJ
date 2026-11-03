@@ -25,6 +25,8 @@ final class MesMissionsModelTests: XCTestCase {
             case page(MissionsPage)
             case echec(Error)
             case retenue(MissionsPage, entree: Gate, sortie: Gate)
+            /// Échoue après l'ouverture de sa barrière (erreur tardive d'une lecture chevauchée).
+            case retenueEchec(Error, entree: Gate, sortie: Gate)
             /// Ne répond jamais (délai de l'écran).
             case muet(Gate)
         }
@@ -55,6 +57,10 @@ final class MesMissionsModelTests: XCTestCase {
                 await entree.open()
                 await sortie.wait()
                 return page
+            case let .retenueEchec(error, entree, sortie):
+                await entree.open()
+                await sortie.wait()
+                throw error
             case let .muet(gate):
                 await gate.wait()
                 throw CancellationError()
@@ -230,7 +236,96 @@ final class MesMissionsModelTests: XCTestCase {
         XCTAssertEqual(model.aVenir.contenu, .echec(MesMissionsModel.genericFailureMessage))
     }
 
+    /// Revue B8 de T5 (2e passe) : l'indicateur de session est rangé par onglet, comme l'erreur. Une
+    /// panne réseau d'un autre onglet n'est pas affichée « Session à vérifier », et le succès d'un autre
+    /// onglet n'efface pas l'indicateur de l'onglet resté en échec de session.
+    func testSessionExpireeRangeeParOngletCommeLErreur() async throws {
+        let port = ScriptedMesMissions(candidatures: [.echec(JoleneError(.unauthorized, SessionController.sessionExpiredMessage))],
+                                       aVenir: [.echec(JoleneError(.network, "Connexion impossible."))],
+                                       passees: [.page(page(["m-5"]))])
+        let (controller, snapshot) = try await pret(port)
+        let model = MesMissionsModel(controller: controller, snapshot: snapshot, onglet: .candidatures)
+        await model.charger()
+        XCTAssertTrue(model.candidatures.sessionExpiree)
+        XCTAssertTrue(model.sessionExpired, "onglet affiché en échec de session : « Vérifier ma session »")
+        await model.selectionner(.aVenir)
+        XCTAssertEqual(model.aVenir.contenu, .echec("Connexion impossible."))
+        XCTAssertFalse(model.aVenir.sessionExpiree, "une panne réseau n'est pas une session expirée")
+        XCTAssertFalse(model.sessionExpired, "onglet affiché en panne : « Réessayer »")
+        XCTAssertTrue(model.candidatures.sessionExpiree, "l'onglet resté en échec de session le reste")
+        await model.selectionner(.passees)
+        XCTAssertEqual(model.passees.elements.map(\.id), ["m-5"])
+        XCTAssertFalse(model.sessionExpired)
+        XCTAssertTrue(model.candidatures.sessionExpiree, "le succès d'un autre onglet n'efface pas l'indicateur")
+        XCTAssertFalse(model.aVenir.sessionExpiree)
+    }
+
+    /// Revue B8 de T5 (2e passe) : deux lectures d'onglets différents se chevauchent ; le
+    /// `.unauthorized` arrivé en retard sur À venir ne marque pas l'erreur réseau de Candidatures,
+    /// affichée entre-temps.
+    func testSessionExpireeTardiveDUnOngletNeMarquePasLErreurDUnAutre() async throws {
+        let entree = Gate()
+        let sortie = Gate()
+        let port = ScriptedMesMissions(candidatures: [.echec(JoleneError(.network, "Connexion impossible."))],
+                                       aVenir: [.retenueEchec(JoleneError(.unauthorized, SessionController.sessionExpiredMessage),
+                                                              entree: entree, sortie: sortie)])
+        let (controller, snapshot) = try await pret(port)
+        let model = MesMissionsModel(controller: controller, snapshot: snapshot)
+        let lente = Task { await model.charger() }
+        await entree.wait()
+        await model.selectionner(.candidatures)
+        XCTAssertEqual(model.candidatures.contenu, .echec("Connexion impossible."))
+        await sortie.open()
+        await lente.value
+        XCTAssertEqual(model.aVenir.contenu, .echec(SessionController.sessionExpiredMessage), "l'échec reste rangé sur son onglet")
+        XCTAssertTrue(model.aVenir.sessionExpiree)
+        XCTAssertFalse(model.candidatures.sessionExpiree)
+        XCTAssertFalse(model.sessionExpired, "l'onglet affiché garde « Réessayer » sur son erreur réseau")
+    }
+
     // MARK: - Pages (lecture cumulative du web, « M1 »)
+
+    /// Revue B8 de T5 (2e passe) : pendant une relecture, « Charger plus » ne ferait rien ; le bouton
+    /// est donc désactivé (`peutChargerPlus`, seule règle du modèle et de l'écran), jamais un tap
+    /// perdu sans retour. Même règle pendant le chargement de la page suivante.
+    func testChargerPlusInactifPendantUneRelectureEtPendantLaSuite() async throws {
+        let entree = Gate()
+        let sortie = Gate()
+        let entreeSuite = Gate()
+        let sortieSuite = Gate()
+        let port = ScriptedMesMissions(aVenir: [.page(page(["m-1"], aSuivre: true)),
+                                                .retenue(page(["m-1"], aSuivre: true), entree: entree, sortie: sortie),
+                                                .retenue(page(["m-1", "m-2"], page: 1, aSuivre: true), entree: entreeSuite, sortie: sortieSuite),
+                                                .page(page(["m-1", "m-2"], page: 2))])
+        let (controller, snapshot) = try await pret(port)
+        let model = MesMissionsModel(controller: controller, snapshot: snapshot)
+        XCTAssertFalse(model.aVenir.peutChargerPlus, "rien avant une première page lue")
+        await model.charger()
+        XCTAssertTrue(model.aVenir.peutChargerPlus)
+
+        let relecture = Task { await model.charger() }
+        await entree.wait()
+        XCTAssertTrue(model.aVenir.rafraichissement)
+        XCTAssertFalse(model.aVenir.peutChargerPlus, "bouton désactivé pendant la relecture")
+        await model.chargerPlus()
+        XCTAssertEqual(port.appels, ["aVenir 0", "aVenir 0"], "aucune page suivante pendant la relecture")
+        await sortie.open()
+        await relecture.value
+        XCTAssertTrue(model.aVenir.peutChargerPlus, "relecture terminée : « Charger plus » de nouveau actif")
+
+        let suite = Task { await model.chargerPlus() }
+        await entreeSuite.wait()
+        XCTAssertTrue(model.aVenir.chargementSuite)
+        XCTAssertFalse(model.aVenir.peutChargerPlus, "bouton désactivé pendant la page suivante")
+        await sortieSuite.open()
+        await suite.value
+        XCTAssertEqual(model.aVenir.elements.map(\.id), ["m-1", "m-2"])
+        XCTAssertTrue(model.aVenir.peutChargerPlus)
+        await model.chargerPlus()
+        XCTAssertFalse(model.aVenir.aSuivre)
+        XCTAssertFalse(model.aVenir.peutChargerPlus, "lecture incomplète : plus de « Charger plus »")
+        XCTAssertEqual(port.appels, ["aVenir 0", "aVenir 0", "aVenir 1", "aVenir 2"])
+    }
 
     func testChargerPlusRelitLesPagesCumuleesEtRemplaceLaListe() async throws {
         let port = ScriptedMesMissions(aVenir: [.page(page(["m-1", "m-2"], aSuivre: true)),

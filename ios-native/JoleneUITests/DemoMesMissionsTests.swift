@@ -1,25 +1,36 @@
 import XCTest
 
 /// Mes missions démo (lot 1, T5) sur iPhone, iPad portrait et iPad paysage : onglets Candidatures /
-/// À venir / Passées servis par `DemoMesMissionsGateway` (`demo-mes-missions.json` et missions
+/// À venir / Passées servis par `DemoMesMissionsGateway` (`demo-mes-missions.json` et les dix missions
 /// ASSIGNEE de `demo-dashboard.json`, horloge fixée 2026-11-02T00:00:00Z). Les libellés attendus sont
 /// ceux que `DemoMesMissionsTests` (JoleneCore) affirme sur le port : un écart entre l'écran et le port
 /// fait échouer l'un des deux. Ajout au calendrier (décision 18) : calendrier démo en mémoire, aucune
-/// demande système ; issue dans un bandeau superposé, visible sans défilement et sans décaler la liste ;
-/// un second tap n'ajoute rien (journal) ; accès refusé simulé par la surcharge DEBUG
-/// `JOLENE_FORCE_CALENDRIER_REFUS` (`testCalendrierAccesRefuse`). L'écriture EventKit réelle est
-/// prouvée sur appareil (`RECETTE_DEVICE_LOT1.md` §4).
+/// demande système, chaque issue le dit (`IssueAjoutCalendrier.mentionDemo`) ; issue dans un bandeau
+/// superposé, visible sans défilement et sans décaler la liste ; un second tap n'ajoute rien (journal) ;
+/// accès refusé simulé par la surcharge DEBUG `JOLENE_FORCE_CALENDRIER_REFUS`. L'écriture EventKit
+/// réelle est prouvée sur appareil (`RECETTE_DEVICE_LOT1.md` §4).
 ///
-/// Recette des états (CLAUDE.md, revue B8 de T5), surcharges DEBUG lues par `AppContainer` :
-/// `JOLENE_FORCE_MES_MISSIONS_ECHEC=1` (erreur puis « Réessayer »), `=session` (« Vérifier ma
-/// session »), `JOLENE_FORCE_MES_MISSIONS_VIDE=1` (états vides et renvoi vers Explorer),
-/// `JOLENE_DEMO_MES_MISSIONS_PAGE=1` (pages d'une mission : « Charger plus » en lecture cumulative).
+/// Recette des états (CLAUDE.md, revue B8 de T5), surcharges DEBUG lues par `AppContainer`. Budget CI
+/// (revue B8 de T5, 2e passe) : chaque lancement coûte une connexion démo (79 à 222 s par test sur
+/// iPad paysage, run 41538145532) ; les surcharges compatibles partagent donc un lancement :
+/// - `testMesMissionsPanneRepriseChargerPlusEtCalendrierRefuse` : `JOLENE_FORCE_MES_MISSIONS_ECHEC=1`,
+///   `JOLENE_DEMO_MES_MISSIONS_PAGE=4` et `JOLENE_FORCE_CALENDRIER_REFUS=1` — erreur puis « Réessayer »,
+///   « Charger plus » en lecture cumulative (4, 8 puis 10 missions), accès au calendrier refusé depuis la
+///   dernière ligne, liste défilée (la première ligne est sortie par le haut), puis erreur et reprise de
+///   l'onglet Passées ;
+/// - `testMesMissionsSessionExpireePuisVidesVersExplorer` : `JOLENE_FORCE_MES_MISSIONS_ECHEC=session` et
+///   `JOLENE_FORCE_MES_MISSIONS_VIDE=1` — « Vérifier ma session » sur chaque onglet (l'indicateur est rangé
+///   par onglet), états vides, puis renvoi vers Explorer.
 final class DemoMesMissionsTests: JoleneUITestCase {
     private static let euro = "\u{00A0}€"
     /// `IssueAjoutCalendrier.dejaAjoutes` (JoleneCore) : l'app ne relit pas le calendrier.
     private static let dejaAjoutes = "Les créneaux de cette mission ont déjà été ajoutés à votre calendrier depuis Jolene sur cet appareil."
+    /// `IssueAjoutCalendrier.mentionDemo` (JoleneCore) : rien n'est écrit sur l'appareil en démo (PRINCIPES §7).
+    private static let mentionDemo = "Démonstration : rien n'est écrit dans le calendrier de l'appareil."
     /// `SessionController.timeoutMessage` : panne simulée comme un délai dépassé.
     private static let messageDelai = "Le service ne répond pas. Vérifiez votre connexion puis réessayez."
+    /// `SessionController.sessionExpiredMessage`.
+    private static let messageSession = "Votre session a expiré. Reconnectez-vous."
 
     func testMesMissionsDemo() throws {
         launchDemo()
@@ -35,11 +46,11 @@ final class DemoMesMissionsTests: JoleneUITestCase {
         verifier("mes-mission-demo-assignee-002", dans: scroll, contient: [
             "Établissement fictif des Lilas · Les Lilas", "Prochain créneau : 9 nov. · 08h00 → 16h00 (8h)", "30,00\(Self.euro)/h",
         ])
-        XCTAssertFalse(element("missions-load-more").exists, "une seule page en démo : pas de « Charger plus »")
+        XCTAssertFalse(element("missions-load-more").exists, "dix missions sur une page de 50 : pas de « Charger plus »")
         record("\(proofPrefix)-mes-missions-a-venir")
 
-        // Calendrier : deux créneaux PREVISIONNEL ; bandeau d'issue visible sans défilement ; fermeture ;
-        // puis aucun doublon au second tap.
+        // Calendrier : deux créneaux PREVISIONNEL ; bandeau d'issue visible sans défilement, mention de la
+        // démo ; fermeture ; puis aucun doublon au second tap.
         let bouton = element("calendrier-demo-assignee-002")
         degager(bouton, dans: scroll)
         bouton.tap()
@@ -47,6 +58,7 @@ final class DemoMesMissionsTests: JoleneUITestCase {
         require("L'ajout au calendrier rend son issue, visible hors des barres") {
             self.visible(issue) && !self.recouverte(issue) && issue.label.contains("2 créneaux ajoutés à votre calendrier.")
         }
+        XCTAssertTrue(issue.label.contains(Self.mentionDemo), "mode démo affiché : « \(issue.label) »")
         tap("missions-calendrier-issue-fermer")
         require("Le bandeau d'issue se ferme") { !issue.exists }
         degager(bouton, dans: scroll)
@@ -106,30 +118,20 @@ final class DemoMesMissionsTests: JoleneUITestCase {
         }
     }
 
-    func testCalendrierAccesRefuse() throws {
-        launchDemo(environment: ["JOLENE_FORCE_CALENDRIER_REFUS": "1"])
-        connexionDemo()
-        let scroll = ouvrirMesMissions()
-        let bouton = element("calendrier-demo-assignee-001")
-        degager(bouton, dans: scroll)
-        bouton.tap()
-        let issue = element("missions-calendrier-issue")
-        require("L'accès refusé est expliqué, sans écriture") {
-            self.visible(issue) && !self.recouverte(issue) && issue.label.contains("L'accès au calendrier n'est pas autorisé.")
-        }
-        record("\(proofPrefix)-mes-missions-calendrier-refuse")
-    }
+    // MARK: - Recette des états (revue B8 de T5), lancements partagés (budget CI, 2e passe)
 
-    // MARK: - Recette des états (revue B8 de T5)
-
-    /// `JOLENE_FORCE_MES_MISSIONS_ECHEC=1` → `DemoMesMissionsEchecGateway` : la première lecture de
-    /// chaque onglet échoue comme un délai dépassé ; « Réessayer » relit la démo.
-    func testMesMissionsErreurPuisReprise() throws {
-        launchDemo(environment: ["JOLENE_FORCE_MES_MISSIONS_ECHEC": "1"])
+    /// `JOLENE_FORCE_MES_MISSIONS_ECHEC=1` (première lecture de chaque onglet en panne, comme un délai
+    /// dépassé), `JOLENE_DEMO_MES_MISSIONS_PAGE=4` (pages de 4 missions) et
+    /// `JOLENE_FORCE_CALENDRIER_REFUS=1` (accès au calendrier refusé), dans une même session.
+    func testMesMissionsPanneRepriseChargerPlusEtCalendrierRefuse() throws {
+        launchDemo(environment: ["JOLENE_FORCE_MES_MISSIONS_ECHEC": "1", "JOLENE_DEMO_MES_MISSIONS_PAGE": "4",
+                                 "JOLENE_FORCE_CALENDRIER_REFUS": "1"])
         connexionDemo()
         tabButton("tab-missions", label: "Mes missions").tap()
         let scroll = element("mes-missions-scroll")
         let erreur = element("mes-missions-error")
+
+        // 1. Panne de la première lecture, puis « Réessayer ».
         require("Mes missions affiche l'état d'erreur", timeout: 30) {
             self.containerVisible(erreur) && !self.element("mes-missions-loading").exists
         }
@@ -140,15 +142,56 @@ final class DemoMesMissionsTests: JoleneUITestCase {
         record("\(proofPrefix)-mes-missions-erreur")
 
         activer("mes-missions-retry", dans: scroll)
-        require("« Réessayer » relit les missions à venir", timeout: 30) {
-            self.element("mes-mission-demo-assignee-001").exists && !erreur.exists && !self.element("mes-missions-loading").exists
+        require("« Réessayer » relit la première page des missions à venir", timeout: 30) {
+            self.element("mes-mission-demo-assignee-004").exists && !erreur.exists && !self.element("mes-missions-loading").exists
         }
+        XCTAssertFalse(element("mes-mission-demo-assignee-005").exists, "pages de quatre : seule la première est lue")
         verifier("mes-mission-demo-assignee-001", dans: scroll, contient: [
             "Démonstration · Mission assignée 1", "Prochain créneau : 5 nov. · 08h00 → 16h00 (8h)",
         ])
         record("\(proofPrefix)-mes-missions-reprise")
 
-        // Autre onglet : sa première lecture échoue aussi, puis « Réessayer » le relit.
+        // 2. « Charger plus » : lecture cumulative tant que la lecture est pleine (4, puis 8), puis absent (10).
+        let plus = element("missions-load-more")
+        degager(plus, dans: scroll)
+        XCTAssertEqual(plus.label, "Charger plus de missions")
+        plus.tap()
+        require("« Charger plus » relit les deux premières pages", timeout: 30) {
+            self.element("mes-mission-demo-assignee-008").exists && plus.exists && plus.isEnabled
+        }
+        XCTAssertFalse(element("mes-mission-demo-assignee-009").exists, "deux pages de quatre")
+        XCTAssertTrue(element("mes-mission-demo-assignee-001").exists, "lecture cumulative : la première mission reste")
+        record("\(proofPrefix)-mes-missions-charger-plus")
+        degager(plus, dans: scroll)
+        plus.tap()
+        require("Après une lecture incomplète, « Charger plus » disparaît", timeout: 30) {
+            !plus.exists && self.element("mes-mission-demo-assignee-010").exists
+        }
+        XCTAssertFalse(element("missions-load-more-error").exists)
+        verifier("mes-mission-demo-assignee-010", dans: scroll, contient: ["Prochain créneau : 28 nov. · 08h00 → 16h00 (8h)"])
+        record("\(proofPrefix)-mes-missions-charger-plus-fin")
+
+        // 3. Calendrier refusé depuis la dernière ligne, liste défilée : le bandeau superposé reste visible
+        //    sans défilement et ne décale pas la liste (un bandeau inséré en tête de liste serait hors écran).
+        let bouton = element("calendrier-demo-assignee-010")
+        degager(bouton, dans: scroll)
+        let avant = cadreImmobile(bouton)
+        XCTAssertGreaterThan(avant.midY, scroll.frame.midY, "la ligne touchée est dans la moitié basse du défilement")
+        let premiere = element("mes-mission-demo-assignee-001")
+        XCTAssertTrue(!premiere.exists || premiere.frame.maxY <= scroll.frame.minY + 1,
+                      "liste défilée : la première ligne est sortie par le haut (\(premiere.frame) / \(scroll.frame))")
+        bouton.tap()
+        let issue = element("missions-calendrier-issue")
+        require("L'accès refusé est expliqué, visible sans défilement") {
+            self.visible(issue) && !self.recouverte(issue) && issue.label.contains("L'accès au calendrier n'est pas autorisé.")
+        }
+        XCTAssertTrue(issue.label.contains(Self.mentionDemo), "mode démo affiché : « \(issue.label) »")
+        XCTAssertEqual(bouton.frame.minY, avant.minY, accuracy: 1, "le bandeau superposé ne décale pas la liste")
+        record("\(proofPrefix)-mes-missions-calendrier-refuse")
+        tap("missions-calendrier-issue-fermer")
+        require("Le bandeau d'issue se ferme") { !issue.exists }
+
+        // 4. Autre onglet : sa première lecture échoue aussi, puis « Réessayer » le relit.
         tap("missions-tab-passees")
         require("Passées affiche l'état d'erreur", timeout: 30) {
             self.element("missions-tab-passees").isSelected && self.containerVisible(erreur)
@@ -162,42 +205,35 @@ final class DemoMesMissionsTests: JoleneUITestCase {
         record("\(proofPrefix)-mes-missions-reprise-passees")
     }
 
-    /// `JOLENE_FORCE_MES_MISSIONS_ECHEC=session` : la première lecture répond « session expirée » ;
-    /// « Vérifier ma session » revalide la session démo (même identité, aucun démontage) puis relit.
-    func testMesMissionsSessionExpireePuisVerification() throws {
-        launchDemo(environment: ["JOLENE_FORCE_MES_MISSIONS_ECHEC": "session"])
+    /// `JOLENE_FORCE_MES_MISSIONS_ECHEC=session` (première lecture de chaque onglet en « session
+    /// expirée ») et `JOLENE_FORCE_MES_MISSIONS_VIDE=1` (aucune ligne), dans une même session :
+    /// « Vérifier ma session » revalide la session démo (même identité, aucun démontage) puis relit
+    /// l'onglet, vide ; chaque onglet porte son propre état de session ; l'action de l'état vide ouvre
+    /// Explorer (la recherche de missions ne vit qu'à cet onglet, comme sur le web).
+    func testMesMissionsSessionExpireePuisVidesVersExplorer() throws {
+        launchDemo(environment: ["JOLENE_FORCE_MES_MISSIONS_ECHEC": "session", "JOLENE_FORCE_MES_MISSIONS_VIDE": "1"])
         connexionDemo()
         tabButton("tab-missions", label: "Mes missions").tap()
         let scroll = element("mes-missions-scroll")
         let expiree = element("mes-missions-session-expired")
+
+        // À venir : session à vérifier, puis vérification et état vide.
         require("Mes missions demande de vérifier la session", timeout: 30) {
             self.containerVisible(expiree) && !self.element("mes-missions-loading").exists
         }
         XCTAssertTrue(text("Session à vérifier").exists, "titre de l'état de session")
-        XCTAssertTrue(text("Votre session a expiré. Reconnectez-vous.").exists, "message de la session expirée")
+        XCTAssertTrue(text(Self.messageSession).exists, "message de la session expirée")
         XCTAssertFalse(element("mes-missions-error").exists, "une session expirée n'est pas une panne")
         XCTAssertFalse(element("mes-missions-retry").exists, "« Vérifier ma session » plutôt que « Réessayer »")
         record("\(proofPrefix)-mes-missions-session-expiree")
 
         activer("mes-missions-session-check", dans: scroll)
-        require("La session revalidée relit les missions à venir", timeout: 30) {
-            self.element("mes-mission-demo-assignee-001").exists && !expiree.exists && !self.element("mes-missions-loading").exists
+        require("La session revalidée relit À venir, vide", timeout: 30) {
+            self.containerVisible(self.element("missions-empty-avenir")) && !expiree.exists
+                && !self.element("mes-missions-loading").exists
         }
         XCTAssertTrue(element("missions-tab-avenir").isSelected, "Mes missions reste affiché, onglet À venir")
         XCTAssertFalse(element("login-scroll").exists, "session démo toujours valide : aucune reconnexion")
-        record("\(proofPrefix)-mes-missions-session-verifiee")
-    }
-
-    /// `JOLENE_FORCE_MES_MISSIONS_VIDE=1` : les trois onglets vides, puis l'action de l'état vide
-    /// ouvre Explorer (la recherche de missions ne vit qu'à cet onglet, comme sur le web).
-    func testMesMissionsVidesVersExplorer() throws {
-        launchDemo(environment: ["JOLENE_FORCE_MES_MISSIONS_VIDE": "1"])
-        connexionDemo()
-        tabButton("tab-missions", label: "Mes missions").tap()
-        let scroll = element("mes-missions-scroll")
-        require("À venir affiche son état vide", timeout: 30) {
-            self.containerVisible(self.element("missions-empty-avenir")) && !self.element("mes-missions-loading").exists
-        }
         XCTAssertTrue(text("Aucune mission à venir").exists)
         XCTAssertTrue(text("Découvrez les missions disponibles et postulez.").exists)
         XCTAssertTrue(element("missions-empty-action-avenir").exists, "action « Voir les missions disponibles »")
@@ -206,15 +242,25 @@ final class DemoMesMissionsTests: JoleneUITestCase {
         XCTAssertEqual(elements(withPrefix: "mes-mission-").count, 0, "aucune ligne fabriquée")
         record("\(proofPrefix)-mes-missions-vide-a-venir")
 
+        // Candidatures : sa propre session à vérifier (indicateur rangé par onglet), puis vide.
         tap("missions-tab-candidatures")
+        require("Candidatures demande de vérifier la session", timeout: 30) {
+            self.element("missions-tab-candidatures").isSelected && self.containerVisible(expiree)
+        }
+        activer("mes-missions-session-check", dans: scroll)
         require("Candidatures affiche son état vide", timeout: 30) {
-            self.element("missions-tab-candidatures").isSelected && self.containerVisible(self.element("missions-empty-candidatures"))
+            self.containerVisible(self.element("missions-empty-candidatures")) && !expiree.exists
         }
         XCTAssertTrue(text("Aucune candidature en attente").exists)
 
+        // Passées : idem, puis renvoi vers Explorer depuis l'état vide.
         tap("missions-tab-passees")
+        require("Passées demande de vérifier la session", timeout: 30) {
+            self.element("missions-tab-passees").isSelected && self.containerVisible(expiree)
+        }
+        activer("mes-missions-session-check", dans: scroll)
         require("Passées affiche son état vide", timeout: 30) {
-            self.element("missions-tab-passees").isSelected && self.containerVisible(self.element("missions-empty-passees"))
+            self.containerVisible(self.element("missions-empty-passees")) && !expiree.exists
         }
         XCTAssertTrue(text("Aucune mission dans l'historique").exists)
         XCTAssertFalse(element("missions-note-net-estime").exists, "aucune note « net estimé » sans mission")
@@ -225,45 +271,6 @@ final class DemoMesMissionsTests: JoleneUITestCase {
             self.containerVisible(self.element("missions-list")) && self.element("missions-count").label == "30 missions"
         }
         record("\(proofPrefix)-mes-missions-vide-vers-explorer")
-    }
-
-    /// `JOLENE_DEMO_MES_MISSIONS_PAGE=1` : pages d'une mission. « Charger plus » relit les pages
-    /// cumulées (web « M1 ») tant que la lecture est pleine, puis disparaît ; l'issue du calendrier
-    /// d'une ligne basse reste visible sans décaler la liste.
-    func testMesMissionsChargerPlus() throws {
-        launchDemo(environment: ["JOLENE_DEMO_MES_MISSIONS_PAGE": "1"])
-        connexionDemo()
-        let scroll = ouvrirMesMissions()
-        XCTAssertFalse(element("mes-mission-demo-assignee-002").exists, "pages d'une mission : seule la première est lue")
-        let plus = element("missions-load-more")
-        degager(plus, dans: scroll)
-        XCTAssertEqual(plus.label, "Charger plus de missions")
-        record("\(proofPrefix)-mes-missions-charger-plus")
-
-        plus.tap()
-        require("« Charger plus » relit les deux premières pages", timeout: 30) {
-            self.element("mes-mission-demo-assignee-002").exists && plus.exists && plus.isEnabled
-        }
-        XCTAssertTrue(element("mes-mission-demo-assignee-001").exists, "lecture cumulative : la première mission reste")
-        degager(plus, dans: scroll)
-        plus.tap()
-        require("Après une lecture incomplète, « Charger plus » disparaît", timeout: 30) { !plus.exists }
-        XCTAssertFalse(element("missions-load-more-error").exists)
-        verifier("mes-mission-demo-assignee-002", dans: scroll, contient: ["Prochain créneau : 9 nov. · 08h00 → 16h00 (8h)"])
-        record("\(proofPrefix)-mes-missions-charger-plus-fin")
-
-        let bouton = element("calendrier-demo-assignee-002")
-        degager(bouton, dans: scroll)
-        let avant = bouton.frame
-        bouton.tap()
-        let issue = element("missions-calendrier-issue")
-        require("L'issue de la ligne basse est visible sans défilement") {
-            self.visible(issue) && !self.recouverte(issue) && issue.label.contains("2 créneaux ajoutés à votre calendrier.")
-        }
-        // Tolérance d'un reliquat d'inertie du dernier glissement ; un bandeau inséré dans la liste la
-        // décalerait de toute sa hauteur (plus de 40 pt).
-        XCTAssertEqual(bouton.frame.minY, avant.minY, accuracy: 8, "le bandeau superposé ne décale pas la liste")
-        record("\(proofPrefix)-mes-missions-calendrier-ligne-basse")
     }
 
     // MARK: - Étapes
@@ -322,6 +329,21 @@ final class DemoMesMissionsTests: JoleneUITestCase {
             XCTAssertTrue(libelle.contains(fragment), "\(identifiant) : « \(fragment) » absent de « \(libelle) »",
                           file: file, line: line)
         }
+    }
+
+    /// Cadre de `cible` une fois la liste immobile : deux lectures successives du prédicat borné
+    /// identiques (fin de l'inertie du dernier glissement), aucune attente arbitraire.
+    private func cadreImmobile(_ cible: XCUIElement) -> CGRect {
+        var precedent = CGRect.null
+        var immobile = CGRect.null
+        require("La liste est immobile avant la mesure") {
+            let courant = cible.frame
+            defer { precedent = courant }
+            guard !courant.isEmpty, courant == precedent else { return false }
+            immobile = courant
+            return true
+        }
+        return immobile
     }
 
     /// Barre qui recouvre `cible` : le défilement s'étend sous la barre d'onglets (iPhone) ; sur iPad

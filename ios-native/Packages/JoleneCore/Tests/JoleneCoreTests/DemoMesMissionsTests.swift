@@ -7,6 +7,8 @@ import XCTest
 /// relit à l'écran.
 final class DemoMesMissionsTests: XCTestCase {
     private let euro = "\u{00A0}€"
+    /// Les dix missions ASSIGNEE de `demo-dashboard.json`, dans l'ordre `debut_le` croissant.
+    private static let dixAVenir = (1...10).map { String(format: "demo-assignee-%03d", $0) }
     private var port: MesMissionsPort { DemoWorld.gateways().mesMissions }
 
     func testFixtureHorlogeFixeeEtCoherenceAvecLeTableauDeBord() throws {
@@ -68,37 +70,94 @@ final class DemoMesMissionsTests: XCTestCase {
         XCTAssertEqual(apresAnnulation.map(\.id), ["demo-candidature-002"], "la candidature annulée en session masque celle des fixtures")
     }
 
+    /// Dix missions À venir (revue B8 de T5, 2e passe) : la liste dépasse la hauteur de l'écran sur les
+    /// trois formats, si bien que le XCUITest touche une ligne réellement basse, liste défilée.
     func testAVenirLesMissionsAssigneesDeLAccueil() async throws {
         let page = try await port.aVenir(context: DemoWorld.context, page: 0)
-        XCTAssertEqual(page.missions.map(\.id), ["demo-assignee-001", "demo-assignee-002"])
+        XCTAssertEqual(page.missions.map(\.id), Self.dixAVenir)
+        XCTAssertEqual(page.missions.map(\.id), try DemoFixtures.loadDashboard().missionsAssignees.map(\.record.id),
+                       "source unique avec l'Accueil, jamais une copie")
         XCTAssertFalse(page.aSuivre)
         XCTAssertEqual(page.finances, [:])
         let lignes = page.missions.map { MesMissionsPresentation.ligneAVenir($0, maintenant: DemoWorld.fixedNow) }
-        XCTAssertEqual(lignes.map(\.horaire), ["Prochain créneau : 5 nov. · 08h00 → 16h00 (8h)",
-                                               "Prochain créneau : 9 nov. · 08h00 → 16h00 (8h)"])
-        XCTAssertEqual(lignes.map(\.lieu), ["Établissement fictif République · Paris", "Établissement fictif des Lilas · Les Lilas"])
-        XCTAssertEqual(page.missions.map { CalendrierMission.evenements(pour: $0).count }, [1, 2], "créneaux ajoutables au calendrier")
+        XCTAssertEqual(lignes.prefix(3).map(\.horaire), ["Prochain créneau : 5 nov. · 08h00 → 16h00 (8h)",
+                                                         "Prochain créneau : 9 nov. · 08h00 → 16h00 (8h)",
+                                                         "Prochain créneau : 13 nov. · 08h00 → 16h00 (8h)"])
+        XCTAssertEqual(lignes.prefix(2).map(\.lieu), ["Établissement fictif République · Paris", "Établissement fictif des Lilas · Les Lilas"])
+        XCTAssertEqual(lignes.last?.horaire, "Prochain créneau : 28 nov. · 08h00 → 16h00 (8h)")
+        XCTAssertEqual(page.missions.map { CalendrierMission.evenements(pour: $0).count }, [1, 2, 1, 1, 2, 1, 1, 1, 1, 2],
+                       "créneaux ajoutables au calendrier")
         let suivante = try await port.aVenir(context: DemoWorld.context, page: 1)
-        XCTAssertEqual(suivante.missions.map(\.id), ["demo-assignee-001", "demo-assignee-002"], "lecture cumulative : pages 0 et 1")
+        XCTAssertEqual(suivante.missions.map(\.id), Self.dixAVenir, "lecture cumulative : pages 0 et 1")
         XCTAssertFalse(suivante.aSuivre)
     }
 
-    /// Surcharge DEBUG `JOLENE_DEMO_MES_MISSIONS_PAGE` : pages d'une mission pour la recette de
-    /// « Charger plus » dans l'interface (`DemoMesMissionsTests.testMesMissionsChargerPlus`).
+    /// Surcharge DEBUG `JOLENE_DEMO_MES_MISSIONS_PAGE` : pages réduites pour la recette de « Charger
+    /// plus » dans l'interface (`DemoMesMissionsTests.testMesMissionsPanneRepriseChargerPlusEtCalendrierRefuse`,
+    /// pages de 4 : 4, puis 8 — lecture pleine, « Charger plus » encore proposé —, puis 10).
     func testTaillePageDemoPourLaRecetteDeChargerPlus() async throws {
-        let gateway = DemoMesMissionsGateway(taillePage: 1)
+        let gateway = DemoMesMissionsGateway(taillePage: 4)
         let premiere = try await gateway.aVenir(context: DemoWorld.context, page: 0)
-        XCTAssertEqual(premiere.missions.map(\.id), ["demo-assignee-001"])
+        XCTAssertEqual(premiere.missions.map(\.id), Array(Self.dixAVenir.prefix(4)))
         XCTAssertTrue(premiere.aSuivre)
         let deux = try await gateway.aVenir(context: DemoWorld.context, page: 1)
-        XCTAssertEqual(deux.missions.map(\.id), ["demo-assignee-001", "demo-assignee-002"])
-        XCTAssertTrue(deux.aSuivre, "lecture pleine (2 = 2 × 1) : « Charger plus » encore proposé, comme le web")
+        XCTAssertEqual(deux.missions.map(\.id), Array(Self.dixAVenir.prefix(8)))
+        XCTAssertTrue(deux.aSuivre, "lecture pleine (8 = 2 × 4) : « Charger plus » encore proposé, comme le web")
         let trois = try await gateway.aVenir(context: DemoWorld.context, page: 2)
-        XCTAssertEqual(trois.missions.map(\.id), ["demo-assignee-001", "demo-assignee-002"])
+        XCTAssertEqual(trois.missions.map(\.id), Self.dixAVenir)
         XCTAssertFalse(trois.aSuivre, "lecture incomplète : plus de « Charger plus »")
         let passees = try await gateway.passees(context: DemoWorld.context, page: 0)
-        XCTAssertEqual(passees.missions.map(\.id), ["demo-terminee-001"])
-        XCTAssertEqual(Set(passees.finances.keys), ["demo-terminee-001"], "colonnes des seules missions lues")
+        XCTAssertEqual(passees.missions.map(\.id), ["demo-terminee-001", "demo-terminee-002", "demo-annulee-001"])
+        XCTAssertFalse(passees.aSuivre)
+
+        let uneParPage = DemoMesMissionsGateway(taillePage: 1)
+        let premierePassee = try await uneParPage.passees(context: DemoWorld.context, page: 0)
+        XCTAssertEqual(premierePassee.missions.map(\.id), ["demo-terminee-001"])
+        XCTAssertEqual(Set(premierePassee.finances.keys), ["demo-terminee-001"], "colonnes des seules missions lues")
+    }
+
+    /// Recette dégradée regroupée (revue B8 de T5, 2e passe : budget CI) : `ECHEC=1` et `PAGE=4`
+    /// ensemble — la première lecture de chaque onglet échoue, puis les pages réduites sont servies.
+    func testCombinaisonEchecEtPagesDeLaRecetteDegradee() async throws {
+        let port = try XCTUnwrap(DemoMesMissionsSurcharges.port(
+            environment: [DemoMesMissionsSurcharges.variableEchec: "1", DemoMesMissionsSurcharges.variableTaillePage: "4"],
+            clock: FixedClock(DemoWorld.fixedNow)))
+        do {
+            _ = try await port.aVenir(context: DemoWorld.context, page: 0)
+            XCTFail("la première lecture échoue")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error, JoleneError(.network, SessionController.timeoutMessage))
+        }
+        let reprise = try await port.aVenir(context: DemoWorld.context, page: 0)
+        XCTAssertEqual(reprise.missions.map(\.id), Array(Self.dixAVenir.prefix(4)), "« Réessayer » relit la première page réduite")
+        XCTAssertTrue(reprise.aSuivre)
+        let fin = try await port.aVenir(context: DemoWorld.context, page: 2)
+        XCTAssertEqual(fin.missions.map(\.id), Self.dixAVenir)
+        XCTAssertFalse(fin.aSuivre)
+        do {
+            _ = try await port.passees(context: DemoWorld.context, page: 0)
+            XCTFail("la première lecture des passées échoue aussi")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error.kind, .network)
+        }
+        let passees = try await port.passees(context: DemoWorld.context, page: 0)
+        XCTAssertEqual(passees.missions.first?.id, "demo-terminee-001")
+    }
+
+    /// Recette regroupée de la session expirée et des états vides (`ECHEC=session` et `VIDE=1`).
+    func testCombinaisonSessionExpireeEtListesVides() async throws {
+        let port = try XCTUnwrap(DemoMesMissionsSurcharges.port(
+            environment: [DemoMesMissionsSurcharges.variableEchec: "session", DemoMesMissionsSurcharges.variableVide: "1"],
+            clock: FixedClock(DemoWorld.fixedNow)))
+        do {
+            _ = try await port.aVenir(context: DemoWorld.context, page: 0)
+            XCTFail("la première lecture répond « session expirée »")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error, JoleneError(.unauthorized, SessionController.sessionExpiredMessage))
+        }
+        let vide = try await port.aVenir(context: DemoWorld.context, page: 0)
+        XCTAssertEqual(vide.missions, [])
+        XCTAssertFalse(vide.aSuivre)
     }
 
     // MARK: - Recette des états dans l'interface (surcharges DEBUG, revue B8 de T5)
@@ -130,7 +189,7 @@ final class DemoMesMissionsTests: XCTestCase {
             }
         }
         let reprise = try await port.aVenir(context: DemoWorld.context, page: 0)
-        XCTAssertEqual(reprise.missions.map(\.id), ["demo-assignee-001", "demo-assignee-002"], "« Réessayer » relit la démo")
+        XCTAssertEqual(reprise.missions.map(\.id), Self.dixAVenir, "« Réessayer » relit la démo")
         let candidatures = try await port.candidatures(context: DemoWorld.context)
         XCTAssertEqual(candidatures.map(\.id), ["demo-candidature-001", "demo-candidature-002"])
     }
@@ -145,7 +204,7 @@ final class DemoMesMissionsTests: XCTestCase {
             XCTAssertEqual(error, JoleneError(.unauthorized, SessionController.sessionExpiredMessage))
         }
         let relue = try await port.aVenir(context: DemoWorld.context, page: 0)
-        XCTAssertEqual(relue.missions.count, 2, "après « Vérifier ma session », la lecture aboutit")
+        XCTAssertEqual(relue.missions.count, 10, "après « Vérifier ma session », la lecture aboutit")
     }
 
     func testEchecForceNonConsommeParUneTacheAnnulee() async throws {

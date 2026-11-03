@@ -16,12 +16,13 @@ final class DemoDashboardTests: XCTestCase {
         XCTAssertEqual(snapshot.missionsOublieesCount, 0)
         XCTAssertFalse(snapshot.planningIndisponible)
 
-        XCTAssertEqual(snapshot.prochaines.map(\.id), ["demo-assignee-001", "demo-assignee-002"])
+        // Les trois premières des dix missions assignées (`mes_missions`, LIMIT 3 du serveur).
+        XCTAssertEqual(snapshot.prochaines.map(\.id), ["demo-assignee-001", "demo-assignee-002", "demo-assignee-003"])
         XCTAssertEqual(snapshot.prochaines.map { AccueilPresentation.planningProchaine($0.planning) },
-                       ["jeudi 5 nov. · 08h00 → 16h00", "lundi 9 nov. · 08h00 → 16h00 · créneau 1/2"])
+                       ["jeudi 5 nov. · 08h00 → 16h00", "lundi 9 nov. · 08h00 → 16h00 · créneau 1/2", "vendredi 13 nov. · 08h00 → 16h00"])
         XCTAssertEqual(snapshot.prochaines.map(\.etablissementNom),
-                       ["Établissement fictif République", "Établissement fictif des Lilas"])
-        XCTAssertEqual(snapshot.prochaines.compactMap { $0.mission?.record.statut }, ["ASSIGNEE", "ASSIGNEE"])
+                       ["Établissement fictif République", "Établissement fictif des Lilas", "Établissement fictif République"])
+        XCTAssertEqual(snapshot.prochaines.compactMap { $0.mission?.record.statut }, ["ASSIGNEE", "ASSIGNEE", "ASSIGNEE"])
 
         XCTAssertEqual(snapshot.pourToi.map(\.id), ["demo-mission-001", "demo-mission-002", "demo-mission-003"])
         XCTAssertEqual(snapshot.pourToi.prefix(AccueilPresentation.nombrePourToiAffiches).map { AccueilPresentation.planningPourToi($0.planning) },

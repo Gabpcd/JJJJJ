@@ -4,15 +4,20 @@ import XCTest
 /// Ajout au calendrier (lot 1, T5, décision 18 ; `CalendarWriterTests` du blueprint) : un événement par
 /// créneau PREVISIONNEL d'un planning complet (comme l'ICS du web), alarmes -1440 / -60 min, URL de la
 /// mission ; double d'`EKEventStore` (`AppareilFactice`) : accord refusé → message sans écriture,
-/// accord → N événements, journal de dédoublonnage par compte (`RECETTE_DEVICE_LOT1.md` §4).
+/// accord → N événements, journal de dédoublonnage par compte (`RECETTE_DEVICE_LOT1.md` §4) ; une
+/// erreur EventKit de la demande d'accès n'est pas un refus (revue B8 de T5, 2e passe) ; en démo,
+/// chaque issue le dit (aucune écriture dans le calendrier de l'appareil, PRINCIPES §7).
 @MainActor
 final class AjoutCalendrierTests: XCTestCase {
     private struct EchecEcriture: Error {}
+    private struct EchecDemande: Error {}
 
     /// Double d'`EKEventStore` : état d'accord, réponse à la demande, écritures et échecs scriptés.
     private final class AppareilFactice: CalendrierAppareil {
         var etat: AccesCalendrier
         var reponse: Bool
+        /// Erreur rendue par la demande d'accès (EventKit : `completion(false, error)`).
+        var erreurDemande: Error?
         /// Rangs (0, 1, …) des écritures qui échouent.
         var echecs: Set<Int>
         private(set) var demandes = 0
@@ -27,9 +32,10 @@ final class AjoutCalendrierTests: XCTestCase {
 
         func acces() -> AccesCalendrier { etat }
 
-        func demanderAcces() async -> Bool {
+        func demanderAcces() async throws -> Bool {
             demandes += 1
             if let retenue { await retenue.wait() }
+            if let erreurDemande { throw erreurDemande }
             if reponse { etat = .accorde }
             return reponse
         }
@@ -147,6 +153,25 @@ final class AjoutCalendrierTests: XCTestCase {
         XCTAssertEqual(refuse.tentatives, 0)
     }
 
+    /// Revue B8 de T5 (2e passe) : une erreur de la demande d'accès (EventKit) n'est pas un refus de
+    /// l'utilisateur : message d'échec générique, jamais « L'accès au calendrier n'est pas autorisé… »,
+    /// aucune écriture, rien au journal ; le tap suivant redemande l'accès.
+    func testErreurDeLaDemandeDAccesRendLEchecGeneriqueSansEcriture() async {
+        let appareil = AppareilFactice(etat: .nonDetermine)
+        appareil.erreurDemande = EchecDemande()
+        let journal = JournalCalendrierMemoire()
+        let ajout = AjoutCalendrier(appareil: appareil, journal: journal)
+        let issue = await ajout.ajouter(deuxCreneaux)
+        XCTAssertEqual(issue, IssueAjoutCalendrier(message: IssueAjoutCalendrier.echecTotal, succes: false))
+        XCTAssertNotEqual(issue.message, IssueAjoutCalendrier.accesRefuse, "une erreur n'est pas un refus")
+        XCTAssertEqual(appareil.tentatives, 0)
+        XCTAssertEqual(journal.entrees, [])
+        appareil.erreurDemande = nil
+        let reprise = await ajout.ajouter(deuxCreneaux)
+        XCTAssertEqual(appareil.demandes, 2, "l'accès est redemandé au tap suivant")
+        XCTAssertEqual(reprise.ajoutes, 2)
+    }
+
     func testSecondAjoutSansDoublonEtCreneauModifieAjoute() async {
         let appareil = AppareilFactice()
         let ajout = AjoutCalendrier(appareil: appareil, journal: JournalCalendrierMemoire())
@@ -236,15 +261,30 @@ final class AjoutCalendrierTests: XCTestCase {
 
     // MARK: - Démonstration
 
+    /// Revue B8 de T5 (2e passe) : le calendrier démo n'écrit rien sur l'appareil ; chaque issue qui
+    /// en parle le dit (suffixe propre à la démo, après le message ordinaire, comme l'aperçu de carte
+    /// « Aperçu de démonstration, sans fond de carte »). Le message d'un planning non confirmé, qui
+    /// n'annonce aucune écriture, reste celui du web.
     func testCalendrierDemoEnMemoireEtRefusForce() async {
+        XCTAssertEqual(IssueAjoutCalendrier.mentionDemo, "Démonstration : rien n'est écrit dans le calendrier de l'appareil.")
         let demo = CalendrierAppareilDemo()
-        let issue = await AjoutCalendrier(appareil: demo, journal: JournalCalendrierMemoire()).ajouter(deuxCreneaux)
-        XCTAssertEqual(issue.ajoutes, 2)
+        XCTAssertEqual(demo.mentionIssue, IssueAjoutCalendrier.mentionDemo)
+        XCTAssertNil(AppareilFactice().mentionIssue, "hors démo : aucune mention")
+        let ajout = AjoutCalendrier(appareil: demo, journal: JournalCalendrierMemoire())
+        let issue = await ajout.ajouter(deuxCreneaux)
+        XCTAssertEqual(issue, IssueAjoutCalendrier(message: "2 créneaux ajoutés à votre calendrier. \(IssueAjoutCalendrier.mentionDemo)",
+                                                   succes: true, ajoutes: 2))
         XCTAssertEqual(demo.evenements.count, 2, "gardés en mémoire, aucune écriture système")
+        let second = await ajout.ajouter(deuxCreneaux)
+        XCTAssertEqual(second.message, "\(IssueAjoutCalendrier.dejaAjoutes) \(IssueAjoutCalendrier.mentionDemo)")
         let refus = CalendrierAppareilDemo(refuse: true)
         let refusee = await AjoutCalendrier(appareil: refus, journal: JournalCalendrierMemoire()).ajouter(deuxCreneaux)
-        XCTAssertEqual(refusee.message, IssueAjoutCalendrier.accesRefuse)
+        XCTAssertEqual(refusee.message, "\(IssueAjoutCalendrier.accesRefuse) \(IssueAjoutCalendrier.mentionDemo)")
+        XCTAssertFalse(refusee.succes)
         XCTAssertEqual(refus.evenements, [])
+        let incomplete = MissionBusiness.enrich(record: record(nb: 3), context: DemoWorld.context, etablissement: etab, slots: [])
+        let nonConfirme = await AjoutCalendrier(appareil: CalendrierAppareilDemo(), journal: JournalCalendrierMemoire()).ajouter(incomplete)
+        XCTAssertEqual(nonConfirme.message, IssueAjoutCalendrier.planningNonConfirme, "rien n'est annoncé comme écrit : aucune mention")
         // Surcharge DEBUG lue par `AppContainer` (liste centralisée des surcharges), jamais ailleurs.
         XCTAssertEqual(CalendrierAppareilDemo.variableRefus, "JOLENE_FORCE_CALENDRIER_REFUS")
     }
