@@ -14,10 +14,15 @@
 --     une sentinelle. Toutes ces gardes refusent par RETURN et seules des
 --     lectures de fixtures les précèdent : une exception levée après coup
 --     (contrôle métier, conformité) prouve donc aussi le passage de la garde.
--- fn_soignants_urgence et fn_diffuser_pool_urgence : un refus (0 ligne, 0)
--- ne se distingue pas d'un pool vide ; seule l'absence d'effet est vérifiée,
--- la garde elle-même l'est par tests/node/gardes-null-security-definer.node.mjs.
--- fn_deposer_chorus : pas de fixture facture ici (même garde statique).
+-- fn_soignants_urgence et fn_diffuser_pool_urgence : un soignant fixture (U),
+-- disponible en urgence, éligible et de la même cohorte test que A, rend le
+-- pool non vide (précondition vérifiée) ; les autres soignants éligibles sont
+-- exclus par A le temps du test. Les appelants légitimes (A, ADM) obtiennent
+-- exactement U, téléphone compris, et une diffusion ; un refus (0 ligne, 0)
+-- se distingue donc d'un pool vide.
+-- fn_deposer_chorus : facture fixture EMISE de A, à payer, sans rapprochement.
+-- fn_etat_pointage_mission n'est plus dans ce lot : la PR B9 B5b
+-- (fix/visibilite-etablissement-par-permission) porte sa garde et sa recette.
 \set ON_ERROR_STOP on
 BEGIN;
 
@@ -37,6 +42,10 @@ DECLARE
   c_contrat uuid := 'a7a10000-0000-4000-8000-000000000041';
   evt uuid := 'a7a10000-0000-4000-8000-000000000051';
   serie uuid := 'a7a10000-0000-4000-8000-000000000061';
+  u_u uuid := 'a7a10000-0000-4000-8000-000000000017';
+  tel_u text := '+33600000017';
+  f_fact uuid := 'a7a10000-0000-4000-8000-000000000071';
+  v_doc record;
   c record;
   v_acteur text;
   v_uid uuid;
@@ -48,7 +57,7 @@ DECLARE
   n_refus integer := 0;
   n_passe integer := 0;
 BEGIN
-  -- Les 21 corps corrigés sont en place, l'inventaire suit, ACL inchangées.
+  -- Les 20 corps corrigés sont en place, l'inventaire suit, ACL inchangées.
   IF (SELECT count(*)
       FROM (VALUES
         ('fn_valider_alerte_presence(uuid)', '1ff0c4c48ccd906f161e1a9174034505'),
@@ -65,7 +74,6 @@ BEGIN
         ('fn_deposer_chorus(uuid,text)', '8b310b8e4c6bbabd58b039a9e915c675'),
         ('fn_generer_facture(uuid)', '078777ead10a6a4d500694551299622b'),
         ('fn_diffuser_pool_urgence(uuid)', '07cd19c650da67e2b8128d32d0ffbfe6'),
-        ('fn_etat_pointage_mission(uuid)', 'db898659563ee11cf461469f82d1fac7'),
         ('fn_etablissement_pour_mission(uuid)', '55493a7014ae20761ebf86fdab938f1c'),
         ('fn_annuler_serie(uuid)', '06255e7b0d58441d46ac69798276dfae'),
         ('fn_assigner_mission_admin(uuid,uuid,text)', '3a3523b9ac79ebd8e34a5ef58e749de3'),
@@ -80,7 +88,7 @@ BEGIN
         AND i.definition_md5 = v.md5_apres
         AND NOT pg_catalog.has_function_privilege('anon', p.oid, 'EXECUTE')
         AND pg_catalog.has_function_privilege('authenticated', p.oid, 'EXECUTE')
-        AND pg_catalog.has_function_privilege('service_role', p.oid, 'EXECUTE')) <> 21 THEN
+        AND pg_catalog.has_function_privilege('service_role', p.oid, 'EXECUTE')) <> 20 THEN
     RAISE EXCEPTION 'GARDES_NULL : corps, inventaire ou ACL non conformes à la migration';
   END IF;
 
@@ -115,14 +123,41 @@ BEGIN
       (u_a, '00000000-0000-0000-0000-000000000000', 'gardes-null-a@example.invalid',
        'authenticated', 'authenticated', '{"role":"ETABLISSEMENT"}', now()),
       (u_adm, '00000000-0000-0000-0000-000000000000', 'gardes-null-adm@example.invalid',
-       'authenticated', 'authenticated', '{"role":"ADMIN_PLATEFORME"}', now());
+       'authenticated', 'authenticated', '{"role":"ADMIN_PLATEFORME"}', now()),
+      (u_u, '00000000-0000-0000-0000-000000000000', 'gardes-null-u@example.invalid',
+       'authenticated', 'authenticated', '{"role":"SOIGNANT"}', now());
 
     INSERT INTO public.soignants (
       id, prenom, nom, email, profession, est_compte_test,
-      rpps_verifie, disponible_urgence, tous_documents_valides
+      rpps_verifie, disponible_urgence, tous_documents_valides, telephone
     ) VALUES
-      (u_s, 'Fixture', 'Assigné', 'gardes-null-s@example.invalid', 'IDE', true, true, false, true),
-      (u_t, 'Fixture', 'Tiers', 'gardes-null-t@example.invalid', 'IDE', true, true, false, true);
+      (u_s, 'Fixture', 'Assigné', 'gardes-null-s@example.invalid', 'IDE', true, true, false, true, NULL),
+      (u_t, 'Fixture', 'Tiers', 'gardes-null-t@example.invalid', 'IDE', true, true, false, true, NULL),
+      (u_u, 'Fixture', 'Urgence', 'gardes-null-u@example.invalid', 'IDE', true, true, true, true, tel_u);
+
+    -- Pool urgence : le filtre documentaire canonique s'applique ; toutes les
+    -- preuves salariées critiques de U sont vérifiées.
+    FOR v_doc IN
+      SELECT drp.type_document, drp.a_expiration
+      FROM public.documents_requis_par_profession drp
+      WHERE drp.profession = 'IDE'
+        AND drp.est_critique IS TRUE
+        AND drp.type_exercice_requis IN ('TOUS', 'SALARIE_ONLY')
+        AND drp.type_document <> 'RPPS_ADELI'
+    LOOP
+      INSERT INTO public.documents_soignants (
+        soignant_id, type_document, s3_cle, nom_fichier,
+        statut_verification, est_critique, valide_jusqua, resultat_ia
+      ) VALUES (
+        u_u, v_doc.type_document,
+        'tests/gardes-null/' || lower(v_doc.type_document::text),
+        lower(v_doc.type_document::text) || '.pdf',
+        'VERIFIE', true,
+        CASE WHEN v_doc.a_expiration THEN current_date + 365 ELSE NULL END,
+        CASE WHEN v_doc.type_document = 'DIPLOME'
+          THEN '{"profession_certifiee":"IDE"}'::jsonb ELSE '{}'::jsonb END
+      );
+    END LOOP;
 
     INSERT INTO public.membres_etablissement (etablissement_id, user_id, role, actif) VALUES
       (e_a, u_a, 'PROPRIETAIRE', true),
@@ -158,6 +193,32 @@ BEGIN
     ) VALUES (p_pres, m_term, u_s, true, false, false);
     INSERT INTO public.evenements_score_etab (id, etablissement_id, type_evenement, points, motif)
     VALUES (evt, e_a, 'AUTRE', -1, 'Fixture gardes NULL');
+    INSERT INTO public.factures (
+      id, etablissement_id, numero_facture, montant_ht, montant_tva, montant_ttc,
+      statut, date_emission, date_echeance
+    ) VALUES (
+      f_fact, e_a, 'JOL-' || to_char(now(), 'YYYY') || '-H-A7A100000071', 10, 2, 12,
+      'EMISE', now(), current_date + 30
+    );
+    -- Borne le pool de m_ouv à U : les autres soignants éligibles de la cohorte
+    -- test sont exclus par A, le temps de la transaction annulée.
+    INSERT INTO public.exclusions (exclu_par, exclu_id, type_exclu_par, motif)
+    SELECT e_a, s.id, 'ETABLISSEMENT', 'Fixture gardes NULL'
+      FROM public.soignants s
+     WHERE s.id <> u_u
+       AND COALESCE(s.disponible_urgence, false)
+       AND public.fn_soignant_eligible_mission(s.id, m_ouv, true)
+    ON CONFLICT (exclu_par, exclu_id) DO NOTHING;
+    IF NOT public.fn_soignant_eligible_mission(u_u, m_ouv, true) THEN
+      RAISE EXCEPTION 'GARDES_NULL fixture urgence non éligible : contrat %, documents %',
+        public.fn_resoudre_contrat_mission(m_ouv, u_u, NULL),
+        public.fn_documents_ok_pour_mission(u_u, 'SALARIE');
+    END IF;
+    IF (SELECT count(*) FROM public.factures
+         WHERE id = f_fact AND statut = 'EMISE' AND montant_a_payer > 0
+           AND NOT rapprochement_paiement_requis AND chorus_pro_statut IS DISTINCT FROM 'DEPOSEE') <> 1 THEN
+      RAISE EXCEPTION 'GARDES_NULL fixture facture non déposable';
+    END IF;
     PERFORM set_config('request.jwt.claim.role', '', true);
     PERFORM set_config('request.jwt.claims', '{}', true);
 
@@ -182,8 +243,9 @@ BEGIN
       (5, format('SELECT to_jsonb(public.fn_regenerer_qr_mission(%L::uuid, %L))', m_term, 'UNIVERSEL'),
        jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE'), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
        jsonb_build_object('success', false, 'error_code', 'MISSION_INACTIVE')),
-      (6, format('SELECT to_jsonb(count(*)) FROM public.fn_soignants_urgence(%L::uuid)', m_ouv),
-       to_jsonb(0), ARRAY['S','T','R','B'], ARRAY[]::text[], NULL),
+      (6, format('SELECT jsonb_build_object(''lignes'', count(*), ''u'', count(*) FILTER (WHERE soignant_id = %L::uuid AND telephone = %L)) FROM public.fn_soignants_urgence(%L::uuid)', u_u, tel_u, m_ouv),
+       jsonb_build_object('lignes', 0, 'u', 0), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
+       jsonb_build_object('lignes', 1, 'u', 1)),
       (7, format('SELECT to_jsonb(public.fn_generer_donnees_dpae(%L::uuid))', c_contrat),
        jsonb_build_object('success', false, 'error', 'Non autorisé'), ARRAY['S','T','R','B'], ARRAY['A','ADM'], NULL),
       (8, format('SELECT to_jsonb(public.fn_enregistrer_numero_dpae(%L::uuid, %L))', c_contrat, 'GNULL2026A1'),
@@ -203,32 +265,30 @@ BEGIN
        '{"error":"Accès refusé"}'::jsonb, ARRAY['S','T','R','B'], ARRAY['A','ADM'],
        '{"error":"La mission doit être TERMINEE"}'::jsonb),
       (14, format('SELECT to_jsonb(public.fn_diffuser_pool_urgence(%L::uuid))', m_ouv),
-       to_jsonb(0), ARRAY['S','T','R','B'], ARRAY[]::text[], NULL),
-      (15, format('SELECT to_jsonb(public.fn_etat_pointage_mission(%L::uuid))', m_ouv),
-       jsonb_build_object('error', 'Accès interdit'), ARRAY['S','T','R','B'], ARRAY['A','ADM'], NULL),
-      (16, format('SELECT to_jsonb(public.fn_etat_pointage_mission(%L::uuid))', m_term),
-       jsonb_build_object('error', 'Accès interdit'), ARRAY['T','R','B'], ARRAY['S','A','ADM'], NULL),
-      (17, format('SELECT to_jsonb(public.fn_etablissement_pour_mission(%L::uuid))', e_b),
+       to_jsonb(0), ARRAY['S','T','R','B'], ARRAY['A','ADM'], to_jsonb(1)),
+      (15, format('SELECT to_jsonb(public.fn_deposer_chorus(%L::uuid, %L))', f_fact, 'CHORUS-GARDES-NULL'),
+       '{"error":"Accès refusé"}'::jsonb, ARRAY['S','T','R','B'], ARRAY['A','ADM'], NULL),
+      (16, format('SELECT to_jsonb(public.fn_etablissement_pour_mission(%L::uuid))', e_b),
        jsonb_build_object('error', 'Accès refusé'), ARRAY['S','T','R','A'], ARRAY['B','ADM'], NULL),
       -- Une mission OUVERTE rend la fiche de A visible à tout compte : inchangé.
-      (18, format('SELECT to_jsonb(public.fn_etablissement_pour_mission(%L::uuid))', e_a),
+      (17, format('SELECT to_jsonb(public.fn_etablissement_pour_mission(%L::uuid))', e_a),
        jsonb_build_object('error', 'Accès refusé'), ARRAY[]::text[], ARRAY['S','T','R','B','A','ADM'], NULL),
-      (19, format('SELECT to_jsonb(public.fn_annuler_serie(%L::uuid))', serie),
+      (18, format('SELECT to_jsonb(public.fn_annuler_serie(%L::uuid))', serie),
        '{"error":"Accès refusé"}'::jsonb, ARRAY['S','T','R'], ARRAY['A','B','ADM'],
        jsonb_build_object('success', true, 'missions_annulees', 0)),
-      (20, format('SELECT to_jsonb(public.fn_assigner_mission_admin(%L::uuid, %L::uuid, NULL))', m_ouv, u_t),
+      (19, format('SELECT to_jsonb(public.fn_assigner_mission_admin(%L::uuid, %L::uuid, NULL))', m_ouv, u_t),
        jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R'], ARRAY['A','ADM'], NULL),
-      (21, format('SELECT to_jsonb(public.fn_assigner_mission_admin(%L::uuid, %L::uuid, NULL))', m_ouv, u_t),
+      (20, format('SELECT to_jsonb(public.fn_assigner_mission_admin(%L::uuid, %L::uuid, NULL))', m_ouv, u_t),
        jsonb_build_object('error', 'Cette mission n''appartient pas à votre établissement'), ARRAY['B'], ARRAY[]::text[], NULL),
-      (22, format('SELECT to_jsonb(public.fn_creer_reclamation_score(%L::uuid, %L, %L, %L))', evt, 'ETAB', 'AUTRE',
+      (21, format('SELECT to_jsonb(public.fn_creer_reclamation_score(%L::uuid, %L, %L, %L))', evt, 'ETAB', 'AUTRE',
                   'Réclamation de fixture pour la garde NULL, jamais persistée.'),
        jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE',
                           'error', 'Vous n''êtes pas concerné par cet événement'),
        ARRAY['S','T','R','B'], ARRAY['A'], NULL),
-      (23, format('SELECT to_jsonb(public.fn_declarer_honoraires_retrocession(%L::uuid, 100, %L))', m_term, 'justificatif-fixture'),
+      (22, format('SELECT to_jsonb(public.fn_declarer_honoraires_retrocession(%L::uuid, 100, %L))', m_term, 'justificatif-fixture'),
        jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
        jsonb_build_object('error', 'Cette mission n''est pas en rétrocession.')),
-      (24, format('SELECT to_jsonb(public.fn_definir_retrocession_mission(%L::uuid, 50))', m_term),
+      (23, format('SELECT to_jsonb(public.fn_definir_retrocession_mission(%L::uuid, 50))', m_term),
        jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
        jsonb_build_object('error', 'Modifiable uniquement sur une mission ouverte.'));
 
@@ -258,12 +318,15 @@ BEGIN
       'escrow', (SELECT count(*) FROM public.escrow_release_queue WHERE mission_id IN (m_term, m_ouv)),
       'missions_a', (SELECT count(*) FROM public.missions WHERE etablissement_id = e_a),
       'factures_a', (SELECT count(*) FROM public.factures WHERE etablissement_id = e_a),
+      'facture', (SELECT to_jsonb(f) FROM public.factures f WHERE f.id = f_fact),
+      'pool_u', (SELECT count(*) FROM public.notifications n WHERE n.destinataire_id = u_u),
       'reclamations', (SELECT count(*) FROM public.reclamations_score WHERE evenement_etab_id = evt),
       'notifications', (SELECT count(*) FROM public.notifications n
                         WHERE n.id_ressource IN (m_term, m_ouv, p_pres, c_contrat, evt)
                            OR n.lien LIKE '%' || m_term::text || '%'
                            OR n.lien LIKE '%' || m_ouv::text || '%'));
     IF (v_avant->>'presence') IS NULL OR (v_avant->>'contrat') IS NULL OR (v_avant->>'evenement') IS NULL
+       OR (v_avant->>'facture') IS NULL
        OR (v_avant->'presence'->>'valide_par_etablissement')::boolean IS DISTINCT FROM false THEN
       RAISE EXCEPTION 'GARDES_NULL fixture incomplète : %', v_avant;
     END IF;
@@ -298,6 +361,8 @@ BEGIN
       'escrow', (SELECT count(*) FROM public.escrow_release_queue WHERE mission_id IN (m_term, m_ouv)),
       'missions_a', (SELECT count(*) FROM public.missions WHERE etablissement_id = e_a),
       'factures_a', (SELECT count(*) FROM public.factures WHERE etablissement_id = e_a),
+      'facture', (SELECT to_jsonb(f) FROM public.factures f WHERE f.id = f_fact),
+      'pool_u', (SELECT count(*) FROM public.notifications n WHERE n.destinataire_id = u_u),
       'reclamations', (SELECT count(*) FROM public.reclamations_score WHERE evenement_etab_id = evt),
       'notifications', (SELECT count(*) FROM public.notifications n
                         WHERE n.id_ressource IN (m_term, m_ouv, p_pres, c_contrat, evt)
@@ -339,7 +404,7 @@ BEGIN
       END LOOP;
     END LOOP;
 
-    IF n_refus <> 85 OR n_passe <> 48
+    IF n_refus <> 82 OR n_passe <> 49
        OR n_refus <> (SELECT sum(cardinality(refuses)) FROM gardes_null_cas)
        OR n_passe <> (SELECT sum(cardinality(passants)) FROM gardes_null_cas) THEN
       RAISE EXCEPTION 'GARDES_NULL matrice incomplète : % refus, % passages', n_refus, n_passe;
@@ -352,7 +417,8 @@ BEGIN
 
   IF EXISTS (SELECT 1 FROM public.etablissements WHERE id IN (e_a, e_b))
      OR EXISTS (SELECT 1 FROM public.missions WHERE id IN (m_term, m_ouv))
-     OR EXISTS (SELECT 1 FROM auth.users WHERE id IN (u_s, u_t, u_r, u_b, u_a, u_adm)) THEN
+     OR EXISTS (SELECT 1 FROM public.factures WHERE id = f_fact)
+     OR EXISTS (SELECT 1 FROM auth.users WHERE id IN (u_s, u_t, u_r, u_b, u_a, u_adm, u_u)) THEN
     RAISE EXCEPTION 'GARDES_NULL : sous-transaction non nettoyée';
   END IF;
   PERFORM set_config('jolene.admin_seed_override_reason', '', true);

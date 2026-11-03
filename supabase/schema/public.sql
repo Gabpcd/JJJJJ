@@ -35162,8 +35162,8 @@ BEGIN
     RETURN jsonb_build_object('error', 'Mission introuvable');
   END IF;
 
-  v_is_etab := est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false);
-  v_is_soignant := COALESCE(v_mission.soignant_assigne_id = auth.uid(), false);
+  v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id();
+  v_is_soignant := v_mission.soignant_assigne_id = auth.uid();
 
   IF NOT v_is_etab AND NOT v_is_soignant THEN
     RETURN jsonb_build_object('error', 'Accès interdit');

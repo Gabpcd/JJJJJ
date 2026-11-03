@@ -8,15 +8,15 @@
 --   IF x.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN refus
 --   IF NOT (est_admin() OR x.etablissement_id = mon_etablissement_id()) THEN refus
 -- la condition vaut NULL, PL/pgSQL ne prend pas la branche et la fonction
--- continue. Les 21 fonctions ci-dessous (SECURITY DEFINER, EXECUTE accordé à
+-- continue. Les 20 fonctions ci-dessous (SECURITY DEFINER, EXECUTE accordé à
 -- authenticated) laissaient ainsi passer un soignant, ou un membre révoqué :
--- validation de sa propre présence (déclenche la file escrow), codes de
--- pointage statiques, code de secours et QR de pointage, téléphones du pool
--- urgence, données DPAE du contrat, numéro DPAE, rebooking, boost facturé,
--- garantie de remplacement, dépôt Chorus, facture de commission, diffusion du
--- pool, état de pointage et présences d'une mission d'un tiers, fiche
--- établissement, réclamation sur un événement de score d'établissement,
--- honoraires et régime de rétrocession.
+-- validation de sa propre présence (déclenche la file escrow), lecture des
+-- codes de pointage statiques, code de secours et QR de pointage, téléphones
+-- du pool urgence, données DPAE du contrat, numéro DPAE, rebooking, boost
+-- facturé, garantie de remplacement, dépôt Chorus, facture de commission,
+-- diffusion du pool, présences d'une mission d'un tiers, fiche établissement,
+-- réclamation sur un événement de score d'établissement, honoraires et régime
+-- de rétrocession.
 --
 -- Correctif. Une seule différence par fonction : la comparaison avec
 -- mon_etablissement_id() (ou est_admin_etablissement(), ou auth.uid() quand
@@ -27,9 +27,17 @@
 -- exactement le même résultat. Messages de refus, corps, propriétaire, ACL,
 -- volatilité et search_path inchangés (CREATE OR REPLACE, aucun GRANT).
 --
+-- Contexte système. Quinze de ces fonctions n'ont pas de garde
+-- auth.uid() IS NULL préalable : service_role et les crons, qui passaient par
+-- le NULL, sont désormais refusés comme tout appelant sans établissement.
+-- Aucun appelant système relu (cron.job LIVE, pg_proc hors
+-- fn_regenerer_qr_mission et fn_creer_mission_multi_jours_v2 qui tournent sous
+-- le JWT de l'utilisateur, edge functions, iOS, scripts) : pas de régression
+-- attendue. Détail : docs/GARDES_NULL_SECURITY_DEFINER.md §2.
+--
 -- Sources : définitions LIVE production relues le 2026-11-03 en lecture seule
 -- (md5(prosrc), pg_get_function_arguments, pg_get_function_result, proconfig,
--- has_function_privilege, private.security_definer_inventory). Les 21 corps
+-- has_function_privilege, private.security_definer_inventory). Les 20 corps
 -- LIVE sont identiques à supabase/schema/public.sql (empreintes « avant »
 -- ci-dessous). Toutes les gardes « avant » précèdent la première
 -- redéfinition : une seule source divergente refuse la migration entière.
@@ -39,6 +47,11 @@
 --     fix/scanner-code-sans-code-suivant (migration 20261102205212). La
 --     redéfinir ici à partir du LIVE réintroduirait nouveau_code/nouveau_hmac
 --     si cette migration passait après.
+--   * fn_etat_pointage_mission : même défaut, corrigé par la PR B9 B5b
+--     fix/visibilite-etablissement-par-permission (migration 20261102210943,
+--     COALESCE à l'usage et code réservé à la permission « pointage »), partie
+--     du même LIVE (md5 3fe46580…). La garder ici ferait échouer la seconde
+--     PR mergée, quel que soit l'ordre.
 --   * est_admin_etablissement() et les cinq triggers qui la nient
 --     (dec_proteger_mission_soignant, dec_proteger_presence_soignant,
 --     fn_protect_mission_financials, fn_protect_presence_integrity,
@@ -48,6 +61,18 @@
 --     soignant_assigne_id reverté). Volet séparé, instruit dans
 --     docs/GARDES_NULL_SECURITY_DEFINER.md et verrouillé par
 --     tests/node/gardes-null-security-definer.node.mjs.
+--
+-- Ordre de merge (docs/GARDES_NULL_SECURITY_DEFINER.md §7). Ce lot passe en
+-- dernier des branches B9 du 02/11, dont les migrations le précèdent :
+--   20261102204820 fix/score-matching-inconnu-null
+--   20261102205212 fix/scanner-code-sans-code-suivant   (verrou : garde statique)
+--   20261102205808 fix/contestation-paiement-soignant
+--   20261102210943 fix/visibilite-etablissement-par-permission (B5b, verrou : garde statique)
+-- Aucune ne redéfinit l'une des 20 fonctions ci-dessous. La garde statique
+-- refuse ce lot tant que les correctifs scanner et B5b ne sont pas dans le
+-- dépôt (entrées REVUES conditionnées à leur preuve). Si ce lot devait passer
+-- avant l'une des quatre, la renommer après 20261103013434 (CLAUDE.md,
+-- migrations règle 2) et repartir de son LIVE.
 -- Garde statique : tests/node/gardes-null-security-definer.node.mjs.
 -- Recette SQL sous ROLLBACK : tests/security/gardes-null-security-definer.test.sql.
 
@@ -73,7 +98,6 @@ BEGIN
     ('fn_deposer_chorus(uuid,text)', 'p_facture_id uuid, p_chorus_id text DEFAULT NULL::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '3a42d1cf3e8bb1aecedd28c4e0782cae', '8b310b8e4c6bbabd58b039a9e915c675'),
     ('fn_generer_facture(uuid)', 'p_mission_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '5314c8689cd382ad000be9e7a9df6b29', '078777ead10a6a4d500694551299622b'),
     ('fn_diffuser_pool_urgence(uuid)', 'p_mission_id uuid', 'integer', 'v', ARRAY['search_path=pg_catalog, public, private']::text[], 'MIXTE_TENANT_ADMIN', 'ba942f8cc9f7997930c5bdc9d32af9df', '07cd19c650da67e2b8128d32d0ffbfe6'),
-    ('fn_etat_pointage_mission(uuid)', 'p_mission_id uuid', 'jsonb', 's', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '3fe46580ddb6d871b4331e41a31a9e05', 'db898659563ee11cf461469f82d1fac7'),
     ('fn_etablissement_pour_mission(uuid)', 'p_etablissement_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '1f9bc93c9cf7e4b097ace3a78720c689', '55493a7014ae20761ebf86fdab938f1c'),
     ('fn_annuler_serie(uuid)', 'p_serie_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '71d57002916d856d6530d90f749676e1', '06255e7b0d58441d46ac69798276dfae'),
     ('fn_assigner_mission_admin(uuid,uuid,text)', 'p_mission_id uuid, p_soignant_id uuid, p_choix_contrat text DEFAULT NULL::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '502101a70656f3b5e5eb01c14f23d5de', '3a3523b9ac79ebd8e34a5ef58e749de3'),
@@ -105,7 +129,7 @@ BEGIN
                  WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE')
     THEN RAISE EXCEPTION 'GARDES_NULL_ACL_AVANT_DIVERGENTE : %', r.signature; END IF;
   END LOOP;
-  IF n <> 21 THEN RAISE EXCEPTION 'GARDES_NULL_PERIMETRE_INCOMPLET : % fonctions', n; END IF;
+  IF n <> 20 THEN RAISE EXCEPTION 'GARDES_NULL_PERIMETRE_INCOMPLET : % fonctions', n; END IF;
 END;
 $gardes_null_avant$;
 
@@ -889,59 +913,6 @@ BEGIN
 END;
 $fonction$;
 
--- fn_etat_pointage_mission(uuid) : LIVE 3fe46580ddb6d871b4331e41a31a9e05 → db898659563ee11cf461469f82d1fac7
-CREATE OR REPLACE FUNCTION public.fn_etat_pointage_mission(p_mission_id uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- STABLE
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $fonction$
-DECLARE
-  v_mission RECORD;
-  v_is_etab boolean;
-  v_is_soignant boolean;
-  v_segments jsonb;
-  v_segment_ouvert boolean;
-BEGIN
-  SELECT id, etablissement_id, soignant_assigne_id, statut,
-         code_pointage_actif, prochain_type_scan, nb_scans, intitule
-    INTO v_mission
-    FROM missions WHERE id = p_mission_id;
-
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('error', 'Mission introuvable');
-  END IF;
-
-  v_is_etab := est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false);
-  v_is_soignant := COALESCE(v_mission.soignant_assigne_id = auth.uid(), false);
-
-  IF NOT v_is_etab AND NOT v_is_soignant THEN
-    RETURN jsonb_build_object('error', 'Accès interdit');
-  END IF;
-
-  -- Segments effectifs (les vrais créneaux travaillés, base de la paie)
-  SELECT
-    COALESCE(jsonb_agg(jsonb_build_object('id', id, 'debut', debut, 'fin', fin) ORDER BY debut), '[]'::jsonb),
-    bool_or(fin IS NULL)
-    INTO v_segments, v_segment_ouvert
-    FROM mission_creneaux
-    WHERE mission_id = p_mission_id AND type_creneau = 'EFFECTIF';
-
-  RETURN jsonb_build_object(
-    'statut', v_mission.statut,
-    'intitule', v_mission.intitule,
-    'prochain_type_scan', v_mission.prochain_type_scan,
-    'nb_scans', v_mission.nb_scans,
-    'segment_ouvert', COALESCE(v_segment_ouvert, false),
-    'segments', v_segments,
-    -- Visible uniquement par l'établissement (l'affiche au soignant à pointer).
-    'code_pointage_actif', CASE WHEN v_is_etab THEN v_mission.code_pointage_actif ELSE NULL END,
-    'est_etab', v_is_etab
-  );
-END;
-$fonction$;
-
 -- fn_etablissement_pour_mission(uuid) : LIVE 1f9bc93c9cf7e4b097ace3a78720c689 → 55493a7014ae20761ebf86fdab938f1c
 CREATE OR REPLACE FUNCTION public.fn_etablissement_pour_mission(p_etablissement_id uuid)
  RETURNS jsonb
@@ -1263,7 +1234,6 @@ BEGIN
     ('fn_deposer_chorus(uuid,text)', 'p_facture_id uuid, p_chorus_id text DEFAULT NULL::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '3a42d1cf3e8bb1aecedd28c4e0782cae', '8b310b8e4c6bbabd58b039a9e915c675'),
     ('fn_generer_facture(uuid)', 'p_mission_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '5314c8689cd382ad000be9e7a9df6b29', '078777ead10a6a4d500694551299622b'),
     ('fn_diffuser_pool_urgence(uuid)', 'p_mission_id uuid', 'integer', 'v', ARRAY['search_path=pg_catalog, public, private']::text[], 'MIXTE_TENANT_ADMIN', 'ba942f8cc9f7997930c5bdc9d32af9df', '07cd19c650da67e2b8128d32d0ffbfe6'),
-    ('fn_etat_pointage_mission(uuid)', 'p_mission_id uuid', 'jsonb', 's', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '3fe46580ddb6d871b4331e41a31a9e05', 'db898659563ee11cf461469f82d1fac7'),
     ('fn_etablissement_pour_mission(uuid)', 'p_etablissement_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '1f9bc93c9cf7e4b097ace3a78720c689', '55493a7014ae20761ebf86fdab938f1c'),
     ('fn_annuler_serie(uuid)', 'p_serie_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '71d57002916d856d6530d90f749676e1', '06255e7b0d58441d46ac69798276dfae'),
     ('fn_assigner_mission_admin(uuid,uuid,text)', 'p_mission_id uuid, p_soignant_id uuid, p_choix_contrat text DEFAULT NULL::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '502101a70656f3b5e5eb01c14f23d5de', '3a3523b9ac79ebd8e34a5ef58e749de3'),
@@ -1299,7 +1269,7 @@ BEGIN
           AND i.definition_md5 = pg_catalog.md5(p.prosrc)) <> 1
     THEN RAISE EXCEPTION 'GARDES_NULL_INVENTAIRE_NON_MIS_A_JOUR : %', r.signature; END IF;
   END LOOP;
-  IF n <> 21 THEN RAISE EXCEPTION 'GARDES_NULL_PERIMETRE_INCOMPLET : % fonctions', n; END IF;
+  IF n <> 20 THEN RAISE EXCEPTION 'GARDES_NULL_PERIMETRE_INCOMPLET : % fonctions', n; END IF;
 END;
 $gardes_null_apres$;
 
