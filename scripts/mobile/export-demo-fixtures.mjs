@@ -118,8 +118,10 @@ function instantDemo(now, jours, heure) {
 /**
  * Tableau de bord démo (lot 1, T3) : corps de `fn_dashboard_soignant_complet` (clés et ordre
  * des colonnes du dump `supabase/schema/public.sql` l.27920) pour le profil fictif, plus :
- *   - `missions_assignees` : fiches et créneaux des deux missions ASSIGNEE de `mes_missions`,
+ *   - `missions_assignees` : fiches et créneaux des dix missions ASSIGNEE du soignant (« À venir » de
+ *     Mes missions, T5 : une liste plus haute que l'écran sur les trois formats, revue B8 2e passe),
  *     lisibles en détail (DemoMissionsGateway.mission) mais jamais listées dans Explorer ;
+ *     `mes_missions` en garde les trois premières (ORDER BY debut_le LIMIT 3, comme le serveur) ;
  *   - `gains_missions` : missions TERMINEE du mois relues comme le web (décision 10).
  * `missions_ouvertes` = les trois premières missions démo (ORDER BY debut_le LIMIT 3) ; la
  * proposition PROPOSEE vise demo-mission-011 et date de 30 minutes avant l'horloge fixée.
@@ -167,7 +169,17 @@ export function buildDemoDashboard(now = new Date(FIXED_NOW), missions = buildDe
   const missionsAssignees = [
     assignee(1, 'Médecine polyvalente', 'demo-etab-1', 27, 'SALARIE', [3]),
     assignee(2, 'Soins de suite', 'demo-etab-2', 30, 'LIBERAL', [7, 8]),
+    assignee(3, 'Médecine polyvalente', 'demo-etab-1', 28, 'SALARIE', [11]),
+    assignee(4, 'Soins de suite', 'demo-etab-2', 26, 'SALARIE', [13]),
+    assignee(5, 'Médecine polyvalente', 'demo-etab-3', 31, 'LIBERAL', [15, 16]),
+    assignee(6, 'Soins de suite', 'demo-etab-1', 29, 'SALARIE', [18]),
+    assignee(7, 'Médecine polyvalente', 'demo-etab-2', 25, 'SALARIE', [20]),
+    assignee(8, 'Soins de suite', 'demo-etab-3', 32, 'LIBERAL', [22]),
+    assignee(9, 'Médecine polyvalente', 'demo-etab-1', 27, 'SALARIE', [24]),
+    assignee(10, 'Soins de suite', 'demo-etab-2', 30, 'LIBERAL', [26, 27]),
   ];
+  // `mes_missions` : ORDER BY debut_le LIMIT 3 (public.sql, fn_dashboard_soignant_complet).
+  const prochaines = [...missionsAssignees].sort((a, b) => a.debut_le.localeCompare(b.debut_le)).slice(0, 3);
   const ouvertes = missions.slice(0, 3);
   const proposee = missions.find((m) => m.id === 'demo-mission-011');
   const termineeDebut = instantDemo(now, -1, 7);
@@ -194,7 +206,7 @@ export function buildDemoDashboard(now = new Date(FIXED_NOW), missions = buildDe
       type_contrat_recherche: m.type_contrat_recherche, accepte_non_specialises: m.accepte_non_specialises,
       specialite_medicale_requise: m.specialite_medicale_requise, etab_nom: nomEtab(m.etablissement_id),
     })),
-    mes_missions: missionsAssignees.map((m) => ({
+    mes_missions: prochaines.map((m) => ({
       id: m.id, intitule: m.intitule, debut_le: m.debut_le, fin_le: m.fin_le, duree_heures: m.duree_heures,
       statut: m.statut, etablissement_id: m.etablissement_id, etab_nom: nomEtab(m.etablissement_id),
     })),

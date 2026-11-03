@@ -146,7 +146,8 @@ struct MesMissionsScreen: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("mes-missions-loading")
-        case let .echec(message) where model.sessionExpired:
+        // Indicateur de session de cet onglet, rangé comme son erreur (revue B8 de T5, 2e passe).
+        case let .echec(message) where liste.sessionExpiree:
             EmptyState(systemImage: "person.crop.circle.badge.exclamationmark", title: "Session à vérifier", message: message,
                        identifier: "mes-missions-session-expired", actionTitle: "Vérifier ma session",
                        actionIdentifier: "mes-missions-session-check") { Task { await model.verifierSession(session) } }
@@ -167,7 +168,9 @@ struct MesMissionsScreen: View {
                 JoleneButton(MesMissionsPresentation.chargerPlus, style: .secondary, isLoading: liste.chargementSuite) {
                     Task { await model.chargerPlus() }
                 }
-                .disabled(liste.chargementSuite)
+                // Inactif pendant une relecture comme pendant la page suivante : `chargerPlus()` n'y lit
+                // rien, le tap ne doit pas être perdu sans retour (revue B8 de T5, 2e passe).
+                .disabled(!liste.peutChargerPlus)
                 .accessibilityIdentifier("missions-load-more")
             }
             if let erreur = liste.erreurSuite {

@@ -90,9 +90,18 @@ public enum AccesCalendrier: Equatable, Sendable {
 @MainActor
 public protocol CalendrierAppareil: AnyObject {
     func acces() -> AccesCalendrier
-    /// Demande système (iOS 16 accès complet, iOS 17+ écriture seule) ; `true` si accordée.
-    func demanderAcces() async -> Bool
+    /// Demande système (iOS 16 accès complet, iOS 17+ écriture seule) : `true` si accordée, `false`
+    /// si l'utilisateur refuse ; une erreur EventKit est levée, jamais confondue avec un refus (revue
+    /// B8 de T5, 2e passe).
+    func demanderAcces() async throws -> Bool
     func enregistrer(_ evenement: EvenementCalendrier) throws
+    /// Phrase ajoutée à chaque issue qui annonce une écriture, un doublon ou un refus : `nil` sur un
+    /// appareil réel ; en démo, `IssueAjoutCalendrier.mentionDemo` (rien n'est écrit, PRINCIPES §7).
+    var mentionIssue: String? { get }
+}
+
+extension CalendrierAppareil {
+    public var mentionIssue: String? { nil }
 }
 
 /// Journal local des créneaux déjà ajoutés (dédoublonnage, `RECETTE_DEVICE_LOT1.md` §4).
@@ -104,7 +113,11 @@ public protocol JournalCalendrier: AnyObject {
 
 /// Journal persistant d'un compte : une clé `UserDefaults` par utilisateur, dont l'identifiant est un
 /// segment entier (`jolene.calendrier.journal.<userId>`), purgée après une suppression de compte
-/// confirmée (`CompteSuppression.purgerPreferencesLocales`, T8).
+/// confirmée (`CompteSuppression.purgerPreferencesLocales`, T8). Aucune purge des créneaux passés au
+/// lot 1 : retirer une clé dont la fin est dépassée ferait réajouter ce créneau au tap suivant tant que
+/// sa mission reste « À venir » (mission sur plusieurs jours), donc un doublon dans le calendrier ; la
+/// croissance (une clé d'environ 120 octets par créneau ajouté) est consignée dans
+/// `RECETTE_DEVICE_LOT1.md` §4 (revue B8 de T5, 2e passe).
 @MainActor
 public final class JournalCalendrierPreferences: JournalCalendrier {
     public static func cle(userId: String) -> String { "jolene.calendrier.journal.\(userId)" }
@@ -158,6 +171,9 @@ public struct IssueAjoutCalendrier: Equatable, Sendable {
     /// pas réajouté (`RECETTE_DEVICE_LOT1.md` §4).
     public static let dejaAjoutes = "Les créneaux de cette mission ont déjà été ajoutés à votre calendrier depuis Jolene sur cet appareil."
     public static let echecTotal = "Le calendrier n'a pas pu enregistrer cette mission. Réessayez."
+    /// Mode démo explicitement affiché (PRINCIPES §7, précédent « Aperçu de démonstration, sans fond de
+    /// carte ») : suffixe de chaque issue du calendrier démo, après le message ordinaire.
+    public static let mentionDemo = "Démonstration : rien n'est écrit dans le calendrier de l'appareil."
 
     static func ajout(_ ajoutes: Int, deja: Int) -> String {
         let base = ajoutes > 1 ? "\(ajoutes) créneaux ajoutés à votre calendrier" : "1 créneau ajouté à votre calendrier"
@@ -176,6 +192,10 @@ public struct IssueAjoutCalendrier: Equatable, Sendable {
 /// - aucun événement (planning non confirmé) → aucune demande d'accès ;
 /// - tous déjà notés au journal → message d'information, aucune demande ni écriture ;
 /// - accord refusé (ou restreint) → message, aucune écriture, aucune nouvelle demande forcée ;
+/// - erreur de la demande d'accès → message d'échec générique (jamais « accès refusé »), aucune
+///   écriture ; l'accès sera redemandé au tap suivant ;
+/// - sur un appareil qui porte une `mentionIssue` (démo), elle suit chaque message, sauf celui d'un
+///   planning non confirmé (rien n'y est annoncé comme écrit) ;
 /// - chaque créneau écrit est noté au journal aussitôt : un échec partiel se complète au tap suivant
 ///   sans doublon.
 /// Deux taps rapprochés sur la même mission partagent la même opération (aucun doublon).
@@ -202,6 +222,14 @@ public final class AjoutCalendrier {
     private func executer(_ mission: Mission) async -> IssueAjoutCalendrier {
         let evenements = CalendrierMission.evenements(pour: mission)
         guard !evenements.isEmpty else { return IssueAjoutCalendrier(message: IssueAjoutCalendrier.planningNonConfirme, succes: false) }
+        var issue = await ecrire(evenements)
+        if let mention = appareil.mentionIssue, !mention.isEmpty {
+            issue.message += " " + mention
+        }
+        return issue
+    }
+
+    private func ecrire(_ evenements: [EvenementCalendrier]) async -> IssueAjoutCalendrier {
         let nouveaux = evenements.filter { !journal.contient($0.cle) }
         let deja = evenements.count - nouveaux.count
         guard !nouveaux.isEmpty else {
@@ -213,7 +241,14 @@ public final class AjoutCalendrier {
         case .refuse:
             return IssueAjoutCalendrier(message: IssueAjoutCalendrier.accesRefuse, succes: false)
         case .nonDetermine:
-            guard await appareil.demanderAcces() else {
+            let accorde: Bool
+            do {
+                accorde = try await appareil.demanderAcces()
+            } catch {
+                // Erreur EventKit (journalisée en DEBUG par l'appareil) : pas un refus de l'utilisateur.
+                return IssueAjoutCalendrier(message: IssueAjoutCalendrier.echecTotal, succes: false)
+            }
+            guard accorde else {
                 return IssueAjoutCalendrier(message: IssueAjoutCalendrier.accesRefuse, succes: false)
             }
         }
@@ -243,8 +278,9 @@ public final class AjoutCalendrier {
 // MARK: - Démonstration
 
 /// Calendrier du monde démo : aucun accès système, aucune écriture réelle ; les événements « écrits »
-/// sont gardés en mémoire (preuve XCUITest par le message d'issue). `refuse` (surcharge DEBUG
-/// `JOLENE_FORCE_CALENDRIER_REFUS`, lue par `AppContainer` seulement) simule un accès refusé.
+/// sont gardés en mémoire (preuve XCUITest par le message d'issue, suivi de `mentionDemo`). `refuse`
+/// (surcharge DEBUG `JOLENE_FORCE_CALENDRIER_REFUS`, lue par `AppContainer` seulement) simule un accès
+/// refusé.
 @MainActor
 public final class CalendrierAppareilDemo: CalendrierAppareil {
     /// Variable d'environnement DEBUG du refus simulé, lue par `AppContainer` (liste des surcharges).
@@ -256,9 +292,11 @@ public final class CalendrierAppareilDemo: CalendrierAppareil {
 
     public init(refuse: Bool = false) { self.refuse = refuse }
 
+    public var mentionIssue: String? { IssueAjoutCalendrier.mentionDemo }
+
     public func acces() -> AccesCalendrier { refuse ? .refuse : .accorde }
 
-    public func demanderAcces() async -> Bool {
+    public func demanderAcces() async throws -> Bool {
         demandes += 1
         return !refuse
     }

@@ -1,6 +1,9 @@
 import EventKit
 import SwiftUI
 import JoleneCore
+#if DEBUG
+import os
+#endif
 
 /// Ajout au calendrier (lot 1, T5, décision 18) : câblage du point d'extension posé par T3
 /// (`AjoutCalendrierMission`). Les règles (un événement par créneau PREVISIONNEL d'un planning
@@ -8,11 +11,13 @@ import JoleneCore
 /// (JoleneCore, testées par `AjoutCalendrierTests` avec un double d'`EKEventStore`) ; ce fichier ne
 /// fournit que l'appareil EventKit et l'injection au-dessus des onglets (Accueil et Mes missions).
 ///
-/// Démonstration : `CalendrierAppareilDemo` (aucune demande système, aucune écriture réelle) et un
-/// journal en mémoire ; `refusDemo` (surcharge DEBUG `JOLENE_FORCE_CALENDRIER_REFUS=1`, lue par
-/// `AppContainer` avec les autres surcharges, `AppContainer.calendrierRefusDemo`) simule un accès
-/// refusé (`DemoMesMissionsTests.testCalendrierAccesRefuse`). Staging et production : EventKit et le
-/// journal du compte (`jolene.calendrier.journal.<userId>`, purgé à la suppression du compte, T8).
+/// Démonstration : `CalendrierAppareilDemo` (aucune demande système, aucune écriture réelle, chaque
+/// issue suivie de `IssueAjoutCalendrier.mentionDemo`) et un journal en mémoire ; `refusDemo`
+/// (surcharge DEBUG `JOLENE_FORCE_CALENDRIER_REFUS=1`, lue par `AppContainer` avec les autres
+/// surcharges, `AppContainer.calendrierRefusDemo`) simule un accès refusé
+/// (`DemoMesMissionsTests.testMesMissionsPanneRepriseChargerPlusEtCalendrierRefuse`). Staging et
+/// production : EventKit et le journal du compte (`jolene.calendrier.journal.<userId>`, purgé à la
+/// suppression du compte, T8).
 /// L'écriture réelle est prouvée sur appareil (`RECETTE_DEVICE_LOT1.md` §4), jamais par la CI.
 @MainActor
 enum CalendarWriter {
@@ -33,11 +38,15 @@ extension AjoutCalendrier: AjoutCalendrierMission {
 
 /// `EKEventStore` sur le main actor (type non `Sendable`) : accès en écriture seule sous iOS 17+
 /// (`requestWriteOnlyAccessToEvents`), accès complet sous iOS 16 (`requestAccess(to:)`) ; aucun
-/// événement n'est relu (même mécanisme sur les deux versions : journal local).
+/// événement n'est relu (même mécanisme sur les deux versions : journal local). Une erreur de la
+/// demande d'accès est levée (message d'échec générique, `AjoutCalendrier`) et journalisée en DEBUG,
+/// jamais présentée comme un refus de l'utilisateur (revue B8 de T5, 2e passe).
 @MainActor
 final class CalendrierEventKit: CalendrierAppareil {
     /// Aucun calendrier par défaut pour les nouveaux événements (réglage de l'appareil).
     struct CalendrierIndisponible: Error {}
+    /// Demande d'accès en erreur (EventKit : `completion(false, error)`), distincte d'un refus.
+    struct DemandeAccesEnErreur: Error {}
 
     private lazy var store = EKEventStore()
 
@@ -50,15 +59,34 @@ final class CalendrierEventKit: CalendrierAppareil {
         }
     }
 
-    func demanderAcces() async -> Bool {
-        await withCheckedContinuation { (suite: CheckedContinuation<Bool, Never>) in
-            let reponse: @Sendable (Bool, (any Error)?) -> Void = { accorde, _ in suite.resume(returning: accorde) }
+    func demanderAcces() async throws -> Bool {
+        try await withCheckedThrowingContinuation { (suite: CheckedContinuation<Bool, any Error>) in
+            let reponse: @Sendable (Bool, (any Error)?) -> Void = { accorde, erreur in
+                // Accordé : succès, quelle que soit l'erreur jointe. Refusé sans erreur : choix de
+                // l'utilisateur. Refusé avec erreur : panne EventKit, jamais un refus.
+                if !accorde, let erreur {
+                    Self.journaliser(erreur)
+                    suite.resume(throwing: DemandeAccesEnErreur())
+                } else {
+                    suite.resume(returning: accorde)
+                }
+            }
             if #available(iOS 17.0, *) {
                 store.requestWriteOnlyAccessToEvents(completion: reponse)
             } else {
                 store.requestAccess(to: .event, completion: reponse)
             }
         }
+    }
+
+    /// Journal DEBUG de l'erreur EventKit : domaine et code seulement (aucune donnée de mission). Rien
+    /// en Release.
+    nonisolated private static func journaliser(_ erreur: any Error) {
+        #if DEBUG
+        let ns = erreur as NSError
+        Logger(subsystem: "app.jolene", category: "calendrier")
+            .debug("Demande d'accès au calendrier en erreur : \(ns.domain, privacy: .public) \(ns.code, privacy: .public)")
+        #endif
     }
 
     func enregistrer(_ evenement: EvenementCalendrier) throws {

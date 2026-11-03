@@ -2,7 +2,8 @@ import Foundation
 
 extension DemoFixtures {
     /// `demo-dashboard.json` (lot 1, T3) : corps de `fn_dashboard_soignant_complet` du profil
-    /// fictif, fiches et créneaux des deux missions ASSIGNEE (`missions_assignees`, lisibles en
+    /// fictif, fiches et créneaux des dix missions ASSIGNEE (`missions_assignees`, dont `mes_missions`
+    /// garde les trois premières comme le serveur — LIMIT 3 —, « À venir » de Mes missions, lisibles en
     /// détail, jamais listées dans Explorer) et missions TERMINEE du mois relues pour les gains
     /// (`gains_missions`). Les missions ouvertes et proposées sont celles de `demo-missions.json`.
     public struct DashboardFile: Decodable, Sendable {

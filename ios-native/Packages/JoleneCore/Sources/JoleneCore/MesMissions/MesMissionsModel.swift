@@ -6,8 +6,10 @@ import Combine
 /// `SessionController.resolutionTimeout` (décision 14). Mêmes règles d'état que `AccueilModel` :
 /// - une annulation de tâche SwiftUI n'est jamais une erreur (l'état reste celui d'avant) ;
 /// - une relecture d'une liste déjà affichée la conserve et n'expose qu'`erreurRafraichissement` ;
-/// - `.unauthorized` lève `sessionExpired` (revalidation de session plutôt que « Réessayer ») ; toute
-///   autre erreur le baisse ;
+/// - `.unauthorized` lève l'indicateur de session **de l'onglet lu** (`Liste.sessionExpiree`,
+///   revalidation de session plutôt que « Réessayer ») ; toute autre erreur, ou un succès, le baisse
+///   pour ce seul onglet — l'indicateur est rangé comme l'erreur, onglet par onglet (revue B8 de T5,
+///   2e passe : deux lectures d'onglets différents peuvent se chevaucher) ;
 /// - une réponse reçue pour un epoch périmé, ou dépassée par une lecture plus récente du même
 ///   onglet, est abandonnée.
 ///
@@ -18,7 +20,9 @@ import Combine
 /// relecture (apparition de l'écran, tirer pour actualiser, « Réessayer ») garde les pages déjà
 /// chargées, comme le `refreshTick` du web, liste conservée pendant la relecture. « Charger plus »
 /// (À venir, Passées) relit une page de plus ; il n'est proposé que si la dernière lecture était
-/// pleine (`aSuivre`, web l.623). Lecture seule.
+/// pleine (`aSuivre`, web l.623) et actif seulement hors relecture et hors page suivante en cours
+/// (`Liste.peutChargerPlus`, seule règle du modèle et de l'écran : jamais un tap perdu sans retour).
+/// Lecture seule.
 @MainActor
 public final class MesMissionsModel: ObservableObject {
     /// État d'une liste d'onglet.
@@ -38,8 +42,17 @@ public final class MesMissionsModel: ObservableObject {
         public internal(set) var erreurRafraichissement: String?
         public internal(set) var chargementSuite = false
         public internal(set) var erreurSuite: String?
+        /// Vrai si la dernière lecture **de cet onglet** a répondu « session expirée »
+        /// (`.unauthorized`) : son état d'échec propose « Vérifier ma session ».
+        public internal(set) var sessionExpiree = false
 
         public init() {}
+
+        /// « Charger plus » actif : liste affichée, dernière lecture pleine, aucune relecture ni page
+        /// suivante en cours. `chargerPlus()` ne lit rien sinon ; l'écran désactive alors le bouton.
+        public var peutChargerPlus: Bool {
+            estChargee && aSuivre && !chargementSuite && !rafraichissement
+        }
 
         public var elements: [Element] {
             if case let .chargee(elements) = contenu { return elements }
@@ -60,7 +73,14 @@ public final class MesMissionsModel: ObservableObject {
     @Published public private(set) var passees = Liste<Mission>()
     /// Colonnes financières des missions passées relues (`MissionsPage.finances`), par id de mission.
     @Published public private(set) var finances: [String: MissionGainLigne] = [:]
-    @Published public private(set) var sessionExpired = false
+    /// Indicateur de session de l'onglet affiché (`Liste.sessionExpiree`).
+    public var sessionExpired: Bool {
+        switch onglet {
+        case .candidatures: return candidatures.sessionExpiree
+        case .aVenir: return aVenir.sessionExpiree
+        case .passees: return passees.sessionExpiree
+        }
+    }
     /// Horloge des gateways de la session (démo : horloge fixée) : prochain créneau des lignes.
     public private(set) var horloge: any ClockPort = SystemClock()
 
@@ -95,7 +115,7 @@ public final class MesMissionsModel: ObservableObject {
         await lire(onglet, page: pageChargee(onglet), suite: false)
     }
 
-    /// Une page de plus pour l'onglet affiché, si la dernière lecture était pleine (À venir, Passées).
+    /// Une page de plus pour l'onglet affiché, si `peutChargerPlus` (À venir, Passées).
     public func chargerPlus() async {
         let liste: Liste<Mission>
         switch onglet {
@@ -103,7 +123,7 @@ public final class MesMissionsModel: ObservableObject {
         case .aVenir: liste = aVenir
         case .passees: liste = passees
         }
-        guard liste.estChargee, liste.aSuivre, !liste.chargementSuite, !liste.rafraichissement else { return }
+        guard liste.peutChargerPlus else { return }
         await lire(onglet, page: liste.page + 1, suite: true)
     }
 
@@ -190,8 +210,8 @@ public final class MesMissionsModel: ObservableObject {
         do {
             let lue = try await bounded(timeout: controller.resolutionTimeout) { try await requete(port, context) }
             guard await controller.epoch == snapshot.epoch, generations[onglet] == courant else { return }
-            sessionExpired = false
             var liste = self[keyPath: cle]
+            liste.sessionExpiree = false
             // Lecture cumulative : la liste est remplacée, jamais complétée localement. Un identifiant
             // répété (impossible sous la contrainte serveur, défensif pour `ForEach`) garde sa première ligne.
             var vus = Set<String>()
@@ -205,13 +225,15 @@ public final class MesMissionsModel: ObservableObject {
             let message: String
             if let jolene = error as? JoleneError {
                 if jolene.kind == .cancelled { return }
-                sessionExpired = jolene.kind == .unauthorized
+                // Rangé sur l'onglet lu, comme l'erreur : un `.unauthorized` tardif d'un onglet ne
+                // marque jamais l'erreur d'un autre (revue B8 de T5, 2e passe).
+                self[keyPath: cle].sessionExpiree = jolene.kind == .unauthorized
                 message = jolene.message
             } else if error is CancellationError {
                 return
             } else {
                 // Une panne quelconque n'est pas une session expirée (revue B8 de T5).
-                sessionExpired = false
+                self[keyPath: cle].sessionExpiree = false
                 message = Self.genericFailureMessage
             }
             if suite {
