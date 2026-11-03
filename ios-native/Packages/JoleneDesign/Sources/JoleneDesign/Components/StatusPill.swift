@@ -12,7 +12,19 @@ import SwiftUI
 /// - `warning` : libellé `midnight` (le `text-jolene-butter-800` de BadgeY2K ne fait que 4,09:1 sur
 ///   `butter-100` en clair) ; icône `butter-800` (≥ 3:1) ;
 /// - `error` : rose (`rose-800`, icône `rose-700`), choix d'`InlineNotice`, au lieu du rouge `destructive` ;
-/// - `neutral` (`text-muted-foreground bg-muted` de `PaiementsEscrowAVenir.tsx`) : `bubblegum` sur `lavender`.
+/// - `neutral` (`text-muted-foreground bg-muted` de `PaiementsEscrowAVenir.tsx`) : `bubblegum` sur `lavender` ;
+/// - retour à la ligne : BadgeY2K reste sur une ligne (`whitespace-nowrap`, `rounded-full`). Le natif ne
+///   tronque jamais un libellé serveur : capsule tant qu'il tient sur une ligne (`ViewThatFits`), sinon
+///   passage à la ligne dans un rectangle arrondi à rayon fixe (`multilineCornerRadius`, ≤ marge horizontale) —
+///   une capsule, dont le rayon vaut la demi-hauteur, rognerait les lettres des lignes extrêmes aux tailles
+///   d'accessibilité.
+///
+/// Doublon connu : `JoleneBadge` (`MissionCard.swift`, lot 0/1) est un premier port de BadgeY2K, à quatre tons
+/// et encres `-700` (`cyan700`, `butter700`, sous AA en clair : mineur 5 de la revue du lot 1). Deux pastilles
+/// d'état coexistent donc, avec des contrastes différents. Plan de convergence : `JoleneBadge` délègue à
+/// `StatusPill` (`success`/`warning`/`error`/`info` → mêmes tons, taille `md`), call sites inchangés, dans une
+/// tranche qui a `MissionCard.swift` et ses tests dans son périmètre ; d'ici là, tout nouveau statut utilise
+/// `StatusPill`.
 public struct StatusPill: View {
     public enum Tone: CaseIterable, Sendable {
         case info, success, warning, error, neutral
@@ -61,6 +73,20 @@ public struct StatusPill: View {
         var font: Font { self == .sm ? Font.system(.caption2).weight(.medium) : JoleneFont.caption.weight(.medium) }
     }
 
+    /// Contour de la pastille selon le nombre de lignes du libellé.
+    public enum Outline: Equatable, Sendable {
+        case capsule
+        case rounded(cornerRadius: CGFloat)
+    }
+
+    /// Rayon des coins quand le libellé passe à la ligne. Un coin de rayon r ne découpe que la zone à moins de
+    /// r des deux bords : r ≤ la plus petite marge horizontale (`sm`, 8 pt), aucun glyphe n'est rogné.
+    nonisolated public static let multilineCornerRadius: CGFloat = 8
+
+    nonisolated public static func outline(isMultiline: Bool) -> Outline {
+        isMultiline ? .rounded(cornerRadius: multilineCornerRadius) : .capsule
+    }
+
     /// Partie calculable : libellé vocalisé (le texte reçu, tel quel) et identifiant.
     public struct Presentation: Equatable, Sendable {
         public var label: String
@@ -86,7 +112,32 @@ public struct StatusPill: View {
     }
 
     public var body: some View {
-        HStack(spacing: JoleneSpacing.xs) {
+        // Une ligne si elle tient (capsule), sinon passage à la ligne (rectangle arrondi) : jamais de « … ».
+        ViewThatFits(in: .horizontal) {
+            pill(isMultiline: false)
+            pill(isMultiline: true)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(presentation.accessibilityLabel)
+        .accessibilityIdentifier(presentation.identifier ?? "")
+    }
+
+    @ViewBuilder
+    private func pill(isMultiline: Bool) -> some View {
+        switch Self.outline(isMultiline: isMultiline) {
+        case .capsule:
+            contenu(isMultiline: isMultiline)
+                .overlay(Capsule().strokeBorder(Color(tone.iconInkHSL).opacity(0.35), lineWidth: 1))
+                .clipShape(Capsule())
+        case .rounded(let rayon):
+            contenu(isMultiline: isMultiline)
+                .overlay(RoundedRectangle(cornerRadius: rayon).strokeBorder(Color(tone.iconInkHSL).opacity(0.35), lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: rayon))
+        }
+    }
+
+    private func contenu(isMultiline: Bool) -> some View {
+        HStack(alignment: isMultiline ? .firstTextBaseline : .center, spacing: JoleneSpacing.xs) {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(size.font)
@@ -97,15 +148,11 @@ public struct StatusPill: View {
                 .font(size.font)
                 .foregroundStyle(Color(tone.labelInkHSL))
                 .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(isMultiline ? nil : 1)
+                .fixedSize(horizontal: !isMultiline, vertical: true)
         }
         .padding(.horizontal, size.horizontalPadding)
         .padding(.vertical, size.verticalPadding)
         .background(Color(tone.backgroundHSL))
-        .overlay(Capsule().strokeBorder(Color(tone.iconInkHSL).opacity(0.35), lineWidth: 1))
-        .clipShape(Capsule())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(presentation.accessibilityLabel)
-        .accessibilityIdentifier(presentation.identifier ?? "")
     }
 }

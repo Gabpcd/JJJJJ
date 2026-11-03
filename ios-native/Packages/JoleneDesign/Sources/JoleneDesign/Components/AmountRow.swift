@@ -8,7 +8,10 @@ import SwiftUI
 /// ici (PRINCIPES §3) ; libellés et note de bas de page verbatim web (HARD STOP n°4, note « net estimé »).
 ///
 /// Vocalisation : un seul élément ; « ~ » lu « environ », astérisque final du libellé de nature retiré
-/// (VoiceOver lirait « tilde », « astérisque »), note de bas de page (texte fourni par l'écran) lue en indice.
+/// (VoiceOver lirait « tilde », « astérisque »), note de bas de page (texte fourni par l'écran) lue en indice
+/// avec la même règle (`spokenText` : marques « * » de tête et de fin retirées, « ~ » lu « environ »). Seule
+/// la vocalisation change : le texte affiché reste verbatim. Textes vocalisés sans équivalent web
+/// (« environ », « Montant indisponible ») consignés dans `DECISIONS_LOT3.md` (HARD STOP n°4, §6.7).
 /// Le montant n'est jamais tronqué : en ligne quand tout tient (`ViewThatFits`), sinon (et toujours aux
 /// tailles d'accessibilité) en colonne. Posée sur une carte ou un écran (texte secondaire `bubblegum`).
 public struct AmountRow: View {
@@ -54,19 +57,29 @@ public struct AmountRow: View {
             nature?.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("*") ?? false
         }
 
-        /// Libellé de nature sans l'astérisque final ; `nil` s'il ne reste rien.
-        public var spokenNature: String? {
-            guard var texte = nature?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
-            while texte.hasSuffix("*") { texte.removeLast() }
-            texte = texte.trimmingCharacters(in: .whitespacesAndNewlines)
-            return texte.isEmpty ? nil : texte
-        }
+        /// Libellé de nature vocalisé (`spokenText` : sans l'astérisque de note) ; `nil` s'il ne reste rien.
+        public var spokenNature: String? { AmountRow.spokenText(nature) }
 
         public var accessibilityLabel: String {
             ([title, subtitle, spokenAmount, spokenNature].compactMap { $0 } + details).joined(separator: ", ")
         }
 
-        public var accessibilityHint: String? { footnote }
+        /// Note de bas de page vocalisée sans « * » ni « ~ » (affichée verbatim).
+        public var accessibilityHint: String? { AmountRow.spokenText(footnote) }
+    }
+
+    /// Texte à vocaliser : marques de note « * » de tête et de fin retirées, « ~ » lu « environ » ; `nil` s'il
+    /// ne reste rien. N'agit que sur la vocalisation, jamais sur le texte affiché.
+    nonisolated public static func spokenText(_ texte: String?) -> String? {
+        guard var sortie = texte?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
+        while sortie.hasPrefix("*") || sortie.hasSuffix("*") {
+            if sortie.hasPrefix("*") { sortie.removeFirst() }
+            if sortie.hasSuffix("*") { sortie.removeLast() }
+            sortie = sortie.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        sortie = sortie.replacingOccurrences(of: #"~\s*"#, with: "environ ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return sortie.isEmpty ? nil : sortie
     }
 
     nonisolated public static let approximatePrefix = "~"

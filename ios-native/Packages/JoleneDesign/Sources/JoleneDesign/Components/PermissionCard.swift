@@ -4,8 +4,15 @@ import SwiftUI
 /// (l.130-170) : pastille d'icône `Bell` (`bg-primary/10 text-primary`), titre, description, encart des
 /// avantages (`bg-muted/50`, coches) et note, puis « Activer les notifications » / « Plus tard ». Sert au
 /// pré-prompt push (T5, D1 : jamais au login, à partir du 2e lancement) et, sans avantages ni action
-/// secondaire, à la carte d'état d'autorisation des préférences (T6). La carte ne demande rien au système :
-/// l'écran appelle le port d'autorisation **au tap seulement** et décide quand l'afficher.
+/// secondaire, à la carte d'état d'autorisation (T4, `EtatNotificationsAppareilRow`, reprise par les
+/// préférences de T6). La carte ne demande rien au système : l'écran appelle le port d'autorisation
+/// **au tap seulement** et décide quand l'afficher.
+///
+/// Identifiants (PRINCIPES §6) : racine `identifier` (`.contain`, les enfants gardent les leurs) ; boutons
+/// `<id>-primary` / `<id>-secondary` par défaut, surchargeables par `Content` pour tenir le contrat d'un écran
+/// (pré-prompt T5 : `push-preprompt-activer` / `push-preprompt-plus-tard`, posés par `pushSoignant` ; carte
+/// d'état T4 : `primaryIdentifier: "push-ouvrir-reglages"`). Largeur bornée à `maxWidth` fond compris (le
+/// dialogue web est en `sm:max-w-md`), centrée dans la place restante (iPad, grande feuille).
 ///
 /// Textes : `Content.pushSoignant` reprend `TEXTES.soignant` verbatim (l.20-28, note l.149, boutons l.158 et
 /// l.164 ; garde de dérive dans les tests). Toute autre carte reçoit ses textes de l'écran (web ou serveur
@@ -22,17 +29,26 @@ public struct PermissionCard: View {
         public var secondaryTitle: String?
         public var systemImage: String
         /// Identifiant racine ; les éléments reçoivent `-title`, `-message`, `-benefits`, `-benefit-<n>`,
-        /// `-footnote`, `-primary`, `-secondary`.
+        /// `-footnote` et, sauf surcharge, `-primary` / `-secondary`.
         public var identifier: String
+        private var primaryIdentifierOverride: String?
+        private var secondaryIdentifierOverride: String?
 
+        /// - Parameters:
+        ///   - primaryIdentifier: identifiant du bouton principal ; `nil` → `<identifier>-primary`.
+        ///   - secondaryIdentifier: identifiant du bouton secondaire ; `nil` → `<identifier>-secondary`.
         public init(title: String, message: String, benefits: [String] = [], footnote: String? = nil, primaryTitle: String,
-                    secondaryTitle: String? = nil, systemImage: String = "bell", identifier: String) {
+                    secondaryTitle: String? = nil, systemImage: String = "bell", identifier: String,
+                    primaryIdentifier: String? = nil, secondaryIdentifier: String? = nil) {
             self.title = title; self.message = message; self.benefits = benefits; self.footnote = footnote
             self.primaryTitle = primaryTitle; self.secondaryTitle = secondaryTitle; self.systemImage = systemImage
             self.identifier = identifier
+            self.primaryIdentifierOverride = primaryIdentifier; self.secondaryIdentifierOverride = secondaryIdentifier
         }
 
         /// Pré-prompt soignant, verbatim `DemandePermissionPush.tsx` (`TEXTES.soignant`, l.20-28 ; l.149 ; l.158 ; l.164).
+        /// Boutons `<identifier>-activer` et `<identifier>-plus-tard` : avec `push-preprompt`, les identifiants
+        /// du blueprint (§3 T5).
         public static func pushSoignant(identifier: String) -> Content {
             Content(title: "Recevoir les alertes missions ?",
                     message: "Jolene vous envoie des notifications pour les nouvelles missions, les rappels de pointage et les mises à jour de vos contrats.",
@@ -40,15 +56,24 @@ public struct PermissionCard: View {
                                "Mises à jour de contrats et paiements"],
                     footnote: "Vous pouvez désactiver les notifications à tout moment depuis les réglages de votre téléphone.",
                     primaryTitle: "Activer les notifications", secondaryTitle: "Plus tard", systemImage: "bell",
-                    identifier: identifier)
+                    identifier: identifier, primaryIdentifier: "\(identifier)-activer",
+                    secondaryIdentifier: "\(identifier)-plus-tard")
         }
 
         public var titleIdentifier: String { "\(identifier)-title" }
         public var messageIdentifier: String { "\(identifier)-message" }
         public var benefitsIdentifier: String { "\(identifier)-benefits" }
         public var footnoteIdentifier: String { "\(identifier)-footnote" }
-        public var primaryIdentifier: String { "\(identifier)-primary" }
-        public var secondaryIdentifier: String { "\(identifier)-secondary" }
+        /// Surcharge si elle existe, sinon dérivé de l'identifiant racine (et le suit s'il change).
+        public var primaryIdentifier: String {
+            get { primaryIdentifierOverride ?? "\(identifier)-primary" }
+            set { primaryIdentifierOverride = newValue }
+        }
+        /// Surcharge si elle existe, sinon dérivé de l'identifiant racine (et le suit s'il change).
+        public var secondaryIdentifier: String {
+            get { secondaryIdentifierOverride ?? "\(identifier)-secondary" }
+            set { secondaryIdentifierOverride = newValue }
+        }
         public func benefitIdentifier(index: Int) -> String { "\(identifier)-benefit-\(index + 1)" }
     }
 
@@ -56,6 +81,9 @@ public struct PermissionCard: View {
     nonisolated public static func isPrimaryEnabled(isLoading: Bool) -> Bool { !isLoading }
     /// « Plus tard » attend aussi la fin de la demande système en cours.
     nonisolated public static func isSecondaryEnabled(isLoading: Bool) -> Bool { !isLoading }
+
+    /// Largeur maximale de la carte, fond et arrondi compris (`sm:max-w-md` du dialogue web, 448 px).
+    nonisolated public static let maxWidth: CGFloat = 480
 
     nonisolated public static let surfaceHSL = JoleneColor.cloudHSL
     nonisolated public static let benefitsSurfaceHSL = JoleneColor.lavenderHSL
@@ -118,10 +146,12 @@ public struct PermissionCard: View {
             }
         }
         .padding(JoleneSpacing.xl)
-        .frame(maxWidth: 480)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: Self.maxWidth)
+        // Fond et découpe posés sur la carte bornée, puis centrage : sur iPad, ni le fond ni l'arrondi ne
+        // s'étendent à toute la largeur.
         .background(Color(Self.surfaceHSL))
         .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.card))
+        .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(content.identifier)
     }
