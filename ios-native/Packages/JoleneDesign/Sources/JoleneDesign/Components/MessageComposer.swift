@@ -14,17 +14,60 @@ import SwiftUI
 /// assumé : là où `slice` coupe une paire de substitution, le natif retire le caractère entier. Écart assumé :
 /// la touche Retour insère une ligne (le web envoie sur Entrée sans Maj.) ; l'envoi passe par le bouton.
 /// Comme sur le web (`disabled={envoi}`), le champ est désactivé pendant l'envoi puis le focus est rendu.
+///
+/// Verrou synchrone (blueprint §2.5, web `envoiRef` d'`InputMessage.tsx` l.52-55) : `isSending` n'arrive de l'écran
+/// qu'au rendu suivant, donc deux touchers dans le même cycle pourraient envoyer deux fois. Le composant prend un
+/// verrou local avant `onSend` ; il le garde tant que l'écran signale l'appel (`isSending`) et le rend à la fin de
+/// celui-ci (le `finally` du web), ou dès le rendu suivant si l'écran n'a ouvert aucun appel. L'écran passe donc
+/// `isSending` à vrai **dans** `onSend`, avant toute suspension. Saisie bornée dans `onChange(of: text)` (motif de
+/// `JoleneTextField`) : le champ affiché est toujours le texte stocké, donc le texte envoyé.
 public struct MessageComposer: View {
     public enum Activity: Equatable, Sendable { case focus, change, blur }
 
-    /// Identifiants dérivés : `<base>-champ`, `-envoyer`, `-compteur`, `-archivee`.
+    /// Identifiants du composeur, alignés sur le blueprint lot 4 v2 (T7b : `chat-input`, `chat-envoyer`,
+    /// `chat-archivee`) et injectables un à un.
     public struct Identifiers: Equatable, Sendable {
-        public var base: String
-        public init(_ base: String) { self.base = base }
-        public var field: String { "\(base)-champ" }
-        public var send: String { "\(base)-envoyer" }
-        public var counter: String { "\(base)-compteur" }
-        public var archived: String { "\(base)-archivee" }
+        public var field: String
+        public var send: String
+        public var counter: String
+        public var archived: String
+
+        public init(field: String, send: String, counter: String, archived: String) {
+            self.field = field; self.send = send; self.counter = counter; self.archived = archived
+        }
+
+        /// Dérivés d'une base : `<base>-input`, `<base>-envoyer`, `<base>-compteur`, `<base>-archivee`.
+        public init(_ base: String) {
+            self.init(field: "\(base)-input", send: "\(base)-envoyer", counter: "\(base)-compteur", archived: "\(base)-archivee")
+        }
+
+        /// Identifiants du fil de T7b : `chat-input`, `chat-envoyer`, `chat-compteur`, `chat-archivee`.
+        public static let chat = Identifiers("chat")
+    }
+
+    /// Verrou synchrone de l'envoi : pris avant `onSend`, rendu dès qu'un rendu observe `isSending` à faux (fin de
+    /// l'appel, ou aucun appel ouvert par l'écran).
+    struct SendLock: Equatable {
+        private(set) var isHeld = false
+
+        /// Prend le verrou pour un envoi ; refusé si déjà pris (second toucher du même cycle) ou si l'envoi est
+        /// impossible (`canSend`).
+        mutating func acquire(text: String, isSending: Bool, isArchived: Bool) -> Bool {
+            guard !isHeld, MessageComposer.canSend(text: text, isSending: isSending, isArchived: isArchived) else { return false }
+            isHeld = true
+            return true
+        }
+
+        /// État de l'appel observé à un rendu : verrou gardé pendant l'appel, rendu sinon.
+        mutating func observe(isSending: Bool) {
+            if !isSending { isHeld = false }
+        }
+    }
+
+    /// Référence mutée hors du cycle de rendu : lue et écrite de façon synchrone par les actions, sans provoquer
+    /// de rendu. Seules les actions et `onChange` de la vue (acteur principal) y touchent.
+    final class SendLockBox {
+        var lock = SendLock()
     }
 
     nonisolated public static let maxLength = 4000
@@ -102,49 +145,61 @@ public struct MessageComposer: View {
     private let onSend: () -> Void
     @FocusState private var isFocused: Bool
     @State private var refocusAfterSend = false
+    @State private var verrou = SendLockBox()
+    /// Compteur d'envois demandés : son changement déclenche le rendu qui règle le verrou.
+    @State private var envoisDemandes = 0
 
-    public init(text: Binding<String>, isSending: Bool = false, isArchived: Bool = false, identifier: String = "message-composer",
+    public init(text: Binding<String>, isSending: Bool = false, isArchived: Bool = false, identifiers: Identifiers = .chat,
                 onActivity: ((Activity) -> Void)? = nil, onSend: @escaping () -> Void) {
         self._text = text; self.isSending = isSending; self.isArchived = isArchived
-        self.identifiers = Identifiers(identifier); self.onActivity = onActivity; self.onSend = onSend
+        self.identifiers = identifiers; self.onActivity = onActivity; self.onSend = onSend
     }
 
     public var body: some View {
-        if isArchived {
-            Text(Self.archivedText)
-                .font(JoleneFont.caption.italic())
-                .foregroundStyle(Color(Self.archivedInkHSL))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, JoleneSpacing.lg)
+        Group {
+            if isArchived {
+                Text(Self.archivedText)
+                    .font(JoleneFont.caption.italic())
+                    .foregroundStyle(Color(Self.archivedInkHSL))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, JoleneSpacing.lg)
+                    .padding(.vertical, JoleneSpacing.md)
+                    .background(JoleneColor.lavender)
+                    .accessibilityIdentifier(identifiers.archived)
+            } else {
+                VStack(alignment: .trailing, spacing: JoleneSpacing.xs) {
+                    HStack(alignment: .bottom, spacing: JoleneSpacing.sm) {
+                        champ
+                        SendButton(isEnabled: Self.canSend(text: text, isSending: isSending, isArchived: isArchived), isSending: isSending,
+                                   identifier: identifiers.send, action: envoyer)
+                    }
+                    if let compteur = Self.counterText(for: text) {
+                        Text(compteur)
+                            .font(Font.system(.caption2))
+                            .foregroundStyle(Color(Self.counterInkHSL(urgent: Self.isCounterUrgent(for: text))))
+                            .accessibilityIdentifier(identifiers.counter)
+                    }
+                }
+                .padding(.horizontal, JoleneSpacing.md)
                 .padding(.vertical, JoleneSpacing.md)
-                .background(JoleneColor.lavender)
-                .accessibilityIdentifier(identifiers.archived)
-        } else {
-            VStack(alignment: .trailing, spacing: JoleneSpacing.xs) {
-                HStack(alignment: .bottom, spacing: JoleneSpacing.sm) {
-                    champ
-                    SendButton(isEnabled: Self.canSend(text: text, isSending: isSending, isArchived: isArchived), isSending: isSending,
-                               identifier: identifiers.send, action: envoyer)
-                }
-                if let compteur = Self.counterText(for: text) {
-                    Text(compteur)
-                        .font(Font.system(.caption2))
-                        .foregroundStyle(Color(Self.counterInkHSL(urgent: Self.isCounterUrgent(for: text))))
-                        .accessibilityIdentifier(identifiers.counter)
-                }
+                .background(JoleneColor.cloud)
+                .overlay(alignment: .top) { Rectangle().fill(JoleneColor.rose100).frame(height: 1) }
             }
-            .padding(.horizontal, JoleneSpacing.md)
-            .padding(.vertical, JoleneSpacing.md)
-            .background(JoleneColor.cloud)
-            .overlay(alignment: .top) { Rectangle().fill(JoleneColor.rose100).frame(height: 1) }
-            .onChange(of: isFocused) { onActivity?($0 ? .focus : .blur) }
-            .onChange(of: isSending) { enCours in
-                if !enCours, refocusAfterSend {
-                    refocusAfterSend = false
-                    isFocused = true
-                }
+        }
+        // Hors des deux branches : le verrou est rendu même si la conversation est archivée pendant l'envoi.
+        .onChange(of: isFocused) { onActivity?($0 ? .focus : .blur) }
+        .onChange(of: text) { valeur in
+            // Borne posée sur la valeur stockée : le champ se redessine avec le texte réellement envoyé.
+            if Self.length(valeur) > Self.maxLength { text = Self.limited(valeur) }
+        }
+        .onChange(of: envoisDemandes) { _ in verrou.lock.observe(isSending: isSending) }
+        .onChange(of: isSending) { enCours in
+            verrou.lock.observe(isSending: enCours)
+            if !enCours, refocusAfterSend {
+                refocusAfterSend = false
+                isFocused = true
             }
         }
     }
@@ -166,17 +221,20 @@ public struct MessageComposer: View {
             .accessibilityIdentifier(identifiers.field)
     }
 
-    /// Saisie bornée à 4 000 unités UTF-16 (`setTexte(e.target.value.slice(0, MAX_LENGTH))`), activité signalée.
+    /// Saisie de l'utilisateur, activité signalée ; la borne de 4 000 unités UTF-16
+    /// (`setTexte(e.target.value.slice(0, MAX_LENGTH))`) est appliquée par `onChange(of: text)`. Un vidage par l'écran
+    /// après l'envoi ne passe pas par ici : il ne signale aucune saisie.
     private var saisie: Binding<String> {
         Binding(get: { text }, set: { nouveau in
-            text = Self.limited(nouveau)
+            text = nouveau
             onActivity?(.change)
         })
     }
 
     private func envoyer() {
-        guard Self.canSend(text: text, isSending: isSending, isArchived: isArchived) else { return }
+        guard verrou.lock.acquire(text: text, isSending: isSending, isArchived: isArchived) else { return }
         refocusAfterSend = isFocused
+        envoisDemandes &+= 1
         onSend()
     }
 

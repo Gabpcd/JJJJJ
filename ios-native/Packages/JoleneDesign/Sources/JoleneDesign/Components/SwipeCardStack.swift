@@ -48,13 +48,30 @@ public enum SwipeCardAction: String, CaseIterable, Sendable {
         }
     }
 
-    /// Identifiant du bouton : `<prefix>-passer`, `<prefix>-sauvegarder`, `<prefix>-candidater`.
+    /// Identifiant du bouton : `<prefix>-passer`, `<prefix>-sauvegarder`, `<prefix>-candidater` (`swipe-passer`…
+    /// avec le préfixe par défaut de `SwipeActionBar`, blueprint lot 4 T3b).
     public func identifier(prefix: String) -> String { "\(prefix)-\(rawValue)" }
 }
 
-/// Règles pures du geste de `SwipeCardStack`, port de `StackCards.tsx` : drag établi au-delà de 8 pt sur l'axe
-/// horizontal (un départ vertical est ignoré : la carte ne bouge pas), validation à 120 pt (blueprint lot 4 T1b ; le web
-/// prend 30 % de la largeur, ≈ 117 px sur un iPhone de 390 pt), rotation `dx / 14` bornée à ±15°, indicateurs
+/// Identifiants du paquet, alignés sur le blueprint lot 4 v2 (T3b : `swipe-deck`, `swipe-card-<missionId>`,
+/// `swipe-passer`, `swipe-sauvegarder`, `swipe-candidater`) et sur la convention `mission-card-<id>` de
+/// PRINCIPES §6. Chaque valeur reste injectable par l'appelant (`SwipeCardStack`, `SwipeActionBar`).
+public enum SwipeDeckIdentifiers {
+    /// Conteneur du paquet.
+    public static let deck = "swipe-deck"
+    /// Préfixe de la carte du dessus : `swipe-card-<id>`.
+    public static let cardPrefix = "swipe-card"
+    /// Préfixe des trois boutons de `SwipeActionBar` : `swipe-passer`, `swipe-sauvegarder`, `swipe-candidater`.
+    public static let actionsPrefix = "swipe"
+
+    /// Identifiant de la carte du dessus : `<prefix>-<id>` (cible du test de geste réel, décision D22).
+    public static func card(prefix: String = cardPrefix, itemID: String) -> String { "\(prefix)-\(itemID)" }
+}
+
+/// Règles pures du geste de `SwipeCardStack`, port de `StackCards.tsx` : drag établi au-delà de 8 pt, axe figé à ce
+/// moment-là (un départ vertical abandonne le geste : la carte ne bouge pas et rien n'est décidé, l.81-84), décision
+/// au relâchement sur le seul décalage horizontal (l.99-110), validation à 120 pt (blueprint lot 4 T1b ; le web prend
+/// 30 % de la largeur, ≈ 117 px sur un iPhone de 390 pt), rotation `dx / 14` bornée à ±15°, indicateurs
 /// « VÉRIFIER » / « SUIVANT » d'opacité `dx / 80`, deux cartes de fond en parallaxe.
 public enum SwipeCardGesture {
     public static let threshold: CGFloat = 120
@@ -74,11 +91,39 @@ public enum SwipeCardGesture {
         return dy >= dx ? .vertical : .horizontal
     }
 
-    /// Action au relâchement : ≥ 120 pt à droite → `candidater` (ouvre le récapitulatif), à gauche → `passer` ;
-    /// en deçà, `nil` (la carte revient au centre).
+    /// Axe figé : tant qu'il est indéterminé, il se décide sur la translation courante ; ensuite il ne change plus,
+    /// quelle que soit la suite du geste (`start.active` du web, posé une seule fois).
+    public static func frozenAxis(_ current: Axis, translation: CGSize) -> Axis {
+        current == .undetermined ? axis(for: translation) : current
+    }
+
+    /// Décalage horizontal suivi par la carte : `dx` sur un geste horizontal, 0 sinon (départ vertical ou indéterminé).
+    public static func trackedDx(axis: Axis, translation: CGSize) -> CGFloat {
+        axis == .horizontal ? translation.width : 0
+    }
+
+    /// Action pour un décalage horizontal : ≥ 120 pt à droite → `candidater` (ouvre le récapitulatif), à gauche →
+    /// `passer` ; en deçà, `nil` (la carte revient au centre).
     public static func decision(forHorizontalTranslation dx: CGFloat) -> SwipeCardAction? {
         guard abs(dx) >= threshold else { return nil }
         return dx > 0 ? .candidater : .passer
+    }
+
+    /// Décision au relâchement, lue sur l'axe **figé au démarrage** et jamais recalculée sur la translation finale :
+    /// un départ vertical ne décide rien, même s'il finit 150 pt de côté (le web a abandonné le geste) ; un départ
+    /// horizontal décide sur `dx` seul, même s'il finit en diagonale, donc comme l'indicateur affiché.
+    public static func decision(frozenAxis: Axis, translation: CGSize) -> SwipeCardAction? {
+        guard frozenAxis == .horizontal else { return nil }
+        return decision(forHorizontalTranslation: translation.width)
+    }
+
+    /// Décalage affiché de la carte du dessus : le doigt pendant le glissement (`liveDx`) ; après une action
+    /// transmise par le geste, le décalage du relâchement (`retainedDx`) tant que l'appel serveur dure (`isBusy`),
+    /// indicateur compris, pour qu'un retour au centre ne signifie qu'un refus ; sinon le centre.
+    public static func displayedOffset(liveDx: CGFloat?, retainedDx: CGFloat?, isBusy: Bool) -> CGFloat {
+        if let liveDx { return liveDx }
+        if isBusy, let retainedDx { return retainedDx }
+        return 0
     }
 
     public static func rotationDegrees(for dx: CGFloat) -> Double {
@@ -113,9 +158,6 @@ public enum SwipeCardGesture {
         reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78)
     }
 
-    /// Identifiant de la carte du dessus : `<prefix>-carte-<id>` (cible du test de geste réel, décision D22).
-    public static func cardIdentifier(prefix: String, itemID: String) -> String { "\(prefix)-carte-\(itemID)" }
-
     /// Indicateur affiché pendant le glissement, décoratif (`aria-hidden`) : textes verbatim de `StackCards.tsx`
     /// (l.196, l.206). Encres relevées pour l'AA (le web : rose-700 sur rose-100, 3,54:1, grand texte).
     public struct Indicator: Equatable, Sendable {
@@ -140,25 +182,45 @@ public enum SwipeCardGesture {
     }
 }
 
+/// Exposition de la carte du dessus à l'accessibilité.
+public enum SwipeCardAccessibility: Equatable, Sendable {
+    /// Un seul élément qui combine le contenu de la carte (comme la carte `role="button"` du web et son
+    /// `aria-label`) et porte les actions « Passer », « Sauvegarder », « Candidater ». Les identifiants posés sur
+    /// les enfants sont absorbés : un XCUITest lit alors le score dans le libellé de la carte.
+    case combine
+    /// Conteneur identifié dont les enfants restent des éléments distincts avec leurs propres identifiants
+    /// (`swipe-score-<id>`, `swipe-pourquoi-<id>` de T3b). Les actions nommées sont posées sur ce conteneur ; selon
+    /// le contenu, VoiceOver peut ne pas les proposer sur les enfants : l'équivalent toujours atteignable reste
+    /// `SwipeActionBar` (à vérifier à VoiceOver par la tranche qui monte le paquet).
+    case contain
+}
+
 /// Paquet de cartes à glisser (lot 4, Explorer › Swipe), générique sur tout élément `Identifiable` : la carte du
 /// dessus suit le doigt, deux cartes de fond en parallaxe, indicateurs « VÉRIFIER » / « SUIVANT ».
 ///
-/// Écart assumé avec le web (blueprint §2.5) : au-delà du seuil, le paquet **transmet** l'action et ramène la
-/// carte au centre ; il ne la fait jamais sortir lui-même. La carte n'est retirée que lorsque l'écran retire
-/// l'élément de `items`, après la réponse serveur `ok:true` ; un refus la laisse donc en tête sans mouvement à
-/// défaire. Pendant l'appel (`isBusy`), geste et actions d'accessibilité sont inertes (une seule action par carte).
+/// Écart assumé avec le web (blueprint §2.5) : au-delà du seuil, le paquet **transmet** l'action ; il ne fait jamais
+/// sortir la carte lui-même. Tant que l'appel serveur dure (`isBusy`), la carte reste décalée avec son indicateur ;
+/// elle n'est retirée que lorsque l'écran retire l'élément de `items`, après la réponse serveur `ok:true`, et un refus
+/// (`isBusy` repasse à faux, élément conservé) la ramène au centre sans mouvement à défaire. L'écran passe `isBusy` à
+/// vrai **dans** l'appel de `onAction` (verrou synchrone du modèle) : sinon la carte revient aussitôt au centre,
+/// comme pour « candidater », qui ouvre une feuille sans appel serveur. Pendant l'appel, le geste est inerte et les
+/// actions d'accessibilité sont retirées (rien n'est annoncé qui ne ferait rien) ; une seule action par carte.
 ///
-/// Accessibilité : la carte du dessus est un seul élément (contenu combiné, identifiant `<prefix>-carte-<id>`)
-/// qui porte les actions « Passer », « Sauvegarder », « Candidater » ; les cartes de fond sont masquées
-/// (`aria-hidden` du web). « Réduire les animations » coupe le ressort et les transitions ; la carte suit
-/// toujours le doigt (manipulation directe). Les boutons équivalents sont fournis par `SwipeActionBar`.
+/// Identifiants (blueprint lot 4 v2, injectables) : conteneur `identifier` (`swipe-deck`), carte du dessus
+/// `<cardIdentifierPrefix>-<id>` (`swipe-card-<missionId>`). Les cartes de fond sont masquées (`aria-hidden` du web).
+/// « Réduire les animations » coupe le ressort et les transitions ; la carte suit toujours le doigt (manipulation
+/// directe). Les boutons équivalents sont fournis par `SwipeActionBar`.
 ///
-/// Le geste est prioritaire sur ceux du contenu : un glissement établi annule le toucher de la carte (le web
-/// supprime le clic après un drag), un simple toucher l'atteint. À monter hors d'un `ScrollView` vertical,
-/// dont il capterait aussi les glissements verticaux (ignorés par le paquet).
+/// Défilement : le geste est prioritaire sur ceux du contenu (un glissement établi annule le toucher de la carte, le
+/// web supprime le clic après un drag ; un simple toucher l'atteint) et il capte aussi les glissements verticaux,
+/// qu'il ignore. Contrairement au web (`touch-pan-y`), aucun défilement vertical ne part donc de la carte : à monter
+/// hors d'un `ScrollView` vertical, et l'écran (T3b) garantit que la carte tient sans défilement à toutes les tailles
+/// Dynamic Type, iPhone SE et iPad paysage compris (le détail complet passant par la feuille de détail).
 public struct SwipeCardStack<Item: Identifiable, Card: View>: View {
     private let items: [Item]
     private let identifier: String
+    private let cardIdentifierPrefix: String
+    private let cardAccessibility: SwipeCardAccessibility
     private let isBusy: Bool
     private let onAction: (SwipeCardAction, Item) -> Void
     private let card: (Item) -> Card
@@ -171,12 +233,35 @@ public struct SwipeCardStack<Item: Identifiable, Card: View>: View {
         var dx: CGFloat = 0
     }
 
+    /// Copie de l'axe figé du geste en cours, relue au relâchement : `@GestureState` est remis à zéro à la fin du geste,
+    /// donc illisible de façon sûre dans `onEnded`. Référence mutée dans `updating` (même source que l'affichage),
+    /// sans provoquer de rendu ; remise à zéro au premier changement de chaque geste, annulé ou non. Lue et écrite
+    /// seulement par les rappels du geste, isolés sur l'acteur principal comme la vue.
+    private final class SuiviGeste {
+        var axe: SwipeCardGesture.Axis = .undetermined
+    }
+
+    /// Décalage du relâchement gardé pour la carte `id` pendant l'appel serveur.
+    private struct Retenue: Equatable {
+        var id: Item.ID
+        var dx: CGFloat
+    }
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @GestureState private var glissement = Glissement()
+    @State private var suivi = SuiviGeste()
+    @State private var retenue: Retenue?
 
-    public init(_ items: [Item], identifier: String = "swipe", isBusy: Bool = false,
+    /// - Parameters:
+    ///   - identifier: conteneur du paquet (`swipe-deck`).
+    ///   - cardIdentifierPrefix: préfixe de la carte du dessus, suivi de l'identifiant de l'élément (`swipe-card-<id>`).
+    ///   - cardAccessibility: `.combine` (un élément, défaut) ou `.contain` (enfants identifiés conservés).
+    public init(_ items: [Item], identifier: String = SwipeDeckIdentifiers.deck,
+                cardIdentifierPrefix: String = SwipeDeckIdentifiers.cardPrefix,
+                cardAccessibility: SwipeCardAccessibility = .combine, isBusy: Bool = false,
                 onAction: @escaping (SwipeCardAction, Item) -> Void, @ViewBuilder card: @escaping (Item) -> Card) {
-        self.items = items; self.identifier = identifier; self.isBusy = isBusy
+        self.items = items; self.identifier = identifier; self.cardIdentifierPrefix = cardIdentifierPrefix
+        self.cardAccessibility = cardAccessibility; self.isBusy = isBusy
         self.onAction = onAction; self.card = card
     }
 
@@ -185,6 +270,11 @@ public struct SwipeCardStack<Item: Identifiable, Card: View>: View {
     func perform(_ action: SwipeCardAction, on item: Item) {
         guard !isBusy else { return }
         onAction(action, item)
+    }
+
+    /// Identifiant de la carte du dessus pour `item`.
+    func cardIdentifier(for item: Item) -> String {
+        SwipeDeckIdentifiers.card(prefix: cardIdentifierPrefix, itemID: String(describing: item.id))
     }
 
     /// Carte visible et son rang (0 = dessus). Une même carte garde son identité en passant du fond au dessus :
@@ -205,8 +295,16 @@ public struct SwipeCardStack<Item: Identifiable, Card: View>: View {
             }
         }
         .animation(SwipeCardGesture.animation(reduceMotion: reduceMotion), value: visibles.map(\.id))
-        // Ressort au relâchement seulement : pendant le glissement, la carte suit le doigt sans animation.
+        // Ressort au relâchement et à la fin de l'appel seulement : pendant le glissement, la carte suit le doigt.
         .animation(SwipeCardGesture.animation(reduceMotion: reduceMotion), value: glissement.actif)
+        .animation(SwipeCardGesture.animation(reduceMotion: reduceMotion), value: isBusy)
+        // Rendu qui suit la transmission : si l'écran n'a pas ouvert d'appel, la carte revient au centre.
+        .onChange(of: retenue) { nouvelle in
+            if nouvelle != nil, !isBusy { retenue = nil }
+        }
+        .onChange(of: isBusy) { occupe in
+            if !occupe { retenue = nil }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(identifier)
     }
@@ -216,40 +314,55 @@ public struct SwipeCardStack<Item: Identifiable, Card: View>: View {
     private func carte(_ item: Item, depth: Int) -> some View {
         let dessus = depth == 0
         let style = SwipeCardGesture.backgroundStyle(depth: depth)
-        let decalage = dessus ? glissement.dx : 0
+        let decalage = dessus ? decalageAffiche(item) : 0
         return card(item)
             .overlay(alignment: .topLeading) { indicateur(.candidater, dx: decalage) }
             .overlay(alignment: .topTrailing) { indicateur(.passer, dx: decalage) }
-            .offset(x: decalage)
+            // Rotation autour du centre de la carte, puis translation (`translate(dx) rotate(θ)` du web).
             .rotationEffect(.degrees(SwipeCardGesture.rotationDegrees(for: decalage)))
+            .offset(x: decalage)
             .scaleEffect(style.scale)
             .offset(y: style.offsetY)
             .opacity(style.opacity)
             .highPriorityGesture(glisser(item), including: dessus && !isBusy ? .all : .subviews)
             .allowsHitTesting(dessus)
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: cardAccessibility == .combine ? .combine : .contain)
             .accessibilityHidden(!dessus)
-            .accessibilityIdentifier(dessus ? SwipeCardGesture.cardIdentifier(prefix: identifier, itemID: String(describing: item.id)) : "")
-            .accessibilityAction(named: Text(SwipeCardAction.passer.accessibilityActionName)) { perform(.passer, on: item) }
-            .accessibilityAction(named: Text(SwipeCardAction.sauvegarder.accessibilityActionName)) { perform(.sauvegarder, on: item) }
-            .accessibilityAction(named: Text(SwipeCardAction.candidater.accessibilityActionName)) { perform(.candidater, on: item) }
+            .accessibilityIdentifier(dessus ? cardIdentifier(for: item) : "")
+            .accessibilityActions {
+                if dessus && !isBusy {
+                    ForEach(SwipeCardAction.allCases, id: \.self) { action in
+                        Button(action.accessibilityActionName) { perform(action, on: item) }
+                    }
+                }
+            }
             .transition(reduceMotion ? .identity : .opacity)
             .zIndex(Double(SwipeCardGesture.visibleBackgroundCards + 1 - depth))
+    }
+
+    private func decalageAffiche(_ item: Item) -> CGFloat {
+        SwipeCardGesture.displayedOffset(liveDx: glissement.actif ? glissement.dx : nil,
+                                         retainedDx: retenue?.id == item.id ? retenue?.dx : nil, isBusy: isBusy)
     }
 
     private func glisser(_ item: Item) -> some Gesture {
         DragGesture(minimumDistance: SwipeCardGesture.activationDistance)
             .updating($glissement) { valeur, etat, _ in
+                // Premier changement d'un geste (état neuf, y compris après une annulation) : suivi remis à zéro.
+                if !etat.actif { suivi.axe = .undetermined }
                 // Axe figé au premier mouvement au-delà de 8 pt ; un départ vertical ne déplace jamais la carte.
-                if etat.axe == .undetermined { etat.axe = SwipeCardGesture.axis(for: valeur.translation) }
+                etat.axe = SwipeCardGesture.frozenAxis(etat.axe, translation: valeur.translation)
                 etat.actif = true
-                etat.dx = etat.axe == .horizontal ? valeur.translation.width : 0
+                etat.dx = SwipeCardGesture.trackedDx(axis: etat.axe, translation: valeur.translation)
+                suivi.axe = etat.axe
             }
             .onEnded { valeur in
-                // Relâchement : décalage horizontal dominant d'au moins 120 pt. La carte revient au centre (remise
-                // à zéro du glissement) ; l'écran la retire après la réponse serveur.
-                guard SwipeCardGesture.axis(for: valeur.translation) == .horizontal,
-                      let decision = SwipeCardGesture.decision(forHorizontalTranslation: valeur.translation.width) else { return }
+                // Relâchement : décision sur l'axe figé au démarrage, jamais sur la translation finale.
+                let axe = suivi.axe
+                suivi.axe = .undetermined
+                guard let decision = SwipeCardGesture.decision(frozenAxis: axe, translation: valeur.translation) else { return }
+                // La carte reste décalée pendant l'appel serveur ; l'écran la retire après la réponse `ok:true`.
+                retenue = Retenue(id: item.id, dx: SwipeCardGesture.trackedDx(axis: axe, translation: valeur.translation))
                 perform(decision, on: item)
             }
     }
@@ -280,13 +393,15 @@ public struct SwipeCardStack<Item: Identifiable, Card: View>: View {
 
 /// Barre des trois boutons ✕ / ⭐ / ❤️ (`BoutonsActionSwipe.tsx`), équivalents des gestes et seule voie du
 /// favori ; couverture XCUITest par ces boutons (décision D22). `isDisabled` pendant un appel serveur
-/// (`disabled` du web). Retour haptique léger / léger / moyen, comme `hapticImpact` du web.
+/// (`disabled` du web). Retour haptique léger / léger / moyen, comme `hapticImpact` du web. Identifiants
+/// `<identifier>-passer`, `-sauvegarder`, `-candidater` (`swipe-passer`… par défaut) et `<identifier>-actions`.
 public struct SwipeActionBar: View {
     private let identifier: String
     private let isDisabled: Bool
     private let onAction: (SwipeCardAction) -> Void
 
-    public init(identifier: String = "swipe", isDisabled: Bool = false, onAction: @escaping (SwipeCardAction) -> Void) {
+    public init(identifier: String = SwipeDeckIdentifiers.actionsPrefix, isDisabled: Bool = false,
+                onAction: @escaping (SwipeCardAction) -> Void) {
         self.identifier = identifier; self.isDisabled = isDisabled; self.onAction = onAction
     }
 

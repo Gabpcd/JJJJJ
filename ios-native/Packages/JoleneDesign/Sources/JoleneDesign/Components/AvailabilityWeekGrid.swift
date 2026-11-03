@@ -9,6 +9,10 @@ import SwiftUI
 /// (lot 4 T2, `SemainesDisponibilites`, lundi Europe/Paris) et l'état déclaré vient du serveur ; la grille ne
 /// calcule aucune date et ne pré-remplit rien. L'écran (T5) empile les quatre semaines et affiche le compteur.
 ///
+/// Identifiants (blueprint lot 4 v2, T5) : bascules `dispo-<yyyy-MM-dd>-JOURNEE` / `dispo-<yyyy-MM-dd>-NUIT`, ligne
+/// `dispo-<yyyy-MM-dd>` (préfixe `slotPrefix`, commun aux quatre semaines empilées), conteneur `identifier` et en-tête
+/// `<identifier>-title` (propres à chaque semaine).
+///
 /// Accessibilité : chaque bascule est vocalisée « <jour>, <créneau> » avec le trait « sélectionné » ; un créneau
 /// déclaré passe aussi à l'icône pleine (l'état ne repose pas sur la seule couleur). Cibles de 44 pt (36 px sur
 /// le web). Aux tailles Dynamic Type d'accessibilité, libellé au-dessus et bascules dessous (repli en colonne
@@ -35,8 +39,6 @@ public struct AvailabilityWeekGrid: View {
 
         /// Encre d'un créneau déclaré ; `nil` = encre fixe `onGradient` du dégradé.
         public var selectedInkHSL: JoleneDynamicHSL? { self == .journee ? nil : JoleneColor.cloudHSL }
-
-        var identifierSuffix: String { rawValue.lowercased() }
     }
 
     public struct SlotState: Equatable, Sendable {
@@ -80,11 +82,15 @@ public struct AvailabilityWeekGrid: View {
     /// Bascule active hors jour passé et hors appel en cours sur ce créneau.
     nonisolated public static func isToggleEnabled(_ state: SlotState, isPast: Bool) -> Bool { !isPast && !state.isPending }
 
-    nonisolated public static func identifier(prefix: String, dayID: String, creneau: Creneau) -> String {
-        "\(prefix)-\(dayID)-\(creneau.identifierSuffix)"
+    /// Préfixe par défaut des bascules et des lignes : `dispo` (blueprint lot 4 T5).
+    nonisolated public static let defaultSlotPrefix = "dispo"
+
+    /// Bascule : `<prefix>-<yyyy-MM-dd>-<JOURNEE|NUIT>`, créneau en valeur serveur (`dispo-2026-11-03-NUIT`).
+    nonisolated public static func identifier(prefix: String = defaultSlotPrefix, dayID: String, creneau: Creneau) -> String {
+        "\(prefix)-\(dayID)-\(creneau.rawValue)"
     }
 
-    nonisolated public static func rowIdentifier(prefix: String, dayID: String) -> String { "\(prefix)-\(dayID)" }
+    nonisolated public static func rowIdentifier(prefix: String = defaultSlotPrefix, dayID: String) -> String { "\(prefix)-\(dayID)" }
     nonisolated public static func titleIdentifier(prefix: String) -> String { "\(prefix)-title" }
 
     nonisolated public static func accessibilityLabel(day: Day, creneau: Creneau) -> String {
@@ -103,17 +109,23 @@ public struct AvailabilityWeekGrid: View {
     private let title: String
     private let days: [Day]
     private let identifier: String
+    private let slotPrefix: String
     private let layoutOverride: Layout?
     private let onToggle: (Day, Creneau) -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    public init(title: String, days: [Day], identifier: String, onToggle: @escaping (Day, Creneau) -> Void) {
-        self.init(title: title, days: days, identifier: identifier, layoutOverride: nil, onToggle: onToggle)
+    /// - Parameters:
+    ///   - identifier: conteneur de la semaine (et `<identifier>-title` pour son en-tête).
+    ///   - slotPrefix: préfixe des bascules et des lignes, `dispo` par défaut (`dispo-<yyyy-MM-dd>-JOURNEE`).
+    public init(title: String, days: [Day], identifier: String, slotPrefix: String = AvailabilityWeekGrid.defaultSlotPrefix,
+                onToggle: @escaping (Day, Creneau) -> Void) {
+        self.init(title: title, days: days, identifier: identifier, slotPrefix: slotPrefix, layoutOverride: nil, onToggle: onToggle)
     }
 
     /// Disposition imposée, sans `ViewThatFits` : réservé aux tests (mesure de la bascule).
-    init(title: String, days: [Day], identifier: String, layoutOverride: Layout?, onToggle: @escaping (Day, Creneau) -> Void) {
-        self.title = title; self.days = days; self.identifier = identifier
+    init(title: String, days: [Day], identifier: String, slotPrefix: String = AvailabilityWeekGrid.defaultSlotPrefix,
+         layoutOverride: Layout?, onToggle: @escaping (Day, Creneau) -> Void) {
+        self.title = title; self.days = days; self.identifier = identifier; self.slotPrefix = slotPrefix
         self.layoutOverride = layoutOverride; self.onToggle = onToggle
     }
 
@@ -164,7 +176,7 @@ public struct AvailabilityWeekGrid: View {
         .padding(.vertical, JoleneSpacing.sm)
         .opacity(day.isPast ? Self.pastOpacity : 1)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(Self.rowIdentifier(prefix: identifier, dayID: day.id))
+        .accessibilityIdentifier(Self.rowIdentifier(prefix: slotPrefix, dayID: day.id))
     }
 
     private func enLigne(_ day: Day) -> some View {
@@ -208,7 +220,7 @@ public struct AvailabilityWeekGrid: View {
         ForEach(Creneau.allCases, id: \.self) { creneau in
             AvailabilityToggle(creneau: creneau, state: day.state(creneau), isPast: day.isPast,
                                accessibilityLabel: Self.accessibilityLabel(day: day, creneau: creneau),
-                               identifier: Self.identifier(prefix: identifier, dayID: day.id, creneau: creneau)) {
+                               identifier: Self.identifier(prefix: slotPrefix, dayID: day.id, creneau: creneau)) {
                 onToggle(day, creneau)
             }
         }
