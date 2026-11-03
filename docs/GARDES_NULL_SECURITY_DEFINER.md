@@ -324,11 +324,20 @@ aucune ne redéfinit l'une des 20 fonctions de ce lot (vérifié sur leurs fichi
 du 03/11). La protection stricte de main impose de les merger une par une ;
 avant le merge de ce lot :
 
-1. rebaser cette branche sur main (conflits attendus seulement dans
-   `.github/workflows/validate-pr.yml` et `supabase/schema/public.sql`,
-   fonctions disjointes : garder les deux côtés) ;
+1. rebaser cette branche sur main. Essai de merge local du 03/11 (main
+   `12d50b7d` + les quatre branches dans l'ordre ci-dessus + ce lot) : seuls
+   conflits dans `.github/workflows/validate-pr.yml`, `supabase/schema/public.sql`
+   fusionne seul (fonctions disjointes). Garder les deux côtés, avec une
+   contrainte : dans `SQL_TESTS`, placer
+   `tests/security/gardes-null-security-definer.test.sql` **avant**
+   `tests/non-regression/sql/contestation-paiement-soignant.test.sql`, dont le
+   test node exige d'être en fin de liste. `tests/node/paiements-staging-installed.node.mjs`
+   compte les suites de `SQL_TESTS` : 64 sur cette branche comme sur
+   contestation, donc **65** après rebase (garder les deux `assert.match`, et le
+   commentaire « les 65 suites » de `validate-pr.yml`) ;
 2. `node --test tests/node/gardes-null-security-definer.node.mjs` doit être
-   entièrement vert, test « ordre de merge » compris ;
+   entièrement vert, test « ordre de merge » compris. Sur l'essai de merge :
+   7/7 verts, et les tests node de B5b (8/8) et de contestation (8/8) aussi ;
 3. relire les md5 LIVE des 20 fonctions (le contrôle « avant » de la migration
    refuse toute divergence) ;
 4. `validate-pr` rejoue la recette SQL sur staging.
