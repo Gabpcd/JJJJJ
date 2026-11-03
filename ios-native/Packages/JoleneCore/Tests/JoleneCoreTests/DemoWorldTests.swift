@@ -200,7 +200,9 @@ final class DemoWorldTests: XCTestCase {
     /// n'a pas de liste propre : `SupabaseGatewaysTests.testAucunPortNonCable` compare
     /// `SupabaseGateways.make(client:).unwiredPorts` à `DemoWorld.gateways().unwiredPorts`, si
     /// bien qu'un port câblé dans un seul monde rougit l'un des deux tests. Critère de sortie de
-    /// T12 (blueprint §2.2) : liste vide, `unwiredPorts.isEmpty` dans les deux mondes.
+    /// T12 (blueprint §2.2) : liste vide, soit aucun nom du lot 1 dans `unwiredPorts` des deux
+    /// mondes (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`) — jamais
+    /// `unwiredPorts.isEmpty`, qui nomme aussi les ports du lot 3 tant que ce lot est ouvert.
     static let portsEnAttenteLot1 = ["candidature", "presence", "favoris", "mesMissions",
                                      "recovery", "justificatifs"]
 
@@ -217,6 +219,9 @@ final class DemoWorldTests: XCTestCase {
         let gateways = DemoWorld.gateways()
         XCTAssertEqual(gateways.unwiredPorts, Self.portsEnAttenteLot1 + Self.portsEnAttenteLot3,
                        "tout port livré doit être câblé dans DemoWorld.gateways() dans la même PR")
+        // Forme du critère de clôture de chaque lot : ses seuls noms, filtrés dans `unwiredPorts` (vide à T12 pour le lot 1).
+        XCTAssertEqual(gateways.unwiredPorts.filter(Lot1PortsTests.portsLot1.contains), Self.portsEnAttenteLot1)
+        XCTAssertEqual(gateways.unwiredPorts.filter(Lot3PortsTests.portsLot3.contains), Self.portsEnAttenteLot3)
         XCTAssertTrue(gateways.audit is DemoAuditGateway)
         XCTAssertTrue(gateways.flags is DemoFlagsGateway)
         XCTAssertTrue(gateways.dashboard is DemoDashboardGateway, "T3 câble le tableau de bord")

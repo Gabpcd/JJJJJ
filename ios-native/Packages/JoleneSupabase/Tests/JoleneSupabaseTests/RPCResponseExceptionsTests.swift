@@ -19,6 +19,8 @@ final class RPCResponseExceptionsTests: XCTestCase {
     private let demarrer = "/rest/v1/rpc/fn_demarrer_inscription"
     private let brouillon = "/rest/v1/rpc/fn_enregistrer_parcours_inscription"
     private let upsert = "/rest/v1/rpc/fn_upsert_token_push"
+    /// RPC du lot 2 qui déclare 42501 comme métier (blueprint du lot 2 §2.4) : forme partagée du helper.
+    private let scanner = "/rest/v1/rpc/fn_scanner_code_pointage"
     /// SQLSTATE métier déclarés par les gateways d'inscription (§2.4) : 42501 n'en fait pas partie.
     private let exceptionsInscription: Set<String> = ["22023", "23505", "P0002"]
 
@@ -95,11 +97,41 @@ final class RPCResponseExceptionsTests: XCTestCase {
     }
 
     func test42501DeclareEstRestitue() async throws {
-        // Seule une RPC qui déclare 42501 comme métier le restitue (cas du lot 2, `fn_scanner_code_pointage`).
-        registry.add("POST", demarrer, respond: .json(403, exception("42501", "Session invalide.")))
-        let r = try await RPCResponse.appeler(TestClient.make(), "fn_demarrer_inscription", params: [:],
+        // Seule une RPC qui déclare 42501 comme métier le restitue (cas du lot 2, `fn_scanner_code_pointage`
+        // l.55652 du dump) : refus verbatim, jamais `.unauthorized`.
+        let message = "Vous n'êtes pas assigné(e) à cette mission."
+        registry.add("POST", scanner, respond: .json(403, exception("42501", message)))
+        let r = try await RPCResponse.appeler(TestClient.make(), "fn_scanner_code_pointage", params: [:],
                                               fallback: fallback, exceptionsMetier: ["42501"])
         XCTAssertEqual(r.sqlstate, "42501")
+        XCTAssertEqual(r.erreur, message)
+        XCTAssertTrue(r.estRefus)
+    }
+
+    func test42501PrivilegeManquantDeclareEstUneErreurDeContrat() async throws {
+        // GRANT manquant (incident #835, blueprint du lot 2 §2.4) : « permission denied for … » n'est jamais un
+        // refus métier restitué, même quand la RPC déclare 42501 — erreur de contrat, une seule requête.
+        for message in ["permission denied for function fn_scanner_code_pointage",
+                        "permission denied for table signatures_contrats"] {
+            registry.reset()
+            registry.add("POST", scanner, respond: .json(403, exception("42501", message)))
+            let e = await erreur {
+                _ = try await RPCResponse.appeler(TestClient.make(), "fn_scanner_code_pointage", params: [:],
+                                                  fallback: self.fallback, exceptionsMetier: ["42501", "P0002"])
+            }
+            XCTAssertEqual(e, JoleneError(.contract, SupabaseErrorMapping.contractMessage), message)
+            XCTAssertEqual(registry.requests(to: scanner).count, 1, "aucun renvoi")
+        }
+    }
+
+    func test42501PrivilegeManquantNonDeclareGardeLeComportementDuLot1() async throws {
+        // Sans 42501 déclaré, `SupabaseErrorMapping` reste seul juge (lot 1, inchangé) : session expirée.
+        registry.add("POST", demarrer, respond: .json(403, exception("42501", "permission denied for function fn_demarrer_inscription")))
+        let e = await erreur {
+            _ = try await RPCResponse.appeler(TestClient.make(), "fn_demarrer_inscription", params: [:],
+                                              fallback: self.fallback, exceptionsMetier: self.exceptionsInscription)
+        }
+        XCTAssertEqual(e, JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage))
     }
 
     func testPGRST202ResteUnRefusDeContratSansRenvoi() async throws {

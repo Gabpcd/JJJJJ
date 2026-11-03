@@ -62,6 +62,32 @@ final class EdgeResponseTests: XCTestCase {
         XCTAssertEqual(r.bool("onboarding_complete"), false)
     }
 
+    func testCorps2xxQuiNestPasUnObjetJSONEstUnRefus() async throws {
+        // Portail captif, proxy ou corps vide : un 2xx illisible n'est jamais un succès fabriqué (PRINCIPES §3).
+        // Refus au `fallback`, sans code ; seul un objet JSON peut échapper au refus.
+        for (corps, type) in [("<html><body>Connexion au Wi-Fi requise</body></html>", "text/html"), ("", "text/plain"),
+                              ("[]", "application/json"), ("null", "application/json"), ("[1,2]", "application/json"),
+                              ("42", "application/json"), (#""ok""#, "application/json"), ("true", "application/json")] {
+            let r = try await invoquer(200, corps, headers: ["Content-Type": type])
+            XCTAssertTrue(r.estRefus, corps)
+            XCTAssertFalse(r.estSucces, corps)
+            XCTAssertNil(r.erreur, corps)
+            XCTAssertEqual(try refus(r), RefusEdge(statut: 200, code: nil, message: fallback), corps)
+        }
+        for statut in [201, 204] {
+            let vide = try await invoquer(statut, "", headers: ["Content-Type": "text/plain"])
+            XCTAssertEqual(try refus(vide), RefusEdge(statut: statut, code: nil, message: fallback), "HTTP \(statut) sans corps")
+        }
+    }
+
+    func testObjet2xxSansDrapeauNiErrorNEstPasUnRefus() async throws {
+        // Seul non-refus sans drapeau : un objet JSON (`stripe-connect-status`) ; la gateway exige ensuite ses clés.
+        let vide = try await invoquer(200, "{}")
+        XCTAssertTrue(vide.estSucces)
+        XCTAssertFalse(vide.estRefus)
+        XCTAssertNil(try vide.refus(fallback: fallback))
+    }
+
     func testRefusDansUn200() async throws {
         let drapeau = try await invoquer(200, #"{"success":false,"error":"Anonymisation non confirmée"}"#)
         XCTAssertEqual(try refus(drapeau), RefusEdge(statut: 200, code: nil, message: "Anonymisation non confirmée"))
@@ -206,6 +232,15 @@ final class EdgeResponseTests: XCTestCase {
         XCTAssertEqual(EdgeResponse.lire(Data("{\"a\":1}".utf8)), .object(["a": .integer(1)]))
         XCTAssertEqual(EdgeResponse.lire(Data()), .null)
         XCTAssertEqual(EdgeResponse.lire(Data("pas du json".utf8)), .null)
+        XCTAssertEqual(EdgeResponse.lire(Data("<html></html>".utf8)), .null)
+        // Un JSON valide est rendu tel quel, même hors objet : c'est `estRefus` qui l'écarte d'un succès.
+        XCTAssertEqual(EdgeResponse.lire(Data("[1]".utf8)), .array([.integer(1)]))
+        XCTAssertEqual(EdgeResponse.lire(Data("42".utf8)), .integer(42))
+        XCTAssertEqual(EdgeResponse.lire(Data(#""x""#.utf8)), .string("x"))
+        XCTAssertEqual(EdgeResponse.lire(Data("null".utf8)), .null)
+        for raw: AnyJSON in [.null, .array([]), .string("OK"), .bool(true), .integer(1)] {
+            XCTAssertTrue(EdgeResponse(statut: 200, raw: raw).estRefus, "\(raw)")
+        }
         for code in ["TEST_ACCOUNT_PAYMENT_DISABLED", "ORIGINE_NON_AUTORISEE", "STRIPE_NOT_CONFIGURED"] {
             XCTAssertTrue(EdgeResponse.estCodeMachine(code), code)
         }

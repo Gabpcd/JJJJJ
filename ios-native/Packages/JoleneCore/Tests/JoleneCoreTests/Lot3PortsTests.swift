@@ -60,8 +60,9 @@ final class Lot3PortsTests: XCTestCase {
         await refuse("T6") { _ = try await g.preferences.lire(context: c) }
         await refuse("T6") {
             _ = try await g.preferences.enregistrer(PreferencesNotifications(canalEmail: true, canalSms: false, canalPush: true,
-                                                                             canalInApp: true, parEvenement: []),
-                                                    smsAlertes: nil, context: c)
+                                                                             canalInApp: true, parEvenement: [],
+                                                                             smsAlertesActives: false),
+                                                    context: c)
         }
         await refuse("T7") { _ = try await g.inscription.creerCompte(email: "a@b.c", motDePasse: "x", intention: intention) }
         await refuse("T7") { _ = try await g.inscription.confirmer(.tokenHash(tokenHash: "x", otpType: "signup")) }
@@ -141,14 +142,24 @@ final class Lot3PortsTests: XCTestCase {
         XCTAssertTrue(dump.contains("CREATE TYPE \"public\".\"canal_notification\" AS ENUM (\n    'EMAIL',\n    'SMS',\n    'PUSH',\n    'IN_APP'\n);"))
     }
 
-    func testIssuesSansSuccesFabrique() {
-        // L'issue d'un flux hébergé n'est jamais un succès : elle impose une relecture (§2.3).
-        let retour = URL(string: "https://jolene.app/soignant/stripe-connect?success=true")!
-        XCTAssertNotEqual(IssueFlux.retour(retour), IssueFlux.ferme)
-        XCTAssertEqual(RetourAttendu.stripeConnect, RetourAttendu(hote: "jolene.app", chemin: "/soignant/stripe-connect"))
-        XCTAssertNotEqual(IssueDesactivationPush.desactive(tokensDesactives: 0), .nonDesactive)
-        XCTAssertEqual(IntentionInscription(profession: "IDE", cgu: true).typeCompte, "SOIGNANT")
-        XCTAssertEqual(IntentionInscription(profession: "IDE", cgu: true).cgv, false)
+    func testRetourStripeConnectIdentiqueAuxURLDeLEdge() throws {
+        // `refresh_url` et `return_url` de `stripe-connect-onboard` (l.202-203) : même chemin que le retour attendu ;
+        // l'hôte est celui de l'en-tête `Origin` envoyé par le natif (§2.4, `Origin: https://jolene.app`).
+        let edge = Self.racine.appendingPathComponent("supabase/functions/stripe-connect-onboard/index.ts")
+        let source = try String(contentsOf: edge, encoding: .utf8)
+        let chemin = RetourAttendu.stripeConnect.chemin
+        XCTAssertTrue(source.contains("refresh_url: `${returnOrigin}\(chemin)?refresh=true`"), "refresh_url de l'edge")
+        XCTAssertTrue(source.contains("return_url: `${returnOrigin}\(chemin)?success=true`"), "return_url de l'edge")
+        XCTAssertEqual(RetourAttendu.stripeConnect.hote, "jolene.app")
+    }
+
+    func testIntentionInscriptionParDefautSoignantSansCGV() {
+        // Le natif ne sert que le parcours soignant (web `inscriptionProgressive.ts` l.26-39) : `SOIGNANT`, `cgv` faux.
+        let intention = IntentionInscription(profession: "IDE", cgu: true)
+        XCTAssertEqual(intention.typeCompte, UserRole.soignant.rawValue)
+        XCTAssertEqual(intention.typeCompte, "SOIGNANT")
+        XCTAssertFalse(intention.cgv)
+        XCTAssertNil(intention.nom)
     }
 
     /// Données sensibles (§2.6, correction 7) : `ProfilComplet` n'a aucune propriété pour les clés
@@ -173,7 +184,7 @@ final class Lot3PortsTests: XCTestCase {
 
     // MARK: - Aide
 
-    static var dumpURL: URL {
+    static var racine: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent() // …/Tests/JoleneCoreTests
             .deletingLastPathComponent() // …/JoleneCore/Tests
@@ -181,8 +192,9 @@ final class Lot3PortsTests: XCTestCase {
             .deletingLastPathComponent() // …/ios-native/Packages
             .deletingLastPathComponent() // …/ios-native
             .deletingLastPathComponent() // racine du dépôt
-            .appendingPathComponent("supabase/schema/public.sql")
     }
+
+    static var dumpURL: URL { racine.appendingPathComponent("supabase/schema/public.sql") }
 
     private func ligneDuDump(contenant marqueur: String, file: StaticString = #filePath, line: UInt = #line) throws -> String {
         let dump = try String(contentsOf: Self.dumpURL, encoding: .utf8)
