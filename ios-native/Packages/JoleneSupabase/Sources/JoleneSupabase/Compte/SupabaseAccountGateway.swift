@@ -45,8 +45,8 @@ public struct SupabaseAccountGateway: AccountPort {
             return try await client.functions.invoke(Self.fonction, options: options) { corps, _ in
                 Self.issue(corps: corps)
             }
-        } catch FunctionsError.httpError(_, let corps) {
-            return Self.refus(RPCResponse(Self.lire(corps)))
+        } catch FunctionsError.httpError(let code, let corps) {
+            return Self.refus(EdgeResponse(statut: code, corps: corps))
         } catch FunctionsError.relayError {
             return .refused(code: nil, message: CompteSuppression.refusParDefautMessage)
         } catch {
@@ -56,21 +56,20 @@ public struct SupabaseAccountGateway: AccountPort {
 
     // MARK: - Interprétation
 
+    // Décodage par `EdgeResponse` (lot 3, T1 : décodeur commun des edges), comportement inchangé :
+    // `delete-account` garde ses propres règles — `success === true` exigé, `error` et `error_code`
+    // seuls lus, tout statut (401 compris) restant un refus affiché (fiche « Edge `delete-account` »).
+
     /// Corps d'une réponse 2xx : `{success:true}` sans `error` → supprimé ; sinon refus (web l.88-89 :
     /// `data?.error || data?.success !== true`).
     static func issue(corps: Data) -> DeleteAccountOutcome {
-        let reponse = RPCResponse(lire(corps))
+        let reponse = EdgeResponse(statut: 200, corps: corps)
         guard reponse.success == true, reponse.erreur == nil else { return refus(reponse) }
         return .deleted
     }
 
     /// Refus verbatim : `error` du serveur et son `error_code` (seule clé de code posée par l'edge).
-    static func refus(_ reponse: RPCResponse) -> DeleteAccountOutcome {
+    static func refus(_ reponse: EdgeResponse) -> DeleteAccountOutcome {
         .refused(code: reponse.codeErreur, message: reponse.erreur ?? CompteSuppression.refusParDefautMessage)
-    }
-
-    /// Corps JSON tolérant : vide, non JSON (page de passerelle) ou scalaire → `null`.
-    static func lire(_ corps: Data) -> AnyJSON {
-        (try? JSONDecoder().decode(AnyJSON.self, from: corps)) ?? .null
     }
 }

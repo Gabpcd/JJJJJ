@@ -77,3 +77,34 @@ Périmètre relu : `git diff origin/feat/ios-lot1...origin/lot3/l3-t0`, commits 
   touche le fichier, pas par l'intégration. Le conflit annoncé avec L2-T0 ne se pose pas sur cette branche :
   `origin/lot2/l2-t0` n'est contenu dans aucune autre branche distante (ni `main`, ni `feat/ios-lot1`) ; il se
   résoudra à la reprise de `main` ou de `feat/ios-lot1` quand L2-T0 y sera fusionné.
+
+## L3-T1
+
+### Consignes de l'auteur pour l'intégration (corrections de la revue B8)
+
+Consignées par l'auteur de la tranche, à la demande de la revue fraîche ; le rapport de revue lui-même reste à
+reproduire ici par l'intégrateur.
+
+- **`UnwiredPorts.erreur(port:tranche:lot:)`** vit dans `ios-native/Packages/JoleneCore/Sources/JoleneCore/Ports/Lot1Ports.swift`,
+  à côté de `erreur(port:tranche:)`, et non dans `Lot3Ports.swift`. L2-T1 la réutilise et ne la redéclare pas dans
+  `Lot2Ports.swift` : deux déclarations identiques ne compilent pas (`DECISIONS_LOT3.md`, « Précisions du mémo »).
+- **Exceptions métier** (`ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/RPC/RPCResponse+ExceptionsMetier.swift`) :
+  `appeler(…, exceptionsMetier:)`, `executer(fallback:exceptionsMetier:_:)` et la visibilité interne de
+  `RPCResponse.executer(fallback:_:)` sont posés par L3-T1 ; L2-T1 les réutilise sans les redéclarer. Le helper suit
+  désormais `LOT2_PLAN.md` §2.4 et la liste de tests de son T1 : un SQLSTATE déclaré dont le message commence par
+  « permission denied for » (GRANT manquant, incident #835) lève `.contract` au lieu d'être restitué
+  (`test42501PrivilegeManquantDeclareEstUneErreurDeContrat`) ; 42501 non déclaré reste une session expirée (lot 1,
+  `SupabaseErrorMapping` inchangé). Une seule déclaration subsiste à l'intégration ; en cas d'écart entre les deux
+  copies, le comportement exigé par `LOT2_PLAN.md` §2.4 fait foi.
+- **`NotificationPreferencesPort.enregistrer(_:context:)`** : écart assumé avec le tableau §2.3 de `LOT3_PLAN.md`
+  (`enregistrer(_:, smsAlertes: Bool?, context:)`). Le paramètre `smsAlertes` est retiré :
+  `PreferencesNotifications.smsAlertesActives` est la seule source de l'alerte SMS (principe « État dérivé ») ; nil =
+  colonne non écrite (parité web `profilSmsPresent`, `PageParametresNotifications.tsx` l.230). T6 implémente cette
+  signature.
+- **Critère de clôture du lot 1 (L1-T12)** : aucun nom du lot 1 dans `unwiredPorts`
+  (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`), jamais `unwiredPorts.isEmpty`, qui reste faux
+  tant que le lot 3 est ouvert (`PRINCIPES.md` §2). Le test de clôture de L1-T12 prend cette forme.
+- **`EdgeResponse`** : un 2xx dont le corps n'est pas un objet JSON (portail captif, proxy, corps vide, `null`,
+  tableau, scalaire) est un refus au `fallback`, sans code. `estSucces` reste plus faible que `RPCResponse.estSucces`
+  (aucun drapeau exigé, à cause de `stripe-connect-status`) : chaque gateway exige ensuite ses propres clés.
+  `delete-account` n'est pas concerné (`issue(corps:)` exige `success == true`).

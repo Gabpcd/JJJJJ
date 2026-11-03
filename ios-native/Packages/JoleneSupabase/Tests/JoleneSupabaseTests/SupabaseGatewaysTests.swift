@@ -50,8 +50,11 @@ final class SupabaseGatewaysTests: XCTestCase {
 
     /// Aucune liste propre à ce monde : les ports encore stubs côté Supabase doivent être
     /// exactement ceux du monde démo (`DemoWorld.gateways()`, figés par la source unique
-    /// `DemoWorldTests.portsEnAttenteLot1`). Une PR qui câble un port dans un seul monde fait
-    /// diverger les deux ensembles et rougit ce test ; T12 exige `unwiredPorts.isEmpty`.
+    /// `DemoWorldTests.portsEnAttenteLot1` et `portsEnAttenteLot3`). Une PR qui câble un port dans
+    /// un seul monde fait diverger les deux ensembles et rougit ce test. T12 (clôture du lot 1)
+    /// exige qu'aucun nom du lot 1 ne reste dans `unwiredPorts`
+    /// (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`), pas `unwiredPorts.isEmpty` :
+    /// les ports du lot 3 y restent nommés tant que ce lot est ouvert.
     func testAucunPortNonCable() {
         let supabase = SupabaseGateways.make(client: TestClient.make()).unwiredPorts
         let demo = DemoWorld.gateways().unwiredPorts
