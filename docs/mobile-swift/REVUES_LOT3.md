@@ -108,3 +108,333 @@ reproduire ici par l'intégrateur.
   tableau, scalaire) est un refus au `fallback`, sans code. `estSucces` reste plus faible que `RPCResponse.estSucces`
   (aucun drapeau exigé, à cause de `stripe-connect-status`) : chaque gateway exige ensuite ses propres clés.
   `delete-account` n'est pas concerné (`issue(corps:)` exige `success == true`).
+
+### Revue fraîche B8 — L3-T1
+
+**Verdict : CLÔTURABLE.** Aucun constat bloquant ni majeur. Six constats mineurs, à traiter dans cette tranche ou dans la suivante.
+
+#### Périmètre
+
+J'ai relu en entier `git diff origin/feat/ios-lot3...origin/lot3/l3-t1` (base `79ad1a81`, identique à la pointe de `feat/ios-lot3`), soit cinq commits :
+- `3f211b30` : tests ;
+- `020ef84e` : implémentation ;
+- `c2f6099d` : docs ;
+- `e633ffb6` : tests des corrections ;
+- `452973c6` : corrections.
+
+Cela fait 22 fichiers, +1 900/−27. La branche se fusionne sans conflit dans `feat/ios-lot3`.
+
+Méthode : lecture seule, sans build, sans test et sans appel MCP.
+- J'ai confronté le code au SDK supabase-swift **v2.55.5** extrait dans DerivedData : `FunctionsClient.rawInvoke` (le relais est vérifié avant `httpError`) et les deux surcharges de `PostgrestBuilder.execute` (Void et Decodable ; rejeu limité à GET et HEAD).
+- J'ai confronté les citations au dump `supabase/schema/public.sql` de la branche et aux edges `register-soignant`, `stripe-connect-status`, `stripe-connect-onboard` et `_shared/errors.ts`, ainsi qu'à `_shared/stripe-errors.ts`.
+
+#### Ce qui a été vérifié
+
+##### Conformité au blueprint v2 (T1)
+
+**Fichiers.** Tous les fichiers listés par T1 sont présents :
+- les 13 ports backend, chacun avec son stub `Unwired…` ;
+- les 4 capacités système hors `Gateways` ;
+- `Lot3Results` avec les 9 types exigés ;
+- `AuditAction` avec 3 cas de plus ;
+- `câblerLot3` dans les deux mondes, sans troisième init (les deux inits du lot 1 sont restés mot pour mot) ;
+- `unwiredPorts` étendu ;
+- la surcharge `erreur(port:tranche:lot:)`, qui rend pour `lot: 1` le même texte que l'ancienne version ;
+- PRINCIPES §2.
+
+**Écarts annoncés par l'auteur.** Je les juge tous acceptables et alignés sur `LOT2_PLAN.md` §2.4 :
+- fichiers séparés `RPCResponse+ExceptionsMetier.swift` et `RPCResponse+SansCorps.swift` ;
+- `executer` passé en interne ;
+- `IssueDesactivationPush` ;
+- `statut(force:)` (correction 17) ;
+- `ExportDonneesRGPD` ;
+- `enregistrer(_:context:)` avec une seule source pour l'alerte SMS.
+
+**Aucun fichier hors périmètre.** `SupabaseAccountGateway` est bien attribué à L3-T1 par le tableau des dépendances. Rien sous `supabase/`, `src/` ni dans l'app ; aucune migration.
+
+##### `EdgeResponse`
+- Le corps de `FunctionsError.httpError` est lu avant tout mapping.
+- Un 401 donne `.unauthorized`, quel que soit le corps.
+- Les refus se lisent à la fois dans un 2xx (drapeaux, ou `error` sans drapeau vrai) et hors 2xx.
+- Un 2xx dont le corps n'est pas un objet JSON est un refus au `fallback`. C'était le majeur de la revue précédente : il est corrigé et testé (HTML, vide, `[]`, `null`, scalaires, 201 et 204 vides).
+- Un objet sans drapeau n'est pas un refus, ce qui convient à `stripe-connect-status`.
+- `x-relay-error` donne `.unknown`, jamais un succès, conformément à l'ordre du SDK.
+- Les options sont transmises telles quelles (`force=true`, `Origin`).
+- Les codes machine ne sont jamais affichés. J'ai vérifié chaque forme réelle : `_shared/errors.ts` (`error` est le miroir de `message`), `{error:'CODE'}`, `mapStripeError` (`{error: code, message}` toujours accompagné d'un `userMessage`), et `{error, error_code}` de `delete-account`.
+
+##### `SupabaseAccountGateway`
+Comportement inchangé :
+- `success == true` reste exigé ;
+- seuls `error` et `error_code` sont lus ;
+- un 401 reste un refus affiché, ce qui est voulu au lot 1.
+
+Aucun autre appelant de `lire` ou de `refus(RPCResponse)`, ni sur la branche ni sur les branches `lot1/*` non intégrées.
+
+##### Exceptions métier
+- Ordre respecté : `[CODE DU TRAVAIL]` (exclu dans le `where`, restitué par l'`executer` du lot 1), puis les exceptions déclarées, puis `SupabaseErrorMapping`, inchangé.
+- Le refus produit a la forme `{success:false, ok:false, code:"SQLSTATE_x", error}`, comme au lot 2.
+- Un SQLSTATE déclaré dont le message commence par « permission denied for » donne `.contract`. Sans déclaration, un 42501 garde le comportement du lot 1.
+- Un `JoleneError` levé à l'intérieur traverse `map` sans être modifié.
+- Pour les RPC `void`, la surcharge `execute()` → `Void` est bien celle choisie, et 204, 200 vide et `null` donnent un succès. Le contrat `RETURNS void` de `fn_upsert_token_push` est suivi dans `rpc-contracts.json`.
+- Les messages et numéros de ligne cités ont été recoupés dans le dump : 30110, 30118, 30127, 32456, 55649, 55652, 64642 et 64645, plus la liste blanche l.32436-32442.
+
+##### Tests
+Chaque test porte une règle réelle :
+- les gardes de dump (CHECK `journaux_audit_action_check` l.70243, `stripe_connect_onboarding_statut_check` l.72036, enum `canal_notification` l.22-27) ont été vérifiées sur le fichier ;
+- `return_url` et `refresh_url` l.202-203 ;
+- la liste blanche par `Mirror` ;
+- « une seule requête » est comptée partout.
+
+La lecture de fichiers du dépôt par `#filePath` dans JoleneCoreTests sur le simulateur suit un usage déjà établi (`DemoNoNetworkTests`, `LinksAASATests`), compatible avec la porte `skipped === 0`.
+
+##### Régressions des lots 0 et 1
+- `DemoNoNetworkTests` : ni `URLSession` ni import réseau dans JoleneCore.
+- Sentinelle démo : les stubs lèvent sans aucun réseau.
+- Aucun identifiant d'accessibilité, aucun XCUITest et aucun écran touchés ; le comportement dans les trois formats ne change pas.
+- Aucun `switch` exhaustif sur `AuditAction`.
+- Aucun nom en collision dans l'app, dans JoleneDesign ni sur les branches `lot2/*`, `lot3/*`, `feat/ios-lot{1,2,4,5}`.
+- `AppContainer` passe bien par `DemoWorld.gateways()` et `SupabaseGateways.make`, qui appellent tous deux `câblerLot3`.
+
+##### Concurrence (Swift 6)
+- Tous les ports sont `Sendable`, de même que les types d'échange.
+- Les closures de décodage ne s'échappent pas.
+- Aucun `MainActor` n'est requis à ce stade.
+
+##### Juridique, B9 et secrets
+- **HARD STOP n°4** : aucun texte nouveau affiché à l'utilisateur, aucun wording juridique.
+- **B9** : aucun selon le blueprint. Les ports Stripe, paiements et IBAN ne sont que des interfaces dont les stubs lèvent une erreur, sans aucun flux monétaire.
+- **Secrets** : aucun littéral suspect. L'IBAN de test est l'exemple ISO 13616 prévu au §2.7.
+
+#### Constats mineurs
+Le détail (fichier:ligne et correction attendue) est dans la liste `mineurs` :
+1. Des erreurs de la plateforme Supabase (`BOOT_ERROR`, `WORKER_LIMIT`, `NOT_FOUND`) seraient affichées telles quelles. Point à confirmer selon la présence de `x-relay-error`.
+2. Un `error` qui n'est pas du texte, dans un 2xx sans drapeau, n'est pas traité comme un refus.
+3. Le garde sur la source de l'edge `stripe-connect-onboard` est absent du filtre `paths` de `ios-swift-ci.yml`.
+4. Trois écarts de signature (`desactiver`, `statut(force:)`, `exporter`) ne sont pas consignés dans REVUES_LOT3.
+5. Les assertions à liste exacte sur `unwiredPorts` casseront à l'arrivée du bloc du lot 2, et la consigne de coordination n'existe que côté lot 3.
+6. L'en-tête de `Lot3Ports.swift` dit que toutes les méthodes reçoivent un contexte, mais `desactiver(token:)` n'en reçoit pas, sans que ce soit expliqué.
+
+#### Pour l'intégrateur
+- Si L2-T1 est intégré lui aussi : conserver une seule copie de `RPCResponse+ExceptionsMetier.swift` (conflit add/add) et une seule déclaration de `UnwiredPorts.erreur(port:tranche:lot:)`. Comme le consigne REVUES_LOT3, c'est `LOT2_PLAN.md` §2.4 qui fait foi.
+- Lot 1 n'est pas clos (T4b, T5, T6, T10, T12) : à chaque reprise de `feat/ios-lot1`, ajuster les listes `portsEnAttenteLot1` en gardant le bloc du lot 3, et formuler le critère de L1-T12 comme un filtre, jamais comme `unwiredPorts.isEmpty`.
+- Ni build ni test n'ont été lancés pour cette revue. La CI, `swift test` en concurrence stricte et les trois formats du simulateur, fait la preuve.
+
+### Intégration sur `feat/ios-lot3` (intégrateur, 2026-11-03)
+
+- `int-lot3` créée depuis `origin/feat/ios-lot3` (`79ad1a81`). `git merge --no-ff origin/feat/ios-lot1` : déjà à jour
+  (`3c0eed95`, déjà contenu depuis l'intégration de L3-T0 ; aucune avancée du lot 1 à reprendre, donc aucune liste
+  `portsEnAttenteLot1` à ajuster).
+- `git merge --no-ff origin/lot3/l3-t1` (`452973c6`) → `2f893735`, sans conflit.
+- Consignes « Pour l'intégrateur » : aucune branche `lot2/*` n'est contenue dans `feat/ios-lot3`, la déduplication de
+  `RPCResponse+ExceptionsMetier.swift` et de `UnwiredPorts.erreur(port:tranche:lot:)` ne se pose donc pas ici ; elle
+  s'appliquera à la rencontre avec L2-T1 (`LOT2_PLAN.md` §2.4 fait foi).
+- La liste `mineurs` citée par le rapport (fichier:ligne de chaque constat) n'accompagnait pas le texte transmis à
+  l'intégrateur ; les six constats restent ouverts, à traiter par T1 (correctif) ou par la tranche suivante qui touche
+  le fichier.
+
+## L3-T1b
+
+### Revue fraîche B8 — L3-T1b
+
+**Verdict : CLÔTURABLE.** Aucun bloquant, aucun majeur, huit constats mineurs.
+
+#### Périmètre
+
+J'ai relu `git diff origin/feat/ios-lot3...origin/lot3/l3-t1b` en entier : 9 fichiers, +1 766 lignes.
+- La base de fusion est bien la pointe actuelle de `feat/ios-lot3` (79ad1a81).
+- Quatre commits, tests d'abord : b9701f71 (tests) puis fbdd76a0 (code), et 81daa073 (tests des corrections) puis 65cbd9a4 (corrections).
+- Fichiers touchés : les sept composants et leur fichier de tests, tous nouveaux sous `JoleneDesign`, plus une puce dans `DECISIONS_LOT3.md`. Cette puce est un bloc séparé du bloc modifié par L3-T1 (vers la l.151 contre l.115-122), sans conflit attendu.
+- Rien sous `src/`, `supabase/`, `ios/`, `android/` ni `mobile-native/`, aucun fichier d'app, pas de CI.
+
+La revue s'est faite en lecture seule, sans build, sans test du projet et sans appel MCP.
+- Pour recouper, j'ai copié les six sources web dans le scratchpad et lancé deux petits scripts Node v24.14.0 hors dépôt : vecteurs de hachage et d'initiales, et rapports de contraste.
+- `LOTS_2_5_DECISIONS.md` du scratchpad a été effacé. Le cadre a donc été lu dans les copies du dépôt : `LOT3_PLAN.md` (§2.1, T1b, T4-T6, T11, T12), `DECISIONS_LOT3.md`, `PRINCIPES.md` et `CLAUDE.md`. Pour le lot 4, j'ai lu directement la branche `origin/lot4/l4-t1b`.
+
+#### Ce qui a été vérifié
+
+- **Blueprint T1b.** Les sept fichiers prévus sont là, avec tests de contraste clair et sombre, de cibles 44 pt et d'identifiants. Le critère « XCUITest indirect » est respecté. Les composants n'utilisent que des API iOS 16 (`ViewThatFits`, `dynamicTypeSize`, `.tint`, `overlay {}`) et les jetons dynamiques existants.
+- **Gardes de dérive.** J'ai relu dans les fichiers web chacune des 28 chaînes cherchées par les tests, ainsi que les blocs relus par extraction (`TEXTES.soignant`, liste `FALLBACK_COLORS`, lignes à 14 espaces de la note et des boutons) : toutes présentes à l'identique. Tous les numéros de ligne cités dans les docs sont exacts (ToggleCanal l.442-461, matrice l.402-413, `aria-label` l.410, MesGains l.664 et l.748, DemandePermissionPush l.20-28, l.149, l.158, l.164, ChangementMotDePasse l.198-242, AvatarUpload l.10-31, l.78, l.117, l.179).
+- **Vecteurs Avatar.** J'ai recalculé avec le code web sous Node les 22 hachages (et leurs index de couleur) et les 15 jeux d'initiales : 0 écart. J'ai contrôlé que les accents du fichier de tests sont précomposés (`É` = C3 89). Le port Swift (`&<<`, `&-`, `&+` sur `Int32`, puis `Int(magnitude)`) est équivalent à `| 0` suivi de `Math.abs`, y compris pour `Int32.min`. L'emoji donne `\ud83d` sur le web : c'est l'écart documenté.
+- **Contrastes.** J'ai recalculé chaque assertion. Toutes tiennent, par exemple :
+  - rose / cloud 2,51 ;
+  - rose-700 / rose100 3,54 ;
+  - bubblegum / lavender 5,18 ;
+  - butter-800 / butter100 4,09 ;
+  - blanc sur émeraude 4,87 (le minimum) ;
+  - `#2B183D` sur les arrêts du dégradé : de 4,95 à 10,81 ;
+  - raison du blocage sous voile : 2,04 à 2,12, donc bien sous AA comme le test l'affirme ;
+  - remplissage de la jauge sur mauve-100 : de 3,12 à 6,10 en clair.
+
+  `bubblegum` sur rose100 (4,44) reste exclu, selon le précédent `SlotList` du lot 1.
+- **Swift 6 et concurrence.** Les motifs sont ceux du lot 1, déjà verts en CI sous Xcode 26.4.1 :
+  - types imbriqués `Presentation` et `Appearance` non isolés, appelés depuis des tests non `@MainActor` ;
+  - `nonisolated static` uniquement sur des types `Sendable` ;
+  - tests de rendu marqués `@MainActor`.
+
+  Aucun `@unchecked`, `nonisolated(unsafe)`, `Task` ni `try!`.
+- **HARD STOP n°4.** Aucun texte juridique nouveau ni reformulé. Les textes repris (pré-prompt, libellés de force, critères, « Changer ma photo de profil ») sont verbatim et gardés par un test. Les textes seulement vocalisés (« environ », « Montant indisponible », « critère rempli / non rempli ») sont listés dans `DECISIONS_LOT3.md` pour relecture par Gabrielle (§6.7). Le texte affiché reste verbatim. B9 n'est pas touché.
+- **Corrections de la revue précédente.** M1 et m1 à m4, m7 à m9 sont effectifs dans le code et les tests :
+  - identifiants `push-preprompt-activer` / `-plus-tard` / `push-ouvrir-reglages`, avec surcharge et dérivation ;
+  - capsule sur une ligne, rectangle arrondi de rayon 8 au-delà (8 ≤ marge horizontale, le raisonnement est juste) ;
+  - fond de PermissionCard posé sur la carte bornée ;
+  - raison du blocage dans le libellé et hors du voile ;
+  - règle commune `spokenText` ;
+  - identifiants `compte-mdp-*`.
+
+  Le XCUITest `app.switches[id].tap()` touche le centre de la ligne, donc le libellé, ce qui bascule l'interrupteur une seule fois.
+- **Régressions lots 0 et 1.** Aucun identifiant existant touché ; DemoNoNetworkTests, sentinelle démo et matrice des trois formats sont inchangés. Seule collision de nom dans les branches : `StatusPill` du lot 4 (constat 1). `Segment` du lot 5 est imbriqué dans un type du cœur, sans conflit.
+- **Divers.** Aucun réseau, aucun littéral qui ressemble à un secret. `XCTSkip` sur une source absente est bien bloqué par la porte `skipped === 0` de la CI.
+
+#### Constats mineurs
+
+1. **`StatusPill.swift:28` — doublon du lot 4.** `origin/lot4/l4-t1b` contient déjà `Components/StatusPill.swift`, copie exacte de la version d'avant revue (fbdd76a0) ; la version corrigée (65cbd9a4) en diverge. À la rencontre des deux branches sur main, il y aura un conflit add/add. Avec la règle « garder les deux côtés », `public struct StatusPill` serait déclaré deux fois et le build casserait.
+   - **Correction :** écrire dans la PR et dans DECISIONS que la version lot 3 l'emporte et que la copie du lot 4 est supprimée. L'API utilisée par le lot 4 reste compatible.
+2. **`AmountRow.swift:108-126` — disposition instable.** `ViewThatFits` juge sur la largeur idéale du texte sur une ligne : un titre long fait passer la ligne en colonne. Dans T12, les lignes alterneront entre les deux dispositions, alors que le web garde toujours le montant à droite (MesGains l.736-737).
+   - **Correction :** disposition en ligne par défaut, titre flexible, colonne montant en `fixedSize` ; colonne seulement aux tailles d'accessibilité. Ajouter un test avec un titre long.
+3. **`AmountRow.swift:115-118` et `StatusPill.swift:120` — testabilité pour T12.** Avec `children: .ignore` et aucun trait, le montant affiché tel quel est illisible par XCUITest (le libellé est « environ … »), il n'y a qu'un identifiant pour les trois prévus par T12 (l.703-704), et les éléments sortent en `otherElements`.
+   - **Correction :** documenter le montage et le contrat d'assertion, et ajouter `.isStaticText`.
+4. **`AvatarView.swift:95,109-110` — zone de tap.** `scaledToFill` déborde ; `clipShape` ne coupe pas la zone de toucher, ce qui l'étendrait hors du cercle dans le bouton de T10.
+   - **Correction :** `.contentShape(forme)`.
+5. **`PermissionCard.swift:85-86` — largeur.** La doc dit 448 px (`sm:max-w-md`) mais la valeur est 480, figée par le test (l.521).
+   - **Correction :** aligner sur 448 ou justifier 480.
+6. **`PasswordCriteriaList.swift:101-102` — « Force : ».** Deux `Text` dans un `HStack` : l'espace dépend de l'espace final du premier, et le tout ne passe pas à la ligne comme une phrase aux tailles d'accessibilité.
+   - **Correction :** concaténer les `Text`, avec `foregroundColor` (cible iOS 16).
+7. **`JoleneDesignLot3Tests.swift:20` — angle mort de la CI.** Les six sources web relues ne sont pas dans les `paths` d'ios-swift-ci.yml (l.13-33, l.36-56), pas plus que `src/index.css` du lot 1. Une PR web merge sans rouge et le natif reste figé jusqu'à la prochaine PR iOS. Le report à T17 n'est noté que dans le scratchpad.
+   - **Correction :** l'inscrire dans DECISIONS_LOT3 ou PORTE_LOT3.
+8. **`AvatarView.swift:9` — promesse « aucun réseau » non verrouillée.** Aucune garde ne couvre JoleneDesign ; DemoNoNetworkTests ne lit que JoleneCore.
+   - **Correction :** garde statique sur `Sources/JoleneDesign` (aucun `URLSession`, `AsyncImage` ni `URL(string:`).
+
+#### Notes pour les tranches suivantes (pas des défauts de T1b)
+
+- **T12.** Sur le web, le montant « net salarié » est un bouton « Voir le détail de l'estimation salariale » (MesGains l.738-744), qui ouvre le détail des cotisations. Ce bouton n'apparaît ni dans LOT3_PLAN ni dans PARITE_SOIGNANT, et AmountRow n'a pas d'emplacement d'action. Il faut le porter (bouton autour de la ligne ou action dédiée) ou le déclarer comme écart assumé.
+- **T12 (opacité).** La matrice web utilise `opacity-40`, ToggleRow 0,5 partout. L'écart est insignifiant, à consigner si T6 veut la parité stricte.
+- **Autres tranches.** Les notes de l'auteur pour T5, T9, T10, T11 et T12 sont justes : T5 utilise `pushSoignant`, T9 et T10 fournissent une `Image` déjà chargée, T11 passe les critères de JoleneCore, T12 passe les chaînes de `MontantMission`.
+
+#### Conditions avant merge
+
+- **CI.** ios-swift-ci verte sur les trois formats (iphone, ipad-portrait, ipad-landscape), avec JoleneDesignTests exécutés, `skipped == 0` et `failed == 0`. Ce sera la **première exécution iOS réelle** des 28 tests : rendu UIHostingController, mesures 44 pt, retour à la ligne de StatusPill.
+- **Corps de PR.**
+  - Toolchain locale Xcode 16.4 / iOS 18.6 contre Xcode 26.4.1 en CI.
+  - Tests jamais exécutés sur iOS, seulement build-for-testing.
+  - « Livré ≠ mergé » : aucun XCUITest visible à cette tranche.
+  - Résolution du doublon StatusPill avec le lot 4 (constat 1).
+- **Gabrielle.** Les trois textes seulement vocalisés sont à relire (§6.7). Ce n'est ni un HARD STOP ni du B9.
+
+### Intégration sur `feat/ios-lot3` (intégrateur, 2026-11-03)
+
+- `git merge --no-ff origin/lot3/l3-t1b` (`65cbd9a4`) → `eee72265`. `DECISIONS_LOT3.md` fusionné automatiquement : la puce
+  de T1b et le bloc modifié par T1 sont distincts, comme la revue l'annonçait. Aucun autre fichier commun.
+- Constat 1 (doublon `StatusPill`) : `feat/ios-lot3` ne contient aucune branche du lot 4, le conflit add/add ne se pose
+  pas ici. Il reste à résoudre à la rencontre avec `lot4/l4-t1b` selon la correction proposée par la revue (une seule
+  déclaration, la version du lot 3) ; « garder les deux côtés » ne s'applique pas à ce fichier, puisque deux
+  `public struct StatusPill` ne compilent pas.
+- Les huit constats mineurs restent ouverts, à traiter par T1b ou par la tranche consommatrice (T5, T6, T10, T11, T12).
+  Les JoleneDesignTests (dont `JoleneDesignLot3Tests`) ont été compilés par `build-for-testing` (voir L3-T2), mais pas
+  exécutés : la première exécution iOS reste celle de la CI.
+
+## L3-T2
+
+### Revue fraîche B8 — L3-T2
+
+**Verdict : CLÔTURABLE.** Aucun bloquant, aucun majeur. Cinq mineurs sont à traiter dans la tranche ou dans le corps de PR.
+
+Branche relue : `origin/lot3/l3-t2` (e834ef0c), comparée à `origin/feat/ios-lot3` (79ad1a81) avec `git diff A...B`. 26 fichiers, dont 7 JSON golden.
+Mode : lecture seule (aucun build, aucun test projet, aucun MCP, aucune écriture). Le cadre scratchpad (LOTS_2_5_DECISIONS.md, LOT3_PLAN.md) est absent du disque. J'ai relu à la place `docs/mobile-swift/LOT3_PLAN.md` (§T2, v2), `DECISIONS_LOT3.md`, `PRINCIPES.md` et `CLAUDE.md` sur la base.
+
+#### Ce qui a été vérifié
+
+- **Exporteur** (`scripts/mobile/export-golden-vectors.mjs`)
+  - L'exception nommée D22 est bornée à `pushNative.ts`, clé = URL du parent. Les modules inertes lèvent à l'appel, à la lecture ou à la conversion. `./nativeLinks` reste réel.
+  - Garde des imports : présente (voir mineur 1).
+  - Les `case` sont extraits par l'AST TypeScript, bornés au corps de `navigationPathForEvent`, avec échec sur un `case` non littéral.
+  - `canon()` suit `JSON.stringify` (undefined, trous, toJSON, nombres non finis) ; sa garde de démarrage est relue.
+  - `canonEcrit` refuse `undefined` et vérifie l'aller-retour JSON. `verifieVitest` compare la forme écrite.
+  - Les cas vitest des 6 modules sont recopiés fidèlement : 15 attentes pushNative, paiement, finance, profil, modes.
+  - La CI fait bien `npm ci`. `typescript` et `@capacitor/core` sont des dépendances du dépôt.
+- **Ports Swift comparés ligne à ligne au web**
+  - `navigationPathForEvent` + `valeurTexte` / `segment` / `lienExplicite`.
+  - `missionFinanceDisplay` : contrat effectif, correction Rist, `??` JS, `Math.round`.
+  - `paiementSoignantUi` : `Number()`, `toFixed(2)` exact avec égalités vers la plus grande valeur absolue, `localeCompare` sur un domaine uuid, `??` contre texte vide.
+  - `valider-profil-soignant`, `{error}` en HTTP 200 compris.
+  - `session-count` : `parseInt`, `String(n)` aux chiffres les plus courts.
+  - `preferencesModesExercice` et listes RPPS (constantes.ts l.55, l.61 ; register-soignant l.49, l.260-261).
+- **Émulation hors disque de la logique Swift relue, contre les vecteurs versionnés : 0 divergence**
+  - paiement : 284 répartitions + 344 classements ;
+  - finance : 560, y compris les assertions de type strict, aucun montant texte ;
+  - push : 873 vecteurs sans lien ;
+  - session : 72 (seuls écarts : −0 contre 0, égaux en Swift) ;
+  - profil : 277.
+  - `typesRoutes` du web est identique à `PushRouting.typesRoutes` : 32 types, même ordre.
+  - Les liens explicites (139 vecteurs) dépendent de `JoleneLink.normalize` du lot 0, non modifié. Le contrôle à la main des 25 formes de `LIENS` ne montre aucun écart.
+- **Libellés (HARD STOP n°4)**
+  - Ils sont verbatim, octet pour octet, et en NFC des deux côtés : missionFinanceDisplay.ts l.103-104, l.115-116, l.126-127 ; paiementSoignantUi.ts l.103-114. Les citations de lignes sont exactes.
+  - Aucun texte nouveau. Modes d'exercice et RPPS : codes et listes seulement, aucun blocage de mode d'exercice. L'exception AS (`InscriptionSoignant.tsx` l.221-222) est bien renvoyée à T8.
+- **Décisions et blueprint**
+  - D5 : les colonnes exactes de `MesGains.tsx` l.95 sont vérifiées, la correction reste inactive ; un témoin à 336,96 est présent.
+  - D11 et D22 sont respectées.
+  - Écarts déclarés et acceptables : 7 fichiers au lieu de 6, rôles en plus, `incrementerSession`, code unique `PROFIL_INVALIDE`.
+- **Intégration**
+  - `ValeurJSON.swift` a le même blob que L2-T2 (ce9754d3).
+  - Aucune collision de type avec la base, L2-T2, L3-T0, L3-T1 ou L3-T1b.
+  - Le filtre de chemins `ios-swift-ci.yml` couvre les 6 modules (pull_request et push).
+- **Concurrence**
+  - Types `Sendable`, règles statiques pures, aucun état partagé.
+  - Je n'ai pas repéré d'erreur de compilation ni de `var` non muté (le job CI exige 0 avertissement).
+- **Non-régression lots 0 et 1** : ni UI, ni identifiants d'accessibilité, ni DemoNoNetworkTests, ni sentinelle démo, ni formats de lien ne sont touchés. Aucun littéral ressemblant à un secret. Aucun fichier hors périmètre.
+
+#### Mineurs
+
+1. **Garde des imports de `pushNative.ts` par regex** (`export-golden-vectors.mjs:139`). Elle ignore les guillemets doubles, les imports à effet de bord et `export … from`. → Passer par l'AST TypeScript.
+2. **Le rejeu golden du push contourne `path(userInfo:)`** (`RulesPushRoutingTests.swift:15`, `PushRouting.swift:83`). → Rejouer via `userInfo` (String/NSNumber).
+3. **`montantRestant` calculé côté client** (`EtatPaiement.swift:95`). Il est en tension avec PRINCIPES §3 / D4, et D5 ne couvre que la correction Rist. → Le consigner pour T12/T13.
+4. **Primitive `trim` en double avec `JSTexte` de L2-T2** (`PrimitivesJS.swift:24-26`). → Tâche d'intégration tracée : un seul port.
+5. **Précisions de doc** (`ValidationProfil.swift:10, :65`). → Citer le `catch` l.197-198 ; parler de « toute unité de substitution non appariée ».
+
+#### Ce que je n'ai pas pu prouver (laissé à la CI)
+
+- `swift build --build-tests` / `swift test` de JoleneCore sur macOS et sur le simulateur.
+- `node scripts/mobile/export-golden-vectors.mjs` suivi de `git diff --exit-code`, en particulier pour l'absence de changement des fichiers lots 0 et 1 avec le nouveau `Collecteur`.
+- Les 139 vecteurs de liens rejoués contre `JoleneLink.normalize`.
+
+#### Pour le corps de PR
+
+Reprendre les conflits annoncés avec L2-T2 :
+- la double déclaration de `constantes` ;
+- les sections de règles à prendre entières de chaque branche ;
+- `fichiers` ;
+- `Golden.fichiers` ;
+- le filtre de chemins de `ios-swift-ci.yml`.
+
+Y ajouter les mineurs 3 et 4.
+
+### Intégration sur `feat/ios-lot3` (intégrateur, 2026-11-03)
+
+- `git merge --no-ff origin/lot3/l3-t2` (`e834ef0c`) → `32e2d0f7`, sans conflit. Aucune branche `lot2/*` n'étant
+  contenue dans `feat/ios-lot3`, les conflits annoncés avec L2-T2 (`constantes`, sections de règles, `fichiers`,
+  `Golden.fichiers`, filtre de chemins de `ios-swift-ci.yml`) et le mineur 4 (un seul port de `trim`/`JSTexte`) se
+  poseront à la rencontre avec le lot 2, pas ici. Les cinq mineurs restent ouverts.
+- **Vérifications exécutées sur `32e2d0f7`** (pointe contenant T1, T1b et T2 ; c'est ce que les trois revues avaient
+  laissé à la CI) :
+  - `node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs
+    tests/node/check-rpc-contracts-lot3.node.mjs` : 136 tests, 0 échec, 0 ignoré. Aucun test Node n'est dédié à
+    `export-golden-vectors.mjs` : ses gardes (`canon`, `canonEcrit`, `verifieVitest`, `case` bornés) s'exécutent à
+    l'export ci-dessous.
+  - `node scripts/mobile/export-golden-vectors.mjs` : 4 306 vecteurs, dont ceux du lot 3 (`push-routing` 1 013,
+    `session-count` 72, `mission-finance-display` 560, `paiement-soignant-ui` 651, `valider-profil-soignant` 277,
+    `preferences-modes-exercice` 97, `professions-rpps` 23). Aucun diff sous `ios-native/` ni `scripts/mobile/`, aucun
+    fichier non versionné : les fichiers des lots 0 et 1 sont inchangés avec le nouveau `Collecteur`.
+  - `node scripts/mobile/export-demo-fixtures.mjs` : aucun diff.
+  - `node scripts/mobile/check-rpc-contracts.mjs` : 41 RPC, aucune dérive.
+  - `swift build --build-tests` puis `swift test`, avec `-Xswiftc -strict-concurrency=complete`, toolchain locale
+    Xcode 16.4 (16F6) : JoleneCore 356 tests XCTest, 0 échec, 0 ignoré, 0 avertissement ; JoleneSupabase 200 tests,
+    0 échec, 0 ignoré, 0 avertissement (hors `.build/checkouts/`).
+  - `xcodebuild build-for-testing -scheme Jolene` sur le simulateur existant « Jolene iPhone 16 Pro Max » (iOS 18.6),
+    `-derivedDataPath` dans le worktree, `COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO` : `TEST BUILD
+    SUCCEEDED`, 0 avertissement de compilation (seules les notes « Metadata extraction skipped » de
+    `appintentsmetadataprocessor`). Cibles compilées : app, JoleneUITests, JoleneCoreTests, JoleneSupabaseTests et
+    JoleneDesignTests.
+- **Non exécuté** : aucun test sur simulateur, ni unitaire iOS ni XCUITest (disque presque plein, consigne de la
+  tâche). L'exécution sur les trois formats (iphone, ipad-portrait, ipad-landscape) avec `skipped == 0` reste la preuve
+  apportée par la CI, en Xcode 26.4.1 (16.4 en local).
+- Aucun correctif d'intégration n'a été nécessaire, donc pas de commit `fix(ios-native): intégration lot 3 …`. Les
+  dossiers de build (`.build` des packages, `-derivedDataPath`) ont été supprimés après vérification.
