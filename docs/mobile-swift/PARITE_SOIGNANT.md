@@ -9,18 +9,32 @@ Critères : lot 1 renseignée à 45 % au moins ; lot 4 100 % statuée, zéro « 
 cœur, matrice signée par Gabrielle. Les routes « redirection » du web sont des alias : natif signifie que le
 routeur de liens (`JoleneCore/Links/LinkRouter.swift`) envoie l'alias vers l écran natif cible.
 
-Dernière mise à jour : 2026-11-01 (initialisation lot 0, 50 routes ; relecture lot 0 : écart rôle `INCONNU`).
+Dernière mise à jour : 2026-11-02 (lot 1, T3 revue B8, 2e passe : ligne Accueil repassée « en cours », renvois
+web masqués jusqu'à T10 et écarts avec le web complétés, preuve de la révision corrigée à acquérir — le run
+[41525050437](https://github.com/Gabpcd/JJJJJ/actions/runs/41525050437) prouvait la révision `2afad001` ; T0 :
+sous-lignes Mes missions / Favoris / détail mission, cibles alignées sur `LOT1_PLAN.md` §1 et §7). Aucune ligne n'est statuée « natif » sans l'URL d'un run vert de `ios-swift-ci.yml` (gate
+`Passed`, `skipped = 0`, iPhone, iPad portrait et iPad paysage) qui contient sa preuve : « mergé » ou
+« compile » n'est pas « livré » (CLAUDE.md, PRINCIPES §7).
+
+Sous-lignes (préfixées `›`) : une route web qui regroupe plusieurs onglets ou vues est détaillée pour que
+chaque preuve soit attribuable ; la ligne de la route passe « natif » quand toutes ses sous-lignes le sont.
 
 | Route | Écran web (src/App.tsx) | Statut natif | Lot cible | Preuve |
 |---|---|---|---|---|
-| `/soignant/tableau-de-bord` (l.312) | `DashboardSoignant` | en cours lot 0 (onglet Accueil, contenu lot 1) | 0 (onglet), 1 (contenu) | XCUITest démo JoleneUITests (ios-swift-ci.yml, 3 formats) — en cours |
-| `/soignant/profil` (l.313) | `ProfilSoignant` | à faire | 3 | — |
+| `/soignant/tableau-de-bord` (l.312) | `DashboardSoignant` | en cours (lot 1 T3, revue B8 2e passe : « natif » dès le run vert de la révision corrigée. Porté : salutation, mes prochaines missions, missions pour vous, missions proposées (lecture et ouverture du détail), gains du mois relus mission par mission, compteurs de notifications non lues et d'oubli de pointage, état d'erreur et reprise, « Vérifier ma session » qui relit le tableau ; bandeaux `BandeauAlerte48h` et « cumul d'activité » exclus, HARD STOP ; non portés : checklist d'activation, litiges, documents expirants, parrainage, widget de pointage (lot 2). Écarts avec le web, à signer : (1) une fiche mission non relue ne rend « à confirmer » que sa mission (le web : tout le planning) ; (2) carte des gains masquée si aucun montant n'est positif (le web : « Ce mois :  sur N missions ») ; (3) « Missions pour vous » sans l'estimation « ~X € brut indicatif / net estimé » du web (`montantFinanceAfficheMission`, l.579-592 et l.635) : taux horaire seul ; (4) durée du créneau (« · 8 h », l.542) absente des prochaines missions ; (5) carte des gains non cliquable (le web mène à `/soignant/mes-gains`, l.677 ; onglet Revenus encore placeholder) ; (6) début du mois des gains en heure de Paris (le web : heure locale de l'appareil, l.94-98 ; identiques sur un appareil réglé sur la France) ; (7) propositions sans Accepter / Refuser avant T6b : la carte ouvre le détail de la mission, qui ne permet pas encore de répondre (point de fusion T6b, verrou T12 n°5) ; (8) aucun rafraîchissement automatique toutes les 60 s (le web : `refetchInterval: 60_000`, l.237) : relecture à l'apparition au-delà de 60 s et tirer-pour-rafraîchir seulement ; (9) notifications non lues et oubli de pointage : compteur sans bouton de renvoi web jusqu'à T10 (présentateur `.safari` `SFSafariViewController` ; un `openURL` d'un chemin `/soignant/*` reviendrait dans l'app par lien universel, sans effet), verrou T12 n°2 ; (10) bouton calendrier absent jusqu'à T5 (point d'extension), verrou T12 n°1) | 1 | à acquérir sur la révision corrigée : `DemoAccueilTests.testAccueilDemo` (dont absences affirmées de `accueil-calendrier-demo-assignee-001`, `accueil-notifications-action`, `accueil-oubli-pointage-action`) et `.testAccueilErreurPuisReprise` sur iphone / ipad-portrait / ipad-landscape, gate `Passed`, `skipped = 0`. Révision précédente (`2afad001`, renvois web par `openURL`) : run [41525050437](https://github.com/Gabpcd/JJJJJ/actions/runs/41525050437), gate `Passed` sur les trois formats (277 réussis, 0 échoué, 0 ignoré) — ne prouve pas la révision corrigée. Unitaires (`swift test` local vert, 02/11/2026) : `DemoDashboardTests`, `AccueilAssemblageTests`, `AccueilModelTests` (délai unique, chargements sérialisés, « Vérifier ma session »), `DashboardDecodingTests`, `SupabaseDashboardGatewayTests` |
+| `/soignant/profil` (l.313) | `ProfilSoignant` | à faire (lot 1 : soignant au profil incomplet renvoyé vers le web via Safari, décision 3) | 3 | — |
 | `/soignant/mon-compte` (l.314) | `MonCompteSoignant` | à faire | 1 | — |
+| `/soignant/mon-compte` › Suppression de compte (`SectionConfidentialite`) | edge `delete-account` | natif (lot 1 T8, Apple 5.1.1 : onglet Profil › Suppression de compte ; texte RGPD verbatim web en tutoiement tant que non validé, HARD STOP n°4) | 1 | Niveau 1 : `SupabaseAccountGatewayTests` (une réponse de l'edge = un test), `CompteModelTests`, `CompteSuppressionVerbatimTests` ; niveau 2 : `DemoCompteTests` (ios-swift-ci.yml, 3 formats) ; niveau 3 à venir (T11) : STAGING `soignants.nom = 'Supprimé'` relu, B9 données, décision 13 |
+| `/soignant/mon-compte` › Sécurité (biométrie) | — (natif seulement, verrou `LAContext`, décision 1) | à faire | 1 (T9) | — (prévu : `DemoSessionTests`, `BiometricGateTests`, recette appareil Face ID) |
 | `/soignant/missions` (l.315) | `MissionsSoignant` | à faire | 1 | — |
-| `/soignant/recherche-missions` (l.316) | `RechercheMissions` | en cours lot 0 (Explorer liste) | 0 (lecture), 1 (candidature) | XCUITest démo JoleneUITests (ios-swift-ci.yml, 3 formats) — en cours |
-| `/soignant/swipe-missions` (l.317) | `RedirectionSwipeMissions` | à faire | 4 | — |
-| `/soignant/missions/serie/:serieId` (l.318) | `DetailSerieSoignant` | à faire | 1 | — |
-| `/soignant/missions/:id` (l.319) | `DetailMissionSoignant` | en cours lot 0 (détail mission, lecture) | 0 (lecture), 1 (candidature) | XCUITest démo JoleneUITests (ios-swift-ci.yml, 3 formats) — en cours |
+| `/soignant/missions` › Candidatures | `MissionsSoignant` onglet `candidatures` | à faire (lot 1 T5 : liste PostgREST `candidatures`, pagination 50, noms via `fn_etablissements_safe`) | 1 | — (prévu : `DemoMesMissionsTests`, `SupabaseMesMissionsGatewayTests`) |
+| `/soignant/missions` › À venir | `MissionsSoignant` onglet `a-venir` | à faire (lot 1 T5 : missions ASSIGNEE, ajout au calendrier EventKit un événement par créneau PREVISIONNEL, décision 18) | 1 | — (prévu : `DemoMesMissionsTests`, `CalendarWriterTests`, recette appareil EventKit) |
+| `/soignant/missions` › Passées | `MissionsSoignant` onglet `passees` | à faire (lot 1 T5 : pagination 50, montants serveur tels quels) | 1 | — (prévu : `DemoMesMissionsTests`) |
+| `/soignant/recherche-missions` (l.316) | `RechercheMissions` | en cours lot 0 (Explorer liste) ; lot 1 T4a implémenté, preuves XCUITest 3 formats en attente : feuille de filtres (ville/CP, profession, rayon 5-100 km pas de 5, taux minimum, contrat, horaires, urgentes ; brouillon + « Afficher les missions », « Réinitialiser » = web, taux remis à 0), chips 🔥/📅/🌙/☀️, compteur, badge des critères actifs, état vide « effacer les filtres rapides » / « élargir le rayon » + « Actualiser » toujours présent et tirer pour actualiser, lectures bornées 15 s (décision 14) et lecture supplantée annulée, carte MapKit lecture seule dans le détail (aperçu hors ligne en démo : aucune tuile, aucune requête) ; point ouvert : chaque critère relit le serveur, le web refiltre localement ville / rayon / contrat / horaire (`MissionsListModel`) ; vue Carte globale, swipe et alerte 1-tap : lot 4 | 0 (lecture), 1 (filtres, candidature) | XCUITest démo JoleneUITests (ios-swift-ci.yml, 3 formats) — en attente ; lot 1 : `DemoExplorerTests` (4 cas), `ExplorerFiltresTests`, `MissionsBusinessFiltresTests`, `ExplorerModelsTests`, `CarteMissionTests` ; carte MapKit réelle : `RECETTE_DEVICE_LOT1.md` §8 (en attente), préalable au statut « natif » |
+| `/soignant/swipe-missions` (l.317) | `RedirectionSwipeMissions` | à faire (routé vers Explorer liste par `LinkRouter`, swipe lot 4) | 4 | — |
+| `/soignant/missions/serie/:serieId` (l.318) | `DetailSerieSoignant` | renvoi web assumé au lot 1 (décision 11 : vecteurs golden de sélection de série portés en T2, détail de série natif au lot 4) | 4 (port), 1 (golden) | — (prévu : `RulesSelectionSerieTests`) |
+| `/soignant/missions/:id` (l.319) | `DetailMissionSoignant` | en cours lot 0 (détail mission, lecture) | 0 (lecture), 1 (candidature, présence), 2 (pointage) | XCUITest démo JoleneUITests (ios-swift-ci.yml, 3 formats) — en cours |
+| `/soignant/missions/:id` › lecture + candidature + confirmation de présence (lot 1), pointage (lot 2) | `DetailMissionSoignant` : POSTULER / ACCEPTER / PROPOSITION via `fn_confirmer_action_planning_v1`, choix de contrat, récapitulatif des créneaux, soft-gate `peut_candidater` (décision 3), bloc « Confirme ta présence » via `fn_confirmer_presence_mission` (décision 16), « Annuler ma participation » via `fn_annuler_mission_soignant` / `fn_annuler_candidature_soignant` (décision 4) ; `BlocConformite` non porté, refus `[CODE DU TRAVAIL]` verbatim (décision 2) | à faire (lot 1 T6a/T6b/T6c/T7) ; pointage `fn_pointer_*` lot 2 | 1 (candidature, présence, annulation), 2 (pointage) | — (prévu : `DemoCandidatureTests`, `DemoPresenceTests`, `DemoAnnulationTests` + STAGING T11 : candidature posée puis relue, proposition acceptée relue, présence relue, annulation relue) |
 | `/soignant/mes-documents` (l.320) | `MesDocuments` | à faire | 2 | — |
 | `/soignant/disponibilites` (l.321) | `MesDisponibilites` | à faire | 4 | — |
 | `/soignant/conformite` (l.322) | `ConformiteSoignant` | à faire | 2 | — |
@@ -46,6 +60,8 @@ Dernière mise à jour : 2026-11-01 (initialisation lot 0, 50 routes ; relecture
 | `/soignant/parametres/recherches-sauvegardees` (l.342) | `PageRecherchesSauvegardees` | à faire | 4 | — |
 | `/soignant/pool-urgence` (l.343) | `PoolUrgenceSoignant` | à faire | 4 | — |
 | `/soignant/mes-favoris` (l.344) | `MesFavorisSoignant` | à faire | 1 | — |
+| `/soignant/mes-favoris` › Missions | `MesFavorisSoignant` onglet missions (`BoutonSauvegarderMission`) | à faire (lot 1 T4b : ajout/retrait via PostgREST `missions_sauvegardees` sous RLS, étoile sur carte et détail, décision 8) | 1 | — (prévu : `DemoFavorisTests`, `SupabaseFavorisGatewayTests`) |
+| `/soignant/mes-favoris` › Établissements | `MesFavorisSoignant` onglet établissements | à faire (lot 1 T4b : lecture `fn_mes_favoris_etablissements` + retrait `fn_toggle_favori_etablissement(false)` ; **pas d'ajout** en natif, non exposé sur le web, décision 8) | 1 | — (prévu : `DemoFavorisTests`) |
 | `/soignant/mes-matches` (l.384) | redirection vers `/soignant/missions` | à faire | 1 (alias de /soignant/missions) | — |
 | `/soignant/documents` (l.385) | redirection vers `/soignant/mes-documents?tab=justificatifs` | à faire | 2 (alias de /soignant/mes-documents) | — |
 | `/soignant/planning` (l.390) | redirection vers `/soignant/missions?tab=a-venir` | à faire | 1 (alias de /soignant/missions) | — |
@@ -69,8 +85,13 @@ Dernière mise à jour : 2026-11-01 (initialisation lot 0, 50 routes ; relecture
 - **Lot 0** : trois lignes « en cours » (Explorer liste, détail mission en lecture, onglet Accueil en coquille). Elles
   passent « natif » quand `JoleneUITests` les couvre sur iPhone, iPad portrait et iPad paysage (job « UI » de
   `ios-swift-ci.yml`) et que la connexion STAGING est exécutée une fois (`ios-swift-staging.yml`).
-- **Lot 1** : tableau de bord, Mes missions, candidature (`fn_confirmer_action_planning_v1`), séries, favoris,
-  Mon compte avec suppression de compte (exigence Apple 5.1.1).
+- **Lot 1** (`LOT1_PLAN.md` §1, décisions §7 du 02/11/2026) : tableau de bord, Mes missions (3 onglets +
+  calendrier EventKit), Explorer filtres/favoris/carte, candidature (`fn_confirmer_action_planning_v1`),
+  confirmation de présence (`fn_confirmer_presence_mission`), annulation avec justificatif, Mon compte avec
+  suppression de compte (exigence Apple 5.1.1), session durcie (audit, biométrie, drapeaux `fn_param_bool`),
+  Universal Links et reset mot de passe (`token_hash` et implicit seulement, décision 7). Les séries restent
+  « renvoi web assumé » au lot 1 (décision 11). Comptage du critère « ≥ 45 % renseignée » : sur les 50 routes
+  (les sous-lignes `›` précisent la preuve d'une route, elles ne comptent pas comme routes).
 - **Lot 2** : présences et pointage, documents, conformité, contrats OTP (alias `/soignant/contrats`, `/soignant/dpae`).
 - **Lot 3** : profil, revenus, Stripe Connect, notifications et préférences push, inscription
   native avec le repli `parcours_inscription` du rôle `INCONNU` (`useRole.ts` l.150-165) :

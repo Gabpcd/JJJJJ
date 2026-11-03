@@ -2,7 +2,8 @@ import SwiftUI
 import JoleneCore
 import JoleneDesign
 
-/// Onglet Profil du lot 0 : identité minimale, déconnexion, diagnostic démo.
+/// Onglet Profil du lot 0 : identité minimale, déconnexion, diagnostic démo ; suppression de compte
+/// (lot 1, T8, `SuppressionCompteSection`). Identifiant de la liste : `profile-list`.
 struct ProfileScreen: View {
     let container: AppContainer
     @ObservedObject var session: SessionStore
@@ -37,7 +38,10 @@ struct ProfileScreen: View {
                 }
                 #endif
             }
+            // Lot 1, T8 (Apple 5.1.1) : dernière section, comme sur le web.
+            SuppressionCompteSection(session: session, snapshot: snapshot, finDeCompte: container.finDeCompte)
         }
+        .accessibilityIdentifier("profile-list")
         .scrollContentBackground(.hidden)
         .background(JoleneColor.lavender.ignoresSafeArea())
         .navigationTitle("Profil")

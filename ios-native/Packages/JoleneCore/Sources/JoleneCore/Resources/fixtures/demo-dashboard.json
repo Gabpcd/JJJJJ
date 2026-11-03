@@ -1,0 +1,256 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "dashboard": {
+    "profil": {
+      "prenom": "Camille",
+      "nom": "Démo",
+      "telephone": null,
+      "date_naissance": null,
+      "profession": "IDE",
+      "type_contrat": "CDD",
+      "numero_rpps": null,
+      "numero_adeli": null,
+      "rpps_verifie": false,
+      "adresse_lat": 48.8566,
+      "adresse_lng": 2.3522,
+      "tous_documents_valides": false,
+      "identite_verifiee": false,
+      "score_fiabilite": null,
+      "total_missions_terminees": 1,
+      "heures_cumulees": 8,
+      "eligible_conversion_3200h": false,
+      "type_exercice": "MIXTE",
+      "mandat_facturation_signe": false
+    },
+    "missions_ouvertes": [
+      {
+        "id": "demo-mission-001",
+        "intitule": "Démonstration · Médecine polyvalente 1",
+        "service": "Médecine polyvalente",
+        "debut_le": "2026-11-03T07:00:00.000Z",
+        "fin_le": "2026-11-03T15:00:00.000Z",
+        "duree_heures": 8,
+        "nb_creneaux": 1,
+        "taux_horaire_base": 23,
+        "total_brut": null,
+        "net_a_payer": null,
+        "net_estime": null,
+        "est_urgente": true,
+        "etablissement_id": "demo-etab-1",
+        "profession_requise": "IDE",
+        "type_contrat_recherche": "SALARIE",
+        "accepte_non_specialises": null,
+        "specialite_medicale_requise": null,
+        "etab_nom": "Établissement fictif République"
+      },
+      {
+        "id": "demo-mission-002",
+        "intitule": "Démonstration · Soins de suite 2",
+        "service": "Soins de suite",
+        "debut_le": "2026-11-04T07:00:00.000Z",
+        "fin_le": "2026-11-04T15:00:00.000Z",
+        "duree_heures": 8,
+        "nb_creneaux": 1,
+        "taux_horaire_base": 24,
+        "total_brut": null,
+        "net_a_payer": null,
+        "net_estime": null,
+        "est_urgente": false,
+        "etablissement_id": "demo-etab-2",
+        "profession_requise": "IDE",
+        "type_contrat_recherche": "SALARIE",
+        "accepte_non_specialises": null,
+        "specialite_medicale_requise": null,
+        "etab_nom": "Établissement fictif des Lilas"
+      },
+      {
+        "id": "demo-mission-003",
+        "intitule": "Démonstration · Médecine polyvalente 3",
+        "service": "Médecine polyvalente",
+        "debut_le": "2026-11-05T07:00:00.000Z",
+        "fin_le": "2026-11-05T15:00:00.000Z",
+        "duree_heures": 8,
+        "nb_creneaux": 1,
+        "taux_horaire_base": 25,
+        "total_brut": null,
+        "net_a_payer": null,
+        "net_estime": null,
+        "est_urgente": false,
+        "etablissement_id": "demo-etab-3",
+        "profession_requise": "IDE",
+        "type_contrat_recherche": "LIBERAL",
+        "accepte_non_specialises": null,
+        "specialite_medicale_requise": null,
+        "etab_nom": "Cabinet fictif du Parc"
+      }
+    ],
+    "mes_missions": [
+      {
+        "id": "demo-assignee-001",
+        "intitule": "Démonstration · Mission assignée 1",
+        "debut_le": "2026-11-05T07:00:00.000Z",
+        "fin_le": "2026-11-05T15:00:00.000Z",
+        "duree_heures": 8,
+        "statut": "ASSIGNEE",
+        "etablissement_id": "demo-etab-1",
+        "etab_nom": "Établissement fictif République"
+      },
+      {
+        "id": "demo-assignee-002",
+        "intitule": "Démonstration · Mission assignée 2",
+        "debut_le": "2026-11-09T07:00:00.000Z",
+        "fin_le": "2026-11-10T15:00:00.000Z",
+        "duree_heures": 16,
+        "statut": "ASSIGNEE",
+        "etablissement_id": "demo-etab-2",
+        "etab_nom": "Établissement fictif des Lilas"
+      }
+    ],
+    "documents": [
+      {
+        "id": "demo-document-001",
+        "type_document": "CARTE_IDENTITE",
+        "valide_jusqua": "2030-06-30",
+        "statut_verification": "VERIFIE"
+      }
+    ],
+    "heures_semaine": 8,
+    "gains_mois": {
+      "net_total": 224.6,
+      "brut_total": 208,
+      "nb_missions": 1
+    },
+    "gains_6mois": [
+      {
+        "mois": "2026-11",
+        "net": 224.6
+      }
+    ],
+    "missions_semaine_cal": [
+      {
+        "debut_le": "2026-11-05T07:00:00.000Z",
+        "statut": "ASSIGNEE"
+      }
+    ],
+    "propositions": [
+      {
+        "id": "demo-proposition-001",
+        "mission_id": "demo-mission-011",
+        "cree_le": "2026-11-01T23:30:00.000Z",
+        "type_contrat_choisi": null,
+        "missions": {
+          "id": "demo-mission-011",
+          "intitule": "Démonstration · Médecine polyvalente 11",
+          "debut_le": "2026-11-13T07:00:00.000Z",
+          "fin_le": "2026-11-13T15:00:00.000Z",
+          "duree_heures": 8,
+          "taux_horaire_base": 25,
+          "net_estime": null,
+          "type_contrat_recherche": "SALARIE",
+          "etablissement_id": "demo-etab-2",
+          "est_urgente": true,
+          "etab_nom": "Établissement fictif des Lilas"
+        }
+      }
+    ],
+    "heures_totales_terminees": 8,
+    "missions_oubliees_count": 0,
+    "notifs_non_lues": 2
+  },
+  "missions_assignees": [
+    {
+      "id": "demo-assignee-001",
+      "intitule": "Démonstration · Mission assignée 1",
+      "description": "Mission entièrement fictive pour découvrir la navigation native. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Médecine polyvalente",
+      "profession_requise": "IDE",
+      "specialite_medicale_requise": null,
+      "accepte_non_specialises": null,
+      "debut_le": "2026-11-05T07:00:00.000Z",
+      "fin_le": "2026-11-05T15:00:00.000Z",
+      "duree_heures": 8,
+      "nb_creneaux": 1,
+      "taux_horaire_base": 27,
+      "taux_rist_plafonne": null,
+      "rist_plafond_applique": false,
+      "total_brut": null,
+      "net_a_payer": null,
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "statut": "ASSIGNEE",
+      "etablissement_id": "demo-etab-1",
+      "type_contrat_recherche": "SALARIE",
+      "boostee_le": null,
+      "mode_remuneration": "HORAIRE",
+      "retrocession_pct": null,
+      "soignant_assigne_id": "demo-soignant",
+      "presence_confirmee_le": null,
+      "creneaux": [
+        {
+          "id": "demo-assignee-001-slot-1",
+          "mission_id": "demo-assignee-001",
+          "debut": "2026-11-05T07:00:00.000Z",
+          "fin": "2026-11-05T15:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    {
+      "id": "demo-assignee-002",
+      "intitule": "Démonstration · Mission assignée 2",
+      "description": "Mission entièrement fictive pour découvrir la navigation native. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Soins de suite",
+      "profession_requise": "IDE",
+      "specialite_medicale_requise": null,
+      "accepte_non_specialises": null,
+      "debut_le": "2026-11-09T07:00:00.000Z",
+      "fin_le": "2026-11-10T15:00:00.000Z",
+      "duree_heures": 16,
+      "nb_creneaux": 2,
+      "taux_horaire_base": 30,
+      "taux_rist_plafonne": null,
+      "rist_plafond_applique": false,
+      "total_brut": null,
+      "net_a_payer": null,
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "statut": "ASSIGNEE",
+      "etablissement_id": "demo-etab-2",
+      "type_contrat_recherche": "LIBERAL",
+      "boostee_le": null,
+      "mode_remuneration": "HORAIRE",
+      "retrocession_pct": null,
+      "soignant_assigne_id": "demo-soignant",
+      "presence_confirmee_le": null,
+      "creneaux": [
+        {
+          "id": "demo-assignee-002-slot-1",
+          "mission_id": "demo-assignee-002",
+          "debut": "2026-11-09T07:00:00.000Z",
+          "fin": "2026-11-09T15:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "demo-assignee-002-slot-2",
+          "mission_id": "demo-assignee-002",
+          "debut": "2026-11-10T07:00:00.000Z",
+          "fin": "2026-11-10T15:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    }
+  ],
+  "gains_missions": [
+    {
+      "id": "demo-terminee-001",
+      "type_contrat_applique": "SALARIE",
+      "type_contrat_recherche": "SALARIE",
+      "total_brut": 208,
+      "net_a_payer": 224.6,
+      "net_estime": 162.4
+    }
+  ]
+}

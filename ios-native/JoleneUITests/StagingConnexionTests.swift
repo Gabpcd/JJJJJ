@@ -75,7 +75,7 @@ final class StagingConnexionTests: JoleneUITestCase {
 
         // 3. Accueil visible, rôle SOIGNANT (réponse serveur fn_get_my_role via le port de rôle).
         require("La session STAGING est prête : Accueil affiché", timeout: 60) {
-            self.tabBarExists && self.visible(self.element("placeholder-accueil"))
+            self.tabBarExists && self.containerVisible(self.element("accueil-screen"))
         }
         XCTAssertFalse(element("login-error").exists, "aucune erreur de connexion")
         XCTAssertFalse(element("access-blocked").exists, "le compte TEST est un soignant servi nativement")
@@ -90,7 +90,7 @@ final class StagingConnexionTests: JoleneUITestCase {
         app.terminate()
         launchStaging()
         require("La session est restaurée après arrêt (Keychain)", timeout: 60) {
-            self.tabBarExists && self.visible(self.element("placeholder-accueil"))
+            self.tabBarExists && self.containerVisible(self.element("accueil-screen"))
         }
         XCTAssertFalse(element("login-scroll").exists, "aucune saisie demandée après restauration")
 
