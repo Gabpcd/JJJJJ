@@ -61,11 +61,12 @@ public actor SessionController {
 
     /// Restaure la session persistée puis résout rôle et profil.
     ///
-    /// Revalidation (identité déjà active et état `.ready`, reprise après 30 minutes) :
-    /// l'état courant est conservé pendant la vérification (pas de passage par `.loading`,
-    /// `MainTabView` n'est pas démonté) et une erreur transitoire (réseau, délai) le laisse
+    /// Revalidation (identité déjà active et état `.ready` ou `.readyEtablissement`, reprise après
+    /// 30 minutes) : l'état courant est conservé pendant la vérification (pas de passage par
+    /// `.loading`, les onglets ne sont pas démontés) et une erreur transitoire (réseau, délai) le laisse
     /// intact. Seule une absence de session confirmée par le port, ou une réponse serveur
-    /// (rôle, profil) change l'état.
+    /// (rôle, profil, périmètre établissement) change l'état ; un changement d'espace ou
+    /// d'établissement avance l'epoch (`frontiereDePerimetre`, lot 5 T2a).
     public func start() async -> SessionState {
         let startedAt = currentEpoch
         let revalidating = activeUserId != nil && currentState.isReady
@@ -183,9 +184,68 @@ public actor SessionController {
 
     private func resolveAndStore(user: AuthenticatedUser, quiet: Bool) async -> SessionState {
         let epochAtStart = currentEpoch
+        let previous = currentState
         if !quiet { currentState = .loading }
         if let resolved = await resolve(user: user, epoch: epochAtStart, quiet: quiet), epochAtStart == currentEpoch {
-            currentState = resolved
+            currentState = quiet ? frontiereDePerimetre(avant: previous, apres: resolved) : resolved
+        }
+        return currentState
+    }
+
+    /// Revalidation silencieuse à identité constante (lot 5, T2a, §2.2) : un changement d'espace ou
+    /// d'établissement est une frontière de périmètre, au même titre qu'un changement d'identité.
+    /// - établissement → autre établissement : refus « périmètre divergent » (renvoi web), epoch + 1 ;
+    /// - établissement → espace non prêt (accès retiré, compte inactif) : epoch + 1 ;
+    /// - soignant ↔ établissement : epoch + 1, instantané ré-étiqueté ;
+    /// - même établissement (rôle ou permissions changés) : instantané remplacé à epoch constant.
+    private func frontiereDePerimetre(avant: SessionState, apres: SessionState) -> SessionState {
+        guard case let .readyEtablissement(precedent) = avant else {
+            if case .ready = avant, case .readyEtablissement = apres {
+                bumpEpoch()
+                return apres.avecEpoch(currentEpoch)
+            }
+            return apres
+        }
+        switch apres {
+        case let .readyEtablissement(nouveau) where nouveau.context.etablissementId == precedent.context.etablissementId:
+            return apres
+        case .readyEtablissement:
+            bumpEpoch()
+            return .blocked(.unsupportedRole(SessionState.etabScopeDivergentCode))
+        case .ready:
+            bumpEpoch()
+            return apres.avecEpoch(currentEpoch)
+        case .idle, .loading, .signedOut, .blocked:
+            bumpEpoch()
+            return apres
+        }
+    }
+
+    /// Relecture du périmètre après un refus de droit reçu par un écran (lot 5, T2a, §2.2, D12) :
+    /// `fn_mes_permissions_etab(NULL)` relu **une fois** par refus (l'écran n'appelle cette méthode
+    /// qu'une fois par refus `accesRefuse`), jamais une déconnexion.
+    /// - même établissement : rôle et permissions remplacés à epoch constant (écrans re-filtrés) ;
+    /// - autre établissement, accès retiré, rôle non servi ou compte inactif : epoch + 1, espace fermé ;
+    /// - erreur transitoire (réseau, délai), epoch périmé ou espace non établissement : état conservé.
+    public func refreshEtablissementScope(epoch expected: Int) async -> SessionState {
+        guard expected == currentEpoch, case .readyEtablissement = currentState else { return currentState }
+        let session = configured.etablissement.session
+        let reponse: PermissionsEtabResult
+        do {
+            reponse = try await bounded(timeout: resolutionTimeout) { try await session.permissions(etablissementId: nil) }
+        } catch {
+            return currentState
+        }
+        guard expected == currentEpoch, case let .readyEtablissement(courant) = currentState else { return currentState }
+        switch EspaceResolution.perimetre(candidat: courant.context.etablissementId, permissions: reponse) {
+        case let .confirme(_, role, permissions):
+            var mis = courant
+            mis.context.roleEtab = role
+            mis.context.permissions = permissions
+            currentState = .readyEtablissement(mis)
+        case let refus:
+            bumpEpoch()
+            currentState = Self.etat(pour: refus)
         }
         return currentState
     }
@@ -216,9 +276,13 @@ public actor SessionController {
         guard currentEpoch == expected else { return nil }
         let role = RoleResolution.resolve(server: serverRole, user: user)
 
-        switch MobileAccess.validate(user: user, role: role?.role) {
-        case .allowed: break
-        case let access: return .blocked(access)
+        // Lot 5 (T2a, D3) : `EspaceResolution` remplace `MobileAccess.validate` (fichier gelé).
+        switch EspaceResolution.espace(user: user, role: role?.role) {
+        case .soignant: break
+        case .etablissement:
+            guard let role else { return .blocked(.unsupportedRole(nil)) }
+            return await resolveEtablissement(user: user, role: role, gateways: gateways, epoch: expected, quiet: quiet)
+        case let .bloque(access): return .blocked(access)
         }
         guard let role else { return .blocked(.unsupportedRole(nil)) }
 
@@ -239,6 +303,55 @@ public actor SessionController {
 
         let context = MissionReadContext(userId: user.id, email: user.email, profile: profile)
         return .ready(SessionSnapshot(user: user, role: role, profile: profile, context: context, epoch: expected))
+    }
+
+    /// Étape « périmètre établissement » (lot 5, T2a, §2.2, D2) à la place du profil soignant :
+    /// `fn_mes_permissions_etab(NULL)` fait foi (le candidat `role.etablissementId` lui est seulement
+    /// comparé), puis `fn_mon_etablissement_complet()` (sous-ensemble) doit servir le même établissement.
+    /// Chaque appel est borné, l'epoch vérifié après chaque `await` ; en revalidation silencieuse, une
+    /// erreur transitoire rend nil (état conservé). Aucun profil soignant ni activité soignant (correction 12).
+    private func resolveEtablissement(user: AuthenticatedUser, role: RoleResult, gateways: Gateways,
+                                      epoch expected: Int, quiet: Bool) async -> SessionState? {
+        let session = gateways.etablissement.session
+        let reponse: PermissionsEtabResult
+        do {
+            reponse = try await bounded(timeout: resolutionTimeout) { try await session.permissions(etablissementId: nil) }
+        } catch {
+            guard currentEpoch == expected else { return nil }
+            return quiet ? nil : .signedOut(message: Self.sessionCheckFailedMessage)
+        }
+        guard currentEpoch == expected else { return nil }
+        let perimetre = EspaceResolution.perimetre(candidat: role.etablissementId, permissions: reponse)
+        guard case let .confirme(etablissementId, roleEtab, permissions) = perimetre else {
+            return Self.etat(pour: perimetre)
+        }
+
+        let profil: EtablissementProfil
+        do {
+            profil = try await bounded(timeout: resolutionTimeout) { try await session.profil() }
+        } catch {
+            guard currentEpoch == expected else { return nil }
+            return quiet ? nil : .signedOut(message: Self.profileLoadFailedMessage)
+        }
+        guard currentEpoch == expected else { return nil }
+        // Un profil d'un autre établissement est une divergence, jamais un repli (Lot5Ports, `profil()`).
+        guard profil.id == etablissementId else {
+            return .blocked(.unsupportedRole(SessionState.etabScopeDivergentCode))
+        }
+        let context = EtablissementReadContext(userId: user.id, etablissementId: etablissementId, roleEtab: roleEtab,
+                                               permissions: permissions, epoch: expected)
+        return .readyEtablissement(EtablissementSessionSnapshot(user: user, role: role, context: context, etablissement: profil))
+    }
+
+    /// État d'un périmètre refusé (`EspaceResolution.perimetre`) ; un périmètre confirmé n'a pas d'état
+    /// sans profil et n'est jamais passé ici.
+    private static func etat(pour perimetre: PerimetreEtablissement) -> SessionState {
+        switch perimetre {
+        case .compteInactif: return .signedOut(message: sessionCheckFailedMessage)
+        case .sansAcces: return .blocked(.unsupportedRole(SessionState.etabSansAccesCode))
+        case let .roleNonServi(role): return .blocked(.unsupportedRole(role))
+        case .divergent, .confirme: return .blocked(.unsupportedRole(SessionState.etabScopeDivergentCode))
+        }
     }
 
     /// Message générique de connexion. Jamais l'erreur brute du SDK : elle pourrait

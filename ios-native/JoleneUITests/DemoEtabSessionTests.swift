@@ -128,16 +128,21 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         require("La session est prête : la barre d'onglets est affichée", timeout: 30) { self.tabBarExists }
     }
 
-    /// Efface la valeur saisie (curseur placé en fin de champ, puis autant de retours arrière que de caractères).
+    /// Efface la valeur saisie lors d'une connexion précédente : curseur amené à droite du texte, puis
+    /// autant de retours arrière que de caractères ; un texte plus large que le champ peut laisser le
+    /// curseur au milieu, d'où au plus trois passes (le reste, plus court, tient alors dans le champ).
     private func viderChamp(_ champ: XCUIElement) {
-        let saisie = (champ.value as? String) ?? ""
-        guard !saisie.isEmpty, saisie != champ.placeholderValue else { return }
-        champ.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
-        champ.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: saisie.count))
-        require("Le champ email est vide avant la saisie") {
+        func saisie() -> String {
             let valeur = (champ.value as? String) ?? ""
-            return valeur.isEmpty || valeur == champ.placeholderValue
+            return valeur == champ.placeholderValue ? "" : valeur
         }
+        var passes = 0
+        while !saisie().isEmpty && passes < 3 {
+            champ.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+            champ.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: saisie().count))
+            passes += 1
+        }
+        require("Le champ email est vide avant la saisie") { saisie().isEmpty }
     }
 
     private func ouvrirOnglet(_ identifiant: String, label: String, contenu: String) {

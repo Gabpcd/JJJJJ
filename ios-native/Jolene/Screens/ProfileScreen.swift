@@ -50,8 +50,8 @@ struct ProfileScreen: View {
 
 #if DEBUG
 /// Preuve « aucune requête réseau en démo » : libellé `network-sentinel` (« 0 requête »).
-/// DEBUG seulement, comme `NetworkSentinel`.
-private struct NetworkSentinelRow: View {
+/// DEBUG seulement, comme `NetworkSentinel`. Interne (lot 5, T2a) : partagé avec le compte établissement.
+struct NetworkSentinelRow: View {
     @ObservedObject var monitor: NetworkSentinel.Monitor
 
     var body: some View {

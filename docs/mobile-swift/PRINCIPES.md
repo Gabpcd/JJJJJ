@@ -48,6 +48,13 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   vide à la clôture du lot 5 (T14). Les refus 42501 de droit sont interceptés avant
   `SupabaseErrorMapping` par listes blanches exactes (`RPC/RPCInterception.swift`), le mapping du
   lot 0 reste inchangé.
+- Lot 5 (T2a, D3) : **seule exception** au gel de `Mission.swift`, `UserRole.isNativelyServed`
+  rend `true` pour `adminEtablissement` et `etablissementLegacy` (une API figée à `false` aurait été
+  un piège silencieux) ; aucune autre signature ne change. `MobileAccess.validate` (`Account.swift`)
+  reste tel quel : le contrôleur de session appelle désormais `EspaceResolution.espace`
+  (`Session/EspaceResolution.swift`). `SessionState` reçoit un cas additif `readyEtablissement`
+  (D1) : aucun `SoignantProfile` fabriqué, `SessionSnapshot` inchangé ; le périmètre est celui que
+  confirme `fn_mes_permissions_etab(NULL)`, jamais `user.id` (§3).
 
 ## 3. Aucun succès fabriqué
 

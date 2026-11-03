@@ -6,7 +6,8 @@ import JoleneSupabase
 /// et construit la session. Le mode démonstration n'instancie JAMAIS JoleneSupabase.
 ///
 /// Surcharges de lancement (`-JOLENE_MODE`, `JOLENE_MODE`, `JOLENE_FORCE_BAD_KEY`,
-/// `JOLENE_FORCE_ACCUEIL_ECHEC`) et sentinelle réseau : honorées en build DEBUG uniquement. En
+/// `JOLENE_FORCE_ACCUEIL_ECHEC`, `-JOLENE_FLAG_<cle>` et `-JOLENE_DEMO_*` en démo) et sentinelle réseau :
+/// honorées en build DEBUG uniquement. En
 /// Release, seul l'Info.plist (xcconfig Production) fait foi, et la sentinelle n'existe pas dans
 /// le binaire.
 @MainActor
@@ -65,7 +66,7 @@ final class AppContainer: ObservableObject {
             NetworkSentinel.install()
             networkSentinel = NetworkSentinel.Monitor.shared
             #endif
-            let gateways = Self.demoGateways(processEnvironment: processEnvironment)
+            let gateways = Self.demoGateways(arguments: arguments, processEnvironment: processEnvironment)
             clock = gateways.clock
             session = SessionStore(controller: SessionController(gateways: gateways))
             environmentError = nil
@@ -98,15 +99,24 @@ final class AppContainer: ObservableObject {
     /// du processus, comme `JOLENE_FORCE_BAD_KEY`) fait échouer le premier chargement de l'Accueil
     /// (`DemoDashboardEchecGateway`) pour la recette de l'état d'erreur et de la reprise
     /// (`DemoAccueilTests.testAccueilErreurPuisReprise`). Jamais compilé en Release.
-    private static func demoGateways(processEnvironment: [String: String]) -> Gateways {
+    ///
+    /// Lot 5 (T2a, D20) : DEBUG seulement, `-JOLENE_DEMO_ESPACE etablissement` (+ `-JOLENE_DEMO_ROLE_ETAB`,
+    /// `-JOLENE_DEMO_LEGACY 1`, `-JOLENE_DEMO_BLOCAGE 1`, `DemoEspaceLancement`) ouvre l'espace établissement
+    /// fictif, et `-JOLENE_FLAG_<cle> true|false` (`DrapeauxLancement`, lot 1 T9) surcharge un drapeau
+    /// d'écran (`DemoFlagsGateway`), pour la recette du renvoi web (`DemoEtabSessionTests`).
+    private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
+        let drapeaux = DrapeauxLancement.surcharges(arguments: arguments)
+        let espace = DemoEspaceLancement.espace(arguments: arguments)
         if processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] == "1" {
-            var gateways = DemoWorld.gateways()
+            var gateways = DemoWorld.gateways(espace: espace, drapeaux: drapeaux)
             gateways.dashboard = DemoDashboardEchecGateway()
             return gateways
         }
-        #endif
+        return DemoWorld.gateways(espace: espace, drapeaux: drapeaux)
+        #else
         return DemoWorld.gateways()
+        #endif
     }
 
     private static func refusal(of environment: JoleneEnvironment) -> JoleneError? {

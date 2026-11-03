@@ -56,15 +56,21 @@ private struct SessionRootView: View {
                     }
                 }
             case let .blocked(access):
+                // Lot 5 (T2a) : périmètre établissement divergent → écran dédié `etab-scope-divergent`
+                // (renvoi jolene.app, déconnexion) ; tout autre refus garde `access-blocked`.
                 BlockingScreen(
-                    title: "Espace non disponible",
+                    title: access.estPerimetreDivergent ? "Établissement à confirmer" : "Espace non disponible",
                     message: access.sessionMessage ?? "Cet espace n'est pas encore disponible dans l'application.",
-                    identifier: "access-blocked",
+                    identifier: access.estPerimetreDivergent ? "etab-scope-divergent" : "access-blocked",
                     secondaryTitle: "Se déconnecter",
                     secondaryIdentifier: "logout-button",
                     secondaryAction: { Task { await session.signOut() } })
             case let .ready(snapshot):
                 MainTabView(container: container, session: session, snapshot: snapshot)
+                    .id(snapshot.epoch)
+            case let .readyEtablissement(snapshot):
+                // Lot 5 (T2a, D1) : espace établissement, reconstruit à chaque epoch.
+                EtablissementTabView(container: container, session: session, snapshot: snapshot)
                     .id(snapshot.epoch)
             }
         }

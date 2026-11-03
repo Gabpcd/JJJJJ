@@ -49,7 +49,7 @@ Conditions : tap depuis **Mail iOS** ; AASA servi par le CDN Apple ; aucun choix
 
 | Étape | Attendu | Observé |
 |---|---|---|
-| Connexion d'un compte legacy (`app_metadata.role = 'ETABLISSEMENT'`, sans `etablissement_id`) | `.readyEtablissement` ; nom d'établissement affiché égal à celui du web | — |
+| Connexion d'un compte legacy (`app_metadata.role = 'ETABLISSEMENT'`, sans `etablissement_id`) | `.readyEtablissement` : cinq onglets établissement ; nom d'établissement (`etab-compte-nom`) égal à celui du web, rôle « Propriétaire » (`etab-compte-role`) | — |
 | `fn_mes_permissions_etab` (lecture) | `role = 'PROPRIETAIRE'`, `etablissement_id = user.id` ; aucune écriture effectuée | — |
 
 ## 4. Signature OTP établissement (T10, facultatif, SMS réel lu par Gabrielle)

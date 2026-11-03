@@ -70,8 +70,18 @@ actor DemoSessionStore {
 /// après `signIn`, jusqu'à `signOut`.
 public struct DemoAuthGateway: AuthPort {
     private let store = DemoSessionStore()
+    /// Compte fictif ouvert pour l'email saisi (déjà débarrassé de ses espaces) : toujours le soignant
+    /// fictif au lot 0 ; choisi par email dans le monde à deux espaces du lot 5 (`DemoWorld.gateways(espace:)`).
+    private let compte: @Sendable (String) throws -> AuthenticatedUser
 
-    public init() {}
+    public init() {
+        self.compte = { _ in DemoWorld.user }
+    }
+
+    /// Lot 5 (T2a) : compte fictif choisi selon l'email saisi.
+    public init(compte: @escaping @Sendable (String) throws -> AuthenticatedUser) {
+        self.compte = compte
+    }
 
     public func restoreSession() async throws -> AuthenticatedUser? {
         await store.current()
@@ -82,7 +92,8 @@ public struct DemoAuthGateway: AuthPort {
         guard !emailSaisi.isEmpty, !password.isEmpty else {
             throw JoleneError(.invalidCredentials, "Saisissez votre email et votre mot de passe.")
         }
-        await store.set(DemoWorld.user)
+        let ouvert = try compte(emailSaisi)
+        await store.set(ouvert)
         // Relecture après mutation : aucun succès fabriqué.
         guard let user = await store.current() else {
             throw JoleneError(.unknown, "La session de démonstration n'a pas pu être ouverte.")

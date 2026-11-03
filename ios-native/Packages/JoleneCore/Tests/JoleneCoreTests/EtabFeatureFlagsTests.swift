@@ -134,8 +134,8 @@ final class EtabFeatureFlagsTests: XCTestCase {
                                                                   "-JOLENE_FLAG_ios_natif_etab_presences_actif", "false"])
         XCTAssertEqual(surcharges, [EcranNatifEtablissement.presences.cle: false])
         let flags = DemoWorld.gateways(espace: .etablissement(.init()), drapeaux: surcharges).flags
-        let presences = await flags.ecranActif(.presences as EcranNatifEtablissement)
-        let accueil = await flags.ecranActif(.accueil as EcranNatifEtablissement)
+        let presences = await flags.ecranEtablissementActif(.presences)
+        let accueil = await flags.ecranEtablissementActif(.accueil)
         XCTAssertFalse(presences)
         XCTAssertTrue(accueil)
     }

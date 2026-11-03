@@ -135,6 +135,54 @@ Aucune ne change une décision du §7 ni une règle juridique ; elles fixent ce 
    `SupabaseAuditGateway` sans être passée en `consommee` ; T1 ne modifie pas l'entrée d'un autre lot (pas de conflit
    avec les tranches du lot 1). `fn_mes_permissions_etab` et `fn_mon_etablissement_complet` passent en `consommee`.
 
+## Précisions relevées par la tranche T2a
+
+Aucune ne change une décision du §7 ni une règle juridique ; elles fixent ce que le blueprint laissait ouvert.
+
+1. **Registre de destinations dans `JoleneCore`.** `enum EtabDestination` vit dans
+   `JoleneCore/Etablissement/EtabDestination.swift` (et non dans l'app) : il est testé sans cible de tests de
+   l'app, et T2b le rendra depuis `LinkRouter.etablissementDestination`. L'app ne garde que le `switch`
+   (`Screens/Etablissement/EtabDestinations.swift`, une ligne par tranche). Chaque destination nomme sa
+   permission (§2.7) et son drapeau ; le contrat suit le drapeau `missions` (aucune des sept clés de D14 ne
+   vise les contrats).
+2. **Drapeaux.** `EcranNatifEtablissement` et `EcransEtablissementModel` (`JoleneCore/Session/EcransEtablissement.swift`)
+   ; valeurs propres à un epoch (une lecture d'une autre identité ne s'applique jamais). La méthode s'appelle
+   `ecranEtablissementActif(_:)` : une surcharge de `ecranActif(_:)` rendait ambigus les appels `.accueil` /
+   `.missions` du lot 1. Amendement 9 vérifié : la migration D-FLAGS (#1111) pose les sept clés
+   (`EtabFeatureFlagsTests` relit la migration).
+3. **Lot 1 T9 non intégré.** `DrapeauxLancement` est porté au même chemin que T9 (`Session/EcransNatifs.swift`,
+   code identique) : à la fusion de T9, garder la version de T9. `SessionStore` lit les drapeaux établissement
+   avant de publier `.readyEtablissement` (ajout localisé) ; à la fusion, l'audit de session de T9 doit traiter
+   `.readyEtablissement` : `connexion()` et `deconnexion()` oui, `activite()` jamais (correction 12, garde
+   `testAucuneActiviteSoignantNiProfilSoignantPourUnEtablissement`).
+4. **Frontières d'epoch en revalidation silencieuse** (le blueprint ne les fixait que pour la relecture après
+   refus) : autre établissement → « périmètre divergent », epoch + 1 ; accès retiré ou compte inactif →
+   epoch + 1 ; soignant ↔ établissement → epoch + 1 et instantané ré-étiqueté ; même établissement → rôle et
+   permissions remplacés à epoch constant.
+5. **Relecture après refus.** `SessionStore.refreshEtablissementScope()` (→ `SessionController.refreshEtablissementScope(epoch:)`) :
+   une lecture de `fn_mes_permissions_etab(NULL)` par appel, l'écran appelle une fois par refus ; deux refus
+   concurrents ne sont pas fusionnés (deux lectures, sans effet de bord). Erreur transitoire : état conservé,
+   jamais de déconnexion.
+6. **Textes natifs ajoutés (non juridiques)** : messages `ETAB_SANS_ACCES` et `ETAB_SCOPE_DIVERGENT`, titre
+   « Établissement à confirmer », écran d'accès refusé, renvoi web (annonce de la reconnexion, D16), contenus
+   provisoires « Disponible au lot 5 ». Libellés des rôles d'équipe repris de `EquipeEtablissement.tsx`
+   l.45-49 (garde de dérive dans `DemoEspaceTests`).
+7. **Monde démo à deux espaces.** Avec `-JOLENE_DEMO_ESPACE etablissement`, tout email ouvre le compte
+   établissement fictif, sauf celui du soignant fictif, qui ouvre l'espace soignant (frontière d'epoch prouvée
+   dans la même session). `DemoRoleEspaceGateway` sert `demo-etab-1` au compte legacy comme au membre (mineur 7
+   de la revue T1). La bannière de connexion démo cite toujours l'email du soignant fictif.
+8. **« Publier » dans la barre de l'onglet Missions** (`etab-missions-publier`, permission `missions`, destination
+   `.publication`) est posé par la coquille ; T5 le garde en remplissant le contenu de l'onglet, T4 pose celui
+   de l'Accueil.
+9. **Compte provisoire** (nom, rôle, email, déconnexion, version, sentinelle réseau) jusqu'à T12 ; le lien de
+   suppression du compte (D17) arrive avec T12 : l'espace établissement n'est pas à exposer hors démo avant T12
+   (Apple 5.1.1(v)).
+10. **Renvoi web sans présentateur `.safari`** (lot 1 T10 non intégré) : le bouton ouvre la racine
+    `https://jolene.app` (hors AASA), comme le renvoi de T9 ; l'URL exacte du renvoi est exposée en valeur
+    d'accessibilité de `etab-renvoi-web-ouvrir`.
+11. **D24** : durée du job UI non mesurée par la tranche (aucun test UI lancé localement, consigne disque) ; à
+    relever sur le premier run CI qui inclut `DemoEtabSessionTests`.
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.
