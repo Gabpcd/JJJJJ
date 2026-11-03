@@ -95,8 +95,9 @@ BEGIN
     -- Historique sans échéance : trente jours sont ajoutés à l'émission.
     -- Les émissions sont posées à midi, heure de Paris, d'un jour calendaire relatif à aujourd_hui :
     -- fn_gerer_blocage_etabs compare des dates de Paris ((date_emission AT TIME ZONE 'Europe/Paris')::date + 30).
-    -- Un « now() - N jours » en UTC (session STAGING) franchit le changement d'heure et tombe un jour plus tard à Paris
-    -- entre 22:00 et 23:00 UTC en hiver : le retard valait alors exactement le seuil et le cas positif échouait.
+    -- Un « now() - N jours » en UTC (session STAGING) tombe un jour plus tard à Paris quand l'émission est en heure d'été
+    -- et le run en heure d'hiver, entre 22:00 et 23:00 UTC (du dernier dimanche d'octobre à environ seuil + 31 jours
+    -- après) : le retard valait alors exactement le seuil et le cas positif échouait.
     UPDATE public.factures SET date_echeance=NULL,
       date_emission=((aujourd_hui-10)::timestamp+interval '12 hours') AT TIME ZONE 'Europe/Paris' WHERE id=f_j21;
     PERFORM public.fn_gerer_blocage_etabs();
