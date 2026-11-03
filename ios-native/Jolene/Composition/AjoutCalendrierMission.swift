@@ -4,7 +4,7 @@ import JoleneCore
 /// Point d'extension « Ajouter au calendrier » (décision 18 : bouton dans Mes missions › À venir
 /// ET sur l'Accueil). Câblé par la tranche T5 : `CalendarWriter.swift` injecte `AjoutCalendrier`
 /// (JoleneCore : un événement par créneau PREVISIONNEL, journal local de dédoublonnage) dans
-/// l'environnement au-dessus des onglets (`MainTabView`, `.ajoutCalendrier(modeDemo:userId:)`).
+/// l'environnement au-dessus des onglets (`MainTabView`, `.ajoutCalendrier(container:userId:)`).
 ///
 /// Sans implémentation injectée (aperçus, futur écran hors onglets), aucun bouton calendrier n'est
 /// rendu : jamais un bouton sans effet ni un succès fabriqué. Preuves : `DemoAccueilTests` (bouton

@@ -10,7 +10,12 @@ import Supabase
 /// - À venir : missions `ASSIGNEE` / `EN_COURS` assignées au soignant, non terminées (`fin_le` ≥
 ///   maintenant), `debut_le` croissant ; Passées : `TERMINEE`, `ANNULEE_PAR_SOIGNANT`,
 ///   `ANNULEE_PAR_ETABLISSEMENT`, `ABSENCE`, `debut_le` décroissant, avec les colonnes financières
-///   (`net_estime`, `type_contrat_applique`) ; pages de `MissionsPage.taille` (`range`).
+///   (`net_estime`, `type_contrat_applique`) ;
+/// - pages : lecture **cumulative** du web (« M1 », l.244-246) — la page `n` relit les lignes
+///   `0…(n + 1) × MissionsPage.taille − 1` et l'appelant remplace sa liste ; jamais une page disjointe,
+///   dont l'offset se décale quand une mission sort de la requête entre deux lectures (`fin_le`
+///   dépassée) et fait sauter la suivante. Départage par `id` après `debut_le` (absent du web) : ordre
+///   stable d'une lecture à l'autre à date de début égale.
 ///
 /// **Sans** l'embed `etablissements(...)` du web : `pol_etab_select` interdit ce SELECT au soignant.
 /// Les noms viennent **exclusivement** de `fn_etablissements_safe` (même cohorte, mission assignée au
@@ -118,14 +123,15 @@ public struct SupabaseMesMissionsGateway: MesMissionsPort {
                 .in("statut", values: MesMissionsPresentation.statutsAVenir)
                 .gte("fin_le", value: MissionQuery.isoTimestamp(clock.now()))
                 .order("debut_le", ascending: true)
+                .order("id", ascending: true)
                 .range(from: bornes.debut, to: bornes.fin)
                 .execute()
                 .value
         } catch {
             throw SupabaseErrorMapping.map(error, fallback: Self.fallbackMessage)
         }
-        return MissionsPage(missions: try await enrichAll(records, context: context), page: page,
-                            aSuivre: records.count == MissionsPage.taille)
+        return MissionsPage(missions: try await enrichAll(records, context: context), page: max(0, page),
+                            aSuivre: records.count == bornes.fin + 1)
     }
 
     public func passees(context: MissionReadContext, page: Int) async throws -> MissionsPage {
@@ -138,24 +144,25 @@ public struct SupabaseMesMissionsGateway: MesMissionsPort {
                 .eq("soignant_assigne_id", value: context.userId)
                 .in("statut", values: MesMissionsPresentation.statutsPassees)
                 .order("debut_le", ascending: false, nullsFirst: true)
+                .order("id", ascending: true)
                 .range(from: bornes.debut, to: bornes.fin)
                 .execute()
                 .value
         } catch {
             throw SupabaseErrorMapping.map(error, fallback: Self.fallbackMessage)
         }
-        var lue = MissionsPage(missions: try await enrichAll(lignes.map(\.record), context: context), page: page,
-                               aSuivre: lignes.count == MissionsPage.taille)
+        var lue = MissionsPage(missions: try await enrichAll(lignes.map(\.record), context: context), page: max(0, page),
+                               aSuivre: lignes.count == bornes.fin + 1)
         lue.finances = Dictionary(lignes.map { ($0.finance.id, $0.finance) }, uniquingKeysWith: { premiere, _ in premiere })
         return lue
     }
 
     // MARK: - Interne
 
-    /// Bornes `range` (incluses) de la page `page` : 0-49, 50-99…
+    /// Bornes `range` (incluses) de la lecture cumulative des pages 0…`page`, comme le web
+    /// (`range(0, (page + 1) * PAGE_SIZE - 1)`) : 0-49, 0-99, 0-149…
     static func bornes(page: Int) -> (debut: Int, fin: Int) {
-        let debut = max(0, page) * MissionsPage.taille
-        return (debut, debut + MissionsPage.taille - 1)
+        (0, (max(0, page) + 1) * MissionsPage.taille - 1)
     }
 
     /// Établissements (`fn_etablissements_safe`, repli sans nom sur erreur) et créneaux (pager), puis

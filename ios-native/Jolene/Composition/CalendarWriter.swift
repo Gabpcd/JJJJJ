@@ -9,20 +9,16 @@ import JoleneCore
 /// fournit que l'appareil EventKit et l'injection au-dessus des onglets (Accueil et Mes missions).
 ///
 /// Démonstration : `CalendrierAppareilDemo` (aucune demande système, aucune écriture réelle) et un
-/// journal en mémoire ; DEBUG seulement, `JOLENE_FORCE_CALENDRIER_REFUS=1` simule un accès refusé
-/// (`DemoMesMissionsTests.testCalendrierAccesRefuse`). Staging et production : EventKit et le journal
-/// du compte (`jolene.calendrier.journal.<userId>`, purgé à la suppression du compte, T8). L'écriture
-/// réelle est prouvée sur appareil (`RECETTE_DEVICE_LOT1.md` §4), jamais par la CI.
+/// journal en mémoire ; `refusDemo` (surcharge DEBUG `JOLENE_FORCE_CALENDRIER_REFUS=1`, lue par
+/// `AppContainer` avec les autres surcharges, `AppContainer.calendrierRefusDemo`) simule un accès
+/// refusé (`DemoMesMissionsTests.testCalendrierAccesRefuse`). Staging et production : EventKit et le
+/// journal du compte (`jolene.calendrier.journal.<userId>`, purgé à la suppression du compte, T8).
+/// L'écriture réelle est prouvée sur appareil (`RECETTE_DEVICE_LOT1.md` §4), jamais par la CI.
 @MainActor
 enum CalendarWriter {
-    static func ajoutCalendrier(modeDemo: Bool, userId: String) -> AjoutCalendrier {
+    static func ajoutCalendrier(modeDemo: Bool, refusDemo: Bool, userId: String) -> AjoutCalendrier {
         if modeDemo {
-            #if DEBUG
-            let refus = ProcessInfo.processInfo.environment["JOLENE_FORCE_CALENDRIER_REFUS"] == "1"
-            #else
-            let refus = false
-            #endif
-            return AjoutCalendrier(appareil: CalendrierAppareilDemo(refuse: refus), journal: JournalCalendrierMemoire())
+            return AjoutCalendrier(appareil: CalendrierAppareilDemo(refuse: refusDemo), journal: JournalCalendrierMemoire())
         }
         return AjoutCalendrier(appareil: CalendrierEventKit(), journal: JournalCalendrierPreferences(userId: userId))
     }
@@ -80,24 +76,36 @@ final class CalendrierEventKit: CalendrierAppareil {
     }
 }
 
+/// Boîte de l'instance d'ajout, pour une construction **paresseuse** : `StateObject(wrappedValue:)`
+/// n'évalue son argument (`@autoclosure`) qu'une fois par identité de vue, alors qu'un
+/// `State(initialValue:)` construisait un `AjoutCalendrier` (appareil + journal) à chaque évaluation
+/// du corps de `MainTabView`, aussitôt jeté (revue B8 de T5).
+@MainActor
+private final class BoiteAjoutCalendrier: ObservableObject {
+    let ajout: AjoutCalendrier
+    init(_ ajout: AjoutCalendrier) { self.ajout = ajout }
+}
+
 /// Injection de l'ajout au calendrier pour une session prête : une instance par epoch (la vue
 /// racine des onglets est recréée à chaque changement d'identité), partagée par l'Accueil et Mes
-/// missions, si bien qu'un créneau ajouté depuis l'un est « déjà présent » depuis l'autre.
+/// missions, si bien qu'un créneau ajouté depuis l'un est « déjà ajouté » depuis l'autre.
 @MainActor
 private struct InjectionAjoutCalendrier: ViewModifier {
-    @State private var ajout: AjoutCalendrier
+    @StateObject private var boite: BoiteAjoutCalendrier
 
-    init(modeDemo: Bool, userId: String) {
-        _ajout = State(initialValue: CalendarWriter.ajoutCalendrier(modeDemo: modeDemo, userId: userId))
+    init(modeDemo: Bool, refusDemo: Bool, userId: String) {
+        _boite = StateObject(wrappedValue: BoiteAjoutCalendrier(
+            CalendarWriter.ajoutCalendrier(modeDemo: modeDemo, refusDemo: refusDemo, userId: userId)))
     }
 
     func body(content: Content) -> some View {
-        content.environment(\.ajoutCalendrierMission, ajout)
+        content.environment(\.ajoutCalendrierMission, boite.ajout)
     }
 }
 
 extension View {
-    func ajoutCalendrier(modeDemo: Bool, userId: String) -> some View {
-        modifier(InjectionAjoutCalendrier(modeDemo: modeDemo, userId: userId))
+    /// `container` fournit le mode et la surcharge DEBUG du refus (`AppContainer.calendrierRefusDemo`).
+    func ajoutCalendrier(container: AppContainer, userId: String) -> some View {
+        modifier(InjectionAjoutCalendrier(modeDemo: container.isDemo, refusDemo: container.calendrierRefusDemo, userId: userId))
     }
 }

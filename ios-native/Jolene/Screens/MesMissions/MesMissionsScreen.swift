@@ -9,9 +9,12 @@ import JoleneDesign
 /// n'ajoute aucune logique ni aucun calcul de montant.
 ///
 /// À venir : bouton « Ajouter au calendrier » (`calendrier-{id}`, décision 18) quand l'ajout est
-/// injecté (`CalendarWriter`) et que le planning est complet ; issue sous les onglets
-/// (`missions-calendrier-issue`). Passées : note « net estimé » du web, verbatim. États vides : renvoi
-/// vers Explorer (la recherche de missions ne vit qu'à cet onglet, comme sur le web).
+/// injecté (`CalendarWriter`) et que le planning est complet ; issue dans un bandeau superposé en haut
+/// de la liste (`missions-calendrier-bandeau`, `missions-calendrier-issue`, fermeture
+/// `missions-calendrier-issue-fermer`) : visible quelle que soit la ligne touchée, y compris après
+/// « Charger plus », sans décaler la liste (revue B8 de T5) ; retiré au changement d'onglet. Passées :
+/// note « net estimé » du web, verbatim. États vides : renvoi vers Explorer (la recherche de missions
+/// ne vit qu'à cet onglet, comme sur le web).
 /// Exclus (HARD STOP n°4, comme l'Accueil) : `BandeauAlerte48h` ; les heures de la semaine ne sont pas lues.
 struct MesMissionsScreen: View {
     @StateObject private var model: MesMissionsModel
@@ -20,6 +23,8 @@ struct MesMissionsScreen: View {
     private let ouvrirOnglet: (MainTabView.Tab) -> Void
     @Environment(\.ajoutCalendrierMission) private var calendrier
     @State private var issueCalendrier: AjoutCalendrierIssue?
+    /// Jeton d'annonce VoiceOver du bandeau : une même issue est réannoncée à chaque tap.
+    @State private var tentativeCalendrier = 0
 
     init(session: SessionStore, snapshot: SessionSnapshot, onglet: MesMissionsOnglet = .aVenir,
          ouvrirOnglet: @escaping (MainTabView.Tab) -> Void) {
@@ -43,10 +48,6 @@ struct MesMissionsScreen: View {
                         }
                     case .aVenir:
                         contenu(model.aVenir, onglet: .aVenir) { missions in
-                            if let issue = issueCalendrier {
-                                InlineNotice(issue.message, tone: issue.succes ? .success : .error, identifier: "missions-calendrier-issue",
-                                             announcesOnAppear: true)
-                            }
                             ForEach(missions) { mission in
                                 HStack(spacing: JoleneSpacing.sm) {
                                     lienMission(MesMissionsPresentation.ligneAVenir(mission, maintenant: model.horloge.now()))
@@ -73,6 +74,8 @@ struct MesMissionsScreen: View {
             }
             .refreshable { await model.charger() }
             .accessibilityIdentifier("mes-missions-scroll")
+            // Après l'identifiant : le bandeau est un voisin du défilement, pas l'un de ses descendants.
+            .overlay(alignment: .top) { bandeauCalendrier }
         }
         .background(JoleneColor.lavender.ignoresSafeArea())
         .accessibilityElement(children: .contain)
@@ -94,6 +97,7 @@ struct MesMissionsScreen: View {
             ForEach(MesMissionsOnglet.allCases) { onglet in
                 let actif = model.onglet == onglet
                 Button {
+                    issueCalendrier = nil
                     Task { await model.selectionner(onglet) }
                 } label: {
                     VStack(spacing: JoleneSpacing.xs) {
@@ -180,6 +184,41 @@ struct MesMissionsScreen: View {
         }
     }
 
+    // MARK: - Calendrier
+
+    /// Issue de l'ajout au calendrier, superposée en haut de la liste : visible sans défilement quelle
+    /// que soit la ligne touchée, sans décaler la liste ; « Fermer » la retire.
+    @ViewBuilder
+    private var bandeauCalendrier: some View {
+        if let issue = issueCalendrier {
+            HStack(alignment: .top, spacing: JoleneSpacing.xs) {
+                InlineNotice(issue.message, tone: issue.succes ? .success : .error, identifier: "missions-calendrier-issue",
+                             announcesOnAppear: true, announcementID: tentativeCalendrier)
+                Button {
+                    issueCalendrier = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(JoleneFont.callout.weight(.semibold))
+                        .foregroundStyle(JoleneColor.midnight)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Fermer")
+                .accessibilityIdentifier("missions-calendrier-issue-fermer")
+            }
+            .padding(JoleneSpacing.xs)
+            .background(JoleneColor.cloud)
+            .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.card))
+            .shadow(color: JoleneColor.midnight.opacity(0.15), radius: 8, y: 2)
+            .frame(maxWidth: 720)
+            .padding(.horizontal, JoleneSpacing.lg)
+            .padding(.top, JoleneSpacing.sm)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("missions-calendrier-bandeau")
+        }
+    }
+
     // MARK: - Lignes
 
     private func lienMission(_ ligne: MesMissionsPresentation.Ligne) -> some View {
@@ -200,7 +239,13 @@ struct MesMissionsScreen: View {
     private func boutonCalendrier(_ mission: Mission) -> some View {
         if let calendrier, !CalendrierMission.evenements(pour: mission).isEmpty {
             Button {
-                Task { issueCalendrier = await calendrier.ajouterAuCalendrier(mission) }
+                Task {
+                    let issue = await calendrier.ajouterAuCalendrier(mission)
+                    // Onglet quitté pendant l'ajout : l'issue ne suit pas sur un autre onglet.
+                    guard model.onglet == .aVenir else { return }
+                    tentativeCalendrier += 1
+                    issueCalendrier = issue
+                }
             } label: {
                 Image(systemName: "calendar.badge.plus")
                     .font(JoleneFont.headline)

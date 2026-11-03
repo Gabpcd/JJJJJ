@@ -5,10 +5,16 @@ import JoleneSupabase
 /// Racine de composition (plan §4.1). Lit l'environnement, choisit le jeu de gateways
 /// et construit la session. Le mode démonstration n'instancie JAMAIS JoleneSupabase.
 ///
-/// Surcharges de lancement (`-JOLENE_MODE`, `JOLENE_MODE`, `JOLENE_FORCE_BAD_KEY`,
-/// `JOLENE_FORCE_ACCUEIL_ECHEC`) et sentinelle réseau : honorées en build DEBUG uniquement. En
-/// Release, seul l'Info.plist (xcconfig Production) fait foi, et la sentinelle n'existe pas dans
-/// le binaire.
+/// Surcharges de lancement et sentinelle réseau : honorées en build DEBUG uniquement, toutes lues
+/// ici (l'environnement du processus n'est lu nulle part ailleurs). En Release, seul l'Info.plist
+/// (xcconfig Production) fait foi, et la sentinelle n'existe pas dans le binaire.
+/// - `-JOLENE_MODE` / `JOLENE_MODE` : mode (démo, staging, production) ;
+/// - `JOLENE_FORCE_BAD_KEY` : clé publiable remplacée (`EnvironmentGuardTests`) ;
+/// - `JOLENE_FORCE_ACCUEIL_ECHEC=1` : premier chargement de l'Accueil démo en échec ;
+/// - `JOLENE_FORCE_MES_MISSIONS_ECHEC=1|session`, `JOLENE_FORCE_MES_MISSIONS_VIDE=1`,
+///   `JOLENE_DEMO_MES_MISSIONS_PAGE=<1…50>` : recette des états de Mes missions démo
+///   (`DemoMesMissionsSurcharges`, JoleneCore) ;
+/// - `JOLENE_FORCE_CALENDRIER_REFUS=1` : accès au calendrier démo refusé (`calendrierRefusDemo`).
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -19,6 +25,9 @@ final class AppContainer: ObservableObject {
     let clock: ClockPort
     /// Lot 1, T8 : avis de fin de compte partagé entre l'écran de suppression et la racine.
     let finDeCompte = AvisFinDeCompte()
+    /// Lot 1, T5 : refus simulé de l'accès au calendrier démo (surcharge DEBUG
+    /// `JOLENE_FORCE_CALENDRIER_REFUS`), toujours faux en Release et hors démo.
+    let calendrierRefusDemo: Bool
     #if DEBUG
     let networkSentinel: NetworkSentinel.Monitor?
     #endif
@@ -45,6 +54,9 @@ final class AppContainer: ObservableObject {
         if let forced = processEnvironment["JOLENE_FORCE_BAD_KEY"], !forced.isEmpty {
             environment.publishableKey = forced
         }
+        calendrierRefusDemo = environment.mode == .demo && processEnvironment[CalendrierAppareilDemo.variableRefus] == "1"
+        #else
+        calendrierRefusDemo = false
         #endif
         self.environment = environment
 
@@ -94,19 +106,23 @@ final class AppContainer: ObservableObject {
         }
     }
 
-    /// Ports du monde démo. DEBUG seulement : `JOLENE_FORCE_ACCUEIL_ECHEC=1` (variable d'environnement
-    /// du processus, comme `JOLENE_FORCE_BAD_KEY`) fait échouer le premier chargement de l'Accueil
-    /// (`DemoDashboardEchecGateway`) pour la recette de l'état d'erreur et de la reprise
-    /// (`DemoAccueilTests.testAccueilErreurPuisReprise`). Jamais compilé en Release.
+    /// Ports du monde démo. DEBUG seulement (variables d'environnement du processus, comme
+    /// `JOLENE_FORCE_BAD_KEY`), jamais compilé en Release :
+    /// - `JOLENE_FORCE_ACCUEIL_ECHEC=1` fait échouer le premier chargement de l'Accueil
+    ///   (`DemoDashboardEchecGateway`, `DemoAccueilTests.testAccueilErreurPuisReprise`) ;
+    /// - les surcharges de Mes missions (`DemoMesMissionsSurcharges`) installent l'échec forcé, la
+    ///   session expirée, les listes vides ou une taille de page réduite (`DemoMesMissionsTests`).
     private static func demoGateways(processEnvironment: [String: String]) -> Gateways {
+        var gateways = DemoWorld.gateways()
         #if DEBUG
         if processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] == "1" {
-            var gateways = DemoWorld.gateways()
             gateways.dashboard = DemoDashboardEchecGateway()
-            return gateways
+        }
+        if let mesMissions = DemoMesMissionsSurcharges.port(environment: processEnvironment, clock: gateways.clock) {
+            gateways.mesMissions = mesMissions
         }
         #endif
-        return DemoWorld.gateways()
+        return gateways
     }
 
     private static func refusal(of environment: JoleneEnvironment) -> JoleneError? {

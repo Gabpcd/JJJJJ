@@ -6,15 +6,19 @@ import Combine
 /// `SessionController.resolutionTimeout` (décision 14). Mêmes règles d'état que `AccueilModel` :
 /// - une annulation de tâche SwiftUI n'est jamais une erreur (l'état reste celui d'avant) ;
 /// - une relecture d'une liste déjà affichée la conserve et n'expose qu'`erreurRafraichissement` ;
-/// - `.unauthorized` lève `sessionExpired` (revalidation de session plutôt que « Réessayer ») ;
+/// - `.unauthorized` lève `sessionExpired` (revalidation de session plutôt que « Réessayer ») ; toute
+///   autre erreur le baisse ;
 /// - une réponse reçue pour un epoch périmé, ou dépassée par une lecture plus récente du même
 ///   onglet, est abandonnée.
 ///
-/// Chaque sélection d'onglet relit sa liste et revient à la première page, comme le web (l.248 :
-/// `setPage(0)` au changement d'onglet, relecture à chaque changement) ; l'apparition de l'écran
-/// relit l'onglet affiché (liste conservée pendant la relecture). « Charger plus » (À venir,
-/// Passées) lit la page suivante de `MissionsPage.taille` et l'ajoute sans doublon ; il n'est
-/// proposé que si la dernière page lue était pleine (`aSuivre`, web l.623). Lecture seule.
+/// Pages : lecture **cumulative** du web (« M1 », `range(0, (page + 1) * 50 - 1)`, l.244-246) — le
+/// port rend les pages 0…`page` d'un seul tenant et la liste est **remplacée** (aucun ajout local :
+/// une mission terminée entre deux lectures ne fait sauter aucune ligne). Chaque sélection d'onglet
+/// revient à la première page, comme le web (l.248 : `setPage(0)` au changement d'onglet) ; une
+/// relecture (apparition de l'écran, tirer pour actualiser, « Réessayer ») garde les pages déjà
+/// chargées, comme le `refreshTick` du web, liste conservée pendant la relecture. « Charger plus »
+/// (À venir, Passées) relit une page de plus ; il n'est proposé que si la dernière lecture était
+/// pleine (`aSuivre`, web l.623). Lecture seule.
 @MainActor
 public final class MesMissionsModel: ObservableObject {
     /// État d'une liste d'onglet.
@@ -26,9 +30,9 @@ public final class MesMissionsModel: ObservableObject {
         }
 
         public internal(set) var contenu: Contenu = .chargement
-        /// Dernière page lue (0 pour la première).
+        /// Dernière page lue (0 pour la première) : la liste contient les pages 0…`page`.
         public internal(set) var page = 0
-        /// Vrai si la dernière page lue était pleine : « Charger plus » est proposé.
+        /// Vrai si la dernière lecture était pleine : « Charger plus » est proposé.
         public internal(set) var aSuivre = false
         public internal(set) var rafraichissement = false
         public internal(set) var erreurRafraichissement: String?
@@ -78,18 +82,20 @@ public final class MesMissionsModel: ObservableObject {
             ?? candidatures.elements.lazy.compactMap(\.mission).first { $0.id == id }
     }
 
-    /// Sélectionne un onglet et relit sa première page (liste conservée si elle était déjà affichée).
+    /// Sélectionne un onglet et relit sa première page, comme le web (`setPage(0)`) ; liste conservée
+    /// pendant la relecture si elle était déjà affichée.
     public func selectionner(_ onglet: MesMissionsOnglet) async {
         self.onglet = onglet
-        await charger()
+        await lire(onglet, page: 0, suite: false)
     }
 
-    /// Relit la première page de l'onglet affiché (apparition, tirer pour actualiser, « Réessayer »).
+    /// Relit l'onglet affiché avec les pages déjà chargées (apparition, tirer pour actualiser,
+    /// « Réessayer », « Vérifier ma session ») ; première page si rien n'est encore affiché.
     public func charger() async {
-        await lire(onglet, page: 0)
+        await lire(onglet, page: pageChargee(onglet), suite: false)
     }
 
-    /// Page suivante de l'onglet affiché, si la dernière lue était pleine (À venir, Passées).
+    /// Une page de plus pour l'onglet affiché, si la dernière lecture était pleine (À venir, Passées).
     public func chargerPlus() async {
         let liste: Liste<Mission>
         switch onglet {
@@ -98,7 +104,16 @@ public final class MesMissionsModel: ObservableObject {
         case .passees: liste = passees
         }
         guard liste.estChargee, liste.aSuivre, !liste.chargementSuite, !liste.rafraichissement else { return }
-        await lire(onglet, page: liste.page + 1)
+        await lire(onglet, page: liste.page + 1, suite: true)
+    }
+
+    /// Pages déjà affichées de l'onglet (les candidatures ne sont pas paginées, comme le web).
+    private func pageChargee(_ onglet: MesMissionsOnglet) -> Int {
+        switch onglet {
+        case .candidatures: return 0
+        case .aVenir: return aVenir.estChargee ? aVenir.page : 0
+        case .passees: return passees.estChargee ? passees.page : 0
+        }
     }
 
     /// « Vérifier ma session » : revalide la session, puis relit l'onglet si elle est toujours prête
@@ -118,19 +133,21 @@ public final class MesMissionsModel: ObservableObject {
         var finances: [String: MissionGainLigne]
     }
 
-    private func lire(_ onglet: MesMissionsOnglet, page: Int) async {
+    /// Lit les pages 0…`page` de l'onglet. `suite` : « Charger plus » (indicateur et erreur propres au
+    /// bouton) ; sinon première lecture ou relecture de la liste affichée.
+    private func lire(_ onglet: MesMissionsOnglet, page: Int, suite: Bool) async {
         switch onglet {
         case .candidatures:
-            await lire(\.candidatures, onglet: onglet, page: 0) { port, context in
+            await lire(\.candidatures, onglet: onglet, page: 0, suite: false) { port, context in
                 PageLue(elements: try await port.candidatures(context: context), aSuivre: false, finances: [:])
             }
         case .aVenir:
-            await lire(\.aVenir, onglet: onglet, page: page) { port, context in
+            await lire(\.aVenir, onglet: onglet, page: page, suite: suite) { port, context in
                 let lue = try await port.aVenir(context: context, page: page)
                 return PageLue(elements: lue.missions, aSuivre: lue.aSuivre, finances: [:])
             }
         case .passees:
-            await lire(\.passees, onglet: onglet, page: page) { port, context in
+            await lire(\.passees, onglet: onglet, page: page, suite: suite) { port, context in
                 let lue = try await port.passees(context: context, page: page)
                 return PageLue(elements: lue.missions, aSuivre: lue.aSuivre, finances: lue.finances)
             }
@@ -141,9 +158,9 @@ public final class MesMissionsModel: ObservableObject {
         _ cle: ReferenceWritableKeyPath<MesMissionsModel, Liste<Element>>,
         onglet: MesMissionsOnglet,
         page: Int,
+        suite: Bool,
         requete: @escaping @Sendable (any MesMissionsPort, MissionReadContext) async throws -> PageLue<Element>
     ) async where Element.ID == String {
-        let suite = page > 0
         let courant = (generations[onglet] ?? 0) + 1
         generations[onglet] = courant
         let conserver = self[keyPath: cle].estChargee
@@ -151,7 +168,7 @@ public final class MesMissionsModel: ObservableObject {
             self[keyPath: cle].chargementSuite = true
             self[keyPath: cle].erreurSuite = nil
         } else {
-            // Une première page remplace toute lecture en vol de l'onglet, page suivante comprise.
+            // Une lecture de la liste remplace toute lecture en vol de l'onglet, « Charger plus » compris.
             self[keyPath: cle].chargementSuite = false
             self[keyPath: cle].erreurSuite = nil
             self[keyPath: cle].erreurRafraichissement = nil
@@ -175,18 +192,14 @@ public final class MesMissionsModel: ObservableObject {
             guard await controller.epoch == snapshot.epoch, generations[onglet] == courant else { return }
             sessionExpired = false
             var liste = self[keyPath: cle]
-            if suite {
-                let deja = Set(liste.elements.map(\.id))
-                liste.contenu = .chargee(liste.elements + lue.elements.filter { !deja.contains($0.id) })
-            } else {
-                liste.contenu = .chargee(lue.elements)
-            }
+            // Lecture cumulative : la liste est remplacée, jamais complétée localement. Un identifiant
+            // répété (impossible sous la contrainte serveur, défensif pour `ForEach`) garde sa première ligne.
+            var vus = Set<String>()
+            liste.contenu = .chargee(lue.elements.filter { vus.insert($0.id).inserted })
             liste.page = page
             liste.aSuivre = lue.aSuivre
             self[keyPath: cle] = liste
-            if onglet == .passees {
-                finances = suite ? finances.merging(lue.finances) { _, relue in relue } : lue.finances
-            }
+            if onglet == .passees { finances = lue.finances }
         } catch {
             guard await controller.epoch == snapshot.epoch, generations[onglet] == courant, !Task.isCancelled else { return }
             let message: String
@@ -197,6 +210,8 @@ public final class MesMissionsModel: ObservableObject {
             } else if error is CancellationError {
                 return
             } else {
+                // Une panne quelconque n'est pas une session expirée (revue B8 de T5).
+                sessionExpired = false
                 message = Self.genericFailureMessage
             }
             if suite {

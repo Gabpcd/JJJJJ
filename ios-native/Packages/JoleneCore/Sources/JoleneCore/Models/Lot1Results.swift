@@ -145,11 +145,14 @@ public struct EtablissementFavori: Codable, Equatable, Sendable, Identifiable {
 // MARK: - Mes missions (T5)
 
 public struct MissionsPage: Equatable, Sendable {
-    /// Pagination de `MissionsSoignant.tsx` (pages de 50).
+    /// Pagination de `MissionsSoignant.tsx` (pages de 50, lues de façon cumulative).
     public static let taille = 50
 
+    /// Missions des pages 0…`page`, ordre serveur (lecture cumulative du web, « M1 »).
     public var missions: [Mission]
+    /// Dernière page incluse.
     public var page: Int
+    /// Lecture pleine : « Charger plus de missions » est proposé (web l.623).
     public var aSuivre: Bool
     /// Colonnes financières relues avec les missions passées (T5 : `net_estime`, `type_contrat_applique`,
     /// `total_brut`, `net_a_payer`), par id de mission ; vide pour « À venir ». Valeurs serveur affichées

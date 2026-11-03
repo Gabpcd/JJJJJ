@@ -74,8 +74,16 @@ public enum MesMissionsPresentation {
     public struct Badge: Equatable, Sendable {
         public var texte: String
         public var ton: TonBadge
-        public init(_ texte: String, ton: TonBadge) { self.texte = texte; self.ton = ton }
+        /// Texte vocalisé quand il diffère du texte affiché (`aria-label` du web, sans pictogramme).
+        public var texteAccessible: String
+
+        public init(_ texte: String, ton: TonBadge, texteAccessible: String? = nil) {
+            self.texte = texte; self.ton = ton; self.texteAccessible = texteAccessible ?? texte
+        }
     }
+
+    /// Pastille d'urgence du web (l.548) : « 🔥 Urgent », `aria-label="Urgent"`.
+    public static let badgeUrgent = Badge("🔥 Urgent", ton: .attention, texteAccessible: "Urgent")
 
     /// Ligne affichée d'un onglet : chaînes déjà formatées, la vue n'ajoute aucune règle.
     public struct Ligne: Equatable, Sendable, Identifiable {
@@ -95,8 +103,15 @@ public enum MesMissionsPresentation {
 
         /// Libellé VoiceOver (et preuve XCUITest) : tout ce que la ligne affiche, dans l'ordre.
         public var texteAccessible: String {
-            (badges.map(\.texte) + [titre, lieu, horaire] + [remuneration, montant].compactMap { $0 }).joined(separator: ", ")
+            (badges.map(\.texteAccessible) + [titre, lieu, horaire] + [remuneration, montant].compactMap { $0 }).joined(separator: ", ")
         }
+    }
+
+    /// Taux horaire serveur d'une ligne (« 26,00 €/h », format natif d'Explorer et du détail) ; masqué
+    /// s'il est absent **ou nul**, comme le web (`{m.taux_horaire_base && …}`, l.470 et l.562).
+    public static func remuneration(_ taux: Double?) -> String? {
+        guard let taux, taux != 0 else { return nil }
+        return AccueilPresentation.remuneration(taux)
     }
 
     /// Candidature en attente (l.428-485) ; `nil` sans mission relue (le web l'écarte, l.188).
@@ -115,13 +130,13 @@ public enum MesMissionsPresentation {
                      lieu: lieu(mission, avecVille: true),
                      jour: jour(affiche?.debut ?? mission.record.debutLe),
                      horaire: plage ?? AccueilPresentation.planningAConfirmer, horaireAConfirmer: plage == nil,
-                     remuneration: AccueilPresentation.remuneration(mission.record.tauxHoraireBase), montant: nil)
+                     remuneration: remuneration(mission.record.tauxHoraireBase), montant: nil)
     }
 
     /// Mission à venir (l.502-560) : statut, urgence, prochain créneau et sa durée.
     public static func ligneAVenir(_ mission: Mission, maintenant: Date) -> Ligne {
         var badges = [badgeStatut(mission.record.statut)]
-        if mission.record.estUrgente { badges.append(Badge("Urgente", ton: .attention)) }
+        if mission.record.estUrgente { badges.append(badgeUrgent) }
         let analyse = completude(mission)
         let prochain = analyse.complet
             ? DisponibilitePointage.prochainCreneauPointage(analyse.creneauxPlanifies, maintenant: maintenant) : nil
@@ -139,7 +154,7 @@ public enum MesMissionsPresentation {
         }
         return Ligne(id: mission.id, badges: badges, titre: mission.record.intitule, lieu: lieu(mission, avecVille: true),
                      jour: jour(prochain?.debut ?? mission.record.debutLe), horaire: horaire, horaireAConfirmer: aConfirmer,
-                     remuneration: AccueilPresentation.remuneration(mission.record.tauxHoraireBase), montant: nil)
+                     remuneration: remuneration(mission.record.tauxHoraireBase), montant: nil)
     }
 
     /// Mission passée (l.566-598) : statut, période, établissement, montant serveur selon le régime.

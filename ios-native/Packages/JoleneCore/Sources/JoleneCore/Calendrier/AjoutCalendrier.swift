@@ -56,10 +56,18 @@ public enum CalendrierMission {
 
     /// `https://jolene.app/soignant/missions/{id}` (identifiant encodé comme `encodeURIComponent`).
     public static func url(missionId: String) -> URL? {
-        var autorises = CharacterSet.alphanumerics
-        autorises.insert(charactersIn: "-_.!~*'()")
-        guard let id = missionId.addingPercentEncoding(withAllowedCharacters: autorises), !id.isEmpty else { return nil }
+        guard let id = encodeURIComponent(missionId), !id.isEmpty else { return nil }
         return URL(string: "https://jolene.app/soignant/missions/\(id)")
+    }
+
+    /// Caractères laissés tels quels par `encodeURIComponent` : lettres et chiffres **ASCII** et
+    /// `-_.!~*'()`. Jeu explicite : `CharacterSet.alphanumerics` contient aussi les lettres et chiffres
+    /// Unicode (« é », « ١ »), que `encodeURIComponent` encode en UTF-8.
+    static let nonReserves = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")
+
+    /// Port de `encodeURIComponent` (UTF-8, `%XX` en majuscules) ; `nil` si la chaîne n'est pas encodable.
+    static func encodeURIComponent(_ texte: String) -> String? {
+        texte.addingPercentEncoding(withAllowedCharacters: nonReserves)
     }
 
     static func cle(missionId: String, creneau: MissionSlot, rang: Int) -> String {
@@ -145,13 +153,16 @@ public struct IssueAjoutCalendrier: Equatable, Sendable {
 
     public static let planningNonConfirme = "Le planning de cette mission n'est pas encore confirmé : rien n'a été ajouté à votre calendrier."
     public static let accesRefuse = "L'accès au calendrier n'est pas autorisé. Vous pouvez l'activer dans les Réglages de l'appareil, rubrique Jolene."
-    public static let dejaAjoutes = "Les créneaux de cette mission sont déjà dans votre calendrier."
+    /// Ce que l'app sait vraiment (écriture seule, aucune relecture du calendrier) : ces créneaux ont
+    /// été ajoutés depuis Jolene sur cet appareil. Un événement supprimé depuis par l'utilisateur n'est
+    /// pas réajouté (`RECETTE_DEVICE_LOT1.md` §4).
+    public static let dejaAjoutes = "Les créneaux de cette mission ont déjà été ajoutés à votre calendrier depuis Jolene sur cet appareil."
     public static let echecTotal = "Le calendrier n'a pas pu enregistrer cette mission. Réessayez."
 
     static func ajout(_ ajoutes: Int, deja: Int) -> String {
         let base = ajoutes > 1 ? "\(ajoutes) créneaux ajoutés à votre calendrier" : "1 créneau ajouté à votre calendrier"
         guard deja > 0 else { return base + "." }
-        return base + " (\(deja) déjà présent\(deja > 1 ? "s" : ""))."
+        return base + " (\(deja) déjà ajouté\(deja > 1 ? "s" : "") auparavant)."
     }
 
     static func partiel(_ ajoutes: Int, echecs: Int) -> String {
@@ -233,9 +244,12 @@ public final class AjoutCalendrier {
 
 /// Calendrier du monde démo : aucun accès système, aucune écriture réelle ; les événements « écrits »
 /// sont gardés en mémoire (preuve XCUITest par le message d'issue). `refuse` (surcharge DEBUG
-/// `JOLENE_FORCE_CALENDRIER_REFUS`) simule un accès refusé.
+/// `JOLENE_FORCE_CALENDRIER_REFUS`, lue par `AppContainer` seulement) simule un accès refusé.
 @MainActor
 public final class CalendrierAppareilDemo: CalendrierAppareil {
+    /// Variable d'environnement DEBUG du refus simulé, lue par `AppContainer` (liste des surcharges).
+    public nonisolated static let variableRefus = "JOLENE_FORCE_CALENDRIER_REFUS"
+
     public private(set) var evenements: [EvenementCalendrier] = []
     public private(set) var demandes = 0
     private let refuse: Bool

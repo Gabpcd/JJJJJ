@@ -59,7 +59,7 @@ struct MainTabView: View {
         }
         .tint(JoleneColor.rose700)
         // Lot 1, T5 : ajout au calendrier (Accueil et Mes missions), une instance par session prête.
-        .ajoutCalendrier(modeDemo: container.isDemo, userId: snapshot.user.id)
+        .ajoutCalendrier(container: container, userId: snapshot.user.id)
         // Fond de carte (`carteTuiles`) : injecté à la racine par `RootView` (revue T4a), hérité ici.
     }
 }
