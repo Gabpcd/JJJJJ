@@ -14,7 +14,8 @@ final class Lot1PortsTests: XCTestCase {
 
     func testInitDuLot0LaisseTousLesPortsDuLot1NonCables() {
         let gateways = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
-        XCTAssertEqual(gateways.unwiredPorts, Self.portsLot1)
+        // Lot 3 (T1) : le bloc « Lot 3 » suit le lot 1 dans `unwiredPorts` (`Lot3PortsTests`).
+        XCTAssertEqual(gateways.unwiredPorts, Self.portsLot1 + Lot3PortsTests.portsLot3)
         XCTAssertTrue(gateways.dashboard is UnwiredDashboardPort)
         XCTAssertTrue(gateways.candidature is UnwiredCandidaturePort)
         XCTAssertTrue(gateways.presence is UnwiredPresencePort)
@@ -28,10 +29,10 @@ final class Lot1PortsTests: XCTestCase {
         XCTAssertTrue(gateways.clock is SystemClock, "défaut d'horloge du lot 0 conservé")
     }
 
-    func testSecondInitCompletNeLaisseAucunPortNonCable() {
+    func testSecondInitCompletNeLaisseAucunPortDuLot1NonCable() {
         let horloge = FixedClock(Date(timeIntervalSince1970: 1))
         let gateways = Lot1Fakes.gateways(clock: horloge)
-        XCTAssertEqual(gateways.unwiredPorts, [])
+        XCTAssertEqual(gateways.unwiredPorts, Lot3PortsTests.portsLot3, "seuls les ports du lot 3 restent à assigner")
         XCTAssertTrue(gateways.audit is FakeAudit)
         XCTAssertTrue(gateways.flags is FakeFlags)
         XCTAssertTrue(gateways.justificatifs is FakeJustificatifs)
@@ -42,7 +43,7 @@ final class Lot1PortsTests: XCTestCase {
         var gateways = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
         gateways.audit = FakeAudit()
         gateways.flags = FakeFlags()
-        XCTAssertEqual(gateways.unwiredPorts, Self.portsLot1.filter { $0 != "audit" && $0 != "flags" })
+        XCTAssertEqual(gateways.unwiredPorts, Self.portsLot1.filter { $0 != "audit" && $0 != "flags" } + Lot3PortsTests.portsLot3)
     }
 
     func testChaquePortNonCableRefuseExplicitementEnCitantSaTranche() async {
@@ -109,7 +110,7 @@ final class Lot1PortsTests: XCTestCase {
 
     func testActionsDuLot1() {
         XCTAssertEqual(ActionPlanning.allCases.map(\.rawValue), ["POSTULER", "ACCEPTER", "PROPOSITION"])
-        XCTAssertEqual(AuditAction.allCases.map(\.rawValue), ["MISSION_ASSIGNATION"])
+        XCTAssertEqual(AuditAction.allCases.first, .missionAssignation, "liste complète : Lot3PortsTests.testActionsAuditDuLot3")
         XCTAssertEqual(MissionsPage.taille, 50)
     }
 
