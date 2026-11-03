@@ -163,9 +163,12 @@ private struct Fixture {
     var mutable: MutableAuthState?
     var events: AuthEventEmitter?
     var timeout: TimeInterval = SessionController.defaultResolutionTimeout
+    /// Lot 5 (T2a) : ports de l'espace établissement ; non câblés par défaut (un rôle établissement
+    /// échoue alors à la confirmation du périmètre : jamais ouvert sans `fn_mes_permissions_etab`).
+    var etablissement: EtablissementGateways = .nonCable
 
     func gateways() -> Gateways {
-        Gateways(
+        var gateways = Gateways(
             auth: FakeAuth(restored: restored, restoreError: restoreError, signInResult: signInResult,
                            signOutError: signOutError, signInGate: signInGate, log: log,
                            restoreGate: restoreGate, restoreGateFromCall: restoreGateFromCall, mutable: mutable, events: events),
@@ -173,6 +176,8 @@ private struct Fixture {
             missions: FakeMissions(profile: profile, profileError: profileError, gate: profileGate, log: log),
             clock: FixedClock(confirmedAt)
         )
+        gateways.etablissement = etablissement
+        return gateways
     }
 
     func controller() -> SessionController { SessionController(gateways: gateways(), resolutionTimeout: timeout) }
@@ -472,15 +477,24 @@ final class SessionControllerTests: XCTestCase {
         XCTAssertFalse(entries.contains { $0.contains("currentRole") }, "pas de résolution de rôle après un échec de connexion")
     }
 
+    /// Changé volontairement au lot 5 (T2a, correction 11) : le lot 0 bloquait l'établissement. Le serveur
+    /// gagne toujours, mais ouvre désormais l'espace établissement, confirmé par `fn_mes_permissions_etab`.
     func testServerRoleOverridesAppMetadataShortcut() async {
         var fixture = Fixture()
         fixture.restored = user(role: "SOIGNANT")
         fixture.role = .success(RoleResult(role: "ADMIN_ETABLISSEMENT", etablissementId: "etab-9"))
+        var etablissement = EtablissementGateways()
+        etablissement.session = FakeEtabSession(etablissementId: "etab-9", log: fixture.log)
+        fixture.etablissement = etablissement
         let controller = fixture.controller()
         let state = await controller.start()
-        XCTAssertEqual(state, .blocked(.unsupportedRole("ADMIN_ETABLISSEMENT")), "app_metadata disait SOIGNANT, le serveur gagne")
+        guard case let .readyEtablissement(snapshot) = state else {
+            return XCTFail("app_metadata disait SOIGNANT, le serveur gagne : espace établissement attendu, obtenu \(state)")
+        }
+        XCTAssertEqual(snapshot.context.etablissementId, "etab-9")
+        XCTAssertNil(state.snapshot, "aucun instantané soignant fabriqué")
         let entries = await fixture.log.entries
-        XCTAssertFalse(entries.contains { $0.hasPrefix("profile(") }, "aucun chargement de profil pour un rôle non servi")
+        XCTAssertFalse(entries.contains { $0.hasPrefix("profile(") }, "aucun chargement de profil soignant pour un établissement")
     }
 
     func testServerRoleUpgradesStaleAppMetadata() async {
@@ -525,8 +539,10 @@ final class SessionControllerTests: XCTestCase {
         XCTAssertEqual(entries, ["restoreSession"])
     }
 
+    /// Changé volontairement au lot 5 (T2a, correction 11) : `ADMIN_ETABLISSEMENT` est servi
+    /// (`SessionControllerEtablissementTests`) ; seuls les rôles d'administration restent bloqués.
     func testNonSoignantRoleIsBlocked() async {
-        for raw in ["ADMIN_PLATEFORME", "ADMIN_GROUPE", "ADMIN_ETABLISSEMENT"] {
+        for raw in ["ADMIN_PLATEFORME", "ADMIN_GROUPE"] {
             var fixture = Fixture()
             fixture.restored = user(role: raw)
             fixture.role = .success(RoleResult(role: raw))

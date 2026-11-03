@@ -154,6 +154,9 @@ class JoleneUITestCase: XCTestCase {
     static let tabSymbols: [String: String] = [
         "tab-accueil": "house", "tab-explorer": "magnifyingglass", "tab-missions": "list.clipboard",
         "tab-revenus": "banknote", "tab-profil": "person",
+        // Lot 5 (T2a) : onglets de l'espace établissement (`EtablissementTabView`, D13).
+        "tab-etab-accueil": "house", "tab-etab-missions": "list.clipboard", "tab-etab-presences": "checkmark.seal",
+        "tab-etab-messages": "bubble.left.and.bubble.right", "tab-etab-compte": "person.crop.circle",
     ]
 
     /// Boutons d'onglet : dans l'élément `TabBar` (barre basse, iPhone) ou, sur iPadOS 18 et
