@@ -112,6 +112,12 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   déduit du libellé affiché (les libellés changent, vouvoiement compris).
 - Les XCUITest atteignent un contrôle par défilement borné dans le conteneur
   identifié ; aucun scénario n'est sauté parce qu'un contrôle n'est pas visible.
+- Budget CI (revue B8 de T5, 2e passe) : chaque classe XCUITest démo est rangée dans un
+  groupe de `scripts/mobile/ui-test-groups.mjs` (un job par format et par groupe dans
+  `ios-swift-ci.yml`, étape de 30 min chacun ; le job « Cœur » échoue sur une classe non
+  rangée). Un lancement coûte une connexion démo (jusqu'à 220 s sur iPad paysage) : les
+  recettes d'états dont les surcharges sont compatibles partagent un lancement, et un groupe
+  qui dépasse l'alerte de 20 min est scindé avant la tranche suivante.
 
 ## 7. Preuves par niveau
 
@@ -121,7 +127,7 @@ critères de sortie sont acquis. Aucun niveau ne prouve les autres.
 | Niveau | Ce qu'il prouve | Où |
 |---|---|---|
 | 1. Tests injectés | Règles pures, contrats de décodage, transports simulés (PGRST202, 300-303) | `swift test` dans `JoleneCore` et `JoleneSupabase` ; vecteurs golden exportés des tests vitest |
-| 2. Démo simulateur | Navigation, écrans, orientation, aucune requête réseau en mode démo | `JoleneUITests` sur iPhone, iPad portrait, iPad paysage (`ios-swift-ci.yml`) |
+| 2. Démo simulateur | Navigation, écrans, orientation, aucune requête réseau en mode démo | `JoleneUITests` sur iPhone, iPad portrait, iPad paysage (`ios-swift-ci.yml`, un job par format et par groupe de `scripts/mobile/ui-test-groups.mjs`) |
 | 3. STAGING | Connexion réelle, rôle, lecture et mutations relues sur `mejpriaetwgtcstbgfid` | `ios-swift-staging.yml` (dispatch manuel, environnement protégé) |
 | 4. Fournisseurs TEST | Stripe TEST, APNs sandbox, SMS de recette | Workflows dédiés, preuves reliées aux objets backend |
 | 5. Appareil physique | Caméra, GPS, Keychain, Face ID, push, arrêt forcé | Recette consignée dans `docs/mobile-swift/RECETTE_DEVICE_LOT<n>.md` |
