@@ -10,7 +10,9 @@
  * Un hook `module.register()` résout l'alias `@/lib/<module>` et les imports
  * relatifs sans extension de ces modules (lot 1, T2). Lot 3, T2 : liste
  * d'exceptions nommée pour `src/lib/pushNative.ts` seulement (modules inertes,
- * décision 22 du lot 3) et règles push, revenus, profil, session et RPPS.
+ * décision 22 du lot 3) et règles push, revenus, profil, session et RPPS ; les
+ * `case` de `navigationPathForEvent` sont lus par le compilateur TypeScript
+ * (`typescript`, dépendance de développement du dépôt), bornés au corps de la fonction.
  *
  * Les vecteurs proviennent des tests vitest existants ET de grilles
  * systématiques (changements d'heure Europe/Paris, fins de mois, années
@@ -180,6 +182,7 @@ const validationProfil = await lib('valider-profil-soignant.ts');
 const modesExercice = await lib('preferencesModesExercice.ts');
 const constantes = await lib('constantes.ts');
 const SESSION_COUNT = resolve(RACINE, 'src/lib/session-count.ts');
+const ts = (await import('typescript')).default;
 
 // ---------------------------------------------------------------------------
 // Outils
@@ -211,6 +214,27 @@ function dernierDimanche(annee, mois) {
 
 function dernierJourDuMois(annee, mois) {
   return new Date(Date.UTC(annee, mois, 0, 12)).getUTCDate();
+}
+
+/**
+ * JSON canonique (clés triées) d'une valeur telle que `JSON.stringify` l'écrit : deux valeurs
+ * ont le même rendu si et seulement si leurs JSON écrits sont identiques à l'ordre des clés près
+ * (comparaison `toEqual` sans dépendre de l'ordre des clés). Comme `JSON.stringify` : `toJSON`
+ * appliqué ; clé d'objet de valeur `undefined`, fonction ou symbole omise ; même valeur dans un
+ * tableau (trou compris) écrite `null` ; nombre non fini écrit `null`. Une valeur que JSON n'écrit
+ * pas rend `undefined`, texte non JSON distinct de tout rendu écrit.
+ */
+function canon(valeur) {
+  if (valeur !== null && typeof valeur === 'object' && typeof valeur.toJSON === 'function') return canon(valeur.toJSON());
+  if (valeur === undefined || typeof valeur === 'function' || typeof valeur === 'symbol') return 'undefined';
+  if (Array.isArray(valeur)) {
+    return `[${Array.from(valeur, (element) => { const rendu = canon(element); return rendu === 'undefined' ? 'null' : rendu; }).join(',')}]`;
+  }
+  if (valeur !== null && typeof valeur === 'object') {
+    const paires = Object.keys(valeur).sort().map((cle) => [cle, canon(valeur[cle])]).filter(([, rendu]) => rendu !== 'undefined');
+    return `{${paires.map(([cle, rendu]) => `${JSON.stringify(cle)}:${rendu}`).join(',')}}`;
+  }
+  return JSON.stringify(valeur);
 }
 
 // Garde de `canon` (revue de L3-T2) : la clé de fusion des vecteurs doit suivre le JSON
@@ -1342,22 +1366,14 @@ function vecteursCompletudePlanning() {
 // Règles 8 à 14 : lot 3, T2 (push, session, revenus, profil, modes d'exercice, RPPS)
 // ---------------------------------------------------------------------------
 
-/** JSON canonique (clés triées) : compare `toEqual` sans dépendre de l'ordre des clés. */
-function canon(valeur) {
-  if (Array.isArray(valeur)) return `[${valeur.map(canon).join(',')}]`;
-  if (valeur && typeof valeur === 'object') {
-    return `{${Object.keys(valeur).sort().map((cle) => `${JSON.stringify(cle)}:${canon(valeur[cle])}`).join(',')}}`;
-  }
-  return JSON.stringify(valeur ?? null);
-}
-
 /**
  * Garde des cas vitest : l'export échoue si le web ne vérifie plus son propre test
- * (`partiel` = `toMatchObject`). Le vecteur exporté porte toujours la sortie complète.
+ * (`partiel` = `toMatchObject`). Comparaison sur la forme écrite (`canon`) : une clé de valeur
+ * `undefined` vaut une clé absente, jamais `null`. Le vecteur exporté porte la sortie complète.
  */
 function verifieVitest(regle, name, obtenu, attendu, partiel = false) {
   const ok = partiel && obtenu && typeof obtenu === 'object'
-    ? Object.entries(attendu).every(([cle, valeur]) => canon(obtenu[cle]) === canon(valeur))
+    ? Object.entries(attendu).every(([cle, valeur]) => canon({ [cle]: obtenu[cle] }) === canon({ [cle]: valeur }))
     : canon(obtenu) === canon(attendu);
   if (!ok) throw new Error(`${regle}: « ${name} » ne vérifie plus l'attente vitest ${canon(attendu)} (obtenu ${canon(obtenu)}).`);
   return obtenu;
@@ -1381,11 +1397,26 @@ function vecteursPushRouting() {
     c.ajoute(name, { fonction: 'navigationPathForEvent', data, role }, obtenu);
   };
 
-  // Types routés, lus dans les `case` du switch : garde de dérive (le port Swift doit
-  // router exactement la même liste, dans le même ordre).
+  // Types routés, lus dans les `case` du corps de `navigationPathForEvent` seul (arbre du
+  // compilateur TypeScript : une fonction voisine n'y entre pas) : garde de dérive (le port
+  // Swift doit router exactement la même liste, dans le même ordre).
   const source = readFileSync(PUSH_NATIVE, 'utf8');
-  const corps = source.slice(source.indexOf('export function navigationPathForEvent'));
-  const types = [...corps.matchAll(/case '([A-Z0-9_]+)':/g)].map((m) => m[1]);
+  const arbre = ts.createSourceFile(PUSH_NATIVE, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const declarations = arbre.statements.filter((noeud) => ts.isFunctionDeclaration(noeud) && noeud.name?.text === 'navigationPathForEvent');
+  if (declarations.length !== 1 || !declarations[0].body) {
+    throw new Error('push-routing: déclaration de navigationPathForEvent introuvable ou dupliquée dans src/lib/pushNative.ts.');
+  }
+  const types = [];
+  const visite = (noeud) => {
+    if (ts.isCaseClause(noeud)) {
+      if (!ts.isStringLiteral(noeud.expression)) {
+        throw new Error(`push-routing: case non littéral dans navigationPathForEvent (${noeud.expression.getText(arbre)}).`);
+      }
+      types.push(noeud.expression.text);
+    }
+    ts.forEachChild(noeud, visite);
+  };
+  visite(declarations[0].body);
   if (types.length === 0 || new Set(types).size !== types.length) {
     throw new Error('push-routing: liste des types de navigationPathForEvent illisible ou dupliquée.');
   }
@@ -1496,8 +1527,9 @@ function vecteursPushRouting() {
  * Le module lit `localStorage` / `sessionStorage` et garde un drapeau de module :
  * chaque vecteur charge une instance neuve (`?instance=N`) sur des stockages simulés.
  * Domaine : compteurs dont le successeur reste sous 1e21 (au-delà, `String(n)` passe
- * en notation exponentielle) ; « stockage indisponible » est hors domaine natif
- * (UserDefaults ne lève pas).
+ * en notation exponentielle) ; au-delà de 2^53, `String(n)` écrit les chiffres les plus
+ * courts qui relisent le même nombre (vecteurs 2^60, 2^69, 21 chiffres), que le port
+ * reproduit. « Stockage indisponible » est hors domaine natif (UserDefaults ne lève pas).
  */
 async function vecteursSessionCount() {
   const c = new Collecteur('session-count');

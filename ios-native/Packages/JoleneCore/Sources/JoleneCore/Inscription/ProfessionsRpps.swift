@@ -3,7 +3,11 @@ import Foundation
 /// Listes RPPS de `src/lib/constantes.ts`, recopiées verbatim et gardées par le vecteur de dérive
 /// `professions-rpps.json` (correction 20, décision 11 du lot 3). Ce n'est pas une règle juridique
 /// nouvelle : la même liste que le web (`InscriptionSoignant.tsx` l.201-208, l.221-225) et que
-/// `register-soignant` (l.49, l.260-261), qui seul vérifie le numéro.
+/// `register-soignant` (l.49, l.260-261), qui seul vérifie le numéro. Ces listes ne décident pas
+/// seules de l'affichage du champ : le web montre un RPPS optionnel à l'aide-soignant bien que `AS`
+/// soit sans RPPS (`InscriptionSoignant.tsx` l.205, l.221-222 :
+/// `afficherChampRpps = !!rppsRequis || form.profession === 'AS'`) ; l'écran d'inscription (T8)
+/// porte cette exception.
 public enum ProfessionsRpps {
     /// `PROFESSIONS_SANS_RPPS` (constantes.ts l.55) : vérification par diplôme et pièce d'identité.
     public static let sansRpps = ["AS", "AES", "AUXILIAIRE_PUERICULTURE"]

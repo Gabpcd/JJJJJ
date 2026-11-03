@@ -55,6 +55,28 @@
     }
   },
   {
+    "name": "estSessionRecurrente/deux-puissance-60",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "1152921504606846976"
+    },
+    "expected": {
+      "numero": 1152921504606847000,
+      "recurrente": true
+    }
+  },
+  {
+    "name": "estSessionRecurrente/deux-puissance-69",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "590295810358705651712"
+    },
+    "expected": {
+      "numero": 590295810358705700000,
+      "recurrente": true
+    }
+  },
+  {
     "name": "estSessionRecurrente/deux-suffixe-texte",
     "input": {
       "fonction": "estSessionRecurrente",
@@ -220,6 +242,17 @@
     }
   },
   {
+    "name": "estSessionRecurrente/vingt-et-un-chiffres",
+    "input": {
+      "fonction": "estSessionRecurrente",
+      "compteur": "123456789012345678901"
+    },
+    "expected": {
+      "numero": 123456789012345680000,
+      "recurrente": true
+    }
+  },
+  {
     "name": "estSessionRecurrente/zero",
     "input": {
       "fonction": "estSessionRecurrente",
@@ -364,6 +397,74 @@
       ],
       "compteurApres": "٢",
       "recurrenteApres": false
+    }
+  },
+  {
+    "name": "incrementerSession/deux-puissance-60/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "1152921504606846976",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1152921504606847000,
+        1152921504606847000
+      ],
+      "compteurApres": "1152921504606847000",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/deux-puissance-60/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "1152921504606846976",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        1152921504606847000,
+        1152921504606847000
+      ],
+      "compteurApres": "1152921504606846976",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/deux-puissance-69/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "590295810358705651712",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        590295810358705700000,
+        590295810358705700000
+      ],
+      "compteurApres": "590295810358705700000",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/deux-puissance-69/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "590295810358705651712",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        590295810358705700000,
+        590295810358705700000
+      ],
+      "compteurApres": "590295810358705651712",
+      "recurrenteApres": true
     }
   },
   {
@@ -907,6 +1008,40 @@
         100000000000000000000
       ],
       "compteurApres": "99999999999999999999",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/vingt-et-un-chiffres/nouvelle-session",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "123456789012345678901",
+      "dejaCompteeCetteSession": false,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        123456789012345680000,
+        123456789012345680000
+      ],
+      "compteurApres": "123456789012345680000",
+      "recurrenteApres": true
+    }
+  },
+  {
+    "name": "incrementerSession/vingt-et-un-chiffres/session-deja-comptee",
+    "input": {
+      "fonction": "incrementerSession",
+      "compteur": "123456789012345678901",
+      "dejaCompteeCetteSession": true,
+      "appels": 2
+    },
+    "expected": {
+      "retours": [
+        123456789012345680000,
+        123456789012345680000
+      ],
+      "compteurApres": "123456789012345678901",
       "recurrenteApres": true
     }
   },

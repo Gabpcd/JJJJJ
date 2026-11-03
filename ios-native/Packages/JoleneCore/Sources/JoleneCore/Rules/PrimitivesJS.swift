@@ -21,6 +21,8 @@ enum PrimitivesJS {
 
     /// `String.prototype.trim`, scalaire par scalaire (les espaces JavaScript sont tous dans le plan
     /// multilingue de base : l'analyse UTF-16 et l'analyse par scalaire coïncident).
+    /// L2-T2 porte la même primitive (`JSTexte.trim` / `estEspaceJS`, Documents/ClassementDocument.swift,
+    /// même ensemble d'espaces) : à l'intégration des deux tranches, un seul port subsiste, l'autre délègue.
     static func trim(_ texte: String) -> String {
         let scalaires = Array(texte.unicodeScalars)
         guard let debut = scalaires.firstIndex(where: { !estEspace($0) }),
@@ -144,9 +146,26 @@ enum PrimitivesJS {
         return Double(String(format: "%.2f", valeur)) ?? valeur
     }
 
-    /// `String(n)` d'un entier fini inférieur à 1e21 en valeur absolue (écriture décimale complète).
+    /// `String(n)` d'un entier fini inférieur à 1e21 en valeur absolue (`Number::toString`) : les
+    /// chiffres les plus courts qui relisent le même `Double` (le plus proche en cas d'égalité),
+    /// complétés de zéros jusqu'à l'unité. Sous 2^53, ce sont tous les chiffres ; au-delà, 2^60
+    /// s'écrit « 1152921504606847000 », pas « 1152921504606846976 » (valeur exacte, `%.0f`). Les
+    /// chiffres sont ceux de `description`, qui suit la même règle ; seule l'écriture diffère
+    /// (« 1.152921504606847e+18 »). Hors domaine (non entier, non fini, ≥ 1e21) : `description`.
     static func texteEntier(_ valeur: Double) -> String {
-        valeur == 0 ? "0" : String(format: "%.0f", valeur)
+        guard valeur != 0 else { return "0" } // -0 compris, comme `String(-0)`
+        guard valeur.isFinite, valeur == valeur.rounded(.towardZero), abs(valeur) < 1e21 else { return valeur.description }
+        var mantisse = Substring(abs(valeur).description) // « 42.0 », « 9.007199254740994e+15 », « 1e+16 »
+        var exposant = 0
+        if let e = mantisse.firstIndex(of: "e") {
+            exposant = Int(mantisse[mantisse.index(after: e)...]) ?? 0
+            mantisse = mantisse[..<e]
+        }
+        let entiere = mantisse.prefix { $0 != "." }
+        var chiffres = String(entiere) + mantisse.dropFirst(entiere.count + 1)
+        while chiffres.count > 1, chiffres.last == "0" { chiffres.removeLast() }
+        let zeros = max(0, entiere.count + exposant - chiffres.count)
+        return (valeur < 0 ? "-" : "") + chiffres + String(repeating: "0", count: zeros)
     }
 
     // MARK: - URI

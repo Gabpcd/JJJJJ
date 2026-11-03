@@ -24,7 +24,8 @@ public enum PushPolicy {
 /// persistée (`jolene_session_count` côté web, UserDefaults côté natif), `dejaCompteeCetteSession`
 /// le drapeau de session (`jolene_session_counted`) ; une instance ne compte qu'une fois (drapeau
 /// de module du web). Côté natif, une session est un lancement à froid : le drapeau de session
-/// part toujours de `false`. Domaine : compteurs dont le successeur reste sous 1e21.
+/// part toujours de `false`. Domaine : compteurs dont le successeur reste sous 1e21 ; au-delà de
+/// 2^53, le compteur écrit suit `String(n)` (chiffres les plus courts, `PrimitivesJS.texteEntier`).
 public struct CompteurSessions: Equatable, Sendable {
     public private(set) var compteurBrut: String?
     public private(set) var dejaCompteeCetteSession: Bool
