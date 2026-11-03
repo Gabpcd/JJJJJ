@@ -16,10 +16,19 @@ public struct QRCodeImage: View {
     nonisolated public static let unavailableText = "QR code indisponible"
 
     /// Image du code (`scale` pixels par module, zone de silence d'un module incluse par CoreImage), `nil` si la
-    /// génération échoue. Charge encodée en UTF-8.
+    /// génération échoue. Charge encodée en UTF-8. Une image déjà produite pour la même charge et le même facteur
+    /// est réutilisée (`body` est réévalué à chaque rendu) ; filtres et contexte ne sont créés qu'au premier calcul.
     nonisolated public static func cgImage(for payload: String, scale: Int = 8) -> CGImage? {
-        guard scale > 0,
-              let generateur = CIFilter(name: "CIQRCodeGenerator"),
+        guard scale > 0 else { return nil }
+        let cle = "\(scale)|\(payload)" as NSString
+        if let image = Rendu.partage.images.object(forKey: cle) { return image }
+        guard let image = genere(payload, scale: scale) else { return nil }
+        Rendu.partage.images.setObject(image, forKey: cle)
+        return image
+    }
+
+    nonisolated private static func genere(_ payload: String, scale: Int) -> CGImage? {
+        guard let generateur = CIFilter(name: "CIQRCodeGenerator"),
               let couleurs = CIFilter(name: "CIFalseColor"),
               let sombre = JoleneHex.parse(foregroundHex), let clair = JoleneHex.parse(backgroundHex) else { return nil }
         generateur.setValue(Data(payload.utf8), forKey: "inputMessage")
@@ -30,7 +39,20 @@ public struct QRCodeImage: View {
         couleurs.setValue(CIColor(red: clair.red, green: clair.green, blue: clair.blue), forKey: "inputColor1")
         guard let colore = couleurs.outputImage else { return nil }
         let agrandi = colore.transformed(by: CGAffineTransform(scaleX: CGFloat(scale), y: CGFloat(scale)))
-        return CIContext(options: [.useSoftwareRenderer: false]).createCGImage(agrandi, from: agrandi.extent.integral)
+        return Rendu.partage.contexte.createCGImage(agrandi, from: agrandi.extent.integral)
+    }
+
+    /// Contexte Core Image partagé et images déjà produites. `@unchecked Sendable` : un `CIContext` est immuable et
+    /// peut être partagé entre fils (documentation Core Image), `NSCache` est sûr entre fils ; aucune autre donnée
+    /// mutable. Cache borné (quelques liens de parrainage au plus).
+    final class Rendu: @unchecked Sendable {
+        static let partage = Rendu()
+        let contexte = CIContext(options: [.useSoftwareRenderer: false])
+        let images: NSCache<NSString, CGImage> = {
+            let cache = NSCache<NSString, CGImage>()
+            cache.countLimit = 16
+            return cache
+        }()
     }
 
     private let payload: String
