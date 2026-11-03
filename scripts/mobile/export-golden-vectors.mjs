@@ -224,13 +224,14 @@ class Collecteur {
 
   ajoute(name, input, expected) {
     if (this.noms.has(name)) throw new Error(`${this.regle}: nom de vecteur dupliqué « ${name} »`);
-    // Une entrée identique (même JSON) n'apporte aucune couverture : elle est fusionnée
-    // avec le premier vecteur qui la porte (les cas vitest précèdent les grilles). Un
-    // attendu différent pour la même entrée serait une incohérence de l'export.
-    const cle = JSON.stringify(input);
+    // Une entrée identique (même JSON canonique, clés triées, comme le contrôle Swift de
+    // `RulesGoldenTests`) n'apporte aucune couverture : elle est fusionnée avec le premier
+    // vecteur qui la porte (les cas vitest précèdent les grilles). Un attendu différent pour
+    // la même entrée serait une incohérence de l'export.
+    const cle = canon(input);
     const existant = this.entrees.get(cle);
     if (existant) {
-      if (JSON.stringify(existant.expected) !== JSON.stringify(expected)) {
+      if (canon(existant.expected) !== canon(expected)) {
         throw new Error(`${this.regle}: entrée identique avec attendus différents (« ${existant.name} », « ${name} »)`);
       }
       this.fusionnes.push(`${name} → ${existant.name}`);

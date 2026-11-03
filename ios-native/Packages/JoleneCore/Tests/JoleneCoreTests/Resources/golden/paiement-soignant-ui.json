@@ -459,24 +459,6 @@
     }
   },
   {
-    "name": "classerPaiementSalaire/grille/confirme/confirme-faux/conteste-faux/montant-300",
-    "input": {
-      "fonction": "classerPaiementSalaire",
-      "paiement": {
-        "confirme_par_soignant": false,
-        "conteste": false,
-        "montant_net": 300,
-        "statut": "CONFIRME"
-      }
-    },
-    "expected": {
-      "montantDeclare": 300,
-      "montantReferenceEmployeur": null,
-      "etat": "a_verifier",
-      "libelle": "Réception à vérifier"
-    }
-  },
-  {
     "name": "classerPaiementSalaire/grille/confirme/confirme-faux/conteste-faux/montant-null",
     "input": {
       "fonction": "classerPaiementSalaire",
@@ -618,24 +600,6 @@
       "montantReferenceEmployeur": null,
       "etat": "conteste",
       "libelle": "Paiement contesté"
-    }
-  },
-  {
-    "name": "classerPaiementSalaire/grille/confirme/confirme-null/conteste-faux/montant-300",
-    "input": {
-      "fonction": "classerPaiementSalaire",
-      "paiement": {
-        "confirme_par_soignant": null,
-        "conteste": false,
-        "montant_net": 300,
-        "statut": "CONFIRME"
-      }
-    },
-    "expected": {
-      "montantDeclare": 300,
-      "montantReferenceEmployeur": null,
-      "etat": "a_verifier",
-      "libelle": "Réception à vérifier"
     }
   },
   {
@@ -801,42 +765,6 @@
     }
   },
   {
-    "name": "classerPaiementSalaire/grille/confirme/confirme-vrai/conteste-faux/montant-null",
-    "input": {
-      "fonction": "classerPaiementSalaire",
-      "paiement": {
-        "confirme_par_soignant": true,
-        "conteste": false,
-        "montant_net": null,
-        "statut": "CONFIRME"
-      }
-    },
-    "expected": {
-      "montantDeclare": null,
-      "montantReferenceEmployeur": null,
-      "etat": "a_verifier",
-      "libelle": "Réception à vérifier"
-    }
-  },
-  {
-    "name": "classerPaiementSalaire/grille/confirme/confirme-vrai/conteste-faux/montant-texte-zero",
-    "input": {
-      "fonction": "classerPaiementSalaire",
-      "paiement": {
-        "confirme_par_soignant": true,
-        "conteste": false,
-        "montant_net": "0",
-        "statut": "CONFIRME"
-      }
-    },
-    "expected": {
-      "montantDeclare": null,
-      "montantReferenceEmployeur": null,
-      "etat": "a_verifier",
-      "libelle": "Réception à vérifier"
-    }
-  },
-  {
     "name": "classerPaiementSalaire/grille/confirme/confirme-vrai/conteste-null/montant-300",
     "input": {
       "fonction": "classerPaiementSalaire",
@@ -888,24 +816,6 @@
       "montantReferenceEmployeur": null,
       "etat": "a_verifier",
       "libelle": "Réception à vérifier"
-    }
-  },
-  {
-    "name": "classerPaiementSalaire/grille/confirme/confirme-vrai/conteste-vrai/montant-300",
-    "input": {
-      "fonction": "classerPaiementSalaire",
-      "paiement": {
-        "confirme_par_soignant": true,
-        "conteste": true,
-        "montant_net": 300,
-        "statut": "CONFIRME"
-      }
-    },
-    "expected": {
-      "montantDeclare": 300,
-      "montantReferenceEmployeur": null,
-      "etat": "conteste",
-      "libelle": "Paiement contesté"
     }
   },
   {
@@ -1263,24 +1173,6 @@
     },
     "expected": {
       "montantDeclare": null,
-      "montantReferenceEmployeur": null,
-      "etat": "conteste",
-      "libelle": "Paiement contesté"
-    }
-  },
-  {
-    "name": "classerPaiementSalaire/grille/conteste/confirme-vrai/conteste-faux/montant-300",
-    "input": {
-      "fonction": "classerPaiementSalaire",
-      "paiement": {
-        "confirme_par_soignant": true,
-        "conteste": false,
-        "montant_net": 300,
-        "statut": "CONTESTE"
-      }
-    },
-    "expected": {
-      "montantDeclare": 300,
       "montantReferenceEmployeur": null,
       "etat": "conteste",
       "libelle": "Paiement contesté"
@@ -1755,24 +1647,6 @@
     }
   },
   {
-    "name": "classerPaiementSalaire/grille/declare/confirme-vrai/conteste-faux/montant-300",
-    "input": {
-      "fonction": "classerPaiementSalaire",
-      "paiement": {
-        "confirme_par_soignant": true,
-        "conteste": false,
-        "montant_net": 300,
-        "statut": "DECLARE"
-      }
-    },
-    "expected": {
-      "montantDeclare": 300,
-      "montantReferenceEmployeur": null,
-      "etat": "declare",
-      "libelle": "Réception à confirmer"
-    }
-  },
-  {
     "name": "classerPaiementSalaire/grille/declare/confirme-vrai/conteste-faux/montant-null",
     "input": {
       "fonction": "classerPaiementSalaire",
@@ -2241,24 +2115,6 @@
     }
   },
   {
-    "name": "classerPaiementSalaire/grille/en-attente/confirme-vrai/conteste-faux/montant-300",
-    "input": {
-      "fonction": "classerPaiementSalaire",
-      "paiement": {
-        "confirme_par_soignant": true,
-        "conteste": false,
-        "montant_net": 300,
-        "statut": "EN_ATTENTE"
-      }
-    },
-    "expected": {
-      "montantDeclare": 300,
-      "montantReferenceEmployeur": null,
-      "etat": "a_verifier",
-      "libelle": "Réception à vérifier"
-    }
-  },
-  {
     "name": "classerPaiementSalaire/grille/en-attente/confirme-vrai/conteste-faux/montant-null",
     "input": {
       "fonction": "classerPaiementSalaire",
@@ -2724,24 +2580,6 @@
       "montantReferenceEmployeur": null,
       "etat": "conteste",
       "libelle": "Paiement contesté"
-    }
-  },
-  {
-    "name": "classerPaiementSalaire/grille/inconnu/confirme-vrai/conteste-faux/montant-300",
-    "input": {
-      "fonction": "classerPaiementSalaire",
-      "paiement": {
-        "confirme_par_soignant": true,
-        "conteste": false,
-        "montant_net": 300,
-        "statut": "INCONNU"
-      }
-    },
-    "expected": {
-      "montantDeclare": 300,
-      "montantReferenceEmployeur": null,
-      "etat": "a_verifier",
-      "libelle": "Réception à vérifier"
     }
   },
   {
@@ -4182,24 +4020,6 @@
       "montantReferenceEmployeur": null,
       "etat": "conteste",
       "libelle": "Paiement contesté"
-    }
-  },
-  {
-    "name": "classerPaiementSalaire/grille/resolu/confirme-vrai/conteste-faux/montant-300",
-    "input": {
-      "fonction": "classerPaiementSalaire",
-      "paiement": {
-        "confirme_par_soignant": true,
-        "conteste": false,
-        "montant_net": 300,
-        "statut": "RESOLU"
-      }
-    },
-    "expected": {
-      "montantDeclare": 300,
-      "montantReferenceEmployeur": null,
-      "etat": "resolu",
-      "libelle": "Litige résolu · réception à vérifier"
     }
   },
   {
