@@ -21,8 +21,11 @@ const detail = (type: string, dpae: { numero: string | null; le: string | null }
   signature_soignant: true, signature_soignant_le: null, signature_ip_soignant: null, signature_navigateur_soignant: null,
   signature_etablissement: true, signature_etablissement_le: null, signature_ip_etablissement: null, signature_navigateur_etablissement: null,
   dpae_effectuee: !!dpae.numero, dpae_effectuee_le: dpae.le, dpae_numero: dpae.numero,
-  storage_path: null, pdf_cle_s3: null, cree_le: '2026-09-24T06:55:00Z',
+  storage_path: null, pdf_cle_s3: null, cree_le: '2026-09-24T12:00:00Z',
 });
+
+// Midi heure locale : le 24 septembre quel que soit le fuseau d'exécution.
+const MIDI_LOCAL_24_SEPTEMBRE = new Date(2026, 8, 24, 12, 0, 0).toISOString();
 
 beforeEach(() => { mocks.rpc.mockReset(); });
 
@@ -40,7 +43,7 @@ it.each(['CDD', 'SALARIE', 'CDDU', 'VACATION'])('un contrat %s affiche la carte 
 });
 
 it.each(['CDDU', 'VACATION'])('un contrat %s déclaré affiche le numéro URSSAF', async type => {
-  await afficher(type, { numero: '2026ABC123', le: '2026-09-24T08:00:00Z' });
+  await afficher(type, { numero: '2026ABC123', le: MIDI_LOCAL_24_SEPTEMBRE });
   expect(screen.getByText('DPAE validée le 24 sept. 2026')).toBeInTheDocument();
   expect(screen.getByText('N° URSSAF : 2026ABC123')).toBeInTheDocument();
 });

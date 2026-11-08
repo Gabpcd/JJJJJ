@@ -76,6 +76,9 @@ describe('DPAEStatus — parcours réellement exposé à l’établissement', ()
 // CDDU et VACATION sont des contrats salariés : DPAE obligatoire (C. trav.
 // art. L.1221-10 ; CDD d'usage = CDD, art. L.1242-2 3° et D.1242-1).
 // Le remplacement libéral (relation B2B) n'en a pas. Décision du 08/11/2026.
+// Midi heure locale : le 24 septembre quel que soit le fuseau d'exécution.
+const MIDI_LOCAL_24_SEPTEMBRE = new Date(2026, 8, 24, 12, 0, 0).toISOString();
+
 describe('DPAE selon le type de contrat', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
@@ -104,7 +107,7 @@ describe('DPAE selon le type de contrat', () => {
   });
 
   it.each(['CDDU', 'VACATION'])('BandeauRappelDPAE confirme la DPAE effectuée pour un contrat %s', type => {
-    render(<BandeauRappelDPAE typeContrat={type} dpaeEffectuee dpaeEffectueeLe="2026-09-24T06:55:00.000Z" />);
+    render(<BandeauRappelDPAE typeContrat={type} dpaeEffectuee dpaeEffectueeLe={MIDI_LOCAL_24_SEPTEMBRE} />);
     expect(screen.getByText('✅ DPAE déclarée comme effectuée par l\'établissement le 24 septembre 2026')).toBeInTheDocument();
   });
 
