@@ -232,11 +232,14 @@ export function metaVilleMetier(ville: VilleSEO, p: ProfessionSEO): PageSEO {
     title: `${noms.court} à ${ville.nom} : missions et remplacements | Jolene Santé`,
     description: `Missions pour ${noms.pluriel} à ${ville.nom} (${ville.departement}) : remplacements, vacations et CDD courts. Inscription gratuite, contrat et taux horaire affichés avant candidature.`,
     h1: `${noms.court} : missions à ${ville.nom}`,
-    intro, liens, indexable: true, priorite: '0.5', frequence: 'monthly',
+    // Indexée seulement si elle porte une donnée BMO propre à son département : sans elle,
+    // le texte ne change que par le nom de ville (risque de pages satellites, revue B8 A2
+    // de #1115). Les autres restent en ligne, en noindex et hors sitemap.
+    intro, liens, indexable: bmo !== null, priorite: '0.5', frequence: 'monthly',
   };
 }
 
-/** Toutes les routes SEO indexables (accueil exclu). */
+/** Toutes les routes SEO générées, indexables ou non (accueil exclu). */
 export function toutesLesRoutesSeo(): PageSEO[] {
   const pages: PageSEO[] = [metaDevenirSoignant(), metaRecruterSoignants()];
   for (const v of VILLES_SEO) pages.push(metaVille(v));

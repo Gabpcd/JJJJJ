@@ -10,7 +10,8 @@
  *    au montage (pas d'hydratation, donc aucun mismatch possible) ;
  *  - régénère dist/sitemap.xml (sans lastmod pour les routes SEO : une date de build
  *    changerait à chaque déploiement sans que le contenu change) en conservant les URL
- *    de public/sitemap.xml qui ne sont pas des routes SEO.
+ *    de public/sitemap.xml qui ne sont pas des routes SEO. Les pages noindex (ville ×
+ *    métier sans donnée BMO) sont générées mais absentes du sitemap.
  *
  * Source de vérité : src/lib/seo-routes.ts (même module que les composants React),
  * compilé à la volée avec esbuild.
@@ -114,7 +115,8 @@ export function entreesSitemapConservees(sitemapSource, cheminsGeneres, siteUrl)
   return gardees;
 }
 
-export function genererSitemap({ pages, conservees, siteUrl }) {
+export function genererSitemap({ pages: toutes, conservees, siteUrl }) {
+  const pages = toutes.filter((p) => p.indexable); // une page noindex n'a rien à faire dans le sitemap
   const url = (p) => `  <url><loc>${echapper(siteUrl + p.path)}</loc><changefreq>${p.frequence}</changefreq><priority>${p.priorite}</priority></url>`;
   const section = (titre, liste) => liste.length ? [`  <!-- ${titre} -->`, ...liste.map(url), ''] : [];
   return [
@@ -159,7 +161,7 @@ export async function genererPagesStatiques({ racine = RACINE_DEFAUT, dist = pat
   const sitemap = genererSitemap({ pages, conservees, siteUrl });
   await writeFile(path.join(dist, 'sitemap.xml'), sitemap);
 
-  return { pages: pages.length, urlSitemap: conservees.length + pages.length, conservees: conservees.length, date };
+  return { pages: pages.length, urlSitemap: conservees.length + pages.filter((p) => p.indexable).length, conservees: conservees.length, date };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

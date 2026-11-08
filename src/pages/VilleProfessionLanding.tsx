@@ -54,7 +54,7 @@ export default function VilleProfessionLanding() {
 
   return (
     <>
-      <SEOHead title={meta.title} description={meta.description} url={urlAbsolue(meta.path)} />
+      <SEOHead title={meta.title} description={meta.description} url={urlAbsolue(meta.path)} noIndex={!meta.indexable} />
       <SEOPageLayout
         heroTitle={meta.h1}
         heroSubtitle={paragraphes[0]}

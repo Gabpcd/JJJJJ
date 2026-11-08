@@ -26,7 +26,7 @@ const faqParProfession: Record<string, { q: string; a: string }[]> = {
   'aide-soignant': [
     { q: 'Quel est le salaire d\'un aide-soignant intérimaire ?', a: 'Un(e) aide-soignant(e) intérimaire gagne en moyenne entre 16 et 22\u20AC brut de l\'heure, hors majorations. Les missions de nuit et de week-end sont mieux rémunérées.' },
     { q: 'Faut-il un RPPS pour s\'inscrire en tant qu\'AS ?', a: 'Le RPPS reste optionnel à l’inscription pour les aides-soignants. Si vous disposez déjà d’une identité RPPS, Jolene la vérifie dans l’Annuaire Santé ; le DEAS et la pièce d’identité restent obligatoires.' },
-    { q: 'Quels types d\'établissements recrutent des AS ?', a: 'Les EHPAD, hôpitaux publics, cliniques privées, SSIAD et HAD recrutent activement des aides-soignants. Sur Jolene, les EHPAD représentent la majorité des missions AS disponibles.' },
+    { q: 'Quels types d\'établissements recrutent des AS ?', a: 'Les EHPAD, hôpitaux publics, cliniques privées, SSIAD et HAD recrutent activement des aides-soignants.' },
     { q: 'Peut-on cumuler des missions en tant qu\'AS ?', a: 'Oui, vous pouvez accepter plusieurs missions dans différents établissements, tant que les horaires ne se chevauchent pas. Jolene vérifie automatiquement les conflits de planning.' },
   ],
   'pharmacien': [

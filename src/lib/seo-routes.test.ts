@@ -151,6 +151,29 @@ describe('données BMO 2026', () => {
   });
 });
 
+describe('indexation des pages ville × métier', () => {
+  const villeMetier = toutesLesRoutesSeo().filter((p) => p.type === 'ville-metier');
+
+  it('indexe une page si et seulement si elle porte une donnée BMO départementale', () => {
+    for (const p of villeMetier) {
+      const bmo = p.intro.some((t) => t.includes('Enquête BMO 2026'));
+      expect({ path: p.path, indexable: p.indexable }).toEqual({ path: p.path, indexable: bmo });
+    }
+  });
+
+  it('n\'indexe que des pages aide-soignant ou médecin', () => {
+    const indexees = villeMetier.filter((p) => p.indexable);
+    expect(indexees.length).toBeGreaterThan(0);
+    for (const p of indexees) expect(p.path).toMatch(/\/(aide-soignant|medecin)$/);
+  });
+
+  it('aucun texte SEO ne présente Jolene ou un métier sous l\'angle de l\'intérim', () => {
+    for (const p of toutesLesRoutesSeo()) {
+      expect([p.title, p.description, p.h1, ...p.intro].join(' ')).not.toMatch(/intérim/i);
+    }
+  });
+});
+
 describe('HTML statique et sitemap', () => {
   let racine: string;
   let dist: string;
@@ -180,7 +203,8 @@ describe('HTML statique et sitemap', () => {
     expect(html).toContain('<meta property="og:url" content="https://jolene.app/emploi-soignant/lyon/infirmier-ide" />');
     expect(html).toContain('href="/emploi-soignant/lyon"');
     expect(html).toContain('href="/metier/infirmier-ide"');
-    expect(html).toContain('<meta name="robots" content="index, follow" />');
+    // IDE : aucune donnée BMO départementale → page en ligne mais non indexée.
+    expect(html).toContain('<meta name="robots" content="noindex, nofollow" />');
     expect(html).toContain('/assets/index-abc.js');
   });
 
@@ -192,6 +216,7 @@ describe('HTML statique et sitemap', () => {
     expect(html.match(/property="og:title"/g)).toHaveLength(1);
     expect(html).not.toContain('ancienne description');
     expect(html).toContain('Enquête BMO 2026, France Travail');
+    expect(html).toContain('<meta name="robots" content="index, follow" />');
     const canonicals = toutesLesRoutesSeo().map((p) => `https://jolene.app${p.path}`);
     expect(new Set(canonicals).size).toBe(canonicals.length);
   });
@@ -207,7 +232,10 @@ describe('HTML statique et sitemap', () => {
     const xml = await readFile(path.join(dist, 'sitemap.xml'), 'utf8');
     expect(xml).toContain('<loc>https://jolene.app/</loc><lastmod>2026-06-15</lastmod>');
     expect(xml).toContain('<loc>https://jolene.app/cgu</loc>');
-    expect(xml).toContain('<loc>https://jolene.app/emploi-soignant/lyon/infirmier-ide</loc><changefreq>');
+    expect(xml).toContain('<loc>https://jolene.app/emploi-soignant/paris/aide-soignant</loc><changefreq>');
+    expect(xml).not.toContain('/emploi-soignant/lyon/infirmier-ide<');
+    const villeMetier = toutesLesRoutesSeo().filter((p) => p.type === 'ville-metier');
+    for (const p of villeMetier) expect(xml.includes(`<loc>https://jolene.app${p.path}</loc>`)).toBe(p.indexable);
     expect(xml).toContain('<loc>https://jolene.app/devenir-soignant</loc><changefreq>');
     expect(xml).not.toContain('2026-11-09');
     expect(xml.match(/<loc>/g)).toHaveLength(resultat.urlSitemap);

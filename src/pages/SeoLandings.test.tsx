@@ -87,8 +87,10 @@ describe('pages SEO connues', () => {
     expect(screen.getByText(/Enquête BMO 2026, France Travail \(données ouvertes/)).toBeInTheDocument();
   });
 
-  it('ville × métier sans donnée BMO (IDE) : aucune mention BMO', () => {
+  it('ville × métier sans donnée BMO (IDE) : aucune mention BMO, page non indexée', () => {
     ouvrir('/emploi-soignant/lyon/infirmier-ide');
     expect(screen.queryByText(/BMO/)).not.toBeInTheDocument();
+    expect(robots()).toBe('noindex, nofollow');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Infirmier (IDE) : missions à Lyon');
   });
 });
