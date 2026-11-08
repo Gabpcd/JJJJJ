@@ -17,6 +17,11 @@ sous-lignes Mes missions / Favoris / détail mission, cibles alignées sur `LOT1
 « compile » n'est pas « livré » (CLAUDE.md, PRINCIPES §7).
 Lot 3, T0 (2026-11-02) : lignes profil, revenus, notifications, Stripe Connect et préférences alignées sur
 `LOT3_PLAN.md` §1 et `DECISIONS_LOT3.md` ; factures, avances et bulletins en renvoi web assumé jusqu'au lot 4.
+Lot 3, T3a (2026-11-08, livraison partielle : `DECISIONS_LOT3.md`, « T3 livrée en deux temps ») : `LinkRouter`
+route les chemins soignant du lot 3 (notifications, préférences, Stripe Connect, inscription, sections Revenus
+depuis `?tab=`, édition du profil séparée du hub `mon-compte`) ; `DestinationLien` les renvoie vers Safari (URL
+canonique) tant que l'écran de leur tranche n'est pas livré. Aucun statut ne change : le coordinateur de liens
+(lot 1 T10, `onOpenURL`) n'est pas encore sur la base ; son câblage et `DemoLiensLot3Tests` forment le reliquat T3b.
 
 Sous-lignes (préfixées `›`) : une route web qui regroupe plusieurs onglets ou vues est détaillée pour que
 chaque preuve soit attribuable ; la ligne de la route passe « natif » quand toutes ses sous-lignes le sont.

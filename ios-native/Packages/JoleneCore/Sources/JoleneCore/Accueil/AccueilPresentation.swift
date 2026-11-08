@@ -157,14 +157,16 @@ public enum AccueilPresentation {
     /// Centre de notifications (lot 3) : écran web au lot 1.
     public static let lienNotifications = "/soignant/notifications"
 
-    /// Route d'un renvoi web de l'Accueil, résolue par `LinkRouter` : `.safari` avec l'URL
-    /// canonique (`JoleneLink.canonicalURL`, `https://jolene.app/...`), jamais une URL écrite en
-    /// dur. `nil` si le lien n'est pas un lien Jolene ou si le routeur le rend natif (le renvoi web
-    /// n'a alors plus lieu d'être). Point de fusion T10 : l'écran ouvre cette route par le
-    /// présentateur `.safari` du `DeepLinkCoordinator`, jamais par un `openURL` qui reviendrait
-    /// dans l'app par lien universel (chemins couverts par l'AASA `/soignant/*`).
+    /// Route d'un renvoi web de l'Accueil, résolue par `LinkRouter` puis `DestinationLien` :
+    /// `.safari` avec l'URL canonique (`JoleneLink.canonicalURL`, `https://jolene.app/...`), jamais
+    /// une URL écrite en dur. `nil` si le lien n'est pas un lien Jolene ou si sa destination est un
+    /// écran natif livré (le renvoi web n'a alors plus lieu d'être : `/soignant/notifications` y
+    /// bascule quand T5 du lot 3 livre le centre de notifications ; point de fusion consigné dans
+    /// `DECISIONS_LOT3.md`, « T3 livrée en deux temps »). Point de fusion T10 : l'écran
+    /// ouvre cette route par le présentateur `.safari` du `DeepLinkCoordinator`, jamais par un
+    /// `openURL` qui reviendrait dans l'app par lien universel (chemins couverts par l'AASA `/soignant/*`).
     public static func renvoiWeb(_ lien: String) -> JoleneRoute? {
-        guard let route = LinkRouter.resolve(link: lien), !route.isNative else { return nil }
+        guard let route = DestinationLien(link: lien)?.destination, !route.isNative else { return nil }
         return route
     }
 

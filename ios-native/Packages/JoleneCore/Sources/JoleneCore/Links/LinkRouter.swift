@@ -17,36 +17,55 @@ import Foundation
 /// | `/soignant/missions` et alias (`mes-matches`, `planning`, `calendrier-sync`, `historique-missions`) | `.missions` |
 /// | `/soignant/missions/serie/{id}`                   | `.serieDetail(id:)`               |
 /// | `/soignant/missions/{id}`, `/mission/{id}`        | `.missionDetail(id:)`             |
-/// | `/soignant/mes-gains` et alias (`mes-factures-honoraires`, `mes-avances`, `bulletins-paie`) | `.revenus` |
-/// | `/soignant/profil`, `mon-compte`, `parametres`, `parametres-complet`, `reputation`, `score`, `fiabilite`, `fiabilite-legacy` | `.profil` |
+/// | `/inscription/soignant`, `/inscription/reprendre`, `/inscription/completer` (lot 3) | `.inscription(EtapeInscription)`, query conservée |
+/// | `/soignant/mes-gains` (`?tab=` → section, lot 3)  | `.revenus(section:)`              |
+/// | alias `mes-factures-honoraires`, `mes-avances`, `bulletins-paie` (`Navigate`, l.395-397) | `.revenus(section: .factures / .avances / .bulletins)` |
+/// | `/soignant/profil`, `reputation` (lot 3)          | `.profil` (édition)               |
+/// | `/soignant/mon-compte`, `parametres`, `parametres-complet` ; `score`, `fiabilite`, `fiabilite-legacy` (page score au lot 4, écart assumé) | `.monCompte` (hub) |
+/// | `/soignant/notifications` (lot 3)                 | `.notifications`                  |
+/// | `/soignant/parametres/notifications` (lot 3)      | `.parametresNotifications`        |
+/// | `/soignant/stripe-connect` (`?success=true` / `?refresh=true`, lot 3) | `.stripeConnect(retour:)` |
 /// | `/etablissement/*`, `/etab/invitation/*`          | `.etablissement(URL)`             |
-/// | tout le reste (`/admin/*`, `/groupe/*`, `/contrat/*`, `/auth/psc/callback`, autres `/inscription/*`, autres `/soignant/*`, chemins hors AASA) | `.safari(URL)` |
+/// | tout le reste (`/admin/*`, `/groupe/*`, `/contrat/*`, `/auth/psc/callback`, `/inscription/etablissement`, `/inscription/soignant/completion`, autres `/inscription/*`, autres `/soignant/*`, chemins hors AASA) | `.safari(URL)` |
 ///
-/// Limite connue du lot 0 : les onglets passés en query (`?tab=passees`, `?tab=factures`)
-/// ne sont pas portés par `JoleneRoute` ; ils seront ajoutés avec les écrans concernés.
+/// Le routeur ne dit pas si l'écran d'une route native est livré : `DestinationLien` renvoie vers
+/// Safari une route dont la tranche d'écran n'est pas encore mergée. Limite connue : `?tab=` n'est
+/// lu que pour Revenus ; les autres onglets en query (`?tab=passees`) ne sont pas portés.
 public enum LinkRouter {
     /// Entrée Universal Link (`onOpenURL`, `NSUserActivity`). N'accepte que les hôtes de
     /// `AASAPatterns.hosts` en https sans port ; retourne `nil` pour tout autre hôte.
     /// Les quinze motifs AASA sont appliqués dans l'ordre du fichier : un chemin qu'aucun motif
     /// ne couvre est renvoyé vers Safari (l'app n'est pas censée le recevoir).
     public static func route(url: URL) -> JoleneRoute? {
+        routage(url: url)?.route
+    }
+
+    /// Lien interne (chemin relatif ou URL d'un hôte de `JoleneLink.trustedWebHosts`), par
+    /// exemple le `lien` d'une notification push. `nil` si le lien n'est pas un lien Jolene.
+    public static func resolve(link rawLink: String) -> JoleneRoute? {
+        routage(link: rawLink)?.route
+    }
+
+    /// Route d'un Universal Link et URL canonique du lien (`https://jolene.app` + chemin, query et
+    /// fragment), reprise par `DestinationLien` pour un renvoi Safari.
+    static func routage(url: URL) -> (route: JoleneRoute, canonique: URL)? {
         guard url.scheme?.lowercased() == "https",
               let host = url.host?.lowercased(), AASAPatterns.hosts.contains(host),
               url.port == nil || url.port == 443,
               let link = JoleneLink.normalize(url.absoluteString) else { return nil }
         let path = JoleneLink.split(link: link).path
         guard AASAPatterns.firstMatch(path: path) != nil else {
-            return .safari(JoleneLink.canonicalURL(link: link) ?? url)
+            let canonique = JoleneLink.canonicalURL(link: link) ?? url
+            return (.safari(canonique), canonique)
         }
-        return resolve(link: link)
+        return routage(link: link)
     }
 
-    /// Lien interne (chemin relatif ou URL d'un hôte de `JoleneLink.trustedWebHosts`), par
-    /// exemple le `lien` d'une notification push. `nil` si le lien n'est pas un lien Jolene.
-    public static func resolve(link rawLink: String) -> JoleneRoute? {
+    /// Route d'un lien interne et son URL canonique.
+    static func routage(link rawLink: String) -> (route: JoleneRoute, canonique: URL)? {
         guard let link = JoleneLink.normalize(rawLink), let url = JoleneLink.canonicalURL(link: link) else { return nil }
         let parts = JoleneLink.split(link: link)
-        return resolve(path: parts.path, query: parts.query ?? "", fragment: parts.fragment ?? "", canonical: url)
+        return (resolve(path: parts.path, query: parts.query ?? "", fragment: parts.fragment ?? "", canonical: url), url)
     }
 
     private static func resolve(path rawPath: String, query: String, fragment: String, canonical: URL) -> JoleneRoute {
@@ -58,16 +77,26 @@ public enum LinkRouter {
         case "/connexion": return .connexion
         case "/reset-password": return .resetPassword(credentials: .recovery(search: query, fragment: fragment))
         case "/inscription/confirmer": return .confirmerInscription(credentials: .signup(search: query, fragment: fragment))
+        case "/inscription/soignant": return .inscription(EtapeInscription(page: .soignant, query: query))
+        case "/inscription/reprendre": return .inscription(EtapeInscription(page: .reprendre, query: query))
+        case "/inscription/completer": return .inscription(EtapeInscription(page: .completer, query: query))
         case "/soignant/tableau-de-bord": return .accueil
         case "/soignant/recherche-missions", "/soignant/swipe-missions": return .explorer
         case "/soignant/missions", "/soignant/mes-matches", "/soignant/planning",
              "/soignant/calendrier-sync", "/soignant/historique-missions":
             return .missions
-        case "/soignant/mes-gains", "/soignant/mes-factures-honoraires", "/soignant/mes-avances", "/soignant/bulletins-paie":
-            return .revenus
-        case "/soignant/profil", "/soignant/mon-compte", "/soignant/parametres", "/soignant/parametres-complet",
-             "/soignant/reputation", "/soignant/score", "/soignant/fiabilite", "/soignant/fiabilite-legacy":
-            return .profil
+        case "/soignant/mes-gains": return .revenus(section: SectionRevenus(tab: FormQuery(query).get("tab")))
+        // Alias `Navigate` de `src/App.tsx` l.395-397 : l'onglet est fixé par la redirection.
+        case "/soignant/mes-factures-honoraires": return .revenus(section: .factures)
+        case "/soignant/mes-avances": return .revenus(section: .avances)
+        case "/soignant/bulletins-paie": return .revenus(section: .bulletins)
+        case "/soignant/profil", "/soignant/reputation": return .profil
+        case "/soignant/mon-compte", "/soignant/parametres", "/soignant/parametres-complet",
+             "/soignant/score", "/soignant/fiabilite", "/soignant/fiabilite-legacy":
+            return .monCompte
+        case "/soignant/notifications": return .notifications
+        case "/soignant/parametres/notifications": return .parametresNotifications
+        case "/soignant/stripe-connect": return .stripeConnect(retour: RetourConnect(query: query))
         default: break
         }
 

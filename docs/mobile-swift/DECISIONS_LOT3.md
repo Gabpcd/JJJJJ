@@ -118,6 +118,126 @@ tranches qui la mettent en œuvre (§3 du blueprint).
   réutilisée par l'autre (deux déclarations identiques ne compilent pas). L3-T1 la pose dans
   `JoleneCore/Ports/Lot1Ports.swift` ; L2-T1 ne la redéclare pas dans `Lot2Ports.swift` (`REVUES_LOT3.md`, L3-T1).
 
+## T3 livrée en deux temps : T3a (cœur) et reliquat T3b (revue fraîche du 08/11/2026)
+
+- **Écart.** Le blueprint fait dépendre T3 de L1-T10 (§3 T3 : « Dépendances : T1, lot 1 T10 » ; §4, vague 2). Or
+  L1-T10 n'existe sur aucune branche : ni `onOpenURL`, ni `onContinueUserActivity`, ni `DeepLinkCoordinator` sur
+  `origin/feat/ios-lot1` ni sur `origin/lot1/*` (vérifié le 08/11/2026). La branche `lot3/l3-t3-v2` est donc une
+  **livraison partielle, T3a (cœur)**, et **T3 n'est pas close**. Le critère « Universal Links complets » côté
+  soignant n'est pas atteint : à l'exécution, rien ne change, hormis `AccueilPresentation.renvoiWeb`.
+- **T3a livre** (JoleneCore seul) :
+  - les routes du lot 3 dans `JoleneRoute` et `LinkRouter` : notifications, préférences, Stripe Connect, inscription
+    avec sa query, sections Revenus lues dans `?tab=`, `.profil` (édition) séparé de `.monCompte` (hub) ;
+  - `Links/DestinationLien.swift` (destination effective : la route si son écran est livré, sinon
+    `.safari(canonique)`) ;
+  - `Links/LienMasque.swift` (descriptions masquées) ;
+  - les tests `LinksRouterTests`, `LinksAASATests` et `DestinationLienTests`.
+- **Reliquat T3b**, une fois L1-T10 sur la base du lot 3 :
+  - `Jolene/Composition/DeepLinkCoordinator.swift`, qui ne présente que `DestinationLien.destination`. Une route
+    native sans écran passe par le présentateur `.safari`. Le coordinateur expose aussi le libellé DEBUG
+    `deeplink-route`, attendu par T5.
+  - `JoleneUITests/DemoLiensLot3Tests.swift`, écrit pour iphone, ipad-portrait et ipad-landscape avec les helpers de
+    `UITestSupport.swift`. Cas à couvrir :
+    - `-JOLENE_OPEN_URL https://jolene.app/soignant/notifications` donne un renvoi Safari (URL vérifiée par le
+      double d'ouverture) tant que T5 n'a pas basculé sa ligne, puis l'écran natif ;
+    - même contrôle pour `/soignant/parametres/notifications`, `/soignant/stripe-connect?success=true` et
+      `/inscription/soignant` ;
+    - `/soignant/mes-gains?tab=factures` reste un renvoi web ;
+    - `/soignant/mon-compte` ouvre le hub natif.
+
+  T3 est close par T3b, après sa revue B8.
+- **Nom du type et point de fusion avec L1-T10.** Le type s'appelle `DestinationLien` et non `DeepLinkIntent`, le
+  nom du blueprint. Raison : `LOT1_PLAN.md` (l.53, l.304-305) attribue `JoleneCore/Links/DeepLinkIntent.swift` et
+  `DeepLinkIntentTests` à L1-T10, avec un autre rôle (13 routes, lien reçu avant `.ready` différé, epoch), et L1-T10
+  part d'une base qui n'a pas ce fichier. Garder le nom ici donnait un conflit add/add certain et un même nom pour
+  deux sémantiques. Au merge de L1-T10 :
+  - `DeepLinkIntent` garde son rôle (intention mémorisée, epoch) et porte une `DestinationLien`, ou l'URL reçue,
+    résolue en `DestinationLien` au moment du rejeu ;
+  - le coordinateur ne présente que `destination` ;
+  - les « 13 routes » de T10 se lisent dans la table de `DestinationLienTests` (natif ou web) ;
+  - `DeepLinkIntentTests` reste à T10.
+- **Nouvelle consigne pour T5 à T14b.** Elle remplace « une ligne de `DeepLinkCoordinator.swift` » (blueprint §3 T3
+  et §4).
+  - La tranche qui livre un écran passe **sa ligne de `DestinationLien.ecranNatifLivre`** à `true`.
+  - Dans `DestinationLienTests`, elle ajuste trois tests :
+    - sa ligne de `testTableDesEcransLivres` ;
+    - son cas dans `testRoutesLot3SansEcranRenvoyeesVersSafariCanonique`, qui passe dans les routes natives ;
+    - dans `testDestinationsDuRoutagePushParFamille`, la destination de sa famille et les deux totaux.
+  - Si T3b est déjà mergée, elle ajoute en plus la ligne de mappage de son écran dans `DeepLinkCoordinator`.
+
+  Ligne de chaque tranche :
+  - T5 : `.notifications`. C'est ainsi que se lit « `DeepLinkCoordinator` (`.notifications` natif) » du §3 T5.
+  - T6 : `.parametresNotifications`.
+  - T7 : `.inscription` (pages `soignant` et `reprendre`).
+  - T8 : `.inscription` (page `completer`).
+  - T9 : `.profil`, alias `reputation` compris.
+  - T11 : les entrées du hub passent par `JoleneRoute` puis `DestinationLien.destination`.
+  - T12 : `.revenus(section: .apercu)` est déjà à `true` ; T12 remplace le placeholder.
+  - T13 : `.revenus(section: .paiementsAConfirmer)`.
+  - T14a : `.stripeConnect`.
+  - T14b : aucune route IBAN dans la table (l'IBAN est une sous-ligne de `/soignant/mes-gains`, `PARITE_SOIGNANT.md`).
+    Sa « ligne » est sans objet tant qu'aucune route n'est ajoutée ; un ajout éventuel passe par le propriétaire de
+    `JoleneRoute` et `LinkRouter`.
+- **Point de fusion L3-T5 (Accueil).** `AccueilPresentation.renvoiWeb` passe désormais par
+  `DestinationLien.destination`. Ce fichier ne figure pas dans la liste du blueprint, et c'est voulu : sans ce
+  changement, `renvoiWeb(lienNotifications)` deviendrait `nil` dès T3a, puisque `/soignant/notifications` est une
+  route native. Quand T5 passera `.notifications` à `true`, `renvoiWeb(lienNotifications)` rendra `nil`. T5 devra
+  alors :
+  - mettre à jour `AccueilAssemblageTests.testRenvoisWebDeLAccueilSontDesRoutesSafariCanoniques` (l'attendu
+    `.safari(https://jolene.app/soignant/notifications)` devient `nil`) ;
+  - remplacer le bouton `accueil-notifications-action` (« Voir sur jolene.app », `AccueilScreen.swift`) par une
+    navigation vers le centre natif ;
+  - migrer les identifiants lus par `DemoAccueilTests`.
+- **Écart assumé : score et fiabilité sur le hub.** `/soignant/score`, `/soignant/fiabilite` et
+  `/soignant/fiabilite-legacy` mènent à `.monCompte`, comme le veut le blueprint v2 (§3 T3, qui fait foi). C'est
+  contraire au principe de `DestinationLien` : `ProfileScreen` n'affiche aucun score (`PARITE_SOIGNANT.md` l.62, score
+  au lot 4), alors que Safari afficherait la page. Le lot 4, avec la page score, les sortira du hub.
+- **Écart : détail de série.** `.serieDetail` part en renvoi Safari (`ecranNatifLivre` vaut `false`), conformément à
+  la décision 11 du lot 1 et à `PARITE_SOIGNANT.md` l.48 (détail natif au lot 4). `LOT1_PLAN.md` l.142 (T10) le
+  confiait pourtant au coordinateur. La tranche qui livrera un écran de série passera sa ligne à `true`.
+- **Journalisation (PRINCIPES §7).** Une destination de lien ne se journalise que par `description` :
+  - descriptions autorisées : celles de `DestinationLien`, `JoleneRoute` et `EtapeInscription`. Elles sont masquées
+    par `LienMasque` : nom du cas de route et gabarit du chemin, dont tout segment hors du vocabulaire des routes
+    devient `‹masqué›` ;
+  - à ne jamais journaliser : `canonique`, `externalURL`, `EtapeInscription.query`, un identifiant extrait.
+
+  Le chemin peut porter un jeton (`/etab/invitation/:token`, `src/App.tsx` l.433, consommé par
+  `fn_accepter_invitation_membre`) ou un identifiant (`/contrat/:id`, `/soignant/missions/:id`).
+
+## Points de fusion inter-lots des liens (branches du lot 1 non intégrées)
+
+T3a change le sens de `JoleneRoute.profil` : la route visait le hub, elle vise désormais l'édition, et le hub
+devient `.monCompte`. T3a donne aussi une section à `.revenus`. Plusieurs branches du lot 1 consomment
+`JoleneRoute` ; aucune n'est sur la base du lot 3. À leur reprise dans `feat/ios-lot3` :
+
+- **`origin/lot1/t9`, `Session/EcransNatifs.swift` l.40-50.** `EcranNatif.init?(route:)` y est décrit comme le
+  « point d'entrée du coordinateur de liens, T10 ». Après fusion, ce code compile mais rend `nil` pour `.monCompte`,
+  c'est-à-dire `/soignant/mon-compte`, l'onglet Profil du web (`BarreNavigation.tsx` l.37). Le lien sortirait alors de
+  l'onglet et du drapeau `ios_natif_profil_actif`, en silence. À corriger lors de la reprise :
+  - `EcranNatif(route: .monCompte)` rend `.profil` ;
+  - `EcranNatif(route: .profil)` rend aussi `.profil` : l'édition (L3-T9) vit dans l'onglet Profil, sous le même
+    drapeau (aucun nouveau drapeau au lot 3). Tant que T9 n'est pas livrée, `DestinationLien` rend `.safari` et
+    `EcranNatif` n'est pas atteint ;
+  - le `cheminWeb` de l'onglet Profil devient `/soignant/mon-compte`. `FeatureFlagsTests.testTitresCheminsEtRoutesDesEcrans`
+    passe par `DestinationLien(link:)?.destination` au lieu de `LinkRouter.resolve`, et vérifie que
+    `/soignant/mon-compte` donne `.profil` ;
+  - `EcranNatif.init?(route:)` ne s'applique qu'à `DestinationLien.destination`, jamais à la route brute.
+    `case .revenus:` y couvre toutes les sections : appliqué à la route brute, `.revenus(section: .factures)`
+    ouvrirait l'onglet natif au lieu du renvoi web assumé (D4).
+- **`origin/lot1/t4b` (`.favoris`, `/soignant/mes-favoris`).** Conflit textuel sur `JoleneRoute.swift` et
+  `LinkRouter.swift` : il faut garder les deux côtés. À ajouter ensuite :
+  - `case .favoris: return true` dans `DestinationLien.ecranNatifLivre` ;
+  - `case .favoris: return "favoris"` dans `JoleneRoute.description` (`LienMasque.swift`). Les deux `switch` sont
+    exhaustifs : sans ces cas, le code ne compile pas ;
+  - une ligne dans `testTableDesEcransLivres`. `mes-favoris` figure déjà dans le vocabulaire de `LienMasque`.
+- **`LOT1_PLAN.md` l.142-143 (T10)** se lit désormais ainsi :
+  - `.missionDetail`, `.accueil`, `.explorer`, `.missions` et `.monCompte` mènent à leur onglet, de même que
+    `.profil` après L3-T9 ;
+  - `.revenus(section: .apercu)` mène à l'onglet Revenus (placeholder jusqu'à L3-T12) ;
+  - `.serieDetail` part vers Safari (décision 11) ;
+  - toute route consommée par le lot 1 (coordinateur, `EcranNatif`, taps push) passe par
+    `DestinationLien.destination`.
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
