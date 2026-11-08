@@ -398,6 +398,9 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(try cible("/soignant/profil"), .profil)
         XCTAssertEqual(try cible("/soignant/profil?tab=principal"), .profil)
         XCTAssertEqual(try cible("/soignant/reputation"), .profil)
+        // Point de fusion T3b / T11 consigné (revue L3-T9 m2, DECISIONS_LOT3.md, intégration) : l'onglet confidentialité
+        // du web (RGPD, suppression) ouvre aussi l'édition ; aucune notification du dump ne vise ce `?tab=`.
+        XCTAssertEqual(try cible("/soignant/profil?tab=confidentialite"), .profil)
         // Destination effective, jamais la route brute : factures et paiements restent des renvois web (D4, T13).
         XCTAssertEqual(try cible("/soignant/mes-gains?tab=factures"),
                        .web(.safari(URL(string: "https://jolene.app/soignant/mes-gains?tab=factures")!)))

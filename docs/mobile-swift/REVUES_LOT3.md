@@ -949,6 +949,167 @@ L3-T5 — garde…`), puis code et documentation. Tous les mineurs sont corrigé
   - exporteurs `--check` sans diff ; `node --test` des contrats : 60 tests, 0 échec.
 - **Non exécuté** : XCUITest (compilés seulement). La condition de merge sur la CI trois formats est maintenue.
 
+### Revue fraîche B8 — L3-T5 (vague 2 bis, n°2)
+
+**Verdict : CLÔTURABLE.** Aucun bloquant, aucun majeur, 9 mineurs. La condition de merge ne change pas : CI verte sur les trois formats (iphone, ipad-portrait, ipad-landscape), relue dans le xcresult avec 0 échec et `skipped = 0`. Les XCUITest de T5 n'ont encore jamais tourné.
+
+#### Ce qui a été relu
+J'ai relu en entier `git diff origin/feat/ios-lot3...origin/lot3/l3-t5-v2` à la pointe `94df9e05` : 42 fichiers, 4 326 lignes de diff. La base `847e31c6` est à jour, c'est le merge-base. En lecture seule, sans build, sans test et sans appel Supabase. J'ai aussi relu :
+- le blueprint v2, section T5 et §2.5-2.7 ;
+- LOTS_2_5_DECISIONS, PRINCIPES et DECISIONS_LOT3 ;
+- les sources web : `PageNotifications.tsx`, `DemandePermissionPush.tsx`, `pushNative.ts`, `session-count.ts`, `PanneauNotifications.tsx` ;
+- dans `supabase/schema/public.sql` : la table `notifications`, les politiques `pol_notif_*` et les déclencheurs `fn_protect_notification_update` et `dec_proteger_contenu_notification` ;
+- `PushCoordinator` (T4), `bounded`, `DateHeureParis` et `DestinationLien`.
+
+#### Corrections de la revue n°1, vérifiées
+- **M1 corrigé.** La garde `testToutEcranNatifLivreAUneCibleNativePresentable` est solide. Elle prend un lien par genre de route, recense les genres par un switch exhaustif et vérifie que tous sont couverts. Elle parcourt aussi toute la famille push des vecteurs golden, avec une exclusion nommée et fermée. Les `switch` de `CibleNotification` et de `presenter` n'ont pas de `default` : une nouvelle cible ne compile pas sans sa présentation. Les repères relus de m1 à m10 tiennent. m12 est consigné.
+- **Tests modifiés.** Les deux tests réécrits (`testEchecDuMarquageNOuvreRien`, `testVoirEtLigneActionnable`) sont justifiés et n'ont pas été affaiblis : les nouvelles assertions comptent les relectures de m2 et l'absence de bouton sans effet.
+
+#### Points de contrôle passés sans constat
+- **Correction des données.** Le décodage tolère `lue` à null ; `titre` et `corps`, NOT NULL en base, sont stricts. Toute erreur PostgREST passe par `SupabaseErrorMapping` avec un texte web en repli. Le filtre `destinataire_id` est explicite : `pol_notif_select` laisse les admins tout lire, il ne suffirait pas. Le PATCH ne touche que `lue` et `lue_le`, puis la ligne est **relue** ; une mise à jour sans effet ou une ligne invisible n'est jamais un succès. Pas de forme `{error}` en HTTP 200 : aucune RPC.
+- **Concurrence Swift 6.** Chaque réponse est contrôlée sur l'epoch et la génération, et l'annulation n'est jamais traitée comme une erreur. Le double envoi est empêché par `ouvertureEnCours`, `tacheOuverture` et le bouton désactivé. Le délégué est `nonisolated` et ne remet au main actor que des valeurs `Sendable`. `limite` est `nonisolated`.
+- **Pré-prompt.** Parité avec le web : marque lue avant tout, compteur à froid, marque `accepted` ou `denied` posée sans affichage, délai de 5 s et marque relue avant d'afficher. Après « Activer », un enregistrement confirmé par `PushCoordinator` est exigé ; sans lui, c'est un échec et la marque n'est pas posée.
+- **Mode démo.** Le compteur est en mémoire vive, si bien que les suites démo et `DemoNoNetworkTests` n'ont pas de pré-prompt. La sentinelle « 0 requête » est affirmée. STAGING est lancé avec `-JOLENE_SESSION_COUNT 1`. `push-tap-cible` n'existe qu'en DEBUG et en démo.
+- **Textes (HARD STOP n°4).** Les 12 constantes `// source:` sont identiques au web au caractère près, sans texte juridique nouveau. Le seul texte sans source web est une indication VoiceOver non juridique, en attente de Gabrielle.
+- **Sécurité.** Pas de littéral qui ressemble à un secret, pas de journalisation. Les descriptions masquent les identifiants et les liens. Les dates relatives portées de date-fns sont exactes, y compris le calcul du décalage horaire.
+- **Périmètre.** Les retouches hors tranche sont minimes et additives : AccueilModel, StagingConnexionTests et des commentaires. Rien n'a changé sous `ios/`, `android/` ou `supabase/`.
+
+#### Mineurs
+Le détail est dans le champ `mineurs`.
+1. Un tap à chaud vers Explorer ou Profil ne revient pas à la racine de l'onglet : les piles n'ont pas de chemin.
+2. Un tap vers le centre déjà affiché ne relit pas la liste ; le web traite ce cas avec `OUVERTURE_NOTIFICATION`.
+3. Le repli des sections de Revenus contredit la doc : à l'exécution, le tap n'ouvre rien au lieu de retomber sur le web.
+4. Une ouverture annulée par un changement d'onglet laisse une ligne périmée.
+5. Le message d'échec d'action est inséré en tête du défilement et peut rester hors écran.
+6. Le test du toast du pré-prompt est fragile face à son effacement automatique au bout de 6 s.
+7. `push-tap-cible` affirme « présenté » alors que la route n'est que résolue, sans verrou pour L1-T10.
+8. Le verrou n°2 du lot 1 (LOT1_PLAN l.306 et l.322) est rendu caduc par le « Voir » natif, sans que ce point de fusion soit consigné.
+9. L'indication vocale attend la relecture de Gabrielle.
+
+#### Branchement de T3b
+Le coordinateur absent n'est pas compté comme défaut. Trois points rendront son branchement plus coûteux, et il vaut mieux les traiter avant ou avec L1-T10 :
+- `presenter` est privé et lié aux `@State` de `MainTabView` : il faudra un modèle de navigation partagé.
+- Les piles Explorer, Mes missions, Revenus et Profil n'ont pas de chemin (m1).
+- Le libellé `push-tap-cible` ne fera pas rougir les tests au passage à la vraie présentation (m7).
+
+La règle d'epoch de `BoiteTapsPush` (un tap reçu sans espace ouvert est rejoué par le premier espace prêt) est compatible avec « intention mémorisée avant `.ready` » du lot 1.
+
+### Intégration sur `feat/ios-lot3` (intégrateur, 2026-11-08, vague 2 bis)
+
+- Base : `origin/feat/ios-lot3` (`847e31c6`), puis `git merge --no-ff origin/main` (`404fc012` : PR B9 #1114, #1117,
+  #1118) → `0c17a21b`, sans conflit (aucun fichier sous `ios-native/`).
+- `git merge --no-ff origin/lot3/l3-t5-v2` (`94df9e05`) → `b0400108`, sans conflit textuel : `DECISIONS_LOT3.md`,
+  `REVUES_LOT3.md` et `PARITE_SOIGNANT.md` fusionnés automatiquement, ajouts conservés.
+- La garde de T5 (`CentreNotificationsTests.testToutEcranNatifLivreAUneCibleNativePresentable`) a joué son rôle à
+  l'arrivée de T6 et T9 : leurs cibles ont été ajoutées par l'intégrateur (sections L3-T6 et L3-T9 ci-dessous).
+- Mineur 1 de la revue n°2 **en partie levé** par l'intégration : la pile de l'onglet Profil a désormais un chemin
+  (`cheminProfil`) et `.monCompte` la ramène à sa racine ; Explorer, Mes missions et Revenus restent sans chemin
+  (point de branchement de T3b). Mineurs 2 à 9 ouverts.
+- Vérifications : sur la pointe finale, voir la section L3-T9.
+
+## L3-T6
+
+### Revue fraîche B8 — L3-T6 (vague 2 bis, n°1)
+
+**Périmètre relu.** `git diff origin/feat/ios-lot3...origin/lot3/l3-t6-v2`, soit 33 fichiers (+2684/−215), lu en entier, pointe `e83a9b74`. J'ai confronté le code à plusieurs sources :
+- la page web `src/pages/PageParametresNotifications.tsx` (l.1-460) et `MonCompteSoignant.tsx` (l.113-115) ;
+- le dump `supabase/schema/public.sql` : les deux RPC l.44100 et l.45986, `preferences_notifications_par_evenement` (`actif NOT NULL`), et les GRANT `soignants` l.85722 et l.85758 ;
+- `RPCResponse` et `RPCResponse+ExceptionsMetier`, `bounded`, `ToggleRow`, `PermissionCard`, `InlineNotice`, `EmptyState` ;
+- `MainTabView`, `AccueilModel`, `UITestSupport` ;
+- les documents de cadre : LOT3_PLAN v2 §3 T6, LOTS_2_5_DECISIONS, DECISIONS_LOT3 (D1, D18, HARD STOP), REVUES_LOT3 §L3-T4 et PRINCIPES §3, §5 et §6.
+
+Lecture seule : aucun build, aucun test, aucun MCP.
+
+**Verdict : CLÔTURABLE.** Aucun bloquant ni majeur. Neuf constats mineurs, détaillés plus bas. **Condition de merge** : CI trois formats verte avec le xcresult relu (DemoPreferencesTests 2 tests et DemoPushTests 3 tests, 0 échec, `skipped = 0`). Ces XCUITest n'ont jamais tourné.
+
+#### Vérifié conforme
+- **Contrat serveur.**
+  - `fn_obtenir…` renvoie toujours `par_evenement` (`COALESCE(…,'[]')`), donc le décodage strict ne casse pas un compte sans exception.
+  - `{error:'Non authentifié'}` en HTTP 200 donne `.unauthorized`. `{success:true}` est le seul succès.
+  - 22P02 (casts l.44130-44131) passe par `exceptionsMetier`, est intercepté avant `SupabaseErrorMapping` et donne `.contract`, sans détail technique.
+  - Le PATCH ne porte que `sms_alertes_actives` (GRANT de colonne), filtré `eq(id, context.userId)`, et seulement si la ligne a été lue.
+  - Le SELECT `soignants` est couvert par le GRANT de table.
+- **Aucun succès fabriqué.**
+  - « Préférences enregistrées » n'est annoncé qu'après une relecture concordante. Une alerte SMS non relue donne l'échec partiel verbatim l.237.
+  - Un refus `{error}` est affiché verbatim et le brouillon est conservé.
+  - Il n'y a ni renvoi automatique ni double envoi (garde `.enCours` testée).
+  - Les réponses d'un epoch périmé sont ignorées : `generation` en lecture, epoch en écriture.
+- **Parité web.**
+  - Le catalogue `EVENTS_SOIGNANT` est relu dans le fichier web par une regex (13 entrées, dans l'ordre, avec le régime). Le filtre de régime fait une comparaison stricte.
+  - Une ligne absente vaut « actif ». Un canal coupé grise la case et ignore le clic.
+  - `sms_alertes_actives ?? true`. Une ligne `soignants` absente masque l'alerte et ne l'écrit pas.
+  - Seuls les types du catalogue sont envoyés ; le serveur fait un upsert par clé.
+- **D1.**
+  - `verifier()` ne demande jamais l'autorisation : `demander()` n'est appelé que dans `activer()`, au tap.
+  - « Activer sur cet appareil » apparaît dans les conditions du web l.356, et le second tap est ignoré.
+  - « Ouvrir les réglages » n'est proposé que sur refus (mineur 4 de T4 tranché).
+- **Une seule surface.** La carte n'est plus montée que dans `PreferencesScreen`. `sectionHub` et `proposeReglages` sont retirés, et `DemoPushTests` est migré.
+- **HARD STOP n°4.** Aucun texte nouveau. Les textes sont verbatim et gardés par des tests qui relisent les fichiers web ; seuls les deux textes tutoyés passent au vouvoiement (décision 9). « Session à vérifier » reprend le lot 1. B9 non concerné (D18).
+- **Lien.** La ligne `DestinationLien.ecranNatifLivre(.parametresNotifications)` passe à true, ce qui suit la consigne. Aucun consommateur vivant n'est affecté : le seul lecteur hors tests est `AccueilPresentation.renvoiWeb`, qui ne vise que `/presences` et `/notifications`, et aucune notification du dump ne pointe vers les préférences.
+- **Lots 0 et 1.** `logout-button`, `profile-*` et `network-sentinel` sont inchangés et restent à la même place ; la nouvelle section se trouve après « Application ». Le monde démo n'émet aucune requête réseau. Les tests de T4 sont remplacés par des tests plus stricts, sans affaiblissement.
+- **Fuites et périmètre.** Aucun secret, aucun log de données sensibles. Les fichiers hors tranche (ProfileScreen de T11, fichiers T4, DestinationLien) sont des retouches consignées.
+
+#### Constats mineurs (à traiter avant ou avec le merge de T11/T3b)
+1. **`PreferencesModel.swift:163-171`.**
+   - Problème : la relecture qui suit une issue inconnue publie sans garde. Elle écrase les modifications faites pendant la relecture, peut afficher une relecture périmée sous « Préférences enregistrées » si un second envoi se termine avant elle, et garde l'échec même quand la relecture concorde.
+   - Correction : un jeton d'opération ou la garde `preferences == demande`, puis la concordance sur la relecture.
+2. **`PreferencesModel.swift:75-80`.**
+   - Problème : `sessionExpired` n'est jamais remis à false sur un échec d'un autre type.
+   - Correction : l'aligner sur `AccueilModel`.
+3. **`PreferencesModelTests`.**
+   - Problème : aucun test sur une réponse tardive après changement d'identité, ni en lecture ni en écriture, et aucun test de `verifierSession`.
+   - Correction : ajouter ces cas.
+4. **`PreferencesScreen.swift:77-79`.**
+   - Problème : `canalPush` est une copie recopiée par `onChange`, en écart au principe « État dérivé ». Sur le premier rendu, l.346 peut s'afficher à tort.
+   - Correction : dériver le canal au rendu.
+5. **`ProfileScreen.swift:49-55`.**
+   - Problème : le `NavigationLink` à destination fermée empêchera T3b de pousser l'écran par programme.
+   - Correction : `NavigationLink(value:)` et `.navigationDestination(for:)`, comme `MissionRoute`.
+6. **`PreferencesScreen.swift:179-185`.**
+   - Problème : les cases sont vocalisées par le seul canal.
+   - Correction : reprendre le patron web l.410 (« ${c} pour ${e.label} »).
+7. **`DemoPushTests.swift:100-113`.**
+   - Problème : l'absence de carte dans le hub n'est plus vérifiée en état « refusé ».
+   - Correction : ajouter `aucuneCarteDansLeHub()`.
+8. **Traçabilité de HARD STOP n°4.**
+   - Problème : « Coût supporté par Jolene. Vous pouvez désactiver… » est vouvoyé, et le mineur 4 de T4 est tranché, mais aucun des deux ne figure dans la liste de Gabrielle (§6.7).
+   - Correction : les y ajouter.
+9. **Preuve de niveau 2 non acquise.**
+   - Problème : sur iPad, le tap à `dx 0.9` tombe sur le libellé et dépend de l'`onTapGesture` de ToggleRow.
+   - Correction : CI trois formats relue avant le merge.
+
+#### Points de fusion à conserver
+- Au merge de T11 : garder `profile-preferences-notifications` et ne jamais ajouter de seconde carte.
+- T3b doit mapper `.parametresNotifications` : onglet Profil, puis `PreferencesScreen(session:snapshot:push:permission:)`. Il doit aussi ajouter le cas de tap vers `prefs-screen` prévu au §3 T5 du blueprint.
+
+### Intégration sur `feat/ios-lot3` (intégrateur, 2026-11-08, vague 2 bis)
+
+- `git merge --no-ff origin/lot3/l3-t6-v2` (`e83a9b74`) → `0ce5f398`, après L3-T5. Conflits résolus en gardant les
+  deux côtés :
+  - `DemoWorld.câblerLot3` et `SupabaseGateways.câblerLot3` : notifications (T5) et préférences (T6) câblées ;
+  - `DemoWorldTests.portsEnAttenteLot3` : `notifications` et `preferences` retirés ;
+  - `DestinationLienTests` : les deux écrans sortent des renvois Safari, `ecranNatifLivre` vrai pour les deux ;
+  - `export-demo-fixtures.mjs` : `buildDemoNotifications` et `buildDemoPreferences` ;
+  - `DemoPushTests` : tests d'autorisation de T6 (carte dans les préférences) + taps et pré-prompt de T5 ; l'absence
+    du pré-prompt en 1re session (T5) est affirmée dans le test « jamais demandé » de T6, avant « Activer sur cet
+    appareil » ; les deux tests du pré-prompt lisent la carte dans l'écran des préférences (« Plus tard » : l.349 et
+    « Activer sur cet appareil » toujours proposés, au lieu de l'absence de carte au hub) ;
+  - `project.pbxproj` régénéré par `xcodegen generate` (groupe vide `Jolene/Resources` recréé localement pour un
+    diff limité aux fichiers de T6).
+- **Correctif d'intégration `9a869e8d`** (garde de T5 rouge sans lui, comme prévu par `DECISIONS_LOT3.md`) :
+  - `CibleNotification.preferences`, onglet Profil, présentable depuis le centre ;
+  - `MainTabView` : pile du Profil en `NavigationStack(path:)`, destination `PreferencesNotificationsRoute`, cas
+    `.preferences` de `presenter` ;
+  - `ProfileScreen` : entrée « Réglages › Notifications » en lien par valeur (**mineur 5 levé**), même identifiant ;
+  - point de fusion « cas de tap vers `prefs-screen` » **fait** : `DemoPushTests.testTapLienExpliciteOuvreLesPreferences` ;
+    `DemoNotificationsTests.testLigneLueVersLesPreferencesOuvreLEcranNatif` (ligne 005 : bouton « Voir », écran natif) ;
+  - test changé, et pourquoi : `PushTapIntentTests.testCiblesDesTypesPrincipaux` attendait le renvoi web des
+    préférences, état d'avant T6 ; il attend désormais `.preferences`. `DemoNotificationsTests` sort la ligne 005 de la
+    boucle des lignes sans action, puisqu'elle en a une, et la vérifie dans son propre test.
+- Mineurs 1 à 4 et 6 à 9 ouverts. Condition de merge inchangée : CI trois formats verte, `xcresult` relu
+  (`DemoPreferencesTests`, `DemoPushTests`, `DemoNotificationsTests`), `skipped = 0`.
+- Vérifications : sur la pointe finale, voir la section L3-T9.
+
 ## L3-T9
 
 ### Revue fraîche B8 — L3-T9 (branche `lot3/l3-t9-v2`, 08/11/2026)
@@ -995,3 +1156,126 @@ Verdict : aucun bloquant ; un majeur ; dix mineurs. Synthèse (détail et correc
   `feat/ios-lot3` pas sur `main` avant T8). Commentaire du modèle reformulé (mineur 1).
 - **Non exécuté** : XCUITest (compilés par `build-for-testing`, jamais lancés : consigne de la tâche). Condition de
   merge : CI trois formats verte, relue dans le `xcresult`.
+
+### Revue fraîche B8 — L3-T9 (vague 2 bis, n°2)
+
+**Branche** `origin/lot3/l3-t9-v2` (99a38bd5), comparée à `origin/feat/ios-lot3` (847e31c6). J'ai relu le diff en entier : 37 fichiers, +3 442 / −91. Revue en lecture seule : aucun build, aucun test, aucun appel Supabase. Les définitions SQL ont été relues dans le dump versionné de la base.
+
+#### Verdict : **CLÔTURABLE**
+Aucun bloquant, aucun majeur, 10 mineurs. Une condition de merge : la CI doit être verte sur les trois formats. Les XCUITest sont compilés mais n'ont jamais été lancés.
+
+#### Ce qui a été vérifié et tient
+
+##### Gateway (`SupabaseProfilGateway`)
+- **Exceptions métier lues avant le mapping générique.** `exceptionsMetier` vaut `["23514", "23505", "P0001"]`. Ces exceptions sont restituées avant `SupabaseErrorMapping`, et le `sqlstate` est examiné avant `estSucces`.
+- **Refus HTTP 200.** Un `{error}` en HTTP 200 donne un refus certain (`RefusEnregistrementProfil`). « Non authentifié » est traité à part : session expirée.
+- **Autres erreurs.** 5xx, 504 et SQLSTATE non déclarés sont des issues ambiguës : l'écran relit le profil, sans jamais renvoyer la demande.
+- **Pas de faux succès.** `{}` est traité comme une erreur de contrat. Un succès est toujours suivi d'une relecture : une requête d'écriture, puis une de lecture.
+- **Corps SQL relus** (`fn_modifier_mon_profil` l.43891-44018, `fn_mon_profil_soignant_complet` l.44659-44684, triggers BEFORE UPDATE de `soignants`) :
+  - le `COALESCE` est respecté ;
+  - aucun texte vide n'est envoyé, sauf le prénom ou le nom (refusés par le serveur) ;
+  - un RPPS vérifié n'est jamais envoyé.
+
+##### Lecture
+- Décodage en liste blanche, après la garde du web `validerProfilSoignant` rejouée par les vecteurs golden.
+- Aucune propriété pour une clé sensible.
+- Description masquée : ni position GPS ni identité.
+- L'identifiant utilisateur est comparé en minuscules dans les deux mondes.
+
+##### Modèle (`ProfilEditionModel`)
+- Lecture bornée dans le temps. Les lectures sont numérotées : une réponse plus ancienne ne publie rien.
+- Epoch d'identité vérifié après chaque attente.
+- Un seul audit `DONNEES_PERSO_CONSULTATION` par ouverture, best-effort, après la vérification des modes.
+- Pas de double envoi : verrou et garde.
+- La revalidation silencieuse de la session garde le même epoch et ne démonte pas l'espace (`SessionController.start`, `MainTabView.id(epoch)`).
+- « Vérifier ma session » reprend les libellés du lot 1.
+
+##### HARD STOP n°4
+- Type d'exercice et attestation L1222-5 ne sont pas portés : `p_type_exercice` et `p_attestation_*` ne sont jamais envoyés.
+- Les textes web sont repris tels quels, à leur ligne source (`ProfilVerbatimTests`).
+- Les modes d'exercice sont dérivés de la table paramétrée. L'état « non câblé » reste conservateur : le libéral n'est jamais ajouté.
+- Deux textes natifs non juridiques sont listés pour relecture par Gabrielle.
+
+##### Périmètre
+- `ProfileScreen` : une seule ligne ajoutée.
+- `AppContainer` : un seul bloc DEBUG ajouté.
+- pbxproj : ajouts seulement.
+- Aucun littéral qui ressemble à un secret.
+- Identifiants d'accessibilité conformes au blueprint.
+- La sentinelle réseau de la démo est vérifiée dans `DemoProfilTests`.
+- Lots 0 et 1 : les identifiants ne bougent pas. `DemoCompteTests` atteint toujours la suppression grâce à ses glissements bornés.
+
+##### Tests
+- Les tests ne sont pas affaiblis : les trois tests passés au type `RefusEnregistrementProfil` gagnent une assertion de non-relecture.
+- Le motif de retour arrière sur iPad est le même que dans les XCUITest déjà verts (`navigationBars.buttons.firstMatch`).
+
+#### Mineurs (détail dans la liste structurée)
+1. Une saisie faite pendant un enregistrement est effacée par le succès relu, alors que la branche ambiguë la conserve.
+2. Point de fusion T3b : tous les `/soignant/profil?tab=*` vont vers l'édition native, y compris `?tab=confidentialite` (RGPD et suppression du web). À consigner et à tester.
+3. Les 23505 ne suivent pas l'ordre du web : l'exemple `soignants_email_key` diverge de `erreurs.ts` l.508.
+4. P0001 couvre aussi `dec_valider_type_exercice_soignant` et `dec_verifier_type_exercice_profession`, dont les messages s'afficheraient tels quels. C'est la parité avec le web, mais ce n'est ni documenté ni testé.
+5. Aucun test sur un changement d'epoch pendant un enregistrement.
+6. `extension ValeurJSON` déclarée dans un fichier de gateway : risque de doublon avec T8.
+7. `ModificationProfil` et `FormulaireProfil` gardent une description non masquée.
+8. Explorer et Accueil gardent un snapshot périmé après un enregistrement. Le manque est consigné mais pas verrouillé par un test.
+9. Le commentaire de la fixture démo ne correspond pas à son contenu (`specialites`).
+10. Condition de merge : CI verte sur iphone, ipad-portrait et ipad-landscape (xcresult). Textes natifs à relire par Gabrielle.
+
+#### Notes T3b
+- `ProfilEntreeSection` garde un `NavigationLink` à fermeture, et la pile de l'onglet Profil n'a pas de chemin de navigation. T3b devra rendre `JoleneRoute` `Hashable`, donner un chemin à la pile et poser une `navigationDestination` sur la `List` de `ProfileScreen`. C'est consigné dans DECISIONS_LOT3 et ne pose pas de difficulté.
+- Le renvoi du type d'exercice construit lui-même son `.safari`, sans passer par `DestinationLien`. C'est correct, à condition que le présentateur de L1-T10 utilise `SFSafariViewController` et jamais `openURL`, sinon le lien universel reviendrait dans l'app.
+
+Seul nettoyage côté Claude : mes propres extractions de revue dans le scratchpad. Rien d'autre n'a été supprimé.
+
+### Intégration sur `feat/ios-lot3` (intégrateur, 2026-11-08, vague 2 bis)
+
+- `git merge --no-ff origin/lot3/l3-t9-v2` (`99a38bd5`) → `cabbf29e`, après L3-T5 et L3-T6. Conflits résolus en
+  gardant les deux côtés :
+  - `AppContainer.demoGateways` : surcharges DEBUG `JOLENE_FORCE_PREFERENCES_ECHEC` (T6) et `JOLENE_DEMO_PROFIL` (T9)
+    dans le même monde démo ;
+  - `ProfileScreen` : ligne « Mon profil » de T9 puis l'entrée « Réglages › Notifications » de T6 (la carte
+    provisoire de T4, encore présente sur la base de T9, n'est plus au hub) ;
+  - `DemoWorldTests.portsEnAttenteLot3` (`profil` câblé en plus), `SupabaseGatewaysTests` (assertions de T5 et T9) ;
+  - `DestinationLienTests` : routes natives de T5 et T9, familles push `/soignant/notifications` et
+    `/soignant/profil` natives, totaux combinés **461** destinations natives et **429** renvois web
+    (448 + 6 + 7 ; 442 − 13) ;
+  - `export-demo-fixtures.mjs` (notifications, préférences, profil complet), `check-rpc-contracts-lot3.node.mjs`
+    (RPC consommées de T6 et T9) ;
+  - `DECISIONS_LOT3.md`, `PARITE_SOIGNANT.md` (ligne tableau de bord de T5, lignes profil de T9), `REVUES_LOT3.md` :
+    sections des deux côtés ; `project.pbxproj` régénéré par `xcodegen generate`.
+- **Correctif d'intégration `6181cfdd`** (garde de T5 rouge sans lui : 7 vecteurs push `/soignant/profil`) :
+  `CibleNotification.profil` (tout `?tab=`, alias `reputation`), destination `ProfilEditionRoute` sur la pile du
+  Profil, cas `.profil` de `presenter`, « Mon profil » en lien par valeur (même identifiant `profil-ouvrir` ; la note
+  T3b « pile sans chemin, lien à fermeture » est levée sans rendre `JoleneRoute` `Hashable`) ;
+  `DemoPushTests.testTapLienExpliciteOuvreLEditionDuProfil` (cas de tap du §3 T5 pour l'écran de T9). **Mineur 2**
+  consigné (`DECISIONS_LOT3.md`, section d'intégration) et caractérisé par `CentreNotificationsTests`
+  (`?tab=confidentialite` → `.profil`) ; à trancher par T3b / T11.
+- **Correctif d'intégration `10f197ca`** : `ProfilVerbatimTests.testLibelleDuRenvoiDuTypeDExerciceEpingleSansSourceWeb`
+  rougissait. Il justifiait « Voir sur jolene.app » par sa présence dans `AccueilScreen.swift`, que T5 retire (centre
+  natif) : test juste pour sa base, faux pour la base fusionnée. Le libellé (non juridique, sans équivalent web)
+  rejoint la liste des textes à relire par Gabrielle ; le test épingle sa valeur, sa présence dans cette liste et son
+  absence de la page web. Aucun texte affiché ne change.
+- **Reprise de `main` et correctif `e9e11948`** : `git merge --no-ff origin/main` (`01d0be09`, PR B9 #1119, hors
+  `ios-native/` et hors dump) → `9f89723b`. La reprise du 1er merge apporte B3 (#1118) : la garde T0
+  `check-rpc-contracts-lot3.node.mjs` (« contestation cassée », témoin du dump) rougissait, comme prévu, en demandant
+  de relire la fiche. Fiche `fn_contester_paiement_soignant` réécrite depuis le dump (l.25741-25839 : huit
+  `error_code`, verrou `FOR UPDATE`, 23505 restituée en `LITIGE_DEJA_OUVERT`, plus d'INSERT `CONTESTATION_PAIEMENT`) ;
+  le test garde le contrat d'après B3 avec la même force. T13 (B9) reste à livrer.
+- **Vérifications exécutées sur la pointe poussée** (Xcode 16.4, Swift 6.1.2 ; disque libre ≈ 30 Go) :
+  - `swift build --build-tests -Xswiftc -strict-concurrency=complete` puis `swift test -Xswiftc
+    -strict-concurrency=complete` : **JoleneCore 625 tests, 0 échec**, 0 avertissement ; **JoleneSupabase 258 tests,
+    0 échec**, 0 avertissement hors `.build/checkouts/` (« CoreData: error: Failed to create NSXPCConnection » : bruit
+    du bac à sable du runner xctest, sans échec associé). `.build` supprimé après chaque package.
+  - `xcodegen generate` : aucun diff ; `xcodebuild build-for-testing -scheme Jolene -configuration Debug
+    -destination 'generic/platform=iOS Simulator'`, `-derivedDataPath` dans le worktree, `CODE_SIGNING_ALLOWED=NO` :
+    **TEST BUILD SUCCEEDED**, 0 erreur, 0 avertissement de nos sources (seules les notes « Metadata extraction
+    skipped » d'`appintentsmetadataprocessor`) ; cibles compilées : Jolene, JoleneUITests (dont `DemoPushTests` 15,
+    `DemoNotificationsTests` 2, `DemoPreferencesTests` 2, `DemoProfilTests` 5), JoleneCore(Tests),
+    JoleneSupabase(Tests), JoleneDesign(Tests). DerivedData supprimé.
+  - Exporteurs en écriture puis en contrôle, sans diff : `export-demo-fixtures.mjs` (7 fichiers),
+    `export-golden-vectors.mjs` (4 306 vecteurs), `check-rpc-contracts.mjs --update` puis contrôle (41 RPC, aucune
+    dérive) ; `node --test tests/node/check-rpc-contracts.node.mjs tests/node/check-rpc-contracts-lot3.node.mjs
+    tests/node/mobile-delivery-plan.node.mjs` : **137 tests, 0 échec, 0 ignoré**.
+- **Non exécuté** : aucun test sur simulateur (consigne). Les XCUITest de T5, T6 et T9, et les trois ajoutés à
+  l'intégration, sont compilés mais n'ont jamais tourné : **condition de merge maintenue**, CI trois formats verte
+  relue dans le `xcresult` (0 échec, `skipped = 0`, `passed = total`). Mineurs 1 et 3 à 10 ouverts.
