@@ -183,7 +183,7 @@ final class PointageModelTests: XCTestCase {
         let appareil: Appareil
     }
 
-    private func banc(_ port: any PointagePort, utilisateur: AuthenticatedUser = utilisateurPointage,
+    private func nouveauBanc(_ port: any PointagePort, utilisateur: AuthenticatedUser = utilisateurPointage,
                       magasin: MagasinEspion = MagasinEspion(), reseau: ScenarioReseauDemo = .enLigne,
                       timeout: TimeInterval = SessionController.defaultResolutionTimeout) async throws -> Banc {
         var gateways = Gateways(auth: PretAuth(utilisateur: utilisateur), role: NeutralRole(), missions: PretMissions(),
@@ -207,7 +207,7 @@ final class PointageModelTests: XCTestCase {
                         reseau: ScenarioReseauDemo = .enLigne, timeout: TimeInterval = SessionController.defaultResolutionTimeout,
                         finLe: String? = "2026-11-02T08:05:00Z",
                         attendre: (@Sendable (TimeInterval) async -> Void)? = nil) async throws -> (PointageModel, SessionController) {
-        let banc = try await banc(port, magasin: magasin, reseau: reseau, timeout: timeout)
+        let banc = try await nouveauBanc(port, magasin: magasin, reseau: reseau, timeout: timeout)
         return (bloc(mission, banc, temps: temps, finLe: finLe, attendre: attendre), banc.controller)
     }
 
@@ -507,7 +507,7 @@ final class PointageModelTests: XCTestCase {
 
     func testDemoCodeDeLaMissionASaisiDansLeBlocB() async throws {
         let magasin = MagasinEspion()
-        let banc = try await banc(DemoPointageGateway(), utilisateur: DemoWorld.user, magasin: magasin)
+        let banc = try await nouveauBanc(DemoPointageGateway(), utilisateur: DemoWorld.user, magasin: magasin)
         let blocA = bloc("demo-presence-a", banc)
         let blocB = bloc("demo-presence-b", banc)
         await blocA.charger()
