@@ -41,8 +41,9 @@ final class RulesDocumentsRequisTests: XCTestCase {
                 let document = try XCTUnwrap(entree["document"])
                 // `profession_certifiee` est lu par `resultat_ia->>profession_certifiee` (texte ou nul) :
                 // toute autre valeur JSON est absente pour le natif, comme `typeof … === 'string'`.
+                // `statut_verification` est NULLable (`public.sql` l.408) : nul est rejoué tel quel.
                 let piece = DocumentSoignantExigence(typeDocument: try XCTUnwrap(document["type_document"]?.string),
-                                                     statutVerification: try XCTUnwrap(document["statut_verification"]?.string),
+                                                     statutVerification: document["statut_verification"]?.string,
                                                      valideJusqua: document["valide_jusqua"]?.string,
                                                      professionCertifiee: document["profession_certifiee"]?.string)
                 return .bool(ExigencesDocuments.documentValidePourExigence(
@@ -140,5 +141,24 @@ final class RulesDocumentsRequisTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(DocumentSoignantExigence.self, from: piece),
                        DocumentSoignantExigence(typeDocument: "DIPLOME", statutVerification: "VERIFIE",
                                                 valideJusqua: "2030-01-31", professionCertifiee: "IADE"))
+    }
+
+    func testUnStatutDeVerificationNulNeCassePasLaListeEtNEstJamaisValide() throws {
+        // `documents_soignants.statut_verification` est NULLable (DEFAULT 'EN_ATTENTE' sans NOT NULL,
+        // `public.sql` l.408 ; `| null` dans `types.ts`) : une ligne à NULL ne doit pas faire échouer
+        // le décodage de toute la liste. Le web la garde et la juge non valide (`=== 'VERIFIE'`).
+        let lignes = Data(#"""
+        [{"id":"d1","type_document":"CARTE_IDENTITE","statut_verification":"VERIFIE","valide_jusqua":null,"profession_certifiee":null},
+         {"id":"d2","type_document":"CARTE_IDENTITE","statut_verification":null,"valide_jusqua":null,"profession_certifiee":null}]
+        """#.utf8)
+        let pieces = try JSONDecoder().decode([DocumentSoignantExigence].self, from: lignes)
+        XCTAssertEqual(pieces, [
+            DocumentSoignantExigence(typeDocument: "CARTE_IDENTITE", statutVerification: "VERIFIE", valideJusqua: nil, professionCertifiee: nil),
+            DocumentSoignantExigence(typeDocument: "CARTE_IDENTITE", statutVerification: nil, valideJusqua: nil, professionCertifiee: nil),
+        ])
+        let maintenant = try DateHeureParis.instantJolene("2026-11-02T10:00:00Z")
+        XCTAssertEqual(pieces.map {
+            ExigencesDocuments.documentValidePourExigence($0, typeDocumentExige: "CARTE_IDENTITE", profession: "IDE", maintenant: maintenant)
+        }, [true, false], "statut nul : pièce gardée, jamais valide")
     }
 }

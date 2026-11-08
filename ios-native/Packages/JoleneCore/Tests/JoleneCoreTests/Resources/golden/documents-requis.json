@@ -1004,6 +1004,24 @@
     "expected": false
   },
   {
+    "name": "documentValidePourExigence/grille/statut/null",
+    "input": {
+      "fonction": "documentValidePourExigence",
+      "document": {
+        "type_document": "CARTE_IDENTITE",
+        "statut_verification": null,
+        "valide_jusqua": null,
+        "profession_certifiee": null
+      },
+      "exigence": {
+        "type_document": "CARTE_IDENTITE"
+      },
+      "profession": "IDE",
+      "maintenant": "2026-11-02T10:00:00Z"
+    },
+    "expected": false
+  },
+  {
     "name": "documentValidePourExigence/grille/statut/verifie",
     "input": {
       "fonction": "documentValidePourExigence",

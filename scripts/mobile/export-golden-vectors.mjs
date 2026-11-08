@@ -1855,7 +1855,8 @@ function domaine(regle, condition, quoi) {
 // l.69057-69067) : `profession` et `type_document` sont NOT NULL ; `type_exercice_requis` est
 // NOT NULL et contraint (`TOUS`, `SALARIE_ONLY`, `LIBERAL_ONLY`), mais la règle web replie nul,
 // vide ou inconnu sur `TOUS` : ces valeurs restent dans les vecteurs. Profil : chaînes ou nul,
-// booléens ou nul (absent compris). `documentValidePourExigence` lit `valide_jusqua` par
+// booléens ou nul (absent compris). Pièce (`documents_soignants`) : `type_document` NOT NULL,
+// `statut_verification` NULLable (l.408), donc chaîne ou nul. `documentValidePourExigence` lit `valide_jusqua` par
 // `new Date` : date seule (colonne `date`, minuit UTC) ou ISO avec ou sans décalage (heure de
 // Paris, fuseau forcé du processus) ; tout autre format de date est hors domaine.
 function vecteursDocumentsRequis() {
@@ -1876,7 +1877,10 @@ function vecteursDocumentsRequis() {
       documentsRequis.filtrerDocumentsRequis(regles, soignant));
   };
   const valide = (nom, document, exigence, profession, maintenant) => {
-    domaine(R, typeof document.type_document === 'string' && typeof document.statut_verification === 'string', 'type_document, statut_verification : chaînes');
+    domaine(R, typeof document.type_document === 'string', 'type_document : chaîne NOT NULL');
+    // `statut_verification` est NULLable (DEFAULT 'EN_ATTENTE' sans NOT NULL, `public.sql` l.408 ;
+    // `| null` dans `types.ts`) : le web garde la ligne et la juge non valide (`=== 'VERIFIE'`).
+    domaine(R, estChaineOuNul(document.statut_verification), 'statut_verification : chaîne ou nul');
     domaine(R, estChaineOuNul(document.valide_jusqua) && typeof exigence.type_document === 'string' && estChaineOuNul(profession), 'valide_jusqua, exigence, profession');
     c.ajoute(`documentValidePourExigence/${nom}`, { fonction: 'documentValidePourExigence', document, exigence, profession, maintenant },
       documentsRequis.documentValidePourExigence(document, exigence, profession, new Date(maintenant)));
@@ -2015,6 +2019,8 @@ function vecteursDocumentsRequis() {
   for (const statut of ['VERIFIE', 'verifie', 'Verifie', 'EN_ATTENTE', 'REJETE', 'EXPIRE', 'REVUE_MANUELLE_REQUISE', 'API_INDISPONIBLE', '']) {
     valide(`grille/statut/${statut || 'vide'}`, doc({ statut_verification: statut }), carte, 'IDE', MAINTENANT);
   }
+  // Statut NULL (colonne NULLable) : la ligne reste lisible et la pièce n'est pas valide.
+  valide('grille/statut/null', doc({ statut_verification: null }), carte, 'IDE', MAINTENANT);
   valide('grille/type/casse-differente', doc({ type_document: 'carte_identite' }), carte, 'IDE', MAINTENANT);
   valide('grille/type/diplome-pour-carte', doc({ type_document: 'DIPLOME', profession_certifiee: 'IADE' }), carte, 'IADE', MAINTENANT);
   valide('grille/type/carte-pour-diplome', doc(), diplome, 'IDE', MAINTENANT);
@@ -2097,6 +2103,9 @@ function vecteursPresencesSoignantListes() {
     }
     for (const liste of Object.values(args.creneauxParMission)) liste.forEach(verifierCreneau);
     for (const contrat of args.contrats ?? []) {
+      // `contrats_mission.statut` est NULLable (`public.sql` l.68786, `types.ts`) mais
+      // `ContratPointage.statut` ne décode pas encore nul : hors domaine jusqu'à T3 (décodage
+      // tolérant puis vecteur `statut: null` dans `grille/contrats/choix`, consigne T3 de DECISIONS_LOT2.md).
       domaine(R, typeof contrat.id === 'string' && typeof contrat.mission_id === 'string' && typeof contrat.statut === 'string'
         && estChaineOuNul(contrat.cree_le), 'contrat : id, mission_id, statut, cree_le');
     }
