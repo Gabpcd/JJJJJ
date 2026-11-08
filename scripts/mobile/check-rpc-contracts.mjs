@@ -84,7 +84,7 @@ export const RPC_SUIVIES = [
   { name: 'fn_etat_pointage_mission', statut: 'a_venir', lot: 2 },
   { name: 'fn_envoyer_otp_signature', statut: 'a_venir', lot: 2 },
   { name: 'fn_signer_contrat_otp', statut: 'a_venir', lot: 2 },
-  { name: 'fn_remplacer_document_soignant', statut: 'a_venir', lot: 2 },
+  { name: 'fn_remplacer_document_soignant', statut: 'consommee', lot: 2 }, // T6 : SupabaseDocumentsGateway
   // Lot 2, T0 : présences (T3, T4b, T5a, T5b), justificatifs (T6), contrats (T8).
   { name: 'fn_consentir_gps', statut: 'a_venir', lot: 2 },
   { name: 'fn_relancer_validation_presence', statut: 'a_venir', lot: 2 },
@@ -92,9 +92,9 @@ export const RPC_SUIVIES = [
   { name: 'fn_fenetre_contestation_ouverte', statut: 'a_venir', lot: 2 },
   { name: 'fn_ouvrir_litige_rate_limited', statut: 'a_venir', lot: 2 },
   { name: 'fn_creer_notation_mission', statut: 'a_venir', lot: 2 },
-  { name: 'fn_demander_revue_document', statut: 'a_venir', lot: 2 },
-  { name: 'fn_verifier_coherence_documents', statut: 'a_venir', lot: 2 },
-  { name: 'fn_signer_attestation_sante', statut: 'a_venir', lot: 2 },
+  { name: 'fn_demander_revue_document', statut: 'consommee', lot: 2 }, // T6 : SupabaseDocumentsGateway
+  { name: 'fn_verifier_coherence_documents', statut: 'consommee', lot: 2 }, // T6 : SupabaseDocumentsGateway
+  { name: 'fn_signer_attestation_sante', statut: 'consommee', lot: 2 }, // T6 : SupabaseDocumentsGateway
   { name: 'fn_admission_otp_signature_recette', statut: 'staging_seulement', lot: 2, source: 'scripts/ci/sms-signature-staging.sql' },
   { name: 'fn_upsert_token_push', statut: 'a_venir', lot: 3 },
 ];

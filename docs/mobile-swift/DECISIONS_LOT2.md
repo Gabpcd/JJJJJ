@@ -287,6 +287,25 @@
   son propre reçu. `RecuErreur.illisible` (domaine `justificatif`) : annulation avec justificatif bloquée dans
   l'app, **voie de récupération** = renvoi web `/soignant/missions/:id` (annulation depuis le détail web, qui
   n'utilise pas ce journal) par `PresentateurRenvoiWeb` ; règle des versions ci-dessus.
+- **T7** (écrans des justificatifs, livré par T6 : `Documents/DocumentsModel.swift`, `DossierDocuments.swift`,
+  `FichierDocument.swift`, `NormalisationImage.swift`, `ConsultationDocuments.swift`, `MessagesDocuments.swift`,
+  `Demo/DemoDocumentsGateway.swift`, `JoleneSupabase/Documents/SupabaseDocumentsGateway.swift`) :
+  - modèle `DocumentsModel(controller:snapshot:recus: appareil.recus)` ; tout fichier choisi passe par
+    `FichierDocument.preparer(nom:type:octets:)` avant `envoyer(typeDocument:fichier:libelle:)` (HEIC/HEIF → JPEG sans
+    métadonnée ; refus local avec le message du web, aucun reçu). Photothèque : le web natif (Capacitor) ré-encode la
+    photo en JPEG qualité 80 (`ModalTeleversement.tsx` l.144-154) ; un JPEG de la photothèque passé tel quel garde ses
+    EXIF (GPS compris) : T7 le passe par `NormalisationImage.versJPEG` (parité, sans GPS) ou consigne l'écart ;
+  - textes des issues (aucun dans T6, hors messages levés par les ports) : `.verificationDemandee` → « Document téléversé
+    — vérification en cours (~30 s). » (`DocumentsSoignant.tsx` l.428) ; `.enregistre` → « Document téléversé.
+    Vérification manuelle en attente. » (l.419) ; `.refuse` `CHEMIN_DOCUMENT_INVALIDE` / `METADONNEES_DOCUMENT_INVALIDES`
+    → `MessagesDocuments.enregistrementImpossible` ; `.refuse("STOCKAGE_<statut>")` : le web affiche « Téléversement
+    impossible : » suivi du message brut de Storage (l.377), que le natif ne transporte pas ; `.nonEnvoye`, `.incertain`,
+    `EtatEnvoi.recuEnCours` et `.suiviIllisible` n'ont pas d'équivalent web : textes opérationnels à inventorier dans
+    « Textes opérationnels hors web » avec leur test (même règle que `RecuScan.messageRecuEnCours` / `messageIllisible`),
+    `.suiviIllisible` avec le renvoi web `DocumentsModel.renvoiWeb` ;
+  - `ConsultationDocuments.effacerTout()` à la fermeture de QuickLook et au changement d'epoch ;
+  - démo : `-JOLENE_DEMO_SCENARIO upload-incertain` → `DemoDocumentsGateway(scenario: .uploadIncertain)` posé par
+    `AppContainer` (DEBUG) ; `DemoWorld.gateways()` garde `.normal`.
 
 ## Amendements du blueprint (`LOT2_PLAN.md`)
 
@@ -302,6 +321,11 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | §2.4 (statuts des stubs de test) | `42501` → 403, `23503` → 409, `P0001`, `22023`, `23514` → 400, autres `P0…` → 500 | + classes `40` (rollback de transaction) et `57` (dont `57014`, `statement_timeout`) → 500 | revue fraîche de T1 : statuts réels de PostgREST |
 | §2.5 « Réconciliation » | preuve : `mission_id` = reçu, id hors baseline, même `id_terminal` | + `numero_scan > nb_scans_avant`, mission vérifiée par `RecuScan.reconcilier` lui-même (projection `PreuveScan` avec `mission_id`) ; relecture datée avant `started` (heure reculée) → verdict `horlogeIncoherente`, fail-closed, jamais « non reçu » ; §2.3 : `IssueScan.horlogeIncoherente` ajoutée, verdicts traduits par `IssueScan(reconciliation:)` (`.aRelire` → `.incertain`) ; reçu effacé après « non reçu » | revue fraîche de T1 : un oubli du filtre `mission_id` par la requête de T3 aurait donné un faux succès ; une horloge reculée laissait un `aRelire` sans fin ; seconde revue : `IssueScan` ne savait pas exprimer ce verdict et aucune phase terminale n'était atteignable après « non reçu » |
 | §2.6 (`RecuDocument` v1 : `userId`, `epoch`, `s3Cle`, `typeDocument`, `mime`, `tailleOctets`, `documentId?`, `phase`) | aucun nom de fichier ni libellé | + `nomFichier` (nom d'origine, non blanc, ≤ 255 points de code) et `libelle?` (≤ 500), immuables pour un même essai | seconde revue fraîche de T1 : le rejeu de `fn_remplacer_document_soignant` exige `p_nom_fichier` non vide (`public.sql` l.53114) et perdrait le libellé saisi ; ajoutés dès la v1 pour ne pas imposer une v2 à T6 |
+| §2.5 « Justificatif » (`started → stored → registered → verification_demandee`) | chaque phase journalisée | `DocumentsModel` journalise `prepared` puis `started` AVANT l'unique `DocumentsPort.envoyer` (port de T1 : un seul appel), puis efface le reçu sur toute issue relue autre que `.incertain` ; un reçu `prepared` orphelin → `not_sent` puis effacé, sans appel ; un reçu en vol → réconcilié avant tout nouvel envoi. « Une seule fois » pour `verify-document` : appelé seulement juste après un `fn_remplacer_document_soignant` accepté par CETTE requête ; une ligne relue par `s3_cle` interdit toute vérification automatique (`.enregistre` → « Revérifier ») | T6 : la gateway n'a pas accès au journal (`Appareil.recus`) ; la relecture serveur rend les phases intermédiaires inutiles à la reprise. Répond au mineur M2 de la revue de T1 (`REVUES_LOT2.md`) |
+| §2.5 réconciliation (« `resultat_ia` ou `verification_attempt_id` non nuls ») | `resultat_ia` lu | vérification engagée = statut ≠ `EN_ATTENTE` ou `verification_attempt_id` non nul (`PreuveDocument`) ; `resultat_ia` jamais lu (seule `profession_certifiee` l'est, projection du web) | minimisation (identité extraite par l'IA) ; sans effet sur « aucun appel » : une ligne présente n'en déclenche jamais |
+| §3 T6 « `createSignedURL(path:expiresIn: 3600)` + audit » | URL signée | `download(path:)` sous le JWT (même politique SELECT), copie temporaire protégée, puis le même audit `DOCUMENT_CONSULTATION` (`p_cle_s3` compris) | l'app n'ouvre pas de lien : aucune URL signée créée ni gardée |
+| §3 T6 attestation (« `fn_signer_attestation_sante` ») ; profil (« `prenom, nom` ») | audit client `ATTESTATION_SANTE_SIGNEE` du web ; `prenom`, `nom` lus | aucun audit client (le serveur écrit déjà `ATTESTATION_SANTE_SIGNEE`, l.56335-56352) ; `prenom`, `nom` non lus | doublon d'audit (même règle que `fn_creer_notification`, décision 9) ; données non affichées par la page |
+| §3 T6 `NormalisationImage` (« taille ≤ 10 Mo sinon réduction ») ; fixture « `une-image.heic` produite par `sips` » | réduction pour toute image | réduction (4 096 px, qualité 0,6) pour un HEIC/HEIF converti ; un JPEG/PNG/WebP/PDF au-delà de 10 Mo est refusé avec le message du web, octets inchangés ; fixture HEIC écrite par ImageIO (GPS et orientation 6), empreintes figées par `NormalisationImageTests` | « PNG/JPEG/PDF inchangés » (tests du blueprint) ; `sips` ne sait pas poser de GPS |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 

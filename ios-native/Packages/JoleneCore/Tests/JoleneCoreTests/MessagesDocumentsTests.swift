@@ -12,6 +12,7 @@ final class MessagesDocumentsTests: XCTestCase {
             .deletingLastPathComponent() // JoleneCore
             .deletingLastPathComponent() // Packages
             .deletingLastPathComponent() // ios-native
+            .deletingLastPathComponent() // racine du dépôt
     }
 
     private func source(_ relatif: String) throws -> String {

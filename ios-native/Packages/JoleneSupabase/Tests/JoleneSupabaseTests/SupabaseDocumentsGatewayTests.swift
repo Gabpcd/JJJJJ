@@ -31,7 +31,8 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
         SupabaseDocumentsGateway(client: TestClient.make(), clock: FixedClock(DemoWorld.fixedNow))
     }
 
-    private var cle: String { "\(uid)/documents/DIPLOME/1793577600000-diplome.jpg" }
+    /// Nom assaini comme le web (`sanitiserNomFichier` garde la casse) : « Diplôme.JPG » → « Diplome.jpg ».
+    private var cle: String { "\(uid)/documents/DIPLOME/1793577600000-Diplome.jpg" }
     private var cheminObjet: String { "/storage/v1/object/jolene-documents/\(cle)" }
     private let verify = "/functions/v1/verify-document"
     private let remplacer = "/rest/v1/rpc/fn_remplacer_document_soignant"
@@ -112,9 +113,9 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
         XCTAssertEqual(docs.query("select"), SupabaseDocumentsGateway.selectionDocuments)
         XCTAssertFalse(docs.query("select")?.contains("resultat_ia,") ?? true, "seule la profession certifiée est lue dans resultat_ia")
         XCTAssertEqual(docs.query("soignant_id"), "eq.\(uid)")
-        XCTAssertEqual(docs.query("supprime_le"), "is.null")
-        XCTAssertEqual(docs.query("revoque_le"), "is.null")
-        XCTAssertEqual(docs.query("order"), "televerse_le.desc")
+        XCTAssertEqual(docs.query("supprime_le"), "is.NULL")
+        XCTAssertEqual(docs.query("revoque_le"), "is.NULL")
+        XCTAssertEqual(docs.query("order"), "televerse_le.desc.nullsfirst", "`order('televerse_le', { ascending: false })` : NULLS FIRST de PostgreSQL")
         XCTAssertTrue(registry.unmatched.isEmpty)
     }
 

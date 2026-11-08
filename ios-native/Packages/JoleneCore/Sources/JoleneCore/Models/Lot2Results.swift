@@ -437,15 +437,23 @@ public struct DocumentSoignant: Codable, Equatable, Sendable, Identifiable {
     public var motifRejet: String?
     public var televerseLe: String?
     public var verificationAttemptId: String?
+    // T6 : projection de `DocumentsSoignant.tsx` l.199 (`valide_depuis`, `est_critique`,
+    // `profession_certifiee:resultat_ia->>profession_certifiee`), champs additifs.
+    public var valideDepuis: String?
+    public var estCritique: Bool?
+    /// `resultat_ia->>profession_certifiee` seulement : le reste de `resultat_ia` n'est jamais lu.
+    public var professionCertifiee: String?
 
     public init(id: String, typeDocument: String, libelle: String? = nil, s3Cle: String? = nil, nomFichier: String? = nil,
                 typeMime: String? = nil, tailleOctets: Int? = nil, valideJusqua: String? = nil,
                 statutVerification: String? = nil, motifRejet: String? = nil, televerseLe: String? = nil,
-                verificationAttemptId: String? = nil) {
+                verificationAttemptId: String? = nil, valideDepuis: String? = nil, estCritique: Bool? = nil,
+                professionCertifiee: String? = nil) {
         self.id = id; self.typeDocument = typeDocument; self.libelle = libelle; self.s3Cle = s3Cle
         self.nomFichier = nomFichier; self.typeMime = typeMime; self.tailleOctets = tailleOctets
         self.valideJusqua = valideJusqua; self.statutVerification = statutVerification; self.motifRejet = motifRejet
         self.televerseLe = televerseLe; self.verificationAttemptId = verificationAttemptId
+        self.valideDepuis = valideDepuis; self.estCritique = estCritique; self.professionCertifiee = professionCertifiee
     }
 
     enum CodingKeys: String, CodingKey {
@@ -460,17 +468,27 @@ public struct DocumentSoignant: Codable, Equatable, Sendable, Identifiable {
         case motifRejet = "motif_rejet"
         case televerseLe = "televerse_le"
         case verificationAttemptId = "verification_attempt_id"
+        case valideDepuis = "valide_depuis"
+        case estCritique = "est_critique"
+        case professionCertifiee = "profession_certifiee"
     }
 }
 
-/// Dossier documentaire : exigences paramétrées, documents, attestation santé (valeur serveur).
+/// Dossier documentaire : exigences paramétrées, documents, attestation santé (valeur serveur). Règles
+/// d'affichage dérivées (T6) : `Documents/DossierDocuments.swift`.
 public struct DossierDocuments: Equatable, Sendable {
+    /// Exigences DÉJÀ filtrées par profession et `type_exercice` (`DossierDocuments.assembler`).
     public var exigences: [ExigenceDocument]
+    /// Pièces actives (ni supprimées ni révoquées), les plus récentes d'abord (`televerse_le` décroissant).
     public var documents: [DocumentSoignant]
     public var attestationSanteSigneeLe: String?
+    /// T6 : profil documentaire relu (`soignants`) ; nil sans dossier professionnel (web : aucune pièce chargée).
+    public var profil: SoignantExigencesDocuments?
 
-    public init(exigences: [ExigenceDocument] = [], documents: [DocumentSoignant] = [], attestationSanteSigneeLe: String? = nil) {
+    public init(exigences: [ExigenceDocument] = [], documents: [DocumentSoignant] = [], attestationSanteSigneeLe: String? = nil,
+                profil: SoignantExigencesDocuments? = nil) {
         self.exigences = exigences; self.documents = documents; self.attestationSanteSigneeLe = attestationSanteSigneeLe
+        self.profil = profil
     }
 }
 

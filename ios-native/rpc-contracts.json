@@ -603,7 +603,7 @@
     },
     {
       "name": "fn_remplacer_document_soignant",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": null,
       "sql": [
@@ -812,7 +812,7 @@
     },
     {
       "name": "fn_demander_revue_document",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": null,
       "sql": [
@@ -837,7 +837,7 @@
     },
     {
       "name": "fn_verifier_coherence_documents",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": {
         "args": "{ p_soignant_id?: string }",
@@ -866,7 +866,7 @@
     },
     {
       "name": "fn_signer_attestation_sante",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": {
         "args": "never",

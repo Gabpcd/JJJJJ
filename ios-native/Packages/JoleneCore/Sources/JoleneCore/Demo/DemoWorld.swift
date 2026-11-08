@@ -62,7 +62,7 @@ public enum DemoWorld {
         gateways.pointage = UnwiredPointagePort()                  // T3
         gateways.contestation = UnwiredContestationPort()          // T5b
         gateways.notation = UnwiredNotationPort()                  // T5a
-        gateways.documents = UnwiredDocumentsPort()                // T6
+        gateways.documents = DemoDocumentsGateway()                // T6 (scénario démo : `-JOLENE_DEMO_SCENARIO`, T7)
         gateways.contrats = UnwiredContratsPort()                  // T8
     }
 }
