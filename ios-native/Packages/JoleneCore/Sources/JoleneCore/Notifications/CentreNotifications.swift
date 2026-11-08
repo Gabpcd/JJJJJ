@@ -60,13 +60,11 @@ public enum CentreNotificationsTextes {
 
 // MARK: - Cible d'une destination dans l'espace prêt
 
-/// Ce que l'espace prêt fait d'une destination de lien (ligne du centre, tap push), en attendant le
-/// coordinateur de liens de L1-T10 (point de fusion consigné dans `DECISIONS_LOT3.md`) : un onglet (Revenus avec
-/// sa section), le détail d'une mission, le centre de notifications, les préférences de notifications (T6) et
-/// l'édition du profil (T9), empilées sur l'onglet Profil (intégration du lot 3) ; un renvoi web passe par le
-/// présentateur
-/// `.safari` (`PresentateurRenvoiWeb`, injecté par L1-T10) ; la connexion et les liens de rappel n'ont pas de
-/// présentation dans l'espace (`.aucune`).
+/// Ce que l'espace prêt fait d'une destination de lien (ligne du centre, tap push, lien universel : aiguillage
+/// unique `AiguillageLiens` de L3-T3b) : un onglet (Revenus avec sa section), le détail d'une mission, le centre de
+/// notifications, les préférences de notifications (T6) et l'édition du profil (T9), empilées sur l'onglet Profil
+/// (intégration du lot 3) ; un renvoi web passe par le présentateur `.safari` (`PresentateurRenvoiWeb`, injecté à la
+/// racine par le coordinateur des liens) ; la connexion n'a pas de présentation dans l'espace (`.aucune`).
 ///
 /// Construite depuis une `DestinationLien` seulement (jamais la route brute : `.revenus(section: .factures)`
 /// ouvrirait l'onglet natif au lieu du renvoi web assumé, D4).

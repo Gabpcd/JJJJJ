@@ -1,8 +1,9 @@
 import Foundation
 
-/// Routeur de liens : Universal Links (`route(url:)`) et liens internes (`resolve(link:)`,
-/// réutilisable par le coordinateur push du lot 3 pour le chemin issu de
-/// `navigationPathForEvent`, sans rien implémenter du push ici).
+/// Routeur de liens : Universal Links (`route(url:)`) et liens internes (`resolve(link:)`, dont le
+/// chemin issu de `navigationPathForEvent` d'un tap push). Il ne dit que la route du chemin : tout
+/// consommateur passe par `DestinationLien(url:)` / `DestinationLien(link:)?.destination` (écran livré
+/// ou renvoi web canonique), puis par `DeepLinkIntent` (lot 3, T3b), jamais par la route brute.
 ///
 /// Table de routage (chemin sans query ni fragment, barre oblique finale ignorée), dérivée
 /// de `src/App.tsx` (routes soignant et redirections `Navigate`) :
@@ -21,7 +22,7 @@ import Foundation
 /// | `/soignant/mes-gains` (`?tab=` → section, lot 3)  | `.revenus(section:)`              |
 /// | alias `mes-factures-honoraires`, `mes-avances`, `bulletins-paie` (`Navigate`, l.395-397) | `.revenus(section: .factures / .avances / .bulletins)` |
 /// | `/soignant/profil`, `reputation` (lot 3)          | `.profil` (édition)               |
-/// | `/soignant/mon-compte`, `parametres`, `parametres-complet` ; `score`, `fiabilite`, `fiabilite-legacy` (page score au lot 4, écart assumé) | `.monCompte` (hub) |
+/// | `/soignant/mon-compte`, `parametres`, `parametres-complet` ; `score`, `fiabilite`, `fiabilite-legacy` (page score au lot 4, écart assumé) ; `/soignant/profil?tab=confidentialite` (export RGPD et suppression, lot 3 T3b) | `.monCompte` (hub) |
 /// | `/soignant/notifications` (lot 3)                 | `.notifications`                  |
 /// | `/soignant/parametres/notifications` (lot 3)      | `.parametresNotifications`        |
 /// | `/soignant/stripe-connect` (`?success=true` / `?refresh=true`, lot 3) | `.stripeConnect(retour:)` |
@@ -90,7 +91,12 @@ public enum LinkRouter {
         case "/soignant/mes-factures-honoraires": return .revenus(section: .factures)
         case "/soignant/mes-avances": return .revenus(section: .avances)
         case "/soignant/bulletins-paie": return .revenus(section: .bulletins)
-        case "/soignant/profil", "/soignant/reputation": return .profil
+        // Onglet « Confidentialité » du profil web (`ProfilSoignant.tsx` l.42-44, l.505-507 : export RGPD, suppression
+        // de compte ; « Supprimer mon compte » du hub web, `MonCompteSoignant.tsx` l.135) : le hub natif porte ces
+        // deux sections (L1-T8, L3-T11). Comparaison exacte de `?tab=`, comme le web ; l'alias `reputation` redirige
+        // sans query (`src/App.tsx` l.393).
+        case "/soignant/profil": return FormQuery(query).get("tab") == "confidentialite" ? .monCompte : .profil
+        case "/soignant/reputation": return .profil
         case "/soignant/mon-compte", "/soignant/parametres", "/soignant/parametres-complet",
              "/soignant/score", "/soignant/fiabilite", "/soignant/fiabilite-legacy":
             return .monCompte

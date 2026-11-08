@@ -109,9 +109,9 @@ public struct PushTapIntent: Equatable, Sendable, CustomStringConvertible, Custo
 /// ensuite, comme le web (redirection après connexion vers le chemin du tap). Aucune donnée n'est exposée : la
 /// destination est relue sous la RLS de la nouvelle identité.
 ///
-/// Point de fusion L1-T10 (`DECISIONS_LOT3.md`, « T3 livrée en deux temps », reliquat T3b) : le coordinateur
-/// de liens (`DeepLinkCoordinator`, `DeepLinkIntent`) n'existe sur aucune branche ; à son arrivée, il consomme
-/// cette boîte au lieu de `MainTabView` (même règle d'epoch, même destination `DestinationLien`).
+/// Consommée par l'aiguillage des liens (lot 3 T3b, reliquat L1-T10 : `AiguillageLiens`, `DeepLinkIntent.swift`,
+/// exécuté par `DeepLinkCoordinator`) : même règle d'epoch, même destination `DestinationLien` que les liens
+/// universels ; entre un lien et un tap en attente, le plus récent l'emporte.
 ///
 /// Premier plan (`willPresent`) : `premiersPlans` avance, le centre de notifications visible se relit.
 @MainActor

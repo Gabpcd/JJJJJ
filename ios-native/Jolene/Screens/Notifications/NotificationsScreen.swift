@@ -13,9 +13,10 @@ struct CentreNotificationsRoute: Hashable {}
 ///
 /// Écarts consignés : ni « Supprimer les lues » (la base refuse DELETE au soignant, correction 9), ni Realtime
 /// (lot 4 ; relecture au tirer-pour-rafraîchir et à chaque notification reçue au premier plan), ni filtres par
-/// famille (hors périmètre du blueprint §1.1). Un renvoi web passe par le présentateur `.safari` injecté par
-/// L1-T10 ; sans lui, « Voir » n'est pas affiché et une ligne déjà lue sans destination présentable depuis le centre
-/// (renvoi web, le centre lui-même) n'est pas un bouton (jamais un bouton sans effet).
+/// famille (hors périmètre du blueprint §1.1). Un renvoi web passe par le présentateur `.safari` du coordinateur des
+/// liens (injecté à la racine par L3-T3b) ; sans lui (aperçu isolé), « Voir » n'est pas affiché et une ligne déjà lue
+/// sans destination présentable depuis le centre (renvoi web, le centre lui-même) n'est pas un bouton (jamais un
+/// bouton sans effet).
 ///
 /// Tâche d'ouverture liée à la vue (revue L3-T5, m4) : annulée à la disparition du centre, elle ne navigue jamais
 /// après le départ de l'utilisateur. Une lecture relue est signalée à l'espace (`surLecture`) pour la relecture

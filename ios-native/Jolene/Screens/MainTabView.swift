@@ -19,12 +19,13 @@ import JoleneDesign
 /// - (intégration du lot 3, T6 et T9) préférences de notifications (`PreferencesScreen`,
 ///   `PreferencesNotificationsRoute`) et édition du profil (`ProfilEditionScreen`, `ProfilEditionRoute`), empilées
 ///   sur l'onglet Profil : entrées du hub, ligne du centre et tap push ;
-/// - taps push : la boîte `BoiteTapsPush` est relue à l'apparition et à chaque tap ; la destination
-///   (`DestinationLien`) est présentée par `presenter(_:depuisCentre:)` : onglet, détail de mission sur l'Accueil,
-///   centre de notifications, préférences et édition du profil sur le Profil, renvoi web par le présentateur `.safari` s'il est injecté (L1-T10). Point de fusion
-///   L1-T10 / T3b : le `DeepLinkCoordinator` reprendra cette présentation (`DECISIONS_LOT3.md`). DEBUG et démo
-///   seulement : libellé `push-tap-cible` de la dernière route présentée (XCUITest des taps vers un écran pas encore
-///   livré ; jamais en STAGING, revue L3-T5 m8) ;
+/// - liens universels et taps push (lot 3, T3b, reliquat L1-T10) : le coordinateur des liens
+///   (`DeepLinkCoordinator`, `container.liens`) est le point d'entrée unique ; l'espace lui signale son ouverture
+///   (rejeu du lien ou du tap reçu avant `.ready`), chaque tap reçu (`BoiteTapsPush.tapsRecus`) et sa fermeture, puis
+///   exécute ses demandes de navigation (`DemandeNavigation`, epoch de l'espace) par `presenter(_:depuisCentre:)` :
+///   onglet, détail de mission sur l'Accueil, centre de notifications, préférences et édition du profil sur le
+///   Profil ; un renvoi web passe par le présentateur `.safari` du coordinateur (injecté à la racine). Le libellé DEBUG
+///   `deeplink-route` (démo seulement) est posé par le coordinateur, à la racine ; il remplace `push-tap-cible` ;
 /// - une notification lue dans le centre périme le compteur de l'Accueil (`lecturesCentre`, jeton de péremption
 ///   d'`AccueilModel`, revue L3-T5 m1).
 struct MainTabView: View {
@@ -35,6 +36,8 @@ struct MainTabView: View {
     @ObservedObject var session: SessionStore
     let snapshot: SessionSnapshot
     @ObservedObject private var taps: BoiteTapsPush
+    /// Lot 3, T3b : coordinateur des liens (demandes de navigation de cet espace).
+    @ObservedObject private var liens: DeepLinkCoordinator
     @StateObject private var prePrompt: PrePromptPushModel
     @State private var selection: Tab = .accueil
     @State private var cheminAccueil = NavigationPath()
@@ -42,9 +45,6 @@ struct MainTabView: View {
     @State private var cheminProfil = NavigationPath()
     /// Notifications lues dans le centre (jeton de péremption du compteur de l'Accueil).
     @State private var lecturesCentre = 0
-    #if DEBUG
-    @State private var derniereRouteTap: String?
-    #endif
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
 
     init(container: AppContainer, session: SessionStore, snapshot: SessionSnapshot) {
@@ -52,6 +52,7 @@ struct MainTabView: View {
         self.session = session
         self.snapshot = snapshot
         self.taps = container.tapsPush
+        self.liens = container.liens
         _prePrompt = StateObject(wrappedValue: PrePromptPushModel(contexte: container.prePrompt, permission: container.pushPermission,
                                                                   push: container.push, snapshot: snapshot))
     }
@@ -121,35 +122,26 @@ struct MainTabView: View {
                 IssuePrePromptPush(issue: issue) { prePrompt.effacerIssue() }
             }
         }
-        #if DEBUG
-        .overlay(alignment: .topLeading) {
-            if container.isDemo, let derniereRouteTap {
-                Text(derniereRouteTap)
-                    .font(.system(size: 1))
-                    .foregroundStyle(.clear)
-                    .frame(width: 1, height: 1)
-                    .allowsHitTesting(false)
-                    .accessibilityIdentifier("push-tap-cible")
-            }
-        }
-        #endif
         .animation(.easeInOut(duration: 0.2), value: prePrompt.visible)
         .task { await prePrompt.evaluer() }
-        .onAppear { consommerTap() }
-        .onChange(of: taps.tapsRecus) { _ in consommerTap() }
-        .onDisappear { taps.fermerEspace(epoch: snapshot.epoch) }
+        // Lot 3, T3b : le coordinateur des liens rejoue l'intention reçue avant `.ready` (lien ou tap), puis chaque
+        // tap reçu ; l'espace n'exécute que les demandes de son epoch.
+        .onAppear {
+            liens.espaceOuvert(snapshot)
+            executerDemande()
+        }
+        .onChange(of: taps.tapsRecus) { _ in liens.tapRecu() }
+        .onChange(of: liens.demande) { _ in executerDemande() }
+        .onDisappear { liens.espaceFerme(epoch: snapshot.epoch) }
     }
 
-    // MARK: - Taps push et cibles des notifications
+    // MARK: - Liens, taps push et cibles des notifications
 
-    /// Relit la boîte des taps pour cet espace (epoch) et présente la destination, une seule fois.
-    private func consommerTap() {
-        guard let lien = taps.prendre(pour: snapshot) else { return }
-        #if DEBUG
-        // Démo seulement : la route porte les identifiants et l'URL réels d'un tap STAGING (revue L3-T5, m8).
-        if container.isDemo { derniereRouteTap = PushTapIntent.libelleDebug(lien.destination) }
-        #endif
-        presenter(CibleNotification(lien), depuisCentre: false)
+    /// Exécute la demande de navigation du coordinateur pour cet espace (epoch), une seule fois.
+    private func executerDemande() {
+        guard let demande = liens.demande, demande.epoch == snapshot.epoch else { return }
+        liens.demandeTraitee(demande)
+        presenter(demande.cible, depuisCentre: false)
     }
 
     /// Présente une cible présentable (`CibleNotification.estPresentable`, rien sinon) : depuis le centre, le détail

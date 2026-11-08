@@ -13,6 +13,8 @@ struct JoleneApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(container: container)
+                // Lot 3, T3b : liens universels, présentateur `.safari`, refus du reset PKCE (`DeepLinkCoordinator`).
+                .modifier(PointDEntreeLiens(coordinateur: container.liens))
                 .onChange(of: scenePhase) { phase in handleScenePhase(phase) }
         }
     }

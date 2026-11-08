@@ -19,6 +19,9 @@ import JoleneSupabase
 /// contexte du pré-prompt (compteur de lancements à froid et marque : `UserDefaults` en staging/production,
 /// mémoire vive en démo) ; DEBUG : `-JOLENE_SIMULER_PUSH` (démo, tap à froid simulé) et `-JOLENE_SESSION_COUNT`
 /// (numéro de session imposé, sans persistance).
+///
+/// Lot 3, T3b (reliquat L1-T10) : coordinateur des liens (`DeepLinkCoordinator`), point d'entrée unique des liens
+/// universels et des taps push ; DEBUG : `-JOLENE_OPEN_URL <url>` (démo et staging), lien universel simulé à froid.
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -33,6 +36,8 @@ final class AppContainer: ObservableObject {
     let pushPermission: PushPermissionPort?
     /// Lot 3, T5 : taps de notification en attente de l'espace prêt (`MainTabView`).
     let tapsPush: BoiteTapsPush
+    /// Lot 3, T3b : coordinateur des liens universels et des taps push (`DeepLinkCoordinator`).
+    let liens: DeepLinkCoordinator
     /// Lot 3, T5 : contexte du pré-prompt pour ce lancement (nil si l'environnement est refusé).
     private(set) var prePrompt: ContextePrePromptPush?
     /// Lot 1, T8 : avis de fin de compte partagé entre l'écran de suppression et la racine.
@@ -67,6 +72,8 @@ final class AppContainer: ObservableObject {
         self.environment = environment
         let boite = NotificationCenterDelegate.shared.boite
         tapsPush = boite
+        let liens = DeepLinkCoordinator(taps: boite, estDemo: environment.mode == .demo)
+        self.liens = liens
 
         // Un mode inconnu (`unknownModeRaw`) est refusé par `validate()` avant tout choix de gateways.
         if let error = Self.refusal(of: environment) {
@@ -80,6 +87,12 @@ final class AppContainer: ObservableObject {
             environmentError = error
             return
         }
+
+        #if DEBUG
+        // Lot 3, T3b : lien universel simulé à froid, reçu avant toute session (mémorisé jusqu'à l'espace prêt, ou
+        // renvoi web présenté aussitôt) ; mêmes refus qu'un lien réel (hôtes de l'AASA, https).
+        if let url = DeepLinkIntent.ouvertureSimulee(arguments: arguments) { liens.recevoirAuLancement(url: url) }
+        #endif
 
         switch environment.mode {
         case .demo:

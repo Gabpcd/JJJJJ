@@ -14,9 +14,9 @@ import JoleneDesign
 ///
 /// Renvoi web du pointage : route `.safari` résolue par `LinkRouter`
 /// (`AccueilPresentation.renvoiWeb`), jamais une URL écrite en dur, présentée seulement par le
-/// présentateur injecté par T10 (`PresentateurRenvoiWeb`, `SFSafariViewController`), jamais par
-/// `openURL` (chemins AASA : retour silencieux dans l'app). Sans présentateur, le compteur reste
-/// affiché et aucun bouton n'est rendu (gap verrouillé, `DemoAccueilTests`).
+/// présentateur `.safari` du coordinateur des liens (`PresentateurRenvoiWeb`, `SFSafariViewController`,
+/// injecté à la racine par L3-T3b), jamais par `openURL` (chemins AASA : retour dans l'app). Sans
+/// présentateur (aperçu isolé), le compteur reste affiché et aucun bouton n'est rendu.
 ///
 /// Lot 3, T5 (point de fusion de T3a, `DECISIONS_LOT3.md`) : le centre de notifications est natif ; le compteur
 /// des non lues ouvre `NotificationsScreen` dans la pile de l'Accueil (`CentreNotificationsRoute`, enregistrée par

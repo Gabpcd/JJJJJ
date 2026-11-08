@@ -20,6 +20,7 @@
 		2A94C1A0F00563A7348B0C89 /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BA24C6A7F18C51C527F02B8 /* PlaceholderScreen.swift */; };
 		2E1E6FD113EBB416CEBC2582 /* DemoAccueilTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2706B588474C6FFEBB240600 /* DemoAccueilTests.swift */; };
 		35B21204F757910A731C8D4B /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57522BC17747DB1695651ECD /* MainTabView.swift */; };
+		39A7227E7A346A452229D7BC /* DemoLiensLot3Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4D20F07781F9A2E52365D03 /* DemoLiensLot3Tests.swift */; };
 		496EB218D427D36B5164DC14 /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B12ED2CF03F5935EB224B9A /* AppContainer.swift */; };
 		4BB07F8A188E0551BB6B7248 /* AjoutCalendrierMission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92467ECFCEBFFC4A3024CA6F /* AjoutCalendrierMission.swift */; };
 		4CB0366CDA13BFA04A0DB949 /* DemoProfilTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D65489D1594FDE00944062B4 /* DemoProfilTests.swift */; };
@@ -46,6 +47,7 @@
 		C0F675E139EA54FE7CE00DBA /* MissionMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E8673ADB03568DA5632CFC /* MissionMapView.swift */; };
 		C4E13AFC9C0C982BCDCF06D0 /* UITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E960FB56B5063137621FDF /* UITestSupport.swift */; };
 		C58B6F5E0E8386082C59403E /* MissionsListScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AB01F07311DA9F04A88388A /* MissionsListScreen.swift */; };
+		CC8BBD760207E7B120FA3DF3 /* DeepLinkCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3F0A6856D66A3E37F08A0E7 /* DeepLinkCoordinator.swift */; };
 		CE5147BA934E8BAC00B16A39 /* StockageAppareil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7E2A5C1F0BCB93E044A7ED /* StockageAppareil.swift */; };
 		D1A49193A61DE1121538F634 /* PrePromptPushScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F524C6906946AF70D55B8DD /* PrePromptPushScreen.swift */; };
 		D2C858B7CC96D57DB6CC5E78 /* PresentateurRenvoiWeb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0747FCCBC21B648A9985AA76 /* PresentateurRenvoiWeb.swift */; };
@@ -106,8 +108,10 @@
 		ACC4653075CBE00DD3130FD3 /* LoginScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginScreen.swift; sourceTree = "<group>"; };
 		B1142E69AB4C44F4FA274100 /* ChoixModesExerciceSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChoixModesExerciceSection.swift; sourceTree = "<group>"; };
 		B2C1F510DF2473734BC92D4D /* AccueilLignes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccueilLignes.swift; sourceTree = "<group>"; };
+		B3F0A6856D66A3E37F08A0E7 /* DeepLinkCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkCoordinator.swift; sourceTree = "<group>"; };
 		B43E8DC20E74CFD2FACC575F /* PushAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushAppDelegate.swift; sourceTree = "<group>"; };
 		B5C216B466C241777BFC4541 /* JoleneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JoleneApp.swift; sourceTree = "<group>"; };
+		C4D20F07781F9A2E52365D03 /* DemoLiensLot3Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoLiensLot3Tests.swift; sourceTree = "<group>"; };
 		CA8934442A0F8427B109291C /* EnvironmentGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentGuardTests.swift; sourceTree = "<group>"; };
 		D05CBBCD86659DF4895A2323 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		D53B5D8BDE7DBB54BF682E49 /* DemoPushTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPushTests.swift; sourceTree = "<group>"; };
@@ -166,6 +170,7 @@
 			children = (
 				92467ECFCEBFFC4A3024CA6F /* AjoutCalendrierMission.swift */,
 				1B12ED2CF03F5935EB224B9A /* AppContainer.swift */,
+				B3F0A6856D66A3E37F08A0E7 /* DeepLinkCoordinator.swift */,
 				0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */,
 				F77D89390B0B48A7470C7E56 /* NotificationCenterDelegate.swift */,
 				0747FCCBC21B648A9985AA76 /* PresentateurRenvoiWeb.swift */,
@@ -294,6 +299,7 @@
 				95F239F5C89642EA9DEEAE04 /* DemoCompteTests.swift */,
 				07388306B298067BAF72F868 /* DemoConsultationTests.swift */,
 				54FD5A2A491C046BB3B80DAC /* DemoExplorerTests.swift */,
+				C4D20F07781F9A2E52365D03 /* DemoLiensLot3Tests.swift */,
 				F3F1FEAB1353A97204BA1A18 /* DemoNotificationsTests.swift */,
 				A633219A5D169F90CE80EA99 /* DemoPreferencesTests.swift */,
 				D65489D1594FDE00944062B4 /* DemoProfilTests.swift */,
@@ -416,6 +422,7 @@
 				496EB218D427D36B5164DC14 /* AppContainer.swift in Sources */,
 				0174BFA8BE84B1166A1CBC63 /* ChoixModesExerciceSection.swift in Sources */,
 				AA33BE43A88764C0D2AEC169 /* CompteSupprimeScreen.swift in Sources */,
+				CC8BBD760207E7B120FA3DF3 /* DeepLinkCoordinator.swift in Sources */,
 				B3446B6871D7FBE2076E8D6B /* EnvironmentBlockedScreen.swift in Sources */,
 				A90CAD5C43F42E1946238456 /* EtatNotificationsAppareilRow.swift in Sources */,
 				EB4448BA06429EF4C7504957 /* FiltresSheet.swift in Sources */,
@@ -452,6 +459,7 @@
 				1B95D14A610032E076A08B5C /* DemoCompteTests.swift in Sources */,
 				8F1F3B7AC29459F237E608AE /* DemoConsultationTests.swift in Sources */,
 				F06D11FE9236C6488B87AE69 /* DemoExplorerTests.swift in Sources */,
+				39A7227E7A346A452229D7BC /* DemoLiensLot3Tests.swift in Sources */,
 				06E53C28EC5560600ABDEA27 /* DemoNotificationsTests.swift in Sources */,
 				B5B9B1365AC084EB90B1587E /* DemoPreferencesTests.swift in Sources */,
 				4CB0366CDA13BFA04A0DB949 /* DemoProfilTests.swift in Sources */,

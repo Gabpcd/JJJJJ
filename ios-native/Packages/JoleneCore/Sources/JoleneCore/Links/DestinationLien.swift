@@ -4,17 +4,14 @@ import Foundation
 /// interne) — lot 3, T3a.
 ///
 /// `LinkRouter` donne la route du chemin (table de `src/App.tsx`) ; `DestinationLien` décide ce que
-/// l'app présente : la route elle-même si son écran natif est livré, sinon un renvoi `.safari` sur
-/// l'URL canonique du lien (`https://jolene.app` + chemin, query et fragment conservés). Ainsi un
-/// lien vers un écran du lot 3 pas encore mergé ouvre la page web au lieu d'un écran vide.
+/// l'app présente : la route elle-même si son écran natif est livré (écran provisoire d'onglet
+/// compris), sinon un renvoi `.safari` sur l'URL canonique du lien (`https://jolene.app` + chemin,
+/// query et fragment conservés). Ainsi un lien vers un écran pas encore livré ouvre la page web au
+/// lieu de ne rien ouvrir.
 ///
-/// Livraison partielle (`DECISIONS_LOT3.md`, « T3 livrée en deux temps ») : le coordinateur de liens
-/// du lot 1 (L1-T10 : `JoleneApp.onOpenURL` / `onContinueUserActivity`, `DeepLinkCoordinator`,
-/// intention mémorisée avant `.ready`, argument DEBUG `-JOLENE_OPEN_URL`) n'est sur aucune branche ;
-/// à l'exécution, seul `AccueilPresentation.renvoiWeb` consomme ce type. Le nom `DeepLinkIntent`
-/// reste à L1-T10 (intention différée, epoch) : son intention portera une `DestinationLien` et
-/// présentera `destination` une fois rejouée. Le câblage du coordinateur et `DemoLiensLot3Tests`
-/// forment le reliquat T3b.
+/// Consommateurs (lot 3, T3b) : `DeepLinkIntent` / `AiguillageLiens` (`DeepLinkIntent.swift`, liens
+/// universels, `-JOLENE_OPEN_URL`, taps push), présentés par `DeepLinkCoordinator` (app) ;
+/// `CibleNotification` (centre de notifications) ; `AccueilPresentation.renvoiWeb`.
 ///
 /// Ligne par tranche : la tranche d'écran du lot 3 passe sa ligne de `ecranNatifLivre` à `true` et
 /// ajuste `DestinationLienTests` (table des écrans, famille du vecteur push, totaux) ; elle ajoute
@@ -66,17 +63,18 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         return .safari(canonique)
     }
 
-    /// Destination dans l'app pour une route native (`false` pour une route externe), **vraie à
-    /// l'arrivée du coordinateur de liens L1-T10**, seul consommateur prévu avec
-    /// `AccueilPresentation.renvoiWeb` : `true` veut dire « la route a sa destination dans l'app »,
-    /// écran provisoire d'onglet (`PlaceholderScreen`) compris. Une ligne par tranche d'écran : la
+    /// Destination dans l'app pour une route native (`false` pour une route externe) : `true` veut
+    /// dire « la route a sa destination dans l'app », écran provisoire d'onglet (`PlaceholderScreen`)
+    /// compris, présentée par le coordinateur de liens (L3-T3b). Une ligne par tranche d'écran : la
     /// tranche qui livre l'écran passe sa ligne à `true`.
     public static func ecranNatifLivre(_ route: JoleneRoute) -> Bool {
         switch route {
         case .connexion, .accueil, .explorer, .missionDetail:
             return true                                  // lots 0 et 1 : écrans présents sur la base
-        case .resetPassword, .confirmerInscription:
-            return true                                  // vrai à l'arrivée de L1-T10 (écrans livrés par T10)
+        case .resetPassword:
+            return false                                 // reset natif non livré (reliquat L1-T10) ; `?code=` refusé par `DeepLinkIntent` (option B)
+        case .confirmerInscription:
+            return false                                 // T7 — écran de confirmation d'inscription
         case .missions:
             return true                                  // onglet Mes missions : placeholder jusqu'à L1-T5
         case .serieDetail:

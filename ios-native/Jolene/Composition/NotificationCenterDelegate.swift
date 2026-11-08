@@ -8,7 +8,9 @@ import JoleneCore
 ///   .list]`, aucune pastille : le serveur n'en envoie pas, §1.2), puis `BoiteTapsPush.signalerPremierPlan()`
 ///   (le centre de notifications visible se relit) ;
 /// - tap (`didReceive`, action par défaut seulement) : paires textuelles du payload (`PushTapIntent`) remises
-///   à la boîte, que l'espace prêt relit (`MainTabView`) ; l'action « effacer » n'ouvre rien.
+///   à la boîte, relue par le coordinateur des liens (`DeepLinkCoordinator`, lot 3 T3b : même aiguillage que les
+///   liens universels, `AiguillageLiens`) quand l'espace prêt s'ouvre ou signale un tap ; l'action « effacer »
+///   n'ouvre rien.
 ///
 /// Les gestionnaires de fin sont appelés tout de suite (rien n'est attendu du réseau) ; la boîte est mise à jour
 /// sur le main actor. Aucune donnée du payload n'est journalisée (PRINCIPES §7).
