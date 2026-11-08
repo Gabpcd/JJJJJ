@@ -6,8 +6,8 @@ import XCTest
 /// écart entre l'écran et le port fait échouer l'un des deux. Exclusions HARD STOP vérifiées
 /// (`BandeauAlerte48h`, « cumul d'activité »), puis navigation vers le détail et vers Explorer ;
 /// état d'erreur et reprise par « Réessayer » (`testAccueilErreurPuisReprise`). Gaps verrouillés
-/// (aucun bouton sans effet) : ni bouton calendrier (T5) ni bouton de renvoi web (T10) tant que
-/// leur implémentation n'est pas injectée.
+/// (aucun bouton sans effet) : pas de bouton calendrier (T5) tant que son implémentation n'est pas
+/// injectée ; le présentateur de renvoi web est injecté depuis L3-T3b (aucun oubli de pointage en démo).
 ///
 /// Coût : les recherches de libellé sont limitées aux descendants de `accueil-screen` et faites
 /// en une seule requête, et chaque ligne n'est résolue qu'une fois (borne CI globale, #1104).
@@ -77,12 +77,13 @@ final class DemoAccueilTests: JoleneUITestCase {
         let voirNotifications = dansEcran("accueil-notifications-action", ecran)
         degager(voirNotifications, dans: ecran)
         XCTAssertEqual(voirNotifications.label, "Voir", "« Voir » ouvre le centre de notifications natif")
-        // Renvoi web du pointage : le compteur reste affiché, mais aucun bouton tant que T10 n'injecte pas le
-        // présentateur `.safari` (`SFSafariViewController`) : un `openURL` d'un chemin `/soignant/*` reviendrait
-        // dans l'app par lien universel, sans effet. T10 remplace cette assertion par la présence du bouton et la
-        // présentation du renvoi (LOT1_PLAN.md §3 T10, verrou T12 n°2).
+        // Renvoi web du pointage : le présentateur `.safari` est injecté à la racine (L3-T3b, verrou T12 n°2 du lot 1),
+        // mais la démo n'a aucun pointage oublié (encart absent, ci-dessus) : ni encart ni bouton. Le renvoi présenté
+        // par ce présentateur est prouvé par `DemoLiensLot3Tests`, `DemoNotificationsTests`, `DemoProfilTests` et
+        // `DemoPushTests` ; la route du bouton (`/soignant/presences`, `.safari`) au niveau 1 (`AccueilAssemblageTests`).
+        // Point ouvert (`DECISIONS_LOT3.md`, T3b) : une variante démo avec un oubli de pointage prouverait le bouton.
         XCTAssertFalse(dansEcran("accueil-oubli-pointage-action", ecran).exists,
-                       "bouton « Vérifier mes présences » sans présentateur injecté (T10 le câble)")
+                       "aucun oubli de pointage dans la démo : aucun bouton « Vérifier mes présences »")
         record("\(proofPrefix)-accueil-bas")
 
         ouvrirProchaineMissionPuisRevenir(ecran)

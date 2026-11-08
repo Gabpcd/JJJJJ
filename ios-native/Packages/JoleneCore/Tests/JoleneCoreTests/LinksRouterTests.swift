@@ -204,6 +204,22 @@ final class LinksRouterTests: XCTestCase {
         XCTAssertEqual(route("https://jolene.app/soignant/profil?tab=principal"), .profil)
     }
 
+    /// L3-T3b (point de fusion de la revue L3-T9, m2, tranché) : l'onglet « Confidentialité » du profil web
+    /// (`ProfilSoignant.tsx` l.42-44 et l.505-507, `SectionConfidentialite` : export RGPD et suppression de compte ;
+    /// entrée « Supprimer mon compte » du hub web vers `?tab=confidentialite#suppression-compte`,
+    /// `MonCompteSoignant.tsx` l.135) mène au hub natif, qui porte la suppression (L1-T8) et l'export (L3-T11) ; les
+    /// autres onglets, `?tab=` absent ou inconnu compris, mènent à l'édition. Comparaison exacte, comme le web.
+    func testOngletConfidentialiteDuProfilMeneAuHub() {
+        XCTAssertEqual(route("https://jolene.app/soignant/profil?tab=confidentialite"), .monCompte)
+        XCTAssertEqual(route("https://jolene.app/soignant/profil?tab=confidentialite#suppression-compte"), .monCompte)
+        XCTAssertEqual(route("https://jolene.app/soignant/profil/?x=1&tab=confidentialite"), .monCompte)
+        XCTAssertEqual(LinkRouter.resolve(link: "/soignant/profil?tab=confidentialite"), .monCompte)
+        for query in ["", "?tab=principal", "?tab=preferences", "?tab=Confidentialite", "?tab=inconnu", "?onglet=confidentialite"] {
+            XCTAssertEqual(route("https://jolene.app/soignant/profil" + query), .profil, query)
+        }
+        XCTAssertEqual(route("https://jolene.app/soignant/reputation?tab=confidentialite"), .profil, "alias : redirection web vers le profil sans query")
+    }
+
     func testCheminsSoignantSansEcranLot3RestentSafariAvecQueryEtFragment() {
         for chemin in ["/soignant/notifications/abc", "/soignant/parametres/recherches-sauvegardees",
                        "/soignant/litiges?tab=reclamations#l%201", "/soignant/mes-documents?tab=contrats",

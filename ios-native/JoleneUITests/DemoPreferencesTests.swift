@@ -10,7 +10,8 @@ import XCTest
 ///
 /// Écart consigné (`DECISIONS_LOT3.md`, section T6) : l'entrée vit dans une section « Réglages » posée par T6
 /// dans le hub Profil (fichier de T11), à la place de la carte provisoire de T4 ; l'Universal Link
-/// `/soignant/parametres/notifications` attend le coordinateur de liens (L1-T10, reliquat T3b).
+/// `/soignant/parametres/notifications` ouvre le même écran (coordinateur des liens de L3-T3b,
+/// `DemoLiensLot3Tests.testLienRecuAvantConnexionRejoueUneSeuleFoisApresReady`).
 final class DemoPreferencesTests: JoleneUITestCase {
     func testPreferencesDemoModifieesEnregistreesPuisRelues() throws {
         launchDemo()
