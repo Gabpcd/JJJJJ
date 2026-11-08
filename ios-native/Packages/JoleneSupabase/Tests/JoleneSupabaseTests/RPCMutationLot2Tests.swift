@@ -7,9 +7,12 @@ import XCTest
 /// Classement local au lot 2 d'un échec de mutation non idempotente (blueprint `LOT2_PLAN.md` correction 10 et
 /// §2.4 ; revue fraîche de T1) : `RPCResponse.appelerMutation` délègue à l'extension partagée avec le lot 3
 /// (`RPCResponse+ExceptionsMetier.swift`, inchangée), puis distingue, sur l'erreur brute du SDK :
-/// - rollback prouvé : PostgREST a répondu avec un `code` (SQLSTATE ou `PGRST…`) → `.refusDefinitif` ;
+/// - rollback prouvé : `code` SQLSTATE (cinq caractères `[0-9A-Z]`) ou code PostgREST de la liste blanche, émis
+///   avant toute transaction ou après son annulation (`PGRST000`, `PGRST002`, `PGRST003`, `PGRST1xx` sauf
+///   `PGRST103`/`PGRST111`/`PGRST112`, `PGRST2xx`, `PGRST3xx`) → `.refusDefinitif` ;
 /// - incertain : réseau, annulation, passerelle (corps HTML → `HTTPError`, corps `{"message"}` sans `code` →
-///   `PostgrestError(code: nil)`) → `.incertain`, à réconcilier par relecture.
+///   `PostgrestError(code: nil)`), `PGRST001` (connexion à la base cassée en cours de session, COMMIT compris), tout
+///   autre code → `.incertain`, à réconcilier par relecture (revue fraîche de T1, seconde passe).
 /// Une seule requête dans tous les cas (POST : le SDK ne rejoue jamais un `rpc`).
 final class RPCMutationLot2Tests: XCTestCase {
     private let registry = StubRegistry.shared
@@ -102,10 +105,48 @@ final class RPCMutationLot2Tests: XCTestCase {
         XCTAssertEqual(delai, .incertain(JoleneError(.network, SupabaseErrorMapping.networkMessage)))
     }
 
+    func testConnexionCasseeEnCoursDeSessionEstIncertaine() async {
+        // PGRST001 (503) : la connexion à la base a cassé pendant la requête, COMMIT compris. Le scan a pu être
+        // appliqué : le reçu `started` est gardé et la relecture tranche (correction 10, PRINCIPES §4).
+        let coupure = await scanne(.json(503, """
+        {"code":"PGRST001","details":null,"hint":null,"message":"Database client error. Retrying the connection."}
+        """))
+        XCTAssertEqual(coupure, .incertain(JoleneError(.unknown, fallback)))
+    }
+
+    func testCodeNiSQLStateNiDeLaListeBlancheEstIncertain() async {
+        // Passerelle qui imiterait la forme PostgREST avec un `code` texte ; erreur interne de PostgREST (PGRSTX00) ;
+        // statut ou en-têtes posés par la fonction et refusés à la construction de la réponse, après le COMMIT
+        // (PGRST111, PGRST112) : aucune preuve de rollback.
+        let passerelle = await scanne(.json(504, #"{"code":"upstream_request_timeout","message":"The upstream server is timing out"}"#))
+        XCTAssertEqual(passerelle, .incertain(JoleneError(.unknown, fallback)))
+        let interne = await scanne(.json(500, #"{"code":"PGRSTX00","details":null,"hint":null,"message":"Internal error"}"#))
+        XCTAssertEqual(interne, .incertain(JoleneError(.unknown, fallback)))
+        let statut = await scanne(.json(500, #"{"code":"PGRST112","details":null,"hint":null,"message":"Invalid status code"}"#))
+        XCTAssertEqual(statut, .incertain(JoleneError(.unknown, fallback)))
+    }
+
     func testClassementSurLErreurBrute() {
-        XCTAssertTrue(RPCResponse.rollbackProuve(PostgrestError(code: "23514", message: "x")))
+        // SQLSTATE : cinq caractères `[0-9A-Z]`, même prédicat que `RecuScan.refuser(sqlstate:)` (le reçu d'un refus
+        // définitif à SQLSTATE se journalise toujours en `refused`).
+        for code in ["23514", "P0002", "42501", "40001", "57014", "XX000"] {
+            XCTAssertTrue(RPCResponse.rollbackProuve(PostgrestError(code: code, message: "x")), code)
+            XCTAssertTrue(RecuScan.sqlstateValide(code), code)
+        }
+        // Codes PostgREST émis avant toute transaction (connexion, cache de schéma, pool, requête, JWT) ou après son
+        // annulation (PGRST116, PGRST124).
+        for code in ["PGRST000", "PGRST002", "PGRST003", "PGRST100", "PGRST102", "PGRST116", "PGRST124", "PGRST200",
+                     "PGRST202", "PGRST205", "PGRST300", "PGRST301", "PGRST303"] {
+            XCTAssertTrue(RPCResponse.rollbackProuve(PostgrestError(code: code, message: "x")), code)
+        }
+        // Aucune preuve : connexion cassée en cours de session, erreur interne, réponse construite après le COMMIT
+        // (plage 416, en-têtes et statut posés par la fonction), codes inconnus ou mal formés.
+        for code in ["PGRST001", "PGRSTX00", "PGRST103", "PGRST111", "PGRST112", "PGRST004", "PGRST400", "PGRST20",
+                     "PGRST2000", "pgrst202", "PGRST2O2", "p0002", "2351", "235140", " 2351", "2351\u{0661}",
+                     "upstream_request_timeout", ""] {
+            XCTAssertFalse(RPCResponse.rollbackProuve(PostgrestError(code: code, message: "x")), code)
+        }
         XCTAssertFalse(RPCResponse.rollbackProuve(PostgrestError(code: nil, message: "x")), "corps de passerelle")
-        XCTAssertFalse(RPCResponse.rollbackProuve(PostgrestError(code: "", message: "x")))
         XCTAssertFalse(RPCResponse.rollbackProuve(URLError(.networkConnectionLost)))
         XCTAssertFalse(RPCResponse.rollbackProuve(CancellationError()), "annulation après envoi : incertain")
         XCTAssertFalse(RPCResponse.rollbackProuve(nil))

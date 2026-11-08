@@ -263,23 +263,96 @@ final class ReceiptJournalTests: XCTestCase {
     // MARK: - Sérialisation
 
     func testEcrituresConcurrentesSerialiseesEntreInstances() async throws {
-        let magasin = MagasinRecusEnMemoire()
+        // Entrelacement forcé (revue fraîche de T1, seconde passe) : la lecture du reçu précédent par le premier essai
+        // est retenue jusqu'au lancement du second, puis jusqu'à ce que le second lise à son tour (au plus
+        // `fenetre`). Avec `JournalRecusActeur`, le second ne peut pas lire pendant cette retenue : la fenêtre expire,
+        // le premier écrit, le second voit son reçu en vol. Sans sérialisation, les deux liraient « aucun reçu » en
+        // même temps et écriraient tous deux : le test rougit (deux lectures simultanées, fenêtre non expirée).
+        let magasin = MagasinEntrelace(fenetre: 0.3)
         let premier = try scan(essai1)
         let second = try scan(essai2)
-        let journaux = [ReceiptJournal<RecuScan>(store: magasin), ReceiptJournal<RecuScan>(store: magasin)]
-        let issues = await withTaskGroup(of: RecuErreur?.self) { groupe -> [RecuErreur?] in
-            for (journal, recu) in zip(journaux, [premier, second]) {
-                groupe.addTask { await Self.issue { try await journal.ecrire(recu) } }
-            }
-            var issues: [RecuErreur?] = []
-            for await issue in groupe { issues.append(issue) }
-            return issues
+        let journalA = ReceiptJournal<RecuScan>(store: magasin)
+        let journalB = ReceiptJournal<RecuScan>(store: magasin)
+
+        // Tâches détachées : aucune isolation héritée du test, seule la sérialisation du journal les ordonne.
+        let a = Task.detached { () -> RecuErreur? in
+            do { try await journalA.ecrire(premier); return nil } catch { return error as? RecuErreur ?? .champInvalide("\(error)") }
         }
-        XCTAssertEqual(issues.filter { $0 == nil }.count, 1, "un seul essai gagne")
-        XCTAssertEqual(issues.compactMap { $0 }, [.recuEnCours])
-        let relu = try await journaux[0].lire(userId: userId)
-        XCTAssertTrue(relu == premier || relu == second)
+        try await magasin.attendrePremiereLectureRetenue()
+        let b = Task.detached { () -> RecuErreur? in
+            do { try await journalB.ecrire(second); return nil } catch { return error as? RecuErreur ?? .champInvalide("\(error)") }
+        }
+        magasin.signalerSecondEssaiLance()
+        let issueA = await a.value
+        let issueB = await b.value
+
+        XCTAssertEqual(magasin.lecturesSimultaneesMax, 1, "jamais deux lectures du journal en même temps")
+        XCTAssertTrue(magasin.fenetreExpiree, "le second essai, lancé, n'a pas pu lire pendant la retenue du premier")
+        XCTAssertNil(issueA, "le premier essai gagne")
+        XCTAssertEqual(issueB, .recuEnCours, "le second voit le reçu en vol du premier")
+        let relu = try await journalA.lire(userId: userId)
+        XCTAssertEqual(relu, premier)
     }
+}
+
+/// Magasin qui force l'entrelacement de deux essais : la PREMIÈRE lecture est retenue jusqu'à
+/// `signalerSecondEssaiLance()` (5 s au plus), puis jusqu'au début d'une seconde lecture ou l'expiration de `fenetre`.
+/// Compte les lectures simultanées. Sémaphores bloquants : `lire` est synchrone (protocole `ReceiptStorePort`).
+final class MagasinEntrelace: ReceiptStorePort, @unchecked Sendable {
+    private let base = MagasinRecusEnMemoire()
+    private let verrou = NSLock()
+    private let lancement = DispatchSemaphore(value: 0)
+    private let secondeLecture = DispatchSemaphore(value: 0)
+    private let fenetre: TimeInterval
+    private var lectures = 0
+    private var enCours = 0
+    private var maximum = 0
+    private var retenue = false
+    private var expiree = false
+
+    init(fenetre: TimeInterval) {
+        self.fenetre = fenetre
+    }
+
+    var lecturesSimultaneesMax: Int { verrou.lock(); defer { verrou.unlock() }; return maximum }
+    var fenetreExpiree: Bool { verrou.lock(); defer { verrou.unlock() }; return expiree }
+    private var premiereRetenue: Bool { verrou.lock(); defer { verrou.unlock() }; return retenue }
+
+    func signalerSecondEssaiLance() { lancement.signal() }
+
+    /// Attend que la première lecture soit retenue (5 s au plus).
+    func attendrePremiereLectureRetenue() async throws {
+        var attente = 0
+        while !premiereRetenue {
+            guard attente < 5_000 else { throw PanneEntrelacement() }
+            attente += 1
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+    }
+
+    struct PanneEntrelacement: Error {}
+
+    func lire(_ cle: CleRecu) throws -> Data? {
+        verrou.lock()
+        lectures += 1
+        let rang = lectures
+        enCours += 1
+        maximum = max(maximum, enCours)
+        if rang == 1 { retenue = true }
+        verrou.unlock()
+        defer { verrou.lock(); enCours -= 1; verrou.unlock() }
+        if rang == 1 {
+            _ = lancement.wait(timeout: .now() + 5)
+            let issue = secondeLecture.wait(timeout: .now() + fenetre)
+            verrou.lock(); expiree = issue == .timedOut; verrou.unlock()
+        } else if rang == 2 {
+            secondeLecture.signal()
+        }
+        return try base.lire(cle)
+    }
+
+    func ecrire(_ donnees: Data, pour cle: CleRecu) throws { try base.ecrire(donnees, pour: cle) }
+    func effacer(_ cle: CleRecu) throws { try base.effacer(cle) }
 }
 
 /// Magasin de test : pannes, écriture ignorée, relecture altérée, effacement ignoré ; journal des appels.

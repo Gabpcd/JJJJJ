@@ -9,9 +9,9 @@ final class RecuDocumentTests: XCTestCase {
     private let ms: Int64 = 1_793_577_600_123
 
     private func prepare(nom: String = "Diplôme d'État.PDF", mime: MimeDocument = .pdf, taille: Int = 2_048,
-                         type: String = "DIPLOME", existant: RecuDocument? = nil) throws -> RecuDocument {
+                         type: String = "DIPLOME", libelle: String? = nil, existant: RecuDocument? = nil) throws -> RecuDocument {
         try RecuDocument.preparer(userId: userId, epoch: 4, typeDocument: type,
-                                  fichier: FichierChoisi(nom: nom, mime: mime, tailleOctets: taille),
+                                  fichier: FichierChoisi(nom: nom, mime: mime, tailleOctets: taille), libelle: libelle,
                                   horodatageMs: ms, existant: existant)
     }
 
@@ -71,6 +71,35 @@ final class RecuDocumentTests: XCTestCase {
             _ = try RecuDocument.preparer(userId: "u/x", epoch: 1, typeDocument: "RIB",
                                           fichier: FichierChoisi(nom: "a.pdf", mime: .pdf, tailleOctets: 1), horodatageMs: 1)
         }, .champInvalide("userId"))
+    }
+
+    func testNomEtLibelleConservesPourLeRejeuDeLEnregistrement() throws {
+        // Revue fraîche de T1 (seconde passe) : après un arrêt forcé (objet présent, aucune ligne), le rejeu de
+        // `fn_remplacer_document_soignant` exige `p_nom_fichier` non vide (`public.sql` l.53110-53115) ; le web passe
+        // le nom d'origine du fichier et le libellé saisi (`DocumentsSoignant.tsx` l.385-388). Le reçu v1 garde les
+        // deux : aucune v2 à prévoir pour T6.
+        let recu = try prepare(nom: "Diplôme d'État.PDF", libelle: "Diplôme d'infirmier")
+        XCTAssertEqual(recu.nomFichier, "Diplôme d'État.PDF", "nom d'origine, comme le web (la clé porte le nom assaini)")
+        XCTAssertEqual(recu.libelle, "Diplôme d'infirmier")
+        XCTAssertNil(try prepare().libelle, "aucun libellé saisi")
+        let relu = try RecuDocument.decoder(try recu.demarrer().stocker().encoder(), userId: userId)
+        XCTAssertEqual(relu.nomFichier, "Diplôme d'État.PDF")
+        XCTAssertEqual(relu.libelle, "Diplôme d'infirmier")
+    }
+
+    func testNomEtLibelleAuxBornesDuServeur() {
+        // l.53112-53114 : `NULLIF(btrim(p_nom_fichier), '')` non nul, `length(p_nom_fichier) <= 255`,
+        // `length(p_libelle) <= 500` ; `length` compte les points de code, `btrim` retire les espaces.
+        XCTAssertEqual(erreur { _ = try self.prepare(nom: "") }, .champInvalide("nomFichier"))
+        XCTAssertEqual(erreur { _ = try self.prepare(nom: "   ") }, .champInvalide("nomFichier"))
+        XCTAssertNoThrow(try prepare(nom: String(repeating: "é", count: 251) + ".pdf"), "255 points de code")
+        XCTAssertEqual(erreur { _ = try self.prepare(nom: String(repeating: "é", count: 252) + ".pdf") },
+                       .champInvalide("nomFichier"), "256 points de code")
+        XCTAssertEqual(erreur { _ = try self.prepare(nom: String(repeating: "e\u{301}", count: 126) + ".pdf") },
+                       .champInvalide("nomFichier"), "130 caractères affichés mais 256 points de code")
+        XCTAssertNoThrow(try prepare(libelle: ""))
+        XCTAssertNoThrow(try prepare(libelle: String(repeating: "a", count: 500)))
+        XCTAssertEqual(erreur { _ = try self.prepare(libelle: String(repeating: "a", count: 501)) }, .champInvalide("libelle"))
     }
 
     func testUnSecondEnvoiEstRefuseTantQueLePremierNEstPasReconcilie() throws {
@@ -140,7 +169,10 @@ final class RecuDocumentTests: XCTestCase {
         let recu = try prepare().demarrer().stocker().enregistrer(documentId: "d-1")
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: try recu.encoder()) as? [String: Any])
         XCTAssertEqual(Set(json.keys), ["version", "user_id", "epoch", "s3_cle", "type_document", "mime", "taille_octets",
-                                        "document_id", "phase"])
+                                        "nom_fichier", "document_id", "phase"])
+        let avecLibelle = try XCTUnwrap(JSONSerialization.jsonObject(with: try prepare(libelle: "Diplôme").encoder()) as? [String: Any])
+        XCTAssertEqual(avecLibelle["libelle"] as? String, "Diplôme")
+        XCTAssertEqual(avecLibelle["nom_fichier"] as? String, "Diplôme d'État.PDF")
         XCTAssertEqual(json["mime"] as? String, "application/pdf")
         XCTAssertEqual(json["phase"] as? String, "registered")
         let labels = Mirror(reflecting: recu).children.compactMap(\.label).map { $0.lowercased() }
@@ -167,8 +199,26 @@ final class RecuDocumentTests: XCTestCase {
         XCTAssertEqual(erreur { _ = try RecuDocument.decoder(try JSONSerialization.data(withJSONObject: json), userId: self.userId) },
                        .illisible)
         json["version"] = 1
+        json["nom_fichier"] = " "
+        XCTAssertEqual(erreur { _ = try RecuDocument.decoder(try JSONSerialization.data(withJSONObject: json), userId: self.userId) },
+                       .illisible, "nom de fichier vide : rejeu impossible")
+        json["nom_fichier"] = recu.nomFichier
+        json["libelle"] = String(repeating: "a", count: 501)
+        XCTAssertEqual(erreur { _ = try RecuDocument.decoder(try JSONSerialization.data(withJSONObject: json), userId: self.userId) },
+                       .illisible, "libellé hors borne")
+        json["libelle"] = nil
         json["url_signee"] = "https://example.invalid/x"
         XCTAssertEqual(erreur { _ = try RecuDocument.decoder(try JSONSerialization.data(withJSONObject: json), userId: self.userId) },
                        .illisible, "clé inattendue")
+    }
+
+    func testNomEtLibelleImmuablesPourUnMemeEssai() throws {
+        let prepare = try prepare(libelle: "Diplôme")
+        var renomme = try prepare.demarrer()
+        renomme.nomFichier = "autre.pdf"
+        XCTAssertEqual(erreur { try renomme.verifierSuccession(apres: prepare) }, .champInvalide("nomFichier"))
+        var relibelle = try prepare.demarrer()
+        relibelle.libelle = nil
+        XCTAssertEqual(erreur { try relibelle.verifierSuccession(apres: prepare) }, .champInvalide("libelle"))
     }
 }

@@ -192,6 +192,20 @@ final class RecuScanTests: XCTestCase {
         XCTAssertEqual(recu.phase, .started)
     }
 
+    func testChaqueVerdictAUneIssueDeScan() {
+        // Revue fraîche de T1 (seconde passe) : `PointagePort.reconcilier` rend une `IssueScan` ; chaque verdict a la
+        // sienne, et aucune ne rouvre l'envoi sans preuve. `.aRelire` : rien n'est prouvé, le reçu reste `started`
+        // (`.incertain`, nouvelle relecture) ; `.horlogeIncoherente` : issue dédiée, jamais `.nonRecu` ni `.incertain`
+        // (relecture en boucle).
+        let preuve = PreuveScan(id: "s-9", missionId: "m-1", numeroScan: 4, typeScan: .fermeture, idTerminal: terminal)
+        XCTAssertEqual(IssueScan(reconciliation: .recu(preuve)), .enregistre(typeScan: .fermeture, numeroScan: 4))
+        XCTAssertEqual(IssueScan(reconciliation: .aRelire), .incertain)
+        XCTAssertEqual(IssueScan(reconciliation: .nonRecu), .nonRecu)
+        XCTAssertEqual(IssueScan(reconciliation: .horlogeIncoherente), .horlogeIncoherente)
+        let sansNumero = PreuveScan(id: "s-9", missionId: "m-1", numeroScan: nil, typeScan: .fermeture, idTerminal: terminal)
+        XCTAssertEqual(IssueScan(reconciliation: .recu(sansNumero)), .incertain, "une preuve sans numéro ne prouve rien")
+    }
+
     func testReconcilierExigeUnRecuDemarre() throws {
         let prepare = try prepare()
         XCTAssertEqual(erreur { _ = try prepare.reconcilier(scans: [], relueLe: self.t0) },

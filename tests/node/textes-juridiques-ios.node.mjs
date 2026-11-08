@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import {
@@ -654,6 +654,38 @@ test('TL : aucun texte juridique écrit en dur dans les fichiers Swift du lot 2 
   ]) {
     assert.ok(DOSSIERS_LOT2.some(d => chemin === d || chemin.startsWith(`${d}/`)), `${chemin} hors de DOSSIERS_LOT2`);
   }
+  // Fondation du lot 2 (T1, déjà livrée) qui porte des textes affichés (revue fraîche de T1, seconde passe).
+  for (const chemin of [
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Receipts/RecuScan.swift',
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Receipts/RecuDocument.swift',
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Receipts/ReceiptJournal.swift',
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Models/Lot2Results.swift',
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Ports/Lot2Ports.swift',
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Ports/AppareilPorts.swift',
+    'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Keychain/KeychainTerminalIdentity.swift',
+    'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Keychain/KeychainReceiptStore.swift',
+  ]) {
+    assert.ok(DOSSIERS_LOT2.some(d => chemin === d || chemin.startsWith(`${d}/`)), `${chemin} hors de DOSSIERS_LOT2`);
+    assert.ok(existsSync(join(ROOT, chemin)), `${chemin} absent du dépôt`);
+  }
+  // Aucun fichier du lot 1 n'entre dans la garde (en-tête de DOSSIERS_LOT2).
+  for (const chemin of [
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Ports/Lot1Ports.swift',
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Ports/Ports.swift',
+    'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Keychain/KeychainSessionStorage.swift',
+  ]) {
+    assert.ok(!DOSSIERS_LOT2.some(d => chemin === d || chemin.startsWith(`${d}/`)), `${chemin} (lot 1) dans DOSSIERS_LOT2`);
+  }
+  // Un texte juridique ajouté plus tard à un message du journal de reçus ou du trousseau fait rougir la garde.
+  const fondation = textesJuridiquesHorsTL([
+    { chemin: 'ios-native/Packages/JoleneCore/Sources/JoleneCore/Receipts/RecuScan.swift',
+      contenu: 'public static let messageIllisible = "Horodatage non vérifiable : pointez depuis jolene.app."' },
+    { chemin: 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Keychain/KeychainTerminalIdentity.swift',
+      contenu: 'static let messageIllisible = "Retirez votre consentement depuis votre profil."' },
+  ]);
+  assert.equal(fondation.length, 2, JSON.stringify(fondation));
+  assert.match(fondation[0], /RecuScan\.swift:1/);
+  assert.match(fondation[1], /KeychainTerminalIdentity\.swift:1/);
   const dossier = DOSSIERS_LOT2[0];
   const fautes = textesJuridiquesHorsTL([
     { chemin: `${dossier}/Exemple.swift`, contenu: 'let a = "Conforme art. 1366-1367 Code civil."\n// Code civil en commentaire : permis\nlet b = "Bonjour"' },
