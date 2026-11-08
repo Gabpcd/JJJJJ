@@ -54,7 +54,7 @@ final class SupabaseNotificationsGatewayTests: XCTestCase {
         let requete = try XCTUnwrap(registry.requests(to: chemin).first)
         XCTAssertEqual(requete.query("select")?.replacingOccurrences(of: " ", with: ""), "id,titre,corps,type,lien,lue,lue_le,cree_le")
         XCTAssertEqual(requete.query("destinataire_id"), "eq.\(TestClient.userId)")
-        XCTAssertEqual(requete.query("order"), "cree_le.desc")
+        XCTAssertEqual(requete.query("order"), "cree_le.desc.nullsfirst", "DESC sans suffixe côté web : NULLS FIRST de Postgres")
         XCTAssertEqual(requete.query("limit"), "200")
         XCTAssertEqual(requete.method, "GET")
         XCTAssertTrue(registry.unmatched.isEmpty)
