@@ -212,9 +212,23 @@ Flux :
    c. UPDATE mission SET code_pointage_actif=new, code_pointage_hmac=new_hmac
 
 8. Retourner :
-   { nouveau_code, nouveau_hmac, type_scan_effectue, prochain_type_scan,
-     creneau_effectif_id, horodatage_arrondi }
+   { type_scan_effectue, prochain_type_scan, creneau_effectif_id,
+     horodatage_effectif, horodatage_arrondi, numero_scan, validation_etab_requise }
+   (depuis la migration *_scanner_code_sans_code_suivant.sql (lot 2 B1) :
+   plus de nouveau_code / nouveau_hmac dans la réponse ; l'établissement relit
+   le code courant par fn_etat_pointage_mission, qui ne le renvoie qu'à
+   l'établissement)
 ```
+
+> **Gap connu, non fermé par B1** (PR B9 séparée « B1-ter », go de Gabrielle) :
+> B1 retire le code des **réponses RPC** seulement. La colonne
+> `missions.code_pointage_actif` (comme `code_pointage_hmac`) reste lisible par
+> le soignant assigné en PostgREST direct
+> (`GET /rest/v1/missions?id=eq.<id>&select=code_pointage_actif`) : SELECT de
+> table accordé à `authenticated` et RLS `pol_mission_select` (branche
+> `soignant_assigne_id = auth.uid()`). Le filtre `CASE WHEN v_is_etab` de
+> `fn_etat_pointage_mission` ne vaut qu'à l'étage RPC. Instruction, audit des
+> lecteurs et proposition : [`POINTAGE_CODE_ROTATIF_VISIBILITE.md`](POINTAGE_CODE_ROTATIF_VISIBILITE.md).
 
 **Arrondi au quart d'heure :**
 ```sql
@@ -405,7 +419,17 @@ Flux :
 4. UPDATE créneau EFFECTIF `SET fin = arrondi`
 5. INSERT scan_pointage fictif (`type = 'FERMETURE'`, `validation_etab_requise = true`)
 6. UPDATE mission `SET prochain_type_scan = 'OUVERTURE'`
-7. Régénère un nouveau code
+7. Régénère un nouveau code (stocké dans `missions.code_pointage_actif`, jamais
+   renvoyé : depuis lot 2 B1, la réponse est
+   `{ creneau_effectif_id, debut_creneau, fin_declaree, horodatage_arrondi,
+   validation_etab_requise, prochain_type_scan, numero_scan }`, sans
+   `nouveau_code` ni `nouveau_hmac`)
+
+Appelants autorisés : le soignant assigné, un propriétaire / `ADMIN_GROUPE` /
+`RH` de l'établissement de la mission, un administrateur plateforme. Depuis
+lot 2 B1, un compte authentifié sans lien avec la mission est refusé (`42501`) :
+la garde LIVE valait `NULL` pour lui (logique ternaire) et le laissait passer.
+Le contexte système (`auth.uid()` NULL) est inchangé.
 
 Le créneau est **automatiquement flaggé** `validation_etab_requise = true`. L'étab doit confirmer dans les 48h (logique UI, pas SQL).
 

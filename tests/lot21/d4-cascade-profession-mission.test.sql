@@ -590,6 +590,32 @@ BEGIN
      OR v_result->'missions'->0->>'mission_id' IS DISTINCT FROM v_m_feed::text THEN
     RAISE EXCEPTION 'D4-T21: mission IDE absente du feed swipe IADE: %', v_result;
   END IF;
+  -- Lot 4 B1 (migration *_score_matching_inconnu_null.sql) : un score calculé
+  -- est renvoyé tel quel, 0 compris ; sans ligne matching_scores, `score` est
+  -- JSON null (jamais un « 0/100 » fabriqué) et `breakdown` reste {}. La
+  -- fixture reste seule dans le feed (rayon 1 km, taux 1000) : limit=1 suffit.
+  -- matching_scores n'a aucun trigger : les écritures ci-dessous, annulées par
+  -- le ROLLBACK final, n'ont pas d'autre effet que la ligne de score.
+  IF v_result->'missions'->0->'score' IS DISTINCT FROM '100'::jsonb THEN
+    RAISE EXCEPTION 'D4-T21B: le score calculé doit être renvoyé tel quel: %', v_result;
+  END IF;
+  UPDATE public.matching_scores SET score_global = 0
+   WHERE soignant_id = v_iade AND mission_id = v_m_feed;
+  v_result := public.fn_obtenir_missions_swipe(1);
+  IF v_result->'missions'->0->>'mission_id' IS DISTINCT FROM v_m_feed::text
+     OR v_result->'missions'->0->'score' IS DISTINCT FROM '0'::jsonb THEN
+    RAISE EXCEPTION 'D4-T21C: un score calculé à 0 doit rester 0: %', v_result;
+  END IF;
+  DELETE FROM public.matching_scores
+   WHERE soignant_id = v_iade AND mission_id = v_m_feed;
+  v_result := public.fn_obtenir_missions_swipe(1);
+  IF v_result->'missions'->0->>'mission_id' IS DISTINCT FROM v_m_feed::text
+     OR jsonb_typeof(v_result->'missions'->0->'score') IS DISTINCT FROM 'null'
+     OR v_result->'missions'->0->'breakdown' IS DISTINCT FROM '{}'::jsonb THEN
+    RAISE EXCEPTION 'D4-T21D: un score inconnu doit être null, breakdown {}: %', v_result;
+  END IF;
+  INSERT INTO public.matching_scores(soignant_id, mission_id, score_global)
+  VALUES (v_iade, v_m_feed, 100);
   PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_admin::text, 'role', 'authenticated', 'aal', 'aal2'
