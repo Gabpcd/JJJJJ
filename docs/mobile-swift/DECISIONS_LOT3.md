@@ -454,6 +454,31 @@ devient `.monCompte`. T3a donne aussi une section à `.revenus`. Plusieurs branc
      remplacée par les modes autorisés ;
   4. `feat/ios-lot3` n'atteint pas `main` avant T8.
 
+## Intégration de T5, T6 et T9 sur `feat/ios-lot3` (vague 2 bis, 08/11/2026)
+
+T6 et T9 passent leur ligne de `ecranNatifLivre` à `true` sur une base sans T5 ; une fois réunies avec T5, la garde
+`CentreNotificationsTests.testToutEcranNatifLivreAUneCibleNativePresentable` exige leurs cibles (section T5
+ci-dessus, « à l'intégration »). Ajoutées par l'intégrateur, sans changer aucune règle :
+
+- **Cibles** : `CibleNotification.preferences` (`.parametresNotifications`) et `CibleNotification.profil` (`.profil`,
+  tout `?tab=` et l'alias `reputation`), onglet Profil, présentables y compris depuis le centre.
+- **Pile de l'onglet Profil** : `NavigationStack(path: $cheminProfil)` dans `MainTabView`, comme l'Accueil ; routes
+  `PreferencesNotificationsRoute` (`PreferencesScreen.swift`) et `ProfilEditionRoute` (`ProfilEditionScreen.swift`),
+  destinations enregistrées par `MainTabView` sur `ProfileScreen`, hors de la `List`. `presenter` ramène le Profil à
+  sa racine puis empile l'écran ; `.monCompte` ramène aussi le Profil à sa racine.
+- **Entrées du hub en liens par valeur** (revues L3-T6 m5 et L3-T9 m6) : « Réglages › Notifications »
+  (`profile-preferences-notifications`) et « Mon profil » (`profil-ouvrir`), mêmes identifiants, même écran ; elles
+  restent à leur place (T11 garde la main sur l'ordre du hub). `JoleneRoute` n'est pas rendue `Hashable` : le
+  coordinateur de T3b peut reprendre ces deux routes telles quelles ou les remplacer par `JoleneRoute`.
+- **Preuves ajoutées** : `DemoPushTests.testTapLienExpliciteOuvreLesPreferences` et
+  `.testTapLienExpliciteOuvreLEditionDuProfil` (cas de tap prévus au §3 T5 du blueprint pour l'écran livré par la
+  tranche) ; `DemoNotificationsTests.testLigneLueVersLesPreferencesOuvreLEcranNatif` (la ligne 005 de la fixture,
+  déjà lue, devient un bouton « Voir » qui ouvre les préférences). Compilés, jamais lancés : condition de merge
+  maintenue (CI trois formats, `xcresult` relu, `skipped = 0`).
+- **Point de fusion T3b maintenu (revue L3-T9 m2)** : `/soignant/profil?tab=confidentialite` (RGPD et suppression
+  sur le web) ouvre aussi l'édition native ; aucune notification du dump ne pointe vers ce `?tab=` (vecteurs push :
+  `/soignant/profil` et `?tab=a` seulement). À trancher par T3b / T11 (renvoi vers le hub, qui porte la suppression).
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.

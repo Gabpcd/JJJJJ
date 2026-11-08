@@ -62,8 +62,9 @@ public enum CentreNotificationsTextes {
 
 /// Ce que l'espace prêt fait d'une destination de lien (ligne du centre, tap push), en attendant le
 /// coordinateur de liens de L1-T10 (point de fusion consigné dans `DECISIONS_LOT3.md`) : un onglet (Revenus avec
-/// sa section), le détail d'une mission, le centre de notifications, les préférences de notifications (T6, empilées
-/// sur l'onglet Profil, intégration du lot 3) ; un renvoi web passe par le présentateur
+/// sa section), le détail d'une mission, le centre de notifications, les préférences de notifications (T6) et
+/// l'édition du profil (T9), empilées sur l'onglet Profil (intégration du lot 3) ; un renvoi web passe par le
+/// présentateur
 /// `.safari` (`PresentateurRenvoiWeb`, injecté par L1-T10) ; la connexion et les liens de rappel n'ont pas de
 /// présentation dans l'espace (`.aucune`).
 ///
@@ -71,8 +72,8 @@ public enum CentreNotificationsTextes {
 /// ouvrirait l'onglet natif au lieu du renvoi web assumé, D4).
 ///
 /// Verrou (revue L3-T5, M1 ; `CLAUDE.md`, « un gap connu reste verrouillé ») : une tranche qui passe sa ligne de
-/// `DestinationLien.ecranNatifLivre` à `true` (T6 préférences — fait à l'intégration du lot 3 —, T7/T8 inscription,
-/// T9 profil, T13 paiements, T14a Stripe) ajoute ici sa cible, sa présentation (`estPresentable`) et son cas dans `MainTabView.presenter`. Tant
+/// `DestinationLien.ecranNatifLivre` à `true` (T6 préférences et T9 profil — faits à l'intégration du lot 3 —,
+/// T7/T8 inscription, T13 paiements, T14a Stripe) ajoute ici sa cible, sa présentation (`estPresentable`) et son cas dans `MainTabView.presenter`. Tant
 /// qu'elle ne l'a pas fait, son écran retombe sur son renvoi web canonique (jamais un tap qui n'ouvre rien) et la
 /// garde `CentreNotificationsTests.testToutEcranNatifLivreAUneCibleNativePresentable` est rouge.
 public enum CibleNotification: Equatable, Sendable {
@@ -94,6 +95,9 @@ public enum CibleNotification: Equatable, Sendable {
     /// Préférences de notifications (`/soignant/parametres/notifications`, T6), empilées sur l'onglet Profil comme
     /// l'entrée « Réglages › Notifications » du hub.
     case preferences
+    /// Édition du profil (`/soignant/profil`, tout `?tab=`, alias `/soignant/reputation`, T9), empilée sur l'onglet
+    /// Profil comme l'entrée « Mon profil » du hub.
+    case profil
     /// Renvoi web (`.safari` ou `.etablissement`), présenté par le présentateur de renvoi web s'il est injecté.
     case web(JoleneRoute)
     /// Route sans présentation depuis un espace prêt : connexion et liens de rappel d'authentification (coordinateur
@@ -111,10 +115,11 @@ public enum CibleNotification: Equatable, Sendable {
         case .missionDetail(let id): self = .mission(id: id)
         case .notifications: self = .centre
         case .parametresNotifications: self = .preferences
+        case .profil: self = .profil
         case .safari, .etablissement: self = .web(destination)
         case .connexion, .resetPassword, .confirmerInscription:
             self = .aucune
-        case .inscription, .serieDetail, .profil, .stripeConnect:
+        case .inscription, .serieDetail, .stripeConnect:
             // Atteint seulement quand la ligne de `ecranNatifLivre` de l'écran est passée à `true` sans que sa
             // tranche ait ajouté sa cible (sinon `destination` est déjà un `.safari`) : repli sur le renvoi web
             // canonique, jamais un tap sans effet ; la garde de `CentreNotificationsTests` le signale.
@@ -129,7 +134,7 @@ public enum CibleNotification: Equatable, Sendable {
         case .explorer: return .explorer
         case .missions: return .missions
         case .revenus: return .revenus
-        case .monCompte, .preferences: return .profil
+        case .monCompte, .preferences, .profil: return .profil
         case .web, .aucune: return nil
         }
     }
@@ -139,7 +144,7 @@ public enum CibleNotification: Equatable, Sendable {
     /// de Revenus attend sa tranche ; depuis le centre (`depuisCentre`), le centre lui-même n'a rien à ouvrir.
     public func estPresentable(renvoiWebDisponible: Bool, depuisCentre: Bool = false) -> Bool {
         switch self {
-        case .accueil, .explorer, .missions, .monCompte, .mission, .preferences: return true
+        case .accueil, .explorer, .missions, .monCompte, .mission, .preferences, .profil: return true
         case .revenus(let section): return section == .apercu
         case .centre: return !depuisCentre
         case .web: return renvoiWebDisponible

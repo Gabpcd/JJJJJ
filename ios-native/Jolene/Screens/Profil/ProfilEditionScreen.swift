@@ -3,6 +3,11 @@ import UIKit
 import JoleneCore
 import JoleneDesign
 
+/// Route de l'édition du profil dans la pile de l'onglet Profil (intégration du lot 3) : poussée par l'entrée
+/// « Mon profil » du hub (`ProfilEntreeSection`) et par `MainTabView.presenter` (ligne du centre, tap push vers
+/// `/soignant/profil`), enregistrée par `MainTabView` comme `PreferencesNotificationsRoute`.
+struct ProfilEditionRoute: Hashable {}
+
 /// « Mon profil » (lot 3, T9), ouvert depuis le hub `ProfileScreen` (entrée `profil-ouvrir`,
 /// `ProfilEntreeSection`). Nom
 /// distinct du hub (`Screens/ProfileScreen.swift`, onglet Profil) : jamais deux surfaces pour la même

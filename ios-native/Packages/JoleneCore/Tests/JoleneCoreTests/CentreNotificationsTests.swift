@@ -394,6 +394,10 @@ final class CentreNotificationsTests: XCTestCase {
         // Intégration du lot 3 : préférences de notifications natives (T6), empilées sur l'onglet Profil.
         XCTAssertEqual(try cible("/soignant/parametres/notifications"), .preferences)
         XCTAssertEqual(try cible("https://www.jolene.app/soignant/parametres/notifications/?origine=push#haut"), .preferences)
+        // Intégration du lot 3 : édition du profil native (T9), tout `?tab=` et l'alias `reputation` compris.
+        XCTAssertEqual(try cible("/soignant/profil"), .profil)
+        XCTAssertEqual(try cible("/soignant/profil?tab=principal"), .profil)
+        XCTAssertEqual(try cible("/soignant/reputation"), .profil)
         // Destination effective, jamais la route brute : factures et paiements restent des renvois web (D4, T13).
         XCTAssertEqual(try cible("/soignant/mes-gains?tab=factures"),
                        .web(.safari(URL(string: "https://jolene.app/soignant/mes-gains?tab=factures")!)))
@@ -406,7 +410,7 @@ final class CentreNotificationsTests: XCTestCase {
 
         let racine = URL(string: "https://jolene.app/")!
         for cible in [CibleNotification.accueil, .explorer, .missions, .revenus(section: .apercu), .monCompte, .mission(id: "m"), .centre,
-                      .preferences] {
+                      .preferences, .profil] {
             XCTAssertTrue(cible.estPresentable(renvoiWebDisponible: false), "\(cible)")
         }
         XCTAssertFalse(CibleNotification.web(.safari(racine)).estPresentable(renvoiWebDisponible: false))
@@ -417,6 +421,7 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertTrue(CibleNotification.accueil.estPresentable(renvoiWebDisponible: false, depuisCentre: true))
         XCTAssertTrue(CibleNotification.mission(id: "m").estPresentable(renvoiWebDisponible: false, depuisCentre: true))
         XCTAssertTrue(CibleNotification.preferences.estPresentable(renvoiWebDisponible: false, depuisCentre: true))
+        XCTAssertTrue(CibleNotification.profil.estPresentable(renvoiWebDisponible: false, depuisCentre: true))
         // Une section de Revenus autre que l'aperçu n'a pas de présentation dans l'espace avant sa tranche (T13) :
         // elle n'est jamais réduite en silence à l'onglet (verrou, garde ci-dessous).
         for section in SectionRevenus.allCases where section != .apercu {
@@ -432,7 +437,7 @@ final class CentreNotificationsTests: XCTestCase {
         let cas: [(CibleNotification, OngletEspace?)] = [
             (.accueil, .accueil), (.mission(id: "m"), .accueil), (.centre, .accueil), (.explorer, .explorer),
             (.missions, .missions), (.revenus(section: .apercu), .revenus), (.revenus(section: .paiementsAConfirmer), .revenus),
-            (.monCompte, .profil), (.preferences, .profil), (.web(.safari(URL(string: "https://jolene.app/")!)), nil), (.aucune, nil),
+            (.monCompte, .profil), (.preferences, .profil), (.profil, .profil), (.web(.safari(URL(string: "https://jolene.app/")!)), nil), (.aucune, nil),
         ]
         for (cible, onglet) in cas {
             XCTAssertEqual(cible.onglet, onglet, "\(cible)")

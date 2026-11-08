@@ -123,9 +123,10 @@ final class DemoPushTests: JoleneUITestCase {
     // Tap à froid simulé (`-JOLENE_SIMULER_PUSH <TYPE>[:<valeur>][:<lien>]`, DEBUG démo) : mémorisé avant la session,
     // rejoué par le premier espace prêt après la connexion, rôle lu dans le snapshot (blueprint §2.5). Six types
     // ouvrent un écran natif ; les renvois web (litige, contrat à signer) sont vérifiés par la route présentée
-    // (`push-tap-cible`, DEBUG et démo seulement), faute de présentateur `.safari` avant L1-T10. Les préférences
-    // (T6, intégration du lot 3) ont leur cas de tap vers `prefs-screen` (blueprint §3 T5) ; factures et paiements
-    // sont prouvés au niveau 1 (`PushTapIntentTests.testCiblesDesTypesPrincipaux`) jusqu'à T12/T13.
+    // (`push-tap-cible`, DEBUG et démo seulement), faute de présentateur `.safari` avant L1-T10. Les préférences (T6)
+    // et l'édition du profil (T9) ont leur cas de tap vers `prefs-screen` et `profil-screen` (blueprint §3 T5,
+    // intégration du lot 3) ; factures et paiements sont prouvés au niveau 1
+    // (`PushTapIntentTests.testCiblesDesTypesPrincipaux`) jusqu'à T12/T13.
 
     func testTapRappelMissionOuvreLeDetail() throws {
         try tapOuvreLeDetail("RAPPEL_MISSION:demo-assignee-001", titre: "Démonstration · Mission assignée 1",
@@ -190,6 +191,27 @@ final class DemoPushTests: JoleneUITestCase {
         let entree = element("profile-preferences-notifications")
         scrollTo(entree, in: element("profile-list"))
         require("Retour au hub, à la racine de l'onglet Profil") { entree.exists }
+    }
+
+    /// Blueprint §3 T5 (cas de tap de l'écran livré par T9) : `/soignant/profil` → édition native du profil
+    /// (`profil-screen`), empilée sur l'onglet Profil.
+    func testTapLienExpliciteOuvreLEditionDuProfil() throws {
+        launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", "SYSTEM::/soignant/profil"])
+        signInDemo()
+        let ecran = element("profil-screen")
+        require("L'édition native du profil est ouverte", timeout: 30) {
+            self.containerVisible(ecran) && self.element("profil-nom-complet").exists
+        }
+        XCTAssertFalse(element("profil-erreur-chargement").exists)
+        XCTAssertEqual(element("push-tap-cible").label, "profil")
+        aucuneAlerte()
+        record("\(proofPrefix)-push-tap-profil")
+        let retour = app.navigationBars.buttons.firstMatch
+        require("Le bouton retour est disponible") { self.visible(retour) }
+        retour.tap()
+        require("Retour au hub, à la racine de l'onglet Profil") {
+            self.containerVisible(self.element("profile-list")) && !ecran.exists
+        }
     }
 
     /// Blueprint §3 T5 : `CONTRAT_A_SIGNER:contrat_id` → `/contrat/<id>` (renvoi web tant que l'écran du lot 2 n'est
