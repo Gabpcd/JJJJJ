@@ -82,6 +82,17 @@ public enum ProfilEdition {
         /// sans message serveur (le web passe par `extraireMessageErreur`, non porté) ; message de
         /// `SupabaseProfilGateway` et du modèle.
         public static let enregistrementEchec = "Votre profil n'a pas pu être enregistré. Réessayez."
+        /// Exceptions PostgREST de l'UPDATE `soignants` (UPDATE entier annulé, rien n'est enregistré),
+        /// traduites comme `extraireMessageErreur` (`src/lib/erreurs.ts`) : 23505 sur `numero_rpps`
+        /// (`soignants_numero_rpps_key`, `public.sql` l.73502) → l.510 ; autre 23505 → l.511 ;
+        /// 23514 (`chk_telephone_format` l.68090, `chk_rayon_raisonnable`) → l.514.
+        public static let rppsDejaEnregistre = "Ce numéro RPPS est déjà enregistré."
+        public static let valeurDejaEnregistree = "Cette valeur existe déjà dans le système."
+        public static let valeurHorsLimites = "La valeur saisie est hors des limites autorisées."
+        /// Libellés natifs du lot 1 pour une session expirée (`AccueilScreen.swift`, `MissionsListScreen.swift`,
+        /// `MissionDetailScreen.swift`), réutilisés tels quels : revalider la session plutôt que rejouer l'appel.
+        public static let sessionAVerifier = "Session à vérifier"
+        public static let verifierSession = "Vérifier ma session"
         /// Libellé natif des renvois web du lot 1 (`AccueilScreen.swift`).
         public static let voirSurLeWeb = "Voir sur jolene.app"
         /// `ProfilSoignant.tsx` l.499.
@@ -123,19 +134,58 @@ public enum ProfilEdition {
     /// Audit de consultation (web l.157-163) : `DONNEES_PERSO_CONSULTATION`, ressource `soignant`.
     public static let auditTypeRessource = "soignant"
     public static let auditDetails = ["page": "profil"]
+
+    /// SQLSTATE que l'UPDATE de `fn_modifier_mon_profil` peut lever sur une saisie de l'écran (définitions
+    /// live relues en lecture seule le 08/11/2026) : 23514 (`chk_telephone_format`, téléphone en saisie
+    /// libre), 23505 (`soignants_numero_rpps_key`, RPPS porté par un autre compte), P0001 (trigger
+    /// `dec_age_minimum` → `dec_verifier_age_minimum` l.3887-3895, date de naissance de moins de 18 ans).
+    /// Restitués avant `SupabaseErrorMapping` (correction 12, §2.4), jamais réduits au message générique.
+    public static let exceptionsMetier: Set<String> = ["23514", "23505", "P0001"]
+
+    /// Message d'une exception métier de l'enregistrement (`exceptionsMetier`) :
+    /// - 23505 : texte web de `extraireMessageErreur` (l.510 si le message nomme `numero_rpps`, l.511 sinon) ;
+    /// - 23514 : texte web l.514 (le message PostgreSQL nomme la contrainte, jamais affiché) ;
+    /// - P0001 (et tout autre SQLSTATE déclaré) : message serveur verbatim — texte d'un trigger écrit pour
+    ///   l'utilisateur (« Vous devez avoir au moins 18 ans pour vous inscrire. ») ; le web, lui, l'efface au
+    ///   profit de son message générique (écart consigné dans `DECISIONS_LOT3.md`) ; message vide → repli.
+    public static func messageExceptionMetier(sqlstate: String, message: String) -> String {
+        switch sqlstate {
+        case "23505": return message.contains("numero_rpps") ? Textes.rppsDejaEnregistre : Textes.valeurDejaEnregistree
+        case "23514": return Textes.valeurHorsLimites
+        default:
+            let texte = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            return texte.isEmpty ? Textes.enregistrementEchec : message
+        }
+    }
+}
+
+/// Refus CERTAIN d'un enregistrement de profil : le serveur a répondu et n'a rien appliqué (`{error}` en
+/// HTTP 200 avant l'UPDATE, ou exception métier qui annule l'UPDATE entier). Le message est affiché tel
+/// quel et n'appelle aucune relecture. Toute autre erreur d'enregistrement (délai, réseau, HTTP 5xx,
+/// passerelle) est AMBIGUË : le serveur a pu agir, l'écran relit le profil (PRINCIPES §3-§4).
+public struct RefusEnregistrementProfil: Error, Equatable, Sendable, LocalizedError {
+    public let message: String
+    public init(_ message: String) { self.message = message }
+    public var errorDescription: String? { message }
 }
 
 /// Modèle de l'écran « Mon profil » (lot 3, T9). Règles :
 /// - lecture `gateways.profil` bornée à `resolutionTimeout` pour l'epoch de l'écran ; échec → message
-///   du web (vouvoyé) et « Réessayer », session expirée signalée à part ;
+///   du web (vouvoyé) et « Réessayer » ; session expirée signalée à part (`sessionExpiree`) : la vue
+///   propose alors « Vérifier ma session » (`verifierSession`), jamais un « Réessayer » sans effet ;
 /// - audit `DONNEES_PERSO_CONSULTATION` une fois par ouverture (instance du modèle), après la
-///   première lecture réussie, best-effort et jamais bloquant ;
+///   première lecture réussie et APRÈS la vérification des modes d'exercice (un audit lent ne retarde
+///   jamais l'écran), best-effort et jamais bloquant ;
 /// - enregistrement : seuls les champs changés (`ModificationProfil.depuis`), une seule demande par
-///   appui, succès annoncé seulement sur le profil RELU rendu par le port ; refus serveur verbatim ;
-///   délai dépassé ou réseau : relecture du profil (la saisie est conservée, aucun renvoi
+///   appui, succès annoncé seulement sur le profil RELU rendu par le port ; refus certain
+///   (`RefusEnregistrementProfil` : `{error}` serveur, exception métier) affiché tel quel, sans
+///   relecture ; toute autre issue sauf session expirée, contrat ou annulation (délai, réseau, HTTP 5xx,
+///   passerelle) est ambiguë : relecture du profil (la saisie est conservée, aucun renvoi
 ///   automatique) ; après un succès, la session est revalidée (silencieusement, sans démonter les
-///   onglets) pour que le profil de la session (rayon, contrats, taux lus par Explorer) suive la base,
-///   comme `invaliderProfilNavigation` du web ; le bouton n'attend pas cette revalidation ;
+///   onglets) : `session.state.snapshot.profile` relit la base, comme `invaliderProfilNavigation` du
+///   web. Les onglets déjà montés (Explorer, Accueil) gardent le snapshot reçu à leur création jusqu'à la
+///   session suivante : manque consigné dans `DECISIONS_LOT3.md` (T9). Le bouton n'attend pas cette
+///   revalidation ;
 /// - modes d'exercice autorisés : `gateways.inscription.typesExercice` (`fn_types_exercice_autorises`,
 ///   câblé par T8, point d'extension) ; erreur ou réponse absente → état « indisponible » du web ; port
 ///   encore non câblé → même état, sans « Réessayer la vérification » (jamais un bouton sans effet).
@@ -230,8 +280,24 @@ public final class ProfilEditionModel: ObservableObject {
             etat = .echec(message)
             return
         }
-        await auditerConsultation(gateways)
+        // Modes d'abord : l'audit (jusqu'à `resolutionTimeout`) ne retarde jamais « Vérification… ».
         if modes == .inactif || modes == .indisponible || modes == .nonCable { await verifierModes() }
+        await auditerConsultation(gateways)
+    }
+
+    /// « Vérifier ma session » (session expirée) : revalide la session, puis, si elle reste prête pour
+    /// l'epoch de l'écran, relit le profil (échec de lecture) ou efface le refus (échec d'enregistrement,
+    /// saisie conservée pour un nouvel appui). Une session fermée ou une autre identité est reprise par la
+    /// racine (`RootView`), sans lecture pour l'identité périmée (même règle que `AccueilModel`).
+    public func verifierSession() async {
+        await session.start()
+        guard session.state.snapshot?.epoch == snapshot.epoch, await memeEpoch() else { return }
+        sessionExpiree = false
+        if profil == nil {
+            await charger()
+        } else {
+            erreur = nil
+        }
     }
 
     /// « Réessayer la vérification » des modes d'exercice autorisés (`reessayer` du web).
@@ -268,7 +334,7 @@ public final class ProfilEditionModel: ObservableObject {
         enregistrementEnCours = true
         let reussi = await envoyer(aEnvoyer)
         enregistrementEnCours = false
-        // Revalidation silencieuse de la session (profil d'Explorer) : le bouton ne l'attend pas.
+        // Revalidation silencieuse de la session (`snapshot.profile` relu) : le bouton ne l'attend pas.
         if reussi { await session.start() }
     }
 
@@ -288,6 +354,13 @@ public final class ProfilEditionModel: ObservableObject {
             succes = ProfilEdition.Textes.succes
             annonces += 1
             return true
+        } catch let refus as RefusEnregistrementProfil {
+            // Refus certain : rien n'a été appliqué, aucune relecture.
+            guard await memeEpoch() else { return false }
+            sessionExpiree = false
+            erreur = refus.message
+            annonces += 1
+            return false
         } catch {
             guard await memeEpoch(), !(error is CancellationError) else { return false }
             let jolene = error as? JoleneError
@@ -295,12 +368,24 @@ public final class ProfilEditionModel: ObservableObject {
             sessionExpiree = jolene?.kind == .unauthorized
             erreur = jolene?.message ?? ProfilEdition.Textes.enregistrementEchec
             annonces += 1
-            // Délai dépassé ou réseau : le serveur a pu enregistrer. Relecture (bouton toujours verrouillé,
-            // aucun second envoi possible pendant ce temps), saisie conservée.
-            if jolene?.kind == .network, let relu = try? await lire(gateways), await memeEpoch() {
+            // Issue ambiguë (délai, réseau, HTTP 5xx, passerelle…) : le serveur a pu enregistrer. Relecture
+            // (bouton toujours verrouillé, aucun second envoi possible pendant ce temps), saisie conservée.
+            // Ni session expirée (aucune lecture possible) ni contrat (version incompatible) ne sont relus.
+            if Self.issueAmbigue(jolene), let relu = try? await lire(gateways), await memeEpoch() {
                 appliquer(relu, conserverSaisie: true)
             }
             return false
+        }
+    }
+
+    /// Vrai si l'erreur d'enregistrement laisse l'issue inconnue (le serveur a pu agir) : tout sauf une
+    /// session expirée, une erreur de contrat ou une annulation (les refus certains sont des
+    /// `RefusEnregistrementProfil`, traités avant).
+    static func issueAmbigue(_ erreur: JoleneError?) -> Bool {
+        guard let kind = erreur?.kind else { return true }
+        switch kind {
+        case .unauthorized, .contract, .cancelled: return false
+        case .network, .invalidCredentials, .environment, .demoOnly, .unknown: return true
         }
     }
 

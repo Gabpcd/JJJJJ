@@ -6,7 +6,8 @@ import Foundation
 /// `iban_last4` (garde `Lot3PortsTests` et `ProfilCompletTests`, par `Mirror`). Type d'exercice et
 /// attestation de cumul (L1222-5) : renvoi web, jamais portés (HARD STOP n°4, correction 8).
 /// `adresse_lat` / `adresse_lng` sont décodées pour la localisation (T10), jamais affichées ni
-/// journalisées. Déplacé de `Models/Lot3Results.swift` par T9, comme prévu par T1.
+/// journalisées (description masquée, extension ci-dessous). Déplacé de `Models/Lot3Results.swift` par T9,
+/// comme prévu par T1.
 public struct ProfilComplet: Equatable, Sendable, Identifiable {
     public var id: String
     public var prenom: String
@@ -107,4 +108,19 @@ public struct ProfilComplet: Equatable, Sendable, Identifiable {
 
     /// RPPS optionnel pour l'aide-soignant seulement (`rppsOptionnel = profession === 'AS'`, l.640).
     public var rppsOptionnel: Bool { profession == "AS" }
+}
+
+/// Description MASQUÉE (§2.6 du blueprint, PRINCIPES §7) : une interpolation dans un journal, un message
+/// d'assertion ou un fil d'Ariane Sentry ne restitue ni identifiant, ni identité, ni coordonnées, ni
+/// position GPS (`adresseLat`/`adresseLng`), ni date de naissance — seulement la présence de ces valeurs.
+/// `Mirror` n'est pas redéfini : les gardes de liste blanche (`ProfilCompletTests`, `Lot3PortsTests`)
+/// continuent de lire les vrais noms de propriétés.
+extension ProfilComplet: CustomStringConvertible, CustomDebugStringConvertible {
+    public var description: String {
+        let position = adresseLat != nil || adresseLng != nil ? "position masquée" : "sans position"
+        let rpps = rppsVerifie == true ? "RPPS vérifié" : "RPPS non vérifié"
+        return "ProfilComplet(valeurs masquées, \(position), \(rpps))"
+    }
+
+    public var debugDescription: String { description }
 }

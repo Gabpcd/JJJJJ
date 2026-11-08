@@ -44,6 +44,11 @@ public struct DemoProfilGateway: ProfilPort {
         store = DemoProfilStore(charger: fixture)
     }
 
+    /// Profil démo dans une variante de recette (`VarianteProfilDemo`) : même fixture, une seule clé changée.
+    public init(variante: VarianteProfilDemo) {
+        self.init(fixture: { variante.appliquer(try DemoFixtures.loadProfilComplet().profil) })
+    }
+
     public func profil(context: MissionReadContext) async throws -> ProfilComplet {
         try verifier(context)
         return try Self.relire(try await store.lire(), userId: context.userId)
@@ -53,11 +58,12 @@ public struct DemoProfilGateway: ProfilPort {
         try verifier(context)
         var ligne = try await store.lire()
         let parametres = champs.parametres
+        // Refus certains (`{error}` en HTTP 200, l.43906-43909), même type que la gateway Supabase.
         if case .texte(let prenom)? = parametres["p_prenom"], prenom.estVideSQL {
-            throw JoleneError(.unknown, "Le prénom ne peut pas être vide")
+            throw RefusEnregistrementProfil("Le prénom ne peut pas être vide")
         }
         if case .texte(let nom)? = parametres["p_nom"], nom.estVideSQL {
-            throw JoleneError(.unknown, "Le nom ne peut pas être vide")
+            throw RefusEnregistrementProfil("Le nom ne peut pas être vide")
         }
         let rppsVerifie = ligne["rpps_verifie"] == .booleen(true)
         for (nom, valeur) in parametres {
@@ -96,6 +102,30 @@ public struct DemoProfilGateway: ProfilPort {
         } catch {
             throw JoleneError(.contract, "Fixture démo illisible : demo-profil-complet.json.")
         }
+    }
+}
+
+/// Variantes DEBUG du profil démo, pour la recette niveau 2 des états que la fixture ne montre pas. Lues par
+/// `AppContainer` dans la variable d'environnement du processus `JOLENE_DEMO_PROFIL` (build DEBUG seulement,
+/// comme `JOLENE_FORCE_ACCUEIL_ECHEC`) ; jamais en Release.
+/// - `identite-verrouillee` : `rpps_verifie = true` (identité figée après le contrôle RPPS : prénom, nom, date
+///   de naissance et RPPS en lecture seule) ; aucun numéro RPPS fictif n'est inventé ;
+/// - `sans-date-naissance` : `date_naissance = null` (bouton « Date de naissance », aucune date écrite sans choix).
+public enum VarianteProfilDemo: String, Sendable, CaseIterable {
+    case identiteVerrouillee = "identite-verrouillee"
+    case sansDateNaissance = "sans-date-naissance"
+
+    public static let variableEnvironnement = "JOLENE_DEMO_PROFIL"
+
+    /// Ligne de la fixture modifiée par la variante (une ligne non objet est rendue telle quelle : le décodeur
+    /// la refusera comme la fixture d'origine).
+    public func appliquer(_ ligne: ValeurJSON) -> ValeurJSON {
+        guard case .objet(var objet) = ligne else { return ligne }
+        switch self {
+        case .identiteVerrouillee: objet["rpps_verifie"] = .booleen(true)
+        case .sansDateNaissance: objet["date_naissance"] = .null
+        }
+        return .objet(objet)
     }
 }
 

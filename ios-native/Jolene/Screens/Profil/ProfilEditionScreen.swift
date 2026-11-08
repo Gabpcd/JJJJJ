@@ -12,7 +12,7 @@ import JoleneDesign
 /// seulement si un présentateur `.safari` est injecté (jamais un bouton sans effet).
 ///
 /// Identifiants : `profil-screen`, `profil-chargement`, `profil-erreur-chargement`, `profil-reessayer`,
-/// `profil-nom-complet`, `profil-prenom`, `profil-nom`, `profil-telephone`, `profil-date-naissance`,
+/// `profil-session-expiree`, `profil-session-verifier` (session expirée), `profil-nom-complet`, `profil-prenom`, `profil-nom`, `profil-telephone`, `profil-date-naissance`,
 /// `profil-date-naissance-renseigner`, `profil-email`, `profil-profession`, `profil-rpps`,
 /// `profil-rpps-verifie`, `profil-ville-recherche`, `profil-bio`, `profil-experience`, `profil-mode-*`,
 /// `profil-taux-min`, `profil-taux-min-valeur`, `profil-rayon`, `profil-rayon-valeur`,
@@ -21,6 +21,8 @@ import JoleneDesign
 struct ProfilEditionScreen: View {
     @StateObject private var model: ProfilEditionModel
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
+    /// Sélecteur de date ouvert sur une date non renseignée : il affiche `DateNaissance.parDefaut` sans l'écrire.
+    @State private var selecteurDateOuvert = false
 
     private typealias Textes = ProfilEdition.Textes
 
@@ -40,6 +42,11 @@ struct ProfilEditionScreen: View {
                     }
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("profil-chargement")
+                case let .echec(message) where model.sessionExpiree:
+                    // Session expirée : revalider la session (lot 1), jamais un « Réessayer » qui échouerait à l'identique.
+                    EmptyState(systemImage: "person.crop.circle.badge.exclamationmark", title: Textes.sessionAVerifier,
+                               message: message, identifier: "profil-session-expiree", actionTitle: Textes.verifierSession,
+                               actionIdentifier: "profil-session-verifier") { Task { await model.verifierSession() } }
                 case let .echec(message):
                     EmptyState(systemImage: "person.crop.circle.badge.exclamationmark", title: Textes.titre, message: message,
                                identifier: "profil-erreur-chargement", actionTitle: Textes.reessayer,
@@ -126,7 +133,9 @@ struct ProfilEditionScreen: View {
         if verrouillee {
             lectureSeule(Textes.dateNaissance, valeur: model.formulaire.dateNaissance.flatMap(DateNaissance.affichage) ?? "—",
                          identifiant: "profil-date-naissance", verrou: true)
-        } else if model.formulaire.dateNaissance.flatMap(DateNaissance.date) != nil {
+        } else if model.formulaire.dateNaissance.flatMap(DateNaissance.date) != nil || selecteurDateOuvert {
+            // Sans date renseignée, le sélecteur AFFICHE `parDefaut` sans l'écrire : seul un choix de l'utilisateur
+            // remplit le formulaire (principe « État dérivé » : jamais un défaut statique enregistré en silence).
             DatePicker(Textes.dateNaissance, selection: DateNaissance.liaison($model.formulaire.dateNaissance),
                        in: ...Date(), displayedComponents: .date)
                 .font(JoleneFont.callout)
@@ -137,9 +146,9 @@ struct ProfilEditionScreen: View {
                 .frame(minHeight: 44)
                 .accessibilityIdentifier("profil-date-naissance")
         } else {
-            // Date absente : aucune date fictive affichée ; un appui ouvre le sélecteur.
+            // Date absente : aucune date fictive affichée ; un appui ouvre le sélecteur sans rien écrire.
             Button {
-                model.formulaire.dateNaissance = DateNaissance.chaine(DateNaissance.parDefaut)
+                selecteurDateOuvert = true
             } label: {
                 Label(Textes.dateNaissance, systemImage: "calendar")
                     .font(JoleneFont.callout.weight(.semibold))
@@ -260,6 +269,10 @@ struct ProfilEditionScreen: View {
             if let erreur = model.erreur {
                 InlineNotice(erreur, tone: .error, identifier: "profil-erreur", announcesOnAppear: true,
                              announcementID: model.annonces)
+                if model.sessionExpiree {
+                    JoleneButton(Textes.verifierSession, style: .secondary) { Task { await model.verifierSession() } }
+                        .accessibilityIdentifier("profil-session-verifier")
+                }
             }
             JoleneButton(model.enregistrementEnCours ? Textes.enregistrement : Textes.enregistrer,
                          isLoading: model.enregistrementEnCours) {
@@ -316,9 +329,10 @@ struct ProfilEditionScreen: View {
                 .font(JoleneFont.body)
                 .foregroundStyle(JoleneColor.midnight)
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                .accessibilityIdentifier(identifiant)
         }
+        // Identifiant sur l'élément COMBINÉ (seul élément exposé : libellé + valeur), jamais sur un enfant fondu.
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(identifiant)
     }
 }
 
@@ -392,7 +406,8 @@ enum DateNaissance {
         return String(format: "%02d/%02d/%04d", composantes.day ?? 1, composantes.month ?? 1, composantes.year ?? 0)
     }
 
-    /// Point de départ du sélecteur quand la date est absente (aucune valeur enregistrée sans appui).
+    /// Point de départ AFFICHÉ par le sélecteur quand la date est absente ; jamais écrit dans le formulaire
+    /// (la lecture de `liaison` ne modifie pas la source, seule l'écriture d'un choix le fait).
     static var parDefaut: Date {
         calendrier.date(byAdding: .year, value: -30, to: Date()) ?? Date()
     }

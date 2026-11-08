@@ -124,12 +124,19 @@ final class AppContainer: ObservableObject {
     /// Ports du monde démo. DEBUG seulement : `JOLENE_FORCE_ACCUEIL_ECHEC=1` (variable d'environnement
     /// du processus, comme `JOLENE_FORCE_BAD_KEY`) fait échouer le premier chargement de l'Accueil
     /// (`DemoDashboardEchecGateway`) pour la recette de l'état d'erreur et de la reprise
-    /// (`DemoAccueilTests.testAccueilErreurPuisReprise`). Jamais compilé en Release.
+    /// (`DemoAccueilTests.testAccueilErreurPuisReprise`). Lot 3, T9 : `JOLENE_DEMO_PROFIL=<variante>`
+    /// (`VarianteProfilDemo`) sert le profil démo dans une variante de recette (`DemoProfilTests`).
+    /// Jamais compilé en Release.
     private static func demoGateways(processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
         if processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] == "1" {
             var gateways = DemoWorld.gateways()
             gateways.dashboard = DemoDashboardEchecGateway()
+            return gateways
+        }
+        if let variante = processEnvironment[VarianteProfilDemo.variableEnvironnement].flatMap(VarianteProfilDemo.init(rawValue:)) {
+            var gateways = DemoWorld.gateways()
+            gateways.profil = DemoProfilGateway(variante: variante)
             return gateways
         }
         #endif

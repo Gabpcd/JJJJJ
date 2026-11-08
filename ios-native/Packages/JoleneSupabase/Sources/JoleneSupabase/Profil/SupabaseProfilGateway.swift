@@ -11,9 +11,17 @@ import Supabase
 ///   autre utilisateur est un refus de contrat, jamais un profil vide ; les clés sensibles
 ///   (`ProfilComplet.clesSensibles`) ne sont ni décodées ni journalisées ;
 /// - écriture `fn_modifier_mon_profil(…)` avec les SEULS paramètres de `ModificationProfil.parametres`
-///   (jamais type d'exercice ni attestation de cumul : HARD STOP n°4) ; `{error}` (prénom ou nom vide)
-///   → message serveur verbatim ; succès = `{success:true}` puis RELECTURE du profil, rendue à
-///   l'appelant (le web affiche son toast sans relire, l.293). Une seule requête, aucun renvoi.
+///   (jamais type d'exercice ni attestation de cumul : HARD STOP n°4) ; succès = `{success:true}` puis
+///   RELECTURE du profil, rendue à l'appelant (le web affiche son toast sans relire, l.293). Une seule
+///   requête, aucun renvoi. Refus CERTAINS, levés en `RefusEnregistrementProfil` (rien n'a été appliqué,
+///   le modèle ne relit pas) :
+///   - `{error}` en HTTP 200 (prénom ou nom vide, l.43906-43909) → message serveur verbatim ;
+///   - exceptions de l'UPDATE `soignants` (`ProfilEdition.exceptionsMetier` : 23514 `chk_telephone_format`,
+///     23505 `soignants_numero_rpps_key`, P0001 `dec_verifier_age_minimum`), restituées AVANT
+///     `SupabaseErrorMapping` (correction 12, §2.4) puis traduites par `ProfilEdition.messageExceptionMetier`
+///     (textes web de `extraireMessageErreur`, message serveur verbatim pour P0001).
+///   Toute autre erreur (réseau, HTTP 5xx, passerelle, SQLSTATE non déclaré) reste une `JoleneError` :
+///   issue ambiguë, que le modèle relit.
 ///
 /// L'audit de consultation (`DONNEES_PERSO_CONSULTATION`) est écrit par le modèle d'écran
 /// (`ProfilEditionModel`, une fois par ouverture), pas par cette gateway, qui sert aussi la relecture.
@@ -22,6 +30,8 @@ public struct SupabaseProfilGateway: ProfilPort {
     public static let ecritureRPC = "fn_modifier_mon_profil"
     /// Repli d'un refus d'enregistrement sans message serveur (texte natif, `ProfilEdition.Textes`).
     public static let fallbackMessage = ProfilEdition.Textes.enregistrementEchec
+    /// SQLSTATE restitués pour `fn_modifier_mon_profil` (`RPCResponse.appeler(…, exceptionsMetier:)`).
+    public static let exceptionsMetier = ProfilEdition.exceptionsMetier
 
     private let client: SupabaseClient
 
@@ -44,8 +54,18 @@ public struct SupabaseProfilGateway: ProfilPort {
         try MissionQuery.validate(context: context)
         guard !champs.estVide else { return try await profil(context: context) }
         let reponse = try await RPCResponse.appeler(client, Self.ecritureRPC, params: Self.params(champs),
-                                                    fallback: Self.fallbackMessage)
-        try reponse.leverSiErreur(fallback: Self.fallbackMessage)
+                                                    fallback: Self.fallbackMessage, exceptionsMetier: Self.exceptionsMetier)
+        // Exception métier restituée : traitée AVANT `estSucces` (un refus restitué n'est jamais un `.contract`).
+        if let sqlstate = reponse.sqlstate {
+            throw RefusEnregistrementProfil(ProfilEdition.messageExceptionMetier(sqlstate: sqlstate,
+                                                                                 message: reponse.erreur ?? ""))
+        }
+        do {
+            try reponse.leverSiErreur(fallback: Self.fallbackMessage)
+        } catch let erreur as JoleneError where erreur.kind == .unknown {
+            // `{error}` en HTTP 200 : la RPC a rendu la main avant l'UPDATE, rien n'a été appliqué.
+            throw RefusEnregistrementProfil(erreur.message)
+        }
         guard reponse.estSucces else { throw JoleneError(.contract, SupabaseErrorMapping.contractMessage) }
         return try await profil(context: context)
     }
