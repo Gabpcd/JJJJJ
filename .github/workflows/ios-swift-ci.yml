@@ -14,6 +14,9 @@ on:
       - 'ios-native/**'
       - 'scripts/mobile/export-golden-vectors.mjs'
       - 'scripts/mobile/export-demo-fixtures.mjs'
+      # Lot 2, T8 : originaux démo rendus par le moteur serveur (export-demo-fixtures.mjs).
+      - 'supabase/functions/_shared/cdd-employeur.ts'
+      - 'supabase/functions/generate-contrat-mission-pdf/index.ts'
       - 'scripts/mobile/check-rpc-contracts.mjs'
       - 'src/lib/date-heure-paris.ts'
       - 'src/lib/format-mission.ts'
@@ -47,6 +50,9 @@ on:
       - 'ios-native/**'
       - 'scripts/mobile/export-golden-vectors.mjs'
       - 'scripts/mobile/export-demo-fixtures.mjs'
+      # Lot 2, T8 : originaux démo rendus par le moteur serveur (export-demo-fixtures.mjs).
+      - 'supabase/functions/_shared/cdd-employeur.ts'
+      - 'supabase/functions/generate-contrat-mission-pdf/index.ts'
       - 'scripts/mobile/check-rpc-contracts.mjs'
       - 'src/lib/date-heure-paris.ts'
       - 'src/lib/format-mission.ts'

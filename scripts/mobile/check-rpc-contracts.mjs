@@ -82,8 +82,8 @@ export const RPC_SUIVIES = [
   { name: 'fn_confirmer_presence_mission', statut: 'a_venir', lot: 1 },
   { name: 'fn_scanner_code_pointage', statut: 'consommee', lot: 2 }, // T3 : SupabasePointageGateway
   { name: 'fn_etat_pointage_mission', statut: 'consommee', lot: 2 }, // T3 : SupabasePointageGateway
-  { name: 'fn_envoyer_otp_signature', statut: 'a_venir', lot: 2 },
-  { name: 'fn_signer_contrat_otp', statut: 'a_venir', lot: 2 },
+  { name: 'fn_envoyer_otp_signature', statut: 'consommee', lot: 2 }, // T8 : SupabaseContratsGateway
+  { name: 'fn_signer_contrat_otp', statut: 'consommee', lot: 2 }, // T8 : SupabaseContratsGateway
   { name: 'fn_remplacer_document_soignant', statut: 'consommee', lot: 2 }, // T6 : SupabaseDocumentsGateway
   // Lot 2, T0 : présences (T3, T4b, T5a, T5b), justificatifs (T6), contrats (T8).
   { name: 'fn_consentir_gps', statut: 'consommee', lot: 2 }, // T3 : SupabasePointageGateway

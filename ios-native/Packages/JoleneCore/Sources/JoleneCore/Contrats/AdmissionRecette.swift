@@ -38,6 +38,30 @@ public enum AdmissionRecette {
         return estUUID(contratId)
     }
 
+    /// Origine `https://<hôte>` d'une URL de projet (lot 2, T8 ; revue fraîche de T2, constat 2) : barre finale,
+    /// chemin (`/storage/v1`) et casse de l'hôte ignorés ; `nil` hors `https`, avec port, identifiants, requête ou
+    /// fragment. La comparaison exacte à `urlStaging` reste celle du web.
+    public static func origine(_ url: URL) -> String? {
+        guard let composants = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              composants.scheme?.lowercased() == "https", let hote = composants.host, !hote.isEmpty,
+              composants.port == nil, composants.user == nil, composants.password == nil,
+              composants.query == nil, composants.fragment == nil else { return nil }
+        return "https://" + hote.lowercased()
+    }
+
+    /// Garde d'entrée depuis l'URL du projet du client (gateway Supabase) : son origine doit être `urlStaging`.
+    public static func doitInterroger(projet: URL, contratId: String) -> Bool {
+        guard let origine = origine(projet) else { return false }
+        return doitInterroger(url: origine, contratId: contratId)
+    }
+
+    /// `lire(url:…)` depuis l'URL du projet du client, ramenée à son origine.
+    public static func lire(projet: URL, contratId: String, maintenant: Date,
+                            interroger: (String) async throws -> ValeurJSON) async -> AdmissionSignatureRecette? {
+        guard let origine = origine(projet) else { return nil }
+        return await lire(url: origine, contratId: contratId, maintenant: maintenant, interroger: interroger)
+    }
+
     /// Lit l'admission : garde d'entrée, un seul appel, puis interprétation stricte. Une erreur de
     /// l'appel (réponse `{ error }`, transport) vaut refus, comme le `catch` du web.
     public static func lire(url: String, contratId: String, maintenant: Date,

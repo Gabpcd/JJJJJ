@@ -1,0 +1,151 @@
+import XCTest
+@testable import JoleneCore
+
+/// Lot 2, T8 — règles d'affichage des contrats portées du web (`Contrats/ContratRules.swift`) :
+/// `contratCorrespondAuFiltre` et `?statut=` (`ListeContrats.tsx` l.20-28, l.55-56), `cddSansOriginal`
+/// (`ContratMission.tsx` l.62-66), bandeaux (l.552-576), compte à rebours (l.578-582), statut (l.593-596),
+/// pied de page (l.535-537, l.831-837), certificat (l.656), signatures (l.672, l.691), zone de signature
+/// (l.709), rendu serveur (l.359-364). Aucune règle n'est réécrite : chaque cas renvoie à sa ligne web.
+final class ContratRulesTests: XCTestCase {
+    private func contrat(statut: String = "EN_ATTENTE_SIGNATURES", type: String? = "CDD", html: String? = nil,
+                         hash: String? = nil, chemin: String? = nil, renduLe: String? = nil,
+                         soignant: Bool? = nil, etablissement: Bool? = nil, soignantLe: String? = nil,
+                         etablissementLe: String? = nil, creeLe: String? = "2026-11-01T14:00:00Z") -> ContratDetail {
+        ContratDetail(id: "k-1", missionId: "m-1", statut: statut, typeContrat: type, contenuHtml: html, hashDocument: hash,
+                      storagePath: chemin, contenuHtmlRenduLe: renduLe, signatureSoignant: soignant,
+                      signatureEtablissement: etablissement, signatureSoignantLe: soignantLe,
+                      signatureEtablissementLe: etablissementLe, creeLe: creeLe)
+    }
+
+    // MARK: - Liste
+
+    func testFiltresDeLaListeCommeLeWeb() {
+        XCTAssertEqual(FiltreContrat.allCases.map(\.rawValue), ["Tous", "EN_ATTENTE_SIGNATURES", "SIGNE_COMPLET", "ANNULE"])
+        let statuts = ["BROUILLON", "EN_ATTENTE_SIGNATURES", "SIGNE_SOIGNANT", "SIGNE_ETABLISSEMENT", "SIGNE_COMPLET",
+                       "ANNULE", "EXPIRE", "REFUSE", ""]
+        XCTAssertEqual(statuts.filter { ContratRules.correspondAuFiltre(statut: $0, filtre: .tous) }, statuts)
+        XCTAssertEqual(statuts.filter { ContratRules.correspondAuFiltre(statut: $0, filtre: .enAttenteSignatures) },
+                       ["BROUILLON", "EN_ATTENTE_SIGNATURES", "SIGNE_SOIGNANT", "SIGNE_ETABLISSEMENT", ""])
+        XCTAssertEqual(statuts.filter { ContratRules.correspondAuFiltre(statut: $0, filtre: .signeComplet) }, ["SIGNE_COMPLET"])
+        XCTAssertEqual(statuts.filter { ContratRules.correspondAuFiltre(statut: $0, filtre: .annule) }, ["ANNULE"])
+    }
+
+    func testFiltreInitialDepuisLeParametreStatut() {
+        XCTAssertEqual(FiltreContrat.initial(statut: "SIGNE_COMPLET"), .signeComplet)
+        XCTAssertEqual(FiltreContrat.initial(statut: "EN_ATTENTE_SIGNATURES"), .enAttenteSignatures)
+        XCTAssertEqual(FiltreContrat.initial(statut: "EXPIRE"), .tous, "statut hors liste → Tous (l.56)")
+        XCTAssertEqual(FiltreContrat.initial(statut: nil), .tous)
+        XCTAssertEqual(FiltreContrat.initial(statut: "signe_complet"), .tous, "comparaison exacte, comme `includes`")
+    }
+
+    func testFiltrerGardeLOrdreServeur() {
+        let liste = [ContratResume(id: "a", missionId: "m", statut: "SIGNE_COMPLET"),
+                     ContratResume(id: "b", missionId: "m", statut: "EN_ATTENTE_SIGNATURES"),
+                     ContratResume(id: "c", missionId: "m", statut: "BROUILLON")]
+        XCTAssertEqual(ContratRules.filtrer(liste, filtre: .enAttenteSignatures).map(\.id), ["b", "c"])
+        XCTAssertEqual(ContratRules.filtrer(liste, filtre: .tous).map(\.id), ["a", "b", "c"])
+    }
+
+    // MARK: - CDD sans original
+
+    func testCddSansOriginal() {
+        XCTAssertTrue(ContratRules.cddSansOriginal(contrat()))
+        XCTAssertFalse(ContratRules.cddSansOriginal(contrat(type: "CDDU")), "seul le CDD attend l'employeur")
+        XCTAssertFalse(ContratRules.cddSansOriginal(contrat(chemin: "k-1/a.html")))
+        XCTAssertFalse(ContratRules.cddSansOriginal(contrat(hash: String(repeating: "a", count: 64))))
+        XCTAssertFalse(ContratRules.cddSansOriginal(contrat(renduLe: "2026-11-01T14:05:00Z")))
+        XCTAssertFalse(ContratRules.cddSansOriginal(contrat(soignant: true)), "une preuve de signature exclut la préparation")
+        XCTAssertFalse(ContratRules.cddSansOriginal(contrat(statut: "SIGNE_ETABLISSEMENT")))
+        for terminal in ["ANNULE", "EXPIRE", "REFUSE"] {
+            XCTAssertFalse(ContratRules.cddSansOriginal(contrat(statut: terminal)), terminal)
+        }
+    }
+
+    // MARK: - Bandeaux, compte à rebours, statut
+
+    func testBandeauxDuContrat() {
+        XCTAssertEqual(ContratRules.bandeaux(contrat(statut: "ANNULE")), [.annule])
+        XCTAssertEqual(ContratRules.bandeaux(contrat(statut: "EXPIRE")), [.expire])
+        XCTAssertEqual(ContratRules.bandeaux(contrat(statut: "REFUSE")), [.refuse])
+        XCTAssertEqual(ContratRules.bandeaux(contrat(etablissement: true)), [.autrePartieASigne])
+        XCTAssertEqual(ContratRules.bandeaux(contrat(soignant: true, etablissement: true)), [], "déjà signé par moi : rien")
+        XCTAssertEqual(ContratRules.bandeaux(contrat(statut: "SIGNE_COMPLET", etablissement: true)), [])
+        XCTAssertEqual(ContratRules.bandeaux(contrat(statut: "ANNULE", etablissement: true)), [.annule])
+        XCTAssertEqual(ContratRules.bandeaux(contrat()), [])
+    }
+
+    func testCompteAReboursAfficheHorsStatutsTerminauxAvecCreeLe() {
+        XCTAssertTrue(ContratRules.afficheCompteARebours(contrat()))
+        XCTAssertTrue(ContratRules.afficheCompteARebours(contrat(statut: "")), "statut nul : non terminal")
+        for statut in ["SIGNE_COMPLET", "ANNULE", "EXPIRE", "REFUSE"] {
+            XCTAssertFalse(ContratRules.afficheCompteARebours(contrat(statut: statut)), statut)
+        }
+        XCTAssertFalse(ContratRules.afficheCompteARebours(contrat(creeLe: nil)))
+        XCTAssertFalse(ContratRules.afficheCompteARebours(contrat(creeLe: "")))
+    }
+
+    func testStatutAffiche() {
+        XCTAssertEqual(ContratRules.statutAffiche(contrat(statut: "SIGNE_COMPLET")), .signe)
+        XCTAssertEqual(ContratRules.statutAffiche(contrat(statut: "ANNULE")), .annule)
+        XCTAssertEqual(ContratRules.statutAffiche(contrat(statut: "EXPIRE")), .enAttente, "le web n'a que trois libellés (l.593-596)")
+        XCTAssertEqual(ContratRules.statutAffiche(contrat(statut: "SIGNE_SOIGNANT")), .enAttente)
+    }
+
+    // MARK: - Pied de page
+
+    func testMentionDuPiedDePage() {
+        let employeur = #"<section data-jolene-cdd="employeur-v1" data-cadre="TEXTE_EMPLOYEUR">"#
+        XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(html: employeur)), .cadreEmployeur)
+        XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(html: "<section data-jolene-cdd='employeur-v1' data-cadre='TEXTE_EMPLOYEUR'>")),
+                       .cadreEmployeur, "guillemets simples acceptés (l.536-537)")
+        XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(html: #"<section data-jolene-cdd="employeur-v1" data-cadre="PRIVE_TERME_PRECIS">"#)),
+                       .salarieEcrit)
+        XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: "CDDU", html: employeur)), .prestationLiberale,
+                       "texteEmployeur exige un CDD ; CDDU n'est ni CDD ni SALARIE (l.833)")
+        XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: "SALARIE")), .salarieEcrit)
+        XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: "REMPLACEMENT_LIBERAL")), .prestationLiberale)
+        XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: nil)), .prestationLiberale)
+    }
+
+    // MARK: - Signatures et zone de signature
+
+    func testSignaturesAfficheesEtCertificat() {
+        XCTAssertTrue(ContratRules.signatureEtablissementAffichee(contrat(statut: "SIGNE_COMPLET")))
+        XCTAssertTrue(ContratRules.signatureEtablissementAffichee(contrat(etablissement: true)))
+        XCTAssertFalse(ContratRules.signatureEtablissementAffichee(contrat(etablissementLe: "2026-11-01T15:00:00Z")),
+                       "la date seule ne suffit pas (l.672)")
+        XCTAssertTrue(ContratRules.signatureSoignantAffichee(contrat(soignant: true)))
+        XCTAssertFalse(ContratRules.signatureSoignantAffichee(contrat()))
+        XCTAssertTrue(ContratRules.certificatVisible(contrat(soignant: true)))
+        XCTAssertTrue(ContratRules.certificatVisible(contrat(etablissement: true)))
+        XCTAssertFalse(ContratRules.certificatVisible(contrat(statut: "SIGNE_COMPLET")), "le web lit les drapeaux (l.656)")
+    }
+
+    func testZoneDeSignature() {
+        let pret = contrat(type: "CDDU", chemin: "k-1/a.html")
+        XCTAssertTrue(ContratRules.zoneSignatureVisible(pret))
+        XCTAssertFalse(ContratRules.zoneSignatureVisible(contrat()), "CDD à préparer par l'employeur")
+        XCTAssertFalse(ContratRules.zoneSignatureVisible(contrat(type: "CDDU", soignant: true)), "déjà signé par moi")
+        for statut in ["SIGNE_COMPLET", "ANNULE", "EXPIRE"] {
+            XCTAssertFalse(ContratRules.zoneSignatureVisible(contrat(statut: statut, type: "CDDU")), statut)
+        }
+        // Le web n'exclut pas REFUSE de la zone (l.709) ; la signature serveur le refuse (CONTRAT_INACTIF).
+        XCTAssertTrue(ContratRules.zoneSignatureVisible(contrat(statut: "REFUSE", type: "CDDU")))
+        XCTAssertTrue(ContratRules.dejaSigneParMoi(contrat(soignant: true)))
+        XCTAssertFalse(ContratRules.dejaSigneParMoi(contrat(soignantLe: "2026-11-01T15:00:00Z")), "drapeau du web (l.533)")
+    }
+
+    // MARK: - Rendu serveur
+
+    func testRenduServeurDemandeSeulementSansOriginalNiSignatureHorsCddEtTerminaux() {
+        XCTAssertTrue(ContratRules.renduServeurADemander(contrat(type: "CDDU")))
+        XCTAssertTrue(ContratRules.renduServeurADemander(contrat(type: "REMPLACEMENT_LIBERAL", html: "<p>{{x}}</p>")))
+        XCTAssertFalse(ContratRules.renduServeurADemander(contrat()), "CDD sans original : jamais de rendu (décision 19)")
+        XCTAssertFalse(ContratRules.renduServeurADemander(contrat(type: "CDDU", chemin: "k-1/a.html")))
+        XCTAssertFalse(ContratRules.renduServeurADemander(contrat(type: "CDDU", etablissement: true)), "document figé")
+        XCTAssertFalse(ContratRules.renduServeurADemander(contrat(statut: "SIGNE_SOIGNANT", type: "CDDU")))
+        for statut in ["ANNULE", "EXPIRE", "REFUSE"] {
+            XCTAssertFalse(ContratRules.renduServeurADemander(contrat(statut: statut, type: "CDDU")), statut)
+        }
+    }
+}

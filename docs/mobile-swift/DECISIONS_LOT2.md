@@ -459,6 +459,26 @@
   - démo : `-JOLENE_DEMO_SCENARIO upload-incertain` → `DemoDocumentsGateway(scenario: .uploadIncertain)` posé par
     `AppContainer` (DEBUG) ; `DemoWorld.gateways()` garde `.normal`.
 
+- **T9a** (lecture, livrée par T8 côté données) : `ContratModel` (`JoleneCore/Contrats/ContratModel.swift`) et
+  `ContratsListeModel` portent l'état ; bandeaux, compte à rebours, statut, pied de page, certificat et zone de
+  signature par `ContratRules` (aucune règle locale à l'écran). `MotifOriginalIndisponible` → texte du web :
+  `.cddAPreparer` → `TextesWeb.Contrat.cddAPreparer` ; autre motif → `originalIndisponible` si
+  `ContratMissionUi.contratPossedeSignature`, sinon `contenuPasDisponible` ; `.renduRefuse(messageServeur:)` → les
+  textes de rendu du web (`ContratMission.tsx` l.377, l.388, l.394, l.715) sont **absents de `LibellesWeb`** :
+  T9a les y ajoute verbatim avec leur source (hors HARD STOP : aucune marque juridique) avant de les afficher.
+  `FichierContratTemporaire.effacer(_:)` à la fermeture de la feuille de partage, `effacerTout()` au changement
+  d'epoch. Démo : `demo-contrat-001` (62 h restantes), `demo-contrat-002` (signé, original partageable, deux lignes
+  de certificat), `demo-contrat-003` (CDD sans original). Les originaux démo sont rendus par le moteur serveur
+  (`rendreCddEmployeur` + `wrapInDocument`) : leur texte est celui du serveur, seules les données « employeur »
+  sont fictives et le disent.
+- **T9b** (HARD STOP, signature) : la session est `ContratModel.session` (`SessionSignatureOtp`) ; l'écran ne fait
+  qu'appeler `accepter(_:)`, `saisirCode(_:)`, `envoyerCode()`, `signer()` et lire `etape`, `retour`,
+  `erreurBloquante`, `secondesRestantes(maintenant: horloge.now())`, `tentativesRestantes`, `smsRestants` ;
+  `ContratModel.signature == .renvoiWeb` (compte TEST sans admission) → renvoi web `/contrat/:id` (décision 18).
+  `-JOLENE_DEMO_SCENARIO otp-expire` : `AppContainer` construit `DemoContratsGateway(scenario:
+  ScenarioDemoContrats(argument:))` à la place du défaut de `DemoWorld.câblerLot2` (`.nominal`). T8 n'écrit aucun
+  texte de consentement ni de signature : tous viennent de `TextesWeb.SignatureOtp` (TL).
+
 ## Amendements du blueprint (`LOT2_PLAN.md`)
 
 Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
@@ -494,6 +514,14 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | §2.5 réconciliation (issue d'une ligne relue) | vérification engagée → `verification_demandee` | issue dérivée du statut relu (`PreuveDocument.issue`) : `EN_ATTENTE` avec tentative → `.verificationDemandee` (suivi) ; `REVUE_MANUELLE_REQUISE`, ou aucune tentative → `.enregistre` ; verdict déjà rendu (`VERIFIE`, `REJETE`, `EXPIRE`…) → `.verdictRendu` (nouvelle issue, sans suivi) | seconde revue fraîche de T6 (m-c) : après un relancement, une pièce déjà jugée aurait été annoncée « vérification en cours (~30 s) » |
 | §3 T6 consultation ; projection documents (« sans `s3_bucket` ») | clé `<uid>/documents/…`, bucket `jolene-documents` fixe | garde de la politique Storage (premier segment = uid, segments non vides, sans `..` ni `\`), bucket lu dans `s3_bucket` (projeté), `jolene-documents` à défaut ; jeton refusé (PostgREST `PGRST301`-`PGRST303`, `NON_AUTHENTIFIE`, Storage `InvalidJWT`, HTTP 401) → session expirée, jamais un refus ordinaire ni un nettoyage | revue fraîche de T6 (m1, m5) : les pièces encore actives envoyées avant 02e957ea (`<uid>/<TYPE>/<ms>_<nom>`) devenaient « Impossible d’ouvrir le document » ; une session expirée nettoyait l'objet puis rendait un refus |
 | correction 21 (« un envoi `AUTRE` est impossible par l'interface ») ; `peutEnvoyer` « exigence affichée » | exigences affichées seulement | + documents complémentaires étudiant / interne visibles (`ComplementairesVisibles`, règle de `src/lib/documents-complementaires.ts`) et pièces du bandeau « expire bientôt » ; pièces de santé toujours exclues | revue fraîche de T6 (m2) : `ATTESTATION_SCOLARITE`, `LICENCE_REMPLACEMENT`, `CARTE_ORDRE` (l.851-900) et « Mettre à jour → » (l.606) étaient refusés |
+| §3 T8 « détail : `contrats_mission` complet » (`select('*')` du web) | toutes les colonnes | projection explicite `ContratDetail.colonnes` (17 colonnes lues par `ContratMission.tsx`), jamais `signature_image_*`, `signature_ip_*` ni `signature_navigateur_*` | T8 : moindre donnée, aucune image en base64 décodée pour rien ; même règle que la correction 22 |
+| §3 T8 certificat « projection **exacte** de `CertificatSignature.tsx` l.50 » | 13 colonnes du web | les 14 colonnes accordées (`SignatureCertificat.colonnes` de T1, `contrat_id` en plus, GRANT l.86518-86570) | T1 : `contrat_id` permet d'écarter une ligne d'un autre contrat ; aucune colonne non accordée |
+| §3 T8 `OriginalContrat.swift` (motifs `hash_mismatch`, `storage_mismatch`, `variables_non_rendues`, `non_fige`) | quatre motifs | + `signatureMismatch` (pilote `business.ts` l.43-44 : signature ou OTP validé sur une autre empreinte), `cddAPreparer` (décision 19), `renduRefuse(messageServeur:)` (edge ≠ 200) ; chemin hors `<contratId>/<nom>.html` ou objet > 2 Mo → `storageMismatch` | T8 : un original n'est jamais supposé ; refus porté par l'erreur typée `ContratOriginalIndisponible`, protocole `ContratsPort` inchangé |
+| §3 T8 `envoyerOtp(contratId:, empreinte:, …)` | un appel `fn_envoyer_otp_signature` | relecture `contrats_mission?select=id,hash_document` **avant** l'appel : empreinte différente → refus local `HASH_DOCUMENT_CHANGE` (bloquant), aucun SMS | T8 : un SMS (3 par 24 h) ne doit pas partir pour une révision que la signature refuserait (l.56563) |
+| §2.8 « `demo-contrat-001.html` » | un original démo | + `demo-contrat-002.html` (original du contrat `SIGNE_COMPLET`) | T8 : le partage d'un contrat signé (T9a) exige un original contrôlé |
+| §3 T8 « `ContratModels.swift` » ; `Models/Lot2Results.swift` | types posés par T1 dans `Lot2Results.swift` | `ContratResume`, `ContratDetail`, `OriginalContrat` déplacés dans `Contrats/ContratModels.swift` (champs additifs, inits de T1 conservés) ; issues OTP et `SignatureCertificat` restent dans `Lot2Results.swift` | en-tête de `Lot2Results.swift` (« le déplace dans son dossier ») |
+| Revue fraîche de T2, constats 2, 3 et 7 | URL STAGING comparée exactement ; nom de RPC et clé non prouvés ; `AdmissionSignatureRecette` en doublon d'`AdmissionOtp` | `AdmissionRecette.origine(_:)` (barre finale, chemin, casse ignorés) et `lire(projet:…)` ; `SupabaseContratsGatewayTests` vérifie RPC et `p_contrat_id` ; type unique `AdmissionSignatureRecette` (`AdmissionOtp` n'a jamais été créé) | T8 |
+| Tri `cree_le` de la liste (web `order('cree_le', { ascending: false })`) | — | `order=cree_le.desc.nullsfirst` (supabase-swift ajoute toujours la clause NULLS ; NULLS FIRST est le défaut PostgreSQL de `DESC`) ; certificat `cree_le.asc.nullslast` | T8 : même tri que le web |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 
@@ -527,6 +555,21 @@ aucun ne cite de valeur stockée. Gardés mot pour mot par les tests indiqués.
 | `PointageQuery.fallbackScan` | « Impossible d'enregistrer le pointage. Réessayez. » | nouveau (T3) : rollback prouvé hors exceptions déclarées (repli de `SupabaseErrorMapping`) | `SupabasePointageGatewayTests.testRollbacksHorsListeEtContrat` |
 | `PointageQuery.fallbackLocalisation` | « Impossible d'enregistrer votre choix de localisation. Réessayez. » | nouveau (T3) : `fn_consentir_gps` en échec ou relecture vide (aucune hypothèse locale) | `SupabasePointageGatewayTests.testConsentementLuPuisEnregistreEtRelu` |
 | `PointageQuery.fallbackDetail` | « Impossible de charger le détail des présences. Réessayez. » | nouveau (T3) : repli de la synthèse serveur, jamais affiché (carte masquée) | `SupabasePointageGatewayTests` |
+
+## Textes opérationnels hors web (T8)
+
+Non juridiques (aucune marque de `MARQUES_JURIDIQUES`), vouvoyés, repris tels quels de leur source ; T8 n'ajoute
+aucun texte de consentement, de signature ni de contrat (HARD STOP n°4 : tous viennent de `TextesWeb`).
+
+| Constante | Texte | Source | Test |
+|---|---|---|---|
+| `MessagesContrats.indisponible` | « Les contrats ne peuvent pas être chargés. Réessayez. » | pilote `mobile-native/src/workflows/contracts/supabaseGateway.ts` l.21 | `ContratModelTests`, `SupabaseContratsGatewayTests` |
+| `SupabaseContratsGateway.messageSignatureNonConfirmee` | « La signature ne peut pas être confirmée. Rechargez son état ; ne renvoyez pas automatiquement le code. » | pilote `supabaseGateway.ts` l.263 | `SupabaseContratsGatewayTests.testSuccesNonConfirmeParLaRelectureNEstPasUnSucces` |
+| `FichierContratTemporaire.messageIndisponible` | « Aucun contrat téléchargeable pour le moment. » | web `src/pages/ContratMission.tsx` l.428 | `OriginalContratTests` |
+
+Écart assumé : sans `telephone_masked` ni `expire_dans_minutes` dans un succès d'envoi, la session annonce « Code
+envoyé au numéro masqué. Valide 10 min. » (`LibellesWeb.SignatureOtp.numeroMasque`, l.296, et la durée du minuteur,
+l.145) là où le web afficherait `undefined`.
 
 ## En attente de Gabrielle
 
