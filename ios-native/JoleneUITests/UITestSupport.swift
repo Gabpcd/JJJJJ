@@ -124,6 +124,8 @@ class JoleneUITestCase: XCTestCase {
     static let maximumChargedEvaluation: TimeInterval = 5
     /// Intervalle entre deux évaluations, celui de `XCTNSPredicateExpectation`.
     static let evaluationInterval: TimeInterval = 1
+    /// Délai par défaut de `require`.
+    static let defaultTimeout: TimeInterval = 15
 
     /// Attente bornée d'un état de l'app : la condition est évaluée environ chaque seconde jusqu'à
     /// être vraie, pendant `timeout` secondes décomptées sur l'horloge monotone
@@ -150,8 +152,8 @@ class JoleneUITestCase: XCTestCase {
     /// après le blocage. Une évaluation qui ne rend jamais la main n'est interrompue que par le délai
     /// d'exécution du test (`executionTimeAllowance`). Tout échec est rapporté à la ligne de
     /// l'appelant.
-    func require(_ description: String, timeout: TimeInterval = 15, file: StaticString = #filePath, line: UInt = #line,
-                 condition: () -> Bool) {
+    func require(_ description: String, timeout: TimeInterval = JoleneUITestCase.defaultTimeout,
+                 file: StaticString = #filePath, line: UInt = #line, condition: () -> Bool) {
         var wait = RequireWait(timeout: timeout, maximumCharged: Self.maximumChargedEvaluation)
         var satisfied = false
         while true {
@@ -275,20 +277,39 @@ class JoleneUITestCase: XCTestCase {
     /// (iPad paysage : le clavier ouvert pour l'email couvre la moitié basse) est d'abord remonté
     /// dans la zone visible hors clavier, puis touché ; le focus est ensuite exigé, car
     /// `typeText` sans focus échoue (« Neither element nor any descendant has keyboard focus »).
+    /// Le premier appel du processus de test attend sur `coldTextInputTimeout`, les suivants sur
+    /// `defaultTimeout`.
     func focus(_ field: XCUIElement, in container: XCUIElement) {
-        require("Le champ à saisir est affiché") { self.containerVisible(field) }
+        let timeout = Self.textInputWarm ? Self.defaultTimeout : Self.coldTextInputTimeout
+        require("Le champ à saisir est affiché", timeout: timeout) { self.containerVisible(field) }
         var attempts = 0
         while coveredByKeyboard(field) && attempts < 10 {
             drag(container, fromY: 0.6, toY: 0.3)
             attempts += 1
         }
-        require("Le champ à saisir est atteignable hors clavier") { self.visible(field) && !self.coveredByKeyboard(field) }
+        require("Le champ à saisir est atteignable hors clavier", timeout: timeout) {
+            self.visible(field) && !self.coveredByKeyboard(field)
+        }
         field.tap()
         if !hasKeyboardFocus(field) {
             field.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5)).tap()
         }
-        require("Le champ a le focus clavier avant la saisie") { self.hasKeyboardFocus(field) }
+        require("Le champ a le focus clavier avant la saisie", timeout: timeout) { self.hasKeyboardFocus(field) }
+        Self.textInputWarm = true
     }
+
+    /// Délai (donc plafond de temps non décompté) des attentes du PREMIER `focus` du processus de
+    /// test : premier champ de saisie interrogé après le premier lancement de l'app sur un
+    /// simulateur fraîchement démarré, système de saisie et d'accessibilité à froid. Sur six runs
+    /// CI (42489677193 à 42523240142, 18 jobs UI), les requêtes de plus de 5 s du premier test
+    /// portent toutes sur le champ `login-email` (6,1 à 10,7 s), dont une de 31 s que XCTest a
+    /// lui-même relancée (« Find the "login-email" TextField (retry 1) », run 42523240142,
+    /// ipad-landscape) : 29,4 s non décomptées, au-delà du plafond de 15 s. Ces seules attentes
+    /// tolèrent 60 s non décomptées, toujours bornées et tracées par `require` ; les `focus`
+    /// suivants, et toutes les autres attentes, gardent `defaultTimeout`.
+    static let coldTextInputTimeout: TimeInterval = 60
+    /// Vrai dès qu'un `focus` a abouti dans ce processus de test (les tests s'y suivent en série).
+    private static var textInputWarm = false
 
     // MARK: Barre d'onglets
 
