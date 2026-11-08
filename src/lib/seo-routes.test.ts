@@ -92,6 +92,18 @@ describe('routes SEO', () => {
     expect(meta.h1).toBe('Infirmier (IDE) : missions à Lyon');
   });
 
+  it('sigles professionnels jamais mis en minuscules (titres, H1, intros, liens)', () => {
+    const fautifs: string[] = [];
+    for (const p of toutesLesRoutesSeo()) {
+      for (const t of [p.title, p.description, p.h1, ...p.intro, ...p.liens.map((l) => l.label)]) {
+        if (/\((ide|aes|as|ibode|iade|rpps)\)/.test(t)) fautifs.push(`${p.path} : ${t.slice(0, 80)}`);
+      }
+    }
+    expect(fautifs).toEqual([]);
+    const lyon = toutesLesRoutesSeo().find((p) => p.path === '/emploi-soignant/lyon/infirmier-ide')!;
+    expect(lyon.intro[0]).toMatch(/^Vous êtes infirmier \(IDE\) et cherchez une mission à Lyon/);
+  });
+
   it('slug inconnu ou hors périmètre : aucune page ville × métier résolue', () => {
     expect(resoudreVilleMetier('inconnue', 'infirmier-ide')).toBeNull();
     expect(resoudreVilleMetier('paris', 'pharmacien')).toBeNull();
@@ -191,12 +203,13 @@ describe('HTML statique et sitemap', () => {
     }
   });
 
-  it('régénère le sitemap avec lastmod du build et conserve les URL non SEO', async () => {
+  it('régénère le sitemap sans lastmod figé au build et conserve les URL non SEO', async () => {
     const xml = await readFile(path.join(dist, 'sitemap.xml'), 'utf8');
     expect(xml).toContain('<loc>https://jolene.app/</loc><lastmod>2026-06-15</lastmod>');
     expect(xml).toContain('<loc>https://jolene.app/cgu</loc>');
-    expect(xml).toContain('<loc>https://jolene.app/emploi-soignant/lyon/infirmier-ide</loc><lastmod>2026-11-09</lastmod>');
-    expect(xml).toContain('<loc>https://jolene.app/devenir-soignant</loc><lastmod>2026-11-09</lastmod>');
+    expect(xml).toContain('<loc>https://jolene.app/emploi-soignant/lyon/infirmier-ide</loc><changefreq>');
+    expect(xml).toContain('<loc>https://jolene.app/devenir-soignant</loc><changefreq>');
+    expect(xml).not.toContain('2026-11-09');
     expect(xml.match(/<loc>/g)).toHaveLength(resultat.urlSitemap);
     expect(xml.match(/devenir-soignant/g)).toHaveLength(1);
     expect(xml.match(/\/emploi-soignant\/paris<\/loc>/g)).toHaveLength(1);

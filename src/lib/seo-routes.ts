@@ -29,14 +29,15 @@ export const VILLES_VILLE_METIER: VilleSEO[] = VILLES_SEO.slice(0, NB_VILLES_VIL
 
 export const PROFESSIONS_VILLE_METIER = ['IDE', 'AS', 'AES', 'MEDECIN', 'KINE', 'SAGE_FEMME'] as const;
 
-interface NomsMetier { court: string; pluriel: string }
+/** court : titres et liens ; phrase : forme employée en milieu de phrase (sigles conservés en capitales). */
+interface NomsMetier { court: string; phrase: string; pluriel: string }
 const NOMS_METIER: Record<string, NomsMetier> = {
-  IDE: { court: 'Infirmier (IDE)', pluriel: 'infirmiers' },
-  AS: { court: 'Aide-soignant', pluriel: 'aides-soignants' },
-  AES: { court: 'Accompagnant éducatif et social (AES)', pluriel: 'accompagnants éducatifs et sociaux' },
-  MEDECIN: { court: 'Médecin', pluriel: 'médecins' },
-  KINE: { court: 'Kinésithérapeute', pluriel: 'kinésithérapeutes' },
-  SAGE_FEMME: { court: 'Sage-femme', pluriel: 'sages-femmes' },
+  IDE: { court: 'Infirmier (IDE)', phrase: 'infirmier (IDE)', pluriel: 'infirmiers' },
+  AS: { court: 'Aide-soignant', phrase: 'aide-soignant', pluriel: 'aides-soignants' },
+  AES: { court: 'Accompagnant éducatif et social (AES)', phrase: 'accompagnant éducatif et social (AES)', pluriel: 'accompagnants éducatifs et sociaux' },
+  MEDECIN: { court: 'Médecin', phrase: 'médecin', pluriel: 'médecins' },
+  KINE: { court: 'Kinésithérapeute', phrase: 'kinésithérapeute', pluriel: 'kinésithérapeutes' },
+  SAGE_FEMME: { court: 'Sage-femme', phrase: 'sage-femme', pluriel: 'sages-femmes' },
 };
 
 export const PROFESSIONS_SEO_VILLE_METIER: ProfessionSEO[] = PROFESSIONS_VILLE_METIER
@@ -214,7 +215,7 @@ export function metaVilleMetier(ville: VilleSEO, p: ProfessionSEO): PageSEO {
   const noms = NOMS_METIER[p.valeur];
   const bmo = phraseBmo(ville.departement, p.valeur);
   const intro = [
-    `Vous êtes ${noms.court.toLowerCase()} et cherchez une mission à ${ville.nom} (département ${ville.departement}) ? Jolene met en relation des professionnels de santé vérifiés et des établissements de la zone (hôpitaux, cliniques, EHPAD, structures médico-sociales) pour des vacations, des CDD courts et des remplacements.`,
+    `Vous êtes ${noms.phrase} et cherchez une mission à ${ville.nom} (département ${ville.departement}) ? Jolene met en relation des professionnels de santé vérifiés et des établissements de santé et médico-sociaux (hôpitaux, cliniques, EHPAD) pour des vacations, des CDD courts et des remplacements.`,
     p.description,
     'Le type de contrat et le taux horaire sont affichés sur chaque annonce, avant votre candidature.',
   ];

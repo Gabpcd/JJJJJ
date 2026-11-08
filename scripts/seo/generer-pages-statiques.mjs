@@ -8,7 +8,8 @@
  *    sémantique minimal (H1, intro, liens internes) dans <div id="root"> ;
  *    src/main.tsx utilise createRoot().render() : React REMPLACE ce contenu
  *    au montage (pas d'hydratation, donc aucun mismatch possible) ;
- *  - régénère dist/sitemap.xml (lastmod = date du build) en conservant les URL
+ *  - régénère dist/sitemap.xml (sans lastmod pour les routes SEO : une date de build
+ *    changerait à chaque déploiement sans que le contenu change) en conservant les URL
  *    de public/sitemap.xml qui ne sont pas des routes SEO.
  *
  * Source de vérité : src/lib/seo-routes.ts (même module que les composants React),
@@ -64,6 +65,8 @@ function nettoyerHead(html) {
     .replace(/<meta\s+name="twitter:(?:title|description)"[^>]*>\s*/gi, '');
 }
 
+export const STYLE_PRERENDU = '<style>main[data-prerender]{max-width:48rem;margin:0 auto;padding:24px 16px;font-family:system-ui,-apple-system,sans-serif;line-height:1.5;color:#1f1a2e}main[data-prerender] h1{font-size:1.75rem;line-height:1.2;font-weight:700;margin:0 0 16px}main[data-prerender] p{margin:0 0 12px}main[data-prerender] ul{padding-left:20px}main[data-prerender] a{color:inherit;text-decoration:underline}</style>';
+
 export function blocHead(page, siteUrl) {
   const url = `${siteUrl}${page.path}`;
   return [
@@ -76,6 +79,8 @@ export function blocHead(page, siteUrl) {
     `<meta property="og:url" content="${echapper(url)}" />`,
     `<meta name="twitter:title" content="${echapper(page.title)}" />`,
     `<meta name="twitter:description" content="${echapper(page.description)}" />`,
+    // Lisible avant le chargement du JS (réseau lent) ; React remplace ce bloc au montage.
+    STYLE_PRERENDU,
   ].map((l) => `    ${l}`).join('\n') + '\n';
 }
 
@@ -109,8 +114,8 @@ export function entreesSitemapConservees(sitemapSource, cheminsGeneres, siteUrl)
   return gardees;
 }
 
-export function genererSitemap({ pages, conservees, date, siteUrl }) {
-  const url = (p) => `  <url><loc>${echapper(siteUrl + p.path)}</loc><lastmod>${date}</lastmod><changefreq>${p.frequence}</changefreq><priority>${p.priorite}</priority></url>`;
+export function genererSitemap({ pages, conservees, siteUrl }) {
+  const url = (p) => `  <url><loc>${echapper(siteUrl + p.path)}</loc><changefreq>${p.frequence}</changefreq><priority>${p.priorite}</priority></url>`;
   const section = (titre, liste) => liste.length ? [`  <!-- ${titre} -->`, ...liste.map(url), ''] : [];
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -151,7 +156,7 @@ export async function genererPagesStatiques({ racine = RACINE_DEFAUT, dist = pat
     /* pas de sitemap source : seules les routes SEO sont listées */
   }
   const conservees = entreesSitemapConservees(sourceSitemap, new Set(pages.map((p) => p.path)), siteUrl);
-  const sitemap = genererSitemap({ pages, conservees, date, siteUrl });
+  const sitemap = genererSitemap({ pages, conservees, siteUrl });
   await writeFile(path.join(dist, 'sitemap.xml'), sitemap);
 
   return { pages: pages.length, urlSitemap: conservees.length + pages.length, conservees: conservees.length, date };
@@ -166,6 +171,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const i = process.argv.indexOf('--dist');
   const dist = i > -1 ? path.resolve(process.argv[i + 1]) : undefined;
   genererPagesStatiques({ dist })
-    .then((r) => console.log(`[seo] ${r.pages} pages statiques générées, sitemap : ${r.urlSitemap} URL (${r.conservees} conservées), lastmod ${r.date}`))
+    .then((r) => console.log(`[seo] ${r.pages} pages statiques générées, sitemap : ${r.urlSitemap} URL (${r.conservees} conservées)`))
     .catch((e) => { console.error('[seo] échec :', e); process.exit(1); });
 }

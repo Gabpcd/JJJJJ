@@ -18,6 +18,7 @@ import {
   PROFESSIONS_SEO_VILLE_METIER,
   VILLES_VILLE_METIER,
   cheminVilleMetier,
+  estVilleVilleMetier,
 } from '@/lib/seo-routes';
 
 /**
@@ -30,10 +31,14 @@ export default function VilleProfessionLanding() {
 
   if (!resolu) {
     const villeConnue = villeSlug ? getVilleBySlug(villeSlug) : undefined;
+    // Une ville connue hors périmètre ville × métier n'a que sa page ville : on renvoie
+    // vers elle et vers les pages métier, jamais vers d'autres pages non référencées.
     const liens = villeConnue
       ? [
           { href: cheminVille(villeConnue.slug), label: `Missions soignants à ${villeConnue.nom}` },
-          ...PROFESSIONS_SEO_VILLE_METIER.map((p) => ({ href: cheminVilleMetier(villeConnue.slug, p.slug), label: `${p.label} à ${villeConnue.nom}` })),
+          ...PROFESSIONS_SEO_VILLE_METIER.map((p) => (estVilleVilleMetier(villeConnue.slug)
+            ? { href: cheminVilleMetier(villeConnue.slug, p.slug), label: `${p.label} à ${villeConnue.nom}` }
+            : { href: cheminMetier(p.slug), label: `Missions ${p.label}` })),
         ]
       : VILLES_VILLE_METIER.map((v) => ({ href: cheminVille(v.slug), label: v.nom }));
     return <PageSEOIntrouvable titre="Page non référencée" liens={liens} />;

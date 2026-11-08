@@ -49,6 +49,15 @@ describe('pages SEO : slug inconnu = noindex', () => {
     ouvrir('/emploi-soignant/inconnue/medecin');
     expect(robots()).toBe('noindex, nofollow');
   });
+
+  it('ville connue hors périmètre ville × métier : liens vers la page ville et les pages métier, jamais vers des pages non référencées', () => {
+    ouvrir('/emploi-soignant/bourges/infirmier-ide');
+    expect(robots()).toBe('noindex, nofollow');
+    const hrefs = [...document.querySelectorAll('a')].map((a) => a.getAttribute('href'));
+    expect(hrefs).toContain('/emploi-soignant/bourges');
+    expect(hrefs).toContain('/metier/infirmier-ide');
+    expect(hrefs.filter((h) => h?.startsWith('/emploi-soignant/bourges/'))).toEqual([]);
+  });
 });
 
 describe('pages SEO connues', () => {
