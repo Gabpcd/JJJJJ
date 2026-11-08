@@ -43,9 +43,8 @@ extension LigneHistoriqueEffectifs: Sendable where Etablissement: Sendable {}
 
 /// Port de `src/lib/presencesSoignantUi.ts`.
 ///
-/// La construction des listes de présences (aujourd'hui, à venir, actives, historique :
-/// `PresencesSoignant.tsx` l.208-276) sera portée par la tranche T2b dans `ListesPresences.swift`,
-/// avec ses vecteurs golden, après la PR web W1 qui l'extrait vers `src/lib/presences-soignant-listes.ts`.
+/// Les onglets Aujourd'hui, À venir et Actives (`src/lib/presences-soignant-listes.ts`, extrait de
+/// `PresencesSoignant.tsx` par la PR web W1) sont portés par `ListesPresences` (tranche T2b).
 public enum HistoriquePresences {
     /// Une ligne par mission sans présence legacy qui a au moins un segment EFFECTIF fermé.
     /// `missionsAvecPresence` : `mission_id` des présences lues (nuls et vides ignorés).
