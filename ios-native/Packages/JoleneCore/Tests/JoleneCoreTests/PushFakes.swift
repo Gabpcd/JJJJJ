@@ -185,6 +185,14 @@ struct PushMissions: MissionsPort {
     func mission(id: String, context: MissionReadContext) async throws -> Mission? { nil }
 }
 
+/// Profil illisible (réseau coupé après la restauration) : `SessionController` publie
+/// `.signedOut(profileLoadFailedMessage)` alors que le SDK détient encore la session.
+struct MissionsHorsLigne: MissionsPort {
+    func profile(userId: String) async throws -> SoignantProfile? { throw JoleneError(.network, "hors ligne") }
+    func listMissions(context: MissionReadContext, filters: MissionFilters) async throws -> [Mission] { [] }
+    func mission(id: String, context: MissionReadContext) async throws -> Mission? { nil }
+}
+
 /// Monde de test du push : contrôleur, doubles et coordinateur reliés au même journal.
 struct MondePush {
     static let utilisateur = AuthenticatedUser(id: "u-push", email: "u-push@example.invalid",

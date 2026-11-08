@@ -4,10 +4,12 @@ import XCTest
 /// Crochets push de `SessionStore` (lot 3, T4 ; blueprint §2.5 « Déconnexion volontaire » et
 /// correction 11) : `.ready` d'un nouvel epoch → `surReady` ; `signOut` → désactivation du token
 /// (JWT encore valide, bornée à 2,5 s) AVANT `controller.signOut()`, une seule fois même sur un double
-/// tap ; toute fin de session subie publiée (événement `.signedOut` du SDK, revalidation qui ne trouve
-/// plus de session, depuis un espace prêt ou bloqué) → désinscription locale seule, sans RPC, APRÈS la
-/// publication de l'état ; lancement à froid sans session → oubli d'un token laissé par la session
-/// précédente ; suppression de compte (`LocalSignOut` du lot 1, T8) → désinscription locale sans RPC.
+/// tap ; absence de session **confirmée par le contrôleur** (événement `.signedOut` du SDK, restauration qui
+/// ne trouve plus de session) après une identité (espace prêt ou bloqué) → désinscription locale seule, sans
+/// RPC, APRÈS la publication de l'état ; même absence sans identité (lancement à froid) → oubli d'un token
+/// laissé par la session précédente ; `.signedOut` transitoire (restauration, profil illisible hors ligne :
+/// le SDK détient encore la session) → rien, token conservé ; suppression de compte (`LocalSignOut` du
+/// lot 1, T8) → désinscription locale sans RPC.
 /// Aucune attente arbitraire : chaque test se synchronise sur une condition observable
 /// (`pushEnCours`, `finDeSessionPush`, `evenementsAuthTraites`, journal des doubles).
 @MainActor
@@ -117,7 +119,40 @@ final class SessionStorePushTests: XCTestCase {
         XCTAssertEqual(monde.journal.entrees.filter { $0 == "auth.signOut" }.count, 1)
     }
 
-    func testSignedOutEmisPendantUneDeconnexionVolontaireNeDesinscritPasDeuxFois() async throws {
+    func testSignedOutEmisPendantLaDesactivationNeDesinscritQuUneFois() async throws {
+        // Cas gardé par `finsDeSessionVoulues` : le SDK émet `.signedOut` (session révoquée ailleurs) pendant
+        // la RPC de désactivation (jusqu'à 2,5 s), alors que l'identité est encore active dans le contrôleur.
+        // Le contrôleur confirme l'absence et publie `.signedOut`, mais la fin est voulue : le coordinateur est
+        // déjà prévenu, aucune désinscription « subie » ne s'ajoute.
+        let barriere = Gate()
+        let monde = MondePush()
+        let store = store(monde)
+        store.observeAuthEvents()
+        await store.start()
+        await store.pushEnCours?.value
+        await monde.gateway.regler(barriereDesactivation: barriere)
+        let deconnexion = Task { await store.signOut() }
+        let rpc = "desactiver:\(hexA)"
+        await waitUntil { monde.journal.entrees.contains(rpc) } // RPC commencée, retenue
+        let traites = store.evenementsAuthTraites
+        monde.events.emit(.signedOut)
+        await waitUntil { @MainActor in store.evenementsAuthTraites == traites + 1 }
+        guard case .signedOut = store.state else {
+            return XCTFail("attendu : `.signedOut` du SDK publié pendant la RPC, obtenu \(store.state)")
+        }
+        XCTAssertNil(store.finDeSessionPush, "fin voulue en cours : aucune désinscription subie lancée")
+        XCTAssertFalse(monde.journal.entrees.contains("desinscrire"), "la désinscription suit la RPC, une seule fois")
+        await barriere.open()
+        await deconnexion.value
+        XCTAssertNil(store.finDeSessionPush)
+        XCTAssertEqual(store.state, .signedOut(message: nil))
+        XCTAssertEqual(monde.journal.entrees(prefixe: "desactiver:"), [rpc])
+        XCTAssertEqual(monde.journal.entrees.filter { $0 == "desinscrire" }.count, 1)
+        XCTAssertEqual(monde.journal.entrees.filter { $0 == "oublier" }.count, 1)
+        XCTAssertEqual(monde.journal.entrees.filter { $0 == "auth.signOut" }.count, 1)
+    }
+
+    func testSignedOutEmisApresUneDeconnexionVolontaireEstIgnore() async throws {
         // Le SDK émet `.signedOut` après la révocation : l'événement est ignoré par le contrôleur
         // (aucune identité active), la désinscription locale n'est pas rejouée.
         let monde = MondePush()
@@ -252,6 +287,142 @@ final class SessionStorePushTests: XCTestCase {
         let desinscriptions = await monde.registrar.desinscriptions
         XCTAssertEqual(desinscriptions, 0, "rien à nettoyer : aucun appel système inutile")
         XCTAssertEqual(monde.journal.entrees, [])
+    }
+
+    func testRelanceApresUnLancementHorsLigneSansSessionOublieLeToken() async throws {
+        // Lancement hors ligne (rien n'est oublié), puis « Réessayer » en ligne : la restauration ne trouve
+        // plus de session (absence confirmée) — le token laissé par la session précédente est oublié, même
+        // si un `.signedOut` transitoire a déjà été publié dans ce processus.
+        let memorise = TokenPushMemorise(token: hexA, userId: MondePush.utilisateur.id)
+        let restaurations = MutableAuthState(restored: nil, restoreError: JoleneError(.network, "hors ligne"))
+        let monde = MondePush(memorise: memorise, restaurations: restaurations)
+        let store = store(monde)
+        await store.start()
+        XCTAssertEqual(store.state, .signedOut(message: SessionController.restoreFailedMessage))
+        XCTAssertNil(store.finDeSessionPush)
+        await restaurations.set(restored: nil, restoreError: nil)
+        await store.start()
+        XCTAssertEqual(store.state, .signedOut(message: nil))
+        await store.finDeSessionPush?.value
+        XCTAssertEqual(monde.journal.entrees, ["desinscrire", "oublier"], "absence confirmée : oubli sans RPC")
+        XCTAssertNil(monde.memoire.lire())
+    }
+
+    // MARK: - Fins de session transitoires (le SDK détient encore la session)
+
+    func testLancementAFroidHorsLigneConserveLeTokenMemorise() async throws {
+        // Jeton d'accès expiré et refresh impossible hors ligne : `start()` publie
+        // `.signedOut(restoreFailedMessage)` (« Réessayer » sans mot de passe) alors que le SDK détient
+        // encore la session. Rien n'est désinscrit ni oublié : l'appareil continue de recevoir les push.
+        let memorise = TokenPushMemorise(token: hexA, userId: MondePush.utilisateur.id)
+        let restaurations = MutableAuthState(restored: nil, restoreError: JoleneError(.network, "hors ligne"))
+        let monde = MondePush(memorise: memorise, restaurations: restaurations)
+        let store = store(monde)
+        store.observeAuthEvents()
+        await store.start()
+        XCTAssertEqual(store.state, .signedOut(message: SessionController.restoreFailedMessage))
+        XCTAssertTrue(store.canRetryRestore)
+        XCTAssertNil(store.finDeSessionPush, "échec transitoire : aucune fin de session pour le push")
+        let desinscriptions = await monde.registrar.desinscriptions
+        XCTAssertEqual(desinscriptions, 0, "aucun `unregisterForRemoteNotifications()`")
+        XCTAssertEqual(monde.memoire.lire(), memorise, "token conservé")
+        XCTAssertEqual(monde.journal.entrees, [])
+
+        // Réseau revenu : « Réessayer » rouvre l'espace et réenregistre le même token.
+        await restaurations.set(restored: MondePush.utilisateur, restoreError: nil)
+        await store.start()
+        XCTAssertTrue(store.state.isReady)
+        await store.pushEnCours?.value
+        XCTAssertEqual(monde.journal.entrees(prefixe: "upsert:"), ["upsert:\(hexA):\(MondePush.utilisateur.id)"])
+        XCTAssertFalse(monde.journal.entrees.contains("desinscrire"))
+    }
+
+    func testLancementAFroidAvecProfilIllisibleConserveLeTokenMemorise() async throws {
+        // Session restaurée, profil illisible hors ligne : `.signedOut(profileLoadFailedMessage)` sans que la
+        // session ait disparu. Rien n'est désinscrit ni oublié.
+        let memorise = TokenPushMemorise(token: hexA, userId: MondePush.utilisateur.id)
+        let monde = MondePush(memorise: memorise, missions: MissionsHorsLigne())
+        let store = store(monde)
+        store.observeAuthEvents()
+        await store.start()
+        XCTAssertEqual(store.state, .signedOut(message: SessionController.profileLoadFailedMessage))
+        XCTAssertNil(store.finDeSessionPush, "échec transitoire : aucune fin de session pour le push")
+        let desinscriptions = await monde.registrar.desinscriptions
+        XCTAssertEqual(desinscriptions, 0)
+        XCTAssertEqual(monde.memoire.lire(), memorise, "token conservé")
+        XCTAssertEqual(monde.journal.entrees, [])
+    }
+
+    func testEspaceBloqueRevalideHorsLigneConserveLeToken() async throws {
+        // Espace bloqué (profil incomplet), puis revalidation hors ligne (`.blocked → .loading →
+        // .signedOut(restoreFailedMessage)`) : l'identité n'est pas perdue, rien n'est désinscrit.
+        let memorise = TokenPushMemorise(token: hexA, userId: MondePush.utilisateur.id)
+        let restaurations = MutableAuthState(restored: MondePush.utilisateur, restoreError: nil)
+        let monde = MondePush(memorise: memorise, restaurations: restaurations, missions: NeutralMissions())
+        let store = store(monde)
+        await store.start()
+        guard case .blocked = store.state else { return XCTFail("attendu : espace bloqué, obtenu \(store.state)") }
+        await restaurations.set(restored: MondePush.utilisateur, restoreError: JoleneError(.network, "hors ligne"))
+        await store.start()
+        XCTAssertEqual(store.state, .signedOut(message: SessionController.restoreFailedMessage))
+        XCTAssertNil(store.finDeSessionPush, "échec transitoire : aucune fin de session pour le push")
+        let desinscriptions = await monde.registrar.desinscriptions
+        XCTAssertEqual(desinscriptions, 0)
+        XCTAssertEqual(monde.memoire.lire(), memorise, "token conservé")
+        XCTAssertEqual(monde.journal.entrees, [])
+
+        // Session effacée ensuite (absence confirmée) : l'identité bloquée est perdue, désinscription seule.
+        await restaurations.set(restored: nil, restoreError: nil)
+        await store.start()
+        XCTAssertEqual(store.state, .signedOut(message: nil))
+        await store.finDeSessionPush?.value
+        XCTAssertEqual(monde.journal.entrees, ["desinscrire", "oublier"])
+    }
+
+    // MARK: - Cause des fins de session (contrôleur)
+
+    func testSeulesLesAbsencesConfirmeesComptent() async throws {
+        // La cause vient du contrôleur, lue avec l'état (`publication`) : ni le texte du message, ni
+        // `canRetryRestore` (publié après `state`). Restauration vide et `.signedOut` du SDK avec une identité
+        // active comptent ; échec de restauration, profil illisible, connexion refusée, déconnexion voulue,
+        // suppression de compte et `.signedOut` sans identité ne comptent pas.
+        let restaurations = MutableAuthState(restored: nil, restoreError: JoleneError(.network, "hors ligne"))
+        let monde = MondePush(restaurations: restaurations)
+        let controller = monde.controller
+
+        var publication = await controller.startPublication()
+        XCTAssertEqual(publication.state, .signedOut(message: SessionController.restoreFailedMessage))
+        XCTAssertEqual(publication.absencesConfirmees, 0, "échec transitoire de restauration")
+
+        await restaurations.set(restored: nil, restoreError: nil)
+        publication = await controller.startPublication()
+        XCTAssertEqual(publication.state, .signedOut(message: nil))
+        XCTAssertEqual(publication.absencesConfirmees, 1, "restauration sans session")
+
+        publication = await controller.handleAuthEventPublication(.signedOut)
+        XCTAssertEqual(publication.absencesConfirmees, 1, "`.signedOut` du SDK sans identité active : ignoré")
+
+        await restaurations.set(restored: MondePush.utilisateur, restoreError: nil)
+        publication = await controller.startPublication()
+        XCTAssertTrue(publication.state.isReady)
+        publication = await controller.handleAuthEventPublication(.signedOut)
+        XCTAssertEqual(publication.state, .signedOut(message: SessionController.sessionExpiredMessage))
+        XCTAssertEqual(publication.absencesConfirmees, 2, "session effacée par le SDK")
+
+        _ = await controller.signIn(email: "u-push@example.invalid", password: "fictif")
+        _ = await controller.signOut()
+        var lue = await controller.publication
+        XCTAssertEqual(lue, SessionController.Publication(state: .signedOut(message: nil), absencesConfirmees: 2),
+                       "déconnexion voulue")
+        _ = await controller.signIn(email: "u-push@example.invalid", password: "fictif")
+        _ = await controller.signOutLocally()
+        lue = await controller.publication
+        XCTAssertEqual(lue.absencesConfirmees, 2, "suppression de compte")
+
+        let profilIllisible = MondePush(missions: MissionsHorsLigne())
+        publication = await profilIllisible.controller.startPublication()
+        XCTAssertEqual(publication.state, .signedOut(message: SessionController.profileLoadFailedMessage))
+        XCTAssertEqual(publication.absencesConfirmees, 0, "profil illisible : la session existe encore")
     }
 
     // MARK: - Suppression de compte
