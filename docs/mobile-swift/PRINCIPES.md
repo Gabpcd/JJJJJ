@@ -96,6 +96,10 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   `.blocked(.unsupportedRole(nil))`, test `testUnknownRoleIsBlockedWithNil`) renvoie vers
   jolene.app sans ce repli : l'inscription est hors périmètre natif jusqu'au lot 3, qui
   portera le repli `parcours_inscription` avec l'inscription (`PARITE_SOIGNANT.md`).
+  Lot 3, T7 : le repli est porté **dans la vue** — `RootView` sert ces `.blocked` (rôle `INCONNU` ou profil
+  soignant absent, `OnboardingResolution.concerne`) par l'aiguillage d'onboarding (`OnboardingRootView`), qui relit
+  `parcours_inscription` ; `RoleResolution`, `SessionController` et `MobileAccess` sont inchangés et aucun espace
+  soignant n'est ouvert sans profil (D9).
 - Chaque appel de port de la résolution (restauration, rôle, profil) est borné à 15 s
   (`SessionController.resolutionTimeout`, comme le pilote) ; au-delà, l'état est
   récupérable (`.signedOut` avec message générique, epoch inchangé), jamais un chargement

@@ -98,7 +98,7 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_desactiver_mon_token_push` | consommée lot 3 (T4) | 3 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_obtenir_mes_preferences_notifications` | consommée lot 3 (T6) | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_modifier_preferences_notifications` | consommée lot 3 (T6) | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_demarrer_inscription` | à venir | 3 (T7, B9) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
+| `fn_demarrer_inscription` | consommée lot 3 (T7) | 3 (T7) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
 | `fn_enregistrer_parcours_inscription` | à venir | 3 (T8, B9) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
 | `fn_types_exercice_autorises` | à venir | 3 (T8, T9) | PUBLIC_VOLONTAIRE | anon, authenticated, service_role | déclarée |
 | `fn_modifier_mon_profil` | consommée lot 3 (T9) | 3 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -944,7 +944,15 @@ CREATE OR REPLACE FUNCTION "public"."fn_modifier_preferences_notifications"("p_c
 
 ## fn_demarrer_inscription
 
-- **Statut natif** : à venir (lot 3, T7) — **B9** (consentement CGU relayé, D18).
+- **Statut natif** : consommée (lot 3, T7) par `JoleneSupabase/Inscription/SupabaseInscriptionGateway.swift`, appelée par
+  `JoleneCore/Inscription/InscriptionModels.swift` (`InscriptionRapideModel` après un `signUp` qui ouvre la session ou
+  « Je suis soignant » ; `OnboardingModel` sur l'intention `user_metadata.inscription_progressive` sans parcours) —
+  **B9** (consentement CGU relayé par `p_cgu`, D18) : PR préparée, jamais mergée sans le go de Gabrielle. Exceptions
+  restituées par `exceptionsMetier` 22023 et 23505 (`SupabaseInscriptionGateway.exceptionsDemarrage`), traduites par
+  `InscriptionRules.refusDemarrage` ; la ligne rendue est relue en liste blanche (`OnboardingResolution.parcours`,
+  propriétaire = utilisateur de la session). Le parcours est lu sous RLS (`parcours_inscription`,
+  `user_id,type_compte,donnees,consentement_cgu_le,modifie_le`). Lignes du dump re-baseliné : définition l.30148-30189,
+  exceptions l.30159, l.30163, l.30167, l.30176.
 - **Usage prévu** : Création du parcours d'inscription après un `signUp` qui ouvre la session, ou à la première
   session au rôle `INCONNU` portant l'intention `user_metadata.inscription_progressive` (repli de `useRole.ts`
   l.150-170) ; paramètres de l'intention web (`src/lib/inscriptionProgressive.ts` l.26-39) : `p_type_compte = 'SOIGNANT'`,
