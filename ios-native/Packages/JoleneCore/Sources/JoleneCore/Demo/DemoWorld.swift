@@ -33,7 +33,7 @@ public enum DemoWorld {
     /// câblé ici dans la même PR que sa tranche ; un port encore stub y est nommé explicitement
     /// (`DemoWorldTests.testAucunPortNonCable`).
     public static func gateways(drapeaux: [String: Bool]) -> Gateways {
-        Gateways(
+        var gateways = Gateways(
             auth: DemoAuthGateway(),
             role: DemoRoleGateway(),
             missions: DemoMissionsGateway(),
@@ -49,6 +49,21 @@ public enum DemoWorld {
             recovery: UnwiredRecoveryPort(),            // T10
             justificatifs: UnwiredJustificatifStoragePort() // T7
         )
+        câblerLot2(&gateways)
+        return gateways
+    }
+
+    /// Lot 2 (blueprint `LOT2_PLAN.md` §2.2) : seul point d'assignation des ports du lot 2 du monde démo,
+    /// après l'init du lot 1 (aucun troisième init). Chaque tranche y remplace son stub par sa gateway démo
+    /// dans la même PR qu'au monde Supabase (`SupabaseGateways.câblerLot2`) et retire le port de
+    /// `DemoWorldTests.portsEnAttenteLot2`. L'appareil démo (GPS, réseau, terminal) n'est pas un port
+    /// backend : `Appareil.demo(gps:reseau:)`, injecté par `AppContainer` (T4b).
+    static func câblerLot2(_ gateways: inout Gateways) {
+        gateways.pointage = UnwiredPointagePort()                  // T3
+        gateways.contestation = UnwiredContestationPort()          // T5b
+        gateways.notation = UnwiredNotationPort()                  // T5a
+        gateways.documents = UnwiredDocumentsPort()                // T6
+        gateways.contrats = UnwiredContratsPort()                  // T8
     }
 }
 

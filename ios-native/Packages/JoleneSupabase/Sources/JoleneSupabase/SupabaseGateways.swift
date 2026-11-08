@@ -34,7 +34,7 @@ public enum SupabaseGateways {
         clock: any ClockPort = SystemClock(),
         enrich: @escaping MissionQuery.Enricher = MissionQuery.defaultEnrich
     ) -> Gateways {
-        Gateways(
+        var gateways = Gateways(
             auth: SupabaseAuthGateway(client: client),
             role: SupabaseRoleGateway(client: client),
             missions: SupabaseMissionsGateway(client: client, clock: clock, enrich: enrich),
@@ -50,6 +50,20 @@ public enum SupabaseGateways {
             recovery: UnwiredRecoveryPort(),            // T10
             justificatifs: UnwiredJustificatifStoragePort() // T7
         )
+        câblerLot2(&gateways, client: client)
+        return gateways
+    }
+
+    /// Lot 2 (blueprint `LOT2_PLAN.md` §2.2) : seul point d'assignation des ports du lot 2 du monde
+    /// Supabase, après l'init du lot 1 (aucun troisième init). Chaque tranche y remplace son stub par sa
+    /// gateway dans la même PR qu'au monde démo (`DemoWorld.câblerLot2`) ;
+    /// `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes.
+    static func câblerLot2(_ gateways: inout Gateways, client: SupabaseClient) {
+        gateways.pointage = UnwiredPointagePort()                  // T3
+        gateways.contestation = UnwiredContestationPort()          // T5b
+        gateways.notation = UnwiredNotationPort()                  // T5a
+        gateways.documents = UnwiredDocumentsPort()                // T6
+        gateways.contrats = UnwiredContratsPort()                  // T8
     }
 
     /// Construction du client : options vérifiées dans `SupabaseClientOptions` de 2.55.5

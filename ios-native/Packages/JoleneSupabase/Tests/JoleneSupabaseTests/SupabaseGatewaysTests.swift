@@ -50,8 +50,11 @@ final class SupabaseGatewaysTests: XCTestCase {
 
     /// Aucune liste propre à ce monde : les ports encore stubs côté Supabase doivent être
     /// exactement ceux du monde démo (`DemoWorld.gateways()`, figés par la source unique
-    /// `DemoWorldTests.portsEnAttenteLot1`). Une PR qui câble un port dans un seul monde fait
-    /// diverger les deux ensembles et rougit ce test ; T12 exige `unwiredPorts.isEmpty`.
+    /// `DemoWorldTests.portsEnAttenteLot1` et `portsEnAttenteLot2`). Une PR qui câble un port dans
+    /// un seul monde fait diverger les deux ensembles et rougit ce test. T12 (clôture du lot 1)
+    /// exige qu'aucun nom du lot 1 ne reste dans `unwiredPorts`
+    /// (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`), pas `unwiredPorts.isEmpty` :
+    /// les ports du lot 2 y restent nommés tant que ce lot est ouvert.
     func testAucunPortNonCable() {
         let supabase = SupabaseGateways.make(client: TestClient.make()).unwiredPorts
         let demo = DemoWorld.gateways().unwiredPorts
@@ -61,6 +64,29 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(supabase.contains("flags"), "T1 câble les drapeaux")
         XCTAssertFalse(supabase.contains("dashboard"), "T3 câble le tableau de bord")
         XCTAssertFalse(supabase.contains("compte"), "T8 câble la suppression de compte")
+    }
+
+    /// Lot 2 (T1) : `câblerLot2(_:client:)` est le seul point d'assignation des cinq ports du lot 2 du
+    /// monde Supabase ; tant que leurs tranches ne sont pas livrées, chacun est un stub nommé.
+    func testCablerLot2AssigneLesStubsDuLot2() {
+        // Revue fraîche de T1 : témoin posé d'abord dans chaque champ du lot 2, puis `câblerLot2` seul ; sans lui,
+        // le test resterait vert avec une fonction vide (les défauts de `Gateways` sont déjà des stubs).
+        var gateways = SupabaseGateways.make(client: TestClient.make())
+        let temoin = PortTemoinLot2()
+        gateways.pointage = temoin
+        gateways.contestation = temoin
+        gateways.notation = temoin
+        gateways.documents = temoin
+        gateways.contrats = temoin
+        XCTAssertFalse(gateways.unwiredPorts.contains("pointage"), "témoin posé")
+        SupabaseGateways.câblerLot2(&gateways, client: TestClient.make())
+        XCTAssertTrue(gateways.pointage is UnwiredPointagePort, "T3")
+        XCTAssertTrue(gateways.contestation is UnwiredContestationPort, "T5b")
+        XCTAssertTrue(gateways.notation is UnwiredNotationPort, "T5a")
+        XCTAssertTrue(gateways.documents is UnwiredDocumentsPort, "T6")
+        XCTAssertTrue(gateways.contrats is UnwiredContratsPort, "T8")
+        XCTAssertEqual(Array(gateways.unwiredPorts.suffix(5)), ["pointage", "contestation", "notation", "documents", "contrats"])
+        XCTAssertTrue(gateways.audit is SupabaseAuditGateway, "le câblage du lot 1 reste celui de l'init")
     }
 
     func testClientOptionsUsePkceInjectedStorageAndJoleneHeader() {

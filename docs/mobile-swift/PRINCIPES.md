@@ -40,7 +40,19 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   (`DemoWorldTests.portsEnAttenteLot1`) ; `SupabaseGatewaysTests` compare le monde Supabase
   au monde démo, si bien qu'un port câblé dans un seul monde rougit un test. Chaque tranche
   câble son port dans les deux mondes et le retire de la liste dans la même PR ; elle est
-  vide à la clôture du lot (`unwiredPorts.isEmpty`, T12).
+  vide à la clôture du lot : aucun nom du lot 1 dans `unwiredPorts`
+  (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`, T12). Pas
+  `unwiredPorts.isEmpty` : cette liste nomme aussi les ports des lots suivants tant qu'ils sont ouverts.
+- Lot 2 (T1, `docs/mobile-swift/LOT2_PLAN.md` §2.2) : cinq champs ajoutés dans un bloc « Lot 2 »
+  du corps de `Gateways` (`pointage`, `contestation`, `notation`, `documents`, `contrats`), même
+  règle (stubs de `Ports/Lot2Ports.swift`, message `UnwiredPorts.erreur(port:tranche:lot:)` partagé
+  avec le lot 3). Pas de troisième init : chaque monde assigne ses ports du lot 2 après l'init
+  complet du lot 1, dans une fonction unique `câblerLot2(_:)` (`DemoWorld`, `SupabaseGateways`) ;
+  liste attendue unique `DemoWorldTests.portsEnAttenteLot2`. Les capacités d'appareil (position,
+  réseau, identifiant terminal, magasin des reçus durables) ne sont pas des gateways : struct `Appareil`
+  (`Ports/AppareilPorts.swift`), injectée par `AppContainer` à côté de `Gateways`, réelle ou démo.
+  Clôture du lot 2 : `unwiredPorts.filter(Lot2PortsTests.portsLot2.contains).isEmpty` (P10 amendé,
+  `docs/mobile-swift/DECISIONS_LOT2.md`).
 
 ## 3. Aucun succès fabriqué
 
@@ -60,6 +72,12 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
 
 - Avant tout upload Storage et avant tout scan de pointage, un reçu est écrit en
   Keychain avec les phases `prepared` → `started` → `refused` / `not_sent` / terminé.
+- Journal générique (`JoleneCore/Receipts/ReceiptJournal.swift`, livré par le lot 2 T1, décision 23 de
+  `DECISIONS_LOT2.md`) : une clé par utilisateur et par domaine (`scan`, `document`, `justificatif`),
+  service Keychain `app.jolene.receipts` (`AfterFirstUnlockThisDeviceOnly`, jamais synchronisé, conservé
+  à la déconnexion, relu seulement par le même utilisateur) ; un seul essai en vol par domaine ; relecture
+  après chaque écriture ; tout échec du trousseau ou reçu illisible bloque l'action (fail-closed), sans
+  réparation automatique.
 - Règle : **aucun renvoi automatique**. Après un arrêt forcé ou une coupure, l'app
   réconcilie par relecture serveur (état de la présence, ligne `documents_soignants`)
   et ne rejoue une action que si la relecture prouve qu'elle n'a pas été reçue.

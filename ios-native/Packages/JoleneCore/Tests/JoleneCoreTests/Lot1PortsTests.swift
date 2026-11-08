@@ -14,7 +14,8 @@ final class Lot1PortsTests: XCTestCase {
 
     func testInitDuLot0LaisseTousLesPortsDuLot1NonCables() {
         let gateways = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
-        XCTAssertEqual(gateways.unwiredPorts, Self.portsLot1)
+        // Lot 2 (T1) : le bloc « Lot 2 » suit le lot 1 dans `unwiredPorts` (`Lot2PortsTests`).
+        XCTAssertEqual(gateways.unwiredPorts, Self.portsLot1 + Lot2PortsTests.portsLot2)
         XCTAssertTrue(gateways.dashboard is UnwiredDashboardPort)
         XCTAssertTrue(gateways.candidature is UnwiredCandidaturePort)
         XCTAssertTrue(gateways.presence is UnwiredPresencePort)
@@ -28,10 +29,10 @@ final class Lot1PortsTests: XCTestCase {
         XCTAssertTrue(gateways.clock is SystemClock, "défaut d'horloge du lot 0 conservé")
     }
 
-    func testSecondInitCompletNeLaisseAucunPortNonCable() {
+    func testSecondInitCompletNeLaisseAucunPortDuLot1NonCable() {
         let horloge = FixedClock(Date(timeIntervalSince1970: 1))
         let gateways = Lot1Fakes.gateways(clock: horloge)
-        XCTAssertEqual(gateways.unwiredPorts, [])
+        XCTAssertEqual(gateways.unwiredPorts, Lot2PortsTests.portsLot2, "seuls les ports du lot 2 restent à assigner")
         XCTAssertTrue(gateways.audit is FakeAudit)
         XCTAssertTrue(gateways.flags is FakeFlags)
         XCTAssertTrue(gateways.justificatifs is FakeJustificatifs)
@@ -42,7 +43,7 @@ final class Lot1PortsTests: XCTestCase {
         var gateways = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
         gateways.audit = FakeAudit()
         gateways.flags = FakeFlags()
-        XCTAssertEqual(gateways.unwiredPorts, Self.portsLot1.filter { $0 != "audit" && $0 != "flags" })
+        XCTAssertEqual(gateways.unwiredPorts, Self.portsLot1.filter { $0 != "audit" && $0 != "flags" } + Lot2PortsTests.portsLot2)
     }
 
     func testChaquePortNonCableRefuseExplicitementEnCitantSaTranche() async {
@@ -96,9 +97,10 @@ final class Lot1PortsTests: XCTestCase {
     }
 
     func testClesDesEcransNatifsEtPolitiqueFailOpen() async {
-        XCTAssertEqual(EcranNatif.allCases.map(\.cle), ["ios_natif_accueil_actif", "ios_natif_explorer_actif",
-                                                        "ios_natif_missions_actif", "ios_natif_revenus_actif",
-                                                        "ios_natif_profil_actif"])
+        // Les cinq écrans du lot 1 ouvrent la liste ; les suivants : `Lot2PortsTests.testClesDesEcransDuLot2ApresCellesDuLot1`.
+        XCTAssertEqual(EcranNatif.allCases.prefix(5).map(\.cle), ["ios_natif_accueil_actif", "ios_natif_explorer_actif",
+                                                                  "ios_natif_missions_actif", "ios_natif_revenus_actif",
+                                                                  "ios_natif_profil_actif"])
         XCTAssertTrue(FlagsPolicy.defautFailOpen, "décision 15 : défaut true, inverse assumé de useParamBool")
         let flags = FakeFlags(valeurs: [EcranNatif.missions.cle: false])
         let missions = await flags.ecranActif(.missions)

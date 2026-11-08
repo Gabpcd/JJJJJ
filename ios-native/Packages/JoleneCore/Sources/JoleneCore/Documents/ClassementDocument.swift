@@ -1,7 +1,8 @@
 import Foundation
 
-/// Types MIME acceptés pour un justificatif (`DOCUMENT_MIME_TYPES` du web).
-public enum MimeDocument: String, CaseIterable, Sendable {
+/// Types MIME acceptés pour un justificatif (`DOCUMENT_MIME_TYPES` du web). `Codable` ici, dans la déclaration
+/// (lot 2 T1, encodé par `RecuDocument`), jamais par une conformité rétroactive ailleurs.
+public enum MimeDocument: String, CaseIterable, Codable, Sendable {
     case pdf = "application/pdf"
     case jpeg = "image/jpeg"
     case png = "image/png"

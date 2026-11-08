@@ -88,7 +88,9 @@ export const NATURES = ['juridique', 'consentement', 'libellé', 'fragment'];
 /**
  * Dossiers et fichiers Swift du lot 2 (LOT2_PLAN §2.1 et §3) où aucun texte juridique ne s'écrit
  * en dur. Les fichiers du lot 2 placés hors des dossiers d'écrans sont nommés un à un : aucun
- * fichier du lot 1 n'est concerné.
+ * fichier du lot 1 n'est concerné. La fondation de T1 en fait partie (journal et reçus, résultats,
+ * ports, trousseau : messages `RecuScan.messageIllisible`, `KeychainTerminalIdentity.message*` ;
+ * seconde revue fraîche de T1).
  */
 export const DOSSIERS_LOT2 = [
   'ios-native/Packages/JoleneCore/Sources/JoleneCore/Pointage',
@@ -108,6 +110,12 @@ export const DOSSIERS_LOT2 = [
   'ios-native/Jolene/Composition/ContratReaderView.swift',
   'ios-native/Jolene/Composition/Device',
   'ios-native/Jolene/Composition/Media',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Receipts',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Models/Lot2Results.swift',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Ports/Lot2Ports.swift',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Ports/AppareilPorts.swift',
+  'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Keychain/KeychainTerminalIdentity.swift',
+  'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Keychain/KeychainReceiptStore.swift',
 ];
 
 /**
