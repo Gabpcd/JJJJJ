@@ -123,8 +123,8 @@ public final class CentreNotificationsModel: ObservableObject {
         case echec
     }
 
-    /// 200 dernières (`.limit(200)`, l.58).
-    public static let limite = 200
+    /// 200 dernières (`.limit(200)`, l.58) ; lue aussi par les gateways (hors main actor).
+    nonisolated public static let limite = 200
 
     @Published public private(set) var etat: Etat = .chargement
     /// Texte web d'une action refusée (marquer lue, lien invalide) ; nil sinon.
