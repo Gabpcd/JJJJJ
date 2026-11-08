@@ -17,7 +17,9 @@ import Foundation
 /// forment le reliquat T3b.
 ///
 /// Ligne par tranche : la tranche d'écran du lot 3 passe sa ligne de `ecranNatifLivre` à `true` et
-/// ajuste `DestinationLienTests` (table des écrans, famille du vecteur push, totaux).
+/// ajuste `DestinationLienTests` (table des écrans, famille du vecteur push, totaux) ; elle ajoute
+/// aussi sa cible dans l'espace (`CibleNotification`, `MainTabView.presenter`), exigée par la garde
+/// `CentreNotificationsTests.testToutEcranNatifLivreAUneCibleNativePresentable` (revue L3-T5, M1).
 ///
 /// Journalisation (PRINCIPES §7) : ne journaliser que `description` — celle de `DestinationLien`,
 /// de `JoleneRoute` ou d'`EtapeInscription`, toutes masquées (`LienMasque`) —, jamais `canonique`,

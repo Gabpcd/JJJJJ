@@ -51,53 +51,92 @@ public enum CentreNotificationsTextes {
     public static let voir = "Voir"
     // source: src/components/PanneauNotifications.tsx:160 (texte réservé aux lecteurs d'écran)
     public static let nonLue = "Non lue"
+
+    /// Indication vocale de « Voir » sur le compteur de l'Accueil (`accueil-notifications-action`). **Sans source
+    /// web** (le web n'a pas d'indication) et non juridique : en attente de relecture par Gabrielle
+    /// (`DECISIONS_LOT3.md`, section T5), épinglée par `CentreNotificationsTests`.
+    public static let indicationOuvrirCentre = "Ouvre le centre de notifications"
 }
 
 // MARK: - Cible d'une destination dans l'espace prêt
 
 /// Ce que l'espace prêt fait d'une destination de lien (ligne du centre, tap push), en attendant le
-/// coordinateur de liens de L1-T10 (point de fusion consigné dans `DECISIONS_LOT3.md`) : les onglets, le détail
-/// d'une mission, le centre de notifications ; un renvoi web passe par le présentateur `.safari`
-/// (`PresentateurRenvoiWeb`, injecté par L1-T10) ; une route sans présentation dans l'espace n'ouvre rien.
+/// coordinateur de liens de L1-T10 (point de fusion consigné dans `DECISIONS_LOT3.md`) : un onglet (Revenus avec
+/// sa section), le détail d'une mission, le centre de notifications ; un renvoi web passe par le présentateur
+/// `.safari` (`PresentateurRenvoiWeb`, injecté par L1-T10) ; la connexion et les liens de rappel n'ont pas de
+/// présentation dans l'espace (`.aucune`).
 ///
 /// Construite depuis une `DestinationLien` seulement (jamais la route brute : `.revenus(section: .factures)`
-/// ouvrirait l'onglet natif au lieu du renvoi web assumé, D4). Une tranche qui passe sa ligne de
-/// `DestinationLien.ecranNatifLivre` à `true` ajoute ici sa cible (T6 préférences, T9 profil, T14a Stripe…).
+/// ouvrirait l'onglet natif au lieu du renvoi web assumé, D4).
+///
+/// Verrou (revue L3-T5, M1 ; `CLAUDE.md`, « un gap connu reste verrouillé ») : une tranche qui passe sa ligne de
+/// `DestinationLien.ecranNatifLivre` à `true` (T6 préférences, T7/T8 inscription, T9 profil, T13 paiements, T14a
+/// Stripe) ajoute ici sa cible, sa présentation (`estPresentable`) et son cas dans `MainTabView.presenter`. Tant
+/// qu'elle ne l'a pas fait, son écran retombe sur son renvoi web canonique (jamais un tap qui n'ouvre rien) et la
+/// garde `CentreNotificationsTests.testToutEcranNatifLivreAUneCibleNativePresentable` est rouge.
 public enum CibleNotification: Equatable, Sendable {
-    /// Onglet de l'espace (les cinq onglets de `MainTabView`, `EcranNatif`).
-    case onglet(EcranNatif)
+    /// Onglet Accueil, à sa racine.
+    case accueil
+    /// Onglet Explorer (`/soignant/recherche-missions`).
+    case explorer
+    /// Onglet Mes missions (`/soignant/missions`).
+    case missions
+    /// Onglet Revenus et sa section (`?tab=`) : seule la racine (`.apercu`) est présentable avant les tranches de
+    /// ses sections (T13 « Paiements à confirmer ») ; une section n'est jamais réduite en silence à l'onglet.
+    case revenus(section: SectionRevenus)
+    /// Onglet Profil, hub du compte (`/soignant/mon-compte`).
+    case monCompte
     /// Détail d'une mission, empilé sur l'onglet Accueil.
     case mission(id: String)
     /// Centre de notifications (`/soignant/notifications`).
     case centre
     /// Renvoi web (`.safari` ou `.etablissement`), présenté par le présentateur de renvoi web s'il est injecté.
     case web(JoleneRoute)
-    /// Route sans présentation depuis un espace prêt (connexion, liens de rappel, écrans pas encore câblés).
+    /// Route sans présentation depuis un espace prêt : connexion et liens de rappel d'authentification (coordinateur
+    /// de L1-T10, hors de l'espace).
     case aucune
 
     public init(_ lien: DestinationLien) {
-        switch lien.destination {
-        case .accueil: self = .onglet(.accueil)
-        case .explorer: self = .onglet(.explorer)
-        case .missions: self = .onglet(.missions)
-        case .revenus: self = .onglet(.revenus)        // section choisie par l'écran Revenus (T12, T13)
-        case .monCompte: self = .onglet(.profil)
+        let destination = lien.destination
+        switch destination {
+        case .accueil: self = .accueil
+        case .explorer: self = .explorer
+        case .missions: self = .missions
+        case .revenus(let section): self = .revenus(section: section)
+        case .monCompte: self = .monCompte
         case .missionDetail(let id): self = .mission(id: id)
         case .notifications: self = .centre
-        case .safari, .etablissement: self = .web(lien.destination)
-        case .connexion, .resetPassword, .confirmerInscription, .inscription, .serieDetail, .profil,
-             .parametresNotifications, .stripeConnect:
-            // Liens de rappel et connexion : coordinateur de L1-T10. Écrans du lot 3 : leur tranche ajoute leur
-            // cible en passant sa ligne de `ecranNatifLivre` (sinon `destination` est déjà un `.safari`).
+        case .safari, .etablissement: self = .web(destination)
+        case .connexion, .resetPassword, .confirmerInscription:
             self = .aucune
+        case .inscription, .serieDetail, .profil, .parametresNotifications, .stripeConnect:
+            // Atteint seulement quand la ligne de `ecranNatifLivre` de l'écran est passée à `true` sans que sa
+            // tranche ait ajouté sa cible (sinon `destination` est déjà un `.safari`) : repli sur le renvoi web
+            // canonique, jamais un tap sans effet ; la garde de `CentreNotificationsTests` le signale.
+            self = .web(.safari(lien.canonique))
+        }
+    }
+
+    /// Onglet porteur de la cible (sélection de la barre), nil pour un renvoi web ou une route sans présentation.
+    public var onglet: OngletEspace? {
+        switch self {
+        case .accueil, .mission, .centre: return .accueil
+        case .explorer: return .explorer
+        case .missions: return .missions
+        case .revenus: return .revenus
+        case .monCompte: return .profil
+        case .web, .aucune: return nil
         }
     }
 
     /// Présentable dans l'espace : un renvoi web exige le présentateur `.safari` (absent avant L1-T10, jamais
-    /// `openURL` : les chemins `/soignant/*` reviendraient dans l'app par lien universel, sans effet).
-    public func estPresentable(renvoiWebDisponible: Bool) -> Bool {
+    /// `openURL` : les chemins `/soignant/*` reviendraient dans l'app par lien universel, sans effet) ; une section
+    /// de Revenus attend sa tranche ; depuis le centre (`depuisCentre`), le centre lui-même n'a rien à ouvrir.
+    public func estPresentable(renvoiWebDisponible: Bool, depuisCentre: Bool = false) -> Bool {
         switch self {
-        case .onglet, .mission, .centre: return true
+        case .accueil, .explorer, .missions, .monCompte, .mission: return true
+        case .revenus(let section): return section == .apercu
+        case .centre: return !depuisCentre
         case .web: return renvoiWebDisponible
         case .aucune: return false
         }
@@ -109,12 +148,15 @@ public enum CibleNotification: Equatable, Sendable {
 /// Modèle du centre de notifications, lu pour l'epoch de la session (`controller.gateways(for:)`), borné à
 /// `SessionController.resolutionTimeout`. Règles :
 /// - premier chargement et « Réessayer » : chargement puis liste ou erreur (texte web, jamais le détail technique) ;
-/// - relecture silencieuse (tirer pour rafraîchir, notification reçue au premier plan) : la liste affichée reste
-///   en place en cas d'échec ;
+/// - relecture silencieuse (notification reçue au premier plan, réconciliation) : la liste affichée reste en place
+///   en cas d'échec, sans message ; tirer pour rafraîchir (`rafraichir`) : idem, mais un échec est signalé par
+///   `erreurRafraichissement` (texte web `erreurChargement`, revue L3-T5 m3) ;
 /// - une réponse d'un epoch périmé ou d'un chargement dépassé est abandonnée ; une annulation n'est jamais une erreur ;
 /// - ouvrir : une notification non lue est d'abord marquée lue et **relue** (ligne rendue par le port) ; un échec
-///   affiche le texte web et n'ouvre rien (l.89-97) ; puis le lien est résolu (`DestinationLien`), un lien non
-///   Jolene affiche le texte web (l.98-102).
+///   affiche le texte web et n'ouvre rien (l.89-97), puis la liste est relue sans être retirée (un délai dépassé
+///   ne prouve pas que le serveur n'a pas agi, PRINCIPES §5, revue L3-T5 m2) ; puis le lien est résolu
+///   (`DestinationLien`), un lien non Jolene affiche le texte web (l.98-102). Une ouverture annulée (centre quitté,
+///   revue L3-T5 m4) ne rend aucune cible et n'affiche rien.
 @MainActor
 public final class CentreNotificationsModel: ObservableObject {
     public enum Etat: Equatable, Sendable {
@@ -133,6 +175,11 @@ public final class CentreNotificationsModel: ObservableObject {
     @Published public private(set) var numeroMessage = 0
     /// Notification en cours d'ouverture : un second tap est ignoré.
     @Published public private(set) var ouvertureEnCours: String?
+    /// Échec du dernier tirer-pour-rafraîchir, liste gardée : texte web `erreurChargement` ; nil sinon.
+    @Published public private(set) var erreurRafraichissement: String?
+    /// Notifications marquées lues (relues) par ce centre : chaque lecture périme le compteur des non lues de
+    /// l'Accueil (`AccueilModel.loadIfStale(peremption:)`, revue L3-T5 m1).
+    @Published public private(set) var lectures = 0
     /// Horloge des gateways de la session (démo : horloge fixée), pour les dates relatives.
     public private(set) var horloge: any ClockPort = SystemClock()
 
@@ -150,15 +197,30 @@ public final class CentreNotificationsModel: ObservableObject {
         return []
     }
 
-    /// `silencieux` : la liste affichée reste en place (pas d'indicateur, pas d'erreur plein écran).
+    /// `silencieux` : la liste affichée reste en place (pas d'indicateur, pas d'erreur plein écran, pas de message).
     public func charger(silencieux: Bool = false) async {
+        _ = await lire(garderListe: silencieux)
+    }
+
+    /// Tirer pour rafraîchir : relecture qui garde la liste affichée ; son échec est signalé par
+    /// `erreurRafraichissement` (encart au texte web), jamais avalé. Sans liste affichée, l'erreur reste plein écran.
+    public func rafraichir() async {
+        erreurRafraichissement = nil
+        if await lire(garderListe: true) == .echecListeGardee {
+            erreurRafraichissement = CentreNotificationsTextes.erreurChargement
+        }
+    }
+
+    private enum IssueLecture: Equatable { case publiee, echecListeGardee, echecPublie, abandonnee }
+
+    private func lire(garderListe silencieux: Bool) async -> IssueLecture {
         generation += 1
         let courant = generation
         let garderListe: Bool
         if case .charge = etat { garderListe = silencieux } else { garderListe = false }
         if !garderListe { etat = .chargement }
 
-        guard let gateways = await controller.gateways(for: snapshot.epoch), generation == courant else { return }
+        guard let gateways = await controller.gateways(for: snapshot.epoch), generation == courant else { return .abandonnee }
         horloge = gateways.clock
         let port = gateways.notifications
         let context = snapshot.context
@@ -166,13 +228,17 @@ public final class CentreNotificationsModel: ObservableObject {
             let liste = try await bounded(timeout: controller.resolutionTimeout) {
                 try await port.liste(context: context)
             }
-            guard await controller.epoch == snapshot.epoch, generation == courant else { return }
+            guard await controller.epoch == snapshot.epoch, generation == courant else { return .abandonnee }
             etat = .charge(liste)
+            erreurRafraichissement = nil
+            return .publiee
         } catch {
-            guard await controller.epoch == snapshot.epoch, generation == courant, !Task.isCancelled else { return }
-            if error is CancellationError { return }
-            if let jolene = error as? JoleneError, jolene.kind == .cancelled { return }
-            if !garderListe { etat = .echec }
+            guard await controller.epoch == snapshot.epoch, generation == courant, !Task.isCancelled else { return .abandonnee }
+            if error is CancellationError { return .abandonnee }
+            if let jolene = error as? JoleneError, jolene.kind == .cancelled { return .abandonnee }
+            if garderListe { return .echecListeGardee }
+            etat = .echec
+            return .echecPublie
         }
     }
 
@@ -182,23 +248,23 @@ public final class CentreNotificationsModel: ObservableObject {
         return DestinationLien(link: lien)
     }
 
-    /// « Voir » affiché : lien Jolene dont la cible est présentable dans l'espace.
+    /// « Voir » affiché : lien Jolene dont la cible est présentable depuis le centre (jamais le centre lui-même).
     public static func afficheVoir(_ notification: NotificationJolene, renvoiWebDisponible: Bool) -> Bool {
         guard let lien = destination(notification) else { return false }
-        return CibleNotification(lien).estPresentable(renvoiWebDisponible: renvoiWebDisponible)
+        return CibleNotification(lien).estPresentable(renvoiWebDisponible: renvoiWebDisponible, depuisCentre: true)
     }
 
-    /// La ligne est un bouton s'il y a quelque chose à faire : la marquer lue, ouvrir sa cible, ou signaler un
-    /// lien invalide (comme le web) ; jamais un bouton sans effet.
+    /// La ligne est un bouton s'il y a quelque chose à faire : la marquer lue, ouvrir sa cible depuis le centre, ou
+    /// signaler un lien invalide (comme le web) ; jamais un bouton sans effet.
     public static func estActionnable(_ notification: NotificationJolene, renvoiWebDisponible: Bool) -> Bool {
         if !notification.lue { return true }
         guard let lien = notification.lien, !lien.isEmpty else { return false }
         guard let destination = DestinationLien(link: lien) else { return true }
-        return CibleNotification(destination).estPresentable(renvoiWebDisponible: renvoiWebDisponible)
+        return CibleNotification(destination).estPresentable(renvoiWebDisponible: renvoiWebDisponible, depuisCentre: true)
     }
 
-    /// Tap sur une ligne (`handleClick`, l.89-103) : rend la cible à présenter, nil s'il n'y a rien à ouvrir
-    /// (échec du marquage, lien absent, invalide ou sans présentation dans l'espace).
+    /// Tap sur une ligne (`handleClick`, l.89-103) : rend la cible à présenter depuis le centre, nil s'il n'y a rien
+    /// à ouvrir (échec du marquage, ouverture annulée, lien absent, invalide ou sans présentation depuis le centre).
     public func ouvrir(_ notification: NotificationJolene, renvoiWebDisponible: Bool) async -> CibleNotification? {
         guard ouvertureEnCours == nil else { return nil }
         ouvertureEnCours = notification.id
@@ -217,11 +283,18 @@ public final class CentreNotificationsModel: ObservableObject {
                 guard await controller.epoch == snapshot.epoch else { return nil }
                 guard relue.id == id, relue.lue else { throw JoleneError(.unknown, CentreNotificationsTextes.marquerLueImpossible) }
                 remplacer(relue)
+                lectures += 1
             } catch {
                 guard await controller.epoch == snapshot.epoch else { return nil }
+                // Centre quitté pendant l'appel : ni message ni relecture pour un écran parti (revue L3-T5, m4).
+                if Self.estAnnulation(error) { return nil }
                 signaler(CentreNotificationsTextes.marquerLueImpossible)
+                // Le PATCH a pu aboutir (délai dépassé, relecture en échec) : réconciliation silencieuse, message
+                // gardé (PRINCIPES §5, revue L3-T5 m2).
+                await charger(silencieux: true)
                 return nil
             }
+            if Task.isCancelled { return nil }
         }
         guard let lien = notification.lien, !lien.isEmpty else { return nil }
         guard let destination = DestinationLien(link: lien) else {
@@ -229,7 +302,13 @@ public final class CentreNotificationsModel: ObservableObject {
             return nil
         }
         let cible = CibleNotification(destination)
-        return cible.estPresentable(renvoiWebDisponible: renvoiWebDisponible) ? cible : nil
+        return cible.estPresentable(renvoiWebDisponible: renvoiWebDisponible, depuisCentre: true) ? cible : nil
+    }
+
+    private static func estAnnulation(_ error: Error) -> Bool {
+        if Task.isCancelled || error is CancellationError { return true }
+        if let jolene = error as? JoleneError, jolene.kind == .cancelled { return true }
+        return false
     }
 
     /// Fin de l'affichage du message d'action.

@@ -14,20 +14,29 @@ struct CentreNotificationsRoute: Hashable {}
 /// Écarts consignés : ni « Supprimer les lues » (la base refuse DELETE au soignant, correction 9), ni Realtime
 /// (lot 4 ; relecture au tirer-pour-rafraîchir et à chaque notification reçue au premier plan), ni filtres par
 /// famille (hors périmètre du blueprint §1.1). Un renvoi web passe par le présentateur `.safari` injecté par
-/// L1-T10 ; sans lui, « Voir » n'est pas affiché et une ligne déjà lue sans destination présentable n'est pas un
-/// bouton (jamais un bouton sans effet).
+/// L1-T10 ; sans lui, « Voir » n'est pas affiché et une ligne déjà lue sans destination présentable depuis le centre
+/// (renvoi web, le centre lui-même) n'est pas un bouton (jamais un bouton sans effet).
+///
+/// Tâche d'ouverture liée à la vue (revue L3-T5, m4) : annulée à la disparition du centre, elle ne navigue jamais
+/// après le départ de l'utilisateur. Une lecture relue est signalée à l'espace (`surLecture`) pour la relecture
+/// du compteur de l'Accueil (m1). L'échec d'un tirer-pour-rafraîchir est affiché en encart (m3).
 ///
 /// Identifiants (blueprint §3 T5) : `notifications-screen`, `notification-<id>`, `notification-non-lue-<id>`,
 /// `notifications-empty`, `notifications-error`, `notifications-retry` ; en plus `notifications-loading`,
-/// `notification-voir-<id>`, `notifications-action-erreur`.
+/// `notifications-action-erreur`, `notifications-refresh-error`. « Voir » fait partie du libellé du bouton de la
+/// ligne (`notification-<id>`) : il n'a pas d'identifiant propre.
 struct NotificationsScreen: View {
     @StateObject private var model: CentreNotificationsModel
     @ObservedObject private var taps: BoiteTapsPush
+    private let surLecture: () -> Void
     private let ouvrir: (CibleNotification) -> Void
+    @State private var tacheOuverture: Task<Void, Never>?
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
 
-    init(session: SessionStore, snapshot: SessionSnapshot, taps: BoiteTapsPush, ouvrir: @escaping (CibleNotification) -> Void) {
+    init(session: SessionStore, snapshot: SessionSnapshot, taps: BoiteTapsPush, surLecture: @escaping () -> Void,
+         ouvrir: @escaping (CibleNotification) -> Void) {
         self.taps = taps
+        self.surLecture = surLecture
         self.ouvrir = ouvrir
         _model = StateObject(wrappedValue: CentreNotificationsModel(controller: session.controller, snapshot: snapshot))
     }
@@ -45,6 +54,10 @@ struct NotificationsScreen: View {
                             do { try await Task.sleep(nanoseconds: IssuePrePromptPush.duree) } catch { return }
                             model.effacerMessage()
                         }
+                }
+                if let erreur = model.erreurRafraichissement {
+                    // Comme `accueil-refresh-error` : la liste reste affichée, l'échec du rafraîchissement est dit.
+                    InlineNotice(erreur, tone: .error, identifier: "notifications-refresh-error", announcesOnAppear: true)
                 }
                 switch model.etat {
                 case .chargement:
@@ -70,13 +83,30 @@ struct NotificationsScreen: View {
             .frame(maxWidth: 720)
             .frame(maxWidth: .infinity)
         }
-        .refreshable { await model.charger(silencieux: true) }
+        .refreshable { await model.rafraichir() }
         .accessibilityIdentifier("notifications-screen")
         .background(JoleneColor.lavender.ignoresSafeArea())
         .navigationTitle(CentreNotificationsTextes.titre)
         .task { if case .chargement = model.etat { await model.charger() } }
         // Notification reçue au premier plan : la liste visible se relit (pas de Realtime avant le lot 4).
         .onChange(of: taps.premiersPlans) { _ in Task { await model.charger(silencieux: true) } }
+        // Centre quitté (retour, changement d'onglet, tap push) : une réponse tardive ne navigue plus.
+        .onDisappear {
+            tacheOuverture?.cancel()
+            tacheOuverture = nil
+        }
+    }
+
+    /// Tap sur une ligne : marquage relu puis ouverture, dans une tâche annulée à la disparition du centre.
+    private func ouvrirLigne(_ notification: NotificationJolene) {
+        let renvoiWeb = renvoiWebDisponible
+        tacheOuverture = Task {
+            let lecturesAvant = model.lectures
+            let cible = await model.ouvrir(notification, renvoiWebDisponible: renvoiWeb)
+            if model.lectures != lecturesAvant { surLecture() }
+            guard !Task.isCancelled, let cible else { return }
+            ouvrir(cible)
+        }
     }
 
     // MARK: - États
@@ -116,11 +146,7 @@ struct NotificationsScreen: View {
             }
             if CentreNotificationsModel.estActionnable(notification, renvoiWebDisponible: renvoiWebDisponible) {
                 Button {
-                    Task {
-                        if let cible = await model.ouvrir(notification, renvoiWebDisponible: renvoiWebDisponible) {
-                            ouvrir(cible)
-                        }
-                    }
+                    ouvrirLigne(notification)
                 } label: {
                     contenu(notification)
                 }
@@ -164,7 +190,6 @@ struct NotificationsScreen: View {
                 }
                 .font(JoleneFont.caption.weight(.semibold))
                 .foregroundStyle(JoleneColor.rose800)
-                .accessibilityIdentifier("notification-voir-\(notification.id)")
             }
         }
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)

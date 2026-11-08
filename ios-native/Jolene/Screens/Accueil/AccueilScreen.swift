@@ -20,21 +20,25 @@ import JoleneDesign
 ///
 /// Lot 3, T5 (point de fusion de T3a, `DECISIONS_LOT3.md`) : le centre de notifications est natif ; le compteur
 /// des non lues ouvre `NotificationsScreen` dans la pile de l'Accueil (`CentreNotificationsRoute`, enregistrée par
-/// `MainTabView`) au lieu du renvoi web « Voir sur jolene.app ».
+/// `MainTabView`) au lieu du renvoi web « Voir sur jolene.app ». Une notification lue dans le centre avance le jeton
+/// `peremption` : le tableau (et son compteur) est relu à l'apparition suivante, même avant 60 s (revue L3-T5, m1).
 struct AccueilScreen: View {
     static let renvoiPresences = AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences)
 
     @StateObject private var model: AccueilModel
     @ObservedObject private var session: SessionStore
     private let snapshot: SessionSnapshot
+    private let peremption: Int
     private let ouvrirOnglet: (MainTabView.Tab) -> Void
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
     @Environment(\.ajoutCalendrierMission) private var calendrier
     @State private var issueCalendrier: AjoutCalendrierIssue?
 
-    init(session: SessionStore, snapshot: SessionSnapshot, ouvrirOnglet: @escaping (MainTabView.Tab) -> Void) {
+    init(session: SessionStore, snapshot: SessionSnapshot, peremption: Int = 0,
+         ouvrirOnglet: @escaping (MainTabView.Tab) -> Void) {
         self.session = session
         self.snapshot = snapshot
+        self.peremption = peremption
         self.ouvrirOnglet = ouvrirOnglet
         _model = StateObject(wrappedValue: AccueilModel(controller: session.controller, snapshot: snapshot))
     }
@@ -70,8 +74,9 @@ struct AccueilScreen: View {
         .navigationDestination(for: MissionRoute.self) { route in
             MissionDetailScreen(route: route, initial: model.mission(id: route.id), session: session, snapshot: snapshot)
         }
-        // Premier affichage, relance après une tâche annulée, relecture au-delà de 60 s.
-        .task { await model.loadIfStale() }
+        // Premier affichage, relance après une tâche annulée, relecture au-delà de 60 s ou après une lecture dans
+        // le centre de notifications (jeton `peremption`, relu dès qu'il avance).
+        .task(id: peremption) { await model.loadIfStale(peremption: peremption) }
     }
 
     // MARK: - États
@@ -295,7 +300,8 @@ struct AccueilScreen: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(CentreNotificationsTextes.voir)
-            .accessibilityHint("Ouvre le centre de notifications")
+            // Indication sans source web, épinglée et en attente de relecture par Gabrielle (revue L3-T5, m11).
+            .accessibilityHint(CentreNotificationsTextes.indicationOuvrirCentre)
             .accessibilityIdentifier("accueil-notifications-action")
         }
         .padding(.horizontal, JoleneSpacing.lg)

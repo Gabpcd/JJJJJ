@@ -35,8 +35,10 @@ struct PrePromptPushScreen: View {
         .transition(.opacity)
     }
 
+    /// Pas d'état de chargement sur la carte : comme le web (`handleActiver`, l.95-121), elle se ferme **avant** la
+    /// demande système (`PrePromptPushModel.activer`) ; un second tap est écarté par le modèle (`demandeEnCours`).
     private var carte: some View {
-        PermissionCard(.pushSoignant(identifier: "push-preprompt"), isLoading: model.demandeEnCours,
+        PermissionCard(.pushSoignant(identifier: "push-preprompt"),
                        onPrimary: { Task { await model.activer() } },
                        onSecondary: { model.plusTard() })
             .padding(JoleneSpacing.lg)

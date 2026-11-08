@@ -156,7 +156,8 @@ public final class PrePromptPushModel: ObservableObject {
 
     /// Pré-prompt affiché.
     @Published public private(set) var visible = false
-    /// Demande système en cours (après « Activer »).
+    /// Demande système en cours (après « Activer ») : écarte une seconde activation. La carte est déjà fermée
+    /// pendant la demande (parité web) : ce n'est pas un état de chargement affiché.
     @Published public private(set) var demandeEnCours = false
     /// Issue de la dernière activation, affichée brièvement (toast du web).
     @Published public private(set) var issue: Issue?

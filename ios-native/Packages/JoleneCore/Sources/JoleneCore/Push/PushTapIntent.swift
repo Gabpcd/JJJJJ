@@ -73,7 +73,8 @@ public struct PushTapIntent: Equatable, Sendable, CustomStringConvertible, Custo
 
     /// Libellé DEBUG de la route effectivement présentée (`push-tap-cible`, XCUITest de T5) : cas de route et,
     /// pour un renvoi web ou un détail, l'URL canonique ou l'identifiant. Données de démonstration seulement :
-    /// jamais journalisé (PRINCIPES §7), affiché uniquement en build DEBUG par `MainTabView`.
+    /// jamais journalisé (PRINCIPES §7), exposé par `MainTabView` en build DEBUG **et** en mode démo uniquement
+    /// (revue L3-T5, m8 : jamais dans l'arbre d'accessibilité d'un build DEBUG STAGING, identifiants réels).
     public static func libelleDebug(_ route: JoleneRoute) -> String {
         switch route {
         case .safari(let url): return "safari \(url.absoluteString)"
@@ -102,6 +103,11 @@ public struct PushTapIntent: Equatable, Sendable, CustomStringConvertible, Custo
 /// - tap reçu sans espace ouvert (lancement à froid, écran de connexion) : rejoué par le premier espace prêt ;
 /// - tap reçu pendant l'espace d'un epoch : lié à cet epoch ; un espace d'un autre epoch (autre identité,
 ///   reconnexion) l'écarte sans le présenter.
+///
+/// Écart consigné (revue L3-T5, m12 ; `DECISIONS_LOT3.md`) : un tap reçu sur l'écran de connexion **après** une
+/// déconnexion (volontaire ou subie) n'a pas d'espace ouvert ; il est rejoué pour l'identité qui se connecte
+/// ensuite, comme le web (redirection après connexion vers le chemin du tap). Aucune donnée n'est exposée : la
+/// destination est relue sous la RLS de la nouvelle identité.
 ///
 /// Point de fusion L1-T10 (`DECISIONS_LOT3.md`, « T3 livrée en deux temps », reliquat T3b) : le coordinateur
 /// de liens (`DeepLinkCoordinator`, `DeepLinkIntent`) n'existe sur aucune branche ; à son arrivée, il consomme
