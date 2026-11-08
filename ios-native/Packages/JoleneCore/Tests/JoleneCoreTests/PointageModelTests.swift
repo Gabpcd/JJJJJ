@@ -7,12 +7,15 @@ private let utilisateurPointage = AuthenticatedUser(id: "u-pointage", email: "u-
                                                     appMetadataRole: "SOIGNANT")
 
 /// Modèle du bloc de pointage (lot 2, T3 ; blueprint §2.5, P6 niveau 1) : un envoi à la fois, base relue avant
-/// l'envoi, reçu `prepared` → `started` avant l'unique requête, réponse ignorée si l'epoch change, délai `bounded` →
-/// vérification par relecture sans renvoi, hors ligne → aucun appel et reçu `not_sent`, réconciliation au chargement.
+/// l'envoi, reçu `prepared` → `started` avant l'unique requête, réponse ignorée si l'epoch change ou si l'écran a
+/// disparu (génération), délai `bounded` → vérification par relecture sans renvoi, hors ligne → aucun appel et reçu
+/// `not_sent`, réconciliation au chargement. Revue fraîche de T3 : un HTTP 200 n'aboutit jamais à « non reçu » (M-A),
+/// le bloc redevient opérant après une réapparition (M-B), session expirée signalée (m1), attente du pool (m2).
 @MainActor
 final class PointageModelTests: XCTestCase {
     private struct PretAuth: AuthPort {
-        func restoreSession() async throws -> AuthenticatedUser? { utilisateurPointage }
+        var utilisateur = utilisateurPointage
+        func restoreSession() async throws -> AuthenticatedUser? { utilisateur }
         func signIn(email: String, password: String) async throws -> AuthenticatedUser { throw nonScripte }
         func signOut() async throws {}
     }
@@ -35,11 +38,16 @@ final class PointageModelTests: XCTestCase {
         let preuves: [PreuveScan]
         let entreeScanner = Gate()
         let retenue: Gate?
+        /// Levée par `scanner` après l'avoir compté (session expirée, m1).
+        let erreurScan: JoleneError?
+        /// Levée par `reconcilier` après l'avoir compté.
+        let erreurReconciliation: JoleneError?
 
         init(etats: [Result<EtatPointage, JoleneError>], scans: [IssueScan] = [.enregistre(typeScan: .ouverture, numeroScan: 1)],
-             reconciliations: [IssueScan] = [.incertain], preuves: [PreuveScan] = [], retenue: Gate? = nil) {
+             reconciliations: [IssueScan] = [.incertain], preuves: [PreuveScan] = [], retenue: Gate? = nil,
+             erreurScan: JoleneError? = nil, erreurReconciliation: JoleneError? = nil) {
             self.etats = etats; self.scans = scans; self.reconciliations = reconciliations; self.preuves = preuves
-            self.retenue = retenue
+            self.retenue = retenue; self.erreurScan = erreurScan; self.erreurReconciliation = erreurReconciliation
         }
 
         var appels: [String] { lock.lock(); defer { lock.unlock() }; return journal }
@@ -88,11 +96,14 @@ final class PointageModelTests: XCTestCase {
             let issue = noterScan(recu, metadonnees)
             await entreeScanner.open()
             if let retenue { await retenue.wait() }
+            if let erreurScan { throw erreurScan }
             return issue
         }
 
         func reconcilier(recu: RecuScan, context: MissionReadContext) async throws -> IssueScan {
-            noterReconciliation()
+            let verdict = noterReconciliation()
+            if let erreurReconciliation { throw erreurReconciliation }
+            return verdict
         }
 
         func presences(context: MissionReadContext) async throws -> InstantanePresences { throw nonScripte }
@@ -144,19 +155,65 @@ final class PointageModelTests: XCTestCase {
                      segments: [])
     }
 
-    private func modele(_ port: PortScripte, magasin: MagasinEspion = MagasinEspion(), temps: TempsTest = TempsTest(),
-                        reseau: ScenarioReseauDemo = .enLigne, timeout: TimeInterval = SessionController.defaultResolutionTimeout,
-                        finLe: String? = "2026-11-02T08:05:00Z") async throws -> (PointageModel, SessionController) {
-        var gateways = Gateways(auth: PretAuth(), role: NeutralRole(), missions: PretMissions(), clock: FixedClock(DemoWorld.fixedNow))
+    /// Attentes du suivi rendues une à une par le test (aucune attente réelle) : `tic()` libère la plus ancienne.
+    private actor Metronome {
+        private(set) var durees: [TimeInterval] = []
+        private var enAttente: [CheckedContinuation<Void, Never>] = []
+
+        func attendre(_ duree: TimeInterval) async {
+            durees.append(duree)
+            await withCheckedContinuation { enAttente.append($0) }
+        }
+
+        func tic() {
+            guard !enAttente.isEmpty else { return }
+            enAttente.removeFirst().resume()
+        }
+
+        /// Revient dès qu'une attente est en cours.
+        func attenteEnCours() async {
+            while enAttente.isEmpty { await Task.yield() }
+        }
+    }
+
+    /// Session, instantané et appareil partagés par les blocs d'un même écran (un journal de reçus par utilisateur).
+    private struct Banc {
+        let controller: SessionController
+        let snapshot: SessionSnapshot
+        let appareil: Appareil
+    }
+
+    private func banc(_ port: any PointagePort, utilisateur: AuthenticatedUser = utilisateurPointage,
+                      magasin: MagasinEspion = MagasinEspion(), reseau: ScenarioReseauDemo = .enLigne,
+                      timeout: TimeInterval = SessionController.defaultResolutionTimeout) async throws -> Banc {
+        var gateways = Gateways(auth: PretAuth(utilisateur: utilisateur), role: NeutralRole(), missions: PretMissions(),
+                                clock: FixedClock(DemoWorld.fixedNow))
         gateways.pointage = port
         let controller = SessionController(gateways: gateways, resolutionTimeout: timeout)
         let state = await controller.start()
         let snapshot = try XCTUnwrap(state.snapshot, "session prête attendue")
         let appareil = Appareil(localisation: DemoLocationPort(scenario: .accorde), reseau: DemoNetworkPathPort(scenario: reseau),
                                 terminal: DemoTerminalIdentity(), recus: magasin)
-        let model = PointageModel(missionId: mission, finLe: finLe, controller: controller, snapshot: snapshot, appareil: appareil,
-                                  attendre: { temps.attendre($0) }, monotone: { temps.lire() })
-        return (model, controller)
+        return Banc(controller: controller, snapshot: snapshot, appareil: appareil)
+    }
+
+    private func bloc(_ mission: String, _ banc: Banc, temps: TempsTest = TempsTest(), finLe: String? = "2026-11-02T08:05:00Z",
+                      attendre: (@Sendable (TimeInterval) async -> Void)? = nil) -> PointageModel {
+        PointageModel(missionId: mission, finLe: finLe, controller: banc.controller, snapshot: banc.snapshot, appareil: banc.appareil,
+                      attendre: attendre ?? { temps.attendre($0) }, monotone: { temps.lire() })
+    }
+
+    private func modele(_ port: PortScripte, magasin: MagasinEspion = MagasinEspion(), temps: TempsTest = TempsTest(),
+                        reseau: ScenarioReseauDemo = .enLigne, timeout: TimeInterval = SessionController.defaultResolutionTimeout,
+                        finLe: String? = "2026-11-02T08:05:00Z",
+                        attendre: (@Sendable (TimeInterval) async -> Void)? = nil) async throws -> (PointageModel, SessionController) {
+        let banc = try await banc(port, magasin: magasin, reseau: reseau, timeout: timeout)
+        return (bloc(mission, banc, temps: temps, finLe: finLe, attendre: attendre), banc.controller)
+    }
+
+    /// Attente minimale avant un verdict « non reçu » d'un essai sorti sans réponse après `ecoule` secondes (m2).
+    private func attenteNonRecu(apres ecoule: TimeInterval) -> TimeInterval {
+        ecoule + PointageModel.attentePoolPostgREST + RecuScan.delaiAbsenceProuvee
     }
 
     private func journal(_ magasin: MagasinEspion) -> ReceiptJournal<RecuScan> { ReceiptJournal<RecuScan>(store: magasin) }
@@ -238,7 +295,9 @@ final class PointageModelTests: XCTestCase {
         await model.pointer(code: "123456", gps: nil)
         XCTAssertEqual(port.compte("scanner"), 1, "jamais de renvoi")
         XCTAssertEqual(port.compte("reconcilier"), 2)
-        XCTAssertEqual(temps.attentes.first, RecuScan.delaiAbsenceProuvee, "8 s monotones avant la première relecture")
+        // m2 : sorti par le délai `bounded`, la requête a pu attendre le pool PostgREST (10 s) puis s'exécuter (8 s).
+        XCTAssertEqual(try XCTUnwrap(temps.attentes.first), attenteNonRecu(apres: 0.2), accuracy: 1e-9,
+                       "délai `bounded` + 10 s + 8 s monotones avant la première relecture")
         XCTAssertEqual(model.issue, .enregistre(.ouverture))
         XCTAssertTrue(magasin.vide)
         await jamais.open()
@@ -247,9 +306,12 @@ final class PointageModelTests: XCTestCase {
     func testRelectureSansPreuveApresHuitSecondesNonRecu() async throws {
         let port = PortScripte(etats: [.success(etat())], scans: [.incertain], reconciliations: [.nonRecu])
         let magasin = MagasinEspion()
-        let (model, _) = try await modele(port, magasin: magasin)
+        let temps = TempsTest()
+        let (model, _) = try await modele(port, magasin: magasin, temps: temps)
         await model.charger()
         await model.pointer(code: "123456", gps: nil)
+        XCTAssertEqual(try XCTUnwrap(temps.attentes.first), attenteNonRecu(apres: 0), accuracy: 1e-9,
+                       "réponse perdue : attente du pool et du `statement_timeout` avant tout verdict (m2)")
         XCTAssertEqual(model.issue, .nonRecu, "saisie du code courant demandée")
         XCTAssertEqual(port.compte("scanner"), 1)
         XCTAssertEqual(magasin.phases, ["prepared", "started", "effacé"])
@@ -402,5 +464,182 @@ final class PointageModelTests: XCTestCase {
         XCTAssertEqual(port.appels, ["etat"], "code de cinq chiffres : rien n'est envoyé")
         await model.pointer(code: "123456", gps: nil)
         XCTAssertEqual(port.compte("scanner"), 0, "statut relu non pointable : aucun envoi")
+    }
+
+    // MARK: - HTTP 200 sur une autre mission (revue fraîche de T3, M-A)
+
+    func testCodeDUneAutreMissionEnregistreLaBasJamaisNonRecu() async throws {
+        let port = PortScripte(etats: [.success(etat())],
+                               scans: [.enregistreSurAutreMission(missionId: "m-2", typeScan: .ouverture, numeroScan: 1)],
+                               reconciliations: [.nonRecu])
+        let magasin = MagasinEspion()
+        let (model, _) = try await modele(port, magasin: magasin)
+        await model.charger()
+        await model.pointer(code: "123456", gps: nil)
+        XCTAssertEqual(model.issue, .enregistreSurAutreMission(.ouverture, missionId: "m-2"), "mission réellement pointée signalée")
+        XCTAssertEqual(port.compte("reconcilier"), 0, "un HTTP 200 n'est jamais réconcilié sur la mission du reçu")
+        XCTAssertEqual(Array(port.appels.suffix(2)), ["scanner", "etat"], "état de ce bloc relu")
+        XCTAssertEqual(magasin.phases, ["prepared", "started", "effacé"], "essai soldé : aucun reçu en cours pour les autres blocs")
+        XCTAssertFalse(model.notationAProposer, "la note est celle de la mission pointée (T5a)")
+        XCTAssertTrue(model.peutEnvoyer)
+        await model.rafraichir()
+        XCTAssertEqual(model.issue, .enregistreSurAutreMission(.ouverture, missionId: "m-2"), "aucun « non reçu » ensuite")
+        XCTAssertEqual(port.compte("scanner"), 1)
+    }
+
+    func testAccepteSansPreuveSuiviIllisibleJamaisNonRecu() async throws {
+        let port = PortScripte(etats: [.success(etat())], scans: [.accepteSansPreuve], reconciliations: [.nonRecu])
+        let magasin = MagasinEspion()
+        let (model, _) = try await modele(port, magasin: magasin)
+        await model.charger()
+        await model.pointer(code: "123456", gps: nil)
+        XCTAssertEqual(model.issue, .suiviIllisible, "COMMIT prouvé, mission non établie : renvoi web, jamais « non reçu »")
+        XCTAssertEqual(port.compte("reconcilier"), 0)
+        XCTAssertEqual(magasin.phases, ["prepared", "started", "effacé"],
+                       "soldé : une réconciliation filtrée sur la mission du reçu conclurait à tort « non reçu »")
+        XCTAssertFalse(model.peutEnvoyer)
+        await model.pointer(code: "123456", gps: nil)
+        XCTAssertEqual(port.compte("scanner"), 1, "aucun nouveau scan depuis ce bloc")
+        await model.rafraichir()
+        XCTAssertEqual(model.issue, .suiviIllisible)
+        XCTAssertEqual(port.compte("reconcilier"), 0)
+    }
+
+    func testDemoCodeDeLaMissionASaisiDansLeBlocB() async throws {
+        let magasin = MagasinEspion()
+        let banc = try await banc(DemoPointageGateway(), utilisateur: DemoWorld.user, magasin: magasin)
+        let blocA = bloc("demo-presence-a", banc)
+        let blocB = bloc("demo-presence-b", banc)
+        await blocA.charger()
+        await blocB.charger()
+        XCTAssertEqual(blocA.etat?.nbScans, 0)
+        XCTAssertEqual(blocB.etat?.prochainTypeScan, .fermeture)
+        await blocB.pointer(code: "123456", gps: nil)
+        XCTAssertEqual(blocB.issue, .enregistreSurAutreMission(.ouverture, missionId: "demo-presence-a"),
+                       "le code de la mission a pointe la mission a (horloge fixe : jamais bloqué en vérification)")
+        XCTAssertEqual(blocB.etat?.nbScans, 1, "mission b inchangée")
+        XCTAssertEqual(blocB.etat?.prochainTypeScan, .fermeture)
+        XCTAssertTrue(magasin.vide, "reçu soldé")
+        XCTAssertTrue(blocB.peutEnvoyer)
+        await blocA.rafraichir()
+        XCTAssertEqual(blocA.etat?.nbScans, 1, "le scan est sur la mission a")
+        XCTAssertEqual(blocA.etat?.statut, "EN_COURS")
+        XCTAssertTrue(blocA.peutEnvoyer, "aucun « reçu en cours » ne bloque l'autre bloc")
+    }
+
+    // MARK: - Disparition et réapparition de l'écran (revue fraîche de T3, M-B et m7)
+
+    func testReponseIgnoreeApresDesactiverPuisBlocDeNouveauOperant() async throws {
+        let retenue = Gate()
+        let port = PortScripte(etats: [.success(etat()), .success(etat()), .success(etat(.fermeture, nbScans: 1, statut: "EN_COURS"))],
+                               scans: [.enregistre(typeScan: .ouverture, numeroScan: 1), .enregistre(typeScan: .fermeture, numeroScan: 2)],
+                               retenue: retenue)
+        let magasin = MagasinEspion()
+        let (model, _) = try await modele(port, magasin: magasin)
+        await model.charger()
+        let envoi = Task { await model.pointer(code: "123456", gps: nil) }
+        await port.entreeScanner.wait()
+        model.desactiver()
+        XCTAssertFalse(model.peutEnvoyer)
+        // Réapparition pendant l'envoi : réactivé, mais aucune lecture en parallèle de l'envoi (m7).
+        await model.charger()
+        XCTAssertEqual(port.compte("etat"), 2, "charger() gardé pendant un envoi")
+        await retenue.open()
+        await envoi.value
+        XCTAssertNil(model.issue, "réponse émise avant la disparition : ignorée")
+        XCTAssertEqual(port.compte("etat"), 2, "aucune relecture publiée pour une réponse ignorée")
+        XCTAssertEqual(magasin.phases, ["prepared", "started", "effacé"], "essai décidé par le serveur : reçu soldé quand même")
+        // De nouveau opérant : charger, puis pointer.
+        await model.charger()
+        XCTAssertEqual(model.etat?.prochainTypeScan, .fermeture)
+        XCTAssertTrue(model.peutEnvoyer)
+        await model.pointer(code: "654321", gps: nil)
+        XCTAssertEqual(port.compte("scanner"), 2)
+        XCTAssertEqual(model.issue, .enregistre(.fermeture))
+    }
+
+    func testDesactiverSansReactivationRendLeBlocInerte() async throws {
+        let port = PortScripte(etats: [.success(etat())])
+        let (model, _) = try await modele(port)
+        await model.charger()
+        model.desactiver()
+        await model.pointer(code: "123456", gps: nil)
+        await model.reconcilier()
+        XCTAssertEqual(port.compte("scanner"), 0, "écran disparu : aucun envoi")
+        XCTAssertEqual(port.appels, ["etat"])
+        model.activer()
+        XCTAssertTrue(model.peutEnvoyer, "réactivé sans relecture : l'état connu reste affiché")
+    }
+
+    func testSuivreToutesLesQuinzeSecondesEtArretALAnnulation() async throws {
+        let port = PortScripte(etats: [.success(etat())])
+        let metronome = Metronome()
+        let (model, _) = try await modele(port, attendre: { await metronome.attendre($0) })
+        await model.charger()
+        let suivi = Task { await model.suivre() }
+        await metronome.attenteEnCours()
+        XCTAssertEqual(port.compte("etat"), 1)
+        await metronome.tic()
+        await metronome.attenteEnCours()
+        XCTAssertEqual(port.compte("etat"), 2, "un tic : une relecture")
+        let durees = await metronome.durees
+        XCTAssertEqual(durees, [PointageModel.intervalleSuivi, PointageModel.intervalleSuivi])
+        XCTAssertEqual(PointageModel.intervalleSuivi, 15, "`refetchInterval: 15000` du web (l.71)")
+        suivi.cancel()
+        await metronome.tic()
+        await suivi.value
+        XCTAssertEqual(port.compte("etat"), 2, "annulé : plus aucune relecture")
+    }
+
+    func testDesactiverArreteLeSuiviQuiRepartApresReapparition() async throws {
+        let port = PortScripte(etats: [.success(etat())])
+        let metronome = Metronome()
+        let (model, _) = try await modele(port, attendre: { await metronome.attendre($0) })
+        await model.charger()
+        let suivi = Task { await model.suivre() }
+        await metronome.attenteEnCours()
+        model.desactiver()
+        await metronome.tic()
+        await suivi.value
+        XCTAssertEqual(port.compte("etat"), 1, "écran disparu : suivi arrêté")
+        // Réapparition : `charger()` puis `suivre()` (consigne T4b).
+        await model.charger()
+        XCTAssertEqual(port.compte("etat"), 2)
+        let reprise = Task { await model.suivre() }
+        await metronome.attenteEnCours()
+        await metronome.tic()
+        await metronome.attenteEnCours()
+        XCTAssertEqual(port.compte("etat"), 3, "suivi de nouveau opérant")
+        reprise.cancel()
+        await metronome.tic()
+        await reprise.value
+    }
+
+    // MARK: - Session expirée (revue fraîche de T3, m1)
+
+    func testSessionExpireeAuScanSignaleeRecuGardeSansRenvoi() async throws {
+        let port = PortScripte(etats: [.success(etat())], erreurScan: JoleneError(.unauthorized, "session expirée (test)"))
+        let magasin = MagasinEspion()
+        let (model, _) = try await modele(port, magasin: magasin)
+        await model.charger()
+        await model.pointer(code: "123456", gps: nil)
+        XCTAssertTrue(model.sessionExpired, "session expirée signalée, jamais un refus métier")
+        XCTAssertEqual(model.issue, .verification)
+        XCTAssertEqual(port.compte("reconcilier"), 0, "aucune relecture sans session")
+        XCTAssertEqual(magasin.phases, ["prepared", "started"], "reçu gardé : réconcilié au retour de l'utilisateur")
+        XCTAssertEqual(port.compte("scanner"), 1)
+    }
+
+    func testSessionExpireePendantLaReconciliationSignaleeAussitot() async throws {
+        let port = PortScripte(etats: [.success(etat())], scans: [.incertain],
+                               erreurReconciliation: JoleneError(.unauthorized, "session expirée (test)"))
+        let magasin = MagasinEspion()
+        let (model, _) = try await modele(port, magasin: magasin)
+        await model.charger()
+        await model.pointer(code: "123456", gps: nil)
+        XCTAssertTrue(model.sessionExpired, "signalée dès la relecture, sans attendre le tic de 15 s")
+        XCTAssertEqual(port.compte("reconcilier"), 1, "relectures arrêtées")
+        XCTAssertEqual(model.issue, .verification)
+        XCTAssertEqual(magasin.phases, ["prepared", "started"])
     }
 }

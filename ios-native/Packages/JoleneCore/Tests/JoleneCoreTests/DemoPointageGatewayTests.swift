@@ -3,7 +3,9 @@ import XCTest
 
 /// Pointage du monde démo (lot 2, T3 ; blueprint §2.8) : fixtures `demo-presences.json`, codes 123456 (mission a,
 /// ouverture), 654321 (mission b, fermeture), 100001 (refus P0002), 100002 (anti-rejeu 23514), scénario
-/// `scan-incertain`, code tourné jamais rendu, aucun autre utilisateur, aucune requête.
+/// `scan-incertain`, code d'une mission saisi dans le bloc d'une autre (revue fraîche de T3, M-A), code tourné jamais
+/// rendu, aucun autre utilisateur. L'absence de réseau du cœur est prouvée par la garde statique `DemoNoNetworkTests`,
+/// pas par ces tests.
 final class DemoPointageGatewayTests: XCTestCase {
     private let terminal = DemoTerminalIdentity.identifiantDemo
     private var context: MissionReadContext { DemoWorld.context }
@@ -111,6 +113,24 @@ final class DemoPointageGatewayTests: XCTestCase {
         XCTAssertEqual(etat.nbScans, 0, "un refus n'écrit rien")
         let recues = await gateway.metadonneesRecues
         XCTAssertTrue(recues.isEmpty)
+    }
+
+    func testCodeDeLaMissionASaisiDansLeBlocBEnregistreSurA() async throws {
+        let gateway = DemoPointageGateway()
+        let started = try await recu(gateway, mission: "demo-presence-b")
+        let issue = try await gateway.scanner(code: "123456", metadonnees: metadonnees(), recu: started, context: context)
+        XCTAssertEqual(issue, .enregistreSurAutreMission(missionId: "demo-presence-a", typeScan: .ouverture, numeroScan: 1),
+                       "le code désigne la mission (comme le serveur) : jamais `.incertain`, jamais « non reçu »")
+        let a = try await gateway.etat(missionId: "demo-presence-a", context: context)
+        XCTAssertEqual(a.nbScans, 1)
+        XCTAssertEqual(a.statut, "EN_COURS")
+        let b = try await gateway.etat(missionId: "demo-presence-b", context: context)
+        XCTAssertEqual(b.nbScans, 1, "mission b inchangée")
+        XCTAssertEqual(b.prochainTypeScan, .fermeture)
+        let preuvesB = try await gateway.preuvesScan(missionId: "demo-presence-b", context: context)
+        XCTAssertEqual(preuvesB.map(\.id), started.preuvesAvant, "aucune preuve ajoutée à b")
+        let verdict = try await gateway.reconcilier(recu: started, context: context)
+        XCTAssertNotEqual(verdict, .nonRecu)
     }
 
     func testScanIncertainPuisReconciliation() async throws {

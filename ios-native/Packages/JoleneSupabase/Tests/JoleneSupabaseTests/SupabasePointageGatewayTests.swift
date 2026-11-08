@@ -108,35 +108,114 @@ final class SupabasePointageGatewayTests: XCTestCase {
         let apres = try await scanner(.json(200, succesApresB1))
         XCTAssertEqual(avant, .enregistre(typeScan: .ouverture, numeroScan: 1))
         XCTAssertEqual(apres, avant, "forme d'après B1 décodée, forme d'avant tolérée")
-        for valeur in [String(describing: avant), String(reflecting: avant), "\(Mirror(reflecting: avant).children.map(\.value))"] {
-            XCTAssertFalse(valeur.contains("482913") || valeur.contains("f00dbabe"), "code suivant jamais exposé ni conservé")
-        }
+        // Revue fraîche de T3 (m3) : la liste blanche est prouvée sur le type décodé lui-même, ré-encodé.
+        let decode = try JSONDecoder().decode(ScanEnregistre.self, from: Data(succesAvantB1.utf8))
+        let reencode = try JSONEncoder().encode(decode)
+        let cles = try XCTUnwrap(JSONSerialization.jsonObject(with: reencode) as? [String: Any])
+        XCTAssertEqual(Set(cles.keys), ["type_scan_effectue", "prochain_type_scan", "creneau_effectif_id", "horodatage_effectif",
+                                        "horodatage_arrondi", "numero_scan", "validation_etab_requise"])
+        XCTAssertNil(cles["nouveau_code"])
+        XCTAssertNil(cles["nouveau_hmac"])
+        let texte = String(decoding: reencode, as: UTF8.self) + String(describing: decode) + String(reflecting: decode)
+        XCTAssertFalse(texte.contains("482913") || texte.contains("f00dbabe"), "code suivant ni conservé ni ré-encodé")
         // Relecture : état puis preuve hors base du reçu.
         XCTAssertEqual(registry.requests(to: etatPath).count, 1)
         let relecture = try XCTUnwrap(registry.requests(to: scansPath).first)
         XCTAssertEqual(relecture.query("mission_id"), "eq.m-1")
     }
 
-    func testSuccesNonConfirmeParLaRelectureResteIncertain() async throws {
+    /// Revue fraîche de T3 (M-A) : un HTTP 200 prouve le COMMIT (PostgREST construit la réponse après lui) ; non confirmé
+    /// par la relecture, il n'est jamais `.incertain` (la réconciliation du reçu, filtrée sur sa mission, conclurait
+    /// « non reçu ») ni un succès supposé : `.accepteSansPreuve`.
+    func testSuccesNonConfirmeParLaRelectureJamaisIncertainNiSuppose() async throws {
         registry.add("POST", scanPath, respond: .json(200, succesApresB1))
         registry.add("POST", etatPath, respond: .json(200, etatJSON(nbScans: 0, prochain: "OUVERTURE")))
         registry.add("GET", scansPath, respond: .json(200, "[\(preuveJSON("s-1", numero: 1))]"))
         let pasBascule = try await gateway().scanner(code: "123456", metadonnees: MetadonneesScan(idTerminal: terminal, observation: nil),
                                                      recu: try recu(), context: TestClient.context)
-        XCTAssertEqual(pasBascule, .incertain, "état non basculé : jamais un succès supposé")
+        XCTAssertEqual(pasBascule, .accepteSansPreuve, "état non basculé : jamais un succès supposé")
 
         registry.reset()
         registry.add("POST", scanPath, respond: .json(200, succesApresB1))
         stubRelecture(preuves: [preuveJSON("s-1", numero: 1, terminal: "TERM_IOS_AUTREAUTREAUTREAUTRE")])
         let autreTerminal = try await gateway().scanner(code: "123456", metadonnees: MetadonneesScan(idTerminal: terminal, observation: nil),
                                                         recu: try recu(), context: TestClient.context)
-        XCTAssertEqual(autreTerminal, .incertain, "preuve d'un autre terminal : rien n'est prouvé")
+        XCTAssertEqual(autreTerminal, .accepteSansPreuve, "preuve d'un autre terminal : rien n'est prouvé")
 
         let sansNumero = try await scanner(.json(200, #"{"type_scan_effectue":"OUVERTURE"}"#))
-        XCTAssertEqual(sansNumero, .incertain, "HTTP 200 sans numero_scan : la fonction a pu valider")
+        XCTAssertEqual(sansNumero, .enregistre(typeScan: .ouverture, numeroScan: 1),
+                       "HTTP 200 sans numero_scan : la preuve hors base de ce terminal, comptée par l'état, est celle de l'essai")
+        let sansNumeroNiPreuve = try await scanner(.json(200, #"{"type_scan_effectue":"OUVERTURE"}"#), relecture: false)
+        XCTAssertEqual(sansNumeroNiPreuve, .accepteSansPreuve)
+        let erreurHTTP200 = try await scanner(.json(200, #"{"error":"inattendu"}"#), relecture: false)
+        XCTAssertEqual(erreurHTTP200, .accepteSansPreuve, "`{error}` en HTTP 200 hors contrat : la fonction a rendu, jamais « non reçu »")
         let relectureEnPanne = try await scanner(.json(200, succesApresB1), relecture: false)
-        XCTAssertEqual(relectureEnPanne, .incertain)
+        XCTAssertEqual(relectureEnPanne, .accepteSansPreuve)
     }
+
+    /// Revue fraîche de T3 (M-A) : `fn_scanner_code_pointage` trouve la mission par le seul code (`public.sql`
+    /// l.55639-55644). Le code d'une autre mission du soignant, saisi dans ce bloc, pointe CETTE mission : la ligne du
+    /// scan est relue sans filtre de mission, par le créneau et le numéro de la réponse.
+    func testCodeDUneAutreMissionJamaisNonRecu() async throws {
+        func stubs(localisation: StubResponse, etatAutre: String) {
+            registry.reset()
+            registry.add("POST", scanPath, respond: .json(200, succesApresB1))
+            registry.add("POST", etatPath, where: { ($0.bodyJSON as? [String: String])?["p_mission_id"] == "m-1" },
+                         respond: .json(200, etatJSON(nbScans: 0, prochain: "OUVERTURE")))
+            registry.add("POST", etatPath, where: { ($0.bodyJSON as? [String: String])?["p_mission_id"] == "m-2" },
+                         respond: .json(200, etatAutre))
+            registry.add("GET", scansPath, where: { $0.query("mission_id") != nil },
+                         respond: .json(200, "[\(preuveJSON("s-0", numero: 0))]"))
+            registry.add("GET", scansPath, where: { $0.query("creneau_effectif_id") != nil }, respond: localisation)
+        }
+        func scannerDansLeBlocM1() async throws -> IssueScan {
+            try await gateway().scanner(code: "123456", metadonnees: MetadonneesScan(idTerminal: terminal, observation: nil),
+                                        recu: try recu(), context: TestClient.context)
+        }
+
+        stubs(localisation: .json(200, "[\(preuveJSON("s-9", numero: 1, mission: "m-2"))]"), etatAutre: etatJSONAutre)
+        let ailleurs = try await scannerDansLeBlocM1()
+        XCTAssertNotEqual(ailleurs, .nonRecu)
+        XCTAssertEqual(ailleurs, .enregistreSurAutreMission(missionId: "m-2", typeScan: .ouverture, numeroScan: 1))
+        XCTAssertEqual(registry.requests(to: scanPath).count, 1, "une seule requête, aucun renvoi")
+        XCTAssertEqual(registry.unmatched.count, 0)
+        let localisation = try XCTUnwrap(registry.requests(to: scansPath).first { $0.query("creneau_effectif_id") != nil })
+        XCTAssertEqual(localisation.query("select"), PreuveScan.selection, "projection imposée")
+        XCTAssertEqual(localisation.query("creneau_effectif_id"), "eq.c-1")
+        XCTAssertEqual(localisation.query("numero_scan"), "eq.1")
+        XCTAssertEqual(localisation.query("id_terminal"), "eq.\(terminal)")
+        XCTAssertEqual(localisation.query("soignant_id"), "eq.\(TestClient.userId)")
+        XCTAssertNil(localisation.query("mission_id"), "sans filtre de mission (`sp_select` l.79931)")
+        XCTAssertEqual(registry.requests(to: etatPath).compactMap { ($0.bodyJSON as? [String: String])?["p_mission_id"] }.sorted(),
+                       ["m-1", "m-2"], "état de la mission réellement pointée relu")
+
+        // Ligne introuvable, lecture en panne, état de l'autre mission non basculé : COMMIT prouvé, jamais « non reçu ».
+        // (Lecture en panne : 400 PostgREST, qu'aucun rejeu GET du SDK ne retarde.)
+        let ligneAutre = "[\(preuveJSON("s-9", numero: 1, mission: "m-2"))]"
+        let ligneAutreTerminal = "[\(preuveJSON("s-9", numero: 1, terminal: "TERM_IOS_AUTREAUTREAUTREAUTRE", mission: "m-2"))]"
+        let panne = #"{"code":"PGRST100","details":null,"hint":null,"message":"failed to parse filter"}"#
+        let echecs: [(StubResponse, String)] = [
+            (.json(200, "[]"), etatJSONAutre),
+            (.json(400, panne), etatJSONAutre),
+            (.json(200, ligneAutre), etatJSON(nbScans: 0, prochain: "OUVERTURE")),
+            (.json(200, ligneAutreTerminal), etatJSONAutre),
+        ]
+        for (reponse, etatAutre) in echecs {
+            stubs(localisation: reponse, etatAutre: etatAutre)
+            let issue = try await scannerDansLeBlocM1()
+            XCTAssertEqual(issue, .accepteSansPreuve)
+            XCTAssertEqual(registry.requests(to: scanPath).count, 1)
+        }
+
+        // La réconciliation du reçu (mission m-1) ne voit rien : c'est pourquoi le modèle ne la consulte jamais après un 200.
+        registry.reset()
+        registry.add("GET", scansPath, respond: .json(200, "[\(preuveJSON("s-0", numero: 0))]"))
+        let reconciliation = try await gateway(decalage: 9).reconcilier(recu: try recu(), context: TestClient.context)
+        XCTAssertEqual(reconciliation, .nonRecu, "limite consignée (DECISIONS_LOT2.md) : réponse perdue sur une autre mission")
+    }
+
+    /// État de la mission m-2 après l'ouverture rendue par `succesApresB1` (numéro 1, prochain FERMETURE).
+    private var etatJSONAutre: String { etatJSON(nbScans: 1, prochain: "FERMETURE") }
 
     // MARK: - Exceptions
 
@@ -183,6 +262,33 @@ final class SupabasePointageGatewayTests: XCTestCase {
         let coupure = try await scanner(.json(503, #"{"code":"PGRST001","details":null,"hint":null,"message":"Database client error."}"#),
                                         relecture: false)
         XCTAssertEqual(coupure, .incertain)
+    }
+
+    /// Revue fraîche de T3 (m1) : un JWT refusé n'est ni un refus métier ni un incertain muet ; `.unauthorized` remonte
+    /// (le modèle signale la session expirée et garde le reçu `started`), au scan comme à la relance.
+    func testSessionExpireeLeveeAuScanEtALaRelance() async throws {
+        for reponse in [StubResponse.json(401, #"{"code":"PGRST301","details":null,"hint":null,"message":"JWT expired"}"#),
+                        .json(401, "<html>Unauthorized</html>")] {
+            registry.reset()
+            registry.add("POST", scanPath, respond: reponse)
+            do {
+                _ = try await gateway().scanner(code: "123456", metadonnees: MetadonneesScan(idTerminal: terminal, observation: nil),
+                                                recu: try recu(), context: TestClient.context)
+                XCTFail("session expirée : jamais une issue de scan")
+            } catch let erreur as JoleneError {
+                XCTAssertEqual(erreur, JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage))
+            }
+            XCTAssertEqual(registry.requests(to: scanPath).count, 1, "aucun renvoi")
+        }
+
+        registry.reset()
+        registry.add("POST", "/rest/v1/rpc/fn_relancer_validation_presence", respond: .json(200, #"{"success":false,"error":"NON_AUTHENTIFIE"}"#))
+        do {
+            _ = try await gateway().relancerValidation(missionId: mission, context: TestClient.context)
+            XCTFail("`NON_AUTHENTIFIE` (public.sql l.53023) : session expirée, jamais « Relance impossible. »")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur, JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage))
+        }
     }
 
     func testRecuIncoherentRefuseAvantToutEnvoi() async throws {
@@ -326,6 +432,25 @@ final class SupabasePointageGatewayTests: XCTestCase {
             XCTAssertFalse(url.contains("etablissements("), "jamais l'embed etablissements")
             XCTAssertFalse(url.contains("select=*"), "jamais select=*")
         }
+    }
+
+    /// Revue fraîche de T3 (m5) : parité `fetchEtablissementsSafe` (`src/lib/etablissements.ts` l.31-38, erreur
+    /// ignorée) : un échec de `fn_etablissements_safe` n'empêche jamais l'instantané ; les noms manquent seulement.
+    func testPresencesSansNomsDEtablissementSiLaLectureEchoue() async throws {
+        registry.add("GET", "/rest/v1/missions", where: { $0.query("statut") == "in.(ASSIGNEE,EN_COURS)" }, respond: .json(200, """
+        [{"id":"m-1","intitule":"Nuit","service":null,"debut_le":"2026-11-02T00:05:00+00:00","fin_le":"2026-11-02T08:05:00+00:00",
+          "duree_heures":8,"statut":"ASSIGNEE","etablissement_id":"etab-1"}]
+        """))
+        registry.add("GET", "/rest/v1/missions", respond: .json(200, "[]"))
+        registry.add("GET", "/rest/v1/presences", respond: .json(200, "[]"))
+        registry.add("GET", "/rest/v1/mission_creneaux", respond: .json(200, "[]", headers: ["Content-Range": "0-0/0"]))
+        registry.add("GET", "/rest/v1/contrats_mission", respond: .json(200, "[]"))
+        registry.add("POST", "/rest/v1/rpc/fn_etablissements_safe",
+                     respond: .json(500, #"{"code":"XX000","details":null,"hint":null,"message":"panne"}"#))
+        let instantane = try await gateway().presences(context: TestClient.context)
+        XCTAssertEqual(instantane.missions.map(\.id), ["m-1"])
+        XCTAssertTrue(instantane.etablissements.isEmpty, "noms absents : l'écran affiche le repli du web")
+        XCTAssertEqual(registry.requests(to: "/rest/v1/rpc/fn_etablissements_safe").count, 1)
     }
 
     // MARK: - Consentement, détail, relance
