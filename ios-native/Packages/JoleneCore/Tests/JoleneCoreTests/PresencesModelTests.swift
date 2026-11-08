@@ -286,7 +286,7 @@ final class PresencesModelTests: XCTestCase {
                                   .instantane(avecMissionDuJour)])
         let (controller, snapshot) = try await pret(port)
         let store = SessionStore(controller: controller)
-        _ = await store.start()
+        await store.start()
         let model = PresencesModel(controller: controller, snapshot: try XCTUnwrap(store.state.snapshot))
         await model.load()
         XCTAssertTrue(model.sessionExpired)
@@ -367,7 +367,7 @@ final class PresencesModelTests: XCTestCase {
 
     func testMondeDemoOngletsEtHistorique() async throws {
         let controller = SessionController(gateways: DemoWorld.gateways())
-        let state = await controller.signIn(email: DemoWorld.context.email, password: "demonstration")
+        let state = await controller.signIn(email: "demonstration@example.invalid", password: "demonstration")
         let snapshot = try XCTUnwrap(state.snapshot)
         let model = PresencesModel(controller: controller, snapshot: snapshot)
         await model.load()

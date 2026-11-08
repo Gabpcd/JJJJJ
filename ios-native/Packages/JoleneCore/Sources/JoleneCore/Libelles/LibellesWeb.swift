@@ -38,6 +38,178 @@ public enum LibellesWeb {
         }
     }
 
+    /// Page Présences (`PresencesSoignant.tsx` l.464-766, lot 2 T4a) : titre, onglets, états vides, missions à
+    /// venir, présences validées récemment. Textes que le web tutoie (sous-titre, descriptions des états vides,
+    /// titre de l'erreur) et assemblages : `LibellesPresences.Liste`. Bandeau « à valider » : `TextesWeb.Presences`.
+    public enum ListePresences {
+        // source: src/pages/PresencesSoignant.tsx:513
+        public static let titre = "Mes présences"
+
+        // source: src/pages/PresencesSoignant.tsx:472
+        public static let reessayer = "Réessayer"
+
+        // source: src/pages/PresencesSoignant.tsx:520
+        public static let ongletAVenir = "À venir"
+
+        /// Libellé vocalisé du compteur de l'onglet « À venir » (`aria-label`, l.520) : voir
+        /// `LibellesPresences.Liste.badgeAVenir(_:)`.
+        // source: src/pages/PresencesSoignant.tsx:520
+        public static let badgeMission = "mission"
+
+        // source: src/pages/PresencesSoignant.tsx:520
+        public static let badgePluriel = "s"
+
+        // source: src/pages/PresencesSoignant.tsx:520
+        public static let badgeAVenir = "à venir"
+
+        // source: src/pages/PresencesSoignant.tsx:521
+        public static let ongletActives = "Actives"
+
+        // source: src/pages/PresencesSoignant.tsx:522
+        public static let ongletAujourdhui = "Aujourd'hui"
+
+        // source: src/pages/PresencesSoignant.tsx:523
+        public static let ongletHistorique = "Historique"
+
+        /// Repli du nom d'établissement (`nom || 'Établissement'`, l.546, l.690 ; `BlocPointageMission.tsx` l.65).
+        // source: src/pages/PresencesSoignant.tsx:546
+        public static let etablissement = "Établissement"
+
+        // source: src/pages/PresencesSoignant.tsx:546
+        public static let separateurVille = "·"
+
+        // source: src/pages/PresencesSoignant.tsx:549
+        public static let planningAConfirmer = "Planning détaillé à confirmer avec l’établissement"
+
+        /// Horaire d'une mission à venir (l.552-553) : voir `LibellesPresences.Liste.horaire(debut:fin:dureeHeures:)`.
+        // source: src/pages/PresencesSoignant.tsx:552
+        public static let fleche = "→"
+
+        // source: src/pages/PresencesSoignant.tsx:553
+        public static let parentheseDuree = "("
+
+        // source: src/pages/PresencesSoignant.tsx:553
+        public static let uniteDuree = "h)"
+
+        // source: src/pages/PresencesSoignant.tsx:564
+        public static let videAVenirTitre = "Aucune mission à venir"
+
+        // source: src/pages/PresencesSoignant.tsx:566
+        public static let chercherDesMissions = "Chercher des missions"
+
+        // source: src/pages/PresencesSoignant.tsx:587
+        public static let videActivesTitre = "Aucune mission active"
+
+        // source: src/pages/PresencesSoignant.tsx:589
+        public static let trouverUneMission = "Trouver une mission"
+
+        // source: src/pages/PresencesSoignant.tsx:610
+        public static let videAujourdhuiTitre = "Aucune mission aujourd'hui"
+
+        // source: src/pages/PresencesSoignant.tsx:612
+        public static let voirMonPlanning = "Voir mon planning"
+
+        // source: src/pages/PresencesSoignant.tsx:619
+        public static let valideesRecemment = "Présences validées récemment"
+
+        // source: src/pages/PresencesSoignant.tsx:632
+        public static let validee = "Validée"
+
+        // source: src/pages/PresencesSoignant.tsx:764
+        public static let videHistoriqueTitre = "Aucune présence enregistrée"
+    }
+
+    /// Ligne de l'onglet Historique (`PresencesSoignant.tsx` l.486-491, l.684-758) : badges, arrivée, départ,
+    /// heures, méthode, ligne reconstruite depuis les segments EFFECTIF. Assemblages : `LibellesPresences.Ligne`.
+    public enum LignePresence {
+        // source: src/pages/PresencesSoignant.tsx:487
+        public static let aucuneValeur = "—"
+
+        // source: src/pages/PresencesSoignant.tsx:488
+        public static let methodeGps = "📍 GPS"
+
+        // source: src/pages/PresencesSoignant.tsx:489
+        public static let methodeCode = "🔢 Code"
+
+        // source: src/pages/PresencesSoignant.tsx:697
+        public static let detail = "Détail"
+
+        // source: src/pages/PresencesSoignant.tsx:700
+        public static let badgeValidee = "✅ Validée"
+
+        // source: src/pages/PresencesSoignant.tsx:702
+        public static let badgeNonValidee = "⏳ Non validée"
+
+        // source: src/pages/PresencesSoignant.tsx:709
+        public static let arrivee = "Arrivée :"
+
+        // source: src/pages/PresencesSoignant.tsx:714
+        public static let depart = "Départ :"
+
+        // source: src/pages/PresencesSoignant.tsx:719
+        public static let heures = "Heures :"
+
+        // source: src/pages/PresencesSoignant.tsx:720
+        public static let uniteHeures = "h"
+
+        // source: src/pages/PresencesSoignant.tsx:745
+        public static let releveReconstruit = "Relevé reconstruit depuis les segments de pointage. La validation historique n’est pas disponible sur cet ancien dossier."
+
+        // source: src/pages/PresencesSoignant.tsx:755
+        public static let voirOuSignalerLitige = "Voir ou signaler un litige"
+    }
+
+    /// Motifs du bloc de pointage d'une mission (`BlocPointageMission.tsx` l.72-127) quand le pointage n'est pas
+    /// ouvert. Texte que le web tutoie (AUCUN_CRENEAU) et assemblages : `LibellesPresences.Bloc`.
+    public enum BlocPointage {
+        // source: src/components/pointage/BlocPointageMission.tsx:80
+        public static let contratNonSigne = "Contrat non signé"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:82
+        public static let contratDoitEtreSigne = "Le contrat doit être signé par les deux parties avant le premier pointage."
+
+        // source: src/components/pointage/BlocPointageMission.tsx:86
+        public static let prochainCreneauAutreJour = "Aucun créneau à pointer aujourd’hui. Prochain créneau le"
+
+        /// Point final des phrases suivies d'une date ou d'une heure (l.87, l.117, l.119).
+        // source: src/components/pointage/BlocPointageMission.tsx:87
+        public static let point = "."
+
+        // source: src/components/pointage/BlocPointageMission.tsx:97
+        public static let voirLeContrat = "Voir le contrat"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:103
+        public static let aucunCreneauPlanifie = "Aucun créneau planifié"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:112
+        public static let pasEncoreOuvert = "Pointage pas encore ouvert"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:113
+        public static let aucunCreneauAujourdhui = "Aucun créneau à pointer aujourd’hui"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:117
+        public static let ouvrira = "Le pointage ouvrira"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:117
+        public static let minutesAvant = "minutes avant le créneau de"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:119
+        public static let prochainCreneau = "Prochain créneau le"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:120
+        public static let tousTermines = "Tous les créneaux planifiés sont terminés."
+    }
+
+    /// Lignes « Mes documents » et « Mes contrats » de la section « Mon espace » du Profil (décision 24 du lot 2),
+    /// titres des pages web. « Mes présences » : `ListePresences.titre`.
+    public enum EspaceSoignant {
+        // source: src/pages/MesDocuments.tsx:27
+        public static let mesDocuments = "Mes documents"
+
+        // source: src/pages/ListeContrats.tsx:101
+        public static let mesContrats = "Mes contrats"
+    }
+
     /// Panneau de contestation (`PanneauContestation.tsx`) : en-tête (l.262) et formulaire
     /// d'ouverture (l.361-392). Libellés de statut : `TextesWeb.Contestation`. Aucun texte de délai
     /// (Q9, en attente de Gabrielle).
@@ -252,6 +424,56 @@ public enum LibellesWeb {
         .init(cle: "Presences.relanceEnvoi", texte: Presences.relanceEnvoi),
         .init(cle: "Presences.relanceSucces", texte: Presences.relanceSucces),
         .init(cle: "Presences.relanceImpossible", texte: Presences.relanceImpossible),
+        .init(cle: "ListePresences.titre", texte: ListePresences.titre),
+        .init(cle: "ListePresences.reessayer", texte: ListePresences.reessayer),
+        .init(cle: "ListePresences.ongletAVenir", texte: ListePresences.ongletAVenir),
+        .init(cle: "ListePresences.badgeMission", texte: ListePresences.badgeMission),
+        .init(cle: "ListePresences.badgePluriel", texte: ListePresences.badgePluriel),
+        .init(cle: "ListePresences.badgeAVenir", texte: ListePresences.badgeAVenir),
+        .init(cle: "ListePresences.ongletActives", texte: ListePresences.ongletActives),
+        .init(cle: "ListePresences.ongletAujourdhui", texte: ListePresences.ongletAujourdhui),
+        .init(cle: "ListePresences.ongletHistorique", texte: ListePresences.ongletHistorique),
+        .init(cle: "ListePresences.etablissement", texte: ListePresences.etablissement),
+        .init(cle: "ListePresences.separateurVille", texte: ListePresences.separateurVille),
+        .init(cle: "ListePresences.planningAConfirmer", texte: ListePresences.planningAConfirmer),
+        .init(cle: "ListePresences.fleche", texte: ListePresences.fleche),
+        .init(cle: "ListePresences.parentheseDuree", texte: ListePresences.parentheseDuree),
+        .init(cle: "ListePresences.uniteDuree", texte: ListePresences.uniteDuree),
+        .init(cle: "ListePresences.videAVenirTitre", texte: ListePresences.videAVenirTitre),
+        .init(cle: "ListePresences.chercherDesMissions", texte: ListePresences.chercherDesMissions),
+        .init(cle: "ListePresences.videActivesTitre", texte: ListePresences.videActivesTitre),
+        .init(cle: "ListePresences.trouverUneMission", texte: ListePresences.trouverUneMission),
+        .init(cle: "ListePresences.videAujourdhuiTitre", texte: ListePresences.videAujourdhuiTitre),
+        .init(cle: "ListePresences.voirMonPlanning", texte: ListePresences.voirMonPlanning),
+        .init(cle: "ListePresences.valideesRecemment", texte: ListePresences.valideesRecemment),
+        .init(cle: "ListePresences.validee", texte: ListePresences.validee),
+        .init(cle: "ListePresences.videHistoriqueTitre", texte: ListePresences.videHistoriqueTitre),
+        .init(cle: "LignePresence.aucuneValeur", texte: LignePresence.aucuneValeur),
+        .init(cle: "LignePresence.methodeGps", texte: LignePresence.methodeGps),
+        .init(cle: "LignePresence.methodeCode", texte: LignePresence.methodeCode),
+        .init(cle: "LignePresence.detail", texte: LignePresence.detail),
+        .init(cle: "LignePresence.badgeValidee", texte: LignePresence.badgeValidee),
+        .init(cle: "LignePresence.badgeNonValidee", texte: LignePresence.badgeNonValidee),
+        .init(cle: "LignePresence.arrivee", texte: LignePresence.arrivee),
+        .init(cle: "LignePresence.depart", texte: LignePresence.depart),
+        .init(cle: "LignePresence.heures", texte: LignePresence.heures),
+        .init(cle: "LignePresence.uniteHeures", texte: LignePresence.uniteHeures),
+        .init(cle: "LignePresence.releveReconstruit", texte: LignePresence.releveReconstruit),
+        .init(cle: "LignePresence.voirOuSignalerLitige", texte: LignePresence.voirOuSignalerLitige),
+        .init(cle: "BlocPointage.contratNonSigne", texte: BlocPointage.contratNonSigne),
+        .init(cle: "BlocPointage.contratDoitEtreSigne", texte: BlocPointage.contratDoitEtreSigne),
+        .init(cle: "BlocPointage.prochainCreneauAutreJour", texte: BlocPointage.prochainCreneauAutreJour),
+        .init(cle: "BlocPointage.point", texte: BlocPointage.point),
+        .init(cle: "BlocPointage.voirLeContrat", texte: BlocPointage.voirLeContrat),
+        .init(cle: "BlocPointage.aucunCreneauPlanifie", texte: BlocPointage.aucunCreneauPlanifie),
+        .init(cle: "BlocPointage.pasEncoreOuvert", texte: BlocPointage.pasEncoreOuvert),
+        .init(cle: "BlocPointage.aucunCreneauAujourdhui", texte: BlocPointage.aucunCreneauAujourdhui),
+        .init(cle: "BlocPointage.ouvrira", texte: BlocPointage.ouvrira),
+        .init(cle: "BlocPointage.minutesAvant", texte: BlocPointage.minutesAvant),
+        .init(cle: "BlocPointage.prochainCreneau", texte: BlocPointage.prochainCreneau),
+        .init(cle: "BlocPointage.tousTermines", texte: BlocPointage.tousTermines),
+        .init(cle: "EspaceSoignant.mesDocuments", texte: EspaceSoignant.mesDocuments),
+        .init(cle: "EspaceSoignant.mesContrats", texte: EspaceSoignant.mesContrats),
         .init(cle: "Contestation.titre", texte: Contestation.titre),
         .init(cle: "Contestation.contester", texte: Contestation.contester),
         .init(cle: "Contestation.placeholderSoignant", texte: Contestation.placeholderSoignant),

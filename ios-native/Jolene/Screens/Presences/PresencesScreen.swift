@@ -1,0 +1,265 @@
+import SwiftUI
+import JoleneCore
+import JoleneDesign
+
+/// Page Présences (blueprint lot 2 §3 T4a) : vue de `PresencesModel` (JoleneCore), port de `PresencesSoignant.tsx`.
+/// Les règles d'état (onglet initial, annulation, rafraîchissement, session expirée, epoch, délai, relecture à 60 s),
+/// les dérivations (listes, historique, blocs de pointage) et les textes sont testés dans JoleneCore
+/// (`PresencesModelTests`, `PresencesAffichageTests`, `LibellesPresencesTests`) ; la vue n'ajoute aucune règle.
+///
+/// Onglets dans l'ordre du web (À venir, Actives, Aujourd'hui, Historique ; `?tab=` aux valeurs exactes du web, porté
+/// par la route de T10 avec `?filtre=a_valider`). Onglet Aujourd'hui : blocs de pointage puis « Présences validées
+/// récemment » ; Actives : blocs des missions EN_COURS ; Historique : bandeau « à valider » (`TextesWeb.Presences`,
+/// verbatim, texte HARD STOP n°4 de TL en attente de la validation de Gabrielle) quand le lien le demande, puis les
+/// lignes. Exclus de T4a : bandeaux hors
+/// ligne et sans GPS, consentement GPS (T4b), notation (T5a), contestation (T5b).
+///
+/// Actions des états vides : onglets de l'app (les routes web `/soignant/missions` et `/soignant/planning` sont
+/// « Mes missions », `/soignant/recherche-missions` est Explorer, `LinkRouter`).
+struct PresencesScreen: View {
+    @StateObject private var model: PresencesModel
+    @ObservedObject private var session: SessionStore
+    private let snapshot: SessionSnapshot
+    private let ouvrirOnglet: (MainTabView.Tab) -> Void
+    @Environment(\.scenePhase) private var scenePhase
+
+    init(session: SessionStore, snapshot: SessionSnapshot, parametreOnglet: String? = nil, parametreFiltre: String? = nil,
+         ouvrirOnglet: @escaping (MainTabView.Tab) -> Void) {
+        self.session = session
+        self.snapshot = snapshot
+        self.ouvrirOnglet = ouvrirOnglet
+        _model = StateObject(wrappedValue: PresencesModel(controller: session.controller, snapshot: snapshot,
+                                                          parametreOnglet: parametreOnglet, parametreFiltre: parametreFiltre))
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: JoleneSpacing.lg) {
+                Text(LibellesPresences.Liste.sousTitre)
+                    .font(JoleneFont.callout)
+                    .foregroundStyle(JoleneColor.bubblegum)
+                    .fixedSize(horizontal: false, vertical: true)
+                switch model.state {
+                case .loading:
+                    chargement
+                case let .failed(echec) where model.sessionExpired:
+                    // Session expirée côté serveur : textes et règle de l'Accueil (lot 1, `AccueilScreen`).
+                    EmptyState(systemImage: "person.crop.circle.badge.exclamationmark", title: "Session à vérifier",
+                               message: echec.message ?? "", identifier: "presences-session-expired",
+                               actionTitle: "Vérifier ma session", actionIdentifier: "presences-session-check") {
+                        Task { await model.verifierSession(session) }
+                    }
+                case let .failed(echec):
+                    EmptyState(systemImage: "exclamationmark.triangle", title: LibellesPresences.Liste.erreurTitre,
+                               message: echec.message ?? "", identifier: "presences-error",
+                               actionTitle: LibellesWeb.ListePresences.reessayer, actionIdentifier: "presences-retry") {
+                        Task { await model.load() }
+                    }
+                case .loaded:
+                    contenu
+                }
+            }
+            .padding(JoleneSpacing.lg)
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
+        }
+        .refreshable { await model.load() }
+        .accessibilityIdentifier("presences-screen")
+        .background(JoleneColor.lavender.ignoresSafeArea())
+        .navigationTitle(LibellesWeb.ListePresences.titre)
+        // Premier affichage, relance après une tâche annulée, relecture au-delà de 60 s (`staleTime`).
+        .task { await model.loadIfStale() }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active { Task { await model.loadIfStale() } }
+        }
+    }
+
+    // MARK: - États
+
+    private var chargement: some View {
+        VStack(alignment: .leading, spacing: JoleneSpacing.md) {
+            SkeletonBlock(size: .lg, width: 260)
+            SkeletonCard()
+            SkeletonCard()
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("presences-loading")
+    }
+
+    @ViewBuilder
+    private var contenu: some View {
+        if let echec = model.echecRafraichissement {
+            InlineNotice(echec.message ?? LibellesPresences.Liste.erreurTitre, tone: .error, identifier: "presences-refresh-error",
+                         announcesOnAppear: true)
+        }
+        OngletsPresences(selection: model.onglet, nombreAVenir: model.listes?.missionsAVenir.count ?? 0) { model.choisir($0) }
+        switch model.onglet ?? .aujourdhui {
+        case .avenir: aVenir
+        case .encours: actives
+        case .aujourdhui: aujourdhui
+        case .historique: historique
+        }
+    }
+
+    // MARK: - Onglets
+
+    @ViewBuilder private var aVenir: some View {
+        let lignes = model.listes?.missionsAVenir ?? []
+        if lignes.isEmpty {
+            EmptyState(systemImage: "calendar", title: LibellesWeb.ListePresences.videAVenirTitre,
+                       message: LibellesPresences.Liste.videAVenirDescription, identifier: "presences-empty-avenir",
+                       actionTitle: LibellesWeb.ListePresences.chercherDesMissions,
+                       actionIdentifier: "presences-empty-avenir-action") { ouvrirOnglet(.missions) }
+        } else {
+            ForEach(lignes, id: \.mission.id) { ligne in
+                PresenceAVenirRow(ligne: ligne)
+            }
+        }
+    }
+
+    @ViewBuilder private var actives: some View {
+        let missions = model.listes?.missionsEnCours ?? []
+        if missions.isEmpty {
+            EmptyState(systemImage: "waveform.path.ecg", title: LibellesWeb.ListePresences.videActivesTitre,
+                       message: LibellesPresences.Liste.videActivesDescription, identifier: "presences-empty-actives",
+                       actionTitle: LibellesWeb.ListePresences.trouverUneMission,
+                       actionIdentifier: "presences-empty-actives-action") { ouvrirOnglet(.explorer) }
+        } else {
+            blocs(missions)
+        }
+    }
+
+    @ViewBuilder private var aujourdhui: some View {
+        let missions = model.listes?.missionsAujourdhui ?? []
+        if missions.isEmpty {
+            EmptyState(systemImage: "calendar", title: LibellesWeb.ListePresences.videAujourdhuiTitre,
+                       message: LibellesPresences.Liste.videAujourdhuiDescription, identifier: "presences-empty-aujourdhui",
+                       actionTitle: LibellesWeb.ListePresences.voirMonPlanning,
+                       actionIdentifier: "presences-empty-aujourdhui-action") { ouvrirOnglet(.missions) }
+        } else {
+            blocs(missions)
+        }
+        let validees = model.presencesValidees
+        if !validees.isEmpty {
+            VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
+                HStack(spacing: JoleneSpacing.xs) {
+                    Image(systemName: "checkmark.circle")
+                        .foregroundStyle(JoleneColor.cyan700)
+                        .accessibilityHidden(true)
+                    Text(LibellesWeb.ListePresences.valideesRecemment)
+                        .font(JoleneFont.headline)
+                        .foregroundStyle(JoleneColor.midnight)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                ForEach(validees) { presence in
+                    PresenceValideeRow(presence: presence, etablissement: model.instantane?.etablissement(de: presence))
+                }
+            }
+            .padding(.top, JoleneSpacing.lg)
+        }
+    }
+
+    @ViewBuilder private var historique: some View {
+        if model.aValider {
+            InlineNotice(TextesWeb.Presences.bandeauAValider, tone: .warning, identifier: "presences-bandeau-a-valider")
+        }
+        let lignes = model.historique
+        if lignes.isEmpty {
+            EmptyState(systemImage: "clock.arrow.circlepath", title: LibellesWeb.ListePresences.videHistoriqueTitre,
+                       message: LibellesPresences.Liste.videHistoriqueDescription, identifier: "presences-empty-historique",
+                       actionTitle: LibellesWeb.ListePresences.trouverUneMission,
+                       actionIdentifier: "presences-empty-historique-action") { ouvrirOnglet(.explorer) }
+        } else if let instantane = model.instantane {
+            ForEach(lignes) { ligne in
+                PresenceHistoriqueRow(ligne: ligne, mission: instantane.mission(de: ligne))
+            }
+        }
+    }
+
+    private func blocs(_ missions: [MissionPresenceEnrichie<MissionPresenceLue, EtablissementSummary>]) -> some View {
+        ForEach(missions, id: \.mission.id) { mission in
+            BlocPointageView(mission: mission, contrat: model.listes?.contrats[mission.mission.id], horloge: model.horloge,
+                             session: session, snapshot: snapshot)
+        }
+    }
+}
+
+/// Barre des quatre onglets (`TabsList` du web, l.519-524) : une ligne quand elle tient, sinon deux colonnes comme le
+/// web sur mobile (`grid-cols-2`). Un onglet choisi porte le trait « sélectionné » ; le compteur d'« À venir » est
+/// vocalisé comme l'`aria-label` du web (« 2 missions à venir »).
+private struct OngletsPresences: View {
+    let selection: PointageRules.OngletPresences?
+    let nombreAVenir: Int
+    let choisir: (PointageRules.OngletPresences) -> Void
+
+    private static let ordre: [PointageRules.OngletPresences] = [.avenir, .encours, .aujourdhui, .historique]
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: JoleneSpacing.xs) {
+                ForEach(Self.ordre, id: \.self) { bouton($0) }
+            }
+            Grid(horizontalSpacing: JoleneSpacing.xs, verticalSpacing: JoleneSpacing.xs) {
+                GridRow { bouton(.avenir); bouton(.encours) }
+                GridRow { bouton(.aujourdhui); bouton(.historique) }
+            }
+        }
+    }
+
+    private func bouton(_ onglet: PointageRules.OngletPresences) -> some View {
+        let choisi = onglet == selection
+        let compteur = onglet == .avenir && nombreAVenir > 0 ? nombreAVenir : nil
+        return Button { choisir(onglet) } label: {
+            HStack(spacing: JoleneSpacing.xs) {
+                Image(systemName: Self.symbole(onglet))
+                    .accessibilityHidden(true)
+                Text(Self.titre(onglet))
+                    .lineLimit(1)
+                    .fixedSize()
+                if let compteur {
+                    Text(String(compteur))
+                        .font(JoleneFont.caption.weight(.semibold))
+                        .padding(.horizontal, JoleneSpacing.xs)
+                        .background(Capsule().fill(JoleneColor.mauve100))
+                }
+            }
+            .font(JoleneFont.callout.weight(.semibold))
+            .foregroundStyle(choisi ? JoleneColor.midnight : JoleneColor.bubblegum)
+            .padding(.horizontal, JoleneSpacing.md)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(RoundedRectangle(cornerRadius: JoleneRadius.field).fill(choisi ? JoleneColor.cloud : JoleneColor.lavender))
+            .overlay(RoundedRectangle(cornerRadius: JoleneRadius.field)
+                .strokeBorder(choisi ? JoleneColor.rose700 : JoleneColor.rose100, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Self.titre(onglet))
+        .accessibilityValue(compteur.map(LibellesPresences.Liste.badgeAVenir) ?? "")
+        .accessibilityAddTraits(choisi ? .isSelected : [])
+        .accessibilityIdentifier("presences-tab-" + Self.suffixe(onglet))
+    }
+
+    private static func titre(_ onglet: PointageRules.OngletPresences) -> String {
+        switch onglet {
+        case .avenir: return LibellesWeb.ListePresences.ongletAVenir
+        case .encours: return LibellesWeb.ListePresences.ongletActives
+        case .aujourdhui: return LibellesWeb.ListePresences.ongletAujourdhui
+        case .historique: return LibellesWeb.ListePresences.ongletHistorique
+        }
+    }
+
+    /// Identifiants du blueprint (`presences-tab-avenir`, `-actives`, `-aujourdhui`, `-historique`).
+    private static func suffixe(_ onglet: PointageRules.OngletPresences) -> String {
+        onglet == .encours ? "actives" : onglet.rawValue
+    }
+
+    /// Icônes du web (`CalendarDays`, `Activity`, `Clock`, `History`).
+    private static func symbole(_ onglet: PointageRules.OngletPresences) -> String {
+        switch onglet {
+        case .avenir: return "calendar"
+        case .encours: return "waveform.path.ecg"
+        case .aujourdhui: return "clock"
+        case .historique: return "clock.arrow.circlepath"
+        }
+    }
+}

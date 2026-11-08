@@ -58,7 +58,7 @@ final class DemoPresencesTests: JoleneUITestCase {
         choisir("presences-tab-avenir")
         XCTAssertEqual(element("presences-tab-avenir").value as? String, "2 missions à venir")
         verifier("presence-avenir-demo-presence-d", dans: ecran, contient: [
-            "mar.", "3", "nov.", "Assignée", "Démonstration · Mission de demain", "Établissement fictif République · Paris",
+            "MAR.", "3", "nov.", "Assignée", "Démonstration · Mission de demain", "Établissement fictif République · Paris",
             "08h00 → 16h00 (8h)",
         ])
         verifier("presence-avenir-demo-presence-e", dans: ecran, contient: [
@@ -97,7 +97,8 @@ final class DemoPresencesTests: JoleneUITestCase {
         revenir()
         let sentinelle = element("network-sentinel")
         let liste = element("profile-list")
-        if !visible(sentinelle) { scrollTo(sentinelle, in: liste) }
+        // La sentinelle est au-dessus de « Mon espace », d'où la liste a été ouverte : défilement vers le haut.
+        if !visible(sentinelle) { scrollTo(sentinelle, in: liste, downward: false) }
         XCTAssertEqual(sentinelle.label, "0 requête", "aucune requête réseau en démonstration")
     }
 
@@ -168,19 +169,18 @@ final class DemoPresencesTests: JoleneUITestCase {
         require("Le profil est affiché") { self.containerVisible(self.element("profile-list")) }
     }
 
-    /// Ligne de la section « Mon espace » : défilement borné si elle est hors cadre, puis tap natif.
+    /// Ligne de la section « Mon espace », placée sous « Application » : défilement borné vers le bas tant qu'elle
+    /// n'est pas entièrement visible (une cellule hors écran d'une `List` n'existe pas encore dans l'arbre), puis tap natif.
     private func tapDansProfil(_ identifiant: String) {
         let ligne = element(identifiant)
-        let liste = element("profile-list")
-        require("La ligne \(identifiant) est rendue") { ligne.exists }
-        if !visible(ligne) { scrollTo(ligne, in: liste) }
+        if !visible(ligne) { scrollTo(ligne, in: element("profile-list")) }
+        XCTAssertTrue(element("profil-espace").exists, "section « Mon espace » du Profil (décision 24)")
         tap(identifiant)
     }
 
     @discardableResult
     private func ouvrirMesPresences() -> XCUIElement {
         ouvrirProfil()
-        XCTAssertTrue(element("profil-espace").exists, "section « Mon espace » du Profil (décision 24)")
         tapDansProfil("profil-presences")
         let ecran = element("presences-screen")
         require("La page Présences est chargée", timeout: 30) {
