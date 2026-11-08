@@ -267,6 +267,9 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
             }
             documentId = id
         }
+        // Envoi annulé (délai `bounded` de l'appelant, qui réconcilie aussitôt) : aucune vérification ne part après
+        // coup ; la ligne relue donnera « Revérifier ». « Une seule fois » reste vrai même en concurrence.
+        guard !Task.isCancelled else { return .incertain }
         await demanderVerification(documentId)
         let preuve: PreuveDocument?
         do {
