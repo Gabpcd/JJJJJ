@@ -208,6 +208,85 @@ tranches qui la mettent en œuvre (§3 du blueprint).
   Le chemin peut porter un jeton (`/etab/invitation/:token`, `src/App.tsx` l.433, consommé par
   `fn_accepter_invitation_membre`) ou un identifiant (`/contrat/:id`, `/soignant/missions/:id`).
 
+## T5 livrée sans le coordinateur de liens de L1-T10 (branche `lot3/l3-t5-v2`, 08/11/2026)
+
+- **Manque.** Le blueprint fait passer les taps par `DeepLinkCoordinator` (« une ligne », §3 T5) et la tranche
+  dépend de T3 (T3b). Ni `DeepLinkCoordinator`, ni `DeepLinkIntent`, ni présentateur `.safari` n'existent sur une
+  branche (L1-T10 absent, reliquat T3b ouvert). T5 n'invente pas ce coordinateur : elle livre la partie faisable
+  et pose un **point d'extension minimal**, à reprendre par L1-T10 / T3b :
+  - `JoleneCore/Push/PushTapIntent.swift` : `PushTapIntent` (payload → `PushRouting` → `DestinationLien`) et
+    `BoiteTapsPush` (dernier tap mémorisé, rejoué par le premier espace prêt avec le rôle du snapshot ; un tap reçu
+    pendant l'espace d'un epoch est écarté par un autre epoch) ;
+  - `JoleneCore/Notifications/CentreNotifications.swift` : `CibleNotification`, construite depuis une
+    `DestinationLien` seulement (jamais la route brute) : Accueil, Explorer, Mes missions, Revenus **avec sa
+    section**, hub Profil, détail de mission, centre, renvoi web, aucune ; onglet porteur donné par
+    `OngletEspace` (`JoleneCore/Navigation/OngletEspace.swift`, enum dédié : les drapeaux `EcranNatif`, étendus
+    par le lot 2 aux présences, documents et contrats, ne sont pas des onglets) ;
+  - `MainTabView.presenter(_:depuisCentre:)` : présentation de ces cibles dans l'espace prêt (onglet, retour à la
+    racine de l'Accueil, détail empilé sur l'Accueil, centre), seulement si `CibleNotification.estPresentable` ; un
+    renvoi web n'est présenté que par `PresentateurRenvoiWeb` s'il est injecté (nil avant L1-T10 : rien n'est
+    ouvert, jamais `openURL`).
+- **Ligne de T5** : `DestinationLien.ecranNatifLivre(.notifications) = true` (consigne de T3a), avec
+  `DestinationLienTests` (table, famille push `/soignant/notifications` → natif, totaux 454 / 436) et le point de
+  fusion de l'Accueil (`renvoiWeb(lienNotifications)` = nil, « Voir » `accueil-notifications-action` ouvre le
+  centre natif, `DemoAccueilTests` migré).
+- **Au merge de L1-T10 / T3b** : le coordinateur consomme `BoiteTapsPush` (même règle d'epoch) et reprend
+  `MainTabView.presenter` ; le libellé DEBUG `push-tap-cible` (route présentée, XCUITest de T5) peut alors céder la
+  place à `deeplink-route` ; `DemoPushTests.testTapLitigeVersLeWebSansEcranBloquant` passe à la présentation réelle
+  du renvoi (URL vérifiée par le double d'ouverture).
+- **Verrou des tranches suivantes (T6, T7, T8, T9, T13, T14a ; revue fraîche de T5, M1)** : en plus de leur
+  ligne de `ecranNatifLivre`, elles ajoutent leur cible à `CibleNotification.init`, sa présentation
+  (`CibleNotification.estPresentable`) et son cas dans `MainTabView.presenter`, avec un cas de tap dans
+  `DemoPushTests` (blueprint §3 T5, corrigé v2). Ce n'est plus une simple consigne :
+  - la garde `CentreNotificationsTests.testToutEcranNatifLivreAUneCibleNativePresentable` parcourt la table des
+    routes (un lien par genre de route, switch exhaustif) et toute la famille push des vecteurs golden ; toute route
+    dont `ecranNatifLivre` vaut `true` doit y donner une cible native présentable (ni `.aucune`, ni `.web`) ; seule
+    exception, la liste nommée et fermée `connexion`, `resetPassword`, `confirmerInscription` (liens consommés hors
+    de l'espace par L1-T10) — une tranche n'y ajoute une route qu'avec sa justification ici ;
+  - repli d'exécution : un écran passé à `true` sans cible retombe sur son renvoi web canonique
+    (`.web(.safari(canonique))`), jamais un tap qui n'ouvre rien ;
+  - **à l'intégration** de `lot3/l3-t6-v2` (`.parametresNotifications`) et `lot3/l3-t9-v2` (`.profil`, 7 vecteurs
+    golden `/soignant/profil`) avec T5, la garde est **rouge tant que leurs cibles ne sont pas ajoutées** : c'est
+    voulu. L'intégrateur ajoute par exemple `.preferences` et `.profil` (onglet Profil, écran empilé sur la pile du
+    hub, qui devient une `NavigationStack(path:)` comme celle de l'Accueil) ; T14a ajoute `.stripeConnect(retour:)`
+    (6 vecteurs) ;
+  - **section de Revenus** : `.revenus(section:)` porte la section ; seule `.apercu` est présentable aujourd'hui.
+    T13 rend `.paiementsAConfirmer` présentable et ouvre `revenus-paiements-declares` (PAIEMENT_RECU, correction 15) ;
+    T12 remplace le placeholder de l'onglet. T12 garde la surcouche du pré-prompt de `MainTabView`.
+- **Taps à chaud** : prouvés au niveau 1 (`BoiteTapsPush`) ; le délégué `UNUserNotificationCenter`
+  (`NotificationCenterDelegate`, posé par `PushAppDelegate.didFinishLaunching`) n'est exercé que sur appareil (T17).
+- **Tap reçu après une déconnexion (écart consigné, revue de T5 m12)** : un tap reçu sur l'écran de connexion
+  après une déconnexion, volontaire ou subie, n'a pas d'espace ouvert ; `BoiteTapsPush` le rejoue pour l'identité
+  qui se connecte ensuite. C'est la parité du web (redirection vers le chemin du tap après connexion) ; la
+  destination est relue sous la RLS de la nouvelle identité, rien n'est exposé. Écarter ce tap supposerait de
+  distinguer la déconnexion volontaire dans `SessionStore` (T4) : non retenu au lot 3.
+- **Centre de notifications, corrections de la revue de T5** : depuis le centre, une ligne qui vise le centre n'a ni
+  « Voir » ni bouton une fois lue (non lue : marquée lue, sans navigation) ; une ligne qui vise l'Accueil ramène à
+  sa racine (m5). Un marquage en échec ou en délai dépassé relit la liste sans la retirer, message gardé (PRINCIPES
+  §5, m2). L'échec d'un tirer-pour-rafraîchir est dit par l'encart `notifications-refresh-error` au texte web
+  « Impossible de charger vos notifications. » (m3). La tâche d'ouverture est annulée à la disparition du centre :
+  jamais de navigation tardive (m4). Une lecture relue avance le jeton de péremption de l'Accueil
+  (`AccueilModel.loadIfStale(peremption:)`) : le compteur des non lues est relu à l'apparition suivante, même avant
+  60 s (m1). Prouvé au niveau 1 seulement : en démo, le compteur est figé par `demo-dashboard.json`.
+- **XCUITest « contrat à signer » (m6)** : `DemoPushTests.testTapContratASignerVersLeWebDuContrat`
+  (`CONTRAT_A_SIGNER:contrat_id=demo-contrat-001` → `safari https://jolene.app/contrat/demo-contrat-001`, renvoi web
+  tant que l'écran contrats du lot 2 n'est pas intégré). Le libellé `push-tap-cible` n'est exposé qu'en build DEBUG
+  **et** en démo (m8).
+- **Pré-prompt** : `MainTabView` (surcouche) ; compteur `jolene.sessionCount` et marque `jolene.pushPrePrompt` en
+  `UserDefaults` (staging/production), en mémoire vive en démo (chaque lancement démo est une 1re session) ;
+  `-JOLENE_SESSION_COUNT <n>` (DEBUG) impose le numéro de session sans persistance — `StagingConnexionTests` le passe
+  à 1 pour qu'un 2e lancement du simulateur ne recouvre pas son parcours. T6 (activation depuis les préférences) :
+  le pré-prompt relit la marque avant de s'afficher ; poser `accepted` après une activation réussie évite un
+  pré-prompt sans objet.
+- **Fixture démo** : `demo-notifications.json` compte **deux** non lues (et non « 1 lue » du §2.7) pour rester égal
+  au compteur `notifs_non_lues` de `demo-dashboard.json` (« 2 notifications non lues » de l'Accueil démo).
+- **Garde des textes** : `scripts/mobile/check-textes-juridiques-ios.mjs` (L2-TL) n'est pas sur la base du lot 3 ;
+  les textes de T5 portent leur `// source: fichier:ligne` et sont épinglés par les tests Swift. Aucun texte
+  juridique. Textes sans équivalent web (non juridiques, à relire par Gabrielle) : l'indication vocale
+  « Ouvre le centre de notifications » (`accueil-notifications-action`, constante
+  `CentreNotificationsTextes.indicationOuvrirCentre` épinglée par `CentreNotificationsTests`, gardée en attendant
+  sa relecture, comme les indications du lot 1) ; le libellé DEBUG `push-tap-cible` n'est jamais affiché.
+
 ## Points de fusion inter-lots des liens (branches du lot 1 non intégrées)
 
 T3a change le sens de `JoleneRoute.profil` : la route visait le hub, elle vise désormais l'édition, et le hub
@@ -280,7 +359,9 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 - Textes d'accessibilité **sans équivalent web** (vocalisés seulement, jamais affichés ; non juridiques, à relire
   par Gabrielle, L3-T1b) : « environ » (lecture de « ~ » devant un montant et dans une note, `AmountRow`) ;
   « Montant indisponible » (lecture du tiret « — », `AmountRow`) ; « critère rempli » / « critère non rempli »
-  (`PasswordCriteriaList`, le web n'a que la coche). Le texte affiché reste verbatim web.
+  (`PasswordCriteriaList`, le web n'a que la coche) ; « Ouvre le centre de notifications » (indication de « Voir »
+  sur le compteur de l'Accueil, L3-T5, `CentreNotificationsTextes.indicationOuvrirCentre`). Le texte affiché reste
+  verbatim web.
 - Seuls les textes non juridiques passent du tutoiement web au vouvoiement (décision 9 du lot 1).
 
 ## En attente de Gabrielle (§6 du blueprint)

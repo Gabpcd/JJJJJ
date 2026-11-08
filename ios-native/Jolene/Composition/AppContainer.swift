@@ -14,6 +14,11 @@ import JoleneSupabase
 /// démo = doubles sans feuille système ni réseau (`DemoPushPermission`, `DemoPushRegistrar`, mémoire
 /// vive) ; staging/production = `UNUserNotificationCenter`, `PushRegistrar` (APNs) et trousseau
 /// `app.jolene.push`.
+///
+/// Lot 3, T5 : boîte des taps push (`NotificationCenterDelegate.shared.boite`, délégué posé au lancement) et
+/// contexte du pré-prompt (compteur de lancements à froid et marque : `UserDefaults` en staging/production,
+/// mémoire vive en démo) ; DEBUG : `-JOLENE_SIMULER_PUSH` (démo, tap à froid simulé) et `-JOLENE_SESSION_COUNT`
+/// (numéro de session imposé, sans persistance).
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -26,6 +31,10 @@ final class AppContainer: ObservableObject {
     let push: PushCoordinator?
     /// Lot 3, T4 : autorisation des notifications de l'appareil (carte `push-etat-appareil`).
     let pushPermission: PushPermissionPort?
+    /// Lot 3, T5 : taps de notification en attente de l'espace prêt (`MainTabView`).
+    let tapsPush: BoiteTapsPush
+    /// Lot 3, T5 : contexte du pré-prompt pour ce lancement (nil si l'environnement est refusé).
+    private(set) var prePrompt: ContextePrePromptPush?
     /// Lot 1, T8 : avis de fin de compte partagé entre l'écran de suppression et la racine.
     let finDeCompte = AvisFinDeCompte()
     #if DEBUG
@@ -56,6 +65,8 @@ final class AppContainer: ObservableObject {
         }
         #endif
         self.environment = environment
+        let boite = NotificationCenterDelegate.shared.boite
+        tapsPush = boite
 
         // Un mode inconnu (`unknownModeRaw`) est refusé par `validate()` avant tout choix de gateways.
         if let error = Self.refusal(of: environment) {
@@ -86,6 +97,11 @@ final class AppContainer: ObservableObject {
             pushPermission = permission
             session = SessionStore(controller: controller, push: coordinator)
             environmentError = nil
+            prePrompt = Self.contextePrePrompt(mode: .demo, arguments: arguments)
+            #if DEBUG
+            // Tap à froid simulé (blueprint §2.7) : rejoué par le premier espace prêt, après la connexion démo.
+            if let tap = PushTapIntent.simule(arguments: arguments) { boite.recevoir(tap) }
+            #endif
         case .staging, .production:
             #if DEBUG
             networkSentinel = nil
@@ -105,6 +121,7 @@ final class AppContainer: ObservableObject {
                 store.observeAuthEvents()
                 session = store
                 environmentError = nil
+                prePrompt = Self.contextePrePrompt(mode: environment.mode, arguments: arguments)
             } catch let error as JoleneError {
                 clock = SystemClock()
                 session = nil
@@ -156,6 +173,19 @@ final class AppContainer: ObservableObject {
         }
         #endif
         return (SystemePushPermission(), PushRegistrar.shared)
+    }
+
+    /// Lot 3, T5 : lancement à froid compté une fois par processus (`AppContainer` est unique) ; démo en mémoire
+    /// vive (chaque lancement démo est une 1re session : jamais de pré-prompt sans `-JOLENE_SESSION_COUNT`).
+    /// DEBUG seulement : `-JOLENE_SESSION_COUNT <n>` impose le numéro de session, compteur et marque en mémoire.
+    private static func contextePrePrompt(mode: JoleneMode, arguments: [String]) -> ContextePrePromptPush {
+        #if DEBUG
+        if let numero = PrePromptPush.numeroSessionForce(arguments: arguments) {
+            return ContextePrePromptPush(stockage: MemoireStockageAppareil(), numeroSession: numero)
+        }
+        #endif
+        if mode == .demo { return .lancement(stockage: MemoireStockageAppareil()) }
+        return .lancement(stockage: UserDefaultsStockageAppareil())
     }
 
     private static func refusal(of environment: JoleneEnvironment) -> JoleneError? {

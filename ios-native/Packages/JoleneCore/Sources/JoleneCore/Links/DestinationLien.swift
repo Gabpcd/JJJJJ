@@ -17,7 +17,9 @@ import Foundation
 /// forment le reliquat T3b.
 ///
 /// Ligne par tranche : la tranche d'écran du lot 3 passe sa ligne de `ecranNatifLivre` à `true` et
-/// ajuste `DestinationLienTests` (table des écrans, famille du vecteur push, totaux).
+/// ajuste `DestinationLienTests` (table des écrans, famille du vecteur push, totaux) ; elle ajoute
+/// aussi sa cible dans l'espace (`CibleNotification`, `MainTabView.presenter`), exigée par la garde
+/// `CentreNotificationsTests.testToutEcranNatifLivreAUneCibleNativePresentable` (revue L3-T5, M1).
 ///
 /// Journalisation (PRINCIPES §7) : ne journaliser que `description` — celle de `DestinationLien`,
 /// de `JoleneRoute` ou d'`EtapeInscription`, toutes masquées (`LienMasque`) —, jamais `canonique`,
@@ -84,7 +86,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .monCompte:
             return true                                  // hub `ProfileScreen` (lot 1 T8 ; complété par L3-T11)
         case .notifications:
-            return false                                 // T5 — centre de notifications
+            return true                                  // T5 — centre de notifications (`NotificationsScreen`)
         case .parametresNotifications:
             return false                                 // T6 — préférences de notifications
         case .inscription(let etape):

@@ -231,12 +231,51 @@ export function buildDemoDashboard(now = new Date(FIXED_NOW), missions = buildDe
   };
 }
 
+/**
+ * Centre de notifications démo (lot 3, T5) : lignes `notifications` du profil fictif, colonnes lues par
+ * l'app (`id, titre, corps, type, lien, lue, lue_le, cree_le`), types de `notifications_type_check`
+ * (`supabase/schema/public.sql` l.70815). Deux non lues, comme `notifs_non_lues` du tableau de bord démo ;
+ * liens : détail d'une mission ASSIGNEE démo, Mes missions, factures (renvoi web, lot 4), Stripe Connect et
+ * préférences (renvoi web jusqu'à T14a / T6), litiges (renvoi web), et une ligne sans lien. Dates : quelques
+ * heures à six jours avant l'horloge fixée (après le changement d'heure du 25/10/2026).
+ */
+export function buildDemoNotifications(now = new Date(FIXED_NOW)) {
+  const avant = (heures) => new Date(now.getTime() - heures * 3_600_000).toISOString();
+  const ligne = (rang, type, titre, corps, lien, lue, heures) => ({
+    id: `demo-notification-${String(rang).padStart(3, '0')}`,
+    titre, corps, type, lien,
+    lue,
+    lue_le: lue ? avant(heures - 1) : null,
+    cree_le: avant(heures),
+  });
+  return {
+    fixed_now: now.toISOString(),
+    notifications: [
+      ligne(1, 'RAPPEL_MISSION', 'Démonstration · Rappel de mission',
+        'Votre mission fictive « Démonstration · Mission assignée 1 » approche.', '/soignant/missions/demo-assignee-001', false, 2),
+      ligne(2, 'CANDIDATURE_ACCEPTEE', 'Démonstration · Candidature acceptée',
+        'Une candidature fictive a été retenue. Retrouvez-la dans Mes missions.', '/soignant/missions', false, 5),
+      ligne(3, 'FACTURE_EMISE', 'Démonstration · Facture émise',
+        'Une facture fictive est disponible.', '/soignant/mes-gains?tab=factures', true, 26),
+      ligne(4, 'SYSTEM', 'Démonstration · Paiements',
+        'Configurez vos paiements fictifs.', '/soignant/stripe-connect', true, 48),
+      ligne(5, 'SYSTEM', 'Démonstration · Préférences',
+        'Choisissez les notifications que vous recevez.', '/soignant/parametres/notifications', true, 72),
+      ligne(6, 'LITIGE_OUVERT', 'Démonstration · Litige ouvert',
+        'Un litige fictif a été ouvert sur une mission.', '/soignant/litiges', true, 120),
+      ligne(7, 'MISSION_A_POURVOIR', 'Démonstration · Nouvelle mission',
+        'Une mission fictive correspond à votre profil.', null, true, 144),
+    ],
+  };
+}
+
 export function buildFixtures() {
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
     'demo-etablissements.json': { fixed_now: FIXED_NOW, etablissements: DEMO_ETABLISSEMENTS },
     'demo-profile.json': { fixed_now: FIXED_NOW, ...DEMO_PROFILE },
     'demo-dashboard.json': buildDemoDashboard(),
+    'demo-notifications.json': buildDemoNotifications(),
   };
 }
 

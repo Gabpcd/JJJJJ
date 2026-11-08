@@ -41,7 +41,9 @@ final class StagingConnexionTests: JoleneUITestCase {
     }
 
     private func launchStaging() {
-        app.launchArguments = ["-JOLENE_MODE", "staging"]
+        // Lot 3, T5 : 1re session imposée (DEBUG, compteur et marque en mémoire) : le pré-prompt de notification,
+        // proposé à partir du 2e lancement d'un appareil, ne recouvre jamais ce parcours (relancé dans le test).
+        app.launchArguments = ["-JOLENE_MODE", "staging", "-JOLENE_SESSION_COUNT", "1"]
         app.launchEnvironment = [:] // jamais la cohorte dans l'environnement de l'app
         app.launch()
         applyOrientation()

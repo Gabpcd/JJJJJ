@@ -135,7 +135,7 @@ public enum AccueilPresentation {
         gains.netSalarie > 0 || gains.brutIndicatif > 0
     }
 
-    /// Compteur de notifications non lues (centre de notifications : renvoi web au lot 1).
+    /// Compteur de notifications non lues (« Voir » ouvre le centre de notifications natif depuis L3-T5).
     public static func texteNotifications(_ nombre: Int) -> String? {
         guard nombre > 0 else { return nil }
         return nombre > 1 ? "\(nombre) notifications non lues" : "1 notification non lue"
@@ -154,7 +154,7 @@ public enum AccueilPresentation {
 
     /// Pointage (lot 2) : écran web au lot 1.
     public static let lienPresences = "/soignant/presences"
-    /// Centre de notifications (lot 3) : écran web au lot 1.
+    /// Centre de notifications : écran web au lot 1, natif depuis L3-T5 (`renvoiWeb` rend alors nil).
     public static let lienNotifications = "/soignant/notifications"
 
     /// Route d'un renvoi web de l'Accueil, résolue par `LinkRouter` puis `DestinationLien` :

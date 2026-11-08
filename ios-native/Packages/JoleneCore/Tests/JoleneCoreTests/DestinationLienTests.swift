@@ -19,8 +19,6 @@ final class DestinationLienTests: XCTestCase {
 
     func testRoutesLot3SansEcranRenvoyeesVersSafariCanonique() throws {
         let cas: [(lien: String, route: JoleneRoute, canonique: String)] = [
-            ("https://www.jolene.app/soignant/notifications?utm_source=push#haut", .notifications,
-             "https://jolene.app/soignant/notifications?utm_source=push#haut"),                                     // T5
             ("https://jolene.app/soignant/parametres/notifications", .parametresNotifications,
              "https://jolene.app/soignant/parametres/notifications"),                                               // T6
             ("https://jolene.app/soignant/stripe-connect?success=true", .stripeConnect(retour: .succes),
@@ -96,6 +94,7 @@ final class DestinationLienTests: XCTestCase {
             ("/soignant/mon-compte", .monCompte),
             ("/soignant/parametres", .monCompte),
             ("/soignant/score", .monCompte),
+            ("/soignant/notifications?utm_source=push#haut", .notifications),                    // lot 3, T5
         ]
         for (chemin, route) in cas {
             let d = try XCTUnwrap(lien("https://jolene.app" + chemin), chemin)
@@ -146,7 +145,8 @@ final class DestinationLienTests: XCTestCase {
         // Lien explicite d'un autre hôte de confiance : URL canonique sur jolene.app.
         let notif = try XCTUnwrap(DestinationLien(link: "https://app.jolene.app/soignant/notifications"))
         XCTAssertEqual(notif.route, .notifications)
-        XCTAssertEqual(notif.destination, .safari(url("https://jolene.app/soignant/notifications")))
+        XCTAssertEqual(notif.destination, .notifications, "T5 : centre de notifications natif")
+        XCTAssertEqual(notif.canonique, url("https://jolene.app/soignant/notifications"))
         // Mission : destination native inchangée.
         let mission = try XCTUnwrap(DestinationLien(link: "/soignant/missions/m1"))
         XCTAssertEqual(mission.destination, .missionDetail(id: "m1"))
@@ -197,7 +197,7 @@ final class DestinationLienTests: XCTestCase {
             "/soignant/missions/{id}": ("missionDetail", "missionDetail", 294),
             "/soignant/missions": ("missions", "missions", 130),
             "/soignant/recherche-missions": ("explorer", "explorer", 24),
-            "/soignant/notifications": ("notifications", "safari", 6),                       // T5
+            "/soignant/notifications": ("notifications", "notifications", 6),                // T5
             "/soignant/profil": ("profil", "safari", 7),                                     // T9
             "/soignant/stripe-connect": ("stripeConnect", "safari", 6),                      // T14a
             "/soignant/mes-gains?tab=paiements": ("revenus(paiements)", "safari", 32),       // T13
@@ -235,8 +235,8 @@ final class DestinationLienTests: XCTestCase {
             }
         }
         XCTAssertEqual(decomptes, attendus.mapValues { $0.nombre }, "décomptes par famille")
-        XCTAssertEqual(natifs, 448, "destinations natives")
-        XCTAssertEqual(renvois, 442, "renvois web")
+        XCTAssertEqual(natifs, 454, "destinations natives (T5 : +6, centre de notifications)")
+        XCTAssertEqual(renvois, 436, "renvois web")
     }
 
     // MARK: Description masquée (PRINCIPES §7 : ni identifiant ni jeton dans les logs)
@@ -377,7 +377,7 @@ final class DestinationLienTests: XCTestCase {
             (.serieDetail(id: "s"), false, "renvoi web, décision 11 du lot 1 ; lot 4"),
             (.revenus(section: .apercu), true, "placeholder jusqu'à L3-T12"),
             (.monCompte, true, "hub ProfileScreen"),
-            (.notifications, false, "T5"),
+            (.notifications, true, "T5"),
             (.parametresNotifications, false, "T6"),
             (.inscription(EtapeInscription(page: .soignant, query: nil)), false, "T7"),
             (.inscription(EtapeInscription(page: .reprendre, query: nil)), false, "T7"),

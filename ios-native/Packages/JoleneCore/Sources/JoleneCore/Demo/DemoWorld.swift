@@ -59,7 +59,7 @@ public enum DemoWorld {
     /// le port de `DemoWorldTests.portsEnAttenteLot3`.
     static func câblerLot3(_ gateways: inout Gateways) {
         gateways.push = DemoPushGateway()                                  // T4
-        gateways.notifications = UnwiredNotificationsCenterPort()          // T5
+        gateways.notifications = DemoNotificationsGateway()                // T5
         gateways.preferences = UnwiredNotificationPreferencesPort()        // T6
         gateways.inscription = UnwiredInscriptionPort()                    // T7, T8
         gateways.profil = UnwiredProfilPort()                              // T9

@@ -1,0 +1,75 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "notifications": [
+    {
+      "id": "demo-notification-001",
+      "titre": "Démonstration · Rappel de mission",
+      "corps": "Votre mission fictive « Démonstration · Mission assignée 1 » approche.",
+      "type": "RAPPEL_MISSION",
+      "lien": "/soignant/missions/demo-assignee-001",
+      "lue": false,
+      "lue_le": null,
+      "cree_le": "2026-11-01T22:00:00.000Z"
+    },
+    {
+      "id": "demo-notification-002",
+      "titre": "Démonstration · Candidature acceptée",
+      "corps": "Une candidature fictive a été retenue. Retrouvez-la dans Mes missions.",
+      "type": "CANDIDATURE_ACCEPTEE",
+      "lien": "/soignant/missions",
+      "lue": false,
+      "lue_le": null,
+      "cree_le": "2026-11-01T19:00:00.000Z"
+    },
+    {
+      "id": "demo-notification-003",
+      "titre": "Démonstration · Facture émise",
+      "corps": "Une facture fictive est disponible.",
+      "type": "FACTURE_EMISE",
+      "lien": "/soignant/mes-gains?tab=factures",
+      "lue": true,
+      "lue_le": "2026-10-31T23:00:00.000Z",
+      "cree_le": "2026-10-31T22:00:00.000Z"
+    },
+    {
+      "id": "demo-notification-004",
+      "titre": "Démonstration · Paiements",
+      "corps": "Configurez vos paiements fictifs.",
+      "type": "SYSTEM",
+      "lien": "/soignant/stripe-connect",
+      "lue": true,
+      "lue_le": "2026-10-31T01:00:00.000Z",
+      "cree_le": "2026-10-31T00:00:00.000Z"
+    },
+    {
+      "id": "demo-notification-005",
+      "titre": "Démonstration · Préférences",
+      "corps": "Choisissez les notifications que vous recevez.",
+      "type": "SYSTEM",
+      "lien": "/soignant/parametres/notifications",
+      "lue": true,
+      "lue_le": "2026-10-30T01:00:00.000Z",
+      "cree_le": "2026-10-30T00:00:00.000Z"
+    },
+    {
+      "id": "demo-notification-006",
+      "titre": "Démonstration · Litige ouvert",
+      "corps": "Un litige fictif a été ouvert sur une mission.",
+      "type": "LITIGE_OUVERT",
+      "lien": "/soignant/litiges",
+      "lue": true,
+      "lue_le": "2026-10-28T01:00:00.000Z",
+      "cree_le": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "id": "demo-notification-007",
+      "titre": "Démonstration · Nouvelle mission",
+      "corps": "Une mission fictive correspond à votre profil.",
+      "type": "MISSION_A_POURVOIR",
+      "lien": null,
+      "lue": true,
+      "lue_le": "2026-10-27T01:00:00.000Z",
+      "cree_le": "2026-10-27T00:00:00.000Z"
+    }
+  ]
+}

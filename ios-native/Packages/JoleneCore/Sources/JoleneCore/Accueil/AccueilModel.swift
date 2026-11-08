@@ -106,6 +106,22 @@ public final class AccueilModel: ObservableObject {
         await load()
     }
 
+    /// Apparition de l'onglet avec un jeton de péremption (lot 3, T5 ; revue L3-T5, m1) : le jeton avance quand une
+    /// autre surface change ce que l'Accueil affiche — une notification marquée lue dans le centre périme le
+    /// compteur des non lues. Un jeton nouveau rend le tableau périmé (relu même avant `delaiRelecture`) ; la
+    /// péremption tient jusqu'au prochain chargement réussi, une relecture annulée est donc reprise à l'apparition
+    /// suivante. Mêmes règles que `loadIfStale()` sinon.
+    public func loadIfStale(peremption: Int) async {
+        if peremption != peremptionVue {
+            peremptionVue = peremption
+            chargeLe = nil
+        }
+        await loadIfStale()
+    }
+
+    /// Dernier jeton de péremption reçu (`loadIfStale(peremption:)`).
+    private var peremptionVue = 0
+
     /// Apparition de l'onglet : premier chargement (ou relance après une tâche annulée), ou
     /// relecture si le dernier chargement date de plus de `delaiRelecture`. Après un échec, seule
     /// l'action « Réessayer » relance (jamais de boucle à l'apparition).
