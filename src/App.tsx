@@ -190,6 +190,7 @@ const AdminCockpitLancement = lazy(() => import("./pages/admin/AdminCockpitLance
 const AdminEquipe = lazy(() => import("./pages/admin/AdminEquipe"));
 const AdminLevee = lazy(() => import("./pages/admin/AdminLevee"));
 const AdminAcquisition = lazy(() => import("./pages/admin/AdminAcquisition"));
+const AdminAgentsCroissance = lazy(() => import("./pages/admin/AdminAgentsCroissance"));
 const AdminSales = lazy(() => import("./pages/admin/AdminSales"));
 const ClassementSoignants = lazy(() => import("./pages/ClassementSoignants"));
 
@@ -497,6 +498,7 @@ function AppRoutes() {
           <Route path="/admin/fondateur/equipe" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FONDATEUR}><AdminEquipe /></RouteAdminProtegee>} />
           <Route path="/admin/fondateur/levee" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FONDATEUR}><AdminLevee /></RouteAdminProtegee>} />
           <Route path="/admin/fondateur/acquisition" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FONDATEUR}><AdminAcquisition /></RouteAdminProtegee>} />
+          <Route path="/admin/fondateur/agents" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FONDATEUR}><AdminAgentsCroissance /></RouteAdminProtegee>} />
           <Route path="/admin/fondateur/sales" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FONDATEUR}><AdminSales /></RouteAdminProtegee>} />
 
           {/* Widget public */}

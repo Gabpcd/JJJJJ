@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
+  Bot,
   AlertTriangle,
   Building2,
   CalendarDays,
@@ -77,6 +78,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     label: 'Acquisition',
     description: 'Besoins externes et prospects',
     items: [
+      { icone: Bot, label: 'Agents de croissance', route: '/admin/fondateur/agents', acces: ACCES.FONDATEUR },
       { icone: Megaphone, label: 'Marchés externes', route: '/admin/fondateur/acquisition', acces: ACCES.FONDATEUR },
       { icone: MessageCircle, label: 'Prospection & CRM', route: '/admin/fondateur/sales', acces: ACCES.FONDATEUR },
     ],
