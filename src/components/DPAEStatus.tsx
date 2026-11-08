@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FileText, Copy, ExternalLink, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
+import { estContratSalarie } from '@/lib/typesContrat';
 
 interface Props {
   contratId: string;
@@ -14,15 +15,16 @@ interface Props {
 /**
  * Composant DPAE (PR 6 Sprint 1).
  *
- * Affiche pour les contrats CDD :
+ * Affiche pour les contrats salariés (CDD, CDDU, VACATION, SALARIE — source
+ * unique `estContratSalarie`) :
  *   - Si pas encore transmise : bouton "Préparer les données DPAE" qui appelle
  *     fn_generer_donnees_dpae et affiche les données à reporter sur
  *     net-entreprises.fr.
  *   - Après soumission URSSAF : champ pour saisir le n° DPAE retourné,
  *     enregistré via fn_enregistrer_numero_dpae.
  *
- * Pour les contrats LIBERAL : le composant ne s'affiche pas (DPAE non
- * requise — relation B2B).
+ * Pour les contrats libéraux (REMPLACEMENT_LIBERAL, LIBERAL) : le composant ne
+ * s'affiche pas (DPAE non requise — relation B2B).
  */
 export function DPAEStatus({ contratId, typeContrat, dpaeNumero, cadreDeclareParEmployeur = false }: Props) {
   const { afficherNotification } = useNotification();
@@ -31,8 +33,10 @@ export function DPAEStatus({ contratId, typeContrat, dpaeNumero, cadreDeclarePar
   const [numeroSaisi, setNumeroSaisi] = useState(dpaeNumero || '');
   const [saved, setSaved] = useState(!!dpaeNumero);
 
-  // Ne pas afficher pour les contrats libéraux (DPAE non requise)
-  const requiresDpae = typeContrat && ['CDD', 'SALARIE'].includes(typeContrat);
+  // Ne pas afficher pour les contrats libéraux (DPAE non requise). Les RPC
+  // fn_generer_donnees_dpae et fn_enregistrer_numero_dpae ne filtrent pas le
+  // type de contrat : elles acceptent CDDU et VACATION.
+  const requiresDpae = estContratSalarie(typeContrat);
 
   // Si déjà saisi à l'initial, considérer comme saved
   useEffect(() => {

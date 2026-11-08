@@ -1,6 +1,7 @@
 import { AlertTriangle, ExternalLink, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { estContratSalarie } from '@/lib/typesContrat';
 
 interface BandeauRappelDPAEProps {
   contratId?: string;
@@ -11,9 +12,9 @@ interface BandeauRappelDPAEProps {
 }
 
 export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat, cadreDeclareParEmployeur = false }: BandeauRappelDPAEProps) {
-  // Le modèle historique utilise tantôt CDD, tantôt SALARIE pour le même
-  // parcours employeur. Les deux doivent donc déclencher le rappel DPAE.
-  if (!typeContrat || !['CDD', 'SALARIE'].includes(typeContrat)) return null;
+  // Tout contrat salarié (CDD, CDDU, VACATION, ou le code historique SALARIE)
+  // déclenche le rappel DPAE : source unique @/lib/typesContrat.
+  if (!estContratSalarie(typeContrat)) return null;
 
   if (dpaeEffectuee) {
     return (
