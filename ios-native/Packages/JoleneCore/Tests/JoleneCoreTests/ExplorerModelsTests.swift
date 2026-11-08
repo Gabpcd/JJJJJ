@@ -169,6 +169,43 @@ final class ExplorerModelsTests: XCTestCase {
         XCTAssertEqual(model.missions.map(\.id), ["a"])
     }
 
+    /// Feuille de filtres (`ExplorerFeuilleFiltres`, enchaînement de `MissionsListScreen`) :
+    /// « Afficher les missions » ne relit rien tant que la feuille n'est pas fermée, puis relit une
+    /// fois avec les critères enregistrés ; « Fermer » ne relit rien et ne change aucun critère.
+    func testFeuilleDeFiltresNAppliqueQuApresSaFermeture() async throws {
+        let port = PortExplorer([.missions([mission("a"), mission("b")]), .missions([mission("b")])])
+        let (controller, snapshot) = try await pret(port)
+        let model = MissionsListModel(controller: controller, snapshot: snapshot)
+        await model.load()
+        let appliques = model.filtres
+        var cdd = appliques
+        cdd.typeContrat = .cdd
+
+        var feuille = ExplorerFeuilleFiltres()
+        feuille.ouvrir(avec: model.filtres)
+        XCTAssertEqual(feuille.ouverture?.filtres, appliques)
+        feuille.enregistrer(cdd)
+        XCTAssertEqual(port.nombreAppels, 1, "aucune lecture pendant la fermeture de la feuille")
+        XCTAssertEqual(model.filtres, appliques)
+        XCTAssertEqual(model.state, .loaded([mission("a"), mission("b")]))
+
+        feuille.ouverture = nil
+        if let nouveaux = feuille.cloturer() { await model.appliquer(nouveaux) }
+        XCTAssertEqual(port.nombreAppels, 2)
+        XCTAssertEqual(port.filtresRecus.last, cdd.missionFilters)
+        XCTAssertEqual(model.filtres, cdd)
+        XCTAssertEqual(model.missions.map(\.id), ["b"])
+
+        // « Fermer » : la feuille rouverte part de CDD, son brouillon est abandonné.
+        feuille.ouvrir(avec: model.filtres)
+        XCTAssertEqual(feuille.ouverture?.filtres, cdd)
+        feuille.ouverture = nil
+        if let nouveaux = feuille.cloturer() { await model.appliquer(nouveaux) }
+        XCTAssertEqual(port.nombreAppels, 2, "« Fermer » ne relit pas")
+        XCTAssertEqual(model.filtres, cdd)
+        XCTAssertEqual(model.missions.map(\.id), ["b"])
+    }
+
     func testChipsEtReinitialisationPassentParLePort() async throws {
         let port = PortExplorer([])
         let (controller, snapshot) = try await pret(port)

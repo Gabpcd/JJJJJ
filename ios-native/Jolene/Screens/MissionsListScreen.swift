@@ -12,6 +12,12 @@ import JoleneDesign
 /// `FiltresSheet`, état vide avec l'action secondaire du web (`missions-empty-action`) ET
 /// « Actualiser » (`missions-refresh`, toujours présent), tirer pour actualiser sur l'état vide
 /// comme sur la liste (`usePullToRefresh(recharger)` couvre toute la page web).
+///
+/// Feuille de filtres : présentée par `.sheet(item:)` depuis `ExplorerFeuilleFiltres` (JoleneCore),
+/// une présentation neuve à chaque appui sur « Filtres ». « Afficher les missions » ne fait
+/// qu'enregistrer les critères ; ils sont appliqués dans `onDismiss`, une fois la feuille fermée,
+/// pour que la liste et le badge ne soient pas reconstruits pendant la transition de fermeture
+/// (feuille qui ne se rouvrait plus, run CI 42526135547). « Fermer » n'applique rien.
 struct MissionRoute: Hashable {
     let id: String
 }
@@ -19,7 +25,7 @@ struct MissionRoute: Hashable {
 struct MissionsListScreen: View {
     @StateObject private var model: MissionsListModel
     @ObservedObject private var session: SessionStore
-    @State private var filtresOuverts = false
+    @State private var feuilleFiltres = ExplorerFeuilleFiltres()
     private let controller: SessionController
     private let snapshot: SessionSnapshot
 
@@ -44,10 +50,12 @@ struct MissionsListScreen: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) { boutonFiltres }
         }
-        .sheet(isPresented: $filtresOuverts) {
-            FiltresSheet(filtres: model.filtres, profile: model.profile) { nouveaux in
-                Task { await model.appliquer(nouveaux) }
-            }
+        .sheet(item: $feuilleFiltres.ouverture, onDismiss: {
+            // Après la transition de fermeture : rien n'est relu tant que la feuille se ferme.
+            guard let nouveaux = feuilleFiltres.cloturer() else { return }
+            Task { await model.appliquer(nouveaux) }
+        }) { ouverture in
+            FiltresSheet(filtres: ouverture.filtres, profile: model.profile) { feuilleFiltres.enregistrer($0) }
         }
         .navigationDestination(for: MissionRoute.self) { route in
             MissionDetailScreen(route: route, initial: model.mission(id: route.id), session: session, snapshot: snapshot)
@@ -72,7 +80,7 @@ struct MissionsListScreen: View {
     private var boutonFiltres: some View {
         let actifs = model.filtres.nombreFiltresActifs
         return Button {
-            filtresOuverts = true
+            feuilleFiltres.ouvrir(avec: model.filtres)
         } label: {
             HStack(spacing: JoleneSpacing.xs) {
                 Image(systemName: "slider.horizontal.3")
