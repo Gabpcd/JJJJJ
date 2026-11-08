@@ -278,7 +278,8 @@
     (renvoi web `/soignant/presences`, ce bloc n'envoie plus rien). La démo applique la même règle (code de la mission
     a saisi dans le bloc b → enregistré sur a ; jamais bloqué en vérification par l'horloge fixe).
   - M-A, limite consignée (réponse perdue) : un scan appliqué sur une AUTRE mission dont la réponse est perdue
-    (transport, délai `bounded`) reste réconcilié sur la mission du reçu ; après l'attente (m2), le verdict est
+    (transport, délai `bounded` de la requête seule depuis mi-1 de la seconde revue) reste réconcilié sur la mission du
+    reçu ; après l'attente (m2), le verdict est
     « non reçu » sur cette mission. Le reçu v1 ne porte la base des preuves que de sa mission (`preuvesAvant`) : sans
     base pour les autres missions, une ligne d'une autre mission ne se distingue pas d'un scan antérieur, sauf à
     comparer l'heure du serveur à celle de l'appareil (non fiable). Atténuations : l'état de l'autre bloc (15 s) et la
@@ -309,6 +310,34 @@
   - m7 : `charger()` ne relit rien pendant un envoi (l'envoi relit lui-même l'état).
   - m8 : `MetadonneesScan` masque coordonnées et précision dans `description`, `debugDescription` et sa réflexion
     (`customMirror`) ; seul `encode` les écrit, pour `p_metadata`.
+- **T3 — seconde revue fraîche de L2-T3 (8 novembre 2026)**, réponse au majeur MJ-1 et aux mineurs mi-1 à mi-6 :
+  - MJ-1, reçu commun soldé par un autre bloc : le journal tient un reçu par utilisateur et tous les blocs le
+    réconcilient. `PointageModel` attache à `.verification` (et au `.suiviIllisible` d'une horloge incohérente) l'essai
+    qu'ils concernent ; quand le bloc d'une autre mission solde cet essai, il transmet son issue (`.enregistre`,
+    `.nonRecu`, …) au bloc qui l'affiche, qui la publie à sa prochaine réconciliation (`charger()`, tic de 15 s, retour
+    au premier plan) ; reçu effacé sans issue transmise → vérification levée (l'état vient d'être relu ; tout nouvel
+    envoi relit sa base), jamais un succès supposé. Un reçu `started` n'est réconcilié que par un modèle à la fois
+    dans le processus (ensemble des essais en vol, réconciliations comprises). Le `.suiviIllisible` d'un journal
+    illisible n'est jamais levé.
+  - mi-1 : `PointagePort` gagne `envoyerScan` (l'unique requête seule → `EnvoiScan.issue(IssueScan)` ou
+    `.accepte(ScanEnregistre?)`) et `relireScanAccepte` (relectures d'un HTTP 200) ; le modèle borne chacune par
+    `bounded` ; des relectures en échec ou hors délai donnent `.accepteSansPreuve`, jamais `.incertain`. Défauts en
+    extension (`envoyerScan` → `.issue(scanner(…))`, `relireScanAccepte` → refus « non câblé ») : démo, doubles et stub
+    inchangés ; `SupabasePointageGateway.scanner` enchaîne les deux moitiés. Limite restante (M-A) : une requête dont
+    le HTTP 200 arrive APRÈS le délai `bounded` reste une réponse perdue.
+  - mi-2 : première relecture immédiate (blueprint §2.5) ; un « non reçu » relu avant la fin de l'attente monotone de
+    l'essai (m2) reste « à relire » : le modèle attend le reste de cette attente, puis relit. La vérification se
+    poursuit hors de l'envoi : `envoiEnCours` retombe dès la réponse perdue, `charger()` et `rafraichir()` relisent
+    l'état pendant l'attente, `reconcilier()` n'en lance pas une seconde (une par génération).
+  - mi-3 : le `.suiviIllisible` d'un HTTP 200 sans preuve est levé par le premier `charger()` réussi d'une génération
+    ultérieure (le bloc a disparu puis réapparu) ; dans la même génération il reste affiché (message lisible, aucun
+    envoi). Consigne T4b ci-dessous (renvoi web explicite).
+  - mi-4 : un bloc réactivé pendant l'envoi (son `charger()` a sauté la lecture) relit son état dès la fin de l'envoi,
+    dans sa génération, et réconcilie un reçu resté `started` ; la réponse de l'envoi reste ignorée (M-B).
+  - mi-5 : fiche `fn_scanner_code_pointage` de `CONTRATS_RPC_SOIGNANT.md` alignée (un HTTP 200 non confirmé n'est
+    jamais `.incertain`).
+  - mi-6 : `DemoPointageGateway.scanner` exige, comme la gateway Supabase, que le terminal du reçu soit celui des
+    métadonnées envoyées (`.contract` sinon, rien n'est appliqué).
 - **T4a** (après T3) : instantané par `gateways.pointage.presences(context:)` ; onglets par
   `InstantanePresences.listes(maintenant:)` (horloge `chargeLe`), historique par `lignesHistorique(soignantId:)`,
   `PointageRules.ongletInitial(parametre:missionsAujourdhui:missionsEnCours:)`, `filtreAValider`,
@@ -320,7 +349,11 @@
   ici ; `.enregistreSurAutreMission(type, missionId:)` (revue fraîche de L2-T3, M-A) → même succès du web (l.143),
   puis rechargement de l'instantané des présences (le bloc de la mission pointée change d'état) ; toute précision sur
   la mission pointée est un texte opérationnel à inventorier ici ; `.suiviIllisible` couvre aussi un HTTP 200 sans
-  preuve relue ; `sessionExpired` → écran de reconnexion du lot 1 ; `PointageRules.action` → libellés l.106-108.
+  preuve relue : son renvoi web est un bouton explicite (jamais une redirection automatique), et le modèle lève ce
+  suivi au premier `charger()` réussi après une réapparition du bloc (seconde revue fraîche de L2-T3, mi-3) ;
+  `.verification` peut se changer, au tic suivant, en l'issue conclue par un autre bloc (MJ-1) ; `envoiEnCours`
+  retombe pendant la vérification d'une réponse perdue (mi-2) : le bouton reste désactivé par `peutEnvoyer` ;
+  `sessionExpired` → écran de reconnexion du lot 1 ; `PointageRules.action` → libellés l.106-108.
   Cycle de vie (revue fraîche de L2-T3, M-B) : `.task { await model.charger(); await model.suivre() }` (l'un et
   l'autre réactivent le bloc : en SwiftUI, une vue poussée dans un `NavigationStack` sous un `TabView` reçoit
   `onDisappear` puis `onAppear` à chaque changement d'onglet et garde son `@StateObject`), `desactiver()` à la
@@ -395,6 +428,9 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | §2.3 (`IssueScan`) ; §2.5 « succès → relecture etat + scans_pointage » | succès relu sur la mission du reçu, sinon incertain | + `IssueScan.enregistreSurAutreMission(missionId:typeScan:numeroScan:)` (ligne du scan relue sans filtre de mission par `creneau_effectif_id` et `numero_scan`, état de sa mission confirmé) et `IssueScan.accepteSansPreuve` (HTTP 200 non confirmé) ; un HTTP 200 n'est jamais `.incertain` ni réconcilié ; `PointageModel.Issue.enregistreSurAutreMission` | revue fraîche de T3 (M-A) : la RPC trouve la mission par le seul code ; un 200 relu sur la seule mission du reçu finissait en « non reçu » et invitait à pointer une seconde fois |
 | §2.5 « absent → « non reçu » seulement si la relecture a lieu ≥ 8 s après `started` » | 8 s | 8 s, et pour un essai sorti sans réponse : instant de sortie (au moins le délai `bounded`) + 10 s (pool PostgREST) + 8 s, monotones | revue fraîche de T3 (m2) : PostgREST peut encore valider pendant l'attente du pool puis le `statement_timeout` |
 | §3 T3 (`PointageModel` : « réponse ignorée si l'écran ou l'epoch a changé ») | écran disparu → modèle inerte | `activer()` (et `charger()`, `suivre()`) réactive le bloc ; génération : une opération d'avant la disparition ne publie rien, une issue décidée solde quand même le reçu (même epoch) | revue fraîche de T3 (M-B) : en SwiftUI, le `@StateObject` survit à un changement d'onglet |
+| §2.3 (`PointagePort`) | `scanner` : requête et relectures en un appel, borné en bloc par le modèle | + `envoyerScan(code:metadonnees:recu:context:) -> EnvoiScan` et `relireScanAccepte(_:recu:context:) -> IssueScan`, défauts en extension ; `scanner` conservé (les deux moitiés enchaînées) | seconde revue fraîche de T3 (mi-1) : un HTTP 200 tardif suivi de relectures pouvait dépasser le délai et finir en « non reçu » |
+| §2.5 « transport → réconciliation immédiate par relecture » | appliqué tel quel | première relecture immédiate ; « non reçu » relu avant l'attente monotone → « à relire » ; vérification menée hors de l'envoi (`envoiEnCours` retombé) | seconde revue fraîche de T3 (mi-2) : l'attente précédait toute relecture et neutralisait `charger()` |
+| §2.6 (`RecuScan` : « un second reçu pour le même utilisateur tant que le premier n'est pas réconcilié » refusé) | reçu réconcilié par le bloc qui l'affiche | reçu réconciliable par tout bloc (un modèle à la fois), issue transmise au bloc de la mission du reçu, vérification levée quand l'essai est soldé | seconde revue fraîche de T3 (MJ-1) : un bloc restait figé en vérification quand un autre soldait le reçu commun |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 

@@ -414,14 +414,19 @@ CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", 
 - **Relecture** : `fn_etat_pointage_mission` (`nb_scans` = `numero_scan`, `prochain_type_scan` basculé) puis
   `scans_pointage?select=id,numero_scan,type_scan,scanne_le,id_terminal,precision_gps_m&mission_id=eq.<id>&order=numero_scan.desc`
   (une preuve hors de la base du reçu, même `id_terminal`) ; jamais `code_saisi`, `ip_address`, `latitude`,
-  `longitude` (lisibles par `sp_select` l.79931 mais inutiles). Réconciliation « non reçu » seulement ≥ 8 s
-  après `started` (décision 2).
+  `longitude` (lisibles par `sp_select` l.79931 mais inutiles). Réconciliation : première relecture immédiate ;
+  « non reçu » seulement ≥ 8 s après `started` (décision 2), et pour un essai sorti sans réponse après sa sortie
+  + 10 s + 8 s monotones (revue fraîche de T3, m2 ; seconde revue, mi-2).
 - **Câblage (T3)** : la projection relue est `PreuveScan.selection`
   (`id,mission_id,numero_scan,type_scan,scanne_le,id_terminal,precision_gps_m`, `mission_id` ajouté par la revue
   fraîche de T1), `order=numero_scan.desc.nullslast`, `limit=1000` (`RecuScan.maxPreuves`) ; la même lecture
   (`PointagePort.preuvesScan`) fournit AVANT l'envoi la base `preuvesAvant` du reçu. Succès annoncé seulement si
   l'état relu confirme le scan (`PointageRules.etatConfirme`) ET si une preuve hors base du même terminal existe
-  (`RecuScan.reconcilier`) ; sinon `.incertain`, réconcilié par relecture, jamais renvoyé. Rollback prouvé
+  (`RecuScan.reconcilier`) ; un HTTP 200 non confirmé sur la mission du reçu suit la puce « Code d'une autre
+  mission » ci-dessous (`.enregistreSurAutreMission` ou `.accepteSansPreuve`, jamais `.incertain`) ; seule une
+  réponse perdue (transport, passerelle, délai de la requête) donne `.incertain`, réconcilié par relecture, jamais
+  renvoyé. La requête (`envoyerScan`) et les relectures d'un HTTP 200 (`relireScanAccepte`) sont bornées séparément
+  par le modèle (seconde revue fraîche de T3, mi-1) : des relectures lentes ne rendent jamais un 200 incertain. Rollback prouvé
   (`RPCResponse.appelerMutation` : `.refusDefinitif`) → `IssueScan.refuse` (SQLSTATE si c'en est un) ; transport,
   passerelle, `PGRST001` → `.incertain`. Seule la surcharge du web s'applique au message (décision 6,
   `PointageRules.estCodeInvalide` : `P0002` et le message exact de l.55649) ; l'autre `P0002` (l.55775) reste
@@ -438,8 +443,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", 
   `IssueScan.accepteSansPreuve` (suivi non vérifiable, renvoi web). Réponse perdue d'un scan appliqué sur une autre
   mission : limite consignée dans `DECISIONS_LOT2.md` (consignes T3, revue fraîche de L2-T3).
 - **Session expirée (m1)** : `PGRST301`-`PGRST303` (rollback prouvé) ou session absente / 401-403 hors PostgREST →
-  `JoleneError(.unauthorized)` levée par `scanner`, jamais un refus métier ; reçu `started` gardé, réconcilié au
-  retour de l'utilisateur.
+  `JoleneError(.unauthorized)` levée par `envoyerScan` (et `scanner`), jamais un refus métier ; reçu `started`
+  gardé, réconcilié au retour de l'utilisateur.
 - **Preuve STAGING** : T11 — deux lignes `scans_pointage` (OUVERTURE puis FERMETURE, `numero_scan` 1 puis 2,
   `id_terminal ~ '^TERM_IOS_[A-Z2-7]{20}$'`, `precision_gps_m` non nul), segment `EFFECTIF` fermé,
   `missions.statut = 'EN_COURS'`, `presences.perimetre_gps_valide = true`.
