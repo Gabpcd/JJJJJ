@@ -48,6 +48,8 @@ struct MesDocumentsScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(JoleneColor.lavender.ignoresSafeArea())
+        // Conteneur nommé : sans `.contain`, l'identifiant serait recopié sur chaque élément enfant.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("documents-screen")
         .navigationTitle(LibellesJustificatifs.titre)
         .navigationBarTitleDisplayMode(.inline)

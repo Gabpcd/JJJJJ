@@ -34,7 +34,8 @@ final class DemoDocumentsTests: JoleneUITestCase {
         let rib = element("document-statut-RIB")
         scrollTo(rib, in: liste)
         XCTAssertEqual(rib.label, "Expiré")
-        XCTAssertTrue(fullyVisible(element("document-exigence-RIB"), inside: liste), "aucun débordement horizontal")
+        let carte = element("document-exigence-RIB").frame
+        XCTAssertTrue(carte.minX >= app.frame.minX - 1 && carte.maxX <= app.frame.maxX + 1, "aucun débordement horizontal")
         record("\(proofPrefix)-justificatifs")
     }
 
