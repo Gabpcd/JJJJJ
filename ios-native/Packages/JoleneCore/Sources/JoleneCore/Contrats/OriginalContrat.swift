@@ -99,8 +99,9 @@ public enum VerificationOriginal {
 /// sous-dossier par copie, protection `complete`, exclue de la sauvegarde ; effacée à la fermeture de la feuille et
 /// au changement d'epoch (`effacer`, `effacerTout`, appelés par l'écran, T9a). Jamais d'URL signée.
 public enum FichierContratTemporaire {
-    /// Échec d'écriture : texte du web (`ContratMission.tsx` l.428), repris tel quel.
-    public static let messageIndisponible = "Aucun contrat téléchargeable pour le moment."
+    /// Échec d'écriture : texte du web (`ContratMission.tsx` l.428), gardé par la machinerie de TL dans
+    /// `LibellesWeb.Contrat.aucunTelechargeable` (T9a, revue fraîche de T8 mineur 4).
+    public static let messageIndisponible = LibellesWeb.Contrat.aucunTelechargeable
 
     public static func dossier() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("jolene-contrats", isDirectory: true)

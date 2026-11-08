@@ -197,9 +197,9 @@ final class DemoContratsTests: JoleneUITestCase {
         require("L'écran du contrat \(id) est affiché") { self.containerVisible(self.element("contrat-screen")) }
     }
 
-    /// Bouton retour de la barre de navigation (premier bouton de la barre affichée).
+    /// Bouton retour de la barre de navigation (même requête que `DemoConsultationTests` et `DemoAccueilTests`).
     private func goBack() {
-        let retour = app.navigationBars.buttons.element(boundBy: 0)
+        let retour = app.navigationBars.buttons.firstMatch
         require("Le bouton retour est atteignable") { self.visible(retour) }
         retour.tap()
     }

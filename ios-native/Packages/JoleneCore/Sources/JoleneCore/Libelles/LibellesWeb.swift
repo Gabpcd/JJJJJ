@@ -229,11 +229,271 @@ public enum LibellesWeb {
         }
     }
 
+    /// Liste des contrats du soignant (`ListeContrats.tsx`, T9a) : titre, filtres, pastilles de statut, états
+    /// vides (branche soignant), carte mobile (`renduCarte`), erreur de chargement (`ErreurRubriqueEtablissement`).
+    public enum Contrats {
+        // source: src/pages/ListeContrats.tsx:101
+        public static let titre = "Mes contrats"
+
+        /// Libellés des filtres (l.121) : voir `libelleFiltre(_:)` (« Tous » y est la valeur même du filtre).
+        // source: src/pages/ListeContrats.tsx:121
+        public static let filtreEnAttente = "En attente"
+
+        // source: src/pages/ListeContrats.tsx:121
+        public static let filtreSignes = "Signés"
+
+        // source: src/pages/ListeContrats.tsx:121
+        public static let filtreAnnules = "Annulés"
+
+        /// Pastille de statut (l.161-165) : voir `badge(_:)`.
+        // source: src/pages/ListeContrats.tsx:163
+        public static let badgeSigne = "✅ Signé"
+
+        // source: src/pages/ListeContrats.tsx:163
+        public static let badgeAnnule = "❌ Annulé"
+
+        // source: src/pages/ListeContrats.tsx:163
+        public static let badgeEnAttente = "⏳ En attente"
+
+        /// États vides du soignant (l.126-145) : voir `titreVide(_:)` et `descriptionVide(_:)`.
+        // source: src/pages/ListeContrats.tsx:128
+        public static let videTitre = "Aucun contrat"
+
+        // source: src/pages/ListeContrats.tsx:131
+        public static let videEnAttenteTitre = "Aucun contrat en attente"
+
+        // source: src/pages/ListeContrats.tsx:134
+        public static let videEnAttente = "Aucun contrat en attente de signature pour le moment."
+
+        // source: src/pages/ListeContrats.tsx:138
+        public static let videSignes = "Aucun contrat signé pour le moment."
+
+        // source: src/pages/ListeContrats.tsx:140
+        public static let videAnnules = "Aucun contrat annulé."
+
+        // source: src/pages/ListeContrats.tsx:144
+        public static let videTous = "Vos contrats apparaîtront ici après avoir accepté une mission."
+
+        /// Carte mobile (l.205-226) : voir `numero(_:)`, `mission(intitule:)`, `typeEtDate(type:dateFormatee:)`,
+        /// `action(aSigner:)`.
+        // source: src/pages/ListeContrats.tsx:210
+        public static let sansValeur = "—"
+
+        // source: src/pages/ListeContrats.tsx:214
+        public static let pictoMission = "📋"
+
+        // source: src/pages/ListeContrats.tsx:215
+        public static let creeLe = "· Créé le"
+
+        /// Masque date-fns de la date de création (l.215), appliqué en heure de Paris (`ContratPresentation.date`).
+        // source: src/pages/ListeContrats.tsx:215
+        public static let formatDateCreation = "dd/MM/yyyy"
+
+        /// Appel de la carte : ouvre la page du contrat, ne signe rien (l.216-224).
+        // source: src/pages/ListeContrats.tsx:223
+        public static let signerLeContrat = "✍️ Signer le contrat"
+
+        // source: src/pages/ListeContrats.tsx:223
+        public static let voirLeContrat = "Voir le contrat"
+
+        /// Erreur de chargement (l.96, `ErreurRubriqueEtablissement`).
+        // source: src/pages/ListeContrats.tsx:96
+        public static let indisponiblesTitre = "Contrats indisponibles"
+
+        // source: src/components/AccesEtablissement.tsx:82
+        public static let chargementNAbouti = "Le chargement n'a pas abouti. Réessayez dans un instant."
+
+        // source: src/components/AccesEtablissement.tsx:84
+        public static let reessayer = "Réessayer"
+
+        /// Libellé d'un filtre (l.121) : « Tous », « En attente », « Signés », sinon « Annulés ». Pour « Tous », le web
+        /// affiche la valeur du filtre elle-même (`f === 'Tous' ? 'Tous'`, la zone de rendu le garde) : le libellé est
+        /// `FiltreContrat.tous.rawValue`, déjà égal à `FILTRES_STATUT[0]` (l.20, `ContratRulesTests`).
+        public static func libelleFiltre(_ filtre: FiltreContrat) -> String {
+            switch filtre {
+            case .tous: return filtre.rawValue
+            case .enAttenteSignatures: return filtreEnAttente
+            case .signeComplet: return filtreSignes
+            case .annule: return filtreAnnules
+            }
+        }
+
+        /// Pastille de statut (l.163) : signé, annulé, sinon en attente (`ContratRules.statutAffiche(statut:)`).
+        public static func badge(_ statut: StatutContratAffiche) -> String {
+            switch statut {
+            case .signe: return badgeSigne
+            case .annule: return badgeAnnule
+            case .enAttente: return badgeEnAttente
+            }
+        }
+
+        /// Titre de l'état vide (l.128-131) : « Aucun contrat en attente » pour ce filtre, sinon « Aucun contrat ».
+        public static func titreVide(_ filtre: FiltreContrat) -> String {
+            filtre == .enAttenteSignatures ? videEnAttenteTitre : videTitre
+        }
+
+        /// Description de l'état vide du soignant (l.130-145, branches `isEtab` exclues).
+        public static func descriptionVide(_ filtre: FiltreContrat) -> String {
+            switch filtre {
+            case .enAttenteSignatures: return videEnAttente
+            case .signeComplet: return videSignes
+            case .annule: return videAnnules
+            case .tous: return videTous
+            }
+        }
+
+        /// Numéro de la carte (`c.numero_contrat || '—'`, l.210).
+        public static func numero(_ numero: String?) -> String {
+            numero.flatMap { $0.isEmpty ? nil : $0 } ?? sansValeur
+        }
+
+        /// Mission de la carte (`📋 {intitule || '—'}`, l.214).
+        public static func mission(intitule: String?) -> String {
+            pictoMission + " " + (intitule.flatMap { $0.isEmpty ? nil : $0 } ?? sansValeur)
+        }
+
+        /// Type et date de création (`{c.type_contrat} · Créé le {date}`, l.215) : un type NULL est rendu vide.
+        public static func typeEtDate(type: String?, dateFormatee: String) -> String {
+            (type ?? "") + " " + creeLe + " " + dateFormatee
+        }
+
+        /// Appel de la carte (l.223) : « ✍️ Signer le contrat » quand le soignant n'a pas signé, sinon « Voir le
+        /// contrat ».
+        public static func action(aSigner: Bool) -> String {
+            aSigner ? signerLeContrat : voirLeContrat
+        }
+    }
+
+    /// Page d'un contrat (`ContratMission.tsx`, T9a) : en-tête, boutons, section Signatures, zone « Votre
+    /// signature » et préparation du document final. Bandeaux, document figé, contenu indisponible, mentions et
+    /// pied de page : `TextesWeb.Contrat`.
+    public enum Contrat {
+        /// Partie d'une ligne de la section Signatures (l.669-705).
+        public enum Partie: Sendable, CaseIterable {
+            case etablissement
+            case soignant
+        }
+
+        /// En-tête (l.591) : voir `titre(numero:)`.
+        // source: src/pages/ContratMission.tsx:591
+        public static let titrePrefixe = "Contrat"
+
+        /// Statut de l'en-tête (l.592-597) : voir `statut(_:)`.
+        // source: src/pages/ContratMission.tsx:593
+        public static let statutPrefixe = "Statut :"
+
+        // source: src/pages/ContratMission.tsx:594
+        public static let statutSigne = "✅ Signé"
+
+        // source: src/pages/ContratMission.tsx:595
+        public static let statutAnnule = "❌ Annulé"
+
+        // source: src/pages/ContratMission.tsx:596
+        public static let statutEnAttente = "⏳ En attente de signatures"
+
+        /// Contrat absent ou illisible (l.530).
+        // source: src/pages/ContratMission.tsx:530
+        public static let introuvable = "Contrat introuvable"
+
+        // source: src/pages/ContratMission.tsx:611
+        public static let telecharger = "Télécharger le contrat"
+
+        // source: src/pages/ContratMission.tsx:614
+        public static let imprimer = "Imprimer"
+
+        /// Aucun original contrôlé à partager (l.427-429).
+        // source: src/pages/ContratMission.tsx:428
+        public static let aucunTelechargeable = "Aucun contrat téléchargeable pour le moment."
+
+        /// Masque date-fns des dates du contrat (l.623, l.679, l.698), appliqué en heure de Paris.
+        // source: src/pages/ContratMission.tsx:623
+        public static let formatDateHeure = "dd/MM/yyyy 'à' HH:mm"
+
+        /// Section Signatures (l.666-706) : voir `ligneSignature(_:signee:dateFormatee:)`.
+        // source: src/pages/ContratMission.tsx:667
+        public static let signaturesTitre = "Signatures"
+
+        // source: src/pages/ContratMission.tsx:678
+        public static let partieEtablissement = "Établissement :"
+
+        // source: src/pages/ContratMission.tsx:697
+        public static let partieSoignant = "Soignant(e) :"
+
+        // source: src/pages/ContratMission.tsx:679
+        public static let signatureSignee = "✅ Signé"
+
+        // source: src/pages/ContratMission.tsx:679
+        public static let signatureLe = "le"
+
+        // source: src/pages/ContratMission.tsx:680
+        public static let signatureEnAttente = "⏳ En attente"
+
+        /// Zone de signature (l.711) ; T9a : renvoi web jusqu'à T9b.
+        // source: src/pages/ContratMission.tsx:711
+        public static let votreSignature = "Votre signature"
+
+        /// Rendu serveur refusé (l.372-377) : voir `renduRefuse(messageServeur:)`.
+        // source: src/pages/ContratMission.tsx:377
+        public static let renduImpossible = "Le document contractuel final n’a pas pu être préparé."
+
+        // source: src/pages/ContratMission.tsx:377
+        public static let reessayerAvantDeSigner = "Réessayez avant de signer."
+
+        /// Document final encore incomplet après le rendu (l.387-388).
+        // source: src/pages/ContratMission.tsx:388
+        public static let renduIncomplet = "Le document contractuel final est encore incomplet. Réessayez avant de signer."
+
+        /// En-tête « Contrat <numéro> » (l.591), sans repli : un numéro NULL laisse « Contrat ».
+        public static func titre(numero: String?) -> String {
+            titrePrefixe + " " + (numero ?? "")
+        }
+
+        /// Statut de l'en-tête (l.593-596) : signé, annulé, sinon en attente de signatures.
+        public static func statut(_ statut: StatutContratAffiche) -> String {
+            let valeur: String
+            switch statut {
+            case .signe: valeur = statutSigne
+            case .annule: valeur = statutAnnule
+            case .enAttente: valeur = statutEnAttente
+            }
+            return statutPrefixe + " " + valeur
+        }
+
+        /// Ligne d'une partie (l.677-681, l.696-700) : « ✅ Signé », suivi de « le <date> » quand la date de
+        /// signature est lisible, sinon « ⏳ En attente ».
+        public static func ligneSignature(_ partie: Partie, signee: Bool, dateFormatee: String?) -> String {
+            let libelle: String
+            switch partie {
+            case .etablissement: libelle = partieEtablissement
+            case .soignant: libelle = partieSoignant
+            }
+            guard signee else { return libelle + " " + signatureEnAttente }
+            guard let dateFormatee, !dateFormatee.isEmpty else { return libelle + " " + signatureSignee }
+            return libelle + " " + signatureSignee + " " + signatureLe + " " + dateFormatee
+        }
+
+        /// Rendu serveur refusé (l.373-377) : motif serveur (180 unités UTF-16 au plus) entre les deux phrases ;
+        /// sans motif, les deux phrases seules (même texte que l.394).
+        public static func renduRefuse(messageServeur: String?) -> String {
+            guard let messageServeur, !messageServeur.isEmpty else { return renduImpossible + " " + reessayerAvantDeSigner }
+            let motif = String(decoding: Array(messageServeur.utf16.prefix(180)), as: UTF16.self)
+            return renduImpossible + " " + motif + " " + reessayerAvantDeSigner
+        }
+    }
+
     /// En-tête de la page `/contrat/:id/certificat` (`CertificatSignaturePage.tsx` l.186). Titre,
     /// certificat et empreinte : `TextesWeb.Certificat`.
     public enum Certificat {
         // source: src/pages/CertificatSignaturePage.tsx:186
         public static let contratPrefixe = "Contrat"
+
+        /// Masque date-fns de l'heure d'une signature (`CertificatSignature.tsx` l.130), en heure de Paris.
+        // source: src/components/CertificatSignature.tsx:130
+        public static let formatDateHeure = "dd/MM/yyyy 'à' HH:mm:ss"
+
+        /// Export PDF de la page (l.195) : renvoi web, jamais porté (LOT2_PLAN §1.2).
+        // source: src/pages/CertificatSignaturePage.tsx:195
+        public static let telechargerPdf = "Télécharger PDF"
 
         /// « Contrat <numéro> » (`contrat.numero_contrat || contrat.id`, l.186).
         public static func contrat(numero: String?, id: String) -> String {
@@ -291,6 +551,50 @@ public enum LibellesWeb {
         .init(cle: "CompteARebours.uniteHeures", texte: CompteARebours.uniteHeures),
         .init(cle: "CompteARebours.uniteMinutes", texte: CompteARebours.uniteMinutes),
         .init(cle: "CompteARebours.uniteSecondes", texte: CompteARebours.uniteSecondes),
+        .init(cle: "Contrats.titre", texte: Contrats.titre),
+        .init(cle: "Contrats.filtreEnAttente", texte: Contrats.filtreEnAttente),
+        .init(cle: "Contrats.filtreSignes", texte: Contrats.filtreSignes),
+        .init(cle: "Contrats.filtreAnnules", texte: Contrats.filtreAnnules),
+        .init(cle: "Contrats.badgeSigne", texte: Contrats.badgeSigne),
+        .init(cle: "Contrats.badgeAnnule", texte: Contrats.badgeAnnule),
+        .init(cle: "Contrats.badgeEnAttente", texte: Contrats.badgeEnAttente),
+        .init(cle: "Contrats.videTitre", texte: Contrats.videTitre),
+        .init(cle: "Contrats.videEnAttenteTitre", texte: Contrats.videEnAttenteTitre),
+        .init(cle: "Contrats.videEnAttente", texte: Contrats.videEnAttente),
+        .init(cle: "Contrats.videSignes", texte: Contrats.videSignes),
+        .init(cle: "Contrats.videAnnules", texte: Contrats.videAnnules),
+        .init(cle: "Contrats.videTous", texte: Contrats.videTous),
+        .init(cle: "Contrats.sansValeur", texte: Contrats.sansValeur),
+        .init(cle: "Contrats.pictoMission", texte: Contrats.pictoMission),
+        .init(cle: "Contrats.creeLe", texte: Contrats.creeLe),
+        .init(cle: "Contrats.formatDateCreation", texte: Contrats.formatDateCreation),
+        .init(cle: "Contrats.signerLeContrat", texte: Contrats.signerLeContrat),
+        .init(cle: "Contrats.voirLeContrat", texte: Contrats.voirLeContrat),
+        .init(cle: "Contrats.indisponiblesTitre", texte: Contrats.indisponiblesTitre),
+        .init(cle: "Contrats.chargementNAbouti", texte: Contrats.chargementNAbouti),
+        .init(cle: "Contrats.reessayer", texte: Contrats.reessayer),
+        .init(cle: "Contrat.titrePrefixe", texte: Contrat.titrePrefixe),
+        .init(cle: "Contrat.statutPrefixe", texte: Contrat.statutPrefixe),
+        .init(cle: "Contrat.statutSigne", texte: Contrat.statutSigne),
+        .init(cle: "Contrat.statutAnnule", texte: Contrat.statutAnnule),
+        .init(cle: "Contrat.statutEnAttente", texte: Contrat.statutEnAttente),
+        .init(cle: "Contrat.introuvable", texte: Contrat.introuvable),
+        .init(cle: "Contrat.telecharger", texte: Contrat.telecharger),
+        .init(cle: "Contrat.imprimer", texte: Contrat.imprimer),
+        .init(cle: "Contrat.aucunTelechargeable", texte: Contrat.aucunTelechargeable),
+        .init(cle: "Contrat.formatDateHeure", texte: Contrat.formatDateHeure),
+        .init(cle: "Contrat.signaturesTitre", texte: Contrat.signaturesTitre),
+        .init(cle: "Contrat.partieEtablissement", texte: Contrat.partieEtablissement),
+        .init(cle: "Contrat.partieSoignant", texte: Contrat.partieSoignant),
+        .init(cle: "Contrat.signatureSignee", texte: Contrat.signatureSignee),
+        .init(cle: "Contrat.signatureLe", texte: Contrat.signatureLe),
+        .init(cle: "Contrat.signatureEnAttente", texte: Contrat.signatureEnAttente),
+        .init(cle: "Contrat.votreSignature", texte: Contrat.votreSignature),
+        .init(cle: "Contrat.renduImpossible", texte: Contrat.renduImpossible),
+        .init(cle: "Contrat.reessayerAvantDeSigner", texte: Contrat.reessayerAvantDeSigner),
+        .init(cle: "Contrat.renduIncomplet", texte: Contrat.renduIncomplet),
         .init(cle: "Certificat.contratPrefixe", texte: Certificat.contratPrefixe),
+        .init(cle: "Certificat.formatDateHeure", texte: Certificat.formatDateHeure),
+        .init(cle: "Certificat.telechargerPdf", texte: Certificat.telechargerPdf),
     ]
 }

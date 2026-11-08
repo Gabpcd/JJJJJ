@@ -115,7 +115,8 @@ public struct SupabaseContratsGateway: ContratsPort {
         } catch {
             throw SupabaseErrorMapping.map(error, fallback: MessagesContrats.indisponible)
         }
-        return lignes.filter { $0.contratId == contratId }
+        // Identifiant comparé sans la casse, comme le reste du gateway (revue fraîche de T8, mineur 1).
+        return lignes.filter { Self.meme($0.contratId, contratId) }
     }
 
     public func fichierOriginal(contrat: OriginalContrat, context: MissionReadContext) async throws -> URL {

@@ -326,6 +326,144 @@
       "code": [
         "<p className=\"text-sm text-muted-foreground\">Contrat {contrat.numero_contrat || contrat.id}</p>"
       ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Contrats.libelleFiltre"
+      ],
+      "source": "src/pages/ListeContrats.tsx:121",
+      "code": [
+        "{f === 'Tous' ? 'Tous' : f === 'EN_ATTENTE_SIGNATURES' ? 'En attente' : f === 'SIGNE_COMPLET' ? 'Signés' : 'Annulés'}"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Contrats.titreVide",
+        "LibellesWeb.Contrats.descriptionVide"
+      ],
+      "source": "src/pages/ListeContrats.tsx:128-145",
+      "code": [
+        "let titreVide = 'Aucun contrat';",
+        "let descVide: string;",
+        "if (filtre === 'EN_ATTENTE_SIGNATURES') {",
+        "titreVide = 'Aucun contrat en attente';",
+        "descVide = isEtab",
+        "? 'Aucun contrat en attente de signature. Les contrats apparaîtront ici quand un soignant acceptera une mission.'",
+        ": 'Aucun contrat en attente de signature pour le moment.';",
+        "} else if (filtre === 'SIGNE_COMPLET') {",
+        "descVide = isEtab",
+        "? 'Aucun contrat finalisé pour le moment. Les contrats signés par vos soignants s\\'afficheront ici.'",
+        ": 'Aucun contrat signé pour le moment.';",
+        "} else if (filtre === 'ANNULE') {",
+        "descVide = 'Aucun contrat annulé.';",
+        "} else {",
+        "descVide = isEtab",
+        "? 'Les contrats apparaîtront ici après qu\\'un soignant ait accepté une de vos missions.'",
+        ": 'Vos contrats apparaîtront ici après avoir accepté une mission.';",
+        "}"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Contrats.badge"
+      ],
+      "source": "src/pages/ListeContrats.tsx:163",
+      "code": [
+        "{statut === 'SIGNE_COMPLET' ? '✅ Signé' : statut === 'ANNULE' ? '❌ Annulé' : '⏳ En attente'}"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Contrats.numero"
+      ],
+      "source": "src/pages/ListeContrats.tsx:210",
+      "code": [
+        "<span className=\"text-sm font-semibold text-foreground truncate\">{c.numero_contrat || '—'}</span>"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Contrats.mission"
+      ],
+      "source": "src/pages/ListeContrats.tsx:214",
+      "code": [
+        "<p className=\"text-xs text-muted-foreground line-clamp-1\">📋 {(c.missions as any)?.intitule || '—'}</p>"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Contrats.typeEtDate"
+      ],
+      "source": "src/pages/ListeContrats.tsx:215",
+      "code": [
+        "<p className=\"text-xs text-muted-foreground\">{c.type_contrat} · Créé le {format(new Date(c.cree_le), 'dd/MM/yyyy', { locale: fr })}</p>"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Contrats.action"
+      ],
+      "source": "src/pages/ListeContrats.tsx:223",
+      "code": [
+        "{aSigner(c) ? '✍️ Signer le contrat' : 'Voir le contrat'}"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Contrat.renduRefuse"
+      ],
+      "source": "src/pages/ContratMission.tsx:372-377",
+      "code": [
+        "if (error || !(data as any)?.success) {",
+        "const motifBrut = typeof (data as any)?.error === 'string'",
+        "? (data as any).error",
+        ": error?.message;",
+        "const motifServeur = motifBrut ? ` ${String(motifBrut).slice(0, 180)}` : '';",
+        "setErreurRenduContrat(`Le document contractuel final n’a pas pu être préparé.${motifServeur} Réessayez avant de signer.`);"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Contrat.titre"
+      ],
+      "source": "src/pages/ContratMission.tsx:591",
+      "code": [
+        "<h1 className=\"text-xl font-bold text-foreground\">Contrat {contrat.numero_contrat}</h1>"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Contrat.statut"
+      ],
+      "source": "src/pages/ContratMission.tsx:593-596",
+      "code": [
+        "Statut : {contrat.statut === 'SIGNE_COMPLET'",
+        "? '✅ Signé'",
+        ": contrat.statut === 'ANNULE' ? '❌ Annulé'",
+        ": '⏳ En attente de signatures'}"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Contrat.ligneSignature"
+      ],
+      "source": "src/pages/ContratMission.tsx:678-680",
+      "code": [
+        "Établissement : {(contrat.statut === 'SIGNE_COMPLET' || contrat.signature_etablissement)",
+        "? `✅ Signé${contrat.signature_etablissement_le ? ` le ${format(new Date(contrat.signature_etablissement_le), \"dd/MM/yyyy 'à' HH:mm\", { locale: fr })}` : ''}`",
+        ": '⏳ En attente'}"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Contrat.ligneSignature"
+      ],
+      "source": "src/pages/ContratMission.tsx:697-699",
+      "code": [
+        "Soignant(e) : {(contrat.statut === 'SIGNE_COMPLET' || contrat.signature_soignant)",
+        "? `✅ Signé${contrat.signature_soignant_le ? ` le ${format(new Date(contrat.signature_soignant_le), \"dd/MM/yyyy 'à' HH:mm\", { locale: fr })}` : ''}`",
+        ": '⏳ En attente'}"
+      ]
     }
   ],
   "rendus": [
@@ -593,6 +731,121 @@
       "fonction": "LibellesWeb.Certificat.contrat",
       "appel": "contrat(numero: nil, id: \"c-001\")",
       "rendu": "Contrat c-001"
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.libelleFiltre",
+      "appel": "libelleFiltre(.enAttenteSignatures)",
+      "rendu": "En attente"
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.libelleFiltre",
+      "appel": "libelleFiltre(.annule)",
+      "rendu": "Annulés"
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.badge",
+      "appel": "badge(.signe)",
+      "rendu": "✅ Signé"
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.badge",
+      "appel": "badge(.enAttente)",
+      "rendu": "⏳ En attente"
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.titreVide",
+      "appel": "titreVide(.enAttenteSignatures)",
+      "rendu": "Aucun contrat en attente"
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.titreVide",
+      "appel": "titreVide(.signeComplet)",
+      "rendu": "Aucun contrat"
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.descriptionVide",
+      "appel": "descriptionVide(.tous)",
+      "rendu": "Vos contrats apparaîtront ici après avoir accepté une mission."
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.descriptionVide",
+      "appel": "descriptionVide(.annule)",
+      "rendu": "Aucun contrat annulé."
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.numero",
+      "appel": "numero(nil)",
+      "rendu": "—"
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.numero",
+      "appel": "numero(\"DEMO-0002\")",
+      "rendu": "DEMO-0002"
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.mission",
+      "appel": "mission(intitule: \"Démonstration · Mission terminée 1\")",
+      "rendu": "📋 Démonstration · Mission terminée 1"
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.mission",
+      "appel": "mission(intitule: nil)",
+      "rendu": "📋 —"
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.typeEtDate",
+      "appel": "typeEtDate(type: \"CDD\", dateFormatee: \"29/10/2026\")",
+      "rendu": "CDD · Créé le 29/10/2026"
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.action",
+      "appel": "action(aSigner: true)",
+      "rendu": "✍️ Signer le contrat"
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.action",
+      "appel": "action(aSigner: false)",
+      "rendu": "Voir le contrat"
+    },
+    {
+      "fonction": "LibellesWeb.Contrat.titre",
+      "appel": "titre(numero: \"DEMO-0001\")",
+      "rendu": "Contrat DEMO-0001"
+    },
+    {
+      "fonction": "LibellesWeb.Contrat.statut",
+      "appel": "statut(.signe)",
+      "rendu": "Statut : ✅ Signé"
+    },
+    {
+      "fonction": "LibellesWeb.Contrat.statut",
+      "appel": "statut(.enAttente)",
+      "rendu": "Statut : ⏳ En attente de signatures"
+    },
+    {
+      "fonction": "LibellesWeb.Contrat.ligneSignature",
+      "appel": "ligneSignature(.etablissement, signee: true, dateFormatee: \"29/10/2026 à 02:00\")",
+      "rendu": "Établissement : ✅ Signé le 29/10/2026 à 02:00"
+    },
+    {
+      "fonction": "LibellesWeb.Contrat.ligneSignature",
+      "appel": "ligneSignature(.soignant, signee: false, dateFormatee: nil)",
+      "rendu": "Soignant(e) : ⏳ En attente"
+    },
+    {
+      "fonction": "LibellesWeb.Contrat.ligneSignature",
+      "appel": "ligneSignature(.soignant, signee: true, dateFormatee: nil)",
+      "rendu": "Soignant(e) : ✅ Signé"
+    },
+    {
+      "fonction": "LibellesWeb.Contrat.renduRefuse",
+      "appel": "renduRefuse(messageServeur: nil)",
+      "rendu": "Le document contractuel final n’a pas pu être préparé. Réessayez avant de signer."
+    },
+    {
+      "fonction": "LibellesWeb.Contrat.renduRefuse",
+      "appel": "renduRefuse(messageServeur: \"Contrat introuvable.\")",
+      "rendu": "Le document contractuel final n’a pas pu être préparé. Contrat introuvable. Réessayez avant de signer."
     }
   ]
 }
