@@ -345,6 +345,46 @@
   `InstantanePresences.listes(maintenant:)` (horloge `chargeLe`), historique par `lignesHistorique(soignantId:)`,
   `PointageRules.ongletInitial(parametre:missionsAujourdhui:missionsEnCours:)`, `filtreAValider`,
   `historiqueAffiche`. Aucun texte dans `Pointage/` : les libellés des onglets et des lignes viennent du web.
+- **T4a — application (L2-T4a, 8 novembre 2026)** : `Pointage/PresencesModel.swift` (instantané, onglet initial posé au
+  premier chargement réussi seulement — `defaultValue` des onglets du web, montés après le chargement —, échec sans texte,
+  règles d'état d'`AccueilModel`, relecture à 60 s et au retour au premier plan) et `Pointage/PresencesAffichage.swift`
+  (`BlocPointageAffichage`, `ResumeLignePresence`, mission et établissement d'une ligne, `PresencesRenvois`), sans
+  texte ; libellés verbatim dans `LibellesWeb` (`ListePresences`, `LignePresence`, `BlocPointage`, `EspaceSoignant`,
+  garde Node au caractère près) ; textes que le web tutoie (vouvoyés), assemblages et textes opérationnels dans
+  `Libelles/LibellesPresences.swift` (ajouté à `DOSSIERS_LOT2` de la garde). Écrans : `Screens/Presences/`
+  (`PresencesScreen`, `BlocPointageView`, `PresenceAVenirRow`, `PresenceValideeRow`, `PresenceHistoriqueRow`) et
+  `Screens/Profil/EspaceSoignantSection.swift`, insérée dans `ProfileScreen` après « Application » (déconnexion et
+  sentinelle réseau, lues sans défilement par les XCUITest des lots 0 et 1, ne bougent pas). Consignes :
+  - **T4b** : la zone de pointage est le point d'extension `FabriqueZonePointage` (`BlocPointageView.swift`), injecté par
+    `.environment(\.fabriqueZonePointage, …)` au-dessus des onglets avec l'`Appareil` d'`AppContainer` ; la zone reçoit
+    `ZonePointageContexte` (mission, fin prévue, action de la fenêtre, session) et possède le `PointageModel`
+    (`@StateObject`, cycle de vie de la consigne T4b). T4b retire l'encart provisoire `pointage-zone-provisoire-<mission>`
+    (`LibellesPresences.Provisoire.pointage`) et migre l'assertion de `DemoPresencesTests.testMesPresencesDepuisLeProfilOuvreAujourdhui`
+    vers ses identifiants ; il ajoute les bandeaux hors ligne et sans GPS en tête de `PresencesScreen` et la ligne
+    `profil-gps-consentement` dans `EspaceSoignantSection` ;
+  - **T5a** : points d'entrée vers le détail — les cartes des blocs, des missions à venir et des lignes d'historique ne
+    sont pas cliquables (le web ouvre `/soignant/missions/:id` et `/soignant/presences/mission/:id`) ; « Détail »
+    (`presence-historique-detail-<ligne>`) est aujourd'hui un renvoi web (`PresencesRenvois.detail`), rendu seulement
+    avec le présentateur de T10 : T5a le remplace par `DetailPresencesScreen`. Les missions de `demo-presences.json`
+    n'existent pas dans `DemoMissionsGateway` : ouvrir `MissionDetailScreen` depuis un bloc afficherait « Mission
+    indisponible » en démo ;
+  - **T5b** : le panneau de contestation se monte dans `PresenceValideeRow` (sous la date) et dans
+    `PresenceHistoriqueRow` (présence non validée et non reconstruite, sous la grille) ; aucun texte de délai (Q9) ;
+  - **T7, T9a** : « Mes documents » et « Mes contrats » ouvrent `PlaceholderScreen(etat: LibellesPresences.Provisoire.etat)`
+    (`placeholder-documents`, `placeholder-contrats`) ; chaque tranche remplace sa destination dans
+    `EspaceSoignantSection`, retire son texte de `LibellesPresences.Provisoire` et migre
+    `DemoPresencesTests.testMesDocumentsEtMesContratsProvisoiresJusquaT7EtT9a`. T9a remplace aussi le renvoi web de
+    « Voir le contrat » (`pointage-voir-contrat-<mission>`, `PresencesRenvois.contrat`) par le contrat natif ;
+  - **T10** : `PresencesScreen(…, parametreOnglet:, parametreFiltre:)` reçoit `?tab=` et `?filtre=` de la route
+    `/soignant/presences` (aujourd'hui `.safari` dans `LinkRouter`) ; le bandeau « à valider »
+    (`TextesWeb.Presences.bandeauAValider`, HARD STOP n°4 de TL, `presences-bandeau-a-valider`) ne s'affiche qu'avec ce
+    filtre, donc pas avant T10. L'injection du présentateur fait apparaître « Voir le contrat », « Détail » et « Voir ou
+    signaler un litige » : T10 remplace les absences affirmées par `DemoPresencesTests` par leur présence ;
+  - **CI** : `LibellesPresencesTests` relit `src/pages/PresencesSoignant.tsx` et
+    `src/components/pointage/BlocPointageMission.tsx`, absents des filtres `paths` d'`ios-swift-ci.yml` (comme
+    `DocumentsSoignant.tsx` pour `MessagesDocumentsTests`) : un changement web de ces textes vouvoyés n'est vu qu'à la
+    PR iOS suivante ; les libellés verbatim restent gardés par `validate-pr.yml` (garde Node). Ajout des deux chemins
+    aux filtres à décider par l'intégrateur (fichier partagé).
 - **T4b** (après T3) : `PointageModel` n'affiche aucun texte. `Issue.refuse(message:codeInvalide: true)` → forme
   vouvoyée de la décision 6, sinon le message serveur tel quel ; `.recuEnCours` → `RecuScan.messageRecuEnCours` ;
   `.suiviIllisible` → `RecuScan.messageIllisible` et renvoi web `/soignant/presences` ; `.horsLigne`,
@@ -525,6 +565,11 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | §3 T8 « `ContratModels.swift` » ; `Models/Lot2Results.swift` | types posés par T1 dans `Lot2Results.swift` | `ContratResume`, `ContratDetail`, `OriginalContrat` déplacés dans `Contrats/ContratModels.swift` (champs additifs, inits de T1 conservés) ; issues OTP et `SignatureCertificat` restent dans `Lot2Results.swift` | en-tête de `Lot2Results.swift` (« le déplace dans son dossier ») |
 | Revue fraîche de T2, constats 2, 3 et 7 | URL STAGING comparée exactement ; nom de RPC et clé non prouvés ; `AdmissionSignatureRecette` en doublon d'`AdmissionOtp` | `AdmissionRecette.origine(_:)` (barre finale, chemin, casse ignorés) et `lire(projet:…)` ; `SupabaseContratsGatewayTests` vérifie RPC et `p_contrat_id` ; type unique `AdmissionSignatureRecette` (`AdmissionOtp` n'a jamais été créé) | T8 |
 | Tri `cree_le` de la liste (web `order('cree_le', { ascending: false })`) | — | `order=cree_le.desc.nullsfirst` (supabase-swift ajoute toujours la clause NULLS ; NULLS FIRST est le défaut PostgreSQL de `DESC`) ; certificat `cree_le.asc.nullslast` | T8 : même tri que le web |
+| §3 T4a « Fichiers » | `PresencesScreen`, `BlocPointageView`, `PresenceHistoriqueRow`, `PresenceValideeRow`, `EspaceSoignantSection`, `ProfileScreen` ; aucun modèle Core nommé | + `Pointage/PresencesModel.swift`, `Pointage/PresencesAffichage.swift` (sans texte), `Libelles/LibellesPresences.swift`, `Screens/Presences/PresenceAVenirRow.swift` ; libellés verbatim dans `LibellesWeb` ; `PlaceholderScreen` gagne `etat` (défaut « Disponible au lot 1 », inchangé pour le lot 0) | T4a : `PresencesModelTests` exige un modèle testable ; un texte que le web tutoie ne peut pas être verbatim dans `LibellesWeb` (égalité au caractère près et test du vouvoiement) |
+| §3 T4a identifiants | `presences-empty-<onglet>` | `presences-empty-avenir`, `-actives`, `-aujourdhui`, `-historique` (suffixes des onglets `presences-tab-*`) ; + `presences-loading`, `presences-refresh-error`, `presences-session-expired`, `presences-session-check`, `presences-bandeau-a-valider`, `presence-avenir-<mission>`, `presence-validee-<presence>`, `presence-historique-detail-<ligne>`, `presence-historique-litige-<ligne>`, `pointage-zone-provisoire-<mission>`, `profil-espace`, `placeholder-documents`, `placeholder-contrats` | T4a : chaque contrôle ou état atteint par un XCUITest porte un identifiant (PRINCIPES §6) |
+| §3 T4a « BlocPointageView » (carte mission) ; « PresenceHistoriqueRow » (ligne) | carte et ligne ouvrent la mission (web l.57, l.685) | non cliquables jusqu'à T5a ; « Détail », « Voir ou signaler un litige » et « Voir le contrat » : renvois web rendus seulement avec le présentateur de T10 | gap verrouillé : en démo, le détail d'une mission de `demo-presences.json` est introuvable ; aucun bouton sans effet avant T10 |
+| `PresencesSoignant.tsx` l.722-726 (« Code : … » d'une présence) | code de pointage de la présence affiché | non affiché | aucune colonne `code_*` n'est lue (gap « B1-ter » de la migration B1, projection `PresenceLue`) |
+| `PresencesSoignant.tsx` l.459-477 (écran d'erreur) | une relecture en échec affiche l'écran d'erreur (`isError`) | présences gardées, encart `presences-refresh-error` ; écran d'erreur au premier chargement seulement | règle du lot 1 (`AccueilModel`, `MissionsListModel`) : jamais de démontage sur un rafraîchissement |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 
@@ -559,6 +604,24 @@ aucun ne cite de valeur stockée. Gardés mot pour mot par les tests indiqués.
 | `PointageQuery.fallbackLocalisation` | « Impossible d'enregistrer votre choix de localisation. Réessayez. » | nouveau (T3) : `fn_consentir_gps` en échec ou relecture vide (aucune hypothèse locale) | `SupabasePointageGatewayTests.testConsentementLuPuisEnregistreEtRelu` |
 | `PointageQuery.fallbackDetail` | « Impossible de charger le détail des présences. Réessayez. » | nouveau (T3) : repli de la synthèse serveur, jamais affiché (carte masquée) | `SupabasePointageGatewayTests` |
 
+## Textes opérationnels hors web (T4a)
+
+Non juridiques (aucune marque de `MARQUES_JURIDIQUES`), vouvoyés ; `LibellesPresences.swift` est dans `DOSSIERS_LOT2`.
+Les libellés repris tels quels du web sont dans `LibellesWeb` (`ListePresences`, `LignePresence`, `BlocPointage`,
+`EspaceSoignant`), gardés au caractère près par `tests/node/textes-juridiques-ios.node.mjs`. Les textes que le web
+tutoie sont vouvoyés, seule la personne change (décision 9 du lot 1) : sous-titre de la page (l.515), titre de
+l'erreur (l.467), descriptions des quatre états vides (l.565, l.588, l.611, l.764), motif « Aucun créneau planifié »
+(`BlocPointageMission.tsx` l.105) ; `LibellesPresencesTests` relit chaque source web. Les titres « Session à
+vérifier » et « Vérifier ma session » sont ceux de l'Accueil du lot 1 (`AccueilScreen`).
+
+| Constante | Texte | Source | Test |
+|---|---|---|---|
+| `LibellesPresences.EspaceSoignant.titreSection` | « Mon espace » | décision 24 du lot 2 (section du Profil ; aucune page web ne regroupe ces trois écrans) | `LibellesPresencesTests.testTextesOperationnelsInventories` |
+| `LibellesPresences.Provisoire.etat` | « Disponible au lot 2 » | provisoire (forme de l'onglet provisoire du lot 0), retiré par T4b, T7 et T9a | idem |
+| `LibellesPresences.Provisoire.pointage` | « Le pointage dans l'application arrive avec la suite du lot 2. » | provisoire, retiré par T4b | idem |
+| `LibellesPresences.Provisoire.documents` | « Vos justificatifs arrivent dans l'application avec la suite du lot 2. » | provisoire, retiré par T7 | idem |
+| `LibellesPresences.Provisoire.contrats` | « Vos contrats arrivent dans l'application avec la suite du lot 2. » | provisoire, retiré par T9a | idem |
+
 ## Textes opérationnels hors web (T8)
 
 Non juridiques (aucune marque de `MARQUES_JURIDIQUES`), vouvoyés, repris tels quels de leur source ; T8 n'ajoute
@@ -583,8 +646,10 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
 - **TL** : validation écrite des textes juridiques et de consentement listés avec leur source dans la PR TL
   (consentement GPS et retrait, attestation santé avec la mention de l'art. 441-7 du Code pénal, bandeaux et mentions
   du contrat, art. 1366-1367 du Code civil, art. L.1242-12 du Code du travail, `MESSAGES_ERREUR`, compte à rebours
-  72 h, certificat) avant que T4b, T7, T9a et T9b soient déclarées livrées. Les textes tutoyés du web restent verbatim
-  tant qu'un wording vouvoyé n'est pas validé.
+  72 h, certificat) avant que T4b, T7, T9a et T9b soient déclarées livrées, ainsi que T4a pour le bandeau du filtre
+  « à valider » (`TextesWeb.Presences.bandeauAValider`, affiché par `PresencesScreen` avec `?filtre=a_valider`, donc
+  atteignable seulement après T10). Les textes tutoyés du web restent verbatim tant qu'un wording vouvoyé n'est pas
+  validé.
 - **T9b** (écran de signature OTP) : go explicite avant merge (captures xcresult des trois formats, liste des textes).
 - **T5b** (contestation depuis une présence) : go explicite avant merge.
 - **Décision Q9 — délai de contestation** (sources primaires : `PanneauContestation.tsx` l.43-46 et l.347, l.354,

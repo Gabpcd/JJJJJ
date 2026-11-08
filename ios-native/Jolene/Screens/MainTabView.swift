@@ -52,7 +52,7 @@ struct MainTabView: View {
             .accessibilityIdentifier("tab-revenus")
 
             NavigationStack {
-                ProfileScreen(container: container, session: session, snapshot: snapshot)
+                ProfileScreen(container: container, session: session, snapshot: snapshot) { selection = $0 }
             }
             .tabItem { Label("Profil", systemImage: "person") }
             .tag(Tab.profil)

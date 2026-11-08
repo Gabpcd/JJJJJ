@@ -116,6 +116,8 @@ export const DOSSIERS_LOT2 = [
   'ios-native/Packages/JoleneCore/Sources/JoleneCore/Ports/AppareilPorts.swift',
   'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Keychain/KeychainTerminalIdentity.swift',
   'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Keychain/KeychainReceiptStore.swift',
+  // T4a : textes vouvoyés, assemblages et textes opérationnels de la page Présences (hors LibellesWeb.swift).
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Libelles/LibellesPresences.swift',
 ];
 
 /**

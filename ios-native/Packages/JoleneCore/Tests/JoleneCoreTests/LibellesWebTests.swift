@@ -70,6 +70,30 @@ final class LibellesWebTests: XCTestCase {
         XCTAssertEqual(LibellesWeb.Certificat.contrat(numero: "", id: "c-001"), "Contrat c-001")
     }
 
+    /// Page Présences (lot 2, T4a) : onglets, états vides, lignes et bloc de pointage, repris tels quels de
+    /// `PresencesSoignant.tsx` et `BlocPointageMission.tsx` (égalité prouvée par la garde Node), tous au catalogue.
+    func testLibellesDeLaPageDesPresencesAuCatalogue() {
+        let liste = LibellesWeb.ListePresences.self, ligne = LibellesWeb.LignePresence.self, bloc = LibellesWeb.BlocPointage.self
+        XCTAssertEqual([liste.ongletAVenir, liste.ongletActives, liste.ongletAujourdhui, liste.ongletHistorique],
+                       ["À venir", "Actives", "Aujourd'hui", "Historique"])
+        XCTAssertEqual(liste.titre, "Mes présences")
+        XCTAssertEqual(liste.planningAConfirmer, "Planning détaillé à confirmer avec l’établissement", "apostrophe ’ du web")
+        XCTAssertEqual(ligne.badgeValidee, "✅ Validée")
+        XCTAssertEqual(ligne.badgeNonValidee, "⏳ Non validée")
+        XCTAssertEqual(bloc.contratNonSigne, "Contrat non signé")
+        XCTAssertEqual(bloc.contratDoitEtreSigne, "Le contrat doit être signé par les deux parties avant le premier pointage.")
+        XCTAssertEqual(LibellesWeb.EspaceSoignant.mesDocuments, "Mes documents")
+        XCTAssertEqual(LibellesWeb.EspaceSoignant.mesContrats, "Mes contrats")
+        let cles = Set(LibellesWeb.catalogue.map(\.cle))
+        for cle in ["ListePresences.titre", "ListePresences.ongletAVenir", "ListePresences.ongletActives",
+                    "ListePresences.ongletAujourdhui", "ListePresences.ongletHistorique", "ListePresences.validee",
+                    "ListePresences.videHistoriqueTitre", "LignePresence.releveReconstruit", "LignePresence.voirOuSignalerLitige",
+                    "BlocPointage.contratNonSigne", "BlocPointage.tousTermines", "BlocPointage.voirLeContrat",
+                    "EspaceSoignant.mesDocuments", "EspaceSoignant.mesContrats"] {
+            XCTAssertTrue(cles.contains(cle), "\(cle) absent du catalogue")
+        }
+    }
+
     /// `String(valeur).padStart(2, '0')` du web.
     func testDeuxChiffres() {
         XCTAssertEqual(LibellesWeb.deuxChiffres(0), "00")

@@ -116,11 +116,15 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
     'src/components/Countdown72hSignature.tsx',
     'src/components/PanneauContestation.tsx',
     'src/components/SignerContratOtp.tsx',
+    // T4a : motifs du bloc de pointage, titres « Mes documents » et « Mes contrats » (section « Mon espace »).
+    'src/components/pointage/BlocPointageMission.tsx',
     'src/components/profil-soignant/SectionPreferences.tsx',
     'src/pages/CertificatSignaturePage.tsx',
     'src/pages/ContratMission.tsx',
     'src/pages/DetailPresencesMission.tsx',
     'src/pages/DocumentsSoignant.tsx',
+    'src/pages/ListeContrats.tsx',
+    'src/pages/MesDocuments.tsx',
     'src/pages/PresencesSoignant.tsx',
   ]);
 });
@@ -651,6 +655,8 @@ test('TL : aucun texte juridique écrit en dur dans les fichiers Swift du lot 2 
     'ios-native/Jolene/Screens/Profil/EspaceSoignantSection.swift',
     'ios-native/Packages/JoleneDesign/Sources/JoleneDesign/Components/CountdownLabel.swift',
     'ios-native/Jolene/Composition/Media/ShareSheet.swift',
+    // T4a : libellés vouvoyés et assemblages de la page Présences, hors LibellesWeb.swift.
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Libelles/LibellesPresences.swift',
   ]) {
     assert.ok(DOSSIERS_LOT2.some(d => chemin === d || chemin.startsWith(`${d}/`)), `${chemin} hors de DOSSIERS_LOT2`);
   }
