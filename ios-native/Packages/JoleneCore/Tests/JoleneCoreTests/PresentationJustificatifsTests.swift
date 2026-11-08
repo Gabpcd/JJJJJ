@@ -296,6 +296,19 @@ final class PresentationJustificatifsTests: XCTestCase {
         for etat in ouverts { XCTAssertFalse(P.fermeLeTeleversement(etat), "\(etat)") }
     }
 
+    /// En tête d'écran, « vérification en cours » ne survit pas au verdict relu : le badge de la carte le porte ensuite.
+    func testIssueAfficheeSeRetireAuVerdict() {
+        let demandee = DocumentsModel.EtatEnvoi.termine(.verificationDemandee(documentId: "d"))
+        XCTAssertEqual(P.issueAffichee(demandee, enVerification: ["d"])?.texte, "Document téléversé — vérification en cours (~30 s).")
+        XCTAssertNil(P.issueAffichee(demandee, enVerification: []), "verdict relu : plus de « vérification en cours »")
+        XCTAssertNil(P.issueAffichee(demandee, enVerification: ["autre"]))
+        XCTAssertEqual(P.issueAffichee(.termine(.enregistre(documentId: "d")), enVerification: []),
+                       P.messageEnvoi(.termine(.enregistre(documentId: "d"))))
+        XCTAssertEqual(P.issueAffichee(.termine(.incertain), enVerification: []), P.messageEnvoi(.termine(.incertain)))
+        XCTAssertEqual(P.issueAffichee(.suiviIllisible, enVerification: []), P.messageEnvoi(.suiviIllisible))
+        XCTAssertNil(P.issueAffichee(.inactif, enVerification: []))
+    }
+
     func testMessagesDeRevérificationCommeLesToastsDuWeb() {
         XCTAssertEqual(P.messageReverification(.verifie, motif: "x"), TexteJustificatif(texte: "✅ Document vérifié automatiquement !", ton: .succes))
         XCTAssertEqual(P.messageReverification(.rejete, motif: "Illisible"), TexteJustificatif(texte: "❌ Document rejeté : Illisible", ton: .erreur))
