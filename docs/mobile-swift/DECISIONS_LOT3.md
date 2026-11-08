@@ -484,7 +484,9 @@ ci-dessus, « à l'intégration »). Ajoutées par l'intégrateur, sans changer 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
 
 - **B3** — PR backend de la contestation de paiement (paiements ; `CREATE OR REPLACE` depuis la définition live,
-  garde-fou 9.0 n°2 ; `test:escrow`, `test:regression` et `guards` requis, B7).
+  garde-fou 9.0 n°2 ; `test:escrow`, `test:regression` et `guards` requis, B7). **Mergée sur `main` (#1118)**,
+  reprise dans `feat/ios-lot3` le 08/11/2026 : fiche `fn_contester_paiement_soignant` de `CONTRATS_RPC_SOIGNANT.md`
+  et garde `check-rpc-contracts-lot3.node.mjs` mises au contrat d'après B3 ; T13 (B9) reste à livrer.
 - **T7** — compte rapide et confirmation (consentement CGU transmis par `fn_demarrer_inscription p_cgu`).
 - **T8** — complétion et `register-soignant` (inscription, audit `RGPD_CONSENTEMENT_DONNE` côté serveur).
 - **T12** — revenus en lecture (paiements, escrow).

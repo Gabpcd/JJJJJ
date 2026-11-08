@@ -104,7 +104,7 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_modifier_mon_profil` | consommée lot 3 (T9) | 3 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_rgpd_exporter_rate_limited` | à venir | 3 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_confirmer_paiement_soignant` | à venir | 3 (T13, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_contester_paiement_soignant` | à venir | 3 (T13 après B3, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_contester_paiement_soignant` | à venir | 3 (T13, B3 mergée #1118, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_consulter_mon_iban` | à venir | 3 (T14b, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_enregistrer_mon_iban` | à venir | 3 (T14b, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_mes_revenus_connect` | à venir | 3 (T12, T14a, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -1143,8 +1143,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_paiement_soignant"("p_paiement
 
 ## fn_contester_paiement_soignant
 
-- **Statut natif** : à venir (lot 3, T13) — **B9** ; bouton **verrouillé** tant que la PR backend **B3** n'est pas
-  sur `main` (D19, correction 3).
+- **Statut natif** : à venir (lot 3, T13) — **B9**. La PR backend **B3** est sur `main` (#1118, migration
+  `20261102205808_contestation_paiement_soignant.sql`, D19, correction 3) : le verrou côté app de T13 peut être levé
+  dans la PR de T13, qui consomme le contrat ci-dessous.
 - **Usage prévu** : « Contester » avec un motif non vide de 500 caractères au plus ; relecture
   `paiements_soignant.statut = 'CONTESTE'` et de la ligne `litiges` ; bouton désactivé pendant l'appel.
 - **Signature SQL** (`supabase/schema/public.sql` l.25741) :
@@ -1155,24 +1156,34 @@ CREATE OR REPLACE FUNCTION "public"."fn_contester_paiement_soignant"("p_paiement
     SET "search_path" TO 'public'
 ```
 
-- **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_contester_paiement_soignant(uuid,text)` ; aucune garde `auth.uid() IS NOT NULL` dans le corps (B3 l'ajoute).
-- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_contester_paiement_soignant(uuid,text)` ;
+  depuis B3, garde `v_uid IS NULL OR NOT public.fn_compte_auth_actif()` en tête du corps (l.25753).
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"` (l.82215-82217).
 - **Signature TypeScript** : `Args: { p_motif: string; p_paiement_id: string }` ; `Returns: Json`.
-- **Contrat de réponse** (dump du 01/11/2026, à confirmer sur la définition live avant B3, garde-fou 9.0 n°2) :
-  `{error:'Paiement introuvable'}` (l.25750) ; `{error:'Accès refusé'}` (l.25751) ; sinon UPDATE
-  **inconditionnel** (l.25754-25759 : ni garde de statut, ni idempotence, ni contrôle du motif), INSERT `litiges`
-  (l.25762-25774), puis INSERT `notifications` de type `'CONTESTATION_PAIEMENT'` (l.25776-25784) **absent** de
-  `notifications_type_check` (l.70815) → **23514**, transaction annulée : la contestation échoue aujourd'hui, sur le
-  web comme en natif. Second échec possible : **23505** sur `uq_litige_mission_type_ouvert_legacy` (l.75280) dès
-  qu'un litige `AUTRE` sans facture est déjà ouvert sur la mission (y compris au second appel). Succès théorique
-  `{success:true, litige_id}` (l.25794). Le trigger `trg_notifier_creation_litige` (l.76080) notifie déjà
-  l'établissement en `LITIGE_OUVERT` : la notification explicite est redondante.
-- **Verrou côté app** (T13, « un gap connu reste verrouillé ») : tant que B3 n'est pas mergée, « Contester » est
-  remplacé par un message explicite (texte nouveau, non juridique, à relire, §6.7 du blueprint) et un renvoi à cette
-  fiche ; aucun appel. B3 (option D19 : retrait de l'INSERT redondant, garde de statut et d'idempotence, `{error}`
-  explicite si un litige est déjà ouvert) rouvre le bouton dans la PR qui la suit.
-- **Preuve STAGING** : après B3, `CONTESTE` + une ligne `litiges` + notification établissement `LITIGE_OUVERT`
-  relues (T16) ; second appel → `{error}` sans second litige.
+- **Contrat de réponse** (dump de `main` après B3, l.25741-25839 ; relu à l'intégration du lot 3 le 08/11/2026) :
+  toujours HTTP 200, refus `{error, error_code}` :
+  - `NON_AUTHENTIFIE` : « Non authentifié ou compte inactif » (l.25754) ;
+  - `MOTIF_INVALIDE` : « Motif requis » (motif vide après `btrim`, l.25758) ou
+    « Motif trop long (500 caractères maximum) » (l.25761) ;
+  - `PAIEMENT_INTROUVABLE` : « Paiement introuvable » (l.25771) ; `ACCES_REFUSE` : « Accès refusé » (l.25774) ;
+  - `DEJA_CONTESTE` : « Paiement déjà contesté » (l.25778, idempotence : jamais un second litige) ;
+    `DEJA_CONFIRME` : « Paiement déjà confirmé » (l.25781) ;
+  - `STATUT_INVALIDE` : « Ce paiement ne peut plus être contesté (statut: <statut>) » hors `DECLARE`/`EN_ATTENTE`
+    (l.25783-25787) ;
+  - `LITIGE_DEJA_OUVERT` : « Un litige de ce type est déjà ouvert pour cette mission. » (l.25820-25823) — la
+    **23505** sur `uq_litige_mission_type_ouvert_legacy` (l.75327) est interceptée dans un sous-bloc : paiement et
+    litige sont annulés ensemble ; toute autre violation d'unicité remonte telle quelle (`RAISE`, l.25818).
+  Le paiement est lu `FOR UPDATE` (l.25766-25769, verrou de ligne : deux contestations simultanées sont
+  sérialisées). Succès `{success:true, litige_id}` (l.25837) après l'UPDATE `CONTESTE`, l'INSERT `litiges` et une
+  notification `SYSTEM` à un administrateur (l.25830-25835).
+- **Correction 3 levée par B3** : l'INSERT `notifications` de type `'CONTESTATION_PAIEMENT'`, absent de
+  `notifications_type_check` (l.70862), qui faisait échouer toute contestation en **23514**, est retiré ;
+  l'établissement reste notifié en `LITIGE_OUVERT` par `trg_notifier_creation_litige` (l.76127).
+- **Verrou côté app** (T13, « un gap connu reste verrouillé ») : il couvrait l'état d'avant B3 (aucun appel,
+  message explicite). B3 étant mergée, T13 ouvre « Contester » dans sa propre PR (B9) avec ces refus restitués et
+  une relecture après toute issue ambiguë.
+- **Preuve STAGING** : `CONTESTE` + une ligne `litiges` + notification établissement `LITIGE_OUVERT` relues (T16) ;
+  second appel → `{error:'Paiement déjà contesté', error_code:'DEJA_CONTESTE'}` sans second litige.
 
 ## fn_consulter_mon_iban
 

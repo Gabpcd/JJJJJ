@@ -359,7 +359,7 @@ test('CONTRATS : fn_rgpd_exporter_rate_limited — refus en valeur JSON réelle'
   ficheContient(fiche, 'fn_rgpd_exporter_rate_limited', ['30', 'RGPD_EXPORT_DONNEES'], 'élément');
 });
 
-test('CONTRATS : paiements déclarés — refus de la confirmation, contestation cassée (23514, 23505) et B3', () => {
+test('CONTRATS : paiements déclarés — refus de la confirmation, contestation corrigée par B3 (#1118)', () => {
   const confirmer = sqlBody('fn_confirmer_paiement_soignant');
   const ficheConfirmer = section(CONTRATS, 'fn_confirmer_paiement_soignant');
   const erreurs = sqlErrors(confirmer);
@@ -369,15 +369,27 @@ test('CONTRATS : paiements déclarés — refus de la confirmation, contestation
 
   const contester = sqlBody('fn_contester_paiement_soignant');
   const ficheContester = section(CONTRATS, 'fn_contester_paiement_soignant');
-  const refus = sqlJsonErrors(contester);
-  assert.deepEqual(refus, ['Paiement introuvable', 'Accès refusé']);
-  for (const e of refus) assert.ok(ficheContester.includes(`error:'${e}'`), `refus absent : ${e}`);
-  // Témoin de la correction 3 : le type inséré n'est pas autorisé par le CHECK des notifications.
-  assert.ok(contester.includes("'CONTESTATION_PAIEMENT',"), 'témoin SQL : INSERT CONTESTATION_PAIEMENT disparu — relire la fiche et B3');
+  // B3 (#1118, migration 20261102205808) : tous les refus sont `{error, error_code}`, aucune forme `'{"error":…}'::JSONB`.
+  assert.deepEqual(sqlJsonErrors(contester), [], 'témoin SQL : ancienne forme de refus revenue — relire la fiche');
+  const codes = [...new Set(sqlErrorCodes(contester))];
+  assert.deepEqual(codes, ['NON_AUTHENTIFIE', 'MOTIF_INVALIDE', 'PAIEMENT_INTROUVABLE', 'ACCES_REFUSE', 'DEJA_CONTESTE',
+    'DEJA_CONFIRME', 'STATUT_INVALIDE', 'LITIGE_DEJA_OUVERT']);
+  ficheContient(ficheContester, 'fn_contester_paiement_soignant', codes.map(c => `\`${c}\``), 'error_code');
+  const refus = sqlErrors(contester);
+  assert.equal(refus.length, 9, `témoin : 9 refus, lus ${refus.length}`);
+  for (const e of refus) assert.ok(horsBlocs(ficheContester).includes(e.trim()), `refus absent : ${e}`);
+  // Correction 3 levée : plus d'INSERT du type refusé par le CHECK des notifications (23514), qui ne l'autorise toujours pas.
+  assert.ok(!contester.includes("'CONTESTATION_PAIEMENT'"), 'témoin SQL : INSERT CONTESTATION_PAIEMENT revenu (23514) — relire la fiche');
   const check = SCHEMA.split('\n').find(l => l.includes('CONSTRAINT "notifications_type_check"'));
-  assert.ok(check && !check.includes("'CONTESTATION_PAIEMENT'"), 'témoin SQL : CONTESTATION_PAIEMENT désormais autorisé — relire la fiche et B3');
+  assert.ok(check && !check.includes("'CONTESTATION_PAIEMENT'"), 'témoin SQL : CONTESTATION_PAIEMENT désormais autorisé — relire la fiche');
+  // Idempotence et concurrence : verrou de ligne, 23505 de l'index legacy restituée en refus, succès avec litige_id.
+  assert.match(contester, /FROM public\.paiements_soignant\s+WHERE id = p_paiement_id\s+FOR UPDATE;/, 'témoin SQL : verrou de ligne');
+  assert.ok(contester.includes('EXCEPTION WHEN unique_violation') && contester.includes("'uq_litige_mission_type_ouvert_legacy'"),
+    'témoin SQL : 23505 de uq_litige_mission_type_ouvert_legacy non restituée');
   assert.ok(SCHEMA.includes('CREATE UNIQUE INDEX "uq_litige_mission_type_ouvert_legacy"'));
-  ficheContient(ficheContester, 'fn_contester_paiement_soignant', ['23514', '23505', '`uq_litige_mission_type_ouvert_legacy`', 'B3', 'verrou'], 'élément');
+  assert.ok(contester.includes("jsonb_build_object('success', true, 'litige_id', v_litige_id)"), 'témoin SQL : forme du succès');
+  ficheContient(ficheContester, 'fn_contester_paiement_soignant',
+    ['23514', '23505', '`uq_litige_mission_type_ouvert_legacy`', 'B3', '#1118', '`FOR UPDATE`', 'verrou', '{success:true, litige_id}'], 'élément');
 });
 
 test('CONTRATS : IBAN — neuf error_code (dont sept sans error), deux messages serveur, formes de consultation', () => {
