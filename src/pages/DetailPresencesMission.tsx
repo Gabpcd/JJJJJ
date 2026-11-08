@@ -491,7 +491,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
       {/* Code de pointage rotatif (système ②) — l'ancien affichage statique est retiré. */}
       {role === 'ADMIN_ETABLISSEMENT' ? (
         <div className="mb-6">
-          <AffichageCodeRotatifEtab missionId={missionId} />
+          <AffichageCodeRotatifEtab missionId={missionId} etablissementId={mission.etablissement_id} />
         </div>
       ) : null}
 
