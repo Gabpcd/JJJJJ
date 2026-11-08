@@ -15,6 +15,10 @@
  * champ par champ. Le fichier versionné est le contrat que le code Swift suppose ;
  * une divergence impose de relire les gateways avant de régénérer.
  *
+ * Lot 2 (T0) : une RPC de recette STAGING (`statut: 'staging_seulement'`) n'existe ni dans
+ * `public.sql` ni dans `types.ts` ; sa signature et ses GRANT sont lus dans le supplément SQL
+ * indiqué par `source`, et sa présence dans le dump de production fait échouer le script.
+ *
  * Usage :
  *   node scripts/mobile/check-rpc-contracts.mjs            # compare, code 1 si dérive
  *   node scripts/mobile/check-rpc-contracts.mjs --update   # réécrit le JSON
@@ -38,6 +42,8 @@ export const CONTRACTS_PATH = join(ROOT, 'ios-native', 'rpc-contracts.json');
  *   - `lot0`    : appelée par `JoleneSupabase` dès le lot 0 ;
  *   - `a_venir` : listée dans `docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md`, lot cible indiqué.
  *   - `consommee` : appelée par une gateway Swift livrée (lot indiqué), passée par la PR qui la câble.
+ *   - `staging_seulement` : RPC de recette définie par un supplément STAGING (`source`), absente de
+ *     la production ; appelée seulement sur STAGING (lot 2, `fn_admission_otp_signature_recette`).
  * L'ordre est celui du plan §11 jour 8, puis celui des tranches du lot 1
  * (`docs/mobile-swift/LOT1_PLAN.md` §3 : T3 accueil, T6 candidature/présence, T7 annulation,
  * T4b favoris, T9 audit/drapeaux, T8 compte). Chaque ajout est accompagné de `--update` et
@@ -50,7 +56,11 @@ export const CONTRACTS_PATH = join(ROOT, 'ios-native', 'rpc-contracts.json');
  * passe en lot 4 (revue B8 de T3 : son seul appelant web, `SuggestionsMissions.tsx`, n'est monté
  * par aucune page ; l'Accueil natif ne la consomme pas).
  *
- * Les deux listes d'exclusion qui suivent sont vérifiées par `verifierExclusions` (fail-closed).
+ * Lot 2 (T0, `docs/mobile-swift/LOT2_PLAN.md` §3 T0 et `DECISIONS_LOT2.md`) : le pointage passe par
+ * le seul système rotatif (`fn_scanner_code_pointage`) ; les RPC du système ① sortent de cette liste
+ * (`RPC_POINTAGE_SYSTEME_1`, décision 1). Dix RPC sont ajoutées après `fn_remplacer_document_soignant`.
+ *
+ * Les listes d'exclusion qui suivent sont vérifiées par `verifierExclusions` (fail-closed).
  */
 export const RPC_SUIVIES = [
   { name: 'fn_get_my_role', statut: 'lot0', lot: 0 },
@@ -70,15 +80,22 @@ export const RPC_SUIVIES = [
   { name: 'fn_supprimer_compte_rate_limited', statut: 'a_venir', lot: 1 },
   { name: 'fn_param_bool', statut: 'a_venir', lot: 1 },
   { name: 'fn_confirmer_presence_mission', statut: 'a_venir', lot: 1 },
-  { name: 'fn_pointer_arrivee', statut: 'a_venir', lot: 2 },
-  { name: 'fn_pointer_depart', statut: 'a_venir', lot: 2 },
   { name: 'fn_scanner_code_pointage', statut: 'a_venir', lot: 2 },
-  { name: 'fn_valider_scan_qr', statut: 'a_venir', lot: 2 },
-  { name: 'fn_generer_qr_mission', statut: 'a_venir', lot: 2 },
   { name: 'fn_etat_pointage_mission', statut: 'a_venir', lot: 2 },
   { name: 'fn_envoyer_otp_signature', statut: 'a_venir', lot: 2 },
   { name: 'fn_signer_contrat_otp', statut: 'a_venir', lot: 2 },
   { name: 'fn_remplacer_document_soignant', statut: 'a_venir', lot: 2 },
+  // Lot 2, T0 : présences (T3, T4b, T5a, T5b), justificatifs (T6), contrats (T8).
+  { name: 'fn_consentir_gps', statut: 'a_venir', lot: 2 },
+  { name: 'fn_relancer_validation_presence', statut: 'a_venir', lot: 2 },
+  { name: 'fn_presences_detail_mission', statut: 'a_venir', lot: 2 },
+  { name: 'fn_fenetre_contestation_ouverte', statut: 'a_venir', lot: 2 },
+  { name: 'fn_ouvrir_litige_rate_limited', statut: 'a_venir', lot: 2 },
+  { name: 'fn_creer_notation_mission', statut: 'a_venir', lot: 2 },
+  { name: 'fn_demander_revue_document', statut: 'a_venir', lot: 2 },
+  { name: 'fn_verifier_coherence_documents', statut: 'a_venir', lot: 2 },
+  { name: 'fn_signer_attestation_sante', statut: 'a_venir', lot: 2 },
+  { name: 'fn_admission_otp_signature_recette', statut: 'staging_seulement', lot: 2, source: 'scripts/ci/sms-signature-staging.sql' },
   { name: 'fn_upsert_token_push', statut: 'a_venir', lot: 3 },
 ];
 
@@ -86,8 +103,32 @@ export const RPC_SUIVIES = [
  * Jamais suivies (donc jamais appelées par le client Swift) :
  *   - `fn_etablissement_public` : exclut `est_compte_test = true` → NULL pour tout établissement
  *     de recette STAGING ; le nom d'établissement vient exclusivement de `fn_etablissements_safe`.
+ *   - `fn_creer_notification` (lot 2, décision 9) : le web l'appelle après une contestation de
+ *     présence ; le trigger `trg_notifier_creation_litige` notifie déjà l'établissement, et l'appel
+ *     client suppose le droit d'écrire une notification arbitraire.
  */
-export const RPC_JAMAIS_SUIVIES = ['fn_etablissement_public'];
+export const RPC_JAMAIS_SUIVIES = ['fn_etablissement_public', 'fn_creer_notification'];
+
+/**
+ * Système de pointage ① (lot 2, décision 1) : plus monté côté web depuis la PR #664 (seul
+ * `PointageRotatifSoignant` l'est), contrat signé non contrôlé par `fn_valider_scan_qr` ni par
+ * `fn_valider_code_secours` (seul le trigger de première arrivée
+ * `trg_01_exiger_conformite_premier_pointage` le vérifie pour elles) et bloquant pour les missions
+ * multi-jours. Jamais suivi, donc jamais appelé par le client Swift.
+ * `fn_generer_code_secours_mission` (générateur du code de secours, appelé seulement par
+ * `QRPointageEtab`, non monté) y entre par l'amendement de la décision 1 (seconde revue de T0).
+ */
+export const RPC_POINTAGE_SYSTEME_1 = [
+  'fn_pointer_arrivee',
+  'fn_pointer_depart',
+  'fn_pointer_debut_pause',
+  'fn_pointer_fin_pause',
+  'fn_valider_scan_qr',
+  'fn_generer_qr_mission',
+  'fn_valider_code_secours',
+  'fn_codes_pointage_mission',
+  'fn_generer_code_secours_mission',
+];
 
 /**
  * Pas avant le lot 4 (suivie au plus tôt avec `lot: 4`, quand la tranche qui la consomme l'ajoute) :
@@ -102,6 +143,9 @@ export const RPC_PAS_AVANT_LOT4 = ['fn_retirer_candidature'];
  */
 export function verifierExclusions(suivies) {
   for (const { name, lot } of suivies) {
+    if (RPC_POINTAGE_SYSTEME_1.includes(name)) {
+      throw new Error(`${name} appartient au système de pointage ①, interdit côté natif (DECISIONS_LOT2.md, décision 1).`);
+    }
     if (RPC_JAMAIS_SUIVIES.includes(name)) {
       throw new Error(`${name} ne doit jamais être suivie côté natif (voir CONTRATS_RPC_SOIGNANT.md, « Interdite côté natif »).`);
     }
@@ -197,15 +241,82 @@ export function extractGrants(schemaSource, name) {
   return [...roles].sort();
 }
 
+/**
+ * Définitions d'une fonction publique dans un supplément SQL STAGING, écrit à la main et non par
+ * pg_dump : `CREATE [OR REPLACE] FUNCTION public.<name>(<args>)` puis `RETURNS … AS $tag$`.
+ * Même forme de sortie que `extractSqlDefinitions` (sans numéro de ligne).
+ */
+export function extractStagingDefinitions(source, name) {
+  const definitions = [];
+  for (const match of source.matchAll(new RegExp(`^CREATE (?:OR REPLACE )?FUNCTION public\\.${name}\\(`, 'gm'))) {
+    const debut = match.index + match[0].length;
+    let profondeur = 1;
+    let i = debut;
+    for (; i < source.length && profondeur > 0; i++) {
+      if (source[i] === '(') profondeur++;
+      else if (source[i] === ')') profondeur--;
+    }
+    if (profondeur !== 0) throw new Error(`Arguments non équilibrés pour ${name} dans le supplément STAGING.`);
+    const args = source.slice(debut, i - 1).replace(/\s+/g, ' ').trim();
+    const finEntete = source.indexOf(' AS $', i);
+    if (finEntete < 0) throw new Error(`Corps introuvable pour ${name} dans le supplément STAGING.`);
+    const entete = source.slice(i, finEntete).replace(/\s+/g, ' ').trim();
+    const returns = (entete.match(/^RETURNS (.+?) LANGUAGE /) ?? [])[1] ?? null;
+    if (returns === null) throw new Error(`RETURNS illisible pour ${name} dans le supplément STAGING.`);
+    definitions.push({
+      signature: `${name}(${args})`,
+      returns,
+      language: (entete.match(/LANGUAGE "?([a-z_]+)"?/) ?? [])[1] ?? null,
+      security: /SECURITY DEFINER/.test(entete) ? 'DEFINER' : 'INVOKER',
+      volatility: (entete.match(/\b(STABLE|IMMUTABLE|VOLATILE)\b/) ?? [])[1] ?? 'VOLATILE',
+      search_path: (entete.match(/SET "?search_path"?\s*(?:=|TO)\s*(.+?)(?:\s+SET |$)/) ?? [])[1] ?? null,
+    });
+  }
+  return definitions;
+}
+
+/** Rôles ayant un GRANT sur la fonction dans un supplément SQL STAGING. */
+export function extractStagingGrants(source, name) {
+  const roles = new Set();
+  const re = new RegExp(`^GRANT (?:ALL|EXECUTE) ON FUNCTION public\\.${name}\\([^)]*\\) TO ([a-z_, ]+);$`, 'gm');
+  for (const match of source.matchAll(re)) for (const role of match[1].split(',')) roles.add(role.trim());
+  return [...roles].sort();
+}
+
+/**
+ * Contrat d'une RPC de recette STAGING (`statut: 'staging_seulement'`). Fail-closed : la RPC ne doit
+ * exister ni dans le dump de production ni dans types.ts (généré depuis la production), et doit être
+ * définie par le supplément indiqué.
+ */
+function contratStaging({ name, statut, lot, source, typesSource, schemaSource, lireSource }) {
+  if (typeof source !== 'string' || source.length === 0) {
+    throw new Error(`${name} : statut staging_seulement sans source de supplément STAGING.`);
+  }
+  if (extractSqlDefinitions(schemaSource, name).length > 0) {
+    throw new Error(`${name} est une RPC de recette STAGING mais figure dans ${SOURCES.schema} (production) : jamais en production (DECISIONS_LOT2.md, décision 20).`);
+  }
+  if (extractTypesSignature(typesSource, name) !== null) {
+    throw new Error(`${name} est une RPC de recette STAGING mais figure dans ${SOURCES.types} (types générés depuis la production).`);
+  }
+  const texte = lireSource(source);
+  const sql = extractStagingDefinitions(texte, name);
+  if (sql.length === 0) throw new Error(`${name} introuvable dans le supplément STAGING ${source}.`);
+  return { name, statut, lot, source, types: null, sql, grants: extractStagingGrants(texte, name), manifeste: null };
+}
+
 export function manifestCategory(manifest, name) {
   const entries = manifest.entries.filter(e => typeof e.signature === 'string' && e.signature.startsWith(`${name}(`));
   if (entries.length === 0) return null;
   return entries.map(e => ({ signature: e.signature, category: e.category }));
 }
 
-export function buildContracts({ typesSource, schemaSource, manifest }) {
+export function buildContracts({ typesSource, schemaSource, manifest, lireSource = read }) {
   verifierExclusions(RPC_SUIVIES);
-  const rpcs = RPC_SUIVIES.map(({ name, statut, lot }) => {
+  const rpcs = RPC_SUIVIES.map(({ name, statut, lot, source }) => {
+    if (statut === 'staging_seulement') {
+      return contratStaging({ name, statut, lot, source, typesSource, schemaSource, lireSource });
+    }
+    if (source !== undefined) throw new Error(`${name} : une source hors dump est réservée aux RPC staging_seulement.`);
     const types = extractTypesSignature(typesSource, name);
     const sql = extractSqlDefinitions(schemaSource, name);
     if (types === null && sql.length === 0) {
@@ -235,7 +346,7 @@ export function diffContracts(expected, actual) {
     const after = actualByName.get(name);
     if (!before) { problems.push(`+ ${name} : nouvelle RPC suivie, absente du JSON versionné.`); continue; }
     if (!after) { problems.push(`- ${name} : présente dans le JSON versionné mais plus suivie par le script.`); continue; }
-    for (const field of ['statut', 'lot', 'types', 'sql', 'grants', 'manifeste']) {
+    for (const field of ['statut', 'lot', 'source', 'types', 'sql', 'grants', 'manifeste']) {
       const a = JSON.stringify(before[field] ?? null);
       const b = JSON.stringify(after[field] ?? null);
       if (a !== b) problems.push(`~ ${name}.${field}\n    versionné : ${a}\n    actuel    : ${b}`);
@@ -269,7 +380,8 @@ export function main(argv = process.argv.slice(2)) {
     return 1;
   }
   const problems = diffContracts(expected, actual);
-  const missingTypes = actual.rpcs.filter(r => r.types === null).map(r => r.name);
+  // Une RPC de recette STAGING n'est jamais dans types.ts : ce n'est pas un retard des types.
+  const missingTypes = actual.rpcs.filter(r => r.types === null && r.statut !== 'staging_seulement').map(r => r.name);
   if (missingTypes.length) {
     console.log(`Note : ${missingTypes.length} RPC absentes de types.ts (contrat tenu par public.sql seul) : ${missingTypes.join(', ')}.`);
   }
