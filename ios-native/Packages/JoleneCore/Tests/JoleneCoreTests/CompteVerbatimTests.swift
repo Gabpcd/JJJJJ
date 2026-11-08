@@ -32,7 +32,10 @@ final class CompteVerbatimTests: XCTestCase {
 
     /// (texte natif, fichier web, ligne) : le texte figure tel quel à sa ligne (échappements `\'` du JS ramenés à `'`).
     private static var attendus: [(String, String, Int)] {
-        [
+        let liens: [(String, String, Int)] = zip(HubCompte.aideEtLegal, [130, 132, 133, 134]).map { lien, ligne in
+            ("label: '\(lien.libelle)', route: '\(lien.chemin)'", hub, ligne)
+        }
+        let textes: [(String, String, Int)] = [
             (M.ancienIncorrect, mdp, 58), (M.succes, mdp, 96), (M.ancien, mdp, 115), (M.nouveau, mdp, 137),
             (M.confirmation, mdp, 160), (M.nonCorrespondance, mdp, 171), (M.correspondance, mdp, 176),
             (M.soumettre, mdp, 187), (M.titre, hub, 206), (M.sectionHub, hub, 178),
@@ -49,9 +52,8 @@ final class CompteVerbatimTests: XCTestCase {
             ("`mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.json`", confidentialite, 70),
             (E.echec, erreurs, 532),
             (HubCompte.titreReglages, hub, 113), (HubCompte.titreAideEtLegal, hub, 126),
-        ] + HubCompte.aideEtLegal.enumerated().map { index, lien in
-            ("label: '\(lien.libelle)', route: '\(lien.chemin)'", hub, [130, 132, 133, 134][index])
-        }
+        ]
+        return textes + liens
     }
 
     func testChaqueTexteRepriseDuWebEstVerbatimASaLigne() throws {

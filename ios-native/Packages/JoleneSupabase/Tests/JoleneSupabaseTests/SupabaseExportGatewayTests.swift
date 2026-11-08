@@ -23,7 +23,7 @@ final class SupabaseExportGatewayTests: XCTestCase {
         try await SupabaseExportGateway(client: TestClient.make()).exporter(context: TestClient.context)
     }
 
-    private func erreur(_ status: Int = 200, _ corps: String) async -> JoleneError? {
+    private func erreur(_ corps: String, status: Int = 200) async -> JoleneError? {
         registry.reset()
         registry.add("POST", chemin, respond: .json(status, corps))
         do {
@@ -88,7 +88,7 @@ final class SupabaseExportGatewayTests: XCTestCase {
     }
 
     func testFonctionIntrouvableEtReseau() async {
-        let introuvable = await erreur(404, #"{"code":"PGRST202","message":"Could not find the function"}"#)
+        let introuvable = await erreur(#"{"code":"PGRST202","message":"Could not find the function"}"#, status: 404)
         XCTAssertEqual(introuvable?.kind, .contract)
         registry.reset()
         registry.add("POST", chemin, respond: .networkFailure())

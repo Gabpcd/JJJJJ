@@ -195,6 +195,12 @@ final class SupabaseMotDePasseGatewayTests: XCTestCase {
         } catch let erreur as JoleneError {
             XCTAssertEqual(erreur.kind, .network)
         }
-        XCTAssertEqual(registry.requests(to: user).count, 1, "aucun renvoi automatique")
+        // La gateway n'appelle `update(user:)` qu'une fois ; le transport du client d'authentification de supabase-swift
+        // 2.55.5 (`RetryRequestInterceptor`, `Auth/Internal/APIClient.swift` l.11-16 : PUT et POST, `retryLimit` 2) rejoue
+        // UNE fois la même requête sur une erreur réseau transitoire ou un 408/5xx. Le rejeu porte le même corps (aucune
+        // nouvelle mutation), puis l'issue reste inconnue : jamais un succès.
+        let envois = registry.requests(to: user)
+        XCTAssertEqual(envois.count, 2, "un appel de la gateway, rejoué une fois par le SDK")
+        XCTAssertEqual(Set(envois.compactMap { $0.body }).count, 1, "rejeu à l'identique, aucune autre valeur envoyée")
     }
 }
