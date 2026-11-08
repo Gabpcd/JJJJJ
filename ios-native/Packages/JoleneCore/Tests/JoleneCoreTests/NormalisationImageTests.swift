@@ -57,6 +57,49 @@ final class NormalisationImageTests: XCTestCase {
         return sortie as Data
     }
 
+    /// JPEG 8 × 4 écrit par ImageIO avec des métadonnées fictives : GPS, fabricant et modèle (`{TIFF}`), commentaire et
+    /// objectif (`{Exif}`), MakerNote Apple (`{MakerApple}`), ville (`{IPTC}`), orientation 6. Construit en mémoire, comme une
+    /// photo de la photothèque.
+    private func jpegAvecMetadonnees() throws -> Data {
+        var pixels = [UInt8](repeating: 200, count: 8 * 4 * 4)
+        let espace = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let image: CGImage = try pixels.withUnsafeMutableBytes { tampon in
+            let ctx = try XCTUnwrap(CGContext(data: tampon.baseAddress, width: 8, height: 4, bitsPerComponent: 8, bytesPerRow: 8 * 4,
+                                              space: espace, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+            return try XCTUnwrap(ctx.makeImage())
+        }
+        let metadonnees: [CFString: Any] = [
+            kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 48.8566, kCGImagePropertyGPSLatitudeRef: "N",
+                                            kCGImagePropertyGPSLongitude: 2.3522, kCGImagePropertyGPSLongitudeRef: "E"],
+            kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: "Fabricant fictif", kCGImagePropertyTIFFModel: "Modele fictif"],
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifUserComment: "commentaire fictif",
+                                             kCGImagePropertyExifLensModel: "objectif fictif"],
+            kCGImagePropertyMakerAppleDictionary: ["1": 7, "8": [0.1, 0.2, 0.3]],
+            kCGImagePropertyIPTCDictionary: [kCGImagePropertyIPTCCity: "Ville fictive"],
+            kCGImagePropertyOrientation: 6,
+        ]
+        let sortie = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(sortie as CFMutableData, "public.jpeg" as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, metadonnees as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return sortie as Data
+    }
+
+    /// Clés de métadonnées identifiantes présentes dans `proprietes` (dictionnaires et champs de `jpegAvecMetadonnees`).
+    private func metadonneesIdentifiantes(_ proprietes: [CFString: Any]) -> [String] {
+        var presentes: [String] = []
+        if proprietes[kCGImagePropertyGPSDictionary] != nil { presentes.append("{GPS}") }
+        if proprietes[kCGImagePropertyMakerAppleDictionary] != nil { presentes.append("{MakerApple}") }
+        if proprietes[kCGImagePropertyIPTCDictionary] != nil { presentes.append("{IPTC}") }
+        let tiff = proprietes[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+        if tiff?[kCGImagePropertyTIFFMake] != nil { presentes.append("TIFF.Make") }
+        if tiff?[kCGImagePropertyTIFFModel] != nil { presentes.append("TIFF.Model") }
+        let exif = proprietes[kCGImagePropertyExifDictionary] as? [CFString: Any]
+        if exif?[kCGImagePropertyExifUserComment] != nil { presentes.append("Exif.UserComment") }
+        if exif?[kCGImagePropertyExifLensModel] != nil { presentes.append("Exif.LensModel") }
+        return presentes
+    }
+
     // MARK: - Fixtures
 
     func testEmpreintesDesFixtures() throws {
@@ -81,14 +124,65 @@ final class NormalisationImageTests: XCTestCase {
         XCTAssertEqual(Array(jpeg.prefix(3)), [0xFF, 0xD8, 0xFF], "en-tête JPEG")
         XCTAssertFalse(NormalisationImage.estHEIF(jpeg))
         let sortie = try proprietes(jpeg)
+        // La fixture ne porte pas de MakerNote : son retrait est prouvé par `testToutesLesMetadonneesRetireesDontMakerNote`.
         XCTAssertNil(sortie[kCGImagePropertyGPSDictionary], "aucune clé {GPS}")
-        XCTAssertNil(sortie[kCGImagePropertyMakerAppleDictionary], "aucune MakerNote")
         XCTAssertEqual(sortie[kCGImagePropertyOrientation] as? Int ?? 1, 1, "orientation « up »")
         XCTAssertEqual(sortie[kCGImagePropertyPixelWidth] as? Int, 32, "orientation 6 appliquée aux pixels (48 × 32 → 32 × 48)")
         XCTAssertEqual(sortie[kCGImagePropertyPixelHeight] as? Int, 48)
         XCTAssertLessThanOrEqual(jpeg.count, ClassementDocument.tailleMaxParDefaut)
         let source = try XCTUnwrap(CGImageSourceCreateWithData(jpeg as CFData, nil))
         XCTAssertEqual(CGImageSourceGetType(source) as String?, "public.jpeg")
+    }
+
+    /// m8 (b) : MakerNote, EXIF, IPTC et GPS d'une image qui en porte vraiment sont tous retirés ; orientation appliquée.
+    func testToutesLesMetadonneesRetireesDontMakerNote() throws {
+        let source = try jpegAvecMetadonnees()
+        XCTAssertEqual(metadonneesIdentifiantes(try proprietes(source)),
+                       ["{GPS}", "{MakerApple}", "{IPTC}", "TIFF.Make", "TIFF.Model", "Exif.UserComment", "Exif.LensModel"],
+                       "l'image de départ porte chaque métadonnée à retirer")
+        guard case let .jpeg(jpeg) = NormalisationImage.versJPEG(source) else { return XCTFail("JPEG attendu") }
+        let sortie = try proprietes(jpeg)
+        XCTAssertEqual(metadonneesIdentifiantes(sortie), [], "aucune métadonnée de la source recopiée")
+        XCTAssertEqual(sortie[kCGImagePropertyOrientation] as? Int ?? 1, 1)
+        XCTAssertEqual(sortie[kCGImagePropertyPixelWidth] as? Int, 4, "orientation 6 appliquée (8 × 4 → 4 × 8)")
+        XCTAssertEqual(sortie[kCGImagePropertyPixelHeight] as? Int, 8)
+    }
+
+    /// m10 : une photo de la photothèque est toujours ré-encodée en JPEG sans métadonnée (parité Capacitor, qualité 80,
+    /// `ModalTeleversement.tsx` l.144-154) ; depuis Fichiers ou l'appareil photo, PNG/JPEG restent inchangés.
+    func testPhotothequeToujoursReencodeeSansMetadonnees() throws {
+        let jpeg = try jpegAvecMetadonnees()
+        guard case let .pret(photo) = FichierDocument.preparer(nom: "IMG_0002.JPG", type: "image/jpeg", octets: jpeg, source: .phototheque) else {
+            return XCTFail("photo de la photothèque acceptée")
+        }
+        XCTAssertNotEqual(photo.octets, jpeg, "ré-encodée")
+        XCTAssertEqual(Array(photo.octets.prefix(3)), [0xFF, 0xD8, 0xFF])
+        XCTAssertEqual(photo.fichier, FichierChoisi(nom: "IMG_0002.jpg", mime: .jpeg, tailleOctets: photo.octets.count))
+        XCTAssertEqual(metadonneesIdentifiantes(try proprietes(photo.octets)), [], "ni GPS, ni EXIF, ni MakerNote jusqu'à Storage et l'IA")
+
+        let png = try Self.media("trois-pixels.png")
+        guard case let .pret(capture) = FichierDocument.preparer(nom: "capture.png", type: "image/png", octets: png, source: .phototheque) else {
+            return XCTFail("PNG de la photothèque accepté")
+        }
+        XCTAssertEqual(capture.fichier.mime, .jpeg)
+        XCTAssertEqual(capture.fichier.nom, "capture.jpg")
+
+        let heic = try Self.media("une-image.heic")
+        guard case let .pret(heif) = FichierDocument.preparer(nom: "IMG_0003.HEIC", type: "image/heic", octets: heic, source: .phototheque) else {
+            return XCTFail("HEIC de la photothèque normalisé")
+        }
+        XCTAssertEqual(heif.fichier.nom, "IMG_0003.jpg")
+
+        for source in [SourceFichier.fichiers, .camera] {
+            guard case let .pret(tel) = FichierDocument.preparer(nom: "IMG_0002.JPG", type: "image/jpeg", octets: jpeg, source: source) else {
+                return XCTFail("\(source) : JPEG accepté")
+            }
+            XCTAssertEqual(tel.octets, jpeg, "\(source) : octets inchangés (« PNG/JPEG/PDF inchangés »)")
+        }
+        guard case .refuse = FichierDocument.preparer(nom: "photo.jpg", type: "image/jpeg", octets: Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00]),
+                                                      source: .phototheque) else {
+            return XCTFail("photo illisible : refusée, jamais envoyée telle quelle avec ses métadonnées")
+        }
     }
 
     func testAuDelaDeLaTailleMaxReductionPuisRefus() throws {

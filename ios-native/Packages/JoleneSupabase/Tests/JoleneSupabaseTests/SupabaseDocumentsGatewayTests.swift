@@ -60,6 +60,14 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
         registry.requests(to: verify).filter { corps($0)["action"] as? String == "cleanup_orphan" }
     }
 
+    /// `verify-document` part sans être attendu par le chemin critique (revue fraîche de T6, M2) : le test attend son
+    /// arrivée — ou constate son absence — avant de conclure, pour qu'aucune requête tardive n'atteigne le test suivant.
+    private func attendreRequetes(_ nombre: Int, delai: TimeInterval = 2, _ compte: () -> Int) async {
+        let limite = Date().addingTimeInterval(delai)
+        while compte() < nombre, Date() < limite { try? await Task.sleep(nanoseconds: 5_000_000) }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+    }
+
     private func stubUpload(_ reponse: StubResponse? = nil) {
         registry.add("POST", cheminObjet, respond: reponse ?? .json(200, #"{"Key":"jolene-documents/\#(cle)","Id":"obj-1"}"#))
     }
@@ -93,7 +101,8 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
         registry.add("GET", lignes, respond: .json(200, """
         [{"id":"\(documentId)","type_document":"DIPLOME","nom_fichier":"diplome.pdf","statut_verification":"VERIFIE","valide_depuis":"2020-06-30",
           "valide_jusqua":null,"televerse_le":"2026-10-20T09:00:00+00:00","motif_rejet":null,"est_critique":true,"s3_cle":"\(uid)/documents/DIPLOME/1-diplome.pdf",
-          "type_mime":"application/pdf","taille_octets":2048,"libelle":null,"verification_attempt_id":null,"profession_certifiee":"IADE"}]
+          "s3_bucket":"jolene-documents","type_mime":"application/pdf","taille_octets":2048,"libelle":null,"verification_attempt_id":null,
+          "profession_certifiee":"IADE"}]
         """))
 
         let dossier = try await gateway().dossier(context: TestClient.context)
@@ -102,6 +111,8 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
         XCTAssertEqual(dossier.exigences.map(\.typeDocument), ["DIPLOME"], "salarié : pas de RCP ; pièce de santé jamais proposée ; IADE garde le diplôme")
         XCTAssertEqual(dossier.documents.first?.professionCertifiee, "IADE")
         XCTAssertEqual(dossier.documents.first?.valideDepuis, "2020-06-30")
+        XCTAssertEqual(dossier.documents.first?.s3Bucket, "jolene-documents", "bucket lu pour la consultation (`doc.s3_bucket`, l.438)")
+        XCTAssertTrue(SupabaseDocumentsGateway.selectionDocuments.split(separator: ",").contains("s3_bucket"))
         let profil = try XCTUnwrap(registry.requests(to: "/rest/v1/soignants").first)
         XCTAssertEqual(profil.query("select"), SupabaseDocumentsGateway.selectionProfil)
         XCTAssertEqual(profil.query("id"), "eq.\(uid)")
@@ -159,15 +170,17 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
 
     // MARK: - Envoi
 
-    func testEnvoiUploadSansEcraserEnregistreVerifieUneFoisPuisRelit() async throws {
+    func testEnvoiUploadSansEcraserEnregistrePuisLanceLaVerificationUneFoisSansLAttendre() async throws {
         stubUpload()
         stubRemplacer(#"{"success":true,"document_id":"\#(documentId)","idempotent":false}"#)
         stubVerify(.json(200, #"{"success":true,"verdict":"VERIFIE","analysis":{"motif_rejet":null}}"#))
-        stubPreuve()
 
         let issue = try await gateway().envoyer(recu: try recuDemarre(), octets: jpeg, context: TestClient.context)
 
         XCTAssertEqual(issue, .verificationDemandee(documentId: documentId))
+        XCTAssertEqual(registry.requests(to: lignes).count, 0,
+                       "le chemin critique n'attend ni la vérification ni sa relecture : le suivi relit la ligne (revue fraîche, M2)")
+        await attendreRequetes(1) { appelsVerification().count }
         let upload = try XCTUnwrap(registry.requests(to: cheminObjet).first)
         XCTAssertEqual(upload.method, "POST")
         XCTAssertEqual(upload.header("x-upsert"), "false", "jamais d'écrasement (aucune politique UPDATE)")
@@ -184,11 +197,6 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
         XCTAssertEqual(appelsVerification().count, 1, "verify-document exactement une fois")
         XCTAssertEqual(corps(appelsVerification().first)["document_id"] as? String, documentId)
         XCTAssertEqual(appelsNettoyage().count, 0)
-        let relecture = try XCTUnwrap(registry.requests(to: lignes).first)
-        XCTAssertEqual(relecture.query("select"), PreuveDocument.selection)
-        XCTAssertEqual(relecture.query("s3_cle"), "eq.\(cle)")
-        XCTAssertEqual(relecture.query("soignant_id"), "eq.\(uid)")
-        XCTAssertEqual(relecture.query("s3_bucket"), "eq.jolene-documents")
         XCTAssertTrue(registry.unmatched.isEmpty)
     }
 
@@ -196,21 +204,107 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
         stubUpload()
         stubRemplacer(#"{"success":true,"document_id":"\#(documentId)","idempotent":false}"#)
         stubVerify(.json(200, #"{"success":true,"verdict":"EN_ATTENTE"}"#))
-        stubPreuve(statut: "EN_ATTENTE")
         _ = try await gateway().envoyer(recu: try recuDemarre(libelle: nil), octets: jpeg, context: TestClient.context)
         XCTAssertEqual(corps(registry.requests(to: remplacer).first)["p_libelle"] as? String, "", "p_libelle: libelle || ''")
+        await attendreRequetes(1) { appelsVerification().count }
     }
 
-    func testVerification429AucunRenvoiVerificationManuelle() async throws {
+    /// 429 (ou 503) de `verify-document` : jamais attendu, jamais relancé. L'issue « vérification manuelle » est tirée du
+    /// statut relu par le suivi du modèle (`DocumentsModelTests`, revue fraîche m11).
+    func testVerification429NonAttendueJamaisRelancee() async throws {
+        for reponse in [StubResponse.json(429, #"{"error":"Trop de vérifications. Réessayez dans 1 minute."}"#),
+                        .json(503, #"{"error":"Service de vérification automatique non configuré"}"#)] {
+            registry.reset()
+            stubUpload()
+            stubRemplacer(#"{"success":true,"document_id":"\#(documentId)","idempotent":false}"#)
+            stubVerify(reponse)
+
+            let issue = try await gateway().envoyer(recu: try recuDemarre(), octets: jpeg, context: TestClient.context)
+
+            XCTAssertEqual(issue, .verificationDemandee(documentId: documentId), "statut \(reponse.status) : verdict relu par le suivi")
+            await attendreRequetes(1) { appelsVerification().count }
+            XCTAssertEqual(appelsVerification().count, 1, "statut \(reponse.status) : aucun renvoi")
+            XCTAssertEqual(registry.requests(to: remplacer).count, 1)
+        }
+    }
+
+    /// Correctif 4c84aa0e (m8 a) : un envoi annulé juste après l'enregistrement (délai de l'appelant) ne lance aucune
+    /// vérification ; la réconciliation relira la ligne et proposera « Revérifier ».
+    func testEnvoiAnnuleApresEnregistrementAucuneVerification() async throws {
         stubUpload()
         stubRemplacer(#"{"success":true,"document_id":"\#(documentId)","idempotent":false}"#)
-        stubVerify(.json(429, #"{"error":"Trop de vérifications. Réessayez dans 1 minute."}"#))
-        stubPreuve(statut: "EN_ATTENTE", tentative: nil)
+        stubVerify(.json(200, #"{"success":true,"verdict":"VERIFIE"}"#))
+        var annulable = gateway()
+        annulable.avantVerification = { withUnsafeCurrentTask { $0?.cancel() } }
+        let recu = try recuDemarre()
+        let contexte = TestClient.context
+        let passerelle = annulable
+        let octets = jpeg
 
-        let issue = try await gateway().envoyer(recu: try recuDemarre(), octets: jpeg, context: TestClient.context)
+        let issue = try await Task { try await passerelle.envoyer(recu: recu, octets: octets, context: contexte) }.value
 
-        XCTAssertEqual(issue, .enregistre(documentId: documentId), "« Vérification manuelle en attente » : Revérifier proposé, jamais relancé")
+        XCTAssertEqual(issue, .incertain, "annulé : rien n'est annoncé, la réconciliation relit")
+        XCTAssertEqual(registry.requests(to: remplacer).count, 1)
+        await attendreRequetes(1, delai: 0.3) { appelsVerification().count }
+        XCTAssertEqual(appelsVerification().count, 0, "aucune vérification après l'annulation")
+    }
+
+    /// m8 (c) : 409 « déjà existant » de Storage → issue incertaine, puis réconciliation : objet présent, aucune ligne →
+    /// enregistrement rejoué sous la même clé et vérification une seule fois, jamais de second upload.
+    func testUpload409IncertainPuisReconciliationRejoueUneFois() async throws {
+        stubUpload(.json(409, #"{"statusCode":"409","error":"Duplicate","message":"The resource already exists"}"#))
+        let incertain = try await gateway().envoyer(recu: try recuDemarre(), octets: jpeg, context: TestClient.context)
+        XCTAssertEqual(incertain, .incertain)
+        XCTAssertEqual(registry.requests(to: remplacer).count, 0)
+
+        registry.add("GET", lignes, respond: .json(200, "[]"))
+        registry.add("HEAD", cheminObjet, respond: .json(200, ""))
+        stubRemplacer(#"{"success":true,"document_id":"\#(documentId)","idempotent":false}"#)
+        stubVerify(.json(200, #"{"success":true,"verdict":"VERIFIE"}"#))
+
+        let reconcilie = try await gateway().reconcilier(recu: try recuDemarre(), context: TestClient.context)
+
+        XCTAssertEqual(reconcilie, .verificationDemandee(documentId: documentId))
+        XCTAssertEqual(registry.requests(to: cheminObjet).map(\.method), ["POST", "HEAD"], "un seul upload")
+        XCTAssertEqual(corps(registry.requests(to: remplacer).first)["p_s3_cle"] as? String, cle)
+        await attendreRequetes(1) { appelsVerification().count }
         XCTAssertEqual(appelsVerification().count, 1)
+        XCTAssertEqual(appelsNettoyage().count, 0)
+        XCTAssertTrue(registry.unmatched.isEmpty)
+    }
+
+    /// m5 : session expirée pendant l'enregistrement (`NON_AUTHENTIFIE` jsonb, `PGRST301` JWT) → `.unauthorized`, ni
+    /// nettoyage (l'objet sera rattaché après reconnexion, par réconciliation) ni vérification.
+    func testSessionExpireeALEnregistrementSansNettoyage() async throws {
+        for reponse in [StubResponse.json(200, #"{"success":false,"error_code":"NON_AUTHENTIFIE"}"#),
+                        .json(401, #"{"code":"PGRST301","message":"JWT expired","details":null,"hint":null}"#)] {
+            registry.reset()
+            stubUpload()
+            registry.add("POST", remplacer, respond: reponse)
+            registry.add("POST", verify, respond: .json(200, #"{"success":true}"#))
+            do {
+                _ = try await gateway().envoyer(recu: try recuDemarre(), octets: jpeg, context: TestClient.context)
+                XCTFail("statut \(reponse.status) : session expirée attendue")
+            } catch let erreur as JoleneError {
+                XCTAssertEqual(erreur.kind, .unauthorized, "statut \(reponse.status)")
+                XCTAssertEqual(erreur.message, SupabaseErrorMapping.unauthorizedMessage)
+            }
+            XCTAssertEqual(registry.requests(to: verify).count, 0, "statut \(reponse.status) : ni nettoyage ni vérification")
+        }
+    }
+
+    /// m5 : jeton refusé par Storage (`InvalidJWT` en HTTP 400) → session expirée, jamais `STOCKAGE_400`.
+    func testJetonRefuseParStorageSessionExpiree() async throws {
+        stubUpload(.json(400, #"{"statusCode":"400","error":"InvalidJWT","message":"\"exp\" claim timestamp check failed"}"#))
+        do {
+            _ = try await gateway().envoyer(recu: try recuDemarre(), octets: jpeg, context: TestClient.context)
+            XCTFail("session expirée attendue")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur.kind, .unauthorized)
+        }
+        XCTAssertEqual(registry.requests(to: remplacer).count, 0)
+        XCTAssertEqual(SupabaseDocumentsGateway.classerEchecUpload(StorageError(statusCode: "400", message: "Bucket not found", error: "Bucket not found")),
+                       .refuse("STOCKAGE_400"), "un autre 400 reste un refus")
     }
 
     func testRefusDEnregistrementNettoieLOrphelinUneFois() async throws {
@@ -296,9 +390,7 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
     // MARK: - Réconciliation
 
     func testReconciliationObjetSansLigneRejoueLaMemeClePuisVerifieUneFois() async throws {
-        let lectures = CompteurStub()
-        registry.add("GET", lignes, where: { _ in lectures.suivant() == 1 }, respond: .json(200, "[]"))
-        stubPreuve()
+        registry.add("GET", lignes, respond: .json(200, "[]"))
         registry.add("HEAD", cheminObjet, respond: .json(200, ""))
         stubRemplacer(#"{"success":true,"document_id":"\#(documentId)","idempotent":true}"#)
         stubVerify(.json(200, #"{"success":true,"verdict":"VERIFIE"}"#))
@@ -311,6 +403,13 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
         XCTAssertEqual(rpc["p_s3_cle"] as? String, cle, "même clé : idempotente")
         XCTAssertEqual(rpc["p_nom_fichier"] as? String, "Diplôme.JPG")
         XCTAssertEqual(rpc["p_libelle"] as? String, "Diplôme d'État")
+        let relecture = try XCTUnwrap(registry.requests(to: lignes).first)
+        XCTAssertEqual(relecture.query("select"), PreuveDocument.selection)
+        XCTAssertEqual(relecture.query("s3_cle"), "eq.\(cle)")
+        XCTAssertEqual(relecture.query("soignant_id"), "eq.\(uid)")
+        XCTAssertEqual(relecture.query("s3_bucket"), "eq.jolene-documents")
+        XCTAssertEqual(registry.requests(to: lignes).count, 1, "aucune relecture après l'enregistrement : le suivi relit")
+        await attendreRequetes(1) { appelsVerification().count }
         XCTAssertEqual(appelsVerification().count, 1)
         XCTAssertTrue(registry.unmatched.isEmpty)
     }
@@ -328,12 +427,32 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
         XCTAssertEqual(registry.requests(to: cheminObjet).count, 0)
     }
 
-    func testReconciliationObjetAbsentNonEnvoye() async throws {
+    /// m7 : objet absent à la relecture → « non envoyé », puis `cleanup_orphan` best-effort sur la clé : un upload qui
+    /// aurait abouti côté serveur après le HEAD ne laisse pas une pièce d'identité non référencée dans Storage.
+    func testReconciliationObjetAbsentNonEnvoyeEtNettoyage() async throws {
         registry.add("GET", lignes, respond: .json(200, "[]"))
         registry.add("HEAD", cheminObjet, respond: .json(404, ""))
+        registry.add("POST", verify, where: { Self.corps($0)["action"] as? String == "cleanup_orphan" },
+                     respond: .json(200, #"{"success":true}"#))
         let issue = try await gateway().reconcilier(recu: try recuDemarre(), context: TestClient.context)
         XCTAssertEqual(issue, .nonEnvoye)
         XCTAssertEqual(registry.requests(to: remplacer).count, 0)
+        XCTAssertEqual(appelsNettoyage().count, 1)
+        XCTAssertEqual(corps(appelsNettoyage().first)["s3_cle"] as? String, cle)
+        XCTAssertEqual(appelsVerification().count, 0)
+        XCTAssertTrue(registry.unmatched.isEmpty)
+    }
+
+    /// m5 : relecture refusée pour jeton expiré (`PGRST301`) → session expirée, jamais une issue incertaine sans fin.
+    func testReconciliationJetonExpireSessionExpiree() async throws {
+        registry.add("GET", lignes, respond: .json(401, #"{"code":"PGRST301","message":"JWT expired","details":null,"hint":null}"#))
+        do {
+            _ = try await gateway().reconcilier(recu: try recuDemarre(), context: TestClient.context)
+            XCTFail("session expirée attendue")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur.kind, .unauthorized)
+        }
+        XCTAssertEqual(registry.requests(to: cheminObjet).count, 0)
     }
 
     func testReconciliationRelectureImpossibleResteIncertaine() async throws {
@@ -365,6 +484,29 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
             XCTAssertEqual(erreur.message, "Trop de vérifications. Réessayez dans 1 minute.", "message serveur verbatim")
         }
         XCTAssertEqual(appelsVerification().count, 1, "aucun renvoi")
+        // m6 : `messageErreurEdgeFn` lit `error || message || motif` (src/lib/erreurs.ts l.574).
+        for (json, attendu) in [(#"{"message":"Document introuvable"}"#, "Document introuvable"),
+                                (#"{"error":"","motif":"Type de document non reconnu"}"#, "Type de document non reconnu"),
+                                (#"{"detail":"x"}"#, MessagesDocuments.verificationImpossible)] {
+            registry.reset()
+            stubVerify(.json(400, json))
+            do {
+                _ = try await gateway().reverifier(documentId: documentId, context: TestClient.context)
+                XCTFail("\(json) : refus")
+            } catch let erreur as JoleneError {
+                XCTAssertEqual(erreur.message, attendu, json)
+                XCTAssertEqual(erreur.kind, .unknown)
+            }
+        }
+        // m5 : 401 → session expirée, jamais un refus ordinaire.
+        registry.reset()
+        stubVerify(.json(401, #"{"error":"Non authentifié"}"#))
+        do {
+            _ = try await gateway().reverifier(documentId: documentId, context: TestClient.context)
+            XCTFail("401 : session expirée")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur.kind, .unauthorized)
+        }
     }
 
     func testDemanderRevueAvecLeMotifDuWeb() async throws {
@@ -425,6 +567,39 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
             XCTFail("objet hors du dossier de l'utilisateur")
         } catch let erreur as JoleneError {
             XCTAssertEqual(erreur.message, MessagesDocuments.consultationImpossible)
+        }
+    }
+
+    /// m1 : une pièce envoyée avant 02e957ea (2026-03-17, clé `<uid>/<TYPE>/<ms>_<nom>`) reste consultable : seule la
+    /// politique Storage compte (`fn_peut_gerer_objet_jolene` : premier segment = uid), bucket lu dans la ligne
+    /// (`doc.s3_bucket || 'jolene-documents'`, `DocumentsSoignant.tsx` l.438).
+    func testConsultationDUnePieceAncienneEtBucketDeLaLigne() async throws {
+        let pdf = Data("%PDF-1.4 ancien".utf8)
+        let ancienne = "\(uid)/DIPLOME/1710000000000_diplome.pdf"
+        registry.add("GET", "/storage/v1/object/jolene-documents/\(ancienne)",
+                     respond: StubResponse(status: 200, headers: ["Content-Type": "application/pdf"], body: pdf, failure: nil))
+        registry.add("POST", "/rest/v1/rpc/fn_ecrire_audit_safe", respond: .json(200, #"{"success":true}"#))
+        var document = DocumentSoignant(id: documentId, typeDocument: "DIPLOME", s3Cle: ancienne, nomFichier: "diplome.pdf",
+                                        typeMime: "application/pdf")
+        document.s3Bucket = "jolene-documents"
+
+        let fichier = try await gateway().consulter(document: document, context: TestClient.context)
+        defer { ConsultationDocuments.effacerTout() }
+
+        XCTAssertEqual(try Data(contentsOf: fichier), pdf)
+        XCTAssertEqual(corps(registry.requests(to: "/rest/v1/rpc/fn_ecrire_audit_safe").first)["p_cle_s3"] as? String, ancienne)
+        XCTAssertTrue(registry.unmatched.isEmpty)
+
+        for refusee in ["\(uid)/../autre/DIPLOME/1-a.pdf", "\(uid)", "/\(uid)/documents/DIPLOME/1-a.pdf", "\(uid)//DIPLOME/1-a.pdf"] {
+            registry.reset()
+            let suspecte = DocumentSoignant(id: documentId, typeDocument: "DIPLOME", s3Cle: refusee)
+            do {
+                _ = try await gateway().consulter(document: suspecte, context: TestClient.context)
+                XCTFail("\(refusee) : refus attendu")
+            } catch let erreur as JoleneError {
+                XCTAssertEqual(erreur.message, MessagesDocuments.consultationImpossible, refusee)
+            }
+            XCTAssertTrue(registry.requests.isEmpty, "\(refusee) : aucun téléchargement")
         }
     }
 

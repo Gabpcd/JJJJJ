@@ -40,9 +40,9 @@ final class DossierDocumentsTests: XCTestCase {
         XCTAssertEqual(d.exigences.map(\.typeDocument), ["CARTE_IDENTITE", "DIPLOME", "RCP_ASSURANCE", "RIB", "ATTESTATION_EMPLOYEUR"],
                        "MIXTE cumule LIBERAL_ONLY et SALARIE_ONLY ; autre profession et pièces de santé écartées")
         for exclu in ["VACCINATIONS", "MEDECINE_TRAVAIL", "ARRET_MALADIE", "AUTRE"] {
-            XCTAssertFalse(d.peutEnvoyer(typeDocument: exclu), "\(exclu) jamais proposé à l'envoi")
+            XCTAssertFalse(d.peutEnvoyer(typeDocument: exclu, maintenant: maintenant), "\(exclu) jamais proposé à l'envoi")
         }
-        XCTAssertTrue(d.peutEnvoyer(typeDocument: "DIPLOME"))
+        XCTAssertTrue(d.peutEnvoyer(typeDocument: "DIPLOME", maintenant: maintenant))
         let salarie = dossier(profil: SoignantExigencesDocuments(profession: "IDE", typeExercice: "SALARIE", rppsVerifie: false, adeliVerifie: false))
         XCTAssertEqual(salarie.exigences.map(\.typeDocument), ["CARTE_IDENTITE", "DIPLOME", "ATTESTATION_EMPLOYEUR"])
         XCTAssertEqual(salarie.alerteRcp(maintenant: maintenant), nil, "RCP exigée en libéral et en mixte seulement")
@@ -135,7 +135,47 @@ final class DossierDocumentsTests: XCTestCase {
         XCTAssertEqual(vide.exigences, [])
         XCTAssertEqual(vide.documents, [], "sans dossier professionnel, aucune pièce n'est chargée (l.186-191)")
         XCTAssertNil(vide.prochaineExigence(maintenant: maintenant))
-        XCTAssertFalse(vide.peutEnvoyer(typeDocument: "DIPLOME"))
+        XCTAssertFalse(vide.peutEnvoyer(typeDocument: "DIPLOME", maintenant: maintenant))
+    }
+
+    /// `documentsComplementairesVisibles` (`src/lib/documents-complementaires.ts`, affichage seul) : un RPPS ou un ADELI
+    /// vérifié masque la scolarité, jamais la licence d'un médecin ; la qualification à l'Ordre est réservée aux
+    /// médecins. Section « Étudiant / interne en santé » de `DocumentsSoignant.tsx` l.851-900.
+    func testDocumentsComplementairesVisiblesCommeLeWeb() {
+        let cas: [(String?, Bool?, Bool?, ComplementairesVisibles)] = [
+            ("IDE", false, false, ComplementairesVisibles(scolarite: true, licence: true, qualification: false)),
+            ("IDE", true, false, ComplementairesVisibles(scolarite: false, licence: false, qualification: false)),
+            ("IDE", nil, true, ComplementairesVisibles(scolarite: false, licence: false, qualification: false)),
+            ("MEDECIN", true, false, ComplementairesVisibles(scolarite: false, licence: true, qualification: true)),
+            ("MEDECIN", false, nil, ComplementairesVisibles(scolarite: true, licence: true, qualification: true)),
+            (nil, nil, nil, ComplementairesVisibles(scolarite: true, licence: true, qualification: false)),
+        ]
+        for (profession, rpps, adeli, attendu) in cas {
+            let profil = SoignantExigencesDocuments(profession: profession, typeExercice: "SALARIE", rppsVerifie: rpps, adeliVerifie: adeli)
+            XCTAssertEqual(ComplementairesVisibles(profil: profil), attendu, "\(profession ?? "nil") rpps=\(String(describing: rpps)) adeli=\(String(describing: adeli))")
+        }
+        XCTAssertEqual(ComplementairesVisibles(scolarite: true, licence: true, qualification: true).types,
+                       ["ATTESTATION_SCOLARITE", "LICENCE_REMPLACEMENT", "CARTE_ORDRE"], "ordre d'affichage du web")
+        let medecin = dossier(profil: SoignantExigencesDocuments(profession: "MEDECIN", typeExercice: "LIBERAL", rppsVerifie: true, adeliVerifie: false))
+        XCTAssertEqual(medecin.typesComplementaires, ["LICENCE_REMPLACEMENT", "CARTE_ORDRE"])
+        XCTAssertEqual(DossierDocuments().typesComplementaires, [], "sans dossier professionnel, la page web s'arrête avant (l.505-518)")
+    }
+
+    /// Envoi possible pour une exigence affichée, un document complémentaire visible ou une pièce du bandeau
+    /// « expire bientôt » (« Mettre à jour → », l.600-608) ; jamais pour une pièce de santé ni un type sans bouton web.
+    func testPeutEnvoyerExigenceComplementaireOuPieceExpirantBientot() {
+        let expirant = DocumentSoignant(id: "d-kbis", typeDocument: "KBIS", valideJusqua: "2026-11-20", statutVerification: "VERIFIE")
+        let vaccins = DocumentSoignant(id: "d-vac", typeDocument: "VACCINATIONS", valideJusqua: "2026-11-20", statutVerification: "VERIFIE")
+        let lointain = DocumentSoignant(id: "d-urssaf", typeDocument: "ATTESTATION_URSSAF", valideJusqua: "2027-06-01", statutVerification: "VERIFIE")
+        let d = dossier(documents: documents + [expirant, vaccins, lointain])
+        XCTAssertTrue(d.peutEnvoyer(typeDocument: "KBIS", maintenant: maintenant), "bandeau d'expiration : « Mettre à jour → »")
+        XCTAssertFalse(d.peutEnvoyer(typeDocument: "VACCINATIONS", maintenant: maintenant), "pièce de santé : jamais proposée")
+        XCTAssertFalse(d.peutEnvoyer(typeDocument: "ATTESTATION_URSSAF", maintenant: maintenant), "ni exigée, ni expirant bientôt")
+        XCTAssertTrue(d.peutEnvoyer(typeDocument: "ATTESTATION_SCOLARITE", maintenant: maintenant), "complémentaire visible (registre non vérifié)")
+        XCTAssertTrue(d.peutEnvoyer(typeDocument: "LICENCE_REMPLACEMENT", maintenant: maintenant))
+        XCTAssertFalse(d.peutEnvoyer(typeDocument: "CARTE_ORDRE", maintenant: maintenant), "qualification : médecins seulement")
+        let verifie = dossier(profil: SoignantExigencesDocuments(profession: "IDE", typeExercice: "MIXTE", rppsVerifie: true, adeliVerifie: false))
+        XCTAssertFalse(verifie.peutEnvoyer(typeDocument: "ATTESTATION_SCOLARITE", maintenant: maintenant), "registre vérifié : section masquée")
     }
 
     /// Preuve d'enregistrement relue par `s3_cle` (réconciliation) : une vérification est engagée dès que le
