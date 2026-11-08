@@ -245,7 +245,9 @@ jobs:
   ui:
     name: UI — ${{ matrix.format }}
     runs-on: macos-26
-    timeout-minutes: 60
+    # Deux éclats de tests bornés à 30 min chacun (DECISIONS_LOT2 décision 22) : le plafond du job
+    # reste au-dessus de leur somme, pour que le délai d'un éclat tombe avant celui du job.
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
@@ -323,10 +325,16 @@ jobs:
           echo "duree_build_s=$duree" >> "$GITHUB_OUTPUT"
           echo "Durée build-for-testing : ${duree}s (mesure pour la porte go/no-go, docs/mobile-swift/PORTE_LOT0.md)"
           grep -q "TEST BUILD SUCCEEDED" "$JOLENE_UI_OUTPUT/build-for-testing.log" || { echo "::error::build-for-testing a échoué (code $code). Voir build-for-testing.log dans l'artefact."; exit 1; }
-      - name: test-without-building — JoleneUITests + JoleneCoreTests + JoleneDesignTests (${{ matrix.format }})
+      # Deux éclats (DECISIONS_LOT2 décision 22 : découpage par domaine dès qu'un format dépasse 20 min ;
+      # une seule étape atteignait 25 à 30 min avec le lot 2, et dépassait ses 30 min sur iphone et
+      # ipad-landscape au run 42532108708). Éclat « socle » : JoleneCoreTests, JoleneDesignTests et les
+      # XCUITest des lots 0 et 1 ; éclat « lot2 » : les XCUITest des domaines du lot 2 (Présences,
+      # Documents, Contrats), chacun nommé par -only-testing. Les classes STAGING à venir (lot 2 T11)
+      # s'ajoutent aux -skip-testing de l'éclat socle. Le résumé exige les deux éclats verts.
+      - name: test-without-building — éclat socle (JoleneCoreTests, JoleneDesignTests, XCUITest lots 0 et 1) (${{ matrix.format }})
         id: tests
         # Délai propre à l'étape : un simulateur ou un runner xctest bloqué est interrompu ici,
-        # pas par le timeout du job (60 min), et le xcresult est clos avant le résumé.
+        # pas par le timeout du job, et le xcresult est clos avant le résumé.
         timeout-minutes: 30
         env:
           UDID: ${{ steps.simulateur.outputs.udid }}
@@ -335,8 +343,7 @@ jobs:
           TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
           TEST_RUNNER_JOLENE_MODE: demo
         run: |
-          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT.xcresult"
-          echo "xcresult=$resultat" >> "$GITHUB_OUTPUT"
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-socle.xcresult"
           set +e
           xcodebuild test-without-building \
             -project ios-native/Jolene.xcodeproj \
@@ -350,63 +357,125 @@ jobs:
             -only-testing:JoleneCoreTests \
             -only-testing:JoleneDesignTests \
             -skip-testing:JoleneUITests/StagingConnexionTests \
+            -skip-testing:JoleneUITests/DemoPresencesTests \
+            -skip-testing:JoleneUITests/DemoDocumentsTests \
+            -skip-testing:JoleneUITests/DemoContratsTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
             -test-timeouts-enabled YES \
             -maximum-test-execution-time-allowance 900 \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-            > "$JOLENE_UI_OUTPUT/test-without-building.log" 2>&1
+            > "$JOLENE_UI_OUTPUT/test-without-building-socle.log" 2>&1
           code=$?
           set -e
-          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building.log" | tail -n 60 || true
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-socle.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
-          echo "xcodebuild test-without-building : code $code"
+          echo "xcodebuild test-without-building (éclat socle) : code $code"
+      - name: test-without-building — éclat lot2 (XCUITest Présences, Documents, Contrats) (${{ matrix.format }})
+        id: tests_lot2
+        # Lancé même si l'éclat socle échoue ou dépasse son délai : chaque éclat apporte sa preuve.
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+        run: |
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot2.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoPresencesTests \
+            -only-testing:JoleneUITests/DemoDocumentsTests \
+            -only-testing:JoleneUITests/DemoContratsTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot2.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot2.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot2) : code $code"
       - name: Résumé xcresult (assertions, pas de succès fabriqué)
         if: always() && steps.build.outcome == 'success'
         env:
-          XCRESULT: ${{ steps.tests.outputs.xcresult }}
-          CODE_XCODEBUILD: ${{ steps.tests.outputs.code }}
+          CODE_SOCLE: ${{ steps.tests.outputs.code }}
+          CODE_LOT2: ${{ steps.tests_lot2.outputs.code }}
         run: |
-          [ -d "$XCRESULT" ] || { echo "::error::Bundle xcresult absent : aucun test n'a produit de résultat."; exit 1; }
-          xcrun xcresulttool get test-results summary --path "$XCRESULT" > "$JOLENE_UI_OUTPUT/xctest-summary.json"
-          xcrun xcresulttool export attachments --path "$XCRESULT" --output-path "$JOLENE_UI_OUTPUT/attachments" || echo "Aucune pièce jointe exportable."
+          mkdir -p "$JOLENE_UI_OUTPUT/attachments"
+          for eclat in socle lot2; do
+            xcresult="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$eclat.xcresult"
+            [ -d "$xcresult" ] || { echo "::error::Bundle xcresult absent pour l'éclat $eclat : aucun test n'a produit de résultat."; exit 1; }
+            xcrun xcresulttool get test-results summary --path "$xcresult" > "$JOLENE_UI_OUTPUT/xctest-summary-$eclat.json"
+            xcrun xcresulttool export attachments --path "$xcresult" --output-path "$JOLENE_UI_OUTPUT/attachments/$eclat" || echo "Aucune pièce jointe exportable ($eclat)."
+          done
           # shellcheck disable=SC2016
           node --input-type=module -e '
             import { readFileSync, readdirSync, existsSync, writeFileSync, appendFileSync } from "node:fs";
             import { join } from "node:path";
             import { readPngDimensions } from "./mobile-native/scripts/png-dimensions.mjs";
             const out = process.env.JOLENE_UI_OUTPUT;
-            const s = JSON.parse(readFileSync(join(out, "xctest-summary.json"), "utf8"));
-            const total = s.totalTestCount ?? 0, passed = s.passedTests ?? 0, failed = s.failedTests ?? 0, skipped = s.skippedTests ?? 0;
-            const lignes = [`### UI — ${process.env.JOLENE_UI_FORMAT}`, "",
-              `- xcodebuild : code ${process.env.CODE_XCODEBUILD}`,
-              `- résultat xcresult : ${s.result} (${passed} réussis, ${failed} échoués, ${skipped} ignorés, ${total} au total)`,
-              `- cibles exécutées sur le simulateur (destination ${process.env.JOLENE_UI_FORMAT}) : JoleneUITests (hors StagingConnexionTests), JoleneCoreTests, JoleneDesignTests`];
+            // Éclats de la décision 22 : chacun doit être vert et avoir exécuté au moins un test ; les classes
+            // de l éclat lot2 doivent toutes avoir démarré (un -only-testing mal nommé n exécute rien).
+            const eclats = [
+              { nom: "socle", code: process.env.CODE_SOCLE, classes: [] },
+              { nom: "lot2", code: process.env.CODE_LOT2, classes: ["DemoPresencesTests", "DemoDocumentsTests", "DemoContratsTests"] },
+            ];
+            let total = 0, passed = 0, failed = 0, skipped = 0, log = "";
+            const lignes = [`### UI — ${process.env.JOLENE_UI_FORMAT}`, ""];
+            const bundles = [];
+            const eclatsKo = [];
+            for (const e of eclats) {
+              const s = JSON.parse(readFileSync(join(out, `xctest-summary-${e.nom}.json`), "utf8"));
+              const t = s.totalTestCount ?? 0, p = s.passedTests ?? 0, f = s.failedTests ?? 0, k = s.skippedTests ?? 0;
+              total += t; passed += p; failed += f; skipped += k;
+              bundles.push(...(s.testTargets ?? s.testPlanConfigurations ?? []).map(x => x.name ?? x.testTargetName ?? "").filter(Boolean));
+              const journal = readFileSync(join(out, `test-without-building-${e.nom}.log`), "utf8");
+              log += journal;
+              const absentes = e.classes.filter(c => !new RegExp(`Test Suite \x27${c}\x27 started`).test(journal));
+              lignes.push(`- éclat ${e.nom} : xcodebuild code ${e.code || "absent"}, xcresult ${s.result} (${p} réussis, ${f} échoués, ${k} ignorés, ${t} au total)`);
+              if (absentes.length) lignes.push(`- éclat ${e.nom} : classes jamais démarrées : ${absentes.join(", ")}`);
+              if (!(e.code === "0" && s.result === "Passed" && t >= 1 && f === 0 && k === 0 && p === t && absentes.length === 0)) eclatsKo.push(e.nom);
+            }
+            lignes.push(`- résultat xcresult : ${eclatsKo.length ? "Failed" : "Passed"} (${passed} réussis, ${failed} échoués, ${skipped} ignorés, ${total} au total, éclats socle + lot2)`,
+              `- cibles exécutées sur le simulateur (destination ${process.env.JOLENE_UI_FORMAT}) : JoleneUITests (hors StagingConnexionTests), JoleneCoreTests, JoleneDesignTests`);
             // Chaque cible doit avoir tourné : un plan qui en oublie une n est pas une preuve.
-            const bundles = (s.testTargets ?? s.testPlanConfigurations ?? []).map(t => t.name ?? t.testTargetName ?? "").filter(Boolean);
             const attendus = ["JoleneUITests", "JoleneCoreTests", "JoleneDesignTests"];
-            const log = readFileSync(join(out, "test-without-building.log"), "utf8");
             const manquantes = attendus.filter(cible => !bundles.includes(cible) && !new RegExp(`Test Suite \x27${cible}[^\x27]*\x27 (started|passed)`).test(log));
             if (manquantes.length) lignes.push(`- cibles sans aucun test exécuté : ${manquantes.join(", ")}`);
             // Contrôle d orientation des captures (mobile-native/scripts/png-dimensions.mjs repris tel quel).
-            const attachments = join(out, "attachments");
-            const pngs = existsSync(attachments) ? readdirSync(attachments).filter(n => n.toLowerCase().endsWith(".png")) : [];
             const attendu = process.env.JOLENE_UI_ORIENTATION;
             const mauvaises = [];
-            const captures = pngs.map(name => {
-              const { width, height } = readPngDimensions(readFileSync(join(attachments, name)));
-              const portrait = width < height;
-              if ((attendu === "portrait") !== portrait) mauvaises.push(`${name} ${width}x${height}`);
-              return { name, width, height };
-            });
+            const captures = [];
+            for (const e of eclats) {
+              const dossier = join(out, "attachments", e.nom);
+              const pngs = existsSync(dossier) ? readdirSync(dossier).filter(n => n.toLowerCase().endsWith(".png")) : [];
+              for (const name of pngs) {
+                const { width, height } = readPngDimensions(readFileSync(join(dossier, name)));
+                const portrait = width < height;
+                if ((attendu === "portrait") !== portrait) mauvaises.push(`${e.nom}/${name} ${width}x${height}`);
+                captures.push({ name: `${e.nom}/${name}`, width, height });
+              }
+            }
             writeFileSync(join(out, "orientation.json"), JSON.stringify({ requested: attendu, captures, mauvaises }, null, 2));
-            lignes.push(`- captures PNG : ${pngs.length} (orientation attendue ${attendu}${pngs.length ? "" : " — aucune capture exportée : l orientation n est PAS prouvée par ce run"})`);
+            lignes.push(`- captures PNG : ${captures.length} (orientation attendue ${attendu}${captures.length ? "" : " — aucune capture exportée : l orientation n est PAS prouvée par ce run"})`);
             if (mauvaises.length) lignes.push(`- captures dans la mauvaise orientation : ${mauvaises.join(", ")}`);
             appendFileSync(process.env.GITHUB_STEP_SUMMARY, lignes.join("\n") + "\n");
             console.log(lignes.join("\n"));
             // JoleneCoreTests seul dépasse 100 tests : un total inférieur signifie qu une cible n a pas tourné.
-            const ok = process.env.CODE_XCODEBUILD === "0" && s.result === "Passed" && total >= 100 && failed === 0 && skipped === 0 && passed === total && mauvaises.length === 0 && manquantes.length === 0;
+            const ok = eclatsKo.length === 0 && total >= 100 && failed === 0 && skipped === 0 && passed === total && mauvaises.length === 0 && manquantes.length === 0;
             if (!ok) { console.error("::error::Tests simulateur non concluants (JoleneUITests, JoleneCoreTests, JoleneDesignTests) : voir le résumé ci-dessus et l artefact xcresult."); process.exit(1); }
           '
       - name: Durée de build dans le résumé (mesure porte go/no-go)
@@ -421,7 +490,8 @@ jobs:
         with:
           name: ios-swift-ui-${{ matrix.format }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            ${{ runner.temp }}/ui-${{ matrix.format }}.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-socle.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot2.xcresult
             ios-native/test-results/${{ matrix.format }}/
           retention-days: 7
           if-no-files-found: warn
