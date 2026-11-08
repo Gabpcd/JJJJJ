@@ -70,7 +70,7 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 |---|---|---|---|---|---|
 | `fn_get_my_role` | consommée lot 0 | 0 | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_etablissements_safe` | consommée lot 0 | 0 | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
-| `fn_mon_profil_soignant_complet` | à venir | 3 (reclassée, lot 1 v2 n°4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mon_profil_soignant_complet` | consommée lot 3 (T9) | 3 (T9 ; reclassée, lot 1 v2 n°4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_dashboard_soignant_complet` | consommée lot 1 (T3) | 1 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_confirmer_action_planning_v1` | à venir | 1 (T6a) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (décision 6) | authenticated, service_role | absente |
 | `fn_suggestions_missions_pour_soignant` | à venir | 4 (reclassée, revue B8 de T3 : non consommée par l'Accueil) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -101,7 +101,7 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_demarrer_inscription` | à venir | 3 (T7, B9) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
 | `fn_enregistrer_parcours_inscription` | à venir | 3 (T8, B9) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
 | `fn_types_exercice_autorises` | à venir | 3 (T8, T9) | PUBLIC_VOLONTAIRE | anon, authenticated, service_role | déclarée |
-| `fn_modifier_mon_profil` | à venir | 3 (T9, T10) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_modifier_mon_profil` | consommée lot 3 (T9) | 3 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_rgpd_exporter_rate_limited` | à venir | 3 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_confirmer_paiement_soignant` | à venir | 3 (T13, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_contester_paiement_soignant` | à venir | 3 (T13 après B3, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
@@ -168,7 +168,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_etablissements_safe"("p_ids" "uuid"[]) R
 
 ## fn_mon_profil_soignant_complet
 
-- **Statut natif** : à venir (**lot 3**, reclassée par le blueprint du lot 1, correction v2 n°4).
+- **Statut natif** : consommée (lot 3, T9) par `JoleneSupabase/Profil/SupabaseProfilGateway.swift`, appelée par
+  `JoleneCore/Profil/ProfilEdition.swift` (`ProfilEditionModel`) ; reclassée lot 3 par le blueprint du lot 1
+  (correction v2 n°4). Définition live relue en lecture seule le 08/11/2026 : corps identique au dump,
+  `SECURITY DEFINER`, `search_path=public`, EXECUTE `authenticated`.
 - **Usage prévu** : Profil complet du soignant connecté (onglet Profil, lot 3). Le soft-gate de candidature
   `peut_candidater` du lot 1 n'en dépend pas : il lit `prenom, nom, date_naissance, telephone, rpps_verifie,
   profession` par SELECT direct sur `soignants` (`pol_soig_select`, `profileSelect` étendu, `LOT1_PLAN.md`
@@ -1019,7 +1022,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_types_exercice_autorises"("p_profession"
 
 ## fn_modifier_mon_profil
 
-- **Statut natif** : à venir (lot 3, T9 ; T10 pour `p_avatar_url` et l'adresse).
+- **Statut natif** : consommée (lot 3, T9) par `JoleneSupabase/Profil/SupabaseProfilGateway.swift`, appelée par
+  `JoleneCore/Profil/ProfilEdition.swift` (`ProfilEditionModel`) ; T10 y ajoutera `p_avatar_url` (l'adresse reste
+  hors du natif tant que la localisation n'est pas livrée). Définition live relue en lecture seule le 08/11/2026 :
+  corps identique au dump, `SECURITY DEFINER`, `search_path=pg_catalog, public`, EXECUTE `authenticated`.
 - **Usage prévu** : Édition du profil natif (identité, téléphone, date de naissance, RPPS non vérifié, rayon, ville
   de recherche, taux minimum, contrats acceptés, bio, années d'expérience ; avatar et adresse en T10) puis relecture
   `fn_mon_profil_soignant_complet`. **Jamais** envoyés par le natif : `p_type_exercice`, `p_attestation_cumul_activite`,
@@ -1039,8 +1045,14 @@ CREATE OR REPLACE FUNCTION "public"."fn_modifier_mon_profil"("p_prenom" "text" D
 - **Signature TypeScript** : vingt-neuf paramètres optionnels (`types.ts`, section `Functions`, mêmes noms que la signature SQL) ; `Returns: Json`.
 - **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` (l.43904) ; `{error:'Le prénom ne peut pas être vide'}`
   (l.43906) ; `{error:'Le nom ne peut pas être vide'}` (l.43909) ; `{success:true}` (l.44015). **`COALESCE` partout**
-  (l.43933-43985) : un paramètre `NULL` ne change rien et **aucun champ ne peut être vidé** — l'app n'offre pas
-  « effacer ». `numero_rpps` n'est modifiable que tant que `rpps_verifie` est faux (l.43949-43952), sans erreur
+  (l.43933-43985) : un paramètre `NULL` ne change rien. (Précision T9, mineur 4 de la revue B8 de T0 : une chaîne
+  `''` **écrase** un champ texte — `COALESCE('', x) = ''` ; seuls prénom et nom sont protégés, par le refus
+  l.43906-43909 et `NULLIF(btrim(…), '')`.) Le web envoie `champ || null` ; le natif (T9) n'envoie que les champs
+  modifiés (`ModificationProfil.depuis`) et jamais une chaîne vide pour un champ texte vidé (téléphone, ville, bio,
+  RPPS : paramètre omis, valeur serveur relue) — l'app n'offre pas « effacer ». Écart assumé : un prénom ou un nom
+  vidé est **envoyé** vide pour que le serveur le refuse avec son message (`{error}` verbatim) au lieu du faux
+  succès du web (`prenom || null` → inchangé puis « Profil mis à jour avec succès ! »).
+  `numero_rpps` n'est modifiable que tant que `rpps_verifie` est faux (l.43949-43952), sans erreur
   sinon : relecture obligatoire. Sans ligne `soignants`, la RPC en **crée** une (l.43917-43930) : chemin jamais
   emprunté par le natif, qui n'ouvre l'écran profil qu'au rôle `SOIGNANT` résolu. Audit `MODIFICATION_PROFIL` écrit
   par la RPC (l.44005-44014).

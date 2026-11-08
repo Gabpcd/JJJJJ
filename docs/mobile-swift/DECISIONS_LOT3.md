@@ -242,6 +242,28 @@ devient `.monCompte`. T3a donne aussi une section à `.revenus`. Plusieurs branc
   - toute route consommée par le lot 1 (coordinateur, `EcranNatif`, taps push) passe par
     `DestinationLien.destination`.
 
+## T9 — profil : écarts assumés, manques et points de fusion (08/11/2026)
+
+- **Envoi par différence.** Le web renvoie tout le formulaire à chaque enregistrement (`ProfilSoignant.tsx`
+  l.258-278, `champ || null`, rayon et années d'expérience toujours) ; le natif n'envoie que les champs modifiés
+  (`ModificationProfil.depuis`), jamais un défaut d'affichage (rayon 30 km, 0 année) écrit en silence. Avec le
+  `COALESCE` serveur, le résultat est le même pour tout champ modifié.
+- **Prénom ou nom vidé** : envoyé vide, refusé par le serveur avec son message verbatim (l.43906-43909), au lieu du
+  faux succès du web. « Supprimer » du taux minimum (web `SectionPreferences.tsx` l.78-82) non porté : le web envoie
+  `null`, que le `COALESCE` ignore (aucun effet serveur).
+- **Entrée du hub** : `ProfilEntreeSection` (une ligne de `ProfileScreen`, après « Application » pour ne déplacer ni
+  « Se déconnecter » ni les identifiants du lot 0) ; T11 la remet en tête, dans l'ordre du hub web.
+- **Liens** : `DestinationLien.ecranNatifLivre(.profil)` vaut `true` (alias `reputation` compris). Le
+  `DeepLinkCoordinator` n'existe pas encore (L1-T10, reliquat T3b) : aucune ligne de mappage n'est ajoutée ; à son
+  arrivée, `.profil` ouvre l'onglet Profil puis pousse `ProfilEditionScreen`, sous `ios_natif_profil_actif`.
+- **Manque — référentiel des modes d'exercice.** `fn_types_exercice_autorises` est lue par
+  `InscriptionPort.typesExercice`, câblé par T8 (`SupabaseInscriptionGateway` est un fichier de T7/T8) : tant que le
+  port est non câblé, l'écran affiche l'état « indisponible » du web (salarié proposé, libéral conservé s'il est
+  coché, jamais ajouté) sans « Réessayer la vérification » (aucun bouton sans effet), verrouillé par
+  `DemoProfilTests` ; T8 remplace cette assertion par les modes autorisés.
+- **Manque — renvoi du type d'exercice.** Le bouton `profil-exercice-web-action` n'existe qu'avec le présentateur
+  `.safari` de L1-T10 ; d'ici là, seul l'encart `profil-exercice-web` est affiché.
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -276,7 +298,12 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   IBAN qui arrivent sans `error` (T14b) ; message du verrou de contestation (T13) ; libellé d'action
   « Ouvrir les réglages » de la carte « Autorisation du téléphone » (T4 : le web n'ouvre pas les réglages système ;
   nommé au §1.1 du blueprint, constante `EtatNotificationsAppareil.ouvrirReglages` épinglée par
-  `EtatNotificationsAppareilTests`).
+  `EtatNotificationsAppareilTests`) ; (T9) libellé du renvoi web du type d'exercice
+  « Le type d'exercice se modifie sur jolene.app. » (encart `profil-exercice-web` sous le titre web « Type
+  d'exercice » : le web affiche la section elle-même, que le natif ne porte pas, correction 8) et message de repli
+  d'un enregistrement refusé sans message serveur « Votre profil n'a pas pu être enregistré. Réessayez. » (le web
+  passe par `extraireMessageErreur`), constantes `ProfilEdition.Textes.typeExerciceWeb` et `.enregistrementEchec`
+  épinglées par `ProfilVerbatimTests`.
 - Textes d'accessibilité **sans équivalent web** (vocalisés seulement, jamais affichés ; non juridiques, à relire
   par Gabrielle, L3-T1b) : « environ » (lecture de « ~ » devant un montant et dans une note, `AmountRow`) ;
   « Montant indisponible » (lecture du tiret « — », `AmountRow`) ; « critère rempli » / « critère non rempli »
