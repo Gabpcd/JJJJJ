@@ -656,10 +656,12 @@ final class DocumentsModelTests: XCTestCase {
         await model?.envoyer(typeDocument: "CARTE_IDENTITE", fichier: fichierPdf, libelle: nil)
         while entrees.lire == 0 { await Task.yield() }
         let lectures = espion.nombre("dossier")
-        weak var faible = model
+        // Référence faible par liste de capture : un `weak var` local jamais réaffecté est signalé par Swift 6.2
+        // (#WeakMutability) et `weak let` n'existe pas avant Swift 6.2 (poste local en 6.1).
+        let modeleLibere = { [weak model] in model == nil }
 
         model = nil
-        XCTAssertNil(faible, "le suivi ne retient pas le modèle")
+        XCTAssertTrue(modeleLibere(), "le suivi ne retient pas le modèle")
         await porte.open()
         try await Task.sleep(nanoseconds: 100_000_000)
 
