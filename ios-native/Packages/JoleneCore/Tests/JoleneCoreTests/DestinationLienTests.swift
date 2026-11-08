@@ -19,8 +19,6 @@ final class DestinationLienTests: XCTestCase {
 
     func testRoutesLot3SansEcranRenvoyeesVersSafariCanonique() throws {
         let cas: [(lien: String, route: JoleneRoute, canonique: String)] = [
-            ("https://jolene.app/soignant/parametres/notifications", .parametresNotifications,
-             "https://jolene.app/soignant/parametres/notifications"),                                               // T6
             ("https://jolene.app/soignant/stripe-connect?success=true", .stripeConnect(retour: .succes),
              "https://jolene.app/soignant/stripe-connect?success=true"),                                            // T14a
             ("https://jolene.app/soignant/stripe-connect?refresh=true", .stripeConnect(retour: .rafraichir),
@@ -74,6 +72,27 @@ final class DestinationLienTests: XCTestCase {
         XCTAssertEqual(d.route, .serieDetail(id: "s 1"))
         XCTAssertFalse(DestinationLien.ecranNatifLivre(d.route))
         XCTAssertEqual(d.destination, .safari(url("https://jolene.app/soignant/missions/serie/s%201?x=1")))
+    }
+
+    // MARK: Écrans du lot 3 livrés (la tranche passe sa ligne de `ecranNatifLivre` à `true`)
+
+    /// Chaque tranche d'écran du lot 3 déplace ici son cas de `testRoutesLot3SansEcranRenvoyeesVersSafariCanonique` :
+    /// la route est sa propre destination (écran natif), le lien canonique n'est plus servi par Safari.
+    func testRoutesLot3AvecEcranLivreSontNatives() throws {
+        let cas: [(lien: String, route: JoleneRoute)] = [
+            ("https://jolene.app/soignant/parametres/notifications", .parametresNotifications),                     // T6
+            ("https://www.jolene.app/soignant/parametres/notifications/?origine=push#haut", .parametresNotifications), // T6
+        ]
+        for c in cas {
+            let d = try XCTUnwrap(lien(c.lien), c.lien)
+            XCTAssertEqual(d.route, c.route, c.lien)
+            XCTAssertTrue(DestinationLien.ecranNatifLivre(d.route), c.lien)
+            XCTAssertEqual(d.destination, c.route, c.lien)
+            XCTAssertTrue(d.destination.isNative, c.lien)
+            XCTAssertNil(d.destination.externalURL, c.lien)
+        }
+        let interne = try XCTUnwrap(DestinationLien(link: "/soignant/parametres/notifications"))
+        XCTAssertEqual(interne.destination, .parametresNotifications, "lien interne (centre de notifications, T5)")
     }
 
     // MARK: Destinations natives existantes inchangées
@@ -378,7 +397,7 @@ final class DestinationLienTests: XCTestCase {
             (.revenus(section: .apercu), true, "placeholder jusqu'à L3-T12"),
             (.monCompte, true, "hub ProfileScreen"),
             (.notifications, true, "T5"),
-            (.parametresNotifications, false, "T6"),
+            (.parametresNotifications, true, "T6"),
             (.inscription(EtapeInscription(page: .soignant, query: nil)), false, "T7"),
             (.inscription(EtapeInscription(page: .reprendre, query: nil)), false, "T7"),
             (.inscription(EtapeInscription(page: .completer, query: nil)), false, "T8"),

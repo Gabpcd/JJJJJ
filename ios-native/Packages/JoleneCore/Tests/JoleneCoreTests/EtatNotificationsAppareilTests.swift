@@ -2,13 +2,14 @@ import XCTest
 @testable import JoleneCore
 
 /// Carte « Autorisation du téléphone » (lot 3, T4 ; hôte définitif : préférences de T6) : textes
-/// verbatim de `src/pages/PageParametresNotifications.tsx` l.341-352 (HARD STOP n°4), choisis comme
-/// le web l.147-155 : autorisé ET enregistrement confirmé → « autorisées », autorisé sans
+/// verbatim de `src/pages/PageParametresNotifications.tsx` l.341-352 et l.365 (HARD STOP n°4), choisis
+/// comme le web l.147-155 : autorisé ET enregistrement confirmé → « autorisées », autorisé sans
 /// confirmation → « n'a pas pu être enregistré », vérification en cours → « Vérification… »,
-/// refusé → « bloquées ». « Jamais demandé » (l.349, « Le canal est actif dans Jolene… ») n'est
-/// affiché que si le canal push est connu actif (préférences, T6) : dans le hub, aucune carte. Bouton
-/// « Ouvrir les réglages » seulement quand un réglage système est utile (refusé, ou autorisé sans
-/// enregistrement confirmé).
+/// refusé → « bloquées », activation en échec → « L’état système n’a pas pu être vérifié » (l.351).
+/// « Jamais demandé » (l.349, « Le canal est actif dans Jolene… ») n'est affiché que si le canal push
+/// est connu actif (préférences, T6). Action de la carte (T6, mineur 4 de la revue B8 de T4) :
+/// « Activer sur cet appareil » (l.365) là où le web la propose (l.356 : jamais demandé, enregistrement
+/// en échec ou état indisponible, canal push actif) ; « Ouvrir les réglages » seulement si refusé.
 final class EtatNotificationsAppareilTests: XCTestCase {
     private typealias E = EtatNotificationsAppareil
 
@@ -38,10 +39,14 @@ final class EtatNotificationsAppareilTests: XCTestCase {
         XCTAssertTrue(E.verification.contains("’") && E.nonEnregistre.contains("’") && E.indisponible.contains("’"))
     }
 
-    func testLibelleDeSectionDuHubWeb() throws {
-        let web = try Self.sourceDepot("src/pages/MonCompteSoignant.tsx")
-        let ligne = web.components(separatedBy: "\n")[114]
-        XCTAssertTrue(ligne.contains("label: '\(E.sectionHub)'"), "MonCompteSoignant.tsx l.115")
+    /// Lot 3, T6 : libellé du bouton d'activation, verbatim l.365 (`PageParametresNotifications.tsx`).
+    func testLibelleActiverSurCetAppareilVerbatim() throws {
+        let web = try Self.sourceDepot("src/pages/PageParametresNotifications.tsx")
+        let lignes = web.components(separatedBy: "\n")
+        XCTAssertEqual(E.activerSurAppareil, "Activer sur cet appareil")
+        XCTAssertEqual(lignes[364].trimmingCharacters(in: .whitespaces), E.activerSurAppareil, "PageParametresNotifications.tsx l.365")
+        // Conditions du web (l.356) : prompt, registration-error ou unavailable, et `global.canal_push`.
+        XCTAssertTrue(lignes[355].contains("['prompt', 'registration-error', 'unavailable'].includes(autorisationPushNative) && global.canal_push"))
     }
 
     func testLibelleOuvrirLesReglagesEpingleSansSourceWeb() throws {
@@ -93,15 +98,42 @@ final class EtatNotificationsAppareilTests: XCTestCase {
         XCTAssertEqual(E.message(autorisation: .refusee, enregistrementConfirme: nil, canalPush: false), E.bloquees)
     }
 
-    func testOuvrirLesReglagesSeulementQuandUnReglageEstUtile() {
-        XCTAssertTrue(E.proposeReglages(autorisation: .refusee, enregistrementConfirme: nil), "réactiver Jolene dans Réglages")
-        XCTAssertTrue(E.proposeReglages(autorisation: .accordee, enregistrementConfirme: false), "autorisé mais non enregistré")
-        XCTAssertTrue(E.proposeReglages(autorisation: .provisoire, enregistrementConfirme: false))
-        XCTAssertFalse(E.proposeReglages(autorisation: .accordee, enregistrementConfirme: true), "autorisé et enregistré : superflu")
-        XCTAssertFalse(E.proposeReglages(autorisation: .accordee, enregistrementConfirme: nil), "vérification en cours")
-        XCTAssertFalse(E.proposeReglages(autorisation: .nonDemandee, enregistrementConfirme: nil),
-                       "jamais demandé : Réglages n'a pas d'entrée Notifications tant que l'app n'a rien demandé")
-        XCTAssertFalse(E.proposeReglages(autorisation: nil, enregistrementConfirme: nil))
+    /// « Ouvrir les réglages » seulement quand seul un réglage système peut agir (refusé) ; « Activer sur cet
+    /// appareil » là où le web propose sa relance (l.356), canal push connu actif ; sinon aucun bouton.
+    func testActionDeLaCarte() {
+        typealias A = EtatNotificationsAppareil.Action
+        for canal: Bool? in [nil, false, true] {
+            XCTAssertEqual(E.action(autorisation: .refusee, enregistrementConfirme: nil, canalPush: canal), A.ouvrirReglages,
+                           "refusé : réactiver Jolene dans Réglages (canal \(String(describing: canal)))")
+            XCTAssertNil(E.action(autorisation: .accordee, enregistrementConfirme: true, canalPush: canal), "autorisé et enregistré : superflu")
+            XCTAssertNil(E.action(autorisation: .accordee, enregistrementConfirme: nil, canalPush: canal), "vérification en cours")
+            XCTAssertNil(E.action(autorisation: nil, enregistrementConfirme: nil, canalPush: canal), "autorisation pas encore lue")
+        }
+        XCTAssertEqual(E.action(autorisation: .nonDemandee, enregistrementConfirme: nil, canalPush: true), A.activer,
+                       "jamais demandé, canal actif : demande au tap (D1, web l.356)")
+        XCTAssertNil(E.action(autorisation: .nonDemandee, enregistrementConfirme: nil, canalPush: false), "canal coupé : aucun bouton (web l.356)")
+        XCTAssertNil(E.action(autorisation: .nonDemandee, enregistrementConfirme: nil, canalPush: nil),
+                     "canal inconnu : Réglages n'a pas d'entrée Notifications tant que l'app n'a rien demandé")
+        XCTAssertEqual(E.action(autorisation: .accordee, enregistrementConfirme: false, canalPush: true), A.activer,
+                       "autorisé mais non enregistré : relance de l'enregistrement, Réglages n'y peut rien (mineur 4 de T4)")
+        XCTAssertEqual(E.action(autorisation: .provisoire, enregistrementConfirme: false, canalPush: true), A.activer)
+        XCTAssertNil(E.action(autorisation: .accordee, enregistrementConfirme: false, canalPush: false), "canal coupé : aucun bouton")
+        XCTAssertNil(E.action(autorisation: .accordee, enregistrementConfirme: false, canalPush: nil))
+        XCTAssertEqual(E.action(autorisation: .nonDemandee, enregistrementConfirme: nil, canalPush: true, indisponible: true), A.activer,
+                       "activation en échec (web 'unavailable') : nouvel essai proposé")
+        XCTAssertNil(E.action(autorisation: .accordee, enregistrementConfirme: nil, canalPush: false, indisponible: true))
+        XCTAssertEqual(E.action(autorisation: .refusee, enregistrementConfirme: nil, canalPush: true, indisponible: true), A.activer,
+                       "l'état indisponible prime, comme sur le web (le refus sera relu au prochain retour au premier plan)")
+    }
+
+    /// Web l.180-183 : une activation en échec affiche l'état indisponible (l.351), quel que soit l'état lu avant.
+    func testActivationEnEchecAfficheLEtatIndisponible() {
+        XCTAssertEqual(E.message(autorisation: .nonDemandee, enregistrementConfirme: nil, canalPush: true, indisponible: true),
+                       E.indisponible)
+        XCTAssertEqual(E.message(autorisation: .accordee, enregistrementConfirme: false, canalPush: true, indisponible: true),
+                       E.indisponible)
+        XCTAssertEqual(E.message(autorisation: nil, enregistrementConfirme: nil, canalPush: true, indisponible: true), E.indisponible)
+        XCTAssertFalse(E.estPositif(autorisation: .accordee, enregistrementConfirme: true, indisponible: true))
     }
 
     func testTonDeLaCarte() {
@@ -129,7 +161,7 @@ final class EtatNotificationsAppareilModelTests: XCTestCase {
         let monde = MondePush()
         let model = modele(monde, try await monde.pret())
         XCTAssertNil(model.message)
-        XCTAssertFalse(model.proposeReglages)
+        XCTAssertNil(model.action)
     }
 
     func testJamaisDemandeeDansLeHubAucuneCarteNiDemandeNiEnregistrement() async throws {
@@ -138,13 +170,16 @@ final class EtatNotificationsAppareilModelTests: XCTestCase {
         await model.verifier()
         XCTAssertEqual(model.autorisation, .nonDemandee)
         XCTAssertNil(model.message, "canal push inconnu dans le hub : jamais « Le canal est actif dans Jolene »")
-        XCTAssertFalse(model.proposeReglages)
+        XCTAssertNil(model.action)
         let demandes = await monde.permission.demandes
         let enregistrements = await monde.registrar.enregistrements
         XCTAssertEqual(demandes, 0, "la carte ne demande jamais l'autorisation (D1)")
         XCTAssertEqual(enregistrements, 0)
         model.canalPush = true // préférences (T6) : canal connu actif
         XCTAssertEqual(model.message, E.aAutoriser)
+        XCTAssertEqual(model.action, .activer, "préférences : « Activer sur cet appareil », jamais de demande sans tap")
+        let demandesApres = await monde.permission.demandes
+        XCTAssertEqual(demandesApres, 0)
     }
 
     func testAccordeeVerificationPuisConfirmationSansBouton() async throws {
@@ -154,12 +189,12 @@ final class EtatNotificationsAppareilModelTests: XCTestCase {
         let verification = Task { await model.verifier() }
         await waitUntil { await monde.registrar.enregistrements == 1 } // token APNs attendu
         XCTAssertEqual(model.message, E.verification)
-        XCTAssertFalse(model.proposeReglages)
+        XCTAssertNil(model.action)
         await barriere.open()
         await verification.value
         XCTAssertEqual(model.message, E.autorisees)
         XCTAssertTrue(model.estPositif)
-        XCTAssertFalse(model.proposeReglages, "autorisé et enregistré : « Ouvrir les réglages » superflu")
+        XCTAssertNil(model.action, "autorisé et enregistré : aucun bouton")
     }
 
     func testNouvelleVerificationGardeLEtatConnu() async throws {
@@ -183,28 +218,114 @@ final class EtatNotificationsAppareilModelTests: XCTestCase {
         let model = modele(monde, try await monde.pret())
         await model.verifier()
         XCTAssertEqual(model.message, E.bloquees)
-        XCTAssertTrue(model.proposeReglages)
+        XCTAssertEqual(model.action, .ouvrirReglages)
         let enregistrements = await monde.registrar.enregistrements
         XCTAssertEqual(enregistrements, 0)
     }
 
-    func testAccordeeNonEnregistreeProposeLesReglages() async throws {
+    func testAccordeeNonEnregistreeProposeLActivationSiLeCanalEstActif() async throws {
         let monde = MondePush()
         await monde.gateway.echouerUpserts([JoleneError(.network, "hors ligne")])
         let model = modele(monde, try await monde.pret())
         await model.verifier()
         XCTAssertEqual(model.message, E.nonEnregistre)
-        XCTAssertTrue(model.proposeReglages)
+        XCTAssertNil(model.action, "canal inconnu : aucun bouton (Réglages ne corrige pas un enregistrement en échec)")
         XCTAssertFalse(model.estPositif)
+        model.canalPush = true
+        XCTAssertEqual(model.action, .activer, "préférences, canal actif : relance (web l.356)")
+    }
+
+    // MARK: Activation au tap (lot 3, T6 ; D1 : « plus l'activation depuis Préférences »)
+
+    func testActiverDemandeAuTapPuisEnregistre() async throws {
+        let monde = MondePush(etat: .nonDemandee)
+        await monde.permission.regler(apresDemande: .accordee)
+        let model = EtatNotificationsAppareilModel(push: monde.coordinator, permission: monde.permission,
+                                                   snapshot: try await monde.pret(), canalPush: true)
+        await model.verifier()
+        XCTAssertEqual(model.message, E.aAutoriser)
+        await model.activer()
+        let demandes = await monde.permission.demandes
+        XCTAssertEqual(demandes, 1, "une seule demande, au tap")
+        XCTAssertEqual(model.autorisation, .accordee)
+        XCTAssertEqual(model.enregistrementConfirme, true)
+        XCTAssertEqual(model.message, E.autorisees)
+        XCTAssertNil(model.action)
+        XCTAssertFalse(model.activationEnCours)
+        let upserts = await monde.gateway.upserts
+        XCTAssertEqual(upserts, [JetonsTest.hex(JetonsTest.a)], "l'appareil est enregistré après l'accord")
+    }
+
+    func testActiverRefuseAfficheBloquees() async throws {
+        let monde = MondePush(etat: .nonDemandee)
+        await monde.permission.regler(apresDemande: .refusee)
+        let model = EtatNotificationsAppareilModel(push: monde.coordinator, permission: monde.permission,
+                                                   snapshot: try await monde.pret(), canalPush: true)
+        await model.verifier()
+        await model.activer()
+        XCTAssertEqual(model.message, E.bloquees)
+        XCTAssertEqual(model.action, .ouvrirReglages)
+        let enregistrements = await monde.registrar.enregistrements
+        XCTAssertEqual(enregistrements, 0, "refusé : aucun token demandé")
+    }
+
+    func testActiverEnEchecAfficheIndisponiblePuisRelectureLeve() async throws {
+        let monde = MondePush(etat: .nonDemandee)
+        await monde.permission.regler(echecDemande: JoleneError(.unknown, "centre de notifications indisponible"))
+        let model = EtatNotificationsAppareilModel(push: monde.coordinator, permission: monde.permission,
+                                                   snapshot: try await monde.pret(), canalPush: true)
+        await model.verifier()
+        await model.activer()
+        XCTAssertTrue(model.indisponible)
+        XCTAssertEqual(model.message, E.indisponible, "web l.180-182 : 'unavailable'")
+        XCTAssertEqual(model.action, .activer, "nouvel essai proposé")
+        // Retour au premier plan : l'état système relu remplace l'état indisponible.
+        await model.verifier()
+        XCTAssertFalse(model.indisponible)
+        XCTAssertEqual(model.message, E.aAutoriser)
+    }
+
+    func testActiverRelanceUnEnregistrementEnEchec() async throws {
+        let monde = MondePush()
+        await monde.gateway.echouerUpserts([JoleneError(.network, "hors ligne")])
+        let model = EtatNotificationsAppareilModel(push: monde.coordinator, permission: monde.permission,
+                                                   snapshot: try await monde.pret(), canalPush: true)
+        await model.verifier()
+        XCTAssertEqual(model.message, E.nonEnregistre)
+        await model.activer()
+        XCTAssertEqual(model.message, E.autorisees, "enregistrement relancé et confirmé")
+        let upserts = await monde.gateway.upserts
+        XCTAssertEqual(upserts.count, 1)
+    }
+
+    func testAucuneDoubleActivation() async throws {
+        let barriere = Gate()
+        let monde = MondePush(etat: .nonDemandee, barriere: barriere)
+        await monde.permission.regler(apresDemande: .accordee)
+        let model = EtatNotificationsAppareilModel(push: monde.coordinator, permission: monde.permission,
+                                                   snapshot: try await monde.pret(), canalPush: true)
+        let premiere = Task { await model.activer() }
+        await waitUntil { await monde.registrar.enregistrements == 1 } // token APNs attendu, activation en vol
+        XCTAssertTrue(model.activationEnCours)
+        await model.activer()
+        let demandes = await monde.permission.demandes
+        XCTAssertEqual(demandes, 1, "un second tap pendant l'activation est ignoré")
+        await barriere.open()
+        await premiere.value
+        XCTAssertFalse(model.activationEnCours)
+        XCTAssertEqual(model.message, E.autorisees)
     }
 
     func testSansCoordinateurAucuneCarte() async throws {
         let monde = MondePush()
         let model = EtatNotificationsAppareilModel(push: nil, permission: nil, snapshot: try await monde.pret())
         await model.verifier()
+        await model.activer()
         XCTAssertNil(model.autorisation)
         XCTAssertNil(model.message)
         let lectures = await monde.permission.lectures
+        let demandes = await monde.permission.demandes
         XCTAssertEqual(lectures, 0)
+        XCTAssertEqual(demandes, 0)
     }
 }

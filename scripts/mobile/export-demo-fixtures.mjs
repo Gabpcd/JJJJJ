@@ -5,7 +5,7 @@
  * Reproduit à l'identique l'algorithme de `mobile-native/src/data/demoGateway.ts`
  * (30 missions, 3 établissements fictifs, profil DEMO_CONTEXT) avec une horloge
  * fixée, puis écrit les fichiers JSON à clés snake_case (contrat PostgREST),
- * lus par `JoleneCore` (DemoMissionsGateway, DemoDashboardGateway) et par les XCUITest.
+ * lus par `JoleneCore` (DemoMissionsGateway, DemoDashboardGateway, DemoPreferencesGateway) et par les XCUITest.
  *
  * Horloge fixée : 2026-11-02T00:00:00Z. Les missions démarrent donc du
  * 2026-11-03 au 2026-12-02 (07:00 UTC, ou 20:00 UTC une mission sur quatre).
@@ -235,9 +235,9 @@ export function buildDemoDashboard(now = new Date(FIXED_NOW), missions = buildDe
  * Centre de notifications démo (lot 3, T5) : lignes `notifications` du profil fictif, colonnes lues par
  * l'app (`id, titre, corps, type, lien, lue, lue_le, cree_le`), types de `notifications_type_check`
  * (`supabase/schema/public.sql` l.70815). Deux non lues, comme `notifs_non_lues` du tableau de bord démo ;
- * liens : détail d'une mission ASSIGNEE démo, Mes missions, factures (renvoi web, lot 4), Stripe Connect et
- * préférences (renvoi web jusqu'à T14a / T6), litiges (renvoi web), et une ligne sans lien. Dates : quelques
- * heures à six jours avant l'horloge fixée (après le changement d'heure du 25/10/2026).
+ * liens : détail d'une mission ASSIGNEE démo, Mes missions, factures (renvoi web, lot 4), Stripe Connect
+ * (renvoi web jusqu'à T14a), préférences (écran natif depuis T6), litiges (renvoi web), et une ligne sans lien.
+ * Dates : quelques heures à six jours avant l'horloge fixée (après le changement d'heure du 25/10/2026).
  */
 export function buildDemoNotifications(now = new Date(FIXED_NOW)) {
   const avant = (heures) => new Date(now.getTime() - heures * 3_600_000).toISOString();
@@ -269,6 +269,35 @@ export function buildDemoNotifications(now = new Date(FIXED_NOW)) {
   };
 }
 
+/**
+ * Lot 3, T6 : préférences de notifications du profil fictif. `preferences` = corps de
+ * `fn_obtenir_mes_preferences_notifications()` (ligne `preferences_notifications` aux défauts serveur
+ * — e-mail, push, in-app actifs, SMS coupé — et trois exceptions par événement du catalogue soignant) ;
+ * `soignant` = `soignants.select('sms_alertes_actives, type_exercice')`, régime dérivé du profil démo.
+ * Lu par `DemoPreferencesGateway` et par les XCUITest (`DemoPreferencesTests`).
+ */
+export function buildDemoPreferences() {
+  return {
+    fixed_now: FIXED_NOW,
+    preferences: {
+      global: {
+        canal_email: true,
+        canal_sms: false,
+        canal_push: true,
+        canal_in_app: true,
+        cree_le: '2026-10-01T08:00:00+00:00',
+        mis_a_jour_le: '2026-10-01T08:00:00+00:00',
+      },
+      par_evenement: [
+        { type_evenement: 'NOUVELLE_MISSION_MATCHANT_FILTRE', canal: 'EMAIL', actif: false },
+        { type_evenement: 'LITIGE_RESOLU', canal: 'PUSH', actif: false },
+        { type_evenement: 'SERIE_ONBOARDING', canal: 'EMAIL', actif: false },
+      ],
+    },
+    soignant: { sms_alertes_actives: true, type_exercice: DEMO_PROFILE.profile.type_exercice },
+  };
+}
+
 export function buildFixtures() {
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
@@ -276,6 +305,7 @@ export function buildFixtures() {
     'demo-profile.json': { fixed_now: FIXED_NOW, ...DEMO_PROFILE },
     'demo-dashboard.json': buildDemoDashboard(),
     'demo-notifications.json': buildDemoNotifications(),
+    'demo-preferences.json': buildDemoPreferences(), // lot 3, T6
   };
 }
 

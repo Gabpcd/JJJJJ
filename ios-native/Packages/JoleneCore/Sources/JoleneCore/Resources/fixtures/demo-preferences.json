@@ -1,0 +1,34 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "preferences": {
+    "global": {
+      "canal_email": true,
+      "canal_sms": false,
+      "canal_push": true,
+      "canal_in_app": true,
+      "cree_le": "2026-10-01T08:00:00+00:00",
+      "mis_a_jour_le": "2026-10-01T08:00:00+00:00"
+    },
+    "par_evenement": [
+      {
+        "type_evenement": "NOUVELLE_MISSION_MATCHANT_FILTRE",
+        "canal": "EMAIL",
+        "actif": false
+      },
+      {
+        "type_evenement": "LITIGE_RESOLU",
+        "canal": "PUSH",
+        "actif": false
+      },
+      {
+        "type_evenement": "SERIE_ONBOARDING",
+        "canal": "EMAIL",
+        "actif": false
+      }
+    ]
+  },
+  "soignant": {
+    "sms_alertes_actives": true,
+    "type_exercice": "MIXTE"
+  }
+}

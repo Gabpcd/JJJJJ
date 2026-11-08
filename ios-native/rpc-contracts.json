@@ -803,7 +803,7 @@
     },
     {
       "name": "fn_obtenir_mes_preferences_notifications",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "never",
@@ -832,7 +832,7 @@
     },
     {
       "name": "fn_modifier_preferences_notifications",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "{ p_canal_email?: boolean; p_canal_in_app?: boolean; p_canal_push?: boolean; p_canal_sms?: boolean; p_par_evenement?: Json }",

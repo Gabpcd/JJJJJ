@@ -211,9 +211,9 @@ final class DemoWorldTests: XCTestCase {
     /// (`DemoWorld`, `SupabaseGateways`) et le retire d'ici dans la même PR ;
     /// `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes. Liste vide à la
     /// clôture du lot 3.
-    static let portsEnAttenteLot3 = ["preferences", "inscription", "profil", "avatar",
+    static let portsEnAttenteLot3 = ["inscription", "profil", "avatar",
                                      "geocodage", "motDePasse", "exportRGPD", "revenus", "paiements", "iban",
-                                     "stripeConnect"] // T4 : `push` câblé (DemoPushGateway) ; T5 : `notifications`
+                                     "stripeConnect"] // T4 : `push` câblé (DemoPushGateway) ; T5 : `notifications` ; T6 : `preferences` câblé (DemoPreferencesGateway)
 
     func testAucunPortNonCable() {
         let gateways = DemoWorld.gateways()
@@ -226,6 +226,7 @@ final class DemoWorldTests: XCTestCase {
         XCTAssertTrue(gateways.flags is DemoFlagsGateway)
         XCTAssertTrue(gateways.dashboard is DemoDashboardGateway, "T3 câble le tableau de bord")
         XCTAssertTrue(gateways.compte is DemoAccountGateway, "T8 câble la suppression de compte")
+        XCTAssertTrue(gateways.preferences is DemoPreferencesGateway, "lot 3, T6 câble les préférences de notifications")
         XCTAssertEqual(DemoWorld.gateways(drapeaux: [:]).unwiredPorts, Self.portsEnAttenteLot1 + Self.portsEnAttenteLot3)
         XCTAssertEqual(gateways.clock.now(), DemoWorld.fixedNow)
     }
