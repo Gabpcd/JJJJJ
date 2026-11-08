@@ -41,10 +41,17 @@ final class EspionDocuments: DocumentsPort, @unchecked Sendable {
     let retenueReconciliation = Verrouille<Gate?>(nil)
     /// Barrière à usage unique : seule la prochaine relecture du dossier l'attend.
     let retenueDossier = Verrouille<Gate?>(nil)
-    /// Latences simulées (secondes) : upload, revérification, téléchargement.
+    /// Latences simulées (secondes) : upload, réconciliation, revérification, téléchargement.
     let latenceEnvoi = Verrouille<TimeInterval>(0)
+    let latenceReconciliation = Verrouille<TimeInterval>(0)
     let latenceReverification = Verrouille<TimeInterval>(0)
     let latenceConsultation = Verrouille<TimeInterval>(0)
+    /// Erreur levée par l'upload après sa retenue (401 tardif).
+    let erreurEnvoi = Verrouille<JoleneError?>(nil)
+    /// Issue forcée de `verify-document` (m-d) ; nil : celle du port interne.
+    let verificationEchoueeForcee = Verrouille<Bool?>(nil)
+    /// Appels de `verificationEchouee` (hors `appels` : ils partent hors du chemin critique, sans ordre fixe).
+    let observationsVerification = Verrouille(0)
 
     init(interne: any DocumentsPort = DemoDocumentsGateway(), magasin: MagasinRecusEnMemoire) {
         self.interne = interne; self.magasin = magasin
@@ -70,12 +77,14 @@ final class EspionDocuments: DocumentsPort, @unchecked Sendable {
         phaseALEnvoi.modifier { $0.append(journalise?.phase) }
         if let retenue = retenueEnvoi.lire { await retenue.wait() }
         try await latenceSimulee(latenceEnvoi.lire)
+        if let erreur = erreurEnvoi.lire { throw erreur }
         let issue = try await interne.envoyer(recu: recu, octets: octets, context: context)
         return issueEnvoiForcee.lire ?? issue
     }
     func reconcilier(recu: RecuDocument, context: MissionReadContext) async throws -> IssueEnvoiDocument {
         noter("reconcilier")
         if let retenue = retenueReconciliation.lire { await retenue.wait() }
+        try await latenceSimulee(latenceReconciliation.lire)
         if let forcee = issueReconciliationForcee.lire { return forcee }
         return try await interne.reconcilier(recu: recu, context: context)
     }
@@ -101,6 +110,26 @@ final class EspionDocuments: DocumentsPort, @unchecked Sendable {
         noter("coherence")
         return try await interne.coherence(context: context)
     }
+    func verificationEchouee(documentId: String) async -> Bool? {
+        observationsVerification.modifier { $0 += 1 }
+        if let forcee = verificationEchoueeForcee.lire { return forcee }
+        return await interne.verificationEchouee(documentId: documentId)
+    }
+}
+
+/// Magasin de reçus dont l'effacement échoue (erreur de stockage du trousseau).
+final class MagasinSansEffacement: ReceiptStorePort, @unchecked Sendable {
+    let interne = MagasinRecusEnMemoire()
+    func lire(_ cle: CleRecu) throws -> Data? { try interne.lire(cle) }
+    func ecrire(_ donnees: Data, pour cle: CleRecu) throws { try interne.ecrire(donnees, pour: cle) }
+    func effacer(_ cle: CleRecu) throws { throw CocoaError(.fileWriteUnknown) }
+}
+
+/// Attend qu'une condition du main actor devienne vraie (issue reprise hors du chemin critique), deux secondes au plus.
+@MainActor
+func attendreQue(_ condition: () -> Bool) async {
+    let limite = Date().addingTimeInterval(2)
+    while !condition(), Date() < limite { try? await Task.sleep(nanoseconds: 2_000_000) }
 }
 
 /// Attente simulée du suivi de vérification : instantanée, journalisée.
@@ -122,16 +151,27 @@ final class DocumentsModelTests: XCTestCase {
 
     private func pret(_ espion: EspionDocuments, attente: AttenteSimulee = AttenteSimulee(),
                       attendre: (@Sendable (TimeInterval) async throws -> Void)? = nil,
-                      resolution: TimeInterval = SessionController.defaultResolutionTimeout)
+                      resolution: TimeInterval = SessionController.defaultResolutionTimeout,
+                      recus: (any ReceiptStorePort)? = nil)
         async throws -> (DocumentsModel, SessionController) {
         var gateways = DemoWorld.gateways()
         gateways.documents = espion
         let controller = SessionController(gateways: gateways, resolutionTimeout: resolution)
         let etat = await controller.signIn(email: "demonstration@example.invalid", password: "demonstration")
         let snapshot = try XCTUnwrap(etat.snapshot, "session démo prête attendue, obtenu \(etat)")
-        let model = DocumentsModel(controller: controller, snapshot: snapshot, recus: espion.magasin,
+        let model = DocumentsModel(controller: controller, snapshot: snapshot, recus: recus ?? espion.magasin,
                                    attendre: attendre ?? { secondes in await attente.attendre(secondes) })
         return (model, controller)
+    }
+
+    /// Second modèle de la même session sur le même journal, construit comme le fera l'écran (`@StateObject` recréé à
+    /// la réouverture, seconde fenêtre iPad) : aucun registre n'est passé, celui du processus est implicite.
+    private func autreModele(_ controller: SessionController, recus: any ReceiptStorePort,
+                             attente: AttenteSimulee = AttenteSimulee()) async throws -> DocumentsModel {
+        let etat = await controller.state
+        let snapshot = try XCTUnwrap(etat.snapshot)
+        return DocumentsModel(controller: controller, snapshot: snapshot, recus: recus,
+                              attendre: { secondes in await attente.attendre(secondes) })
     }
 
     /// Reçu `started` d'un essai précédent (arrêt forcé pendant l'upload).
@@ -211,6 +251,9 @@ final class DocumentsModelTests: XCTestCase {
         XCTAssertNil(model.exigenceSuivante)
         let delais = await attente.delais
         XCTAssertEqual(delais, [5], "relecture toutes les 5 s, arrêtée dès le verdict")
+        // m-h : la célébration est ponctuelle (2,5 s sur le web, l.268-269) ; l'écran l'oublie après l'avoir montrée.
+        model.oublierDossierComplet()
+        XCTAssertFalse(model.dossierComplet)
     }
 
     func testEnchainementVersLExigenceSuivante() async throws {
@@ -293,7 +336,10 @@ final class DocumentsModelTests: XCTestCase {
         let espion = EspionDocuments(magasin: magasin)
         let (model, _) = try await pret(espion)
         await model.charger()
-        XCTAssertEqual(espion.appels.lire.prefix(2), ["reconcilier", "dossier"], "réconciliation avant la lecture du dossier")
+        // Revue fraîche de T6, m-b : le dossier est lu AVANT la réconciliation (l'écran ne reste pas en `.chargement`
+        // pendant elle), puis relu après son issue.
+        XCTAssertEqual(Array(espion.appels.lire.prefix(3)), ["dossier", "reconcilier", "dossier"],
+                       "dossier lu d'abord, réconciliation, puis relecture après l'issue")
         XCTAssertEqual(model.envoi, .termine(.nonEnvoye), "ni objet ni ligne : nouvelle sélection demandée")
         XCTAssertTrue(magasin.cles().isEmpty)
     }
@@ -655,5 +701,236 @@ final class DocumentsModelTests: XCTestCase {
         await model.envoyer(typeDocument: "CARTE_ORDRE", fichier: fichierPdf, libelle: nil)
         XCTAssertEqual(model.envoi, .refuseAvantEnvoi(message: MessagesDocuments.enregistrementImpossible),
                        "qualification à l'Ordre : médecins seulement")
+    }
+
+    // MARK: - Seconde revue fraîche de T6 : instances multiples, gestes en file, délais, verdicts, epoch
+
+    /// M1-bis : un upload lent du premier modèle est en vol ; l'écran est fermé puis rouvert (nouveau modèle, comme
+    /// `@StateObject`, sur le même journal ; même cas avec deux fenêtres sur iPad). Le second ne réconcilie jamais l'essai
+    /// en vol (reçu intact, ni « non envoyé » ni `cleanup_orphan`), ne lance aucun envoi, affiche l'envoi en cours puis en
+    /// reprend l'issue ; une seule vérification pour le document.
+    func testSecondModeleNeReconcilieNiNEnvoiePendantLEnvoiDuPremier() async throws {
+        let magasin = MagasinRecusEnMemoire()
+        let demo = DemoDocumentsGateway()
+        let espion = EspionDocuments(interne: demo, magasin: magasin)
+        let retenue = Gate()
+        espion.retenueEnvoi.modifier { $0 = retenue }
+        let (premier, controller) = try await pret(espion)
+        await premier.charger()
+        let envoi = Task { await premier.envoyer(typeDocument: "CARTE_IDENTITE", fichier: fichierPdf, libelle: nil) }
+        while espion.nombre("envoyer") == 0 { await Task.yield() }
+        let journalise = try await journal(magasin).lire(userId: DemoWorld.context.userId)
+        let enVol = try XCTUnwrap(journalise)
+        XCTAssertEqual(enVol.phase, .started)
+
+        let second = try await autreModele(controller, recus: magasin)
+        await second.charger()
+        XCTAssertEqual(espion.nombre("reconcilier"), 0, "jamais de réconciliation de l'essai en vol d'une autre instance")
+        let relu = try await journal(magasin).lire(userId: DemoWorld.context.userId)
+        XCTAssertEqual(relu, enVol, "reçu en vol intact")
+        XCTAssertNotNil(second.dossier, "le dossier reste consultable")
+        XCTAssertEqual(second.envoi, .enCours(typeDocument: "CARTE_IDENTITE"), "l'envoi en vol est affiché, jamais « non envoyé »")
+        await second.envoyer(typeDocument: "DIPLOME", fichier: fichierPdf, libelle: nil)
+        XCTAssertEqual(espion.nombre("preparer"), 1, "aucun second envoi tant que l'autre est en vol")
+        XCTAssertEqual(espion.nombre("envoyer"), 1)
+
+        await retenue.open()
+        await envoi.value
+        guard case let .termine(.verificationDemandee(id)) = premier.envoi else {
+            return XCTFail("vérification demandée attendue, obtenu \(premier.envoi)")
+        }
+        await attendreQue { second.envoi != .enCours(typeDocument: "CARTE_IDENTITE") }
+        XCTAssertEqual(second.envoi, .termine(.verificationDemandee(documentId: id)), "issue reprise par le second écran")
+        let verifications = await demo.appelsVerification
+        XCTAssertEqual(verifications, [id], "verify-document une seule fois pour ce document_id (décision 14)")
+        XCTAssertEqual(espion.nombre("reconcilier"), 0)
+        XCTAssertEqual(espion.nombre("envoyer"), 1)
+        XCTAssertTrue(magasin.cles().isEmpty)
+        await premier.attendreFinDuSuivi()
+        await second.attendreFinDuSuivi()
+    }
+
+    /// M1-bis : la réconciliation « une seule à la fois » est partagée par toutes les instances du même utilisateur :
+    /// deux écrans qui se chargent pendant qu'un reçu est en attente font une seule relecture (un seul rejeu, une seule
+    /// vérification), et chacun en publie l'issue.
+    func testDeuxModelesPartagentUneSeuleReconciliation() async throws {
+        let magasin = MagasinRecusEnMemoire()
+        try await recuDemarreEnAttente(magasin)
+        let espion = EspionDocuments(magasin: magasin)
+        let retenue = Gate()
+        espion.retenueReconciliation.modifier { $0 = retenue }
+        let (premier, controller) = try await pret(espion)
+        let second = try await autreModele(controller, recus: magasin)
+
+        let chargementPremier = Task { await premier.charger() }
+        while espion.nombre("reconcilier") == 0 { await Task.yield() }
+        let chargementSecond = Task { await second.charger() }
+        while espion.nombre("dossier") < 2 { await Task.yield() }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(espion.nombre("reconcilier"), 1, "le second écran attend la réconciliation en cours")
+
+        await retenue.open()
+        await chargementPremier.value
+        await chargementSecond.value
+        XCTAssertEqual(espion.nombre("reconcilier"), 1)
+        XCTAssertEqual(premier.envoi, .termine(.nonEnvoye))
+        XCTAssertEqual(second.envoi, .termine(.nonEnvoye))
+        XCTAssertTrue(magasin.cles().isEmpty)
+    }
+
+    /// m-a : deux gestes déjà en file sur le main actor (double tap) ne passent jamais tous deux la garde : un seul
+    /// `verify-document` pour « Revérifier », une seule `fn_signer_attestation_sante`.
+    func testDeuxGestesSimultanesUneSeuleAction() async throws {
+        let espion = EspionDocuments(magasin: MagasinRecusEnMemoire())
+        let (model, _) = try await pret(espion)
+        await model.charger()
+        let rejete = try XCTUnwrap(model.dossier?.document(pour: "CARTE_IDENTITE"))
+
+        async let premiere = model.reverifier(documentId: rejete.id)
+        async let seconde = model.reverifier(documentId: rejete.id)
+        let verdicts = await [premiere, seconde]
+        XCTAssertEqual(espion.nombre("reverifier"), 1, "une seule revérification")
+        XCTAssertEqual(verdicts.compactMap { $0 }, [.enAttente])
+
+        async let signature = model.signerAttestation()
+        async let doublon = model.signerAttestation()
+        let signatures = await [signature, doublon]
+        XCTAssertEqual(espion.nombre("attestation"), 1, "une seule signature de la déclaration sur l'honneur")
+        XCTAssertEqual(signatures.filter { $0 }.count, 1)
+        XCTAssertNil(model.actionEnCours)
+    }
+
+    /// m-b : avec un reçu en attente, le dossier est affiché sans attendre la réconciliation.
+    func testDossierAfficheSansAttendreLaReconciliation() async throws {
+        let magasin = MagasinRecusEnMemoire()
+        try await recuDemarreEnAttente(magasin)
+        let espion = EspionDocuments(magasin: magasin)
+        let retenue = Gate()
+        espion.retenueReconciliation.modifier { $0 = retenue }
+        let (model, _) = try await pret(espion)
+
+        let chargement = Task { await model.charger() }
+        while espion.nombre("reconcilier") == 0 { await Task.yield() }
+        XCTAssertNotNil(model.dossier, "dossier affiché pendant la réconciliation (jamais plusieurs minutes en chargement)")
+        XCTAssertEqual(espion.appels.lire, ["dossier", "reconcilier"])
+
+        await retenue.open()
+        await chargement.value
+        XCTAssertEqual(model.envoi, .termine(.nonEnvoye))
+    }
+
+    /// m-b : une réconciliation (ligne, HEAD, rejeu, nettoyage ; `verify-document` jamais attendu) est bornée à quatre
+    /// lectures, jamais à la borne des transferts (≥ 120 s) ; délai dépassé : reçu gardé, réconcilié plus tard.
+    func testReconciliationBorneeAQuatreLectures() async throws {
+        XCTAssertEqual(DocumentsModel.requetesReconciliation, 4)
+        let magasin = MagasinRecusEnMemoire()
+        try await recuDemarreEnAttente(magasin)
+        let espion = EspionDocuments(magasin: magasin)
+        espion.latenceReconciliation.modifier { $0 = 0.5 }
+        let (model, _) = try await pret(espion, resolution: 0.2)
+        await model.charger()
+        XCTAssertEqual(model.envoi, .termine(.nonEnvoye), "0,5 s < 4 × 0,2 s : la réconciliation aboutit")
+
+        try await recuDemarreEnAttente(magasin)
+        espion.latenceReconciliation.modifier { $0 = 3 }
+        let debut = Date()
+        await model.charger()
+        XCTAssertLessThan(Date().timeIntervalSince(debut), 2, "borne de quatre lectures (0,8 s), pas celle des transferts")
+        let garde = try await journal(magasin).lire(userId: DemoWorld.context.userId)
+        XCTAssertEqual(garde?.phase, .started, "reçu gardé")
+    }
+
+    /// m-c : une ligne relue dont le verdict est déjà rendu (relancement après la vérification) n'est ni annoncée « en
+    /// cours » ni suivie.
+    func testVerdictDejaRenduALaReconciliationAucunSuivi() async throws {
+        let magasin = MagasinRecusEnMemoire()
+        try await recuDemarreEnAttente(magasin)
+        let espion = EspionDocuments(magasin: magasin)
+        espion.issueReconciliationForcee.modifier { $0 = .verdictRendu(documentId: "demo-doc-diplome") }
+        let attente = AttenteSimulee()
+        let (model, _) = try await pret(espion, attente: attente)
+        await model.charger()
+        XCTAssertEqual(model.envoi, .termine(.verdictRendu(documentId: "demo-doc-diplome")))
+        XCTAssertEqual(model.enVerification, [])
+        await model.attendreFinDuSuivi()
+        let delais = await attente.delais
+        XCTAssertEqual(delais, [], "aucun suivi d'une pièce déjà jugée")
+        XCTAssertTrue(magasin.cles().isEmpty)
+    }
+
+    /// m-d : `verify-document` en erreur (429, 403, 503) : « vérification manuelle en attente » aussitôt, comme le web
+    /// (l.413-425), sans attendre les 60 s du suivi (bloqué ici).
+    func testErreurDeVerificationDonneAussitotVerificationManuelle() async throws {
+        let porte = Gate()
+        let espion = EspionDocuments(magasin: MagasinRecusEnMemoire())
+        espion.verificationEchoueeForcee.modifier { $0 = true }
+        let (model, _) = try await pret(espion, attendre: { _ in await porte.wait() })
+        await model.charger()
+        await model.envoyer(typeDocument: "CARTE_IDENTITE", fichier: fichierPdf, libelle: nil)
+        let id = try XCTUnwrap(model.dossier?.document(pour: "CARTE_IDENTITE")?.id)
+
+        await attendreQue { model.envoi == .termine(.enregistre(documentId: id)) }
+
+        XCTAssertEqual(model.envoi, .termine(.enregistre(documentId: id)))
+        XCTAssertEqual(model.enVerification, [], "suivi abandonné pour cette pièce")
+        XCTAssertEqual(espion.observationsVerification.lire, 1)
+        await porte.open()
+        await model.attendreFinDuSuivi()
+    }
+
+    /// m-d : `verify-document` a répondu : relecture aussitôt (le web recharge, l.420), verdict affiché sans attendre la
+    /// relecture suivante du suivi (bloqué ici).
+    func testReponseDeVerificationRelitAussitotLeVerdict() async throws {
+        let porte = Gate()
+        let espion = EspionDocuments(magasin: MagasinRecusEnMemoire())
+        espion.verificationEchoueeForcee.modifier { $0 = false }
+        let (model, _) = try await pret(espion, attendre: { _ in await porte.wait() })
+        await model.charger()
+        await model.envoyer(typeDocument: "CARTE_IDENTITE", fichier: fichierPdf, libelle: nil)
+
+        await attendreQue { model.dossierComplet }
+
+        XCTAssertTrue(model.dossierComplet, "verdict VERIFIE relu dès la réponse de verify-document")
+        XCTAssertEqual(model.dossier?.document(pour: "CARTE_IDENTITE")?.statutVerification, "VERIFIE")
+        XCTAssertEqual(model.enVerification, [])
+        await porte.open()
+        await model.attendreFinDuSuivi()
+    }
+
+    /// m-f : un reçu qu'on ne parvient pas à effacer après sa réconciliation reste en vol : l'envoi est bloqué « suivi
+    /// illisible » (renvoi web), jamais remplacé par « un autre reçu en cours », et aucun nouvel essai n'est préparé.
+    func testEffacementImpossibleApresLaReconciliationGardeLeSuiviIllisible() async throws {
+        let magasin = MagasinSansEffacement()
+        let espion = EspionDocuments(magasin: magasin.interne)
+        espion.issueReconciliationForcee.modifier { $0 = .nonEnvoye }
+        let (model, _) = try await pret(espion, recus: magasin)
+        await model.charger()
+        try await recuDemarreEnAttente(magasin.interne)
+
+        await model.envoyer(typeDocument: "CARTE_IDENTITE", fichier: fichierPdf, libelle: nil)
+
+        XCTAssertEqual(model.envoi, .suiviIllisible)
+        XCTAssertEqual(espion.nombre("reconcilier"), 1)
+        XCTAssertEqual(espion.nombre("preparer"), 0, "aucun nouvel essai tant que le reçu reste en vol")
+    }
+
+    /// m-f : identité quittée pendant l'upload, puis 401 tardif : aucun état de l'ancienne session n'est publié (ni
+    /// « session expirée », ni erreur) ; le modèle périmé revient à `.inactif`.
+    func testIdentiteQuitteePendantLEnvoiAucunEtatDeLAncienneSession() async throws {
+        let espion = EspionDocuments(magasin: MagasinRecusEnMemoire())
+        let retenue = Gate()
+        espion.retenueEnvoi.modifier { $0 = retenue }
+        espion.erreurEnvoi.modifier { $0 = JoleneError(.unauthorized, SessionController.sessionExpiredMessage) }
+        let (model, controller) = try await pret(espion)
+        await model.charger()
+        let envoi = Task { await model.envoyer(typeDocument: "CARTE_IDENTITE", fichier: fichierPdf, libelle: nil) }
+        while espion.nombre("envoyer") == 0 { await Task.yield() }
+
+        _ = await controller.signOut()
+        await retenue.open()
+        await envoi.value
+
+        XCTAssertFalse(model.sessionExpired, "401 d'une identité quittée : rien n'est publié")
+        XCTAssertEqual(model.envoi, .inactif)
     }
 }

@@ -193,4 +193,23 @@ final class DossierDocumentsTests: XCTestCase {
         XCTAssertFalse(nul.verificationEngagee, "statut nul : aucune preuve de vérification")
         XCTAssertEqual(PreuveDocument.selection, "id,s3_cle,statut_verification,verification_attempt_id")
     }
+
+    /// Seconde revue fraîche de T6, m-c : l'issue est dérivée du statut relu. Une pièce déjà jugée (relancement après la
+    /// vérification) n'est jamais annoncée « vérification en cours (~30 s) » ; une revue manuelle relue donne
+    /// « vérification manuelle en attente » (l.416-419) ; seule une tentative sans verdict est suivie.
+    func testIssueDUneLigneRelueDeriveeDuStatut() {
+        func preuve(_ statut: String?, tentative: String? = "a-1") -> PreuveDocument {
+            PreuveDocument(id: "d-1", s3Cle: "k", statutVerification: statut, verificationAttemptId: tentative)
+        }
+        XCTAssertEqual(preuve("EN_ATTENTE").issue, .verificationDemandee(documentId: "d-1"))
+        XCTAssertEqual(preuve(nil).issue, .verificationDemandee(documentId: "d-1"))
+        XCTAssertEqual(preuve("EN_ATTENTE", tentative: nil).issue, .enregistre(documentId: "d-1"))
+        XCTAssertEqual(preuve(nil, tentative: nil).issue, .enregistre(documentId: "d-1"))
+        XCTAssertEqual(preuve("REVUE_MANUELLE_REQUISE").issue, .enregistre(documentId: "d-1"))
+        XCTAssertEqual(preuve("REVUE_MANUELLE_REQUISE", tentative: nil).issue, .enregistre(documentId: "d-1"))
+        for statut in ["VERIFIE", "REJETE", "EXPIRE"] {
+            XCTAssertEqual(preuve(statut).issue, .verdictRendu(documentId: "d-1"), "\(statut) : verdict déjà rendu, aucun suivi")
+            XCTAssertEqual(preuve(statut, tentative: nil).issue, .verdictRendu(documentId: "d-1"))
+        }
+    }
 }

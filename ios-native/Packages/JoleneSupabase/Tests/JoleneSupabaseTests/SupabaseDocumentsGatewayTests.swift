@@ -228,6 +228,32 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
         }
     }
 
+    /// Seconde revue fraîche de T6, m-d : l'issue de `verify-document`, jamais attendue par l'envoi, est observable sans
+    /// relance — vrai sur une erreur (429, 403, 503 : le web annonce aussitôt « vérification manuelle en attente »,
+    /// l.413-425), faux sur une réponse, nil pour un document dont ce port n'a lancé aucune vérification.
+    func testIssueDeLaVerificationObservableSansRelance() async throws {
+        for (reponse, echec) in [(StubResponse.json(429, #"{"error":"Trop de vérifications. Réessayez dans 1 minute."}"#), true),
+                                 (.json(403, #"{"error":"Accès refusé"}"#), true),
+                                 (.json(503, #"{"error":"Service de vérification automatique non configuré"}"#), true),
+                                 (.json(200, #"{"success":true,"verdict":"VERIFIE"}"#), false)] {
+            registry.reset()
+            stubUpload()
+            stubRemplacer(#"{"success":true,"document_id":"\#(documentId)","idempotent":false}"#)
+            stubVerify(reponse)
+            let passerelle = gateway()
+
+            let issue = try await passerelle.envoyer(recu: try recuDemarre(), octets: jpeg, context: TestClient.context)
+            XCTAssertEqual(issue, .verificationDemandee(documentId: documentId))
+            let observee = await passerelle.verificationEchouee(documentId: documentId)
+
+            XCTAssertEqual(observee, echec, "statut \(reponse.status)")
+            let inconnue = await passerelle.verificationEchouee(documentId: "00000000-0000-4000-8000-000000000000")
+            XCTAssertNil(inconnue, "aucune vérification lancée pour ce document")
+            await attendreRequetes(1) { appelsVerification().count }
+            XCTAssertEqual(appelsVerification().count, 1, "statut \(reponse.status) : observée, jamais relancée")
+        }
+    }
+
     /// Correctif 4c84aa0e (m8 a) : un envoi annulé juste après l'enregistrement (délai de l'appelant) ne lance aucune
     /// vérification ; la réconciliation relira la ligne et proposera « Revérifier ».
     func testEnvoiAnnuleApresEnregistrementAucuneVerification() async throws {
@@ -350,9 +376,19 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
         XCTAssertEqual(registry.requests(to: remplacer).count, 0)
 
         registry.reset()
+        stubUpload(.networkFailure(.cannotFindHost))
+        let jamaisPartie = try await gateway().envoyer(recu: try recuDemarre(), octets: jpeg, context: TestClient.context)
+        XCTAssertEqual(jamaisPartie, .nonEnvoye, "hôte introuvable, requête jamais partie : nouvelle sélection")
+
+        // Seconde revue fraîche de T6, m-g : sur iOS, -1009 (`notConnectedToInternet`) peut survenir en cours de
+        // transfert. Ce test l'attendait « non envoyé » (reçu effacé, objet possiblement orphelin) : il est incertain,
+        // et le HEAD de la réconciliation tranche.
+        registry.reset()
         stubUpload(.networkFailure(.notConnectedToInternet))
         let horsLigne = try await gateway().envoyer(recu: try recuDemarre(), octets: jpeg, context: TestClient.context)
-        XCTAssertEqual(horsLigne, .nonEnvoye, "requête jamais partie : nouvelle sélection")
+        XCTAssertEqual(horsLigne, .incertain, "connexion perdue, peut-être en cours de transfert : réconciliation par exists(path:)")
+        XCTAssertEqual(SupabaseDocumentsGateway.classerEchecUpload(URLError(.cannotConnectToHost)), .nonEnvoye)
+        XCTAssertEqual(SupabaseDocumentsGateway.classerEchecUpload(URLError(.dnsLookupFailed)), .nonEnvoye)
 
         registry.reset()
         stubUpload(.networkFailure(.timedOut))
@@ -422,6 +458,16 @@ final class SupabaseDocumentsGatewayTests: XCTestCase {
         stubPreuve(statut: "EN_ATTENTE", tentative: nil)
         let enregistree = try await gateway().reconcilier(recu: try recuDemarre(), context: TestClient.context)
         XCTAssertEqual(enregistree, .enregistre(documentId: documentId), "« Revérifier » proposé, jamais automatique")
+        // Seconde revue fraîche de T6, m-c : issue dérivée du statut relu — une pièce déjà jugée n'est jamais annoncée
+        // « vérification en cours » ; une revue manuelle donne « vérification manuelle en attente ».
+        for (statut, attendue) in [("VERIFIE", IssueEnvoiDocument.verdictRendu(documentId: documentId)),
+                                   ("REJETE", .verdictRendu(documentId: documentId)),
+                                   ("REVUE_MANUELLE_REQUISE", .enregistre(documentId: documentId))] {
+            registry.reset()
+            stubPreuve(statut: statut, tentative: "a-1")
+            let relue = try await gateway().reconcilier(recu: try recuDemarre(), context: TestClient.context)
+            XCTAssertEqual(relue, attendue, statut)
+        }
         XCTAssertEqual(registry.requests(to: verify).count, 0)
         XCTAssertEqual(registry.requests(to: remplacer).count, 0)
         XCTAssertEqual(registry.requests(to: cheminObjet).count, 0)
