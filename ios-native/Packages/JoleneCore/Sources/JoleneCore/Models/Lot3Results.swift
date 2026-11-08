@@ -185,69 +185,8 @@ public enum ResultatFinalisation: Equatable, Sendable {
 
 // MARK: - Profil (T9, T10)
 
-/// Profil lu par `fn_mon_profil_soignant_complet`, décodé en LISTE BLANCHE (correction 7) : aucune
-/// propriété pour `numero_secu`, `numero_adeli`, `siret_liberal`, `code_ape`, `assujetti_tva`,
-/// `numero_tva`, `stripe_account_id`, `iban_last4` (garde `Lot3PortsTests`, par `Mirror`). Type
-/// d'exercice et attestation de cumul (L1222-5) : renvoi web, jamais portés (HARD STOP n°4).
-public struct ProfilComplet: Equatable, Sendable, Identifiable {
-    public var id: String
-    public var prenom: String
-    public var nom: String
-    public var email: String?
-    public var telephone: String?
-    public var dateNaissance: String?
-    public var profession: String?
-    public var numeroRpps: String?
-    public var rppsVerifie: Bool?
-    public var rayonDeplacementKm: Int?
-    public var villeRecherche: String?
-    public var tauxHoraireMinimum: Double?
-    public var typesContratAcceptes: [String]
-    public var bio: String?
-    public var anneesExperience: Int?
-    public var avatarUrl: String?
-
-    public init(id: String, prenom: String, nom: String, email: String? = nil, telephone: String? = nil,
-                dateNaissance: String? = nil, profession: String? = nil, numeroRpps: String? = nil, rppsVerifie: Bool? = nil,
-                rayonDeplacementKm: Int? = nil, villeRecherche: String? = nil, tauxHoraireMinimum: Double? = nil,
-                typesContratAcceptes: [String] = [], bio: String? = nil, anneesExperience: Int? = nil, avatarUrl: String? = nil) {
-        self.id = id; self.prenom = prenom; self.nom = nom; self.email = email; self.telephone = telephone
-        self.dateNaissance = dateNaissance; self.profession = profession; self.numeroRpps = numeroRpps
-        self.rppsVerifie = rppsVerifie; self.rayonDeplacementKm = rayonDeplacementKm; self.villeRecherche = villeRecherche
-        self.tauxHoraireMinimum = tauxHoraireMinimum; self.typesContratAcceptes = typesContratAcceptes; self.bio = bio
-        self.anneesExperience = anneesExperience; self.avatarUrl = avatarUrl
-    }
-}
-
-/// Champs modifiables par `fn_modifier_mon_profil`. nil = inchangé (`COALESCE` côté serveur) : le
-/// natif envoie nil, jamais une chaîne vide, et n'offre pas « effacer » (§2.4).
-public struct ModificationProfil: Equatable, Sendable {
-    public var prenom: String?
-    public var nom: String?
-    public var telephone: String?
-    public var dateNaissance: String?
-    public var numeroRpps: String?
-    public var rayonDeplacementKm: Int?
-    public var villeRecherche: String?
-    public var tauxHoraireMinimum: Double?
-    public var typesContratAcceptes: [String]?
-    public var bio: String?
-    public var anneesExperience: Int?
-    public var avatarUrl: String?
-
-    public init(prenom: String? = nil, nom: String? = nil, telephone: String? = nil, dateNaissance: String? = nil,
-                numeroRpps: String? = nil, rayonDeplacementKm: Int? = nil, villeRecherche: String? = nil,
-                tauxHoraireMinimum: Double? = nil, typesContratAcceptes: [String]? = nil, bio: String? = nil,
-                anneesExperience: Int? = nil, avatarUrl: String? = nil) {
-        self.prenom = prenom; self.nom = nom; self.telephone = telephone; self.dateNaissance = dateNaissance
-        self.numeroRpps = numeroRpps; self.rayonDeplacementKm = rayonDeplacementKm; self.villeRecherche = villeRecherche
-        self.tauxHoraireMinimum = tauxHoraireMinimum; self.typesContratAcceptes = typesContratAcceptes; self.bio = bio
-        self.anneesExperience = anneesExperience; self.avatarUrl = avatarUrl
-    }
-
-    /// Aucun champ à transmettre : l'écran n'appelle pas la RPC.
-    public var estVide: Bool { self == ModificationProfil() }
-}
+// `ProfilComplet` et `ModificationProfil` : déplacés par T9 dans `Profil/ProfilComplet.swift` et
+// `Profil/ModificationProfil.swift` (décodage en liste blanche, différence de saisie).
 
 /// Résultat du géocodage inverse (`api-adresse.data.gouv.fr/reverse`, D15), best-effort.
 public struct AdresseGeocodee: Equatable, Sendable {

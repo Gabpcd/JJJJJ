@@ -1,0 +1,26 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "profil": {
+    "id": "demo-soignant",
+    "prenom": "Camille",
+    "nom": "Démo",
+    "email": "demonstration@example.invalid",
+    "telephone": null,
+    "date_naissance": "1990-05-14",
+    "profession": "IDE",
+    "numero_rpps": null,
+    "rpps_verifie": false,
+    "type_contrat": "CDD",
+    "type_exercice": "MIXTE",
+    "adresse_lat": 48.8566,
+    "adresse_lng": 2.3522,
+    "rayon_deplacement_km": 50,
+    "bio": null,
+    "annees_experience": 4,
+    "specialites": [],
+    "types_contrat_acceptes": "[\"CDD\",\"LIBERAL\"]",
+    "avatar_url": null,
+    "taux_horaire_minimum": 0,
+    "ville_recherche": null
+  }
+}
