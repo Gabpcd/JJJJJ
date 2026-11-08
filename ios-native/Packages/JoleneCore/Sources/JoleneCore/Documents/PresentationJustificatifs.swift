@@ -358,6 +358,13 @@ public enum PresentationJustificatifs {
         }
     }
 
+    /// Issue annoncée en tête de l'écran : celle de `messageEnvoi`, sauf « vérification en cours » une fois le verdict relu
+    /// (la pièce a quitté le suivi en ligne : son badge porte le verdict, comme le toast du web qui disparaît).
+    public static func issueAffichee(_ etat: DocumentsModel.EtatEnvoi, enVerification: Set<String>) -> TexteJustificatif? {
+        if case let .termine(.verificationDemandee(documentId)) = etat, !enVerification.contains(documentId) { return nil }
+        return messageEnvoi(etat)
+    }
+
     /// La feuille de téléversement se ferme quand le document est enregistré ou en cours de vérification (web : la modale
     /// se ferme après l'enregistrement, l.429) ; elle reste ouverte sur un refus, pour une nouvelle sélection.
     public static func fermeLeTeleversement(_ etat: DocumentsModel.EtatEnvoi) -> Bool {

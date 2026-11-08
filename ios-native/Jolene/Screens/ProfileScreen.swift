@@ -20,6 +20,8 @@ struct ProfileScreen: View {
                 LabeledContent("Profession", value: snapshot.profile.profession)
                     .accessibilityIdentifier("profile-profession")
             }
+            // Lot 2 (T7, puis T4a et T4b) : Mes documents, Mes présences, Mes contrats.
+            EspaceSoignantSection(container: container, session: session, snapshot: snapshot)
             Section {
                 JoleneButton("Se déconnecter", style: .secondary, isLoading: isSigningOut) {
                     isSigningOut = true

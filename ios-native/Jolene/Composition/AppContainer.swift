@@ -19,6 +19,9 @@ final class AppContainer: ObservableObject {
     let clock: ClockPort
     /// Lot 1, T8 : avis de fin de compte partagé entre l'écran de suppression et la racine.
     let finDeCompte = AvisFinDeCompte()
+    /// Lot 2, T7 : sélecteurs de médias du monde démo (`DemoMediaPicker`, fichier de `-JOLENE_DEMO_SOURCE_DOC` en DEBUG),
+    /// à la place de l'appareil photo, de la photothèque et de Fichiers ; nil hors démo (vrais sélecteurs).
+    private(set) var mediaDemo: DemoMediaPicker?
     #if DEBUG
     let networkSentinel: NetworkSentinel.Monitor?
     #endif
@@ -65,7 +68,12 @@ final class AppContainer: ObservableObject {
             NetworkSentinel.install()
             networkSentinel = NetworkSentinel.Monitor.shared
             #endif
-            let gateways = Self.demoGateways(processEnvironment: processEnvironment)
+            let gateways = Self.demoGateways(arguments: arguments, processEnvironment: processEnvironment)
+            #if DEBUG
+            mediaDemo = DemoMediaPicker(source: SourceDocumentDemo(arguments: arguments))
+            #else
+            mediaDemo = DemoMediaPicker(source: .png)
+            #endif
             clock = gateways.clock
             session = SessionStore(controller: SessionController(gateways: gateways))
             environmentError = nil
@@ -97,16 +105,21 @@ final class AppContainer: ObservableObject {
     /// Ports du monde démo. DEBUG seulement : `JOLENE_FORCE_ACCUEIL_ECHEC=1` (variable d'environnement
     /// du processus, comme `JOLENE_FORCE_BAD_KEY`) fait échouer le premier chargement de l'Accueil
     /// (`DemoDashboardEchecGateway`) pour la recette de l'état d'erreur et de la reprise
-    /// (`DemoAccueilTests.testAccueilErreurPuisReprise`). Jamais compilé en Release.
-    private static func demoGateways(processEnvironment: [String: String]) -> Gateways {
+    /// (`DemoAccueilTests.testAccueilErreurPuisReprise`) ; lot 2 T7 : `-JOLENE_DEMO_SCENARIO upload-incertain`
+    /// pose `DemoDocumentsGateway(scenario: .uploadIncertain)` (réponse perdue après application, `DemoDocumentsTests`).
+    /// Jamais compilé en Release.
+    private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
+        var gateways = DemoWorld.gateways()
         #if DEBUG
         if processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] == "1" {
-            var gateways = DemoWorld.gateways()
             gateways.dashboard = DemoDashboardEchecGateway()
-            return gateways
+        }
+        let scenarioDocuments = ScenarioDocumentsDemo(arguments: arguments)
+        if scenarioDocuments != .normal {
+            gateways.documents = DemoDocumentsGateway(scenario: scenarioDocuments)
         }
         #endif
-        return DemoWorld.gateways()
+        return gateways
     }
 
     private static func refusal(of environment: JoleneEnvironment) -> JoleneError? {
