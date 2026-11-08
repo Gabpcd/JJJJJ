@@ -57,7 +57,10 @@ public actor JournalRecusActeur {
 /// - Relecture après écriture : les octets relus doivent être ceux écrits.
 /// - Tout échec du magasin, tout reçu illisible (JSON, version, clé, invariant, autre utilisateur, taille) donne
 ///   `RecuErreur.illisible`, SANS réparation : rien n'est réécrit ni effacé par-dessus. L'écran affiche le message
-///   fail-closed du domaine (`RecuScan.messageIllisible`) et aucun nouvel essai n'est envoyé.
+///   fail-closed du domaine (`RecuScan.messageIllisible`) et aucun nouvel essai n'est envoyé ; il propose le renvoi
+///   web du domaine, qui n'utilise pas ce journal (voie de récupération des consignes T3, T6 et lot 1 T7 de
+///   `docs/mobile-swift/DECISIONS_LOT2.md`). Versions : une version N+1 d'un reçu relit la version N ; la version N
+///   ne relit jamais la N+1 (retour à un build antérieur : illisible, renvoi web).
 public struct ReceiptJournal<Recu: RecuDurable>: Sendable {
     /// Taille maximale d'un reçu (pilote `attemptJournal.ts` l.14 : `MAX_BYTES = 64_000`).
     public static var tailleMax: Int { 64_000 }

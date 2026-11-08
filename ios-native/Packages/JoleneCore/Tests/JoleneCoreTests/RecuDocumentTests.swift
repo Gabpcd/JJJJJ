@@ -75,8 +75,8 @@ final class RecuDocumentTests: XCTestCase {
 
     func testNomEtLibelleConservesPourLeRejeuDeLEnregistrement() throws {
         // Revue fraîche de T1 (seconde passe) : après un arrêt forcé (objet présent, aucune ligne), le rejeu de
-        // `fn_remplacer_document_soignant` exige `p_nom_fichier` non vide (`public.sql` l.53110-53115) ; le web passe
-        // le nom d'origine du fichier et le libellé saisi (`DocumentsSoignant.tsx` l.385-388). Le reçu v1 garde les
+        // `fn_remplacer_document_soignant` exige `p_nom_fichier` non vide (`public.sql` l.53114-53115) ; le web passe
+        // le nom d'origine du fichier et le libellé saisi (`DocumentsSoignant.tsx` l.386-388). Le reçu v1 garde les
         // deux : aucune v2 à prévoir pour T6.
         let recu = try prepare(nom: "Diplôme d'État.PDF", libelle: "Diplôme d'infirmier")
         XCTAssertEqual(recu.nomFichier, "Diplôme d'État.PDF", "nom d'origine, comme le web (la clé porte le nom assaini)")
@@ -88,7 +88,7 @@ final class RecuDocumentTests: XCTestCase {
     }
 
     func testNomEtLibelleAuxBornesDuServeur() {
-        // l.53112-53114 : `NULLIF(btrim(p_nom_fichier), '')` non nul, `length(p_nom_fichier) <= 255`,
+        // l.53114-53116 : `NULLIF(btrim(p_nom_fichier), '')` non nul, `length(p_nom_fichier) <= 255`,
         // `length(p_libelle) <= 500` ; `length` compte les points de code, `btrim` retire les espaces.
         XCTAssertEqual(erreur { _ = try self.prepare(nom: "") }, .champInvalide("nomFichier"))
         XCTAssertEqual(erreur { _ = try self.prepare(nom: "   ") }, .champInvalide("nomFichier"))

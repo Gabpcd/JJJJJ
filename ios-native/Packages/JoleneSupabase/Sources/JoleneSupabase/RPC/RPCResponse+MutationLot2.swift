@@ -11,12 +11,14 @@ enum IssueMutation: Equatable, Sendable {
     /// Réponse HTTP 200 (succès ou refus jsonb), exception déclarée restituée en refus (`exceptionsMetier`) ou
     /// `[CODE DU TRAVAIL]` : l'appelant lit `estRefus`, `sqlstate`, `erreur`.
     case reponse(RPCResponse)
-    /// PostgREST a répondu avec un `code` (SQLSTATE ou `PGRST…`) : transaction annulée ou jamais ouverte, rien n'est
-    /// écrit. Refus définitif (message de `SupabaseErrorMapping`), jamais un incertain ; aucun renvoi.
+    /// Rollback prouvé (`RPCResponse.rollbackProuve`) : SQLSTATE, ou code PostgREST émis avant toute transaction ou
+    /// après son annulation. Rien n'est écrit. Refus définitif (message de `SupabaseErrorMapping`), jamais un
+    /// incertain ; aucun renvoi.
     case refusDefinitif(code: String, erreur: JoleneError)
     /// Aucune preuve : réseau, annulation, passerelle (corps HTML → `HTTPError` ; corps `{"message"}` sans `code`
-    /// → `PostgrestError(code: nil)` dans supabase-swift 2.55.5). La requête a pu être appliquée : réconciliation par
-    /// relecture, jamais un renvoi.
+    /// → `PostgrestError(code: nil)` dans supabase-swift 2.55.5), `PGRST001` (connexion à la base cassée en cours de
+    /// session, COMMIT compris), tout autre code. La requête a pu être appliquée : réconciliation par relecture,
+    /// jamais un renvoi.
     case incertain(JoleneError)
 }
 
@@ -51,9 +53,28 @@ extension RPCResponse {
         }
     }
 
-    /// Vrai seulement pour une réponse PostgREST décodée portant un `code` non vide.
+    /// Vrai seulement pour une réponse PostgREST décodée dont le `code` prouve que rien n'a été validé
+    /// (revue fraîche de T1, seconde passe ; correction 10 amendée dans `DECISIONS_LOT2.md`) :
+    /// - un SQLSTATE (`RecuScan.sqlstateValide` : cinq caractères `[0-9A-Z]`, le prédicat de `RecuScan.refuser`) :
+    ///   PostgreSQL a levé une erreur, la transaction est annulée ;
+    /// - un code PostgREST de `codePostgRESTSansTransaction`.
+    /// Tout autre code (`PGRST001`, `PGRSTX00`, code texte d'une passerelle) n'est pas une preuve.
     static func rollbackProuve(_ echec: (any Error)?) -> Bool {
         guard let postgrest = echec as? PostgrestError, let code = postgrest.code else { return false }
-        return !code.isEmpty
+        return RecuScan.sqlstateValide(code) || codePostgRESTSansTransaction(code)
+    }
+
+    /// Codes PostgREST émis avant toute transaction ou après son annulation : connexion jamais obtenue (`PGRST000`),
+    /// cache de schéma indisponible (`PGRST002`), délai d'attente du pool (`PGRST003`), requête (`PGRST1xx`, dont
+    /// `PGRST116` et `PGRST124` qui annulent la transaction), cache de schéma (`PGRST2xx`), JWT (`PGRST3xx`).
+    /// Exclus : `PGRST001` (connexion cassée en cours de session, COMMIT compris) et, parmi les `PGRST1xx`, ceux que
+    /// PostgREST produit aussi en construisant la réponse APRÈS le COMMIT : `PGRST103` (plage 416), `PGRST111` et
+    /// `PGRST112` (en-têtes et statut posés par la fonction).
+    static func codePostgRESTSansTransaction(_ code: String) -> Bool {
+        if ["PGRST000", "PGRST002", "PGRST003"].contains(code) { return true }
+        if ["PGRST103", "PGRST111", "PGRST112"].contains(code) { return false }
+        let scalaires = Array(code.unicodeScalars)
+        guard scalaires.count == 8, code.hasPrefix("PGRST"), ("1"..."3").contains(scalaires[5]) else { return false }
+        return scalaires[6...].allSatisfy { ("0"..."9").contains($0) }
     }
 }

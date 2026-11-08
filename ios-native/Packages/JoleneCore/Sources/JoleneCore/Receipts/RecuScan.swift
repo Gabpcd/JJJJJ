@@ -110,7 +110,8 @@ public struct RecuScan: RecuDurable, Codable {
         return suivant
     }
 
-    /// `started` → `refused` : exception PostgREST décodée (rollback prouvé, correction 10).
+    /// `started` → `refused` : refus à SQLSTATE (exception déclarée restituée, ou rollback prouvé par
+    /// `RPCResponse.rollbackProuve` ; correction 10 amendée dans `DECISIONS_LOT2.md`).
     public func refuser(sqlstate: String) throws -> RecuScan {
         guard phase == .started else { throw transition(vers: .refused) }
         guard Self.sqlstateValide(sqlstate) else { throw RecuErreur.champInvalide("sqlstate") }
@@ -134,9 +135,10 @@ public struct RecuScan: RecuDurable, Codable {
         /// Preuve de la mission, hors baseline, du même terminal et de numéro postérieur : le scan a été reçu
         /// (aucun second scan).
         case recu(PreuveScan)
-        /// Aucune preuve, relecture trop tôt : relire de nouveau.
+        /// Aucune preuve, relecture trop tôt : relire de nouveau (`IssueScan.incertain`, reçu `started` gardé).
         case aRelire
-        /// Aucune preuve 8 s ou plus après l'envoi : non reçu (saisie du code courant demandée).
+        /// Aucune preuve 8 s ou plus après l'envoi : non reçu (saisie du code courant demandée) ; le reçu est effacé
+        /// après cette relecture (`ReceiptJournal.effacer`).
         case nonRecu
         /// Aucune preuve et relecture datée AVANT le passage `started` (heure de l'appareil reculée) : l'écoulement
         /// des 8 s n'est pas établi. Fail-closed explicite : jamais `.nonRecu` ; le reçu reste `started`, aucun
@@ -243,8 +245,9 @@ public struct RecuScan: RecuDurable, Codable {
         }
     }
 
-    /// SQLSTATE PostgreSQL : cinq caractères `[0-9A-Z]`.
-    static func sqlstateValide(_ valeur: String) -> Bool {
+    /// SQLSTATE PostgreSQL : cinq caractères `[0-9A-Z]` (ASCII). Public : même prédicat pour le classement des
+    /// mutations (`RPCResponse.rollbackProuve`, JoleneSupabase) que pour `refuser(sqlstate:)`.
+    public static func sqlstateValide(_ valeur: String) -> Bool {
         valeur.count == 5 && valeur.unicodeScalars.allSatisfy { ("0"..."9").contains($0) || ("A"..."Z").contains($0) }
     }
 

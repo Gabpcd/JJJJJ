@@ -238,12 +238,39 @@ public enum IssueScan: Equatable, Sendable {
     case enregistre(typeScan: TypeScan?, numeroScan: Int)
     /// Exception PostgREST ou refus HTTP 200 : rollback prouvé, message serveur verbatim (décision 6).
     case refuse(sqlstate: String?, message: String)
-    /// Réponse perdue ou délai dépassé : réconciliation par relecture, jamais un second envoi.
+    /// Réponse perdue, délai dépassé ou relecture trop tôt : reçu `started` gardé, réconciliation par relecture,
+    /// jamais un second envoi.
     case incertain
     /// Hors ligne : aucun appel, reçu `not_sent`.
     case nonEnvoye
-    /// Relecture ≥ 8 s après l'envoi sans preuve : le serveur n'a rien reçu (nouvelle saisie demandée).
+    /// Relecture ≥ 8 s après l'envoi sans preuve : le serveur n'a rien reçu (nouvelle saisie demandée). Le reçu est
+    /// effacé (`ReceiptJournal.effacer`) après cette relecture.
     case nonRecu
+    /// Relecture sans preuve datée AVANT le passage `started` (heure de l'appareil reculée,
+    /// `RecuScan.VerdictReconciliation.horlogeIncoherente`) : l'écoulement des 8 s n'est pas établi. Reçu `started`
+    /// gardé, aucun nouveau scan, aucune relecture en boucle ; affiché comme `RecuScan.messageIllisible`, recours web
+    /// (consigne T3 de `DECISIONS_LOT2.md`). Redevient `.nonRecu` dès que l'horloge dépasse `demarreLe + 8 s`.
+    case horlogeIncoherente
+}
+
+extension IssueScan {
+    /// Issue de `PointagePort.reconcilier` pour un verdict de `RecuScan.reconcilier(scans:relueLe:)` : aucune ne
+    /// rouvre l'envoi sans preuve. `.recu` → `.enregistre` (numéro et type relus) ; `.aRelire` → `.incertain` (rien
+    /// n'est prouvé) ; `.nonRecu` → `.nonRecu` ; `.horlogeIncoherente` → `.horlogeIncoherente`. Une preuve sans
+    /// numéro (que `reconcilier` ne rend jamais) ne prouve rien : `.incertain`.
+    public init(reconciliation verdict: RecuScan.VerdictReconciliation) {
+        switch verdict {
+        case let .recu(preuve):
+            if let numero = preuve.numeroScan {
+                self = .enregistre(typeScan: preuve.typeScan, numeroScan: numero)
+            } else {
+                self = .incertain
+            }
+        case .aRelire: self = .incertain
+        case .nonRecu: self = .nonRecu
+        case .horlogeIncoherente: self = .horlogeIncoherente
+        }
+    }
 }
 
 /// `fn_relancer_validation_presence(p_mission_id)` (l.53013) : `message` serveur verbatim quand il existe.

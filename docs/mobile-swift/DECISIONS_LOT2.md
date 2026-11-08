@@ -114,7 +114,8 @@
     décision nouvelle. Livré : `JoleneCore/Receipts/ReceiptJournal.swift` (`ReceiptJournal<Recu: RecuDurable>`, une
     clé `CleRecu` par (utilisateur, domaine) ; lire, écrire, effacer ; écriture refusée, `RecuErreur.recuEnCours`, si
     un reçu non terminé d'un autre `attemptId` existe ; succession des phases du même essai ; relecture après écriture
-    et après effacement ; tout échec du magasin ou reçu illisible → `RecuErreur.illisible`, sans réparation ;
+    et après effacement ; tout échec du magasin ou reçu illisible → `RecuErreur.illisible`, sans réparation (recours :
+    renvoi web du domaine, « Consignes aux tranches suivantes ») ;
     opérations sérialisées par l'acteur global `JournalRecusActeur` ; protocole `ReceiptStorePort` et magasin démo
     `MagasinRecusEnMemoire`), `RecuDurable.attemptId` et `verifierSuccession(apres:)`, champ `Appareil.recus`
     (`Appareil.demo` : magasin en mémoire vierge), `JoleneSupabase/Keychain/KeychainReceiptStore.swift` (service
@@ -213,18 +214,27 @@
   `ios-native/` ou `scripts/mobile/export-demo-fixtures.mjs` pose `est_etab: false`.
 - **T3** (revue fraîche de T1) :
   - reçu par `ReceiptJournal<RecuScan>(store: appareil.recus)` : `prepared` écrit AVANT tout appel, `started` juste
-    avant l'unique requête, effacé après la relecture du succès ou du refus. `RecuErreur.recuEnCours` →
-    `RecuScan.messageRecuEnCours` ; `RecuErreur.illisible` → écran bloquant `RecuScan.messageIllisible`, aucun scan ;
+    avant l'unique requête, effacé (`ReceiptJournal.effacer`) après la relecture du succès, du refus ou du verdict
+    « non reçu ». `RecuErreur.recuEnCours` → `RecuScan.messageRecuEnCours` ; `RecuErreur.illisible` → écran bloquant
+    `RecuScan.messageIllisible`, aucun scan, **voie de récupération** = renvoi web `/soignant/presences` par
+    `PresentateurRenvoiWeb` (le pointage web n'utilise pas ce journal), comme l'identifiant terminal (consigne T4b) ;
+    le reçu illisible n'est jamais réécrit ni effacé par l'app (seconde revue fraîche de T1) ;
   - le scan passe par `RPCResponse.appelerMutation(…, exceptionsMetier: ExceptionsMetierLot2.scannerCodePointage)`,
     jamais par `appeler` : `JoleneError(.unknown)` d'`appeler` mêle une exception non déclarée (rollback prouvé) et
     une passerelle 502/504 (incertaine, corps HTML ou `{"message"}` décodé en `PostgrestError(code: nil)` par
-    supabase-swift 2.55.5). `.reponse` → succès relu ou refus restitué ; `.refusDefinitif(code:erreur:)` → refus,
-    reçu `refused` si `code` est un SQLSTATE (cinq caractères), sinon effacé ; `.incertain` et délai `bounded` →
-    `IssueScan.incertain`, reçu `started` conservé, réconciliation par relecture ;
+    supabase-swift 2.55.5). `.reponse` → succès relu ou refus restitué ; `.refusDefinitif(code:erreur:)` (rollback
+    prouvé : `code` SQLSTATE, ou code PostgREST de `RPCResponse.codePostgRESTSansTransaction`, amendement de la
+    correction 10) → refus, reçu `refused` si `code` est un SQLSTATE (`RecuScan.sqlstateValide`, même prédicat), sinon
+    effacé (code `PGRST…` émis avant toute transaction ou après son annulation) ; `.incertain` (réseau, passerelle,
+    `PGRST001`, tout autre code) et délai `bounded` → `IssueScan.incertain`, reçu `started` conservé,
+    réconciliation par relecture ;
   - relecture `scans_pointage?select=<PreuveScan.selection>&mission_id=eq.<mission du reçu>` : la projection porte
-    `mission_id`, que `RecuScan.reconcilier` vérifie aussi (avec `numero_scan > nb_scans_avant`) ;
-    `.horlogeIncoherente` (heure de l'appareil reculée) s'affiche comme `messageIllisible`, sans relecture en
-    boucle ; le reçu reste `started` ;
+    `mission_id`, que `RecuScan.reconcilier` vérifie aussi (avec `numero_scan > nb_scans_avant`). Le verdict est
+    rendu par `IssueScan(reconciliation:)` : `.recu` → `.enregistre` (reçu effacé) ; `.aRelire` → `.incertain`
+    (reçu `started` gardé, nouvelle relecture) ; `.nonRecu` → `.nonRecu` (reçu effacé après cette relecture, saisie
+    du code courant demandée) ; `.horlogeIncoherente` (heure de l'appareil reculée) → `IssueScan.horlogeIncoherente`,
+    affichée comme `messageIllisible` avec le même renvoi web, sans relecture en boucle ; le reçu reste `started`
+    et le verdict redevient « non reçu » dès que l'horloge dépasse `demarreLe + 8 s` ;
   - `fn_etat_pointage_mission` et `fn_presences_detail_mission` : la gateway lit `RPCResponse.estRefus` et
     `erreur` AVANT de décoder (`{error}` → `.refuse` verbatim pour l'état ; carte de synthèse masquée pour le
     détail) ; `EtatPointage` et `ResumePresencesServeur` refusent eux-mêmes `{error}` et un objet sans leurs clés
@@ -232,6 +242,24 @@
 - **T6** : reçu par `ReceiptJournal<RecuDocument>(store: appareil.recus)` (domaine `document`, essai = `s3Cle`),
   mêmes règles que T3 ; `MimeDocument` est `Codable` dans sa déclaration (`Documents/ClassementDocument.swift`),
   ne pas y ajouter de conformité rétroactive.
+- **T6** (seconde revue fraîche de T1) :
+  - `RecuDocument.preparer(…, fichier:, libelle:, …)` garde dès la v1 le nom d'origine (`nomFichier` = `fichier.nom`,
+    non blanc, ≤ 255 points de code) et le libellé saisi (`libelle`, ≤ 500), bornes de `fn_remplacer_document_soignant`
+    (`public.sql` l.53114-53116). Le rejeu après arrêt forcé (objet présent, aucune ligne) repasse
+    `p_nom_fichier: recu.nomFichier` et `p_libelle: recu.libelle ?? ""` (parité `DocumentsSoignant.tsx` l.386-388 :
+    `libelle || ''`, `fichier.name`) : aucun écart de parité, aucune v2 du reçu. Un nom ou un libellé hors bornes est
+    refusé par `preparer` (`RecuErreur.champInvalide`) avant tout envoi ; T6/T7 l'affichent avec le message du web
+    pour `METADONNEES_DOCUMENT_INVALIDES` (`DocumentsSoignant.tsx` l.400-402), sans objet orphelin à nettoyer ;
+  - `RecuErreur.illisible` (domaine `document`) : envoi bloqué, **voie de récupération** = renvoi web
+    `/soignant/mes-documents?tab=justificatifs` par `PresentateurRenvoiWeb` (l'envoi web n'utilise pas ce journal) ;
+    le reçu n'est jamais réécrit ni effacé par l'app.
+- **Versions des reçus (T3, T6, lot 1 T7)** : une version N+1 d'un reçu relit la version N (son décodeur est
+  conservé, l'essai en vol se termine avec la version lue, jamais réécrit dans une autre version) ; la version N ne
+  relit jamais la N+1 (fail-closed). Un retour à un build antérieur (TestFlight) après qu'un build plus récent a écrit
+  une version N+1 rend le reçu illisible : renvoi web du domaine jusqu'au retour au build récent, qui le relit et le
+  réconcilie. L'élément Keychain survit à la réinstallation (`ThisDeviceOnly`) ; une remise à zéro explicite d'un
+  reçu illisible n'est pas prévue au lot 2 : si la recette appareil (T12) rencontre ce cas, elle se décide alors,
+  avec son texte (même règle que l'identifiant terminal, consigne T4b).
 - **T4b** : la surcharge `P0002` affiche exactement la forme de la décision 6 (apostrophe ’).
 - **T4b** (revue fraîche de T1) : une `JoleneError(.environment)` de `KeychainTerminalIdentity` s'affiche telle
   quelle dans le bloc de pointage, bouton désactivé. `messageVerrouille` et `messageIndisponible` : nouvel essai à
@@ -247,7 +275,9 @@
   dépendent d'aucun autre fichier du lot 2 : sur une base sans le lot 2, T7 les reprend octet pour octet ; le
   magasin y est injecté par son `AppContainer` (`Appareil.recus` est un champ du lot 2). Leurs tests s'appuient sur
   `RecuScan`, `RecuDocument` et le trousseau en mémoire de `KeychainTerminalIdentityTests` : T7 les rejoue avec
-  son propre reçu.
+  son propre reçu. `RecuErreur.illisible` (domaine `justificatif`) : annulation avec justificatif bloquée dans
+  l'app, **voie de récupération** = renvoi web `/soignant/missions/:id` (annulation depuis le détail web, qui
+  n'utilise pas ce journal) par `PresentateurRenvoiWeb` ; règle des versions ci-dessus.
 
 ## Amendements du blueprint (`LOT2_PLAN.md`)
 
@@ -259,9 +289,10 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | §3 T0 (`RPC_POINTAGE_SYSTEME_1`) ; §1.2 « Système de pointage ① » | huit RPC | neuf RPC : + `fn_generer_code_secours_mission` | seconde revue fraîche de T0 : générateur du code de secours de ①, troisième chaîne de pointage à distance (décision 1 amendée) |
 | §1.3 P10 (porte du lot 2) | « `unwiredPorts.isEmpty` » | `unwiredPorts.filter(Lot2PortsTests.portsLot2.contains).isEmpty` : aucun port du lot 2 non câblé, dans les deux mondes | revue fraîche de T1 : `unwiredPorts` nomme aussi les ports des lots suivants ; si le lot 3 est intégré avant la clôture du lot 2, `isEmpty` est faux pour le lot 2 lui-même (même règle que la clôture du lot 1, PRINCIPES §2) |
 | §2.2 (`ReceiptStorePort` « lot 1 T7 », `KeychainReceiptStore` « (T7) ») ; §2.6 (« Le journal est celui de T7 ») ; §3 T1 « Dépendances » | journal et magasin Keychain livrés par lot 1 T7 | livrés par T1 du lot 2 (décision 23, « Application ») ; protocole `ReceiptStorePort` dans `Receipts/ReceiptJournal.swift`, champ `Appareil.recus` ; Keychain `AfterFirstUnlockThisDeviceOnly` (le pilote prenait `WhenUnlocked`) | T7 n'existe sur aucune branche ; une réponse reçue écran verrouillé doit encore se journaliser, et un reçu ne porte aucun secret |
-| §2.4 et correction 10 (« seuls `URLError`, délai `bounded` et `HTTPError` sans corps PostgREST sont incertains ») | une `PostgrestError` décodée prouve un rollback | seule une `PostgrestError` portant un `code` le prouve ; `PostgrestError(code: nil)` (corps `{"message"}` d'une passerelle) est incertaine ; classement par `RPCResponse.appelerMutation` (lot 2), le fichier partagé avec le lot 3 restant inchangé | revue fraîche de T1 : supabase-swift 2.55.5 décode tout corps d'erreur JSON à `message` en `PostgrestError`, `code` optionnel |
+| §2.4 et correction 10 (« seuls `URLError`, délai `bounded` et `HTTPError` sans corps PostgREST sont incertains ») | une `PostgrestError` décodée prouve un rollback | seule une `PostgrestError` dont le `code` est un SQLSTATE (`^[0-9A-Z]{5}$`, `RecuScan.sqlstateValide`) ou un code PostgREST émis avant toute transaction ou après son annulation (`PGRST000`, `PGRST002`, `PGRST003`, `PGRST1xx` sauf `PGRST103`, `PGRST111`, `PGRST112`, `PGRST2xx`, `PGRST3xx` : `RPCResponse.codePostgRESTSansTransaction`) le prouve ; `PostgrestError(code: nil)` (corps `{"message"}` d'une passerelle), `PGRST001`, `PGRSTX00` et tout autre code sont incertains ; classement par `RPCResponse.appelerMutation` (lot 2), le fichier partagé avec le lot 3 restant inchangé | revue fraîche de T1 : supabase-swift 2.55.5 décode tout corps d'erreur JSON à `message` en `PostgrestError`, `code` optionnel ; seconde revue fraîche : `PGRST001` (503) signale une connexion à la base cassée en cours de session, COMMIT compris, et une passerelle peut renvoyer un `code` texte ; PostgREST construit la réponse après le COMMIT, d'où `PGRST103` (plage 416), `PGRST111` et `PGRST112` (en-têtes et statut posés par la fonction) exclus de la liste blanche |
 | §2.4 (statuts des stubs de test) | `42501` → 403, `23503` → 409, `P0001`, `22023`, `23514` → 400, autres `P0…` → 500 | + classes `40` (rollback de transaction) et `57` (dont `57014`, `statement_timeout`) → 500 | revue fraîche de T1 : statuts réels de PostgREST |
-| §2.5 « Réconciliation » | preuve : `mission_id` = reçu, id hors baseline, même `id_terminal` | + `numero_scan > nb_scans_avant`, mission vérifiée par `RecuScan.reconcilier` lui-même (projection `PreuveScan` avec `mission_id`) ; relecture datée avant `started` (heure reculée) → verdict `horlogeIncoherente`, fail-closed, jamais « non reçu » | revue fraîche de T1 : un oubli du filtre `mission_id` par la requête de T3 aurait donné un faux succès ; une horloge reculée laissait un `aRelire` sans fin |
+| §2.5 « Réconciliation » | preuve : `mission_id` = reçu, id hors baseline, même `id_terminal` | + `numero_scan > nb_scans_avant`, mission vérifiée par `RecuScan.reconcilier` lui-même (projection `PreuveScan` avec `mission_id`) ; relecture datée avant `started` (heure reculée) → verdict `horlogeIncoherente`, fail-closed, jamais « non reçu » ; §2.3 : `IssueScan.horlogeIncoherente` ajoutée, verdicts traduits par `IssueScan(reconciliation:)` (`.aRelire` → `.incertain`) ; reçu effacé après « non reçu » | revue fraîche de T1 : un oubli du filtre `mission_id` par la requête de T3 aurait donné un faux succès ; une horloge reculée laissait un `aRelire` sans fin ; seconde revue : `IssueScan` ne savait pas exprimer ce verdict et aucune phase terminale n'était atteignable après « non reçu » |
+| §2.6 (`RecuDocument` v1 : `userId`, `epoch`, `s3Cle`, `typeDocument`, `mime`, `tailleOctets`, `documentId?`, `phase`) | aucun nom de fichier ni libellé | + `nomFichier` (nom d'origine, non blanc, ≤ 255 points de code) et `libelle?` (≤ 500), immuables pour un même essai | seconde revue fraîche de T1 : le rejeu de `fn_remplacer_document_soignant` exige `p_nom_fichier` non vide (`public.sql` l.53114) et perdrait le libellé saisi ; ajoutés dès la v1 pour ne pas imposer une v2 à T6 |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 

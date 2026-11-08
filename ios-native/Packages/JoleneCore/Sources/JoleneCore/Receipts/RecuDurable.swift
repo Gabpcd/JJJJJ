@@ -27,6 +27,7 @@ public protocol RecuDurable: Equatable, Sendable {
     func encoder() throws -> Data
     /// Relecture stricte : version inconnue, clé inattendue ou invariant rompu → `RecuErreur.illisible` ;
     /// reçu d'un autre utilisateur → `RecuErreur.utilisateurDifferent`. Jamais de réparation silencieuse.
+    /// Une version N+1 relit toujours la version N (décodeur de la N conservé) ; la N ne relit jamais la N+1.
     static func decoder(_ data: Data, userId: String) throws -> Self
 }
 

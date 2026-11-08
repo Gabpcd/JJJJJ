@@ -9,12 +9,19 @@ import Foundation
 /// une seule fois) ; `refused` depuis `started` ou `stored` (le serveur a refusé : `cleanup_orphan`) ;
 /// `not_sent` depuis `prepared` ou `started` (relecture : ni objet ni ligne). La réconciliation par `s3_cle`
 /// peut sauter de `started` à `stored` (objet présent sans ligne) ou à `registered` (ligne relue).
+///
+/// Le reçu garde aussi le nom d'origine du fichier et le libellé saisi (revue fraîche de T1, seconde passe) : après
+/// un arrêt forcé (objet présent, aucune ligne), le rejeu de `fn_remplacer_document_soignant` les repasse tels que le
+/// web les envoie (`DocumentsSoignant.tsx` l.386-388 : `p_libelle: libelle || ''`, `p_nom_fichier: fichier.name`).
 public struct RecuDocument: RecuDurable, Codable {
     public static let domaine = "document"
     public static let versionCourante = 1
-    /// Bornes de `fn_remplacer_document_soignant` (l.53102, l.53110-53113).
+    /// Bornes de `fn_remplacer_document_soignant` (l.53104, l.53111-53116).
     public static let longueurMaxCle = 512
     public static let tailleMaxOctets = 10_485_760
+    /// `length(p_nom_fichier) > 255` et `length(COALESCE(p_libelle, '')) > 500` refusés (points de code).
+    public static let longueurMaxNomFichier = 255
+    public static let longueurMaxLibelle = 500
 
     public enum Phase: String, Codable, Sendable {
         case prepared, started, stored, registered, refused
@@ -29,15 +36,20 @@ public struct RecuDocument: RecuDurable, Codable {
     public internal(set) var typeDocument: String
     public internal(set) var mime: MimeDocument
     public internal(set) var tailleOctets: Int
+    /// Nom d'origine du fichier (`p_nom_fichier`) : non blanc, ≤ 255 points de code. La clé porte le nom assaini.
+    public internal(set) var nomFichier: String
+    /// Libellé saisi (`p_libelle`), ≤ 500 points de code ; nil si aucun.
+    public internal(set) var libelle: String?
     public internal(set) var documentId: String?
     public internal(set) var phase: Phase
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case version, epoch, mime, phase
+        case version, epoch, mime, phase, libelle
         case userId = "user_id"
         case s3Cle = "s3_cle"
         case typeDocument = "type_document"
         case tailleOctets = "taille_octets"
+        case nomFichier = "nom_fichier"
         case documentId = "document_id"
     }
 
@@ -57,7 +69,8 @@ public struct RecuDocument: RecuDurable, Codable {
             ("version", version == precedent.version), ("userId", userId == precedent.userId),
             ("epoch", epoch == precedent.epoch), ("s3Cle", s3Cle == precedent.s3Cle),
             ("typeDocument", typeDocument == precedent.typeDocument), ("mime", mime == precedent.mime),
-            ("tailleOctets", tailleOctets == precedent.tailleOctets),
+            ("tailleOctets", tailleOctets == precedent.tailleOctets), ("nomFichier", nomFichier == precedent.nomFichier),
+            ("libelle", libelle == precedent.libelle),
         ]
         if let ecart = immuables.first(where: { !$0.1 }) { throw RecuErreur.champInvalide(ecart.0) }
         if phase == precedent.phase {
@@ -79,9 +92,11 @@ public struct RecuDocument: RecuDurable, Codable {
     // MARK: - Préparation
 
     /// Prépare l'envoi : clé `<userId>/documents/<typeDocument>/<horodatageMs>-<nom assaini>`
-    /// (`ClassementDocument.sanitiserNomFichier`, T2). `existant` encore en vol → `.recuEnCours`.
+    /// (`ClassementDocument.sanitiserNomFichier`, T2), nom d'origine `fichier.nom` et `libelle` gardés pour le rejeu.
+    /// `existant` encore en vol → `.recuEnCours` ; nom ou libellé hors bornes du serveur → `.champInvalide`.
     public static func preparer(userId: String, epoch: Int, typeDocument: String, fichier: FichierChoisi,
-                                horodatageMs: Int64, existant: RecuDocument? = nil) throws -> RecuDocument {
+                                libelle: String? = nil, horodatageMs: Int64,
+                                existant: RecuDocument? = nil) throws -> RecuDocument {
         if let existant {
             guard existant.userId == userId else { throw RecuErreur.utilisateurDifferent }
             guard existant.estTermine else { throw RecuErreur.recuEnCours }
@@ -92,7 +107,8 @@ public struct RecuDocument: RecuDurable, Codable {
         let nom = ClassementDocument.sanitiserNomFichier(fichier.nom, mime: fichier.mime)
         let recu = RecuDocument(version: versionCourante, userId: userId, epoch: epoch,
                                 s3Cle: "\(userId)/documents/\(typeDocument)/\(horodatageMs)-\(nom)", typeDocument: typeDocument,
-                                mime: fichier.mime, tailleOctets: fichier.tailleOctets, documentId: nil, phase: .prepared)
+                                mime: fichier.mime, tailleOctets: fichier.tailleOctets, nomFichier: fichier.nom,
+                                libelle: libelle, documentId: nil, phase: .prepared)
         try recu.valider()
         return recu
     }
@@ -176,12 +192,21 @@ public struct RecuDocument: RecuDurable, Codable {
         guard Self.typeDocumentValide(typeDocument) else { throw RecuErreur.champInvalide("typeDocument") }
         guard (1...Self.tailleMaxOctets).contains(tailleOctets) else { throw RecuErreur.champInvalide("tailleOctets") }
         guard Self.cleValide(s3Cle, userId: userId, typeDocument: typeDocument) else { throw RecuErreur.champInvalide("s3Cle") }
+        guard Self.nomFichierValide(nomFichier) else { throw RecuErreur.champInvalide("nomFichier") }
+        if let libelle, libelle.unicodeScalars.count > Self.longueurMaxLibelle { throw RecuErreur.champInvalide("libelle") }
         switch phase {
         case .registered, .verificationDemandee:
             guard let documentId, RecuValidation.identifiantValide(documentId) else { throw RecuErreur.champInvalide("documentId") }
         case .prepared, .started, .stored, .refused, .notSent:
             guard documentId == nil else { throw RecuErreur.champInvalide("documentId") }
         }
+    }
+
+    /// `NULLIF(btrim(p_nom_fichier), '')` non nul et `length(p_nom_fichier) <= 255` (l.53114-53115) : `btrim` ne
+    /// retire que l'espace, `length` compte les points de code.
+    static func nomFichierValide(_ nom: String) -> Bool {
+        let scalaires = nom.unicodeScalars
+        return scalaires.count <= longueurMaxNomFichier && scalaires.contains { $0 != " " }
     }
 
     /// Libellé de l'énumération `type_document` : `^[A-Z][A-Z0-9_]*$` (jamais de séparateur de chemin).

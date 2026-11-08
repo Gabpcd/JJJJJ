@@ -22,7 +22,8 @@ public protocol PointagePort: Sendable {
     /// Une seule requête `fn_scanner_code_pointage` ; `recu` est en phase `started` et déjà journalisé.
     /// Succès annoncé seulement après relecture de l'état et de `scans_pointage` (preuve hors baseline).
     func scanner(code: String, metadonnees: MetadonneesScan, recu: RecuScan, context: MissionReadContext) async throws -> IssueScan
-    /// Relecture de `scans_pointage` pour un reçu `started` (`RecuScan.reconcilier(scans:relueLe:)`).
+    /// Relecture de `scans_pointage` pour un reçu `started` (`RecuScan.reconcilier(scans:relueLe:)`), verdict
+    /// traduit par `IssueScan(reconciliation:)` : `.enregistre`, `.incertain` (relire), `.nonRecu`, `.horlogeIncoherente`.
     func reconcilier(recu: RecuScan, context: MissionReadContext) async throws -> IssueScan
     func detail(missionId: String, context: MissionReadContext) async throws -> DetailPresences
     func relancerValidation(missionId: String, context: MissionReadContext) async throws -> IssueRelance
