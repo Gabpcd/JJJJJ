@@ -1,4 +1,4 @@
-import { test, expect, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { test, expect, type BrowserContext, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 import { creerMissionSimulee, ids, now, preuveMission } from './helpers/recette-complete-mission';
 
@@ -33,9 +33,10 @@ function preparer(type: string, regime: 'SALARIE' | 'LIBERAL') {
   return banc;
 }
 
-// Racine du bloc (DPAEStatus ou BandeauRappelDPAE) qui porte ce texte.
-const encadre = (page: Page, texte: string) => page.getByText(texte, { exact: true })
-  .locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " rounded-xl ")][1]');
+// Encadrés DPAE localisés par data-testid (DPAEStatus, BandeauRappelDPAE) ; data-etat
+// distingue « à déclarer / déclarée » et « à effectuer / effectuée ».
+const statutDpae = (page: Page) => page.getByTestId('dpae-statut');
+const rappelDpae = (page: Page) => page.getByTestId('rappel-dpae');
 
 async function ouvrir(page: Page, type: string) {
   await expect(page.getByRole('heading', { name: `Contrat SIM-CONTRAT-${type}`, exact: true, level: 1 })).toBeVisible();
@@ -71,13 +72,16 @@ for (const type of ['CDDU', 'VACATION'] as const) {
     await page.clock.setFixedTime(new Date(now));
     await context.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
     const label = `dpae-${type}-ADMIN_ETABLISSEMENT-${info.project.name}`;
-    const blocDpae = encadre(page, BLOC_DPAE);
+    const blocDpae = statutDpae(page);
     try {
       // 1. Contrat salarié en attente de signatures : préparation DPAE proposée avant toute signature.
       await page.goto(`/contrat/${ids.contrat}`);
       await ouvrir(page, type);
       await verifierCompteARebours(page);
       await expect(blocDpae).toHaveCount(1);
+      await expect(blocDpae).toHaveAttribute('data-etat', 'a-declarer');
+      await expect(blocDpae.getByText(BLOC_DPAE, { exact: true })).toBeVisible();
+      await expect(rappelDpae(page)).toHaveCount(0);
       await expect(blocDpae).toContainText("La Déclaration Préalable à l'Embauche doit être effectuée auprès de l'URSSAF avant la prise de poste (art. R1221-2 Code travail).");
       await expect(page.getByRole('button', { name: BOUTON_PREPARER, exact: true })).toBeVisible();
       await expect(page.getByText(RAPPEL_DPAE, { exact: true })).toHaveCount(0);
@@ -91,10 +95,13 @@ for (const type of ['CDDU', 'VACATION'] as const) {
       await page.reload();
       await ouvrir(page, type);
       await expect(page.getByText(DEJA_SIGNE, { exact: true })).toBeVisible();
-      const rappel = encadre(page, RAPPEL_DPAE);
+      const rappel = rappelDpae(page);
       await expect(rappel).toHaveCount(1);
+      await expect(rappel).toHaveAttribute('data-etat', 'a-effectuer');
+      await expect(rappel.getByText(RAPPEL_DPAE, { exact: true })).toBeVisible();
       await expect(rappel).toContainText(RAPPEL_DPAE_SUITE);
       await expect(blocDpae).toHaveCount(1);
+      await expect(blocDpae).toHaveAttribute('data-etat', 'a-declarer');
       await verifierCompteARebours(page);
       await deposerDump(info, `${label}-2-rappel-dpae`, rappel);
       await preuveMission(page, info, `${label}-2-signe-etablissement-rappel`);
@@ -108,7 +115,8 @@ for (const type of ['CDDU', 'VACATION'] as const) {
         .toHaveAttribute('href', 'https://www.net-entreprises.fr/declaration-prealable-embauche/');
       await blocDpae.getByPlaceholder('Ex : 2026XXXXXXXX').fill(NUMERO_DPAE);
       await blocDpae.getByRole('button', { name: 'Enregistrer le numéro DPAE', exact: true }).click();
-      const blocDeclare = encadre(page, 'DPAE déclarée');
+      const blocDeclare = statutDpae(page);
+      await expect(blocDeclare).toHaveAttribute('data-etat', 'declaree');
       await expect(blocDeclare).toHaveText(`DPAE déclarée Numéro DPAE : ${NUMERO_DPAE}`, { useInnerText: true });
       await expect(page.getByText(BLOC_DPAE, { exact: true })).toHaveCount(0);
       await deposerDump(info, `${label}-3-bloc-dpae-declaree`, blocDeclare);
@@ -116,9 +124,12 @@ for (const type of ['CDDU', 'VACATION'] as const) {
       // 4. Reprise après rechargement : le numéro relu du contrat, le rappel devient confirmation.
       await page.reload();
       await ouvrir(page, type);
+      await expect(blocDeclare).toHaveAttribute('data-etat', 'declaree');
       await expect(blocDeclare).toHaveText(`DPAE déclarée Numéro DPAE : ${NUMERO_DPAE}`, { useInnerText: true });
-      const confirmation = encadre(page, RAPPEL_DPAE_FAITE);
+      const confirmation = rappelDpae(page);
       await expect(confirmation).toHaveCount(1);
+      await expect(confirmation).toHaveAttribute('data-etat', 'effectuee');
+      await expect(confirmation.getByText(RAPPEL_DPAE_FAITE, { exact: true })).toBeVisible();
       await expect(page.getByText(RAPPEL_DPAE, { exact: true })).toHaveCount(0);
       await expect(page.getByRole('button', { name: BOUTON_PREPARER, exact: true })).toHaveCount(0);
       await verifierCompteARebours(page);
@@ -158,6 +169,8 @@ test('DPAE CONTRAT — établissement : remplacement libéral, ni statut ni rapp
   await context.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
   const label = `dpae-${type}-ADMIN_ETABLISSEMENT-${info.project.name}`;
   const aucuneDpae = async () => {
+    await expect(statutDpae(page)).toHaveCount(0);
+    await expect(rappelDpae(page)).toHaveCount(0);
     await expect(page.getByText(BLOC_DPAE, { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: BOUTON_PREPARER, exact: true })).toHaveCount(0);
     await expect(page.getByText(RAPPEL_DPAE, { exact: true })).toHaveCount(0);
@@ -203,6 +216,8 @@ for (const type of ['CDDU', 'VACATION'] as const) {
       await ouvrir(page, type);
       await verifierCompteARebours(page);
       await verifierPiedDePage(page, MENTION_SALARIEE, MENTION_LIBERALE);
+      await expect(statutDpae(page)).toHaveCount(0);
+      await expect(rappelDpae(page)).toHaveCount(0);
       await expect(page.getByText(BLOC_DPAE, { exact: true })).toHaveCount(0);
       await expect(page.getByRole('button', { name: BOUTON_PREPARER, exact: true })).toHaveCount(0);
       await expect(page.getByText(RAPPEL_DPAE, { exact: true })).toHaveCount(0);
@@ -230,3 +245,176 @@ for (const type of ['CDDU', 'VACATION'] as const) {
     }
   });
 }
+
+// ── Administrateur plateforme : /admin/contrats/:id et /admin/contrats ──
+// Les RPC admin (droits, détail, liste) sont simulées ici ; le reste passe par le helper,
+// qui refuse et journalise tout endpoint non prévu (state.unknown).
+const TYPES_ADMIN = ['CDDU', 'VACATION', 'REMPLACEMENT_LIBERAL', 'CDD'] as const;
+type TypeAdmin = typeof TYPES_ADMIN[number];
+const idAdmin = (type: TypeAdmin) => `71000000-0000-4000-8000-00000000010${TYPES_ADMIN.indexOf(type) + 1}`;
+const DPAE_ATTENTE_ADMIN = '⏳ DPAE non encore transmise / numéro non saisi.';
+const A_TRAITER = 'À traiter (signatures en attente, DPAE manquantes)';
+const HISTORIQUE = 'Historique (signés, annulés, expirés)';
+
+function contratAdmin(type: TypeAdmin, dpae: { numero: string | null; le: string | null } = { numero: null, le: null }) {
+  return { id: idAdmin(type), numero_contrat: `SIM-ADMIN-${type}`, mission_id: ids.mission,
+    mission_intitule: `Mission fictive ${type}`, mission_debut_le: '2026-09-24T07:00:00.000Z', mission_fin_le: '2026-09-24T15:00:00.000Z',
+    soignant_id: ids.soignant, soignant_nom: 'Camille Recette', soignant_email: 'soignant-mission@example.invalid', soignant_rpps: null,
+    etablissement_id: ids.etablissement, etablissement_nom: 'Clinique Simulation', etablissement_siret: null,
+    type_contrat: type, statut: 'SIGNE_COMPLET', mode_signature: 'OTP', hash_document: null, hash_court: null,
+    signature_soignant: true, signature_soignant_le: now, signature_ip_soignant: null, signature_navigateur_soignant: null,
+    signature_etablissement: true, signature_etablissement_le: now, signature_ip_etablissement: null, signature_navigateur_etablissement: null,
+    dpae_effectuee: !!dpae.numero, dpae_effectuee_le: dpae.le, dpae_numero: dpae.numero,
+    storage_path: null, pdf_cle_s3: null, cree_le: now };
+}
+
+async function installerAdmin(context: BrowserContext, page: Page, contrats: Map<string, any>) {
+  const banc = creerMissionSimulee();
+  await banc.installer(context, 'ADMIN_PLATEFORME');
+  await page.clock.setFixedTime(new Date(now));
+  await context.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
+  const appelsAdmin: { name: string; body: any }[] = [];
+  await context.route('**/rest/v1/rpc/fn_admin_*', async route => {
+    const req = route.request();
+    const name = new URL(req.url()).pathname.split('/').pop()!;
+    if (req.method() === 'OPTIONS') return route.fallback();
+    const body = req.postData() ? JSON.parse(req.postData()!) : null;
+    const json = (data: any) => route.fulfill({ status: 200, json: data, headers: { 'access-control-allow-origin': '*' } });
+    if (name === 'fn_admin_mes_acces') { appelsAdmin.push({ name, body }); return json({ acces_total: true, groupes: [] }); }
+    if (name === 'fn_admin_detail_contrat') {
+      appelsAdmin.push({ name, body });
+      const contrat = contrats.get(body?.p_contrat_id);
+      return json(contrat ? { success: true, contrat, signatures: [], audit_trail: [] } : { success: false, error: 'Contrat introuvable' });
+    }
+    if (name === 'fn_admin_lister_contrats') {
+      appelsAdmin.push({ name, body });
+      const liste = [...contrats.values()];
+      return json({ success: true, total: liste.length, contrats: liste });
+    }
+    return route.fallback();
+  });
+  return { ...banc, appelsAdmin };
+}
+
+function verifierJournalAdmin(state: ReturnType<typeof creerMissionSimulee>['state']) {
+  expect(state.calls.filter(call => call.name.includes('dpae'))).toEqual([]);
+  expect(state.unknown).toEqual([]);
+  expect(state.external).toEqual([]);
+  expect(state.errors).toEqual([]);
+}
+
+for (const type of ['CDDU', 'VACATION', 'REMPLACEMENT_LIBERAL'] as const) {
+  const salarie = type !== 'REMPLACEMENT_LIBERAL';
+  test(`DPAE CONTRAT — administrateur : détail d'un contrat ${type}, carte DPAE ${salarie ? 'en attente puis validée' : 'absente'}, reprise après rechargement`, async ({ context, page }, info) => {
+    const contrats = new Map([[idAdmin(type), contratAdmin(type)]]);
+    const { state, appelsAdmin } = await installerAdmin(context, page, contrats);
+    const label = `dpae-${type}-ADMIN_PLATEFORME-detail-${info.project.name}`;
+    const carte = page.getByTestId('carte-dpae-admin');
+    try {
+      await page.goto(`/admin/contrats/${idAdmin(type)}`);
+      await expect(page.getByRole('heading', { name: `SIM-ADMIN-${type}`, exact: true, level: 1 })).toBeVisible();
+      await expect(page.getByText(type, { exact: true })).toBeVisible();
+      if (salarie) {
+        await expect(carte).toHaveCount(1);
+        await expect(carte.getByRole('heading', { name: 'DPAE', exact: true, level: 2 })).toBeVisible();
+        await expect(carte).toHaveText(`DPAE${DPAE_ATTENTE_ADMIN}`);
+        await deposerDump(info, `${label}-1-carte-dpae-attente`, carte);
+        await preuveMission(page, info, `${label}-1-attente`);
+        // État serveur simulé : l'établissement a saisi le numéro URSSAF.
+        contrats.set(idAdmin(type), contratAdmin(type, { numero: NUMERO_DPAE, le: now }));
+        await page.reload();
+        await expect(page.getByRole('heading', { name: `SIM-ADMIN-${type}`, exact: true, level: 1 })).toBeVisible();
+        await expect(carte).toHaveCount(1);
+        await expect(carte.getByText('DPAE validée le 24 sept. 2026', { exact: true })).toBeVisible();
+        await expect(carte.getByText(`N° URSSAF : ${NUMERO_DPAE}`, { exact: true })).toBeVisible();
+        await expect(carte.getByText(DPAE_ATTENTE_ADMIN, { exact: true })).toHaveCount(0);
+        await deposerDump(info, `${label}-2-carte-dpae-validee-apres-reload`, carte);
+        await preuveMission(page, info, `${label}-2-validee-apres-reload`);
+      } else {
+        for (const etape of ['1-initial', '2-apres-reload']) {
+          if (etape === '2-apres-reload') {
+            await page.reload();
+            await expect(page.getByRole('heading', { name: `SIM-ADMIN-${type}`, exact: true, level: 1 })).toBeVisible();
+          }
+          await expect(carte).toHaveCount(0);
+          await expect(page.getByRole('heading', { name: 'DPAE', exact: true })).toHaveCount(0);
+          expect(await page.getByRole('main').innerText()).not.toContain('DPAE');
+          await preuveMission(page, info, `${label}-${etape}`);
+        }
+      }
+      await writeFile(info.outputPath(`${label}.main.aria.yml`), await page.getByRole('main').ariaSnapshot() + '\n');
+      expect(appelsAdmin.filter(a => a.name === 'fn_admin_detail_contrat').map(a => a.body))
+        .toEqual([{ p_contrat_id: idAdmin(type) }, { p_contrat_id: idAdmin(type) }]);
+      verifierJournalAdmin(state);
+    } finally {
+      await info.attach(`${label}-journal-simule`, {
+        body: JSON.stringify({ simulationSeulement: true, type, appelsAdmin, calls: state.calls, unknown: state.unknown, external: state.external, errors: state.errors }),
+        contentType: 'application/json',
+      });
+    }
+  });
+}
+
+test('DPAE CONTRAT — administrateur : liste des contrats, badge et file « À traiter » pour CDDU et VACATION, libéral non requis', async ({ context, page }, info) => {
+  const contrats = new Map<string, any>([
+    [idAdmin('CDDU'), contratAdmin('CDDU')],
+    [idAdmin('VACATION'), contratAdmin('VACATION')],
+    [idAdmin('REMPLACEMENT_LIBERAL'), contratAdmin('REMPLACEMENT_LIBERAL')],
+    [idAdmin('CDD'), contratAdmin('CDD', { numero: NUMERO_DPAE, le: now })],
+  ]);
+  const { state, appelsAdmin } = await installerAdmin(context, page, contrats);
+  const label = `dpae-ADMIN_PLATEFORME-liste-${info.project.name}`;
+  // Table (≥ 768 px) ou cartes (mobile) : une ligne par contrat, numéro exact (CDD ≠ CDDU).
+  const ligne = (zone: Locator, type: TypeAdmin) => zone.getByRole('row').or(zone.getByRole('listitem'))
+    .filter({ has: page.getByText(`SIM-ADMIN-${type}`, { exact: true }) });
+  const aTraiter = page.getByRole('region', { name: A_TRAITER, exact: true });
+  const historique = page.getByRole('region', { name: HISTORIQUE, exact: true });
+  const verifierListe = async () => {
+    await expect(page.getByRole('heading', { name: 'Suivre les signatures de contrats', level: 1 })).toBeVisible();
+    await expect(aTraiter.getByRole('heading', { name: `2 ${A_TRAITER}`, exact: true, level: 2 })).toBeVisible();
+    for (const type of ['CDDU', 'VACATION'] as const) {
+      const contrat = ligne(aTraiter, type);
+      await expect(contrat).toHaveCount(1);
+      await expect(contrat.getByText('DPAE manquante', { exact: true })).toBeVisible();
+      await expect(contrat.getByText('⏳ À déclarer', { exact: true })).toBeVisible();
+      await expect(contrat.getByText('Non requise', { exact: true })).toHaveCount(0);
+    }
+    await expect(ligne(aTraiter, 'REMPLACEMENT_LIBERAL')).toHaveCount(0);
+    await expect(ligne(aTraiter, 'CDD')).toHaveCount(0);
+    const bouton = historique.getByRole('button', { name: /^Historique \(signés, annulés, expirés\)/ });
+    await expect(bouton).toHaveAttribute('aria-expanded', 'false');
+    await bouton.click();
+    await expect(bouton).toHaveAttribute('aria-expanded', 'true');
+    const liberal = ligne(historique, 'REMPLACEMENT_LIBERAL');
+    await expect(liberal).toHaveCount(1);
+    await expect(liberal.getByText('Non requise', { exact: true })).toBeVisible();
+    await expect(liberal.getByText('DPAE manquante', { exact: true })).toHaveCount(0);
+    await expect(ligne(historique, 'CDD').getByText(`Validée · ${NUMERO_DPAE.slice(0, 8)}…`, { exact: true })).toBeVisible();
+    await expect(ligne(historique, 'CDDU')).toHaveCount(0);
+    await expect(ligne(historique, 'VACATION')).toHaveCount(0);
+  };
+  try {
+    await page.goto('/admin/contrats');
+    await verifierListe();
+    await deposerDump(info, `${label}-1-a-traiter`, aTraiter);
+    await deposerDump(info, `${label}-1-historique`, historique);
+    await preuveMission(page, info, `${label}-1-liste`);
+    await page.reload();
+    await verifierListe();
+    await preuveMission(page, info, `${label}-2-liste-apres-reload`);
+    // Lien profond depuis la file : le contrat VACATION ouvre son détail, carte DPAE en attente.
+    await ligne(aTraiter, 'VACATION').getByText('SIM-ADMIN-VACATION', { exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/admin/contrats/${idAdmin('VACATION')}$`));
+    await expect(page.getByRole('heading', { name: 'SIM-ADMIN-VACATION', exact: true, level: 1 })).toBeVisible();
+    await expect(page.getByTestId('carte-dpae-admin')).toHaveText(`DPAE${DPAE_ATTENTE_ADMIN}`);
+    await preuveMission(page, info, `${label}-3-detail-vacation-depuis-file`);
+    expect(appelsAdmin.filter(a => a.name === 'fn_admin_lister_contrats')).toHaveLength(2);
+    expect(appelsAdmin.filter(a => a.name === 'fn_admin_detail_contrat').map(a => a.body)).toEqual([{ p_contrat_id: idAdmin('VACATION') }]);
+    verifierJournalAdmin(state);
+  } finally {
+    await info.attach(`${label}-journal-simule`, {
+      body: JSON.stringify({ simulationSeulement: true, appelsAdmin, calls: state.calls, unknown: state.unknown, external: state.external, errors: state.errors }),
+      contentType: 'application/json',
+    });
+  }
+});

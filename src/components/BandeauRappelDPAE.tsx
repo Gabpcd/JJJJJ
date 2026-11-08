@@ -18,7 +18,7 @@ export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat,
 
   if (dpaeEffectuee) {
     return (
-      <div className="bg-success/10 border border-success/30 rounded-xl p-4 flex items-start gap-3">
+      <div data-testid="rappel-dpae" data-etat="effectuee" className="bg-success/10 border border-success/30 rounded-xl p-4 flex items-start gap-3">
         <CheckCircle className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-semibold text-success">
@@ -33,7 +33,7 @@ export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat,
   }
 
   return (
-    <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 flex items-start gap-3">
+    <div data-testid="rappel-dpae" data-etat="a-effectuer" className="bg-warning/10 border border-warning/30 rounded-xl p-4 flex items-start gap-3">
       <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
       <div className="flex-1">
         <p className="text-sm font-semibold text-warning">

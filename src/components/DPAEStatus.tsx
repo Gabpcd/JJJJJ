@@ -101,7 +101,7 @@ export function DPAEStatus({ contratId, typeContrat, dpaeNumero, cadreDeclarePar
 
   if (saved) {
     return (
-      <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 p-4 flex items-start gap-3">
+      <div data-testid="dpae-statut" data-etat="declaree" className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 p-4 flex items-start gap-3">
         <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
         <div>
           <p className="font-semibold text-emerald-900 dark:text-emerald-200">DPAE déclarée</p>
@@ -114,7 +114,7 @@ export function DPAEStatus({ contratId, typeContrat, dpaeNumero, cadreDeclarePar
   }
 
   return (
-    <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 p-4 space-y-3">
+    <div data-testid="dpae-statut" data-etat="a-declarer" className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 p-4 space-y-3">
       <div className="flex items-start gap-2">
         <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
         <div className="flex-1">

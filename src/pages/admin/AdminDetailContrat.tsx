@@ -241,7 +241,7 @@ export default function AdminDetailContrat() {
 
       {/* DPAE — contrats salariés (CDD, CDDU, VACATION), source unique @/lib/typesContrat */}
       {estContratSalarie(contrat.type_contrat) && (
-        <CardY2K hoverLift={false} className="mb-6">
+        <CardY2K hoverLift={false} className="mb-6" data-testid="carte-dpae-admin">
           <h2 className="text-sm font-bold text-foreground mb-2">DPAE</h2>
           {contrat.dpae_effectuee && contrat.dpae_numero ? (
             <div className="text-xs space-y-1">
