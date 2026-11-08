@@ -113,6 +113,56 @@ final class PointageModelTests: XCTestCase {
         func relancerValidation(missionId: String, context: MissionReadContext) async throws -> IssueRelance { throw nonScripte }
     }
 
+    /// Port dont la requête et les relectures d'un HTTP 200 sont séparées, comme `SupabasePointageGateway` (seconde
+    /// revue fraîche de T3, mi-1) : `envoyerScan` rend `.accepte` après `dureeEnvoi`, `relireScanAccepte` rend `relecture`
+    /// après `dureeRelecture` (ou jamais, tant que `retenueRelecture` est fermée).
+    private final class PortEnDeuxTemps: PointagePort, @unchecked Sendable {
+        private let lock = NSLock()
+        private var journal: [String] = []
+        let scan: ScanEnregistre?
+        let dureeEnvoi: TimeInterval
+        let dureeRelecture: TimeInterval
+        let relecture: IssueScan
+        let retenueRelecture: Gate?
+
+        init(scan: ScanEnregistre?, dureeEnvoi: TimeInterval = 0, dureeRelecture: TimeInterval = 0, relecture: IssueScan,
+             retenueRelecture: Gate? = nil) {
+            self.scan = scan; self.dureeEnvoi = dureeEnvoi; self.dureeRelecture = dureeRelecture; self.relecture = relecture
+            self.retenueRelecture = retenueRelecture
+        }
+
+        func compte(_ nom: String) -> Int { lock.lock(); defer { lock.unlock() }; return journal.filter { $0 == nom }.count }
+        private func noter(_ appel: String) { lock.lock(); journal.append(appel); lock.unlock() }
+
+        func etat(missionId: String, context: MissionReadContext) async throws -> EtatPointage {
+            noter("etat")
+            return EtatPointage(statut: "ASSIGNEE", intitule: "Nuit", prochainTypeScan: .ouverture, nbScans: 0, segmentOuvert: false,
+                                segments: [])
+        }
+        func preuvesScan(missionId: String, context: MissionReadContext) async throws -> [PreuveScan] { noter("preuves"); return [] }
+        func envoyerScan(code: String, metadonnees: MetadonneesScan, recu: RecuScan, context: MissionReadContext) async throws -> EnvoiScan {
+            noter("envoyerScan")
+            await PointageModel.attendreReellement(dureeEnvoi)
+            return .accepte(scan)
+        }
+        func relireScanAccepte(_ scan: ScanEnregistre?, recu: RecuScan, context: MissionReadContext) async throws -> IssueScan {
+            noter("relireScanAccepte")
+            if let retenueRelecture { await retenueRelecture.wait() }
+            await PointageModel.attendreReellement(dureeRelecture)
+            return relecture
+        }
+        func scanner(code: String, metadonnees: MetadonneesScan, recu: RecuScan, context: MissionReadContext) async throws -> IssueScan {
+            noter("scanner")
+            throw nonScripte
+        }
+        func reconcilier(recu: RecuScan, context: MissionReadContext) async throws -> IssueScan { noter("reconcilier"); return .nonRecu }
+        func presences(context: MissionReadContext) async throws -> InstantanePresences { throw nonScripte }
+        func consentementGps(context: MissionReadContext) async throws -> Bool? { throw nonScripte }
+        func enregistrerConsentementGps(_ accepte: Bool, context: MissionReadContext) async throws -> Bool { throw nonScripte }
+        func detail(missionId: String, context: MissionReadContext) async throws -> DetailPresences { throw nonScripte }
+        func relancerValidation(missionId: String, context: MissionReadContext) async throws -> IssueRelance { throw nonScripte }
+    }
+
     /// Horloge monotone et attentes du modèle, avancées par le test (aucune attente réelle).
     private final class TempsTest: @unchecked Sendable {
         private let lock = NSLock()
@@ -642,6 +692,45 @@ final class PointageModelTests: XCTestCase {
         XCTAssertEqual(a.issue, .verification)
         XCTAssertFalse(a.peutEnvoyer)
         XCTAssertNil(b.issue, "B n'affiche pas la vérification de l'essai de A")
+    }
+
+    // MARK: - Requête et relectures d'un HTTP 200 bornées à part (seconde revue fraîche de T3, mi-1)
+
+    private let scanAccepte = ScanEnregistre(typeScanEffectue: .ouverture, prochainTypeScan: .fermeture, creneauEffectifId: "c-1",
+                                             horodatageEffectif: nil, horodatageArrondi: nil, numeroScan: 1, validationEtabRequise: false)
+
+    /// Requête puis relectures, chacune sous le délai, leur somme au-delà : un HTTP 200 tardif reste un succès relu.
+    func testHTTP200TardifPuisRelecturesSousLeDelaiChacuneSuccesRelu() async throws {
+        let port = PortEnDeuxTemps(scan: scanAccepte, dureeEnvoi: 0.6, dureeRelecture: 0.6,
+                                   relecture: .enregistreSurAutreMission(missionId: "m-2", typeScan: .ouverture, numeroScan: 1))
+        let magasin = MagasinEspion()
+        let banc = try await nouveauBanc(port, magasin: magasin, timeout: 1.0)
+        let model = bloc(mission, banc)
+        await model.charger()
+        await model.pointer(code: "123456", gps: nil)
+        XCTAssertEqual(model.issue, .enregistreSurAutreMission(.ouverture, missionId: "m-2"),
+                       "1,2 s en tout pour un délai de 1 s : jamais « incertain », jamais « non reçu »")
+        XCTAssertEqual(port.compte("envoyerScan"), 1)
+        XCTAssertEqual(port.compte("relireScanAccepte"), 1)
+        XCTAssertEqual(port.compte("reconcilier"), 0, "un HTTP 200 n'est jamais réconcilié")
+        XCTAssertEqual(port.compte("scanner"), 0, "le modèle appelle les deux moitiés")
+        XCTAssertTrue(magasin.vide)
+    }
+
+    /// Relectures hors délai après un HTTP 200 : accepté sans preuve (suivi non vérifiable), reçu soldé, aucune
+    /// réconciliation ni « non reçu ».
+    func testRelecturesApresHTTP200HorsDelaiAccepteSansPreuve() async throws {
+        let jamais = Gate()
+        let port = PortEnDeuxTemps(scan: scanAccepte, relecture: .enregistre(typeScan: .ouverture, numeroScan: 1), retenueRelecture: jamais)
+        let magasin = MagasinEspion()
+        let banc = try await nouveauBanc(port, magasin: magasin, timeout: 0.2)
+        let model = bloc(mission, banc)
+        await model.charger()
+        await model.pointer(code: "123456", gps: nil)
+        XCTAssertEqual(model.issue, .suiviIllisible, "COMMIT prouvé, mission non établie")
+        XCTAssertEqual(port.compte("reconcilier"), 0)
+        XCTAssertEqual(magasin.phases, ["prepared", "started", "effacé"], "reçu soldé : aucun « non reçu » ensuite")
+        await jamais.open()
     }
 
     func testDemoCodeDeLaMissionASaisiDansLeBlocB() async throws {

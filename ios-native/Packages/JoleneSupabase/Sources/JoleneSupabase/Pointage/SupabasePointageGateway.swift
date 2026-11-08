@@ -18,7 +18,9 @@ import Supabase
 ///   ET d'une preuve `scans_pointage` hors base du reçu (`RecuScan.reconcilier`) ; sinon ligne du scan relue SANS filtre
 ///   de mission (le code désigne la mission, revue fraîche de T3, M-A) → `.enregistreSurAutreMission` ; sinon
 ///   `.accepteSansPreuve`, jamais `.incertain`. Rollback prouvé → `.refuse` (SQLSTATE si c'en est un) ; transport ou
-///   passerelle → `.incertain`, jamais un renvoi ; JWT refusé ou session absente → `.unauthorized` levée (m1).
+///   passerelle → `.incertain`, jamais un renvoi ; JWT refusé ou session absente → `.unauthorized` levée (m1). La
+///   requête (`envoyerScan`) et les relectures d'un HTTP 200 (`relireScanAccepte`) sont séparées pour être bornées à
+///   part par le modèle (seconde revue fraîche de T3, mi-1) ; `scanner` enchaîne les deux.
 /// - Réconciliation : relecture de `scans_pointage` de la mission du reçu, verdict de `RecuScan.reconcilier`.
 /// - Consentement : `soignants.consentement_gps`, puis `fn_consentir_gps` relu.
 /// - Détail : créneaux de la mission et `fn_presences_detail_mission` (carte masquée sur `{error}`).
@@ -147,8 +149,21 @@ public struct SupabasePointageGateway: PointagePort {
 
     // MARK: - Scan
 
+    /// `envoyerScan`, puis, pour un HTTP 200, `relireScanAccepte` (le modèle appelle les deux moitiés, bornées à part).
     public func scanner(code: String, metadonnees: MetadonneesScan, recu: RecuScan,
                         context: MissionReadContext) async throws -> IssueScan {
+        switch try await envoyerScan(code: code, metadonnees: metadonnees, recu: recu, context: context) {
+        case let .issue(issue):
+            return issue
+        case let .accepte(scan):
+            return try await relireScanAccepte(scan, recu: recu, context: context)
+        }
+    }
+
+    /// L'unique requête seule (seconde revue fraîche de T3, mi-1) : aucune relecture ici, pour que l'appelant borne la
+    /// requête et les relectures d'un HTTP 200 séparément.
+    public func envoyerScan(code: String, metadonnees: MetadonneesScan, recu: RecuScan,
+                            context: MissionReadContext) async throws -> EnvoiScan {
         try MissionQuery.validate(context: context)
         guard recu.phase == .started, recu.userId == context.userId, recu.terminalId == metadonnees.idTerminal,
               PointageRules.codeSaisi(code) == code else {
@@ -159,22 +174,31 @@ public struct SupabasePointageGateway: PointagePort {
                                                  exceptionsMetier: ExceptionsMetierLot2.scannerCodePointage) {
         case let .reponse(reponse):
             if reponse.estRefus {
-                return .refuse(sqlstate: reponse.sqlstate, message: reponse.erreur ?? PointageQuery.fallbackScan)
+                return .issue(.refuse(sqlstate: reponse.sqlstate, message: reponse.erreur ?? PointageQuery.fallbackScan))
             }
             // HTTP 200 : la fonction a rendu, le COMMIT est fait. Corps hors contrat (sans numéro de scan, `{error}`
             // inattendu) : relu sans réponse décodée, jamais « non reçu » (revue fraîche de T3, M-A).
-            let scan = reponse.erreur == nil ? PointageQuery.decoder(ScanEnregistre.self, reponse) : nil
-            return await relire(scan, recu: recu, context: context)
+            return .accepte(reponse.erreur == nil ? PointageQuery.decoder(ScanEnregistre.self, reponse) : nil)
         case let .refusDefinitif(code, erreur):
             // JWT refusé (`PGRST301`-`PGRST303`) : session expirée, jamais un refus métier (m1).
             if erreur.kind == .unauthorized { throw erreur }
-            return .refuse(sqlstate: RecuScan.sqlstateValide(code) ? code : nil, message: erreur.message)
+            return .issue(.refuse(sqlstate: RecuScan.sqlstateValide(code) ? code : nil, message: erreur.message))
         case let .incertain(erreur):
             // Session absente (levée avant l'envoi) ou 401/403 hors PostgREST : `.unauthorized` remonte (m1) ; l'appelant
             // garde le reçu `started` et le réconcilie au retour de l'utilisateur.
             if erreur.kind == .unauthorized { throw erreur }
-            return .incertain
+            return .issue(.incertain)
         }
+    }
+
+    /// Relectures d'un HTTP 200 rendu par `envoyerScan` : `.enregistre`, `.enregistreSurAutreMission` ou
+    /// `.accepteSansPreuve`, jamais `.incertain` (`relire`).
+    public func relireScanAccepte(_ scan: ScanEnregistre?, recu: RecuScan, context: MissionReadContext) async throws -> IssueScan {
+        try MissionQuery.validate(context: context)
+        guard recu.phase == .started, recu.userId == context.userId else {
+            throw JoleneError(.contract, SupabaseErrorMapping.contractMessage)
+        }
+        return await relire(scan, recu: recu, context: context)
     }
 
     /// Relecture d'un HTTP 200 (§2.3 ; revue fraîche de T3, M-A). `fn_scanner_code_pointage` trouve la mission par le

@@ -153,6 +153,48 @@ final class SupabasePointageGatewayTests: XCTestCase {
         XCTAssertEqual(relectureEnPanne, .accepteSansPreuve)
     }
 
+    /// Seconde revue fraîche de T3 (mi-1) : `envoyerScan` ne fait que l'unique requête (le modèle borne à part les
+    /// relectures d'un HTTP 200) ; `relireScanAccepte` fait les relectures ; `scanner` enchaîne les deux.
+    func testEnvoyerScanSeulementLaRequeteRelecturesAPart() async throws {
+        registry.add("POST", scanPath, respond: .json(200, succesAvantB1))
+        stubRelecture()
+        let started = try recu()
+        let envoi = try await gateway().envoyerScan(code: "123456", metadonnees: MetadonneesScan(idTerminal: terminal, observation: nil),
+                                                    recu: started, context: TestClient.context)
+        let attendu = try JSONDecoder().decode(ScanEnregistre.self, from: Data(succesApresB1.utf8))
+        XCTAssertEqual(envoi, .accepte(attendu), "HTTP 200 : réponse en liste blanche, relectures à faire")
+        XCTAssertEqual(registry.requests(to: scanPath).count, 1)
+        XCTAssertEqual(registry.requests(to: etatPath).count, 0, "aucune relecture dans la requête")
+        XCTAssertEqual(registry.requests(to: scansPath).count, 0)
+        let relu = try await gateway().relireScanAccepte(attendu, recu: started, context: TestClient.context)
+        XCTAssertEqual(relu, .enregistre(typeScan: .ouverture, numeroScan: 1))
+        XCTAssertEqual(registry.requests(to: scanPath).count, 1, "les relectures ne renvoient jamais le scan")
+        XCTAssertEqual(registry.requests(to: etatPath).count, 1)
+
+        // Refus et réponse perdue : verdict sans relecture.
+        registry.reset()
+        registry.add("POST", scanPath, respond: exception("P0002", "Code de pointage invalide ou expiré."))
+        let refus = try await gateway().envoyerScan(code: "123456", metadonnees: MetadonneesScan(idTerminal: terminal, observation: nil),
+                                                    recu: started, context: TestClient.context)
+        XCTAssertEqual(refus, .issue(.refuse(sqlstate: "P0002", message: "Code de pointage invalide ou expiré.")))
+        registry.reset()
+        registry.add("POST", scanPath, respond: .networkFailure(.networkConnectionLost))
+        let perdu = try await gateway().envoyerScan(code: "123456", metadonnees: MetadonneesScan(idTerminal: terminal, observation: nil),
+                                                    recu: started, context: TestClient.context)
+        XCTAssertEqual(perdu, .issue(.incertain))
+        XCTAssertEqual(registry.requests(to: etatPath).count + registry.requests(to: scansPath).count, 0)
+
+        // Même garde que la requête : reçu `started` du même utilisateur.
+        let prepare = try RecuScan.preparer(userId: TestClient.userId, epoch: 1, missionId: mission, terminalId: terminal,
+                                            typeAttendu: .ouverture, nbScansAvant: 0, preuvesAvant: [], gps: .disponible)
+        do {
+            _ = try await gateway().relireScanAccepte(attendu, recu: prepare, context: TestClient.context)
+            XCTFail("reçu non démarré : erreur de contrat attendue")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur.kind, .contract)
+        }
+    }
+
     /// Revue fraîche de T3 (M-A) : `fn_scanner_code_pointage` trouve la mission par le seul code (`public.sql`
     /// l.55639-55644). Le code d'une autre mission du soignant, saisi dans ce bloc, pointe CETTE mission : la ligne du
     /// scan est relue sans filtre de mission, par le créneau et le numéro de la réponse.

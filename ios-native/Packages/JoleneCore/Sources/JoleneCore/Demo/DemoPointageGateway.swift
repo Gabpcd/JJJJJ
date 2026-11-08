@@ -117,7 +117,8 @@ public actor DemoPointageGateway: PointagePort {
     public func scanner(code: String, metadonnees: MetadonneesScan, recu: RecuScan,
                         context: MissionReadContext) async throws -> IssueScan {
         try verifier(context)
-        guard recu.phase == .started, recu.userId == context.userId else {
+        // Mêmes gardes que `SupabasePointageGateway.envoyerScan` (seconde revue fraîche de T3, mi-6).
+        guard recu.phase == .started, recu.userId == context.userId, recu.terminalId == metadonnees.idTerminal else {
             throw JoleneError(.contract, DemoWorld.messageDemoSeulement)
         }
         var m = try charger()

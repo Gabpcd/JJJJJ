@@ -11,26 +11,37 @@ import Foundation
 ///   journalisé en `prepared`, puis `started` juste avant l'UNIQUE requête `fn_scanner_code_pointage` ;
 /// - succès annoncé seulement après relecture (la gateway relit état et preuves), puis nouvelle relecture de l'état :
 ///   un second scan n'est possible qu'après la relecture du nouvel état (`PointageRotatifSoignant.continuite.test.tsx`) ;
-/// - un HTTP 200 n'aboutit jamais à « non reçu » (revue fraîche de T3, M-A) : scan relu sur une autre mission →
-///   `.enregistreSurAutreMission`, non confirmé → `.suiviIllisible` ; dans les deux cas le reçu est soldé, sans
-///   réconciliation (filtrée sur la mission du reçu, elle conclurait à tort « non reçu ») ;
+/// - la requête et les relectures d'un HTTP 200 sont bornées séparément (`PointagePort.envoyerScan` puis
+///   `relireScanAccepte`, seconde revue fraîche de T3, mi-1) : un HTTP 200 reçu dans le délai n'aboutit jamais à
+///   « non reçu » (revue fraîche de T3, M-A), même si ses relectures dépassent le délai : scan relu sur une autre
+///   mission → `.enregistreSurAutreMission`, non confirmé → `.suiviIllisible` ; dans les deux cas le reçu est soldé,
+///   sans réconciliation (filtrée sur la mission du reçu, elle conclurait à tort « non reçu ») ;
 /// - réponse perdue, délai `bounded` ou erreur de transport → `.verification` : reçu `started` gardé, réconciliation
-///   par relecture, JAMAIS de renvoi (décision 2) ; hors ligne → aucun appel, reçu `not_sent` ;
+///   par relecture, JAMAIS de renvoi (décision 2) ; l'envoi se termine et la vérification se poursuit hors de lui
+///   (`charger()` relit l'état pendant l'attente, mi-2) ; hors ligne → aucun appel, reçu `not_sent` ;
 /// - session expirée (`.unauthorized`) au scan ou pendant la réconciliation → `sessionExpired`, reçu `started` gardé
 ///   (réconcilié au retour de l'utilisateur, nouvel epoch), jamais un refus ni un renvoi (m1) ;
 /// - réponse ignorée si l'écran a disparu (`desactiver()`, web l.53-55 `actif.current`) ou si l'epoch a changé.
 ///   L'écran qui réapparaît (onglet rouvert : même `@StateObject`) réactive le bloc par `activer()`, ou `charger()` et
 ///   `suivre()` qui l'appellent ; une réponse émise avant la disparition reste ignorée (génération, M-B). Une issue
-///   décidée par le serveur (succès, refus, « non reçu ») solde quand même le reçu si l'epoch n'a pas changé ;
+///   décidée par le serveur (succès, refus, « non reçu ») solde quand même le reçu si l'epoch n'a pas changé ; le bloc
+///   réactivé pendant l'envoi relit alors son état, et réconcilie un reçu resté `started`, dans sa génération (mi-4) ;
 /// - état relu toutes les 15 s quand le bloc est visible (`suivre()`, web l.71 `refetchInterval: 15000`) ;
 ///   `charger()` ne relit rien pendant un envoi (m7).
 ///
 /// Réconciliation (consignes T3 de `docs/mobile-swift/DECISIONS_LOT2.md`) : reçu `prepared` orphelin → `not_sent` puis
 /// effacé (aucune requête n'est partie : `started` précède toujours l'envoi) ; reçu terminal → effacé ; reçu `started`
-/// → `PointagePort.reconcilier`. Le verdict « non reçu » attend aussi, sur l'horloge MONOTONE du processus quand l'essai
-/// y a démarré, 8 s après `started` (revue de T1, M1 : une horloge d'appareil avancée ne raccourcit pas l'attente) et,
-/// pour un essai sorti sans réponse, l'instant de sortie (au moins le délai `bounded`) + 10 s d'attente du pool
-/// PostgREST (`PGRST003`) + 8 s de `statement_timeout` (revue fraîche de T3, m2).
+/// → `PointagePort.reconcilier`, par un seul modèle à la fois dans le processus. Première relecture immédiate (§2.5,
+/// mi-2) ; une absence de preuve ne vaut « non reçu » qu'après, sur l'horloge MONOTONE du processus quand l'essai y a
+/// démarré, 8 s après `started` (revue de T1, M1 : une horloge d'appareil avancée ne raccourcit pas l'attente) et, pour
+/// un essai sorti sans réponse, l'instant de sortie (au moins le délai `bounded`) + 10 s d'attente du pool PostgREST
+/// (`PGRST003`) + 8 s de `statement_timeout` (revue fraîche de T3, m2) ; avant, elle reste « à relire ».
+///
+/// Journal commun (un reçu par utilisateur, tous blocs confondus ; seconde revue fraîche de T3, MJ-1) : un reçu peut
+/// être soldé par la réconciliation d'un autre bloc. Son issue est alors rendue au bloc qui affiche la vérification de
+/// cet essai, à sa prochaine réconciliation ; à défaut (reçu effacé sans issue), la vérification est levée. Un
+/// `.suiviIllisible` venu d'un HTTP 200 sans preuve est levé par la première lecture d'état réussie après une
+/// réapparition du bloc (mi-3).
 @MainActor
 public final class PointageModel: ObservableObject {
     /// `refetchInterval` du web (l.71).
@@ -64,14 +75,16 @@ public final class PointageModel: ObservableObject {
         case refuse(message: String, codeInvalide: Bool)
         /// Hors ligne : aucun appel, reçu `not_sent`.
         case horsLigne
-        /// Réponse perdue (ou session expirée) : vérification par relecture en cours.
+        /// Réponse perdue (ou session expirée) : vérification par relecture en cours. Levée quand l'essai est soldé,
+        /// ici ou par un autre bloc (MJ-1).
         case verification
         /// Le serveur n'a rien reçu (relecture ≥ 8 s) : saisir le code courant (il a pu tourner).
         case nonRecu
         /// `RecuScan.messageRecuEnCours`.
         case recuEnCours
         /// `RecuScan.messageIllisible` et renvoi web `/soignant/presences` (journal illisible, horloge incohérente,
-        /// HTTP 200 sans preuve relue).
+        /// HTTP 200 sans preuve relue). Horloge incohérente : levée quand l'essai est soldé (MJ-1) ; HTTP 200 sans
+        /// preuve : levée après une réapparition du bloc (mi-3) ; journal illisible : jamais levée.
         case suiviIllisible
         /// Erreur avant tout envoi (identifiant terminal, relecture de la base) : message tel quel.
         case erreur(String)
@@ -96,14 +109,34 @@ public final class PointageModel: ObservableObject {
     private var actif = true
     /// Avance à chaque disparition : une opération commencée avant ne publie plus rien (M-B).
     private var generation = 0
-    private var reconciliationEnCours = false
+    /// Génération de la réconciliation en cours : une seule par génération ; une réapparition peut en lancer une
+    /// nouvelle pendant que l'ancienne finit son attente (elle ne publiera rien).
+    private var reconciliationGeneration: Int?
+    /// Essai dont ce bloc affiche la vérification (`.verification`) ou le suivi non vérifiable venu de sa réconciliation
+    /// (`.suiviIllisible`, horloge incohérente) : levés quand cet essai est soldé, ici ou par un autre bloc (MJ-1).
+    private var essaiAffiche: String?
+    /// Génération où `.suiviIllisible` d'un HTTP 200 sans preuve a été publié (mi-3).
+    private var generationSansPreuve: Int?
 
-    /// Essais en vol dans ce processus, tous blocs confondus : un autre modèle ne les réconcilie pas.
+    /// Issue décidée pour un essai soldé (reçu effacé).
+    private enum Conclusion: Equatable {
+        case enregistre(TypeScan?)
+        case surAutreMission(TypeScan?, missionId: String)
+        case sansPreuve
+        case nonRecu
+    }
+
+    /// Essais en vol (envoi, ou réconciliation par un modèle) dans ce processus, tous blocs confondus : un autre modèle
+    /// ne les réconcilie pas en parallèle.
     private static var essaisEnVol: Set<String> = []
     /// Passage `started` sur l'horloge monotone du processus, par essai.
     private static var demarragesMonotones: [String: TimeInterval] = [:]
     /// Attente monotone minimale avant « non reçu », par essai sorti sans réponse (m2) ; sinon `delaiAbsenceProuvee`.
     private static var delaisAbsence: [String: TimeInterval] = [:]
+    /// Issues d'essais soldés par la réconciliation d'un bloc d'une autre mission, en attente du bloc qui affiche leur
+    /// vérification (MJ-1) ; bornées (un bloc disparu pour de bon ne les reprend jamais).
+    private static var conclusionsTransmises: [(essai: String, conclusion: Conclusion)] = []
+    private static let maxConclusionsTransmises = 16
 
     public init(missionId: String, finLe: String?, controller: SessionController, snapshot: SessionSnapshot, appareil: Appareil,
                 attendre: @escaping @Sendable (TimeInterval) async -> Void = { await PointageModel.attendreReellement($0) },
@@ -164,6 +197,7 @@ public final class PointageModel: ObservableObject {
             guard await estCourant(jeton) else { return }
             sessionExpired = false
             chargement = .pret(etat)
+            leverSansPreuveApresReapparition(jeton)
         } catch {
             guard await estCourant(jeton), !Self.estAnnulation(error) else { return }
             noterSession(error)
@@ -201,23 +235,42 @@ public final class PointageModel: ObservableObject {
               let code = PointageRules.codeSaisi(saisie), etat != nil else { return }
         let jeton = generation
         envoiEnCours = true
-        defer { envoiEnCours = false }
         issue = nil
+        essaiAffiche = nil
+        generationSansPreuve = nil
         notationAProposer = false
-        guard let x = await contexte(), await estCourant(jeton) else { return }
-        await envoyer(code: code, gps: gps, x, jeton)
+        var perdu: (recu: RecuScan, x: Contexte)?
+        if let x = await contexte(), await estCourant(jeton) {
+            perdu = await envoyer(code: code, gps: gps, x, jeton)
+        }
+        envoiEnCours = false
+        if let perdu {
+            if generation == jeton {
+                // Réponse perdue (mi-2) : l'envoi est terminé, la vérification se poursuit ; `charger()` relit l'état
+                // pendant l'attente et aucune seconde réconciliation ne part en parallèle.
+                await reconcilierApresEnvoi(perdu.recu, perdu.x, jeton)
+            } else {
+                Self.essaisEnVol.remove(perdu.recu.attemptId)
+            }
+        }
+        if generation != jeton, actif {
+            // mi-4 : bloc réactivé pendant l'envoi ou sa vérification (son `charger()` a sauté la lecture) : état relu,
+            // et reçu resté `started` réconcilié, dans la génération courante.
+            await charger()
+        }
     }
 
-    private func envoyer(code: String, gps: ObservationGps?, _ x: Contexte, _ jeton: Int) async {
+    /// Envoi d'un code ; rend le reçu `started` dont la réponse est perdue (à réconcilier hors de l'envoi), sinon nil.
+    private func envoyer(code: String, gps: ObservationGps?, _ x: Contexte, _ jeton: Int) async -> (recu: RecuScan, x: Contexte)? {
         let userId = x.context.userId
         let existant: RecuScan?
-        do { existant = try await journal.lire(userId: userId) } catch { publier(.suiviIllisible, jeton); return }
+        do { existant = try await journal.lire(userId: userId) } catch { publier(.suiviIllisible, jeton); return nil }
         if let existant, !existant.estTermine {
             publier(.recuEnCours, jeton)
-            return
+            return nil
         }
         let terminal: String
-        do { terminal = try appareil.terminal.identifiant() } catch { publier(.erreur(Self.message(error)), jeton); return }
+        do { terminal = try appareil.terminal.identifiant() } catch { publier(.erreur(Self.message(error)), jeton); return nil }
         let gpsRecu = RecuScan.Gps(observation: gps)
 
         guard await appareil.reseau.estEnLigne() else {
@@ -230,11 +283,11 @@ public final class PointageModel: ObservableObject {
                     try await journal.ecrire(recu.marquerNonEnvoye())
                 } catch {
                     publier(.suiviIllisible, jeton)
-                    return
+                    return nil
                 }
             }
             publier(.horsLigne, jeton)
-            return
+            return nil
         }
 
         // Base du reçu : état et preuves relus juste avant l'envoi.
@@ -247,14 +300,14 @@ public final class PointageModel: ObservableObject {
                 return try await (etat: etat, preuves: preuves)
             }
         } catch {
-            guard await estCourant(jeton), !Self.estAnnulation(error) else { return }
+            guard await estCourant(jeton), !Self.estAnnulation(error) else { return nil }
             noterSession(error)
-            issue = .erreur(Self.message(error))
-            return
+            publier(.erreur(Self.message(error)), jeton)
+            return nil
         }
-        guard await estCourant(jeton) else { return }
+        guard await estCourant(jeton) else { return nil }
         chargement = .pret(base.etat)
-        guard PointageRules.pointageDisponible(statut: base.etat.statut) else { return }
+        guard PointageRules.pointageDisponible(statut: base.etat.statut) else { return nil }
 
         let demarre: RecuScan
         var essai: String?
@@ -273,25 +326,25 @@ public final class PointageModel: ObservableObject {
         } catch {
             if let essai { oublier(essai) }
             publier((error as? RecuErreur) == .recuEnCours ? .recuEnCours : .suiviIllisible, jeton)
-            return
+            return nil
         }
-        defer { Self.essaisEnVol.remove(demarre.attemptId) }
+        // L'essai reste « en vol » jusqu'à la fin de sa vérification quand la réponse est perdue (`pointer`).
+        var resteEnVol = false
+        defer { if !resteEnVol { Self.essaisEnVol.remove(demarre.attemptId) } }
 
         let metadonnees = MetadonneesScan(idTerminal: terminal, observation: gps)
         let resultat: IssueScan
         do {
-            resultat = try await bounded(timeout: x.delai) {
-                try await port.scanner(code: code, metadonnees: metadonnees, recu: demarre, context: context)
-            }
+            resultat = try await envoyerRequete(code: code, metadonnees: metadonnees, recu: demarre, x, jeton)
         } catch let erreur as JoleneError where erreur.kind == .unauthorized {
             // Session expirée (m1) : rien n'est affirmé ; reçu `started` gardé, réconcilié au retour de l'utilisateur.
             noterSortieSansReponse(demarre, delaiDepasse: false)
-            guard await estCourant(jeton) else { return }
+            guard await estCourant(jeton) else { return nil }
             sessionExpired = true
-            issue = .verification
-            return
+            afficherSuivi(.verification, essai: demarre.attemptId, jeton)
+            return nil
         } catch {
-            // Délai `bounded` ou transport : la requête a pu être appliquée (PRINCIPES §3-§4).
+            // Délai `bounded` de la requête ou transport : elle a pu être appliquée (PRINCIPES §3-§4).
             noterSortieSansReponse(demarre, delaiDepasse: Self.estDelaiDepasse(error), delai: x.delai)
             resultat = .incertain
         }
@@ -299,19 +352,52 @@ public final class PointageModel: ObservableObject {
         guard await estCourant(jeton) else {
             // Écran disparu ou epoch périmé : rien n'est publié. Même utilisateur : l'essai décidé est soldé.
             if await controller.epoch == snapshot.epoch { await solder(resultat, recu: demarre) }
-            return
+            return nil
         }
-        await traiter(resultat, recu: demarre, x, jeton)
+        guard await traiter(resultat, recu: demarre, x, jeton) else { return nil }
+        resteEnVol = true
+        return (demarre, x)
     }
 
-    private func traiter(_ resultat: IssueScan, recu: RecuScan, _ x: Contexte, _ jeton: Int) async {
+    /// L'unique requête, bornée seule, puis, pour un HTTP 200, ses relectures bornées à part (seconde revue fraîche de
+    /// T3, mi-1) : un HTTP 200 n'aboutit qu'à `.enregistre`, `.enregistreSurAutreMission` ou `.accepteSansPreuve`, même
+    /// quand ses relectures échouent ou dépassent le délai. Lève l'erreur de la requête (délai, transport, session).
+    private func envoyerRequete(code: String, metadonnees: MetadonneesScan, recu: RecuScan, _ x: Contexte,
+                                _ jeton: Int) async throws -> IssueScan {
+        let port = x.port, context = x.context
+        let envoi = try await bounded(timeout: x.delai) {
+            try await port.envoyerScan(code: code, metadonnees: metadonnees, recu: recu, context: context)
+        }
+        switch envoi {
+        case let .issue(issue):
+            return issue
+        case let .accepte(scan):
+            let relu: IssueScan
+            do {
+                relu = try await bounded(timeout: x.delai) { try await port.relireScanAccepte(scan, recu: recu, context: context) }
+            } catch {
+                // COMMIT prouvé, mission non établie : jamais « incertain » ; une session expirée est signalée (m1).
+                if (error as? JoleneError)?.kind == .unauthorized, await estCourant(jeton) { sessionExpired = true }
+                return .accepteSansPreuve
+            }
+            switch relu {
+            case .enregistre, .enregistreSurAutreMission, .accepteSansPreuve:
+                return relu
+            case .refuse, .incertain, .nonEnvoye, .nonRecu, .horlogeIncoherente:
+                return .accepteSansPreuve
+            }
+        }
+    }
+
+    /// Traite l'issue d'un envoi ; vrai si la réponse est perdue (réconciliation à mener hors de l'envoi).
+    private func traiter(_ resultat: IssueScan, recu: RecuScan, _ x: Contexte, _ jeton: Int) async -> Bool {
         switch resultat {
         case let .enregistre(typeScan, _):
-            await conclureEnregistre(recu, typeScan: typeScan, x, jeton)
+            await conclure(.enregistre(typeScan), recu, x, jeton)
         case let .enregistreSurAutreMission(autre, typeScan, _):
-            await conclureSurAutreMission(recu, autre: autre, typeScan: typeScan, x, jeton)
+            await conclure(Self.conclusion(autre: autre, typeScan: typeScan, recu: recu), recu, x, jeton)
         case .accepteSansPreuve:
-            await conclureSansPreuve(recu, x, jeton)
+            await conclure(.sansPreuve, recu, x, jeton)
         case let .refuse(sqlstate, message):
             // Anti-rejeu juste après une réponse perdue : un scan de ce terminal vient d'être enregistré (§2.5).
             if PointageRules.estAntiRejeu(sqlstate: sqlstate, message: message) {
@@ -319,8 +405,8 @@ public final class PointageModel: ObservableObject {
                 if case let .enregistre(type, _)? = try? await bounded(timeout: x.delai, {
                     try await port.reconcilier(recu: recu, context: context)
                 }) {
-                    await conclureEnregistre(recu, typeScan: type, x, jeton)
-                    return
+                    await conclure(.enregistre(type), recu, x, jeton)
+                    return false
                 }
             }
             // Rollback prouvé : `refused` si SQLSTATE, puis relecture, puis effacement (consigne T3).
@@ -332,48 +418,48 @@ public final class PointageModel: ObservableObject {
                     jeton)
         case .incertain, .nonEnvoye:
             // `scanner` ne rend jamais `.nonEnvoye` : traité, par prudence, comme une réponse perdue.
-            await reconcilierRecu(recu, x, jeton)
+            return true
         case .nonRecu:
-            oublier(recu.attemptId)
-            try? await journal.effacer(recu)
-            publier(.nonRecu, jeton)
+            await conclure(.nonRecu, recu, x, jeton)
         case .horlogeIncoherente:
-            publier(.suiviIllisible, jeton)
+            afficherSuivi(.suiviIllisible, essai: recu.attemptId, jeton)
         }
+        return false
     }
 
-    private func conclureEnregistre(_ recu: RecuScan, typeScan: TypeScan?, _ x: Contexte, _ jeton: Int) async {
+    /// Essai soldé (succès relu, HTTP 200, « non reçu ») : reçu effacé, état de ce bloc relu, issue publiée par le bloc de
+    /// la mission du reçu ; conclue par le bloc d'une autre mission (journal commun), elle est transmise au bloc qui
+    /// affiche la vérification de cet essai (MJ-1).
+    private func conclure(_ conclusion: Conclusion, _ recu: RecuScan, _ x: Contexte, _ jeton: Int) async {
         oublier(recu.attemptId)
         try? await journal.effacer(recu)
         await relireEtat(x, jeton)
-        guard recu.missionId == missionId, visible(jeton) else { return }
-        issue = .enregistre(typeScan)
-        notationAProposer = PointageRules.notationAProposer(typeScan: typeScan, finLe: finLe, maintenant: x.horloge.now())
-    }
-
-    /// HTTP 200 relu sur une autre mission (M-A) : reçu soldé, état de CE bloc relu (inchangé). Aucune note : elle est
-    /// celle de la mission pointée (T5a).
-    private func conclureSurAutreMission(_ recu: RecuScan, autre: String, typeScan: TypeScan?, _ x: Contexte, _ jeton: Int) async {
-        guard autre != recu.missionId else {
-            await conclureEnregistre(recu, typeScan: typeScan, x, jeton)
+        guard recu.missionId == missionId else {
+            Self.transmettre(conclusion, essai: recu.attemptId)
+            leverSuivi(essai: recu.attemptId, jeton)
             return
         }
-        oublier(recu.attemptId)
-        try? await journal.effacer(recu)
-        await relireEtat(x, jeton)
-        guard recu.missionId == missionId else { return }
-        publier(.enregistreSurAutreMission(typeScan, missionId: autre), jeton)
+        appliquer(conclusion, x, jeton)
     }
 
-    /// HTTP 200 sans preuve relue (M-A) : COMMIT prouvé, mission non établie. Le reçu est soldé (aucun renvoi n'est
-    /// possible, et sa réconciliation, filtrée sur sa mission, conclurait à tort « non reçu ») ; suivi non vérifiable,
-    /// renvoi web `/soignant/presences` (T4b) ; ce bloc n'envoie plus rien.
-    private func conclureSansPreuve(_ recu: RecuScan, _ x: Contexte, _ jeton: Int) async {
-        oublier(recu.attemptId)
-        try? await journal.effacer(recu)
-        await relireEtat(x, jeton)
-        guard recu.missionId == missionId else { return }
-        publier(.suiviIllisible, jeton)
+    /// Publie une issue conclue pour la mission de ce bloc. Aucune note pour un scan relu sur une autre mission : elle
+    /// est celle de la mission pointée (T5a).
+    private func appliquer(_ conclusion: Conclusion, _ x: Contexte, _ jeton: Int) {
+        guard visible(jeton) else { return }
+        switch conclusion {
+        case let .enregistre(type):
+            publier(.enregistre(type), jeton)
+            notationAProposer = PointageRules.notationAProposer(typeScan: type, finLe: finLe, maintenant: x.horloge.now())
+        case let .surAutreMission(type, autre):
+            publier(.enregistreSurAutreMission(type, missionId: autre), jeton)
+        case .sansPreuve:
+            // HTTP 200 sans preuve relue (M-A) : COMMIT prouvé, mission non établie ; suivi non vérifiable, renvoi web
+            // `/soignant/presences` (T4b) ; levé après une réapparition du bloc (mi-3).
+            publier(.suiviIllisible, jeton)
+            generationSansPreuve = jeton
+        case .nonRecu:
+            publier(.nonRecu, jeton)
+        }
     }
 
     /// Rollback prouvé à SQLSTATE : phase `refused` journalisée avant l'effacement.
@@ -403,18 +489,21 @@ public final class PointageModel: ObservableObject {
 
     /// Réconcilie le reçu en attente de l'utilisateur (lancement, retour au premier plan, ouverture, suivi).
     public func reconcilier() async {
-        guard actif, !reconciliationEnCours, !envoiEnCours else { return }
+        guard actif, reconciliationGeneration != generation, !envoiEnCours else { return }
         let jeton = generation
-        reconciliationEnCours = true
-        defer { reconciliationEnCours = false }
+        reconciliationGeneration = jeton
+        defer { if reconciliationGeneration == jeton { reconciliationGeneration = nil } }
         guard let x = await contexte(), await estCourant(jeton) else { return }
         let recu: RecuScan?
         do {
             recu = try await journal.lire(userId: x.context.userId)
         } catch {
-            if await estCourant(jeton) { issue = .suiviIllisible }
+            // Journal illisible : jamais réécrit ni effacé, et ce suivi n'est jamais levé par l'app.
+            if await estCourant(jeton) { publier(.suiviIllisible, jeton) }
             return
         }
+        guard await estCourant(jeton) else { return }
+        reprendreSuiviSolde(recu, x, jeton)
         guard let recu, !Self.essaisEnVol.contains(recu.attemptId) else { return }
         switch recu.phase {
         case .prepared:
@@ -424,58 +513,82 @@ public final class PointageModel: ObservableObject {
         case .refused, .notSent:
             try? await journal.effacer(recu)
         case .started:
+            Self.essaisEnVol.insert(recu.attemptId)
+            defer { Self.essaisEnVol.remove(recu.attemptId) }
             await reconcilierRecu(recu, x, jeton)
         }
     }
 
+    /// Réconciliation d'un essai de ce bloc juste après son envoi : l'essai reste « en vol » (aucun autre bloc ne le
+    /// réconcilie en parallèle) jusqu'à la fin des relectures.
+    private func reconcilierApresEnvoi(_ recu: RecuScan, _ x: Contexte, _ jeton: Int) async {
+        defer { Self.essaisEnVol.remove(recu.attemptId) }
+        if recu.missionId == missionId { afficherSuivi(.verification, essai: recu.attemptId, jeton) }
+        // Une réconciliation de cette génération tourne déjà (autre reçu, soldé depuis) : elle, ou le suivi, reprendra
+        // celui-ci ; la vérification reste affichée et bloque tout envoi.
+        guard reconciliationGeneration != jeton else { return }
+        reconciliationGeneration = jeton
+        defer { if reconciliationGeneration == jeton { reconciliationGeneration = nil } }
+        await reconcilierRecu(recu, x, jeton)
+    }
+
+    /// Relectures d'un reçu `started` : la première tout de suite (§2.5, mi-2) ; sans preuve, « non reçu » seulement
+    /// après l'attente monotone de l'essai, sinon « à relire » après le reste de cette attente (ou la pause).
     private func reconcilierRecu(_ recu: RecuScan, _ x: Contexte, _ jeton: Int) async {
-        let memeMission = recu.missionId == missionId
-        if memeMission { publier(.verification, jeton) }
+        if recu.missionId == missionId { afficherSuivi(.verification, essai: recu.attemptId, jeton) }
         let port = x.port, context = x.context
-        for tentative in 0..<Self.maxRelectures {
-            if let debut = Self.demarragesMonotones[recu.attemptId] {
-                let requis = Self.delaisAbsence[recu.attemptId] ?? RecuScan.delaiAbsenceProuvee
-                let reste = requis - (monotone() - debut)
-                if reste > 0 { await attendre(reste) }
-            }
-            if tentative > 0 { await attendre(Self.pauseRelecture) }
+        var relectures = 0
+        while true {
             guard await estCourant(jeton) else { return }
             let verdict: IssueScan
             do {
                 verdict = try await bounded(timeout: x.delai) { try await port.reconcilier(recu: recu, context: context) }
             } catch is RecuErreur {
-                if await estCourant(jeton) { issue = .suiviIllisible }
+                if await estCourant(jeton) { publier(.suiviIllisible, jeton) }
                 return
             } catch let erreur as JoleneError where erreur.kind == .unauthorized {
                 // m1 : session expirée signalée tout de suite ; le reçu reste `started`, réconcilié au retour.
                 if await estCourant(jeton) { sessionExpired = true }
                 return
             } catch {
-                continue
+                verdict = .incertain
             }
             guard await estCourant(jeton) else { return }
             switch verdict {
             case let .enregistre(type, _):
-                await conclureEnregistre(recu, typeScan: type, x, jeton)
+                await conclure(.enregistre(type), recu, x, jeton)
                 return
             case let .enregistreSurAutreMission(autre, type, _):
-                await conclureSurAutreMission(recu, autre: autre, typeScan: type, x, jeton)
+                await conclure(Self.conclusion(autre: autre, typeScan: type, recu: recu), recu, x, jeton)
                 return
             case .accepteSansPreuve:
-                await conclureSansPreuve(recu, x, jeton)
-                return
-            case .nonRecu:
-                oublier(recu.attemptId)
-                try? await journal.effacer(recu)
-                await relireEtat(x, jeton)
-                if memeMission { publier(.nonRecu, jeton) }
+                await conclure(.sansPreuve, recu, x, jeton)
                 return
             case .horlogeIncoherente:
-                issue = .suiviIllisible
+                afficherSuivi(.suiviIllisible, essai: recu.attemptId, jeton)
                 return
-            case .incertain, .refuse, .nonEnvoye:
-                continue
+            case .nonRecu where resteAvantAbsence(recu) <= 0:
+                await conclure(.nonRecu, recu, x, jeton)
+                return
+            case .nonRecu, .incertain, .refuse, .nonEnvoye:
+                relectures += 1
+                guard relectures < Self.maxRelectures else { return }
+                let reste = resteAvantAbsence(recu)
+                await attendre(reste > 0 ? reste : Self.pauseRelecture)
             }
+        }
+    }
+
+    /// MJ-1 : l'essai dont ce bloc affiche la vérification n'est plus en attente dans le journal commun (soldé par un
+    /// autre bloc, ou effacé) : son issue transmise est publiée ; à défaut, la vérification est levée (l'état vient
+    /// d'être relu, et tout nouvel envoi relit sa base), jamais un succès supposé.
+    private func reprendreSuiviSolde(_ enAttente: RecuScan?, _ x: Contexte, _ jeton: Int) {
+        guard let essai = essaiAffiche, visible(jeton) else { return }
+        if let enAttente, enAttente.attemptId == essai, !enAttente.estTermine { return }
+        if let conclusion = Self.retirerConclusion(essai) {
+            appliquer(conclusion, x, jeton)
+        } else {
+            leverSuivi(essai: essai, jeton)
         }
     }
 
@@ -513,9 +626,44 @@ public final class PointageModel: ObservableObject {
         return epoch == snapshot.epoch && visible(jeton)
     }
 
+    /// Issue sans essai attaché : jamais levée par la reprise d'un essai soldé.
     private func publier(_ nouvelle: Issue, _ jeton: Int) {
         guard visible(jeton) else { return }
         issue = nouvelle
+        essaiAffiche = nil
+        generationSansPreuve = nil
+    }
+
+    /// `.verification` ou `.suiviIllisible` attachés à l'essai `essai` : levés quand il est soldé (MJ-1).
+    private func afficherSuivi(_ nouvelle: Issue, essai: String, _ jeton: Int) {
+        guard visible(jeton) else { return }
+        issue = nouvelle
+        essaiAffiche = essai
+        generationSansPreuve = nil
+    }
+
+    /// Essai soldé sans issue à publier ici : la vérification (ou le suivi non vérifiable) qui lui était attachée est
+    /// levée ; rien ne change si ce bloc n'est pas visible (reprise à la prochaine réconciliation).
+    private func leverSuivi(essai: String, _ jeton: Int) {
+        guard essaiAffiche == essai, visible(jeton) else { return }
+        essaiAffiche = nil
+        if issue == .verification || issue == .suiviIllisible { issue = nil }
+    }
+
+    /// mi-3 : `.suiviIllisible` d'un HTTP 200 sans preuve, publié dans une génération antérieure (le bloc a disparu puis
+    /// réapparu), est levé par une lecture d'état réussie : le reçu est soldé et tout nouvel envoi relit sa base.
+    private func leverSansPreuveApresReapparition(_ jeton: Int) {
+        guard let publiee = generationSansPreuve, publiee != jeton, issue == .suiviIllisible else { return }
+        generationSansPreuve = nil
+        issue = nil
+    }
+
+    /// Temps monotone restant avant qu'une absence de preuve vaille « non reçu » (M1, m2) ; 0 pour un essai d'un autre
+    /// processus (seul l'écart d'horloge murale de la gateway s'applique alors).
+    private func resteAvantAbsence(_ recu: RecuScan) -> TimeInterval {
+        guard let debut = Self.demarragesMonotones[recu.attemptId] else { return 0 }
+        let requis = Self.delaisAbsence[recu.attemptId] ?? RecuScan.delaiAbsenceProuvee
+        return requis - (monotone() - debut)
     }
 
     /// Essai sorti sans réponse (m2) : « non reçu » seulement après l'instant de sortie (au moins le délai `bounded`
@@ -535,6 +683,23 @@ public final class PointageModel: ObservableObject {
 
     private func noterSession(_ error: Error) {
         sessionExpired = (error as? JoleneError)?.kind == .unauthorized
+    }
+
+    private static func conclusion(autre: String, typeScan: TypeScan?, recu: RecuScan) -> Conclusion {
+        autre == recu.missionId ? .enregistre(typeScan) : .surAutreMission(typeScan, missionId: autre)
+    }
+
+    private static func transmettre(_ conclusion: Conclusion, essai: String) {
+        conclusionsTransmises.removeAll { $0.essai == essai }
+        conclusionsTransmises.append((essai: essai, conclusion: conclusion))
+        if conclusionsTransmises.count > maxConclusionsTransmises {
+            conclusionsTransmises.removeFirst(conclusionsTransmises.count - maxConclusionsTransmises)
+        }
+    }
+
+    private static func retirerConclusion(_ essai: String) -> Conclusion? {
+        guard let index = conclusionsTransmises.firstIndex(where: { $0.essai == essai }) else { return nil }
+        return conclusionsTransmises.remove(at: index).conclusion
     }
 
     private static func estAnnulation(_ error: Error) -> Bool {

@@ -20,7 +20,8 @@ public protocol PointagePort: Sendable {
     /// `fn_consentir_gps(p_accepte)` puis relecture : rend la valeur relue, jamais une hypothèse locale.
     func enregistrerConsentementGps(_ accepte: Bool, context: MissionReadContext) async throws -> Bool
     /// Une seule requête `fn_scanner_code_pointage` ; `recu` est en phase `started` et déjà journalisé.
-    /// Succès annoncé seulement après relecture de l'état et de `scans_pointage` (preuve hors baseline).
+    /// Succès annoncé seulement après relecture de l'état et de `scans_pointage` (preuve hors baseline). Équivaut à
+    /// `envoyerScan` suivi, pour un HTTP 200, de `relireScanAccepte` ; `PointageModel` appelle les deux moitiés.
     func scanner(code: String, metadonnees: MetadonneesScan, recu: RecuScan, context: MissionReadContext) async throws -> IssueScan
     /// Relecture de `scans_pointage` pour un reçu `started` (`RecuScan.reconcilier(scans:relueLe:)`), verdict
     /// traduit par `IssueScan(reconciliation:)` : `.enregistre`, `.incertain` (relire), `.nonRecu`, `.horlogeIncoherente`.
@@ -30,11 +31,37 @@ public protocol PointagePort: Sendable {
     /// Lignes `scans_pointage` de la mission (projection `PreuveScan.colonnes`) : base `preuvesAvant` du reçu, relue
     /// AVANT l'envoi (§2.5). Ajout de T3 (amendement du §2.3, `DECISIONS_LOT2.md`) ; défaut « non câblé » ci-dessous.
     func preuvesScan(missionId: String, context: MissionReadContext) async throws -> [PreuveScan]
+    /// Première moitié de `scanner` : l'unique requête seule, sans les relectures d'un HTTP 200, pour que l'appelant
+    /// borne la requête et les relectures séparément (seconde revue fraîche de T3, mi-1 : un HTTP 200 tardif suivi de
+    /// relectures ne doit jamais devenir `.incertain` par dépassement du délai). Défaut ci-dessous : `.issue(scanner(…))`.
+    func envoyerScan(code: String, metadonnees: MetadonneesScan, recu: RecuScan, context: MissionReadContext) async throws -> EnvoiScan
+    /// Seconde moitié : relectures d'un HTTP 200 rendu par `envoyerScan` (`.accepte`) → `.enregistre`,
+    /// `.enregistreSurAutreMission` ou `.accepteSansPreuve`, jamais `.incertain`.
+    func relireScanAccepte(_ scan: ScanEnregistre?, recu: RecuScan, context: MissionReadContext) async throws -> IssueScan
+}
+
+/// Issue de la seule requête `fn_scanner_code_pointage`, avant les relectures (seconde revue fraîche de T3, mi-1).
+public enum EnvoiScan: Equatable, Sendable {
+    /// Verdict sans relecture à faire : refus, réponse perdue, ou verdict d'un port qui relit lui-même (`scanner`).
+    case issue(IssueScan)
+    /// HTTP 200 (COMMIT prouvé) : relectures à faire par `relireScanAccepte` ; réponse en liste blanche, nil hors contrat.
+    case accepte(ScanEnregistre?)
 }
 
 public extension PointagePort {
     /// Défaut des conformances antérieures à T3 (stub, doubles de test) : refus « non câblé », jamais une base vide.
     func preuvesScan(missionId: String, context: MissionReadContext) async throws -> [PreuveScan] {
+        throw UnwiredPorts.erreur(port: "pointage", tranche: "T3", lot: 2)
+    }
+
+    /// Défaut : le port relit lui-même dans `scanner` (démo, doubles de test, stub) ; jamais `.accepte`.
+    func envoyerScan(code: String, metadonnees: MetadonneesScan, recu: RecuScan, context: MissionReadContext) async throws -> EnvoiScan {
+        .issue(try await scanner(code: code, metadonnees: metadonnees, recu: recu, context: context))
+    }
+
+    /// Défaut : inatteignable (le défaut d'`envoyerScan` ne rend jamais `.accepte`) ; refus « non câblé », que le modèle
+    /// traduit en `.accepteSansPreuve` (fail-closed), jamais un succès supposé.
+    func relireScanAccepte(_ scan: ScanEnregistre?, recu: RecuScan, context: MissionReadContext) async throws -> IssueScan {
         throw UnwiredPorts.erreur(port: "pointage", tranche: "T3", lot: 2)
     }
 }
