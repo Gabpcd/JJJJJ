@@ -135,7 +135,11 @@ public final class PreferencesModel: ObservableObject {
         let delai = controller.resolutionTimeout
         do {
             let relu = try await bounded(timeout: delai) { try await port.enregistrer(demande, context: context) }
-            guard await controller.epoch == snapshot.epoch else { return }
+            // Identité changée pendant l'envoi : rien n'est publié pour l'ancienne (la racine démonte l'écran).
+            guard await controller.epoch == snapshot.epoch else {
+                enregistrement = .aucun
+                return
+            }
             state = .loaded(relu)
             let concordance = relu.concordance(avec: demande)
             if !concordance.generales {
@@ -146,7 +150,10 @@ public final class PreferencesModel: ObservableObject {
                 enregistrement = .enregistre
             }
         } catch {
-            guard await controller.epoch == snapshot.epoch else { return }
+            guard await controller.epoch == snapshot.epoch else {
+                enregistrement = .aucun
+                return
+            }
             let jolene = error as? JoleneError
             if error is CancellationError || jolene?.kind == .cancelled {
                 // Vue fermée pendant l'envoi : rien n'est annoncé ; la prochaine ouverture relit le serveur.

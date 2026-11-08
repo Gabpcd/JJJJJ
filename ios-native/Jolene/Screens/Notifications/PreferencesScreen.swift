@@ -7,62 +7,76 @@ import JoleneDesign
 /// échec partiel, délai dépassé) et textes verbatim testés dans JoleneCore
 /// (`PreferencesNotificationsTests`, `PreferencesModelTests`) ; la vue n'ajoute aucune règle.
 ///
-/// Sections, dans l'ordre du web : SMS d'alerte (si la ligne `soignants` a été lue), canaux globaux (+ état
-/// d'autorisation de l'appareil, point d'extension `etatAppareil`), matrice par événement (catalogue filtré
-/// par régime ; une carte par événement, un interrupteur par canal de l'événement — le « — » du web n'a pas
-/// d'interrupteur), notifications d'urgence, puis « Enregistrer » dans une barre fixe au-dessus de la
-/// barre d'onglets, avec l'issue de l'enregistrement.
+/// Sections, dans l'ordre du web : SMS d'alerte (si la ligne `soignants` a été lue), canaux globaux (+ carte
+/// « Autorisation du téléphone » de T4, `EtatNotificationsAppareilRow`, dont c'est l'hôte définitif : canal
+/// push lu du brouillon comme le web l.345-356, autorisation relue à l'affichage et au retour au premier plan
+/// comme l.142-165), matrice par événement (catalogue filtré par régime ; une carte par événement, un
+/// interrupteur par canal de l'événement — le « — » du web n'a pas d'interrupteur), notifications d'urgence,
+/// puis « Enregistrer » dans une barre fixe sous le défilement (comme `FiltresSheet` : le cadre du défilement
+/// s'arrête au-dessus de la barre, aucun contrôle n'est masqué par elle), avec l'issue de l'enregistrement.
 ///
-/// Identifiants : `prefs-screen`, `prefs-loading`, `prefs-error`, `prefs-retry`, `prefs-session-expired`,
-/// `prefs-session-check`, `prefs-sms-alertes` (+ `-avertissement`), `prefs-canal-email|push|sms|inapp`,
-/// `prefs-evt-<TYPE>-<CANAL>`, `prefs-urgence`, `prefs-barre-action`, `prefs-enregistrer`, `prefs-enregistre`,
-/// `prefs-enregistrement-partiel`, `prefs-enregistrement-erreur`.
-///
-/// Point d'extension T4 : `EtatNotificationsAppareilRow` (`push-etat-appareil`, `push-ouvrir-reglages`) n'est
-/// pas encore sur la base ; il se passe en `etatAppareil` sans autre changement de cet écran.
-struct PreferencesScreen<EtatAppareil: View>: View {
+/// Identifiants : `prefs-screen` (défilement), `prefs-loading`, `prefs-error`, `prefs-retry`,
+/// `prefs-session-expired`, `prefs-session-check`, `prefs-sms-alertes` (+ `-avertissement`),
+/// `prefs-canal-email|push|sms|inapp`, `push-etat-appareil` (+ `-title`, `-message`, boutons
+/// `push-activer-appareil`, `push-ouvrir-reglages`), `prefs-evt-<TYPE>-<CANAL>`, `prefs-urgence`,
+/// `prefs-barre-action`, `prefs-enregistrer`, `prefs-enregistre`, `prefs-enregistrement-partiel`,
+/// `prefs-enregistrement-erreur`.
+struct PreferencesScreen: View {
     @StateObject private var model: PreferencesModel
+    /// Lot 3, T4 : carte d'autorisation de l'appareil (hôte définitif depuis T6).
+    @StateObject private var etatAppareil: EtatNotificationsAppareilModel
     @ObservedObject private var session: SessionStore
-    private let etatAppareil: EtatAppareil
+    @Environment(\.scenePhase) private var scenePhase
 
-    init(session: SessionStore, snapshot: SessionSnapshot, @ViewBuilder etatAppareil: () -> EtatAppareil) {
+    init(session: SessionStore, snapshot: SessionSnapshot, push: PushCoordinator?, permission: PushPermissionPort?) {
         self.session = session
-        self.etatAppareil = etatAppareil()
         _model = StateObject(wrappedValue: PreferencesModel(controller: session.controller, snapshot: snapshot))
+        _etatAppareil = StateObject(wrappedValue: EtatNotificationsAppareilModel(push: push, permission: permission,
+                                                                                 snapshot: snapshot))
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: JoleneSpacing.xl) {
-                switch model.state {
-                case .loading:
-                    chargement
-                case let .failed(message) where model.sessionExpired:
-                    EmptyState(systemImage: "person.crop.circle.badge.exclamationmark", title: "Session à vérifier", message: message,
-                               identifier: "prefs-session-expired", actionTitle: "Vérifier ma session",
-                               actionIdentifier: "prefs-session-check") { Task { await model.verifierSession(session) } }
-                case .failed:
-                    EmptyState(systemImage: "bell.slash", title: PreferencesTextes.titre,
-                               message: PreferencesTextes.chargementImpossible, identifier: "prefs-error",
-                               actionTitle: PreferencesTextes.reessayer, actionIdentifier: "prefs-retry") {
-                        Task { await model.load() }
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: JoleneSpacing.xl) {
+                    switch model.state {
+                    case .loading:
+                        chargement
+                    case let .failed(message) where model.sessionExpired:
+                        EmptyState(systemImage: "person.crop.circle.badge.exclamationmark", title: "Session à vérifier", message: message,
+                                   identifier: "prefs-session-expired", actionTitle: "Vérifier ma session",
+                                   actionIdentifier: "prefs-session-check") { Task { await model.verifierSession(session) } }
+                    case .failed:
+                        EmptyState(systemImage: "bell.slash", title: PreferencesTextes.titre,
+                                   message: PreferencesTextes.chargementImpossible, identifier: "prefs-error",
+                                   actionTitle: PreferencesTextes.reessayer, actionIdentifier: "prefs-retry") {
+                            Task { await model.load() }
+                        }
+                    case let .loaded(preferences):
+                        contenu(preferences)
                     }
-                case let .loaded(preferences):
-                    contenu(preferences)
                 }
+                .padding(JoleneSpacing.lg)
+                .frame(maxWidth: 720)
+                .frame(maxWidth: .infinity)
             }
-            .padding(JoleneSpacing.lg)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
-        }
-        .safeAreaInset(edge: .bottom) {
+            .accessibilityIdentifier("prefs-screen")
             if model.preferences != nil { barreAction }
         }
-        .accessibilityIdentifier("prefs-screen")
         .background(JoleneColor.lavender.ignoresSafeArea())
         .navigationTitle(PreferencesTextes.titre)
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.chargerSiNecessaire() }
+        // Lot 3, T4 → T6 : autorisation lue à l'affichage, et au retour de Réglages (premier plan).
+        .task { await etatAppareil.verifier() }
+        .onChange(of: scenePhase) { phase in
+            guard phase == .active else { return }
+            Task { await etatAppareil.verifier() }
+        }
+        // Le message et l'action de la carte suivent le canal push du brouillon (web l.345-356).
+        .onChange(of: model.preferences?.canalPush) { canal in
+            etatAppareil.canalPush = canal
+        }
     }
 
     // MARK: - États
@@ -135,7 +149,8 @@ struct PreferencesScreen<EtatAppareil: View>: View {
                           isDisabled: model.estEnregistrementEnCours,
                           identifier: PreferencesTextes.identifiantCanal(canal))
             }
-            etatAppareil
+            // Web l.326-368 : sous les quatre canaux, seulement si la carte a quelque chose à affirmer.
+            EtatNotificationsAppareilRow(model: etatAppareil)
         }
     }
 
@@ -214,12 +229,5 @@ struct PreferencesScreen<EtatAppareil: View>: View {
         case .sms: return "message"
         case .inApp: return "bell"
         }
-    }
-}
-
-extension PreferencesScreen where EtatAppareil == EmptyView {
-    /// Sans état d'autorisation de l'appareil tant que T4 (`EtatNotificationsAppareilRow`) n'est pas sur la base.
-    init(session: SessionStore, snapshot: SessionSnapshot) {
-        self.init(session: session, snapshot: snapshot) { EmptyView() }
     }
 }

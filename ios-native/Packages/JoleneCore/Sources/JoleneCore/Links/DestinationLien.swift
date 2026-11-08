@@ -86,7 +86,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .notifications:
             return false                                 // T5 — centre de notifications
         case .parametresNotifications:
-            return false                                 // T6 — préférences de notifications
+            return true                                  // T6 — `PreferencesScreen` (onglet Profil, entrée « Réglages »)
         case .inscription(let etape):
             switch etape.page {
             case .soignant, .reprendre: return false     // T7 — compte rapide, aiguillage onboarding

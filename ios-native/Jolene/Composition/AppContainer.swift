@@ -6,7 +6,7 @@ import JoleneSupabase
 /// et construit la session. Le mode démonstration n'instancie JAMAIS JoleneSupabase.
 ///
 /// Surcharges de lancement (`-JOLENE_MODE`, `JOLENE_MODE`, `JOLENE_FORCE_BAD_KEY`,
-/// `JOLENE_FORCE_ACCUEIL_ECHEC`, `-JOLENE_PUSH_AUTORISATION` en démo, `-JOLENE_PUSH_TOKEN_FACTICE` en
+/// `JOLENE_FORCE_ACCUEIL_ECHEC`, `JOLENE_FORCE_PREFERENCES_ECHEC`, `-JOLENE_PUSH_AUTORISATION` en démo, `-JOLENE_PUSH_TOKEN_FACTICE` en
 /// staging) et sentinelle réseau : honorées en build DEBUG uniquement. En Release, seul l'Info.plist
 /// (xcconfig Production) fait foi, et la sentinelle n'existe pas dans le binaire.
 ///
@@ -124,16 +124,22 @@ final class AppContainer: ObservableObject {
     /// Ports du monde démo. DEBUG seulement : `JOLENE_FORCE_ACCUEIL_ECHEC=1` (variable d'environnement
     /// du processus, comme `JOLENE_FORCE_BAD_KEY`) fait échouer le premier chargement de l'Accueil
     /// (`DemoDashboardEchecGateway`) pour la recette de l'état d'erreur et de la reprise
-    /// (`DemoAccueilTests.testAccueilErreurPuisReprise`). Jamais compilé en Release.
+    /// (`DemoAccueilTests.testAccueilErreurPuisReprise`) ; lot 3, T6 : `JOLENE_FORCE_PREFERENCES_ECHEC=1`,
+    /// de même pour les préférences de notifications (`DemoPreferencesEchecGateway`,
+    /// `DemoPreferencesTests.testPreferencesErreurPuisReprise`). Jamais compilé en Release.
     private static func demoGateways(processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
+        var gateways = DemoWorld.gateways()
         if processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] == "1" {
-            var gateways = DemoWorld.gateways()
             gateways.dashboard = DemoDashboardEchecGateway()
-            return gateways
         }
-        #endif
+        if processEnvironment["JOLENE_FORCE_PREFERENCES_ECHEC"] == "1" {
+            gateways.preferences = DemoPreferencesEchecGateway() // lot 3, T6
+        }
+        return gateways
+        #else
         return DemoWorld.gateways()
+        #endif
     }
 
     /// Lot 3, T4 : état d'autorisation du double démo. DEBUG seulement : `-JOLENE_PUSH_AUTORISATION`

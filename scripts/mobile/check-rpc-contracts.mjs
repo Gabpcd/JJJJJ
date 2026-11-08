@@ -86,8 +86,8 @@ export const RPC_SUIVIES = [
   // Lot 3, tranche T0 (`docs/mobile-swift/LOT3_PLAN.md` §3 T0) : push, préférences, inscription, profil,
   // compte, revenus, paiements déclarés, IBAN — ordre du blueprint, fiches dans CONTRATS_RPC_SOIGNANT.md.
   { name: 'fn_desactiver_mon_token_push', statut: 'consommee', lot: 3 }, // L3-T4 : SupabasePushGateway
-  { name: 'fn_obtenir_mes_preferences_notifications', statut: 'a_venir', lot: 3 },
-  { name: 'fn_modifier_preferences_notifications', statut: 'a_venir', lot: 3 },
+  { name: 'fn_obtenir_mes_preferences_notifications', statut: 'consommee', lot: 3 }, // L3-T6 : SupabasePreferencesGateway
+  { name: 'fn_modifier_preferences_notifications', statut: 'consommee', lot: 3 }, // L3-T6 : SupabasePreferencesGateway
   { name: 'fn_demarrer_inscription', statut: 'a_venir', lot: 3 },
   { name: 'fn_enregistrer_parcours_inscription', statut: 'a_venir', lot: 3 },
   { name: 'fn_types_exercice_autorises', statut: 'a_venir', lot: 3 },

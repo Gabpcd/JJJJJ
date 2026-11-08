@@ -298,6 +298,12 @@ public enum PreferencesTextes {
     /// Repli du web quand l'erreur n'a pas de message (`err?.message || 'Erreur enregistrement'`, l.244).
     public static let echecEnregistrement = "Erreur enregistrement"
 
+    /// Entrée du hub Profil vers cet écran : section « Réglages » (`src/pages/MonCompteSoignant.tsx` l.113) et
+    /// ligne « Notifications » (l.115). Posée par T6 à la place de la carte provisoire de T4 ; reprise par T11.
+    public static let sectionHub = "Réglages"
+    public static let entreeHub = "Notifications"
+    public static let identifiantEntreeHub = "profile-preferences-notifications"
+
     /// Libellés des canaux globaux (l.321-324).
     public static func libelleCanalGlobal(_ canal: CanalNotification) -> String {
         switch canal {
