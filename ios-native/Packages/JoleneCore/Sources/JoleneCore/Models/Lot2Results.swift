@@ -69,8 +69,9 @@ public struct SegmentPointage: Codable, Equatable, Sendable {
 
 /// `fn_etat_pointage_mission(p_mission_id)` (`public.sql` l.35180-35190), en liste blanche :
 /// `code_pointage_actif` (nul pour le soignant, l.35188) et `est_etab` (nul pour tout compte sans
-/// établissement) ne sont jamais décodés. Un refus `{error}` HTTP 200 (l.35162, l.35169) est traité par la
-/// gateway (T3, `.refuse` verbatim) ; le décodeur le refuse aussi, comme un objet sans `nb_scans` ni
+/// établissement) ne sont jamais décodés. Un refus `{error}` HTTP 200 (l.35162, l.35169) est levé par la
+/// gateway (T3) en `JoleneError(.unknown, <message serveur verbatim>)` (« Non authentifié » → `.unauthorized`,
+/// consigne M3 de `DECISIONS_LOT2.md`) ; le décodeur le refuse aussi, comme un objet sans `nb_scans` ni
 /// `prochain_type_scan` (clés toujours présentes dans un succès, valeurs nulles comprises). Tolérance par
 /// valeur et par segment.
 public struct EtatPointage: Codable, Equatable, Sendable {
@@ -193,7 +194,8 @@ public struct PreuveScan: Codable, Equatable, Sendable {
 
 /// `p_metadata` du scan, clés identiques à `PointageRotatifSoignant.tsx` l.122-126 : `id_terminal`, puis
 /// `latitude`, `longitude`, `precision_gps_m` seulement pour une position disponible (P3 ; décision 5 :
-/// aucune coordonnée en précision réduite). Jamais journalisé (coordonnées).
+/// aucune coordonnée en précision réduite). Jamais journalisé (coordonnées) : seul `encode` les écrit (corps de la
+/// requête) ; descriptions et réflexion les masquent (revue fraîche de T1, M6 ; de T3, m8).
 public struct MetadonneesScan: Encodable, Equatable, Sendable {
     public let idTerminal: String
     public let latitude: Double?
@@ -220,12 +222,33 @@ public struct MetadonneesScan: Encodable, Equatable, Sendable {
     }
 }
 
+extension MetadonneesScan: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    /// Terminal et état GPS seulement, jamais les coordonnées ni leur précision.
+    public var description: String { "MetadonneesScan(idTerminal: \(idTerminal), gps: \(gps.rawValue))" }
+    public var debugDescription: String { description }
+    public var customMirror: Mirror {
+        Mirror(self, children: ["idTerminal": idTerminal, "gps": gps], displayStyle: .struct)
+    }
+}
+
 // `InstantanePresences` (posé ici par T1) est complété et déplacé par T3 dans `Pointage/InstantanePresences.swift`.
 
 /// Issue d'un scan ou de sa réconciliation (blueprint §2.3, §2.5). Jamais de renvoi automatique.
 public enum IssueScan: Equatable, Sendable {
     /// Accepté par le serveur ET relu (`fn_etat_pointage_mission` et `scans_pointage`).
     case enregistre(typeScan: TypeScan?, numeroScan: Int)
+    /// HTTP 200 (COMMIT prouvé : PostgREST construit la réponse après le COMMIT, amendement de la correction 10) et
+    /// scan relu sur une AUTRE mission que celle du reçu : `fn_scanner_code_pointage` trouve la mission par le seul code
+    /// (`public.sql` l.55639-55644), le code saisi était celui de `missionId`. Ligne `scans_pointage` relue sans filtre
+    /// de mission et état de `missionId` confirmé ; jamais « non reçu » (revue fraîche de T3, M-A). Rendu par
+    /// `PointagePort.scanner` seulement.
+    case enregistreSurAutreMission(missionId: String, typeScan: TypeScan?, numeroScan: Int)
+    /// HTTP 200 (COMMIT prouvé) que la relecture ne confirme pas (lecture en échec, réponse hors contrat, ligne
+    /// introuvable, état non basculé) : le scan est validé, la mission n'est pas établie. Jamais `.incertain` (la
+    /// réconciliation du reçu, filtrée sur sa mission, conclurait « non reçu »), jamais un succès affiché : suivi non
+    /// vérifiable (`RecuScan.messageIllisible`), renvoi web `/soignant/presences` (revue fraîche de T3, M-A). Rendu par
+    /// `PointagePort.scanner` seulement.
+    case accepteSansPreuve
     /// Exception PostgREST ou refus HTTP 200 : rollback prouvé, message serveur verbatim (décision 6).
     case refuse(sqlstate: String?, message: String)
     /// Réponse perdue, délai dépassé ou relecture trop tôt : reçu `started` gardé, réconciliation par relecture,

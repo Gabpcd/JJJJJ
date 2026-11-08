@@ -30,6 +30,11 @@ public enum PointageQuery {
     public static var historiqueSelect: String {
         (PresenceLue.colonnes + ["missions(\(MissionDePresence.colonnes.joined(separator: ",")))"]).joined(separator: ",")
     }
+    /// Lecture d'une ligne `scans_pointage` par créneau et numéro (revue fraîche de T3, M-A) : une seule attendue ; deux
+    /// lues suffisent à refuser une ambiguïté.
+    public static let limiteLocalisation = 2
+    /// `error` de `fn_relancer_validation_presence` sans utilisateur (`public.sql` l.53023) : session expirée.
+    public static let erreurRelanceNonAuthentifie = "NON_AUTHENTIFIE"
     public static let contratsSelect = "id,mission_id,statut,cree_le"
     public static let consentementSelect = "consentement_gps"
     public static var preuvesSelect: String { PreuveScan.selection }

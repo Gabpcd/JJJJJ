@@ -5,21 +5,24 @@ import Supabase
 /// `PointagePort` sur Supabase (blueprint lot 2 §2.3-§2.5, §3 T3), avec le JWT du soignant ; la RLS reste seule juge.
 ///
 /// - Présences : quatre lectures en parallèle comme le `Promise.all` du web (`PresencesSoignant.tsx` l.110-152), puis
-///   créneaux (tous types, paginés), contrats et `fn_etablissements_safe` (`PointageQuery` : projections imposées).
+///   créneaux (tous types, paginés), contrats et `fn_etablissements_safe` (`PointageQuery` : projections imposées) ;
+///   noms d'établissement en lecture tolérante, comme le web (revue fraîche de T3, m5).
 /// - État : `fn_etat_pointage_mission` ; `{error}` HTTP 200 (« Mission introuvable », « Accès interdit ») lu AVANT le
 ///   décodage et levé en `JoleneError(.unknown, <message serveur verbatim>)` (« Non authentifié » → `.unauthorized`) ;
 ///   décodeur `EtatPointage` en liste blanche (`code_pointage_actif`, `est_etab` jamais lus).
 /// - Scan : une seule requête par `RPCResponse.appelerMutation(…, exceptionsMetier: ExceptionsMetierLot2.scannerCodePointage)`.
 ///   Réponse décodée en liste blanche (`ScanEnregistre`) : la forme d'après la PR B1 (sans code suivant) comme celle
 ///   d'avant (code suivant et sa signature encore présents) donnent le même résultat ; ces clés ne sont ni lues, ni
-///   conservées, ni journalisées (la réponse brute ne sort jamais de cette méthode). Succès annoncé seulement après
-///   relecture de l'état (`PointageRules.etatConfirme`) ET d'une preuve `scans_pointage` hors base du reçu
-///   (`RecuScan.reconcilier`) ; sinon `.incertain`. Rollback prouvé → `.refuse` (SQLSTATE si c'en est un) ; transport,
-///   passerelle ou relecture impossible → `.incertain`, jamais un renvoi.
+///   conservées, ni journalisées (la réponse brute ne sort jamais de cette méthode). Un HTTP 200 prouve le COMMIT
+///   (PostgREST construit la réponse après lui) : succès annoncé après relecture de l'état (`PointageRules.etatConfirme`)
+///   ET d'une preuve `scans_pointage` hors base du reçu (`RecuScan.reconcilier`) ; sinon ligne du scan relue SANS filtre
+///   de mission (le code désigne la mission, revue fraîche de T3, M-A) → `.enregistreSurAutreMission` ; sinon
+///   `.accepteSansPreuve`, jamais `.incertain`. Rollback prouvé → `.refuse` (SQLSTATE si c'en est un) ; transport ou
+///   passerelle → `.incertain`, jamais un renvoi ; JWT refusé ou session absente → `.unauthorized` levée (m1).
 /// - Réconciliation : relecture de `scans_pointage` de la mission du reçu, verdict de `RecuScan.reconcilier`.
 /// - Consentement : `soignants.consentement_gps`, puis `fn_consentir_gps` relu.
 /// - Détail : créneaux de la mission et `fn_presences_detail_mission` (carte masquée sur `{error}`).
-/// - Relance : `fn_relancer_validation_presence`, message serveur verbatim.
+/// - Relance : `fn_relancer_validation_presence`, message serveur verbatim ; `NON_AUTHENTIFIE` → `.unauthorized`.
 ///
 /// Les lectures GET peuvent être rejouées par le SDK (`PostgrestBuilder`, correction 19) ; les RPC partent en POST et ne
 /// le sont jamais.
@@ -84,7 +87,7 @@ public struct SupabasePointageGateway: PointagePort {
             missions: missionsActives, presencesValidees: presencesValidees, historique: presences, missionsHistorique: missionsTerminees)
         async let creneaux = lireCreneaux(missionIds: idsMissions)
         async let contrats = lireContrats(missionIds: missionsActives.map(\.id))
-        async let etablissements = missions.etablissements(ids: idsEtablissements)
+        async let etablissements = lireEtablissements(ids: idsEtablissements)
         return try await InstantanePresences(missions: missionsActives, presencesValidees: presencesValidees, historique: presences,
                                              missionsHistorique: missionsTerminees, creneaux: creneaux, contrats: contrats,
                                              etablissements: etablissements, chargeLe: maintenant)
@@ -158,28 +161,80 @@ public struct SupabasePointageGateway: PointagePort {
             if reponse.estRefus {
                 return .refuse(sqlstate: reponse.sqlstate, message: reponse.erreur ?? PointageQuery.fallbackScan)
             }
-            // Corps HTTP 200 sans numéro de scan (contrat changé, `{error}` inattendu) : la fonction a pu valider, relecture.
-            guard reponse.erreur == nil, let scan = PointageQuery.decoder(ScanEnregistre.self, reponse) else { return .incertain }
+            // HTTP 200 : la fonction a rendu, le COMMIT est fait. Corps hors contrat (sans numéro de scan, `{error}`
+            // inattendu) : relu sans réponse décodée, jamais « non reçu » (revue fraîche de T3, M-A).
+            let scan = reponse.erreur == nil ? PointageQuery.decoder(ScanEnregistre.self, reponse) : nil
             return await relire(scan, recu: recu, context: context)
         case let .refusDefinitif(code, erreur):
+            // JWT refusé (`PGRST301`-`PGRST303`) : session expirée, jamais un refus métier (m1).
+            if erreur.kind == .unauthorized { throw erreur }
             return .refuse(sqlstate: RecuScan.sqlstateValide(code) ? code : nil, message: erreur.message)
-        case .incertain:
+        case let .incertain(erreur):
+            // Session absente (levée avant l'envoi) ou 401/403 hors PostgREST : `.unauthorized` remonte (m1) ; l'appelant
+            // garde le reçu `started` et le réconcilie au retour de l'utilisateur.
+            if erreur.kind == .unauthorized { throw erreur }
             return .incertain
         }
     }
 
-    /// Relecture d'un succès (§2.3) : état basculé et preuve hors base du reçu ; sinon `.incertain` (réconciliation).
-    private func relire(_ scan: ScanEnregistre, recu: RecuScan, context: MissionReadContext) async -> IssueScan {
-        do {
-            async let etatRelu = self.etat(missionId: recu.missionId, context: context)
-            async let preuvesRelues = self.preuvesScan(missionId: recu.missionId, context: context)
-            let (relu, lignes) = try await (etatRelu, preuvesRelues)
-            guard case let .recu(preuve) = try recu.reconcilier(scans: lignes, relueLe: clock.now()),
-                  preuve.numeroScan == scan.numeroScan, PointageRules.etatConfirme(relu, scan: scan) else { return .incertain }
-            return .enregistre(typeScan: scan.typeScanEffectue ?? preuve.typeScan, numeroScan: scan.numeroScan)
-        } catch {
-            return .incertain
+    /// Relecture d'un HTTP 200 (§2.3 ; revue fraîche de T3, M-A). `fn_scanner_code_pointage` trouve la mission par le
+    /// seul code (`public.sql` l.55639-55644) : le scan validé peut appartenir à une autre mission du soignant que celle
+    /// du reçu. (1) Mission du reçu : preuve hors base ET état confirmé → `.enregistre`. (2) Sinon, ligne du scan relue
+    /// sans filtre de mission (`localiser`) puis état de sa mission confirmé → `.enregistreSurAutreMission`. (3) Sinon
+    /// `.accepteSansPreuve` : jamais `.incertain`, car la réconciliation du reçu, filtrée sur sa mission, conclurait
+    /// « non reçu » et inviterait à pointer une seconde fois (décision 2, PRINCIPES §4).
+    private func relire(_ scan: ScanEnregistre?, recu: RecuScan, context: MissionReadContext) async -> IssueScan {
+        if let confirme = try? await confirmerSurLaMissionDuRecu(scan, recu: recu, context: context) { return confirme }
+        guard let scan, let creneau = scan.creneauEffectifId, !creneau.isEmpty,
+              let preuve = try? await localiser(scan, creneau: creneau, recu: recu, context: context),
+              let mission = preuve.missionId, mission != recu.missionId,
+              let relu = try? await etat(missionId: mission, context: context),
+              PointageRules.etatConfirme(relu, scan: scan) else { return .accepteSansPreuve }
+        return .enregistreSurAutreMission(missionId: mission, typeScan: scan.typeScanEffectue ?? preuve.typeScan,
+                                          numeroScan: scan.numeroScan)
+    }
+
+    /// (1) de `relire` : nil si la mission du reçu ne confirme pas le scan. Sans réponse décodée, la preuve hors base de
+    /// ce terminal est celle de l'essai (un seul essai en vol par utilisateur, `ReceiptJournal`), si l'état la compte.
+    private func confirmerSurLaMissionDuRecu(_ scan: ScanEnregistre?, recu: RecuScan,
+                                             context: MissionReadContext) async throws -> IssueScan? {
+        async let etatRelu = self.etat(missionId: recu.missionId, context: context)
+        async let preuvesRelues = self.preuvesScan(missionId: recu.missionId, context: context)
+        let (relu, lignes) = try await (etatRelu, preuvesRelues)
+        guard case let .recu(preuve) = try recu.reconcilier(scans: lignes, relueLe: clock.now()),
+              let numero = preuve.numeroScan else { return nil }
+        guard let scan else {
+            return (relu.nbScans ?? 0) >= numero ? .enregistre(typeScan: preuve.typeScan, numeroScan: numero) : nil
         }
+        guard numero == scan.numeroScan, PointageRules.etatConfirme(relu, scan: scan) else { return nil }
+        return .enregistre(typeScan: scan.typeScanEffectue ?? preuve.typeScan, numeroScan: scan.numeroScan)
+    }
+
+    /// Ligne `scans_pointage` d'un scan validé, SANS filtre de mission (revue fraîche de T3, M-A) : le créneau EFFECTIF
+    /// et le numéro rendus par la réponse la désignent seule (un créneau appartient à une mission, où le numéro est
+    /// unique : `numero_scan = COALESCE(nb_scans, 0) + 1`, `public.sql` l.55667), lisible par le soignant (`sp_select`
+    /// l.79931). Projection `PreuveScan.colonnes` (jamais `code_saisi`, `ip_address`, `latitude`, `longitude`). Nil si
+    /// aucune ligne, ou plusieurs, ne conviennent (même terminal, même numéro, même type, mission connue).
+    private func localiser(_ scan: ScanEnregistre, creneau: String, recu: RecuScan,
+                           context: MissionReadContext) async throws -> PreuveScan? {
+        try MissionQuery.validate(context: context)
+        let soignant = context.userId, terminal = recu.terminalId, numero = String(scan.numeroScan)
+        let lignes: [LigneTolerante<PreuveScan>] = try await lire {
+            try await client.from("scans_pointage").select(PointageQuery.preuvesSelect)
+                .eq("soignant_id", value: soignant)
+                .eq("creneau_effectif_id", value: creneau)
+                .eq("numero_scan", value: numero)
+                .eq("id_terminal", value: terminal)
+                .limit(PointageQuery.limiteLocalisation)
+                .execute().value
+        }
+        let candidates = LigneTolerante.valeurs(lignes).filter { ligne in
+            guard ligne.numeroScan == scan.numeroScan, ligne.idTerminal == terminal,
+                  let mission = ligne.missionId, !mission.isEmpty else { return false }
+            guard let attendu = scan.typeScanEffectue, let lu = ligne.typeScan else { return true }
+            return attendu == lu
+        }
+        return candidates.count == 1 ? candidates.first : nil
     }
 
     // MARK: - Réconciliation
@@ -237,6 +292,10 @@ public struct SupabasePointageGateway: PointagePort {
         let reponse = try await RPCResponse.appeler(client, PointageQuery.rpcRelance, params: ["p_mission_id": .string(missionId)],
                                                     fallback: PointageQuery.fallbackRelance)
         if reponse.success == true, reponse.erreur == nil { return .envoyee(message: reponse.string("message")) }
+        // Session expirée (`auth.uid()` nul, `public.sql` l.53023) : jamais « Relance impossible. » (m1).
+        if reponse.erreur == PointageQuery.erreurRelanceNonAuthentifie {
+            throw JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage)
+        }
         return .refusee(message: reponse.string("message") ?? PointageQuery.fallbackRelance)
     }
 
@@ -249,6 +308,21 @@ public struct SupabasePointageGateway: PointagePort {
             return try await requete()
         } catch {
             throw SupabaseErrorMapping.map(error, fallback: fallback)
+        }
+    }
+
+    /// Noms des établissements en lecture tolérante, comme le web (`fetchEtablissementsSafe`,
+    /// `src/lib/etablissements.ts` l.31-38 : erreur ignorée, repli « Établissement » à l'affichage) : un échec de
+    /// `fn_etablissements_safe` donne `[:]`, jamais l'échec de l'instantané ; une session expirée et l'annulation
+    /// remontent (revue fraîche de T3, m5).
+    private func lireEtablissements(ids: [String]) async throws -> [String: EtablissementSummary] {
+        do {
+            return try await missions.etablissements(ids: ids)
+        } catch let erreur as JoleneError where erreur.kind == .unauthorized || erreur.kind == .cancelled {
+            throw erreur
+        } catch {
+            if error is CancellationError { throw error }
+            return [:]
         }
     }
 

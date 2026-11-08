@@ -7,8 +7,10 @@ import Foundation
 /// EFFECTIF, une FERMETURE ferme le segment ouvert ; `nb_scans` et `prochain_type_scan` en découlent ; une ligne de
 /// preuve (`PreuveScan`) est ajoutée ; puis le code tourne. Le nouveau code reste interne (jamais rendu, jamais saisissable :
 /// il n'a pas six chiffres). Codes de démonstration : `100001` → refus `P0002` du code inconnu, `100002` → anti-rejeu
-/// `23514` (87 secondes) ; scénario `scan-incertain` (`-JOLENE_DEMO_SCENARIO`, lu par `AppContainer` en T4b) : le premier
-/// scan est appliqué puis sa réponse est perdue (`.incertain`), la réconciliation le retrouve par relecture.
+/// `23514` (87 secondes) ; le code d'une mission saisi dans le bloc d'une autre pointe la mission du code
+/// (`.enregistreSurAutreMission`, revue fraîche de T3, M-A) ; scénario `scan-incertain` (`-JOLENE_DEMO_SCENARIO`, lu par
+/// `AppContainer` en T4b) : le premier scan est appliqué puis sa réponse est perdue (`.incertain`), la réconciliation le
+/// retrouve par relecture (sur la mission du reçu seulement : limite consignée dans `DECISIONS_LOT2.md`).
 public actor DemoPointageGateway: PointagePort {
     /// Valeurs de `-JOLENE_DEMO_SCENARIO` qui concernent le pointage.
     public enum Scenario: String, CaseIterable, Sendable {
@@ -66,7 +68,8 @@ public actor DemoPointageGateway: PointagePort {
     private var monde: Monde?
     private var rotations = 0
     private var relances: Set<String> = []
-    /// Métadonnées reçues par les scans appliqués (preuve de T4b : aucune coordonnée quand le GPS est refusé).
+    /// Métadonnées reçues par les scans appliqués (preuve de T4b : aucune coordonnée quand le GPS est refusé) ; en
+    /// mémoire seulement, coordonnées fictives, jamais décrites (`MetadonneesScan.description`).
     public private(set) var metadonneesRecues: [MetadonneesScan] = []
 
     public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow), scenario: Scenario = .normal) {
@@ -149,9 +152,14 @@ public actor DemoPointageGateway: PointagePort {
             scenario = .normal
             return .incertain
         }
-        // Relecture, comme la gateway Supabase : la preuve doit appartenir à la mission du reçu.
-        guard case let .recu(preuve) = try recu.reconcilier(scans: m.preuves[recu.missionId] ?? [], relueLe: clock.now()),
-              preuve.numeroScan == numero else { return .incertain }
+        // Relecture, comme la gateway Supabase : le code désigne la mission (revue fraîche de T3, M-A). Code d'une autre
+        // mission saisi dans ce bloc → scan enregistré là ; sinon la preuve doit être celle du reçu. Un scan appliqué
+        // n'est jamais `.incertain` (avec l'horloge fixe, sa réconciliation resterait « à relire » sans fin).
+        guard missionId == recu.missionId else {
+            return .enregistreSurAutreMission(missionId: missionId, typeScan: type, numeroScan: numero)
+        }
+        guard case let .recu(preuve) = try recu.reconcilier(scans: m.preuves[missionId] ?? [], relueLe: clock.now()),
+              preuve.numeroScan == numero else { return .accepteSansPreuve }
         return .enregistre(typeScan: type, numeroScan: numero)
     }
 
