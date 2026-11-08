@@ -127,7 +127,11 @@ final class RulesListesPresencesTests: XCTestCase {
     }
 
     func testUneMissionLueEstUtilisableDirectement() throws {
-        // `MissionRecord` (lot 1) porte les colonnes lues par la page : aucune copie n'est nécessaire.
+        // Une mission déjà décodée en `MissionRecord` (lot 1) s'utilise telle quelle, sans copie. La
+        // projection de `PresencesSoignant.tsx` (l.114-115) ne sélectionne pas `profession_requise`, que
+        // `MissionRecord.init(from:)` exige : elle ne se décode pas en `MissionRecord` (`keyNotFound`).
+        // T3 ajoute `profession_requise` à son select, ou décode son propre type tolérant conforme à
+        // `MissionPresenceRepresentable` (consigne T3 de DECISIONS_LOT2.md).
         let record = MissionsTestSupport.record(finLe: "2026-10-27T16:00:00Z")
         let listes: ListesPresencesSoignant<MissionRecord, String> = ListesPresences.construire(
             missions: [record], creneauxParMission: [:], contrats: [], maintenant: try DateHeureParis.instantJolene("2026-10-27T09:00:00Z"),

@@ -30,6 +30,10 @@ public struct MissionPresence: Equatable, Sendable, MissionPresenceRepresentable
     public var cleEtablissement: String? { etablissementId }
 }
 
+/// Une mission déjà décodée en `MissionRecord` s'utilise sans copie. Attention : la projection de
+/// `PresencesSoignant.tsx` (l.114-115) ne sélectionne pas `profession_requise`, que
+/// `MissionRecord.init(from:)` exige ; T3 l'ajoute à son select, ou décode son propre type tolérant
+/// conforme à `MissionPresenceRepresentable` (consigne T3 de DECISIONS_LOT2.md).
 extension MissionRecord: MissionPresenceRepresentable {
     public var cleEtablissement: String? { etablissementId }
 }
@@ -165,18 +169,11 @@ public enum ListesPresences {
                                       dateAffichage: nil, prochainCreneau: nil, dureeAffichageHeures: nil, planningAConfirmer: true)
             }
         // Tri stable : missions datées par date croissante, puis plannings à confirmer dans l'ordre reçu.
-        let missionsAVenir = (datees + aConfirmer).enumerated().sorted { a, b in
-            switch (a.element.dateAffichage, b.element.dateAffichage) {
-            case let (dateA?, dateB?):
-                let ecart = DisponibilitePointage.temps(dateA) - DisponibilitePointage.temps(dateB)
-                if ecart < 0 { return true }
-                if ecart > 0 { return false }
-                return a.offset < b.offset
-            case (.some, nil): return true
-            case (nil, .some): return false
-            case (nil, nil): return a.offset < b.offset
-            }
-        }.prefix(limiteAVenir).map(\.element)
+        // Une date affichée est toujours lisible (début ≥ demain, donc fini) ; un planning à confirmer
+        // vaut +∞ : il suit toutes les dates, et deux +∞ gardent l'ordre reçu.
+        let missionsAVenir = Array(DisponibilitePointage.triStable(datees + aConfirmer, croissant: true) {
+            $0.dateAffichage.map { DisponibilitePointage.temps($0) } ?? .infinity
+        }.prefix(limiteAVenir))
 
         // Une mission EN_COURS reste visible même sans présence legacy : les créneaux EFFECTIF
         // sont la source de vérité du pointage.

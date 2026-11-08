@@ -192,6 +192,15 @@
   `false` ; `est_etab` n'est pas décodé (ou `Bool?` ignoré), comme `code_pointage_actif` (fiche
   `fn_etat_pointage_mission` de `CONTRATS_RPC_SOIGNANT.md`). La garde rougit si une fixture ou un stub de
   `ios-native/` ou `scripts/mobile/export-demo-fixtures.mjs` pose `est_etab: false`.
+- **T3** (revue fraîche de T2b) : `contrats_mission.statut` est NULLable (`supabase/schema/public.sql` l.68786,
+  `types.ts` `statut: string | null`) ; le web retient un contrat à statut nul (non terminal, priorité 0), qui bloque
+  alors le pointage avec le motif CONTRAT. `ContratPointage.statut: String` (`Rules/DisponibilitePointage.swift`) ne le
+  décode pas : T3 rend le décodage tolérant (nul → `""`, même effet que le web), puis ajoute un contrat `statut: null`
+  à `grille/contrats/choix` de `scripts/mobile/export-golden-vectors.mjs`, dont le domaine refuse aujourd'hui ce cas.
+- **T3** (revue fraîche de T2b) : la projection `missions` de `PresencesSoignant.tsx` (l.114-115) ne sélectionne pas
+  `profession_requise`, que `MissionRecord.init(from:)` exige (`Models/Mission.swift`) : la décoder en `MissionRecord`
+  lèverait `keyNotFound`. T3 ajoute `profession_requise` à son select, ou décode son propre type tolérant conforme à
+  `MissionPresenceRepresentable` (`Pointage/ListesPresences.swift`).
 - **T4b** : la surcharge `P0002` affiche exactement la forme de la décision 6 (apostrophe ’).
 
 ## Amendements du blueprint (`LOT2_PLAN.md`)

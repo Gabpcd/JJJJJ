@@ -7,8 +7,8 @@ public protocol RegleDocumentRequisRepresentable {
     var profession: String { get }
     /// `type_document` (NOT NULL, l.69060).
     var typeDocument: String { get }
-    /// `type_exercice_requis` : `TOUS`, `SALARIE_ONLY` ou `LIBERAL_ONLY` (CHECK l.69066) ; nul, vide
-    /// ou inconnu vaut `TOUS`, comme le repli du web.
+    /// `type_exercice_requis` (colonne NOT NULL l.69065) : `TOUS`, `SALARIE_ONLY` ou `LIBERAL_ONLY`
+    /// (contrainte `chk_type_exercice_requis` l.69066) ; nul, vide ou inconnu vaut `TOUS`, comme le repli du web.
     var typeExerciceRequis: String? { get }
 }
 
@@ -55,14 +55,18 @@ public struct SoignantExigencesDocuments: Codable, Equatable, Sendable {
 
 /// Pièce de `documents_soignants` comparée à une exigence (port de `DocumentSoignantExigence`).
 public struct DocumentSoignantExigence: Codable, Equatable, Sendable {
+    /// `type_document` (NOT NULL).
     public var typeDocument: String
-    public var statutVerification: String
+    /// Nullabilité réelle du schéma : `statut_verification` a un DEFAULT 'EN_ATTENTE' sans NOT NULL
+    /// (`public.sql` l.408 ; `| null` dans `types.ts`). Une ligne à NULL reste lisible (la liste entière
+    /// se décode) et la pièce n'est pas valide, comme `=== 'VERIFIE'` côté web.
+    public var statutVerification: String?
     /// `valide_jusqua` (colonne `date`) : jamais écrite par le client.
     public var valideJusqua: String?
     /// `resultat_ia->>profession_certifiee` (`DocumentsSoignant.tsx` l.199) : texte ou nul.
     public var professionCertifiee: String?
 
-    public init(typeDocument: String, statutVerification: String, valideJusqua: String?, professionCertifiee: String?) {
+    public init(typeDocument: String, statutVerification: String?, valideJusqua: String?, professionCertifiee: String?) {
         self.typeDocument = typeDocument; self.statutVerification = statutVerification
         self.valideJusqua = valideJusqua; self.professionCertifiee = professionCertifiee
     }
