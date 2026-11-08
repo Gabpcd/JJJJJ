@@ -208,6 +208,48 @@ tranches qui la mettent en œuvre (§3 du blueprint).
   Le chemin peut porter un jeton (`/etab/invitation/:token`, `src/App.tsx` l.433, consommé par
   `fn_accepter_invitation_membre`) ou un identifiant (`/contrat/:id`, `/soignant/missions/:id`).
 
+## T5 livrée sans le coordinateur de liens de L1-T10 (branche `lot3/l3-t5-v2`, 08/11/2026)
+
+- **Manque.** Le blueprint fait passer les taps par `DeepLinkCoordinator` (« une ligne », §3 T5) et la tranche
+  dépend de T3 (T3b). Ni `DeepLinkCoordinator`, ni `DeepLinkIntent`, ni présentateur `.safari` n'existent sur une
+  branche (L1-T10 absent, reliquat T3b ouvert). T5 n'invente pas ce coordinateur : elle livre la partie faisable
+  et pose un **point d'extension minimal**, à reprendre par L1-T10 / T3b :
+  - `JoleneCore/Push/PushTapIntent.swift` : `PushTapIntent` (payload → `PushRouting` → `DestinationLien`) et
+    `BoiteTapsPush` (dernier tap mémorisé, rejoué par le premier espace prêt avec le rôle du snapshot ; un tap reçu
+    pendant l'espace d'un epoch est écarté par un autre epoch) ;
+  - `JoleneCore/Notifications/CentreNotifications.swift` : `CibleNotification`, construite depuis une
+    `DestinationLien` seulement (jamais la route brute) : onglet, détail de mission, centre, renvoi web, aucune ;
+  - `MainTabView.presenter(_:depuisCentre:)` : présentation de ces cibles dans l'espace prêt (onglet, détail
+    empilé sur l'Accueil, centre) ; un renvoi web n'est présenté que par `PresentateurRenvoiWeb` s'il est injecté
+    (nil avant L1-T10 : rien n'est ouvert, jamais `openURL`).
+- **Ligne de T5** : `DestinationLien.ecranNatifLivre(.notifications) = true` (consigne de T3a), avec
+  `DestinationLienTests` (table, famille push `/soignant/notifications` → natif, totaux 454 / 436) et le point de
+  fusion de l'Accueil (`renvoiWeb(lienNotifications)` = nil, « Voir » `accueil-notifications-action` ouvre le
+  centre natif, `DemoAccueilTests` migré).
+- **Au merge de L1-T10 / T3b** : le coordinateur consomme `BoiteTapsPush` (même règle d'epoch) et reprend
+  `MainTabView.presenter` ; le libellé DEBUG `push-tap-cible` (route présentée, XCUITest de T5) peut alors céder la
+  place à `deeplink-route` ; `DemoPushTests.testTapLitigeVersLeWebSansEcranBloquant` passe à la présentation réelle
+  du renvoi (URL vérifiée par le double d'ouverture).
+- **Consigne aux tranches suivantes (T6, T9, T12, T13, T14a)** : en plus de leur ligne de `ecranNatifLivre`, elles
+  ajoutent leur cible à `CibleNotification.init` (aujourd'hui `.aucune` pour `.parametresNotifications`, `.profil`,
+  `.stripeConnect`, `.inscription`) et sa présentation dans `MainTabView.presenter`, avec un cas de tap dans
+  `DemoPushTests` (blueprint §3 T5, corrigé v2). T12 garde la surcouche du pré-prompt de `MainTabView`.
+- **Taps à chaud** : prouvés au niveau 1 (`BoiteTapsPush`) ; le délégué `UNUserNotificationCenter`
+  (`NotificationCenterDelegate`, posé par `PushAppDelegate.didFinishLaunching`) n'est exercé que sur appareil (T17).
+- **Pré-prompt** : `MainTabView` (surcouche) ; compteur `jolene.sessionCount` et marque `jolene.pushPrePrompt` en
+  `UserDefaults` (staging/production), en mémoire vive en démo (chaque lancement démo est une 1re session) ;
+  `-JOLENE_SESSION_COUNT <n>` (DEBUG) impose le numéro de session sans persistance — `StagingConnexionTests` le passe
+  à 1 pour qu'un 2e lancement du simulateur ne recouvre pas son parcours. T6 (activation depuis les préférences) :
+  le pré-prompt relit la marque avant de s'afficher ; poser `accepted` après une activation réussie évite un
+  pré-prompt sans objet.
+- **Fixture démo** : `demo-notifications.json` compte **deux** non lues (et non « 1 lue » du §2.7) pour rester égal
+  au compteur `notifs_non_lues` de `demo-dashboard.json` (« 2 notifications non lues » de l'Accueil démo).
+- **Garde des textes** : `scripts/mobile/check-textes-juridiques-ios.mjs` (L2-TL) n'est pas sur la base du lot 3 ;
+  les textes de T5 portent leur `// source: fichier:ligne` et sont épinglés par les tests Swift. Aucun texte
+  juridique. Textes sans équivalent web (non juridiques, à relire par Gabrielle) : l'indication vocale
+  « Ouvre le centre de notifications » (`accueil-notifications-action`) ; le libellé DEBUG `push-tap-cible` n'est
+  jamais affiché.
+
 ## Points de fusion inter-lots des liens (branches du lot 1 non intégrées)
 
 T3a change le sens de `JoleneRoute.profil` : la route visait le hub, elle vise désormais l'édition, et le hub

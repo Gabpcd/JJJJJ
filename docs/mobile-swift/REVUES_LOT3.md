@@ -829,3 +829,32 @@ Lecture seule : aucun build, aucun test, aucun appel Supabase.
   `DemoPushTests` dans la même tranche).
 - Aucun correctif d'intégration n'a été nécessaire, donc pas de commit `fix(ios-native): intégration lot 3 …`. Les
   dossiers de build (`.build` des packages, `-derivedDataPath`) ont été supprimés après vérification.
+
+## L3-T5
+
+### Consignes de l'auteur pour l'intégration
+
+Consignées par l'auteur de la tranche (`lot3/l3-t5-v2`) ; écarts et point de fusion détaillés dans
+`DECISIONS_LOT3.md`, section « T5 livrée sans le coordinateur de liens de L1-T10 ».
+
+- **Dépendance absente.** `DeepLinkCoordinator`, `DeepLinkIntent` et le présentateur `.safari` (L1-T10, reliquat
+  T3b) n'existent sur aucune branche : T5 livre un point d'extension (`BoiteTapsPush`, `CibleNotification`,
+  `MainTabView.presenter`) et ne revendique pas la présentation d'un renvoi web. Le critère « tap ouvrant l'écran
+  attendu pour au moins six types » est visé au niveau 2 pour six types natifs (`DemoPushTests`), le litige
+  (renvoi web) par la route présentée seulement.
+- **Fichiers d'autres tranches touchés (retouches minimales, gardées par un test)** :
+  - `Jolene/Screens/MainTabView.swift` (T5 surcouche puis T12 onglet Revenus) : init explicite (même signature),
+    pile de l'Accueil avec chemin (`cheminAccueil`), destination `CentreNotificationsRoute`, surcouches du
+    pré-prompt et de son issue, consommation des taps. Au conflit avec T12 : garder les deux côtés (T12 ne remplace
+    que le contenu de l'onglet Revenus).
+  - `Jolene/Screens/Accueil/AccueilScreen.swift` (L1-T3) : « Voir » natif (point de fusion de T3a) ;
+    `JoleneUITests/DemoAccueilTests.swift` migré.
+  - `Jolene/Composition/PushAppDelegate.swift`, `AppContainer.swift` (T4) : délégué posé au lancement, boîte des
+    taps, contexte du pré-prompt (ajouts localisés).
+  - `JoleneUITests/StagingConnexionTests.swift` (lot 0) : `-JOLENE_SESSION_COUNT 1` au lancement STAGING.
+  - `Jolene/Composition/PresentateurRenvoiWeb.swift` (L1-T10) : commentaire seulement.
+- **Ligne de DestinationLien** : `.notifications` à `true` ; les tranches T6, T9, T12-T14a qui passent leur ligne
+  ajoutent aussi leur cible dans `CibleNotification.init` et `MainTabView.presenter` (sinon `.aucune` : le tap
+  n'ouvre rien).
+- **Vérifications de l'auteur** : voir la sortie de la tranche (commandes et résultats) ; les XCUITest n'ont pas été
+  lancés (consigne de la tâche) : CI trois formats à relire dans le `xcresult` (0 échec, `skipped = 0`).
