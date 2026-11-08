@@ -52,6 +52,7 @@ final class DemoPushTests: JoleneUITestCase {
 
         prefsRetourAuProfil()
         let sentinel = element("network-sentinel")
+        scrollTo(sentinel, in: element("profile-list"), downward: false)
         require("La sentinelle réseau est exposée") { sentinel.exists }
         XCTAssertEqual(sentinel.label, "0 requête", "Enregistrement du token démo : aucune requête réseau")
         let deconnexion = element("logout-button")
@@ -121,16 +122,19 @@ final class DemoPushTests: JoleneUITestCase {
         XCTAssertFalse(springboard.alerts.firstMatch.exists, "Aucune feuille système d'autorisation")
     }
 
-    /// Le hub ne porte plus la carte (une seule surface, T6) : la liste est amenée jusqu'à la suppression de
-    /// compte (dernière section), si bien que l'emplacement provisoire de T4 est à l'écran ; seule l'entrée
-    /// « Réglages › Notifications » y figure.
+    /// Le hub ne porte plus la carte (une seule surface, T6) : la liste est amenée jusqu'à l'entrée « Réglages ›
+    /// Notifications », posée à l'emplacement provisoire de T4 (entre « Application » et la suppression de
+    /// compte), puis jusqu'à la suppression de compte (dernière section) ; aucune carte à l'un ni à l'autre.
     private func aucuneCarteDansLeHub() {
         let list = element("profile-list")
         require("La liste du profil est affichée") { self.containerVisible(list) }
-        scrollTo(element("compte-suppression-info"), in: list)
+        let entree = element("profile-preferences-notifications")
+        scrollTo(entree, in: list)
+        XCTAssertTrue(entree.label.contains("Notifications"), "Entrée « Notifications » du hub : \(entree.label)")
         XCTAssertFalse(element("push-etat-appareil").exists, "Carte retirée du hub : elle vit dans les préférences")
+        scrollTo(element("compte-suppression-info"), in: list)
+        XCTAssertFalse(element("push-etat-appareil").exists)
         XCTAssertFalse(element("push-ouvrir-reglages").exists)
-        XCTAssertTrue(element("profile-preferences-notifications").exists, "Entrée « Notifications » du hub")
     }
 
     /// Amène la carte d'état dans l'écran des préférences et rend son message.

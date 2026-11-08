@@ -72,6 +72,7 @@ final class DemoPreferencesTests: JoleneUITestCase {
 
         prefsRetourAuProfil()
         let sentinelle = element("network-sentinel")
+        scrollTo(sentinelle, in: element("profile-list"), downward: false)
         require("La sentinelle réseau est exposée") { sentinelle.exists }
         XCTAssertEqual(sentinelle.label, "0 requête", "aucune requête réseau en démonstration")
     }
