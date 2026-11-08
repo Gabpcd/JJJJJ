@@ -44,12 +44,11 @@ struct ProfileScreen: View {
             // l.113-115) vers les préférences, hôte définitif de la carte d'autorisation de T4. Placée après
             // « Application », à l'emplacement de la carte provisoire de T4, pour ne déplacer ni « Se déconnecter »
             // ni les identifiants du lot 0 testés par les XCUITest existants. T11, propriétaire du hub, la reprend
-            // (route `.parametresNotifications`) sans seconde carte (`DECISIONS_LOT3.md`, section T6).
+            // (route `.parametresNotifications`) sans seconde carte (`DECISIONS_LOT3.md`, section T6). Lien par
+            // valeur (intégration du lot 3, revue L3-T6 m5) : `MainTabView` enregistre la destination et pousse le
+            // même écran par programme (ligne du centre, tap push).
             Section(PreferencesTextes.sectionHub) {
-                NavigationLink {
-                    PreferencesScreen(session: session, snapshot: snapshot, push: container.push,
-                                      permission: container.pushPermission)
-                } label: {
+                NavigationLink(value: PreferencesNotificationsRoute()) {
                     Label(PreferencesTextes.entreeHub, systemImage: "bell")
                 }
                 .accessibilityIdentifier(PreferencesTextes.identifiantEntreeHub)

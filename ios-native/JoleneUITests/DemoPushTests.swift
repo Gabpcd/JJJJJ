@@ -123,8 +123,9 @@ final class DemoPushTests: JoleneUITestCase {
     // Tap à froid simulé (`-JOLENE_SIMULER_PUSH <TYPE>[:<valeur>][:<lien>]`, DEBUG démo) : mémorisé avant la session,
     // rejoué par le premier espace prêt après la connexion, rôle lu dans le snapshot (blueprint §2.5). Six types
     // ouvrent un écran natif ; les renvois web (litige, contrat à signer) sont vérifiés par la route présentée
-    // (`push-tap-cible`, DEBUG et démo seulement), faute de présentateur `.safari` avant L1-T10. Les autres types
-    // (factures, paiements, préférences) sont prouvés au niveau 1 (`PushTapIntentTests.testCiblesDesTypesPrincipaux`).
+    // (`push-tap-cible`, DEBUG et démo seulement), faute de présentateur `.safari` avant L1-T10. Les préférences
+    // (T6, intégration du lot 3) ont leur cas de tap vers `prefs-screen` (blueprint §3 T5) ; factures et paiements
+    // sont prouvés au niveau 1 (`PushTapIntentTests.testCiblesDesTypesPrincipaux`) jusqu'à T12/T13.
 
     func testTapRappelMissionOuvreLeDetail() throws {
         try tapOuvreLeDetail("RAPPEL_MISSION:demo-assignee-001", titre: "Démonstration · Mission assignée 1",
@@ -170,6 +171,25 @@ final class DemoPushTests: JoleneUITestCase {
         }
         XCTAssertEqual(element("push-tap-cible").label, "notifications")
         record("\(proofPrefix)-push-tap-centre")
+    }
+
+    /// Blueprint §3 T5 (« l'écran final est vérifié par un cas de tap ajouté dans la tranche qui le livre ») :
+    /// `/soignant/parametres/notifications` → écran natif des préférences (`prefs-screen`), empilé sur l'onglet Profil.
+    func testTapLienExpliciteOuvreLesPreferences() throws {
+        launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", "SYSTEM::/soignant/parametres/notifications"])
+        signInDemo()
+        let ecran = element("prefs-screen")
+        require("L'écran natif des préférences est ouvert", timeout: 30) {
+            self.containerVisible(ecran) && self.element("prefs-canal-email").exists
+        }
+        XCTAssertTrue(app.navigationBars["Préférences de notifications"].exists, "titre verbatim web")
+        XCTAssertEqual(element("push-tap-cible").label, "parametresNotifications")
+        aucuneAlerte()
+        record("\(proofPrefix)-push-tap-preferences")
+        prefsRetourAuProfil()
+        let entree = element("profile-preferences-notifications")
+        scrollTo(entree, in: element("profile-list"))
+        require("Retour au hub, à la racine de l'onglet Profil") { entree.exists }
     }
 
     /// Blueprint §3 T5 : `CONTRAT_A_SIGNER:contrat_id` → `/contrat/<id>` (renvoi web tant que l'écran du lot 2 n'est

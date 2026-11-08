@@ -56,8 +56,8 @@ final class PushTapIntentTests: XCTestCase {
     }
 
     /// Au moins six types de la table du web (critère « tap ouvrant l'écran attendu », niveau 1 ici) : route
-    /// résolue et cible de l'espace. `FACTURE_EMISE`, `PAIEMENT_RECU` et les préférences visent des écrans livrés
-    /// après T5 : seule la route résolue est affirmée (renvoi web d'ici leur tranche).
+    /// résolue et cible de l'espace. `FACTURE_EMISE` et `PAIEMENT_RECU` visent des écrans livrés après T5 : renvoi web
+    /// d'ici leur tranche (T12, T13). Les préférences (T6) ont leur cible native depuis l'intégration du lot 3.
     func testCiblesDesTypesPrincipaux() throws {
         let cas: [(donnees: [String: String], route: JoleneRoute, cible: CibleNotification)] = [
             (["type_evenement": "RAPPEL_MISSION", "mission_id": "demo-assignee-001"],
@@ -77,7 +77,7 @@ final class PushTapIntentTests: XCTestCase {
             (["type_evenement": "PAIEMENT_RECU"], .revenus(section: .paiementsAConfirmer),
              .web(.safari(url("https://jolene.app/soignant/mes-gains?tab=paiements")))),
             (["type_evenement": "SYSTEM", "lien": "/soignant/parametres/notifications"], .parametresNotifications,
-             .web(.safari(url("https://jolene.app/soignant/parametres/notifications")))),
+             .preferences),
         ]
         for c in cas {
             let lien = try XCTUnwrap(PushTapIntent(donnees: c.donnees).destination(role: "SOIGNANT"), "\(c.donnees)")

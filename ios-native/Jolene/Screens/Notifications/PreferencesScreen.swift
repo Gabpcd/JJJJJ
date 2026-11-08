@@ -2,6 +2,11 @@ import SwiftUI
 import JoleneCore
 import JoleneDesign
 
+/// Route de l'écran des préférences dans la pile de l'onglet Profil (intégration du lot 3) : poussée par l'entrée
+/// « Réglages › Notifications » du hub (`ProfileScreen`) et par `MainTabView.presenter` (ligne du centre, tap push),
+/// enregistrée par `MainTabView` comme `CentreNotificationsRoute` sur l'Accueil.
+struct PreferencesNotificationsRoute: Hashable {}
+
 /// « Préférences de notifications » (lot 3, T6) : vue de `PreferencesModel` (JoleneCore), port de
 /// `src/pages/PageParametresNotifications.tsx`. Règles (case grisée, alerte SMS, relecture concordante,
 /// échec partiel, délai dépassé) et textes verbatim testés dans JoleneCore

@@ -9,9 +9,11 @@ import XCTest
 ///   `formatDistanceToNow` (« il y a environ 2 heures »), « Voir » sur les seules destinations présentables ;
 /// - tap sur une non lue : marquée lue (relue dans l'acteur démo) puis ouverture du détail de la mission ; au
 ///   retour, la pastille a disparu ; une non lue vers Mes missions bascule sur l'onglet ;
-/// - lignes déjà lues vers un renvoi web (factures, Stripe, préférences, litiges) ou sans lien : chacune amenée à
-///   l'écran et rendue, puis affirmée sans bouton ni « Voir » tant que le présentateur `.safari` (L1-T10) n'est pas
-///   injecté (jamais un bouton sans effet) ;
+/// - lignes déjà lues vers un renvoi web (factures, Stripe, litiges) ou sans lien : chacune amenée à l'écran et
+///   rendue, puis affirmée sans bouton ni « Voir » tant que le présentateur `.safari` (L1-T10) n'est pas injecté
+///   (jamais un bouton sans effet) ;
+/// - (intégration du lot 3, T6) ligne déjà lue vers les préférences de notifications : un bouton avec « Voir », qui
+///   ouvre l'écran natif des préférences (`prefs-screen`) sur l'onglet Profil, sans marquage (déjà lue) ;
 /// - aucune requête réseau (`network-sentinel`).
 /// Les règles (relecture, échec du marquage et sa réconciliation, annulation, lien invalide, epoch, échec du
 /// tirer-pour-rafraîchir) sont prouvées au niveau 1 (`CentreNotificationsTests`, `DemoNotificationsGatewayTests`,
@@ -48,8 +50,9 @@ final class DemoNotificationsTests: JoleneUITestCase {
 
         // Déjà lues, renvoi web sans présentateur `.safari` : aucune action possible, donc aucun bouton. Chaque ligne
         // est d'abord amenée à l'écran et exigée rendue (la pile est paresseuse : une ligne non rendue rendrait
-        // l'assertion négative vide, revue L3-T5 m7), puis affirmée non bouton.
-        for id in ["003", "004", "005", "006", "007"] {
+        // l'assertion négative vide, revue L3-T5 m7), puis affirmée non bouton. La ligne 005 (préférences, écran
+        // natif depuis T6) est vérifiée par `testLigneLueVersLesPreferencesOuvreLEcranNatif`.
+        for id in ["003", "004", "006", "007"] {
             let ligne = element("notification-demo-notification-\(id)")
             scrollTo(ligne, in: centre)
             require("La ligne \(id) est rendue") { ligne.exists }
@@ -88,6 +91,51 @@ final class DemoNotificationsTests: JoleneUITestCase {
         let sentinel = element("network-sentinel")
         require("La sentinelle réseau est exposée") { sentinel.exists }
         XCTAssertEqual(sentinel.label, "0 requête", "centre de notifications démo : aucune requête réseau")
+    }
+
+    /// Intégration du lot 3 (T5 × T6) : la ligne déjà lue vers `/soignant/parametres/notifications` a une cible native
+    /// présentable depuis le centre (`CibleNotification.preferences`) : un bouton avec « Voir », qui bascule sur
+    /// l'onglet Profil et y empile l'écran des préférences ; retour au hub par la barre de navigation.
+    func testLigneLueVersLesPreferencesOuvreLEcranNatif() throws {
+        launchDemo()
+        connexionDemo()
+        let accueil = element("accueil-screen")
+        require("L'Accueil démo est chargé", timeout: 30) {
+            self.containerVisible(accueil) && self.element("accueil-salutation").exists
+        }
+        let voir = element("accueil-notifications-action")
+        degager(voir, dans: accueil)
+        voir.tap()
+        let centre = element("notifications-screen")
+        require("Le centre de notifications natif est affiché", timeout: 30) {
+            self.containerVisible(centre) && self.element("notification-demo-notification-001").exists
+        }
+
+        let ligne = element("notification-demo-notification-005")
+        degager(ligne, dans: centre)
+        require("La ligne des préférences est rendue") { ligne.exists }
+        XCTAssertFalse(element("notification-non-lue-demo-notification-005").exists, "déjà lue")
+        XCTAssertEqual(ligne.elementType, .button, "écran natif livré : la ligne est un bouton")
+        for fragment in ["Démonstration · Préférences", "Voir"] {
+            XCTAssertTrue(ligne.label.contains(fragment), "« \(fragment) » absent de « \(ligne.label) »")
+        }
+        record("\(proofPrefix)-notifications-ligne-preferences")
+
+        ligne.tap()
+        let ecran = element("prefs-screen")
+        require("L'écran natif des préférences est ouvert sur l'onglet Profil", timeout: 30) {
+            self.containerVisible(ecran) && self.element("prefs-canal-email").exists
+        }
+        XCTAssertTrue(app.navigationBars["Préférences de notifications"].exists, "titre verbatim web")
+        XCTAssertFalse(element("prefs-error").exists)
+        XCTAssertFalse(element("notifications-screen").exists, "le centre (onglet Accueil) n'est plus à l'écran")
+        record("\(proofPrefix)-notifications-preferences")
+
+        prefsRetourAuProfil()
+        let sentinel = element("network-sentinel")
+        scrollTo(sentinel, in: element("profile-list"), downward: false)
+        require("La sentinelle réseau est exposée") { sentinel.exists }
+        XCTAssertEqual(sentinel.label, "0 requête", "centre et préférences démo : aucune requête réseau")
     }
 
     // MARK: - Étapes

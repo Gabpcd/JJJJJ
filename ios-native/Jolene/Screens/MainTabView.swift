@@ -16,9 +16,11 @@ import JoleneDesign
 /// - pré-prompt de notification (`PrePromptPushScreen`, `PrePromptPushModel`), évalué à l'apparition de
 ///   l'espace, et l'issue de l'activation (`push-preprompt-issue`) ;
 /// - centre de notifications (`NotificationsScreen`), empilé sur l'onglet Accueil (`CentreNotificationsRoute`) ;
+/// - (intégration du lot 3, T6) préférences de notifications (`PreferencesScreen`), empilées sur l'onglet Profil
+///   (`PreferencesNotificationsRoute`) : entrée « Réglages › Notifications » du hub, ligne du centre et tap push ;
 /// - taps push : la boîte `BoiteTapsPush` est relue à l'apparition et à chaque tap ; la destination
 ///   (`DestinationLien`) est présentée par `presenter(_:depuisCentre:)` : onglet, détail de mission sur l'Accueil,
-///   centre de notifications, renvoi web par le présentateur `.safari` s'il est injecté (L1-T10). Point de fusion
+///   centre de notifications, préférences sur le Profil, renvoi web par le présentateur `.safari` s'il est injecté (L1-T10). Point de fusion
 ///   L1-T10 / T3b : le `DeepLinkCoordinator` reprendra cette présentation (`DECISIONS_LOT3.md`). DEBUG et démo
 ///   seulement : libellé `push-tap-cible` de la dernière route présentée (XCUITest des taps vers un écran pas encore
 ///   livré ; jamais en STAGING, revue L3-T5 m8) ;
@@ -35,6 +37,8 @@ struct MainTabView: View {
     @StateObject private var prePrompt: PrePromptPushModel
     @State private var selection: Tab = .accueil
     @State private var cheminAccueil = NavigationPath()
+    /// Pile de l'onglet Profil (intégration du lot 3) : les préférences de notifications y sont empilées.
+    @State private var cheminProfil = NavigationPath()
     /// Notifications lues dans le centre (jeton de péremption du compteur de l'Accueil).
     @State private var lecturesCentre = 0
     #if DEBUG
@@ -89,8 +93,12 @@ struct MainTabView: View {
             .tag(Tab.revenus)
             .accessibilityIdentifier("tab-revenus")
 
-            NavigationStack {
+            NavigationStack(path: $cheminProfil) {
                 ProfileScreen(container: container, session: session, snapshot: snapshot)
+                    .navigationDestination(for: PreferencesNotificationsRoute.self) { _ in
+                        PreferencesScreen(session: session, snapshot: snapshot, push: container.push,
+                                          permission: container.pushPermission)
+                    }
             }
             .tabItem { Label("Profil", systemImage: "person") }
             .tag(Tab.profil)
@@ -162,6 +170,7 @@ struct MainTabView: View {
             selection = .revenus
         case .monCompte:
             selection = .profil
+            cheminProfil = NavigationPath()
         case .mission(let id):
             if !depuisCentre {
                 selection = .accueil
@@ -172,6 +181,11 @@ struct MainTabView: View {
             selection = .accueil
             cheminAccueil = NavigationPath()
             cheminAccueil.append(CentreNotificationsRoute())
+        case .preferences:
+            // Depuis le centre comme depuis un tap : le Profil repart de sa racine, puis les préférences s'y empilent.
+            selection = .profil
+            cheminProfil = NavigationPath()
+            cheminProfil.append(PreferencesNotificationsRoute())
         case .web(let route):
             presentateurRenvoiWeb?.presenter(route)
         case .aucune:
