@@ -112,8 +112,9 @@ test('RPC_SUIVIES : toutes les RPC du lot 1 sont suivies en lot 1, a_venir sauf 
 });
 
 test('RPC_SUIVIES : fn_mon_profil_soignant_complet est reclassée lot 3 (correction v2 n°4)', () => {
+  // Consommée par L3-T9 (SupabaseProfilGateway) : statut passé par la tranche qui câble la gateway.
   assert.deepEqual(byName.get('fn_mon_profil_soignant_complet'), {
-    name: 'fn_mon_profil_soignant_complet', statut: 'a_venir', lot: 3,
+    name: 'fn_mon_profil_soignant_complet', statut: 'consommee', lot: 3,
   });
 });
 

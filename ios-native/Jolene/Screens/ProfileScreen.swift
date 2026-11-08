@@ -5,8 +5,7 @@ import JoleneDesign
 /// Onglet Profil du lot 0 : identité minimale, déconnexion, diagnostic démo ; suppression de compte
 /// (lot 1, T8, `SuppressionCompteSection`) ; autorisation des notifications de l'appareil (lot 3, T4,
 /// `EtatNotificationsAppareilRow`, hôte provisoire : la carte rejoint les préférences de T6, une seule
-/// surface — `REVUES_LOT3.md`, section L3-T4) ; entrée « Mon profil » (lot 3, T9, `profil-ouvrir`).
-/// Identifiant de la liste : `profile-list`.
+/// surface — `REVUES_LOT3.md`, section L3-T4). Identifiant de la liste : `profile-list`.
 struct ProfileScreen: View {
     let container: AppContainer
     @ObservedObject var session: SessionStore
@@ -33,16 +32,6 @@ struct ProfileScreen: View {
                     .accessibilityIdentifier("profile-role")
                 LabeledContent("Profession", value: snapshot.profile.profession)
                     .accessibilityIdentifier("profile-profession")
-            }
-            // Lot 3, T9 : entrée « Mon profil » (`MonCompteSoignant.tsx` l.59) vers l'édition native.
-            // Point de fusion T11 (propriétaire du hub) : section reprise dans l'ordre du hub web.
-            Section {
-                NavigationLink {
-                    ProfilEditionScreen(session: session, snapshot: snapshot)
-                } label: {
-                    Label(ProfilEdition.Textes.titre, systemImage: "person.text.rectangle")
-                }
-                .accessibilityIdentifier("profil-ouvrir")
             }
             Section {
                 JoleneButton("Se déconnecter", style: .secondary, isLoading: isSigningOut) {

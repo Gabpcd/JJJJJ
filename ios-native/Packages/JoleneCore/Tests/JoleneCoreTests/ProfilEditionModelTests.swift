@@ -33,6 +33,8 @@ actor ProfilServeur {
         return try lire()
     }
 
+    func sansProfession() { profil.profession = nil }
+
     func scripter(erreurLecture: Error? = nil, erreurEcriture: Error? = nil, perteReponse: Error? = nil, barriere: Gate? = nil) {
         self.erreurLecture = erreurLecture; self.erreurEcriture = erreurEcriture
         self.perteReponseEcriture = perteReponse; self.barriereEcriture = barriere
@@ -79,12 +81,15 @@ final class ProfilEditionModelTests: XCTestCase {
     }
 
     private func scenario(audit: FakeAudit = FakeAudit(), types: Result<[String]?, Error> = .success(["SALARIE", "LIBERAL", "MIXTE"]),
-                          inscription: InscriptionPort? = nil, timeout: TimeInterval = SessionController.defaultResolutionTimeout)
+                          inscription: InscriptionPort? = nil, timeout: TimeInterval = SessionController.defaultResolutionTimeout,
+                          revalidation: Gate? = nil)
         async throws -> Scenario {
         let log = CallLog()
         let serveur = ProfilServeur(profil: profilServeur)
         var gateways = Lot1Fakes.gateways(audit: audit)
-        gateways.auth = FakeAuth(restored: utilisateur, signInResult: .success(utilisateur), log: log)
+        // `revalidation` retient la 2e restauration de session (celle qui suit un enregistrement réussi).
+        gateways.auth = FakeAuth(restored: utilisateur, signInResult: .success(utilisateur), log: log,
+                                 restoreGate: revalidation, restoreGateFromCall: 2)
         gateways.role = FakeRole(result: .success(RoleResult(role: "SOIGNANT")), gate: nil, log: log)
         gateways.missions = FakeMissions(profile: SoignantProfile(id: "u-1", profession: "IDE"), profileError: nil, gate: nil, log: log)
         gateways.profil = FakeProfil(serveur: serveur)
@@ -261,15 +266,34 @@ final class ProfilEditionModelTests: XCTestCase {
     }
 
     func testReferentielIndisponibleEtPortNonCableDonnentLEtatIndisponibleDuWeb() async throws {
-        let indisponible = try await scenario(types: .success(nil))
-        await indisponible.model.charger()
-        XCTAssertEqual(indisponible.model.modes, .indisponible)
-        XCTAssertTrue(indisponible.model.choixModes.indisponible)
-        // Tant que T8 n'a pas câblé `inscription`, le stub refuse : même état, jamais un référentiel supposé.
+        // `error || !Array.isArray(data)` puis `catch` (useTypesExerciceAutorises.ts l.32-40) : état « indisponible ».
+        let reponses: [Result<[String]?, Error>] = [.success(nil), .failure(JoleneError(.network, "Le service ne répond pas."))]
+        for types in reponses {
+            let indisponible = try await scenario(types: types)
+            await indisponible.model.charger()
+            XCTAssertEqual(indisponible.model.modes, .indisponible)
+            XCTAssertTrue(indisponible.model.choixModes.indisponible)
+            XCTAssertTrue(indisponible.model.reessaiModesPossible, "« Réessayer la vérification » du web")
+        }
+        // Tant que T8 n'a pas câblé `inscription`, le stub refuserait toujours : même état du web, jamais un
+        // référentiel supposé, mais sans « Réessayer la vérification » (jamais un bouton sans effet).
         let nonCable = try await scenario(inscription: UnwiredInscriptionPort())
         await nonCable.model.charger()
-        XCTAssertEqual(nonCable.model.modes, .indisponible)
-        XCTAssertEqual(nonCable.model.choixModes.options.map(\.mode), [.salarie, .liberal])
+        XCTAssertEqual(nonCable.model.modes, .nonCable)
+        XCTAssertTrue(nonCable.model.choixModes.indisponible)
+        XCTAssertFalse(nonCable.model.reessaiModesPossible)
+        XCTAssertEqual(nonCable.model.choixModes.options.map(\.mode), [.salarie, .liberal],
+                       "salarié toujours proposé, libéral conservé parce qu'il est coché")
+        XCTAssertFalse(nonCable.model.choixModes.liberalNonPropose, "aucun verdict sans référentiel")
+    }
+
+    func testSansProfessionAucuneVerificationDesModes() async throws {
+        let s = try await scenario()
+        await s.serveur.sansProfession()
+        await s.model.charger()
+        XCTAssertEqual(s.model.modes, .inactif, "`if (!profession)` : statut inactif, aucun appel")
+        XCTAssertFalse(s.model.choixModes.chargement)
+        XCTAssertFalse(s.model.reessaiModesPossible)
     }
 
     func testDernierModeJamaisDecoche() async throws {
@@ -297,5 +321,30 @@ final class ProfilEditionModelTests: XCTestCase {
             }
         }
         XCTAssertEqual(ProfilEdition.renvoiTypeExercice, .safari(URL(string: "https://jolene.app/soignant/profil?tab=principal")!))
+    }
+
+    func testRenvoiDuTypeDExerciceSeulementPourUneProfessionConnue() {
+        // `{profession && (… Type d'exercice …)}` (SectionProfilPrincipal.tsx l.895-896).
+        XCTAssertTrue(ProfilEdition.afficheRenvoiTypeExercice(profilServeur))
+        XCTAssertFalse(ProfilEdition.afficheRenvoiTypeExercice(ProfilComplet(id: "u-1", prenom: "", nom: "")))
+        XCTAssertFalse(ProfilEdition.afficheRenvoiTypeExercice(ProfilComplet(id: "u-1", prenom: "", nom: "", profession: "")))
+    }
+
+    func testLeBoutonNAttendPasLaRevalidationDeLaSession() async throws {
+        // La revalidation de la session (jusqu'à 15 s hors ligne) suit le succès relu : l'indicateur
+        // d'enregistrement est levé et le succès annoncé avant elle.
+        let revalidation = Gate()
+        let s = try await scenario(revalidation: revalidation)
+        await s.model.charger()
+        s.model.formulaire.villeRecherche = "Annecy"
+        let model = s.model
+        async let enregistrement: Void = model.enregistrer()
+        while await s.log.entries.filter({ $0 == "restoreSession" }).count < 2 { await Task.yield() }
+        XCTAssertFalse(model.enregistrementEnCours, "revalidation en cours : le bouton n'est plus en attente")
+        XCTAssertEqual(model.succes, ProfilEdition.Textes.succes)
+        XCTAssertEqual(model.profil?.villeRecherche, "Annecy")
+        await revalidation.open()
+        await enregistrement
+        XCTAssertTrue(s.store.state.isReady)
     }
 }
