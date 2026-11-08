@@ -211,7 +211,7 @@ final class DemoWorldTests: XCTestCase {
     /// T8 contrats) câble son port dans `câblerLot2(_:)` des deux mondes (`DemoWorld`, `SupabaseGateways`)
     /// et le retire d'ici dans la même PR ; `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux
     /// mondes. Liste vide à la clôture du lot 2 (T12).
-    static let portsEnAttenteLot2 = ["pointage", "contestation", "notation", "documents", "contrats"]
+    static let portsEnAttenteLot2 = ["pointage", "contestation", "notation", "contrats"] // T6 : documents câblé
 
     func testAucunPortNonCable() {
         let gateways = DemoWorld.gateways()
@@ -243,7 +243,7 @@ final class DemoWorldTests: XCTestCase {
         XCTAssertTrue(gateways.pointage is UnwiredPointagePort, "T3 n'est pas livrée : stub nommé explicitement")
         XCTAssertTrue(gateways.contestation is UnwiredContestationPort)
         XCTAssertTrue(gateways.notation is UnwiredNotationPort)
-        XCTAssertTrue(gateways.documents is UnwiredDocumentsPort)
+        XCTAssertTrue(gateways.documents is DemoDocumentsGateway, "T6 câble les justificatifs")
         XCTAssertTrue(gateways.contrats is UnwiredContratsPort)
         XCTAssertEqual(gateways.unwiredPorts, Lot1PortsTests.portsLot1 + Self.portsEnAttenteLot2,
                        "câblerLot2 n'assigne que le bloc du lot 2")

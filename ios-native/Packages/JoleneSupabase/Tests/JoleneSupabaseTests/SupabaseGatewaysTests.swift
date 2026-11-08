@@ -83,9 +83,9 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.pointage is UnwiredPointagePort, "T3")
         XCTAssertTrue(gateways.contestation is UnwiredContestationPort, "T5b")
         XCTAssertTrue(gateways.notation is UnwiredNotationPort, "T5a")
-        XCTAssertTrue(gateways.documents is UnwiredDocumentsPort, "T6")
+        XCTAssertTrue(gateways.documents is SupabaseDocumentsGateway, "T6 câble les justificatifs")
         XCTAssertTrue(gateways.contrats is UnwiredContratsPort, "T8")
-        XCTAssertEqual(Array(gateways.unwiredPorts.suffix(5)), ["pointage", "contestation", "notation", "documents", "contrats"])
+        XCTAssertEqual(Array(gateways.unwiredPorts.suffix(4)), ["pointage", "contestation", "notation", "contrats"])
         XCTAssertTrue(gateways.audit is SupabaseAuditGateway, "le câblage du lot 1 reste celui de l'init")
     }
 
