@@ -4,12 +4,13 @@ import XCTest
 /// `mobile-native/ios-ui-tests/NativePilotUITests/NativePilotTests.swift`
 /// (`element`, `visible`, `fullyVisible`, `require`, `scrollTo`, `record`, `attachText`),
 /// avec un `tap()` natif pour toute activation (jamais `press(forDuration:)` comme tap) et
-/// l'orientation lue dans `JOLENE_UI_ORIENTATION` (portrait | landscape). Le seul glissement
-/// est `drag(_:fromY:toY:)` (défilement borné de `scrollTo`), qui emploie
-/// `press(forDuration:thenDragTo:)` entre deux coordonnées calculées hors clavier : c'est
-/// l'unique API XCUITest de glissement à point de départ contrôlé, et elle n'active rien.
-/// Aucune attente arbitraire : toutes passent par `require` (prédicat borné). La preuve est
-/// l'assertion ; les captures (`record`) ne sont que des artefacts pour l'humain.
+/// l'orientation lue dans `JOLENE_UI_ORIENTATION` (portrait | landscape). Les seuls glissements
+/// sont `drag(_:fromY:toY:)` (défilement borné de `scrollTo`) et `dragSliderPastEnd(_:minimum:)`
+/// (curseur amené à une borne), qui emploient `press(forDuration:thenDragTo:…)` entre deux
+/// coordonnées calculées : c'est l'unique API XCUITest de glissement à point de départ contrôlé,
+/// et elle n'active rien. Aucune attente arbitraire : toutes passent par `require` (prédicat
+/// borné). La preuve est l'assertion ; les captures (`record`) ne sont que des artefacts pour
+/// l'humain.
 @MainActor
 class JoleneUITestCase: XCTestCase {
     // Lus depuis les crochets XCTest (nonisolés) qui tournent sur le thread principal ;
@@ -111,10 +112,55 @@ class JoleneUITestCase: XCTestCase {
         return keyboard.exists && element.frame.maxY > keyboard.frame.minY
     }
 
-    func require(_ description: String, timeout: TimeInterval = 15, condition: @escaping () -> Bool) {
-        let predicate = NSPredicate { _, _ in condition() }
-        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed, description)
+    /// Part maximale du délai de `require` décomptée pour UNE évaluation de la condition. Une
+    /// évaluation (quelques requêtes d'accessibilité) dure moins de 5 s, même sur un runner lent ;
+    /// au-delà, c'est l'observateur qui est bloqué (runner saturé, serveur d'accessibilité muet),
+    /// pas l'app. Run 42489677193, UI — iphone : une seule requête « Find the "chip-weekend"
+    /// Button » a duré 12,5 s (t = 70,4 → 82,9 s), la capture d'échec 9,5 s et le relancement
+    /// suivant 10,7 s au lieu de 1,8 s ; le délai de 15 s a expiré après UNE évaluation, sans
+    /// qu'aucune n'ait observé l'app après le blocage, alors que l'arbre d'accessibilité de fin
+    /// montrait la chip en place (402 × 874, cadre {122.7, 124, 104, 44}).
+    static let maximumChargedEvaluation: TimeInterval = 5
+    /// Intervalle entre deux évaluations, celui de `XCTNSPredicateExpectation`.
+    static let evaluationInterval: TimeInterval = 1
+
+    /// Attente bornée d'un état de l'app : la condition est évaluée environ chaque seconde jusqu'à
+    /// être vraie, pendant `timeout` secondes d'observation. Chaque évaluation est décomptée pour
+    /// sa durée plafonnée à `maximumChargedEvaluation` : un blocage de l'observateur ne consomme
+    /// pas le délai laissé à l'app, et l'état est toujours constaté par une évaluation qui suit le
+    /// blocage. Une app réellement figée échoue quand même : chaque évaluation, même bloquée,
+    /// consomme au moins `maximumChargedEvaluation` du délai, l'attente reste donc finie. Sans
+    /// blocage, l'attente équivaut à `XCTNSPredicateExpectation` sur `timeout`. L'échec est
+    /// rapporté à la ligne de l'appelant.
+    func require(_ description: String, timeout: TimeInterval = 15, file: StaticString = #filePath, line: UInt = #line,
+                 condition: @escaping () -> Bool) {
+        var remaining = timeout
+        var evaluations = 0
+        var observerStall: TimeInterval = 0
+        while true {
+            let start = Date()
+            if condition() { return }
+            evaluations += 1
+            let duration = Date().timeIntervalSince(start)
+            observerStall += max(0, duration - Self.maximumChargedEvaluation)
+            remaining -= min(duration, Self.maximumChargedEvaluation)
+            guard remaining > 0 else { break }
+            let pause = min(Self.evaluationInterval, remaining)
+            pauseBetweenEvaluations(pause)
+            remaining -= pause
+        }
+        let stall = observerStall > 0 ? String(format: ", dont %.1f s d'observateur bloqué non décomptées", observerStall) : ""
+        XCTFail("\(description) — condition fausse à chacune des \(evaluations) évaluations sur \(Int(timeout)) s\(stall)",
+                file: file, line: line)
+    }
+
+    /// Laisse tourner la boucle principale entre deux évaluations (XCTest y traite ses
+    /// événements), comme `XCTNSPredicateExpectation` entre deux sondages. Un `XCTWaiter` sans
+    /// délégué n'enregistre aucun échec : l'attente inversée se termine au bout de `duration`.
+    private func pauseBetweenEvaluations(_ duration: TimeInterval) {
+        let pause = XCTestExpectation(description: "Intervalle entre deux évaluations")
+        pause.isInverted = true
+        _ = XCTWaiter().wait(for: [pause], timeout: duration)
     }
 
     // MARK: Actions
@@ -213,6 +259,34 @@ class JoleneUITestCase: XCTestCase {
         let start = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * fromY))
         let end = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * toY))
         start.press(forDuration: 0.05, thenDragTo: end)
+    }
+
+    /// Amène un curseur (`Slider`) à sa borne basse (`minimum`) ou haute par un glissement qui
+    /// part du pouce et finit AU-DELÀ de l'extrémité de la piste : le contrôle borne lui-même la
+    /// valeur, quel que soit l'écart du geste synthétisé. `adjust(toNormalizedSliderPosition: 0)`
+    /// vise l'extrémité elle-même, à quelques points près : run 42489677193, UI — ipad-landscape,
+    /// son geste (« press, hold, drag, and hold ») part de x = 575,96 et finit à x = 323,25, soit
+    /// 7,25 pt dans une piste qui commence à x = 316 et dont le premier pas (5 → 10 km, 19 pas sur
+    /// 548 pt) s'arrondit dès 14,4 pt ; le curseur est resté à « Rayon : 10 km » pendant les 15 s
+    /// d'attente. La valeur atteinte reste prouvée par l'appelant (libellé ou valeur affichés).
+    func dragSliderPastEnd(_ slider: XCUIElement, minimum: Bool = true) {
+        require("Le curseur est atteignable") { self.visible(slider) && slider.isEnabled }
+        let frame = slider.frame
+        let position = min(1, max(0, slider.normalizedSliderPosition))
+        // Centre du pouce : la piste utile est réduite d'une demi-largeur de pouce à chaque bout,
+        // et le pouce d'un `UISlider` est à peu près aussi large que le contrôle est haut.
+        let halfThumb = min(frame.height, frame.width) / 2
+        let thumbX = frame.minX + halfThumb + position * (frame.width - 2 * halfThumb)
+        // Fin du geste : une cible tactile (44 pt) au-delà de l'extrémité visée, dans la fenêtre.
+        let overshoot: CGFloat = 44
+        let endX = minimum ? max(app.frame.minX + 1, frame.minX - overshoot) : min(app.frame.maxX - 1, frame.maxX + overshoot)
+        let origin = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+        let y = frame.midY - app.frame.minY
+        let start = origin.withOffset(CGVector(dx: thumbX - app.frame.minX, dy: y))
+        let end = origin.withOffset(CGVector(dx: endX - app.frame.minX, dy: y))
+        // Pression tenue 0,25 s comme `adjust` (au-delà du délai de contenu d'un défilement), puis
+        // maintien au point d'arrivée pour que la dernière position soit livrée avant le relâché.
+        start.press(forDuration: 0.25, thenDragTo: end, withVelocity: .default, thenHoldForDuration: 0.25)
     }
 
     func scrollTo(_ target: XCUIElement, in container: XCUIElement, downward: Bool = true) {
