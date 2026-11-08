@@ -30,7 +30,7 @@ INSERT INTO public.growth_config (cle, valeur, maj_le) VALUES
   ('agents_prospection_file_max', '60', now()),
   ('prospection_signature', E'Gabrielle\nFondatrice de Jolene\nhttps://jolene.app', now()),
   ('prospection_mention_opposition',
-   'Vos coordonnées professionnelles proviennent du répertoire public FINESS. Si vous ne souhaitez plus être contacté par Jolene, répondez simplement « STOP » à cet email : nous ne vous écrirons plus.',
+   'Vos coordonnées professionnelles proviennent des annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé). Si vous ne souhaitez plus être contacté par Jolene, répondez simplement « STOP » à cet email : nous ne vous écrirons plus.',
    now())
 ON CONFLICT (cle) DO NOTHING;
 
@@ -235,6 +235,74 @@ AS $body$
     AND private.fn_mission_lie_compte_test(m.id) IS FALSE;
 $body$;
 
+-- Prédicat UNIQUE de joignabilité d'un destinataire (agents + décision admin).
+-- NULL = joignable ; sinon le motif. Ne jamais re-décider localement.
+CREATE OR REPLACE FUNCTION private.fn_growth_destinataire_bloque(
+  p_cible_type text, p_cible_id text, p_email text, p_telephone text, p_finess text
+)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SET search_path TO ''
+AS $body$
+DECLARE
+  v_uid uuid;
+  v_finess text := p_finess;
+BEGIN
+  IF p_cible_type IN ('SOIGNANT', 'ETABLISSEMENT') THEN
+    BEGIN
+      v_uid := p_cible_id::uuid;
+    EXCEPTION WHEN invalid_text_representation THEN
+      RETURN 'CIBLE_INVALIDE';
+    END;
+    IF p_cible_type = 'SOIGNANT' AND NOT EXISTS (
+      SELECT 1 FROM public.soignants s
+      WHERE s.id = v_uid AND s.supprime_le IS NULL AND s.est_compte_test IS FALSE
+    ) THEN
+      RETURN 'COMPTE_SUPPRIME';
+    END IF;
+    IF p_cible_type = 'ETABLISSEMENT' THEN
+      SELECT e.finess INTO v_finess FROM public.etablissements e
+      WHERE e.id = v_uid AND e.supprime_le IS NULL AND e.est_compte_test IS FALSE;
+      IF NOT FOUND THEN
+        RETURN 'COMPTE_SUPPRIME';
+      END IF;
+    END IF;
+    -- Mêmes préférences que send-email : canal email global, puis l'événement
+    -- SERIE_ONBOARDING (relances d'activation).
+    IF EXISTS (SELECT 1 FROM public.preferences_notifications pn
+               WHERE pn.utilisateur_id = v_uid AND pn.canal_email IS FALSE)
+       OR EXISTS (SELECT 1 FROM public.preferences_notifications_par_evenement pe
+                  WHERE pe.utilisateur_id = v_uid AND pe.type_evenement = 'SERIE_ONBOARDING'
+                    AND upper(pe.canal) = 'EMAIL' AND pe.actif IS FALSE) THEN
+      RETURN 'EMAILS_DESACTIVES';
+    END IF;
+    IF public.fn_sales_outreach_est_interdit(
+         NULL, CASE WHEN p_cible_type = 'SOIGNANT' THEN 'SOIGNANT' ELSE 'ETABLISSEMENT' END,
+         CASE WHEN p_cible_type = 'ETABLISSEMENT' THEN v_finess END, p_email, p_telephone) THEN
+      RETURN 'STOP';
+    END IF;
+    RETURN NULL;
+  ELSIF p_cible_type IN ('PROSPECT_ETABLISSEMENT', 'CONTACT_CRM') THEN
+    IF p_cible_type = 'CONTACT_CRM' THEN
+      BEGIN
+        v_uid := p_cible_id::uuid;
+      EXCEPTION WHEN invalid_text_representation THEN
+        RETURN 'CIBLE_INVALIDE';
+      END;
+    END IF;
+    IF public.fn_sales_outreach_est_interdit(
+         v_uid, 'ETABLISSEMENT',
+         CASE WHEN p_cible_type = 'PROSPECT_ETABLISSEMENT' THEN p_cible_id ELSE p_finess END,
+         p_email, p_telephone) THEN
+      RETURN 'STOP';
+    END IF;
+    RETURN NULL;
+  END IF;
+  RETURN NULL;
+END;
+$body$;
+
 -- ---------------------------------------------------------------------------
 -- 4. Agent 1 — prospection établissements (étape 1 + relances CRM 2 et 3)
 -- ---------------------------------------------------------------------------
@@ -343,6 +411,7 @@ BEGIN
         AND NOT EXISTS (
           SELECT 1 FROM public.growth_brouillons b
           WHERE b.cible_type = 'PROSPECT_ETABLISSEMENT' AND b.cible_id = p.finess
+            AND b.statut <> 'EXPIRE'
         )
     ) s
     ) q
@@ -351,7 +420,7 @@ BEGIN
   LOOP
     EXIT WHEN v_crees >= v_place;
 
-    IF public.fn_sales_outreach_est_interdit(NULL, 'ETABLISSEMENT', r.finess, r.email, r.telephone) THEN
+    IF private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', r.finess, r.email, r.telephone, NULL) IS NOT NULL THEN
       v_exclus_stop := v_exclus_stop + 1;
       CONTINUE;
     END IF;
@@ -398,7 +467,7 @@ BEGIN
         'Je suis Gabrielle, fondatrice de Jolene, une plateforme qui met directement en relation les établissements de santé et des soignants vérifiés pour des missions courtes : vacations, CDD courts et remplacements.',
         v_accroche,
         v_tension,
-        E'Concrètement :\n- vous publiez une mission en quelques minutes ;\n- les soignants qui candidatent ont leurs documents vérifiés (identité, diplôme, RPPS lorsqu''il existe) ;\n- contrats et facturation sont générés automatiquement ;\n- 15 % HT de commission sur le montant de la mission, sans abonnement ni frais d''entrée : vous ne payez que si vous recrutez.',
+        E'Concrètement :\n- vous publiez une mission en quelques minutes ;\n- l''identité et les qualifications professionnelles des soignants sont contrôlées, notamment via le RPPS lorsqu''il existe ;\n- contrats et facturation sont générés automatiquement ;\n- 15 % HT de commission sur le montant de la mission, sans abonnement ni frais d''entrée : vous ne payez que si vous recrutez.',
         'Nous démarrons dans votre secteur et je vous propose d''accompagner personnellement la publication de votre première mission. Seriez-vous disponible 15 minutes cette semaine pour en parler ?',
         'Pour découvrir le fonctionnement : ' || v_lien,
         'Bien cordialement,' || E'\n' || v_signature,
@@ -416,7 +485,7 @@ BEGIN
         'type_etablissement', r.type_jolene,
         'ville', r.ville,
         'telephone', NULLIF(btrim(r.telephone), ''),
-        'source', 'FINESS (répertoire public)',
+        'source', 'FINESS (établissement) + Annuaire Santé (email)',
         'score', jsonb_build_object(
           'type', r.pts_type, 'email', r.pts_email, 'telephone', r.pts_tel,
           'signal_boamp_90j', r.pts_signal, 'tension_bmo_as', r.pts_tension),
@@ -444,10 +513,16 @@ BEGIN
       AND COALESCE(sc.archive, false) IS FALSE
       AND sc.sequence_etape BETWEEN 1 AND 2
       AND NULLIF(btrim(sc.email), '') IS NOT NULL
+      -- Seuls les contacts ouverts par cet agent : la mention de source reste exacte.
+      AND EXISTS (
+        SELECT 1 FROM public.growth_brouillons b0
+        WHERE b0.agent = 'PROSPECTION_ETABLISSEMENT' AND b0.statut = 'ENVOYE'
+          AND b0.cible_type = 'PROSPECT_ETABLISSEMENT' AND b0.cible_id = sc.finess
+      )
     ORDER BY sc.prochaine_action_le
     LIMIT 50
   LOOP
-    IF public.fn_sales_outreach_est_interdit(c.id, 'ETABLISSEMENT', c.finess, c.email, c.telephone) THEN
+    IF private.fn_growth_destinataire_bloque('CONTACT_CRM', c.id::text, c.email, c.telephone, c.finess) IS NOT NULL THEN
       v_exclus_stop := v_exclus_stop + 1;
       CONTINUE;
     END IF;
@@ -558,7 +633,7 @@ BEGIN
             private.fn_growth_majuscule(private.fn_growth_libelle_profession(v_prof, true)), v_dept, v_nb,
             CASE WHEN v_nb > 1 THEN 's' ELSE '' END,
             CASE WHEN v_taux IS NOT NULL THEN format(', jusqu''à %s €/h', trim(to_char(v_taux, 'FM999990.00'))) ELSE '' END),
-          'Vacations, CDD courts et remplacements auprès d''établissements de santé. Inscription gratuite, documents vérifiés une fois pour toutes, contrats générés automatiquement.',
+          'Vacations, CDD courts et remplacements auprès d''établissements de santé. Inscription gratuite, contrats générés automatiquement.',
           'Voir les missions et s''inscrire : ' || v_lien);
       ELSE
         v_corps := concat_ws(E'\n\n',
@@ -593,7 +668,7 @@ BEGIN
   v_corps := CASE v_angle
     WHEN 0 THEN concat_ws(E'\n\n',
       'Un arrêt maladie à 6 h du matin, un week-end à couvrir, des congés qui se chevauchent : dans beaucoup d''EHPAD et de structures médico-sociales, le remplacement se joue au téléphone, au dernier moment.',
-      'Avec Jolene, vous publiez la mission en quelques minutes et des soignants vérifiés candidatent directement. Contrats et facturation sont générés automatiquement.',
+      'Avec Jolene, vous publiez la mission en quelques minutes et les soignants candidatent directement. Contrats et facturation sont générés automatiquement.',
       'Nous démarrons en Île-de-France et dans le Morbihan. Si vous dirigez un établissement et voulez tester sur votre prochaine absence, écrivez-moi : je publie la première mission avec vous.',
       v_lien)
     WHEN 1 THEN concat_ws(E'\n\n',
@@ -603,7 +678,7 @@ BEGIN
       v_lien)
     ELSE concat_ws(E'\n\n',
       'Recruter un renfort, c''est aussi vérifier : identité, diplôme, numéro RPPS lorsqu''il existe.',
-      'Sur Jolene, ces documents sont vérifiés avant que le soignant puisse candidater, et vous gardez la décision finale sur chaque candidature.',
+      'Sur Jolene, l''identité et les qualifications professionnelles des soignants sont contrôlées, notamment via le RPPS lorsqu''il existe, et vous gardez la décision finale sur chaque candidature.',
       'Vous dirigez un EHPAD, un centre de santé ou une structure médico-sociale en Île-de-France ou dans le Morbihan ? Parlons de votre prochaine absence à couvrir.',
       v_lien)
   END;
@@ -652,6 +727,8 @@ BEGIN
       AND m.debut_le > now()
       AND m.cree_le < now() - interval '6 hours'
       AND NOT EXISTS (SELECT 1 FROM public.candidatures ca WHERE ca.mission_id = m.id)
+      -- Visibilité publique = source canonique (page /mission/:id), jamais re-décidée ici.
+      AND public.fn_mission_publique(m.id) IS NOT NULL
     ORDER BY m.debut_le
     LIMIT 30
   LOOP
@@ -725,8 +802,7 @@ BEGIN
         AND so.cree_le < now() - interval '3 days'
         AND NULLIF(btrim(so.email), '') IS NOT NULL
         AND NOT EXISTS (SELECT 1 FROM public.candidatures ca WHERE ca.soignant_id = so.id)
-        AND NOT EXISTS (SELECT 1 FROM public.preferences_notifications pn
-                        WHERE pn.utilisateur_id = so.id AND pn.canal_email IS FALSE)
+        AND private.fn_growth_destinataire_bloque('SOIGNANT', so.id::text, so.email, so.telephone, NULL) IS NULL
         AND NOT EXISTS (SELECT 1 FROM public.growth_brouillons b
                         WHERE b.agent = 'REACTIVATION' AND b.cible_type = 'SOIGNANT'
                           AND b.cible_id = so.id::text AND b.cree_le > now() - interval '14 days')
@@ -738,8 +814,8 @@ BEGIN
       CASE r.blocage WHEN 'CANDIDATURE' THEN '/soignant/recherche-missions' ELSE '/soignant/documents' END,
       'reactivation', 'email', 'agent-reactivation', lower(r.blocage));
     v_message := CASE r.blocage
-      WHEN 'DOCUMENTS' THEN 'Il ne vous reste qu''une étape pour pouvoir candidater : ajouter vos documents (une photo prise avec votre téléphone suffit). La vérification est faite pour vous, une seule fois.'
-      WHEN 'VERIFICATION' THEN 'Certains de vos documents sont encore en attente ou à compléter. Une fois votre profil vérifié, vous pourrez candidater aux missions en un clic.'
+      WHEN 'DOCUMENTS' THEN 'Il vous reste à ajouter vos documents pour compléter votre profil : une photo prise avec votre téléphone suffit.'
+      WHEN 'VERIFICATION' THEN 'Certains de vos documents sont encore en attente ou à compléter : vous pouvez suivre leur état depuis votre espace.'
       ELSE 'Votre profil est prêt. Activez une alerte sur votre zone et votre métier : vous serez prévenu dès qu''une mission correspondante est publiée.'
     END;
     INSERT INTO public.growth_brouillons (
@@ -748,7 +824,7 @@ BEGIN
     ) VALUES (
       'REACTIVATION', 'EMAIL', 'SOIGNANT', r.id::text, r.prenom, r.email,
       r.departement, r.profession,
-      CASE r.blocage WHEN 'CANDIDATURE' THEN 'Votre profil Jolene est prêt' ELSE 'Plus qu''une étape pour candidater sur Jolene' END,
+      CASE r.blocage WHEN 'CANDIDATURE' THEN 'Votre profil Jolene est prêt' ELSE 'Complétez votre profil Jolene' END,
       concat_ws(E'\n\n',
         'Bonjour' || COALESCE(' ' || NULLIF(btrim(r.prenom), ''), '') || ',',
         'Merci de vous être inscrit sur Jolene.',
@@ -775,6 +851,7 @@ BEGIN
       AND e.cree_le < now() - interval '2 days'
       AND NULLIF(btrim(e.email_contact), '') IS NOT NULL
       AND NOT EXISTS (SELECT 1 FROM public.missions m WHERE m.etablissement_id = e.id)
+      AND private.fn_growth_destinataire_bloque('ETABLISSEMENT', e.id::text, e.email_contact, e.telephone_contact, e.finess) IS NULL
       AND NOT EXISTS (SELECT 1 FROM public.growth_brouillons b
                       WHERE b.agent = 'REACTIVATION' AND b.cible_type = 'ETABLISSEMENT'
                         AND b.cible_id = e.id::text AND b.cree_le > now() - interval '14 days')
@@ -990,9 +1067,21 @@ BEGIN
     RETURN jsonb_build_object('ignore', true, 'raison', 'growth_config.agents_croissance_actifs <> true');
   END IF;
 
+  -- Données d'un compte supprimé : aucun brouillon ne les conserve.
+  DELETE FROM public.growth_brouillons b
+   WHERE (b.cible_type = 'SOIGNANT' AND NOT EXISTS (
+            SELECT 1 FROM public.soignants s
+            WHERE s.id::text = b.cible_id AND s.supprime_le IS NULL AND s.est_compte_test IS FALSE))
+      OR (b.cible_type = 'ETABLISSEMENT' AND NOT EXISTS (
+            SELECT 1 FROM public.etablissements e
+            WHERE e.id::text = b.cible_id AND e.supprime_le IS NULL AND e.est_compte_test IS FALSE));
+
+  -- Un brouillon (même validé) non envoyé expire ; sa clé est libérée pour
+  -- qu'un agent puisse reproposer la cible plus tard.
   UPDATE public.growth_brouillons
-     SET statut = 'EXPIRE', maj_le = now()
-   WHERE statut = 'BROUILLON' AND expire_le IS NOT NULL AND expire_le < now();
+     SET statut = 'EXPIRE', maj_le = now(),
+         idempotence_key = idempotence_key || ':expire:' || id
+   WHERE statut IN ('BROUILLON', 'VALIDE') AND expire_le IS NOT NULL AND expire_le < now();
   GET DIAGNOSTICS v_expires = ROW_COUNT;
 
   FOREACH v_agent IN ARRAY ARRAY['PROSPECTION_ETABLISSEMENT', 'POST_SOCIAL', 'MISSION_A_POURVOIR', 'REACTIVATION'] LOOP
@@ -1030,6 +1119,7 @@ REVOKE ALL ON FUNCTION private.fn_growth_lien(text, text, text, text, text) FROM
 REVOKE ALL ON FUNCTION private.fn_growth_libelle_profession(text, boolean) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.fn_growth_majuscule(text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.fn_growth_missions_reelles() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.fn_growth_destinataire_bloque(text, text, text, text, text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.fn_growth_agent_prospection() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.fn_growth_agent_posts() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.fn_growth_agent_missions() FROM PUBLIC, anon, authenticated;
@@ -1091,7 +1181,7 @@ DECLARE
   v_b public.growth_brouillons%ROWTYPE;
   v_contact_id uuid;
   v_crm jsonb;
-  v_interdit boolean := false;
+  v_motif text;
   v_sujet text := NULLIF(btrim(COALESCE(p_sujet, '')), '');
   v_corps text := NULLIF(btrim(COALESCE(p_corps, '')), '');
 BEGIN
@@ -1120,34 +1210,31 @@ BEGIN
     RAISE EXCEPTION 'Sujet trop long';
   END IF;
 
-  -- Garde STOP à chaque validation et au constat d'envoi (une opposition a
-  -- pu arriver entre-temps).
-  IF v_action IN ('VALIDER', 'MARQUER_ENVOYE') AND v_b.canal = 'EMAIL'
-     AND v_b.cible_type IN ('PROSPECT_ETABLISSEMENT', 'CONTACT_CRM') THEN
-    v_interdit := public.fn_sales_outreach_est_interdit(
-      CASE WHEN v_b.cible_type = 'CONTACT_CRM' THEN v_b.cible_id::uuid END,
-      'ETABLISSEMENT',
-      CASE WHEN v_b.cible_type = 'PROSPECT_ETABLISSEMENT' THEN v_b.cible_id ELSE v_b.contexte->>'finess' END,
-      v_b.destinataire_email,
-      v_b.contexte->>'telephone');
-    IF v_interdit THEN
-      -- Pas de RAISE : il annulerait ce rejet. Le rejet persiste, l'UI l'affiche.
+  -- Joignabilité revérifiée à chaque validation et au constat d'envoi : une
+  -- opposition, un refus d'emails ou une suppression de compte a pu arriver.
+  -- Pas de RAISE ici : il annulerait le rejet, qui doit persister.
+  IF v_action IN ('VALIDER', 'MARQUER_ENVOYE') AND v_b.canal = 'EMAIL' THEN
+    v_motif := private.fn_growth_destinataire_bloque(
+      v_b.cible_type, v_b.cible_id, v_b.destinataire_email,
+      v_b.contexte->>'telephone', v_b.contexte->>'finess');
+    IF v_motif = 'COMPTE_SUPPRIME' THEN
+      DELETE FROM public.growth_brouillons WHERE id = p_id;
+      RETURN jsonb_build_object('success', false, 'id', p_id, 'statut', 'SUPPRIME',
+        'raison', 'Compte supprimé : brouillon effacé, aucun envoi possible');
+    ELSIF v_motif IS NOT NULL THEN
       UPDATE public.growth_brouillons
-         SET statut = 'REJETE', motif_rejet = 'Opposition (STOP) ou contact perdu', maj_le = now()
+         SET statut = 'REJETE', maj_le = now(),
+             motif_rejet = CASE v_motif
+               WHEN 'STOP' THEN 'Opposition (STOP) ou contact perdu'
+               WHEN 'EMAILS_DESACTIVES' THEN 'Emails désactivés par le destinataire'
+               ELSE 'Destinataire invalide' END
        WHERE id = p_id;
       RETURN jsonb_build_object('success', false, 'id', p_id, 'statut', 'REJETE',
-        'raison', 'Contact en opposition (STOP) ou perdu : aucun envoi possible');
+        'raison', CASE v_motif
+          WHEN 'STOP' THEN 'Contact en opposition (STOP) ou perdu : aucun envoi possible'
+          WHEN 'EMAILS_DESACTIVES' THEN 'Le destinataire a désactivé ces emails : aucun envoi possible'
+          ELSE 'Destinataire invalide : aucun envoi possible' END);
     END IF;
-  END IF;
-  IF v_action IN ('VALIDER', 'MARQUER_ENVOYE') AND v_b.cible_type = 'SOIGNANT' AND EXISTS (
-    SELECT 1 FROM public.preferences_notifications pn
-    WHERE pn.utilisateur_id = v_b.cible_id::uuid AND pn.canal_email IS FALSE
-  ) THEN
-    UPDATE public.growth_brouillons
-       SET statut = 'REJETE', motif_rejet = 'Emails désactivés par le soignant', maj_le = now()
-     WHERE id = p_id;
-    RETURN jsonb_build_object('success', false, 'id', p_id, 'statut', 'REJETE',
-      'raison', 'Le soignant a désactivé les emails');
   END IF;
 
   IF v_action = 'MODIFIER' THEN
@@ -1178,6 +1265,16 @@ BEGIN
       v_contact_id := v_b.cible_id::uuid;
       PERFORM public.fn_crm_enregistrer_email_envoye(
         v_contact_id, false, 'Brouillon agent ' || v_b.id || ' (étape ' || COALESCE(v_b.sequence_etape, 2) || ')');
+      -- L'étape 3 annonce « je ne vous relancerai plus » : le CRM ne doit plus
+      -- programmer de relance ni garder de tâche ouverte.
+      IF v_b.sequence_etape = 3 THEN
+        UPDATE public.sales_contacts
+           SET sequence_active = false, prochaine_action_le = NULL, a_rappeler = false, maj_le = now()
+         WHERE id = v_contact_id;
+        UPDATE public.sales_taches
+           SET statut = 'ANNULEE', maj_le = now()
+         WHERE contact_id = v_contact_id AND statut IN ('A_FAIRE', 'EN_COURS');
+      END IF;
     END IF;
     UPDATE public.growth_brouillons
        SET statut = 'ENVOYE', envoye_par = auth.uid(), envoye_le = now(), maj_le = now()

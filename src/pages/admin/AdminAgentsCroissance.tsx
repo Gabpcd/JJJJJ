@@ -115,6 +115,9 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
 
   const rouvrir = async () => {
     if (estEmail(b) && b.destinataire_email) {
+      // Revalider revérifie l'opposition (STOP) et les préférences avant d'ouvrir Gmail.
+      const ok = await decider('VALIDER');
+      if (!ok) return;
       window.open(lienGmail(b.destinataire_email, sujet, corps), '_blank', 'noopener');
     } else {
       try {
@@ -127,7 +130,8 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
   };
 
   const rejeter = async () => {
-    const motif = window.prompt('Motif du rejet (facultatif)') ?? undefined;
+    const motif = window.prompt('Motif du rejet (facultatif)');
+    if (motif === null) return; // « Annuler » ne rejette pas.
     if (await decider('REJETER', motif)) toast.success('Brouillon rejeté');
   };
 

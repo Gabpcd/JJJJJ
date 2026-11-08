@@ -144,8 +144,13 @@ prospection refuse de tourner : le verrou est explicite et l'erreur est tracée.
 
 Wording exposé aux prospects, ajouté en pied de chaque email de prospection :
 
-> Vos coordonnées professionnelles proviennent du répertoire public FINESS. Si vous ne souhaitez
-> plus être contacté par Jolene, répondez simplement « STOP » à cet email : nous ne vous écrirons plus.
+> Vos coordonnées professionnelles proviennent des annuaires publics des établissements de santé
+> (répertoire FINESS et Annuaire Santé). Si vous ne souhaitez plus être contacté par Jolene, répondez
+> simplement « STOP » à cet email : nous ne vous écrirons plus.
+
+Origine vérifiée en base au 08/11 : les 64 058 établissements viennent de FINESS, et leurs 30 633 emails
+viennent de l'enrichissement Annuaire Santé (FHIR ANS). Les relances de l'agent ne concernent que les
+contacts qu'il a lui-même ouverts, ce qui garde cette mention exacte.
 
 | Source | Force | Ce qu'elle impose |
 |---|---|---|
@@ -164,8 +169,17 @@ Choix de conformité proposés :
   membres (règles Meta).
 
 Les emails reprennent uniquement des affirmations déjà publiques sur `/recruter-soignants` :
-15 % HT de commission, sans abonnement, documents vérifiés, contrats et facturation automatiques.
-Il n'y a aucune mention réglementaire.
+15 % HT de commission, sans abonnement, contrôle de l'identité et des qualifications (RPPS lorsqu'il
+existe), contrats et facturation automatiques. Il n'y a aucune mention réglementaire.
+
+Garde-fous du code :
+- Un **prédicat unique**, `private.fn_growth_destinataire_bloque`, sert aux agents comme à la
+  validation. Il refuse un compte supprimé, les emails désactivés (préférence globale ou événement
+  `SERIE_ONBOARDING`) et les oppositions STOP.
+- La visibilité d'une mission vient de `fn_mission_publique`.
+- Les brouillons d'un compte supprimé sont effacés.
+- Un brouillon non envoyé, même validé, expire.
+- Après le dernier email (étape 3), la séquence CRM s'arrête.
 
 ## 6. Ce qui attend le feu vert de Gabrielle
 

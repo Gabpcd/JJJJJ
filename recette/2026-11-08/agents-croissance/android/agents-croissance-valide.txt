@@ -27,7 +27,7 @@
     - text: Objet
     - textbox "Objet": Renforts pour vos absences — Jolene
     - text: Message
-    - textbox "Message": "Bonjour, Je suis Gabrielle, fondatrice de Jolene. Vos coordonnées professionnelles proviennent du répertoire public FINESS. Si vous ne souhaitez plus être contacté par Jolene, répondez simplement « STOP » à cet email : nous ne vous écrirons plus."
+    - textbox "Message": "Bonjour, Je suis Gabrielle, fondatrice de Jolene. Vos coordonnées professionnelles proviennent des annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé). Si vous ne souhaitez plus être contacté par Jolene, répondez simplement « STOP » à cet email : nous ne vous écrirons plus."
     - button "J’ai envoyé":
       - img
       - text: J’ai envoyé

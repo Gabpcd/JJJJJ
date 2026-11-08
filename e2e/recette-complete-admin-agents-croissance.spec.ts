@@ -22,7 +22,7 @@ function fixtures(): Brouillon[] {
       cible_type: 'PROSPECT_ETABLISSEMENT', cible_id: '560000001', destinataire_nom: 'EHPAD Les Tilleuls — recette',
       destinataire_email: 'contact@ehpad-tilleuls.example.invalid', departement: '56', sequence_etape: 1, score: 67,
       sujet: 'Renforts soignants pour EHPAD Les Tilleuls — recette',
-      corps: 'Bonjour,\n\nJe suis Gabrielle, fondatrice de Jolene.\n\nVos coordonnées professionnelles proviennent du répertoire public FINESS. Si vous ne souhaitez plus être contacté par Jolene, répondez simplement « STOP » à cet email : nous ne vous écrirons plus.',
+      corps: 'Bonjour,\n\nJe suis Gabrielle, fondatrice de Jolene.\n\nVos coordonnées professionnelles proviennent des annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé). Si vous ne souhaitez plus être contacté par Jolene, répondez simplement « STOP » à cet email : nous ne vous écrirons plus.',
       contexte: { type_etablissement: 'EHPAD', ville: 'Lorient', score: { signal_boamp_90j: 0 }, bmo_as: { difficulte_pct: 74, projets: 971, annee: 2026 } },
       statut: 'BROUILLON',
     },
@@ -137,7 +137,7 @@ test('admin — agents de croissance : file, validation Gmail, constat d’envoi
   await expect(tilleuls.getByText('À valider', { exact: true })).toBeVisible();
   await expect(tilleuls.getByText('Étape 1/3', { exact: true })).toBeVisible();
   await expect(tilleuls.getByRole('button', { name: 'Valider et ouvrir Gmail' })).toBeEnabled();
-  await expect(tilleuls.getByLabel('Message')).toHaveValue(/répertoire public FINESS[\s\S]*« STOP »/);
+  await expect(tilleuls.getByLabel('Message')).toHaveValue(/\(répertoire FINESS et Annuaire Santé\)[\s\S]*« STOP »/);
   const post = cartes.filter({ hasText: 'Aides-soignants du 75' });
   await expect(post.getByRole('link', { name: 'Aides-soignants Île-de-France — recette' })).toHaveAttribute('href', 'https://www.facebook.com/groups/recette');
   await expect(post.getByRole('button', { name: 'Valider et copier' })).toBeEnabled();

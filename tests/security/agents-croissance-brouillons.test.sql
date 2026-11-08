@@ -74,7 +74,7 @@ BEGIN
     RAISE EXCEPTION 'Prospection : STOP, opposition, doublon d''adresse ou type hors cible non exclu';
   END IF;
   SELECT id, corps INTO v_id, v_corps FROM public.growth_brouillons WHERE cible_id = 'ZZGROW001';
-  IF position('répertoire public FINESS' IN v_corps) = 0
+  IF position('(répertoire FINESS et Annuaire Santé)' IN v_corps) = 0
      OR position('« STOP »' IN v_corps) = 0
      OR position('15 % HT' IN v_corps) = 0
      OR position('utm_campaign=agent-prospection' IN v_corps) = 0 THEN
@@ -103,15 +103,32 @@ BEGIN
     RAISE EXCEPTION 'La prospection doit refuser de tourner sans mention d''opposition';
   END IF;
   UPDATE public.growth_config
-     SET valeur = 'Vos coordonnées professionnelles proviennent du répertoire public FINESS. Si vous ne souhaitez plus être contacté par Jolene, répondez simplement « STOP » à cet email : nous ne vous écrirons plus.'
+     SET valeur = 'Vos coordonnées professionnelles proviennent des annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé). Si vous ne souhaitez plus être contacté par Jolene, répondez simplement « STOP » à cet email : nous ne vous écrirons plus.'
    WHERE cle = 'prospection_mention_opposition';
 
-  -- 4. Posts : 2 professions × 1 département + 1 LinkedIn, idempotents.
+  -- 4. Posts : 2 professions × 1 département + 1 LinkedIn de la semaine, idempotents.
   v_res := private.fn_growth_agent_posts();
   v_res := private.fn_growth_agent_posts();
-  SELECT count(*) INTO v_n FROM public.growth_brouillons WHERE agent = 'POST_SOCIAL' AND (departement = 'ZZ' OR canal = 'LINKEDIN');
-  IF v_n <> 3 THEN
-    RAISE EXCEPTION 'Posts : 3 brouillons attendus, % obtenus', v_n;
+  SELECT count(*) INTO v_n FROM public.growth_brouillons WHERE agent = 'POST_SOCIAL' AND departement = 'ZZ';
+  IF v_n <> 2 THEN
+    RAISE EXCEPTION 'Posts : 2 brouillons Facebook ZZ attendus, % obtenus', v_n;
+  END IF;
+  IF (SELECT count(*) FROM public.growth_brouillons
+      WHERE idempotence_key = 'posts:' || to_char(now() AT TIME ZONE 'Europe/Paris', 'IYYY-"S"IW') || ':linkedin') <> 1 THEN
+    RAISE EXCEPTION 'Posts : un seul LinkedIn attendu pour la semaine courante';
+  END IF;
+
+  -- 4 bis. Un brouillon expiré libère la cible : elle est reproposée.
+  INSERT INTO public.prospects_etablissements (finess, nom, type_jolene, email, ville, departement, statut_sourcing)
+  VALUES ('ZZGROW007', 'EHPAD Recette Expiré', 'EHPAD', 'accueil@ehpad-recette-expire.test', 'Recetteville', 'ZZ', 'A_QUALIFIER');
+  v_res := private.fn_growth_agent_prospection();
+  SELECT id INTO v_id_stop FROM public.growth_brouillons WHERE cible_id = 'ZZGROW007';
+  UPDATE public.growth_brouillons SET expire_le = now() - interval '1 minute' WHERE id = v_id_stop;
+  UPDATE public.growth_config SET valeur = 'true' WHERE cle = 'agents_croissance_actifs';
+  v_res := private.fn_growth_agents_executer('CRON');
+  IF (SELECT statut FROM public.growth_brouillons WHERE id = v_id_stop) <> 'EXPIRE'
+     OR (SELECT count(*) FROM public.growth_brouillons WHERE cible_id = 'ZZGROW007' AND statut = 'BROUILLON') <> 1 THEN
+    RAISE EXCEPTION 'Une cible expirée doit être reproposée — %', v_res;
   END IF;
 
   -- 5. Orchestrateur : le cron respecte l'interrupteur.
