@@ -166,8 +166,11 @@ final class PushCoordinatorTests: XCTestCase {
         let ready = Task { await monde.coordinator.surReady(snapshot) }
         await waitUntil { await monde.registrar.enregistrements == 1 }
         let active = Task { await monde.coordinator.surActive(snapshot) }
-        // Le retour au premier plan arrive pendant que le token APNs est attendu (barrière fermée).
-        try await Task.sleep(nanoseconds: 50_000_000)
+        // Le retour au premier plan arrive pendant que le token APNs est attendu (barrière fermée) : on
+        // attend qu'il ait rejoint l'enregistrement en vol (condition observable, aucun délai arbitraire).
+        await waitUntil { await monde.coordinator.enregistrementsRejoints == 1 }
+        let lectures = await monde.permission.lectures
+        XCTAssertEqual(lectures, 1, "l'appel rejoint ne relit pas l'autorisation : il attend l'enregistrement en vol")
         await barriere.open()
         await ready.value
         await active.value
@@ -267,12 +270,77 @@ final class PushCoordinatorTests: XCTestCase {
         let monde = MondePush()
         let snapshot = try await monde.pret()
         await monde.coordinator.surReady(snapshot)
-        await monde.coordinator.surDeconnexionSubie()
+        await monde.coordinator.surDeconnexionSubie(epoch: snapshot.epoch)
         XCTAssertEqual(Array(monde.journal.entrees.suffix(2)), ["desinscrire", "oublier"])
         XCTAssertEqual(monde.journal.entrees(prefixe: "desactiver:"), [], "JWT absent : aucune RPC")
         XCTAssertNil(monde.memoire.lire())
         let confirme = await monde.coordinator.enregistrementConfirme(epoch: snapshot.epoch)
         XCTAssertFalse(confirme)
+    }
+
+    func testDeconnexionSubieFermeLEpochPerduMemeAvantSonEnregistrement() async throws {
+        // `.ready` publié, tâche d'enregistrement pas encore arrivée au coordinateur, puis session effacée :
+        // l'enregistrement de l'identité perdue n'a jamais lieu (aucun appel APNs après la désinscription).
+        let monde = MondePush()
+        let snapshot = try await monde.pret()
+        _ = await monde.controller.signOut()
+        await monde.coordinator.surDeconnexionSubie(epoch: snapshot.epoch)
+        await monde.coordinator.surReady(snapshot)
+        let enregistrements = await monde.registrar.enregistrements
+        XCTAssertEqual(enregistrements, 0, "aucun enregistrement APNs pour l'identité perdue")
+        XCTAssertEqual(monde.journal.entrees, ["desinscrire", "oublier"])
+    }
+
+    func testDeconnexionSubieNeFermeJamaisLIdentiteSuivante() async throws {
+        // La fin subie est traitée après la publication de l'état : si une nouvelle identité est déjà
+        // ouverte, seul l'epoch perdu est fermé (l'epoch courant du contrôleur n'est pas lu).
+        let monde = MondePush()
+        let perdue = try await monde.pret()
+        _ = await monde.controller.signOut()
+        let suivante = try await monde.pret()
+        XCTAssertGreaterThan(suivante.epoch, perdue.epoch)
+        await monde.coordinator.surDeconnexionSubie(epoch: perdue.epoch)
+        await monde.coordinator.surReady(suivante)
+        let upserts = await monde.gateway.upserts
+        XCTAssertEqual(upserts, [hexA], "l'identité suivante enregistre son token")
+        let confirme = await monde.coordinator.enregistrementConfirme(epoch: suivante.epoch)
+        XCTAssertTrue(confirme)
+    }
+
+    // MARK: - Lancement à froid sans session
+
+    func testSessionAbsenteOublieLeTokenLaisseParUneSessionPrecedente() async throws {
+        let memorise = TokenPushMemorise(token: hexB, userId: MondePush.utilisateur.id)
+        let monde = MondePush(memorise: memorise)
+        await monde.coordinator.surSessionAbsente()
+        XCTAssertEqual(monde.journal.entrees, ["desinscrire", "oublier"], "aucun JWT : désinscription locale et oubli, sans RPC")
+        XCTAssertNil(monde.memoire.lire())
+    }
+
+    func testSessionAbsenteSansTokenMemoriseNeFaitRien() async throws {
+        let monde = MondePush()
+        await monde.coordinator.surSessionAbsente()
+        let desinscriptions = await monde.registrar.desinscriptions
+        XCTAssertEqual(desinscriptions, 0, "rien à nettoyer : aucun appel système")
+        XCTAssertEqual(monde.journal.entrees, [])
+    }
+
+    // MARK: - Journal DEBUG (§2.4 ; T17 distingue non autorisé, APNs muet, 22023 et réseau)
+
+    func testMotifDuJournalCategorieSeulementJamaisLeToken() {
+        // Catégorie d'erreur seulement : ni message (il pourrait citer un token ou un texte serveur), ni token.
+        XCTAssertEqual(PushCoordinator.motif(JoleneError(.contract, "Token push invalide \(hexA)")), "contract",
+                       "22023 → refus de contrat (`SupabasePushGateway`)")
+        XCTAssertEqual(PushCoordinator.motif(JoleneError(.unauthorized, SessionController.sessionExpiredMessage)), "unauthorized")
+        XCTAssertEqual(PushCoordinator.motif(JoleneError(.network, "hors ligne")), "network")
+        XCTAssertEqual(PushCoordinator.motif(JoleneError(.network, SessionController.timeoutMessage)), "network (délai dépassé)",
+                       "APNs ou serveur muet : borne de `bounded` atteinte")
+        XCTAssertEqual(PushCoordinator.motif(CancellationError()), "annulé")
+        XCTAssertEqual(PushCoordinator.motif(NSError(domain: NSCocoaErrorDomain, code: 3010)), "NSCocoaErrorDomain 3010",
+                       "échec APNs (`didFailToRegisterForRemoteNotificationsWithError`) : domaine et code")
+        for erreur: Error in [JoleneError(.unknown, hexA), NSError(domain: "d", code: 1, userInfo: [NSLocalizedDescriptionKey: hexA])] {
+            XCTAssertFalse(PushCoordinator.motif(erreur).contains(hexA), "jamais le token ni le message dans le journal")
+        }
     }
 
     func testNouvelleSessionApresDeconnexionReenregistre() async throws {

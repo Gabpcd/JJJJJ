@@ -512,6 +512,17 @@ final class JoleneDesignLot3Tests: XCTestCase {
         XCTAssertTrue(PermissionCard.isPrimaryEnabled(isLoading: false))
         XCTAssertFalse(PermissionCard.isPrimaryEnabled(isLoading: true))
         XCTAssertFalse(PermissionCard.isSecondaryEnabled(isLoading: true), "« Plus tard » attend aussi la fin de la demande système")
+        // T4 : sans action principale (`onPrimary: nil`), la carte d'état n'affiche aucun bouton (autorisé et
+        // enregistré : « Ouvrir les réglages » serait superflu) ; le pré-prompt garde toujours la sienne.
+        XCTAssertFalse(PermissionCard.showsPrimary(onPrimary: nil))
+        XCTAssertTrue(PermissionCard.showsPrimary(onPrimary: {}))
+    }
+
+    func testBlockingScreenActionSecondaireBloqueePendantLAppel() {
+        // T4 : « Se déconnecter » de l'écran bloqué montre l'attente et refuse un second tap pendant la
+        // déconnexion (désactivation du token jusqu'à 2,5 s ; `SessionStore.deconnexionEnCours`).
+        XCTAssertTrue(BlockingScreen.isSecondaryEnabled(isLoading: false))
+        XCTAssertFalse(BlockingScreen.isSecondaryEnabled(isLoading: true))
     }
 
     func testPermissionCardLargeurMaximaleDeLaCarteEntiere() throws {
@@ -651,6 +662,18 @@ final class JoleneDesignLot3Tests: XCTestCase {
             ("carte d'état", AnyView(PermissionCard(.init(title: "Autorisation du téléphone", message: "Message.",
                                                           primaryTitle: "Ouvrir les réglages", identifier: "push-etat-appareil",
                                                           primaryIdentifier: "push-ouvrir-reglages"), onPrimary: {}))),
+            // T4 : carte d'état sans réglage utile (autorisé et enregistré) : aucune action, aucun bouton.
+            ("carte d'état sans action", AnyView(PermissionCard(.init(title: "Autorisation du téléphone", message: "Message.",
+                                                                      primaryTitle: "Ouvrir les réglages",
+                                                                      identifier: "push-etat-appareil",
+                                                                      primaryIdentifier: "push-ouvrir-reglages"),
+                                                                onPrimary: nil))),
+            // T4 : écran bloqué pendant la déconnexion (RPC de désactivation jusqu'à 2,5 s) : bouton en attente.
+            ("écran bloqué, déconnexion en cours", AnyView(BlockingScreen(title: "Espace non disponible", message: "Message.",
+                                                                         identifier: "access-blocked",
+                                                                         secondaryTitle: "Se déconnecter",
+                                                                         secondaryIdentifier: "logout-button",
+                                                                         secondaryAction: {}, secondaryIsLoading: true))),
             ("critères", AnyView(PasswordCriteriaList(criteria: criteres, identifier: "mdp"))),
             ("critères vides", AnyView(PasswordCriteriaList(criteria: [], identifier: "mdp-vide"))),
         ]

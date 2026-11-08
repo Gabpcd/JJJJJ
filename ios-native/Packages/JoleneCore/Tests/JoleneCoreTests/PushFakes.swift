@@ -60,11 +60,13 @@ actor FakePushPermission: PushPermissionPort {
     func regler(_ etat: AutorisationPush) { courant = etat }
 }
 
-/// Registrar APNs simulé : token configurable, échec, barrière (enregistrement « en vol »).
+/// Registrar APNs simulé : token configurable, échec, barrière (enregistrement « en vol »), barrière de
+/// désinscription (désinscription commencée et journalisée, puis retenue).
 actor FakePushRegistrar: PushRegistrarPort {
     private var token: Data
     private var echec: Error?
     private var barriere: Gate?
+    private var barriereDesinscription: Gate?
     private let journal: JournalPush
     private(set) var enregistrements = 0
     private(set) var desinscriptions = 0
@@ -84,20 +86,23 @@ actor FakePushRegistrar: PushRegistrarPort {
     func desinscrire() async {
         desinscriptions += 1
         journal.noter("desinscrire")
+        if let barriereDesinscription { await barriereDesinscription.wait() }
     }
 
     func regler(token: Data) { self.token = token }
     func regler(echec: Error?) { self.echec = echec }
     func regler(barriere: Gate?) { self.barriere = barriere }
+    func regler(barriereDesinscription: Gate?) { self.barriereDesinscription = barriereDesinscription }
 }
 
 /// Gateway push espionne : journalise `upsert:<token>:<userId>` et `desactiver:<token>` ;
-/// échecs et lenteur configurables.
+/// échecs, lenteur et barrière de désactivation (RPC commencée puis retenue) configurables.
 actor SpyPushGateway: PushRegistrationPort {
     private let journal: JournalPush
     private var echecsUpsert: [Error] = []
     private var echecDesactivation: Error?
     private var lenteurDesactivation: UInt64 = 0
+    private var barriereDesactivation: Gate?
     private var issueDesactivation: IssueDesactivationPush = .desactive(tokensDesactives: 1)
     private(set) var upserts: [String] = []
     private(set) var desactivations: [String] = []
@@ -113,6 +118,7 @@ actor SpyPushGateway: PushRegistrationPort {
     func desactiver(token: String) async throws -> IssueDesactivationPush {
         journal.noter("desactiver:\(token)")
         desactivations.append(token)
+        if let barriereDesactivation { await barriereDesactivation.wait() }
         if lenteurDesactivation > 0 { try await Task.sleep(nanoseconds: lenteurDesactivation) }
         if let echecDesactivation { throw echecDesactivation }
         return issueDesactivation
@@ -122,6 +128,7 @@ actor SpyPushGateway: PushRegistrationPort {
     func echouerDesactivation(_ erreur: Error?) { echecDesactivation = erreur }
     func ralentirDesactivation(secondes: Double) { lenteurDesactivation = UInt64(secondes * 1_000_000_000) }
     func repondreDesactivation(_ issue: IssueDesactivationPush) { issueDesactivation = issue }
+    func regler(barriereDesactivation: Gate?) { self.barriereDesactivation = barriereDesactivation }
 }
 
 /// Mémoire du token journalisée (`memoriser:<token>:<userId>`, `oublier`).
@@ -150,13 +157,19 @@ final class JournalPushTokenStore: PushTokenStorePort, @unchecked Sendable {
     }
 }
 
-/// Auth de test : restaure `restored`, journalise la révocation (`auth.signOut`) et la purge locale.
+/// Auth de test : restaure `restored` (ou la valeur courante de `restaurations`, modifiable en cours de
+/// test : session effacée pendant l'arrière-plan), journalise la révocation (`auth.signOut`).
 struct PushAuth: AuthPort {
     var restored: AuthenticatedUser?
     var journal: JournalPush
     var events: AuthEventEmitter?
+    var restaurations: MutableAuthState? = nil
 
-    func restoreSession() async throws -> AuthenticatedUser? { restored }
+    func restoreSession() async throws -> AuthenticatedUser? {
+        guard let restaurations else { return restored }
+        if let erreur = await restaurations.restoreError { throw erreur }
+        return await restaurations.restored
+    }
     func signIn(email: String, password: String) async throws -> AuthenticatedUser {
         guard let restored else { throw JoleneError(.invalidCredentials, "refusé") }
         return restored
@@ -187,15 +200,20 @@ struct MondePush {
     let coordinator: PushCoordinator
     let events: AuthEventEmitter
 
+    /// - Parameters:
+    ///   - restaurations: session restaurée modifiable en cours de test (nil : `utilisateur` à chaque fois).
+    ///   - missions: `NeutralMissions()` pour un espace bloqué (profil incomplet).
     init(etat: AutorisationPush = .accordee, token: Data = JetonsTest.a, barriere: Gate? = nil,
          memorise: TokenPushMemorise? = nil,
          delaiDesactivation: TimeInterval = PushCoordinator.delaiDesactivation,
-         delaiToken: TimeInterval = PushCoordinator.delaiToken) {
+         delaiToken: TimeInterval = PushCoordinator.delaiToken,
+         restaurations: MutableAuthState? = nil, missions: MissionsPort = PushMissions()) {
         let journal = JournalPush()
         let events = AuthEventEmitter()
         let gateway = SpyPushGateway(journal: journal)
-        var gateways = Gateways(auth: PushAuth(restored: Self.utilisateur, journal: journal, events: events),
-                                role: NeutralRole(), missions: PushMissions())
+        var gateways = Gateways(auth: PushAuth(restored: Self.utilisateur, journal: journal, events: events,
+                                               restaurations: restaurations),
+                                role: NeutralRole(), missions: missions)
         gateways.push = gateway
         let controller = SessionController(gateways: gateways)
         let permission = FakePushPermission(etat)
