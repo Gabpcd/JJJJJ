@@ -23,11 +23,6 @@ final class DestinationLienTests: XCTestCase {
              "https://jolene.app/soignant/stripe-connect?success=true"),                                            // T14a
             ("https://jolene.app/soignant/stripe-connect?refresh=true", .stripeConnect(retour: .rafraichir),
              "https://jolene.app/soignant/stripe-connect?refresh=true"),                                            // T14a
-            ("https://jolene.app/inscription/soignant?profession=IDE&ville=Lyon",
-             .inscription(EtapeInscription(page: .soignant, query: "profession=IDE&ville=Lyon")),
-             "https://jolene.app/inscription/soignant?profession=IDE&ville=Lyon"),                                  // T7
-            ("https://jolene.app/inscription/reprendre", .inscription(EtapeInscription(page: .reprendre, query: nil)),
-             "https://jolene.app/inscription/reprendre"),                                                           // T7
             ("https://jolene.app/inscription/completer?ref=ABCD-12#x",
              .inscription(EtapeInscription(page: .completer, query: "ref=ABCD-12")),
              "https://jolene.app/inscription/completer?ref=ABCD-12#x"),                                             // T8
@@ -79,6 +74,9 @@ final class DestinationLienTests: XCTestCase {
         let cas: [(lien: String, route: JoleneRoute)] = [
             ("https://jolene.app/soignant/parametres/notifications", .parametresNotifications),                     // T6
             ("https://www.jolene.app/soignant/parametres/notifications/?origine=push#haut", .parametresNotifications), // T6
+            ("https://jolene.app/inscription/soignant?profession=IDE&ville=Lyon",
+             .inscription(EtapeInscription(page: .soignant, query: "profession=IDE&ville=Lyon"))),                 // T7
+            ("https://jolene.app/inscription/reprendre", .inscription(EtapeInscription(page: .reprendre, query: nil))), // T7
         ]
         for c in cas {
             let d = try XCTUnwrap(lien(c.lien), c.lien)
@@ -397,8 +395,8 @@ final class DestinationLienTests: XCTestCase {
             (.monCompte, true, "hub ProfileScreen"),
             (.notifications, true, "T5"),
             (.parametresNotifications, true, "T6"),
-            (.inscription(EtapeInscription(page: .soignant, query: nil)), false, "T7"),
-            (.inscription(EtapeInscription(page: .reprendre, query: nil)), false, "T7"),
+            (.inscription(EtapeInscription(page: .soignant, query: nil)), true, "T7 : InscriptionRapideScreen, hors espace"),
+            (.inscription(EtapeInscription(page: .reprendre, query: nil)), true, "T7 : OnboardingRootView, hors espace"),
             (.inscription(EtapeInscription(page: .completer, query: nil)), false, "T8"),
             (.profil, true, "T9 : ProfilEditionScreen"),
             (.revenus(section: .paiementsAConfirmer), false, "T13"),

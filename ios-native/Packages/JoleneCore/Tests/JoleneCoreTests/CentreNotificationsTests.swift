@@ -516,8 +516,11 @@ final class CentreNotificationsTests: XCTestCase {
 
     /// Liste d'exclusion nommée et fermée : routes natives **sans présentation depuis un espace prêt par nature**
     /// (connexion et liens de rappel d'authentification, consommés hors de l'espace par le coordinateur de L1-T10).
-    /// Une tranche n'y ajoute une route qu'avec sa justification dans `DECISIONS_LOT3.md`.
-    private static let sansCibleDansLEspace: Set<GenreRoute> = [.connexion, .resetPassword, .confirmerInscription]
+    /// Une tranche n'y ajoute une route qu'avec sa justification dans `DECISIONS_LOT3.md`. T7 : pages
+    /// `/inscription/soignant` et `/inscription/reprendre`, consommées hors de l'espace (écran de connexion,
+    /// aiguillage d'onboarding, `BoiteLiensInscription`) — un compte ouvert n'a pas d'inscription à faire.
+    private static let sansCibleDansLEspace: Set<GenreRoute> = [.connexion, .resetPassword, .confirmerInscription,
+                                                                .inscriptionSoignant, .inscriptionReprendre]
 
     /// Garde « un gap connu reste verrouillé » (`CLAUDE.md`) : toute route dont l'écran natif est livré
     /// (`DestinationLien.ecranNatifLivre == true`), parmi la table des routes et toute la famille push des vecteurs
