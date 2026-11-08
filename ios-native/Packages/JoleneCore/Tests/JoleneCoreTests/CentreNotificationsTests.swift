@@ -343,6 +343,28 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(avec, .web(.safari(URL(string: "https://jolene.app/soignant/litiges")!)))
     }
 
+    /// Revue B8 de T3b, m2 : le centre ne contourne pas l'option B (décision 7 du lot 1). Une ligne dont le lien est un
+    /// lien de réinitialisation `?code=` n'ouvre jamais la page web avec le code : lue, elle n'est ni « Voir » ni un
+    /// bouton ; non lue, elle est marquée lue (relue) puis n'ouvre rien, sans message (le lien est Jolene et valide).
+    func testLienDeReinitialisationPkceJamaisServiParLeCentre() async throws {
+        let lue = ligne("r1", lien: "/reset-password?code=c", lue: true)
+        XCTAssertFalse(CentreNotificationsModel.afficheVoir(lue, renvoiWebDisponible: true))
+        XCTAssertFalse(CentreNotificationsModel.estActionnable(lue, renvoiWebDisponible: true))
+        let tokenHash = ligne("r2", lien: "/reset-password?token_hash=h&type=recovery", lue: true)
+        XCTAssertTrue(CentreNotificationsModel.afficheVoir(tokenHash, renvoiWebDisponible: true),
+                      "`token_hash` : la page web canonique sait le vérifier")
+
+        let port = PortScripte([.success([ligne("r3", lien: "/reset-password?code=c")])])
+        let (controller, snapshot) = try await pret(port)
+        let model = CentreNotificationsModel(controller: controller, snapshot: snapshot)
+        await model.charger()
+        let cible = await model.ouvrir(model.notifications[0], renvoiWebDisponible: true)
+        XCTAssertNil(cible, "jamais `.web(.safari(…?code=…))`")
+        let marquees = await port.marquees
+        XCTAssertEqual(marquees, ["r3"], "la lecture est relue comme pour toute ligne non lue")
+        XCTAssertNil(model.messageAction)
+    }
+
     // MARK: - Présentation des lignes (jamais un bouton sans effet)
 
     func testVoirEtLigneActionnable() {
@@ -398,10 +420,11 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(try cible("/soignant/profil"), .profil)
         XCTAssertEqual(try cible("/soignant/profil?tab=principal"), .profil)
         XCTAssertEqual(try cible("/soignant/reputation"), .profil)
-        // Point de fusion T3b / T11 (revue L3-T9 m2), tranché par L3-T3b : l'onglet confidentialité du web (export RGPD,
-        // suppression de compte) mène au hub natif, qui porte la suppression (`LinksRouterTests`) ; aucune notification
-        // du dump ne vise ce `?tab=`.
-        XCTAssertEqual(try cible("/soignant/profil?tab=confidentialite"), .monCompte)
+        // Point de fusion T3b / T11 (revue L3-T9 m2 ; revue B8 de T3b, m3) : l'onglet confidentialité du web (export RGPD,
+        // suppression de compte) reste un renvoi web tant que le hub natif n'a pas l'export (L3-T11, garde de
+        // `LinksRouterTests`) ; aucune notification du dump ne vise ce `?tab=`.
+        XCTAssertEqual(try cible("/soignant/profil?tab=confidentialite"),
+                       .web(.safari(URL(string: "https://jolene.app/soignant/profil?tab=confidentialite")!)))
         // Destination effective, jamais la route brute : factures et paiements restent des renvois web (D4, T13).
         XCTAssertEqual(try cible("/soignant/mes-gains?tab=factures"),
                        .web(.safari(URL(string: "https://jolene.app/soignant/mes-gains?tab=factures")!)))
@@ -413,6 +436,10 @@ final class CentreNotificationsTests: XCTestCase {
         // L3-T3b : écran de réinitialisation natif non livré, la page web canonique (`token_hash` conservé) est servie.
         XCTAssertEqual(try cible("/reset-password?token_hash=h&type=recovery"),
                        .web(.safari(URL(string: "https://jolene.app/reset-password?token_hash=h&type=recovery")!)))
+        // Revue B8 de T3b, m2 : option B (décision 7 du lot 1) — un lien `?code=` n'est jamais servi par Safari, depuis le
+        // centre comme depuis un lien universel ou un tap (`DeepLinkIntent.reinitialisationRefusee`).
+        XCTAssertEqual(try cible("/reset-password?code=c"), .aucune)
+        XCTAssertEqual(try cible("https://www.jolene.app/reset-password/?code=c&type=recovery#x"), .aucune)
 
         let racine = URL(string: "https://jolene.app/")!
         for cible in [CibleNotification.accueil, .explorer, .missions, .revenus(section: .apercu), .monCompte, .mission(id: "m"), .centre,

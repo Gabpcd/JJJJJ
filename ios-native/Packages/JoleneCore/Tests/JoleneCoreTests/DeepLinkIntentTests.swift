@@ -48,7 +48,6 @@ final class DeepLinkIntentTests: XCTestCase {
             ("https://jolene.app/soignant/parametres", .monCompte),
             ("https://jolene.app/soignant/profil", .profil),
             ("https://jolene.app/soignant/reputation", .profil),
-            ("https://jolene.app/soignant/profil?tab=confidentialite#suppression-compte", .monCompte), // hub : suppression, export
             ("https://www.jolene.app/soignant/notifications?utm_source=mail#haut", .centre),
             ("https://jolene.app/soignant/parametres/notifications", .preferences),
         ]
@@ -76,6 +75,9 @@ final class DeepLinkIntentTests: XCTestCase {
             "https://jolene.app/soignant/stripe-connect?refresh=true",                // T14a
             "https://jolene.app/soignant/missions/serie/s1",                          // lot 4 (décision 11 du lot 1)
             "https://jolene.app/soignant/litiges#l1",
+            // Onglet « Confidentialité » du profil web (export RGPD, suppression de compte) : renvoi web tant que le hub
+            // natif n'a pas l'export (L3-T11 ; revue B8 de T3b, m3, garde de `LinksRouterTests`).
+            "https://jolene.app/soignant/profil?tab=confidentialite#suppression-compte",
             "https://jolene.app/inscription/soignant?profession=IDE&ville=Lyon",      // T7
             "https://jolene.app/inscription/reprendre",                               // T7
             "https://jolene.app/inscription/completer?ref=ABCD-12",                   // T8
@@ -383,6 +385,27 @@ final class DeepLinkIntentTests: XCTestCase {
         XCTAssertEqual(aiguillage.ouvrirEspace(snapshot(epoch: 1)), .naviguer(.profil, route: .profil, epoch: 1))
     }
 
+    /// Revue B8 de T3b, m8 : le plus récent (le tap) est écarté par la règle d'epoch de `BoiteTapsPush` (reçu pendant
+    /// l'espace d'un autre epoch, que la boîte tient encore pour ouvert) ; le lien mémorisé sert de repli, et les deux
+    /// sont consommés.
+    func testTapPlusRecentEcarteParLEpochRepliSurLeLienMemorise() {
+        let taps = BoiteTapsPush()
+        let aiguillage = AiguillageLiens(taps: taps)
+        _ = aiguillage.recevoir(url: url("https://jolene.app/soignant/parametres/notifications"))
+        XCTAssertTrue(aiguillage.aUnLienEnAttente)
+        // La boîte tient encore l'espace de l'epoch 1 pour ouvert : le tap reçu ensuite lui est lié.
+        XCTAssertNil(taps.prendre(pour: snapshot(epoch: 1)))
+        taps.recevoir(PushTapIntent(donnees: ["type_evenement": "MISSION_A_POURVOIR"]))
+        XCTAssertTrue(taps.aUnTapEnAttente)
+        XCTAssertEqual(aiguillage.ouvrirEspace(snapshot(epoch: 2)),
+                       .naviguer(.preferences, route: .parametresNotifications, epoch: 2),
+                       "tap plus récent, mais d'un autre epoch : écarté, le lien mémorisé est rejoué")
+        XCTAssertFalse(taps.aUnTapEnAttente, "le tap écarté est consommé")
+        XCTAssertFalse(aiguillage.aUnLienEnAttente, "le lien est consommé")
+        aiguillage.fermerEspace(epoch: 2)
+        XCTAssertNil(aiguillage.ouvrirEspace(snapshot(epoch: 3)), "rien n'est rejoué deux fois")
+    }
+
     // MARK: - Argument DEBUG, descriptions
 
     func testArgumentDOuvertureSimulee() {
@@ -396,6 +419,20 @@ final class DeepLinkIntentTests: XCTestCase {
         XCTAssertNil(DeepLinkIntent.ouvertureSimulee(arguments: ["-JOLENE_OPEN_URL"]), "valeur absente")
         XCTAssertNil(DeepLinkIntent.ouvertureSimulee(arguments: ["-JOLENE_OPEN_URL", ""]), "valeur vide")
         XCTAssertNil(DeepLinkIntent.ouvertureSimulee(arguments: ["-JOLENE_MODE", "demo"]))
+    }
+
+    /// Revue B8 de T3b, m1 : `-JOLENE_OPEN_URL_SUIVANT <url>` (DEBUG, démo) — lien universel remis par le double démo
+    /// du renvoi web (bouton `renvoi-web-lien-suivant`), pour prouver un lien reçu pendant qu'un renvoi est affiché.
+    /// Distinct de `-JOLENE_OPEN_URL`, jamais confondu avec lui.
+    func testArgumentDuLienSuivantSimule() {
+        XCTAssertEqual(DeepLinkIntent.argumentLienSuivant, "-JOLENE_OPEN_URL_SUIVANT")
+        let arguments = ["-JOLENE_OPEN_URL", "https://jolene.app/soignant/stripe-connect",
+                         "-JOLENE_OPEN_URL_SUIVANT", "https://jolene.app/reset-password?code=demo"]
+        XCTAssertEqual(DeepLinkIntent.lienSuivantSimule(arguments: arguments), url("https://jolene.app/reset-password?code=demo"))
+        XCTAssertEqual(DeepLinkIntent.ouvertureSimulee(arguments: arguments), url("https://jolene.app/soignant/stripe-connect"))
+        XCTAssertNil(DeepLinkIntent.lienSuivantSimule(arguments: ["-JOLENE_OPEN_URL", "https://jolene.app/soignant/stripe-connect"]))
+        XCTAssertNil(DeepLinkIntent.lienSuivantSimule(arguments: ["-JOLENE_OPEN_URL_SUIVANT"]))
+        XCTAssertNil(DeepLinkIntent.lienSuivantSimule(arguments: ["-JOLENE_OPEN_URL_SUIVANT", ""]))
     }
 
     private func textes(_ valeur: Any) -> [String] {

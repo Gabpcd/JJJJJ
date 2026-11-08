@@ -14,7 +14,13 @@ import XCTest
 ///   renvoi web (`/soignant/mes-gains?tab=factures`, D4) sont présentées **aussitôt**, sans session, par le
 ///   présentateur `.safari` (double démo `renvoi-web-demo`, URL canonique lue dans `renvoi-web-url`, aucune requête
 ///   réseau) ; après fermeture puis connexion, rien n'est rejoué ;
-/// - libellé DEBUG `deeplink-route` (démo) : route effectivement présentée par le coordinateur ;
+/// - (revue B8 de T3b, m8) détail de mission natif (`/soignant/missions/:id`, `LOT1_PLAN.md` §3 T10) ; absence
+///   bornée (attente inversée) de toute présentation sur l'écran de connexion ;
+/// - (revue B8 de T3b, m1) lien de réinitialisation `?code=` refusé par une alerte (option B), au lancement comme
+///   pendant un renvoi affiché (lien remis par le double, `-JOLENE_OPEN_URL_SUIVANT`) : renvoi fermé d'abord, alerte
+///   ensuite, jamais le code servi par Safari ;
+/// - libellé DEBUG `deeplink-route` (démo) : route effectivement présentée par le coordinateur (apparition de la
+///   feuille, exécution de la navigation par l'espace) ;
 /// - aucune requête réseau (`network-sentinel`).
 /// Les règles (classement de chaque route, option B du reset, dernier lien gagnant, lien contre tap, epoch, renvoi
 /// jamais rejoué comme lien universel) sont prouvées au niveau 1 (`DeepLinkIntentTests`). Le lien universel réel
@@ -111,16 +117,89 @@ final class DemoLiensLot3Tests: JoleneUITestCase {
         XCTAssertEqual(element("deeplink-route").label, "safari \(lien)")
     }
 
+    /// `LOT1_PLAN.md` §3 T10 (revue B8 de T3b, m8) : lien universel vers le détail d'une mission, reçu avant la connexion,
+    /// rejoué après `.ready` : détail natif empilé sur l'Accueil (jamais un renvoi web), retour à la racine de l'Accueil.
+    func testLienDetailDeMissionOuvreLeDetailNatif() throws {
+        launchDemo(extraArguments: ["-JOLENE_OPEN_URL", "https://jolene.app/soignant/missions/demo-mission-002"])
+        liensAucunePresentationSurLaConnexion()
+        liensConnexionDemo()
+        let titre = element("mission-detail-title")
+        require("Le détail natif de la mission est ouvert après `.ready`", timeout: 30) {
+            self.containerVisible(self.element("mission-detail")) && self.visible(titre)
+        }
+        XCTAssertEqual(titre.label, "Démonstration · Soins de suite 2")
+        XCTAssertFalse(element("renvoi-web-demo").exists, "écran natif livré (lot 1) : jamais un renvoi web")
+        XCTAssertEqual(element("deeplink-route").label, "missionDetail demo-mission-002")
+        record("\(proofPrefix)-liens-detail-mission")
+        let retour = app.navigationBars.buttons.firstMatch
+        require("Le bouton retour est disponible") { self.visible(retour) }
+        retour.tap()
+        require("Retour à la racine de l'Accueil") { self.containerVisible(self.element("accueil-screen")) && !titre.exists }
+    }
+
+    /// Option B (décision 7 du lot 1) : un lien de réinitialisation `?code=` reçu au lancement est refusé par une alerte
+    /// au texte décidé, sans session ; jamais servi par Safari ni rejoué après la connexion.
+    func testLienDeReinitialisationPkceRefuseParUneAlerte() throws {
+        launchDemo(extraArguments: ["-JOLENE_OPEN_URL", "https://jolene.app/reset-password?code=demo"])
+        liensRefusAffichePuisFerme()
+        record("\(proofPrefix)-liens-refus-reinitialisation")
+        requireAbsence("Le code n'est jamais servi par Safari") { self.element("renvoi-web-demo").exists }
+        XCTAssertFalse(element("deeplink-route").exists, "rien n'est présenté")
+        liensConnexionDemo()
+        require("L'Accueil est affiché", timeout: 30) { self.containerVisible(self.element("accueil-screen")) }
+        XCTAssertEqual(app.alerts.count, 0, "le refus n'est jamais rejoué")
+        XCTAssertFalse(element("deeplink-route").exists, "aucune navigation rejouée")
+    }
+
+    /// Revue B8 de T3b, m1 (second cas) : un lien `?code=` reçu **pendant** un renvoi affiché (bouton DEBUG du double,
+    /// `-JOLENE_OPEN_URL_SUIVANT`) ferme d'abord le renvoi, puis présente l'alerte du refus une fois la feuille fermée ;
+    /// jamais l'alerte sous la feuille, jamais le code servi par Safari.
+    func testRenvoiAffichePuisLienDeReinitialisationAlerteApresLaFermeture() throws {
+        let lien = "https://jolene.app/soignant/stripe-connect?success=true"
+        let reinitialisation = "https://jolene.app/reset-password?code=demo"
+        launchDemo(extraArguments: ["-JOLENE_OPEN_URL", lien, "-JOLENE_OPEN_URL_SUIVANT", reinitialisation])
+        liensRenvoiWebAffiche(lien)
+        let suivant = element("renvoi-web-lien-suivant")
+        require("Le double du renvoi remet le lien suivant") { self.visible(suivant) && suivant.isEnabled }
+        XCTAssertEqual(suivant.label, reinitialisation)
+        record("\(proofPrefix)-liens-renvoi-avant-refus")
+        suivant.tap()
+        liensRefusAffichePuisFerme()
+        XCTAssertFalse(element("renvoi-web-demo").exists, "le renvoi est fermé, le code n'est jamais servi par Safari")
+        require("L'écran de connexion est de nouveau affiché") { self.containerVisible(self.element("login-scroll")) }
+        XCTAssertEqual(element("deeplink-route").label, "safari \(lien)", "seul le renvoi a été présenté")
+    }
+
     // MARK: Étapes
 
-    /// Écran de connexion affiché, et rien de présenté par-dessus ni à sa place (lien de l'espace mémorisé).
+    /// Écran de connexion affiché, et rien de présenté par-dessus ni à sa place (lien de l'espace mémorisé). Revue B8 de
+    /// T3b, m8 : absence bornée (attente inversée), jamais une lecture instantanée qu'une feuille encore en cours
+    /// d'animation passerait.
     private func liensAucunePresentationSurLaConnexion() {
         require("L'écran de connexion est affiché") { self.containerVisible(self.element("login-scroll")) }
-        XCTAssertFalse(element("renvoi-web-demo").exists, "un lien de l'espace n'est jamais servi par Safari")
-        XCTAssertFalse(element("deeplink-route").exists, "rien n'est présenté avant `.ready`")
-        XCTAssertFalse(tabBarExists, "aucun espace ouvert avant la connexion")
-        XCTAssertEqual(app.alerts.count, 0)
+        requireAbsence("Rien n'est présenté avant `.ready` : ni renvoi web, ni route, ni espace, ni alerte") {
+            self.element("renvoi-web-demo").exists || self.element("deeplink-route").exists || self.tabBarExists
+                || self.app.alerts.count > 0
+        }
+        XCTAssertTrue(containerVisible(element("login-scroll")), "l'écran de connexion reste affiché")
     }
+
+    /// Alerte du refus de réinitialisation (texte de la décision 7 du lot 1, `DeepLinkIntent.Textes`) affichée sans
+    /// feuille par-dessus, puis fermée par « Fermer ».
+    private func liensRefusAffichePuisFerme() {
+        let alerte = app.alerts.firstMatch
+        require("L'alerte du refus est présentée, sans feuille de renvoi", timeout: 30) {
+            alerte.exists && !self.element("renvoi-web-demo").exists
+        }
+        XCTAssertTrue(alerte.staticTexts[Self.texteRefus].exists, "texte décidé (décision 7 du lot 1)")
+        let fermer = alerte.buttons["Fermer"]
+        require("« Fermer » est atteignable") { fermer.exists && fermer.isHittable }
+        fermer.tap()
+        require("L'alerte est fermée") { self.app.alerts.count == 0 }
+    }
+
+    /// `DeepLinkIntent.Textes.reinitialisationRefusee` (JoleneCore, épinglé par `DeepLinkIntentTests`).
+    private static let texteRefus = "Ce lien ne permet pas de réinitialiser le mot de passe depuis l'application."
 
     private func liensConnexionDemo() {
         let scroll = element("login-scroll")
