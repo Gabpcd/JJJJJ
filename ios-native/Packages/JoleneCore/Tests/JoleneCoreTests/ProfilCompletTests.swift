@@ -93,6 +93,27 @@ final class ProfilCompletTests: XCTestCase {
         }
     }
 
+    func testDescriptionMasqueeSansIdentiteNiCoordonneesNiPosition() {
+        // §2.6 du blueprint : la position GPS (`adresseLat`/`adresseLng`) n'est jamais journalisée ; la description
+        // par réflexion la restituerait à la moindre interpolation (journal, fil d'Ariane Sentry, message d'erreur).
+        let profil = ProfilComplet(id: "u-1-identifiant", prenom: "Léa", nom: "Martin", email: "lea@example.invalid",
+                                   telephone: "0611223344", dateNaissance: "1990-05-14", numeroRpps: "10101010101",
+                                   villeRecherche: "Grenoble", bio: "Infirmière", adresseLat: 45.7578, adresseLng: 4.832)
+        let rendus = [String(describing: profil), String(reflecting: profil), "\(profil)", "\([profil])",
+                      String(describing: ProfilEditionModel.Etat.pret(profil)), String(reflecting: Optional(profil))]
+        for rendu in rendus {
+            for valeur in ["u-1-identifiant", "Léa", "Martin", "lea@example", "0611223344", "1990-05-14", "10101010101",
+                           "Grenoble", "Infirmière", "45.7578", "4.832"] {
+                XCTAssertFalse(rendu.contains(valeur), "« \(valeur) » restitué par « \(rendu) »")
+            }
+        }
+        XCTAssertEqual(String(describing: profil), "ProfilComplet(valeurs masquées, position masquée, RPPS non vérifié)")
+        XCTAssertEqual(String(describing: ProfilComplet(id: "u", prenom: "", nom: "", rppsVerifie: true)),
+                       "ProfilComplet(valeurs masquées, sans position, RPPS vérifié)")
+        // Les gardes de liste blanche lisent toujours les vrais noms de propriétés (`Mirror` non redéfini).
+        XCTAssertTrue(Set(Mirror(reflecting: profil).children.compactMap(\.label)).isSuperset(of: ["adresseLat", "telephone"]))
+    }
+
     func testIdentiteVerrouilleeEtChampRppsSelonLaProfession() {
         XCTAssertTrue(ProfilComplet(id: "u", prenom: "", nom: "", rppsVerifie: true).identiteVerrouillee)
         XCTAssertFalse(ProfilComplet(id: "u", prenom: "", nom: "", rppsVerifie: false).identiteVerrouillee)

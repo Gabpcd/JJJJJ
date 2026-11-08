@@ -26,6 +26,7 @@ final class ProfilVerbatimTests: XCTestCase {
     private static let bio = "src/components/SectionBio.tsx"
     private static let choixModes = "src/components/ChoixModesExercice.tsx"
     private static let hub = "src/pages/MonCompteSoignant.tsx"
+    private static let erreurs = "src/lib/erreurs.ts"
 
     /// (texte, fichier web, ligne) : le texte figure tel quel à sa ligne source.
     private static var attendus: [(String, String, Int)] {
@@ -51,7 +52,43 @@ final class ProfilVerbatimTests: XCTestCase {
             (M.libelleLiberal, choixModes, 21), (M.chargement, choixModes, 41), (M.indisponible, choixModes, 43),
             (M.reessayer, choixModes, 44), (M.liberalNonPropose, choixModes, 46), (M.anciennePreference, choixModes, 47),
             (M.aucunMode, choixModes, 48),
+            // Exceptions PostgREST de l'enregistrement, traduites comme `extraireMessageErreur`.
+            (T.rppsDejaEnregistre, erreurs, 510), ("numero_rpps", erreurs, 510), (T.valeurDejaEnregistree, erreurs, 511),
+            ("violates check constraint", erreurs, 513), (T.valeurHorsLimites, erreurs, 514),
         ]
+    }
+
+    func testExceptionsMetierDeLEnregistrementTraduitesCommeLeWebOuVerbatimServeur() throws {
+        // Définitions live relues le 08/11/2026 : `chk_telephone_format` (23514), `soignants_numero_rpps_key` (23505),
+        // `dec_verifier_age_minimum` (P0001, `public.sql` l.3893).
+        XCTAssertEqual(ProfilEdition.exceptionsMetier, ["23514", "23505", "P0001"])
+        XCTAssertEqual(ProfilEdition.messageExceptionMetier(
+            sqlstate: "23505", message: #"duplicate key value violates unique constraint "soignants_numero_rpps_key""#),
+                       "Ce numéro RPPS est déjà enregistré.")
+        XCTAssertEqual(ProfilEdition.messageExceptionMetier(
+            sqlstate: "23505", message: #"duplicate key value violates unique constraint "soignants_email_key""#),
+                       "Cette valeur existe déjà dans le système.")
+        XCTAssertEqual(ProfilEdition.messageExceptionMetier(
+            sqlstate: "23514", message: #"new row for relation "soignants" violates check constraint "chk_telephone_format""#),
+                       "La valeur saisie est hors des limites autorisées.")
+        let age = "Vous devez avoir au moins 18 ans pour vous inscrire."
+        XCTAssertEqual(ProfilEdition.messageExceptionMetier(sqlstate: "P0001", message: age), age, "message serveur verbatim")
+        XCTAssertEqual(ProfilEdition.messageExceptionMetier(sqlstate: "P0001", message: "  "), T.enregistrementEchec)
+        // Source serveur du message verbatim (dump versionné, identique à la définition live).
+        let schema = try Self.sourceDepot("supabase/schema/public.sql").components(separatedBy: "\n")
+        XCTAssertTrue(schema[3893 - 1].contains("RAISE EXCEPTION '\(age)'"), "public.sql l.3893")
+        // Aucun nom de contrainte ni texte anglais affiché.
+        for sqlstate in ["23505", "23514"] {
+            let texte = ProfilEdition.messageExceptionMetier(sqlstate: sqlstate, message: "violates constraint chk_x")
+            XCTAssertFalse(texte.contains("chk_") || texte.contains("violates"), texte)
+        }
+    }
+
+    func testLibellesDeSessionExpireeReprisDuLot1() throws {
+        // Libellés natifs du lot 1 (session expirée : revalider la session, jamais « Réessayer » sans effet).
+        let accueil = try Self.sourceDepot("ios-native/Jolene/Screens/Accueil/AccueilScreen.swift")
+        XCTAssertTrue(accueil.contains("title: \"\(T.sessionAVerifier)\""))
+        XCTAssertTrue(accueil.contains("actionTitle: \"\(T.verifierSession)\""))
     }
 
     func testChaqueTexteAfficheEstVerbatimASaLigneWeb() throws {

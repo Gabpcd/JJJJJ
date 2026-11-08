@@ -39,21 +39,44 @@ final class DemoProfilGatewayTests: XCTestCase {
     }
 
     func testPrenomOuNomVidesRefusesAvecLeMessageServeur() async throws {
+        // Refus CERTAIN (`{error}` en HTTP 200) : même type que la gateway Supabase, `RefusEnregistrementProfil`,
+        // que le modèle affiche sans relecture (revue B8 de T9 : le refus se distingue d'une issue ambiguë).
         let gateway = DemoProfilGateway()
         do {
             _ = try await gateway.modifier(ModificationProfil(prenom: " "), context: contexte)
             XCTFail("refus attendu")
-        } catch let erreur as JoleneError {
-            XCTAssertEqual(erreur, JoleneError(.unknown, "Le prénom ne peut pas être vide"))
+        } catch let refus as RefusEnregistrementProfil {
+            XCTAssertEqual(refus, RefusEnregistrementProfil("Le prénom ne peut pas être vide"))
         }
         do {
             _ = try await gateway.modifier(ModificationProfil(nom: ""), context: contexte)
             XCTFail("refus attendu")
-        } catch let erreur as JoleneError {
-            XCTAssertEqual(erreur, JoleneError(.unknown, "Le nom ne peut pas être vide"))
+        } catch let refus as RefusEnregistrementProfil {
+            XCTAssertEqual(refus, RefusEnregistrementProfil("Le nom ne peut pas être vide"))
         }
         let relu = try await gateway.profil(context: contexte)
         XCTAssertEqual(relu.prenom, "Camille", "rien n'a été écrit")
+    }
+
+    func testVariantesDeRecetteDuProfilDemo() async throws {
+        // `JOLENE_DEMO_PROFIL` (DEBUG, `AppContainer`) : une seule clé de la fixture change par variante.
+        XCTAssertEqual(VarianteProfilDemo.variableEnvironnement, "JOLENE_DEMO_PROFIL")
+        XCTAssertEqual(VarianteProfilDemo.allCases.map(\.rawValue), ["identite-verrouillee", "sans-date-naissance"])
+        let base = try await DemoProfilGateway().profil(context: contexte)
+        var verrouille = try await DemoProfilGateway(variante: .identiteVerrouillee).profil(context: contexte)
+        XCTAssertTrue(verrouille.identiteVerrouillee)
+        XCTAssertNil(verrouille.numeroRpps, "aucun numéro RPPS fictif inventé")
+        verrouille.rppsVerifie = base.rppsVerifie
+        XCTAssertEqual(verrouille, base, "seule `rpps_verifie` change")
+        var sansDate = try await DemoProfilGateway(variante: .sansDateNaissance).profil(context: contexte)
+        XCTAssertNil(sansDate.dateNaissance)
+        XCTAssertNil(FormulaireProfil(profil: sansDate).dateNaissance, "date non renseignée : aucune date affichée")
+        sansDate.dateNaissance = base.dateNaissance
+        XCTAssertEqual(sansDate, base, "seule `date_naissance` change")
+        // Identité verrouillée : le RPPS n'est pas modifiable (l.43949-43952), comme dans le monde Supabase.
+        let gateway = DemoProfilGateway(variante: .identiteVerrouillee)
+        let relu = try await gateway.modifier(ModificationProfil(numeroRpps: "20202020202"), context: contexte)
+        XCTAssertNil(relu.numeroRpps)
     }
 
     func testPrenomEnregistreSansBlancsEtRppsFigeApresVerification() async throws {

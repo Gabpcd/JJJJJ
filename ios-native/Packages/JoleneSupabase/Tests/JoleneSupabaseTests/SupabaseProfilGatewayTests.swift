@@ -151,16 +151,98 @@ final class SupabaseProfilGatewayTests: XCTestCase {
         XCTAssertEqual(try corps(ecriture)["p_date_naissance"] as? String, "1991-01-02")
     }
 
+    /// Refus CERTAIN levé par `modifier` (le serveur a répondu sans rien appliquer).
+    private func refus(_ operation: @escaping () async throws -> Void) async -> RefusEnregistrementProfil? {
+        do {
+            try await operation()
+            return nil
+        } catch let refus as RefusEnregistrementProfil {
+            return refus
+        } catch {
+            XCTFail("refus certain attendu, obtenu : \(error)")
+            return nil
+        }
+    }
+
+    /// Exception PostgREST (corps d'erreur de `PostgrestError`), message brut de PostgreSQL.
+    private func exception(_ sqlstate: String, message: String, details: String? = nil) -> String {
+        let detail = details.map { #""\#($0)""# } ?? "null"
+        return #"{"code":"\#(sqlstate)","details":\#(detail),"hint":null,"message":"\#(message)"}"#
+    }
+
     func testPrenomVideRefuseVerbatimSansRelecture() async {
-        // l.43906 : `{error:'Le prénom ne peut pas être vide'}` en HTTP 200 ; le message serveur est restitué tel quel.
+        // l.43906 : `{error:'Le prénom ne peut pas être vide'}` en HTTP 200 ; le message serveur est restitué tel quel,
+        // en refus CERTAIN (`RefusEnregistrementProfil`, revue B8 de T9 : distinct d'une issue ambiguë, que le modèle relit).
         for (champ, message) in [(ModificationProfil(prenom: ""), "Le prénom ne peut pas être vide"),
                                  (ModificationProfil(nom: " "), "Le nom ne peut pas être vide")] {
             registry.reset()
             registry.add("POST", ecriture, respond: .json(200, #"{"error":"\#(message)"}"#))
-            let e = await erreur { _ = try await self.gateway().modifier(champ, context: TestClient.context) }
-            XCTAssertEqual(e, JoleneError(.unknown, message))
+            let r = await refus { _ = try await self.gateway().modifier(champ, context: TestClient.context) }
+            XCTAssertEqual(r, RefusEnregistrementProfil(message))
             XCTAssertTrue(registry.requests(to: lecture).isEmpty, "\(message) : aucun succès relu")
             XCTAssertEqual(registry.requests(to: ecriture).count, 1, "\(message) : aucun renvoi")
+        }
+    }
+
+    // MARK: - Exceptions métier de l'UPDATE (revue B8 de T9 ; définitions live relues le 08/11/2026)
+
+    func testTelephoneHorsFormat23514TexteWebSansRelecture() async {
+        // `chk_telephone_format` (`public.sql` l.68090) : téléphone en saisie libre (« 06/12/34/56/78 »). PostgREST
+        // répond 400 ; `extraireMessageErreur` (src/lib/erreurs.ts l.513-514) affiche le texte web.
+        let message = #"new row for relation \"soignants\" violates check constraint \"chk_telephone_format\""#
+        registry.add("POST", ecriture, respond: .json(400, exception("23514", message: message,
+                                                                       details: "Failing row contains (…).")))
+        let r = await refus {
+            _ = try await self.gateway().modifier(ModificationProfil(telephone: "06/12/34/56/78", bio: "Bonjour"),
+                                                  context: TestClient.context)
+        }
+        XCTAssertEqual(r, RefusEnregistrementProfil("La valeur saisie est hors des limites autorisées."))
+        XCTAssertEqual(registry.requests(to: ecriture).count, 1, "une seule requête, aucun renvoi")
+        XCTAssertTrue(registry.requests(to: lecture).isEmpty, "UPDATE entier annulé : aucune relecture")
+    }
+
+    func testRppsDejaPorte23505TexteWebSansRelecture() async {
+        // `soignants_numero_rpps_key` (l.73502) : 409 ; texte web l.510. Une autre contrainte unique → l.511.
+        for (contrainte, attendu) in [("soignants_numero_rpps_key", "Ce numéro RPPS est déjà enregistré."),
+                                      ("soignants_email_key", "Cette valeur existe déjà dans le système.")] {
+            registry.reset()
+            let message = #"duplicate key value violates unique constraint \"\#(contrainte)\""#
+            registry.add("POST", ecriture, respond: .json(409, exception("23505", message: message,
+                                                                           details: "Key (numero_rpps)=(…) already exists.")))
+            let r = await refus {
+                _ = try await self.gateway().modifier(ModificationProfil(numeroRpps: "10101010101"), context: TestClient.context)
+            }
+            XCTAssertEqual(r, RefusEnregistrementProfil(attendu), contrainte)
+            XCTAssertEqual(registry.requests(to: ecriture).count, 1, "\(contrainte) : une seule requête")
+            XCTAssertTrue(registry.requests(to: lecture).isEmpty, "\(contrainte) : aucune relecture")
+        }
+    }
+
+    func testAgeMinimumP0001MessageServeurVerbatimSansRelecture() async {
+        // Trigger `dec_age_minimum` → `dec_verifier_age_minimum` (l.3887-3895) : P0001, 400. Message serveur verbatim
+        // (le web affiche son message générique : écart consigné dans DECISIONS_LOT3.md).
+        let message = "Vous devez avoir au moins 18 ans pour vous inscrire."
+        registry.add("POST", ecriture, respond: .json(400, exception("P0001", message: message)))
+        let r = await refus {
+            _ = try await self.gateway().modifier(ModificationProfil(dateNaissance: "2015-01-01"), context: TestClient.context)
+        }
+        XCTAssertEqual(r, RefusEnregistrementProfil(message))
+        XCTAssertEqual(registry.requests(to: ecriture).count, 1)
+        XCTAssertTrue(registry.requests(to: lecture).isEmpty)
+        XCTAssertEqual(SupabaseProfilGateway.exceptionsMetier, ["23514", "23505", "P0001"])
+    }
+
+    func testErreurServeurAmbigueResteUneErreurJamaisUnRefusCertain() async {
+        // HTTP 5xx / passerelle : issue inconnue (l'UPDATE a pu passer) → `.unknown` avec le repli, que le modèle relit.
+        // Une exception non déclarée garde le comportement du lot 1 (message générique, jamais restituée).
+        for reponse in [StubResponse.json(500, exception("XX000", message: "internal error")),
+                        StubResponse.json(504, #"{"message":"upstream request timeout"}"#),
+                        StubResponse.json(400, exception("22P02", message: "invalid input syntax for type date"))] {
+            registry.reset()
+            registry.add("POST", ecriture, respond: reponse)
+            let e = await erreur { _ = try await self.gateway().modifier(ModificationProfil(bio: "x"), context: TestClient.context) }
+            XCTAssertEqual(e, JoleneError(.unknown, ProfilEdition.Textes.enregistrementEchec))
+            XCTAssertEqual(registry.requests(to: ecriture).count, 1, "aucun renvoi automatique")
         }
     }
 

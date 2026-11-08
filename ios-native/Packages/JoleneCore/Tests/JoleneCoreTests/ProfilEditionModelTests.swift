@@ -49,6 +49,22 @@ struct FakeProfil: ProfilPort {
     }
 }
 
+/// Audit retenu par une barrière (audit lent) : l'appel est journalisé dès son début.
+struct AuditRetenu: AuditPort {
+    let journal = AuditJournal()
+    let barriere: Gate
+
+    func connexion() async throws -> AuditResultat { .enregistre }
+    func deconnexion() async throws -> AuditResultat { .enregistre }
+    func activite() async throws -> AuditResultat { .enregistre }
+    func ecrire(action: AuditAction, typeRessource: String, idRessource: String, details: [String: String],
+                context: MissionReadContext) async throws -> AuditResultat {
+        await journal.record("\(action.rawValue) \(typeRessource) \(idRessource)")
+        await barriere.wait()
+        return .enregistre
+    }
+}
+
 /// `fn_types_exercice_autorises` seulement (le reste de l'inscription n'est pas scripté).
 struct FakeTypesExercice: InscriptionPort {
     var types: Result<[String]?, Error>
@@ -80,13 +96,14 @@ final class ProfilEditionModelTests: XCTestCase {
         var log: CallLog
     }
 
-    private func scenario(audit: FakeAudit = FakeAudit(), types: Result<[String]?, Error> = .success(["SALARIE", "LIBERAL", "MIXTE"]),
+    private func scenario(audit: FakeAudit = FakeAudit(), auditPort: AuditPort? = nil,
+                          types: Result<[String]?, Error> = .success(["SALARIE", "LIBERAL", "MIXTE"]),
                           inscription: InscriptionPort? = nil, timeout: TimeInterval = SessionController.defaultResolutionTimeout,
                           revalidation: Gate? = nil)
         async throws -> Scenario {
         let log = CallLog()
         let serveur = ProfilServeur(profil: profilServeur)
-        var gateways = Lot1Fakes.gateways(audit: audit)
+        var gateways = Lot1Fakes.gateways(audit: auditPort ?? audit)
         // `revalidation` retient la 2e restauration de session (celle qui suit un enregistrement réussi).
         gateways.auth = FakeAuth(restored: utilisateur, signInResult: .success(utilisateur), log: log,
                                  restoreGate: revalidation, restoreGateFromCall: 2)
@@ -118,6 +135,23 @@ final class ProfilEditionModelTests: XCTestCase {
         await ProfilEditionModel(session: s.store, snapshot: snapshot).charger()
         let auditsApresReouverture = await s.audit.journal.entries.count
         XCTAssertEqual(auditsApresReouverture, 2)
+    }
+
+    func testUnAuditLentNeRetardePasLaVerificationDesModes() async throws {
+        // Revue B8 de T9 : l'audit (jusqu'à 15 s) était attendu avant `verifierModes()` ; une fois T8 câblé, les
+        // modes seraient restés `.inactif`, sans « Vérification… », pendant un audit lent.
+        let barriere = Gate()
+        let audit = AuditRetenu(barriere: barriere)
+        let s = try await scenario(auditPort: audit, types: .success(["SALARIE"]))
+        let model = s.model
+        async let chargement: Void = model.charger()
+        while await audit.journal.entries.isEmpty { await Task.yield() }
+        XCTAssertEqual(model.modes, .disponibles(["SALARIE"]), "modes vérifiés avant l'audit, qui est encore en cours")
+        XCTAssertEqual(model.etat, .pret(profilServeur))
+        await barriere.open()
+        await chargement
+        let audits = await audit.journal.entries
+        XCTAssertEqual(audits, ["DONNEES_PERSO_CONSULTATION soignant u-1"])
     }
 
     func testAuditEnEchecNeBloqueJamaisLEcran() async throws {
@@ -187,10 +221,12 @@ final class ProfilEditionModelTests: XCTestCase {
     }
 
     func testRefusServeurAfficheVerbatimEtConserveLaSaisie() async throws {
+        // Refus CERTAIN (`{error}` serveur) : `RefusEnregistrementProfil`, affiché tel quel, sans relecture.
         let s = try await scenario()
         await s.model.charger()
         s.model.formulaire.prenom = " "
-        await s.serveur.scripter(erreurEcriture: JoleneError(.unknown, "Le prénom ne peut pas être vide"))
+        await s.serveur.scripter(erreurEcriture: RefusEnregistrementProfil("Le prénom ne peut pas être vide"))
+        let lecturesAvant = await s.serveur.lectures
         await s.model.enregistrer()
         XCTAssertEqual(s.model.erreur, "Le prénom ne peut pas être vide")
         XCTAssertNil(s.model.succes)
@@ -198,6 +234,102 @@ final class ProfilEditionModelTests: XCTestCase {
         let ecritures = await s.serveur.ecritures
         XCTAssertEqual(ecritures, [ModificationProfil(prenom: "")], "prénom vidé envoyé pour être refusé par le serveur")
         XCTAssertEqual(s.model.annonces, 1)
+        let lecturesApres = await s.serveur.lectures
+        XCTAssertEqual(lecturesApres, lecturesAvant, "refus certain : rien n'a été appliqué, aucune relecture")
+        XCTAssertFalse(s.model.sessionExpiree)
+    }
+
+    func testExceptionMetierAfficheLeTexteWebSansRelecture() async throws {
+        // 23505 `soignants_numero_rpps_key` restitué par la gateway en refus certain : l'UPDATE entier est annulé.
+        let s = try await scenario()
+        await s.model.charger()
+        s.model.formulaire.numeroRpps = "10101010101"
+        s.model.formulaire.villeRecherche = "Nice"
+        await s.serveur.scripter(erreurEcriture: RefusEnregistrementProfil(ProfilEdition.Textes.rppsDejaEnregistre))
+        let lecturesAvant = await s.serveur.lectures
+        await s.model.enregistrer()
+        XCTAssertEqual(s.model.erreur, "Ce numéro RPPS est déjà enregistré.")
+        let lecturesApres = await s.serveur.lectures
+        XCTAssertEqual(lecturesApres, lecturesAvant)
+        XCTAssertEqual(s.model.modification, ModificationProfil(numeroRpps: "10101010101", villeRecherche: "Nice"),
+                       "aucun champ enregistré : toute la saisie reste à envoyer")
+    }
+
+    func testIssueAmbigueHorsReseauRelitAussiLeProfil() async throws {
+        // HTTP 5xx / 504 de la passerelle → `.unknown` (repli) : le serveur a pu appliquer l'UPDATE. Relecture,
+        // jamais de renvoi (revue B8 de T9 : la relecture n'avait lieu qu'après `.network`).
+        let s = try await scenario()
+        await s.model.charger()
+        s.model.formulaire.villeRecherche = "Nice"
+        await s.serveur.scripter(perteReponse: JoleneError(.unknown, ProfilEdition.Textes.enregistrementEchec))
+        let lecturesAvant = await s.serveur.lectures
+        await s.model.enregistrer()
+        let ecritures = await s.serveur.ecritures
+        XCTAssertEqual(ecritures.count, 1, "jamais de renvoi automatique")
+        XCTAssertEqual(s.model.erreur, ProfilEdition.Textes.enregistrementEchec)
+        XCTAssertNil(s.model.succes)
+        let lecturesApres = await s.serveur.lectures
+        XCTAssertEqual(lecturesApres, lecturesAvant + 1, "issue ambiguë : profil relu")
+        XCTAssertEqual(s.model.profil?.villeRecherche, "Nice", "le serveur avait enregistré")
+        XCTAssertTrue(s.model.modification.estVide, "relu identique à la saisie : rien à renvoyer")
+    }
+
+    func testSessionExpireeOuContratALEnregistrementSansRelecture() async throws {
+        for erreur in [JoleneError(.unauthorized, "Votre session a expiré. Reconnectez-vous."),
+                       JoleneError(.contract, "Cette version de l'application n'est plus compatible avec le service. Mettez-la à jour.")] {
+            let s = try await scenario()
+            await s.model.charger()
+            s.model.formulaire.bio = "Infirmière"
+            await s.serveur.scripter(erreurEcriture: erreur)
+            let lecturesAvant = await s.serveur.lectures
+            await s.model.enregistrer()
+            XCTAssertEqual(s.model.erreur, erreur.message)
+            let lecturesApres = await s.serveur.lectures
+            XCTAssertEqual(lecturesApres, lecturesAvant, "\(erreur.kind) : aucune relecture")
+            XCTAssertEqual(s.model.sessionExpiree, erreur.kind == .unauthorized)
+        }
+        XCTAssertFalse(ProfilEditionModel.issueAmbigue(JoleneError(.cancelled, "Chargement annulé.")))
+        XCTAssertTrue(ProfilEditionModel.issueAmbigue(JoleneError(.network, "Le service ne répond pas.")))
+        XCTAssertTrue(ProfilEditionModel.issueAmbigue(nil), "erreur hors `JoleneError` : issue inconnue")
+    }
+
+    func testVerifierMaSessionApresUneLectureExpireeRelitLeProfil() async throws {
+        let s = try await scenario()
+        await s.serveur.scripter(erreurLecture: JoleneError(.unauthorized, "Votre session a expiré. Reconnectez-vous."))
+        await s.model.charger()
+        XCTAssertTrue(s.model.sessionExpiree)
+        await s.serveur.scripter()
+        await s.model.verifierSession()
+        XCTAssertFalse(s.model.sessionExpiree)
+        XCTAssertEqual(s.model.etat, .pret(profilServeur), "session toujours valide : profil relu")
+        let restaurations = await s.log.entries.filter { $0 == "restoreSession" }.count
+        XCTAssertEqual(restaurations, 2, "session revalidée, jamais une simple relecture")
+    }
+
+    func testVerifierMaSessionApresUnEnregistrementExpireConserveLaSaisie() async throws {
+        let s = try await scenario()
+        await s.model.charger()
+        s.model.formulaire.villeRecherche = "Annecy"
+        await s.serveur.scripter(erreurEcriture: JoleneError(.unauthorized, "Votre session a expiré. Reconnectez-vous."))
+        await s.model.enregistrer()
+        XCTAssertTrue(s.model.sessionExpiree)
+        await s.serveur.scripter()
+        await s.model.verifierSession()
+        XCTAssertFalse(s.model.sessionExpiree)
+        XCTAssertNil(s.model.erreur)
+        XCTAssertEqual(s.model.formulaire.villeRecherche, "Annecy", "saisie conservée pour un nouvel appui")
+        XCTAssertTrue(s.model.peutEnregistrer)
+    }
+
+    func testVerifierMaSessionSessionFermeeAucuneLecture() async throws {
+        let s = try await scenario()
+        await s.serveur.scripter(erreurLecture: JoleneError(.unauthorized, "Votre session a expiré. Reconnectez-vous."))
+        await s.model.charger()
+        await s.store.signOut()
+        let lecturesAvant = await s.serveur.lectures
+        await s.model.verifierSession()
+        let lecturesApres = await s.serveur.lectures
+        XCTAssertEqual(lecturesApres, lecturesAvant, "autre epoch : la racine reprend la main, aucune lecture")
     }
 
     func testDelaiDepasseRelitLeProfilSansRenvoyerEtConserveLaSaisie() async throws {

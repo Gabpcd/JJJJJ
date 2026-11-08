@@ -12,7 +12,10 @@ import XCTest
 /// - un prénom vidé est refusé avec le message serveur verbatim (`fn_modifier_mon_profil` l.43906) ;
 /// - le référentiel des modes d'exercice (`fn_types_exercice_autorises`, câblé par T8) n'est pas encore lu :
 ///   état « indisponible » du web, sans « Réessayer la vérification » (verrou du gap : T8 remplace cette
-///   assertion par les modes autorisés).
+///   assertion par les modes autorisés) ;
+/// - identité figée après le contrôle RPPS (variante démo `JOLENE_DEMO_PROFIL=identite-verrouillee`) : prénom,
+///   nom, date de naissance et RPPS exposés en lecture seule par leur identifiant, avec la mention verbatim ;
+/// - date de naissance non renseignée (variante `sans-date-naissance`) : ouvrir le sélecteur n'écrit aucune date.
 /// L'envoi des seuls champs modifiés, l'audit de consultation et la relecture après un délai dépassé sont
 /// prouvés au niveau 1 (`ProfilEditionModelTests`, `ModificationProfilTests`, `SupabaseProfilGatewayTests`).
 ///
@@ -22,6 +25,10 @@ final class DemoProfilTests: JoleneUITestCase {
     static let succes = "Profil mis à jour avec succès !"
     static let prenomVide = "Le prénom ne peut pas être vide"
     static let indisponible = "Vérification temporairement indisponible. Le mode salarié reste accessible. Vos choix sont conservés ; l’ajout du libéral nécessite une vérification."
+    /// `SectionProfilPrincipal.tsx` l.797 (verbatim).
+    static let nonModifiable = "(non modifiable après le contrôle RPPS)"
+    /// Variable d'environnement DEBUG des variantes du profil démo (`VarianteProfilDemo`, `AppContainer`).
+    static let varianteProfil = "JOLENE_DEMO_PROFIL"
 
     func testEditionDeLaVilleDeRechercheEnregistreeRelueEtRetrouvee() throws {
         launchDemo()
@@ -78,10 +85,8 @@ final class DemoProfilTests: JoleneUITestCase {
         let prenom = element("profil-prenom")
         scrollTo(prenom, in: ecran)
         focus(prenom, in: ecran)
-        let longueur = (prenom.value as? String)?.count ?? 0
-        XCTAssertGreaterThan(longueur, 0, "prénom de démonstration lu")
-        prenom.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: longueur))
-        require("Le prénom est vidé") { ((prenom.value as? String) ?? "").isEmpty || (prenom.value as? String) == "Prénom" }
+        XCTAssertEqual(prenom.value as? String, "Camille", "prénom de démonstration lu")
+        vider(prenom, placeholder: "Prénom")
         prenom.typeText("\n")
 
         let enregistrer = element("profil-enregistrer")
@@ -117,7 +122,70 @@ final class DemoProfilTests: JoleneUITestCase {
         record("\(proofPrefix)-profil-exercice")
     }
 
+    func testIdentiteVerrouilleeApresLeControleRppsExposeeEnLectureSeule() throws {
+        // Variante démo `identite-verrouillee` (`rpps_verifie = true`) : prénom, nom, date de naissance et RPPS en lecture
+        // seule (`SectionProfilPrincipal.tsx` l.795-840, `readOnly={rppsVerifie}`), chacun exposé par son identifiant sur
+        // l'élément combiné libellé + valeur ; l'email est en lecture seule sans mention de verrou.
+        launchDemo(environment: [Self.varianteProfil: "identite-verrouillee"])
+        signInDemo()
+        ouvrirProfil()
+        let ecran = element("profil-screen")
+        XCTAssertTrue(element("profil-rpps-verifie").exists, "pastille « RPPS Vérifié »")
+        for (identifiant, valeur) in [("profil-prenom", "Camille"), ("profil-nom", "Démo"),
+                                      ("profil-date-naissance", "14/05/1990"), ("profil-rpps", "—")] {
+            let champ = element(identifiant)
+            scrollTo(champ, in: ecran)
+            XCTAssertTrue(champ.label.contains(Self.nonModifiable), "\(identifiant) : mention verbatim, obtenu « \(champ.label) »")
+            XCTAssertTrue(champ.label.contains(valeur), "\(identifiant) : valeur relue, obtenu « \(champ.label) »")
+            XCTAssertFalse(app.textFields.matching(identifier: identifiant).firstMatch.exists, "\(identifiant) : aucun champ de saisie")
+        }
+        let email = element("profil-email")
+        scrollTo(email, in: ecran)
+        XCTAssertTrue(email.label.contains(Self.demoEmail), "email relu : \(email.label)")
+        XCTAssertFalse(email.label.contains(Self.nonModifiable))
+        let enregistrer = element("profil-enregistrer")
+        scrollTo(enregistrer, in: ecran)
+        XCTAssertFalse(enregistrer.isEnabled, "rien à enregistrer")
+        record("\(proofPrefix)-profil-identite-verrouillee")
+    }
+
+    func testDateDeNaissanceNonRenseigneeJamaisEcriteSansChoix() throws {
+        // Variante démo `sans-date-naissance` : ouvrir le sélecteur n'écrit aucune date (aucun défaut statique enregistré
+        // en silence) ; seul un choix de l'utilisateur rendrait l'enregistrement possible.
+        launchDemo(environment: [Self.varianteProfil: "sans-date-naissance"])
+        signInDemo()
+        ouvrirProfil()
+        let ecran = element("profil-screen")
+        let renseigner = element("profil-date-naissance-renseigner")
+        scrollTo(renseigner, in: ecran)
+        XCTAssertFalse(element("profil-date-naissance").exists, "aucune date fictive affichée")
+        tap("profil-date-naissance-renseigner")
+        require("Le sélecteur de date est affiché") { self.element("profil-date-naissance").exists }
+        let enregistrer = element("profil-enregistrer")
+        scrollTo(enregistrer, in: ecran)
+        XCTAssertFalse(enregistrer.isEnabled, "sélecteur ouvert sans choix : aucune date à enregistrer")
+        record("\(proofPrefix)-profil-date-non-renseignee")
+    }
+
     // MARK: Étapes
+
+    /// Vide un champ de saisie. Le curseur est d'abord placé en fin de texte par un appui sur le bord droit du champ
+    /// (le repli de `focus` touche à dx 0,2 et peut le poser au milieu de « Camille » sur iPhone), puis le texte est
+    /// effacé ; l'opération est répétée, bornée, jusqu'au champ vide (valeur vide ou placeholder).
+    private func vider(_ champ: XCUIElement, placeholder: String) {
+        func estVide() -> Bool {
+            let valeur = (champ.value as? String) ?? ""
+            return valeur.isEmpty || valeur == placeholder
+        }
+        var essais = 0
+        while !estVide() && essais < 4 {
+            champ.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
+            let longueur = ((champ.value as? String) ?? "").count
+            champ.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: max(longueur, 1)))
+            essais += 1
+        }
+        require("Le champ est vidé") { estVide() }
+    }
 
     private func signInDemo() {
         let scroll = element("login-scroll")
