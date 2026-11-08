@@ -299,6 +299,20 @@ final class PreferencesNotificationsTests: XCTestCase {
         }
     }
 
+    /// Entrée du hub Profil vers l'écran (T6, en attendant le hub de T11) : section « Réglages » (l.113) et
+    /// ligne « Notifications » (l.115) de `MonCompteSoignant.tsx`, verbatim. Remplace le titre de section
+    /// provisoire de la carte d'autorisation de T4 (`EtatNotificationsAppareil.sectionHub`, retiré).
+    func testEntreeDuHubVerbatim() throws {
+        let hub = try String(contentsOf: Lot3PortsTests.racine.appendingPathComponent("src/pages/MonCompteSoignant.tsx"),
+                             encoding: .utf8).components(separatedBy: "\n")
+        XCTAssertEqual(PreferencesTextes.sectionHub, "Réglages")
+        XCTAssertEqual(PreferencesTextes.entreeHub, "Notifications")
+        XCTAssertTrue(hub[112].contains("titre: '\(PreferencesTextes.sectionHub)'"), "MonCompteSoignant.tsx l.113")
+        XCTAssertTrue(hub[114].contains("label: '\(PreferencesTextes.entreeHub)', route: '/soignant/parametres/notifications'"),
+                      "MonCompteSoignant.tsx l.115")
+        XCTAssertEqual(PreferencesTextes.identifiantEntreeHub, "profile-preferences-notifications")
+    }
+
     func testIdentifiantsDAccessibilite() {
         XCTAssertEqual(CanalNotification.allCases.map(PreferencesTextes.identifiantCanal),
                        ["prefs-canal-email", "prefs-canal-sms", "prefs-canal-push", "prefs-canal-inapp"])

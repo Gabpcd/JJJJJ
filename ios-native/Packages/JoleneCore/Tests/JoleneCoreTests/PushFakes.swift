@@ -42,6 +42,10 @@ enum JetonsTest {
 
 actor FakePushPermission: PushPermissionPort {
     private var courant: AutorisationPush
+    /// Lot 3, T6 : réponse de l'utilisateur à la feuille système (nil : état inchangé, comme une demande
+    /// déjà tranchée) et échec de la demande (« Activer sur cet appareil »).
+    private var apresDemande: AutorisationPush?
+    private var echecDemande: Error?
     private(set) var demandes = 0
     private(set) var lectures = 0
 
@@ -54,10 +58,14 @@ actor FakePushPermission: PushPermissionPort {
 
     func demander() async throws -> Bool {
         demandes += 1
+        if let echecDemande { throw echecDemande }
+        if courant == .nonDemandee, let apresDemande { courant = apresDemande }
         return courant.permetEnregistrement
     }
 
     func regler(_ etat: AutorisationPush) { courant = etat }
+    func regler(apresDemande: AutorisationPush?) { self.apresDemande = apresDemande }
+    func regler(echecDemande: Error?) { self.echecDemande = echecDemande }
 }
 
 /// Registrar APNs simulé : token configurable, échec, barrière (enregistrement « en vol »), barrière de
