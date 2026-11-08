@@ -229,7 +229,16 @@ final class DemoWorldTests: XCTestCase {
     }
 
     func testCablerLot2AssigneLesStubsSansToucherAuLot1() {
+        // Revue fraîche de T1 : un témoin est posé d'abord dans chaque champ du lot 2, si bien que ce test rougit
+        // si `câblerLot2` oublie un champ (les défauts de `Gateways` sont déjà des stubs `Unwired*`).
         var gateways = Gateways(auth: DemoAuthGateway(), role: DemoRoleGateway(), missions: DemoMissionsGateway())
+        let temoin = PortTemoinLot2()
+        gateways.pointage = temoin
+        gateways.contestation = temoin
+        gateways.notation = temoin
+        gateways.documents = temoin
+        gateways.contrats = temoin
+        XCTAssertEqual(gateways.unwiredPorts, Lot1PortsTests.portsLot1, "témoin posé dans les cinq champs du lot 2")
         DemoWorld.câblerLot2(&gateways)
         XCTAssertTrue(gateways.pointage is UnwiredPointagePort, "T3 n'est pas livrée : stub nommé explicitement")
         XCTAssertTrue(gateways.contestation is UnwiredContestationPort)

@@ -49,19 +49,43 @@ final class Lot2ResultsTests: XCTestCase {
         XCTAssertEqual(etat.segments, [SegmentPointage(id: "c-1", debut: "2026-11-01T22:00:00+00:00", fin: nil)])
         XCTAssertFalse(String(describing: etat).contains("654321"))
         XCTAssertEqual(try cles(etat), ["statut", "intitule", "prochain_type_scan", "nb_scans", "segment_ouvert", "segments"])
-        let tolerant = try decode(EtatPointage.self, #"{"prochain_type_scan":"PAUSE","segments":null}"#)
+        let tolerant = try decode(EtatPointage.self, #"{"nb_scans":null,"prochain_type_scan":"PAUSE","segments":null}"#)
         XCTAssertNil(tolerant.prochainTypeScan, "valeur inconnue : nil, jamais une supposition")
+        XCTAssertNil(tolerant.nbScans)
         XCTAssertEqual(tolerant.segments, [])
+    }
+
+    func testEtatDuPointageRefuseLaFormeErrorEtLesClesDiscriminantesManquantes() {
+        // Revue fraîche de T1 : `{error}` HTTP 200 (`public.sql` l.35162, l.35169) ne devient jamais un état vide
+        // plausible (segments [], tout à nil). Le succès porte toujours `nb_scans` et `prochain_type_scan`
+        // (`jsonb_build_object` l.35180-35190, valeurs nulles comprises).
+        for json in [#"{"error":"Accès interdit"}"#, #"{"error":"Mission introuvable"}"#, "{}", #"{"nb_scans":1}"#,
+                     #"{"prochain_type_scan":"OUVERTURE"}"#, #"{"error":"Accès interdit","nb_scans":1,"prochain_type_scan":"OUVERTURE"}"#] {
+            XCTAssertThrowsError(try decode(EtatPointage.self, json), json)
+        }
+    }
+
+    func testUnSegmentMalFormeNeVidePasLesAutres() throws {
+        let etat = try decode(EtatPointage.self, """
+        {"nb_scans":3,"prochain_type_scan":"FERMETURE","segments":[{"id":"c-1","debut":"2026-11-01T22:00:00+00:00","fin":"2026-11-02T01:00:00+00:00"},
+         {"id":5,"debut":"x"},{"debut":"2026-11-02T01:30:00+00:00"},{"id":"c-2","debut":"2026-11-02T01:30:00+00:00","fin":null}]}
+        """)
+        XCTAssertEqual(etat.segments, [SegmentPointage(id: "c-1", debut: "2026-11-01T22:00:00+00:00", fin: "2026-11-02T01:00:00+00:00"),
+                                       SegmentPointage(id: "c-2", debut: "2026-11-02T01:30:00+00:00", fin: nil)],
+                       "tolérance par segment : seuls les segments mal formés sont écartés")
     }
 
     func testProjectionDesPreuvesDeScan() throws {
         // T3 (corrigé v2) : jamais `code_saisi`, `ip_address`, `latitude`, `longitude` (lisibles via `sp_select` l.79931).
-        XCTAssertEqual(PreuveScan.colonnes, ["id", "numero_scan", "type_scan", "scanne_le", "id_terminal", "precision_gps_m"])
-        XCTAssertEqual(PreuveScan.selection, "id,numero_scan,type_scan,scanne_le,id_terminal,precision_gps_m")
+        // `mission_id` (revue fraîche de T1) : la réconciliation vérifie elle-même la mission du reçu.
+        XCTAssertEqual(PreuveScan.colonnes, ["id", "mission_id", "numero_scan", "type_scan", "scanne_le", "id_terminal",
+                                             "precision_gps_m"])
+        XCTAssertEqual(PreuveScan.selection, "id,mission_id,numero_scan,type_scan,scanne_le,id_terminal,precision_gps_m")
         let preuve = try decode(PreuveScan.self, """
-        {"id":"s-1","numero_scan":2,"type_scan":"FERMETURE","scanne_le":"2026-11-02T08:00:00+00:00","id_terminal":"TERM_IOS_X",
-         "precision_gps_m":12.5,"code_saisi":"123456","latitude":48.8,"longitude":2.3}
+        {"id":"s-1","mission_id":"m-1","numero_scan":2,"type_scan":"FERMETURE","scanne_le":"2026-11-02T08:00:00+00:00",
+         "id_terminal":"TERM_IOS_X","precision_gps_m":12.5,"code_saisi":"123456","latitude":48.8,"longitude":2.3}
         """)
+        XCTAssertEqual(preuve.missionId, "m-1")
         XCTAssertEqual(preuve.numeroScan, 2)
         XCTAssertEqual(preuve.typeScan, .fermeture)
         XCTAssertEqual(preuve.precisionGpsM, 12.5)
@@ -82,6 +106,18 @@ final class Lot2ResultsTests: XCTestCase {
                                                       alerteTeleportation: false, methodeArrivee: "QR", methodeDepart: "CODE"))
         XCTAssertFalse(Mirror(reflecting: resume).children.contains { $0.label?.lowercased().contains("reelle") == true })
         XCTAssertEqual(DetailPresences(missionId: "m-1").resume, nil, "sans réponse : carte de synthèse masquée")
+        let sansPresence = try decode(ResumePresencesServeur.self, #"{"pointage_effectue":false,"heures_planifiees":8}"#)
+        XCTAssertEqual(sansPresence, ResumePresencesServeur(pointageEffectue: false), "l.48928 : aucune présence")
+    }
+
+    func testResumeServeurRefuseLaFormeErrorEtExigePointageEffectue() {
+        // Revue fraîche de T1 : `{error:'Accès refusé' | 'Mission introuvable'}` HTTP 200 (l.48918, l.48922) ne donne
+        // jamais un résumé non nil (carte affichée vide) : la carte est masquée (§2.4). `pointage_effectue` est
+        // toujours un booléen dans les deux formes de succès (l.48928, l.48939).
+        for json in [#"{"error":"Accès refusé"}"#, #"{"error":"Mission introuvable"}"#, "{}", #"{"pointage_effectue":null}"#,
+                     #"{"pointage_effectue":"oui"}"#, #"{"distance_m":12}"#, #"{"error":"Accès refusé","pointage_effectue":true}"#] {
+            XCTAssertThrowsError(try decode(ResumePresencesServeur.self, json), json)
+        }
     }
 
     // MARK: - Notation

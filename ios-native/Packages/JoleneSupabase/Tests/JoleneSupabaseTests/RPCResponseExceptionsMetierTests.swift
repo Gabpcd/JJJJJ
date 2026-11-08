@@ -9,8 +9,8 @@ import XCTest
 /// `fn_scanner_code_pointage` et les triggers de `presences` signalent leurs refus par `RAISE EXCEPTION`
 /// (HTTP 4xx/5xx PostgREST) : chaque message du dump est restitué mot pour mot, AVANT
 /// `SupabaseErrorMapping` (qui ferait de 42501 « Votre session a expiré »). Statuts des stubs = ceux de
-/// PostgREST pour chaque SQLSTATE (42501 → 403, 23503 → 409, P0001, 22023, 23514 → 400, autres P0… → 500)
-/// pour exercer le décodage réel du SDK. Une seule requête par appel, aucun renvoi (POST).
+/// PostgREST pour chaque SQLSTATE (42501 → 403, 23503 → 409, P0001, 22023, 23514 → 400, autres P0… → 500,
+/// classes 40 et 57 → 500) pour exercer le décodage réel du SDK. Une seule requête par appel, aucun renvoi (POST).
 final class RPCResponseExceptionsMetierTests: XCTestCase {
     private let registry = StubRegistry.shared
     private let fallback = "Impossible d'enregistrer le pointage. Réessayez."
@@ -31,14 +31,20 @@ final class RPCResponseExceptionsMetierTests: XCTestCase {
         return String(decoding: data, as: UTF8.self)
     }
 
-    private func statut(_ sqlstate: String) -> Int {
+    /// Statut HTTP de PostgREST pour un SQLSTATE levé (table « HTTP Status Codes » de PostgREST : 42501 → 403
+    /// pour un rôle authentifié, 23503 → 409, P0001 → 400, autres P0… → 500, classe 40 (rollback de
+    /// transaction) et 57 (opérateur, dont 57014 statement_timeout) → 500, autres → 400).
+    static func statut(_ sqlstate: String) -> Int {
         switch sqlstate {
         case "42501": return 403
         case "23503": return 409
         case "P0001", "22023", "23514": return 400
-        default: return sqlstate.hasPrefix("P0") ? 500 : 400
+        default:
+            return ["P0", "40", "57"].contains(where: sqlstate.hasPrefix) ? 500 : 400
         }
     }
+
+    private func statut(_ sqlstate: String) -> Int { Self.statut(sqlstate) }
 
     private func scanne(exceptionsMetier: Set<String>? = ExceptionsMetierLot2.scannerCodePointage) async throws -> RPCResponse {
         if let exceptionsMetier {
@@ -151,16 +157,38 @@ final class RPCResponseExceptionsMetierTests: XCTestCase {
     }
 
     func testSQLStateHorsEnsembleResteGenerique() async throws {
-        // Correction 10 : PostgrestError décodée = rollback prouvé ; non déclarée → message générique, jamais
-        // le texte technique ; distinct d'une erreur réseau (`.network`), seule incertaine avec le délai.
-        registry.add("POST", scanner, respond: .json(400, exception("40001", "could not serialize access due to concurrent update")))
+        // Correction 10 : une exception non déclarée donne le message générique, jamais le texte technique. Avec ce
+        // seul helper, elle est INDISCERNABLE d'une passerelle 502/504 (test suivant) : le classement rollback prouvé
+        // / incertain d'une mutation passe par `RPCResponse.appelerMutation` (`RPCMutationLot2Tests`).
+        registry.add("POST", scanner, respond: .json(statut("40001"), exception("40001", "could not serialize access due to concurrent update")))
         let e = await erreur { _ = try await self.scanne() }
         XCTAssertEqual(e, JoleneError(.unknown, fallback))
+        XCTAssertEqual(statut("40001"), 500, "PostgREST : classe 40 → 500")
         registry.reset()
         registry.add("POST", scanner, respond: .networkFailure(.networkConnectionLost))
         let reseau = await erreur { _ = try await self.scanne() }
         XCTAssertEqual(reseau?.kind, .network)
         XCTAssertEqual(registry.requests(to: scanner).count, 1, "réponse perdue : aucun renvoi, la réconciliation tranche")
+    }
+
+    func testPasserelle502504DonneLeMemeRepliQuUneExceptionNonDeclaree() async throws {
+        // Revue fraîche de T1 : corps HTML de passerelle → `HTTPError` ; corps `{"message":…}` sans `code` → décodé
+        // par supabase-swift 2.55.5 en `PostgrestError(code: nil)` (`PostgrestBuilder.swift`, `code` optionnel).
+        // Les deux finissent en `JoleneError(.unknown, fallback)` par `SupabaseErrorMapping` (inchangé), comme une
+        // exception non déclarée dont le rollback est prouvé : `appeler` ne sait pas dire « incertain ».
+        let passerelles: [StubResponse] = [
+            StubResponse(status: 502, headers: ["Content-Type": "text/html"],
+                         body: Data("<html><body><h1>502 Bad Gateway</h1></body></html>".utf8), failure: nil),
+            .json(504, #"{"message":"The upstream server is timing out"}"#),
+            .json(502, #"{"message":"An invalid response was received from the upstream server"}"#),
+        ]
+        for reponse in passerelles {
+            registry.reset()
+            registry.add("POST", scanner, respond: reponse)
+            let e = await erreur { _ = try await self.scanne() }
+            XCTAssertEqual(e, JoleneError(.unknown, fallback), "statut \(reponse.status)")
+            XCTAssertEqual(registry.requests(to: scanner).count, 1, "statut \(reponse.status) : aucun renvoi")
+        }
     }
 
     func testCodeDuTravailInchangeAvecExceptionsMetier() async throws {

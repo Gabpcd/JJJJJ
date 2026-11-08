@@ -129,26 +129,67 @@ final class RecuScanTests: XCTestCase {
 
     // MARK: - Réconciliation (relecture de `scans_pointage`)
 
-    func testPreuveHorsBaselineDuMemeTerminalEstUnSucces() throws {
+    func testPreuveHorsBaselineDuMemeTerminalEtDeLaMissionEstUnSucces() throws {
+        // §2.5 : `scans_pointage` où mission_id = reçu, id ∉ baseline, id_terminal = reçu ; en plus,
+        // numero_scan > nb_scans relu avant l'envoi (`numero_scan = COALESCE(nb_scans, 0) + 1`, public.sql l.55667).
         let recu = try prepare(preuves: ["s-1", "s-2"]).demarrer(le: t0)
         let scans = [
-            PreuveScan(id: "s-2", numeroScan: 2, typeScan: .fermeture, idTerminal: terminal),
-            PreuveScan(id: "s-9", numeroScan: 3, typeScan: .ouverture, idTerminal: "TERM_IOS_AUTREAUTREAUTREAUTRE"),
-            PreuveScan(id: "s-3", numeroScan: 3, typeScan: .ouverture, idTerminal: terminal),
+            PreuveScan(id: "s-2", missionId: "m-1", numeroScan: 2, typeScan: .fermeture, idTerminal: terminal),
+            PreuveScan(id: "s-9", missionId: "m-1", numeroScan: 3, typeScan: .ouverture, idTerminal: "TERM_IOS_AUTREAUTREAUTREAUTRE"),
+            PreuveScan(id: "s-3", missionId: "m-1", numeroScan: 3, typeScan: .ouverture, idTerminal: terminal),
         ]
         XCTAssertEqual(try recu.reconcilier(scans: scans, relueLe: t0.addingTimeInterval(1)),
-                       .recu(PreuveScan(id: "s-3", numeroScan: 3, typeScan: .ouverture, idTerminal: terminal)),
-                       "seule une preuve absente de la baseline ET du même terminal prouve la réception")
+                       .recu(PreuveScan(id: "s-3", missionId: "m-1", numeroScan: 3, typeScan: .ouverture, idTerminal: terminal)),
+                       "seule une preuve absente de la baseline, du même terminal ET de la même mission prouve la réception")
+    }
+
+    func testUnScanDuMemeTerminalSurUneAutreMissionNeProuveRien() throws {
+        // Revue fraîche de T1 : un scan du même appareil sur une autre mission du jour (hors baseline, celle-ci
+        // n'étant relue que pour la mission du reçu) ne devient jamais un faux succès, même si la requête de
+        // relecture oublie son filtre `mission_id`.
+        let recu = try prepare(preuves: ["s-1", "s-2"]).demarrer(le: t0)
+        let ailleurs = [
+            PreuveScan(id: "x-1", missionId: "m-2", numeroScan: 3, typeScan: .ouverture, idTerminal: terminal),
+            PreuveScan(id: "x-2", missionId: nil, numeroScan: 5, typeScan: .ouverture, idTerminal: terminal),
+        ]
+        XCTAssertEqual(try recu.reconcilier(scans: ailleurs, relueLe: t0.addingTimeInterval(1)), .aRelire)
+        XCTAssertEqual(try recu.reconcilier(scans: ailleurs, relueLe: t0.addingTimeInterval(8)), .nonRecu,
+                       "mission absente ou différente : aucune preuve")
+    }
+
+    func testUnePreuveAnterieureALEssaiNeProuveRien() throws {
+        // nb_scans_avant = 2 : une ligne de numéro ≤ 2 hors baseline (baseline tronquée, ligne relue en retard)
+        // précède l'envoi ; une ligne sans numéro ne prouve rien (fail-closed).
+        let recu = try prepare(preuves: ["s-1"]).demarrer(le: t0)
+        let anciennes = [
+            PreuveScan(id: "s-2", missionId: "m-1", numeroScan: 2, typeScan: .fermeture, idTerminal: terminal),
+            PreuveScan(id: "s-4", missionId: "m-1", numeroScan: nil, typeScan: .ouverture, idTerminal: terminal),
+        ]
+        XCTAssertEqual(try recu.reconcilier(scans: anciennes, relueLe: t0.addingTimeInterval(9)), .nonRecu)
     }
 
     func testAbsenceProuveeSeulementHuitSecondesApresLEnvoi() throws {
         // §2.5 (corrigé v2) : statement_timeout de `authenticated` (migration 20260720172000 l.6-7).
         let recu = try prepare(preuves: ["s-1"]).demarrer(le: t0)
-        let scans = [PreuveScan(id: "s-1", numeroScan: 1, typeScan: .ouverture, idTerminal: terminal)]
+        let scans = [PreuveScan(id: "s-1", missionId: "m-1", numeroScan: 1, typeScan: .ouverture, idTerminal: terminal)]
         XCTAssertEqual(try recu.reconcilier(scans: scans, relueLe: t0.addingTimeInterval(7.9)), .aRelire)
         XCTAssertEqual(try recu.reconcilier(scans: scans, relueLe: t0.addingTimeInterval(8)), .nonRecu)
         XCTAssertEqual(try recu.reconcilier(scans: [], relueLe: t0.addingTimeInterval(60)), .nonRecu)
+        XCTAssertEqual(try recu.reconcilier(scans: [], relueLe: t0), .aRelire, "délai nul : relire")
         XCTAssertEqual(RecuScan.delaiAbsenceProuvee, 8)
+    }
+
+    func testHorlogeQuiReculeEstUnVerdictFailClosedExplicite() throws {
+        // Revue fraîche de T1 : relecture datée AVANT le passage `started` (heure de l'appareil reculée) :
+        // l'écoulement des 8 s n'est pas établi. Jamais `.nonRecu` (qui rouvrirait l'envoi), jamais un `.aRelire`
+        // silencieux : verdict dédié, le reçu reste `started` (aucun nouveau scan).
+        let recu = try prepare(preuves: ["s-1"]).demarrer(le: t0)
+        XCTAssertEqual(try recu.reconcilier(scans: [], relueLe: t0.addingTimeInterval(-0.001)), .horlogeIncoherente)
+        XCTAssertEqual(try recu.reconcilier(scans: [], relueLe: t0.addingTimeInterval(-86_400)), .horlogeIncoherente)
+        let preuve = PreuveScan(id: "s-5", missionId: "m-1", numeroScan: 3, typeScan: .ouverture, idTerminal: terminal)
+        XCTAssertEqual(try recu.reconcilier(scans: [preuve], relueLe: t0.addingTimeInterval(-60)), .recu(preuve),
+                       "une preuve relue reste une preuve, quelle que soit l'horloge")
+        XCTAssertEqual(recu.phase, .started)
     }
 
     func testReconcilierExigeUnRecuDemarre() throws {
