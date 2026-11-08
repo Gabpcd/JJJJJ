@@ -129,7 +129,8 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
   `PRINCIPES.md` §5, `DECISIONS_LOT0.md`). Cibles fixées par `LOT3_PLAN.md` §1 et `DECISIONS_LOT3.md` (T0) ;
   hors matrice `/soignant/*`, les routes `/inscription/soignant`, `/inscription/reprendre`, `/inscription/completer`
   et `/inscription/confirmer` deviennent natives (T7, T8), `/inscription/etablissement` reste en renvoi web et PSC
-  n'est pas construit (D8).
+  n'est pas construit (D8). T7 (branche `lot3/l3-t7-v2`) : compte rapide, confirmation et aiguillage d'onboarding
+  natifs ; la complétion reste à T8 et les liens attendent le coordinateur de L1-T10 / T3b (`DECISIONS_LOT3.md`).
 - **Lot 4** : parcours secondaires ; renvoi web assumé proposé pour premium, prévoyance, mandat et charges
   sociales (décision 3 : WebView bornée ou Safari, à trancher par Gabrielle).
 - Aucune ligne n'est « abandonné » à l initialisation ; ce statut exige une décision écrite de Gabrielle.

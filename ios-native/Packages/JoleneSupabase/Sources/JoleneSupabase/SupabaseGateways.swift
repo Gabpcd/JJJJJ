@@ -62,7 +62,7 @@ public enum SupabaseGateways {
         gateways.push = SupabasePushGateway(client: client)                // T4
         gateways.notifications = SupabaseNotificationsGateway(client: client, clock: gateways.clock) // T5
         gateways.preferences = SupabasePreferencesGateway(client: client)  // T6
-        gateways.inscription = UnwiredInscriptionPort()                    // T7, T8
+        gateways.inscription = SupabaseInscriptionGateway(client: client) // T7 (complétion refusée jusqu'à T8)
         gateways.profil = SupabaseProfilGateway(client: client)            // T9
         gateways.avatar = UnwiredAvatarStoragePort()                       // T10
         gateways.geocodage = UnwiredGeocodagePort()                        // T10

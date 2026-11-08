@@ -61,7 +61,8 @@ public enum DemoWorld {
         gateways.push = DemoPushGateway()                                  // T4
         gateways.notifications = DemoNotificationsGateway()                // T5
         gateways.preferences = DemoPreferencesGateway()                    // T6
-        gateways.inscription = UnwiredInscriptionPort()                    // T7, T8
+        // T7 (compte, confirmation, parcours) ; complétion et `register-soignant` refusées jusqu'à T8.
+        gateways.inscription = DemoInscriptionGateway(auth: gateways.auth as? DemoAuthGateway ?? DemoAuthGateway())
         gateways.profil = DemoProfilGateway()                              // T9
         gateways.avatar = UnwiredAvatarStoragePort()                       // T10
         gateways.geocodage = UnwiredGeocodagePort()                        // T10
@@ -84,9 +85,11 @@ actor DemoSessionStore {
 
 /// Accepte n'importe quel email et mot de passe non vides et renvoie l'utilisateur démo
 /// confirmé. `restoreSession` renvoie `nil` au premier lancement, puis l'utilisateur
-/// après `signIn`, jusqu'à `signOut`.
+/// après `signIn`, jusqu'à `signOut`. Lot 3, T7 : l'adresse d'un compte créé pendant ce lancement
+/// (`DemoInscriptionGateway`, mêmes `store` et `comptes`) ouvre ce nouveau compte, sans profil soignant.
 public struct DemoAuthGateway: AuthPort {
-    private let store = DemoSessionStore()
+    let store = DemoSessionStore()
+    let comptes = DemoComptesInscription()
 
     public init() {}
 
@@ -99,7 +102,7 @@ public struct DemoAuthGateway: AuthPort {
         guard !emailSaisi.isEmpty, !password.isEmpty else {
             throw JoleneError(.invalidCredentials, "Saisissez votre email et votre mot de passe.")
         }
-        await store.set(DemoWorld.user)
+        await store.set(await comptes.utilisateur(email: emailSaisi) ?? DemoWorld.user)
         // Relecture après mutation : aucun succès fabriqué.
         guard let user = await store.current() else {
             throw JoleneError(.unknown, "La session de démonstration n'a pas pu être ouverte.")

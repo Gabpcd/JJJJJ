@@ -546,10 +546,14 @@ final class CentreNotificationsTests: XCTestCase {
 
     /// Liste d'exclusion nommée et fermée : routes natives **sans présentation depuis un espace prêt par nature**
     /// (connexion, consommée hors de l'espace par le coordinateur de liens, `DeepLinkIntent.horsEspace`). Une tranche
-    /// n'y ajoute une route qu'avec sa justification dans `DECISIONS_LOT3.md` (T7 : confirmation et inscription
-    /// natives, présentées hors espace ; reset natif). L3-T3b en retire le reset et la confirmation : sans écran
-    /// natif, leur ligne de `ecranNatifLivre` vaut `false` et leur lien est un renvoi web canonique.
-    private static let sansCibleDansLEspace: Set<GenreRoute> = [.connexion]
+    /// n'y ajoute une route qu'avec sa justification dans `DECISIONS_LOT3.md` (reset natif à venir). L3-T3b en retire
+    /// le reset : sans écran natif, sa ligne de `ecranNatifLivre` vaut `false` et son lien est un renvoi web
+    /// canonique. T7 (intégration du lot 3) : confirmation (`/inscription/confirmer`) et pages `/inscription/soignant`
+    /// et `/inscription/reprendre`, présentées hors de l'espace par le coordinateur des liens (`AiguillageLiens`,
+    /// action `.inscription`, `BoiteLiensInscription` lue par `RootView`) — un compte ouvert n'a pas d'inscription à
+    /// faire.
+    private static let sansCibleDansLEspace: Set<GenreRoute> = [.connexion, .confirmerInscription,
+                                                                .inscriptionSoignant, .inscriptionReprendre]
 
     /// Garde « un gap connu reste verrouillé » (`CLAUDE.md`) : toute route dont l'écran natif est livré
     /// (`DestinationLien.ecranNatifLivre == true`), parmi la table des routes et toute la famille push des vecteurs

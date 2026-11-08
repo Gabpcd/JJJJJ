@@ -644,6 +644,92 @@ absente de toutes les branches : point d'entrée unique des liens universels et 
   `CentreNotificationsTests` (le hub n'a pas l'export : l'attendu « hub » était faux pour la base) ; l'absence
   instantanée de `liensAucunePresentationSurLaConnexion` devient une absence bornée (plus stricte).
 
+## T7 — inscription : compte rapide, confirmation, aiguillage onboarding (branche `lot3/l3-t7-v2`, 08/11/2026)
+
+- **Livré.** Cœur (`JoleneCore/Inscription/`) : `InscriptionRules` (validation `InscriptionRapide.tsx` l.58-70,
+  intention et `user_metadata.inscription_progressive` l.46-52 et l.74, refus GoTrue traduits comme
+  `mapperErreurInscription`, exceptions 22023 / 23505 de `fn_demarrer_inscription`), `OnboardingResolution`
+  (`registrationIntent`, `registrationDraft`, décision de `ParcoursInscription.tsx` l.39-75), modèles
+  `InscriptionRapideModel`, `ConfirmationInscriptionModel` (échange tenté une seule fois, D10), `OnboardingModel`
+  (epoch), `BoiteLiensInscription` ; monde démo `DemoInscriptionGateway` ; gateway `SupabaseInscriptionGateway`
+  (`signUp` sans captcha vers `https://jolene.app/inscription/confirmer`, `verifyOTP` / `setSession` /
+  `exchangeCodeForSession`, `GET /auth/v1/user`, `parcours_inscription` sous RLS, `fn_demarrer_inscription` avec
+  `exceptionsMetier`). Écrans : « Créer un compte soignant » sur la connexion (`login-create-account`), compte rapide
+  (`InscriptionRapideScreen`), lien de confirmation (`ConfirmationInscriptionScreen`), aiguillage
+  (`OnboardingRootView`) ; `RootView` sert `.blocked(.unsupportedRole(nil | "PROFIL_INCOMPLET"))` par l'aiguillage,
+  tout autre `.blocked` garde l'écran du lot 0. `fn_demarrer_inscription` passe en `consommee` (définition live relue
+  en lecture seule le 08/11/2026, identique au dump l.30148-30189 ; politique `parcours_inscription_proprietaire`
+  identique).
+- **Préalable non mesuré (§3 T7, §6.11, D25).** `PORTE_LOT0.md` 3.1 (STAGING) et 3.2 (production) sont « non
+  mesurées » : aucun dispatch n'est permis à cette tranche. T7 livre donc le `signUp` natif sans jeton captcha ; un
+  refus captcha (`captcha_failed`, message contenant « captcha ») rend le message générique du web
+  (`erreurs.ts` l.178) avec le code `CAPTCHA_FAILED`, et le renvoi vers `/inscription/soignant` n'est proposé que
+  par le présentateur `.safari` de L1-T10 (absent : aucun bouton). **Si la mesure 3.1 ou 3.2 renvoie un refus
+  captcha, D25 s'applique avant le merge** : « Créer un compte » devient un renvoi web, la confirmation et
+  l'aiguillage restent natifs.
+- **Manque — coordinateur de liens (L1-T10 / T3b).** Ni `onOpenURL`, ni `onContinueUserActivity`, ni
+  `-JOLENE_OPEN_URL` sur la base : à l'exécution, un lien `/inscription/confirmer` n'atteint pas l'app. Point
+  d'extension minimal : `AppContainer.liensInscription` (`BoiteLiensInscription`) ; le coordinateur y dépose la
+  `DestinationLien` reçue (`recevoir(_:)` rend vrai pour `.confirmerInscription` et `.inscription`, faux pour toute
+  autre destination, qu'il présente lui-même) ; `RootView` présente la confirmation au-dessus de tout état puis relit
+  la session, et `/inscription/soignant` hors session ouvre le compte rapide (profession du lien pré-remplie comme
+  `lireCriteresInscription`). L'XCUITest « lien démo → onboarding » du blueprint attend `-JOLENE_OPEN_URL` : la
+  confirmation est prouvée au niveau 1 (`InscriptionModelsTests`, `DemoInscriptionGatewayTests`,
+  `SupabaseInscriptionGatewayTests`) ; le monde démo accepte déjà
+  `https://jolene.app/inscription/confirmer?token_hash=demo&type=signup`. À l'arrivée du coordinateur : un
+  `DemoLiensLot3Tests` couvre ce lien et `/inscription/soignant?profession=IDE`.
+- **Ligne de T7.** `DestinationLien.ecranNatifLivre(.inscription(soignant | reprendre))` vaut `true` ;
+  `DestinationLienTests` déplace les deux cas vers `testRoutesLot3AvecEcranLivreSontNatives` (aucun vecteur push ne
+  mène à l'inscription : totaux inchangés). **Exclusion nommée ajoutée** à
+  `CentreNotificationsTests.sansCibleDansLEspace` : `inscriptionSoignant`, `inscriptionReprendre`. Justification : ces
+  pages sont consommées hors de l'espace prêt (écran de connexion, aiguillage d'onboarding), comme la connexion et
+  les liens de rappel ; une identité qui a un espace prêt n'a pas d'inscription à faire. `CibleNotification` rend
+  `.aucune` pour `.inscription` (rien n'est présenté depuis l'espace). T8 ajoutera `inscriptionCompleter` avec sa
+  propre ligne.
+- **Écarts assumés (non juridiques).**
+  - « J’ai confirmé mon email » et « Se connecter et continuer » (web l.63-68 : `signInWithPassword`) passent par
+    `SessionStore.signIn` : un refus affiche les messages de connexion du lot 0 sur l'écran de connexion, adresse
+    reprise, et non les deux textes web propres à ce chemin (l.103, l.105). Le parcours est ensuite démarré par
+    l'aiguillage depuis `user_metadata` (repli de `ParcoursInscription.tsx`), jamais par la seule intention locale.
+  - « Je suis soignant » (session déjà ouverte) : formulaire réduit à la profession et au consentement (adresse de la
+    session affichée), puis `fn_demarrer_inscription` ; le web réaffiche adresse et mot de passe, ignorés pour une
+    session de même adresse (`creerCompteRapide` l.56-62).
+  - Pas de bouton « Afficher le mot de passe » ; la `ville` d'un lien de recherche publique
+    (`memoriserRecherchePublique`) n'est pas mémorisée pour Explorer.
+  - Un `signUp` qui ouvre une session puis un démarrage refusé : message affiché, session SDK conservée sans
+    `start()` (comme le web, qui reste sur le formulaire) ; un nouvel appui ne refait pas de `signUp`
+    (`creerCompte` reconnaît la session de même adresse).
+  - « Je représente un établissement » n'existe qu'avec le présentateur `.safari` ; un parcours ou une intention
+    établissement affiche l'écran bloquant du lot 0 (message de rôle non servi), sans jamais réserver un compte
+    établissement depuis l'app.
+  - Mention du lot 0 « Pas encore de compte ? L'inscription se fait sur jolene.app. » retirée de la connexion.
+  - Démo : aucun e-mail, la confirmation est réputée faite (le compte créé se connecte aussitôt) ; le parcours est
+    construit en mémoire depuis l'intention (pas de `demo-parcours.json`) ; `DemoRoleGateway` reste SOIGNANT, si bien
+    que le nouveau compte démo passe par « profil incomplet » (le serveur rend `INCONNU`) : même aiguillage.
+- **Point d'extension T8 (complétion).** L'état `OnboardingModel.Etat.completerSoignant` affiche l'écran bloquant
+  du lot 0 (titre « Espace non disponible », message « Votre profil soignant n'est pas encore complet… »,
+  identifiant `onboarding-completion`, « Se déconnecter »). T8 :
+  1. remplace ce rendu par `CompletionProfilScreen` ;
+  2. câble `enregistrerBrouillon`, `typesExercice` et `finaliser` dans `SupabaseInscriptionGateway` et
+     `DemoInscriptionGateway` (elles lèvent aujourd'hui « …livré par la tranche T8 du lot 3 », verrou testé dans les
+     deux mondes) ;
+  3. remplace dans `DemoInscriptionTests.testCreationPuisConfirmationOuvreLAiguillageEtLaCompletionEnAttente`
+     l'assertion `onboarding-completion` par l'écran de complétion ;
+  4. ajoute ses codes à `RefusInscriptionDemo` (`-JOLENE_DEMO_INSCRIPTION_REFUS`).
+- **Consigne de T4 (`RootView`)** : `secondaryIsLoading: session.deconnexionEnCours` conservé sur `access-blocked` ;
+  chaque « Se déconnecter » de l'aiguillage (`logout-button`) lit aussi `deconnexionEnCours` (attente visible,
+  second tap ignoré).
+- **HARD STOP n°4.** Aucun texte nouveau ni reformulé : textes web verbatim de `InscriptionRapide.tsx`,
+  `ConfirmationInscription.tsx`, `ParcoursInscription.tsx`, `PageConnexion.tsx` l.334 et `src/lib/erreurs.ts`,
+  messages serveur verbatim de `fn_demarrer_inscription` (22023), libellés natifs du lot 0 réutilisés tels quels.
+  La phrase de consentement est l'assemblage exact du JSX l.264-284 (« J’accepte les CGU et la politique de
+  confidentialité. »), ses liens ouvrent `/cgu` et `/confidentialite` dans `SFSafariViewController`. Garde locale
+  `InscriptionVerbatimTests` (chaque annotation `// source:` relue contre son fichier, en attendant
+  `check-textes-juridiques-ios.mjs` de L2-TL, absent de la base du lot 3). **À relire par Gabrielle** : la phrase de
+  consentement et ses deux liens ; le choix du message générique (au lieu du texte captcha du web, « Rafraîchissez
+  la page… ») pour un refus captcha.
+- **B9.** Go humain requis (D18) : consentement CGU transmis par `p_cgu` à `fn_demarrer_inscription`.
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -652,7 +738,8 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   garde-fou 9.0 n°2 ; `test:escrow`, `test:regression` et `guards` requis, B7). **Mergée sur `main` (#1118)**,
   reprise dans `feat/ios-lot3` le 08/11/2026 : fiche `fn_contester_paiement_soignant` de `CONTRATS_RPC_SOIGNANT.md`
   et garde `check-rpc-contracts-lot3.node.mjs` mises au contrat d'après B3 ; T13 (B9) reste à livrer.
-- **T7** — compte rapide et confirmation (consentement CGU transmis par `fn_demarrer_inscription p_cgu`).
+- **T7** — compte rapide et confirmation (consentement CGU transmis par `fn_demarrer_inscription p_cgu`) ; branche
+  `lot3/l3-t7-v2` poussée (section T7 ci-dessus), préalable captcha `PORTE_LOT0.md` 3.1 / 3.2 non mesuré.
 - **T8** — complétion et `register-soignant` (inscription, audit `RGPD_CONSENTEMENT_DONNE` côté serveur).
 - **T12** — revenus en lecture (paiements, escrow).
 - **T13** — paiements déclarés (confirmation ; contestation après B3).
@@ -733,6 +820,8 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 - **§6.10 TestFlight externe** : groupe de soignants pilotes, informations de test, Beta App Review ; décision
   explicite, le build parlant à la production.
 - **§6.11 Captcha** : mesurer `PORTE_LOT0.md` 3.1 et 3.2 avant d'ouvrir T7 ; en cas de refus captcha, D25 s'applique.
+  (T7, 08/11/2026) Toujours « non mesurées » : T7 est livrée en natif sous réserve de ces mesures, à faire avant son
+  merge ; un refus captcha mesuré impose D25 (renvoi web de « Créer un compte »).
 - **Signalé par T3b (hors §6)** : le reset natif du mot de passe (reste de L1-T10 : `SupabaseRecoveryGateway`,
   `ResetPasswordScreen`, quarantaine de la session de recovery, « Mot de passe oublié ? ») n'a de tranche ni au lot 1
   (mergé sans T10) ni au lot 3 ; en attendant, le lien `token_hash` ouvre la page web et `?code=` est refusé

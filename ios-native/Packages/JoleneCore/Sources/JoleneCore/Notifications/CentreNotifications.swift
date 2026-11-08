@@ -99,12 +99,13 @@ public enum CibleNotification: Equatable, Sendable {
     /// profil » du hub.
     case profil
     /// Renvoi web (`.safari` ou `.etablissement`), présenté par le présentateur de renvoi web s'il est injecté
-    /// (coordinateur des liens, L3-T3b) ; reset `token_hash`/implicit et confirmation d'inscription compris, tant que
-    /// leurs écrans natifs ne sont pas livrés.
+    /// (coordinateur des liens, L3-T3b) ; reset `token_hash`/implicit compris, tant que son écran natif n'est pas
+    /// livré.
     case web(JoleneRoute)
-    /// Route sans présentation depuis un espace prêt : connexion (consommée hors de l'espace, `DeepLinkIntent.horsEspace`)
-    /// et lien de réinitialisation `?code=` (option B, décision 7 du lot 1 : jamais servi par Safari, depuis le centre
-    /// comme depuis un lien universel ; revue B8 de T3b, m2).
+    /// Route sans présentation depuis un espace prêt : connexion (consommée hors de l'espace, `DeepLinkIntent.horsEspace`),
+    /// confirmation et pages d'inscription livrées (T7 : présentées hors de l'espace par le coordinateur des liens,
+    /// `BoiteLiensInscription`), et lien de réinitialisation `?code=` (option B, décision 7 du lot 1 : jamais servi par
+    /// Safari, depuis le centre comme depuis un lien universel ; revue B8 de T3b, m2).
     case aucune
 
     public init(_ lien: DestinationLien) {
@@ -127,7 +128,12 @@ public enum CibleNotification: Equatable, Sendable {
         case .safari, .etablissement: self = .web(destination)
         case .connexion, .resetPassword, .confirmerInscription:
             self = .aucune
-        case .inscription, .serieDetail, .stripeConnect:
+        case .inscription:
+            // T7 : pages d'inscription consommées hors de l'espace prêt (écran de connexion, aiguillage d'onboarding,
+            // `BoiteLiensInscription`), comme la connexion ; une page non livrée (`completer` avant T8) est déjà un
+            // `.safari` (`destination`) et n'arrive pas ici.
+            self = .aucune
+        case .serieDetail, .stripeConnect:
             // Atteint seulement quand la ligne de `ecranNatifLivre` de l'écran est passée à `true` sans que sa
             // tranche ait ajouté sa cible (sinon `destination` est déjà un `.safari`) : repli sur le renvoi web
             // canonique, jamais un tap sans effet ; la garde de `CentreNotificationsTests` le signale.

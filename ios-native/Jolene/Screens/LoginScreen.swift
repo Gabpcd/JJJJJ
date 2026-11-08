@@ -1,4 +1,5 @@
 import SwiftUI
+import JoleneCore
 import JoleneDesign
 
 /// Écran de connexion (plan §11 jours 4-5) : `login-scroll`, `login-email`,
@@ -6,11 +7,15 @@ import JoleneDesign
 /// reste local à la vue, n'est jamais journalisé et est effacé à chaque réapparition de l'écran.
 /// `retryRestore` (non nul après une restauration échouée pour cause transitoire) relance
 /// `session.start()` : la session Keychain intacte ne redemande pas le mot de passe.
+/// Lot 3, T7 : « Créer un compte soignant » (`login-create-account`, `PageConnexion.tsx` l.334) ouvre le compte
+/// rapide natif ; il remplace la mention « L'inscription se fait sur jolene.app » du lot 0. La création d'un compte
+/// établissement reste sur le web (§1.2 du blueprint du lot 3).
 struct LoginScreen: View {
     @Binding var email: String
     let errorMessage: String?
     let isDemo: Bool
     var retryRestore: (() async -> Void)? = nil
+    var creerCompte: (() -> Void)? = nil
     let submit: (String, String) async -> Void
 
     @State private var password = ""
@@ -63,9 +68,14 @@ struct LoginScreen: View {
                     JoleneButton("Se connecter", isLoading: isSubmitting) { send() }
                         .disabled(!canSubmit)
                         .accessibilityIdentifier("login-submit")
-                    Text("Pas encore de compte ? L'inscription se fait sur jolene.app.")
-                        .font(JoleneFont.caption)
-                        .foregroundStyle(JoleneColor.bubblegum)
+                    if let creerCompte {
+                        JoleneButton(InscriptionTextes.creerCompteSoignant, style: .secondary) {
+                            focusedField = nil
+                            creerCompte()
+                        }
+                        .disabled(isSubmitting)
+                        .accessibilityIdentifier("login-create-account")
+                    }
                 }
                 .padding(JoleneSpacing.xl)
                 .frame(maxWidth: 520)
