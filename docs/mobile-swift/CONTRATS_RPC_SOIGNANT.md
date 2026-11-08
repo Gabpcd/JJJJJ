@@ -1056,6 +1056,15 @@ CREATE OR REPLACE FUNCTION "public"."fn_modifier_mon_profil"("p_prenom" "text" D
   sinon : relecture obligatoire. Sans ligne `soignants`, la RPC en **crée** une (l.43917-43930) : chemin jamais
   emprunté par le natif, qui n'ouvre l'écran profil qu'au rôle `SOIGNANT` résolu. Audit `MODIFICATION_PROFIL` écrit
   par la RPC (l.44005-44014).
+- **Exceptions PostgREST de l'UPDATE** (revue B8 de T9 ; définitions live relues en lecture seule le 08/11/2026,
+  identiques au dump) : 23514 `chk_telephone_format` (l.68090, `^\+?[0-9\s\-\.]{8,20}$`, téléphone en saisie libre)
+  ou `chk_rayon_raisonnable` ; 23505 `soignants_numero_rpps_key` (l.73502) ; P0001 « Vous devez avoir au moins 18 ans
+  pour vous inscrire. » (`dec_verifier_age_minimum` l.3887-3895, trigger `dec_age_minimum` BEFORE INSERT OR UPDATE).
+  Chacune annule l'UPDATE entier (aucun champ enregistré, aucun audit). Le natif les déclare en `exceptionsMetier`
+  (lues avant `SupabaseErrorMapping`) et les rend en refus certain sans relecture : 23505 `numero_rpps` → texte web
+  `erreurs.ts` l.510 (autre 23505 → l.511), 23514 → l.514, P0001 → message serveur verbatim (le web affiche son
+  message générique, écart consigné dans `DECISIONS_LOT3.md`). Toute autre erreur (HTTP 5xx, passerelle, SQLSTATE
+  non déclaré) est une issue ambiguë : relecture, jamais de renvoi.
 - **Preuve STAGING** : profil modifié puis relu par `fn_mon_profil_soignant_complet` (T16).
 
 ## fn_rgpd_exporter_rate_limited
