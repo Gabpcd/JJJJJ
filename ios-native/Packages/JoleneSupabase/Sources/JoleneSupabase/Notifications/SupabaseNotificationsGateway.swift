@@ -49,7 +49,9 @@ public struct SupabaseNotificationsGateway: NotificationsCenterPort {
             return try await client.from(Self.table)
                 .select(Self.colonnes)
                 .eq("destinataire_id", value: context.userId)
-                .order("cree_le", ascending: false)
+                // Web `.order('cree_le', { ascending: false })` sans suffixe : NULLS FIRST par défaut de Postgres sur
+                // un DESC, reproduit par `nullsFirst: true` (le SDK Swift pose toujours le suffixe).
+                .order("cree_le", ascending: false, nullsFirst: true)
                 .limit(Self.limite)
                 .execute()
                 .value
