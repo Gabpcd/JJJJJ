@@ -161,6 +161,23 @@ final class DeepLinkIntentTests: XCTestCase {
         XCTAssertGreaterThan(resolus, 800, "chemins non nuls du vecteur push-routing")
     }
 
+    /// L'URL canonique d'un lien de rappel porte des secrets (`token_hash`, `code`, `access_token`,
+    /// `refresh_token`) : la description de l'intention ne montre que le chemin, comme
+    /// `AuthCallbackCredentials` masque ses valeurs.
+    func testDescriptionMasqueQueryEtFragment() throws {
+        let liens = ["https://jolene.app/reset-password?token_hash=SECRET1&type=recovery",
+                     "https://jolene.app/inscription/confirmer#access_token=SECRET2&refresh_token=SECRET3&type=signup",
+                     "https://jolene.app/auth/psc/callback?status=success&token_hash=SECRET4",
+                     "https://jolene.app/inscription/confirmer?code=SECRET5"]
+        for lien in liens {
+            let i = try XCTUnwrap(intent(lien), lien)
+            for texte in [i.description, i.debugDescription, String(describing: i), String(reflecting: i), "\(i)"] {
+                XCTAssertFalse(texte.contains("SECRET"), "\(lien) → \(texte)")
+                XCTAssertTrue(texte.contains(i.canonique.path), texte)
+            }
+        }
+    }
+
     // MARK: Table des écrans livrés (une ligne par tranche d'écran)
 
     func testTableDesEcransLivres() {
