@@ -64,6 +64,7 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(supabase.contains("flags"), "T1 câble les drapeaux")
         XCTAssertFalse(supabase.contains("dashboard"), "T3 câble le tableau de bord")
         XCTAssertFalse(supabase.contains("compte"), "T8 câble la suppression de compte")
+        XCTAssertFalse(supabase.contains("contrats"), "lot 2, T8 câble les contrats")
     }
 
     /// Lot 2 (T1) : `câblerLot2(_:client:)` est le seul point d'assignation des cinq ports du lot 2 du
@@ -84,8 +85,8 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.contestation is UnwiredContestationPort, "T5b")
         XCTAssertTrue(gateways.notation is UnwiredNotationPort, "T5a")
         XCTAssertTrue(gateways.documents is UnwiredDocumentsPort, "T6")
-        XCTAssertTrue(gateways.contrats is UnwiredContratsPort, "T8")
-        XCTAssertEqual(Array(gateways.unwiredPorts.suffix(5)), ["pointage", "contestation", "notation", "documents", "contrats"])
+        XCTAssertTrue(gateways.contrats is SupabaseContratsGateway, "T8 câble les contrats")
+        XCTAssertEqual(Array(gateways.unwiredPorts.suffix(4)), ["pointage", "contestation", "notation", "documents"])
         XCTAssertTrue(gateways.audit is SupabaseAuditGateway, "le câblage du lot 1 reste celui de l'init")
     }
 
