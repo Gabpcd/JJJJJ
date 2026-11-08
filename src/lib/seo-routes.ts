@@ -229,7 +229,7 @@ export function metaVilleMetier(ville: VilleSEO, p: ProfessionSEO): PageSEO {
   return {
     type: 'ville-metier', path: cheminVilleMetier(ville.slug, p.slug),
     title: `${noms.court} à ${ville.nom} : missions et remplacements | Jolene Santé`,
-    description: `Missions de ${noms.pluriel} à ${ville.nom} (${ville.departement}) : remplacements, vacations et CDD courts. Inscription gratuite, contrat et taux horaire affichés avant candidature.`,
+    description: `Missions pour ${noms.pluriel} à ${ville.nom} (${ville.departement}) : remplacements, vacations et CDD courts. Inscription gratuite, contrat et taux horaire affichés avant candidature.`,
     h1: `${noms.court} : missions à ${ville.nom}`,
     intro, liens, indexable: true, priorite: '0.5', frequence: 'monthly',
   };
