@@ -11,14 +11,23 @@ import XCTest
 /// - thème Système / Clair / Sombre (`compte-theme-*`, D16) : le segment choisi est sélectionné et appliqué à
 ///   la racine (libellé DEBUG `compte-theme-effectif`, schéma de couleurs lu dans l'environnement SwiftUI) ;
 /// - export RGPD : texte RGPD verbatim web (tutoiement, HARD STOP n°4) ; « Exporter JSON » écrit le fichier du
-///   jour et l'ouvre dans la feuille de partage réelle (libellé DEBUG `compte-export-pret` posé dans la feuille :
-///   `mes-donnees-jolene-2026-11-02.json`) ; un refus du serveur (variante `JOLENE_FORCE_EXPORT_ECHEC=1`, message
-///   verbatim de `fn_rgpd_exporter_rate_limited`) est affiché et n'ouvre aucune feuille ;
+///   jour et l'ouvre dans la feuille de partage réelle (`UIActivityViewController` présentée par UIKit ; libellé
+///   DEBUG `compte-export-pret` posé dans la feuille : `mes-donnees-jolene-2026-11-02.json`) ; revue B8 (M1),
+///   une seule fin, `completionWithItemsHandler` : (a) feuille fermée sans partage (bouton de fermeture, ou hors du
+///   popover sur iPad) → aucun `compte-export-succes`, boutons réactivés, fichier supprimé (libellé DEBUG
+///   `compte-export-residus` = « 0 »), « 0 requête » ; (b) activité aboutie (« Copier ») → « Données exportées en
+///   JSON. » (`SectionConfidentialite.tsx` l.73), boutons réactivés, fichier supprimé ; un refus du serveur
+///   (variante `JOLENE_FORCE_EXPORT_ECHEC=1`, message verbatim de `fn_rgpd_exporter_rate_limited`) est affiché et
+///   n'ouvre aucune feuille ;
 /// - « Aide & légal » n'existe pas tant que le présentateur Safari de L1-T10 n'est pas injecté (jamais un lien
 ///   sans effet : verrou du gap, remplacé par l'ouverture Safari à l'arrivée de T10).
-/// Persistance du thème, suppression du fichier à la fermeture de la feuille, aplatissement CSV, audit et refus
-/// GoTrue sont prouvés au niveau 1 (`PreferenceThemeTests`, `ExportRGPDModelTests`, `ExportRGPDTests`,
-/// `MotDePasseModelTests`, `SupabaseMotDePasseGatewayTests`).
+/// Persistance du thème, présentation différée tant que le hub est hors écran, suppression du fichier en fin de
+/// session, aplatissement CSV, audit et refus GoTrue sont prouvés au niveau 1 (`PreferenceThemeTests`,
+/// `ExportRGPDModelTests`, `ExportRGPDTests`, `MotDePasseModelTests`, `SupabaseMotDePasseGatewayTests`).
+///
+/// Feuille de partage : ses contrôles sont ceux du système (libellés anglais ou français selon la langue du
+/// simulateur : « Close » / « Fermer », « Copy » / « Copier ») ; sur iPad la feuille est un popover, fermé hors de
+/// son cadre (`PopoverDismissRegion`) quand il n'a pas de bouton de fermeture.
 ///
 /// Formats : iPhone, iPad portrait, iPad paysage (`JOLENE_UI_ORIENTATION`, `proofPrefix`) ; chaque contrôle est
 /// amené à l'écran par un défilement borné (`scrollTo`) avant d'être exigé atteignable (PRINCIPES §6).
@@ -32,6 +41,10 @@ final class DemoCompteLot3Tests: JoleneUITestCase {
     static let descriptionExport = "Télécharge l'intégralité de tes données personnelles dans le format de ton choix."
     static let refusLimite = "Trop d'exports en peu de temps. Réessayez dans quelques minutes."
     static let fichierDuJour = "mes-donnees-jolene-2026-11-02.json"
+    static let exportJSONReussi = "Données exportées en JSON."
+    /// Contrôles système de la feuille de partage (langue du simulateur).
+    static let libellesCopier = ["Copy", "Copier"]
+    static let libellesFermer = ["Close", "Fermer"]
 
     // MARK: - Mot de passe
 
@@ -133,21 +146,51 @@ final class DemoCompteLot3Tests: JoleneUITestCase {
 
     // MARK: - Export RGPD
 
-    func testExportJSONOuvreLaFeuilleDePartageAvecLeFichierDuJour() throws {
+    /// (a) Feuille fermée sans partage : aucune annonce, boutons réactivés, fichier supprimé, aucune requête.
+    func testExportJSONFeuilleFermeeSansPartageAucunSucces() throws {
         launchDemo()
         compteSeConnecter()
         compteOuvrirProfil()
-        let liste = element("profile-list")
-        let json = element("compte-export-json")
-        scrollTo(json, in: liste)
+        let json = compteAmenerExport()
         XCTAssertEqual(element("compte-export-info").label, Self.descriptionExport, "texte RGPD verbatim web (tutoiement)")
-        XCTAssertTrue(element("compte-export-csv").exists)
-        tap("compte-export-json")
-        let pret = element("compte-export-pret")
-        require("La feuille de partage reçoit le fichier du jour", timeout: 30) { pret.exists }
-        XCTAssertEqual(pret.label, Self.fichierDuJour)
+        XCTAssertEqual(element("compte-export-residus").label, "0", "aucun fichier d'export avant la demande")
+        let pret = compteOuvrirFeuille()
         XCTAssertFalse(element("compte-export-erreur").exists)
         record("\(proofPrefix)-compte-export-partage")
+
+        compteFermerFeuilleSansPartage()
+        require("La feuille de partage est fermée") { !pret.exists }
+        let csv = element("compte-export-csv")
+        require("Les deux boutons sont réactivés") { json.isEnabled && csv.isEnabled }
+        XCTAssertFalse(element("compte-export-succes").exists, "feuille fermée sans partage : aucun succès (écart 3, DECISIONS_LOT3)")
+        XCTAssertFalse(element("compte-export-erreur").exists)
+        require("Le fichier exporté est supprimé à la fermeture") { self.element("compte-export-residus").label == "0" }
+        record("\(proofPrefix)-compte-export-ferme")
+        compteSentinelleSansRequete()
+    }
+
+    /// (b) Activité aboutie (« Copier ») : « Données exportées en JSON. », boutons réactivés, fichier supprimé.
+    func testExportJSONPartageAboutiAnnonceLeSucces() throws {
+        launchDemo()
+        compteSeConnecter()
+        compteOuvrirProfil()
+        let json = compteAmenerExport()
+        let pret = compteOuvrirFeuille()
+
+        let copier = app.descendants(matching: .any).matching(NSPredicate(
+            format: "(elementType == %d OR elementType == %d) AND label IN %@",
+            XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.cell.rawValue, Self.libellesCopier)).firstMatch
+        require("L'action « Copier » de la feuille est atteignable", timeout: 30) { self.visible(copier) }
+        copier.tap()
+        let succes = element("compte-export-succes")
+        require("Le partage abouti est annoncé", timeout: 30) { succes.exists }
+        XCTAssertTrue(succes.label.hasSuffix(Self.exportJSONReussi), "texte verbatim web (l.73) : \(succes.label)")
+        XCTAssertFalse(pret.exists, "la feuille s'est fermée d'elle-même")
+        let csv = element("compte-export-csv")
+        require("Les deux boutons sont réactivés") { json.isEnabled && csv.isEnabled }
+        require("Le fichier exporté est supprimé après le partage") { self.element("compte-export-residus").label == "0" }
+        record("\(proofPrefix)-compte-export-succes")
+        compteSentinelleSansRequete()
     }
 
     func testExportRefuseParLeServeurAfficheLeMessageSansFeuille() throws {
@@ -212,6 +255,37 @@ final class DemoCompteLot3Tests: JoleneUITestCase {
         require("L'écran du mot de passe est affiché") { self.containerVisible(ecran) && self.element("compte-mdp-ancien").exists }
         XCTAssertTrue(app.navigationBars["Changer mon mot de passe"].exists, "titre verbatim web (l.206)")
         return ecran
+    }
+
+    /// Section « Mes données (RGPD) » amenée à l'écran ; rend « Exporter JSON », exigé actif.
+    private func compteAmenerExport() -> XCUIElement {
+        let json = element("compte-export-json")
+        scrollTo(json, in: element("profile-list"))
+        require("« Exporter JSON » et « Exporter CSV » sont actifs") { json.isEnabled && self.element("compte-export-csv").isEnabled }
+        return json
+    }
+
+    /// « Exporter JSON », puis la feuille de partage du fichier du jour (libellé DEBUG posé dans la feuille).
+    private func compteOuvrirFeuille() -> XCUIElement {
+        tap("compte-export-json")
+        let pret = element("compte-export-pret")
+        require("La feuille de partage reçoit le fichier du jour", timeout: 30) { pret.exists }
+        XCTAssertEqual(pret.label, Self.fichierDuJour)
+        return pret
+    }
+
+    /// Ferme la feuille sans rien partager : son bouton de fermeture (iPhone ; iPad s'il en a un), sinon un tap natif
+    /// hors du popover (iPad), dans la zone de fermeture que UIKit expose (`PopoverDismissRegion`).
+    private func compteFermerFeuilleSansPartage() {
+        let fermer = app.buttons.matching(NSPredicate(format: "label IN %@ OR identifier IN %@",
+                                                      Self.libellesFermer, Self.libellesFermer)).firstMatch
+        let horsPopover = app.otherElements["PopoverDismissRegion"]
+        require("La feuille de partage peut être fermée", timeout: 30) { self.visible(fermer) || horsPopover.exists }
+        if visible(fermer) {
+            fermer.tap()
+        } else {
+            horsPopover.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.97)).tap()
+        }
     }
 
     /// Saisie dans un champ de l'écran (amené à l'écran, focus clavier exigé) ; `remonter` : le champ est au-dessus.

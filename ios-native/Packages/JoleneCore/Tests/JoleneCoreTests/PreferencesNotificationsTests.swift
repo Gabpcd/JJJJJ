@@ -299,15 +299,17 @@ final class PreferencesNotificationsTests: XCTestCase {
         }
     }
 
-    /// Entrée du hub Profil vers l'écran (T6, en attendant le hub de T11) : section « Réglages » (l.113) et
+    /// Entrée du hub Profil vers l'écran (T6, repris par le hub de T11) : section « Réglages » (l.113) et
     /// ligne « Notifications » (l.115) de `MonCompteSoignant.tsx`, verbatim. Remplace le titre de section
-    /// provisoire de la carte d'autorisation de T4 (`EtatNotificationsAppareil.sectionHub`, retiré).
+    /// provisoire de la carte d'autorisation de T4 (`EtatNotificationsAppareil.sectionHub`, retiré). Le titre de
+    /// la section a une seule source, `HubCompte.titreReglages` (revue B8 de T11, m7 : `PreferencesTextes.sectionHub`
+    /// retiré, il n'était plus lu par l'app).
     func testEntreeDuHubVerbatim() throws {
         let hub = try String(contentsOf: Lot3PortsTests.racine.appendingPathComponent("src/pages/MonCompteSoignant.tsx"),
                              encoding: .utf8).components(separatedBy: "\n")
-        XCTAssertEqual(PreferencesTextes.sectionHub, "Réglages")
+        XCTAssertEqual(HubCompte.titreReglages, "Réglages")
         XCTAssertEqual(PreferencesTextes.entreeHub, "Notifications")
-        XCTAssertTrue(hub[112].contains("titre: '\(PreferencesTextes.sectionHub)'"), "MonCompteSoignant.tsx l.113")
+        XCTAssertTrue(hub[112].contains("titre: '\(HubCompte.titreReglages)'"), "MonCompteSoignant.tsx l.113")
         XCTAssertTrue(hub[114].contains("label: '\(PreferencesTextes.entreeHub)', route: '/soignant/parametres/notifications'"),
                       "MonCompteSoignant.tsx l.115")
         XCTAssertEqual(PreferencesTextes.identifiantEntreeHub, "profile-preferences-notifications")

@@ -133,6 +133,40 @@ final class ExportRGPDTests: XCTestCase {
         XCTAssertEqual(JSONOrdonne.chaine("\u{08}\u{0C}\r\u{1F}").texteCompact, #""\b\f\r\u001f""#)
     }
 
+    /// Octets UTF-8 en hexadécimal (message d'échec lisible).
+    private func hex(_ texte: String) -> String { texte.utf8.map { String(format: "%02x", $0) }.joined(separator: " ") }
+
+    func testUnicodeSansEquivalenceCanoniqueCommeJavaScript() throws {
+        // Revue B8 (m4) : `replace(/"/g, '""')` et les clés d'un objet JavaScript travaillent unité par unité, sans
+        // équivalence canonique. Un `"` suivi d'une marque combinante (U+0301) est doublé ; les clés « é » NFD
+        // (`e` + U+0301) et NFC (U+00E9), distinctes pour `JSON.parse` comme pour un jsonb, restent deux clés ; une
+        // clé répétée octet pour octet garde sa première place et sa dernière valeur. Attendus produits par les
+        // lignes 54-64 et 68 de `SectionConfidentialite.tsx` exécutées sous Node 24 le 08/11/2026, comparés octet
+        // par octet (l'égalité de `String` suit l'équivalence canonique et masquerait l'écart).
+        let entree = #"{"é":"a","é":"b","q":"\"́x","p":{"é":1,"é":2},"é":"c"}"#
+        let attenduCSV = "Champ,Valeur\n\"e\u{301}\",\"c\"\n\"\u{E9}\",\"b\"\n\"q\",\"\"\"\u{301}x\"\n\"p.e\u{301}\",\"1\"\n\"p.\u{E9}\",\"2\""
+        let attenduJSON = "{\n  \"e\u{301}\": \"c\",\n  \"\u{E9}\": \"b\",\n  \"q\": \"\\\"\u{301}x\",\n  \"p\": {\n    \"e\u{301}\": 1,\n    \"\u{E9}\": 2\n  }\n}"
+        XCTAssertEqual(hex(attenduCSV), "43 68 61 6d 70 2c 56 61 6c 65 75 72 0a 22 65 cc 81 22 2c 22 63 22 0a 22 c3 a9 22 2c 22 62 22 0a 22 71 22 2c 22 22 22 cc 81 78 22 0a 22 70 2e 65 cc 81 22 2c 22 31 22 0a 22 70 2e c3 a9 22 2c 22 32 22",
+                       "attendu CSV : octets produits par le web sous Node")
+        XCTAssertEqual(hex(attenduJSON), "7b 0a 20 20 22 65 cc 81 22 3a 20 22 63 22 2c 0a 20 20 22 c3 a9 22 3a 20 22 62 22 2c 0a 20 20 22 71 22 3a 20 22 5c 22 cc 81 78 22 2c 0a 20 20 22 70 22 3a 20 7b 0a 20 20 20 20 22 65 cc 81 22 3a 20 31 2c 0a 20 20 20 20 22 c3 a9 22 3a 20 32 0a 20 20 7d 0a 7d",
+                       "attendu JSON : octets produits par le web sous Node")
+        XCTAssertEqual(hex(try csv(entree)), hex(attenduCSV))
+        XCTAssertEqual(hex(try json(entree)), hex(attenduJSON))
+
+        // Lecture d'une clé : octet pour octet (l'export lit `error` ; jamais une clé seulement équivalente).
+        let racine = try JSONOrdonne.analyser(Data(entree.utf8))
+        guard case .objet(let membres) = racine else { return XCTFail("objet attendu") }
+        XCTAssertEqual(membres.map { hex($0.cle) }, ["65 cc 81", "c3 a9", "71", "70"], "ordre et clés de `Object.keys` sous Node")
+        XCTAssertEqual(racine["e\u{301}"].map { if case .chaine(let v) = $0 { return v } else { return "?" } }, "c")
+        XCTAssertEqual(racine["\u{E9}"].map { if case .chaine(let v) = $0 { return v } else { return "?" } }, "b")
+        XCTAssertNil(try JSONOrdonne.analyser(Data(#"{"é":1}"#.utf8))["e\u{301}"], "clé NFC absente sous sa forme NFD")
+        XCTAssertNotEqual(JSONOrdonne.chaine("e\u{301}"), JSONOrdonne.chaine("\u{E9}"), "deux chaînes JavaScript distinctes")
+        XCTAssertNotEqual(MembreJSON(cle: "e\u{301}", valeur: .null), MembreJSON(cle: "\u{E9}", valeur: .null))
+        // Refus serveur : `data.error` exact (une clé « error » suivie d'une marque combinante n'en est pas une).
+        XCTAssertEqual(ExportRGPD.analyserReponse(Data(#"{"erroŕ":"x"}"#.utf8)),
+                       .donnees(ExportDonneesRGPD(json: Data(#"{"erroŕ":"x"}"#.utf8))))
+    }
+
     // MARK: - Aplatissement CSV
 
     func testObjetsImbriquesAplatisTableauxEnJSONCompactNullVide() throws {

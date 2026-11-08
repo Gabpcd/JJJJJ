@@ -81,13 +81,30 @@ final class CompteVerbatimTests: XCTestCase {
         XCTAssertEqual(E.titre, "Mes données (RGPD)")
     }
 
+    /// Corps de `fn_rgpd_exporter_rate_limited` dans le dump, localisé par son en-tête (revue B8, m5) : un
+    /// `schema-snapshot` qui décale le dump ne fait pas rougir ce test. Les numéros de ligne cités dans les
+    /// sources (`public.sql:55385`, `:55379` au 08/11/2026) ne sont qu'indicatifs.
+    static func corpsExportLimite() throws -> [String] {
+        let schema = try lignes(Self.schema)
+        let entete = #"CREATE OR REPLACE FUNCTION "public"."fn_rgpd_exporter_rate_limited"() RETURNS "jsonb""#
+        let debut = try XCTUnwrap(schema.firstIndex { $0.contains(entete) }, "en-tête de fn_rgpd_exporter_rate_limited introuvable")
+        let fin = try XCTUnwrap(schema[debut...].firstIndex { $0.hasPrefix("$$;") }, "fin du corps introuvable")
+        return Array(schema[debut...fin])
+    }
+
     func testRefusDuServeurEtTraductionsDesErreursAuthVerbatim() throws {
-        // Message de refus de `fn_rgpd_exporter_rate_limited` (dump l.55385, définition live relue le 08/11/2026) :
-        // valeur JSON réelle, l'apostrophe doublée par le littéral SQL est simple.
-        let schema = try Self.lignes(Self.schema)
-        XCTAssertTrue(schema[55385 - 1].contains("'Trop d''exports en peu de temps. Réessayez dans quelques minutes.'"))
+        // Message de refus de `fn_rgpd_exporter_rate_limited` (définition live relue le 08/11/2026) : valeur JSON
+        // réelle, l'apostrophe doublée par le littéral SQL est simple. Chaque texte est cherché dans le corps de la
+        // fonction (et non à une ligne fixe du dump), une seule fois.
+        let corps = try Self.corpsExportLimite()
+        let limite = "RETURN jsonb_build_object('error', 'Trop d''exports en peu de temps. Réessayez dans quelques minutes.');"
+        let nonAuthentifie = "RETURN jsonb_build_object('error', 'Non authentifié');"
+        XCTAssertEqual(corps.filter { $0.contains(limite) }.count, 1, "refus de limite dans fn_rgpd_exporter_rate_limited")
         XCTAssertEqual(ExportRGPD.refusLimiteServeur, "Trop d'exports en peu de temps. Réessayez dans quelques minutes.")
-        XCTAssertTrue(schema[55379 - 1].contains("RETURN jsonb_build_object('error', 'Non authentifié');"))
+        XCTAssertEqual(corps.filter { $0.contains(nonAuthentifie) }.count, 1, "refus sans session dans fn_rgpd_exporter_rate_limited")
+        let indexLimite = try XCTUnwrap(corps.firstIndex { $0.contains(limite) })
+        let indexSession = try XCTUnwrap(corps.firstIndex { $0.contains(nonAuthentifie) })
+        XCTAssertLessThan(indexSession, indexLimite, "la session est vérifiée avant la limite")
 
         // Table `traductions` d'`extraireMessageErreur` (erreurs.ts l.480-493) et repli `weak_password` (l.502-503) :
         // chaque paire portée figure à sa ligne, dans l'ordre du web.
@@ -125,6 +142,36 @@ final class CompteVerbatimTests: XCTestCase {
                 XCTAssertFalse(texte.contains(tutoiement), "« \(texte) » doit être vouvoyé")
             }
         }
+    }
+
+    func testTitreReglagesAUneSeuleSource() throws {
+        // Revue B8 (m7), règle « doublons » de CLAUDE.md : le titre « Réglages » du hub n'est déclaré qu'une fois
+        // (`HubCompte.titreReglages`) dans les sources de l'app et de ses paquets.
+        var racine = URL(fileURLWithPath: #filePath)
+        for _ in 0..<6 { racine.deleteLastPathComponent() }
+        let dossiers = ["ios-native/Jolene", "ios-native/Packages/JoleneCore/Sources", "ios-native/Packages/JoleneDesign/Sources",
+                        "ios-native/Packages/JoleneSupabase/Sources"]
+        var declarations: [String] = []
+        for dossier in dossiers {
+            let base = racine.appendingPathComponent(dossier)
+            guard let parcours = FileManager.default.enumerator(at: base, includingPropertiesForKeys: nil) else { continue }
+            for case let fichier as URL in parcours where fichier.pathExtension == "swift" {
+                let texte = try String(contentsOf: fichier, encoding: .utf8)
+                if texte.contains("\"\(HubCompte.titreReglages)\"") { declarations.append(fichier.lastPathComponent) }
+            }
+        }
+        XCTAssertEqual(declarations, ["HubCompte.swift"], "« Réglages » déclaré une seule fois")
+    }
+
+    func testDependanceDuRenvoiMotDePasseOublieConsignee() throws {
+        // Revue B8 (m6) : le refus verrouillé renvoie vers « Mot de passe oublié ? », que l'écran de connexion ne
+        // porte qu'avec L1-T10 (`login-forgot`) ; la dépendance est consignée dans les manques de T11.
+        XCTAssertTrue(M.reauthentificationRequise.contains("« Mot de passe oublié ? »"))
+        let decisions = try Self.source("docs/mobile-swift/DECISIONS_LOT3.md")
+        let section = try XCTUnwrap(decisions.range(of: "## T11 — hub Compte"), "section T11 de DECISIONS_LOT3.md")
+        let suite = decisions[section.upperBound...]
+        let t11 = suite.range(of: "\n## ").map { suite[..<$0.lowerBound] } ?? suite
+        XCTAssertTrue(t11.contains("login-forgot") && t11.contains("L1-T10"), "dépendance du renvoi à L1-T10 consignée")
     }
 
     func testAideEtLegalSontDesRenvoisSafariCanoniques() throws {

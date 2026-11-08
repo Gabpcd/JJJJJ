@@ -33,9 +33,13 @@ struct AuditDetaille: AuditPort {
 }
 
 /// Serveur d'authentification simulé : issues scriptées dans l'ordre, appels comptés (longueurs seulement).
+/// Comme la gateway GoTrue (revue B8, m2), la garde d'identité est consultée entre la vérification de l'ancien
+/// mot de passe (ici, après la barrière) et la mise à jour : identité partie → aucune mise à jour, `.cancelled`.
 actor ServeurMotDePasse {
     private var issues: [Result<ResultatMotDePasse, Error>]
     private(set) var appels: [(ancien: Int, nouveau: Int)] = []
+    /// Réponses de la garde d'identité, dans l'ordre des appels.
+    private(set) var gardes: [Bool] = []
     var barriere: Gate?
 
     init(issues: [Result<ResultatMotDePasse, Error>]) { self.issues = issues }
@@ -44,9 +48,12 @@ actor ServeurMotDePasse {
 
     func retenir(_ gate: Gate) { barriere = gate }
 
-    func changer(ancien: String, nouveau: String) async throws -> ResultatMotDePasse {
+    func changer(ancien: String, nouveau: String, identiteCourante: @Sendable () async -> Bool) async throws -> ResultatMotDePasse {
         appels.append((ancien.count, nouveau.count))
         if let barriere { await barriere.wait() }
+        let courante = await identiteCourante()
+        gardes.append(courante)
+        guard courante else { throw JoleneError(.cancelled, "identité partie : aucune mise à jour") }
         guard !issues.isEmpty else { throw JoleneError(.contract, "issue non scriptée") }
         return try issues.removeFirst().get()
     }
@@ -54,8 +61,9 @@ actor ServeurMotDePasse {
 
 struct FakeMotDePasse: MotDePassePort {
     let serveur: ServeurMotDePasse
-    func changer(ancien: String, nouveau: String, context: MissionReadContext) async throws -> ResultatMotDePasse {
-        try await serveur.changer(ancien: ancien, nouveau: nouveau)
+    func changer(ancien: String, nouveau: String, context: MissionReadContext,
+                 identiteCourante: @escaping @Sendable () async -> Bool) async throws -> ResultatMotDePasse {
+        try await serveur.changer(ancien: ancien, nouveau: nouveau, identiteCourante: identiteCourante)
     }
 }
 
@@ -275,6 +283,101 @@ final class MotDePasseModelTests: XCTestCase {
         XCTAssertNil(model.erreur)
         let audit = await s.audit.journal.entrees
         XCTAssertTrue(audit.isEmpty, "aucun audit pour une identité périmée")
+        let gardes = await s.serveur.gardes
+        XCTAssertEqual(gardes, [false], "la garde transmise au port signale l'identité partie avant la mise à jour (revue B8, m2)")
+    }
+
+    // MARK: - Garde d'identité (revue B8, m2)
+
+    func testGardeDIdentiteVraiePourLaSessionDeLEcran() async throws {
+        let s = try await scenario([.success(.modifie)])
+        remplir(s.model)
+        await s.model.changer()
+        let gardes = await s.serveur.gardes
+        XCTAssertEqual(gardes, [true], "même epoch : la mise à jour peut partir")
+        XCTAssertEqual(s.model.succes, MotDePasse.Textes.succes)
+    }
+
+    // MARK: - Écran retiré de la pile pendant la demande (revue B8, m3)
+
+    func testEcranRetirePendantLaDemandeSuccesRemonteAuHub() async throws {
+        let s = try await scenario([.success(.modifie)])
+        let barriere = Gate()
+        await s.serveur.retenir(barriere)
+        let model = s.model
+        let ecran = UUID()
+        model.ouvertureEcran(ecran)
+        remplir(model)
+        let envoi = Task { await model.changer() }
+        while await s.serveur.nombreAppels == 0 { await Task.yield() }
+        // Retour programmé de la pile du Profil (tap push, ligne du centre) en pleine demande.
+        model.retraitEcran(ecran)
+        XCTAssertTrue(model.enCours, "la demande continue : son issue n'est pas perdue")
+        XCTAssertNil(model.issueAuHub, "rien à afficher tant que la demande n'a pas abouti")
+        await barriere.open()
+        await envoi.value
+        XCTAssertEqual(model.issueAuHub, IssueChangementHorsEcran(texte: MotDePasse.Textes.succes, estSucces: true),
+                       "le hub annonce le succès d'une demande dont l'écran a été retiré")
+        XCTAssertEqual([model.ancien, model.nouveau, model.confirmation], ["", "", ""], "champs effacés (l.98-100)")
+        let audit = await s.audit.journal.entrees
+        XCTAssertEqual(audit.map(\.action), ["DONNEES_PERSO_MODIFICATION"], "audit best-effort, écran retiré ou non")
+        // Réouverture : l'écran porte l'issue, le hub ne la répète pas.
+        let autre = UUID()
+        model.ouvertureEcran(autre)
+        XCTAssertNil(model.issueAuHub)
+        XCTAssertEqual(model.succes, MotDePasse.Textes.succes)
+        // Retrait hors demande (retour de l'utilisateur) : formulaire et issue effacés, comme un démontage web.
+        model.retraitEcran(autre)
+        XCTAssertNil(model.succes)
+        XCTAssertNil(model.issueAuHub)
+    }
+
+    func testEcranRetirePendantLaDemandeRefusRemonteAuHub() async throws {
+        let s = try await scenario([.success(.ancienIncorrect)])
+        let barriere = Gate()
+        await s.serveur.retenir(barriere)
+        let model = s.model
+        let ecran = UUID()
+        model.ouvertureEcran(ecran)
+        remplir(model)
+        let envoi = Task { await model.changer() }
+        while await s.serveur.nombreAppels == 0 { await Task.yield() }
+        model.retraitEcran(ecran)
+        await barriere.open()
+        await envoi.value
+        XCTAssertEqual(model.issueAuHub, IssueChangementHorsEcran(texte: MotDePasse.Textes.ancienIncorrect, estSucces: false))
+    }
+
+    func testRetraitHorsDemandeVideLeFormulaireEtLeVerrou() async throws {
+        let s = try await scenario([.success(.reauthentificationRequise), .success(.modifie)])
+        let model = s.model
+        let ecran = UUID()
+        model.ouvertureEcran(ecran)
+        remplir(model)
+        await model.changer()
+        XCTAssertTrue(model.reauthentificationExigee)
+        XCTAssertNil(model.issueAuHub, "écran affiché : l'issue est sur l'écran, pas au hub")
+        model.retraitEcran(ecran)
+        XCTAssertEqual([model.ancien, model.nouveau, model.confirmation], ["", "", ""], "aucun mot de passe gardé après le retrait")
+        XCTAssertNil(model.erreur)
+        XCTAssertNil(model.issueAuHub)
+        XCTAssertFalse(model.reauthentificationExigee, "le verrou vaut pour la durée de l'écran (D13)")
+        model.ouvertureEcran(UUID())
+        remplir(model)
+        XCTAssertTrue(model.peutSoumettre, "un nouvel écran repart d'un formulaire neuf")
+    }
+
+    func testRetraitTardifDUnEcranRemplaceSansEffet() async throws {
+        let s = try await scenario([])
+        let model = s.model
+        let ancienEcran = UUID()
+        model.ouvertureEcran(ancienEcran)
+        let nouvelEcran = UUID()
+        model.ouvertureEcran(nouvelEcran) // nouvel écran empilé avant le retrait signalé de l'ancien
+        remplir(model)
+        model.retraitEcran(ancienEcran)
+        XCTAssertEqual(model.nouveau, Self.valide, "le retrait d'un écran déjà remplacé ne vide pas le formulaire affiché")
+        XCTAssertTrue(model.peutSoumettre)
     }
 
     // MARK: - Session (vérification de l'ancien mot de passe par `signIn`)

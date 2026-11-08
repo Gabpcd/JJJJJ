@@ -203,6 +203,104 @@ final class ExportRGPDModelTests: XCTestCase {
         XCTAssertTrue(audit.isEmpty)
     }
 
+    // MARK: - Feuille de partage : une présentation, une fin (revue B8, M1 et m3)
+
+    func testFeuillePresenteeSeulementHubAfficheEtUneSeuleFois() async throws {
+        let s = try await scenario([.success(ExportDonneesRGPD(json: Data(Self.brut.utf8)))])
+        let model = s.model
+        // Export abouti pendant que le hub est hors écran (autre onglet, écran empilé sur le Profil).
+        model.hubAffiche(false)
+        await model.exporter(.json)
+        let partage = try XCTUnwrap(model.partage)
+        XCTAssertNil(model.fichierAPresenter, "hub hors écran : aucune feuille présentée depuis un onglet caché")
+        XCTAssertFalse(model.peutExporter, "fichier en attente de sa feuille : les deux boutons restent inactifs")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: partage.url.path))
+        // Retour au hub : la feuille est présentée, une seule fois.
+        model.hubAffiche(true)
+        XCTAssertEqual(model.fichierAPresenter, partage, "la feuille est présentée au retour du hub")
+        model.feuillePresentee(partage)
+        XCTAssertTrue(model.feuilleOuverte)
+        XCTAssertNil(model.fichierAPresenter, "jamais deux feuilles pour le même fichier")
+        model.hubAffiche(false)
+        model.hubAffiche(true)
+        XCTAssertNil(model.fichierAPresenter, "feuille ouverte : aucune nouvelle présentation au retour du hub")
+        // Fin unique : la feuille signale son issue une seule fois.
+        model.partageTermine(complete: true)
+        XCTAssertFalse(model.feuilleOuverte)
+        XCTAssertNil(model.fichierAPresenter)
+        XCTAssertTrue(model.peutExporter, "boutons réactivés")
+        XCTAssertEqual(model.succes, "Données exportées en JSON.")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: partage.url.path))
+        XCTAssertEqual(DossierExportTemporaire(racine: racine).residus, 0)
+    }
+
+    func testHubAfficheLaFeuilleSuitLExportSansDelai() async throws {
+        let s = try await scenario([.success(ExportDonneesRGPD(json: Data(Self.brut.utf8)))])
+        s.model.hubAffiche(true)
+        await s.model.exporter(.csv)
+        let partage = try XCTUnwrap(s.model.partage)
+        XCTAssertEqual(s.model.fichierAPresenter, partage)
+        XCTAssertEqual(DossierExportTemporaire(racine: racine).residus, 1, "un seul dossier d'export écrit")
+        s.model.feuillePresentee(partage)
+        s.model.partageTermine(complete: false)
+        XCTAssertNil(s.model.succes, "feuille fermée sans partage : aucun succès fabriqué")
+        XCTAssertTrue(s.model.peutExporter)
+        XCTAssertEqual(DossierExportTemporaire(racine: racine).residus, 0)
+    }
+
+    func testFeuillePresenteePourUnAutreFichierSansEffet() async throws {
+        let s = try await scenario([.success(ExportDonneesRGPD(json: Data(Self.brut.utf8)))])
+        s.model.hubAffiche(true)
+        await s.model.exporter(.json)
+        let partage = try XCTUnwrap(s.model.partage)
+        let etranger = FichierAPartager(url: racine.appendingPathComponent("autre.json"), nom: "autre.json", format: .json)
+        s.model.feuillePresentee(etranger)
+        XCTAssertFalse(s.model.feuilleOuverte)
+        XCTAssertEqual(s.model.fichierAPresenter, partage)
+    }
+
+    func testFinDeSessionFeuilleOuverteSupprimeLeFichierSansSucces() async throws {
+        let s = try await scenario([.success(ExportDonneesRGPD(json: Data(Self.brut.utf8)))])
+        let model = s.model
+        model.hubAffiche(true)
+        await model.exporter(.json)
+        let partage = try XCTUnwrap(model.partage)
+        model.feuillePresentee(partage)
+        // Session terminée feuille ouverte (révocation, déconnexion) : le hub est détruit, le fichier protégé
+        // n'attend pas la prochaine connexion (revue B8, m8).
+        await s.store.signOut()
+        await model.verificationIdentite?.value
+        XCTAssertFalse(FileManager.default.fileExists(atPath: partage.url.path), "fichier supprimé à la fin de session")
+        XCTAssertEqual(contenuRacine, [], "aucun résidu")
+        XCTAssertNil(model.partage, "fichier retiré : la feuille de l'identité partie est fermée par sa vue")
+        XCTAssertFalse(model.feuilleOuverte)
+        // Fin tardive de la feuille : sans effet, aucun succès pour une identité partie.
+        model.partageTermine(complete: true)
+        XCTAssertNil(model.succes)
+    }
+
+    func testFinDeSessionSansFichierSansEffet() async throws {
+        let s = try await scenario([])
+        await s.store.signOut()
+        await s.model.verificationIdentite?.value
+        XCTAssertNil(s.model.partage)
+        XCTAssertNil(s.model.erreur)
+        XCTAssertEqual(contenuRacine, [])
+    }
+
+    func testRevalidationDeLaMemeSessionGardeLaFeuille() async throws {
+        let s = try await scenario([.success(ExportDonneesRGPD(json: Data(Self.brut.utf8)))])
+        s.model.hubAffiche(true)
+        await s.model.exporter(.json)
+        let partage = try XCTUnwrap(s.model.partage)
+        s.model.feuillePresentee(partage)
+        await s.store.start() // même identité, même epoch : rien n'est retiré
+        await s.model.verificationIdentite?.value
+        XCTAssertEqual(s.model.partage, partage)
+        XCTAssertTrue(s.model.feuilleOuverte)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: partage.url.path))
+    }
+
     func testResidusDUnExportInterrompuPurgesALaCreation() async throws {
         // Un export laissé par un arrêt brutal (feuille jamais fermée) est retiré au prochain écran.
         try preparerRacine()
@@ -211,7 +309,18 @@ final class ExportRGPDModelTests: XCTestCase {
         try Data("{}".utf8).write(to: residu.appendingPathComponent("mes-donnees-jolene-2026-10-01.json"))
         let autre = racine.appendingPathComponent("autre-dossier")
         try FileManager.default.createDirectory(at: autre, withIntermediateDirectories: true)
+        XCTAssertEqual(DossierExportTemporaire(racine: racine).residus, 1, "seuls les dossiers d'export sont comptés")
         _ = try await scenario([])
         XCTAssertEqual(contenuRacine, ["autre-dossier"], "seuls les dossiers d'export sont purgés")
+        XCTAssertEqual(DossierExportTemporaire(racine: racine).residus, 0)
+    }
+
+    func testPurgeAuLancementSansHubNiSession() throws {
+        // `AppContainer` purge au lancement (revue B8, m8), avant tout hub et toute session.
+        try preparerRacine()
+        let residu = racine.appendingPathComponent("\(DossierExportTemporaire.prefixe)arret-brutal")
+        try FileManager.default.createDirectory(at: residu, withIntermediateDirectories: true)
+        DossierExportTemporaire(racine: racine).purgerResidus()
+        XCTAssertEqual(contenuRacine, [])
     }
 }

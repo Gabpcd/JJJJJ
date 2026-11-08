@@ -52,6 +52,38 @@ final class SupabaseMotDePasseGatewayTests: XCTestCase {
         try await SupabaseMotDePasseGateway(client: client).changer(ancien: Self.ancien, nouveau: Self.nouveau, context: TestClient.context)
     }
 
+    private func changer(_ client: SupabaseClient, ancien: String = SupabaseMotDePasseGatewayTests.ancien,
+                         nouveau: String = SupabaseMotDePasseGatewayTests.nouveau,
+                         garde: @escaping @Sendable () async -> Bool) async throws -> ResultatMotDePasse {
+        try await SupabaseMotDePasseGateway(client: client).changer(ancien: ancien, nouveau: nouveau, context: TestClient.context,
+                                                                    identiteCourante: garde)
+    }
+
+    /// Rang de la requête en cours sur un chemin, partagé par les prédicats du transport (évalués dans l'ordre
+    /// d'enregistrement, sous le verrou du registre).
+    private final class Rang: @unchecked Sendable {
+        private let verrou = NSLock()
+        private var compte = 0
+        private var courant = 0
+        /// Nouvelle requête : son rang (1, 2…).
+        func nouvelleRequete() -> Int { verrou.lock(); defer { verrou.unlock() }; compte += 1; courant = compte; return courant }
+        var actuel: Int { verrou.lock(); defer { verrou.unlock() }; return courant }
+    }
+
+    /// Réponses successives d'un même chemin : la n-ième requête reçoit `reponses[n - 1]` (au-delà, aucune : la
+    /// requête est hors contrat). Le premier prédicat, consulté le premier pour chaque requête, fixe son rang.
+    private func enSequence(_ methode: String, _ chemin: String, _ reponses: [StubResponse]) {
+        let rang = Rang()
+        for (index, reponse) in reponses.enumerated() {
+            registry.add(methode, chemin, where: { _ in
+                (index == 0 ? rang.nouvelleRequete() : rang.actuel) == index + 1
+            }, respond: reponse)
+        }
+    }
+
+    private static let logout = "/auth/v1/logout"
+    private static let deconnexionAcceptee = StubResponse(status: 204, headers: [:], body: Data(), failure: nil)
+
     // MARK: - Succès
 
     func testAncienVerifieSurLEmailDeLaSessionPuisMotDePasseMisAJour() async throws {
@@ -146,9 +178,10 @@ final class SupabaseMotDePasseGatewayTests: XCTestCase {
     }
 
     func testRefusDeLaMiseAJourTraduitsCommeExtraireMessageErreur() async throws {
+        // `same_password` n'est plus dans cette table (revue B8, m1) : avec un ancien vérifié et un nouveau distinct,
+        // il prouve que le mot de passe vaut déjà le nouveau (tests « Rejeu » ci-dessous) ; avec un nouveau égal à
+        // l'ancien, il reste le refus générique du web (`testSamePasswordAvecUnNouveauEgalALAncienResteUnRefus`).
         let cas: [(StubResponse, String)] = [
-            (refus(422, code: "same_password", message: "New password should be different from the old password."),
-             "Une erreur est survenue. Veuillez réessayer."),
             (refus(422, code: "weak_password", message: "Password is known to be weak and easy to guess, please choose a different one.",
                    extra: #","weak_password":{"reasons":["pwned"]}"#),
              "Mot de passe trop faible. Utilisez au moins 8 caractères avec majuscules, minuscules, chiffres et caractères spéciaux."),
@@ -202,5 +235,175 @@ final class SupabaseMotDePasseGatewayTests: XCTestCase {
         let envois = registry.requests(to: user)
         XCTAssertEqual(envois.count, 2, "un appel de la gateway, rejoué une fois par le SDK")
         XCTAssertEqual(Set(envois.compactMap { $0.body }).count, 1, "rejeu à l'identique, aucune autre valeur envoyée")
+    }
+
+    // MARK: - Rejeu du SDK et issue inconnue (revue B8, m1)
+
+    private static let refusMemeMotDePasse = "New password should be different from the old password."
+
+    func testRejeuDUnPUTAboutiSamePasswordAvecUnNouveauDistinctEstUnSucces() async throws {
+        // Premier PUT parvenu au serveur, réponse perdue (coupure) ; le rejeu du SDK reçoit `same_password`. L'ancien
+        // vient d'être vérifié et le nouveau en diffère : le mot de passe vaut donc déjà le nouveau.
+        let client = try await connecte()
+        registry.add("POST", token, respond: .json(200, TestClient.sessionJSON()))
+        enSequence("PUT", user, [.networkFailure(.networkConnectionLost),
+                                 refus(422, code: "same_password", message: Self.refusMemeMotDePasse)])
+        let issue = try await changer(client)
+        XCTAssertEqual(issue, .modifie, "rejeu d'un PUT abouti : jamais « Une erreur est survenue »")
+        let envois = registry.requests(to: user)
+        XCTAssertEqual(envois.count, 2, "un appel de la gateway, rejoué une fois par le SDK")
+        XCTAssertEqual(Set(envois.compactMap { $0.body }).count, 1, "rejeu à l'identique")
+        XCTAssertTrue(registry.unmatched.isEmpty, "requêtes hors contrat : \(registry.unmatched.map(\.path))")
+    }
+
+    func testSamePasswordAvecUnNouveauDistinctSansRejeuEstUnSucces() async throws {
+        // Même preuve sans rejeu (le mot de passe a été changé entre la vérification et la mise à jour) : le
+        // mot de passe vaut le nouveau.
+        let client = try await connecte()
+        registry.add("POST", token, respond: .json(200, TestClient.sessionJSON()))
+        registry.add("PUT", user, respond: refus(422, code: "same_password", message: Self.refusMemeMotDePasse))
+        XCTAssertEqual(try await changer(client), .modifie)
+        XCTAssertEqual(registry.requests(to: user).count, 1)
+    }
+
+    func testSamePasswordAvecUnNouveauEgalALAncienResteUnRefus() async throws {
+        // Nouveau égal à l'ancien, octet pour octet : vrai refus, texte web d'`extraireMessageErreur` (l.532).
+        let client = try await connecte()
+        registry.add("POST", token, respond: .json(200, TestClient.sessionJSON()))
+        registry.add("PUT", user, respond: refus(422, code: "same_password", message: Self.refusMemeMotDePasse))
+        let issue = try await changer(client, ancien: Self.nouveau, nouveau: Self.nouveau, garde: { true })
+        XCTAssertEqual(issue, .refuse(message: "Une erreur est survenue. Veuillez réessayer."))
+    }
+
+    func testSamePasswordAvecLesMemes72PremiersOctetsResteUnRefus() async throws {
+        // bcrypt (GoTrue) ne lit que les 72 premiers octets : deux mots de passe qui les partagent ne prouvent rien.
+        let prefixe = String(repeating: "é", count: 36) // 72 octets UTF-8
+        XCTAssertEqual(prefixe.utf8.count, 72)
+        let client = try await connecte()
+        registry.add("POST", token, respond: .json(200, TestClient.sessionJSON()))
+        registry.add("PUT", user, respond: refus(422, code: "same_password", message: Self.refusMemeMotDePasse))
+        let issue = try await changer(client, ancien: prefixe + "A1!", nouveau: prefixe + "B2?", garde: { true })
+        XCTAssertEqual(issue, .refuse(message: "Une erreur est survenue. Veuillez réessayer."))
+    }
+
+    func testSamePasswordFormesNFCEtNFDDistinctesEstUnSucces() async throws {
+        // « é » NFC et NFD : égales pour `String`, distinctes pour GoTrue (octets) ; la comparaison est octet par octet.
+        let client = try await connecte()
+        registry.add("POST", token, respond: .json(200, TestClient.sessionJSON()))
+        registry.add("PUT", user, respond: refus(422, code: "same_password", message: Self.refusMemeMotDePasse))
+        let issue = try await changer(client, ancien: "Mdp-2026-\u{E9}", nouveau: "Mdp-2026-e\u{301}", garde: { true })
+        XCTAssertEqual(issue, .modifie)
+    }
+
+    func testErreurServeurOuDelaiALaMiseAJourEstUneIssueInconnue() async throws {
+        // 5xx ou 408 sur le PUT (après le rejeu du SDK) : le serveur a pu enregistrer le changement, jamais un refus.
+        let cas: [StubResponse] = [
+            refus(500, code: "unexpected_failure", message: "Internal Server Error"),
+            refus(503, code: "unexpected_failure", message: "Service Unavailable"),
+            refus(408, code: "request_timeout", message: "Processing this request timed out, please retry after a moment."),
+        ]
+        for reponse in cas {
+            registry.reset()
+            let client = try await connecte()
+            registry.add("POST", token, respond: .json(200, TestClient.sessionJSON()))
+            registry.add("PUT", user, respond: reponse)
+            do {
+                let issue = try await changer(client)
+                XCTFail("\(reponse.status) : issue inconnue attendue, obtenu \(issue)")
+            } catch let erreur as JoleneError {
+                XCTAssertEqual(erreur.kind, .unknown, "\(reponse.status)")
+                XCTAssertEqual(erreur.message, MotDePasse.Textes.confirmationIndisponible, "\(reponse.status)")
+            }
+            XCTAssertEqual(registry.requests(to: user).count, 2, "\(reponse.status) : rejoué une fois par le SDK")
+        }
+    }
+
+    func testErreurServeurALaVerificationResteUnRefusSansMiseAJour() async throws {
+        // Avant toute mise à jour, rien n'a changé : le refus générique du web reste juste.
+        let client = try await connecte()
+        registry.add("POST", token, respond: refus(500, code: "unexpected_failure", message: "Internal Server Error"))
+        XCTAssertEqual(try await changer(client), .refuse(message: "Une erreur est survenue. Veuillez réessayer."))
+        XCTAssertTrue(registry.requests(to: user).isEmpty)
+    }
+
+    // MARK: - Garde d'identité entre la vérification et la mise à jour (revue B8, m2)
+
+    /// Relevés pris par une garde (nombre de vérifications et de mises à jour déjà parties).
+    private final class Releves: @unchecked Sendable {
+        private let verrou = NSLock()
+        private var valeurs: [[Int]] = []
+        func noter(_ valeur: [Int]) { verrou.lock(); defer { verrou.unlock() }; valeurs.append(valeur) }
+        var tous: [[Int]] { verrou.lock(); defer { verrou.unlock() }; return valeurs }
+    }
+
+    func testGardeConsulteeApresLaVerificationEtAvantLaMiseAJour() async throws {
+        let client = try await connecte()
+        registry.add("POST", token, respond: .json(200, TestClient.sessionJSON()))
+        registry.add("PUT", user, respond: .json(200, Self.utilisateurJSON))
+        let registre = registry
+        let (chemins, releves) = ((token, user), Releves())
+        let issue = try await changer(client, garde: {
+            releves.noter([registre.requests(to: chemins.0).count, registre.requests(to: chemins.1).count])
+            return true
+        })
+        XCTAssertEqual(issue, .modifie)
+        XCTAssertEqual(releves.tous, [[1, 0]], "une consultation, après la vérification et avant la mise à jour")
+    }
+
+    func testGardeNonConsulteeSansAncienVerifie() async throws {
+        let client = try await connecte()
+        registry.add("POST", token, respond: refus(400, code: "invalid_credentials", message: "Invalid login credentials"))
+        let releves = Releves()
+        let issue = try await changer(client, garde: { releves.noter([0]); return true })
+        XCTAssertEqual(issue, .ancienIncorrect)
+        XCTAssertTrue(releves.tous.isEmpty)
+    }
+
+    func testIdentitePartieApresLaVerificationAucuneMiseAJourSessionRecreeeRetiree() async throws {
+        // `.signedOut` (révocation, refresh refusé) arrivé pendant le `signIn` de vérification : l'app affiche la
+        // connexion, mais le `signIn` a recréé une session dans le SDK. Aucune mise à jour ; cette session est retirée.
+        let client = try await connecte()
+        let expiration = Date().timeIntervalSince1970 + 7200
+        registry.add("POST", token, respond: .json(200, TestClient.sessionJSON(expiresAt: expiration)))
+        registry.add("POST", Self.logout, respond: Self.deconnexionAcceptee)
+        registry.add("PUT", user, respond: .json(200, Self.utilisateurJSON))
+        do {
+            let issue = try await changer(client, garde: { false })
+            XCTFail("identité partie : aucune issue attendue, obtenu \(issue)")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur.kind, .cancelled)
+        }
+        XCTAssertTrue(registry.requests(to: user).isEmpty, "aucune mise à jour pour une identité partie")
+        let deconnexions = registry.requests(to: Self.logout)
+        XCTAssertEqual(deconnexions.count, 1)
+        XCTAssertEqual(deconnexions.first?.query("scope"), "local", "seule la session recréée est retirée, jamais une déconnexion globale")
+        XCTAssertEqual(deconnexions.first?.header("Authorization"), "Bearer \(TestClient.accessToken(expiresAt: expiration))",
+                       "le jeton retiré est celui de la vérification")
+        XCTAssertNil(client.auth.currentSession, "aucune session laissée au SDK pendant que l'app affiche la connexion")
+        XCTAssertTrue(registry.unmatched.isEmpty, "requêtes hors contrat : \(registry.unmatched.map(\.path))")
+    }
+
+    func testIdentiteRemplaceeApresLaVerificationLaSessionSuivanteEstConservee() async throws {
+        // Une connexion arrivée après la vérification (autre jeton) n'est jamais retirée par la gateway.
+        let client = try await connecte()
+        let maintenant = Date().timeIntervalSince1970
+        let (expirationVerification, expirationSuivante) = (maintenant + 7200, maintenant + 10_800)
+        let suivante = ["sui", "vante"].joined()
+        registry.add("POST", token, where: { ($0.bodyJSON as? [String: Any])?["password"] as? String == suivante },
+                     respond: .json(200, TestClient.sessionJSON(expiresAt: expirationSuivante)))
+        registry.add("POST", token, respond: .json(200, TestClient.sessionJSON(expiresAt: expirationVerification)))
+        registry.add("POST", Self.logout, respond: Self.deconnexionAcceptee)
+        do {
+            _ = try await changer(client, garde: {
+                _ = try? await SupabaseAuthGateway(client: client).signIn(email: TestClient.email, password: suivante)
+                return false
+            })
+            XCTFail("identité remplacée : aucune issue attendue")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur.kind, .cancelled)
+        }
+        XCTAssertTrue(registry.requests(to: user).isEmpty)
+        XCTAssertTrue(registry.requests(to: Self.logout).isEmpty, "la session de la connexion suivante n'est pas retirée")
+        XCTAssertEqual(client.auth.currentSession?.accessToken, TestClient.accessToken(expiresAt: expirationSuivante))
     }
 }
