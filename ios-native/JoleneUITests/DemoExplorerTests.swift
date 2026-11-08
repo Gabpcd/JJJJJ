@@ -21,6 +21,8 @@ final class DemoExplorerTests: JoleneUITestCase {
         /// Rayon minimum + Libéral : 0 ; « Élargir le rayon (+20 km) » → 25 km, 10 missions libérales.
         static let liberalApresElargissement = 10
         static let premierEtablissement = "Établissement fictif République · 75011 Paris"
+        /// Cycles « ouvrir, changer, Afficher les missions, rouvrir » du test de réouverture.
+        static let cyclesReouverture = 10
     }
 
     func testChipsRapidesFiltrentLaListe() throws {
@@ -128,6 +130,76 @@ final class DemoExplorerTests: JoleneUITestCase {
         XCTAssertEqual(element("explorer-filtres-ouvrir").value as? String, "Aucun filtre actif")
     }
 
+    /// Réouverture après application (run 42526135547, iPad portrait) : la feuille ne se rouvrait
+    /// parfois plus après « Afficher les missions », les critères étant appliqués pendant sa
+    /// transition de fermeture. Dix cycles « ouvrir, changer le contrat, Afficher les missions,
+    /// rouvrir » : chaque réouverture affiche la feuille, partie des critères appliqués, et chaque
+    /// application met à jour le compteur de la liste (lu dans son en-tête) et le badge du bouton.
+    func testFiltresSeRouvrentApresChaqueApplication() throws {
+        ouvrirExplorer()
+        var cdd = false
+        for cycle in 1...Attendus.cyclesReouverture {
+            ouvrirFiltres(contexte: "cycle \(cycle)")
+            let contrat = selecteurContrat()
+            require("Cycle \(cycle) : la feuille rouverte part du contrat appliqué (\(cdd ? "CDD" : "Tous"))") {
+                contrat.buttons.element(boundBy: cdd ? 1 : 0).isSelected
+            }
+            cdd.toggle()
+            let cible = contrat.buttons.element(boundBy: cdd ? 1 : 0)
+            require("Cycle \(cycle) : le segment visé est atteignable") { self.visible(cible) }
+            cible.tap()
+            require("Cycle \(cycle) : le segment visé est sélectionné") { cible.isSelected }
+            appliquerFiltres(attendu: cdd ? Attendus.cdd : Attendus.total)
+            let badge = cdd ? "1 filtre actif" : "Aucun filtre actif"
+            require("Cycle \(cycle) : le bouton Filtres annonce « \(badge) »") {
+                (self.element("explorer-filtres-ouvrir").value as? String) == badge
+            }
+        }
+        // Réouverture après la dernière application, puis fermeture sans rien changer.
+        ouvrirFiltres(contexte: "après le cycle \(Attendus.cyclesReouverture)")
+        let contratFinal = selecteurContrat()
+        require("La feuille rouverte part du contrat appliqué") {
+            contratFinal.buttons.element(boundBy: cdd ? 1 : 0).isSelected
+        }
+        record("\(proofPrefix)-explorer-filtres-reouverture")
+        fermerFiltres()
+        attendreCompteur(cdd ? Attendus.cdd : Attendus.total)
+    }
+
+    /// « Fermer » abandonne le brouillon : ni le compteur, ni la liste, ni le badge ne changent, et
+    /// la feuille rouverte repart des critères appliqués (un « Fermer » qui appliquerait le
+    /// brouillon, même après la fermeture, rouvrirait la feuille sur CDD).
+    func testFermerLesFiltresNAppliqueRien() throws {
+        ouvrirExplorer()
+        let rows = elements(withPrefix: "mission-row-")
+        require("Au moins une cellule mission est visible") { rows.count > 0 && self.visible(rows.firstMatch) }
+        let premiere = rows.firstMatch.identifier
+
+        ouvrirFiltres()
+        let contrat = selecteurContrat()
+        let cdd = contrat.buttons.element(boundBy: 1)
+        require("Le segment CDD est atteignable") { self.visible(cdd) }
+        cdd.tap()
+        require("CDD est sélectionné dans le brouillon") { cdd.isSelected }
+        fermerFiltres()
+
+        attendreCompteur(Attendus.total)
+        XCTAssertEqual(element("explorer-filtres-ouvrir").value as? String, "Aucun filtre actif",
+                       "« Fermer » n'ajoute aucun critère")
+        XCTAssertEqual(rows.firstMatch.identifier, premiere, "la liste n'a pas changé")
+
+        ouvrirFiltres(contexte: "après Fermer")
+        let contratRouvert = selecteurContrat()
+        require("La feuille rouverte part du contrat appliqué (Tous)") {
+            contratRouvert.buttons.element(boundBy: 0).isSelected
+        }
+        record("\(proofPrefix)-explorer-filtres-fermer")
+        fermerFiltres()
+        attendreCompteur(Attendus.total)
+        XCTAssertEqual(element("explorer-filtres-ouvrir").value as? String, "Aucun filtre actif")
+        XCTAssertEqual(rows.firstMatch.identifier, premiere, "la liste n'a pas changé")
+    }
+
     func testCarteEnLectureSeuleDansLeDetailSansRequete() throws {
         ouvrirExplorer()
         let rows = elements(withPrefix: "mission-row-")
@@ -223,11 +295,23 @@ final class DemoExplorerTests: JoleneUITestCase {
         }
     }
 
-    private func ouvrirFiltres() {
+    private func ouvrirFiltres(contexte: String? = nil) {
         tap("explorer-filtres-ouvrir")
-        require("La feuille de filtres est affichée") {
+        require("La feuille de filtres est affichée\(contexte.map { " (\($0))" } ?? "")") {
             self.containerVisible(self.element("explorer-filtres")) && self.visible(self.element("filtres-apply"))
         }
+    }
+
+    /// Sélecteur « Type de contrat » de la feuille, amené dans le cadre du défilement.
+    private func selecteurContrat() -> XCUIElement {
+        let contrat = app.segmentedControls.matching(identifier: "filtre-contrat").firstMatch
+        scrollTo(contrat, in: feuilleFiltres)
+        return contrat
+    }
+
+    private func fermerFiltres() {
+        tap("filtres-fermer")
+        require("La feuille de filtres est fermée") { !self.element("explorer-filtres").exists }
     }
 
     private func appliquerFiltres(attendu: Int) {
