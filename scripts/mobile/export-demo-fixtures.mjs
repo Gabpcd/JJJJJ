@@ -231,12 +231,100 @@ export function buildDemoDashboard(now = new Date(FIXED_NOW), missions = buildDe
   };
 }
 
+/**
+ * Présences et pointage démo (lot 2, T3 ; blueprint `docs/mobile-swift/LOT2_PLAN.md` §2.8), lus par
+ * `DemoPointageGateway`. Colonnes des requêtes de `src/pages/PresencesSoignant.tsx` réduites à celles que lit l'app
+ * (`MissionPresenceLue`, `PresenceLue`, `MissionDePresence`) : aucun montant, aucune colonne `code_pointage_*`,
+ * jamais l'embed `etablissements` (noms par `demo-etablissements.json`, comme `fn_etablissements_safe`).
+ *   - demo-presence-a : ASSIGNEE, créneau 00:05Z → 08:05Z le 02/11, contrat SIGNE_COMPLET, code affiché 123456
+ *     (onglet Aujourd'hui, pointage ouvert car dans les 15 min) ;
+ *   - demo-presence-b : EN_COURS, segment EFFECTIF ouvert depuis 2026-11-01T22:00Z, code affiché 654321 ;
+ *   - demo-presence-c : ASSIGNEE ce jour, contrat SIGNE_SOIGNANT (motif CONTRAT), aucun code ;
+ *   - demo-presence-d : ASSIGNEE, créneau le 03/11 (À venir) ;
+ *   - demo-presence-e : ASSIGNEE sur plusieurs jours sans créneau (« Planning détaillé à confirmer ») ;
+ *   - historique : h1 validée il y a 10 h, h2 non validée, h3 sans présence reconstruite depuis deux EFFECTIF.
+ * `codes_affiches` simule le code affiché par l'écran établissement fictif (`AffichageCodeRotatifEtab`) : il n'est
+ * jamais renvoyé par le monde démo, qui le fait tourner après chaque scan. `consentement_gps` nul : le soignant n'a
+ * pas encore répondu.
+ */
+export function buildDemoPresences(now = new Date(FIXED_NOW)) {
+  const minutes = (n) => new Date(now.getTime() + n * 60_000);
+  const heures = (n) => minutes(n * 60);
+  const iso = (date) => date.toISOString();
+  const creneau = (id, missionId, debut, fin, type = 'PREVISIONNEL') => ({
+    id, mission_id: missionId, debut: iso(debut), fin: fin ? iso(fin) : null, est_pause: false, type_creneau: type,
+  });
+  const mission = (id, intitule, statut, debut, fin, etablissementId, service) => ({
+    id, intitule: `Démonstration · ${intitule}`, service, debut_le: iso(debut), fin_le: iso(fin),
+    duree_heures: (fin.getTime() - debut.getTime()) / 3_600_000, statut, etablissement_id: etablissementId,
+  });
+  const missions = [
+    mission('demo-presence-a', 'Pointage du jour', 'ASSIGNEE', minutes(5), minutes(8 * 60 + 5), 'demo-etab-1', 'Médecine polyvalente'),
+    mission('demo-presence-b', 'Mission en cours', 'EN_COURS', heures(-2), heures(6), 'demo-etab-2', 'Soins de suite'),
+    mission('demo-presence-c', 'Contrat à signer', 'ASSIGNEE', heures(6), heures(14), 'demo-etab-3', 'Consultations'),
+    mission('demo-presence-d', 'Mission de demain', 'ASSIGNEE', heures(31), heures(39), 'demo-etab-1', 'Médecine polyvalente'),
+    mission('demo-presence-e', 'Planning à confirmer', 'ASSIGNEE', heures(8 * 24 + 7), heures(12 * 24 + 15), 'demo-etab-2', 'Soins de suite'),
+  ];
+  const missionsHistorique = [
+    mission('demo-presence-h1', 'Présence validée', 'TERMINEE', heures(-41), heures(-33), 'demo-etab-1', 'Médecine polyvalente'),
+    mission('demo-presence-h2', 'Présence à valider', 'TERMINEE', heures(-65), heures(-57), 'demo-etab-2', 'Soins de suite'),
+    mission('demo-presence-h3', 'Heures pointées sans présence', 'TERMINEE', heures(-113), heures(-105), 'demo-etab-3', 'Consultations'),
+  ];
+  const creneaux = [
+    creneau('demo-presence-a-prevu', 'demo-presence-a', minutes(5), minutes(8 * 60 + 5)),
+    creneau('demo-presence-b-prevu', 'demo-presence-b', heures(-2), heures(6)),
+    creneau('demo-presence-b-effectif-1', 'demo-presence-b', heures(-2), null, 'EFFECTIF'),
+    creneau('demo-presence-c-prevu', 'demo-presence-c', heures(6), heures(14)),
+    creneau('demo-presence-d-prevu', 'demo-presence-d', heures(31), heures(39)),
+    creneau('demo-presence-h1-prevu', 'demo-presence-h1', heures(-41), heures(-33)),
+    creneau('demo-presence-h1-effectif-1', 'demo-presence-h1', heures(-41), heures(-33), 'EFFECTIF'),
+    creneau('demo-presence-h2-prevu', 'demo-presence-h2', heures(-65), heures(-57)),
+    creneau('demo-presence-h2-effectif-1', 'demo-presence-h2', heures(-65), heures(-57), 'EFFECTIF'),
+    creneau('demo-presence-h3-prevu', 'demo-presence-h3', heures(-113), heures(-105)),
+    creneau('demo-presence-h3-effectif-1', 'demo-presence-h3', heures(-113), heures(-108), 'EFFECTIF'),
+    creneau('demo-presence-h3-effectif-2', 'demo-presence-h3', minutes(-108 * 60 + 30), heures(-105), 'EFFECTIF'),
+  ].sort((a, b) => new Date(a.debut).getTime() - new Date(b.debut).getTime());
+  const embed = (m, avecStatut) => ({
+    id: m.id, intitule: m.intitule, etablissement_id: m.etablissement_id, debut_le: m.debut_le, fin_le: m.fin_le,
+    ...(avecStatut ? { statut: m.statut } : {}),
+  });
+  const presence = (id, m, valideLe, avecStatut) => ({
+    id, mission_id: m.id, soignant_id: DEMO_PROFILE.user_id, pointage_arrivee_le: m.debut_le, pointage_depart_le: m.fin_le,
+    valide_par_etablissement: valideLe !== null, valide_le: valideLe,
+    methode_pointage_arrivee: 'CODE', methode_pointage_depart: 'CODE', missions: embed(m, avecStatut),
+  });
+  const [h1, h2] = missionsHistorique;
+  const contrat = (missionId, statut) => ({
+    id: `demo-contrat-pointage-${missionId.slice('demo-presence-'.length)}`, mission_id: missionId, statut,
+    cree_le: iso(heures(-72)),
+  });
+  return {
+    fixed_now: now.toISOString(),
+    consentement_gps: null,
+    missions,
+    presences_validees: [presence('demo-presence-h1-presence', h1, iso(heures(-10)), false)],
+    historique: [
+      presence('demo-presence-h1-presence', h1, iso(heures(-10)), true),
+      presence('demo-presence-h2-presence', h2, null, true),
+    ],
+    missions_historique: missionsHistorique,
+    creneaux,
+    contrats: [
+      contrat('demo-presence-a', 'SIGNE_COMPLET'), contrat('demo-presence-b', 'SIGNE_COMPLET'),
+      contrat('demo-presence-c', 'SIGNE_SOIGNANT'), contrat('demo-presence-d', 'SIGNE_COMPLET'),
+      contrat('demo-presence-e', 'SIGNE_COMPLET'),
+    ],
+    codes_affiches: { 'demo-presence-a': '123456', 'demo-presence-b': '654321' },
+  };
+}
+
 export function buildFixtures() {
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
     'demo-etablissements.json': { fixed_now: FIXED_NOW, etablissements: DEMO_ETABLISSEMENTS },
     'demo-profile.json': { fixed_now: FIXED_NOW, ...DEMO_PROFILE },
     'demo-dashboard.json': buildDemoDashboard(),
+    'demo-presences.json': buildDemoPresences(),
   };
 }
 

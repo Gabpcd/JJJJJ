@@ -85,14 +85,14 @@ production. Les RPC du système de pointage ① (`RPC_POINTAGE_SYSTEME_1`) et `f
 | `fn_supprimer_compte_rate_limited` | à venir | 1 (T8, via edge `delete-account`) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_param_bool` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_confirmer_presence_mission` | à venir | 1 (T6c) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_scanner_code_pointage` | à venir | 2 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_etat_pointage_mission` | à venir | 2 (T3) | MIXTE_TENANT_ADMIN | authenticated, service_role | absente |
+| `fn_scanner_code_pointage` | consommée lot 2 (T3) | 2 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_etat_pointage_mission` | consommée lot 2 (T3) | 2 (T3) | MIXTE_TENANT_ADMIN | authenticated, service_role | absente |
 | `fn_envoyer_otp_signature` | à venir | 2 (T8) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_signer_contrat_otp` | à venir | 2 (T8) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_remplacer_document_soignant` | à venir | 2 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_consentir_gps` | à venir | 2 (T3, T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_relancer_validation_presence` | à venir | 2 (T3, T5a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_presences_detail_mission` | à venir | 2 (T3, T5a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_consentir_gps` | consommée lot 2 (T3) | 2 (T3, T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_relancer_validation_presence` | consommée lot 2 (T3) | 2 (T3, T5a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_presences_detail_mission` | consommée lot 2 (T3) | 2 (T3, T5a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_fenetre_contestation_ouverte` | à venir | 2 (T5b) | hors manifeste (SECURITY INVOKER) | authenticated, service_role | déclarée |
 | `fn_ouvrir_litige_rate_limited` | à venir | 2 (T5b, surcharge `(uuid, type_litige, text)`) | RPC_UTILISATEUR_AUTH_INTERNE (deux surcharges sur trois) | authenticated, service_role | absente |
 | `fn_creer_notation_mission` | à venir | 2 (T5a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
@@ -351,7 +351,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_suggestions_missions_pour_soignant"("p_l
 
 ## fn_scanner_code_pointage
 
-- **Statut natif** : à venir (lot 2, T3 gateway, T4b écran ; décisions 1, 2, 6 de `DECISIONS_LOT2.md`).
+- **Statut natif** : consommée lot 2 (T3 : `SupabasePointageGateway.scanner`, `PointageModel` ; T4b écran ; décisions 1, 2, 6 de `DECISIONS_LOT2.md`).
 - **Usage prévu** : seul système de pointage du natif (code rotatif à six chiffres affiché par l'établissement,
   saisi ou lu dans le QR de `AffichageCodeRotatifEtab`). Arrivée, départ et pauses alternent OUVERTURE et
   FERMETURE d'un segment `mission_creneaux` `EFFECTIF`. Reçu `RecuScan` écrit avant l'appel (`LOT2_PLAN.md`
@@ -414,15 +414,44 @@ CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", 
 - **Relecture** : `fn_etat_pointage_mission` (`nb_scans` = `numero_scan`, `prochain_type_scan` basculé) puis
   `scans_pointage?select=id,numero_scan,type_scan,scanne_le,id_terminal,precision_gps_m&mission_id=eq.<id>&order=numero_scan.desc`
   (une preuve hors de la base du reçu, même `id_terminal`) ; jamais `code_saisi`, `ip_address`, `latitude`,
-  `longitude` (lisibles par `sp_select` l.79931 mais inutiles). Réconciliation « non reçu » seulement ≥ 8 s
-  après `started` (décision 2).
+  `longitude` (lisibles par `sp_select` l.79931 mais inutiles). Réconciliation : première relecture immédiate ;
+  « non reçu » seulement ≥ 8 s après `started` (décision 2), et pour un essai sorti sans réponse après sa sortie
+  + 10 s + 8 s monotones (revue fraîche de T3, m2 ; seconde revue, mi-2).
+- **Câblage (T3)** : la projection relue est `PreuveScan.selection`
+  (`id,mission_id,numero_scan,type_scan,scanne_le,id_terminal,precision_gps_m`, `mission_id` ajouté par la revue
+  fraîche de T1), `order=numero_scan.desc.nullslast`, `limit=1000` (`RecuScan.maxPreuves`) ; la même lecture
+  (`PointagePort.preuvesScan`) fournit AVANT l'envoi la base `preuvesAvant` du reçu. Succès annoncé seulement si
+  l'état relu confirme le scan (`PointageRules.etatConfirme`) ET si une preuve hors base du même terminal existe
+  (`RecuScan.reconcilier`) ; un HTTP 200 non confirmé sur la mission du reçu suit la puce « Code d'une autre
+  mission » ci-dessous (`.enregistreSurAutreMission` ou `.accepteSansPreuve`, jamais `.incertain`) ; seule une
+  réponse perdue (transport, passerelle, délai de la requête) donne `.incertain`, réconcilié par relecture, jamais
+  renvoyé. La requête (`envoyerScan`) et les relectures d'un HTTP 200 (`relireScanAccepte`) sont bornées séparément
+  par le modèle (seconde revue fraîche de T3, mi-1) : des relectures lentes ne rendent jamais un 200 incertain. Rollback prouvé
+  (`RPCResponse.appelerMutation` : `.refusDefinitif`) → `IssueScan.refuse` (SQLSTATE si c'en est un) ; transport,
+  passerelle, `PGRST001` → `.incertain`. Seule la surcharge du web s'applique au message (décision 6,
+  `PointageRules.estCodeInvalide` : `P0002` et le message exact de l.55649) ; l'autre `P0002` (l.55775) reste
+  verbatim. Aucune colonne `code_pointage_*` de `missions` n'est jamais demandée par le natif (gap « B1-ter »
+  nommé par la migration B1 : le code rotatif reste lisible par le soignant assigné en PostgREST direct).
+- **Code d'une autre mission (revue fraîche de T3, M-A)** : la fonction trouve la mission par le seul code
+  (`WHERE code_pointage_actif = p_code`, l.55639-55644) ; un soignant qui a deux missions `ASSIGNEE`/`EN_COURS` et
+  saisit dans le bloc B le code de la mission A pointe A. Un HTTP 200 prouve le COMMIT (PostgREST construit la
+  réponse après lui, amendement de la correction 10) : il n'aboutit jamais à « non reçu ». Non confirmé sur la mission
+  du reçu, la ligne du scan est relue **sans filtre de mission** :
+  `scans_pointage?select=<PreuveScan.selection>&soignant_id=eq.<uid>&creneau_effectif_id=eq.<réponse>&numero_scan=eq.<réponse>&id_terminal=eq.<terminal>&limit=2`
+  (lisible par `sp_select`, l.79931 ; même projection, jamais `code_saisi`, `ip_address`, `latitude`, `longitude`),
+  puis `fn_etat_pointage_mission` de la mission trouvée → `IssueScan.enregistreSurAutreMission` ; sinon
+  `IssueScan.accepteSansPreuve` (suivi non vérifiable, renvoi web). Réponse perdue d'un scan appliqué sur une autre
+  mission : limite consignée dans `DECISIONS_LOT2.md` (consignes T3, revue fraîche de L2-T3).
+- **Session expirée (m1)** : `PGRST301`-`PGRST303` (rollback prouvé) ou session absente / 401-403 hors PostgREST →
+  `JoleneError(.unauthorized)` levée par `envoyerScan` (et `scanner`), jamais un refus métier ; reçu `started`
+  gardé, réconcilié au retour de l'utilisateur.
 - **Preuve STAGING** : T11 — deux lignes `scans_pointage` (OUVERTURE puis FERMETURE, `numero_scan` 1 puis 2,
   `id_terminal ~ '^TERM_IOS_[A-Z2-7]{20}$'`, `precision_gps_m` non nul), segment `EFFECTIF` fermé,
   `missions.statut = 'EN_COURS'`, `presences.perimetre_gps_valide = true`.
 
 ## fn_etat_pointage_mission
 
-- **Statut natif** : à venir (lot 2, T3).
+- **Statut natif** : consommée lot 2 (T3 : `SupabasePointageGateway.etat` ; `{error}` lu avant le décodage et levé en `JoleneError(.unknown, <message serveur verbatim>)`, « Non authentifié » → `.unauthorized`).
 - **Usage prévu** : état du pointage d'une mission, relu toutes les 15 s quand le bloc est visible
   (`PointageRotatifSoignant.tsx` l.64-72) et après chaque scan (règle « aucun succès fabriqué »).
 - **Signature SQL** (`supabase/schema/public.sql` l.35145) :
@@ -579,7 +608,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_remplacer_document_soignant"("p_type_doc
 
 ## fn_consentir_gps
 
-- **Statut natif** : à venir (lot 2, T3 gateway, T4b consentement et Profil ; décision 4).
+- **Statut natif** : consommée lot 2 (T3 : `SupabasePointageGateway.enregistrerConsentementGps`, puis relecture ; T4b consentement et Profil ; décision 4).
 - **Usage prévu** : premier consentement GPS (`soignants.consentement_gps IS NULL`) avant le premier pointage,
   texte verbatim de `ConsentementGPS.tsx` ; retrait et réactivation depuis le Profil natif (`SectionPreferences.tsx`
   l.128-168). Relecture `soignants.consentement_gps` (SELECT direct, comme `PresencesSoignant.tsx` l.58) ; audit
@@ -604,7 +633,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_consentir_gps"("p_accepte" boolean) RETU
 
 ## fn_relancer_validation_presence
 
-- **Statut natif** : à venir (lot 2, T3 gateway, T5a écran).
+- **Statut natif** : consommée lot 2 (T3 : `SupabasePointageGateway.relancerValidation` ; T5a écran).
 - **Usage prévu** : relance de l'établissement quand une présence à pointage complet attend sa validation
   (`DetailPresencesMission.tsx` l.116-124).
 - **Signature SQL** (`supabase/schema/public.sql` l.53013) :
@@ -624,11 +653,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_relancer_validation_presence"("p_mission
   24 h). Succès `{success:true, message}` avec « Établissement relancé. Il a été notifié de valider tes présences. »
   (l.53070-53071), notification `RAPPEL_VALIDATION_PRESENCE` à l'établissement et audit `PRESENCE_RELANCE_VALIDATION`.
 - **Messages affichés** : `message` serveur verbatim quand il existe (tutoyé côté serveur, décision 9 du lot 1) ;
-  code sans message → repli du web « Relance impossible. » (l.123), jamais le code brut.
+  code sans message → repli du web « Relance impossible. » (l.123), jamais le code brut ; `NON_AUTHENTIFIE` (l.53023)
+  → `JoleneError(.unauthorized)` (session expirée), jamais ce repli (revue fraîche de T3, m1).
 
 ## fn_presences_detail_mission
 
-- **Statut natif** : à venir (lot 2, T3 gateway, T5a écran ; `LOT2_PLAN.md` correction 16).
+- **Statut natif** : consommée lot 2 (T3 : `SupabasePointageGateway.detail`, carte masquée sur `{error}` ; T5a écran ; `LOT2_PLAN.md` correction 16).
 - **Usage prévu** : carte de synthèse du détail des présences (`DetailPresencesMission.tsx` l.140, l.338-344) ;
   lecture tolérante, `heures_reelles` jamais affichée (les segments `EFFECTIF` fermés font foi, web l.341-344).
 - **Signature SQL** (`supabase/schema/public.sql` l.48908) :
@@ -1237,6 +1267,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   `nouveau_code` et `nouveau_hmac` ne sont ni décodés, ni conservés, ni journalisés, ni joints à un rapport
   (tests de T3 : absents du modèle et de tout `attachText`). Aucun fichier source Swift (hors tests) ne mentionne
   ces clés ; garde `tests/node/check-rpc-contracts.node.mjs`.
+- **Deux formes décodées (T3)** : la réponse d'après B1 (`fix/scanner-code-sans-code-suivant`, migration
+  `20261102205212_scanner_code_sans_code_suivant.sql` : mêmes clés, sans le code suivant ni sa signature) et celle
+  d'avant B1 donnent le même `ScanEnregistre` et la même issue (`SupabasePointageGatewayTests`) ; la réponse brute ne
+  sort jamais de `SupabasePointageGateway.scanner`. La même PR B1 retire aussi ces clés de
+  `fn_declarer_fin_retroactive`, que le natif n'appelle pas (déclaration de fin rétroactive : écran établissement du
+  web, décision 2) et ne suit donc pas dans `RPC_SUIVIES`.
 - **Correctif serveur** : PR backend **B1** (B9, `SECURITY DEFINER` → go explicite de Gabrielle,
   `DECISIONS_LOT2.md` décision 8) qui retire les deux clés depuis la définition live. B1 vise `main`, où la présente
   fiche et la garde « `nouveau_code` présent dans le dump » de `tests/node/check-rpc-contracts.node.mjs` n'existent

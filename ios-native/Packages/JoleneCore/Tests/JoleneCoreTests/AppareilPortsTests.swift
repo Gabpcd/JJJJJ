@@ -138,6 +138,27 @@ final class AppareilPortsTests: XCTestCase {
         XCTAssertEqual(MetadonneesScan(idTerminal: id, observation: .precisionReduite).gps, .reduite)
         XCTAssertEqual(MetadonneesScan(idTerminal: id, observation: nil).gps, .nonDemande)
     }
+
+    func testMetadonneesDuScanMasquentLesCoordonneesHorsDuCorpsDeLaRequete() {
+        // Revue fraîche de T1 (M6), rappelée par celle de T3 (m8) : descriptions et réflexion ne portent jamais les
+        // coordonnées (rien ne doit pouvoir les journaliser ni les afficher) ; seul `encode` les écrit, pour `p_metadata`.
+        let metadonnees = MetadonneesScan(idTerminal: "TERM_IOS_ABCDEFGHIJKLMNOPQRST",
+                                          observation: .disponible(latitude: 45.761234, longitude: 4.851234, precisionM: 8.5))
+        var vidage = ""
+        dump(metadonnees, to: &vidage)
+        let rendus = [String(describing: metadonnees), String(reflecting: metadonnees), "\(metadonnees)", vidage,
+                      "\(Mirror(reflecting: metadonnees).children.map(\.value))"]
+        let etiquettes = "\(Mirror(reflecting: metadonnees).children.compactMap(\.label))"
+        for rendu in rendus + [etiquettes] {
+            for valeur in ["45.76", "4.85", "8.5", "latitude", "longitude", "precision"] {
+                XCTAssertFalse(rendu.contains(valeur), "« \(valeur) » exposé par « \(rendu) »")
+            }
+        }
+        for rendu in rendus {
+            XCTAssertTrue(rendu.contains("available") || rendu.contains("disponible"), "état GPS conservé : \(rendu)")
+        }
+        XCTAssertEqual(metadonnees.latitude, 45.761234, "valeur conservée pour le corps de la requête")
+    }
 }
 
 /// Générateur déterministe : rend les valeurs dans l'ordre, puis recommence.

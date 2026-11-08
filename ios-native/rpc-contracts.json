@@ -490,7 +490,7 @@
     },
     {
       "name": "fn_scanner_code_pointage",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": {
         "args": "{ p_code: string; p_metadata?: Json }",
@@ -519,7 +519,7 @@
     },
     {
       "name": "fn_etat_pointage_mission",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": null,
       "sql": [
@@ -629,7 +629,7 @@
     },
     {
       "name": "fn_consentir_gps",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": {
         "args": "{ p_accepte: boolean }",
@@ -658,7 +658,7 @@
     },
     {
       "name": "fn_relancer_validation_presence",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": null,
       "sql": [
@@ -684,7 +684,7 @@
     },
     {
       "name": "fn_presences_detail_mission",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": {
         "args": "{ p_mission_id: string }",

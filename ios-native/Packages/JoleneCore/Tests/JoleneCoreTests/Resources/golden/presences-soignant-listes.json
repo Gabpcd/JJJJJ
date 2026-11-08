@@ -714,6 +714,30 @@
           "cree_le": "2026-10-01T00:30:00Z"
         },
         {
+          "id": "nul-recent",
+          "mission_id": "statut-nul",
+          "statut": null,
+          "cree_le": "2026-10-02T00:00:00Z"
+        },
+        {
+          "id": "envoye-ancien",
+          "mission_id": "statut-nul",
+          "statut": "ENVOYE",
+          "cree_le": "2026-10-01T00:00:00Z"
+        },
+        {
+          "id": "nul",
+          "mission_id": "statut-nul-signe",
+          "statut": null,
+          "cree_le": "2026-10-03T00:00:00Z"
+        },
+        {
+          "id": "signe",
+          "mission_id": "statut-nul-signe",
+          "statut": "SIGNE_COMPLET",
+          "cree_le": "2026-10-01T00:00:00Z"
+        },
+        {
           "id": "pour-m1",
           "mission_id": "m1",
           "statut": "SIGNE_COMPLET",
@@ -739,6 +763,8 @@
         "egalite": "premier",
         "casse": "seul-terminal-minuscules",
         "formats": "utc",
+        "statut-nul": "nul-recent",
+        "statut-nul-signe": "signe",
         "m1": "pour-m1"
       }
     }

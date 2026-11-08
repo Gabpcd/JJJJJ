@@ -1,0 +1,282 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "consentement_gps": null,
+  "missions": [
+    {
+      "id": "demo-presence-a",
+      "intitule": "Démonstration · Pointage du jour",
+      "service": "Médecine polyvalente",
+      "debut_le": "2026-11-02T00:05:00.000Z",
+      "fin_le": "2026-11-02T08:05:00.000Z",
+      "duree_heures": 8,
+      "statut": "ASSIGNEE",
+      "etablissement_id": "demo-etab-1"
+    },
+    {
+      "id": "demo-presence-b",
+      "intitule": "Démonstration · Mission en cours",
+      "service": "Soins de suite",
+      "debut_le": "2026-11-01T22:00:00.000Z",
+      "fin_le": "2026-11-02T06:00:00.000Z",
+      "duree_heures": 8,
+      "statut": "EN_COURS",
+      "etablissement_id": "demo-etab-2"
+    },
+    {
+      "id": "demo-presence-c",
+      "intitule": "Démonstration · Contrat à signer",
+      "service": "Consultations",
+      "debut_le": "2026-11-02T06:00:00.000Z",
+      "fin_le": "2026-11-02T14:00:00.000Z",
+      "duree_heures": 8,
+      "statut": "ASSIGNEE",
+      "etablissement_id": "demo-etab-3"
+    },
+    {
+      "id": "demo-presence-d",
+      "intitule": "Démonstration · Mission de demain",
+      "service": "Médecine polyvalente",
+      "debut_le": "2026-11-03T07:00:00.000Z",
+      "fin_le": "2026-11-03T15:00:00.000Z",
+      "duree_heures": 8,
+      "statut": "ASSIGNEE",
+      "etablissement_id": "demo-etab-1"
+    },
+    {
+      "id": "demo-presence-e",
+      "intitule": "Démonstration · Planning à confirmer",
+      "service": "Soins de suite",
+      "debut_le": "2026-11-10T07:00:00.000Z",
+      "fin_le": "2026-11-14T15:00:00.000Z",
+      "duree_heures": 104,
+      "statut": "ASSIGNEE",
+      "etablissement_id": "demo-etab-2"
+    }
+  ],
+  "presences_validees": [
+    {
+      "id": "demo-presence-h1-presence",
+      "mission_id": "demo-presence-h1",
+      "soignant_id": "demo-soignant",
+      "pointage_arrivee_le": "2026-10-31T07:00:00.000Z",
+      "pointage_depart_le": "2026-10-31T15:00:00.000Z",
+      "valide_par_etablissement": true,
+      "valide_le": "2026-11-01T14:00:00.000Z",
+      "methode_pointage_arrivee": "CODE",
+      "methode_pointage_depart": "CODE",
+      "missions": {
+        "id": "demo-presence-h1",
+        "intitule": "Démonstration · Présence validée",
+        "etablissement_id": "demo-etab-1",
+        "debut_le": "2026-10-31T07:00:00.000Z",
+        "fin_le": "2026-10-31T15:00:00.000Z"
+      }
+    }
+  ],
+  "historique": [
+    {
+      "id": "demo-presence-h1-presence",
+      "mission_id": "demo-presence-h1",
+      "soignant_id": "demo-soignant",
+      "pointage_arrivee_le": "2026-10-31T07:00:00.000Z",
+      "pointage_depart_le": "2026-10-31T15:00:00.000Z",
+      "valide_par_etablissement": true,
+      "valide_le": "2026-11-01T14:00:00.000Z",
+      "methode_pointage_arrivee": "CODE",
+      "methode_pointage_depart": "CODE",
+      "missions": {
+        "id": "demo-presence-h1",
+        "intitule": "Démonstration · Présence validée",
+        "etablissement_id": "demo-etab-1",
+        "debut_le": "2026-10-31T07:00:00.000Z",
+        "fin_le": "2026-10-31T15:00:00.000Z",
+        "statut": "TERMINEE"
+      }
+    },
+    {
+      "id": "demo-presence-h2-presence",
+      "mission_id": "demo-presence-h2",
+      "soignant_id": "demo-soignant",
+      "pointage_arrivee_le": "2026-10-30T07:00:00.000Z",
+      "pointage_depart_le": "2026-10-30T15:00:00.000Z",
+      "valide_par_etablissement": false,
+      "valide_le": null,
+      "methode_pointage_arrivee": "CODE",
+      "methode_pointage_depart": "CODE",
+      "missions": {
+        "id": "demo-presence-h2",
+        "intitule": "Démonstration · Présence à valider",
+        "etablissement_id": "demo-etab-2",
+        "debut_le": "2026-10-30T07:00:00.000Z",
+        "fin_le": "2026-10-30T15:00:00.000Z",
+        "statut": "TERMINEE"
+      }
+    }
+  ],
+  "missions_historique": [
+    {
+      "id": "demo-presence-h1",
+      "intitule": "Démonstration · Présence validée",
+      "service": "Médecine polyvalente",
+      "debut_le": "2026-10-31T07:00:00.000Z",
+      "fin_le": "2026-10-31T15:00:00.000Z",
+      "duree_heures": 8,
+      "statut": "TERMINEE",
+      "etablissement_id": "demo-etab-1"
+    },
+    {
+      "id": "demo-presence-h2",
+      "intitule": "Démonstration · Présence à valider",
+      "service": "Soins de suite",
+      "debut_le": "2026-10-30T07:00:00.000Z",
+      "fin_le": "2026-10-30T15:00:00.000Z",
+      "duree_heures": 8,
+      "statut": "TERMINEE",
+      "etablissement_id": "demo-etab-2"
+    },
+    {
+      "id": "demo-presence-h3",
+      "intitule": "Démonstration · Heures pointées sans présence",
+      "service": "Consultations",
+      "debut_le": "2026-10-28T07:00:00.000Z",
+      "fin_le": "2026-10-28T15:00:00.000Z",
+      "duree_heures": 8,
+      "statut": "TERMINEE",
+      "etablissement_id": "demo-etab-3"
+    }
+  ],
+  "creneaux": [
+    {
+      "id": "demo-presence-h3-prevu",
+      "mission_id": "demo-presence-h3",
+      "debut": "2026-10-28T07:00:00.000Z",
+      "fin": "2026-10-28T15:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-presence-h3-effectif-1",
+      "mission_id": "demo-presence-h3",
+      "debut": "2026-10-28T07:00:00.000Z",
+      "fin": "2026-10-28T12:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "EFFECTIF"
+    },
+    {
+      "id": "demo-presence-h3-effectif-2",
+      "mission_id": "demo-presence-h3",
+      "debut": "2026-10-28T12:30:00.000Z",
+      "fin": "2026-10-28T15:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "EFFECTIF"
+    },
+    {
+      "id": "demo-presence-h2-prevu",
+      "mission_id": "demo-presence-h2",
+      "debut": "2026-10-30T07:00:00.000Z",
+      "fin": "2026-10-30T15:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-presence-h2-effectif-1",
+      "mission_id": "demo-presence-h2",
+      "debut": "2026-10-30T07:00:00.000Z",
+      "fin": "2026-10-30T15:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "EFFECTIF"
+    },
+    {
+      "id": "demo-presence-h1-prevu",
+      "mission_id": "demo-presence-h1",
+      "debut": "2026-10-31T07:00:00.000Z",
+      "fin": "2026-10-31T15:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-presence-h1-effectif-1",
+      "mission_id": "demo-presence-h1",
+      "debut": "2026-10-31T07:00:00.000Z",
+      "fin": "2026-10-31T15:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "EFFECTIF"
+    },
+    {
+      "id": "demo-presence-b-prevu",
+      "mission_id": "demo-presence-b",
+      "debut": "2026-11-01T22:00:00.000Z",
+      "fin": "2026-11-02T06:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-presence-b-effectif-1",
+      "mission_id": "demo-presence-b",
+      "debut": "2026-11-01T22:00:00.000Z",
+      "fin": null,
+      "est_pause": false,
+      "type_creneau": "EFFECTIF"
+    },
+    {
+      "id": "demo-presence-a-prevu",
+      "mission_id": "demo-presence-a",
+      "debut": "2026-11-02T00:05:00.000Z",
+      "fin": "2026-11-02T08:05:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-presence-c-prevu",
+      "mission_id": "demo-presence-c",
+      "debut": "2026-11-02T06:00:00.000Z",
+      "fin": "2026-11-02T14:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-presence-d-prevu",
+      "mission_id": "demo-presence-d",
+      "debut": "2026-11-03T07:00:00.000Z",
+      "fin": "2026-11-03T15:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    }
+  ],
+  "contrats": [
+    {
+      "id": "demo-contrat-pointage-a",
+      "mission_id": "demo-presence-a",
+      "statut": "SIGNE_COMPLET",
+      "cree_le": "2026-10-30T00:00:00.000Z"
+    },
+    {
+      "id": "demo-contrat-pointage-b",
+      "mission_id": "demo-presence-b",
+      "statut": "SIGNE_COMPLET",
+      "cree_le": "2026-10-30T00:00:00.000Z"
+    },
+    {
+      "id": "demo-contrat-pointage-c",
+      "mission_id": "demo-presence-c",
+      "statut": "SIGNE_SOIGNANT",
+      "cree_le": "2026-10-30T00:00:00.000Z"
+    },
+    {
+      "id": "demo-contrat-pointage-d",
+      "mission_id": "demo-presence-d",
+      "statut": "SIGNE_COMPLET",
+      "cree_le": "2026-10-30T00:00:00.000Z"
+    },
+    {
+      "id": "demo-contrat-pointage-e",
+      "mission_id": "demo-presence-e",
+      "statut": "SIGNE_COMPLET",
+      "cree_le": "2026-10-30T00:00:00.000Z"
+    }
+  ],
+  "codes_affiches": {
+    "demo-presence-a": "123456",
+    "demo-presence-b": "654321"
+  }
+}

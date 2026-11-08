@@ -211,7 +211,7 @@ final class DemoWorldTests: XCTestCase {
     /// T8 contrats) câble son port dans `câblerLot2(_:)` des deux mondes (`DemoWorld`, `SupabaseGateways`)
     /// et le retire d'ici dans la même PR ; `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux
     /// mondes. Liste vide à la clôture du lot 2 (T12).
-    static let portsEnAttenteLot2 = ["pointage", "contestation", "notation", "documents", "contrats"]
+    static let portsEnAttenteLot2 = ["contestation", "notation", "documents", "contrats"] // T3 : pointage câblé
 
     func testAucunPortNonCable() {
         let gateways = DemoWorld.gateways()
@@ -224,6 +224,7 @@ final class DemoWorldTests: XCTestCase {
         XCTAssertTrue(gateways.flags is DemoFlagsGateway)
         XCTAssertTrue(gateways.dashboard is DemoDashboardGateway, "T3 câble le tableau de bord")
         XCTAssertTrue(gateways.compte is DemoAccountGateway, "T8 câble la suppression de compte")
+        XCTAssertTrue(gateways.pointage is DemoPointageGateway, "lot 2 T3 câble le pointage")
         XCTAssertEqual(DemoWorld.gateways(drapeaux: [:]).unwiredPorts, Self.portsEnAttenteLot1 + Self.portsEnAttenteLot2)
         XCTAssertEqual(gateways.clock.now(), DemoWorld.fixedNow)
     }
@@ -240,7 +241,7 @@ final class DemoWorldTests: XCTestCase {
         gateways.contrats = temoin
         XCTAssertEqual(gateways.unwiredPorts, Lot1PortsTests.portsLot1, "témoin posé dans les cinq champs du lot 2")
         DemoWorld.câblerLot2(&gateways)
-        XCTAssertTrue(gateways.pointage is UnwiredPointagePort, "T3 n'est pas livrée : stub nommé explicitement")
+        XCTAssertTrue(gateways.pointage is DemoPointageGateway, "T3 câble le pointage démo")
         XCTAssertTrue(gateways.contestation is UnwiredContestationPort)
         XCTAssertTrue(gateways.notation is UnwiredNotationPort)
         XCTAssertTrue(gateways.documents is UnwiredDocumentsPort)
