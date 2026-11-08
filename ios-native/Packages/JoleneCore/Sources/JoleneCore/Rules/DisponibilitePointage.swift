@@ -22,6 +22,17 @@ public struct ContratPointage: Codable, Equatable, Sendable, ContratPointageRepr
         case creeLe = "cree_le"
         case missionId = "mission_id"
     }
+
+    /// `contrats_mission.statut` est NULLable (`supabase/schema/public.sql` l.68786, `types.ts` `string | null`) : un
+    /// statut nul se lit `""`, comme le web le traite (non terminal, priorité 0) ; il bloque donc le pointage par le
+    /// motif CONTRAT (consigne T3 de `docs/mobile-swift/DECISIONS_LOT2.md`, vecteur `grille/contrats/choix`).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        statut = try c.decodeIfPresent(String.self, forKey: .statut) ?? ""
+        creeLe = try c.decodeIfPresent(String.self, forKey: .creeLe)
+        missionId = try c.decodeIfPresent(String.self, forKey: .missionId)
+    }
 }
 
 public protocol AvecStatutMission {
@@ -105,7 +116,7 @@ public struct EtatClotureAdminMission: Equatable, Sendable {
 
 /// Disponibilité du pointage côté client (port de `src/lib/disponibilite-pointage.ts`).
 /// Ces règles n'affichent que ce que le serveur accepterait ; la décision finale
-/// reste celle de `fn_pointer_arrivee` / `fn_pointer_depart`.
+/// reste celle de `fn_scanner_code_pointage` (système rotatif, seul porté : décision 1 du lot 2).
 public enum DisponibilitePointage {
     public static let fenetreOuvertureMinutes = 15
     static let fenetreOuvertureMs: Double = Double(fenetreOuvertureMinutes) * 60_000

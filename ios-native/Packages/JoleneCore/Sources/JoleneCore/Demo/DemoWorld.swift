@@ -59,7 +59,7 @@ public enum DemoWorld {
     /// `DemoWorldTests.portsEnAttenteLot2`. L'appareil démo (GPS, réseau, terminal) n'est pas un port
     /// backend : `Appareil.demo(gps:reseau:)`, injecté par `AppContainer` (T4b).
     static func câblerLot2(_ gateways: inout Gateways) {
-        gateways.pointage = UnwiredPointagePort()                  // T3
+        gateways.pointage = DemoPointageGateway(clock: FixedClock(fixedNow)) // T3
         gateways.contestation = UnwiredContestationPort()          // T5b
         gateways.notation = UnwiredNotationPort()                  // T5a
         gateways.documents = UnwiredDocumentsPort()                // T6

@@ -220,17 +220,7 @@ public struct MetadonneesScan: Encodable, Equatable, Sendable {
     }
 }
 
-/// Instantané des présences du soignant (T3 : décodage tolérant des quatre requêtes de
-/// `PresencesSoignant.tsx`, sans l'embed `etablissements`, regroupement par mission, listes dérivées).
-/// T1 pose le contenant ; T3 le complète ou le déplace dans `Pointage/InstantanePresences.swift`.
-public struct InstantanePresences: Equatable, Sendable {
-    public var missions: [MissionRecord]
-    public var creneaux: [MissionSlot]
-
-    public init(missions: [MissionRecord] = [], creneaux: [MissionSlot] = []) {
-        self.missions = missions; self.creneaux = creneaux
-    }
-}
+// `InstantanePresences` (posé ici par T1) est complété et déplacé par T3 dans `Pointage/InstantanePresences.swift`.
 
 /// Issue d'un scan ou de sa réconciliation (blueprint §2.3, §2.5). Jamais de renvoi automatique.
 public enum IssueScan: Equatable, Sendable {

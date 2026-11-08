@@ -27,6 +27,16 @@ public protocol PointagePort: Sendable {
     func reconcilier(recu: RecuScan, context: MissionReadContext) async throws -> IssueScan
     func detail(missionId: String, context: MissionReadContext) async throws -> DetailPresences
     func relancerValidation(missionId: String, context: MissionReadContext) async throws -> IssueRelance
+    /// Lignes `scans_pointage` de la mission (projection `PreuveScan.colonnes`) : base `preuvesAvant` du reçu, relue
+    /// AVANT l'envoi (§2.5). Ajout de T3 (amendement du §2.3, `DECISIONS_LOT2.md`) ; défaut « non câblé » ci-dessous.
+    func preuvesScan(missionId: String, context: MissionReadContext) async throws -> [PreuveScan]
+}
+
+public extension PointagePort {
+    /// Défaut des conformances antérieures à T3 (stub, doubles de test) : refus « non câblé », jamais une base vide.
+    func preuvesScan(missionId: String, context: MissionReadContext) async throws -> [PreuveScan] {
+        throw UnwiredPorts.erreur(port: "pointage", tranche: "T3", lot: 2)
+    }
 }
 
 /// Litige depuis une présence (`litiges`, `fn_fenetre_contestation_ouverte`, `fn_ouvrir_litige_rate_limited`
