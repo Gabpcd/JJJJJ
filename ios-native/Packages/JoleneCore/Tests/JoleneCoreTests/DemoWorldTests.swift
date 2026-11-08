@@ -211,9 +211,9 @@ final class DemoWorldTests: XCTestCase {
     /// (`DemoWorld`, `SupabaseGateways`) et le retire d'ici dans la même PR ;
     /// `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes. Liste vide à la
     /// clôture du lot 3.
-    static let portsEnAttenteLot3 = ["push", "notifications", "preferences", "inscription", "profil", "avatar",
+    static let portsEnAttenteLot3 = ["notifications", "preferences", "inscription", "profil", "avatar",
                                      "geocodage", "motDePasse", "exportRGPD", "revenus", "paiements", "iban",
-                                     "stripeConnect"]
+                                     "stripeConnect"] // T4 : `push` câblé (DemoPushGateway)
 
     func testAucunPortNonCable() {
         let gateways = DemoWorld.gateways()
@@ -234,8 +234,8 @@ final class DemoWorldTests: XCTestCase {
         var gateways = Gateways(auth: DemoAuthGateway(), role: DemoRoleGateway(), missions: DemoMissionsGateway())
         gateways.push = FakePushRegistration()
         DemoWorld.câblerLot3(&gateways)
-        XCTAssertTrue(gateways.push is UnwiredPushRegistrationPort, "T4 n'est pas livrée : stub nommé explicitement")
-        XCTAssertTrue(gateways.stripeConnect is UnwiredStripeConnectPort)
+        XCTAssertTrue(gateways.push is DemoPushGateway, "T4 câble le push : le double est remplacé par la gateway démo")
+        XCTAssertTrue(gateways.stripeConnect is UnwiredStripeConnectPort, "T14a n'est pas livrée : stub nommé explicitement")
         XCTAssertEqual(gateways.unwiredPorts, Lot1PortsTests.portsLot1 + Self.portsEnAttenteLot3,
                        "câblerLot3 n'assigne que le bloc du lot 3")
         let monde = DemoWorld.gateways()

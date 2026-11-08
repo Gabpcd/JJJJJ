@@ -45,6 +45,12 @@ const LOT3_AJOUTS = [
 // Déjà suivies en lot 3 avant cette tranche (lot 0 pour le token push, T0 du lot 1 pour le profil).
 const LOT3_DEJA = ['fn_mon_profil_soignant_complet', 'fn_upsert_token_push'];
 const LOT3 = [...LOT3_DEJA, ...LOT3_AJOUTS];
+// Câblées par une tranche livrée (statut `consommee`, ligne de synthèse « consommée lot 3 (Tn) ») :
+// RPC → [tranche, gateway Swift qui l'appelle]. Chaque tranche qui câble une gateway l'ajoute ici.
+const LOT3_CONSOMMEES = new Map([
+  ['fn_upsert_token_push', ['T4', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Push/SupabasePushGateway.swift']],
+  ['fn_desactiver_mon_token_push', ['T4', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Push/SupabasePushGateway.swift']],
+]);
 // Hors manifeste (capture du 2026-07-29) : classement manuel documentaire (correction 13).
 const HORS_MANIFESTE = ['fn_demarrer_inscription', 'fn_enregistrer_parcours_inscription'];
 // Absentes de types.ts : contrat tenu par public.sql seul.
@@ -128,6 +134,24 @@ test('RPC_SUIVIES : les RPC du lot 3 sont suivies en lot 3, dans l ordre du blue
   // relatif du lot 3 est tenu par le deepEqual ci-dessus.
 });
 
+test('RPC_SUIVIES : les RPC câblées par une tranche du lot 3 sont consommées, appelées par leur gateway et fichées', () => {
+  for (const name of LOT3) {
+    const attendu = LOT3_CONSOMMEES.has(name) ? 'consommee' : 'a_venir';
+    assert.equal(byName.get(name).statut, attendu, `${name} : statut attendu ${attendu}`);
+  }
+  const contrats = JSON.parse(readFileSync(CONTRACTS_PATH, 'utf8'));
+  const parNom = new Map(contrats.rpcs.map(r => [r.name, r]));
+  for (const [name, [tranche, gateway]] of LOT3_CONSOMMEES) {
+    assert.equal(parNom.get(name)?.statut, 'consommee', `${name} : rpc-contracts.json non régénéré (--update)`);
+    const source = read(gateway);
+    assert.ok(source.includes(`"${name}"`), `${name} : littéral absent de ${gateway}`);
+    const fiche = section(CONTRATS, name);
+    const fichier = gateway.split('/Sources/')[1];
+    assert.ok(fiche.includes(`- **Statut natif** : consommée (lot 3, ${tranche}) par \`${fichier}\``),
+      `${name} : fiche « Statut natif » non mise à jour (consommée, ${tranche}, ${fichier})`);
+  }
+});
+
 test('rpc-contracts.json : RPC du lot 3 — GRANT authenticated, manifeste et types.ts tels qu observés', () => {
   const contrats = JSON.parse(readFileSync(CONTRACTS_PATH, 'utf8'));
   const parNom = new Map(contrats.rpcs.map(r => [r.name, r]));
@@ -179,7 +203,12 @@ test('CONTRATS : en-tête et synthèse — lot 3 annoncé, une ligne par RPC, so
   for (const name of LOT3_AJOUTS) {
     const ligne = synthese.split('\n').find(l => l.startsWith(`| \`${name}\` |`));
     assert.ok(ligne, `synthèse : ligne absente pour ${name}`);
-    assert.ok(/\| à venir \| 3 /.test(ligne), `synthèse : ${name} doit être « à venir », lot 3`);
+    if (LOT3_CONSOMMEES.has(name)) {
+      const [tranche] = LOT3_CONSOMMEES.get(name);
+      assert.ok(ligne.includes(`| consommée lot 3 (${tranche}) | 3 (${tranche}) |`), `synthèse : ${name} doit être « consommée lot 3 (${tranche}) »`);
+    } else {
+      assert.ok(/\| à venir \| 3 /.test(ligne), `synthèse : ${name} doit être « à venir », lot 3`);
+    }
   }
   for (const name of HORS_MANIFESTE) {
     const ligne = synthese.split('\n').find(l => l.startsWith(`| \`${name}\` |`));
