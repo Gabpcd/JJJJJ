@@ -220,7 +220,8 @@ AS $body$
   SELECT upper(left(COALESCE(p_texte, ''), 1)) || substr(COALESCE(p_texte, ''), 2);
 $body$;
 
--- Missions de la cohorte réelle uniquement (même filtre que l'aperçu public).
+-- Missions des établissements réels (hors cohorte test). Ce n'est PAS le filtre public :
+-- toute surface publique (posts) ajoute public.fn_mission_publique(m.id) IS NOT NULL.
 CREATE OR REPLACE FUNCTION private.fn_growth_missions_reelles()
 RETURNS SETOF public.missions
 LANGUAGE sql

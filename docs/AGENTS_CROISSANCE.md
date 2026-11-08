@@ -180,6 +180,13 @@ Garde-fous du code :
 - Les brouillons d'un compte supprimé sont effacés.
 - Un brouillon non envoyé, même validé, expire.
 - Après le dernier email (étape 3), la séquence CRM s'arrête.
+- Écart connu (A4, non bloquant) : quand un compte est supprimé, ses brouillons sont effacés au
+  passage suivant des agents (quotidien une fois activés, ou « Préparer maintenant »). D'ici là, ils
+  restent visibles des seuls admins, et aucun envoi n'est possible : la validation revérifie le compte
+  et efface le brouillon. La correction complète consiste à purger les brouillons dans le parcours de
+  suppression de compte (`fn_supprimer_mon_compte*`), ce qui sort du périmètre de cette PR.
+- Une relance validée puis expirée bloque l'étape suivante de ce contact. C'est un choix prudent :
+  l'email a pu partir sans constat. Le contact reste suivi dans le CRM.
 
 ## 6. Ce qui attend le feu vert de Gabrielle
 
