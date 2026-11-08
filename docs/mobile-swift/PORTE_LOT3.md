@@ -65,7 +65,7 @@ les autres.
 | 6.3 | Textes HARD STOP validés ou restés verbatim web avec leur source. | `DECISIONS_LOT3.md` « HARD STOP n°4 » ; tests de textes des tranches. | non mesurée |
 | 6.4 | `docs/mobile-swift/PARITE_SOIGNANT.md` : lignes du lot 3 statuées avec preuve. | Matrice de parité. | non mesurée |
 | 6.5 | TestFlight externe ouvert (décision explicite de Gabrielle, build parlant à la production). | App Store Connect. | non mesurée |
-| 6.6 | Universal Links soignant complets (T3 = T3a + T3b, revue L3-T3 mineur 7) : coordinateur unique des liens et des taps, lien reçu avant `.ready` rejoué une fois, écran natif livré sinon renvoi web canonique par `SFSafariViewController`, `?code=` du reset refusé (option B). | `DeepLinkIntentTests`, `DestinationLienTests`, `LinksRouterTests` (job « Cœur ») ; `DemoLiensLot3Tests` trois formats ; lien réel depuis Mail sur iPhone (`RECETTE_DEVICE_LOT3.md`). | non mesurée |
+| 6.6 | Universal Links soignant complets (T3 = T3a + T3b, revue L3-T3 mineur 7) : coordinateur unique des liens et des taps, lien reçu avant `.ready` rejoué une fois, écran natif livré sinon renvoi web canonique par `SFSafariViewController`, `?code=` du reset refusé (option B) ; magasin du navigateur intégré effacé à chaque fin d'identité et avant chaque connexion (revue B8 de T3b, M1). | `DeepLinkIntentTests`, `DestinationLienTests`, `LinksRouterTests`, `PresentationsRacineTests`, `SessionStoreFinIdentiteWebTests` (job « Cœur ») ; `DemoLiensLot3Tests` trois formats ; lien réel depuis Mail et effacement du magasin sur iPhone (`RECETTE_DEVICE_LOT3.md` §6 bis). | non mesurée |
 
 ## Verdict global
 

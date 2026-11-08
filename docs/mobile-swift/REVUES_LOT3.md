@@ -544,6 +544,33 @@ revue fraîche B8 : T3 n'est close qu'avec elle et la CI trois formats.
   0 échec, `skipped = 0`). Pas de B9 (aucune RPC, aucun texte juridique) ; le refus du reset `?code=` applique la
   décision 7 du lot 1.
 
+### Consignes de l'auteur pour l'intégration (corrections de la revue fraîche B8, 08/11/2026)
+
+Revue fraîche : aucun bloquant, un majeur (M1), huit mineurs (m1 à m8). Tous corrigés sur `lot3/l3-t3b-v2` ; choix et
+écarts dans `DECISIONS_LOT3.md`, section T3b, « corrections de la revue fraîche B8 ». Tests d'abord (niveau 1 puis
+XCUITest), puis code.
+
+- **M1** : port `FinIdentiteWebPort` (`JoleneCore/Session/FinIdentiteWeb.swift`) injecté dans `SessionStore`
+  (`init(controller:push:finIdentiteWeb:)`, défaut nil) et implémenté par `DeepLinkCoordinator` (feuille fermée,
+  `SFSafariViewController.DataStore.default.clearWebsiteData` hors démo, renvoi différé pendant l'effacement).
+  `SessionStore.suivrePush` devient `suivreIdentite` (même déclencheur `didSet`, push inchangé) : **au merge de
+  L1-T9**, garder ce nom dans la consigne « garder le `didSet` de T4 » (section L3-T4 ci-dessous). Nouveaux tests :
+  `SessionStoreFinIdentiteWebTests` (13).
+- **m1, m7** : `JoleneCore/Links/PresentationsRacine.swift` (+ `PresentationsRacineTests`, 10) ; le coordinateur ne
+  pose l'anti-boucle et `deeplink-route` qu'à la présentation effective ; alerte numérotée, hôte recréé par `.id`.
+  DEBUG démo : `-JOLENE_OPEN_URL_SUIVANT` et bouton `renvoi-web-lien-suivant` du double (aucun texte : libellé = URL).
+- **m2** : `CibleNotification.init` (`.aucune` pour `?code=`). **m3** : `LinkRouter` (`?tab=confidentialite` →
+  `.safari`), garde liée au port `exportRGPD` (T11 l'inverse). **m4** : `DemoDashboardGateway(missionsOubliees:)`,
+  surcharge DEBUG `JOLENE_FORCE_OUBLI_POINTAGE` (`AppContainer`). **m5** : `cheminExplorer` (`MainTabView`). **m6** :
+  docstrings. **m8** : `requireAbsence` (`UITestSupport.swift`), nouveaux XCUITest.
+- **XCUITest ajoutés** (compilés, jamais lancés) : `DemoLiensLot3Tests.testLienDetailDeMissionOuvreLeDetailNatif`,
+  `.testLienDeReinitialisationPkceRefuseParUneAlerte`, `.testRenvoiAffichePuisLienDeReinitialisationAlerteApresLaFermeture`
+  (8 tests au total dans la classe) ; `DemoAccueilTests.testOubliDePointageOuvreLesPresencesSurLeWeb`. Condition de
+  merge inchangée : CI trois formats verte, `xcresult` relu (`DemoLiensLot3Tests` 8 tests, `DemoAccueilTests` 3 tests,
+  0 échec, `skipped = 0`).
+- **Projet** : aucun fichier ajouté ni retiré dans l'app ou les XCUITest (nouveaux fichiers dans le paquet JoleneCore
+  seulement) : `project.pbxproj` inchangé, `xcodegen generate` sans objet.
+
 ## L3-T4
 
 ### Consignes de l'auteur pour l'intégration (corrections de la revue B8)

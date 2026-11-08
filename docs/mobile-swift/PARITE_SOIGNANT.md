@@ -30,8 +30,10 @@ Lot 3, T9 (2026-11-08) : édition du profil livrée sur `lot3/l3-t9-v2` (lignes 
 Lot 3, T3b (2026-11-08, reliquat L1-T10 : `DECISIONS_LOT3.md`, section T3b) : coordinateur des liens branché
 (`onOpenURL`, `onContinueUserActivity`, `-JOLENE_OPEN_URL` en DEBUG, taps push par le même aiguillage) ; chaque route
 ouvre son écran natif livré, sinon sa page web canonique par le présentateur `.safari` (`SFSafariViewController`,
-jamais `openURL`) ; `/soignant/profil?tab=confidentialite` mène au hub ; reset et confirmation d'inscription en renvoi
-web (lien `?code=` du reset refusé, option B). Aucun statut ne change sans run vert de `DemoLiensLot3Tests`.
+jamais `openURL`) ; `/soignant/profil?tab=confidentialite` reste un renvoi web jusqu'à l'export RGPD du hub (L3-T11,
+revue B8 de T3b m3) ; reset et confirmation d'inscription en renvoi web (lien `?code=` du reset refusé, option B, y
+compris depuis le centre de notifications) ; le magasin du navigateur intégré est effacé à chaque fin d'identité et
+avant chaque connexion (revue B8 de T3b, M1). Aucun statut ne change sans run vert de `DemoLiensLot3Tests`.
 
 Sous-lignes (préfixées `›`) : une route web qui regroupe plusieurs onglets ou vues est détaillée pour que
 chaque preuve soit attribuable ; la ligne de la route passe « natif » quand toutes ses sous-lignes le sont.

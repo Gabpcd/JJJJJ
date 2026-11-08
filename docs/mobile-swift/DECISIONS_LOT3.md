@@ -478,7 +478,7 @@ ci-dessus, « à l'intégration »). Ajoutées par l'intégrateur, sans changer 
 - **Point de fusion T3b maintenu (revue L3-T9 m2)** : `/soignant/profil?tab=confidentialite` (RGPD et suppression
   sur le web) ouvre aussi l'édition native ; aucune notification du dump ne pointe vers ce `?tab=` (vecteurs push :
   `/soignant/profil` et `?tab=a` seulement). À trancher par T3b / T11 (renvoi vers le hub, qui porte la suppression).
-  **Tranché par T3b** (section suivante) : le hub.
+  **Tranché par T3b** (section suivante) : renvoi web jusqu'à T11, puis le hub (revue B8 de T3b, m3).
 
 ## T3b — coordinateur des liens et points d'entrée (reliquat L1-T10, fin de T3 ; branche `lot3/l3-t3b-v2`, 08/11/2026)
 
@@ -508,6 +508,8 @@ absente de toutes les branches : point d'entrée unique des liens universels et 
   1. **Renvoi web présenté aussitôt, avec ou sans session.** `LOT1_PLAN.md` §2.5 mémorise tout lien jusqu'à
      `.ready` ; T3b ne mémorise que les destinations de l'espace. Un renvoi n'a pas besoin de l'espace, et un lien
      d'inscription, d'établissement ou reçu sur un compte bloqué ne serait sinon jamais présenté (aucun `.ready`).
+     Conséquence traitée par la revue B8 (M1, ci-dessous) : une session web ouverte dans le renvoi sans identité
+     native ne survit pas à la connexion suivante (magasin effacé avant chaque `signIn`).
   2. **Reset du mot de passe.** L'écran natif de L1-T10 (`SupabaseRecoveryGateway`, `ResetPasswordScreen`,
      quarantaine de la session de recovery, « Mot de passe oublié ? ») n'est sur aucune branche et n'est pas livré
      ici (point d'extension) : `ecranNatifLivre(.resetPassword)` passe de `true` (« vrai à l'arrivée de L1-T10 ») à
@@ -525,28 +527,36 @@ absente de toutes les branches : point d'entrée unique des liens universels et 
      décrivaient des écrans que T3b n'apporte pas : avec le coordinateur branché, ces liens n'auraient rien ouvert.
   5. **Lien et tap en attente** : le plus récent l'emporte à l'ouverture de l'espace, l'autre sert de repli s'il ne
      mène nulle part ; les deux sont consommés. La règle d'epoch de `BoiteTapsPush` (L3-T5) est inchangée.
-  6. **Anti-boucle** : tant qu'un renvoi est affiché, le même lien revenu par lien universel est ignoré (« un `.safari`
-     issu de l'app n'est jamais rejoué comme lien universel », `LOT1_PLAN.md` §3 T10).
+  6. **Anti-boucle** : tant qu'un renvoi est **effectivement affiché** (apparition du contenu de la feuille, revue B8
+     m1), le même lien revenu par lien universel est ignoré (« un `.safari` issu de l'app n'est jamais rejoué comme
+     lien universel », `LOT1_PLAN.md` §3 T10).
   7. **Repli d'une cible non présentable** sur le renvoi web canonique (revue L3-T5, m3, levé dans l'aiguillage).
-  8. **`push-tap-cible` remplacé par `deeplink-route`** (consigne de T5 ; revue L3-T5 m7 levé : le libellé est posé
-     quand le coordinateur présente la route). Démo seulement (m8), à la racine de la fenêtre.
-  9. Une navigation ou un refus ferment d'abord le renvoi web affiché (le dernier lien reçu reste visible).
-  10. `/soignant/profil?tab=confidentialite` (point de fusion de la revue L3-T9, m2) **mène au hub** (`.monCompte`) :
-      sur le web, cet onglet porte l'export RGPD et la suppression de compte (`SectionConfidentialite`), que le hub
-      natif porte (L1-T8, L3-T11) ; « Supprimer mon compte » du hub web y renvoie (`MonCompteSoignant.tsx` l.135).
-      Aucune notification du dump ne vise ce `?tab=` (décomptes push inchangés).
+  8. **`push-tap-cible` remplacé par `deeplink-route`** (consigne de T5 ; revue L3-T5 m7 levé). Le libellé est posé à
+     la présentation effective (revue B8 de T3b, m7) : quand l'espace exécute la navigation (`demandeTraitee`) et à
+     l'apparition de la feuille d'un renvoi. Démo seulement (m8), à la racine de la fenêtre.
+  9. Une navigation ou un refus ferment d'abord le renvoi web affiché (le dernier lien reçu reste visible) ; un refus
+     reçu pendant un renvoi affiché est présenté après la fin de sa présentation (`onDismiss`, revue B8 m1).
+  10. `/soignant/profil?tab=confidentialite` (point de fusion de la revue L3-T9, m2) **reste un renvoi web**
+      (`.safari(canonique)`, ligne de `LinkRouter`) jusqu'à ce que L3-T11 livre l'export RGPD au hub (revue B8 de
+      T3b, m3) : sur le web, cet onglet porte l'export RGPD et la suppression de compte (`SectionConfidentialite`) ; le
+      hub natif n'a que la suppression (L1-T8, `SuppressionCompteSection`) ; « Supprimer mon compte » du hub web y
+      renvoie (`MonCompteSoignant.tsx` l.135). Aucune notification du dump ne vise ce `?tab=` (décomptes push
+      inchangés). Garde : `LinksRouterTests.testOngletConfidentialiteSuitLExportRGPDDuHub` exige le hub dès que le
+      port `exportRGPD` est câblé.
   11. `.horsEspace` (route native livrée sans cible dans l'espace) : liste nommée et fermée réduite à `/connexion`
       (rien à ouvrir), gardée par `DeepLinkIntentTests.testToutLienHorsEspaceAppartientALaListeNommee`.
 - **Limites connues.** Une seule feuille par niveau en SwiftUI : un lien reçu pendant qu'une autre feuille est
-  ouverte (filtres d'Explorer) n'affiche pas son renvoi web. Les drapeaux `ios_natif_*_actif` ne filtrent pas encore
-  les liens (`EcransNatifs` de `origin/lot1/t9` absent de la base, point de fusion inchangé). Remise réelle d'un lien
-  universel (AASA, CDN Apple, Mail) : niveau 5 seulement (`RECETTE_DEVICE_LOT3.md`).
+  ouverte (filtres d'Explorer) n'affiche ni son renvoi web ni l'alerte d'un refus ; depuis la revue B8 (m1), aucun
+  état n'en reste collé (le même lien est redemandé sous un nouvel item, un refus suivant est un nouvel item,
+  `PresentationsRacine`). Les drapeaux `ios_natif_*_actif` ne filtrent pas encore les liens (`EcransNatifs` de
+  `origin/lot1/t9` absent de la base, point de fusion inchangé). Remise réelle d'un lien universel (AASA, CDN Apple,
+  Mail) et effacement réel du magasin `SFSafariViewController` : niveau 5 seulement (`RECETTE_DEVICE_LOT3.md`).
 - **Migrations d'identifiants XCUITest (règle 8)** : `DemoPushTests` (`push-tap-cible` → `deeplink-route` ; contrat
   et litige : présentation réelle du renvoi, URL vérifiée sur le double démo) ; `DemoNotificationsTests` (lignes lues
   003, 004, 006 vers le web : boutons « Voir », 006 ouvre sa page ; 007 sans lien inchangée) ; `DemoProfilTests`
   (`profil-exercice-web-action` présent, ouvre `/soignant/profil?tab=principal`) ; `DemoAccueilTests` (absence de
-  `accueil-oubli-pointage-action` gardée : la démo n'a aucun oubli de pointage ; **point ouvert** : une variante démo
-  avec un oubli prouverait le bouton, verrou T12 n°2 du lot 1 — le présentateur est injecté).
+  `accueil-oubli-pointage-action` gardée pour la démo par défaut, sans oubli de pointage ; le bouton et son renvoi sont
+  prouvés par la variante `JOLENE_FORCE_OUBLI_POINTAGE`, revue B8 m4 : **verrou T12 n°2 du lot 1 levé**).
 - **Consignes aux tranches suivantes** (remplacent « une ligne de `DeepLinkCoordinator.swift` ») : la tranche qui
   livre un écran passe sa ligne de `ecranNatifLivre`, ajoute sa cible (`CibleNotification`, `estPresentable`,
   `MainTabView.presenter`) et un cas de tap ; le coordinateur ne change pas. **T7** : inscription et confirmation sont
@@ -554,10 +564,85 @@ absente de toutes les branches : point d'entrée unique des liens universels et 
   `DeepLinkIntentTests.testToutLienHorsEspaceAppartientALaListeNommee` tant que leur présentation hors espace
   (`AiguillageLiens`, `DeepLinkCoordinator`, `RootView`) n'est pas ajoutée. **Reset natif** (reste de L1-T10, sans
   tranche au lot 3) : même verrou ; le refus `?code=` est déjà en place. **T11** : les entrées du hub passent par
-  `JoleneRoute` puis `DestinationLien.destination` ; `?tab=confidentialite` arrive sur le hub. **T14a** : le retour
-  `?success=true` arrive par le même coordinateur (relecture `force=true`, jamais une preuve).
+  `JoleneRoute` puis `DestinationLien.destination` ; en câblant l'export RGPD (port `exportRGPD`), T11 passe la ligne
+  `?tab=confidentialite` de `LinkRouter` à `.monCompte` et ajuste les cas de `DeepLinkIntentTests`
+  (`testRoutesSansEcranOuExternesSontDesRenvoisWebCanoniques` → `testRoutesNativesLivreesVontDansLEspace`),
+  `CentreNotificationsTests.testCibleDesDestinations` et `LinksRouterTests` — la garde
+  `testOngletConfidentialiteSuitLExportRGPDDuHub` est rouge sinon. **T14a** : le retour `?success=true` arrive par le
+  même coordinateur (relecture `force=true`, jamais une preuve). **Toute tranche qui ajoute une fin d'identité**
+  (verrou biométrique de L1-T9 compris, s'il ferme l'identité) : elle passe par `SessionStore`, qui appelle
+  `FinIdentiteWebPort.identiteTerminee()` (une fin transitoire ne l'appelle jamais) ; un nouveau
+  `SFSafariViewController` de l'app est présenté par le coordinateur (`presenter`), jamais à part, pour que la fin
+  d'identité le ferme.
 - **HARD STOP n°4** : aucun texte juridique ; textes repris : refus du reset (décision 7 du lot 1), « Fermer »
-  (`FiltresSheet.swift` l.64). Le double démo n'affiche que l'URL (données de démonstration).
+  (`FiltresSheet.swift` l.64). Le double démo n'affiche que des URL (données de démonstration), son bouton DEBUG
+  `renvoi-web-lien-suivant` compris (libellé = l'URL remise).
+
+### T3b — corrections de la revue fraîche B8 (08/11/2026)
+
+- **M1 — aucune session web ne survit à la fin de l'identité native.** Le `SFSafariViewController` de T3b est le
+  premier de l'app ; son magasin (cookies, cache, `localStorage` où le web Supabase garde sa session) appartient à
+  l'app et persiste (`SFSafariViewControllerDataStore.h`, SDK iOS 18.5 : « website data accrued from browsing activity
+  within your app »). Choix :
+  - port injecté `FinIdentiteWebPort` (`JoleneCore/Session/FinIdentiteWeb.swift`), implémenté par `DeepLinkCoordinator`
+    et appelé par `SessionStore` **une fois par fin d'identité** : déconnexion volontaire (après la révocation, double
+    tap et `.signedOut` du SDK émis pendant la déconnexion compris), fin de compte (`signOutLocally`, après la purge),
+    absence de session confirmée par le contrôleur après une identité (espace prêt ou bloqué : `.signedOut` subi,
+    revalidation qui ne trouve plus de session) ;
+  - **jamais** sur une fin transitoire (restauration hors ligne, profil illisible, connexion refusée : le SDK détient
+    encore la session) ;
+  - **pas** au lancement à froid sans session (aucune identité dans ce processus) : l'écart n°1 y présente un renvoi
+    ouvert par le lien de lancement, que la confirmation de l'absence de session (`start()`, ordre non garanti avec
+    `racineVisible`) fermerait sous les yeux de l'utilisateur ;
+  - **en plus, avant chaque connexion par mot de passe** (`signIn`) : c'est le seul point par lequel une autre
+    identité s'ouvre ; il couvre les trois cas que les fins ne voient pas — identité close hors de l'app (session
+    révoquée app fermée, puis lancement sans session), session web ouverte sans identité native (écart n°1), identité
+    remplacée après une fin transitoire (connexion d'un autre compte depuis « Réessayer »). Coût : une connexion native
+    explicite repart d'un magasin web vide (reconnexion web au prochain renvoi), sans effet sur une restauration ;
+  - effet (app) : le renvoi affiché est fermé (`fermerRenvoiWeb()`, la feuille posée sur la racine ne survit plus au
+    changement d'état), puis, hors démo, `SFSafariViewController.DataStore.default.clearWebsiteData` (iOS 16.0, cible
+    16.0) ; un renvoi demandé pendant l'effacement est **différé jusqu'à sa fin** (`PresentationsRacine`), une nouvelle
+    fin d'identité l'abandonne. En démo, aucun effacement (le double n'a ni réseau ni données ; « sans effet en démo »),
+    la feuille du double est fermée comme ailleurs ;
+  - preuves niveau 1 : `SessionStoreFinIdentiteWebTests` (13 tests : un appel par fin, port indépendant du push, zéro
+    sur les fins transitoires et le lancement sans session, appel avant `signIn`) et `PresentationsRacineTests`
+    (report pendant l'effacement). L'effacement réel n'est mesurable que sur appareil (`RECETTE_DEVICE_LOT3.md`).
+  - Renommage : `SessionStore.suivrePush` devient `suivreIdentite` (l'identité est suivie avec ou sans push ; les
+    appels push sont inchangés) ; la consigne de fusion de L1-T9 (`REVUES_LOT3.md`, section L3-T4, « garder le
+    `didSet { suivrePush… }` ») se lit avec ce nom.
+- **m1 — présentation à la racine sans état collé.** `JoleneCore/Links/PresentationsRacine.swift` (niveau 1,
+  `PresentationsRacineTests`) : l'anti-boucle et `deeplink-route` sont posés à l'apparition effective du contenu de la
+  feuille (`onAppear`), levés à sa disparition (`onDisappear`), par numéro d'item ; un refus reçu pendant un renvoi
+  affiché attend la fin de sa présentation (`onDismiss`) ; chaque refus est un nouvel item numéroté, présenté par un
+  hôte recréé (`.id`), si bien qu'un refus jamais affiché ne fait plus taire les suivants. Preuve niveau 2 :
+  `DemoLiensLot3Tests.testRenvoiAffichePuisLienDeReinitialisationAlerteApresLaFermeture` (lien remis pendant le renvoi
+  par le bouton DEBUG `renvoi-web-lien-suivant` du double, argument `-JOLENE_OPEN_URL_SUIVANT`, démo seulement) et
+  `testLienDeReinitialisationPkceRefuseParUneAlerte`.
+- **m2 — le centre ne contourne plus l'option B** : `CibleNotification.init` rend `.aucune` pour
+  `/reset-password?code=…` (lu sur la route, comme `DeepLinkIntent`) ; ni « Voir » ni bouton sur une ligne lue, une
+  ligne non lue est marquée lue sans rien ouvrir (`CentreNotificationsTests.testLienDeReinitialisationPkceJamaisServiParLeCentre`).
+- **m3 — `?tab=confidentialite`** : renvoi web jusqu'à L3-T11 (point 10 ci-dessus), garde automatique liée au port
+  `exportRGPD`.
+- **m4 — verrou T12 n°2 du lot 1 levé** : variante démo `JOLENE_FORCE_OUBLI_POINTAGE=1`
+  (`DemoDashboardGateway(missionsOubliees: 1)`, `DemoDashboardTests.testVarianteOubliDePointageNeChangeQueLeCompteur`)
+  et XCUITest trois formats `DemoAccueilTests.testOubliDePointageOuvreLesPresencesSurLeWeb`
+  (`accueil-oubli-pointage-action` → `renvoi-web-demo` sur `https://jolene.app/soignant/presences`).
+- **m5 — Explorer revient à sa racine** : `NavigationStack(path: cheminExplorer)` dans `MainTabView`, vidée par
+  `presenter(.explorer)` (lien universel ou tap). Mes missions et Revenus n'ont pas encore de pile (placeholders) : leur
+  tranche (L1-T5, L3-T12) leur donne un chemin vidé de la même façon. Prouvé par le code seulement (aucun moyen démo de
+  remettre un lien pendant un détail d'Explorer ; niveau 5 au besoin).
+- **m6 — docstrings alignées** : `PushTapIntent.libelleDebug` (`deeplink-route`, posé par le coordinateur à la
+  racine) ; `CibleNotification` (`.profil` hors `confidentialite`, `.web` pour reset et confirmation, `.aucune` pour la
+  connexion et `?code=`, présentateur injecté depuis L3-T3b).
+- **m7** : libellé à la présentation effective (point 8 ci-dessus).
+- **m8 — couverture** : absence bornée (attente inversée `requireAbsence`, `UITestSupport.swift`) dans
+  `liensAucunePresentationSurLaConnexion` ; XCUITest du lien universel vers un détail de mission
+  (`testLienDetailDeMissionOuvreLeDetailNatif`, `LOT1_PLAN.md` §3 T10) ; niveau 1 « tap plus récent écarté par
+  l'epoch → repli sur le lien mémorisé » (`DeepLinkIntentTests.testTapPlusRecentEcarteParLEpochRepliSurLeLienMemorise`).
+- Aucun texte nouveau, aucun texte juridique ; aucune RPC ; aucun test sauté, désactivé ni affaibli. Tests changés,
+  et pourquoi : `?tab=confidentialite` passe du hub au renvoi web dans `LinksRouterTests`, `DeepLinkIntentTests` et
+  `CentreNotificationsTests` (le hub n'a pas l'export : l'attendu « hub » était faux pour la base) ; l'absence
+  instantanée de `liensAucunePresentationSurLaConnexion` devient une absence bornée (plus stricte).
 
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
