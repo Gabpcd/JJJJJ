@@ -19,6 +19,13 @@ import JoleneSupabase
 /// contexte du pré-prompt (compteur de lancements à froid et marque : `UserDefaults` en staging/production,
 /// mémoire vive en démo) ; DEBUG : `-JOLENE_SIMULER_PUSH` (démo, tap à froid simulé) et `-JOLENE_SESSION_COUNT`
 /// (numéro de session imposé, sans persistance).
+///
+/// Lot 3, T3b (reliquat L1-T10) : coordinateur des liens (`DeepLinkCoordinator`), point d'entrée unique des liens
+/// universels et des taps push ; DEBUG : `-JOLENE_OPEN_URL <url>` (démo et staging), lien universel simulé à froid.
+/// Revue B8 de T3b : le coordinateur est le port `FinIdentiteWebPort` de la session (M1 : renvoi fermé et magasin
+/// `SFSafariViewController` effacé à chaque fin d'identité, aucun effacement en démo) ; DEBUG, démo :
+/// `-JOLENE_OPEN_URL_SUIVANT <url>` (lien remis pendant un renvoi affiché, m1) et `JOLENE_FORCE_OUBLI_POINTAGE=1`
+/// (Accueil avec un oubli de pointage, m4).
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -33,6 +40,8 @@ final class AppContainer: ObservableObject {
     let pushPermission: PushPermissionPort?
     /// Lot 3, T5 : taps de notification en attente de l'espace prêt (`MainTabView`).
     let tapsPush: BoiteTapsPush
+    /// Lot 3, T3b : coordinateur des liens universels et des taps push (`DeepLinkCoordinator`).
+    let liens: DeepLinkCoordinator
     /// Lot 3, T5 : contexte du pré-prompt pour ce lancement (nil si l'environnement est refusé).
     private(set) var prePrompt: ContextePrePromptPush?
     /// Lot 1, T8 : avis de fin de compte partagé entre l'écran de suppression et la racine.
@@ -67,6 +76,11 @@ final class AppContainer: ObservableObject {
         self.environment = environment
         let boite = NotificationCenterDelegate.shared.boite
         tapsPush = boite
+        // Revue B8 de T3b, M1 : le coordinateur est aussi le port `FinIdentiteWebPort` de la session (fermeture du renvoi
+        // affiché, effacement du magasin `SFSafariViewController` hors démo).
+        let liens = DeepLinkCoordinator(taps: boite, estDemo: environment.mode == .demo,
+                                        effaceur: environment.mode == .demo ? nil : EffaceurDonneesSafari())
+        self.liens = liens
 
         // Un mode inconnu (`unknownModeRaw`) est refusé par `validate()` avant tout choix de gateways.
         if let error = Self.refusal(of: environment) {
@@ -80,6 +94,14 @@ final class AppContainer: ObservableObject {
             environmentError = error
             return
         }
+
+        #if DEBUG
+        // Lot 3, T3b : lien universel simulé à froid, reçu avant toute session (mémorisé jusqu'à l'espace prêt, ou
+        // renvoi web présenté aussitôt) ; mêmes refus qu'un lien réel (hôtes de l'AASA, https).
+        if let url = DeepLinkIntent.ouvertureSimulee(arguments: arguments) { liens.recevoirAuLancement(url: url) }
+        // Revue B8 de T3b, m1 : lien remis par le double démo du renvoi web, pendant un renvoi affiché (démo seulement).
+        if let url = DeepLinkIntent.lienSuivantSimule(arguments: arguments) { liens.preparerLienSuivantDemo(url) }
+        #endif
 
         switch environment.mode {
         case .demo:
@@ -95,7 +117,7 @@ final class AppContainer: ObservableObject {
                                               registrar: DemoPushRegistrar(), memoire: MemoirePushTokenStore())
             push = coordinator
             pushPermission = permission
-            session = SessionStore(controller: controller, push: coordinator)
+            session = SessionStore(controller: controller, push: coordinator, finIdentiteWeb: liens)
             environmentError = nil
             prePrompt = Self.contextePrePrompt(mode: .demo, arguments: arguments)
             #if DEBUG
@@ -115,7 +137,7 @@ final class AppContainer: ObservableObject {
                                                   registrar: registrar, memoire: KeychainPushTokenStore())
                 push = coordinator
                 pushPermission = permission
-                let store = SessionStore(controller: controller, push: coordinator)
+                let store = SessionStore(controller: controller, push: coordinator, finIdentiteWeb: liens)
                 // Session effacée côté SDK (révocation, déconnexion globale, refresh refusé) :
                 // l'écran bascule sans action de l'utilisateur.
                 store.observeAuthEvents()
@@ -144,13 +166,17 @@ final class AppContainer: ObservableObject {
     /// (`DemoAccueilTests.testAccueilErreurPuisReprise`) ; lot 3, T6 : `JOLENE_FORCE_PREFERENCES_ECHEC=1`,
     /// de même pour les préférences de notifications (`DemoPreferencesEchecGateway`,
     /// `DemoPreferencesTests.testPreferencesErreurPuisReprise`) ; lot 3, T9 : `JOLENE_DEMO_PROFIL=<variante>`
-    /// (`VarianteProfilDemo`) sert le profil démo dans une variante de recette (`DemoProfilTests`).
+    /// (`VarianteProfilDemo`) sert le profil démo dans une variante de recette (`DemoProfilTests`) ; lot 3, T3b :
+    /// `JOLENE_FORCE_OUBLI_POINTAGE=1` sert le tableau de bord démo avec un oubli de pointage
+    /// (`DemoDashboardGateway(missionsOubliees:)`, `DemoAccueilTests.testOubliDePointageOuvreLesPresencesSurLeWeb`).
     /// Jamais compilé en Release.
     private static func demoGateways(processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
         var gateways = DemoWorld.gateways()
         if processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] == "1" {
             gateways.dashboard = DemoDashboardEchecGateway()
+        } else if processEnvironment[DemoDashboardGateway.variableOubliPointage] == "1" {
+            gateways.dashboard = DemoDashboardGateway(missionsOubliees: 1) // lot 3, T3b (revue B8, m4)
         }
         if processEnvironment["JOLENE_FORCE_PREFERENCES_ECHEC"] == "1" {
             gateways.preferences = DemoPreferencesEchecGateway() // lot 3, T6

@@ -71,10 +71,13 @@ public struct PushTapIntent: Equatable, Sendable, CustomStringConvertible, Custo
         return PushTapIntent(donnees: donnees)
     }
 
-    /// Libellé DEBUG de la route effectivement présentée (`push-tap-cible`, XCUITest de T5) : cas de route et,
-    /// pour un renvoi web ou un détail, l'URL canonique ou l'identifiant. Données de démonstration seulement :
-    /// jamais journalisé (PRINCIPES §7), exposé par `MainTabView` en build DEBUG **et** en mode démo uniquement
-    /// (revue L3-T5, m8 : jamais dans l'arbre d'accessibilité d'un build DEBUG STAGING, identifiants réels).
+    /// Libellé DEBUG de la route effectivement présentée (`deeplink-route`, XCUITest des liens et des taps ; il
+    /// remplace `push-tap-cible` de T5) : cas de route et, pour un renvoi web ou un détail, l'URL canonique ou
+    /// l'identifiant. Données de démonstration seulement : jamais journalisé (PRINCIPES §7), posé par le coordinateur
+    /// des liens à la racine de la fenêtre (`DeepLinkCoordinator`, L3-T3b) — à l'exécution de la navigation par
+    /// l'espace et à l'apparition effective de la feuille du renvoi (revue B8 de T3b, m7) —, en build DEBUG **et** en
+    /// mode démo uniquement (revue L3-T5, m8 : jamais dans l'arbre d'accessibilité d'un build DEBUG STAGING,
+    /// identifiants réels).
     public static func libelleDebug(_ route: JoleneRoute) -> String {
         switch route {
         case .safari(let url): return "safari \(url.absoluteString)"
@@ -109,9 +112,9 @@ public struct PushTapIntent: Equatable, Sendable, CustomStringConvertible, Custo
 /// ensuite, comme le web (redirection après connexion vers le chemin du tap). Aucune donnée n'est exposée : la
 /// destination est relue sous la RLS de la nouvelle identité.
 ///
-/// Point de fusion L1-T10 (`DECISIONS_LOT3.md`, « T3 livrée en deux temps », reliquat T3b) : le coordinateur
-/// de liens (`DeepLinkCoordinator`, `DeepLinkIntent`) n'existe sur aucune branche ; à son arrivée, il consomme
-/// cette boîte au lieu de `MainTabView` (même règle d'epoch, même destination `DestinationLien`).
+/// Consommée par l'aiguillage des liens (lot 3 T3b, reliquat L1-T10 : `AiguillageLiens`, `DeepLinkIntent.swift`,
+/// exécuté par `DeepLinkCoordinator`) : même règle d'epoch, même destination `DestinationLien` que les liens
+/// universels ; entre un lien et un tap en attente, le plus récent l'emporte.
 ///
 /// Premier plan (`willPresent`) : `premiersPlans` avance, le centre de notifications visible se relit.
 @MainActor

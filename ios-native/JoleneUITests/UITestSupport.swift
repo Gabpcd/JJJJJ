@@ -264,6 +264,16 @@ class JoleneUITestCase: XCTestCase {
         _ = XCTWaiter().wait(for: [pause], timeout: duration)
     }
 
+    /// Absence prouvée sur une fenêtre bornée (attente inversée, comme le délai du pré-prompt de `DemoPushTests`) :
+    /// échoue dès que `condition` devient vraie pendant `duree`. Une lecture instantanée laisserait passer une
+    /// présentation encore en cours d'animation (revue B8 de T3b, m8). Jamais un délai fixe sans condition.
+    func requireAbsence(_ description: String, pendant duree: TimeInterval = 3, condition: @escaping () -> Bool) {
+        let predicate = NSPredicate { _, _ in condition() }
+        let apparition = XCTNSPredicateExpectation(predicate: predicate, object: nil)
+        apparition.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [apparition], timeout: duree), .completed, description)
+    }
+
     // MARK: Actions
 
     /// Un `tap()` natif, jamais `press(forDuration:)` pour activer : la navigation attendue est vérifiée ensuite.

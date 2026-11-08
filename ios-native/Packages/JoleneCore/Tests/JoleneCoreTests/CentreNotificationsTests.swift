@@ -343,6 +343,28 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(avec, .web(.safari(URL(string: "https://jolene.app/soignant/litiges")!)))
     }
 
+    /// Revue B8 de T3b, m2 : le centre ne contourne pas l'option B (décision 7 du lot 1). Une ligne dont le lien est un
+    /// lien de réinitialisation `?code=` n'ouvre jamais la page web avec le code : lue, elle n'est ni « Voir » ni un
+    /// bouton ; non lue, elle est marquée lue (relue) puis n'ouvre rien, sans message (le lien est Jolene et valide).
+    func testLienDeReinitialisationPkceJamaisServiParLeCentre() async throws {
+        let lue = ligne("r1", lien: "/reset-password?code=c", lue: true)
+        XCTAssertFalse(CentreNotificationsModel.afficheVoir(lue, renvoiWebDisponible: true))
+        XCTAssertFalse(CentreNotificationsModel.estActionnable(lue, renvoiWebDisponible: true))
+        let tokenHash = ligne("r2", lien: "/reset-password?token_hash=h&type=recovery", lue: true)
+        XCTAssertTrue(CentreNotificationsModel.afficheVoir(tokenHash, renvoiWebDisponible: true),
+                      "`token_hash` : la page web canonique sait le vérifier")
+
+        let port = PortScripte([.success([ligne("r3", lien: "/reset-password?code=c")])])
+        let (controller, snapshot) = try await pret(port)
+        let model = CentreNotificationsModel(controller: controller, snapshot: snapshot)
+        await model.charger()
+        let cible = await model.ouvrir(model.notifications[0], renvoiWebDisponible: true)
+        XCTAssertNil(cible, "jamais `.web(.safari(…?code=…))`")
+        let marquees = await port.marquees
+        XCTAssertEqual(marquees, ["r3"], "la lecture est relue comme pour toute ligne non lue")
+        XCTAssertNil(model.messageAction)
+    }
+
     // MARK: - Présentation des lignes (jamais un bouton sans effet)
 
     func testVoirEtLigneActionnable() {
@@ -398,9 +420,11 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(try cible("/soignant/profil"), .profil)
         XCTAssertEqual(try cible("/soignant/profil?tab=principal"), .profil)
         XCTAssertEqual(try cible("/soignant/reputation"), .profil)
-        // Point de fusion T3b / T11 consigné (revue L3-T9 m2, DECISIONS_LOT3.md, intégration) : l'onglet confidentialité
-        // du web (RGPD, suppression) ouvre aussi l'édition ; aucune notification du dump ne vise ce `?tab=`.
-        XCTAssertEqual(try cible("/soignant/profil?tab=confidentialite"), .profil)
+        // Point de fusion T3b / T11 (revue L3-T9 m2 ; revue B8 de T3b, m3) : l'onglet confidentialité du web (export RGPD,
+        // suppression de compte) reste un renvoi web tant que le hub natif n'a pas l'export (L3-T11, garde de
+        // `LinksRouterTests`) ; aucune notification du dump ne vise ce `?tab=`.
+        XCTAssertEqual(try cible("/soignant/profil?tab=confidentialite"),
+                       .web(.safari(URL(string: "https://jolene.app/soignant/profil?tab=confidentialite")!)))
         // Destination effective, jamais la route brute : factures et paiements restent des renvois web (D4, T13).
         XCTAssertEqual(try cible("/soignant/mes-gains?tab=factures"),
                        .web(.safari(URL(string: "https://jolene.app/soignant/mes-gains?tab=factures")!)))
@@ -409,7 +433,13 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(try cible("/etablissement/missions/abc"),
                        .web(.etablissement(URL(string: "https://jolene.app/etablissement/missions/abc")!)))
         XCTAssertEqual(try cible("/connexion"), .aucune, "connexion depuis un espace prêt : coordinateur de L1-T10")
-        XCTAssertEqual(try cible("/reset-password?token_hash=h&type=recovery"), .aucune)
+        // L3-T3b : écran de réinitialisation natif non livré, la page web canonique (`token_hash` conservé) est servie.
+        XCTAssertEqual(try cible("/reset-password?token_hash=h&type=recovery"),
+                       .web(.safari(URL(string: "https://jolene.app/reset-password?token_hash=h&type=recovery")!)))
+        // Revue B8 de T3b, m2 : option B (décision 7 du lot 1) — un lien `?code=` n'est jamais servi par Safari, depuis le
+        // centre comme depuis un lien universel ou un tap (`DeepLinkIntent.reinitialisationRefusee`).
+        XCTAssertEqual(try cible("/reset-password?code=c"), .aucune)
+        XCTAssertEqual(try cible("https://www.jolene.app/reset-password/?code=c&type=recovery#x"), .aucune)
 
         let racine = URL(string: "https://jolene.app/")!
         for cible in [CibleNotification.accueil, .explorer, .missions, .revenus(section: .apercu), .monCompte, .mission(id: "m"), .centre,
@@ -515,9 +545,11 @@ final class CentreNotificationsTests: XCTestCase {
     ]
 
     /// Liste d'exclusion nommée et fermée : routes natives **sans présentation depuis un espace prêt par nature**
-    /// (connexion et liens de rappel d'authentification, consommés hors de l'espace par le coordinateur de L1-T10).
-    /// Une tranche n'y ajoute une route qu'avec sa justification dans `DECISIONS_LOT3.md`.
-    private static let sansCibleDansLEspace: Set<GenreRoute> = [.connexion, .resetPassword, .confirmerInscription]
+    /// (connexion, consommée hors de l'espace par le coordinateur de liens, `DeepLinkIntent.horsEspace`). Une tranche
+    /// n'y ajoute une route qu'avec sa justification dans `DECISIONS_LOT3.md` (T7 : confirmation et inscription
+    /// natives, présentées hors espace ; reset natif). L3-T3b en retire le reset et la confirmation : sans écran
+    /// natif, leur ligne de `ecranNatifLivre` vaut `false` et leur lien est un renvoi web canonique.
+    private static let sansCibleDansLEspace: Set<GenreRoute> = [.connexion]
 
     /// Garde « un gap connu reste verrouillé » (`CLAUDE.md`) : toute route dont l'écran natif est livré
     /// (`DestinationLien.ecranNatifLivre == true`), parmi la table des routes et toute la famille push des vecteurs

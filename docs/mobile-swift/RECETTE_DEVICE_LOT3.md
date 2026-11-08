@@ -98,6 +98,20 @@ mémorisé pour jolene.app ; lien non réécrit par un traceur SMTP ; build appa
 | Thème sombre (Réglages iOS sombre, puis choix « Sombre » dans l'app) | contrastes lisibles sur tous les écrans du lot 3 ; préférence conservée après relancement (D16) | — |
 | Export RGPD partagé vers Fichiers | fichier JSON non vide, supprimé du conteneur temporaire après la feuille de partage | — |
 
+## 6 bis. Renvoi web et fin d'identité (L3-T3b, revue B8 M1)
+
+Le magasin du `SFSafariViewController` appartient à l'app et persiste ; il est effacé à chaque fin d'identité native et
+avant chaque connexion (`DECISIONS_LOT3.md`, section T3b, corrections de la revue B8). Niveau 1 :
+`SessionStoreFinIdentiteWebTests`, `PresentationsRacineTests` ; l'effacement réel ne se constate que sur appareil.
+
+| Étape | Attendu | Observé |
+|---|---|---|
+| Compte A : ouvrir un renvoi (`/soignant/litiges` depuis un lien ou le centre), se connecter sur la page web dans la feuille, fermer | page web de A affichée dans la feuille | — |
+| A se déconnecte de l'app (hub, « Se déconnecter »), puis le même lien universel est ouvert sans session | la feuille s'ouvre sur la page web **non connectée** (connexion web demandée), jamais l'espace de A | — |
+| A connecté, renvoi affiché, session révoquée depuis le web (« Se déconnecter partout » ou changement de mot de passe) | la feuille se ferme avec le passage à l'écran de connexion ; un renvoi rouvert ensuite n'est pas connecté | — |
+| Compte B se connecte sur le même appareil, puis ouvre `/soignant/mes-gains?tab=factures` | page web non connectée (ou session web de B après sa connexion web), jamais celle de A | — |
+| Lien `?code=` de réinitialisation reçu pendant un renvoi affiché | la feuille se ferme, puis l'alerte « Ce lien ne permet pas de réinitialiser le mot de passe depuis l'application. » | — |
+
 ## 7. Signature de clôture
 
 | Élément | Valeur |

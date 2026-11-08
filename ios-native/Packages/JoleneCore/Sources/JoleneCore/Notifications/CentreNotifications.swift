@@ -60,16 +60,15 @@ public enum CentreNotificationsTextes {
 
 // MARK: - Cible d'une destination dans l'espace prêt
 
-/// Ce que l'espace prêt fait d'une destination de lien (ligne du centre, tap push), en attendant le
-/// coordinateur de liens de L1-T10 (point de fusion consigné dans `DECISIONS_LOT3.md`) : un onglet (Revenus avec
-/// sa section), le détail d'une mission, le centre de notifications, les préférences de notifications (T6) et
-/// l'édition du profil (T9), empilées sur l'onglet Profil (intégration du lot 3) ; un renvoi web passe par le
-/// présentateur
-/// `.safari` (`PresentateurRenvoiWeb`, injecté par L1-T10) ; la connexion et les liens de rappel n'ont pas de
-/// présentation dans l'espace (`.aucune`).
+/// Ce que l'espace prêt fait d'une destination de lien (ligne du centre, tap push, lien universel : aiguillage
+/// unique `AiguillageLiens` de L3-T3b) : un onglet (Revenus avec sa section), le détail d'une mission, le centre de
+/// notifications, les préférences de notifications (T6) et l'édition du profil (T9), empilées sur l'onglet Profil
+/// (intégration du lot 3) ; un renvoi web passe par le présentateur `.safari` (`PresentateurRenvoiWeb`, injecté à la
+/// racine par le coordinateur des liens) ; la connexion n'a pas de présentation dans l'espace (`.aucune`).
 ///
 /// Construite depuis une `DestinationLien` seulement (jamais la route brute : `.revenus(section: .factures)`
-/// ouvrirait l'onglet natif au lieu du renvoi web assumé, D4).
+/// ouvrirait l'onglet natif au lieu du renvoi web assumé, D4). Seule lecture de la route : le refus d'un lien de
+/// réinitialisation `?code=` (option B), comme `DeepLinkIntent`.
 ///
 /// Verrou (revue L3-T5, M1 ; `CLAUDE.md`, « un gap connu reste verrouillé ») : une tranche qui passe sa ligne de
 /// `DestinationLien.ecranNatifLivre` à `true` (T6 préférences et T9 profil — faits à l'intégration du lot 3 —,
@@ -79,7 +78,7 @@ public enum CentreNotificationsTextes {
 public enum CibleNotification: Equatable, Sendable {
     /// Onglet Accueil, à sa racine.
     case accueil
-    /// Onglet Explorer (`/soignant/recherche-missions`).
+    /// Onglet Explorer (`/soignant/recherche-missions`), à sa racine (un détail empilé est retiré ; revue B8 de T3b, m5).
     case explorer
     /// Onglet Mes missions (`/soignant/missions`).
     case missions
@@ -95,16 +94,25 @@ public enum CibleNotification: Equatable, Sendable {
     /// Préférences de notifications (`/soignant/parametres/notifications`, T6), empilées sur l'onglet Profil comme
     /// l'entrée « Réglages › Notifications » du hub.
     case preferences
-    /// Édition du profil (`/soignant/profil`, tout `?tab=`, alias `/soignant/reputation`, T9), empilée sur l'onglet
-    /// Profil comme l'entrée « Mon profil » du hub.
+    /// Édition du profil (`/soignant/profil`, alias `/soignant/reputation`, T9 ; tout `?tab=` sauf `confidentialite`,
+    /// renvoi web tant que le hub n'a pas l'export RGPD, L3-T11), empilée sur l'onglet Profil comme l'entrée « Mon
+    /// profil » du hub.
     case profil
-    /// Renvoi web (`.safari` ou `.etablissement`), présenté par le présentateur de renvoi web s'il est injecté.
+    /// Renvoi web (`.safari` ou `.etablissement`), présenté par le présentateur de renvoi web s'il est injecté
+    /// (coordinateur des liens, L3-T3b) ; reset `token_hash`/implicit et confirmation d'inscription compris, tant que
+    /// leurs écrans natifs ne sont pas livrés.
     case web(JoleneRoute)
-    /// Route sans présentation depuis un espace prêt : connexion et liens de rappel d'authentification (coordinateur
-    /// de L1-T10, hors de l'espace).
+    /// Route sans présentation depuis un espace prêt : connexion (consommée hors de l'espace, `DeepLinkIntent.horsEspace`)
+    /// et lien de réinitialisation `?code=` (option B, décision 7 du lot 1 : jamais servi par Safari, depuis le centre
+    /// comme depuis un lien universel ; revue B8 de T3b, m2).
     case aucune
 
     public init(_ lien: DestinationLien) {
+        // Option B : décidée sur la route, comme `DeepLinkIntent` (le centre ne passe pas par l'aiguillage des liens).
+        if case .resetPassword(credentials: .some(.pkce)) = lien.route {
+            self = .aucune
+            return
+        }
         let destination = lien.destination
         switch destination {
         case .accueil: self = .accueil
@@ -139,9 +147,10 @@ public enum CibleNotification: Equatable, Sendable {
         }
     }
 
-    /// Présentable dans l'espace : un renvoi web exige le présentateur `.safari` (absent avant L1-T10, jamais
-    /// `openURL` : les chemins `/soignant/*` reviendraient dans l'app par lien universel, sans effet) ; une section
-    /// de Revenus attend sa tranche ; depuis le centre (`depuisCentre`), le centre lui-même n'a rien à ouvrir.
+    /// Présentable dans l'espace : un renvoi web exige le présentateur `.safari` (injecté à la racine par le
+    /// coordinateur des liens depuis L3-T3b ; jamais `openURL` : les chemins `/soignant/*` reviendraient dans l'app par
+    /// lien universel, sans effet) ; une section de Revenus attend sa tranche ; depuis le centre (`depuisCentre`), le
+    /// centre lui-même n'a rien à ouvrir.
     public func estPresentable(renvoiWebDisponible: Bool, depuisCentre: Bool = false) -> Bool {
         switch self {
         case .accueil, .explorer, .missions, .monCompte, .mission, .preferences, .profil: return true

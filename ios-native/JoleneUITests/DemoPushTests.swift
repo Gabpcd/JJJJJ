@@ -121,9 +121,11 @@ final class DemoPushTests: JoleneUITestCase {
     // MARK: Taps (T5)
 
     // Tap à froid simulé (`-JOLENE_SIMULER_PUSH <TYPE>[:<valeur>][:<lien>]`, DEBUG démo) : mémorisé avant la session,
-    // rejoué par le premier espace prêt après la connexion, rôle lu dans le snapshot (blueprint §2.5). Six types
-    // ouvrent un écran natif ; les renvois web (litige, contrat à signer) sont vérifiés par la route présentée
-    // (`push-tap-cible`, DEBUG et démo seulement), faute de présentateur `.safari` avant L1-T10. Les préférences (T6)
+    // rejoué par le premier espace prêt après la connexion, rôle lu dans le snapshot (blueprint §2.5), par le même
+    // coordinateur que les liens universels (L3-T3b). Six types ouvrent un écran natif ; les renvois web (litige,
+    // contrat à signer) sont présentés par le présentateur `.safari` du coordinateur (double démo `renvoi-web-demo`,
+    // URL canonique vérifiée), puis la route présentée est relue (`deeplink-route`, DEBUG et démo seulement, qui
+    // remplace `push-tap-cible` de T5). Les préférences (T6)
     // et l'édition du profil (T9) ont leur cas de tap vers `prefs-screen` et `profil-screen` (blueprint §3 T5,
     // intégration du lot 3) ; factures et paiements sont prouvés au niveau 1
     // (`PushTapIntentTests.testCiblesDesTypesPrincipaux`) jusqu'à T12/T13.
@@ -149,7 +151,7 @@ final class DemoPushTests: JoleneUITestCase {
         require("Explorer est ouvert (`/soignant/recherche-missions`)", timeout: 30) {
             self.containerVisible(self.element("missions-list"))
         }
-        XCTAssertEqual(element("push-tap-cible").label, "explorer")
+        XCTAssertEqual(element("deeplink-route").label, "explorer")
         record("\(proofPrefix)-push-tap-explorer")
     }
 
@@ -159,7 +161,7 @@ final class DemoPushTests: JoleneUITestCase {
         require("L'onglet Mes missions est ouvert (`/soignant/missions`)", timeout: 30) {
             self.visible(self.element("placeholder-missions"))
         }
-        XCTAssertEqual(element("push-tap-cible").label, "missions")
+        XCTAssertEqual(element("deeplink-route").label, "missions")
         record("\(proofPrefix)-push-tap-mes-missions")
     }
 
@@ -170,7 +172,7 @@ final class DemoPushTests: JoleneUITestCase {
             self.containerVisible(self.element("notifications-screen"))
                 && self.element("notification-demo-notification-001").exists
         }
-        XCTAssertEqual(element("push-tap-cible").label, "notifications")
+        XCTAssertEqual(element("deeplink-route").label, "notifications")
         record("\(proofPrefix)-push-tap-centre")
     }
 
@@ -184,7 +186,7 @@ final class DemoPushTests: JoleneUITestCase {
             self.containerVisible(ecran) && self.element("prefs-canal-email").exists
         }
         XCTAssertTrue(app.navigationBars["Préférences de notifications"].exists, "titre verbatim web")
-        XCTAssertEqual(element("push-tap-cible").label, "parametresNotifications")
+        XCTAssertEqual(element("deeplink-route").label, "parametresNotifications")
         aucuneAlerte()
         record("\(proofPrefix)-push-tap-preferences")
         prefsRetourAuProfil()
@@ -203,7 +205,7 @@ final class DemoPushTests: JoleneUITestCase {
             self.containerVisible(ecran) && self.element("profil-nom-complet").exists
         }
         XCTAssertFalse(element("profil-erreur-chargement").exists)
-        XCTAssertEqual(element("push-tap-cible").label, "profil")
+        XCTAssertEqual(element("deeplink-route").label, "profil")
         aucuneAlerte()
         record("\(proofPrefix)-push-tap-profil")
         let retour = app.navigationBars.buttons.firstMatch
@@ -215,30 +217,33 @@ final class DemoPushTests: JoleneUITestCase {
     }
 
     /// Blueprint §3 T5 : `CONTRAT_A_SIGNER:contrat_id` → `/contrat/<id>` (renvoi web tant que l'écran du lot 2 n'est
-    /// pas intégré, aucun présentateur `.safari` avant L1-T10) : route présentée vérifiée, l'espace reste affiché.
+    /// pas intégré) : la page web canonique du contrat est présentée par le présentateur `.safari` du coordinateur des
+    /// liens (L3-T3b) ; à sa fermeture, l'espace est intact.
     func testTapContratASignerVersLeWebDuContrat() throws {
+        let page = "https://jolene.app/contrat/demo-contrat-001"
         launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", "CONTRAT_A_SIGNER:contrat_id=demo-contrat-001"])
         signInDemo()
-        let cible = element("push-tap-cible")
-        require("Le tap est présenté (renvoi web du contrat)", timeout: 30) { cible.exists }
-        XCTAssertEqual(cible.label, "safari https://jolene.app/contrat/demo-contrat-001", "page web canonique du contrat")
-        XCTAssertTrue(containerVisible(element("accueil-screen")), "sans présentateur `.safari` (L1-T10), l'espace reste affiché")
+        liensRenvoiWebAffiche(page)
         XCTAssertFalse(element("access-blocked").exists)
         XCTAssertFalse(element("env-blocked").exists)
         aucuneAlerte()
         record("\(proofPrefix)-push-tap-contrat")
+        liensFermerRenvoiWeb()
+        require("L'espace est intact après la fermeture du renvoi") { self.containerVisible(self.element("accueil-screen")) }
+        XCTAssertEqual(element("deeplink-route").label, "safari \(page)", "page web canonique du contrat")
     }
 
     func testTapLitigeVersLeWebSansEcranBloquant() throws {
+        let page = "https://jolene.app/soignant/litiges"
         launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", "LITIGE_OUVERT"])
         signInDemo()
-        let cible = element("push-tap-cible")
-        require("Le tap est présenté (renvoi web)", timeout: 30) { cible.exists }
-        XCTAssertEqual(cible.label, "safari https://jolene.app/soignant/litiges", "page web canonique, jamais un écran vide")
-        XCTAssertTrue(containerVisible(element("accueil-screen")), "sans présentateur `.safari` (L1-T10), l'espace reste affiché")
+        liensRenvoiWebAffiche(page)
         XCTAssertFalse(element("access-blocked").exists)
         XCTAssertFalse(element("env-blocked").exists)
         record("\(proofPrefix)-push-tap-web")
+        liensFermerRenvoiWeb()
+        require("L'espace est intact après la fermeture du renvoi") { self.containerVisible(self.element("accueil-screen")) }
+        XCTAssertEqual(element("deeplink-route").label, "safari \(page)", "page web canonique, jamais un écran vide")
     }
 
     // MARK: Pré-prompt (T5)
@@ -307,7 +312,7 @@ final class DemoPushTests: JoleneUITestCase {
             self.containerVisible(self.element("mission-detail")) && self.visible(titre)
         }
         XCTAssertEqual(titre.label, attendu)
-        XCTAssertEqual(element("push-tap-cible").label, route)
+        XCTAssertEqual(element("deeplink-route").label, route)
         aucuneAlerte()
         record("\(proofPrefix)-push-tap-\(route.replacingOccurrences(of: " ", with: "-"))")
         // Retour : la pile de l'Accueil reste cohérente (le détail était empilé sur sa racine).

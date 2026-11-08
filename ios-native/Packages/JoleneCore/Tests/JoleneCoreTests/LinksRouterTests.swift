@@ -204,6 +204,44 @@ final class LinksRouterTests: XCTestCase {
         XCTAssertEqual(route("https://jolene.app/soignant/profil?tab=principal"), .profil)
     }
 
+    /// L3-T3b (point de fusion de la revue L3-T9, m2 ; revue B8 de T3b, m3) : l'onglet « Confidentialité » du profil
+    /// web (`ProfilSoignant.tsx` l.42-44 et l.505-507, `SectionConfidentialite` : export RGPD et suppression de compte ;
+    /// entrée « Supprimer mon compte » du hub web vers `?tab=confidentialite#suppression-compte`,
+    /// `MonCompteSoignant.tsx` l.135) reste un **renvoi web** (URL canonique, query et fragment conservés) : le hub natif
+    /// porte la suppression (L1-T8, `SuppressionCompteSection`) mais pas encore l'export (L3-T11). Les autres onglets,
+    /// `?tab=` absent ou inconnu compris, mènent à l'édition. Comparaison exacte, comme le web.
+    func testOngletConfidentialiteDuProfilEnRenvoiWebJusquALExportAuHub() throws {
+        for lien in ["https://jolene.app/soignant/profil?tab=confidentialite",
+                     "https://jolene.app/soignant/profil?tab=confidentialite#suppression-compte",
+                     "https://www.jolene.app/soignant/profil/?x=1&tab=confidentialite"] {
+            let canonique = try XCTUnwrap(DestinationLien(url: URL(string: lien)!), lien).canonique
+            XCTAssertEqual(route(lien), .safari(canonique), lien)
+        }
+        let interne = try XCTUnwrap(DestinationLien(link: "/soignant/profil?tab=confidentialite"))
+        XCTAssertEqual(LinkRouter.resolve(link: "/soignant/profil?tab=confidentialite"), .safari(interne.canonique))
+        for query in ["", "?tab=principal", "?tab=preferences", "?tab=Confidentialite", "?tab=inconnu", "?onglet=confidentialite"] {
+            XCTAssertEqual(route("https://jolene.app/soignant/profil" + query), .profil, query)
+        }
+        XCTAssertEqual(route("https://jolene.app/soignant/reputation?tab=confidentialite"), .profil, "alias : redirection web vers le profil sans query")
+    }
+
+    /// Garde pour L3-T11 (revue B8 de T3b, m3 ; `CLAUDE.md`, « un gap connu reste verrouillé ») : la destination de
+    /// `?tab=confidentialite` suit le câblage de l'export RGPD. Tant que le port `exportRGPD` attend sa tranche, c'est le
+    /// renvoi web ; dès que T11 le câble (l'export est alors au hub, blueprint §3 T11), ce test exige le hub
+    /// (`.monCompte`) : T11 change la ligne de `LinkRouter` et les cas de `DeepLinkIntentTests` et
+    /// `CentreNotificationsTests` dans la même PR.
+    func testOngletConfidentialiteSuitLExportRGPDDuHub() throws {
+        let lien = try XCTUnwrap(DestinationLien(link: "/soignant/profil?tab=confidentialite#suppression-compte"))
+        let exportAuHub = !DemoWorld.gateways().unwiredPorts.contains("exportRGPD")
+        if exportAuHub {
+            XCTAssertEqual(lien.destination, .monCompte,
+                           "L3-T11 a câblé l'export RGPD : l'onglet confidentialité doit mener au hub (ligne de `LinkRouter`)")
+        } else {
+            XCTAssertEqual(lien.destination, .safari(lien.canonique),
+                           "export RGPD absent du hub : le hub ne remplace pas l'onglet web (renvoi web canonique)")
+        }
+    }
+
     func testCheminsSoignantSansEcranLot3RestentSafariAvecQueryEtFragment() {
         for chemin in ["/soignant/notifications/abc", "/soignant/parametres/recherches-sauvegardees",
                        "/soignant/litiges?tab=reclamations#l%201", "/soignant/mes-documents?tab=contrats",

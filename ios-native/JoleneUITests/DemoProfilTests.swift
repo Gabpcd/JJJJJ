@@ -6,7 +6,8 @@ import XCTest
 ///
 /// Ce que ces tests prouvent (niveau 2), et seulement cela :
 /// - la lecture affiche l'identité du profil fictif ; le type d'exercice n'est pas éditable (encart de renvoi
-///   `profil-exercice-web`, HARD STOP n°4 ; son bouton n'existe qu'avec le présentateur Safari de L1-T10) ;
+///   `profil-exercice-web`, HARD STOP n°4) ; son bouton « Voir sur jolene.app » (`profil-exercice-web-action`)
+///   présente la section web par le présentateur `.safari` du coordinateur des liens (L3-T3b, double démo) ;
 /// - une ville de recherche saisie est enregistrée puis relue (encart « Profil mis à jour avec succès ! »,
 ///   texte verbatim de `ProfilSoignant.tsx` l.293), et retrouvée à la réouverture de l'écran ;
 /// - un prénom vidé est refusé avec le message serveur verbatim (`fn_modifier_mon_profil` l.43906) ;
@@ -116,10 +117,18 @@ final class DemoProfilTests: JoleneUITestCase {
         let exercice = element("profil-exercice-web")
         scrollTo(exercice, in: ecran)
         XCTAssertTrue(exercice.label.contains("Type d'exercice"), "renvoi libellé : \(exercice.label)")
-        XCTAssertFalse(element("profil-exercice-web-action").exists,
-                       "sans présentateur Safari (L1-T10), aucun bouton sans effet")
         XCTAssertFalse(textContaining("L1222-5").exists, "aucun texte juridique du type d'exercice porté")
+        // L3-T3b : le présentateur `.safari` est injecté ; le bouton présente la section web du profil (URL canonique).
+        let action = element("profil-exercice-web-action")
+        scrollTo(action, in: ecran)
+        require("« Voir sur jolene.app » est atteignable") { self.visible(action) && action.isEnabled }
+        XCTAssertTrue(action.label.contains("Voir sur jolene.app"), "libellé : \(action.label)")
         record("\(proofPrefix)-profil-exercice")
+        action.tap()
+        liensRenvoiWebAffiche("https://jolene.app/soignant/profil?tab=principal")
+        record("\(proofPrefix)-profil-exercice-renvoi")
+        liensFermerRenvoiWeb()
+        require("Retour à l'édition du profil") { self.containerVisible(ecran) }
     }
 
     func testIdentiteVerrouilleeApresLeControleRppsExposeeEnLectureSeule() throws {

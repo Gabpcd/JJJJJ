@@ -118,6 +118,26 @@ final class DemoDashboardTests: XCTestCase {
         _ = try await port.dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
     }
 
+    // MARK: - Variante « oubli de pointage » (revue B8 de T3b, m4 : verrou T12 n°2 du lot 1)
+
+    /// Surcharge DEBUG `JOLENE_FORCE_OUBLI_POINTAGE=1` (`AppContainer`) : le même tableau de bord démo, avec une mission
+    /// qui semble attendre un pointage de départ (`missions_oubliees_count` = 1). Tout le reste est inchangé ; l'encart
+    /// porte le texte web, et le bouton du renvoi `/soignant/presences` est prouvé par `DemoAccueilTests`.
+    func testVarianteOubliDePointageNeChangeQueLeCompteur() async throws {
+        XCTAssertEqual(DemoDashboardGateway.variableOubliPointage, "JOLENE_FORCE_OUBLI_POINTAGE")
+        let defaut = try await DemoDashboardGateway().dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
+        let variante = try await DemoDashboardGateway(missionsOubliees: 1).dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
+        XCTAssertEqual(defaut.missionsOublieesCount, 0)
+        XCTAssertEqual(variante.missionsOublieesCount, 1)
+        XCTAssertEqual(AccueilPresentation.texteOubliPointage(variante.missionsOublieesCount),
+                       "1 mission semble attendre un pointage de départ. Vérifiez vos présences.")
+        var attendu = defaut
+        attendu.missionsOublieesCount = 1
+        XCTAssertEqual(variante, attendu, "seul le compteur change")
+        XCTAssertEqual(AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences),
+                       .safari(URL(string: "https://jolene.app/soignant/presences")!), "route du bouton : renvoi web canonique")
+    }
+
     func testEchecForceRefuseToutAutreUtilisateur() async {
         var autre = DemoWorld.context
         autre.userId = "user-1"

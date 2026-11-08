@@ -9,9 +9,10 @@ import XCTest
 ///   `formatDistanceToNow` (« il y a environ 2 heures »), « Voir » sur les seules destinations présentables ;
 /// - tap sur une non lue : marquée lue (relue dans l'acteur démo) puis ouverture du détail de la mission ; au
 ///   retour, la pastille a disparu ; une non lue vers Mes missions bascule sur l'onglet ;
-/// - lignes déjà lues vers un renvoi web (factures, Stripe, litiges) ou sans lien : chacune amenée à l'écran et
-///   rendue, puis affirmée sans bouton ni « Voir » tant que le présentateur `.safari` (L1-T10) n'est pas injecté
-///   (jamais un bouton sans effet) ;
+/// - lignes déjà lues vers un renvoi web (factures, Stripe, litiges) : depuis L3-T3b (présentateur `.safari` du
+///   coordinateur des liens, injecté à la racine), chacune est un bouton avec « Voir » ; le litige ouvre sa page web
+///   canonique (double démo `renvoi-web-demo`), puis le centre reste affiché à la fermeture ; ligne sans lien : ni
+///   bouton ni « Voir » (jamais un bouton sans effet) ;
 /// - (intégration du lot 3, T6) ligne déjà lue vers les préférences de notifications : un bouton avec « Voir », qui
 ///   ouvre l'écran natif des préférences (`prefs-screen`) sur l'onglet Profil, sans marquage (déjà lue) ;
 /// - aucune requête réseau (`network-sentinel`).
@@ -48,19 +49,34 @@ final class DemoNotificationsTests: JoleneUITestCase {
         XCTAssertEqual(premiere.elementType, .button, "non lue vers un écran natif : un bouton")
         record("\(proofPrefix)-notifications-liste")
 
-        // Déjà lues, renvoi web sans présentateur `.safari` : aucune action possible, donc aucun bouton. Chaque ligne
-        // est d'abord amenée à l'écran et exigée rendue (la pile est paresseuse : une ligne non rendue rendrait
-        // l'assertion négative vide, revue L3-T5 m7), puis affirmée non bouton. La ligne 005 (préférences, écran
-        // natif depuis T6) est vérifiée par `testLigneLueVersLesPreferencesOuvreLEcranNatif`.
-        for id in ["003", "004", "006", "007"] {
+        // Déjà lues, renvoi web (factures, Stripe, litiges) : le présentateur `.safari` du coordinateur des liens est
+        // injecté (L3-T3b) : chaque ligne est un bouton avec « Voir ». Sans lien (007) : aucune action, donc aucun
+        // bouton. Chaque ligne est d'abord amenée à l'écran et exigée rendue (la pile est paresseuse : une ligne non
+        // rendue rendrait l'assertion négative vide, revue L3-T5 m7). La ligne 005 (préférences, écran natif depuis T6)
+        // est vérifiée par `testLigneLueVersLesPreferencesOuvreLEcranNatif`.
+        for id in ["003", "004", "006"] {
             let ligne = element("notification-demo-notification-\(id)")
             scrollTo(ligne, in: centre)
             require("La ligne \(id) est rendue") { ligne.exists }
-            XCTAssertNotEqual(ligne.elementType, .button, "ligne \(id) : jamais un bouton sans effet")
-            XCTAssertFalse(app.buttons.matching(identifier: "notification-demo-notification-\(id)").firstMatch.exists,
-                           "ligne \(id) : jamais un bouton sans effet")
-            XCTAssertFalse(ligne.label.contains("Voir"), "ligne \(id) : pas de « Voir » sans destination présentable")
+            XCTAssertEqual(ligne.elementType, .button, "ligne \(id) : renvoi web présentable, un bouton")
+            XCTAssertTrue(ligne.label.contains("Voir"), "ligne \(id) : « Voir » vers la page web, « \(ligne.label) »")
         }
+        let sansLien = element("notification-demo-notification-007")
+        scrollTo(sansLien, in: centre)
+        require("La ligne 007 est rendue") { sansLien.exists }
+        XCTAssertNotEqual(sansLien.elementType, .button, "ligne 007 : jamais un bouton sans effet")
+        XCTAssertFalse(app.buttons.matching(identifier: "notification-demo-notification-007").firstMatch.exists,
+                       "ligne 007 : jamais un bouton sans effet")
+        XCTAssertFalse(sansLien.label.contains("Voir"), "ligne 007 : pas de « Voir » sans destination")
+
+        // Déjà lue vers `/soignant/litiges` : page web canonique présentée (double démo), sans marquage ; le centre reste.
+        let litige = element("notification-demo-notification-006")
+        degager(litige, dans: centre)
+        litige.tap()
+        liensRenvoiWebAffiche("https://jolene.app/soignant/litiges")
+        record("\(proofPrefix)-notifications-renvoi-web")
+        liensFermerRenvoiWeb()
+        require("Le centre reste affiché après le renvoi web") { self.containerVisible(centre) && litige.exists }
 
         // Non lue → marquée lue (relue) → détail de la mission démo (retour en haut de la liste d'abord).
         scrollTo(premiere, in: centre, downward: false)
