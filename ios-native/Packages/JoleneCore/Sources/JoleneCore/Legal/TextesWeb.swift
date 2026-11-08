@@ -144,19 +144,19 @@ public enum TextesWeb {
         }
     }
 
-    /// Présences : retour du consentement GPS (`PresencesSoignant.tsx` l.82, l.101), bandeau du filtre
-    /// « à valider » (l.715-719) et relance de l'établissement (`DetailPresencesMission.tsx` l.695-703 ;
+    /// Présences : retour du consentement GPS (`PresencesSoignant.tsx` l.76, l.95), bandeau du filtre
+    /// « à valider » (l.656-660) et relance de l'établissement (`DetailPresencesMission.tsx` l.695-703 ;
     /// bouton et retours de la relance : `LibellesWeb.Presences`).
     public enum Presences {
-        // source: src/pages/PresencesSoignant.tsx:82 [consentement]
+        // source: src/pages/PresencesSoignant.tsx:76 [consentement]
         public static let consentementGpsEnregistre = "Consentement GPS enregistré."
 
         /// Tutoiement du web conservé verbatim : le passage au vouvoiement serait une reformulation
         /// (HARD STOP n°4), en attente de la décision de Gabrielle.
-        // source: src/pages/PresencesSoignant.tsx:101 [consentement]
+        // source: src/pages/PresencesSoignant.tsx:95 [consentement]
         public static let pointageSansGpsActive = "Pointage sans GPS activé — ton pointage sera validé manuellement par l'établissement, rien à faire de ton côté."
 
-        // source: src/pages/PresencesSoignant.tsx:717 [juridique]
+        // source: src/pages/PresencesSoignant.tsx:658 [juridique]
         public static let bandeauAValider = "⏳ Présences en attente de validation par l'établissement (validation automatique sous 72 h). La validation des heures est distincte du versement. En salarié, le salaire est versé par l'établissement employeur. En libéral, le paiement suit les modalités de la mission."
 
         /// Tutoiement du web conservé verbatim : le passage au vouvoiement serait une reformulation
