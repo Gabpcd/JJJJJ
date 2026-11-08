@@ -3,7 +3,8 @@ import JoleneCore
 import JoleneDesign
 
 /// Section « Mon espace » du Profil (décision 24 du lot 2 : pas de sixième onglet) : Mes présences, Mes documents,
-/// Mes contrats. Titres des pages web (`LibellesWeb.ListePresences.titre`, `LibellesWeb.EspaceSoignant`) ; titre de la
+/// Mes contrats. Titres des pages web (`LibellesWeb.ListePresences.titre`, `LibellesWeb.EspaceSoignant.mesDocuments`,
+/// `LibellesWeb.Contrats.titre`) ; titre de la
 /// section : texte opérationnel inventorié (`LibellesPresences.EspaceSoignant.titreSection`, même texte que
 /// `LibellesJustificatifs.monEspace` de T7). Une ligne par tranche : T4a (`profil-presences`), T7 (`profil-documents`,
 /// `MesDocumentsScreen`), T9a (`profil-contrats`, `ContratsDestination.liste`, qui remplace l'écran provisoire et
@@ -33,7 +34,7 @@ struct EspaceSoignantSection: View {
             NavigationLink {
                 ContratsDestination.liste(session: session, snapshot: snapshot)
             } label: {
-                Label(LibellesWeb.EspaceSoignant.mesContrats, systemImage: "signature")
+                Label(LibellesWeb.Contrats.titre, systemImage: "signature")
             }
             .accessibilityIdentifier("profil-contrats")
         } header: {

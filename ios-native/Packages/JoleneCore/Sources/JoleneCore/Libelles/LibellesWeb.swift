@@ -200,14 +200,13 @@ public enum LibellesWeb {
         public static let tousTermines = "Tous les créneaux planifiés sont terminés."
     }
 
-    /// Lignes « Mes documents » et « Mes contrats » de la section « Mon espace » du Profil (décision 24 du lot 2),
-    /// titres des pages web. « Mes présences » : `ListePresences.titre`.
+    /// Ligne « Mes documents » de la section « Mon espace » du Profil (décision 24 du lot 2), titre de la page web.
+    /// « Mes présences » : `ListePresences.titre` ; « Mes contrats » : `Contrats.titre` (T9a, même ligne l.101 de
+    /// `ListeContrats.tsx` : une occurrence web ne garde qu'une constante, d'où le retrait du doublon de T4a à
+    /// l'intégration).
     public enum EspaceSoignant {
         // source: src/pages/MesDocuments.tsx:27
         public static let mesDocuments = "Mes documents"
-
-        // source: src/pages/ListeContrats.tsx:101
-        public static let mesContrats = "Mes contrats"
     }
 
     /// Panneau de contestation (`PanneauContestation.tsx`) : en-tête (l.262) et formulaire
@@ -733,7 +732,6 @@ public enum LibellesWeb {
         .init(cle: "BlocPointage.prochainCreneau", texte: BlocPointage.prochainCreneau),
         .init(cle: "BlocPointage.tousTermines", texte: BlocPointage.tousTermines),
         .init(cle: "EspaceSoignant.mesDocuments", texte: EspaceSoignant.mesDocuments),
-        .init(cle: "EspaceSoignant.mesContrats", texte: EspaceSoignant.mesContrats),
         .init(cle: "Contestation.titre", texte: Contestation.titre),
         .init(cle: "Contestation.contester", texte: Contestation.contester),
         .init(cle: "Contestation.placeholderSoignant", texte: Contestation.placeholderSoignant),

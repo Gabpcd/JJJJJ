@@ -83,13 +83,13 @@ final class LibellesWebTests: XCTestCase {
         XCTAssertEqual(bloc.contratNonSigne, "Contrat non signé")
         XCTAssertEqual(bloc.contratDoitEtreSigne, "Le contrat doit être signé par les deux parties avant le premier pointage.")
         XCTAssertEqual(LibellesWeb.EspaceSoignant.mesDocuments, "Mes documents")
-        XCTAssertEqual(LibellesWeb.EspaceSoignant.mesContrats, "Mes contrats")
+        XCTAssertEqual(LibellesWeb.Contrats.titre, "Mes contrats", "ligne « Mes contrats » du Profil (T9a, l.101)")
         let cles = Set(LibellesWeb.catalogue.map(\.cle))
         for cle in ["ListePresences.titre", "ListePresences.ongletAVenir", "ListePresences.ongletActives",
                     "ListePresences.ongletAujourdhui", "ListePresences.ongletHistorique", "ListePresences.validee",
                     "ListePresences.videHistoriqueTitre", "LignePresence.releveReconstruit", "LignePresence.voirOuSignalerLitige",
                     "BlocPointage.contratNonSigne", "BlocPointage.tousTermines", "BlocPointage.voirLeContrat",
-                    "EspaceSoignant.mesDocuments", "EspaceSoignant.mesContrats"] {
+                    "EspaceSoignant.mesDocuments", "Contrats.titre"] {
             XCTAssertTrue(cles.contains(cle), "\(cle) absent du catalogue")
         }
     }
