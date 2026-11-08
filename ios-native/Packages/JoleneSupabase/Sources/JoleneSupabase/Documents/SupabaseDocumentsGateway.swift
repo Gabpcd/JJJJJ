@@ -11,9 +11,11 @@ import Supabase
 /// (jamais `upload(path:file:options:)`, déprécié, correction 18) sous la clé du reçu, construite comme le web (l.372) ;
 /// `fn_remplacer_document_soignant` (idempotente sur la clé) ; refus → `cleanup_orphan` une fois ; succès →
 /// `verify-document {document_id}` lancé UNE fois sans être attendu, comme le web (l.410-426 ; revue fraîche de T6, M2) :
-/// le verdict est relu dans la ligne par le suivi du modèle. Réconciliation : ligne relue par `s3_cle` (jamais de
+/// le verdict est relu dans la ligne par le suivi du modèle, et l'issue de l'appel (erreur ou réponse) est observable par
+/// `verificationEchouee(documentId:)` sans jamais le relancer (m-d). Réconciliation : ligne relue par `s3_cle` (jamais de
 /// vérification automatique si elle existe), sinon objet relu par `exists(path:)` (HEAD) → enregistrement rejoué sous la
-/// même clé, sinon « non envoyé » et `cleanup_orphan` best-effort (m7). Jeton refusé (PostgREST `PGRST301`-`PGRST303`,
+/// même clé, sinon « non envoyé » et `cleanup_orphan` best-effort juste après le HEAD (m7, portée limitée : m-e). Jeton
+/// refusé (PostgREST `PGRST301`-`PGRST303`,
 /// `NON_AUTHENTIFIE`, Storage `InvalidJWT`, HTTP 401) → session expirée, jamais un refus ordinaire (m5). Aucun octet
 /// conservé, aucune URL signée, aucun chemin ni nom de fichier journalisé côté client.
 public struct SupabaseDocumentsGateway: DocumentsPort {
@@ -42,6 +44,8 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
 
     private let client: SupabaseClient
     private let clock: any ClockPort
+    /// Vérifications lancées par ce port (partagées par ses copies : `Gateways` est une valeur).
+    private let verifications = VerificationsLancees()
     /// Tests seulement : appelé juste avant la garde d'annulation qui précède `verify-document` (correctif 4c84aa0e).
     var avantVerification: (@Sendable () -> Void)?
 
@@ -141,8 +145,10 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
             return .incertain
         }
         guard objetPresent else {
-            // m7 : l'upload a pu aboutir côté serveur après ce HEAD ; un objet absent ou déjà référencé n'est pas touché
-            // (`cleanup_orphan`, `verify-document/index.ts` l.333-387). Best-effort, une fois.
+            // m7, portée corrigée (m-e) : `cleanup_orphan` part juste après le HEAD, une fois, best-effort ; il ne rattrape
+            // qu'un objet devenu visible entre les deux appels, jamais un objet arrivé plus tard (qui reste non
+            // référencé). Un objet absent ou déjà référencé n'est pas touché (`verify-document/index.ts` l.333-387).
+            // Aucun envoi de ce processus n'est en vol pour la clé (registre `EssaisDocumentsEnVol`, M1-bis).
             await nettoyerOrphelin(recu.s3Cle)
             return .nonEnvoye
         }
@@ -295,20 +301,35 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
         // coup ; la ligne relue donnera « Revérifier ». « Une seule fois » reste vrai même en concurrence.
         avantVerification?()
         guard !Task.isCancelled else { return .incertain }
-        lancerVerification(documentId)
+        await lancerVerification(documentId)
         return .verificationDemandee(documentId: documentId)
     }
 
     /// `verify-document {document_id}` : un seul appel, lancé dans une tâche non structurée que ni le délai ni
     /// l'annulation de l'appelant n'interrompent (l'edge sonde 10 s puis appelle l'IA 20 s, `index.ts` l.286-287 et
-    /// l.625-626 ; le web ne l'attend pas non plus, l.410-426). Résultat ignoré : le verdict, ou la revue manuelle d'un
-    /// 503, est relu dans la ligne par le suivi du modèle. Jamais relancé.
-    private func lancerVerification(_ documentId: String) {
+    /// l.625-626 ; le web ne l'attend pas non plus, l.410-426). Jamais relancé. Son issue — erreur (HTTP hors 2xx,
+    /// transport) ou réponse — est gardée pour `verificationEchouee(documentId:)` ; le verdict, ou la revue manuelle d'un
+    /// 503, est relu dans la ligne par le suivi du modèle.
+    private func lancerVerification(_ documentId: String) async {
         let client = self.client
         let options = FunctionInvokeOptions(method: .post, body: ["document_id": documentId])
-        Task {
-            _ = try? await client.functions.invoke(Self.fonctionVerification, options: options) { donnees, _ in donnees }
+        let tache = Task { () -> Bool in
+            do {
+                _ = try await client.functions.invoke(Self.fonctionVerification, options: options) { donnees, _ in donnees }
+                return false
+            } catch {
+                return true
+            }
         }
+        await verifications.poser(tache, pour: documentId)
+    }
+
+    /// Revue fraîche de T6, m-d : issue de la vérification lancée par ce port pour `documentId`, attendue sans relance
+    /// (vrai : erreur, comme le `.then` du web l.413-425 ; faux : réponse) ; nil si ce port n'en a lancé aucune (ou plus de
+    /// `VerificationsLancees.capacite` depuis).
+    public func verificationEchouee(documentId: String) async -> Bool? {
+        guard let tache = await verifications.tache(pour: documentId) else { return nil }
+        return await tache.value
     }
 
     /// `cleanup_orphan` après un refus d'enregistrement (l.395-397), une fois, best-effort.
@@ -360,7 +381,9 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
 
     static func classerEchecUpload(_ error: any Error) -> EchecUpload {
         if let url = error as? URLError {
-            let jamaisPartie: Set<URLError.Code> = [.notConnectedToInternet, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed]
+            // Échecs de la résolution ou de la connexion seulement : `.notConnectedToInternet` (-1009) peut survenir en
+            // cours de transfert sur iOS, il reste incertain et le HEAD de la réconciliation tranche (revue fraîche, m-g).
+            let jamaisPartie: Set<URLError.Code> = [.cannotFindHost, .cannotConnectToHost, .dnsLookupFailed]
             return jamaisPartie.contains(url.code) ? .nonEnvoye : .incertain
         }
         if let storage = error as? StorageError, jetonRefuseParStorage(storage) { return .sessionExpiree }
@@ -428,6 +451,22 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
         }
         return nil
     }
+}
+
+/// Tâches `verify-document` lancées par un `SupabaseDocumentsGateway`, par document (les `capacite` plus récentes) :
+/// leur issue est attendue par `verificationEchouee(documentId:)`, jamais relancée.
+actor VerificationsLancees {
+    static let capacite = 32
+
+    private var taches: [String: Task<Bool, Never>] = [:]
+    private var ordre: [String] = []
+
+    func poser(_ tache: Task<Bool, Never>, pour documentId: String) {
+        if taches.updateValue(tache, forKey: documentId) == nil { ordre.append(documentId) }
+        while ordre.count > Self.capacite { taches[ordre.removeFirst()] = nil }
+    }
+
+    func tache(pour documentId: String) -> Task<Bool, Never>? { taches[documentId] }
 }
 
 /// Profil documentaire lu dans `soignants`.

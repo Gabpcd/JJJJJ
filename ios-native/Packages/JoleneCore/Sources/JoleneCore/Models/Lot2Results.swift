@@ -519,10 +519,15 @@ public enum VerdictDocument: String, Codable, CaseIterable, Sendable {
 
 /// Issue d'un envoi de justificatif ou de sa réconciliation (§2.5). Jamais de renvoi automatique.
 public enum IssueEnvoiDocument: Equatable, Sendable {
-    /// Ligne enregistrée et `verify-document` demandée une fois.
+    /// Ligne enregistrée et `verify-document` demandée une fois, ou relue `EN_ATTENTE` avec une tentative en cours :
+    /// verdict attendu en ligne.
     case verificationDemandee(documentId: String)
-    /// Ligne enregistrée sans vérification demandée : « Revérifier » proposé, jamais automatique.
+    /// Ligne enregistrée sans vérification en cours : revue manuelle relue (`REVUE_MANUELLE_REQUISE`), aucune tentative
+    /// relue, ou `verify-document` en erreur. « Revérifier » reste un geste manuel, jamais automatique.
     case enregistre(documentId: String)
+    /// Ligne relue dont le verdict est déjà rendu (`VERIFIE`, `REJETE`, `EXPIRE`…), après un relancement : ni
+    /// vérification ni suivi, le badge de la pièce porte le verdict (revue fraîche de T6, m-c).
+    case verdictRendu(documentId: String)
     /// Refus serveur (`error_code` de `fn_remplacer_document_soignant`, Storage) ; message du web (T7).
     case refuse(code: String)
     case incertain

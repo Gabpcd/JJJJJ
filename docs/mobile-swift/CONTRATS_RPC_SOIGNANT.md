@@ -1294,13 +1294,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   **Livré (T6, revue fraîche)** : après un `fn_remplacer_document_soignant` accepté par la requête de l'envoi (ou du
   rejeu de réconciliation), la vérification est **lancée sans être attendue** (tâche non structurée, ni bornée ni
   annulée par l'appelant), comme le web (l.410-426) : la sonde de 10 s et l'appel IA de 20 s (`index.ts` l.286-287,
-  l.625-626) ne pèsent jamais sur l'envoi. Son résultat est ignoré ; le suivi du modèle relit la ligne : statut sorti
-  d'`EN_ATTENTE` → verdict (`REVUE_MANUELLE_REQUISE` après un 503 ou un 500 → « vérification manuelle en attente ») ;
-  `EN_ATTENTE` sans `verification_attempt_id` après 60 s (429, 403 : rien n'a été écrit) → même issue. « Revérifier »
-  attend la réponse, borné par `DocumentsModel.delaiTransfert` (≥ 120 s) ; message d'erreur lu comme
-  `messageErreurEdgeFn` (`error || message || motif`, `src/lib/erreurs.ts` l.573-575) ; 401 → session expirée.
-  `cleanup_orphan` est aussi appelée, best-effort, quand la réconciliation ne trouve ni ligne ni objet (HEAD 400/404) :
-  un upload terminé côté serveur après le HEAD ne laisse pas d'objet non référencé.
+  l.625-626) ne pèsent jamais sur l'envoi. Son issue est gardée par la gateway et observée hors du chemin critique
+  (`DocumentsPort.verificationEchouee(documentId:)`, seconde revue fraîche de T6, m-d), sans jamais relancer l'appel,
+  comme le `.then` du web (l.413-425) : erreur (HTTP hors 2xx — 429, 403, 503… — ou transport) → « vérification
+  manuelle en attente » aussitôt ; réponse → relecture aussitôt (le web recharge, l.420). Le suivi du modèle relit
+  aussi la ligne : statut sorti d'`EN_ATTENTE` → verdict (`REVUE_MANUELLE_REQUISE` après un 503 ou un 500 →
+  « vérification manuelle en attente ») ; `EN_ATTENTE` sans `verification_attempt_id` après 60 s → même issue (filet
+  quand l'issue n'est pas observable). « Revérifier » attend la réponse, borné par `DocumentsModel.delaiTransfert`
+  (≥ 120 s) ; message d'erreur lu comme `messageErreurEdgeFn` (`error || message || motif`, `src/lib/erreurs.ts`
+  l.573-575) ; 401 → session expirée. `cleanup_orphan` est aussi appelée, best-effort et une fois, juste après un HEAD
+  qui ne trouve ni ligne ni objet (400/404) : portée limitée (seconde revue fraîche de T6, m-e) — elle ne rattrape
+  qu'un objet devenu visible entre le HEAD et elle ; un objet que le serveur finit d'écrire plus tard (l'upload de
+  l'essai a été annulé par le délai, la requête a pu être reçue en entier) reste non référencé dans le bucket (aucune
+  politique DELETE client). Elle ne vise jamais l'essai d'un envoi en vol : aucune instance ne réconcilie pendant un
+  envoi du même utilisateur (registre du processus `EssaisDocumentsEnVol`, M1-bis).
 - **Preuve STAGING** : T11 (P4) — 1 ligne `journaux_audit` `DOCUMENT_VERIFICATION_AUTO` pour le `document_id`
   (l.1322-1330) ou 1 ligne `file_revue_manuelle`, et 1 seule invocation dans les logs edge du run.
 
@@ -1350,7 +1357,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   recréées) : un objet n'est jamais écrasé (`upload(_:data:options:)` avec `FileOptions(contentType:, upsert: false)` —
   jamais `upload(path:file:options:)`, déprécié dans supabase-swift 2.55.5, `LOT2_PLAN.md` correction 18) ; un
   orphelin est nettoyé par l'edge (`cleanup_orphan`, service_role) ou reste non référencé. Réconciliation de
-  l'objet par `exists(path:)` (HEAD). Chemin `<uid>/documents/<TYPE>/<ms>-<nom assaini>`. Consultation par
+  l'objet par `exists(path:)` (HEAD). Échec de l'upload : « non envoyé » seulement si la requête n'a pas pu partir
+  (`cannotFindHost`, `cannotConnectToHost`, `dnsLookupFailed`) ; tout autre échec de transport, `notConnectedToInternet`
+  (-1009) compris — il peut survenir en cours de transfert sur iOS (seconde revue fraîche de T6, m-g) —, un 409 ou un
+  5xx est incertain et tranché par le HEAD. Chemin `<uid>/documents/<TYPE>/<ms>-<nom assaini>`. Consultation par
   `createSignedURL(path:expiresIn: 3600)` + audit `DOCUMENT_CONSULTATION` (présent dans le CHECK l.70243).
   **Livré (T6)** : la consultation native télécharge l'objet sous le JWT (`download(path:)`, même politique
   `pol_storage_jolene_select`) dans une copie temporaire protégée, puis écrit le même audit `DOCUMENT_CONSULTATION`

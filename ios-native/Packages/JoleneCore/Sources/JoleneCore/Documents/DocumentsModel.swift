@@ -4,24 +4,31 @@ import Foundation
 /// Modèle des justificatifs (lot 2 T6, blueprint §2.5 « Justificatif », décision 14). Données et pipeline d'envoi ;
 /// l'écran (T7) ne fait que lire ces états et traduire les issues en textes.
 ///
-/// - Lecture : dossier relu sous l'epoch de la session, borné à `SessionController.resolutionTimeout` ; cohérence des
-///   noms en best-effort (le web avale l'erreur) ; un reçu laissé par un essai précédent est réconcilié AVANT la lecture,
-///   jamais pendant un envoi en vol, et une seule réconciliation à la fois (revue fraîche de T6, M1).
-/// - Envoi, un seul à la fois (drapeau privé `envoiEnVol`, posé du début de `envoyer` jusqu'à sa fin) : reçu `prepared`
-///   puis `started` journalisés (`ReceiptJournal<RecuDocument>`, domaine `document`) AVANT l'unique upload ; issue relue
-///   par la gateway ; reçu effacé après un succès, un refus ou un « non envoyé » ; gardé `started` sur une issue
-///   incertaine, réconciliée aussitôt puis à chaque chargement — jamais de renvoi, ni de l'upload ni de
-///   `verify-document`. Aucun octet n'est conservé.
-/// - Délais : upload, réconciliation, revérification et consultation sont bornés par `delaiTransfert(octets:)` (au moins
-///   120 s, proportionnel à la taille), jamais par `resolutionTimeout` ; `verify-document` est lancé par la gateway sans
-///   être attendu (amendement de PRINCIPES l.107-114, `docs/mobile-swift/DECISIONS_LOT2.md`).
+/// - Plusieurs instances (écran rouvert pendant un upload, deux fenêtres sur iPad, nouvel epoch du même utilisateur)
+///   partagent le registre du processus `EssaisDocumentsEnVol` (revue fraîche de T6, M1-bis) : un seul envoi et une
+///   seule réconciliation à la fois par utilisateur, quelle que soit l'instance ; aucune ne réconcilie l'essai en vol
+///   d'une autre ni n'en lance un second : elle l'affiche `.enCours` puis en reprend l'issue.
+/// - Lecture : dossier relu sous l'epoch de la session, borné à `SessionController.resolutionTimeout`, AVANT la
+///   réconciliation du reçu laissé par un essai précédent (l'écran quitte `.chargement` sans l'attendre, m-b) ; cohérence
+///   des noms en best-effort (le web avale l'erreur).
+/// - Envoi : reçu `prepared` puis `started` journalisés (`ReceiptJournal<RecuDocument>`, domaine `document`) AVANT
+///   l'unique upload ; issue relue par la gateway ; reçu effacé après un succès, un refus ou un « non envoyé » ; gardé
+///   `started` sur une issue incertaine, réconciliée aussitôt puis à chaque chargement — jamais de renvoi, ni de l'upload
+///   ni de `verify-document`. Aucun octet n'est conservé.
+/// - Délais : upload, revérification et consultation sont bornés par `delaiTransfert(octets:)` (au moins 120 s,
+///   proportionnel à la taille) ; une réconciliation (ligne, HEAD, rejeu, nettoyage) par `requetesReconciliation` fois
+///   `resolutionTimeout` ; `verify-document` est lancé par la gateway sans être attendu, son issue est observée hors du
+///   chemin critique (m-d) (amendement de PRINCIPES l.107-114, `docs/mobile-swift/DECISIONS_LOT2.md`).
 /// - Verdict en ligne : relecture du dossier toutes les 5 s pendant 60 s au plus (`DocumentsSoignant.tsx` l.250-255),
-///   arrêtée dès que la pièce quitte `EN_ATTENTE`, par `arreterSuivi()` ou à la disparition du modèle (l.254) ; un
-///   verdict `VERIFIE` enchaîne sur la prochaine exigence critique (`exigenceSuivante`) ou signale un dossier complet
-///   (l.258-276) ; une revue manuelle relue, ou une vérification jamais engagée après 60 s, donne `.enregistre`
-///   (« Document téléversé. Vérification manuelle en attente. », l.416-419).
+///   aussitôt après la réponse de `verify-document` (l.420), arrêtée dès que la pièce quitte `EN_ATTENTE`, par
+///   `arreterSuivi()` ou à la disparition du modèle (l.254) ; un verdict `VERIFIE` enchaîne sur la prochaine exigence
+///   critique (`exigenceSuivante`) ou signale un dossier complet (l.258-276) ; une erreur de `verify-document`, une
+///   revue manuelle relue ou une vérification jamais engagée après 60 s donne `.enregistre` (« Document téléversé.
+///   Vérification manuelle en attente. », l.413-425).
 /// - Journal illisible (`RecuErreur.illisible`) : envoi bloqué, reçu jamais réécrit ni effacé, renvoi web
 ///   `renvoiWeb` (consigne T6 de `docs/mobile-swift/DECISIONS_LOT2.md`).
+/// - Epoch : aucun état d'erreur ni de session n'est publié pour une identité quittée (m-f) ; un modèle périmé revient
+///   à `.inactif`.
 @MainActor
 public final class DocumentsModel: ObservableObject {
     public enum Etat: Equatable, Sendable {
@@ -32,6 +39,7 @@ public final class DocumentsModel: ObservableObject {
 
     public enum EtatEnvoi: Equatable, Sendable {
         case inactif
+        /// Envoi en vol pour cet utilisateur, lancé par cette instance ou par une autre (écran rouvert, autre fenêtre).
         case enCours(typeDocument: String)
         /// Issue relue (T7 la traduit avec les messages du web).
         case termine(IssueEnvoiDocument)
@@ -58,6 +66,11 @@ public final class DocumentsModel: ObservableObject {
     public nonisolated static let delaiTransfertMinimum: TimeInterval = 120
     /// Débit plancher supposé (≈ 400 kbit/s) : 10 Mo ≈ 240 s.
     public nonisolated static let debitPlancherOctetsParSeconde: Double = 50_000
+    /// Requêtes successives d'une réconciliation au plus — ligne relue, objet relu (HEAD), rejeu de l'enregistrement,
+    /// nettoyage best-effort —, chacune de la taille d'une lecture : la réconciliation est bornée à autant de fois
+    /// `resolutionTimeout` (revue fraîche de T6, m-b). Aucun transfert de fichier, et `verify-document` n'est jamais
+    /// attendu.
+    public nonisolated static let requetesReconciliation = 4
 
     /// Borne d'un transfert de `octets` (upload, téléchargement) ou d'une vérification : 30 s de latence plus la durée au
     /// débit plancher, au moins `delaiTransfertMinimum`. Taille inconnue : celle du plafond (10 Mo).
@@ -73,7 +86,8 @@ public final class DocumentsModel: ObservableObject {
     @Published public private(set) var coherence: CoherenceDocuments?
     /// Exigence à proposer après un verdict `VERIFIE` (l.272-274) ; l'écran l'oublie quand il l'ouvre.
     @Published public private(set) var exigenceSuivante: String?
-    /// Toutes les pièces critiques sont valides après un verdict (l.266-270).
+    /// Toutes les pièces critiques sont valides après un verdict (l.266-270) ; l'écran l'oublie après la célébration
+    /// (`oublierDossierComplet()`, 2,5 s sur le web, l.268-269).
     @Published public private(set) var dossierComplet = false
     @Published public private(set) var sessionExpired = false
     /// Pièce visée par une action en cours (revérification, revue, consultation) ; « attestation » pour la signature.
@@ -88,12 +102,15 @@ public final class DocumentsModel: ObservableObject {
     private let snapshot: SessionSnapshot
     private let journal: ReceiptJournal<RecuDocument>
     private let attendre: @Sendable (TimeInterval) async throws -> Void
+    /// Clé du journal de cet utilisateur ; nil si l'identifiant est inutilisable (journal illisible).
+    private let cle: CleRecu?
+    /// Registre du processus, jamais un autre (M1-bis).
+    private let registre: EssaisDocumentsEnVol
     private var generation = 0
-    /// Envoi en vol, du début de `envoyer` jusqu'à sa fin (relecture et suivi lancés) : seule garde du « un seul envoi à
-    /// la fois », indépendante de l'état publié `envoi` (revue fraîche de T6, M1).
-    private var envoiEnVol = false
-    /// Réconciliation en cours, partagée par tout appelant (un seul passage à la fois).
-    private var reconciliation: Task<Bool, Never>?
+    /// Envoi lancé par CETTE instance (inscrit au registre du processus).
+    private var envoiPropre: Task<EtatEnvoi, Never>?
+    /// Envoi d'une autre instance du même utilisateur, affiché ici jusqu'à sa fin.
+    private var envoiObserve: Task<EtatEnvoi, Never>?
     private var suivi: Task<Void, Never>?
     private var numeroSuivi = 0
     /// Copie de la tâche de suivi, annulable depuis `deinit` (non isolé).
@@ -105,6 +122,8 @@ public final class DocumentsModel: ObservableObject {
         self.snapshot = snapshot
         self.journal = ReceiptJournal<RecuDocument>(store: recus)
         self.attendre = attendre
+        self.cle = CleRecu(domaine: RecuDocument.domaine, userId: snapshot.context.userId)
+        self.registre = .processus
     }
 
     deinit {
@@ -122,96 +141,51 @@ public final class DocumentsModel: ObservableObject {
 
     // MARK: - Chargement
 
-    /// Apparition, tirer-pour-rafraîchir, retour au premier plan (T7). Pendant un envoi, aucune réconciliation : le reçu
-    /// en vol est celui de l'envoi courant.
+    /// Apparition, tirer-pour-rafraîchir, retour au premier plan (T7). Le dossier est lu d'abord ; puis, si aucun envoi
+    /// n'est en vol pour cet utilisateur (dans cette instance ou une autre), le reçu en attente est réconcilié ; sinon
+    /// l'envoi en vol est affiché, jamais réconcilié.
     public func charger() async {
         guard let gateways = await gatewaysCourantes() else { return }
         horloge = gateways.clock
         if dossier == nil { etat = .chargement }
-        if !envoiEnVol { await reconcilierEnAttente(gateways) }
         await relireDossier(gateways, signalerEchec: true)
+        if let cle, let enVol = registre.envoi(cle) {
+            suivreEnvoi(enVol)
+        } else {
+            await reconcilierEnAttente(gateways)
+        }
         guard let dossier, !dossier.documents.isEmpty else { return }
         let port = gateways.documents
         let context = snapshot.context
         let lue = try? await bounded(timeout: controller.resolutionTimeout) { try await port.coherence(context: context) }
-        guard await controller.epoch == snapshot.epoch else { return }
+        guard await courant() else { return }
         coherence = lue
     }
 
     // MARK: - Envoi
 
     /// Envoie un fichier préparé (`FichierDocument.preparer`) pour un type proposé par l'écran
-    /// (`DossierDocuments.peutEnvoyer`). Un seul envoi à la fois : un geste pendant un envoi est ignoré.
+    /// (`DossierDocuments.peutEnvoyer`). Un seul envoi à la fois par utilisateur, dans tout le processus : un geste
+    /// pendant un envoi est ignoré ; pendant l'envoi d'une autre instance, celui-ci est affiché ici.
     public func envoyer(typeDocument: String, fichier: FichierPret, libelle: String?) async {
-        guard !envoiEnVol, envoi != .suiviIllisible else { return }
+        guard envoi != .suiviIllisible else { return }
+        guard let cle else { envoi = .suiviIllisible; return }
+        if let enVol = registre.envoi(cle) {
+            suivreEnvoi(enVol)
+            return
+        }
         guard let dossier, dossier.peutEnvoyer(typeDocument: typeDocument, maintenant: horloge.now()) else {
             envoi = .refuseAvantEnvoi(message: MessagesDocuments.enregistrementImpossible)
             return
         }
-        envoiEnVol = true
-        defer { envoiEnVol = false }
+        // Contrôle et inscription sans suspension : aucune autre instance ne peut s'intercaler.
+        guard let tache = registre.demarrerEnvoi(cle, typeDocument: typeDocument, { [self] in
+            await self.executerEnvoi(typeDocument: typeDocument, fichier: fichier, libelle: libelle)
+        }) else { return }
+        envoiPropre = tache
         envoi = .enCours(typeDocument: typeDocument)
-        guard let gateways = await gatewaysCourantes() else { envoi = .inactif; return }
-        let port = gateways.documents
-        let context = snapshot.context
-
-        // 1. Un reçu d'un essai précédent est réconcilié d'abord (sans publier son issue au milieu de cet envoi) ; tant
-        //    qu'il reste en vol, aucun nouvel envoi.
-        guard await reconcilierEnAttente(gateways) else {
-            if envoi != .suiviIllisible { envoi = .recuEnCours }
-            return
-        }
-
-        // 2. Reçu `prepared` à la clé déterministe, daté de l'epoch de cet écran.
-        let libelleSaisi = libelle.flatMap { $0.isEmpty ? nil : $0 }
-        var recu: RecuDocument
-        do {
-            recu = try await bounded(timeout: controller.resolutionTimeout) {
-                try await port.preparerEnvoi(type: typeDocument, fichier: fichier.fichier, libelle: libelleSaisi, context: context)
-            }
-            recu.epoch = snapshot.epoch
-            try recu.valider()
-        } catch let erreur as RecuErreur {
-            envoi = erreur == .illisible ? .suiviIllisible : .termine(.refuse(code: Self.codeMetadonneesInvalides))
-            return
-        } catch {
-            envoi = .erreur(message(de: error))
-            return
-        }
-        guard await controller.epoch == snapshot.epoch else { envoi = .inactif; return }
-
-        // 3. Journal AVANT l'upload : `prepared`, puis `started` juste avant l'unique requête.
-        do {
-            try await journal.ecrire(recu)
-            recu = try recu.demarrer()
-            try await journal.ecrire(recu)
-        } catch RecuErreur.recuEnCours {
-            envoi = .recuEnCours
-            return
-        } catch {
-            envoi = .suiviIllisible
-            return
-        }
-
-        // 4. Une seule requête d'envoi, bornée par la taille ; transport incertain → réconciliation immédiate.
-        var issue: IssueEnvoiDocument
-        do {
-            let demarre = recu
-            issue = try await bounded(timeout: borneTransfert(octets: fichier.octets.count)) {
-                try await port.envoyer(recu: demarre, octets: fichier.octets, context: context)
-            }
-        } catch let erreur as JoleneError where erreur.kind == .unauthorized {
-            sessionExpired = true
-            envoi = .erreur(erreur.message)
-            return
-        } catch {
-            // Délai, transport, reçu refusé par les contrôles de la gateway : rien ne prouve l'absence d'effet.
-            issue = .incertain
-        }
-        if issue == .incertain {
-            issue = await reconcilier(recu, gateways: gateways) ?? .incertain
-        }
-        await terminer(recu, issue: issue, gateways: gateways, depuisEnvoi: true)
+        _ = await tache.value
+        if envoiPropre == tache { envoiPropre = nil }
     }
 
     /// Attend la fin du suivi de vérification en cours (tests, fermeture de l'écran).
@@ -229,6 +203,11 @@ public final class DocumentsModel: ObservableObject {
 
     public func oublierExigenceSuivante() {
         exigenceSuivante = nil
+    }
+
+    /// La célébration du dossier complet a été montrée (le web l'éteint après 2,5 s, l.268-269).
+    public func oublierDossierComplet() {
+        dossierComplet = false
     }
 
     // MARK: - Actions sur une pièce
@@ -267,115 +246,207 @@ public final class DocumentsModel: ObservableObject {
         }
     }
 
-    // MARK: - Interne
+    // MARK: - Interne : envoi
 
-    private func gatewaysCourantes() async -> Gateways? {
-        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return nil }
-        guard await controller.epoch == snapshot.epoch else { return nil }
-        return gateways
-    }
-
-    /// Borne d'un transfert, jamais plus courte que `resolutionTimeout`.
-    private func borneTransfert(octets: Int?) -> TimeInterval {
-        max(controller.resolutionTimeout, Self.delaiTransfert(octets: octets))
-    }
-
-    /// Relit le dossier ; un échec n'efface jamais un dossier déjà affiché (seul le premier chargement échoue).
-    private func relireDossier(_ gateways: Gateways, signalerEchec: Bool) async {
-        generation += 1
-        let courant = generation
+    /// Corps de l'envoi inscrit au registre ; rend l'état final (repris par les autres instances), publié ici seulement
+    /// sous l'epoch de l'écran.
+    private func executerEnvoi(typeDocument: String, fichier: FichierPret, libelle: String?) async -> EtatEnvoi {
+        guard let gateways = await gatewaysCourantes() else { return await publier(.inactif) }
         let port = gateways.documents
         let context = snapshot.context
+
+        // 1. Un reçu d'un essai précédent est réconcilié d'abord (sans publier son issue au milieu de cet envoi) ; tant
+        //    qu'il reste en vol, ou si le journal est illisible, aucun nouvel envoi.
+        guard await reconcilierEnAttente(gateways) else {
+            return await publier(envoi == .suiviIllisible ? .suiviIllisible : .recuEnCours)
+        }
+
+        // 2. Reçu `prepared` à la clé déterministe, daté de l'epoch de cet écran.
+        let libelleSaisi = libelle.flatMap { $0.isEmpty ? nil : $0 }
+        var recu: RecuDocument
         do {
-            let lu = try await bounded(timeout: controller.resolutionTimeout) { try await port.dossier(context: context) }
-            guard await controller.epoch == snapshot.epoch, generation == courant else { return }
-            sessionExpired = false
-            etat = .charge(lu)
+            recu = try await bounded(timeout: controller.resolutionTimeout) {
+                try await port.preparerEnvoi(type: typeDocument, fichier: fichier.fichier, libelle: libelleSaisi, context: context)
+            }
+            recu.epoch = snapshot.epoch
+            try recu.valider()
+        } catch let erreur as RecuErreur {
+            return await publier(erreur == .illisible ? .suiviIllisible : .termine(.refuse(code: Self.codeMetadonneesInvalides)))
         } catch {
-            guard await controller.epoch == snapshot.epoch, generation == courant, !estAnnulation(error) else { return }
-            if let jolene = error as? JoleneError, jolene.kind == .unauthorized { sessionExpired = true }
-            if signalerEchec, dossier == nil { etat = .echec(message(de: error)) }
+            return await publier(.erreur(message(de: error)))
+        }
+        guard await courant() else { return await publier(.inactif) }
+
+        // 3. Journal AVANT l'upload : `prepared`, puis `started` juste avant l'unique requête.
+        do {
+            try await journal.ecrire(recu)
+            recu = try recu.demarrer()
+            try await journal.ecrire(recu)
+        } catch RecuErreur.recuEnCours {
+            return await publier(.recuEnCours)
+        } catch {
+            return await publier(.suiviIllisible)
+        }
+
+        // 4. Une seule requête d'envoi, bornée par la taille ; transport incertain → réconciliation immédiate.
+        var issue: IssueEnvoiDocument
+        do {
+            let demarre = recu
+            issue = try await bounded(timeout: borneTransfert(octets: fichier.octets.count)) {
+                try await port.envoyer(recu: demarre, octets: fichier.octets, context: context)
+            }
+        } catch let erreur as JoleneError where erreur.kind == .unauthorized {
+            if await courant() { sessionExpired = true }
+            return await publier(.erreur(erreur.message))
+        } catch {
+            // Délai, transport, reçu refusé par les contrôles de la gateway : rien ne prouve l'absence d'effet.
+            issue = .incertain
+        }
+        if issue == .incertain {
+            let relue = await relire(recu, port: port)
+            if relue.sessionExpiree, await courant() { sessionExpired = true }
+            issue = relue.issue ?? .incertain
+        }
+
+        // 5. Reçu effacé sauf issue incertaine (gardé `started`), issue publiée, dossier relu, suivi du verdict.
+        if issue != .incertain {
+            do { try await journal.effacer(recu) } catch { return await publier(.suiviIllisible) }
+        }
+        guard await courant() else { return await publier(.termine(issue)) }
+        envoi = .termine(issue)
+        if issue != .incertain { await apresIssue(issue, gateways: gateways) }
+        return .termine(issue)
+    }
+
+    /// Publie `etat` si l'epoch est toujours celui de l'écran, sinon `.inactif` : aucun état d'une identité quittée
+    /// (revue fraîche de T6, m-f). Rend `etat`, repris par les autres instances du même utilisateur.
+    private func publier(_ etat: EtatEnvoi) async -> EtatEnvoi {
+        envoi = await courant() ? etat : .inactif
+        return etat
+    }
+
+    /// Envoi inscrit pour cet utilisateur : celui de cette instance (geste ignoré) ou celui d'une autre (écran rouvert,
+    /// autre fenêtre ; M1-bis), affiché `.enCours` ici puis repris à sa fin — jamais réconcilié, jamais doublé.
+    private func suivreEnvoi(_ enVol: EssaisDocumentsEnVol.Envoi) {
+        guard enVol.tache != envoiPropre, enVol.tache != envoiObserve else { return }
+        envoiObserve = enVol.tache
+        envoi = .enCours(typeDocument: enVol.typeDocument)
+        let tache = enVol.tache
+        Task { [weak self] in
+            let fin = await tache.value
+            await self?.reprendre(fin, de: tache)
         }
     }
 
-    /// Réconcilie le reçu en attente, une seule fois à la fois : un appelant qui arrive pendant une réconciliation en
-    /// attend l'issue au lieu d'en lancer une seconde (même reçu, même rejeu idempotent, une seule vérification). Vrai si
+    /// Fin de l'envoi d'une autre instance : son issue est reprise (dossier relu, suivi du verdict) ; tout autre état
+    /// final rend l'envoi possible ici, sauf un journal illisible.
+    private func reprendre(_ fin: EtatEnvoi, de tache: Task<EtatEnvoi, Never>) async {
+        guard envoiObserve == tache else { return }
+        envoiObserve = nil
+        guard let gateways = await gatewaysCourantes() else { envoi = .inactif; return }
+        switch fin {
+        case let .termine(issue):
+            envoi = .termine(issue)
+            if issue != .incertain { await apresIssue(issue, gateways: gateways) }
+        case .suiviIllisible:
+            envoi = .suiviIllisible
+        default:
+            envoi = .inactif
+            await relireDossier(gateways, signalerEchec: false)
+        }
+    }
+
+    // MARK: - Interne : réconciliation
+
+    /// Réconcilie le reçu en attente : une seule réconciliation à la fois pour cet utilisateur, partagée par toute
+    /// instance qui la demande pendant qu'elle tourne (même reçu, même rejeu idempotent, une seule vérification). Vrai si
     /// plus rien n'est en vol.
     @discardableResult
     private func reconcilierEnAttente(_ gateways: Gateways) async -> Bool {
-        if let enCours = reconciliation { return await enCours.value }
-        let tache = Task { await self.reconcilierUneFois(gateways) }
-        reconciliation = tache
-        let resultat = await tache.value
-        reconciliation = nil
-        return resultat
+        guard let cle else {
+            if await courant() { envoi = .suiviIllisible }
+            return false
+        }
+        let port = gateways.documents
+        let tache = registre.reconciliation(cle, sinon: { [self] in await self.reconciliationPartagee(port: port) })
+        return await appliquer(await tache.value, gateways: gateways)
     }
 
-    /// `prepared` : rien n'est parti (sortie sûre `not_sent`, aucun appel) ; terminé : effacé ; sinon relecture serveur,
-    /// jamais de renvoi.
-    private func reconcilierUneFois(_ gateways: Gateways) async -> Bool {
+    /// Journal et gateway seulement, aucun état publié : `prepared` → `not_sent` puis effacé (rien n'est parti, aucun
+    /// appel) ; terminé → effacé ; sinon relecture serveur, jamais de renvoi, et reçu effacé après une issue certaine.
+    private func reconciliationPartagee(port: any DocumentsPort) async -> ResultatReconciliationDocument {
         let enAttente: RecuDocument?
         do {
             enAttente = try await journal.lire(userId: snapshot.context.userId)
         } catch {
-            envoi = .suiviIllisible
-            return false
+            return .illisible
         }
-        guard let recu = enAttente else { return true }
+        guard let recu = enAttente else { return .aucunRecu }
         if recu.estTermine || recu.phase == .prepared {
             do {
                 if recu.phase == .prepared { try await journal.ecrire(try recu.marquerNonEnvoye()) }
                 try await journal.effacer(recu)
             } catch {
-                envoi = .suiviIllisible
-                return false
+                return .illisible
             }
-            return true
+            return .efface
         }
-        guard let issue = await reconcilier(recu, gateways: gateways) else { return false }
-        await terminer(recu, issue: issue, gateways: gateways, depuisEnvoi: false)
-        return issue != .incertain
+        let relue = await relire(recu, port: port)
+        guard let issue = relue.issue else { return .echec(sessionExpiree: relue.sessionExpiree) }
+        if issue != .incertain {
+            // Un reçu qui ne s'efface pas reste en vol : fail-closed, jamais « plus rien en vol » (m-f).
+            do { try await journal.effacer(recu) } catch { return .illisible }
+        }
+        return .issue(issue)
     }
 
-    /// Une relecture par la gateway (bornée comme un transfert : le rejeu de l'enregistrement peut suivre) ; nil si elle
-    /// n'a pas pu avoir lieu (transport, délai, session).
-    private func reconcilier(_ recu: RecuDocument, gateways: Gateways) async -> IssueEnvoiDocument? {
-        let port = gateways.documents
+    /// Résultat partagé appliqué à CETTE instance. L'issue n'est jamais publiée pendant un envoi de cette instance ni
+    /// pendant l'affichage de celui d'une autre : elle ne remplace pas `.enCours`.
+    private func appliquer(_ resultat: ResultatReconciliationDocument, gateways: Gateways) async -> Bool {
+        switch resultat {
+        case .aucunRecu, .efface:
+            return true
+        case .illisible:
+            if await courant() { envoi = .suiviIllisible }
+            return false
+        case let .echec(sessionExpiree):
+            if sessionExpiree, await courant() { self.sessionExpired = true }
+            return false
+        case let .issue(issue):
+            guard await courant() else { return issue != .incertain }
+            if envoiPropre == nil, envoiObserve == nil { envoi = .termine(issue) }
+            if issue != .incertain { await apresIssue(issue, gateways: gateways) }
+            return issue != .incertain
+        }
+    }
+
+    /// Une relecture par la gateway (ligne, objet, rejeu de l'enregistrement), bornée à `requetesReconciliation` fois
+    /// `resolutionTimeout` ; issue nil si elle n'a pas pu avoir lieu (transport, délai, session).
+    private func relire(_ recu: RecuDocument, port: any DocumentsPort) async -> (issue: IssueEnvoiDocument?, sessionExpiree: Bool) {
         let context = snapshot.context
         do {
-            return try await bounded(timeout: borneTransfert(octets: recu.tailleOctets)) {
-                try await port.reconcilier(recu: recu, context: context)
-            }
+            let issue = try await bounded(timeout: borneReconciliation) { try await port.reconcilier(recu: recu, context: context) }
+            return (issue, false)
         } catch let erreur as JoleneError where erreur.kind == .unauthorized {
-            sessionExpired = true
-            return nil
+            return (nil, true)
         } catch {
-            return nil
+            return (nil, false)
         }
     }
 
-    /// Issue relue : reçu effacé sauf issue incertaine (gardé `started`), dossier relu, suivi du verdict. L'issue d'une
-    /// réconciliation n'est publiée que hors d'un envoi en vol : elle ne remplace jamais `.enCours`.
-    private func terminer(_ recu: RecuDocument, issue: IssueEnvoiDocument, gateways: Gateways, depuisEnvoi: Bool) async {
-        if issue != .incertain {
-            do {
-                try await journal.effacer(recu)
-            } catch {
-                envoi = .suiviIllisible
-                return
-            }
-        }
-        guard await controller.epoch == snapshot.epoch else { return }
-        if depuisEnvoi || !envoiEnVol { envoi = .termine(issue) }
-        guard issue != .incertain else { return }
+    /// Après une issue relue : dossier relu, puis suivi du verdict d'une vérification demandée.
+    private func apresIssue(_ issue: IssueEnvoiDocument, gateways: Gateways) async {
         await relireDossier(gateways, signalerEchec: false)
         if case let .verificationDemandee(documentId) = issue {
-            suivre(documentId)
+            suivre(documentId, port: gateways.documents)
         }
     }
 
-    private func suivre(_ documentId: String) {
+    // MARK: - Interne : suivi du verdict
+
+    private func suivre(_ documentId: String, port: any DocumentsPort) {
         enVerification.insert(documentId)
+        observerVerification(documentId, port: port)
         if let suivi, !suivi.isCancelled { return }
         numeroSuivi += 1
         let numero = numeroSuivi
@@ -395,6 +466,27 @@ public final class DocumentsModel: ObservableObject {
         }
         suivi = tache
         annulationSuivi.poser(tache)
+    }
+
+    /// Issue de `verify-document`, attendue hors du chemin critique (revue fraîche de T6, m-d), comme le `.then` du web
+    /// (l.413-425) : une erreur (429, 403, 503…) donne aussitôt « vérification manuelle en attente » ; une réponse
+    /// donne aussitôt une relecture (`charger()`, l.420). Inconnue (port sans suivi, démo) : rien, le suivi relit.
+    private func observerVerification(_ documentId: String, port: any DocumentsPort) {
+        Task { [weak self] in
+            guard let echec = await port.verificationEchouee(documentId: documentId) else { return }
+            await self?.issueVerification(documentId, echec: echec)
+        }
+    }
+
+    private func issueVerification(_ documentId: String, echec: Bool) async {
+        guard enVerification.contains(documentId), await courant() else { return }
+        guard echec else {
+            _ = await releverSuivi(final: false)
+            return
+        }
+        enVerification.remove(documentId)
+        verificationManuelle(documentId)
+        if let gateways = await gatewaysCourantes() { await relireDossier(gateways, signalerEchec: false) }
     }
 
     /// Une relecture du suivi ; vrai tant qu'une pièce suivie reste `EN_ATTENTE`.
@@ -441,23 +533,64 @@ public final class DocumentsModel: ObservableObject {
         enVerification = []
     }
 
+    // MARK: - Interne : lectures et actions
+
+    private func gatewaysCourantes() async -> Gateways? {
+        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return nil }
+        guard await courant() else { return nil }
+        return gateways
+    }
+
+    private func courant() async -> Bool {
+        await controller.epoch == snapshot.epoch
+    }
+
+    /// Borne d'un transfert, jamais plus courte que `resolutionTimeout`.
+    private func borneTransfert(octets: Int?) -> TimeInterval {
+        max(controller.resolutionTimeout, Self.delaiTransfert(octets: octets))
+    }
+
+    private var borneReconciliation: TimeInterval {
+        controller.resolutionTimeout * Double(Self.requetesReconciliation)
+    }
+
+    /// Relit le dossier ; un échec n'efface jamais un dossier déjà affiché (seul le premier chargement échoue).
+    private func relireDossier(_ gateways: Gateways, signalerEchec: Bool) async {
+        generation += 1
+        let numero = generation
+        let port = gateways.documents
+        let context = snapshot.context
+        do {
+            let lu = try await bounded(timeout: controller.resolutionTimeout) { try await port.dossier(context: context) }
+            guard await courant(), generation == numero else { return }
+            sessionExpired = false
+            etat = .charge(lu)
+        } catch {
+            guard await courant(), generation == numero, !estAnnulation(error) else { return }
+            if let jolene = error as? JoleneError, jolene.kind == .unauthorized { sessionExpired = true }
+            if signalerEchec, dossier == nil { etat = .echec(message(de: error)) }
+        }
+    }
+
     /// Action ponctuelle : une requête bornée (`delai`, `resolutionTimeout` par défaut), refus affiché (`messageAction`),
-    /// relecture du dossier après succès.
+    /// relecture du dossier après succès. Une seule à la fois : la garde est posée AVANT toute suspension (revue fraîche
+    /// de T6, m-a), un second geste déjà en file est ignoré.
     private func action<T: Sendable>(_ cible: String, relire: Bool = true, delai: TimeInterval? = nil,
                                      _ appel: @escaping @Sendable (any DocumentsPort, MissionReadContext) async throws -> T) async -> T? {
-        guard actionEnCours == nil, let gateways = await gatewaysCourantes() else { return nil }
+        guard actionEnCours == nil else { return nil }
         actionEnCours = cible
-        messageAction = nil
         defer { actionEnCours = nil }
+        guard let gateways = await gatewaysCourantes() else { return nil }
+        messageAction = nil
         let port = gateways.documents
         let context = snapshot.context
         do {
             let resultat = try await bounded(timeout: delai ?? controller.resolutionTimeout) { try await appel(port, context) }
-            guard await controller.epoch == snapshot.epoch else { return nil }
+            guard await courant() else { return nil }
             if relire { await relireDossier(gateways, signalerEchec: false) }
             return resultat
         } catch {
-            guard await controller.epoch == snapshot.epoch, !estAnnulation(error) else { return nil }
+            guard await courant(), !estAnnulation(error) else { return nil }
             if let jolene = error as? JoleneError, jolene.kind == .unauthorized { sessionExpired = true }
             messageAction = message(de: error)
             return nil

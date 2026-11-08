@@ -201,8 +201,18 @@ public struct PreuveDocument: Codable, Equatable, Sendable {
         return verificationAttemptId != nil
     }
 
-    /// Issue d'une ligne relue : suivi du verdict si la vérification est engagée, sinon « Revérifier » proposé.
+    /// Issue d'une ligne relue, dérivée du statut relu (revue fraîche de T6, m-c) : tentative en cours sans verdict →
+    /// suivi du verdict ; revue manuelle, ou aucune tentative → « vérification manuelle en attente » (l.416-419), jamais
+    /// de vérification automatique ; verdict déjà rendu (`VERIFIE`, `REJETE`, `EXPIRE`…) → `.verdictRendu`, sans suivi :
+    /// jamais « vérification en cours » pour une pièce déjà jugée.
     public var issue: IssueEnvoiDocument {
-        verificationEngagee ? .verificationDemandee(documentId: id) : .enregistre(documentId: id)
+        switch statutVerification {
+        case nil, VerdictDocument.enAttente.rawValue?:
+            return verificationAttemptId != nil ? .verificationDemandee(documentId: id) : .enregistre(documentId: id)
+        case VerdictDocument.revueManuelleRequise.rawValue?:
+            return .enregistre(documentId: id)
+        default:
+            return .verdictRendu(documentId: id)
+        }
     }
 }
