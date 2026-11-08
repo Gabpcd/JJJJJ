@@ -14,7 +14,7 @@ import Foundation
 /// attendant, chaque tranche d'écran du lot 3 change **une ligne** de `ecranNatifLivre` (au lieu
 /// de `DeepLinkCoordinator.swift`, prévu par le blueprint du lot 3 §3 T3) et la ligne
 /// correspondante de `DeepLinkIntentTests`.
-public struct DeepLinkIntent: Equatable, Sendable {
+public struct DeepLinkIntent: Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
     /// Route rendue par `LinkRouter`, indépendante de la disponibilité des écrans.
     public let route: JoleneRoute
     /// URL web canonique du lien reçu, servie par Safari si l'écran n'est pas livré.
@@ -37,6 +37,13 @@ public struct DeepLinkIntent: Equatable, Sendable {
         self.route = route
         self.canonique = canonique
     }
+
+    /// Chemin seul : query et fragment d'un lien de rappel portent des secrets (`token_hash`,
+    /// `code`, `access_token`, `refresh_token`), jamais journalisés.
+    public var description: String {
+        "DeepLinkIntent(\(canonique.path), \(route.isNative ? "native" : "web"), query et fragment masqués)"
+    }
+    public var debugDescription: String { description }
 
     /// Ce que l'app présente : la route si son écran natif est livré, une route externe telle
     /// quelle, sinon `.safari(canonique)`.
