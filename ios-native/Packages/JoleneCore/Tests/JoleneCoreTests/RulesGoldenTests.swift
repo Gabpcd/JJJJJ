@@ -96,9 +96,10 @@ enum Golden {
                            // Lot 1, T2 : planning candidat, sélection de série, complétude du planning.
                            "planning-candidat", "selection-serie-candidat", "completude-planning-mission",
                            // Lot 2, T2 : synthèse et historique de présence, justificatifs, contrats.
-                           // T2b (après la PR web W1) ajoutera « documents-requis » et « presences-soignant-listes ».
                            "synthese-presence-mission", "presences-soignant-ui", "document-upload", "documents",
-                           "contrat-mission-ui", "signature-sms-staging-admission"]
+                           "contrat-mission-ui", "signature-sms-staging-admission",
+                           // Lot 2, T2b : règles extraites par la PR web W1 (#1112).
+                           "documents-requis", "presences-soignant-listes"]
     static let minimumTotal = 200
 
     struct FichierIntrouvable: Error, CustomStringConvertible {

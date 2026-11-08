@@ -3,7 +3,7 @@ import XCTest
 
 /// Rejoue `Resources/golden/documents.json` (port de `rppsDispenseDiplome` et
 /// `diplomeCompatibleProfession`, `src/lib/documents.ts`). Le filtre des exigences par
-/// profession et `type_exercice` (`documents-requis.ts`) arrive avec T2b, après la PR web W1.
+/// profession et `type_exercice` (`documents-requis.ts`) est rejoué par `RulesDocumentsRequisTests` (T2b).
 final class RulesExigencesDocumentsTests: XCTestCase {
     func testVecteursGoldenDocuments() throws {
         let rejoues = try Golden.rejouer("documents") { vecteur in
