@@ -13,6 +13,7 @@ struct JoleneApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(container: container)
+                .modifier(ThemeRacine(theme: container.theme)) // lot 3, T11 : thème Système / Clair / Sombre (D16)
                 .onChange(of: scenePhase) { phase in handleScenePhase(phase) }
         }
     }

@@ -962,7 +962,7 @@
     },
     {
       "name": "fn_rgpd_exporter_rate_limited",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "never",

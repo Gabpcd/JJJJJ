@@ -1,0 +1,122 @@
+{
+  "profil": {
+    "id": "demo-soignant",
+    "nom": "Démo",
+    "email": "demonstration@example.invalid",
+    "prenom": "Camille",
+    "profession": "IDE",
+    "adresse_lat": 48.8566,
+    "adresse_lng": 2.3522,
+    "type_contrat": "CDD",
+    "type_exercice": "MIXTE",
+    "ville_recherche": null,
+    "rayon_deplacement_km": 50,
+    "taux_horaire_minimum": 0,
+    "tous_documents_valides": false,
+    "types_contrat_acceptes": "[\"CDD\",\"LIBERAL\"]"
+  },
+  "missions": [],
+  "documents": [],
+  "presences": [],
+  "export_date": "2026-11-02T00:00:00+00:00",
+  "parrainages": [],
+  "candidatures": [],
+  "partages_rib": [],
+  "messages_chat": [],
+  "notifications": [
+    {
+      "lue": false,
+      "type": "RAPPEL_MISSION",
+      "corps": "Votre mission fictive « Démonstration · Mission assignée 1 » approche.",
+      "titre": "Démonstration · Rappel de mission",
+      "cree_le": "2026-11-01T22:00:00.000Z"
+    },
+    {
+      "lue": false,
+      "type": "CANDIDATURE_ACCEPTEE",
+      "corps": "Une candidature fictive a été retenue. Retrouvez-la dans Mes missions.",
+      "titre": "Démonstration · Candidature acceptée",
+      "cree_le": "2026-11-01T19:00:00.000Z"
+    },
+    {
+      "lue": true,
+      "type": "FACTURE_EMISE",
+      "corps": "Une facture fictive est disponible.",
+      "titre": "Démonstration · Facture émise",
+      "cree_le": "2026-10-31T22:00:00.000Z"
+    },
+    {
+      "lue": true,
+      "type": "SYSTEM",
+      "corps": "Configurez vos paiements fictifs.",
+      "titre": "Démonstration · Paiements",
+      "cree_le": "2026-10-31T00:00:00.000Z"
+    },
+    {
+      "lue": true,
+      "type": "SYSTEM",
+      "corps": "Choisissez les notifications que vous recevez.",
+      "titre": "Démonstration · Préférences",
+      "cree_le": "2026-10-30T00:00:00.000Z"
+    },
+    {
+      "lue": true,
+      "type": "LITIGE_OUVERT",
+      "corps": "Un litige fictif a été ouvert sur une mission.",
+      "titre": "Démonstration · Litige ouvert",
+      "cree_le": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "lue": true,
+      "type": "MISSION_A_POURVOIR",
+      "corps": "Une mission fictive correspond à votre profil.",
+      "titre": "Démonstration · Nouvelle mission",
+      "cree_le": "2026-10-27T00:00:00.000Z"
+    }
+  ],
+  "bulletins_paie": [],
+  "utilisateur_id": "demo-soignant",
+  "factor_advances": [],
+  "messages_litige": [],
+  "cessions_creance": [],
+  "contrats_mission": [],
+  "messages_mission": [],
+  "notations_recues": [],
+  "notations_donnees": [],
+  "evaluations_recues": [],
+  "paiements_soignant": [],
+  "serie_email_envois": [],
+  "evaluations_donnees": [],
+  "factures_honoraires": [],
+  "filtres_sauvegardes": [],
+  "mandats_facturation": [],
+  "cotisations_sociales": [],
+  "favoris_etablissements": [],
+  "prevoyance_liste_attente": [],
+  "preferences_notifications": {
+    "cree_le": "2026-10-01T08:00:00+00:00",
+    "canal_sms": false,
+    "canal_push": true,
+    "canal_email": true,
+    "canal_in_app": true,
+    "mis_a_jour_le": "2026-10-01T08:00:00+00:00"
+  },
+  "scoring_breakdown_historique": [],
+  "preferences_notifications_par_evenement": [
+    {
+      "actif": false,
+      "canal": "EMAIL",
+      "type_evenement": "NOUVELLE_MISSION_MATCHANT_FILTRE"
+    },
+    {
+      "actif": false,
+      "canal": "PUSH",
+      "type_evenement": "LITIGE_RESOLU"
+    },
+    {
+      "actif": false,
+      "canal": "EMAIL",
+      "type_evenement": "SERIE_ONBOARDING"
+    }
+  ]
+}

@@ -92,7 +92,7 @@ export const RPC_SUIVIES = [
   { name: 'fn_enregistrer_parcours_inscription', statut: 'a_venir', lot: 3 },
   { name: 'fn_types_exercice_autorises', statut: 'a_venir', lot: 3 },
   { name: 'fn_modifier_mon_profil', statut: 'consommee', lot: 3 }, // L3-T9 : SupabaseProfilGateway
-  { name: 'fn_rgpd_exporter_rate_limited', statut: 'a_venir', lot: 3 },
+  { name: 'fn_rgpd_exporter_rate_limited', statut: 'consommee', lot: 3 }, // L3-T11 : SupabaseExportGateway
   { name: 'fn_confirmer_paiement_soignant', statut: 'a_venir', lot: 3 },
   { name: 'fn_contester_paiement_soignant', statut: 'a_venir', lot: 3 },
   { name: 'fn_consulter_mon_iban', statut: 'a_venir', lot: 3 },

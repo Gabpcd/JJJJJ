@@ -37,6 +37,9 @@ final class AppContainer: ObservableObject {
     private(set) var prePrompt: ContextePrePromptPush?
     /// Lot 1, T8 : avis de fin de compte partagé entre l'écran de suppression et la racine.
     let finDeCompte = AvisFinDeCompte()
+    /// Lot 3, T11 : thème de l'app (D16), appliqué à la racine (`ThemeRacine`) ; par appareil (`UserDefaults`,
+    /// clé `jolene.theme`) en staging et production, mémoire vive en démo (chaque lancement démo part de Système).
+    let theme: PreferenceThemeModel
     #if DEBUG
     let networkSentinel: NetworkSentinel.Monitor?
     #endif
@@ -67,6 +70,7 @@ final class AppContainer: ObservableObject {
         self.environment = environment
         let boite = NotificationCenterDelegate.shared.boite
         tapsPush = boite
+        theme = PreferenceThemeModel(stockage: environment.mode == .demo ? MemoireStockageAppareil() : UserDefaultsStockageAppareil())
 
         // Un mode inconnu (`unknownModeRaw`) est refusé par `validate()` avant tout choix de gateways.
         if let error = Self.refusal(of: environment) {
@@ -144,7 +148,9 @@ final class AppContainer: ObservableObject {
     /// (`DemoAccueilTests.testAccueilErreurPuisReprise`) ; lot 3, T6 : `JOLENE_FORCE_PREFERENCES_ECHEC=1`,
     /// de même pour les préférences de notifications (`DemoPreferencesEchecGateway`,
     /// `DemoPreferencesTests.testPreferencesErreurPuisReprise`) ; lot 3, T9 : `JOLENE_DEMO_PROFIL=<variante>`
-    /// (`VarianteProfilDemo`) sert le profil démo dans une variante de recette (`DemoProfilTests`).
+    /// (`VarianteProfilDemo`) sert le profil démo dans une variante de recette (`DemoProfilTests`) ; lot 3, T11 :
+    /// `JOLENE_FORCE_EXPORT_ECHEC=1` fait refuser l'export RGPD avec le message serveur verbatim
+    /// (`DemoCompteLot3Tests.testExportRefuseParLeServeurAfficheLeMessageSansFeuille`).
     /// Jamais compilé en Release.
     private static func demoGateways(processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
@@ -157,6 +163,9 @@ final class AppContainer: ObservableObject {
         }
         if let variante = processEnvironment[VarianteProfilDemo.variableEnvironnement].flatMap(VarianteProfilDemo.init(rawValue:)) {
             gateways.profil = DemoProfilGateway(variante: variante) // lot 3, T9
+        }
+        if processEnvironment["JOLENE_FORCE_EXPORT_ECHEC"] == "1" {
+            gateways.exportRGPD = DemoExportRGPDGateway(refus: ExportRGPD.refusLimiteServeur) // lot 3, T11
         }
         return gateways
         #else
