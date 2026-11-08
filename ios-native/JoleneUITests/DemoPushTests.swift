@@ -1,7 +1,7 @@
 import XCTest
 
-/// Push en démo, partie autorisation (lot 3, T4 ; blueprint §2.7). Les taps de notification
-/// (`-JOLENE_SIMULER_PUSH`) sont ajoutés par T5. Aucune requête réseau.
+/// Push en démo (lot 3 ; blueprint §2.7) : autorisation (T4), taps de notification simulés
+/// (`-JOLENE_SIMULER_PUSH`) et pré-prompt (`-JOLENE_SESSION_COUNT 2`) (T5). Aucune requête réseau.
 ///
 /// Ce que ces tests prouvent (niveau 2), et seulement cela :
 /// - carte « Autorisation du téléphone » de l'onglet Profil (`push-etat-appareil`, textes verbatim de
@@ -65,6 +65,8 @@ final class DemoPushTests: JoleneUITestCase {
                        "Jamais demandé, canal inconnu dans le hub : aucune carte, rien n'est affirmé")
         XCTAssertFalse(element("push-ouvrir-reglages").exists)
         aucuneAlerte()
+        // T5 : 1re session démo (compteur en mémoire vive) : jamais de pré-prompt (D1).
+        XCTAssertFalse(element("push-preprompt").exists, "1re session : aucun pré-prompt")
         record("\(proofPrefix)-push-non-demande")
     }
 
@@ -81,7 +83,142 @@ final class DemoPushTests: JoleneUITestCase {
         record("\(proofPrefix)-push-refuse")
     }
 
+    // MARK: Taps (T5)
+
+    // Tap à froid simulé (`-JOLENE_SIMULER_PUSH <TYPE>[:<valeur>][:<lien>]`, DEBUG démo) : mémorisé avant la session,
+    // rejoué par le premier espace prêt après la connexion, rôle lu dans le snapshot (blueprint §2.5). Six types
+    // ouvrent un écran natif ; un renvoi web (litige) est vérifié par la route présentée (`push-tap-cible`, DEBUG),
+    // faute de présentateur `.safari` avant L1-T10. Les autres types (factures, paiements, préférences) sont
+    // prouvés au niveau 1 (`PushTapIntentTests.testCiblesDesTypesPrincipaux`).
+
+    func testTapRappelMissionOuvreLeDetail() throws {
+        try tapOuvreLeDetail("RAPPEL_MISSION:demo-assignee-001", titre: "Démonstration · Mission assignée 1",
+                             route: "missionDetail demo-assignee-001")
+    }
+
+    func testTapCandidatureAccepteeOuvreLeDetail() throws {
+        try tapOuvreLeDetail("CANDIDATURE_ACCEPTEE:demo-mission-002", titre: "Démonstration · Soins de suite 2",
+                             route: "missionDetail demo-mission-002")
+    }
+
+    func testTapMissionAssigneeOuvreLeDetail() throws {
+        try tapOuvreLeDetail("MISSION_ASSIGNEE:demo-assignee-002", titre: "Démonstration · Mission assignée 2",
+                             route: "missionDetail demo-assignee-002")
+    }
+
+    func testTapMissionAPourvoirSansIdOuvreExplorer() throws {
+        launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", "MISSION_A_POURVOIR"])
+        signInDemo()
+        require("Explorer est ouvert (`/soignant/recherche-missions`)", timeout: 30) {
+            self.containerVisible(self.element("missions-list"))
+        }
+        XCTAssertEqual(element("push-tap-cible").label, "explorer")
+        record("\(proofPrefix)-push-tap-explorer")
+    }
+
+    func testTapMissionAnnuleeSansIdOuvreMesMissions() throws {
+        launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", "MISSION_ANNULEE_ETAB"])
+        signInDemo()
+        require("L'onglet Mes missions est ouvert (`/soignant/missions`)", timeout: 30) {
+            self.visible(self.element("placeholder-missions"))
+        }
+        XCTAssertEqual(element("push-tap-cible").label, "missions")
+        record("\(proofPrefix)-push-tap-mes-missions")
+    }
+
+    func testTapLienExpliciteOuvreLeCentreDeNotifications() throws {
+        launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", "SYSTEM::/soignant/notifications"])
+        signInDemo()
+        require("Le centre de notifications natif est ouvert", timeout: 30) {
+            self.containerVisible(self.element("notifications-screen"))
+                && self.element("notification-demo-notification-001").exists
+        }
+        XCTAssertEqual(element("push-tap-cible").label, "notifications")
+        record("\(proofPrefix)-push-tap-centre")
+    }
+
+    func testTapLitigeVersLeWebSansEcranBloquant() throws {
+        launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", "LITIGE_OUVERT"])
+        signInDemo()
+        let cible = element("push-tap-cible")
+        require("Le tap est présenté (renvoi web)", timeout: 30) { cible.exists }
+        XCTAssertEqual(cible.label, "safari https://jolene.app/soignant/litiges", "page web canonique, jamais un écran vide")
+        XCTAssertTrue(containerVisible(element("accueil-screen")), "sans présentateur `.safari` (L1-T10), l'espace reste affiché")
+        XCTAssertFalse(element("access-blocked").exists)
+        XCTAssertFalse(element("env-blocked").exists)
+        record("\(proofPrefix)-push-tap-web")
+    }
+
+    // MARK: Pré-prompt (T5)
+
+    func testPrePromptDeuxiemeSessionPuisActiver() throws {
+        launchDemo(extraArguments: ["-JOLENE_SESSION_COUNT", "2"]) // autorisation démo : jamais demandée
+        signInDemo()
+        aucuneAlerte()
+        let carte = element("push-preprompt")
+        require("Le pré-prompt apparaît (2e session, 5 s après l'ouverture de l'espace)", timeout: 20) { carte.exists }
+        XCTAssertEqual(element("push-preprompt-title").label, "Recevoir les alertes missions ?")
+        XCTAssertEqual(element("push-preprompt-message").label,
+                       "Jolene vous envoie des notifications pour les nouvelles missions, les rappels de pointage et les mises à jour de vos contrats.")
+        let activer = element("push-preprompt-activer")
+        require("« Activer les notifications » est atteignable") { self.visible(activer) && activer.isEnabled }
+        XCTAssertEqual(activer.label, "Activer les notifications")
+        XCTAssertEqual(element("push-preprompt-plus-tard").label, "Plus tard")
+        record("\(proofPrefix)-push-preprompt")
+
+        activer.tap()
+        let issue = element("push-preprompt-issue")
+        require("L'activation aboutit : alertes push activées", timeout: 15) { issue.exists }
+        XCTAssertTrue(issue.label.contains("Alertes push activées !"), "issue : « \(issue.label) »")
+        XCTAssertFalse(carte.exists, "le pré-prompt se ferme avant la demande")
+        aucuneAlerte()
+        record("\(proofPrefix)-push-preprompt-active")
+        // L'issue (toast) se ferme au tap ; sur iPad, elle recouvrirait la barre d'onglets haute.
+        issue.tap()
+        require("L'issue est effacée au tap") { !issue.exists }
+
+        openProfile()
+        let message = carteEtat()
+        require("L'appareil est autorisé et enregistré") { message.label == Self.autorisees }
+    }
+
+    func testPrePromptPlusTard() throws {
+        launchDemo(extraArguments: ["-JOLENE_SESSION_COUNT", "2"])
+        signInDemo()
+        let plusTard = element("push-preprompt-plus-tard")
+        require("Le pré-prompt apparaît", timeout: 20) { self.visible(plusTard) }
+        plusTard.tap()
+        require("« Plus tard » ferme le pré-prompt") { !self.element("push-preprompt").exists }
+        XCTAssertFalse(element("push-preprompt-issue").exists, "aucune demande, donc aucune issue")
+        aucuneAlerte()
+        openProfile()
+        let list = element("profile-list")
+        require("La liste du profil est affichée") { self.containerVisible(list) }
+        scrollTo(element("compte-suppression-info"), in: list)
+        XCTAssertFalse(element("push-etat-appareil").exists, "autorisation toujours jamais demandée : aucune carte")
+        record("\(proofPrefix)-push-preprompt-plus-tard")
+    }
+
     // MARK: Étapes
+
+    /// Tap à froid vers le détail d'une mission démo : rejoué après la connexion, détail empilé sur l'Accueil.
+    private func tapOuvreLeDetail(_ simulation: String, titre attendu: String, route: String) throws {
+        launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", simulation])
+        signInDemo()
+        let titre = element("mission-detail-title")
+        require("Le tap ouvre le détail de la mission", timeout: 30) {
+            self.containerVisible(self.element("mission-detail")) && self.visible(titre)
+        }
+        XCTAssertEqual(titre.label, attendu)
+        XCTAssertEqual(element("push-tap-cible").label, route)
+        aucuneAlerte()
+        record("\(proofPrefix)-push-tap-\(route.replacingOccurrences(of: " ", with: "-"))")
+        // Retour : la pile de l'Accueil reste cohérente (le détail était empilé sur sa racine).
+        let retour = app.navigationBars.buttons.firstMatch
+        require("Le bouton retour est disponible") { self.visible(retour) }
+        retour.tap()
+        require("Retour à l'Accueil") { self.containerVisible(self.element("accueil-screen")) && !titre.exists }
+    }
 
     /// Aucune alerte au login (D1) : ni alerte de l'app, ni feuille SpringBoard (garde de câblage en démo,
     /// voir l'en-tête : le double d'autorisation ne sollicite jamais le système).

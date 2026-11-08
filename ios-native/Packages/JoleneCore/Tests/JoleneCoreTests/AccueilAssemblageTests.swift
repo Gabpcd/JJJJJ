@@ -334,8 +334,8 @@ final class AccueilAssemblageTests: XCTestCase {
         XCTAssertEqual(AccueilPresentation.lienNotifications, "/soignant/notifications")
         XCTAssertEqual(AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences),
                        .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/presences"))))
-        XCTAssertEqual(AccueilPresentation.renvoiWeb(AccueilPresentation.lienNotifications),
-                       .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/notifications"))))
+        // Lot 3, T5 : le centre de notifications est natif, plus de renvoi web (point de fusion de T3a).
+        XCTAssertNil(AccueilPresentation.renvoiWeb(AccueilPresentation.lienNotifications))
         XCTAssertNil(AccueilPresentation.renvoiWeb("/soignant/missions"), "un écran natif n'est jamais ouvert comme renvoi web")
         XCTAssertNil(AccueilPresentation.renvoiWeb("https://exemple.invalid/soignant/presences"), "hôte étranger refusé")
     }

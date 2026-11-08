@@ -72,12 +72,15 @@ final class DemoAccueilTests: JoleneUITestCase {
         // `accueil-calendrier-issue` après un tap (LOT1_PLAN.md §3 T5, verrou de clôture T12).
         XCTAssertFalse(dansEcran("accueil-calendrier-demo-assignee-001", ecran).exists,
                        "bouton calendrier sans implémentation injectée : jamais un bouton sans effet (T5 le câble)")
-        // Renvois web (pointage, notifications) : le compteur reste affiché, mais aucun bouton tant que
-        // T10 n'injecte pas le présentateur `.safari` (`SFSafariViewController`) : un `openURL` d'un
-        // chemin `/soignant/*` reviendrait dans l'app par lien universel, sans effet. T10 remplace ces
-        // assertions par la présence du bouton et la présentation du renvoi (LOT1_PLAN.md §3 T10, verrou T12 n°2).
-        XCTAssertFalse(dansEcran("accueil-notifications-action", ecran).exists,
-                       "bouton « Voir sur jolene.app » sans présentateur injecté : jamais un bouton sans effet (T10 le câble)")
+        // Lot 3, T5 : le centre de notifications est natif ; « Voir » l'ouvre dans la pile de l'Accueil (son parcours
+        // est prouvé par `DemoNotificationsTests`). Ancien renvoi « Voir sur jolene.app » retiré (point de fusion T3a).
+        let voirNotifications = dansEcran("accueil-notifications-action", ecran)
+        degager(voirNotifications, dans: ecran)
+        XCTAssertEqual(voirNotifications.label, "Voir", "« Voir » ouvre le centre de notifications natif")
+        // Renvoi web du pointage : le compteur reste affiché, mais aucun bouton tant que T10 n'injecte pas le
+        // présentateur `.safari` (`SFSafariViewController`) : un `openURL` d'un chemin `/soignant/*` reviendrait
+        // dans l'app par lien universel, sans effet. T10 remplace cette assertion par la présence du bouton et la
+        // présentation du renvoi (LOT1_PLAN.md §3 T10, verrou T12 n°2).
         XCTAssertFalse(dansEcran("accueil-oubli-pointage-action", ecran).exists,
                        "bouton « Vérifier mes présences » sans présentateur injecté (T10 le câble)")
         record("\(proofPrefix)-accueil-bas")
