@@ -298,6 +298,27 @@ export function buildDemoPreferences() {
   };
 }
 
+/**
+ * Profil complet démo (lot 3, T9) : réponse de `fn_mon_profil_soignant_complet` (colonnes du dump
+ * `supabase/schema/public.sql` l.44667-44679) pour le profil fictif, RÉDUITE À LA LISTE BLANCHE du
+ * décodeur Swift (`ProfilComplet.clesLues`) : aucune clé sensible (`numero_secu`, `siret_liberal`,
+ * `iban_last4`…), garde `DemoProfilGatewayTests`. Identité alignée sur le tableau de bord démo.
+ */
+export function buildDemoProfilComplet(now = new Date(FIXED_NOW)) {
+  const p = DEMO_PROFILE.profile;
+  return {
+    fixed_now: now.toISOString(),
+    profil: {
+      id: p.id, prenom: 'Camille', nom: 'Démo', email: DEMO_PROFILE.email, telephone: null,
+      date_naissance: '1990-05-14', profession: p.profession, numero_rpps: null, rpps_verifie: false,
+      type_contrat: p.type_contrat, type_exercice: p.type_exercice,
+      adresse_lat: p.adresse_lat, adresse_lng: p.adresse_lng, rayon_deplacement_km: p.rayon_deplacement_km,
+      bio: null, annees_experience: 4, specialites: [], types_contrat_acceptes: p.types_contrat_acceptes,
+      avatar_url: null, taux_horaire_minimum: p.taux_horaire_minimum, ville_recherche: null,
+    },
+  };
+}
+
 export function buildFixtures() {
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
@@ -306,6 +327,7 @@ export function buildFixtures() {
     'demo-dashboard.json': buildDemoDashboard(),
     'demo-notifications.json': buildDemoNotifications(),
     'demo-preferences.json': buildDemoPreferences(), // lot 3, T6
+    'demo-profil-complet.json': buildDemoProfilComplet(),
   };
 }
 

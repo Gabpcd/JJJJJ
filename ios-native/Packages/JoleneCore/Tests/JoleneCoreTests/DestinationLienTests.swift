@@ -31,9 +31,6 @@ final class DestinationLienTests: XCTestCase {
             ("https://jolene.app/inscription/completer?ref=ABCD-12#x",
              .inscription(EtapeInscription(page: .completer, query: "ref=ABCD-12")),
              "https://jolene.app/inscription/completer?ref=ABCD-12#x"),                                             // T8
-            ("https://jolene.app/soignant/profil?tab=principal", .profil,
-             "https://jolene.app/soignant/profil?tab=principal"),                                                   // T9
-            ("https://jolene.app/soignant/reputation", .profil, "https://jolene.app/soignant/reputation"),          // T9
             ("https://jolene.app/soignant/mes-gains?tab=paiements", .revenus(section: .paiementsAConfirmer),
              "https://jolene.app/soignant/mes-gains?tab=paiements"),                                                // T13
         ]
@@ -114,6 +111,8 @@ final class DestinationLienTests: XCTestCase {
             ("/soignant/parametres", .monCompte),
             ("/soignant/score", .monCompte),
             ("/soignant/notifications?utm_source=push#haut", .notifications),                    // lot 3, T5
+            ("/soignant/profil?tab=principal", .profil),          // lot 3, T9 : édition du profil livrée
+            ("/soignant/reputation", .profil),                    // lot 3, T9 : alias du profil
         ]
         for (chemin, route) in cas {
             let d = try XCTUnwrap(lien("https://jolene.app" + chemin), chemin)
@@ -217,7 +216,7 @@ final class DestinationLienTests: XCTestCase {
             "/soignant/missions": ("missions", "missions", 130),
             "/soignant/recherche-missions": ("explorer", "explorer", 24),
             "/soignant/notifications": ("notifications", "notifications", 6),                // T5
-            "/soignant/profil": ("profil", "safari", 7),                                     // T9
+            "/soignant/profil": ("profil", "profil", 7),                                     // T9 (livrée)
             "/soignant/stripe-connect": ("stripeConnect", "safari", 6),                      // T14a
             "/soignant/mes-gains?tab=paiements": ("revenus(paiements)", "safari", 32),       // T13
             "/soignant/mes-gains?tab=factures": ("revenus(factures)", "safari", 21),         // lot 4 (D4)
@@ -254,8 +253,8 @@ final class DestinationLienTests: XCTestCase {
             }
         }
         XCTAssertEqual(decomptes, attendus.mapValues { $0.nombre }, "décomptes par famille")
-        XCTAssertEqual(natifs, 454, "destinations natives (T5 : +6, centre de notifications)")
-        XCTAssertEqual(renvois, 436, "renvois web")
+        XCTAssertEqual(natifs, 461, "destinations natives (T5 : +6, centre de notifications ; T9 : +7, profil)")
+        XCTAssertEqual(renvois, 429, "renvois web")
     }
 
     // MARK: Description masquée (PRINCIPES §7 : ni identifiant ni jeton dans les logs)
@@ -401,7 +400,7 @@ final class DestinationLienTests: XCTestCase {
             (.inscription(EtapeInscription(page: .soignant, query: nil)), false, "T7"),
             (.inscription(EtapeInscription(page: .reprendre, query: nil)), false, "T7"),
             (.inscription(EtapeInscription(page: .completer, query: nil)), false, "T8"),
-            (.profil, false, "T9"),
+            (.profil, true, "T9 : ProfilEditionScreen"),
             (.revenus(section: .paiementsAConfirmer), false, "T13"),
             (.stripeConnect(retour: nil), false, "T14a"),
             (.stripeConnect(retour: .succes), false, "T14a"),

@@ -52,6 +52,8 @@ const LOT3_CONSOMMEES = new Map([
   ['fn_desactiver_mon_token_push', ['T4', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Push/SupabasePushGateway.swift']],
   ['fn_obtenir_mes_preferences_notifications', ['T6', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Notifications/SupabasePreferencesGateway.swift']],
   ['fn_modifier_preferences_notifications', ['T6', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Notifications/SupabasePreferencesGateway.swift']],
+  ['fn_mon_profil_soignant_complet', ['T9', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Profil/SupabaseProfilGateway.swift']],
+  ['fn_modifier_mon_profil', ['T9', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Profil/SupabaseProfilGateway.swift']],
 ]);
 // Hors manifeste (capture du 2026-07-29) : classement manuel documentaire (correction 13).
 const HORS_MANIFESTE = ['fn_demarrer_inscription', 'fn_enregistrer_parcours_inscription'];

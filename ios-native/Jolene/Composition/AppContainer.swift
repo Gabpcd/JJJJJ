@@ -143,7 +143,9 @@ final class AppContainer: ObservableObject {
     /// (`DemoDashboardEchecGateway`) pour la recette de l'état d'erreur et de la reprise
     /// (`DemoAccueilTests.testAccueilErreurPuisReprise`) ; lot 3, T6 : `JOLENE_FORCE_PREFERENCES_ECHEC=1`,
     /// de même pour les préférences de notifications (`DemoPreferencesEchecGateway`,
-    /// `DemoPreferencesTests.testPreferencesErreurPuisReprise`). Jamais compilé en Release.
+    /// `DemoPreferencesTests.testPreferencesErreurPuisReprise`) ; lot 3, T9 : `JOLENE_DEMO_PROFIL=<variante>`
+    /// (`VarianteProfilDemo`) sert le profil démo dans une variante de recette (`DemoProfilTests`).
+    /// Jamais compilé en Release.
     private static func demoGateways(processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
         var gateways = DemoWorld.gateways()
@@ -152,6 +154,9 @@ final class AppContainer: ObservableObject {
         }
         if processEnvironment["JOLENE_FORCE_PREFERENCES_ECHEC"] == "1" {
             gateways.preferences = DemoPreferencesEchecGateway() // lot 3, T6
+        }
+        if let variante = processEnvironment[VarianteProfilDemo.variableEnvironnement].flatMap(VarianteProfilDemo.init(rawValue:)) {
+            gateways.profil = DemoProfilGateway(variante: variante) // lot 3, T9
         }
         return gateways
         #else

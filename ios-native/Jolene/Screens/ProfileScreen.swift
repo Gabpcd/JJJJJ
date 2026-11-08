@@ -40,6 +40,7 @@ struct ProfileScreen: View {
                 }
                 #endif
             }
+            ProfilEntreeSection(session: session, snapshot: snapshot) // Lot 3, T9 : « Mon profil » (point de fusion T11)
             // Lot 3, T6 : entrée « Notifications » de la section « Réglages » du hub web (`MonCompteSoignant.tsx`
             // l.113-115) vers les préférences, hôte définitif de la carte d'autorisation de T4. Placée après
             // « Application », à l'emplacement de la carte provisoire de T4, pour ne déplacer ni « Se déconnecter »

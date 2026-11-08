@@ -948,3 +948,50 @@ L3-T5 — garde…`), puis code et documentation. Tous les mineurs sont corrigé
   - `xcodebuild build-for-testing` : `TEST BUILD SUCCEEDED`, 0 avertissement de nos sources ;
   - exporteurs `--check` sans diff ; `node --test` des contrats : 60 tests, 0 échec.
 - **Non exécuté** : XCUITest (compilés seulement). La condition de merge sur la CI trois formats est maintenue.
+
+## L3-T9
+
+### Revue fraîche B8 — L3-T9 (branche `lot3/l3-t9-v2`, 08/11/2026)
+
+Verdict : aucun bloquant ; un majeur ; dix mineurs. Synthèse (détail et corrections ci-dessous) :
+
+- **Majeur** — `SupabaseProfilGateway.modifier` appelait `fn_modifier_mon_profil` sans `exceptionsMetier` : 23514
+  `chk_telephone_format`, 23505 `soignants_numero_rpps_key` et P0001 `dec_verifier_age_minimum` étaient réduits à
+  « Votre profil n'a pas pu être enregistré. Réessayez. » (correction 12 et §2.4 du blueprint non respectés).
+- **Mineurs** — (1) commentaire de revalidation d'Explorer inexact ; (2) date par défaut écrite à l'ouverture du
+  sélecteur ; (3) relecture seulement après `.network` ; (4) `sessionExpiree` non lu par la vue ; (5) identifiants des
+  champs en lecture seule posés sur un enfant fondu ; (6) `NavigationLink` à fermeture non poussable par T3b ;
+  (7) description par réflexion de `ProfilComplet` (position GPS, téléphone) ; (8) effacement du prénom instable dans
+  `DemoProfilTests` ; (9) audit attendu avant la vérification des modes ; (10) état `.nonCable` à tenir en liste de
+  contrôle pour T8.
+
+### Corrections de l'auteur (tests d'abord)
+
+- **Majeur, corrigé.** `exceptionsMetier: ["23514", "23505", "P0001"]` (`ProfilEdition.exceptionsMetier`), refus
+  restitué traité avant `estSucces`, messages par `ProfilEdition.messageExceptionMetier` : textes web
+  `src/lib/erreurs.ts` l.510, l.511, l.514, message serveur verbatim pour P0001 (écart avec le web consigné dans
+  `DECISIONS_LOT3.md`, T9). Définitions relues en lecture seule sur la base live (contraintes, trigger, fonction),
+  identiques au dump. Tests : trois cas dans `SupabaseProfilGatewayTests` (une requête, aucune relecture, message
+  attendu), rouges sans la correction, plus le cas « erreur ambiguë » ; `ProfilVerbatimTests` épingle les sources.
+- **Mineur 3, corrigé** avec un type de refus certain `RefusEnregistrementProfil` (JoleneCore, levé par les deux
+  mondes) : relecture après toute issue ambiguë (tout sauf refus certain, `.unauthorized`, `.contract`,
+  `.cancelled`). Test rouge sans la correction (`testIssueAmbigueHorsReseauRelitAussiLeProfil`). Deux tests
+  existants changés de `JoleneError(.unknown, …)` en `RefusEnregistrementProfil` (gateway et démo), parce que le
+  refus est désormais typé : même message, même absence de relecture, assertion de non-relecture ajoutée.
+- **Mineur 9, corrigé** : modes vérifiés avant l'audit (`testUnAuditLentNeRetardePasLaVerificationDesModes`, rouge
+  sans la correction).
+- **Mineur 4, corrigé** : « Session à vérifier » / « Vérifier ma session » (libellés du lot 1) au chargement et sous
+  le refus d'enregistrement ; `ProfilEditionModel.verifierSession` (trois tests).
+- **Mineur 5, corrigé** : identifiant sur l'élément combiné ; XCUITest `testIdentiteVerrouilleeApresLeControleRppsExposeeEnLectureSeule`
+  sur la variante démo DEBUG `JOLENE_DEMO_PROFIL=identite-verrouillee`.
+- **Mineur 2, corrigé** : le sélecteur affiche le défaut sans l'écrire ; XCUITest
+  `testDateDeNaissanceNonRenseigneeJamaisEcriteSansChoix` (variante `sans-date-naissance`).
+- **Mineur 7, corrigé** : description masquée (test `testDescriptionMasqueeSansIdentiteNiCoordonneesNiPosition`).
+- **Mineur 8, corrigé** : curseur placé en fin de texte par un appui sur le bord droit, effacement répété borné
+  jusqu'au champ vide.
+- **Mineurs 1, 6 et 10, consignés** dans `DECISIONS_LOT3.md` (T9) : manque des onglets déjà montés (point de fusion :
+  lecture de `session.state.snapshot`), point de fusion T11/T3b de la navigation programmée (`JoleneRoute` non
+  `Hashable`, hub de T11), liste de contrôle T8 (retrait de `.nonCable` et de l'assertion de `DemoProfilTests`,
+  `feat/ios-lot3` pas sur `main` avant T8). Commentaire du modèle reformulé (mineur 1).
+- **Non exécuté** : XCUITest (compilés par `build-for-testing`, jamais lancés : consigne de la tâche). Condition de
+  merge : CI trois formats verte, relue dans le `xcresult`.

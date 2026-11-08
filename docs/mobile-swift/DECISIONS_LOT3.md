@@ -374,6 +374,86 @@ devient `.monCompte`. T3a donne aussi une section à `.revenus`. Plusieurs branc
   `MonCompteSoignant.tsx` (gardés par `PreferencesNotificationsTests` et `EtatNotificationsAppareilTests`), et
   « Session à vérifier » / « Vérifier ma session » repris des écrans du lot 1. **B9** : non (D18).
 
+## T9 — profil : écarts assumés, manques et points de fusion (08/11/2026)
+
+- **Envoi par différence.** Le web renvoie tout le formulaire à chaque enregistrement (`ProfilSoignant.tsx`
+  l.258-278, `champ || null`, rayon et années d'expérience toujours) ; le natif n'envoie que les champs modifiés
+  (`ModificationProfil.depuis`), jamais un défaut d'affichage (rayon 30 km, 0 année) écrit en silence. Avec le
+  `COALESCE` serveur, le résultat est le même pour tout champ modifié.
+- **Prénom ou nom vidé** : envoyé vide, refusé par le serveur avec son message verbatim (l.43906-43909), au lieu du
+  faux succès du web. « Supprimer » du taux minimum (web `SectionPreferences.tsx` l.78-82) non porté : le web envoie
+  `null`, que le `COALESCE` ignore (aucun effet serveur).
+- **Entrée du hub** : `ProfilEntreeSection` (une ligne de `ProfileScreen`, après « Application » pour ne déplacer ni
+  « Se déconnecter » ni les identifiants du lot 0) ; T11 la remet en tête, dans l'ordre du hub web.
+- **Liens** : `DestinationLien.ecranNatifLivre(.profil)` vaut `true` (alias `reputation` compris). Le
+  `DeepLinkCoordinator` n'existe pas encore (L1-T10, reliquat T3b) : aucune ligne de mappage n'est ajoutée ; à son
+  arrivée, `.profil` ouvre l'onglet Profil puis pousse `ProfilEditionScreen`, sous `ios_natif_profil_actif`.
+- **Manque — référentiel des modes d'exercice.** `fn_types_exercice_autorises` est lue par
+  `InscriptionPort.typesExercice`, câblé par T8 (`SupabaseInscriptionGateway` est un fichier de T7/T8) : tant que le
+  port est non câblé, l'écran affiche l'état « indisponible » du web (salarié proposé, libéral conservé s'il est
+  coché, jamais ajouté) sans « Réessayer la vérification » (aucun bouton sans effet), verrouillé par
+  `DemoProfilTests` ; T8 remplace cette assertion par les modes autorisés.
+- **Manque — renvoi du type d'exercice.** Le bouton `profil-exercice-web-action` n'existe qu'avec le présentateur
+  `.safari` de L1-T10 ; d'ici là, seul l'encart `profil-exercice-web` est affiché.
+
+### T9 — corrections de la revue fraîche B8 (08/11/2026)
+
+- **Exceptions métier de l'enregistrement (majeur).** L'UPDATE de `soignants` dans `fn_modifier_mon_profil` peut
+  lever trois exceptions PostgREST que l'écran sait provoquer (définitions live relues en lecture seule le
+  08/11/2026, identiques au dump) : 23514 `chk_telephone_format` (`public.sql` l.68090, téléphone en saisie libre),
+  23505 `soignants_numero_rpps_key` (l.73502), P0001 `dec_verifier_age_minimum` (l.3887-3895, trigger
+  `dec_age_minimum`). L'UPDATE entier est annulé : aucun champ n'est enregistré. Elles sont restituées avant
+  `SupabaseErrorMapping` (`exceptionsMetier`, correction 12, §2.4) et traduites par
+  `ProfilEdition.messageExceptionMetier` :
+  - 23505 sur `numero_rpps` → « Ce numéro RPPS est déjà enregistré. » (`src/lib/erreurs.ts` l.510), autre 23505 →
+    « Cette valeur existe déjà dans le système. » (l.511) ; 23514 → « La valeur saisie est hors des limites
+    autorisées. » (l.514) : textes web verbatim, épinglés par `ProfilVerbatimTests` ;
+  - P0001 → message serveur **verbatim** (« Vous devez avoir au moins 18 ans pour vous inscrire. ») : texte serveur
+    autorisé (règle 2 du mémo des lots 2 à 5). **Écart avec le web** : `extraireMessageErreur` ne reconnaît pas ce
+    message (aucun préfixe de `TRIGGER_PREFIXES` ne le couvre) et affiche son message générique « Une erreur est
+    survenue. Veuillez réessayer. » (l.532), qui invite à refaire un essai voué au même échec. Aucun texte nouveau.
+- **Refus certain contre issue ambiguë.** Un refus certain (`{error}` en HTTP 200, exception métier) est levé en
+  `RefusEnregistrementProfil` (JoleneCore) par la gateway Supabase comme par le monde démo : message affiché, aucune
+  relecture. Toute autre erreur d'enregistrement hors session expirée, contrat et annulation (délai, réseau, HTTP
+  5xx, 504 de la passerelle, SQLSTATE non déclaré) est ambiguë : le profil est relu, jamais renvoyé (la relecture
+  n'avait lieu qu'après `.network`).
+- **Session expirée.** L'écran propose « Vérifier ma session » (revalidation `session.start()`, puis relecture ou
+  effacement du refus si la session reste prête pour l'epoch), avec les libellés natifs du lot 1 (« Session à
+  vérifier », « Vérifier ma session », `AccueilScreen.swift`), au lieu d'un « Réessayer » sans effet.
+- **Date de naissance non renseignée.** Ouvrir le sélecteur n'écrit plus `DateNaissance.parDefaut` dans le
+  formulaire : le défaut est seulement affiché, seul un choix de l'utilisateur remplit la date (principe « État
+  dérivé »). Limite assumée : le sélecteur compact n'écrit rien si l'utilisateur valide le jour affiché sans le
+  changer ; une date choisie ne revient pas à « non renseignée » sans quitter l'écran (le `COALESCE` serveur ne
+  l'effacerait de toute façon pas).
+- **Manque — profil des onglets déjà montés.** Après un enregistrement, `session.start()` relit
+  `session.state.snapshot.profile`, mais `MissionsListModel` (créé par `MissionsListScreen.swift` l.30,
+  `ExplorerFiltres.initiaux(profile: snapshot.profile)` en `MissionsListModel.swift` l.68) et l'Accueil gardent en
+  `@StateObject` le snapshot reçu à leur création : un
+  onglet déjà visité reste sur l'ancien profil (rayon, contrats, taux) jusqu'à la session suivante. Point de fusion
+  (lot 1 / T12) : ces modèles lisent `session.state.snapshot` au lieu du snapshot figé à leur création. Aucun test
+  ne prétend le contraire (le test de T9 prouve seulement la relecture de la session).
+- **Point de fusion T11/T3b — navigation programmée vers l'édition.** `ProfilEntreeSection` garde un
+  `NavigationLink` à fermeture : ni `JoleneRoute` (`Equatable` seulement, fichier de T3) ni le hub (`ProfileScreen`,
+  propriété de T11, une ligne pour T9) ne sont modifiés par T9, et une `.navigationDestination` posée dans la `List`
+  (conteneur paresseux) serait ignorée. À la reprise : T3b rend `JoleneRoute` `Hashable` et pousse `.profil` sur la
+  pile de l'onglet Profil ; T11 remplace le lien par `NavigationLink(value: JoleneRoute.profil)` et pose
+  `.navigationDestination(for: JoleneRoute.self)` sur la `List` de `ProfileScreen` (modèle `MissionRoute`).
+- **Variantes démo DEBUG.** `JOLENE_DEMO_PROFIL=identite-verrouillee|sans-date-naissance` (variable d'environnement
+  du processus, lue par `AppContainer` en DEBUG seulement, comme `JOLENE_FORCE_ACCUEIL_ECHEC`) sert le profil démo
+  avec `rpps_verifie = true` ou `date_naissance = null` (`VarianteProfilDemo`), pour les XCUITest des champs en
+  lecture seule et de la date non renseignée. Aucun numéro RPPS fictif n'est inventé.
+- **Description masquée.** `ProfilComplet` (identité, coordonnées, date de naissance, position GPS) se décrit
+  « ProfilComplet(valeurs masquées, …) » : aucune interpolation dans un journal ou un fil d'Ariane Sentry ne
+  restitue ces valeurs (§2.6). `Mirror` n'est pas redéfini (gardes de liste blanche inchangées).
+- **Liste de contrôle T8 (modes d'exercice).** L'état `.nonCable` (« Vérification temporairement indisponible… »
+  permanent, `fn_types_exercice_autorises` non consommée) est verrouillé et documenté, mais le plan se contredit :
+  T9 est en vague 3 et le port `InscriptionPort` n'est câblé que par T8 en vague 4. À la livraison de T8 :
+  1. `SupabaseInscriptionGateway.typesExercice` câblé dans les deux mondes ;
+  2. le cas `ProfilEditionModel.Modes.nonCable` retiré (avec sa branche de `verifierModes`) ;
+  3. l'assertion « référentiel non câblé » de `DemoProfilTests.testTypeDExerciceEnRenvoiEtModesSansReferentiel`
+     remplacée par les modes autorisés ;
+  4. `feat/ios-lot3` n'atteint pas `main` avant T8.
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -408,7 +488,16 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   IBAN qui arrivent sans `error` (T14b) ; message du verrou de contestation (T13) ; libellé d'action
   « Ouvrir les réglages » de la carte « Autorisation du téléphone » (T4 : le web n'ouvre pas les réglages système ;
   nommé au §1.1 du blueprint, constante `EtatNotificationsAppareil.ouvrirReglages` épinglée par
-  `EtatNotificationsAppareilTests`).
+  `EtatNotificationsAppareilTests`) ; (T9) libellé du renvoi web du type d'exercice
+  « Le type d'exercice se modifie sur jolene.app. » (encart `profil-exercice-web` sous le titre web « Type
+  d'exercice » : le web affiche la section elle-même, que le natif ne porte pas, correction 8) et message de repli
+  d'un enregistrement refusé sans message serveur « Votre profil n'a pas pu être enregistré. Réessayez. » (le web
+  passe par `extraireMessageErreur`), constantes `ProfilEdition.Textes.typeExerciceWeb` et `.enregistrementEchec`
+  épinglées par `ProfilVerbatimTests`.
+- (T9, revue B8) Refus d'enregistrement du profil : textes web verbatim d'`extraireMessageErreur`
+  (`src/lib/erreurs.ts` l.510, l.511, l.514) pour 23505 et 23514, message serveur verbatim pour `{error}` et P0001
+  (`dec_verifier_age_minimum`, `public.sql` l.3893), épinglés par `ProfilVerbatimTests` ; libellés natifs du lot 1
+  « Session à vérifier » / « Vérifier ma session » réutilisés tels quels. Aucun texte nouveau, aucun texte juridique.
 - Textes d'accessibilité **sans équivalent web** (vocalisés seulement, jamais affichés ; non juridiques, à relire
   par Gabrielle, L3-T1b) : « environ » (lecture de « ~ » devant un montant et dans une note, `AmountRow`) ;
   « Montant indisponible » (lecture du tiret « — », `AmountRow`) ; « critère rempli » / « critère non rempli »

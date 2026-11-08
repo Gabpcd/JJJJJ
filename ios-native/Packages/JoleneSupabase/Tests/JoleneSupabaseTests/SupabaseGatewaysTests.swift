@@ -67,6 +67,7 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(supabase.contains("compte"), "T8 câble la suppression de compte")
         XCTAssertFalse(supabase.contains("push"), "lot 3, T4 câble le push")
         XCTAssertFalse(supabase.contains("notifications"), "lot 3, T5 câble le centre de notifications")
+        XCTAssertFalse(supabase.contains("profil"), "lot 3, T9 câble le profil")
     }
 
     func testClientOptionsUsePkceInjectedStorageAndJoleneHeader() {
