@@ -91,6 +91,9 @@ public extension FlagsPort {
 /// Écrans natifs pilotés par un drapeau `parametres_systeme` (décision 15 : onglets du socle).
 public enum EcranNatif: String, CaseIterable, Sendable {
     case accueil, explorer, missions, revenus, profil
+    // Lot 2 (T1, « D-FLAGS » de `docs/mobile-swift/DECISIONS_LOT2.md`) : coupe-circuits des présences
+    // et du pointage, des documents, des contrats (migration `20261102204450_drapeaux_ios_natif_lots_2_4_5.sql`).
+    case presences, documents, contrats
 
     /// Clé `parametres_systeme.cle` (lignes créées par la PR backend B0).
     public var cle: String { "ios_natif_\(rawValue)_actif" }
@@ -127,6 +130,14 @@ public protocol UnwiredPort: Sendable {}
 public enum UnwiredPorts {
     public static func erreur(port: String, tranche: String) -> JoleneError {
         JoleneError(.contract, "Port « \(port) » non câblé : livré par la tranche \(tranche) du lot 1 (docs/mobile-swift/LOT1_PLAN.md §3).")
+    }
+
+    /// Surcharge générique des lots suivants (blueprints lot 2 §2.2 et lot 3 §2.2) : cite la tranche,
+    /// le lot et son plan `docs/mobile-swift/LOT<lot>_PLAN.md`. Ajoutée une seule fois par la
+    /// première T1 intégrée (lot 2 ou lot 3), réutilisée par l'autre ; pour `lot: 1`, même texte
+    /// que `erreur(port:tranche:)`.
+    public static func erreur(port: String, tranche: String, lot: Int) -> JoleneError {
+        JoleneError(.contract, "Port « \(port) » non câblé : livré par la tranche \(tranche) du lot \(lot) (docs/mobile-swift/LOT\(lot)_PLAN.md §3).")
     }
 }
 

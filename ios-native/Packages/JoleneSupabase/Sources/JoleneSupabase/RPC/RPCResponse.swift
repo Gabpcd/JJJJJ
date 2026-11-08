@@ -224,7 +224,10 @@ public struct RPCResponse: Equatable, Sendable {
 
     /// Seul point de traduction des erreurs d'appel : l'interception du Code du travail précède
     /// `SupabaseErrorMapping.map`, laissé inchangé (lot 0). Une seule requête, aucun renvoi.
-    private static func executer(fallback: String, _ requete: () async throws -> AnyJSON) async throws -> RPCResponse {
+    /// Interne (et non privé) depuis le lot 3 (T1) : les extensions `RPCResponse+ExceptionsMetier`
+    /// et `RPCResponse+SansCorps`, dans d'autres fichiers, y délèguent (même changement prévu par
+    /// le blueprint du lot 2, T1).
+    static func executer(fallback: String, _ requete: () async throws -> AnyJSON) async throws -> RPCResponse {
         do {
             return RPCResponse(try await requete())
         } catch let postgrest as PostgrestError where estRefusCodeDuTravail(postgrest.message) {

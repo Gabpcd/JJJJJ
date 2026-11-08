@@ -40,7 +40,17 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   (`DemoWorldTests.portsEnAttenteLot1`) ; `SupabaseGatewaysTests` compare le monde Supabase
   au monde démo, si bien qu'un port câblé dans un seul monde rougit un test. Chaque tranche
   câble son port dans les deux mondes et le retire de la liste dans la même PR ; elle est
-  vide à la clôture du lot (`unwiredPorts.isEmpty`, T12).
+  vide à la clôture du lot : aucun nom du lot 1 dans `unwiredPorts`
+  (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`, T12). Pas
+  `unwiredPorts.isEmpty` : cette liste nomme aussi les ports des lots suivants tant qu'ils sont ouverts.
+- Lot 2 (T1, `docs/mobile-swift/LOT2_PLAN.md` §2.2) : cinq champs ajoutés dans un bloc « Lot 2 »
+  du corps de `Gateways` (`pointage`, `contestation`, `notation`, `documents`, `contrats`), même
+  règle (stubs de `Ports/Lot2Ports.swift`, message `UnwiredPorts.erreur(port:tranche:lot:)` partagé
+  avec le lot 3). Pas de troisième init : chaque monde assigne ses ports du lot 2 après l'init
+  complet du lot 1, dans une fonction unique `câblerLot2(_:)` (`DemoWorld`, `SupabaseGateways`) ;
+  liste attendue unique `DemoWorldTests.portsEnAttenteLot2`. Les capacités d'appareil (position,
+  réseau, identifiant terminal) ne sont pas des gateways : struct `Appareil`
+  (`Ports/AppareilPorts.swift`), injectée par `AppContainer` à côté de `Gateways`, réelle ou démo.
 
 ## 3. Aucun succès fabriqué
 
