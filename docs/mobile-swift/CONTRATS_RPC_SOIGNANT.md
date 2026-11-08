@@ -96,8 +96,8 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_remplacer_document_soignant` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_upsert_token_push` | consommée lot 3 (T4) | 3 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_desactiver_mon_token_push` | consommée lot 3 (T4) | 3 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_obtenir_mes_preferences_notifications` | à venir | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_modifier_preferences_notifications` | à venir | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_obtenir_mes_preferences_notifications` | consommée lot 3 (T6) | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_modifier_preferences_notifications` | consommée lot 3 (T6) | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_demarrer_inscription` | à venir | 3 (T7, B9) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
 | `fn_enregistrer_parcours_inscription` | à venir | 3 (T8, B9) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
 | `fn_types_exercice_autorises` | à venir | 3 (T8, T9) | PUBLIC_VOLONTAIRE | anon, authenticated, service_role | déclarée |
@@ -872,9 +872,17 @@ CREATE OR REPLACE FUNCTION "public"."fn_desactiver_mon_token_push"("p_token" "te
 
 ## fn_obtenir_mes_preferences_notifications
 
-- **Statut natif** : à venir (lot 3, T6).
-- **Usage prévu** : Écran `/soignant/parametres/notifications` : lecture des quatre canaux globaux et des exceptions
-  par événement (web `PageParametresNotifications.tsx` l.105-138) ; relue après chaque enregistrement.
+- **Statut natif** : consommée (lot 3, T6) par `JoleneSupabase/Notifications/SupabasePreferencesGateway.swift`,
+  appelée par `JoleneCore/Notifications/PreferencesModel.swift` (écran `PreferencesScreen`, entrée « Réglages ›
+  Notifications » du hub Profil). Contrat lu dans le dump du 01/11/2026 (aucune relecture live : règle 4 du mémo
+  des lots 2 à 5).
+- **Usage** : Écran `/soignant/parametres/notifications` : lecture des quatre canaux globaux et des exceptions
+  par événement (web `PageParametresNotifications.tsx` l.105-138), suivie, comme le web l.120-125, de
+  `soignants.select('sms_alertes_actives, type_exercice').eq('id', <utilisateur de la session>)` en
+  `maybeSingle` (aucune ligne → alerte SMS ni affichée ni écrite ; erreur → écran en erreur) ; relue après chaque
+  enregistrement, seule preuve d'un succès. Décodage strict (`PreferencesNotifications.decoder`) : quatre booléens
+  `canal_*`, chaque ligne `par_evenement` lisible (type non vide, canal de l'enum, `actif` booléen) ; une ligne
+  illisible est une erreur d'écran, jamais une absence (qui vaudrait « actif »).
 - **Signature SQL** (`supabase/schema/public.sql` l.45986) :
 
 ```sql
@@ -897,11 +905,17 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_mes_preferences_notifications"()
 
 ## fn_modifier_preferences_notifications
 
-- **Statut natif** : à venir (lot 3, T6).
-- **Usage prévu** : Enregistrement des canaux et de la matrice par événement ; l'app n'envoie que les types du
-  catalogue soignant `EVENTS_SOIGNANT` (web `PageParametresNotifications.tsx` l.42-56, filtre de régime) puis relit
-  `fn_obtenir_mes_preferences_notifications` après `{success:true}`. L'alerte SMS (`soignants.sms_alertes_actives`,
-  GRANT de colonne) s'écrit à part, jamais par cette RPC. Préférence, pas un consentement juridique (D18 : non B9).
+- **Statut natif** : consommée (lot 3, T6) par `JoleneSupabase/Notifications/SupabasePreferencesGateway.swift`,
+  appelée par `JoleneCore/Notifications/PreferencesModel.swift`. Contrat lu dans le dump du 01/11/2026.
+- **Usage** : Enregistrement des canaux et de la matrice par événement ; l'app n'envoie que les types du
+  catalogue soignant `EVENTS_SOIGNANT` (web `PageParametresNotifications.tsx` l.42-56 ; le filtre de régime n'en
+  retire rien, la RPC mettant à jour par clé sans rien supprimer) puis relit `fn_obtenir_mes_preferences_notifications`
+  après `{success:true}` ; « Préférences enregistrées » n'est annoncé que si la relecture concorde avec la demande.
+  L'alerte SMS (`soignants.sms_alertes_actives`, GRANT de colonne l.85758) s'écrit à part, jamais par cette RPC :
+  `PATCH soignants` de cette seule colonne (`return=minimal`, comme supabase-js), seulement si la ligne a été lue
+  (web `profilSmsPresent`, l.230) ; son échec n'arrête pas la relecture, qui montre la valeur serveur, et l'écran
+  annonce l'échec partiel du web (l.237). Aucun renvoi automatique ; une issue inconnue (délai dépassé, réseau)
+  impose une relecture. Préférence, pas un consentement juridique (D18 : non B9).
 - **Signature SQL** (`supabase/schema/public.sql` l.44100) :
 
 ```sql

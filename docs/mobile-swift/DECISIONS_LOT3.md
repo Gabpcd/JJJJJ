@@ -242,6 +242,59 @@ devient `.monCompte`. T3a donne aussi une section à `.revenus`. Plusieurs branc
   - toute route consommée par le lot 1 (coordinateur, `EcranNatif`, taps push) passe par
     `DestinationLien.destination`.
 
+## T6 — préférences de notifications : écarts et points de fusion (08/11/2026)
+
+- **Ligne de T6.** `DestinationLien.ecranNatifLivre(.parametresNotifications)` vaut `true` (consigne « Nouvelle
+  consigne pour T5 à T14b » ci-dessus) ; `DestinationLienTests` déplace le cas de T6 dans
+  `testRoutesLot3AvecEcranLivreSontNatives`. Aucun chemin du vecteur push ne mène aux préférences :
+  `testDestinationsDuRoutagePushParFamille` est inchangé (448 destinations natives, 442 renvois web).
+  `Jolene/Composition/DeepLinkCoordinator.swift` n'existe pas sur la base (L1-T10 absent, reliquat T3b) : la ligne de
+  mappage du coordinateur reste à écrire par T3b, qui ouvre l'onglet Profil et pousse
+  `PreferencesScreen(session:snapshot:push:permission:)` dans sa pile, comme l'entrée du hub.
+- **Entrée du hub posée par T6 (écart au §4 du blueprint : `ProfileScreen.swift` appartient à T11).** La consigne de
+  T4 (`REVUES_LOT3.md`, section L3-T4) impose à T6 de retirer la carte provisoire du hub dans la même tranche. Sans
+  coordinateur de liens, l'écran des préférences serait alors inatteignable et la carte d'autorisation disparaîtrait
+  de l'app. T6 remplace donc la section provisoire, au même emplacement (après « Application »), par la section
+  « Réglages » et la ligne « Notifications » du hub web (`MonCompteSoignant.tsx` l.113, l.115, verbatim), identifiant
+  `profile-preferences-notifications`. **Au merge de T11** : garder cette entrée (ou celle de T11, si elle passe par
+  `JoleneRoute.parametresNotifications` puis `DestinationLien.destination`) avec le même identifiant, lu par
+  `DemoPreferencesTests` et `DemoPushTests` ; jamais de seconde carte d'autorisation dans le hub.
+- **Carte « Autorisation du téléphone » (mineurs 4 et 5 de la revue B8 de T4).** Elle vit désormais sous les canaux
+  globaux de `PreferencesScreen`, comme le web (l.326-368), avec `canalPush` lu du brouillon (`global.canal_push`) ;
+  `DemoPushTests` est migré vers cet écran (mêmes identifiants `push-etat-appareil`, `push-etat-appareil-message`,
+  `push-ouvrir-reglages`).
+  - Écart l.346/l.347 du hub provisoire : **levé** (canal connu, même règle que le web).
+  - Écart l.349 : **conservé et assumé**. « Le canal est actif dans Jolene… » n'est affiché que si le canal push est
+    actif dans le brouillon ; le web l'affiche aussi canal coupé, où le texte est faux. Canal coupé et autorisation
+    jamais demandée : aucune carte (le web n'y propose de toute façon aucun bouton, l.356).
+  - Mineur 4 **tranché** : sur un enregistrement en échec, l'action est « Activer sur cet appareil » (verbatim l.365,
+    conditions du web l.356 : `prompt`, `registration-error` ou `unavailable`, canal push actif), qui relance
+    l'enregistrement ; « Ouvrir les réglages » n'est plus proposé que si l'autorisation est refusée.
+  - Activation au tap (D1 : « plus l'activation depuis Préférences ») : `EtatNotificationsAppareilModel.activer()`
+    demande l'autorisation, puis relit et enregistre comme `verifier()` ; une demande en échec affiche l.351 jusqu'à
+    la lecture suivante ; un second tap pendant l'activation est ignoré. Les toasts du web (l.176, l.178, l.182) ne
+    sont pas portés : la carte affiche l'état relu (l.346, l.350, l.351).
+  - `EtatNotificationsAppareil.sectionHub` (titre de la section provisoire) est retiré ; les libellés du hub sont
+    `PreferencesTextes.sectionHub` et `PreferencesTextes.entreeHub`.
+- **Écarts au web assumés (non juridiques).**
+  - Après `{success:true}`, l'app relit les préférences et n'annonce « Préférences enregistrées » que si la relecture
+    concorde avec la demande (PRINCIPES §3) ; relecture non concordante → « Erreur enregistrement » (repli verbatim
+    l.244). Le web annonce sans relire.
+  - Seuls les types du catalogue soignant sont envoyés à `fn_modifier_preferences_notifications` ; le web renvoie
+    toutes les lignes lues. Comme la RPC met à jour par clé sans rien supprimer, le résultat serveur est le même.
+  - Échec d'enregistrement : message natif de `JoleneError` (réseau, session, contrat), jamais le `err.message` brut
+    de PostgREST (détail technique) ; refus `{error}` du serveur : verbatim.
+  - Alerte SMS en échec alors que la valeur relue est déjà celle demandée : « Préférences enregistrées » (l'état
+    serveur est celui voulu) ; le web annoncerait l'échec partiel (l.237).
+  - Matrice rendue en cartes par événement (un interrupteur par canal de l'événement) au lieu d'un tableau à trois
+    colonnes ; libellé vocalisé d'une case : canal et, si grisée, la raison verbatim (l.409), l'événement étant le
+    titre de sa carte. Cases grisées à l'opacité 0,5 de `ToggleRow` au lieu de `opacity-40` (note de la revue T1b).
+  - Vouvoiement des deux textes tutoyés (l.297, l.301 ; décision 9 du lot 1) ; emoji « ⚠️ » du titre d'urgence
+    remplacé par l'icône du ton « Attention » d'`InlineNotice`.
+- **HARD STOP n°4.** Aucun texte nouveau : textes verbatim de `PageParametresNotifications.tsx` et
+  `MonCompteSoignant.tsx` (gardés par `PreferencesNotificationsTests` et `EtatNotificationsAppareilTests`), et
+  « Session à vérifier » / « Vérifier ma session » repris des écrans du lot 1. **B9** : non (D18).
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
