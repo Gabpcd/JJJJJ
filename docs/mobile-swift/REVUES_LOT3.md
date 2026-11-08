@@ -438,3 +438,175 @@ Y ajouter les mineurs 3 et 4.
   apportée par la CI, en Xcode 26.4.1 (16.4 en local).
 - Aucun correctif d'intégration n'a été nécessaire, donc pas de commit `fix(ios-native): intégration lot 3 …`. Les
   dossiers de build (`.build` des packages, `-derivedDataPath`) ont été supprimés après vérification.
+
+## L3-T4
+
+### Consignes de l'auteur pour l'intégration (corrections de la revue B8)
+
+Consignées par l'auteur de la tranche (`lot3/l3-t4-v2`), à la demande de la revue fraîche du 08/11/2026, puis
+complétées après la deuxième revue fraîche du même jour (majeur : fin de session confirmée par le contrôleur ;
+mineurs : verrou biométrique de L1-T9, délais du test de parallélisme, réentrance, écart l.346, test de la
+déconnexion retenue, `RootView` parmi les écarts, preuve niveau 2) ; les rapports de revue eux-mêmes restent à
+reproduire ici par l'intégrateur.
+
+- **D3 — audit `DECONNEXION` et désactivation du token en parallèle, au merge de L1-T9.** L1-T9 (`origin/lot1/t9`)
+  n'est ni sur `main` ni sur `feat/ios-lot3` : T4 n'a ni `async let` ni test d'ordre (écart consigné sous D3 dans
+  `DECISIONS_LOT3.md`). Au merge de L1-T9 dans `feat/ios-lot3`, le conflit de
+  `ios-native/Packages/JoleneCore/Sources/JoleneCore/Session/SessionStore.swift` **ne se résout pas en gardant les
+  deux côtés** : `await auditerDeconnexion()` (borné à `resolutionTimeout`, 15 s) suivi de
+  `await desactiverPushAvantDeconnexion()` (borné à 2,5 s) mettrait les deux appels en série, contre D3 (« ne jamais
+  bloquer une déconnexion hors ligne »), et aucun test de T4 ne le verrait. Résolution attendue :
+
+  ```swift
+  public func signOut() async {
+      guard !deconnexionEnCours else { return }
+      deconnexionEnCours = true
+      finsDeSessionVoulues += 1
+      defer {
+          finsDeSessionVoulues -= 1
+          deconnexionEnCours = false
+      }
+      canRetryRestore = false
+      // D3 : deux appels JWT indépendants, lancés ensemble ; la révocation suit dès que les deux ont rendu ou expiré.
+      async let audit: Void = auditerDeconnexion()
+      async let push: Void = desactiverPushAvantDeconnexion()
+      _ = await (audit, push)
+      state = await controller.signOut()
+      canRetryRestore = await controller.canRetryRestore
+      biometrie.oublierIdentite()
+  }
+  ```
+
+  - `deconnexionEnCours` : une seule déclaration, celle de T4 (`@Published public private(set)`, lue par l'écran
+    bloqué de `RootView`) ; la variable privée de L1-T9 disparaît, sa garde est la même.
+  - `state` : garder le `didSet { suivrePush(depuis: oldValue) }` de T4 sur la déclaration de L1-T9. **La cause
+    d'un `.signedOut` vient du contrôleur, jamais du texte du message ni de `canRetryRestore`** (publié après
+    `state`, donc périmé dans le `didSet`) : `SessionController.Publication` porte l'état et le compteur
+    `absencesConfirmees`, incrémenté **seulement** par une restauration sans session (`restoreSession()` → nil)
+    et par un `.signedOut` du SDK avec une identité active. Les publications de L1-T9 se raccordent ainsi :
+    - `publier()` de L1-T9 lit `await controller.publication` et passe par `appliquer(_:)` de T4, au lieu de
+      `state = await controller.state` (une absence confirmée pendant `controller.start()` reste portée par le
+      compteur jusqu'à cette lecture, après `preparer`) ;
+    - boucle d'événements : `controller.handleAuthEventPublication(event)` ; la branche `.ready` garde
+      `preparer` puis `publier()`, la branche « sinon » appelle `self.appliquer(publication)` ;
+    - `refresh()` : celui de T4 (`appliquer(await controller.publication)`) ;
+    - **`lockForBiometrics()`** (`origin/lot1/t9`, `SessionController` l.161-166) publie `.signedOut(nil)` avec
+      `restoreRetryable = true` alors que la session Keychain reste intacte : il **n'incrémente pas**
+      `absencesConfirmees`, et `SessionStore.start()` garde `state = await controller.lockForBiometrics()` (sans
+      `appliquer`). Le crochet push le traite donc comme un `.signedOut` transitoire : ni
+      `unregisterForRemoteNotifications()`, ni oubli du token, identité suivie conservée — parité web, le push
+      reste actif pour une session verrouillée par la biométrie. Une affirmation « rien d'autre à ajouter »
+      (version précédente de cette consigne) était fausse : sans cette exclusion, un Face ID annulé
+      désinscrirait l'appareil pendant tout le verrouillage.
+  - `observeAuthEvents` : garder la boucle de L1-T9 (`preparer`/`publier`, `biometrie.oublierIdentite()`), avec
+    `handleAuthEventPublication` et `appliquer` comme ci-dessus, et y ajouter `self.evenementsAuthTraites += 1`
+    en fin d'itération (preuve des tests de T4).
+  - `auditerDeconnexion()` lit `state` avant toute mutation ; `epochDeLIdentiteOuverte()` de T4 fait la même lecture
+    et peut la remplacer.
+  - Tests à ajouter dans `SessionStorePushTests` (avec le double d'audit de L1-T9) :
+    `testSignOutLanceAuditEtDesactivationEnParallele` — `audit.deconnexion()` et `desactiver` retenus chacun par une
+    `Gate` : les deux appels sont observés commencés alors qu'aucun n'a rendu et `auth.signOut` est absent ;
+    ouverture de la première barrière → toujours aucun `auth.signOut` ; ouverture de la seconde → `auth.signOut`
+    en dernier ; `testSignOutHorsLigneBorneParLePlusLongDesDeuxDelais` — audit muet (`resolutionTimeout` 1 s)
+    et désactivation muette (`delaiDesactivation` 1 s) : `signOut` dure moins de 1,8 s, soit le plus long des
+    deux délais (1 s) et non leur somme (2 s) ; la marge de 0,8 s tient sur un runner CI chargé (des délais de
+    0,2 s avec une borne de 0,35 s ne laissaient que 150 ms) ; `testVerrouBiometriqueApresReadyConserveLeToken` —
+    espace prêt, token enregistré, reprise avec biométrie refusée → `.signedOut(nil)`, aucun `desinscrire`, token
+    conservé, `finDeSessionPush` nil, puis déverrouillage → `.ready` sans désinscription ; et
+    `testVerrouBiometriqueAuLancementConserveLeToken` — lancement à froid, token mémorisé, biométrie refusée →
+    aucun `desinscrire`, token conservé.
+- **Fin de session subie (mineurs 1 et 2 ; corrigé par la deuxième revue, majeur).** La désinscription locale ne
+  suit qu'une absence de session **confirmée par `SessionController`** (compteur `absencesConfirmees` de
+  `SessionController.Publication` : restauration sans session, `.signedOut` du SDK avec une identité active),
+  hors `signOut`/`signOutLocally` : après une identité (`.ready` ou `.blocked`) → `surDeconnexionSubie(epoch:)` ;
+  sans identité (lancement à froid, « Réessayer » qui ne trouve plus de session) → `surSessionAbsente`, qui oublie
+  un token laissé par une session précédente, sans RPC. Elle part après la publication (`finDeSessionPush`) :
+  l'écran de connexion n'attend pas la désinscription. Un `.signedOut` transitoire — restauration impossible hors
+  ligne (`restoreFailedMessage`, « Réessayer » sans mot de passe), rôle ou profil illisible
+  (`sessionCheckFailedMessage`, `profileLoadFailedMessage`), connexion refusée, plus tard le verrou biométrique —
+  ne désinscrit rien et ne touche ni au token ni à l'identité suivie : le SDK détient encore la session et
+  l'appareil doit continuer de recevoir les push (D2 : « déconnexion subie » seulement ; fiche
+  `fn_desactiver_mon_token_push` : « le SDK n'a rien restauré »). Une même absence publiée deux fois (retour de
+  `start()` et boucle d'événements) n'est traitée qu'une fois. `surDeconnexionSubie(epoch:)` ferme l'epoch perdu
+  sans lire l'epoch courant du contrôleur (une identité suivante n'est jamais fermée) ; l'enregistrement d'un
+  nouvel espace attend la fin de la désinscription précédente. Tests : `SessionStorePushTests` (lancement à froid
+  hors ligne et profil illisible avec token mémorisé, espace bloqué revalidé hors ligne : aucun `desinscrire`,
+  token conservé ; relance en ligne sans session : oubli ; `testSeulesLesAbsencesConfirmeesComptent`).
+- **`.signedOut` du SDK pendant la désactivation (deuxième revue, mineur).** Le cas gardé par
+  `finsDeSessionVoulues` — révocation reçue pendant la RPC de 2,5 s, identité encore active — est testé avec la RPC
+  retenue par une `Gate` (`testSignedOutEmisPendantLaDesactivationNeDesinscritQuUneFois` : une seule
+  désinscription, aucune `finDeSessionPush`) ; l'ancien test, qui émettait après `signOut()`, s'appelle
+  `testSignedOutEmisApresUneDeconnexionVolontaireEstIgnore`.
+- **Réentrance de `PushCoordinator.executer` (deuxième revue, mineur).** La génération (`actif(courante)`) est
+  relue après la lecture `await controller.epoch`, sans suspension avant d'écrire `confirme` et le token
+  mémorisé : une déconnexion exécutée pendant cette lecture n'est jamais suivie d'une mémorisation. Fenêtre non
+  reproductible par un test déterministe (lecture d'acteur sans point d'injection) : garde vérifiée à la lecture.
+- **Double tap sur « Se déconnecter » (mineur 3).** `SessionStore.signOut` ignore un second appel pendant la
+  déconnexion (`deconnexionEnCours`, publié) ; l'écran bloqué (`access-blocked`, `logout-button`) montre l'attente
+  et désactive le bouton (`BlockingScreen(secondaryIsLoading:)`).
+- **Tests sans délai arbitraire (mineur 8).** `PushCoordinatorTests` attend `enregistrementsRejoints` au lieu de
+  50 ms ; `SessionStorePushTests` attend `evenementsAuthTraites` et `finDeSessionPush` au lieu de yields et 50 ms.
+- **Carte « Autorisation du téléphone » : une seule surface (T6, T11 ; mineur 4).** L'hôte prévu par le blueprint est l'écran
+  de préférences de T6 (§3 T6 : `push-etat-appareil` de T4 dans `PreferencesScreen`), et le hub
+  `Jolene/Screens/ProfileScreen.swift` appartient au seul T11. T4 monte la carte dans le hub **à titre provisoire**
+  (section « Notifications », après « Application ») avec le modèle `EtatNotificationsAppareilModel` (JoleneCore,
+  lu à l'affichage et au retour au premier plan) et la vue `Jolene/Screens/Profil/EtatNotificationsAppareilRow.swift`.
+  - **T6** monte la carte dans `PreferencesScreen` avec `model.canalPush` lu des préférences (`global.canal_push`)
+    et **retire la section provisoire du hub dans la même tranche**, en migrant `DemoPushTests` (identifiants
+    `push-etat-appareil`, `push-etat-appareil-message`, `push-ouvrir-reglages`) vers l'écran de préférences.
+  - **T11** n'ajoute pas de seconde carte : l'entrée « Notifications » du hub ouvre les préférences
+    (`.parametresNotifications`). Si T11 passe avant T6, T11 garde la section provisoire telle quelle et T6 la retire.
+  - Règles d'affichage (`EtatNotificationsAppareil`, testées) : autorisation jamais demandée → texte l.349 (« Le canal
+    est actif dans Jolene… ») **seulement si `canal_push` est connu vrai** ; dans le hub (canal inconnu) comme avec un
+    canal coupé, aucune carte. Le web affiche l.349 quel que soit le canal : écart à confirmer par T6. Autorisé et
+    enregistré : l.346 (« Les notifications sont autorisées sur cet appareil. »), ou l.347 si `canal_push` est connu
+    faux ; **dans le hub (canal inconnu), l.346** — le web n'affiche l.346 que si `global.canal_push` est vrai
+    (sinon l.347, `PageParametresNotifications.tsx` l.345-347) : second écart du hub provisoire (texte verbatim,
+    règle de choix différente), consigné par la deuxième revue B8 et levé par T6, qui passe `canalPush` lu des
+    préférences ; T6 vérifie les deux écarts (l.346/l.347 et l.349) avant de retirer la section du hub. Bouton
+    « Ouvrir les réglages » seulement si refusé, ou autorisé sans enregistrement confirmé ; absent quand
+    l'autorisation n'a jamais été demandée (Réglages n'a pas d'entrée Notifications tant que l'app n'a rien demandé,
+    l'activation relève de T5/T6) et quand tout est en ordre.
+- **Libellé « Ouvrir les réglages » (mineur 5).** Sans source web (le web n'ouvre pas les réglages système) ; nommé
+  au §1.1 du blueprint, déjà employé par les tests de T1b ; action non juridique. Constante
+  `EtatNotificationsAppareil.ouvrirReglages`, épinglée par `EtatNotificationsAppareilTests` ; listé à relire par
+  Gabrielle dans `DECISIONS_LOT3.md` (HARD STOP n°4, textes sans équivalent web).
+- **Ce que `DemoPushTests` prouve (mineurs 6 et 7).** Niveau 2 : carte et bouton selon l'autorisation, retour à la
+  connexion sans attente ni erreur. L'ordre « désactivation → désinscription → oubli → révocation » et l'absence de
+  demande système sont prouvés au niveau 1 (`SessionStorePushTests`, `PushCoordinatorTests`,
+  `EtatNotificationsAppareilModelTests`) ; en démo, l'absence de feuille SpringBoard ne garde que contre un câblage
+  du centre de notifications réel. Chaque contrôle exigé est amené à l'écran par `scrollTo` borné. Ces XCUITest
+  n'ont pas été exécutés localement : la CI trois formats doit les confirmer. **Condition de merge (deuxième
+  revue B8)** : les `DemoPushTests` (3 tests, iPhone, iPad portrait, iPad paysage) et les nouveaux cas de
+  `JoleneDesignLot3Tests` (carte d'état sans action principale, écran bloqué pendant la déconnexion) n'ont jamais
+  tourné ; le merge n'est possible qu'après une CI trois formats verte **relue** (rapport `xcresult` : 0 échec,
+  `skipped = 0`).
+- **Journal DEBUG (mineur 9).** `PushCoordinator` journalise (`Logger`, `app.jolene`, catégorie `push`, DEBUG
+  seulement) l'étape et la catégorie d'erreur (`motif(_:)` : genre de `JoleneError`, « délai dépassé », domaine et
+  code APNs), jamais le token, l'identifiant ni le message.
+- **Contrats (mineur 10).** Les fiches `fn_upsert_token_push` et `fn_desactiver_mon_token_push` de
+  `CONTRATS_RPC_SOIGNANT.md` ne citent plus de relecture en production (règle 4 du mémo des lots 2 à 5 : lecture
+  live réservée aux PR backend) ; elles renvoient au dump du 01/11/2026 (sécurité, `search_path`, GRANT).
+- **Fichiers d'autres tranches touchés par T4 (écarts au §4 du blueprint ; liste complétée par la deuxième revue
+  B8).** Chacun est une retouche minimale, gardée par un test, à conserver telle quelle au merge du propriétaire :
+  - `ios-native/Jolene/Screens/ProfileScreen.swift` (**T11 seul**) : section provisoire « Notifications » (carte
+    `push-etat-appareil`) après « Application » ; T6 la retire, T11 la garde s'il passe avant T6 (puce « Carte
+    « Autorisation du téléphone » » ci-dessus).
+  - `ios-native/Jolene/Screens/RootView.swift` (**T7 seul**, l.42-51 réécrites par l'aiguillage d'onboarding) :
+    **une ligne**, `secondaryIsLoading: session.deconnexionEnCours` sur le `BlockingScreen` `access-blocked`
+    (l.68 : « Se déconnecter » montre l'attente de la désactivation, jusqu'à 2,5 s, et refuse un second tap).
+    Consigne d'intégration : au conflit avec T7, garder les deux côtés — l'argument reste sur tout
+    `BlockingScreen` qui offre `logout-button`, et si `OnboardingRootView` (T7) propose « Se déconnecter », son
+    bouton lit aussi `session.deconnexionEnCours` (attente visible, bouton désactivé). `SessionStore.signOut`
+    ignore de toute façon un second appel (`testDoubleTapSurSeDeconnecterUneSeuleDeconnexion`) ; l'état visuel
+    est épinglé par `JoleneDesignLot3Tests` (`BlockingScreen.isSecondaryEnabled`).
+  - `ios-native/Packages/JoleneCore/Sources/JoleneCore/Compte/CompteModel.swift` (**L1-T8**) :
+    `await session.signOutLocally()` remplace `controller.signOutLocally()` suivi de `session.refresh()`
+    (désinscription push locale avant la purge ; `testSuppressionDeCompteDesinscritLocalementSansRPC`).
+  - API `JoleneDesign` (**T1b**) : `PermissionCard(onPrimary:)` devient optionnel (nil : aucun bouton principal,
+    `showsPrimary(onPrimary:)`) ; `BlockingScreen(secondaryIsLoading:)` (défaut `false`,
+    `isSecondaryEnabled(isLoading:)`). Appels existants inchangés.
+  - `ios-native/Packages/JoleneCore/Sources/JoleneCore/Session/SessionController.swift` (lot 0, modifié aussi par
+    **L1-T9**) : compteur `absencesConfirmees`, `Publication`, `publication`, `startPublication()`,
+    `handleAuthEventPublication(_:)` (internes au module). Au merge de L1-T9, garder les deux côtés ;
+    `lockForBiometrics()` n'incrémente pas le compteur (puce D3 ci-dessus).

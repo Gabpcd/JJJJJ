@@ -59,7 +59,7 @@ public enum SupabaseGateways {
     /// sa gateway dans la même PR qu'au monde démo (`DemoWorld.câblerLot3`) ;
     /// `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes.
     static func câblerLot3(_ gateways: inout Gateways, client: SupabaseClient) {
-        gateways.push = UnwiredPushRegistrationPort()                      // T4
+        gateways.push = SupabasePushGateway(client: client)                // T4
         gateways.notifications = UnwiredNotificationsCenterPort()          // T5
         gateways.preferences = UnwiredNotificationPreferencesPort()        // T6
         gateways.inscription = UnwiredInscriptionPort()                    // T7, T8

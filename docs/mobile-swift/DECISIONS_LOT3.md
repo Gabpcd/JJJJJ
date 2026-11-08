@@ -22,6 +22,10 @@ tranches qui la mettent en œuvre (§3 du blueprint).
    seule exception consignée ; l'audit `DECONNEXION` (L1-T9) et la désactivation partent **en parallèle**
    (`async let`, deux appels JWT indépendants) et `controller.signOut()` suit dès que les deux ont rendu ou expiré —
    amendement local de L1-T9 à faire accepter par la revue de T4. Tranche T4.
+   **Écart de T4 (revue B8 du 08/11/2026)** : L1-T9 (`origin/lot1/t9`) n'est ni sur `main` ni sur `feat/ios-lot3` ;
+   T4 livre la désactivation bornée à 2,5 s avant `controller.signOut()`, sans audit. **Parallélisation et test
+   d'ordre reportés au merge de L1-T9 dans `feat/ios-lot3`** ; résolution du conflit de `SessionStore.signOut` et
+   tests à ajouter : `REVUES_LOT3.md`, section L3-T4 (jamais l'audit et la désactivation en série).
 4. **Revenus au lot 3** (D4) — **Adoptée** : totaux serveur (`fn_mes_revenus_connect`), paiements rapides,
    missions terminées, paiements déclarés, Stripe et IBAN natifs ; factures, bulletins et avances en renvoi web ;
    aucun KPI calculé côté client. Tranches T12, T13, T14a, T14b.
@@ -269,7 +273,10 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 - Non portés, renvoi web libellé : type d'exercice et attestation de cumul d'activité (art. L1222-5,
   `ProfilSoignant.tsx` l.252-256, l.274-278, correction 8).
 - Textes **sans équivalent web** (non juridiques, à relire par Gabrielle) : messages natifs des sept `error_code`
-  IBAN qui arrivent sans `error` (T14b) ; message du verrou de contestation (T13).
+  IBAN qui arrivent sans `error` (T14b) ; message du verrou de contestation (T13) ; libellé d'action
+  « Ouvrir les réglages » de la carte « Autorisation du téléphone » (T4 : le web n'ouvre pas les réglages système ;
+  nommé au §1.1 du blueprint, constante `EtatNotificationsAppareil.ouvrirReglages` épinglée par
+  `EtatNotificationsAppareilTests`).
 - Textes d'accessibilité **sans équivalent web** (vocalisés seulement, jamais affichés ; non juridiques, à relire
   par Gabrielle, L3-T1b) : « environ » (lecture de « ~ » devant un montant et dans une note, `AmountRow`) ;
   « Montant indisponible » (lecture du tiret « — », `AmountRow`) ; « critère rempli » / « critère non rempli »

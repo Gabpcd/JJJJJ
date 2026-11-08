@@ -94,8 +94,8 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_envoyer_otp_signature` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_signer_contrat_otp` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_remplacer_document_soignant` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_upsert_token_push` | à venir | 3 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_desactiver_mon_token_push` | à venir | 3 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_upsert_token_push` | consommée lot 3 (T4) | 3 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_desactiver_mon_token_push` | consommée lot 3 (T4) | 3 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_obtenir_mes_preferences_notifications` | à venir | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_modifier_preferences_notifications` | à venir | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_demarrer_inscription` | à venir | 3 (T7, B9) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
@@ -517,8 +517,13 @@ CREATE OR REPLACE FUNCTION "public"."fn_remplacer_document_soignant"("p_type_doc
 
 ## fn_upsert_token_push
 
-- **Statut natif** : à venir (lot 3).
-- **Usage prévu** : Enregistrement du token APNs (`p_plateforme = IOS`) à chaque session et au retour au premier plan.
+- **Statut natif** : consommée (lot 3, T4) par `JoleneSupabase/Push/SupabasePushGateway.swift`, appelée par
+  `JoleneCore/Push/PushCoordinator.swift`.
+- **Usage** : Enregistrement du token APNs (`p_plateforme = IOS`) à chaque session (`.ready` d'un nouvel epoch) et
+  au retour au premier plan, seulement si l'appareil autorise déjà les notifications (jamais de demande implicite, D1) ;
+  identité vérifiée (epoch) avant l'appel ; token mémorisé (`KeychainPushTokenStore`, service `app.jolene.push`) après
+  le succès. Contrat lu dans le dump du 01/11/2026 : `SECURITY DEFINER`, `search_path=pg_catalog, public`
+  (l.64629-64630), EXECUTE `authenticated` et `service_role`, révoqué de `PUBLIC` (l.85471-85473).
 - **Signature SQL** (`supabase/schema/public.sql` l.64628) :
 
 ```sql
@@ -833,12 +838,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
 
 ## fn_desactiver_mon_token_push
 
-- **Statut natif** : à venir (lot 3, T4).
-- **Usage prévu** : Déconnexion volontaire : désactivation du token APNs mémorisé (`KeychainPushTokenStore`,
+- **Statut natif** : consommée (lot 3, T4) par `JoleneSupabase/Push/SupabasePushGateway.swift`, appelée par
+  `JoleneCore/Push/PushCoordinator.swift` depuis `SessionStore.signOut`. Contrat lu dans le dump du 01/11/2026 :
+  `SECURITY DEFINER` (l.30177), EXECUTE `authenticated` et `service_role`, révoqué de `PUBLIC` (l.82446-82448).
+- **Usage** : Déconnexion volontaire : désactivation du token APNs mémorisé (`KeychainPushTokenStore`,
   service `app.jolene.push`) **avant** `controller.signOut()` — le JWT est requis (correction 11) —, bornée à
   **2,5 s** comme le web (`src/lib/pushDeviceToken.ts` l.90-92, l.113 ; décision D3), puis
-  `unregisterForRemoteNotifications()` et oubli du token, que la RPC ait répondu ou non. Déconnexion subie
-  (`.signedOut` du SDK) et suppression de compte : désinscription locale seule, sans appel (JWT absent).
+  `unregisterForRemoteNotifications()` et oubli du token, que la RPC ait répondu ou non ; un second tap pendant
+  l'appel est ignoré. Déconnexion subie (`.signedOut` du SDK, revalidation qui ne trouve plus de session, depuis
+  un espace prêt ou bloqué) : désinscription locale seule, sans appel (JWT absent), après la publication de
+  l'écran de connexion. Suppression de compte : désinscription locale avant la purge, sans appel. Lancement sans
+  session (le SDK n'a rien restauré) avec un token laissé par une session précédente : désinscription locale et
+  oubli, sans appel. Ces fins de session ne partent que d'une absence de session confirmée par
+  `SessionController` (`absencesConfirmees`) : un `.signedOut` transitoire (restauration impossible hors ligne,
+  rôle ou profil illisible, et au merge de L1-T9 le verrou biométrique) ne désinscrit rien et garde le token.
 - **Signature SQL** (`supabase/schema/public.sql` l.30176) :
 
 ```sql

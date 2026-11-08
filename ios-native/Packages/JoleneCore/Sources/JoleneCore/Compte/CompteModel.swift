@@ -124,8 +124,9 @@ public final class CompteModel: ObservableObject {
         if fin == .supprime {
             CompteSuppression.purgerPreferencesLocales(userId: snapshot.user.id, defaults: preferences)
         }
-        _ = await controller.signOutLocally()
-        await session.refresh()
+        // Lot 3, T4 : `SessionStore.signOutLocally` ajoute la désinscription push locale (sans RPC)
+        // avant `controller.signOutLocally()` puis relit l'état, comme ici au lot 1.
+        await session.signOutLocally()
     }
 
     static func message(pour error: Error) -> String {

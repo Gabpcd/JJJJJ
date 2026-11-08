@@ -62,7 +62,10 @@ private struct SessionRootView: View {
                     identifier: "access-blocked",
                     secondaryTitle: "Se déconnecter",
                     secondaryIdentifier: "logout-button",
-                    secondaryAction: { Task { await session.signOut() } })
+                    secondaryAction: { Task { await session.signOut() } },
+                    // Lot 3, T4 : désactivation du token (jusqu'à 2,5 s) avant la révocation : attente visible,
+                    // pas de second tap (`SessionStore.deconnexionEnCours`, qui ignore aussi un second appel).
+                    secondaryIsLoading: session.deconnexionEnCours)
             case let .ready(snapshot):
                 MainTabView(container: container, session: session, snapshot: snapshot)
                     .id(snapshot.epoch)
