@@ -123,8 +123,9 @@ public enum DisponibilitePointage {
         Double(DateHeureParis.millisecondes(date))
     }
 
-    /// Tri stable par clé numérique ; deux clés NaN ou incomparables gardent leur ordre.
-    private static func triStable<T>(_ elements: [T], croissant: Bool, cle: (T) -> Double) -> [T] {
+    /// Tri stable par clé numérique ; deux clés NaN ou incomparables gardent leur ordre, de même que
+    /// deux clés égales (+∞ compris). Partagé avec `ListesPresences` (onglet « À venir »).
+    static func triStable<T>(_ elements: [T], croissant: Bool, cle: (T) -> Double) -> [T] {
         elements.enumerated().sorted { a, b in
             let ka = cle(a.element), kb = cle(b.element)
             if croissant ? ka < kb : ka > kb { return true }

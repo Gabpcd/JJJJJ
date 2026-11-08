@@ -25,13 +25,16 @@ on:
       - 'src/lib/constantes.ts'
       - 'src/lib/donnees-test.ts'
       - 'src/lib/profession-hierarchy.ts'
-      # Lot 2, T2 : règles portées en Swift avec vecteurs golden (T2b ajoutera documents-requis.ts et presences-soignant-listes.ts).
+      # Lot 2, T2 : règles portées en Swift avec vecteurs golden.
       - 'src/lib/synthese-presence-mission.ts'
       - 'src/lib/presencesSoignantUi.ts'
       - 'src/lib/documentUpload.ts'
       - 'src/lib/documents.ts'
       - 'src/lib/contratMissionUi.ts'
       - 'src/lib/signatureSmsStagingAdmission.ts'
+      # Lot 2, T2b : règles extraites par la PR web W1 (#1112), leurs dépendances étant déjà listées.
+      - 'src/lib/documents-requis.ts'
+      - 'src/lib/presences-soignant-listes.ts'
       - 'src/components/planning/planning-candidat.ts'
       - 'src/components/planning/selection-serie-candidat.ts'
       - 'src/integrations/supabase/types.ts'
@@ -55,13 +58,16 @@ on:
       - 'src/lib/constantes.ts'
       - 'src/lib/donnees-test.ts'
       - 'src/lib/profession-hierarchy.ts'
-      # Lot 2, T2 : règles portées en Swift avec vecteurs golden (T2b ajoutera documents-requis.ts et presences-soignant-listes.ts).
+      # Lot 2, T2 : règles portées en Swift avec vecteurs golden.
       - 'src/lib/synthese-presence-mission.ts'
       - 'src/lib/presencesSoignantUi.ts'
       - 'src/lib/documentUpload.ts'
       - 'src/lib/documents.ts'
       - 'src/lib/contratMissionUi.ts'
       - 'src/lib/signatureSmsStagingAdmission.ts'
+      # Lot 2, T2b : règles extraites par la PR web W1 (#1112), leurs dépendances étant déjà listées.
+      - 'src/lib/documents-requis.ts'
+      - 'src/lib/presences-soignant-listes.ts'
       - 'src/components/planning/planning-candidat.ts'
       - 'src/components/planning/selection-serie-candidat.ts'
       - 'src/integrations/supabase/types.ts'

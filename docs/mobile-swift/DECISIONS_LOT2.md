@@ -239,6 +239,15 @@
     `erreur` AVANT de décoder (`{error}` → `.refuse` verbatim pour l'état ; carte de synthèse masquée pour le
     détail) ; `EtatPointage` et `ResumePresencesServeur` refusent eux-mêmes `{error}` et un objet sans leurs clés
     discriminantes.
+- **T3** (revue fraîche de T2b) : `contrats_mission.statut` est NULLable (`supabase/schema/public.sql` l.68786,
+  `types.ts` `statut: string | null`) ; le web retient un contrat à statut nul (non terminal, priorité 0), qui bloque
+  alors le pointage avec le motif CONTRAT. `ContratPointage.statut: String` (`Rules/DisponibilitePointage.swift`) ne le
+  décode pas : T3 rend le décodage tolérant (nul → `""`, même effet que le web), puis ajoute un contrat `statut: null`
+  à `grille/contrats/choix` de `scripts/mobile/export-golden-vectors.mjs`, dont le domaine refuse aujourd'hui ce cas.
+- **T3** (revue fraîche de T2b) : la projection `missions` de `PresencesSoignant.tsx` (l.114-115) ne sélectionne pas
+  `profession_requise`, que `MissionRecord.init(from:)` exige (`Models/Mission.swift`) : la décoder en `MissionRecord`
+  lèverait `keyNotFound`. T3 ajoute `profession_requise` à son select, ou décode son propre type tolérant conforme à
+  `MissionPresenceRepresentable` (`Pointage/ListesPresences.swift`).
 - **T6** : reçu par `ReceiptJournal<RecuDocument>(store: appareil.recus)` (domaine `document`, essai = `s3Cle`),
   mêmes règles que T3 ; `MimeDocument` est `Codable` dans sa déclaration (`Documents/ClassementDocument.swift`),
   ne pas y ajouter de conformité rétroactive.

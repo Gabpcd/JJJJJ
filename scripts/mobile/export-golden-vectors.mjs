@@ -7,7 +7,8 @@
  * par type stripping natif de Node, aucune dépendance supplémentaire, et écrit,
  * (lot 2, T2 : `synthese-presence-mission.ts`, `presencesSoignantUi.ts`,
  * `documentUpload.ts` rejoué avec `File` de Node, `documents.ts`, `contratMissionUi.ts`,
- * `signatureSmsStagingAdmission.ts` rejoué avec un client RPC simulé)
+ * `signatureSmsStagingAdmission.ts` rejoué avec un client RPC simulé ; lot 2, T2b :
+ * `documents-requis.ts` et `presences-soignant-listes.ts`, extraits par la PR web W1, #1112)
  * par règle, un JSON de vecteurs `{ name, input, expected }` dans
  * `ios-native/Packages/JoleneCore/Tests/JoleneCoreTests/Resources/golden/`.
  * Un hook `module.register()` résout l'alias `@/lib/<module>` et les imports
@@ -118,9 +119,7 @@ const planningCandidat = await planningComposant('planning-candidat.ts');
 const selectionSerie = await planningComposant('selection-serie-candidat.ts');
 const completude = await lib('completude-planning-mission.ts');
 // Lot 2, T2 : pointage (synthèse, historique), justificatifs (classement, dispense de
-// diplôme), contrats (affichage, admission OTP de recette STAGING). Les deux règles que la PR
-// web W1 extrait des composants (exigences documentaires `documents-requis.ts`, listes de
-// présences `presences-soignant-listes.ts`) sont vectorisées par la tranche T2b, après W1.
+// diplôme), contrats (affichage, admission OTP de recette STAGING).
 const synthesePresence = await lib('synthese-presence-mission.ts');
 const presencesUi = await lib('presencesSoignantUi.ts');
 const documentUpload = await lib('documentUpload.ts');
@@ -128,6 +127,10 @@ const documentsRegles = await lib('documents.ts');
 const constantes = await lib('constantes.ts');
 const contratUi = await lib('contratMissionUi.ts');
 const admissionSms = await lib('signatureSmsStagingAdmission.ts');
+// Lot 2, T2b : les deux règles que la PR web W1 (#1112) a extraites des composants
+// (exigences documentaires de `DocumentsSoignant.tsx`, listes de `PresencesSoignant.tsx`).
+const documentsRequis = await lib('documents-requis.ts');
+const presencesListes = await lib('presences-soignant-listes.ts');
 
 // ---------------------------------------------------------------------------
 // Outils
@@ -1250,11 +1253,9 @@ function vecteursCompletudePlanning() {
 // ---------------------------------------------------------------------------
 // Règles 8 à 13 : lot 2, T2 (pointage, justificatifs, contrats)
 // ---------------------------------------------------------------------------
-// Restent à vectoriser par la tranche T2b, après le merge de la PR web W1 (décision
-// « Lot 2 T2 » de LOTS_2_5_DECISIONS) : `filtrerDocumentsRequis` et
-// `documentValidePourExigence` (`src/lib/documents-requis.ts`), `construireListesPresences`
-// (`src/lib/presences-soignant-listes.ts`). Aujourd'hui enfouies dans `DocumentsSoignant.tsx`
-// et `PresencesSoignant.tsx`, elles ne sont pas exportables sans cette extraction.
+// Les deux règles extraites par la PR web W1 (`documents-requis.ts`,
+// `presences-soignant-listes.ts`) sont les règles 14 et 15 (tranche T2b, décision « Lot 2 T2 »
+// de LOTS_2_5_DECISIONS).
 
 // Un créneau porte toujours ses quatre clés (`fin: null` explicite) : l'attendu le recopie
 // tel quel et le port Swift le ré-encode (`MissionSlot.golden`) avec les mêmes clés.
@@ -1836,6 +1837,638 @@ async function vecteursAdmissionSms() {
 }
 
 // ---------------------------------------------------------------------------
+// Règles 14 et 15 : lot 2, T2b (règles extraites par la PR web W1, #1112)
+// ---------------------------------------------------------------------------
+const estChaineOuNul = (v) => v === undefined || v === null || typeof v === 'string';
+const estBooleenOuNul = (v) => v === undefined || v === null || typeof v === 'boolean';
+/** Refuse une entrée hors du domaine rejoué par le port Swift (le message nomme le champ). */
+function domaine(regle, condition, quoi) {
+  if (!condition) throw new Error(`${regle}: entrée hors domaine (${quoi}) : la décoder côté Swift ou retirer le vecteur.`);
+}
+
+// ---------------------------------------------------------------------------
+// Règle 14 : documents-requis (src/lib/documents-requis.ts)
+// ---------------------------------------------------------------------------
+// `filtrerDocumentsRequis` est générique : il renvoie les lignes reçues qu'il retient, dans leur
+// ordre. L'attendu recopie donc ces lignes telles quelles, et le port Swift rend les lignes JSON
+// d'entrée qu'il retient. Domaine relu dans `public.sql` (`documents_requis_par_profession`
+// l.69057-69067) : `profession` et `type_document` sont NOT NULL ; `type_exercice_requis` est
+// NOT NULL et contraint (`TOUS`, `SALARIE_ONLY`, `LIBERAL_ONLY`), mais la règle web replie nul,
+// vide ou inconnu sur `TOUS` : ces valeurs restent dans les vecteurs. Profil : chaînes ou nul,
+// booléens ou nul (absent compris). Pièce (`documents_soignants`) : `type_document` NOT NULL,
+// `statut_verification` NULLable (l.408), donc chaîne ou nul. `documentValidePourExigence` lit `valide_jusqua` par
+// `new Date` : date seule (colonne `date`, minuit UTC) ou ISO avec ou sans décalage (heure de
+// Paris, fuseau forcé du processus) ; tout autre format de date est hors domaine.
+function vecteursDocumentsRequis() {
+  const c = new Collecteur('documents-requis');
+  const R = 'documents-requis';
+  const verifierRegle = (r) => {
+    domaine(R, typeof r.profession === 'string' && typeof r.type_document === 'string', 'profession et type_document : chaînes NOT NULL');
+    domaine(R, estChaineOuNul(r.type_exercice_requis), 'type_exercice_requis : chaîne ou nul');
+  };
+  const verifierSoignant = (s) => {
+    domaine(R, estChaineOuNul(s.profession) && estChaineOuNul(s.type_exercice), 'profession, type_exercice : chaîne ou nul');
+    domaine(R, estBooleenOuNul(s.rpps_verifie) && estBooleenOuNul(s.adeli_verifie), 'rpps_verifie, adeli_verifie : booléen ou nul');
+  };
+  const filtrer = (nom, regles, soignant) => {
+    (regles ?? []).forEach(verifierRegle);
+    verifierSoignant(soignant);
+    c.ajoute(`filtrerDocumentsRequis/${nom}`, { fonction: 'filtrerDocumentsRequis', regles, soignant },
+      documentsRequis.filtrerDocumentsRequis(regles, soignant));
+  };
+  const valide = (nom, document, exigence, profession, maintenant) => {
+    domaine(R, typeof document.type_document === 'string', 'type_document : chaîne NOT NULL');
+    // `statut_verification` est NULLable (DEFAULT 'EN_ATTENTE' sans NOT NULL, `public.sql` l.408 ;
+    // `| null` dans `types.ts`) : le web garde la ligne et la juge non valide (`=== 'VERIFIE'`).
+    domaine(R, estChaineOuNul(document.statut_verification), 'statut_verification : chaîne ou nul');
+    domaine(R, estChaineOuNul(document.valide_jusqua) && typeof exigence.type_document === 'string' && estChaineOuNul(profession), 'valide_jusqua, exigence, profession');
+    c.ajoute(`documentValidePourExigence/${nom}`, { fonction: 'documentValidePourExigence', document, exigence, profession, maintenant },
+      documentsRequis.documentValidePourExigence(document, exigence, profession, new Date(maintenant)));
+  };
+
+  // La liste elle-même est un vecteur : un type ajouté côté web rougit le port Swift.
+  c.ajoute('constante/TYPES_DOCUMENTS_EXCLUS_UPLOAD', { fonction: 'TYPES_DOCUMENTS_EXCLUS_UPLOAD' }, [...documentsRegles.TYPES_DOCUMENTS_EXCLUS_UPLOAD]);
+
+  // --- Issus des tests vitest (documents-requis.test.ts) -------------------
+  const regle = (type_document, extra = {}) => ({
+    id: `${type_document}-${String(extra.profession ?? 'IDE')}-${String(extra.type_exercice_requis ?? 'TOUS')}`,
+    profession: 'IDE', type_document, est_critique: true, type_exercice_requis: 'TOUS', ...extra,
+  });
+  const REGLES_IDE = [
+    regle('CARTE_IDENTITE'), regle('DIPLOME'), regle('RPPS_ADELI'), regle('AUTORISATION_EXERCICE', { est_critique: false }),
+    regle('VACCINATIONS'), regle('MEDECINE_TRAVAIL'), regle('RCP_ASSURANCE', { type_exercice_requis: 'LIBERAL_ONLY' }),
+    regle('ATTESTATION_URSSAF', { type_exercice_requis: 'LIBERAL_ONLY' }), regle('CASIER_JUDICIAIRE', { type_exercice_requis: 'SALARIE_ONLY' }),
+  ];
+  const soignant = (extra = {}) => ({ profession: 'IDE', type_exercice: 'SALARIE', rpps_verifie: false, adeli_verifie: false, ...extra });
+  const pour = (profession) => REGLES_IDE.map((r) => ({ ...r, profession }));
+
+  filtrer('vitest-profession-ordre-recu', [
+    regle('DIPLOME', { profession: 'KINE' }), regle('CARTE_IDENTITE'), regle('DIPLOME'), regle('CARTE_IDENTITE', { profession: 'AS' }),
+  ], soignant());
+  filtrer('vitest-mixte-exclus-upload-et-cumul', REGLES_IDE, soignant({ type_exercice: 'MIXTE' }));
+  filtrer('vitest-liberal', REGLES_IDE, soignant({ type_exercice: 'LIBERAL' }));
+  for (const typeExercice of ['SALARIE', 'CDD', 'INTERIM']) filtrer(`vitest-salarie-${typeExercice}`, REGLES_IDE, soignant({ type_exercice: typeExercice }));
+  for (const [nom, typeExercice] of [['null', null], ['absent', undefined], ['vide', '']]) {
+    filtrer(`vitest-sans-type-exercice-${nom}`, REGLES_IDE, soignant({ type_exercice: typeExercice }));
+  }
+  filtrer('vitest-type-exercice-requis-repli-tous', [
+    regle('CARTE_IDENTITE', { type_exercice_requis: null }), regle('DIPLOME', { type_exercice_requis: undefined }),
+    regle('RIB', { type_exercice_requis: 'AUTRE_VALEUR' }),
+  ], soignant({ type_exercice: null }));
+  filtrer('vitest-regles-null', null, soignant());
+  filtrer('vitest-regles-absentes', undefined, soignant());
+  filtrer('vitest-rpps-ide-dispenses', REGLES_IDE, soignant({ rpps_verifie: true }));
+  for (const profession of ['IADE', 'IBODE']) filtrer(`vitest-rpps-specialite-${profession}`, pour(profession), soignant({ profession, rpps_verifie: true }));
+  for (const profession of ['AS', 'AES', 'AUXILIAIRE_PUERICULTURE']) {
+    filtrer(`vitest-sans-rpps-${profession}`, pour(profession), soignant({ profession, rpps_verifie: true }));
+  }
+  filtrer('vitest-adeli-ide', REGLES_IDE, soignant({ adeli_verifie: true }));
+  filtrer('vitest-adeli-as', pour('AS'), soignant({ profession: 'AS', adeli_verifie: true }));
+  for (const [nom, valeur] of [['faux', false], ['null', null], ['absent', undefined]]) {
+    filtrer(`vitest-rpps-${nom}-garde-diplome`, REGLES_IDE, soignant({ rpps_verifie: valeur }));
+  }
+
+  const MAINTENANT = '2026-11-02T10:00:00Z';
+  const doc = (extra = {}) => ({ type_document: 'CARTE_IDENTITE', statut_verification: 'VERIFIE', valide_jusqua: null, profession_certifiee: null, ...extra });
+  const carte = { type_document: 'CARTE_IDENTITE' };
+  const diplome = { type_document: 'DIPLOME' };
+  valide('vitest-meme-type-verifie', doc(), carte, 'IDE', MAINTENANT);
+  valide('vitest-autre-type', doc({ type_document: 'PASSEPORT' }), carte, 'IDE', MAINTENANT);
+  for (const statut of ['EN_ATTENTE', 'REJETE', 'EXPIRE', 'REVUE_MANUELLE_REQUISE', 'API_INDISPONIBLE']) {
+    valide(`vitest-statut-${statut}`, doc({ statut_verification: statut }), carte, 'IDE', MAINTENANT);
+  }
+  valide('vitest-fin-validite-plus-1-ms', doc({ valide_jusqua: '2026-11-02T10:00:00.001Z' }), carte, 'IDE', MAINTENANT);
+  valide('vitest-fin-validite-atteinte', doc({ valide_jusqua: '2026-11-02T10:00:00Z' }), carte, 'IDE', MAINTENANT);
+  valide('vitest-fin-validite-veille', doc({ valide_jusqua: '2026-11-01' }), carte, 'IDE', MAINTENANT);
+  valide('vitest-fin-validite-vide', doc({ valide_jusqua: '' }), carte, 'IDE', MAINTENANT);
+  for (const profession of ['IADE', 'IBODE']) {
+    for (const [nom, certifiee] of [['exacte', profession], ['minuscules', profession.toLowerCase()], ['IDE', 'IDE'], ['null', null]]) {
+      valide(`vitest-diplome-${profession}-certifie-${nom}`, doc({ type_document: 'DIPLOME', profession_certifiee: certifiee }), diplome, profession, MAINTENANT);
+    }
+  }
+  valide('vitest-specialite-hors-diplome', doc(), carte, 'IADE', MAINTENANT);
+  valide('vitest-diplome-ide-sans-certification', doc({ type_document: 'DIPLOME', profession_certifiee: null }), diplome, 'IDE', MAINTENANT);
+
+  // --- Grille : type d'exercice × exigence de régime ------------------------
+  // Une ligne par valeur de `type_exercice_requis` (dont nul, vide, inconnu, minuscules, absent),
+  // plus les deux types remplacés par l'attestation sur l'honneur sous chaque régime.
+  // Lignes de grille réduites aux colonnes que lit la règle (le port rend la ligne reçue entière).
+  const ligne = (type_document, type_exercice_requis = 'TOUS', profession = 'IDE') => ({ profession, type_document, type_exercice_requis });
+  const REGIMES = [
+    ligne('CARTE_IDENTITE'), ligne('RCP_ASSURANCE', 'LIBERAL_ONLY'), ligne('CASIER_JUDICIAIRE', 'SALARIE_ONLY'), ligne('RIB', null),
+    ligne('ATTESTATION_URSSAF', ''), ligne('EXTRAIT_KBIS', 'AUTRE'), ligne('PERMIS', 'liberal_only'), ligne('PHOTO', 'salarie_only'),
+    { profession: 'IDE', type_document: 'JUSTIFICATIF_DOMICILE' },
+    ligne('VACCINATIONS', 'LIBERAL_ONLY'), ligne('MEDECINE_TRAVAIL', 'SALARIE_ONLY'), ligne('vaccinations'), ligne('MEDECINE_TRAVAIL '),
+  ];
+  for (const [nom, typeExercice] of [
+    ['SALARIE', 'SALARIE'], ['LIBERAL', 'LIBERAL'], ['MIXTE', 'MIXTE'], ['CDD', 'CDD'], ['INTERIM', 'INTERIM'],
+    ['inconnu', 'AUTRE_REGIME'], ['liberal-minuscules', 'liberal'], ['mixte-minuscules', 'mixte'], ['espace-LIBERAL', ' LIBERAL'],
+    ['null', null], ['vide', ''], ['absent', undefined],
+  ]) {
+    filtrer(`grille/regime/${nom}`, REGIMES, { profession: 'IDE', type_exercice: typeExercice, rpps_verifie: false, adeli_verifie: false });
+  }
+
+  // --- Grille : profession × registre (RPPS, ADELI), régime MIXTE ------------
+  // Les quatre types que les registres masquent, plus un type témoin ; une ligne d'une autre
+  // profession dans chaque liste vérifie que le filtre de profession précède les dispenses.
+  // MEDECIN représente les autres professions à RPPS (KINE, SAGE_FEMME… : même branche de la règle).
+  const professionsRegistre = ['IDE', 'MEDECIN', 'IADE', 'IBODE', 'AS', 'AES', 'AUXILIAIRE_PUERICULTURE', 'ide'];
+  const libelleBool = (v) => (v === undefined ? 'absent' : String(v));
+  // Vrai et faux pour chaque profession ; nul (qui vaut faux) sur trois professions témoins :
+  // avec RPPS, spécialité exacte, sans RPPS.
+  const avecNul = new Set(['IDE', 'IADE', 'AS']);
+  for (const profession of professionsRegistre) {
+    const regles = ['CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI', 'AUTORISATION_EXERCICE'].map((type_document) => ligne(type_document, 'TOUS', profession));
+    regles.push(ligne('DIPLOME', 'TOUS', profession === 'IDE' ? 'KINE' : 'IDE'));
+    const valeurs = avecNul.has(profession) ? [true, false, null] : [true, false];
+    for (const rpps of valeurs) {
+      for (const adeli of valeurs) {
+        filtrer(`grille/registre/${profession}/rpps-${libelleBool(rpps)}/adeli-${libelleBool(adeli)}`, regles,
+          { profession, type_exercice: 'MIXTE', rpps_verifie: rpps, adeli_verifie: adeli });
+      }
+    }
+  }
+  const reglesIde = ['CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI', 'AUTORISATION_EXERCICE'].map((type_document) => ({ profession: 'IDE', type_document }));
+  for (const [nom, extra] of [['rpps-absent-adeli-absent', {}], ['rpps-vrai-adeli-absent', { rpps_verifie: true }], ['rpps-absent-adeli-vrai', { adeli_verifie: true }]]) {
+    filtrer(`grille/registre/IDE/${nom}`, reglesIde, { profession: 'IDE', type_exercice: 'SALARIE', ...extra });
+  }
+
+  // --- Grille : profession du soignant absente, vide ou d'une autre casse ---
+  const reglesProfessions = [
+    { profession: 'IDE', type_document: 'DIPLOME', type_exercice_requis: 'TOUS' },
+    { profession: 'ide', type_document: 'DIPLOME', type_exercice_requis: 'TOUS' },
+    { profession: '', type_document: 'CARTE_IDENTITE', type_exercice_requis: 'TOUS' },
+    { profession: 'KINE', type_document: 'DIPLOME', type_exercice_requis: 'TOUS' },
+    { profession: 'IDE', type_document: 'RPPS_ADELI', type_exercice_requis: 'TOUS' },
+  ];
+  for (const [nom, profession] of [['IDE', 'IDE'], ['ide', 'ide'], ['vide', ''], ['null', null], ['absente', undefined]]) {
+    for (const rpps of [true, false]) {
+      filtrer(`grille/profession/${nom}/rpps-${rpps}`, reglesProfessions, { profession, type_exercice: 'LIBERAL', rpps_verifie: rpps, adeli_verifie: false });
+    }
+  }
+
+  // --- Grille : ordre et doublons conservés, liste vide ---------------------
+  filtrer('grille/ordre-et-doublons', [
+    regle('RIB', { type_exercice_requis: 'LIBERAL_ONLY' }), regle('CARTE_IDENTITE'), regle('RIB', { type_exercice_requis: 'LIBERAL_ONLY' }),
+    regle('DIPLOME'), regle('CARTE_IDENTITE', { est_critique: false }),
+  ], soignant({ type_exercice: 'LIBERAL' }));
+  filtrer('grille/liste-vide', [], soignant());
+  filtrer('grille/seulement-exclus-upload', [regle('VACCINATIONS'), regle('MEDECINE_TRAVAIL')], soignant({ type_exercice: 'MIXTE' }));
+
+  // --- Grille : documentValidePourExigence ----------------------------------
+  for (const statut of ['VERIFIE', 'verifie', 'Verifie', 'EN_ATTENTE', 'REJETE', 'EXPIRE', 'REVUE_MANUELLE_REQUISE', 'API_INDISPONIBLE', '']) {
+    valide(`grille/statut/${statut || 'vide'}`, doc({ statut_verification: statut }), carte, 'IDE', MAINTENANT);
+  }
+  // Statut NULL (colonne NULLable) : la ligne reste lisible et la pièce n'est pas valide.
+  valide('grille/statut/null', doc({ statut_verification: null }), carte, 'IDE', MAINTENANT);
+  valide('grille/type/casse-differente', doc({ type_document: 'carte_identite' }), carte, 'IDE', MAINTENANT);
+  valide('grille/type/diplome-pour-carte', doc({ type_document: 'DIPLOME', profession_certifiee: 'IADE' }), carte, 'IADE', MAINTENANT);
+  valide('grille/type/carte-pour-diplome', doc(), diplome, 'IDE', MAINTENANT);
+  // Fin de validité : nulle, absente, vide ; date seule (minuit UTC) ; ISO avec ou sans décalage.
+  const { valide_jusqua: _sansFin, ...docSansFin } = doc();
+  valide('grille/fin/absente', docSansFin, carte, 'IDE', MAINTENANT);
+  for (const [nom, fin] of [
+    ['null', null], ['date-seule-jour-meme', '2026-11-02'], ['date-seule-lendemain', '2026-11-03'], ['date-seule-an-prochain', '2027-11-02'],
+    ['date-seule-passee', '2020-01-31'], ['utc-moins-1-ms', '2026-11-02T09:59:59.999Z'], ['utc-plus-1-s', '2026-11-02T10:00:01Z'],
+    ['decalage-paris-egal', '2026-11-02T11:00:00+01:00'], ['decalage-paris-plus-1-ms', '2026-11-02T11:00:00.001+01:00'],
+    ['decalage-postgrest-microsecondes-egal', '2026-11-02T10:00:00.000999+00:00'], ['decalage-postgrest-microsecondes-apres', '2026-11-02T10:00:00.001999+00:00'],
+    ['sans-decalage-heure-paris-egale', '2026-11-02T11:00:00'], ['sans-decalage-heure-paris-plus-1-s', '2026-11-02T11:00:01'],
+    ['sans-decalage-heure-utc', '2026-11-02T10:00:00'], ['illisible', 'pas une date'],
+  ]) {
+    valide(`grille/fin/${nom}`, doc({ valide_jusqua: fin }), carte, 'IDE', MAINTENANT);
+  }
+  // Changement d'heure : une fin de validité en date seule vaut minuit UTC, pas minuit à Paris.
+  valide('grille/fin/date-seule-dst-mars-avant-minuit-utc', doc({ valide_jusqua: '2026-03-29' }), carte, 'IDE', '2026-03-28T23:30:00Z');
+  valide('grille/fin/date-seule-dst-mars-apres-minuit-utc', doc({ valide_jusqua: '2026-03-29' }), carte, 'IDE', '2026-03-29T00:30:00Z');
+  valide('grille/fin/date-seule-minuit-paris-avant-minuit-utc', doc({ valide_jusqua: '2026-11-02' }), carte, 'IDE', '2026-11-01T23:30:00Z');
+  // Diplôme : profession de la mission × profession certifiée (toute valeur non textuelle compte pour absente).
+  // La correspondance elle-même est couverte par `documents.json` (diplomeCompatibleProfession) :
+  // cette grille vérifie qu'elle n'est appliquée qu'à l'exigence DIPLOME, avec la profession reçue.
+  for (const profession of ['IADE', 'IBODE', 'IDE', 'iade', null, undefined]) {
+    for (const [nom, certifiee] of [['IADE', 'IADE'], ['iade', 'iade'], ['IDE', 'IDE'], ['espace', ' IADE'],
+      ['null', null], ['absente', undefined], ['nombre', 42]]) {
+      const pieces = doc({ type_document: 'DIPLOME', profession_certifiee: certifiee });
+      if (certifiee === undefined) delete pieces.profession_certifiee;
+      valide(`grille/diplome/${libelleBool(profession) || 'vide'}/certifiee-${nom}`, pieces, diplome, profession, MAINTENANT);
+    }
+  }
+  valide('grille/diplome/IADE-certifie-mais-rejete', doc({ type_document: 'DIPLOME', profession_certifiee: 'IADE', statut_verification: 'REJETE' }), diplome, 'IADE', MAINTENANT);
+  valide('grille/diplome/IADE-certifie-mais-expire', doc({ type_document: 'DIPLOME', profession_certifiee: 'IADE', valide_jusqua: '2026-11-01' }), diplome, 'IADE', MAINTENANT);
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 15 : presences-soignant-listes (src/lib/presences-soignant-listes.ts)
+// ---------------------------------------------------------------------------
+// `construireListesPresences` recopie chaque mission lue (`...mission`) : l'attendu n'en garde que
+// l'identifiant, les créneaux (avec le repli ponctuel) et l'établissement résolu, plus, pour
+// « À venir », la date, le prochain créneau, la durée (NaN → null, comme `JSON.stringify`) et
+// `planningAConfirmer` (absent → faux). Le contrat retenu par mission est réduit à son
+// identifiant. Domaine relu dans `public.sql` : `mission_creneaux.mission_id` (l.70567) et
+// `contrats_mission.mission_id` (l.68776) sont NOT NULL ; un créneau porte exactement les colonnes
+// lues par la page (`id, mission_id, debut, fin, est_pause, type_creneau`) ; un établissement
+// est un objet (`fn_etablissements_safe`). L'ordre des clés d'un regroupement n'est pas comparé
+// (les vecteurs sont comparés structurellement) : seul l'ordre des créneaux d'une mission l'est.
+function vecteursPresencesSoignantListes() {
+  const c = new Collecteur('presences-soignant-listes');
+  const R = 'presences-soignant-listes';
+  const COLONNES_CRENEAU = new Set(['id', 'mission_id', 'debut', 'fin', 'est_pause', 'type_creneau']);
+  const verifierCreneau = (cr) => {
+    domaine(R, ['debut', 'fin', 'est_pause', 'type_creneau'].every((cle) => Object.hasOwn(cr, cle))
+      && Object.keys(cr).every((cle) => COLONNES_CRENEAU.has(cle)), `créneau aux colonnes ${JSON.stringify(Object.keys(cr))}`);
+    domaine(R, typeof cr.debut === 'string' && (cr.fin === null || typeof cr.fin === 'string')
+      && typeof cr.est_pause === 'boolean' && typeof cr.type_creneau === 'string', 'créneau : types des colonnes');
+    domaine(R, cr.id === undefined || typeof cr.id === 'string', 'créneau : id');
+    domaine(R, cr.mission_id === undefined || typeof cr.mission_id === 'string', 'créneau : mission_id');
+  };
+  const regrouper = (nom, creneaux) => {
+    for (const cr of creneaux ?? []) {
+      verifierCreneau(cr);
+      domaine(R, typeof cr.mission_id === 'string', 'regroupement : mission_id NOT NULL');
+    }
+    c.ajoute(`regrouperCreneauxParMission/${nom}`, { fonction: 'regrouperCreneauxParMission', creneaux },
+      presencesListes.regrouperCreneauxParMission(creneaux));
+  };
+  const projeter = (m, source, autres) => {
+    clesExactes(R, m, [...new Set([...Object.keys(source), 'creneaux', 'etablissements', ...autres])]);
+    return { id: m.id, creneaux: m.creneaux, etablissements: m.etablissements };
+  };
+  const construire = (nom, args) => {
+    for (const m of args.missions) {
+      domaine(R, typeof m.id === 'string' && typeof m.statut === 'string' && typeof m.debut_le === 'string' && typeof m.fin_le === 'string',
+        'mission : id, statut, debut_le, fin_le');
+      domaine(R, m.duree_heures === undefined || m.duree_heures === null || typeof m.duree_heures === 'number', 'mission : duree_heures');
+      domaine(R, estChaineOuNul(m.etablissement_id), 'mission : etablissement_id');
+    }
+    for (const liste of Object.values(args.creneauxParMission)) liste.forEach(verifierCreneau);
+    for (const contrat of args.contrats ?? []) {
+      // `contrats_mission.statut` est NULLable (`public.sql` l.68786, `types.ts`) mais
+      // `ContratPointage.statut` ne décode pas encore nul : hors domaine jusqu'à T3 (décodage
+      // tolérant puis vecteur `statut: null` dans `grille/contrats/choix`, consigne T3 de DECISIONS_LOT2.md).
+      domaine(R, typeof contrat.id === 'string' && typeof contrat.mission_id === 'string' && typeof contrat.statut === 'string'
+        && estChaineOuNul(contrat.cree_le), 'contrat : id, mission_id, statut, cree_le');
+    }
+    for (const etablissement of Object.values(args.etablissements ?? {})) {
+      domaine(R, typeof etablissement === 'object' && etablissement !== null && !Array.isArray(etablissement), 'établissement : objet');
+    }
+    const r = presencesListes.construireListesPresences({ ...args, maintenant: new Date(args.maintenant) });
+    clesExactes(R, r, ['missionsAujourdhui', 'missionsAVenir', 'missionsEnCours', 'contrats']);
+    // Une mission dupliquée garde sa source par position : la recherche par identifiant suffit (mêmes clés).
+    const source = (m) => args.missions.find((mission) => mission.id === m.id);
+    c.ajoute(`construireListesPresences/${nom}`, { fonction: 'construireListesPresences', ...args }, {
+      missionsAujourdhui: r.missionsAujourdhui.map((m) => projeter(m, source(m), [])),
+      missionsAVenir: r.missionsAVenir.map((m) => ({
+        ...projeter(m, source(m), ['dateAffichage', 'prochainCreneau', 'dureeAffichageHeures', ...(Object.hasOwn(m, 'planningAConfirmer') ? ['planningAConfirmer'] : [])]),
+        dateAffichage: m.dateAffichage,
+        prochainCreneau: m.prochainCreneau,
+        dureeAffichageHeures: Number.isFinite(m.dureeAffichageHeures) ? m.dureeAffichageHeures : null,
+        planningAConfirmer: m.planningAConfirmer === true,
+      })),
+      missionsEnCours: r.missionsEnCours.map((m) => projeter(m, source(m), [])),
+      contrats: Object.fromEntries(Object.entries(r.contrats).map(([missionId, contrat]) => [missionId, contrat.id])),
+    });
+  };
+
+  const prevu = (id, debut, fin, extra = {}) => creneauLot2(debut, fin, 'PREVISIONNEL', { id, ...extra });
+  const effectif = (id, debut, fin, extra = {}) => creneauLot2(debut, fin, 'EFFECTIF', { id, ...extra });
+  const mission = (id, statut, debut_le, fin_le, extra = {}) => ({
+    id, intitule: `Mission ${id}`, statut, debut_le, fin_le, duree_heures: 7, etablissement_id: 'etab-1', ...extra,
+  });
+  // Lundi 2 novembre 2026, 10 h à Paris (UTC+1) : aujourd'hui = [2026-11-01T23:00Z, 2026-11-02T23:00Z[.
+  const MAINTENANT = '2026-11-02T09:00:00Z';
+  // Mission longue (plus de 24 h) : jamais de repli ponctuel. Colonnes réduites à celles que lit la
+  // règle (les grilles qui testent l'établissement ou la durée les ajoutent).
+  const longue = (id, statut, extra = {}) => ({ id, statut, debut_le: '2026-10-20T07:00:00Z', fin_le: '2026-11-20T15:00:00Z', ...extra });
+
+  // --- Issus des tests vitest (presences-soignant-listes.test.ts) ----------
+  regrouper('vitest-ordre-conserve', [
+    { ...prevu('a1', '2026-11-02T07:00:00Z', '2026-11-02T15:00:00Z'), mission_id: 'a' },
+    { ...prevu('b1', '2026-11-03T07:00:00Z', '2026-11-03T15:00:00Z'), mission_id: 'b' },
+    { ...prevu('a2', '2026-11-04T07:00:00Z', '2026-11-04T15:00:00Z'), mission_id: 'a' },
+  ]);
+  regrouper('vitest-null', null);
+  regrouper('vitest-absente', undefined);
+
+  construire('vitest-aujourdhui-creneau-du-jour', {
+    missions: [mission('du-jour', 'ASSIGNEE', '2026-11-02T07:00:00Z', '2026-11-02T15:00:00Z')],
+    creneauxParMission: { 'du-jour': [prevu('c', '2026-11-02T07:00:00Z', '2026-11-02T15:00:00Z')] },
+    contrats: [], maintenant: MAINTENANT,
+  });
+  construire('vitest-aujourdhui-segment-ouvert', {
+    missions: [mission('segment-ouvert', 'EN_COURS', '2026-10-30T07:00:00Z', '2026-11-06T15:00:00Z')],
+    creneauxParMission: { 'segment-ouvert': [effectif('e', '2026-11-01T07:00:00Z', null), prevu('p', '2026-11-03T07:00:00Z', '2026-11-03T15:00:00Z')] },
+    contrats: [], maintenant: MAINTENANT,
+  });
+  construire('vitest-aujourdhui-pauses-et-segment-ferme-ignores', {
+    missions: [mission('pauses', 'EN_COURS', '2026-10-30T07:00:00Z', '2026-11-06T15:00:00Z')],
+    creneauxParMission: {
+      pauses: [
+        effectif('pause-ouverte', '2026-11-02T08:00:00Z', null, { est_pause: true }),
+        effectif('ferme', '2026-11-02T07:00:00Z', '2026-11-02T08:00:00Z'),
+        prevu('pause-prevue', '2026-11-02T11:00:00Z', '2026-11-02T12:00:00Z', { est_pause: true }),
+      ],
+    },
+    contrats: [], maintenant: MAINTENANT,
+  });
+  construire('vitest-aujourdhui-bornes-minuit-paris', {
+    missions: [
+      mission('fini-minuit', 'ASSIGNEE', '2026-10-30T07:00:00Z', '2026-11-06T15:00:00Z'),
+      mission('commence-demain', 'ASSIGNEE', '2026-10-30T07:00:00Z', '2026-11-06T15:00:00Z'),
+      mission('chevauche-minuit', 'ASSIGNEE', '2026-10-30T07:00:00Z', '2026-11-06T15:00:00Z'),
+    ],
+    creneauxParMission: {
+      'fini-minuit': [prevu('a', '2026-11-01T15:00:00Z', '2026-11-01T23:00:00Z')],
+      'commence-demain': [prevu('b', '2026-11-02T23:00:00Z', '2026-11-03T07:00:00Z')],
+      'chevauche-minuit': [prevu('c', '2026-11-01T20:00:00Z', '2026-11-02T06:00:00Z')],
+    },
+    contrats: [], maintenant: MAINTENANT,
+  });
+  construire('vitest-aujourdhui-jour-civil-paris', {
+    missions: [mission('mardi', 'ASSIGNEE', '2026-11-03T07:00:00Z', '2026-11-03T15:00:00Z')],
+    creneauxParMission: { mardi: [prevu('m', '2026-11-03T07:00:00Z', '2026-11-03T15:00:00Z')] },
+    contrats: [], maintenant: '2026-11-02T23:30:00Z',
+  });
+  construire('vitest-aujourdhui-repli-ponctuel', {
+    missions: [mission('ponctuelle', 'ASSIGNEE', '2026-11-02T07:00:00Z', '2026-11-02T15:00:00Z')],
+    creneauxParMission: {}, contrats: [], maintenant: MAINTENANT,
+  });
+  construire('vitest-a-venir-prochain-creneau-et-duree', {
+    missions: [
+      mission('segment-ouvert', 'EN_COURS', '2026-10-30T07:00:00Z', '2026-11-06T15:00:00Z'),
+      mission('jeudi', 'ASSIGNEE', '2026-11-05T07:00:00Z', '2026-11-05T19:00:00Z', { duree_heures: 99 }),
+    ],
+    creneauxParMission: {
+      'segment-ouvert': [
+        prevu('hier', '2026-11-01T07:00:00Z', '2026-11-01T15:00:00Z'), prevu('jour', '2026-11-02T07:00:00Z', '2026-11-02T15:00:00Z'),
+        prevu('apres', '2026-11-04T07:00:00Z', '2026-11-04T11:00:00Z'), prevu('demain', '2026-11-03T07:00:00Z', '2026-11-03T15:00:00Z'),
+      ],
+      jeudi: [prevu('j', '2026-11-05T07:00:00Z', '2026-11-05T19:00:00Z')],
+    },
+    contrats: [], maintenant: MAINTENANT,
+  });
+  construire('vitest-a-venir-planning-a-confirmer', {
+    missions: [
+      mission('longue-sans-creneau', 'ASSIGNEE', '2026-11-10T07:00:00Z', '2026-11-20T15:00:00Z'),
+      mission('en-cours-sans-creneau', 'EN_COURS', '2026-10-10T07:00:00Z', '2026-11-20T15:00:00Z'),
+      mission('incomplete', 'ASSIGNEE', '2026-11-10T07:00:00Z', '2026-11-20T15:00:00Z'),
+      mission('datee', 'ASSIGNEE', '2026-11-09T07:00:00Z', '2026-11-09T15:00:00Z'),
+    ],
+    creneauxParMission: {
+      incomplete: [prevu('sans-fin', '2026-11-10T07:00:00Z', null)],
+      datee: [prevu('d', '2026-11-09T07:00:00Z', '2026-11-09T15:00:00Z')],
+    },
+    contrats: [], maintenant: MAINTENANT,
+  });
+  const vingtDeux = Array.from({ length: 22 }, (_, i) => {
+    const jour = String(25 - i).padStart(2, '0');
+    return mission(`m-${jour}`, 'ASSIGNEE', `2026-11-${jour}T07:00:00Z`, `2026-11-${jour}T15:00:00Z`);
+  });
+  construire('vitest-a-venir-tri-et-coupe-20', {
+    missions: [...vingtDeux, mission('a-confirmer', 'ASSIGNEE', '2026-12-01T07:00:00Z', '2026-12-10T15:00:00Z')],
+    creneauxParMission: {}, contrats: [], maintenant: MAINTENANT,
+  });
+  construire('vitest-actives-en-cours', {
+    missions: [
+      mission('a', 'EN_COURS', '2026-10-10T07:00:00Z', '2026-11-20T15:00:00Z'),
+      mission('b', 'ASSIGNEE', '2026-11-02T07:00:00Z', '2026-11-02T15:00:00Z'),
+      mission('c', 'EN_COURS', '2026-10-10T07:00:00Z', '2026-11-20T15:00:00Z'),
+    ],
+    creneauxParMission: {}, contrats: [], maintenant: MAINTENANT,
+  });
+  construire('vitest-contrat-de-pointage-par-mission', {
+    missions: [], creneauxParMission: {},
+    contrats: [
+      { id: 'annule', mission_id: 'm1', statut: 'ANNULE', cree_le: '2026-10-20T00:00:00Z' },
+      { id: 'envoye', mission_id: 'm1', statut: 'ENVOYE', cree_le: '2026-10-10T00:00:00Z' },
+      { id: 'signe', mission_id: 'm1', statut: 'SIGNE_COMPLET', cree_le: '2026-09-01T00:00:00Z' },
+      { id: 'ancien', mission_id: 'm2', statut: 'EN_ATTENTE_SIGNATURE', cree_le: '2026-10-01T00:00:00Z' },
+      { id: 'recent', mission_id: 'm2', statut: 'EN_ATTENTE_SIGNATURE', cree_le: '2026-10-15T00:00:00Z' },
+      { id: 'expire', mission_id: 'm3', statut: 'EXPIRE', cree_le: '2026-10-15T00:00:00Z' },
+    ],
+    maintenant: MAINTENANT,
+  });
+  construire('vitest-enrichissement-etablissement', {
+    missions: [
+      mission('connue', 'EN_COURS', '2026-10-10T07:00:00Z', '2026-11-20T15:00:00Z', { service: 'Urgences' }),
+      mission('inconnue', 'EN_COURS', '2026-10-10T07:00:00Z', '2026-11-20T15:00:00Z', { etablissement_id: 'etab-2' }),
+    ],
+    creneauxParMission: { connue: [effectif('e', '2026-11-02T07:00:00Z', null)] },
+    contrats: [], maintenant: MAINTENANT, etablissements: { 'etab-1': { nom: 'Clinique Test' } },
+  });
+  construire('vitest-sans-carte-etablissements', {
+    missions: [mission('m', 'EN_COURS', '2026-10-10T07:00:00Z', '2026-11-20T15:00:00Z')],
+    creneauxParMission: {}, contrats: [], maintenant: MAINTENANT,
+  });
+
+  // --- Grille : regroupement -------------------------------------------------
+  regrouper('grille/vide', []);
+  regrouper('grille/une-mission-desordre-conserve', [
+    { ...prevu('tard', '2026-11-05T07:00:00Z', '2026-11-05T15:00:00Z'), mission_id: 'm' },
+    { ...effectif('eff', '2026-11-01T07:00:00Z', null), mission_id: 'm' },
+    { ...prevu('tot', '2026-11-01T07:00:00Z', '2026-11-01T15:00:00Z'), mission_id: 'm' },
+  ]);
+  regrouper('grille/trois-missions-entrelacees', ['x', 'y', 'x', 'z', 'y', 'x'].map((missionId, i) => ({
+    ...prevu(`c${i}`, `2026-11-0${i + 1}T07:00:00Z`, `2026-11-0${i + 1}T15:00:00Z`), mission_id: missionId,
+  })));
+  regrouper('grille/sans-identifiant-de-creneau', [{ ...creneauLot2('2026-11-02T07:00:00Z', null, 'EFFECTIF'), mission_id: 'm' }]);
+
+  // --- Grille : jour civil de Paris aux changements d'heure ------------------
+  // 29 mars 2026 (23 h) : [2026-03-28T23:00Z, 2026-03-29T22:00Z[ ; 25 octobre 2026 (25 h) :
+  // [2026-10-24T22:00Z, 2026-10-25T23:00Z[. Une mission par créneau, toutes longues.
+  const bornes = (nom, maintenant, creneaux) => construire(`grille/jour/${nom}`, {
+    missions: creneaux.map(([id]) => ({ id, statut: 'ASSIGNEE', debut_le: '2026-01-01T07:00:00Z', fin_le: '2026-12-31T15:00:00Z' })),
+    creneauxParMission: Object.fromEntries(creneaux.map(([id, debut, fin]) => [id, [prevu(id, debut, fin)]])),
+    contrats: [], maintenant,
+  });
+  bornes('dst-mars-journee-23-h', '2026-03-29T10:00:00Z', [
+    ['finit-au-debut-du-jour', '2026-03-28T20:00:00Z', '2026-03-28T23:00:00Z'],
+    ['finit-1-ms-apres-le-debut', '2026-03-28T20:00:00Z', '2026-03-28T23:00:00.001Z'],
+    ['commence-1-ms-avant-la-fin', '2026-03-29T21:59:59.999Z', '2026-03-30T05:00:00Z'],
+    ['commence-a-la-fin-du-jour', '2026-03-29T22:00:00Z', '2026-03-30T05:00:00Z'],
+    ['couvre-le-jour', '2026-03-28T22:00:00Z', '2026-03-29T23:00:00Z'],
+  ]);
+  bornes('dst-octobre-journee-25-h', '2026-10-25T10:00:00Z', [
+    ['finit-au-debut-du-jour', '2026-10-24T18:00:00Z', '2026-10-24T22:00:00Z'],
+    ['commence-a-23-h-30-heure-de-paris', '2026-10-25T22:30:00Z', '2026-10-25T23:30:00Z'],
+    ['commence-a-la-fin-du-jour', '2026-10-25T23:00:00Z', '2026-10-26T07:00:00Z'],
+    ['heure-repetee', '2026-10-25T00:30:00Z', '2026-10-25T01:30:00Z'],
+  ]);
+  for (const [nom, maintenant] of [['minuit-paris-exact', '2026-11-01T23:00:00Z'], ['minuit-paris-moins-1-ms', '2026-11-01T22:59:59.999Z'],
+    ['fin-de-journee-paris', '2026-11-02T22:59:59.999Z'], ['minuit-paris-suivant', '2026-11-02T23:00:00Z']]) {
+    bornes(`horloge-${nom}`, maintenant, [
+      ['lundi', '2026-11-02T07:00:00Z', '2026-11-02T15:00:00Z'], ['mardi', '2026-11-03T07:00:00Z', '2026-11-03T15:00:00Z'],
+      ['dimanche', '2026-11-01T07:00:00Z', '2026-11-01T15:00:00Z'],
+    ]);
+  }
+  bornes('formats-de-date', MAINTENANT, [
+    ['decalage-paris', '2026-11-02T08:00:00+01:00', '2026-11-02T16:00:00+01:00'],
+    ['legacy-sans-decalage', '2026-11-02T08:00:00', '2026-11-02T16:00:00'],
+    ['postgrest-microsecondes', '2026-11-03T07:00:00.123456+00:00', '2026-11-03T15:00:00.654321+00:00'],
+    ['legacy-sans-decalage-demain', '2026-11-03T00:00:00', '2026-11-03T08:00:00'],
+    ['legacy-sans-decalage-23-h-59', '2026-11-02T23:59:00', '2026-11-03T08:00:00'],
+  ]);
+
+  // --- Grille : segment ouvert ----------------------------------------------
+  construire('grille/segment-ouvert/variantes', {
+    missions: ['fin-null', 'fin-vide', 'pause-ouverte', 'prevu-sans-fin', 'ferme', 'ouvert-futur', 'type-inconnu'].map((id) => longue(id, 'EN_COURS')),
+    creneauxParMission: {
+      'fin-null': [effectif('e1', '2026-10-21T07:00:00Z', null)],
+      'fin-vide': [effectif('e2', '2026-10-21T07:00:00Z', '')],
+      'pause-ouverte': [effectif('e3', '2026-10-21T07:00:00Z', null, { est_pause: true })],
+      'prevu-sans-fin': [prevu('p4', '2026-10-21T07:00:00Z', null)],
+      ferme: [effectif('e5', '2026-10-21T07:00:00Z', '2026-10-21T15:00:00Z')],
+      'ouvert-futur': [effectif('e6', '2026-11-10T07:00:00Z', null)],
+      'type-inconnu': [creneauLot2('2026-10-21T07:00:00Z', null, 'AUTRE', { id: 'x7' })],
+    },
+    contrats: [], maintenant: MAINTENANT,
+  });
+
+  // --- Grille : À venir (bornes, prochain créneau, durée) --------------------
+  construire('grille/a-venir/bornes-de-demain', {
+    missions: ['a-demain-pile', 'a-demain-moins-1-ms', 'pause-demain', 'prevu-sans-fin-demain', 'effectif-demain', 'desordre', 'deux-ordre-recu']
+      .map((id) => longue(id, 'ASSIGNEE')),
+    creneauxParMission: {
+      'a-demain-pile': [prevu('a', '2026-11-02T23:00:00Z', '2026-11-03T07:00:00Z')],
+      'a-demain-moins-1-ms': [prevu('b', '2026-11-02T22:59:59.999Z', '2026-11-03T07:00:00Z')],
+      'pause-demain': [prevu('c', '2026-11-03T10:00:00Z', '2026-11-03T11:00:00Z', { est_pause: true })],
+      'prevu-sans-fin-demain': [prevu('d', '2026-11-03T07:00:00Z', null)],
+      'effectif-demain': [effectif('e', '2026-11-03T07:00:00Z', '2026-11-03T15:00:00Z')],
+      desordre: [prevu('f3', '2026-11-08T07:00:00Z', '2026-11-08T15:00:00Z'), prevu('f1', '2026-11-04T07:00:00Z', '2026-11-04T09:30:00Z'),
+        prevu('f0', '2026-11-01T07:00:00Z', '2026-11-01T15:00:00Z'), prevu('f2', '2026-11-06T07:00:00Z', '2026-11-06T15:00:00Z')],
+      'deux-ordre-recu': [prevu('g1', '2026-11-05T07:00:00Z', '2026-11-05T09:00:00Z'), prevu('g2', '2026-11-05T07:00:00Z', '2026-11-05T19:00:00Z')],
+    },
+    contrats: [], maintenant: MAINTENANT,
+  });
+  construire('grille/a-venir/durees', {
+    missions: ['sept-heures-trente', 'nulle', 'negative', 'fin-illisible', 'nuit-dst-octobre', 'un-tiers'].map((id) => longue(id, 'ASSIGNEE')),
+    creneauxParMission: {
+      'sept-heures-trente': [prevu('a', '2026-11-04T07:00:00Z', '2026-11-04T14:30:00Z')],
+      nulle: [prevu('b', '2026-11-04T07:00:00Z', '2026-11-04T07:00:00Z')],
+      negative: [prevu('c', '2026-11-04T15:00:00Z', '2026-11-04T07:00:00Z')],
+      'fin-illisible': [prevu('d', '2026-11-04T07:00:00Z', 'pas une date')],
+      'nuit-dst-octobre': [prevu('e', '2026-10-24T20:00:00+02:00', '2026-10-25T08:00:00+01:00')],
+      'un-tiers': [prevu('f', '2026-11-04T07:00:00Z', '2026-11-04T07:20:00Z')],
+    },
+    contrats: [], maintenant: '2026-10-20T09:00:00Z',
+  });
+
+  // --- Grille : repli des missions ponctuelles (24 h au plus) ---------------
+  construire('grille/repli-ponctuel', {
+    missions: [
+      mission('24-h-exactes-demain', 'ASSIGNEE', '2026-11-04T07:00:00Z', '2026-11-05T07:00:00Z'),
+      mission('24-h-plus-1-ms', 'ASSIGNEE', '2026-11-04T07:00:00Z', '2026-11-05T07:00:00.001Z'),
+      mission('duree-nulle', 'ASSIGNEE', '2026-11-04T07:00:00Z', '2026-11-04T07:00:00Z'),
+      mission('duree-negative', 'ASSIGNEE', '2026-11-04T15:00:00Z', '2026-11-04T07:00:00Z'),
+      mission('debut-illisible', 'ASSIGNEE', 'bientôt', '2026-11-04T07:00:00Z'),
+      mission('en-cours-du-jour', 'EN_COURS', '2026-11-02T07:00:00Z', '2026-11-02T15:00:00Z'),
+      mission('effectifs-seuls', 'EN_COURS', '2026-11-02T07:00:00Z', '2026-11-02T15:00:00Z'),
+      mission('prevu-sans-fin', 'ASSIGNEE', '2026-11-04T07:00:00Z', '2026-11-04T15:00:00Z'),
+      mission('pause-prevue-seule', 'ASSIGNEE', '2026-11-04T07:00:00Z', '2026-11-04T15:00:00Z'),
+      mission('legacy-sans-decalage', 'ASSIGNEE', '2026-11-04T08:00:00', '2026-11-04T16:00:00'),
+      mission('a-cheval-sur-minuit', 'ASSIGNEE', '2026-11-02T20:00:00Z', '2026-11-03T06:00:00Z'),
+    ],
+    creneauxParMission: {
+      'effectifs-seuls': [effectif('e', '2026-11-02T07:05:00Z', '2026-11-02T08:00:00Z')],
+      'prevu-sans-fin': [prevu('p', '2026-11-04T07:00:00Z', null)],
+      'pause-prevue-seule': [prevu('q', '2026-11-04T10:00:00Z', '2026-11-04T10:30:00Z', { est_pause: true })],
+    },
+    contrats: [], maintenant: MAINTENANT,
+  });
+
+  // --- Grille : statuts (aucun filtre de statut sauf Actives et « à confirmer ») ---
+  construire('grille/statuts', {
+    missions: [
+      longue('terminee-du-jour', 'TERMINEE'), longue('brouillon-sans-creneau', 'BROUILLON'), longue('assignee-sans-creneau', 'ASSIGNEE'),
+      longue('en-cours-sans-creneau', 'EN_COURS'), longue('en-cours-minuscules', 'en_cours'), longue('assignee-minuscules', 'assignee'),
+      longue('litige-a-venir', 'LITIGE'),
+    ],
+    creneauxParMission: {
+      'terminee-du-jour': [prevu('t', '2026-11-02T07:00:00Z', '2026-11-02T15:00:00Z')],
+      'litige-a-venir': [prevu('l', '2026-11-05T07:00:00Z', '2026-11-05T15:00:00Z')],
+    },
+    contrats: [], maintenant: MAINTENANT,
+  });
+
+  // --- Grille : tri de « À venir » et coupe à 20 -----------------------------
+  construire('grille/tri/egalites-et-non-datees-en-tete', {
+    missions: [
+      longue('a-confirmer-1', 'ASSIGNEE'), longue('meme-date-1', 'ASSIGNEE'), longue('plus-tard', 'ASSIGNEE'),
+      longue('a-confirmer-2', 'ASSIGNEE'), longue('meme-date-2', 'ASSIGNEE'), longue('plus-tot', 'ASSIGNEE'),
+      longue('meme-instant-autre-format', 'ASSIGNEE'),
+    ],
+    creneauxParMission: {
+      'meme-date-1': [prevu('m1', '2026-11-05T07:00:00Z', '2026-11-05T15:00:00Z')],
+      'plus-tard': [prevu('pt', '2026-11-09T07:00:00Z', '2026-11-09T15:00:00Z')],
+      'meme-date-2': [prevu('m2', '2026-11-05T07:00:00Z', '2026-11-05T19:00:00Z')],
+      'plus-tot': [prevu('po', '2026-11-03T07:00:00Z', '2026-11-03T15:00:00Z')],
+      'meme-instant-autre-format': [prevu('mf', '2026-11-05T08:00:00+01:00', '2026-11-05T16:00:00+01:00')],
+    },
+    contrats: [], maintenant: MAINTENANT,
+  });
+  const datees = (n) => Array.from({ length: n }, (_, i) => longue(`d-${String(i).padStart(2, '0')}`, 'ASSIGNEE'));
+  const creneauxDatees = (n) => Object.fromEntries(Array.from({ length: n }, (_, i) => {
+    const jour = String(3 + ((i * 7) % n)).padStart(2, '0');
+    return [`d-${String(i).padStart(2, '0')}`, [prevu(`c-${i}`, `2026-11-${jour}T07:00:00Z`, `2026-11-${jour}T15:00:00Z`)]];
+  }));
+  construire('grille/tri/19-datees-3-a-confirmer', {
+    missions: [longue('x-1', 'ASSIGNEE'), ...datees(19), longue('x-2', 'ASSIGNEE'), longue('x-3', 'ASSIGNEE')],
+    creneauxParMission: creneauxDatees(19), contrats: [], maintenant: MAINTENANT,
+  });
+  construire('grille/tri/21-datees', { missions: datees(21), creneauxParMission: creneauxDatees(21), contrats: [], maintenant: MAINTENANT });
+  construire('grille/tri/21-a-confirmer-coupe-20', {
+    missions: Array.from({ length: 21 }, (_, i) => longue(`ac-${String(i).padStart(2, '0')}`, 'ASSIGNEE')),
+    creneauxParMission: {}, contrats: [], maintenant: MAINTENANT,
+  });
+
+  // --- Grille : contrat de pointage par mission -----------------------------
+  const contrat = (id, missionId, statut, creeLe, sansDate = false) => (sansDate
+    ? { id, mission_id: missionId, statut }
+    : { id, mission_id: missionId, statut, cree_le: creeLe });
+  construire('grille/contrats/choix', {
+    missions: [longue('m1', 'EN_COURS')], creneauxParMission: {},
+    contrats: [
+      ...['ANNULE', 'EXPIRE', 'REFUSE', 'RUPTURE_ETAB', 'RUPTURE_SOIGNANT'].map((statut, i) => contrat(`terminal-${i}`, 'tous-terminaux', statut, '2026-10-01T00:00:00Z')),
+      contrat('signe-ancien', 'deux-signes', 'SIGNE_COMPLET', '2026-09-01T00:00:00Z'), contrat('signe-recent', 'deux-signes', 'SIGNE_COMPLET', '2026-09-02T00:00:00Z'),
+      contrat('sans-date', 'date-nulle', 'EN_ATTENTE_SIGNATURES', null), contrat('date', 'date-nulle', 'EN_ATTENTE_SIGNATURES', '1970-01-01T00:00:00.001Z'),
+      contrat('absente', 'date-absente', 'SIGNE_SOIGNANT', null, true), contrat('epoque', 'date-absente', 'SIGNE_SOIGNANT', '1970-01-01T00:00:00Z'),
+      contrat('premier', 'egalite', 'ENVOYE', '2026-10-01T00:00:00Z'), contrat('second', 'egalite', 'ENVOYE', '2026-10-01T00:00:00Z'),
+      contrat('seul-terminal-minuscules', 'casse', 'annule', '2026-10-01T00:00:00Z'),
+      contrat('legacy', 'formats', 'ENVOYE', '2026-10-01T02:00:00'), contrat('utc', 'formats', 'ENVOYE', '2026-10-01T00:30:00Z'),
+      contrat('pour-m1', 'm1', 'SIGNE_COMPLET', '2026-10-01T00:00:00Z'),
+    ],
+    maintenant: MAINTENANT,
+  });
+  construire('grille/contrats/null', { missions: [longue('m1', 'EN_COURS')], creneauxParMission: {}, contrats: null, maintenant: MAINTENANT });
+  construire('grille/contrats/absents', { missions: [longue('m1', 'EN_COURS')], creneauxParMission: {}, maintenant: MAINTENANT });
+
+  // --- Grille : établissements ----------------------------------------------
+  construire('grille/etablissements', {
+    missions: [
+      longue('connu', 'EN_COURS', { etablissement_id: 'etab-1' }), longue('autre', 'EN_COURS', { etablissement_id: 'etab-2' }), longue('inconnu', 'EN_COURS', { etablissement_id: 'etab-3' }),
+      longue('id-null', 'EN_COURS', { etablissement_id: null }), longue('id-vide', 'EN_COURS', { etablissement_id: '' }),
+      longue('sans-id', 'EN_COURS', { etablissement_id: undefined }),
+    ],
+    creneauxParMission: { orpheline: [prevu('o', '2026-11-02T07:00:00Z', '2026-11-02T15:00:00Z')] },
+    contrats: [], maintenant: MAINTENANT,
+    etablissements: { 'etab-1': { nom: 'Clinique Test', adresse_ville: 'Lyon' }, 'etab-2': { nom: 'Hôpital Nord' } },
+  });
+  construire('grille/aucune-mission', { missions: [], creneauxParMission: {}, contrats: [], maintenant: MAINTENANT });
+  construire('grille/mission-dupliquee', {
+    missions: [longue('d', 'EN_COURS'), longue('d', 'EN_COURS')],
+    creneauxParMission: { d: [effectif('e', '2026-11-02T07:00:00Z', null)] }, contrats: [], maintenant: MAINTENANT,
+  });
+  construire('grille/duree-heures-absente-ou-nulle', {
+    missions: [longue('absente', 'ASSIGNEE', { duree_heures: undefined }), longue('nulle', 'ASSIGNEE', { duree_heures: null }),
+      longue('datee', 'ASSIGNEE', { duree_heures: null })],
+    creneauxParMission: { datee: [prevu('d', '2026-11-04T07:00:00Z', '2026-11-04T15:00:00Z')] },
+    contrats: [], maintenant: MAINTENANT,
+  });
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
 // Écriture
 // ---------------------------------------------------------------------------
 const fichiers = {
@@ -1846,13 +2479,16 @@ const fichiers = {
   'planning-candidat.json': vecteursPlanningCandidat(),
   'selection-serie-candidat.json': vecteursSelectionSerie(),
   'completude-planning-mission.json': vecteursCompletudePlanning(),
-  // Lot 2, T2. T2b (après W1) ajoutera `documents-requis.json` et `presences-soignant-listes.json`.
+  // Lot 2, T2.
   'synthese-presence-mission.json': vecteursSynthesePresence(),
   'presences-soignant-ui.json': vecteursPresencesSoignantUi(),
   'document-upload.json': await vecteursDocumentUpload(),
   'documents.json': vecteursDocuments(),
   'contrat-mission-ui.json': vecteursContratMissionUi(),
   'signature-sms-staging-admission.json': await vecteursAdmissionSms(),
+  // Lot 2, T2b : règles extraites par la PR web W1 (#1112).
+  'documents-requis.json': vecteursDocumentsRequis(),
+  'presences-soignant-listes.json': vecteursPresencesSoignantListes(),
 };
 
 let total = 0;
