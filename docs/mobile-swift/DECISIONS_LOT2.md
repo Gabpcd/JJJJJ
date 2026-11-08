@@ -569,6 +569,42 @@
   `-JOLENE_DEMO_SCENARIO otp-expire` : `AppContainer` construit `DemoContratsGateway(scenario:
   ScenarioDemoContrats(argument:))` à la place du défaut de `DemoWorld.câblerLot2` (`.nominal`). T8 n'écrit aucun
   texte de consentement ni de signature : tous viennent de `TextesWeb.SignatureOtp` (TL).
+- **Intégration de T9a** (`lot2/l2-t9a-v2`, écrans `Jolene/Screens/Contrats/`, lecteur `Composition/ContratReaderView.swift`,
+  feuille `Composition/Media/ShareSheet.swift`) : les points d'entrée prévus par le blueprint vivent dans des fichiers de
+  T4a et T7, absents de la base de T9a (`EspaceSoignantSection.swift`, `MesDocumentsScreen.swift`, `BlocPointageView.swift`).
+  T9a pose `ContratsDestination` (`Screens/Contrats/ContratsDestination.swift`) et une entrée provisoire ; à l'intégration,
+  une ligne par fichier :
+  - **T4a** : la ligne `profil-contrats` d'`EspaceSoignantSection` ouvre `ContratsDestination.liste(session:snapshot:)` (au
+    lieu de son `PlaceholderScreen`) ; supprimer `Screens/Contrats/ContratsEntreeProfil.swift` et sa ligne dans
+    `ProfileScreen` (marquée « lot 2 T9a, provisoire »). Même identifiant `profil-contrats` : `DemoContratsTests` reste
+    valable. « Voir le contrat » de `BlocPointageView` (`pointage-voir-contrat-<missionId>`) ouvre
+    `ContratsDestination.contrat(session:snapshot:contratId:)` sur le contrat retenu par `choisirContratPointage`, au lieu
+    du renvoi web ; les XCUITest de T4a qui assertent ce renvoi migrent dans la même intégration (règle 8).
+  - **T7** : l'onglet Contrats de `MesDocumentsScreen` (`documents-tab-contrats`) monte
+    `ContratsDestination.liste(session:snapshot:presentation: .onglet)` (titre « Mes contrats » dans le contenu, comme le
+    `h2` du web, aucun titre de navigation imposé) ; les assertions de T7 sur son placeholder migrent avec lui.
+  - **T10** : `/soignant/contrats?statut=` → `ContratsDestination.liste(…, filtreInitial: FiltreContrat.initial(statut:))` ;
+    `/contrat/:id` → `ContratsDestination.contrat` ; `/contrat/:id/certificat` → `ContratsDestination.certificat`
+    (`CertificatRoute`, son propre `ContratModel`).
+  - **Lot 1 T10** (présentateur `.safari` injecté) : la zone « Votre signature » montre alors `contrat-renvoi-web-action`
+    (« ✍️ Signer le contrat » → `https://jolene.app/contrat/<id>`, `ContratPresentation.renvoiSignature`) et la page du
+    certificat `certificat-export` (« Télécharger PDF » → `/contrat/<id>/certificat`) ; `DemoContratsTests` affirme
+    aujourd'hui leur absence (gap verrouillé, comme `DemoAccueilTests`) : T10 remplace ces assertions par la présence du
+    bouton et la présentation du renvoi.
+  - **État après l'intégration du 8 novembre 2026** (`int-lot2-v3`, poussée sur `feat/ios-lot2`) : faits — la ligne
+    `profil-contrats` d'`EspaceSoignantSection` ouvre `ContratsDestination.liste`, `ContratsEntreeProfil.swift` et sa
+    ligne de `ProfileScreen` sont supprimés, l'onglet Contrats de `MesDocumentsScreen` monte la liste (présentation
+    onglet), `LibellesPresences.Provisoire.contrats` est retiré, et les XCUITest migrent
+    (`DemoPresencesTests.testMesDocumentsEtMesContratsNatifsDepuisMonEspace`,
+    `DemoDocumentsTests.testOngletContratsNatifEtDpaeEnRenvoiWeb`). **Reste ouvert** : « Voir le contrat » de
+    `BlocPointageView`. Le monde démo n'a pas le contrat de la mission c (`demo-contrat-pointage-c` vient de
+    `demo-presences.json` et manque à `demo-contrats.json`) : un bouton natif y ouvrirait « Contrat introuvable ». Le
+    bouton reste donc un renvoi web, rendu seulement avec le présentateur de T10 (gap verrouillé, absence affirmée par
+    `DemoPresencesTests`). Pour le basculer, il faut ajouter ce contrat aux fixtures démo (T8, `export-demo-fixtures.mjs`
+    puis adaptation de `DemoContratsTests`), à confier à T4b ou T10.
+  - **T9b** : remplace `zoneSignature` de `ContratScreen` par `SignatureOtpView` quand `ContratModel.signature == .possible`,
+    garde le renvoi web pour `.renvoiWeb` (décision 18) et les messages de préparation (`ContratPresentation.messagePreparation`) ;
+    l'assertion « aucune signature native » (`contract-otp` absent) de `DemoContratsTests` bascule avec elle.
 
 ## Amendements du blueprint (`LOT2_PLAN.md`)
 
@@ -622,6 +658,16 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | §3 T7 `JustificatifsView` (« bannière cohérence, expiration proche ») ; `DocumentsSoignant.tsx` l.611-640 | bandeaux du web | bandeau d'incohérence et d'expiration portés ; bandeau RCP et textes d'accès des documents complémentaires non affichés | HARD STOP n°4 (restriction d'exercice, obligation d'assurance) : « En attente de Gabrielle » |
 | §3 T7 « Fichiers » (`DemoMediaPicker.swift`) ; §2.8 (« fichiers fictifs de 3 pixels ») | fichiers démo dans l'app | règle et octets dans JoleneCore (`Demo/DemoSourcesDocument.swift`, `Resources/media-demo/`), `DemoMediaPicker` (app) ne fait que les rendre ; PNG = trois pixels du pilote, HEIC = fixture de T6, PDF vide, `trop-gros` = PDF de 10 Mo + 1 octet | T7 : testables par `swift test` (préparation identique aux vrais sélecteurs) |
 | §3 T7 « Dépendances » (T4a : `EspaceSoignantSection`) ; §2.2 (`Appareil` injecté par `AppContainer`, T4b) | consommés | `EspaceSoignantSection` créée par T7 (ligne « Mes documents ») ; magasin de reçus par `AppContainer.recusJustificatifs` (point d'extension) | T4a et T4b non intégrés à la base de T7 : fusion d'une ligne par tranche à l'intégration |
+| §3 T9a « Fichiers » (`EspaceSoignantSection.swift`, `MesDocumentsScreen.swift`, `BlocPointageView.swift`) | destinations « Mes contrats », onglet Contrats, « Voir le contrat » natifs | `ContratsDestination` (une ligne par point d'entrée) + entrée provisoire `profil-contrats` dans `ProfileScreen` (`ContratsEntreeProfil`) ; bascule à l'intégration (« Consignes », « Intégration de T9a ») | T9a : T4a et T7 tournent en parallèle, leurs fichiers n'existent pas sur sa base (`feat/ios-lot2` `51b32cc8`) ; rien n'est inventé à leur place |
+| §3 T9a « zone de signature en renvoi web jusqu'à T9b » | renvoi web | zone « Votre signature » (`contrat-renvoi-web`) : messages de préparation du web (l.377 motif serveur verbatim, l.388) puis, avec le présentateur `.safari` (lot 1 T10), « ✍️ Signer le contrat » (libellé de la carte web qui ouvre la même page, `ListeContrats.tsx` l.223) ; sans présentateur, « Signature non disponible pour le moment » (`SignerContratOtp.tsx` l.230, repris hors de son contexte d'origine : document non prêt) et aucun bouton | « jamais un bouton sans effet » (`PresentateurRenvoiWeb`, verrou de `DemoAccueilTests`) ; aucun texte nouveau |
+| Consigne T9a (« textes de rendu l.377, l.388, l.394, l.715 ») | quatre textes affichés | l.377 (avec et sans motif) et l.388 ajoutés à `LibellesWeb.Contrat` et affichés ; l.394 non repris : même texte que l.377 sans motif (rendu `renduRefuse(messageServeur: nil)`), et un échec de transport de l'edge reste une erreur d'écran entière (`ContratModel`, revue de T8 mineur 5) ; l.715 (« Préparation du document contractuel final… ») non repris : le natif n'a pas d'état intermédiaire visible, le chargement couvre l'écran | T9a : aucune modification de `ContratModel.charger` (T8), aucun texte affiché sans son état |
+| Décision 17 / §3 T9a lecteur (`WKWebView`, `loadHTMLString(html, baseURL: nil)`, règle `WKContentRuleList`, méta CSP) | règle « bloquant toute ressource » ; défilement du lecteur | six règles, une par schéma de chargement (`^https?:`, `^wss?:`, `^ftps?:`, `^file:`, `^data:`, `^blob:` : les filtres WebKit n'acceptent pas l'alternative), installées avant le chargement, rien chargé si la compilation échoue ; en-tête injecté = CSP + `<meta name="viewport">` (sans viewport, la page serait rendue à 980 px) ; lecteur non défilant, hauteur du document (`scrollView.contentSize`) : l'écran défile seul, fond blanc en mode sombre (l'original n'a pas de thème sombre). Règles pures dans `JoleneCore/Contrats/LecteurContrat.swift` (`LecteurContratTests`) | décision 17 ; un défilement imbriqué captait les glissements des XCUITest et de VoiceOver |
+| §3 T9a `ShareSheet.swift` (« `UIActivityViewController`, effacement à la fermeture ») | feuille | présentée par UIKit au-dessus de la scène (popover centré sur iPad), `completionWithItemsHandler` → effacement ; copie aussi effacée à la disparition de l'écran et toutes les copies au changement d'epoch (`MainTabView.onDisappear`, une ligne) | une feuille UIKit enveloppée dans une feuille SwiftUI perd sa liaison à la fermeture programmatique |
+| §3 T9a XCUITest « contrat signé → partage (feuille système présentée, fichier `.html`) » | nom du fichier asserté | présentation de la feuille système assertée (`ActivityListView` ou `UIActivityContentView`) ; le nom `Contrat-<numéro>.html` et l'effacement sont prouvés par `OriginalContratTests` (T8) et `ContratModelTests` (partage) | la feuille système n'expose pas de manière stable le nom du fichier à XCUITest |
+| §3 T9a XCUITest « lecteur visible, aucune requête (sentinelle) » | sentinelle | sentinelle « 0 requête » relue au retour au profil ; elle ne voit pas les chargements de WebKit (hors processus) : l'isolement du lecteur est prouvé par sa configuration et `LecteurContratTests` | `NetworkSentinel` observe `URLSession` (`URLProtocol`) |
+| `CertificatView` (« `contrat-certificat` ; export PDF → renvoi web ») | certificat dans la page du contrat | certificat résumé dans la page du contrat (l.656-663) et page `/contrat/:id/certificat` native (`CertificatScreen` : empreinte complète et explication, mention de la page), ouverte depuis la page du contrat par `contrat-certificat-ouvrir` (libellé `TextesWeb.Certificat.titrePage`) — la page web du contrat n'a pas ce lien ; T10 y route le lien | T9a : la page fait partie du périmètre §1.1 « Certificat et partage » ; sans ce lien, elle ne serait atteignable que par T10 |
+| Filtre « Tous » (`ListeContrats.tsx` l.121 : `f === 'Tous' ? 'Tous'`) | libellé gardé comme constante | libellé = `FiltreContrat.tous.rawValue` (zone de rendu l.121) | la ligne porte deux « Tous » (valeur comparée et texte) : une constante annotée l.121 ne survivait pas à la mutation de la garde TL |
+| Revue fraîche de T8, mineurs 1 et 4 (préalables à T9a) | — | `certificat()` compare l'identifiant sans la casse (`meme`), test ; message du téléchargement repris de `LibellesWeb.Contrat.aucunTelechargeable` (`ContratMission.tsx` l.428, gardé par TL), textes du pilote de T8 inventoriés mot pour mot (`ContratModelsTests`, `SupabaseContratsGatewayTests`) | T9a |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 
@@ -672,7 +718,7 @@ vérifier » et « Vérifier ma session » sont ceux de l'Accueil du lot 1 (`Acc
 | `LibellesPresences.Provisoire.etat` | « Disponible au lot 2 » | provisoire (forme de l'onglet provisoire du lot 0), retiré par T4b, T7 et T9a | idem |
 | `LibellesPresences.Provisoire.pointage` | « Le pointage dans l'application arrive avec la suite du lot 2. » | provisoire, retiré par T4b | idem |
 | `LibellesPresences.Provisoire.documents` | « Vos justificatifs arrivent dans l'application avec la suite du lot 2. » | provisoire, **retiré à l'intégration de T7** (8 novembre 2026 : constante et assertions supprimées, « Mes documents » ouvre `MesDocumentsScreen`) | — |
-| `LibellesPresences.Provisoire.contrats` | « Vos contrats arrivent dans l'application avec la suite du lot 2. » | provisoire, retiré par T9a | idem |
+| `LibellesPresences.Provisoire.contrats` | « Vos contrats arrivent dans l'application avec la suite du lot 2. » | provisoire, **retiré à l'intégration de T9a** (8 novembre 2026 : constante et assertions supprimées, « Mes contrats » ouvre `ContratsDestination.liste`) | — |
 
 ## Textes opérationnels hors web (T8)
 
@@ -734,6 +780,23 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
   encart RIB l.830-843 (relation d'employeur, renvoi vers les versements du lot 3). Point d'extension :
   `PresentationJustificatifs.complementaires` (`description` nil) et `DossierDocuments.alerteRcp` (T6), non affichée.
 - **T9b** (écran de signature OTP) : go explicite avant merge (captures xcresult des trois formats, liste des textes).
+- **T9a** (lecture des contrats, aucun texte nouveau) : les textes HARD STOP affichés par T9a sont ceux de TL
+  (`TextesWeb.Contrat` : bandeaux, CDD à préparer, document figé et empreinte, document d'origine indisponible, « déjà
+  signé », pied de page ; `TextesWeb.CompteARebours` ; `TextesWeb.Certificat` : certificat, mentions des art. 1366-1367
+  du Code civil et d'eIDAS, empreinte et son explication) : T9a n'est déclarée livrée qu'après la validation écrite de TL.
+  Points à trancher par Gabrielle (rien n'est changé côté natif sans sa décision) :
+  - **mention du pied de page** (revue fraîche de T8, mineur 10) : `ContratRules.mentionPiedDePage` reprend fidèlement le
+    web (`ContratMission.tsx` l.831-837) : tout `type_contrat` autre que CDD et SALARIE (CDDU, VACATION…) reçoit « Contrat
+    de prestation entre l’établissement et le professionnel libéral. », qualification juridique fausse pour un CDDU ou une
+    vacation salariée. Correction à décider sur le web d'abord (PR HARD STOP), puis reprise verbatim ;
+  - **originaux de démonstration** (même mineur) : `demo-contrat-001.html` et `demo-contrat-002.html`, rendus par le moteur
+    serveur avec des données « employeur » fictives qui le disent, sont lisibles en mode démo, donc par l'App Review ;
+  - **classement des statuts de signature** : « ✅ Signé », « ⏳ En attente », « Statut : … », « Établissement : ✅ Signé le
+    <date> » (liste et page du contrat) sont rangés dans `LibellesWeb` (libellés d'état, hors HARD STOP, verbatim et gardés
+    par TL) ; les déplacer dans `TextesWeb` les soumettrait à la validation de TL ;
+  - **zone « Votre signature » sans présentateur** : « Signature non disponible pour le moment » (`SignerContratOtp.tsx`
+    l.230) y est repris hors de son contexte web (document non prêt) pour annoncer la signature sur jolene.app avant
+    lot 1 T10 ; aucun texte nouveau n'a été écrit.
 - **T5b** (contestation depuis une présence) : go explicite avant merge.
 - **Décision Q9 — délai de contestation** (sources primaires : `PanneauContestation.tsx` l.43-46 et l.347, l.354,
   l.394 ; `fn_fenetre_contestation_ouverte` l.36600-36622 ; `fn_litiges_escalader_auto` l.40712, l.40726-40730 ;

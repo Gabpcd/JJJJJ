@@ -175,7 +175,8 @@ final class DemoDocumentsTests: JoleneUITestCase {
         record("\(proofPrefix)-attestation-signee")
     }
 
-    func testOngletsContratsEtDpaeEnRenvoiWeb() throws {
+    /// Contrats : liste native de T9a depuis l'intégration (migré du renvoi web de T7) ; DPAE : renvoi web (décision 16).
+    func testOngletContratsNatifEtDpaeEnRenvoiWeb() throws {
         launchDemo()
         signInDemo()
         ouvrirMesDocuments()
@@ -190,8 +191,11 @@ final class DemoDocumentsTests: JoleneUITestCase {
         record("\(proofPrefix)-documents-dpae")
 
         tap("documents-tab-contrats")
-        require("L'onglet Contrats renvoie au web jusqu'à T9a") { self.element("documents-contrats-renvoi").exists }
-        XCTAssertFalse(element("documents-contrats-web").exists)
+        require("L'onglet Contrats affiche la liste native (T9a)") { self.containerVisible(self.element("contrats-liste")) }
+        require("Les contrats démo sont chargés", timeout: 30) { self.element("contrat-carte-demo-contrat-001").exists }
+        XCTAssertTrue(element("documents-tab-contrats").isSelected)
+        XCTAssertFalse(element("documents-contrats-renvoi").exists, "renvoi web retiré par T9a")
+        XCTAssertFalse(element("documents-dpae-renvoi").exists)
 
         tap("documents-tab-justificatifs")
         require("Les justificatifs reviennent") { self.element("document-statut-CARTE_IDENTITE").exists }

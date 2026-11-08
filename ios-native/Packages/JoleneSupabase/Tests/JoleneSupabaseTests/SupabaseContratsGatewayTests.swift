@@ -287,6 +287,22 @@ final class SupabaseContratsGatewayTests: XCTestCase {
         XCTAssertEqual(requete.query("order"), "cree_le.asc.nullslast")
     }
 
+    /// Revue fraîche de T8, mineur 1 (préalable à T9a) : un identifiant en majuscules (lien saisi, `UUID.uuidString`)
+    /// garde les lignes du contrat, comparé sans la casse comme le reste du gateway (`meme`) ; une ligne d'un autre
+    /// contrat reste écartée.
+    func testCertificatIdentifiantEnMajusculesGardeLesLignesDuContrat() async throws {
+        let autre = signature("etablissement").replacingOccurrences(of: id, with: "0b8c2d1e-0000-4000-8000-000000000003")
+        registry.add("GET", cheminSignatures, respond: .json(200, "[\(signature("soignant")),\(autre)]"))
+        let lignes = try await gateway().certificat(contratId: id.uppercased(), context: TestClient.context)
+        XCTAssertEqual(lignes.map(\.signataireRole), ["soignant"])
+    }
+
+    /// Texte opérationnel de T8 (« Textes opérationnels hors web (T8) ») gardé mot pour mot (revue de T8, mineur 4).
+    func testTexteOperationnelDeLaSignatureNonConfirmeeInventorie() {
+        XCTAssertEqual(SupabaseContratsGateway.messageSignatureNonConfirmee,
+                       "La signature ne peut pas être confirmée. Rechargez son état ; ne renvoyez pas automatiquement le code.")
+    }
+
     // MARK: - Envoi du code
 
     private func stubEmpreinteActuelle(_ valeur: String? = nil) {

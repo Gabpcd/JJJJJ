@@ -91,6 +91,33 @@ final class ContratRulesTests: XCTestCase {
         XCTAssertEqual(ContratRules.statutAffiche(contrat(statut: "SIGNE_SOIGNANT")), .enAttente)
     }
 
+    /// T9a : même correspondance pour la pastille de la liste (`ListeContrats.tsx` l.162-163) et l'en-tête du
+    /// contrat (l.593-596), depuis le seul code serveur.
+    func testStatutAfficheDepuisLeCodeServeur() {
+        XCTAssertEqual(ContratRules.statutAffiche(statut: "SIGNE_COMPLET"), .signe)
+        XCTAssertEqual(ContratRules.statutAffiche(statut: "ANNULE"), .annule)
+        for statut in ["EN_ATTENTE_SIGNATURES", "SIGNE_SOIGNANT", "EXPIRE", "REFUSE", "", "signe_complet"] {
+            XCTAssertEqual(ContratRules.statutAffiche(statut: statut), .enAttente, statut)
+        }
+        for statut in ["SIGNE_COMPLET", "ANNULE", "EXPIRE"] {
+            XCTAssertEqual(ContratRules.statutAffiche(contrat(statut: statut)), ContratRules.statutAffiche(statut: statut))
+        }
+    }
+
+    /// T9a : appel à signer d'une carte (`aSigner`, `ListeContrats.tsx` l.156-159, branche soignant) : tout contrat
+    /// non annulé que le soignant n'a pas signé. Le serveur décide seul d'une signature.
+    func testASignerParMoiCommeLaListeDuWeb() {
+        func carte(_ statut: String, _ soignant: Bool?) -> ContratResume {
+            ContratResume(id: "k-1", missionId: "m-1", statut: statut, signatureSoignant: soignant)
+        }
+        XCTAssertTrue(ContratRules.aSignerParMoi(carte("EN_ATTENTE_SIGNATURES", false)))
+        XCTAssertTrue(ContratRules.aSignerParMoi(carte("SIGNE_ETABLISSEMENT", nil)), "drapeau absent : non signé (`!c.signature_soignant`)")
+        XCTAssertTrue(ContratRules.aSignerParMoi(carte("EXPIRE", false)), "seul ANNULE est exclu par le web")
+        XCTAssertFalse(ContratRules.aSignerParMoi(carte("ANNULE", false)))
+        XCTAssertFalse(ContratRules.aSignerParMoi(carte("SIGNE_SOIGNANT", true)))
+        XCTAssertFalse(ContratRules.aSignerParMoi(carte("SIGNE_COMPLET", true)))
+    }
+
     // MARK: - Pied de page
 
     func testMentionDuPiedDePage() {

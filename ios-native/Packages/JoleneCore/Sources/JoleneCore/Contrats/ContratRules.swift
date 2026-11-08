@@ -92,11 +92,23 @@ public enum ContratRules {
 
     /// Statut de l'en-tête (l.593-596).
     public static func statutAffiche(_ contrat: ContratDetail) -> StatutContratAffiche {
-        switch contrat.statut {
+        statutAffiche(statut: contrat.statut)
+    }
+
+    /// Statut affiché depuis le code serveur : même correspondance pour l'en-tête du contrat (l.593-596) et la
+    /// pastille de la liste (`ListeContrats.tsx` l.162-163, T9a).
+    public static func statutAffiche(statut: String) -> StatutContratAffiche {
+        switch statut {
         case "SIGNE_COMPLET": return .signe
         case "ANNULE": return .annule
         default: return .enAttente
         }
+    }
+
+    /// Appel à signer d'une carte de la liste (`aSigner`, `ListeContrats.tsx` l.156-159, branche soignant) : contrat
+    /// non annulé que le soignant n'a pas signé. N'annonce qu'une action ; le serveur décide de toute signature.
+    public static func aSignerParMoi(_ contrat: ContratResume) -> Bool {
+        contrat.statut != "ANNULE" && contrat.signatureSoignant != true
     }
 
     /// `texteEmployeur` (l.535-537) : CDD dont l'original porte le cadre « texte de l'employeur ».

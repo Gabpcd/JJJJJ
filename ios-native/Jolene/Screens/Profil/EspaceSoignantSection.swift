@@ -6,10 +6,8 @@ import JoleneDesign
 /// Mes contrats. Titres des pages web (`LibellesWeb.ListePresences.titre`, `LibellesWeb.EspaceSoignant`) ; titre de la
 /// section : texte opérationnel inventorié (`LibellesPresences.EspaceSoignant.titreSection`, même texte que
 /// `LibellesJustificatifs.monEspace` de T7). Une ligne par tranche : T4a (`profil-presences`), T7 (`profil-documents`,
-/// `MesDocumentsScreen`), T9a (`profil-contrats`) ; T4b y ajoute le consentement GPS (`profil-gps-consentement`).
-///
-/// « Mes contrats » ouvre un écran provisoire honnête jusqu'à T9a (`placeholder-contrats`), qui le remplace et migre
-/// les identifiants de `DemoPresencesTests`.
+/// `MesDocumentsScreen`), T9a (`profil-contrats`, `ContratsDestination.liste`, qui remplace l'écran provisoire et
+/// l'entrée `ContratsEntreeProfil` de T9a à l'intégration) ; T4b y ajoute le consentement GPS (`profil-gps-consentement`).
 struct EspaceSoignantSection: View {
     let container: AppContainer
     @ObservedObject var session: SessionStore
@@ -33,8 +31,7 @@ struct EspaceSoignantSection: View {
             .accessibilityIdentifier("profil-documents")
 
             NavigationLink {
-                PlaceholderScreen(titre: LibellesWeb.EspaceSoignant.mesContrats, identifier: "placeholder-contrats",
-                                  description: LibellesPresences.Provisoire.contrats, etat: LibellesPresences.Provisoire.etat)
+                ContratsDestination.liste(session: session, snapshot: snapshot)
             } label: {
                 Label(LibellesWeb.EspaceSoignant.mesContrats, systemImage: "signature")
             }

@@ -74,6 +74,14 @@ final class ContratModelsTests: XCTestCase {
         XCTAssertNil(mission.tauxHoraireBase, "valeur d'un autre type : nil, jamais un échec du document")
     }
 
+    /// Textes opérationnels de T8 (`DECISIONS_LOT2.md`, « Textes opérationnels hors web (T8) ») gardés mot pour mot
+    /// (revue fraîche de T8, mineur 4) ; le message du téléchargement vient désormais de `LibellesWeb` (web l.428).
+    func testTextesOperationnelsDeT8InventoriesMotPourMot() {
+        XCTAssertEqual(MessagesContrats.indisponible, "Les contrats ne peuvent pas être chargés. Réessayez.")
+        XCTAssertEqual(FichierContratTemporaire.messageIndisponible, "Aucun contrat téléchargeable pour le moment.")
+        XCTAssertEqual(FichierContratTemporaire.messageIndisponible, LibellesWeb.Contrat.aucunTelechargeable)
+    }
+
     func testInitsDuLot2ConservesEtOriginalComplete() {
         // Inits posés par T1 (Lot2PortsTests) : toujours valides.
         let detail = ContratDetail(id: "k-1", missionId: "m-1", statut: "EN_ATTENTE_SIGNATURES")

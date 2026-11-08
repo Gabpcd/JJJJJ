@@ -3,7 +3,8 @@ import JoleneCore
 import JoleneDesign
 
 /// « Mes documents » (lot 2 T7), port de `src/pages/MesDocuments.tsx` : trois onglets dans l'ordre du web (Justificatifs,
-/// Contrats, DPAE), Justificatifs par défaut (l.24). Contrats : renvoi web jusqu'à T9a ; DPAE : renvoi web (décision 16).
+/// Contrats, DPAE), Justificatifs par défaut (l.24). Contrats : liste native de T9a (`ContratsListeView`, présentation
+/// onglet, branchée à l'intégration) ; DPAE : renvoi web (décision 16).
 /// Ouvert depuis Profil › Mon espace (`EspaceSoignantSection`) ; T10 y routera `/soignant/mes-documents?tab=` (`ongletInitial`).
 ///
 /// Drapeau `ios_natif_documents_actif` (D-FLAGS, fail-open) : lu à l'apparition ; à faux, l'écran entier devient un
@@ -38,7 +39,7 @@ struct MesDocumentsScreen: View {
                 case .justificatifs:
                     JustificatifsView(model: model, session: session, snapshot: snapshot, mediaDemo: mediaDemo)
                 case .contrats:
-                    renvoi(identifiant: "documents-contrats", lien: Self.lienContrats)
+                    ContratsDestination.liste(session: session, snapshot: snapshot, presentation: .onglet)
                 case .dpae:
                     renvoi(identifiant: "documents-dpae", lien: Self.lienDpae)
                 }
@@ -56,9 +57,7 @@ struct MesDocumentsScreen: View {
         .task { ecranActif = await Self.drapeau(session: session, snapshot: snapshot) }
     }
 
-    /// Contrats : onglet natif à T9a (`/soignant/contrats`, alias du web, App.tsx l.404). DPAE : `/soignant/dpae` (renvoi
-    /// web, décision 16 ; App.tsx l.402).
-    static let lienContrats = "/soignant/contrats"
+    /// DPAE : `/soignant/dpae` (renvoi web, décision 16 ; App.tsx l.402). L'onglet Contrats est natif depuis T9a.
     static let lienDpae = "/soignant/dpae"
 
     private static func drapeau(session: SessionStore, snapshot: SessionSnapshot) async -> Bool {

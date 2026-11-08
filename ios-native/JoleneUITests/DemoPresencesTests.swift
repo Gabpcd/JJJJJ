@@ -123,9 +123,10 @@ final class DemoPresencesTests: JoleneUITestCase {
         record("\(proofPrefix)-presences-onglets")
     }
 
-    /// Migré à l'intégration de T7 : « Mes documents » ouvre l'écran natif (`documents-screen`, onglet Justificatifs par
-    /// défaut, contenu affirmé par `DemoDocumentsTests`) ; « Mes contrats » reste provisoire jusqu'à T9a.
-    func testMesDocumentsNatifEtMesContratsProvisoireJusquaT9a() throws {
+    /// Migré aux intégrations de T7 et T9a : « Mes documents » ouvre l'écran natif (`documents-screen`, onglet
+    /// Justificatifs par défaut, contenu affirmé par `DemoDocumentsTests`) et « Mes contrats » la liste native
+    /// (`contrats-liste`, contenu affirmé par `DemoContratsTests`) ; plus aucun écran provisoire.
+    func testMesDocumentsEtMesContratsNatifsDepuisMonEspace() throws {
         launchDemo()
         connexionDemo()
         ouvrirProfil()
@@ -138,8 +139,9 @@ final class DemoPresencesTests: JoleneUITestCase {
         revenir()
 
         tapDansProfil("profil-contrats")
-        require("Mes contrats : écran provisoire (T9a)") { self.containerVisible(self.element("placeholder-contrats")) }
-        XCTAssertTrue(text("Vos contrats arrivent dans l'application avec la suite du lot 2.").exists)
+        require("Mes contrats : liste native (T9a)") { self.containerVisible(self.element("contrats-liste")) }
+        require("Les contrats démo sont chargés", timeout: 30) { self.element("contrat-carte-demo-contrat-001").exists }
+        XCTAssertFalse(element("placeholder-contrats").exists, "écran provisoire retiré par T9a")
         record("\(proofPrefix)-profil-contrats")
         revenir()
         require("Le profil est de retour") { self.containerVisible(self.element("profile-list")) }

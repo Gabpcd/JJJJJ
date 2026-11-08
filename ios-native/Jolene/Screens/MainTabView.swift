@@ -59,6 +59,7 @@ struct MainTabView: View {
             .accessibilityIdentifier("tab-profil")
         }
         .tint(JoleneColor.rose700)
+        .onDisappear { FichierContratTemporaire.effacerTout() } // lot 2 T9a : copies de contrats effacées au changement d'epoch
         // Fond de carte (`carteTuiles`) : injecté à la racine par `RootView` (revue T4a), hérité ici.
     }
 }

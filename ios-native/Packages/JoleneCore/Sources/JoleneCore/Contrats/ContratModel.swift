@@ -39,6 +39,8 @@ public final class ContratModel: ObservableObject {
     @Published public private(set) var admission: AdmissionSignatureRecette?
     @Published public private(set) var session: SessionSignatureOtp
     @Published public private(set) var sessionExpired = false
+    /// Échec de la préparation du fichier à partager ou imprimer (T9a), `nil` sinon.
+    @Published public private(set) var erreurPartage: String?
 
     public let contratId: String
     private let controller: SessionController
@@ -183,6 +185,39 @@ public final class ContratModel: ObservableObject {
             let erreur = Self.traduire(error)
             if erreur.kind == .unauthorized { sessionExpired = true }
             session.echouerSignature(message: erreur.kind == .cancelled ? nil : erreur.message, demande: demande)
+        }
+    }
+
+    // MARK: - Partage (T9a)
+
+    /// Copie temporaire de l'original contrôlé (`Contrat-<numéro>.html`, `FichierContratTemporaire`), à partager par
+    /// la feuille système ; l'écran l'efface à la fermeture de la feuille. Sans original contrôlé (CDD à préparer,
+    /// document non figé ou empreinte différente), rien n'est écrit et le message du web est publié (`ContratMission.tsx`
+    /// l.427-429) : jamais une reconstitution. Une copie écrite pour un epoch quitté est effacée aussitôt.
+    public func preparerPartage() async -> URL? {
+        erreurPartage = nil
+        guard let original, let gateways = ports else {
+            erreurPartage = FichierContratTemporaire.messageIndisponible
+            return nil
+        }
+        let port = gateways.contrats
+        let context = snapshot.context
+        do {
+            let url = try await bounded(timeout: controller.resolutionTimeout) {
+                try await port.fichierOriginal(contrat: original, context: context)
+            }
+            guard await controller.epoch == snapshot.epoch else {
+                FichierContratTemporaire.effacer(url)
+                return nil
+            }
+            return url
+        } catch {
+            guard await controller.epoch == snapshot.epoch else { return nil }
+            if error is CancellationError || (error as? JoleneError)?.kind == .cancelled { return nil }
+            let erreur = error as? JoleneError
+            if erreur?.kind == .unauthorized { sessionExpired = true }
+            erreurPartage = erreur?.message ?? FichierContratTemporaire.messageIndisponible
+            return nil
         }
     }
 
