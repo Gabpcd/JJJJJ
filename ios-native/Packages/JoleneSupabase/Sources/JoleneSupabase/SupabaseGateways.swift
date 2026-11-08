@@ -60,7 +60,7 @@ public enum SupabaseGateways {
     /// `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes.
     static func câblerLot3(_ gateways: inout Gateways, client: SupabaseClient) {
         gateways.push = SupabasePushGateway(client: client)                // T4
-        gateways.notifications = UnwiredNotificationsCenterPort()          // T5
+        gateways.notifications = SupabaseNotificationsGateway(client: client, clock: gateways.clock) // T5
         gateways.preferences = UnwiredNotificationPreferencesPort()        // T6
         gateways.inscription = UnwiredInscriptionPort()                    // T7, T8
         gateways.profil = UnwiredProfilPort()                              // T9

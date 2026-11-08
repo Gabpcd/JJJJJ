@@ -12,14 +12,17 @@ import JoleneDesign
 /// missions pour vous, missions proposées, gains du mois, notifications non lues.
 /// Exclus (HARD STOP n°4) : `BandeauAlerte48h` et l'encart « cumul d'activité ».
 ///
-/// Renvois web (pointage, notifications) : routes `.safari` résolues par `LinkRouter`
-/// (`AccueilPresentation.renvoiWeb`), jamais une URL écrite en dur, présentées seulement par le
+/// Renvoi web du pointage : route `.safari` résolue par `LinkRouter`
+/// (`AccueilPresentation.renvoiWeb`), jamais une URL écrite en dur, présentée seulement par le
 /// présentateur injecté par T10 (`PresentateurRenvoiWeb`, `SFSafariViewController`), jamais par
 /// `openURL` (chemins AASA : retour silencieux dans l'app). Sans présentateur, le compteur reste
 /// affiché et aucun bouton n'est rendu (gap verrouillé, `DemoAccueilTests`).
+///
+/// Lot 3, T5 (point de fusion de T3a, `DECISIONS_LOT3.md`) : le centre de notifications est natif ; le compteur
+/// des non lues ouvre `NotificationsScreen` dans la pile de l'Accueil (`CentreNotificationsRoute`, enregistrée par
+/// `MainTabView`) au lieu du renvoi web « Voir sur jolene.app ».
 struct AccueilScreen: View {
     static let renvoiPresences = AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences)
-    static let renvoiNotifications = AccueilPresentation.renvoiWeb(AccueilPresentation.lienNotifications)
 
     @StateObject private var model: AccueilModel
     @ObservedObject private var session: SessionStore
@@ -279,13 +282,21 @@ struct AccueilScreen: View {
                 .foregroundStyle(JoleneColor.midnight)
                 .accessibilityIdentifier("accueil-notifications")
             Spacer(minLength: 0)
-            if let presentateurRenvoiWeb, let route = Self.renvoiNotifications {
-                Button("Voir sur jolene.app") { presentateurRenvoiWeb.presenter(route) }
-                    .font(JoleneFont.callout.weight(.semibold))
-                    .foregroundStyle(JoleneColor.rose800)
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("accueil-notifications-action")
+            // Lot 3, T5 : centre natif. Libellé « Voir » (`PageNotifications.tsx` l.165, verbatim).
+            NavigationLink(value: CentreNotificationsRoute()) {
+                HStack(spacing: JoleneSpacing.xs) {
+                    Text(CentreNotificationsTextes.voir)
+                    Image(systemName: "chevron.right").accessibilityHidden(true)
+                }
+                .font(JoleneFont.callout.weight(.semibold))
+                .foregroundStyle(JoleneColor.rose800)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(CentreNotificationsTextes.voir)
+            .accessibilityHint("Ouvre le centre de notifications")
+            .accessibilityIdentifier("accueil-notifications-action")
         }
         .padding(.horizontal, JoleneSpacing.lg)
         .padding(.vertical, JoleneSpacing.sm)

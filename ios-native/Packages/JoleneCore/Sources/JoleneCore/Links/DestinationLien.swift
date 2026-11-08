@@ -84,7 +84,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .monCompte:
             return true                                  // hub `ProfileScreen` (lot 1 T8 ; complété par L3-T11)
         case .notifications:
-            return false                                 // T5 — centre de notifications
+            return true                                  // T5 — centre de notifications (`NotificationsScreen`)
         case .parametresNotifications:
             return false                                 // T6 — préférences de notifications
         case .inscription(let etape):
