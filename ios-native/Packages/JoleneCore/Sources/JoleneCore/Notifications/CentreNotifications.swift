@@ -100,8 +100,8 @@ public enum CibleNotification: Equatable, Sendable {
     case profil
     /// Renvoi web (`.safari` ou `.etablissement`), présenté par le présentateur de renvoi web s'il est injecté.
     case web(JoleneRoute)
-    /// Route sans présentation depuis un espace prêt : connexion et liens de rappel d'authentification (coordinateur
-    /// de L1-T10, hors de l'espace).
+    /// Route sans présentation depuis un espace prêt : connexion, liens de rappel d'authentification (coordinateur
+    /// de L1-T10, hors de l'espace) et pages d'inscription livrées (T7, `BoiteLiensInscription`).
     case aucune
 
     public init(_ lien: DestinationLien) {
@@ -119,7 +119,12 @@ public enum CibleNotification: Equatable, Sendable {
         case .safari, .etablissement: self = .web(destination)
         case .connexion, .resetPassword, .confirmerInscription:
             self = .aucune
-        case .inscription, .serieDetail, .stripeConnect:
+        case .inscription:
+            // T7 : pages d'inscription consommées hors de l'espace prêt (écran de connexion, aiguillage d'onboarding,
+            // `BoiteLiensInscription`), comme la connexion ; une page non livrée (`completer` avant T8) est déjà un
+            // `.safari` (`destination`) et n'arrive pas ici.
+            self = .aucune
+        case .serieDetail, .stripeConnect:
             // Atteint seulement quand la ligne de `ecranNatifLivre` de l'écran est passée à `true` sans que sa
             // tranche ait ajouté sa cible (sinon `destination` est déjà un `.safari`) : repli sur le renvoi web
             // canonique, jamais un tap sans effet ; la garde de `CentreNotificationsTests` le signale.
