@@ -122,9 +122,12 @@ final class ExplorerModelsTests: XCTestCase {
     /// ne l'observe qu'ensuite, quand la tâche de sa requête reprend (`Task.sleep` interrompu)
     /// sur le pool coopératif. Sur simulateur iOS lent, cette reprise peut suivre le retour du
     /// modèle : compter les annulations sans les attendre échouait (« 0 ≠ 2 », run 42489265587).
-    /// L'attente se termine sur l'événement (chaque annulation remplit l'attente) ; `timeout`
-    /// ne borne que l'échec, sous le délai de 15 s de `bounded`, pour que seule l'annulation par
-    /// le modèle — jamais celle du délai dépassé — puisse la remplir.
+    /// L'attente se termine sur l'événement (chaque annulation comptée la remplit) ; le `timeout`
+    /// de `fulfillment` ne borne que l'échec. Elle ne dit pas qui a annulé : le délai de 15 s de
+    /// `bounded` annule lui aussi la requête (sa tâche `timer` termine le flux, `onTermination`
+    /// annule le travail) et passe donc par `compterAnnulation`. Ce chemin est exclu par le
+    /// `XCTAssertLessThan(Date().timeIntervalSince(debut), 5)` qui suit chaque attente : une
+    /// annulation par le délai ne survient que 15 s après le lancement de la requête.
     private func attenteAnnulations(_ port: PortExplorer, nombre: Int, _ description: String) -> XCTestExpectation {
         let attente = expectation(description: description)
         attente.expectedFulfillmentCount = nombre

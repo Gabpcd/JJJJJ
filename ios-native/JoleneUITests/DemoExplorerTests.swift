@@ -49,7 +49,7 @@ final class DemoExplorerTests: JoleneUITestCase {
         let rayon = app.sliders.matching(identifier: "filtre-rayon").firstMatch
         scrollTo(rayon, in: feuilleFiltres)
         XCTAssertEqual(element("filtre-rayon-valeur").label, "Rayon : 50 km", "rayon du profil démo")
-        dragSliderPastEnd(rayon)
+        dragSliderPastMinimum(rayon)
         require("Le rayon minimum est sélectionné") { self.element("filtre-rayon-valeur").label == "Rayon : 5 km" }
         record("\(proofPrefix)-explorer-filtres-rayon")
         appliquerFiltres(attendu: Attendus.rayonMinimum)
@@ -86,7 +86,7 @@ final class DemoExplorerTests: JoleneUITestCase {
         ouvrirFiltres()
         let rayon = app.sliders.matching(identifier: "filtre-rayon").firstMatch
         scrollTo(rayon, in: feuilleFiltres)
-        dragSliderPastEnd(rayon)
+        dragSliderPastMinimum(rayon)
         require("Le rayon minimum est sélectionné") { self.element("filtre-rayon-valeur").label == "Rayon : 5 km" }
         let contrat = app.segmentedControls.matching(identifier: "filtre-contrat").firstMatch
         scrollTo(contrat, in: feuilleFiltres)

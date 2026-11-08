@@ -5,8 +5,8 @@ import XCTest
 /// (`element`, `visible`, `fullyVisible`, `require`, `scrollTo`, `record`, `attachText`),
 /// avec un `tap()` natif pour toute activation (jamais `press(forDuration:)` comme tap) et
 /// l'orientation lue dans `JOLENE_UI_ORIENTATION` (portrait | landscape). Les seuls glissements
-/// sont `drag(_:fromY:toY:)` (défilement borné de `scrollTo`) et `dragSliderPastEnd(_:minimum:)`
-/// (curseur amené à une borne), qui emploient `press(forDuration:thenDragTo:…)` entre deux
+/// sont `drag(_:fromY:toY:)` (défilement borné de `scrollTo`) et `dragSliderPastMinimum(_:)`
+/// (curseur amené à sa borne basse), qui emploient `press(forDuration:thenDragTo:…)` entre deux
 /// coordonnées calculées : c'est l'unique API XCUITest de glissement à point de départ contrôlé,
 /// et elle n'active rien. Aucune attente arbitraire : toutes passent par `require` (prédicat
 /// borné). La preuve est l'assertion ; les captures (`record`) ne sont que des artefacts pour
@@ -113,45 +113,144 @@ class JoleneUITestCase: XCTestCase {
     }
 
     /// Part maximale du délai de `require` décomptée pour UNE évaluation de la condition. Une
-    /// évaluation (quelques requêtes d'accessibilité) dure moins de 5 s, même sur un runner lent ;
-    /// au-delà, c'est l'observateur qui est bloqué (runner saturé, serveur d'accessibilité muet),
-    /// pas l'app. Run 42489677193, UI — iphone : une seule requête « Find the "chip-weekend"
-    /// Button » a duré 12,5 s (t = 70,4 → 82,9 s), la capture d'échec 9,5 s et le relancement
-    /// suivant 10,7 s au lieu de 1,8 s ; le délai de 15 s a expiré après UNE évaluation, sans
-    /// qu'aucune n'ait observé l'app après le blocage, alors que l'arbre d'accessibilité de fin
-    /// montrait la chip en place (402 × 874, cadre {122.7, 124, 104, 44}).
+    /// évaluation (quelques requêtes d'accessibilité) dure normalement bien moins de 5 s. Au-delà,
+    /// quelque chose est bloqué sans que le runner puisse dire quoi : l'observateur (runner saturé)
+    /// ou l'app, dont le serveur d'accessibilité répond sur le thread principal, si bien qu'un gel de
+    /// l'app allonge l'évaluation exactement comme un runner saturé. Run 42489677193, UI — iphone :
+    /// une seule requête « Find the "chip-weekend" Button » a duré 12,5 s (t = 70,4 → 82,9 s), la
+    /// capture d'échec 9,5 s et le relancement suivant 10,7 s au lieu de 1,8 s ; le délai de 15 s a
+    /// expiré après UNE évaluation, sans qu'aucune n'ait observé l'app après le blocage, alors que
+    /// l'arbre d'accessibilité de fin montrait la chip en place (402 × 874, cadre {122.7, 124, 104, 44}).
     static let maximumChargedEvaluation: TimeInterval = 5
     /// Intervalle entre deux évaluations, celui de `XCTNSPredicateExpectation`.
     static let evaluationInterval: TimeInterval = 1
 
     /// Attente bornée d'un état de l'app : la condition est évaluée environ chaque seconde jusqu'à
-    /// être vraie, pendant `timeout` secondes d'observation. Chaque évaluation est décomptée pour
-    /// sa durée plafonnée à `maximumChargedEvaluation` : un blocage de l'observateur ne consomme
-    /// pas le délai laissé à l'app, et l'état est toujours constaté par une évaluation qui suit le
-    /// blocage. Une app réellement figée échoue quand même : chaque évaluation, même bloquée,
-    /// consomme au moins `maximumChargedEvaluation` du délai, l'attente reste donc finie. Sans
-    /// blocage, l'attente équivaut à `XCTNSPredicateExpectation` sur `timeout`. L'échec est
-    /// rapporté à la ligne de l'appelant.
+    /// être vraie, pendant `timeout` secondes décomptées sur l'horloge monotone
+    /// (`ProcessInfo.systemUptime`). Sans blocage, l'attente équivaut à
+    /// `XCTNSPredicateExpectation` sur `timeout`.
+    ///
+    /// Décompte : une évaluation compte pour sa durée mesurée, plafonnée à
+    /// `maximumChargedEvaluation` ; un intervalle compte pour sa durée mesurée (jamais moins que
+    /// prévu). L'excédent d'une évaluation au-delà du plafond n'est pas décompté : c'est un blocage
+    /// de l'observateur OU du thread principal de l'app, indiscernables côté runner. Ce temps non
+    /// décompté n'est donc jamais ignoré :
+    /// - borné : cumulé sur l'appel, il ne dépasse pas `timeout`. Au-delà, l'attente échoue aussitôt
+    ///   (« observateur ou thread principal de l'app bloqué … »), même si la condition est vraie :
+    ///   une évaluation figée plus de `timeout` + `maximumChargedEvaluation` (20 s par défaut) ne
+    ///   passe jamais en silence, et un appel dure au plus environ deux fois `timeout`, plus la
+    ///   durée de l'évaluation qui franchit le plafond. L'incident ci-dessus (7,5 s non décomptées
+    ///   sur 15) reste sous le plafond ;
+    /// - tracé : dès qu'il est non nul, attente réussie comprise, une activité XCTest et une pièce
+    ///   jointe texte (`<proofPrefix>-attente-bloquee-<fichier>-<ligne>.txt`) donnent chaque
+    ///   évaluation bloquée avec sa durée mesurée.
+    ///
+    /// Évaluation de grâce : si l'évaluation qui épuise le délai était bloquée, une évaluation de
+    /// plus est accordée, une seule fois et sous le même plafond, pour que l'état soit constaté
+    /// après le blocage. Une évaluation qui ne rend jamais la main n'est interrompue que par le délai
+    /// d'exécution du test (`executionTimeAllowance`). Tout échec est rapporté à la ligne de
+    /// l'appelant.
     func require(_ description: String, timeout: TimeInterval = 15, file: StaticString = #filePath, line: UInt = #line,
-                 condition: @escaping () -> Bool) {
-        var remaining = timeout
-        var evaluations = 0
-        var observerStall: TimeInterval = 0
+                 condition: () -> Bool) {
+        var wait = RequireWait(timeout: timeout, maximumCharged: Self.maximumChargedEvaluation)
+        var satisfied = false
         while true {
-            let start = Date()
-            if condition() { return }
-            evaluations += 1
-            let duration = Date().timeIntervalSince(start)
-            observerStall += max(0, duration - Self.maximumChargedEvaluation)
-            remaining -= min(duration, Self.maximumChargedEvaluation)
-            guard remaining > 0 else { break }
-            let pause = min(Self.evaluationInterval, remaining)
+            let start = ProcessInfo.processInfo.systemUptime
+            satisfied = condition()
+            let stalled = wait.recordEvaluation(ProcessInfo.processInfo.systemUptime - start)
+            if satisfied || wait.stallCapExceeded { break }
+            if wait.remaining <= 0 {
+                // Délai épuisé : une seule évaluation de plus, si celle qui l'a épuisé était bloquée.
+                guard stalled, !wait.graceGranted else { break }
+                wait.graceGranted = true
+            }
+            let pause = wait.remaining > 0 ? min(Self.evaluationInterval, wait.remaining) : Self.evaluationInterval
+            let pauseStart = ProcessInfo.processInfo.systemUptime
             pauseBetweenEvaluations(pause)
-            remaining -= pause
+            wait.pauses += max(pause, ProcessInfo.processInfo.systemUptime - pauseStart)
         }
-        let stall = observerStall > 0 ? String(format: ", dont %.1f s d'observateur bloqué non décomptées", observerStall) : ""
-        XCTFail("\(description) — condition fausse à chacune des \(evaluations) évaluations sur \(Int(timeout)) s\(stall)",
-                file: file, line: line)
+        if wait.uncharged > 0 {
+            let outcome = wait.stallCapExceeded ? "échec, plafond du temps non décompté dépassé"
+                : satisfied ? "condition vraie" : "échec, condition fausse au terme du délai"
+            traceUncharged(wait, description: description, outcome: outcome, file: file, line: line)
+        }
+        let s = Self.seconds
+        if wait.stallCapExceeded {
+            let detail = "\(wait.stalls.count) évaluation(s) bloquée(s) sur \(wait.evaluations), la plus longue "
+                + "\(s(wait.longestStall)) ; condition \(satisfied ? "vraie" : "fausse") à la dernière"
+            XCTFail("\(description) — observateur ou thread principal de l'app bloqué \(s(wait.uncharged)) non décomptées "
+                    + "(plafond \(s(wait.maximumUncharged)) par attente) : \(detail)", file: file, line: line)
+        } else if !satisfied {
+            let stall = wait.uncharged > 0 ? ", plus \(s(wait.uncharged)) de blocage non décomptées" : ""
+            let grace = wait.graceGranted ? ", évaluation de grâce comprise" : ""
+            XCTFail("\(description) — condition fausse à chacune des \(wait.evaluations) évaluations sur \(s(timeout)) "
+                    + "décomptées\(stall)\(grace)", file: file, line: line)
+        }
+    }
+
+    /// Mesures d'un appel de `require` : évaluations, blocages, intervalles.
+    private struct RequireWait {
+        let timeout: TimeInterval
+        let maximumCharged: TimeInterval
+        /// Plafond du temps non décompté cumulé sur l'appel : le délai lui-même.
+        var maximumUncharged: TimeInterval { timeout }
+        var evaluations = 0
+        /// Évaluations bloquées (au-delà de `maximumCharged`) : rang et durée mesurée.
+        var stalls: [(index: Int, duration: TimeInterval)] = []
+        var charged: TimeInterval = 0
+        var uncharged: TimeInterval = 0
+        var pauses: TimeInterval = 0
+        var graceGranted = false
+
+        /// Délai restant : `timeout` moins les évaluations décomptées et les intervalles mesurés.
+        var remaining: TimeInterval { timeout - charged - pauses }
+        var stallCapExceeded: Bool { uncharged > maximumUncharged }
+        var longestStall: TimeInterval { stalls.map(\.duration).max() ?? 0 }
+
+        /// Compte une évaluation ; vrai si elle était bloquée.
+        mutating func recordEvaluation(_ duration: TimeInterval) -> Bool {
+            evaluations += 1
+            charged += min(duration, maximumCharged)
+            let excess = duration - maximumCharged
+            guard excess > 0 else { return false }
+            stalls.append((evaluations, duration))
+            uncharged += excess
+            return true
+        }
+    }
+
+    /// Consigne le temps non décompté d'un `require`, que l'attente réussisse ou non : activité
+    /// XCTest (journal du xcresult) et pièce jointe texte conservée, nommée avec `proofPrefix`.
+    private func traceUncharged(_ wait: RequireWait, description: String, outcome: String, file: StaticString, line: UInt) {
+        let s = Self.seconds
+        let fileName = (String(describing: file) as NSString).lastPathComponent
+        let stalls = wait.stalls.map { stall in
+            "  évaluation n° \(stall.index) : \(s(stall.duration)) mesurées, \(s(wait.maximumCharged)) décomptées, "
+                + "\(s(stall.duration - wait.maximumCharged)) non décomptées"
+        }
+        let report = [
+            "Attente : \(description)",
+            "Appelant : \(fileName):\(line)",
+            "Issue : \(outcome)",
+            "Délai : \(s(wait.timeout)) ; décompté : \(s(wait.charged + wait.pauses)) (évaluations \(s(wait.charged)), "
+                + "intervalles mesurés \(s(wait.pauses)))",
+            "Temps non décompté : \(s(wait.uncharged)) (plafond \(s(wait.maximumUncharged)) par attente)",
+            "Évaluations : \(wait.evaluations), dont \(wait.stalls.count) bloquée(s) au-delà de \(s(wait.maximumCharged)) :",
+        ] + stalls + [
+            "Évaluation de grâce après blocage : \(wait.graceGranted ? "accordée" : "non")",
+            "Origine : observateur (runner) ou thread principal de l'app, indiscernables côté runner.",
+        ]
+        let attachment = XCTAttachment(string: report.joined(separator: "\n"))
+        attachment.name = "\(proofPrefix)-attente-bloquee-\((fileName as NSString).deletingPathExtension)-\(line).txt"
+        attachment.lifetime = .keepAlways
+        let activity = "Attente « \(description) » : \(s(wait.uncharged)) non décomptées "
+            + "(plafond \(s(wait.maximumUncharged))), \(outcome)"
+        XCTContext.runActivity(named: activity) { $0.add(attachment) }
+    }
+
+    /// Durée en secondes au format français (« 12,5 s »).
+    private nonisolated static func seconds(_ value: TimeInterval) -> String {
+        String(format: "%.1f s", locale: Locale(identifier: "fr_FR"), value)
     }
 
     /// Laisse tourner la boucle principale entre deux évaluations (XCTest y traite ses
@@ -243,8 +342,8 @@ class JoleneUITestCase: XCTestCase {
         return buttons[label]
     }
 
-    /// Glissement entre deux coordonnées du viewport visible (hors clavier). Seul emploi de
-    /// `press(forDuration:thenDragTo:)` du socle : un glissement, pas une activation.
+    /// Glissement entre deux coordonnées du viewport visible (hors clavier) : un glissement, pas une
+    /// activation. L'un des deux glissements du socle, avec `dragSliderPastMinimum(_:)`.
     func drag(_ container: XCUIElement, fromY: CGFloat, toY: CGFloat) {
         var viewport = container.frame.intersection(app.frame)
         if app.keyboards.firstMatch.exists {
@@ -261,15 +360,15 @@ class JoleneUITestCase: XCTestCase {
         start.press(forDuration: 0.05, thenDragTo: end)
     }
 
-    /// Amène un curseur (`Slider`) à sa borne basse (`minimum`) ou haute par un glissement qui
-    /// part du pouce et finit AU-DELÀ de l'extrémité de la piste : le contrôle borne lui-même la
-    /// valeur, quel que soit l'écart du geste synthétisé. `adjust(toNormalizedSliderPosition: 0)`
+    /// Amène un curseur (`Slider`) à sa borne basse par un glissement qui part du pouce et finit
+    /// AU-DELÀ de l'extrémité gauche de la piste : le contrôle borne lui-même la valeur, quel que
+    /// soit l'écart du geste synthétisé. `adjust(toNormalizedSliderPosition: 0)`
     /// vise l'extrémité elle-même, à quelques points près : run 42489677193, UI — ipad-landscape,
     /// son geste (« press, hold, drag, and hold ») part de x = 575,96 et finit à x = 323,25, soit
     /// 7,25 pt dans une piste qui commence à x = 316 et dont le premier pas (5 → 10 km, 19 pas sur
     /// 548 pt) s'arrondit dès 14,4 pt ; le curseur est resté à « Rayon : 10 km » pendant les 15 s
     /// d'attente. La valeur atteinte reste prouvée par l'appelant (libellé ou valeur affichés).
-    func dragSliderPastEnd(_ slider: XCUIElement, minimum: Bool = true) {
+    func dragSliderPastMinimum(_ slider: XCUIElement) {
         require("Le curseur est atteignable") { self.visible(slider) && slider.isEnabled }
         let frame = slider.frame
         let position = min(1, max(0, slider.normalizedSliderPosition))
@@ -277,9 +376,9 @@ class JoleneUITestCase: XCTestCase {
         // et le pouce d'un `UISlider` est à peu près aussi large que le contrôle est haut.
         let halfThumb = min(frame.height, frame.width) / 2
         let thumbX = frame.minX + halfThumb + position * (frame.width - 2 * halfThumb)
-        // Fin du geste : une cible tactile (44 pt) au-delà de l'extrémité visée, dans la fenêtre.
+        // Fin du geste : une cible tactile (44 pt) à gauche de la piste, dans la fenêtre.
         let overshoot: CGFloat = 44
-        let endX = minimum ? max(app.frame.minX + 1, frame.minX - overshoot) : min(app.frame.maxX - 1, frame.maxX + overshoot)
+        let endX = max(app.frame.minX + 1, frame.minX - overshoot)
         let origin = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
         let y = frame.midY - app.frame.minY
         let start = origin.withOffset(CGVector(dx: thumbX - app.frame.minX, dy: y))
