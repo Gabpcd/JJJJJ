@@ -858,3 +858,38 @@ Consignées par l'auteur de la tranche (`lot3/l3-t5-v2`) ; écarts et point de f
   n'ouvre rien).
 - **Vérifications de l'auteur** : voir la sortie de la tranche (commandes et résultats) ; les XCUITest n'ont pas été
   lancés (consigne de la tâche) : CI trois formats à relire dans le `xcresult` (0 échec, `skipped = 0`).
+
+### Vérification de compilation et des tests unitaires (08/11/2026, pointe `4f56f2eb`)
+
+L'auteur n'avait pu lancer aucun build (disque plein à la vague 2). Vérification refaite sur la pointe de
+`lot3/l3-t5-v2`, toolchain locale Xcode 16.4 (16F6) ; **aucun correctif de code n'a été nécessaire**.
+
+- `swift build --build-tests -Xswiftc -strict-concurrency=complete` puis `swift test -Xswiftc
+  -strict-concurrency=complete` :
+  - JoleneCore : 499 tests XCTest, 0 échec, 0 ignoré, 0 avertissement ; dont les suites de T5 `PushTapIntentTests`
+    (13), `PushPolicyTests` (16), `CentreNotificationsTests` (13), `DistanceRelativeTests` (3),
+    `DemoNotificationsGatewayTests` (5), et les suites retouchées `DestinationLienTests` (12),
+    `AccueilAssemblageTests` (20), `DemoWorldTests` (12).
+  - JoleneSupabase : 227 tests XCTest, 0 échec, 0 ignoré, 0 avertissement (hors `.build/checkouts/`), dont
+    `SupabaseNotificationsGatewayTests` (10) ; « CoreData: error: Failed to create NSXPCConnection » = bruit du bac à
+    sable du runner xctest, sans échec associé.
+- `xcodegen generate` : seul écart, le groupe vide `Jolene/Resources` (présent sur la base, dossier vide non suivi
+  par git) ; le `project.pbxproj` versionné est gardé tel quel (il référence déjà les fichiers de T5).
+- `xcodebuild build-for-testing -scheme Jolene -configuration Debug -sdk iphonesimulator -destination
+  'generic/platform=iOS Simulator'`, `-derivedDataPath` dans le worktree, `CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_REQUIRED=NO` (comme la CI : signé en local, le bundle de ressources `JoleneCore_JoleneCore.bundle`
+  est refusé par `codesign`, « bundle format unrecognized », sans rapport avec T5) : `TEST BUILD SUCCEEDED`, 0
+  avertissement de compilation (seules les notes « Metadata extraction skipped » de `appintentsmetadataprocessor`).
+  Cibles compilées : app (dont `NotificationCenterDelegate`, `NotificationsScreen`, `PrePromptPushScreen`,
+  `StockageAppareil`, `MainTabView`), JoleneUITests (dont `DemoPushTests`, `DemoNotificationsTests`,
+  `DemoAccueilTests`, `StagingConnexionTests`), JoleneCoreTests, JoleneSupabaseTests, JoleneDesignTests.
+- Exporteurs en contrôle, sans diff : `export-demo-fixtures.mjs --check` (5 fichiers, dont
+  `demo-notifications.json`), `export-golden-vectors.mjs --check` (4 306 vecteurs), `check-rpc-contracts.mjs`
+  (41 RPC, aucune dérive) ; `node --test tests/node/check-rpc-contracts.node.mjs
+  tests/node/check-rpc-contracts-lot3.node.mjs` : 60 tests, 0 échec, 0 ignoré.
+- Textes : les douze constantes `// source:` de `CentreNotificationsTextes` (9) et `PrePromptPush` (3) relues contre
+  `PageNotifications.tsx` (l.93, 101, 124, 140, 142, 146, 165), `PanneauNotifications.tsx` (l.160) et
+  `DemandePermissionPush.tsx` (l.106, 107, 119) : identiques au caractère près.
+- **Non exécuté** : aucun test sur simulateur (consigne de la tâche). Les XCUITest de T5 (`DemoPushTests` +9,
+  `DemoNotificationsTests`, `DemoAccueilTests` migré) sont compilés mais n'ont jamais tourné : **condition de merge
+  maintenue**, CI trois formats verte relue dans le `xcresult` (0 échec, `skipped = 0`, `passed = total`).
