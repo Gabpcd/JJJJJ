@@ -71,7 +71,46 @@ public struct Gateways: Sendable {
     public var missions: MissionsPort
     public var clock: ClockPort
 
+    // Lot 1 — ajout additif (PRINCIPES §2) : Swift interdit les propriétés stockées en
+    // extension, les ports du lot 1 sont donc déclarés ici, chacun « non câblé » par défaut
+    // (`Ports/Lot1Ports.swift`) : il refuse explicitement tant que sa tranche ne l'a pas livré.
+    // L'init du lot 0 ci-dessous est conservé tel quel ; `unwiredPorts` nomme les ports encore
+    // stubs pour que chaque monde (démo, Supabase) prouve son câblage par test.
+    public var dashboard: DashboardPort = UnwiredDashboardPort()
+    public var candidature: CandidaturePort = UnwiredCandidaturePort()
+    public var presence: PresencePort = UnwiredPresencePort()
+    public var favoris: FavorisPort = UnwiredFavorisPort()
+    public var mesMissions: MesMissionsPort = UnwiredMesMissionsPort()
+    public var compte: AccountPort = UnwiredAccountPort()
+    public var audit: AuditPort = UnwiredAuditPort()
+    public var flags: FlagsPort = UnwiredFlagsPort()
+    public var recovery: RecoveryPort = UnwiredRecoveryPort()
+    public var justificatifs: JustificatifStoragePort = UnwiredJustificatifStoragePort()
+
     public init(auth: AuthPort, role: RolePort, missions: MissionsPort, clock: ClockPort = SystemClock()) {
         self.auth = auth; self.role = role; self.missions = missions; self.clock = clock
+    }
+
+    /// Jeu complet du lot 1 : chaque port est nommé, aucun défaut implicite (un port encore
+    /// livré par sa tranche est passé explicitement en `Unwired…`).
+    public init(auth: AuthPort, role: RolePort, missions: MissionsPort, clock: ClockPort,
+                dashboard: DashboardPort, candidature: CandidaturePort, presence: PresencePort,
+                favoris: FavorisPort, mesMissions: MesMissionsPort, compte: AccountPort,
+                audit: AuditPort, flags: FlagsPort, recovery: RecoveryPort, justificatifs: JustificatifStoragePort) {
+        self.init(auth: auth, role: role, missions: missions, clock: clock)
+        self.dashboard = dashboard; self.candidature = candidature; self.presence = presence
+        self.favoris = favoris; self.mesMissions = mesMissions; self.compte = compte
+        self.audit = audit; self.flags = flags; self.recovery = recovery; self.justificatifs = justificatifs
+    }
+
+    /// Noms des champs du lot 1 encore servis par un stub « non câblé », dans l'ordre de
+    /// déclaration. Vide pour un monde complet.
+    public var unwiredPorts: [String] {
+        let ports: [(nom: String, port: Any)] = [
+            ("dashboard", dashboard), ("candidature", candidature), ("presence", presence),
+            ("favoris", favoris), ("mesMissions", mesMissions), ("compte", compte),
+            ("audit", audit), ("flags", flags), ("recovery", recovery), ("justificatifs", justificatifs),
+        ]
+        return ports.filter { $0.port is UnwiredPort }.map(\.nom)
     }
 }

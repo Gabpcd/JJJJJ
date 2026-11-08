@@ -28735,7 +28735,15 @@ BEGIN
   v_caller_is_etab_admin := est_admin_etablissement()
     AND mon_etablissement_id() = v_mission.etablissement_id;
 
-  IF NOT (v_caller_is_soignant OR v_caller_is_etab_admin OR est_admin()) THEN
+  -- Logique ternaire : pour un compte authentifié sans lien avec la mission
+  -- (soignant non assigné, compte sans établissement), est_admin_etablissement()
+  -- et mon_etablissement_id() valent NULL ; NOT (false OR NULL OR false) vaut
+  -- NULL et ce IF laissait passer l'appel. Le contexte système (auth.uid() NULL :
+  -- service_role, tests SQL) reste inchangé.
+  IF auth.uid() IS NOT NULL
+     AND NOT (COALESCE(v_caller_is_soignant, false)
+              OR COALESCE(v_caller_is_etab_admin, false)
+              OR COALESCE(est_admin(), false)) THEN
     RAISE EXCEPTION 'Vous n''êtes pas autorisé(e) à déclarer une fin rétroactive sur cette mission.'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -28851,8 +28859,6 @@ BEGIN
     'fin_declaree', p_heure_fin,
     'horodatage_arrondi', v_arrondi_audit,
     'validation_etab_requise', true,
-    'nouveau_code', v_new_code,
-    'nouveau_hmac', v_new_hmac,
     'prochain_type_scan', 'OUVERTURE',
     'numero_scan', v_scan_numero
   );
@@ -46107,7 +46113,7 @@ BEGIN
           'montant_majoration_nuit', COALESCE(m.montant_majoration_nuit, 0),
           'montant_majoration_dimanche', COALESCE(m.montant_majoration_dimanche, 0),
           'montant_majoration_ferie', COALESCE(m.montant_majoration_ferie, 0),
-          'score', COALESCE(ms.score_global, 0),
+          'score', ms.score_global,
           'breakdown', COALESCE(ms.breakdown, '{}'::jsonb),
           'paiement_rapide', (
             v_flag_pr AND m.type_contrat_recherche = 'LIBERAL'
@@ -55912,8 +55918,6 @@ BEGIN
   WHERE id = v_mission.id;
 
   RETURN jsonb_build_object(
-    'nouveau_code', v_new_code,
-    'nouveau_hmac', v_new_hmac,
     'type_scan_effectue', v_mission.prochain_type_scan,
     'prochain_type_scan', CASE
       WHEN v_mission.prochain_type_scan = 'OUVERTURE' THEN 'FERMETURE'

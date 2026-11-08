@@ -94,7 +94,7 @@ export function creerActionsNationales() {
       state.mission.presences = [{ ...state.presence, missions: undefined }];
       control.codePointage = String(Number(control.codePointage) + 1);
       return route.fulfill({ json: { type_scan_effectue: ouvert ? 'FERMETURE' : 'OUVERTURE',
-        prochain_type_scan: ouvert ? 'OUVERTURE' : 'FERMETURE', nouveau_code: control.codePointage,
+        prochain_type_scan: ouvert ? 'OUVERTURE' : 'FERMETURE',
         numero_scan: state.calls.filter(c => c.name === name).length, horodatage_effectif: control.heurePointage } });
     });
   }

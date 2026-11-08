@@ -18,6 +18,8 @@ const specializedDiplomaMigration = readFileSync(
   'utf8',
 );
 const documentsPage = readFileSync('src/pages/DocumentsSoignant.tsx', 'utf8');
+// Filtre des exigences documentaires extrait de la page (vecteurs golden iOS, lot 2 W1).
+const documentsRequis = readFileSync('src/lib/documents-requis.ts', 'utf8');
 const activationChecklist = readFileSync(
   'src/components/dashboard/ChecklistActivation.tsx',
   'utf8',
@@ -59,12 +61,15 @@ describe('remplacement de preuve sans effacer les données existantes', () => {
 
 describe('dispense documentaire RPPS et spécialité exacte', () => {
   it('dispense du diplôme uniquement quand le RPPS est validé par l’API', () => {
-    expect(documentsPage).toContain("rppsDispenseDiplome(sg.profession, sg.rpps_verifie) && d.type_document === 'DIPLOME'");
-    expect(documentsPage).toContain('PROFESSIONS_SANS_RPPS.includes');
-    expect(documentsPage).toContain("registreProfessionnelVerifie && d.type_document === 'RPPS_ADELI'");
-    expect(documentsPage).not.toMatch(
-      /adeliVerifie\s*&&\s*d\.type_document\s*===\s*['"]DIPLOME['"]/,
-    );
+    expect(documentsPage).toContain('filtrerDocumentsRequis(');
+    expect(documentsRequis).toContain("rppsDispenseDiplome(sg.profession, sg.rpps_verifie) && d.type_document === 'DIPLOME'");
+    expect(documentsRequis).toContain('PROFESSIONS_SANS_RPPS.includes');
+    expect(documentsRequis).toContain("registreProfessionnelVerifie && d.type_document === 'RPPS_ADELI'");
+    for (const source of [documentsPage, documentsRequis]) {
+      expect(source).not.toMatch(
+        /adeliVerifie\s*&&\s*d\.type_document\s*===\s*['"]DIPLOME['"]/,
+      );
+    }
     expect(activationChecklist).toContain(
       "identiteVerifiee && d.type_document === 'RPPS_ADELI'",
     );

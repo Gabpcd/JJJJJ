@@ -105,7 +105,10 @@ BEGIN
   SELECT t.codes INTO codes FROM tirages t;
   PERFORM setseed(0.31415926);
   r := public.fn_scanner_code_pointage(codes[1], NULL);
-  IF r->>'nouveau_code' IS DISTINCT FROM codes[1]
+  -- Lu dans missions, pas dans la réponse : depuis lot 2 B1, la réponse au
+  -- soignant ne porte plus le code suivant.
+  IF (SELECT code_pointage_actif FROM missions WHERE id='f1700000-0000-4000-8000-000000000001') IS DISTINCT FROM codes[1]
+    OR (SELECT prochain_type_scan FROM missions WHERE id='f1700000-0000-4000-8000-000000000001') IS DISTINCT FROM 'FERMETURE'
     OR (SELECT count(*) FROM scans_pointage) <> 2
   THEN RAISE EXCEPTION 'POINTAGE_ROTATION_OLD_DEFECT_NOT_REPRODUCED'; END IF;
 END $before$;
@@ -127,12 +130,11 @@ BEGIN
   PERFORM setseed(0.31415926);
   r := public.fn_scanner_code_pointage(codes[1], NULL);
   next_draw := lpad(floor(random() * 1000000)::text, 6, '0');
-  IF r->>'nouveau_code' IS DISTINCT FROM codes[4] OR next_draw IS DISTINCT FROM codes[5]
+  IF (SELECT code_pointage_actif FROM missions WHERE id='f1700000-0000-4000-8000-000000000001') IS DISTINCT FROM codes[4] OR next_draw IS DISTINCT FROM codes[5]
     OR r->>'type_scan_effectue' IS DISTINCT FROM 'OUVERTURE'
     OR r->>'prochain_type_scan' IS DISTINCT FROM 'FERMETURE'
     OR (r->>'numero_scan')::integer IS DISTINCT FROM 2
     OR (r->>'horodatage_effectif')::timestamptz IS DISTINCT FROM now()
-    OR (SELECT code_pointage_actif FROM missions WHERE id='f1700000-0000-4000-8000-000000000001') IS DISTINCT FROM codes[4]
     OR (SELECT count(*) FROM scans_pointage) <> 2
     OR (SELECT count(*) FROM mission_creneaux WHERE type_creneau='EFFECTIF' AND debut=now() AND fin IS NULL) <> 1
     OR (SELECT count(*) FROM presences WHERE pointage_arrivee_le=now()) <> 1
@@ -178,7 +180,7 @@ BEGIN
   PERFORM setseed(0.31415926);
   r := public.fn_scanner_code_pointage(codes[1], NULL);
   next_draw := lpad(floor(random() * 1000000)::text, 6, '0');
-  IF r->>'nouveau_code' IS DISTINCT FROM codes[4] OR next_draw IS DISTINCT FROM codes[5]
+  IF (SELECT code_pointage_actif FROM missions WHERE id='f1700000-0000-4000-8000-000000000001') IS DISTINCT FROM codes[4] OR next_draw IS DISTINCT FROM codes[5]
     OR r->>'type_scan_effectue' IS DISTINCT FROM 'FERMETURE'
     OR r->>'prochain_type_scan' IS DISTINCT FROM 'OUVERTURE'
     OR (r->>'horodatage_effectif')::timestamptz IS DISTINCT FROM now()

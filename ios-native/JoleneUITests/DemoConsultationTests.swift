@@ -50,7 +50,7 @@ final class DemoConsultationTests: JoleneUITestCase {
         }
         submit.tap()
         require("La session est prête : la barre d'onglets est affichée", timeout: 30) {
-            self.tabBarExists && self.visible(self.element("placeholder-accueil"))
+            self.tabBarExists && self.containerVisible(self.element("accueil-screen"))
         }
         XCTAssertFalse(element("login-error").exists, "Aucune erreur de connexion en démo")
     }
