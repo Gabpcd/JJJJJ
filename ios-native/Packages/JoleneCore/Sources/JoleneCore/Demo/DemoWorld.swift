@@ -62,7 +62,7 @@ public enum DemoWorld {
         gateways.notifications = UnwiredNotificationsCenterPort()          // T5
         gateways.preferences = UnwiredNotificationPreferencesPort()        // T6
         gateways.inscription = UnwiredInscriptionPort()                    // T7, T8
-        gateways.profil = UnwiredProfilPort()                              // T9
+        gateways.profil = DemoProfilGateway()                              // T9
         gateways.avatar = UnwiredAvatarStoragePort()                       // T10
         gateways.geocodage = UnwiredGeocodagePort()                        // T10
         gateways.motDePasse = UnwiredMotDePassePort()                      // T11
