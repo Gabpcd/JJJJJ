@@ -103,6 +103,15 @@ public protocol DocumentsPort: Sendable {
     func signerAttestationSante(context: MissionReadContext) async throws -> Date
     /// Lecture best-effort : nil sans bannière (le web avale l'erreur).
     func coherence(context: MissionReadContext) async throws -> CoherenceDocuments?
+    /// Issue de `verify-document` lancé (sans être attendu) par un `envoyer` ou un `reconcilier` de ce port qui a rendu
+    /// `.verificationDemandee(documentId)`, attendue sans jamais relancer l'appel : vrai si l'appel a échoué (HTTP hors
+    /// 2xx, transport : le web annonce alors « vérification manuelle en attente », `DocumentsSoignant.tsx` l.413-425),
+    /// faux s'il a répondu, nil si ce port n'a lancé aucune vérification de ce document (défaut). Revue fraîche de T6, m-d.
+    func verificationEchouee(documentId: String) async -> Bool?
+}
+
+extension DocumentsPort {
+    public func verificationEchouee(documentId: String) async -> Bool? { nil }
 }
 
 /// Contrats signés par OTP SMS (`contrats_mission`, bucket `contrats-signes`, edge

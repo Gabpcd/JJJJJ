@@ -450,15 +450,27 @@ public struct DocumentSoignant: Codable, Equatable, Sendable, Identifiable {
     public var motifRejet: String?
     public var televerseLe: String?
     public var verificationAttemptId: String?
+    // T6 : projection de `DocumentsSoignant.tsx` l.199 (`valide_depuis`, `est_critique`,
+    // `profession_certifiee:resultat_ia->>profession_certifiee`), champs additifs.
+    public var valideDepuis: String?
+    public var estCritique: Bool?
+    /// `resultat_ia->>profession_certifiee` seulement : le reste de `resultat_ia` n'est jamais lu.
+    public var professionCertifiee: String?
+    /// Revue fraîche de T6 (m1) : bucket de l'objet, lu pour la consultation comme le web
+    /// (`doc.s3_bucket || 'jolene-documents'`, `DocumentsSoignant.tsx` l.438).
+    public var s3Bucket: String?
 
     public init(id: String, typeDocument: String, libelle: String? = nil, s3Cle: String? = nil, nomFichier: String? = nil,
                 typeMime: String? = nil, tailleOctets: Int? = nil, valideJusqua: String? = nil,
                 statutVerification: String? = nil, motifRejet: String? = nil, televerseLe: String? = nil,
-                verificationAttemptId: String? = nil) {
+                verificationAttemptId: String? = nil, valideDepuis: String? = nil, estCritique: Bool? = nil,
+                professionCertifiee: String? = nil, s3Bucket: String? = nil) {
         self.id = id; self.typeDocument = typeDocument; self.libelle = libelle; self.s3Cle = s3Cle
         self.nomFichier = nomFichier; self.typeMime = typeMime; self.tailleOctets = tailleOctets
         self.valideJusqua = valideJusqua; self.statutVerification = statutVerification; self.motifRejet = motifRejet
         self.televerseLe = televerseLe; self.verificationAttemptId = verificationAttemptId
+        self.valideDepuis = valideDepuis; self.estCritique = estCritique; self.professionCertifiee = professionCertifiee
+        self.s3Bucket = s3Bucket
     }
 
     enum CodingKeys: String, CodingKey {
@@ -473,17 +485,28 @@ public struct DocumentSoignant: Codable, Equatable, Sendable, Identifiable {
         case motifRejet = "motif_rejet"
         case televerseLe = "televerse_le"
         case verificationAttemptId = "verification_attempt_id"
+        case valideDepuis = "valide_depuis"
+        case estCritique = "est_critique"
+        case professionCertifiee = "profession_certifiee"
+        case s3Bucket = "s3_bucket"
     }
 }
 
-/// Dossier documentaire : exigences paramétrées, documents, attestation santé (valeur serveur).
+/// Dossier documentaire : exigences paramétrées, documents, attestation santé (valeur serveur). Règles
+/// d'affichage dérivées (T6) : `Documents/DossierDocuments.swift`.
 public struct DossierDocuments: Equatable, Sendable {
+    /// Exigences DÉJÀ filtrées par profession et `type_exercice` (`DossierDocuments.assembler`).
     public var exigences: [ExigenceDocument]
+    /// Pièces actives (ni supprimées ni révoquées), les plus récentes d'abord (`televerse_le` décroissant).
     public var documents: [DocumentSoignant]
     public var attestationSanteSigneeLe: String?
+    /// T6 : profil documentaire relu (`soignants`) ; nil sans dossier professionnel (web : aucune pièce chargée).
+    public var profil: SoignantExigencesDocuments?
 
-    public init(exigences: [ExigenceDocument] = [], documents: [DocumentSoignant] = [], attestationSanteSigneeLe: String? = nil) {
+    public init(exigences: [ExigenceDocument] = [], documents: [DocumentSoignant] = [], attestationSanteSigneeLe: String? = nil,
+                profil: SoignantExigencesDocuments? = nil) {
         self.exigences = exigences; self.documents = documents; self.attestationSanteSigneeLe = attestationSanteSigneeLe
+        self.profil = profil
     }
 }
 
@@ -509,10 +532,15 @@ public enum VerdictDocument: String, Codable, CaseIterable, Sendable {
 
 /// Issue d'un envoi de justificatif ou de sa réconciliation (§2.5). Jamais de renvoi automatique.
 public enum IssueEnvoiDocument: Equatable, Sendable {
-    /// Ligne enregistrée et `verify-document` demandée une fois.
+    /// Ligne enregistrée et `verify-document` demandée une fois, ou relue `EN_ATTENTE` avec une tentative en cours :
+    /// verdict attendu en ligne.
     case verificationDemandee(documentId: String)
-    /// Ligne enregistrée sans vérification demandée : « Revérifier » proposé, jamais automatique.
+    /// Ligne enregistrée sans vérification en cours : revue manuelle relue (`REVUE_MANUELLE_REQUISE`), aucune tentative
+    /// relue, ou `verify-document` en erreur. « Revérifier » reste un geste manuel, jamais automatique.
     case enregistre(documentId: String)
+    /// Ligne relue dont le verdict est déjà rendu (`VERIFIE`, `REJETE`, `EXPIRE`…), après un relancement : ni
+    /// vérification ni suivi, le badge de la pièce porte le verdict (revue fraîche de T6, m-c).
+    case verdictRendu(documentId: String)
     /// Refus serveur (`error_code` de `fn_remplacer_document_soignant`, Storage) ; message du web (T7).
     case refuse(code: String)
     case incertain

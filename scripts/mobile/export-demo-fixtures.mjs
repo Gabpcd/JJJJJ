@@ -318,6 +318,81 @@ export function buildDemoPresences(now = new Date(FIXED_NOW)) {
   };
 }
 
+/**
+ * Lot 2 T6 (`docs/mobile-swift/LOT2_PLAN.md` §2.8) : justificatifs du profil fictif (IDE MIXTE, comme DEMO_PROFILE).
+ * Exigences fictives marquées « Exigence de démonstration » : aucune règle réelle n'est reproduite, seule la forme des
+ * lignes de `documents_requis_par_profession` ; VACCINATIONS y figure pour prouver le filtre des pièces de santé
+ * (`TYPES_DOCUMENTS_EXCLUS_UPLOAD`). Pièces : diplôme vérifié ; pièce d'identité REJETE avec une date passée (doit
+ * s'afficher Rejetée, pas Expirée) ; RCP vérifiée qui expire dans 12 jours ; RIB expiré. Les clés Storage suivent le
+ * chemin du web (`<uid>/documents/<TYPE>/<ms>-<nom>`), sans aucun objet réel.
+ */
+export function buildDemoDocuments(now = new Date(FIXED_NOW)) {
+  const uid = DEMO_PROFILE.user_id;
+  const jour = (decalage) => {
+    const d = new Date(now);
+    d.setUTCDate(d.getUTCDate() + decalage);
+    return d.toISOString().slice(0, 10);
+  };
+  const instant = (decalage) => new Date(now.getTime() + decalage * 86_400_000).toISOString();
+  const exigence = (type, critique, exercice) => ({
+    id: `demo-exigence-${type.toLowerCase().replaceAll('_', '-')}`,
+    profession: DEMO_PROFILE.profile.profession,
+    type_document: type,
+    description: 'Exigence de démonstration',
+    a_expiration: type !== 'DIPLOME',
+    duree_validite_mois: null,
+    est_critique: critique,
+    type_exercice_requis: exercice,
+  });
+  const piece = (id, type, nom, mime, televerseJours, extra) => {
+    const ms = new Date(instant(televerseJours)).getTime();
+    return {
+      id,
+      type_document: type,
+      libelle: null,
+      s3_cle: `${uid}/documents/${type}/${ms}-${nom}`,
+      nom_fichier: nom,
+      type_mime: mime,
+      taille_octets: 2048,
+      valide_depuis: null,
+      valide_jusqua: null,
+      statut_verification: 'VERIFIE',
+      motif_rejet: null,
+      televerse_le: instant(televerseJours),
+      verification_attempt_id: null,
+      est_critique: true,
+      profession_certifiee: null,
+      ...extra,
+    };
+  };
+  return {
+    fixed_now: now.toISOString(),
+    profil: {
+      profession: DEMO_PROFILE.profile.profession,
+      type_exercice: DEMO_PROFILE.profile.type_exercice,
+      rpps_verifie: false,
+      adeli_verifie: false,
+    },
+    attestation_sante_signee_le: null,
+    exigences: [
+      exigence('CARTE_IDENTITE', true, 'TOUS'),
+      exigence('DIPLOME', true, 'TOUS'),
+      exigence('RCP_ASSURANCE', true, 'LIBERAL_ONLY'),
+      exigence('RIB', false, 'LIBERAL_ONLY'),
+      exigence('VACCINATIONS', true, 'TOUS'),
+    ],
+    // Les plus récentes d'abord (`order('televerse_le', { ascending: false })`).
+    documents: [
+      piece('demo-doc-carte-identite', 'CARTE_IDENTITE', 'piece-identite-demonstration.pdf', 'application/pdf', -3,
+        { statut_verification: 'REJETE', valide_jusqua: jour(-32), motif_rejet: 'Pièce de démonstration illisible.' }),
+      piece('demo-doc-rcp', 'RCP_ASSURANCE', 'rcp-demonstration.pdf', 'application/pdf', -5, { valide_jusqua: jour(12) }),
+      piece('demo-doc-diplome', 'DIPLOME', 'diplome-demonstration.pdf', 'application/pdf', -12, { valide_depuis: '2020-07-01' }),
+      piece('demo-doc-rib', 'RIB', 'rib-demonstration.pdf', 'application/pdf', -400,
+        { statut_verification: 'EXPIRE', valide_jusqua: jour(-18), est_critique: false }),
+    ],
+  };
+}
+
 export function buildFixtures() {
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
@@ -325,6 +400,7 @@ export function buildFixtures() {
     'demo-profile.json': { fixed_now: FIXED_NOW, ...DEMO_PROFILE },
     'demo-dashboard.json': buildDemoDashboard(),
     'demo-presences.json': buildDemoPresences(),
+    'demo-documents.json': buildDemoDocuments(),
   };
 }
 

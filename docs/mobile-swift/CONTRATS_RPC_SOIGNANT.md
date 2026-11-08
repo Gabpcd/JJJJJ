@@ -89,16 +89,16 @@ production. Les RPC du système de pointage ① (`RPC_POINTAGE_SYSTEME_1`) et `f
 | `fn_etat_pointage_mission` | consommée lot 2 (T3) | 2 (T3) | MIXTE_TENANT_ADMIN | authenticated, service_role | absente |
 | `fn_envoyer_otp_signature` | à venir | 2 (T8) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_signer_contrat_otp` | à venir | 2 (T8) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_remplacer_document_soignant` | à venir | 2 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_remplacer_document_soignant` | consommée lot 2 (T6) | 2 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_consentir_gps` | consommée lot 2 (T3) | 2 (T3, T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_relancer_validation_presence` | consommée lot 2 (T3) | 2 (T3, T5a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_presences_detail_mission` | consommée lot 2 (T3) | 2 (T3, T5a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_fenetre_contestation_ouverte` | à venir | 2 (T5b) | hors manifeste (SECURITY INVOKER) | authenticated, service_role | déclarée |
 | `fn_ouvrir_litige_rate_limited` | à venir | 2 (T5b, surcharge `(uuid, type_litige, text)`) | RPC_UTILISATEUR_AUTH_INTERNE (deux surcharges sur trois) | authenticated, service_role | absente |
 | `fn_creer_notation_mission` | à venir | 2 (T5a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
-| `fn_demander_revue_document` | à venir | 2 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | absente |
-| `fn_verifier_coherence_documents` | à venir | 2 (T6) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
-| `fn_signer_attestation_sante` | à venir | 2 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_demander_revue_document` | consommée lot 2 (T6) | 2 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | absente |
+| `fn_verifier_coherence_documents` | consommée lot 2 (T6) | 2 (T6) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_signer_attestation_sante` | consommée lot 2 (T6 gateway, T7 écran) | 2 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_admission_otp_signature_recette` | STAGING seulement | 2 (T8) | hors manifeste (supplément STAGING) | authenticated | absente (jamais en production) |
 | `fn_upsert_token_push` | à venir | 3 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 
@@ -574,7 +574,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_signer_contrat_otp"("p_contrat_id" "uuid
 
 ## fn_remplacer_document_soignant
 
-- **Statut natif** : à venir (lot 2, T6 ; décision 14).
+- **Statut natif** : consommée (lot 2, T6 ; décision 14) — `SupabaseDocumentsGateway` (envoi et réconciliation).
 - **Usage prévu** : enregistrement atomique d'un justificatif après l'upload Storage sous
   `<uid>/documents/<TYPE>/<ms>-<nom assaini>` (`DocumentsSoignant.tsx` l.404) ; reçu `RecuDocument` écrit avant
   l'upload ; puis `verify-document` **une seule fois** pour ce `document_id`. Seule mutation **rejouable** du lot 2 :
@@ -802,7 +802,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_creer_notation_mission"("p_mission_id" "
 
 ## fn_demander_revue_document
 
-- **Statut natif** : à venir (lot 2, T6).
+- **Statut natif** : consommée (lot 2, T6) — `SupabaseDocumentsGateway.demanderRevue`.
 - **Usage prévu** : revue humaine d'un justificatif à la demande du soignant (`DocumentsSoignant.tsx` l.369-391),
   motif fixe du web « Contestation du verdict automatique depuis l’espace Documents ».
 - **Signature SQL** (`supabase/schema/public.sql` l.30015) :
@@ -825,7 +825,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_demander_revue_document"("p_document_id"
 
 ## fn_verifier_coherence_documents
 
-- **Statut natif** : à venir (lot 2, T6).
+- **Statut natif** : consommée (lot 2, T6) — `SupabaseDocumentsGateway.coherence`.
 - **Usage prévu** : bannière de cohérence des noms entre justificatifs et profil, **lecture best-effort** : appel
   **sans** `p_soignant_id` (parité web `DocumentsSoignant.tsx` l.328), toute erreur avalée (l.328-338).
 - **Signature SQL** (`supabase/schema/public.sql` l.65809) :
@@ -848,7 +848,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_verifier_coherence_documents"("p_soignan
 
 ## fn_signer_attestation_sante
 
-- **Statut natif** : à venir (lot 2, T6 gateway, T7 écran ; décision 15, textes TL).
+- **Statut natif** : consommée (lot 2, T6 gateway `SupabaseDocumentsGateway.signerAttestationSante` ; écran T7 ; décision 15, textes TL).
 - **Usage prévu** : signature des deux attestations sur l'honneur de l'onglet Justificatifs ; relecture
   `soignants.attestation_sante_signee_le`.
 - **Signature SQL** (`supabase/schema/public.sql` l.56311) :
@@ -864,7 +864,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_signer_attestation_sante"() RETURNS "jso
 - **Signature TypeScript** : `Args: never` ; `Returns: Json`.
 - **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` (l.56322) ; `{error:'Soignant introuvable'}`
   (l.56326) ; succès `{success:true, signe_le}` (l.56354) ; le serveur capture IP et User-Agent et journalise
-  `ATTESTATION_SANTE_SIGNEE`.
+  `ATTESTATION_SANTE_SIGNEE`. Le natif (T6) n'ajoute pas l'audit client que le web écrit après coup
+  (`DocumentsSoignant.tsx` l.57-64, doublon de l'audit serveur) et relit `soignants.attestation_sante_signee_le` ;
+  `{error}` autre que « Non authentifié » → message du web l.52 (le web, lui, prend ce corps HTTP 200 pour un succès).
 
 ## fn_admission_otp_signature_recette
 
@@ -1080,6 +1082,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_maj_activite_soignant"() RETURNS "jsonb"
   (l.903-914). **Pas de ligne sur POSTULER** (décision 5). Paramètres app : `p_acteur_id = user.id`,
   `p_type_acteur = 'SOIGNANT'`, `p_cle_s3 = nil`, `p_ip = nil`, `p_navigateur = 'jolene-ios/2.0.0'`.
   `p_id_ressource` **jamais nul** (binding uuid cassé PostgREST, `CLAUDE.md` « audit escrow »).
+  **Lot 2, T6** : `DOCUMENT_CONSULTATION` après le téléchargement d'un justificatif (parité `DocumentsSoignant.tsx`
+  l.445-448), appel RPC **direct** de `SupabaseDocumentsGateway.consulter` (hors `AuditPort`) : `p_type_ressource =
+  'document'`, `p_id_ressource = documents_soignants.id`, `p_cle_s3 = s3_cle` de la ligne (seul appel avec une clé
+  Storage), `p_details = {type_document}`, mêmes `p_acteur_id`, `p_type_acteur`, `p_ip` et `p_navigateur` ; best-effort,
+  son échec n'empêche pas la consultation. `DOCUMENT_CONSULTATION` figure dans `journaux_audit_action_check` (l.70243).
+  Aucun audit client `ATTESTATION_SANTE_SIGNEE` (le serveur l'écrit, `DECISIONS_LOT2.md`).
 - **Signature SQL** (`supabase/schema/public.sql` l.31802) :
 
 ```sql
@@ -1282,7 +1290,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
 
 ## Edge `verify-document`
 
-- **Statut natif** : à venir (lot 2, T6). Pas une RPC : `supabase/functions/verify-document/index.ts`, appelée par
+- **Statut natif** : consommée (lot 2, T6, `SupabaseDocumentsGateway`). Pas une RPC : `supabase/functions/verify-document/index.ts`, appelée par
   `client.functions.invoke("verify-document")` avec le JWT du soignant (`Authorization: Bearer <access_token>`),
   comme le web (`DocumentsSoignant.tsx` l.343, l.427, l.445). `supabase/config.toml` : `verify_jwt = false` — la
   vérification est faite **dans** la fonction (`verifyUserOrServiceRole`, mêmes réponses 401/403/500 que la fiche
@@ -1319,6 +1327,23 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
     revue manuelle) ; second cas du 409 ci-dessus.
 - **Règle app** : tout statut ≠ 200 est un refus, jamais rejoué ; le verdict affiché est **relu** dans
   `documents_soignants` (polling 5 s pendant 60 s, `DocumentsSoignant.tsx` l.277-284).
+  **Livré (T6, revue fraîche)** : après un `fn_remplacer_document_soignant` accepté par la requête de l'envoi (ou du
+  rejeu de réconciliation), la vérification est **lancée sans être attendue** (tâche non structurée, ni bornée ni
+  annulée par l'appelant), comme le web (l.410-426) : la sonde de 10 s et l'appel IA de 20 s (`index.ts` l.286-287,
+  l.625-626) ne pèsent jamais sur l'envoi. Son issue est gardée par la gateway et observée hors du chemin critique
+  (`DocumentsPort.verificationEchouee(documentId:)`, seconde revue fraîche de T6, m-d), sans jamais relancer l'appel,
+  comme le `.then` du web (l.413-425) : erreur (HTTP hors 2xx — 429, 403, 503… — ou transport) → « vérification
+  manuelle en attente » aussitôt ; réponse → relecture aussitôt (le web recharge, l.420). Le suivi du modèle relit
+  aussi la ligne : statut sorti d'`EN_ATTENTE` → verdict (`REVUE_MANUELLE_REQUISE` après un 503 ou un 500 →
+  « vérification manuelle en attente ») ; `EN_ATTENTE` sans `verification_attempt_id` après 60 s → même issue (filet
+  quand l'issue n'est pas observable). « Revérifier » attend la réponse, borné par `DocumentsModel.delaiTransfert`
+  (≥ 120 s) ; message d'erreur lu comme `messageErreurEdgeFn` (`error || message || motif`, `src/lib/erreurs.ts`
+  l.573-575) ; 401 → session expirée. `cleanup_orphan` est aussi appelée, best-effort et une fois, juste après un HEAD
+  qui ne trouve ni ligne ni objet (400/404) : portée limitée (seconde revue fraîche de T6, m-e) — elle ne rattrape
+  qu'un objet devenu visible entre le HEAD et elle ; un objet que le serveur finit d'écrire plus tard (l'upload de
+  l'essai a été annulé par le délai, la requête a pu être reçue en entier) reste non référencé dans le bucket (aucune
+  politique DELETE client). Elle ne vise jamais l'essai d'un envoi en vol : aucune instance ne réconcilie pendant un
+  envoi du même utilisateur (registre du processus `EssaisDocumentsEnVol`, M1-bis).
 - **Preuve STAGING** : T11 (P4) — 1 ligne `journaux_audit` `DOCUMENT_VERIFICATION_AUTO` pour le `document_id`
   (l.1322-1330) ou 1 ligne `file_revue_manuelle`, et 1 seule invocation dans les logs edge du run.
 
@@ -1368,8 +1393,21 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   recréées) : un objet n'est jamais écrasé (`upload(_:data:options:)` avec `FileOptions(contentType:, upsert: false)` —
   jamais `upload(path:file:options:)`, déprécié dans supabase-swift 2.55.5, `LOT2_PLAN.md` correction 18) ; un
   orphelin est nettoyé par l'edge (`cleanup_orphan`, service_role) ou reste non référencé. Réconciliation de
-  l'objet par `exists(path:)` (HEAD). Chemin `<uid>/documents/<TYPE>/<ms>-<nom assaini>`. Consultation par
+  l'objet par `exists(path:)` (HEAD). Échec de l'upload : « non envoyé » seulement si la requête n'a pas pu partir
+  (`cannotFindHost`, `cannotConnectToHost`, `dnsLookupFailed`) ; tout autre échec de transport, `notConnectedToInternet`
+  (-1009) compris — il peut survenir en cours de transfert sur iOS (seconde revue fraîche de T6, m-g) —, un 409 ou un
+  5xx est incertain et tranché par le HEAD. Chemin `<uid>/documents/<TYPE>/<ms>-<nom assaini>`. Consultation par
   `createSignedURL(path:expiresIn: 3600)` + audit `DOCUMENT_CONSULTATION` (présent dans le CHECK l.70243).
+  **Livré (T6)** : la consultation native télécharge l'objet sous le JWT (`download(path:)`, même politique
+  `pol_storage_jolene_select`) dans une copie temporaire protégée, puis écrit le même audit `DOCUMENT_CONSULTATION`
+  (`p_cle_s3` compris, parité `DocumentsSoignant.tsx` l.445-448) ; aucune URL signée n'est créée (l'app n'ouvre pas de
+  lien). Garde de consultation (revue fraîche de T6, m1) : celle de la politique, premier segment = uid
+  (`fn_peut_gerer_objet_jolene`), au moins deux segments non vides, sans `..` ni `\` ; bucket lu dans la ligne
+  (`s3_bucket` projeté, `doc.s3_bucket || 'jolene-documents'`, l.438) : une pièce encore active envoyée avant
+  02e957ea (2026-03-17, clé `<uid>/<TYPE>/<ms>_<nom>`) reste consultable. Jeton refusé par Storage (`InvalidJWT` en
+  HTTP 400, ou 401) → session expirée, jamais `STOCKAGE_400` ni « Impossible d’ouvrir le document ». Limite connue :
+  `exists(path:)` (supabase-swift 2.55.5) rend `false` sur tout 400, jeton refusé compris ; la relecture de la ligne,
+  qui le précède, lève déjà la session expirée (`PGRST301`).
 - **`contrats-signes`** (originaux de contrat, T8) : `pol_contrats_signes_select` (`FOR SELECT TO authenticated`,
   compte actif, admin ou `contrats_mission.storage_path = name` pour le soignant ou l'établissement du contrat),
   `20260729143000` l.126-142. Aucune écriture client ; l'objet est écrit par l'edge `generate-contrat-mission-pdf`
