@@ -574,6 +574,28 @@ aucun texte de consentement, de signature ni de contrat (HARD STOP n°4 : tous v
 envoyé au numéro masqué. Valide 10 min. » (`LibellesWeb.SignatureOtp.numeroMasque`, l.296, et la durée du minuteur,
 l.145) là où le web afficherait `undefined`.
 
+## Textes opérationnels hors web (T7)
+
+Non juridiques (aucune marque de `MARQUES_JURIDIQUES`), vouvoyés ; aucun équivalent web : le web n'a ni journal de
+reçus ni réconciliation d'envoi (`DocumentsSoignant.tsx` l.361-431), ni section regroupant présences, documents et
+contrats. Modèle : `RecuScan.messageRecuEnCours` / `messageIllisible` (pilote `attemptJournal.ts`). Tous les autres
+libellés de l'écran sont ceux du web, repris tels quels ou vouvoyés (`Documents/LibellesJustificatifs.swift`, garde
+`LibellesJustificatifsTests`, qui relit chaque ligne web).
+
+| Constante | Texte | Source | Test |
+|---|---|---|---|
+| `LibellesJustificatifs.envoiAVerifier` | « L'envoi du document est en cours de vérification. Ne le renvoyez pas : cette page se mettra à jour. » | nouveau (T7) : `IssueEnvoiDocument.incertain`, reçu `started` gardé, aucun renvoi (décision 14) | `LibellesJustificatifsTests.testTextesOperationnelsInventories`, `PresentationJustificatifsTests` |
+| `LibellesJustificatifs.envoiNonRecu` | « Le document n'a pas été reçu. Choisissez-le de nouveau puis réessayez. » | nouveau (T7) : `.nonEnvoye`, aucun octet conservé, nouvelle sélection (décision 14) | idem |
+| `LibellesJustificatifs.envoiPrecedentAVerifier` | « Un autre envoi de document doit être vérifié avant de continuer. » | nouveau (T7) : `EtatEnvoi.recuEnCours`, sur le modèle de `RecuScan.messageRecuEnCours` | idem |
+| `LibellesJustificatifs.suiviIllisible` | « Le suivi sécurisé des envois ne peut pas être vérifié. Aucun nouveau document ne peut être envoyé. » | nouveau (T7) : `EtatEnvoi.suiviIllisible`, sur le modèle de `RecuScan.messageIllisible` ; renvoi web `DocumentsModel.renvoiWeb` | idem |
+| `LibellesJustificatifs.monEspace` | « Mon espace » | blueprint §7 Q24 (section « Mon espace » du Profil) ; titre de section | idem |
+
+Repris d'écrans natifs déjà livrés, sans texte nouveau : « Cet espace n'est pas encore disponible dans l'application.
+Rendez-vous sur jolene.app. » (`MobileAccess.unsupportedRole`, lot 0 : onglets DPAE et Contrats, drapeau
+`ios_natif_documents_actif` à faux), « Voir sur jolene.app » (`AccueilScreen.swift` l.283, lot 1), « Session à
+vérifier » / « Vérifier ma session » (`MissionsListScreen.swift` l.107-108, lot 1) et
+`SessionController.sessionExpiredMessage`.
+
 ## En attente de Gabrielle
 
 Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranche indiquée.

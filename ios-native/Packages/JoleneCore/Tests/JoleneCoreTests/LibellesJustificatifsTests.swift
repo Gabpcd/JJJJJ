@@ -39,7 +39,7 @@ final class LibellesJustificatifsTests: XCTestCase {
     /// Textes repris tels quels : (natif, fichier, ligne).
     private var verbatim: [(String, String, Int)] {
         [
-            (L.titre, Self.onglets, 28), (L.ongletJustificatifs, Self.onglets, 36), (L.ongletContrats, Self.onglets, 40),
+            (L.titre, Self.onglets, 27), (L.ongletJustificatifs, Self.onglets, 36), (L.ongletContrats, Self.onglets, 40),
             (L.ongletDpae, Self.onglets, 44),
             (L.documentsIndisponibles, Self.page, 490), (L.reessayer, Self.page, 499),
             (L.dossierTitre, Self.page, 509), (L.dossierTexte, Self.page, 511),
