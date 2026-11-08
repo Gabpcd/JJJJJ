@@ -82,10 +82,10 @@ export const RPC_SUIVIES = [
   { name: 'fn_envoyer_otp_signature', statut: 'a_venir', lot: 2 },
   { name: 'fn_signer_contrat_otp', statut: 'a_venir', lot: 2 },
   { name: 'fn_remplacer_document_soignant', statut: 'a_venir', lot: 2 },
-  { name: 'fn_upsert_token_push', statut: 'a_venir', lot: 3 },
+  { name: 'fn_upsert_token_push', statut: 'consommee', lot: 3 }, // L3-T4 : SupabasePushGateway
   // Lot 3, tranche T0 (`docs/mobile-swift/LOT3_PLAN.md` §3 T0) : push, préférences, inscription, profil,
   // compte, revenus, paiements déclarés, IBAN — ordre du blueprint, fiches dans CONTRATS_RPC_SOIGNANT.md.
-  { name: 'fn_desactiver_mon_token_push', statut: 'a_venir', lot: 3 },
+  { name: 'fn_desactiver_mon_token_push', statut: 'consommee', lot: 3 }, // L3-T4 : SupabasePushGateway
   { name: 'fn_obtenir_mes_preferences_notifications', statut: 'a_venir', lot: 3 },
   { name: 'fn_modifier_preferences_notifications', statut: 'a_venir', lot: 3 },
   { name: 'fn_demarrer_inscription', statut: 'a_venir', lot: 3 },

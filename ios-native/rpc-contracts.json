@@ -745,7 +745,7 @@
     },
     {
       "name": "fn_upsert_token_push",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "{ p_plateforme?: string; p_token: string }",
@@ -774,7 +774,7 @@
     },
     {
       "name": "fn_desactiver_mon_token_push",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "{ p_token: string }",

@@ -58,7 +58,7 @@ public enum DemoWorld {
     /// gateway démo dans la même PR qu'au monde Supabase (`SupabaseGateways.câblerLot3`) et retire
     /// le port de `DemoWorldTests.portsEnAttenteLot3`.
     static func câblerLot3(_ gateways: inout Gateways) {
-        gateways.push = UnwiredPushRegistrationPort()                      // T4
+        gateways.push = DemoPushGateway()                                  // T4
         gateways.notifications = UnwiredNotificationsCenterPort()          // T5
         gateways.preferences = UnwiredNotificationPreferencesPort()        // T6
         gateways.inscription = UnwiredInscriptionPort()                    // T7, T8

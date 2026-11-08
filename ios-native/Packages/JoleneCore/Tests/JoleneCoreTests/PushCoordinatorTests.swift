@@ -166,6 +166,8 @@ final class PushCoordinatorTests: XCTestCase {
         let ready = Task { await monde.coordinator.surReady(snapshot) }
         await waitUntil { await monde.registrar.enregistrements == 1 }
         let active = Task { await monde.coordinator.surActive(snapshot) }
+        // Le retour au premier plan arrive pendant que le token APNs est attendu (barrière fermée).
+        try await Task.sleep(nanoseconds: 50_000_000)
         await barriere.open()
         await ready.value
         await active.value

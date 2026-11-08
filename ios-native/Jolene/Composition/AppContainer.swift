@@ -6,9 +6,14 @@ import JoleneSupabase
 /// et construit la session. Le mode démonstration n'instancie JAMAIS JoleneSupabase.
 ///
 /// Surcharges de lancement (`-JOLENE_MODE`, `JOLENE_MODE`, `JOLENE_FORCE_BAD_KEY`,
-/// `JOLENE_FORCE_ACCUEIL_ECHEC`) et sentinelle réseau : honorées en build DEBUG uniquement. En
-/// Release, seul l'Info.plist (xcconfig Production) fait foi, et la sentinelle n'existe pas dans
-/// le binaire.
+/// `JOLENE_FORCE_ACCUEIL_ECHEC`, `-JOLENE_PUSH_AUTORISATION` en démo, `-JOLENE_PUSH_TOKEN_FACTICE` en
+/// staging) et sentinelle réseau : honorées en build DEBUG uniquement. En Release, seul l'Info.plist
+/// (xcconfig Production) fait foi, et la sentinelle n'existe pas dans le binaire.
+///
+/// Lot 3, T4 : le coordinateur push est construit avec la session (`SessionStore(controller:push:)`) :
+/// démo = doubles sans feuille système ni réseau (`DemoPushPermission`, `DemoPushRegistrar`, mémoire
+/// vive) ; staging/production = `UNUserNotificationCenter`, `PushRegistrar` (APNs) et trousseau
+/// `app.jolene.push`.
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -17,6 +22,10 @@ final class AppContainer: ObservableObject {
     let environmentError: JoleneError?
     let session: SessionStore?
     let clock: ClockPort
+    /// Lot 3, T4 : enregistrement et désactivation du token APNs (nil si l'environnement est refusé).
+    let push: PushCoordinator?
+    /// Lot 3, T4 : autorisation des notifications de l'appareil (carte `push-etat-appareil`).
+    let pushPermission: PushPermissionPort?
     /// Lot 1, T8 : avis de fin de compte partagé entre l'écran de suppression et la racine.
     let finDeCompte = AvisFinDeCompte()
     #if DEBUG
@@ -55,6 +64,8 @@ final class AppContainer: ObservableObject {
             #endif
             clock = SystemClock()
             session = nil
+            push = nil
+            pushPermission = nil
             environmentError = error
             return
         }
@@ -67,7 +78,13 @@ final class AppContainer: ObservableObject {
             #endif
             let gateways = Self.demoGateways(processEnvironment: processEnvironment)
             clock = gateways.clock
-            session = SessionStore(controller: SessionController(gateways: gateways))
+            let controller = SessionController(gateways: gateways)
+            let permission = DemoPushPermission(etat: Self.autorisationPushDemo(arguments: arguments))
+            let coordinator = PushCoordinator(controller: controller, permission: permission,
+                                              registrar: DemoPushRegistrar(), memoire: MemoirePushTokenStore())
+            push = coordinator
+            pushPermission = permission
+            session = SessionStore(controller: controller, push: coordinator)
             environmentError = nil
         case .staging, .production:
             #if DEBUG
@@ -76,7 +93,13 @@ final class AppContainer: ObservableObject {
             do {
                 let gateways = try SupabaseGateways.make(environment: environment)
                 clock = gateways.clock
-                let store = SessionStore(controller: SessionController(gateways: gateways))
+                let controller = SessionController(gateways: gateways)
+                let (permission, registrar) = Self.appareilPush(mode: environment.mode, arguments: arguments)
+                let coordinator = PushCoordinator(controller: controller, permission: permission,
+                                                  registrar: registrar, memoire: KeychainPushTokenStore())
+                push = coordinator
+                pushPermission = permission
+                let store = SessionStore(controller: controller, push: coordinator)
                 // Session effacée côté SDK (révocation, déconnexion globale, refresh refusé) :
                 // l'écran bascule sans action de l'utilisateur.
                 store.observeAuthEvents()
@@ -85,10 +108,14 @@ final class AppContainer: ObservableObject {
             } catch let error as JoleneError {
                 clock = SystemClock()
                 session = nil
+                push = nil
+                pushPermission = nil
                 environmentError = error
             } catch {
                 clock = SystemClock()
                 session = nil
+                push = nil
+                pushPermission = nil
                 environmentError = JoleneError(.environment, "Configuration de l'application invalide.")
             }
         }
@@ -107,6 +134,28 @@ final class AppContainer: ObservableObject {
         }
         #endif
         return DemoWorld.gateways()
+    }
+
+    /// Lot 3, T4 : état d'autorisation du double démo. DEBUG seulement : `-JOLENE_PUSH_AUTORISATION`
+    /// (`PushLancement`) ; sinon (et toujours en Release) un appareil neuf, autorisation jamais demandée.
+    private static func autorisationPushDemo(arguments: [String]) -> AutorisationPush {
+        #if DEBUG
+        return PushLancement.autorisation(arguments: arguments) ?? .nonDemandee
+        #else
+        return .nonDemandee
+        #endif
+    }
+
+    /// Lot 3, T4 : capacités push réelles (`UNUserNotificationCenter`, APNs). DEBUG et staging seulement :
+    /// `-JOLENE_PUSH_TOKEN_FACTICE <hex>` remplace APNs par ce token et simule l'autorisation accordée,
+    /// pour la preuve STAGING de T16 (`tokens_push` relu, `actif` vrai puis faux). Jamais en production.
+    private static func appareilPush(mode: JoleneMode, arguments: [String]) -> (PushPermissionPort, PushRegistrarPort) {
+        #if DEBUG
+        if mode == .staging, let factice = PushLancement.tokenFactice(arguments: arguments) {
+            return (DemoPushPermission(etat: .accordee), DemoPushRegistrar(token: factice))
+        }
+        #endif
+        return (SystemePushPermission(), PushRegistrar.shared)
     }
 
     private static func refusal(of environment: JoleneEnvironment) -> JoleneError? {

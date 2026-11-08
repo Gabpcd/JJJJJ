@@ -94,8 +94,8 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_envoyer_otp_signature` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_signer_contrat_otp` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_remplacer_document_soignant` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_upsert_token_push` | à venir | 3 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_desactiver_mon_token_push` | à venir | 3 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_upsert_token_push` | consommée lot 3 (T4) | 3 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_desactiver_mon_token_push` | consommée lot 3 (T4) | 3 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_obtenir_mes_preferences_notifications` | à venir | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_modifier_preferences_notifications` | à venir | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_demarrer_inscription` | à venir | 3 (T7, B9) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
@@ -517,8 +517,13 @@ CREATE OR REPLACE FUNCTION "public"."fn_remplacer_document_soignant"("p_type_doc
 
 ## fn_upsert_token_push
 
-- **Statut natif** : à venir (lot 3).
-- **Usage prévu** : Enregistrement du token APNs (`p_plateforme = IOS`) à chaque session et au retour au premier plan.
+- **Statut natif** : consommée (lot 3, T4) par `JoleneSupabase/Push/SupabasePushGateway.swift`, appelée par
+  `JoleneCore/Push/PushCoordinator.swift`.
+- **Usage** : Enregistrement du token APNs (`p_plateforme = IOS`) à chaque session (`.ready` d'un nouvel epoch) et
+  au retour au premier plan, seulement si l'appareil autorise déjà les notifications (jamais de demande implicite, D1) ;
+  identité vérifiée (epoch) avant l'appel ; token mémorisé (`KeychainPushTokenStore`, service `app.jolene.push`) après
+  le succès. Définition live relue le 2026-11-08 (production, lecture seule) : corps identique au dump (`md5(prosrc)`),
+  `SECURITY DEFINER`, `search_path=pg_catalog, public`, EXECUTE `authenticated` oui, `anon` non.
 - **Signature SQL** (`supabase/schema/public.sql` l.64628) :
 
 ```sql
@@ -833,8 +838,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
 
 ## fn_desactiver_mon_token_push
 
-- **Statut natif** : à venir (lot 3, T4).
-- **Usage prévu** : Déconnexion volontaire : désactivation du token APNs mémorisé (`KeychainPushTokenStore`,
+- **Statut natif** : consommée (lot 3, T4) par `JoleneSupabase/Push/SupabasePushGateway.swift`, appelée par
+  `JoleneCore/Push/PushCoordinator.swift` depuis `SessionStore.signOut`. Définition live relue le 2026-11-08
+  (production, lecture seule) : corps identique au dump (`md5(prosrc)`), EXECUTE `authenticated` oui, `anon` non.
+- **Usage** : Déconnexion volontaire : désactivation du token APNs mémorisé (`KeychainPushTokenStore`,
   service `app.jolene.push`) **avant** `controller.signOut()` — le JWT est requis (correction 11) —, bornée à
   **2,5 s** comme le web (`src/lib/pushDeviceToken.ts` l.90-92, l.113 ; décision D3), puis
   `unregisterForRemoteNotifications()` et oubli du token, que la RPC ait répondu ou non. Déconnexion subie

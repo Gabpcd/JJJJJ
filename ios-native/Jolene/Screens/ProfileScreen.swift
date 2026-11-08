@@ -3,7 +3,8 @@ import JoleneCore
 import JoleneDesign
 
 /// Onglet Profil du lot 0 : identité minimale, déconnexion, diagnostic démo ; suppression de compte
-/// (lot 1, T8, `SuppressionCompteSection`). Identifiant de la liste : `profile-list`.
+/// (lot 1, T8, `SuppressionCompteSection`) ; autorisation des notifications de l'appareil (lot 3, T4,
+/// `EtatNotificationsAppareilRow`). Identifiant de la liste : `profile-list`.
 struct ProfileScreen: View {
     let container: AppContainer
     @ObservedObject var session: SessionStore
@@ -37,6 +38,16 @@ struct ProfileScreen: View {
                     NetworkSentinelRow(monitor: monitor)
                 }
                 #endif
+            }
+            // Lot 3, T4 : autorisation des notifications de l'appareil, sous « Notifications » comme l'entrée
+            // du hub web (`MonCompteSoignant.tsx` l.115) ; placée après « Application » pour ne déplacer ni
+            // « Se déconnecter » ni les identifiants du lot 0 testés par les XCUITest existants.
+            if let push = container.push, let permission = container.pushPermission {
+                Section(EtatNotificationsAppareil.sectionHub) {
+                    EtatNotificationsAppareilRow(push: push, permission: permission, snapshot: snapshot)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
+                }
             }
             // Lot 1, T8 (Apple 5.1.1) : dernière section, comme sur le web.
             SuppressionCompteSection(session: session, snapshot: snapshot, finDeCompte: container.finDeCompte)
