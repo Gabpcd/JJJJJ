@@ -18,18 +18,49 @@ public enum PreparationFichier: Equatable, Sendable {
     case refuse(code: EchecFichierDocument, message: String)
 }
 
+/// Provenance d'un fichier choisi (T7 : `TeleversementSheet`).
+public enum SourceFichier: String, Sendable {
+    /// `UIDocumentPickerViewController` : fichier envoyé tel quel (HEIC/HEIF excepté).
+    case fichiers
+    /// `UIImagePickerController` `.camera` puis `jpegData(0.8)` : pixels seuls, aucune métadonnée.
+    case camera
+    /// `PHPickerViewController` : l'original garde ses EXIF (GPS compris), toujours ré-encodé en JPEG sans métadonnée,
+    /// comme le web natif (Capacitor, qualité 80, `ModalTeleversement.tsx` l.144-154).
+    case phototheque
+}
+
 /// Chaîne de préparation d'un justificatif (lot 2 T6, blueprint §2.5) : un HEIC/HEIF (annoncé ou reconnu à sa boîte
-/// `ftyp`) devient un JPEG sans métadonnée (`NormalisationImage`), puis tout fichier passe le contrôle du web
-/// (`ClassementDocument.verifierFichier` : taille, MIME, extension, signature binaire). PNG, JPEG, WebP et PDF ne sont
-/// jamais ré-encodés.
+/// `ftyp`) et toute image de la photothèque deviennent un JPEG sans métadonnée (`NormalisationImage`), puis tout fichier
+/// passe le contrôle du web (`ClassementDocument.verifierFichier` : taille, MIME, extension, signature binaire). Depuis
+/// Fichiers ou l'appareil photo, PNG, JPEG, WebP et PDF ne sont jamais ré-encodés.
 public enum FichierDocument {
-    public static func preparer(nom: String, type: String, octets: Data,
+    public static func preparer(nom: String, type: String, octets: Data, source: SourceFichier = .fichiers,
                                 tailleMax: Int = ClassementDocument.tailleMaxParDefaut) -> PreparationFichier {
         var nomFinal = nom
         var typeFinal = type
         var contenu = octets
         let heif = !octets.isEmpty
             && (ClassementDocument.classerFormat(nom: nom, type: type) == .heicNonSupporte || NormalisationImage.estHEIF(octets))
+        if !heif, source == .phototheque, !octets.isEmpty, !estPDF(octets) {
+            // Revue fraîche de T6 (m10) : une image de la photothèque n'est jamais envoyée avec ses métadonnées.
+            guard case .valide = ClassementDocument.verifierFichier(nom: nom, type: type, taille: octets.count,
+                                                                     entete: Array(octets.prefix(12)), tailleMax: Int.max) else {
+                return refus(ClassementDocument.verifierFichier(nom: nom, type: type, taille: octets.count,
+                                                                entete: Array(octets.prefix(12)), tailleMax: tailleMax))
+            }
+            switch NormalisationImage.versJPEG(octets, tailleMax: tailleMax) {
+            case let .jpeg(jpeg):
+                contenu = jpeg
+                nomFinal = renommerEnJPEG(nom)
+                typeFinal = MimeDocument.jpeg.rawValue
+            case .illisible:
+                // Jamais l'original avec ses métadonnées : refus (message générique du web, l.402).
+                return .refuse(code: .signatureInvalide, message: MessagesDocuments.enregistrementImpossible)
+            case .tropLourd:
+                return refus(ClassementDocument.verifierFichier(nom: nom, type: type, taille: tailleMax + 1, entete: nil,
+                                                                 tailleMax: tailleMax))
+            }
+        }
         if heif {
             switch NormalisationImage.versJPEG(octets, tailleMax: tailleMax) {
             case let .jpeg(jpeg):
@@ -65,6 +96,11 @@ public enum FichierDocument {
         }
         let nette = base.trimmingCharacters(in: .whitespaces)
         return "\(nette.isEmpty ? "photo" : nette).\(MimeDocument.jpeg.extensionCanonique)"
+    }
+
+    /// Signature `%PDF` : un PDF n'est jamais une image à ré-encoder.
+    static func estPDF(_ octets: Data) -> Bool {
+        octets.prefix(4).elementsEqual([0x25, 0x50, 0x44, 0x46])
     }
 
     private static func refus(_ validation: ValidationFichierDocument) -> PreparationFichier {

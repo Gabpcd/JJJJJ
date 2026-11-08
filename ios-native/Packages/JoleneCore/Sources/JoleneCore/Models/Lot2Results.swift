@@ -443,17 +443,21 @@ public struct DocumentSoignant: Codable, Equatable, Sendable, Identifiable {
     public var estCritique: Bool?
     /// `resultat_ia->>profession_certifiee` seulement : le reste de `resultat_ia` n'est jamais lu.
     public var professionCertifiee: String?
+    /// Revue fraîche de T6 (m1) : bucket de l'objet, lu pour la consultation comme le web
+    /// (`doc.s3_bucket || 'jolene-documents'`, `DocumentsSoignant.tsx` l.438).
+    public var s3Bucket: String?
 
     public init(id: String, typeDocument: String, libelle: String? = nil, s3Cle: String? = nil, nomFichier: String? = nil,
                 typeMime: String? = nil, tailleOctets: Int? = nil, valideJusqua: String? = nil,
                 statutVerification: String? = nil, motifRejet: String? = nil, televerseLe: String? = nil,
                 verificationAttemptId: String? = nil, valideDepuis: String? = nil, estCritique: Bool? = nil,
-                professionCertifiee: String? = nil) {
+                professionCertifiee: String? = nil, s3Bucket: String? = nil) {
         self.id = id; self.typeDocument = typeDocument; self.libelle = libelle; self.s3Cle = s3Cle
         self.nomFichier = nomFichier; self.typeMime = typeMime; self.tailleOctets = tailleOctets
         self.valideJusqua = valideJusqua; self.statutVerification = statutVerification; self.motifRejet = motifRejet
         self.televerseLe = televerseLe; self.verificationAttemptId = verificationAttemptId
         self.valideDepuis = valideDepuis; self.estCritique = estCritique; self.professionCertifiee = professionCertifiee
+        self.s3Bucket = s3Bucket
     }
 
     enum CodingKeys: String, CodingKey {
@@ -471,6 +475,7 @@ public struct DocumentSoignant: Codable, Equatable, Sendable, Identifiable {
         case valideDepuis = "valide_depuis"
         case estCritique = "est_critique"
         case professionCertifiee = "profession_certifiee"
+        case s3Bucket = "s3_bucket"
     }
 }
 

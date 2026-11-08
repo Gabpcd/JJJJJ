@@ -7,8 +7,9 @@ import ImageIO
 /// l'app le convertit avec ImageIO, sans UIKit. Orientation EXIF appliquée aux pixels (`kCGImageSourceCreateThumbnailWithTransform`),
 /// image ré-encodée depuis ses seuls pixels : aucune métadonnée de la source n'est recopiée (ni `{GPS}`, ni MakerNote,
 /// ni EXIF). Qualité 0,8 ; au-delà de la taille maximale, une seule réduction à 4 096 pixels de côté et qualité 0,6,
-/// puis refus (message du web, `ClassementDocument`). PNG, JPEG, WebP et PDF ne passent jamais ici : ils sont envoyés tels
-/// quels (`FichierDocument.preparer`). Aucun octet n'est écrit sur disque.
+/// puis refus (message du web, `ClassementDocument`). Depuis Fichiers ou l'appareil photo, PNG, JPEG, WebP et PDF ne
+/// passent jamais ici : ils sont envoyés tels quels ; une image de la photothèque y passe toujours, pour perdre ses EXIF
+/// (`FichierDocument.preparer(…, source: .phototheque)`, revue fraîche de T6). Aucun octet n'est écrit sur disque.
 public enum NormalisationImage {
     public static let qualite = 0.8
     public static let qualiteReduite = 0.6

@@ -291,13 +291,31 @@
   `FichierDocument.swift`, `NormalisationImage.swift`, `ConsultationDocuments.swift`, `MessagesDocuments.swift`,
   `Demo/DemoDocumentsGateway.swift`, `JoleneSupabase/Documents/SupabaseDocumentsGateway.swift`) :
   - modèle `DocumentsModel(controller:snapshot:recus: appareil.recus)` ; tout fichier choisi passe par
-    `FichierDocument.preparer(nom:type:octets:)` avant `envoyer(typeDocument:fichier:libelle:)` (HEIC/HEIF → JPEG sans
-    métadonnée ; refus local avec le message du web, aucun reçu). Photothèque : le web natif (Capacitor) ré-encode la
-    photo en JPEG qualité 80 (`ModalTeleversement.tsx` l.144-154) ; un JPEG de la photothèque passé tel quel garde ses
-    EXIF (GPS compris) : T7 le passe par `NormalisationImage.versJPEG` (parité, sans GPS) ou consigne l'écart ;
+    `FichierDocument.preparer(nom:type:octets:source:)` avant `envoyer(typeDocument:fichier:libelle:)` (HEIC/HEIF → JPEG
+    sans métadonnée ; refus local avec le message du web, aucun reçu). `source` est **obligatoire** dans l'écran
+    (revue fraîche de T6, m10) : `.phototheque` pour `PHPickerViewController` — toute image y est ré-encodée en JPEG sans
+    métadonnée (ni GPS, ni EXIF, ni MakerNote), comme le web natif (Capacitor, qualité 80, `ModalTeleversement.tsx`
+    l.144-154) ; `.camera` pour `UIImagePickerController` (`jpegData(0.8)`, pixels seuls) ; `.fichiers` pour
+    `UIDocumentPickerViewController` (octets inchangés). Aucun écart de parité ;
+  - types envoyables : `DossierDocuments.peutEnvoyer(typeDocument:maintenant: model.horloge.now())` — exigences
+    affichées, cartes « Étudiant / interne en santé » (`typesComplementaires`, ordre et règle de
+    `src/lib/documents-complementaires.ts`, textes du web `DocumentsSoignant.tsx` l.866-898) et bouton « Mettre à jour → »
+    du bandeau d'expiration (`expirantBientot`, l.600-608) ; aucun écart de parité (revue fraîche de T6, m2) ;
+  - cycle de l'écran : `charger()` à l'apparition, au tirer-pour-rafraîchir et au retour au premier plan (sans effet sur
+    un envoi en vol : aucune réconciliation pendant un envoi, une seule à la fois) ; `arreterSuivi()` à la disparition
+    (parité du démontage web, l.254 ; le suivi s'arrête aussi à la disparition du modèle) ;
+  - attestation santé : `signerAttestation()` rend faux sans appel si `attestationSanteSigneeLe` est déjà posée (web :
+    `canSign = … && !signedAt`, l.69) ; l'écran affiche alors `attestation-signee`, jamais « Signer » ;
   - textes des issues (aucun dans T6, hors messages levés par les ports) : `.verificationDemandee` → « Document téléversé
     — vérification en cours (~30 s). » (`DocumentsSoignant.tsx` l.428) ; `.enregistre` → « Document téléversé.
-    Vérification manuelle en attente. » (l.419) ; `.refuse` `CHEMIN_DOCUMENT_INVALIDE` / `METADONNEES_DOCUMENT_INVALIDES`
+    Vérification manuelle en attente. » (l.419). Pendant le suivi, `.termine(.verificationDemandee(id))` devient
+    `.termine(.enregistre(id))` quand le statut relu est `REVUE_MANUELLE_REQUISE` (503 `AI_NOT_CONFIGURED` ou erreur
+    après le début de la tentative, `verify-document/index.ts` l.444-457, l.1360-1370) ou quand, après 60 s, la pièce
+    est encore `EN_ATTENTE` sans tentative (429 ou 403 avant toute écriture) : T7 affiche alors le second message, comme
+    le second toast du web (l.416-419 ; revue fraîche de T6, m11). Écarts consignés : après un 429, le web l'affiche
+    aussitôt, le natif au bout de 60 s ; un verdict `REVUE_MANUELLE_REQUISE` rendu avec succès (IA en délai ou
+    indisponible, l.653-710) donne aussi ce message, là où le web n'affiche que le badge de la carte ;
+    `.refuse` `CHEMIN_DOCUMENT_INVALIDE` / `METADONNEES_DOCUMENT_INVALIDES`
     → `MessagesDocuments.enregistrementImpossible` ; `.refuse("STOCKAGE_<statut>")` : le web affiche « Téléversement
     impossible : » suivi du message brut de Storage (l.377), que le natif ne transporte pas ; `.nonEnvoye`, `.incertain`,
     `EtatEnvoi.recuEnCours` et `.suiviIllisible` n'ont pas d'équivalent web : textes opérationnels à inventorier dans
@@ -326,6 +344,11 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | §3 T6 « `createSignedURL(path:expiresIn: 3600)` + audit » | URL signée | `download(path:)` sous le JWT (même politique SELECT), copie temporaire protégée, puis le même audit `DOCUMENT_CONSULTATION` (`p_cle_s3` compris) | l'app n'ouvre pas de lien : aucune URL signée créée ni gardée |
 | §3 T6 attestation (« `fn_signer_attestation_sante` ») ; profil (« `prenom, nom` ») | audit client `ATTESTATION_SANTE_SIGNEE` du web ; `prenom`, `nom` lus | aucun audit client (le serveur écrit déjà `ATTESTATION_SANTE_SIGNEE`, l.56335-56352) ; `prenom`, `nom` non lus | doublon d'audit (même règle que `fn_creer_notification`, décision 9) ; données non affichées par la page |
 | §3 T6 `NormalisationImage` (« taille ≤ 10 Mo sinon réduction ») ; fixture « `une-image.heic` produite par `sips` » | réduction pour toute image | réduction (4 096 px, qualité 0,6) pour un HEIC/HEIF converti ; un JPEG/PNG/WebP/PDF au-delà de 10 Mo est refusé avec le message du web, octets inchangés ; fixture HEIC écrite par ImageIO (GPS et orientation 6), empreintes figées par `NormalisationImageTests` | « PNG/JPEG/PDF inchangés » (tests du blueprint) ; `sips` ne sait pas poser de GPS |
+| `PRINCIPES.md` l.107-114 (« les modèles d'écran bornent leurs lectures et mutations au même délai ») ; §2.3 (« tous bornés par `bounded(timeout: resolutionTimeout)` ») ; §2.5 (`verify-document` puis relecture avant le verdict) | 15 s pour tout appel de port des justificatifs ; `verify-document` attendu dans l'envoi | upload, réconciliation, revérification et consultation bornés par `DocumentsModel.delaiTransfert(octets:)` = max(120 s ; 30 s + taille ÷ 50 000 o/s), soit ≈ 240 s pour 10 Mo, jamais moins que `resolutionTimeout` ; lecture du dossier, préparation du reçu, cohérence, revue et attestation restent à 15 s ; `verify-document` lancé une fois par une tâche non structurée (ni bornée ni annulée par l'appelant), jamais attendu par l'envoi, verdict relu dans la ligne par le suivi (parité `DocumentsSoignant.tsx` l.410-426). Un délai dépassé reste incertain et impose la relecture (PRINCIPES §3-§4) | revue fraîche de T6 (M2) : l'edge sonde 10 s puis appelle l'IA 20 s (`index.ts` l.286-287, l.625-626) et le web annonce « ~30 s » ; un upload de 3 Mo à 1,5 Mbit/s (≈ 16 s) était annulé à 15 s puis réconcilié « non envoyé » à chaque essai, et `verify-document` annulé côté client |
+| §2.5 « un envoi à la fois » ; réconciliation « au lancement, retour au premier plan, ouverture de l'écran » | garde lue dans l'état publié (`envoi == .enCours`) | drapeau privé `envoiEnVol`, posé du début de `envoyer` jusqu'à sa fin ; `charger()` ne réconcilie jamais pendant un envoi ; une seule réconciliation à la fois (les appelants suivants attendent la même) ; l'issue d'une réconciliation n'est jamais publiée pendant un envoi | revue fraîche de T6 (M1) : un `charger()` pendant l'upload réconciliait le reçu de l'envoi en vol (« non envoyé » prématuré, ou second `verify-document` pour le même `document_id`) et l'issue publiée de l'étape 1 levait la garde |
+| §2.5 réconciliation (« objet absent → `not_sent` ») | reçu effacé, rien d'autre | + `cleanup_orphan` best-effort sur la clé (sans effet sur un objet absent ou déjà référencé) | revue fraîche de T6 (m7) : un upload terminé côté serveur après le HEAD laissait une pièce d'identité non référencée dans Storage |
+| §3 T6 consultation ; projection documents (« sans `s3_bucket` ») | clé `<uid>/documents/…`, bucket `jolene-documents` fixe | garde de la politique Storage (premier segment = uid, segments non vides, sans `..` ni `\`), bucket lu dans `s3_bucket` (projeté), `jolene-documents` à défaut ; jeton refusé (PostgREST `PGRST301`-`PGRST303`, `NON_AUTHENTIFIE`, Storage `InvalidJWT`, HTTP 401) → session expirée, jamais un refus ordinaire ni un nettoyage | revue fraîche de T6 (m1, m5) : les pièces encore actives envoyées avant 02e957ea (`<uid>/<TYPE>/<ms>_<nom>`) devenaient « Impossible d’ouvrir le document » ; une session expirée nettoyait l'objet puis rendait un refus |
+| correction 21 (« un envoi `AUTRE` est impossible par l'interface ») ; `peutEnvoyer` « exigence affichée » | exigences affichées seulement | + documents complémentaires étudiant / interne visibles (`ComplementairesVisibles`, règle de `src/lib/documents-complementaires.ts`) et pièces du bandeau « expire bientôt » ; pièces de santé toujours exclues | revue fraîche de T6 (m2) : `ATTESTATION_SCOLARITE`, `LICENCE_REMPLACEMENT`, `CARTE_ORDRE` (l.851-900) et « Mettre à jour → » (l.606) étaient refusés |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 

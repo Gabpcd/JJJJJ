@@ -1052,6 +1052,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_maj_activite_soignant"() RETURNS "jsonb"
   (l.903-914). **Pas de ligne sur POSTULER** (décision 5). Paramètres app : `p_acteur_id = user.id`,
   `p_type_acteur = 'SOIGNANT'`, `p_cle_s3 = nil`, `p_ip = nil`, `p_navigateur = 'jolene-ios/2.0.0'`.
   `p_id_ressource` **jamais nul** (binding uuid cassé PostgREST, `CLAUDE.md` « audit escrow »).
+  **Lot 2, T6** : `DOCUMENT_CONSULTATION` après le téléchargement d'un justificatif (parité `DocumentsSoignant.tsx`
+  l.445-448), appel RPC **direct** de `SupabaseDocumentsGateway.consulter` (hors `AuditPort`) : `p_type_ressource =
+  'document'`, `p_id_ressource = documents_soignants.id`, `p_cle_s3 = s3_cle` de la ligne (seul appel avec une clé
+  Storage), `p_details = {type_document}`, mêmes `p_acteur_id`, `p_type_acteur`, `p_ip` et `p_navigateur` ; best-effort,
+  son échec n'empêche pas la consultation. `DOCUMENT_CONSULTATION` figure dans `journaux_audit_action_check` (l.70243).
+  Aucun audit client `ATTESTATION_SANTE_SIGNEE` (le serveur l'écrit, `DECISIONS_LOT2.md`).
 - **Signature SQL** (`supabase/schema/public.sql` l.31802) :
 
 ```sql
@@ -1285,6 +1291,16 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
     revue manuelle) ; second cas du 409 ci-dessus.
 - **Règle app** : tout statut ≠ 200 est un refus, jamais rejoué ; le verdict affiché est **relu** dans
   `documents_soignants` (polling 5 s pendant 60 s, `DocumentsSoignant.tsx` l.277-284).
+  **Livré (T6, revue fraîche)** : après un `fn_remplacer_document_soignant` accepté par la requête de l'envoi (ou du
+  rejeu de réconciliation), la vérification est **lancée sans être attendue** (tâche non structurée, ni bornée ni
+  annulée par l'appelant), comme le web (l.410-426) : la sonde de 10 s et l'appel IA de 20 s (`index.ts` l.286-287,
+  l.625-626) ne pèsent jamais sur l'envoi. Son résultat est ignoré ; le suivi du modèle relit la ligne : statut sorti
+  d'`EN_ATTENTE` → verdict (`REVUE_MANUELLE_REQUISE` après un 503 ou un 500 → « vérification manuelle en attente ») ;
+  `EN_ATTENTE` sans `verification_attempt_id` après 60 s (429, 403 : rien n'a été écrit) → même issue. « Revérifier »
+  attend la réponse, borné par `DocumentsModel.delaiTransfert` (≥ 120 s) ; message d'erreur lu comme
+  `messageErreurEdgeFn` (`error || message || motif`, `src/lib/erreurs.ts` l.573-575) ; 401 → session expirée.
+  `cleanup_orphan` est aussi appelée, best-effort, quand la réconciliation ne trouve ni ligne ni objet (HEAD 400/404) :
+  un upload terminé côté serveur après le HEAD ne laisse pas d'objet non référencé.
 - **Preuve STAGING** : T11 (P4) — 1 ligne `journaux_audit` `DOCUMENT_VERIFICATION_AUTO` pour le `document_id`
   (l.1322-1330) ou 1 ligne `file_revue_manuelle`, et 1 seule invocation dans les logs edge du run.
 
@@ -1339,7 +1355,13 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   **Livré (T6)** : la consultation native télécharge l'objet sous le JWT (`download(path:)`, même politique
   `pol_storage_jolene_select`) dans une copie temporaire protégée, puis écrit le même audit `DOCUMENT_CONSULTATION`
   (`p_cle_s3` compris, parité `DocumentsSoignant.tsx` l.445-448) ; aucune URL signée n'est créée (l'app n'ouvre pas de
-  lien).
+  lien). Garde de consultation (revue fraîche de T6, m1) : celle de la politique, premier segment = uid
+  (`fn_peut_gerer_objet_jolene`), au moins deux segments non vides, sans `..` ni `\` ; bucket lu dans la ligne
+  (`s3_bucket` projeté, `doc.s3_bucket || 'jolene-documents'`, l.438) : une pièce encore active envoyée avant
+  02e957ea (2026-03-17, clé `<uid>/<TYPE>/<ms>_<nom>`) reste consultable. Jeton refusé par Storage (`InvalidJWT` en
+  HTTP 400, ou 401) → session expirée, jamais `STOCKAGE_400` ni « Impossible d’ouvrir le document ». Limite connue :
+  `exists(path:)` (supabase-swift 2.55.5) rend `false` sur tout 400, jeton refusé compris ; la relecture de la ligne,
+  qui le précède, lève déjà la session expirée (`PGRST301`).
 - **`contrats-signes`** (originaux de contrat, T8) : `pol_contrats_signes_select` (`FOR SELECT TO authenticated`,
   compte actif, admin ou `contrats_mission.storage_path = name` pour le soignant ou l'établissement du contrat),
   `20260729143000` l.126-142. Aucune écriture client ; l'objet est écrit par l'edge `generate-contrat-mission-pdf`

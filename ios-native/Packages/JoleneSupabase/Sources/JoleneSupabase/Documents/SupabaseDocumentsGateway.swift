@@ -10,10 +10,12 @@ import Supabase
 /// Envoi (reçu `started` journalisé par l'appelant) : upload Storage `upload(_:data:options:)` avec `upsert: false`
 /// (jamais `upload(path:file:options:)`, déprécié, correction 18) sous la clé du reçu, construite comme le web (l.372) ;
 /// `fn_remplacer_document_soignant` (idempotente sur la clé) ; refus → `cleanup_orphan` une fois ; succès →
-/// `verify-document {document_id}` UNE fois, quel qu'en soit le résultat, puis relecture de la ligne par `s3_cle`.
-/// Réconciliation : ligne relue par `s3_cle` (jamais de vérification automatique si elle existe), sinon objet relu
-/// par `exists(path:)` (HEAD) → enregistrement rejoué sous la même clé, sinon « non envoyé ». Aucun octet conservé,
-/// aucune URL signée, aucun chemin ni nom de fichier journalisé côté client.
+/// `verify-document {document_id}` lancé UNE fois sans être attendu, comme le web (l.410-426 ; revue fraîche de T6, M2) :
+/// le verdict est relu dans la ligne par le suivi du modèle. Réconciliation : ligne relue par `s3_cle` (jamais de
+/// vérification automatique si elle existe), sinon objet relu par `exists(path:)` (HEAD) → enregistrement rejoué sous la
+/// même clé, sinon « non envoyé » et `cleanup_orphan` best-effort (m7). Jeton refusé (PostgREST `PGRST301`-`PGRST303`,
+/// `NON_AUTHENTIFIE`, Storage `InvalidJWT`, HTTP 401) → session expirée, jamais un refus ordinaire (m5). Aucun octet
+/// conservé, aucune URL signée, aucun chemin ni nom de fichier journalisé côté client.
 public struct SupabaseDocumentsGateway: DocumentsPort {
     public static let bucket = "jolene-documents"
     public static let fonctionVerification = "verify-document"
@@ -26,18 +28,22 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
     public static let selectionProfil = "profession,type_exercice,rpps_verifie,adeli_verifie,attestation_sante_signee_le"
     /// l.201, telle quelle.
     public static let selectionExigences = "id,profession,type_document,description,a_expiration,duree_validite_mois,est_critique,type_exercice_requis"
-    /// l.199, sans `soignant_id` ni `s3_bucket` (filtrés), plus `verification_attempt_id` ; de `resultat_ia`, seule la
-    /// profession certifiée.
+    /// l.199, sans `soignant_id` (filtré), plus `verification_attempt_id` ; de `resultat_ia`, seule la profession
+    /// certifiée ; `s3_bucket` lu pour la consultation (`doc.s3_bucket || 'jolene-documents'`, l.438 ; revue fraîche m1).
     public static let selectionDocuments = "id,type_document,nom_fichier,statut_verification,valide_depuis,valide_jusqua,televerse_le,"
-        + "motif_rejet,est_critique,s3_cle,type_mime,taille_octets,libelle,verification_attempt_id,"
+        + "motif_rejet,est_critique,s3_cle,s3_bucket,type_mime,taille_octets,libelle,verification_attempt_id,"
         + "profession_certifiee:resultat_ia->>profession_certifiee"
     /// Code de refus d'un upload refusé par Storage (`STOCKAGE_<statut HTTP>`).
     public static let prefixeRefusStockage = "STOCKAGE_"
     /// Refus d'enregistrement sans `error_code` (web : `'Enregistrement impossible'`, l.403).
     public static let codeEnregistrementImpossible = "ENREGISTREMENT_IMPOSSIBLE"
+    /// Codes PostgREST d'un jeton refusé (expiré, absent, revendications invalides) : session expirée.
+    static let codesJetonRefuse: Set<String> = ["PGRST301", "PGRST302", "PGRST303"]
 
     private let client: SupabaseClient
     private let clock: any ClockPort
+    /// Tests seulement : appelé juste avant la garde d'annulation qui précède `verify-document` (correctif 4c84aa0e).
+    var avantVerification: (@Sendable () -> Void)?
 
     public init(client: SupabaseClient, clock: any ClockPort = SystemClock()) {
         self.client = client
@@ -106,10 +112,10 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
             case .nonEnvoye: return .nonEnvoye
             case .incertain: return .incertain
             case let .refuse(code): return .refuse(code: code)
-            case .sessionExpiree: throw JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage)
+            case .sessionExpiree: throw Self.sessionExpireeErreur
             }
         }
-        return await enregistrerPuisVerifier(recu)
+        return try await enregistrerPuisVerifier(recu)
     }
 
     public func reconcilier(recu: RecuDocument, context: MissionReadContext) async throws -> IssueEnvoiDocument {
@@ -121,6 +127,7 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
         do {
             preuve = try await lirePreuve(recu)
         } catch {
+            if Self.sessionExpiree(error) { throw Self.sessionExpireeErreur }
             return .incertain
         }
         if let preuve { return preuve.issue }
@@ -130,10 +137,16 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
         do {
             objetPresent = try await client.storage.from(Self.bucket).exists(path: recu.s3Cle)
         } catch {
+            if Self.sessionExpiree(error) { throw Self.sessionExpireeErreur }
             return .incertain
         }
-        guard objetPresent else { return .nonEnvoye }
-        return await enregistrerPuisVerifier(recu)
+        guard objetPresent else {
+            // m7 : l'upload a pu aboutir côté serveur après ce HEAD ; un objet absent ou déjà référencé n'est pas touché
+            // (`cleanup_orphan`, `verify-document/index.ts` l.333-387). Best-effort, une fois.
+            await nettoyerOrphelin(recu.s3Cle)
+            return .nonEnvoye
+        }
+        return try await enregistrerPuisVerifier(recu)
     }
 
     // MARK: - Actions sur une pièce
@@ -146,8 +159,9 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
             let corps = try await client.functions.invoke(Self.fonctionVerification, options: options) { donnees, _ in donnees }
             let verdict = RPCResponse(SupabaseAccountGateway.lire(corps)).string("verdict").flatMap(VerdictDocument.init(rawValue:))
             return verdict ?? .enAttente // web : « Vérification en attente… » pour tout autre verdict
-        } catch FunctionsError.httpError(_, let corps) {
-            throw JoleneError(.unknown, RPCResponse(SupabaseAccountGateway.lire(corps)).erreur ?? MessagesDocuments.verificationImpossible)
+        } catch FunctionsError.httpError(let statut, let corps) {
+            if statut == 401 { throw Self.sessionExpireeErreur }
+            throw JoleneError(.unknown, Self.messageEdge(corps) ?? MessagesDocuments.verificationImpossible)
         } catch FunctionsError.relayError {
             throw JoleneError(.unknown, MessagesDocuments.verificationImpossible)
         } catch {
@@ -175,16 +189,20 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
     /// Téléchargement de l'objet sous le JWT du soignant (politique `pol_storage_jolene_select`), copie temporaire
     /// protégée, puis audit `DOCUMENT_CONSULTATION` best-effort (parité l.445-448). Écart assumé au web : aucune URL
     /// signée n'est créée (`createSignedUrl(…, 3600)`, l.437-439) — l'app affiche une copie locale, pas un lien.
+    /// Garde (revue fraîche m1) : celle de la politique Storage (`fn_peut_gerer_objet_jolene` : premier segment = uid),
+    /// sans `..` ni segment vide, et le bucket de la ligne (`doc.s3_bucket || 'jolene-documents'`, l.438) : une pièce
+    /// envoyée avant 02e957ea (clé `<uid>/<TYPE>/<ms>_<nom>`) reste consultable.
     public func consulter(document: DocumentSoignant, context: MissionReadContext) async throws -> URL {
         try MissionQuery.validate(context: context)
-        guard let cle = document.s3Cle, cle.hasPrefix("\(context.userId)/documents/"), !cle.contains("..") else {
+        guard let cle = document.s3Cle, Self.cleConsultable(cle, userId: context.userId),
+              let bucket = Self.bucketConsultable(document.s3Bucket) else {
             throw JoleneError(.contract, MessagesDocuments.consultationImpossible)
         }
         let octets: Data
         do {
-            octets = try await client.storage.from(Self.bucket).download(path: cle)
+            octets = try await client.storage.from(bucket).download(path: cle)
         } catch {
-            if Self.statutHTTP(error) == 401 { throw JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage) }
+            if Self.sessionExpiree(error) { throw Self.sessionExpireeErreur }
             throw JoleneError(.unknown, MessagesDocuments.consultationImpossible)
         }
         let fichier = try ConsultationDocuments.ecrire(octets, nomFichier: document.nomFichier)
@@ -240,8 +258,9 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
     // MARK: - Enregistrement et vérification
 
     /// `fn_remplacer_document_soignant` sous la clé du reçu (`p_libelle: libelle || ''`, `p_nom_fichier: fichier.name`,
-    /// l.385-391), puis `verify-document` une seule fois et relecture de la ligne.
-    private func enregistrerPuisVerifier(_ recu: RecuDocument) async -> IssueEnvoiDocument {
+    /// l.385-391), puis `verify-document` lancé une seule fois, sans l'attendre : la preuve d'enregistrement est le
+    /// `document_id` rendu par CETTE requête ; le verdict est relu par le suivi.
+    private func enregistrerPuisVerifier(_ recu: RecuDocument) async throws -> IssueEnvoiDocument {
         let params: JSONObject = [
             "p_type_document": .string(recu.typeDocument),
             "p_libelle": .string(recu.libelle ?? ""),
@@ -258,9 +277,14 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
         case .incertain:
             return .incertain
         case let .refusDefinitif(code, _):
+            // m5 : jeton refusé par PostgREST, rien n'est enregistré : session expirée, sans nettoyage (l'objet sera
+            // rattaché après reconnexion par la réconciliation du reçu `started`).
+            if Self.codesJetonRefuse.contains(code) { throw Self.sessionExpireeErreur }
             await nettoyerOrphelin(recu.s3Cle)
             return .refuse(code: RecuScan.sqlstateValide(code) ? RPCResponse.prefixeSQLState + code : code)
         case let .reponse(reponse):
+            // m5 : `NON_AUTHENTIFIE` (`public.sql` l.53089-53091) est rendu avant toute écriture : même traitement.
+            if reponse.codeErreur == "NON_AUTHENTIFIE" { throw Self.sessionExpireeErreur }
             guard reponse.success == true, let id = reponse.string("document_id").flatMap(SupabaseAuditGateway.uuid) else {
                 await nettoyerOrphelin(recu.s3Cle)
                 return .refuse(code: reponse.codeErreur ?? Self.codeEnregistrementImpossible)
@@ -269,23 +293,22 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
         }
         // Envoi annulé (délai `bounded` de l'appelant, qui réconcilie aussitôt) : aucune vérification ne part après
         // coup ; la ligne relue donnera « Revérifier ». « Une seule fois » reste vrai même en concurrence.
+        avantVerification?()
         guard !Task.isCancelled else { return .incertain }
-        await demanderVerification(documentId)
-        let preuve: PreuveDocument?
-        do {
-            preuve = try await lirePreuve(recu)
-        } catch {
-            return .incertain
-        }
-        guard let preuve, preuve.id.lowercased() == documentId else { return .incertain }
-        return preuve.issue
+        lancerVerification(documentId)
+        return .verificationDemandee(documentId: documentId)
     }
 
-    /// `verify-document {document_id}` : un seul appel, résultat ignoré (le verdict est relu dans la ligne ; un 429 ou un
-    /// 503 laisse la pièce en vérification manuelle, l.416-426). Jamais relancé.
-    private func demanderVerification(_ documentId: String) async {
+    /// `verify-document {document_id}` : un seul appel, lancé dans une tâche non structurée que ni le délai ni
+    /// l'annulation de l'appelant n'interrompent (l'edge sonde 10 s puis appelle l'IA 20 s, `index.ts` l.286-287 et
+    /// l.625-626 ; le web ne l'attend pas non plus, l.410-426). Résultat ignoré : le verdict, ou la revue manuelle d'un
+    /// 503, est relu dans la ligne par le suivi du modèle. Jamais relancé.
+    private func lancerVerification(_ documentId: String) {
+        let client = self.client
         let options = FunctionInvokeOptions(method: .post, body: ["document_id": documentId])
-        _ = try? await client.functions.invoke(Self.fonctionVerification, options: options) { donnees, _ in donnees }
+        Task {
+            _ = try? await client.functions.invoke(Self.fonctionVerification, options: options) { donnees, _ in donnees }
+        }
     }
 
     /// `cleanup_orphan` après un refus d'enregistrement (l.395-397), une fois, best-effort.
@@ -340,6 +363,7 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
             let jamaisPartie: Set<URLError.Code> = [.notConnectedToInternet, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed]
             return jamaisPartie.contains(url.code) ? .nonEnvoye : .incertain
         }
+        if let storage = error as? StorageError, jetonRefuseParStorage(storage) { return .sessionExpiree }
         guard let statut = statutHTTP(error) else { return .incertain }
         switch statut {
         case 401: return .sessionExpiree
@@ -353,6 +377,55 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
     static func statutHTTP(_ error: any Error) -> Int? {
         if let storage = error as? StorageError { return storage.statusCode.flatMap { Int($0) } }
         if let http = error as? HTTPError { return http.response.statusCode }
+        return nil
+    }
+
+    // MARK: - Session, consultation, messages de l'edge
+
+    static let sessionExpireeErreur = JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage)
+
+    /// Jeton refusé (revue fraîche m5) : PostgREST `PGRST301`-`PGRST303`, Storage `InvalidJWT` ou 401, HTTP 401 d'une
+    /// passerelle ou d'une edge function.
+    static func sessionExpiree(_ error: any Error) -> Bool {
+        if let jolene = error as? JoleneError { return jolene.kind == .unauthorized }
+        if let postgrest = error as? PostgrestError { return postgrest.code.map(codesJetonRefuse.contains) ?? false }
+        if let storage = error as? StorageError { return storage.statusCode == "401" || jetonRefuseParStorage(storage) }
+        if let http = error as? HTTPError { return http.response.statusCode == 401 }
+        if let edge = error as? FunctionsError, case let .httpError(statut, _) = edge { return statut == 401 }
+        return false
+    }
+
+    /// Storage rend un jeton expiré ou invalide en HTTP 400 (`{"statusCode":"400","error":"InvalidJWT",…}`).
+    static func jetonRefuseParStorage(_ erreur: StorageError) -> Bool {
+        erreur.error?.caseInsensitiveCompare("InvalidJWT") == .orderedSame
+    }
+
+    /// Clé consultable : celle que la politique Storage accorde (`fn_peut_gerer_objet_jolene`, premier segment = uid),
+    /// au moins deux segments non vides, sans `..` ni `\`.
+    static func cleConsultable(_ cle: String, userId: String) -> Bool {
+        let segments = cle.split(separator: "/", omittingEmptySubsequences: false)
+        guard segments.count >= 2, segments.allSatisfy({ !$0.isEmpty }), String(segments[0]) == userId.lowercased() else {
+            return false
+        }
+        return !cle.contains("..") && !cle.contains("\\") && cle.count <= 1_024
+    }
+
+    /// Bucket de la ligne, `jolene-documents` à défaut (`doc.s3_bucket || 'jolene-documents'`) ; nil s'il n'a pas la forme
+    /// d'un nom de bucket.
+    static func bucketConsultable(_ bucket: String?) -> String? {
+        guard let bucket, !bucket.isEmpty else { return Self.bucket }
+        let autorises = Set("abcdefghijklmnopqrstuvwxyz0123456789._-")
+        guard !bucket.contains(".."), bucket.allSatisfy(autorises.contains) else { return nil }
+        return bucket
+    }
+
+    /// Message d'erreur d'une edge function, comme `messageErreurEdgeFn` (`body.error || body.message || body.motif`,
+    /// `src/lib/erreurs.ts` l.573-575) ; nil sans texte.
+    static func messageEdge(_ corps: Data) -> String? {
+        let reponse = RPCResponse(SupabaseAccountGateway.lire(corps))
+        for cle in ["error", "message", "motif"] {
+            if let texte = reponse.string(cle), !texte.isEmpty { return texte }
+        }
         return nil
     }
 }

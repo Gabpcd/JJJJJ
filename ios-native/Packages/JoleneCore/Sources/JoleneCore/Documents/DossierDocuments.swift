@@ -41,11 +41,22 @@ extension DossierDocuments {
     /// `typesOrdonnes` (l.521-524) : critiques puis optionnelles.
     public var exigencesOrdonnees: [ExigenceDocument] { exigencesCritiques + exigences.filter { $0.estCritique != true } }
 
-    /// Seule une exigence affichée peut recevoir un envoi (l.656-838 ; correction 21 : un envoi `AUTRE` est
-    /// impossible par l'interface). Les pièces de santé n'y figurent jamais (`typesDocumentsExclusUpload`).
-    public func peutEnvoyer(typeDocument: String) -> Bool {
-        !ExigencesDocuments.typesDocumentsExclusUpload.contains(typeDocument)
-            && exigences.contains { $0.typeDocument == typeDocument }
+    /// Seul un type proposé par un bouton du web peut recevoir un envoi (correction 21 : un envoi `AUTRE` est impossible
+    /// par l'interface) : une exigence affichée (l.656-838), un document complémentaire étudiant / interne visible
+    /// (l.851-900) ou une pièce du bandeau « expire bientôt » (« Mettre à jour → », l.600-608). Les pièces de santé n'y
+    /// figurent jamais (`typesDocumentsExclusUpload`).
+    public func peutEnvoyer(typeDocument: String, maintenant: Date) -> Bool {
+        guard !ExigencesDocuments.typesDocumentsExclusUpload.contains(typeDocument) else { return false }
+        return exigences.contains { $0.typeDocument == typeDocument }
+            || typesComplementaires.contains(typeDocument)
+            || expirantBientot(maintenant: maintenant).contains { $0.typeDocument == typeDocument }
+    }
+
+    /// Documents complémentaires proposés à l'envoi, dans l'ordre du web ; aucun sans dossier professionnel (la page web
+    /// s'arrête avant, l.505-518).
+    public var typesComplementaires: [String] {
+        guard let profil else { return [] }
+        return ComplementairesVisibles(profil: profil).types
     }
 
     /// `docsValides` (l.237-239) : critiques satisfaites par une pièce valide à `maintenant`.
@@ -122,6 +133,34 @@ extension DossierDocuments {
     }
 }
 
+/// Section « Étudiant / interne en santé » du web (`documentsComplementairesVisibles`, `src/lib/documents-complementaires.ts`,
+/// affichage seul : ne vérifie aucun document et n'ouvre aucune éligibilité). Un RPPS ou un ADELI vérifié masque la
+/// scolarité, jamais la licence de remplacement d'un médecin ; la qualification à l'Ordre est réservée aux médecins.
+public struct ComplementairesVisibles: Equatable, Sendable {
+    public var scolarite: Bool
+    public var licence: Bool
+    public var qualification: Bool
+
+    public init(scolarite: Bool, licence: Bool, qualification: Bool) {
+        self.scolarite = scolarite; self.licence = licence; self.qualification = qualification
+    }
+
+    public init(profil: SoignantExigencesDocuments?) {
+        let registreVerifie = profil?.rppsVerifie == true || profil?.adeliVerifie == true
+        let medecin = profil?.profession == "MEDECIN"
+        self.init(scolarite: !registreVerifie, licence: !registreVerifie || medecin, qualification: medecin)
+    }
+
+    /// Types de document des cartes visibles, dans l'ordre du web (l.866-898).
+    public var types: [String] {
+        var types: [String] = []
+        if scolarite { types.append("ATTESTATION_SCOLARITE") }
+        if licence { types.append("LICENCE_REMPLACEMENT") }
+        if qualification { types.append("CARTE_ORDRE") }
+        return types
+    }
+}
+
 /// Ligne de règle lue pour le filtre : `profession` est NOT NULL côté serveur (une ligne sans profession ne
 /// correspond à aucun profil).
 private struct RegleExigence: RegleDocumentRequisRepresentable {
@@ -131,7 +170,7 @@ private struct RegleExigence: RegleDocumentRequisRepresentable {
     var typeExerciceRequis: String? { exigence.typeExerciceRequis }
 }
 
-/// Preuve d'enregistrement d'un justificatif relue par `s3_cle` (relecture avant succès et réconciliation,
+/// Preuve d'enregistrement d'un justificatif relue par `s3_cle` (réconciliation,
 /// blueprint §2.5). Projection minimale : `resultat_ia` n'est jamais lu (données d'identité extraites par l'IA) ;
 /// la présence de la ligne suffit à interdire toute vérification automatique (décision 14).
 public struct PreuveDocument: Codable, Equatable, Sendable {
