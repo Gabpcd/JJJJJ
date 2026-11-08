@@ -29,57 +29,69 @@ final class ContratModelTests: XCTestCase {
     private static let empreinte = VerificationOriginal.empreinte(html)
     private static let maintenant = DemoWorld.fixedNow
 
-    /// Port scripté : chaque méthode rend la valeur posée par le test et compte ses appels.
-    private actor PortScripte: ContratsPort {
-        var details: [ContratDetail] = []
-        var original: Result<OriginalContrat, Error> = .failure(nonScripte)
-        var admission: AdmissionSignatureRecette?
-        var envoi: Result<IssueEnvoiOtp, Error> = .failure(nonScripte)
-        var signature: Result<IssueSignature, Error> = .failure(nonScripte)
-        var certificatLignes: [SignatureCertificat] = []
-        var certificatErreur: Error?
-        var liste: Result<[ContratResume], Error> = .success([])
-        var attenteEnvoi: Duration = .zero
-        private(set) var appels: [String] = []
+    /// Port scripté : chaque méthode rend la valeur posée par le test et compte ses appels. Classe verrouillée
+    /// (et non acteur) : le test pose ses réponses sans traverser de frontière d'isolation.
+    private final class PortScripte: ContratsPort, @unchecked Sendable {
+        private let verrou = NSLock()
+        private var details: [ContratDetail] = []
+        private var issueOriginal: Result<OriginalContrat, Error> = .failure(nonScripte)
+        private var issueAdmission: AdmissionSignatureRecette?
+        private var issueEnvoi: Result<IssueEnvoiOtp, Error> = .failure(nonScripte)
+        private var issueSignature: Result<IssueSignature, Error> = .failure(nonScripte)
+        private var certificatLignes: [SignatureCertificat] = []
+        private var certificatErreur: Error?
+        private var issueListe: Result<[ContratResume], Error> = .success([])
+        private var attenteEnvoi: Duration = .zero
+        private var journal: [String] = []
 
-        func poser(details: [ContratDetail]) { self.details = details }
-        func poser(original: Result<OriginalContrat, Error>) { self.original = original }
-        func poser(admission: AdmissionSignatureRecette?) { self.admission = admission }
-        func poser(envoi: Result<IssueEnvoiOtp, Error>, attente: Duration = .zero) { self.envoi = envoi; attenteEnvoi = attente }
-        func poser(signature: Result<IssueSignature, Error>) { self.signature = signature }
-        func poser(certificat: [SignatureCertificat], erreur: Error? = nil) { certificatLignes = certificat; certificatErreur = erreur }
-        func poser(liste: Result<[ContratResume], Error>) { self.liste = liste }
-        func compte(_ nom: String) -> Int { appels.filter { $0 == nom }.count }
+        private func avec<T>(_ bloc: () throws -> T) rethrows -> T {
+            verrou.lock(); defer { verrou.unlock() }
+            return try bloc()
+        }
+
+        var appels: [String] { avec { journal } }
+        func compte(_ nom: String) -> Int { avec { journal.filter { $0 == nom }.count } }
+        func poser(details: [ContratDetail]) { avec { self.details = details } }
+        func poser(original: Result<OriginalContrat, Error>) { avec { issueOriginal = original } }
+        func poser(admission: AdmissionSignatureRecette?) { avec { issueAdmission = admission } }
+        func poser(envoi: Result<IssueEnvoiOtp, Error>, attente: Duration = .zero) { avec { issueEnvoi = envoi; attenteEnvoi = attente } }
+        func poser(signature: Result<IssueSignature, Error>) { avec { issueSignature = signature } }
+        func poser(certificat: [SignatureCertificat], erreur: Error? = nil) { avec { certificatLignes = certificat; certificatErreur = erreur } }
+        func poser(liste: Result<[ContratResume], Error>) { avec { issueListe = liste } }
 
         func contrats(context: MissionReadContext) async throws -> [ContratResume] {
-            appels.append("contrats"); return try liste.get()
+            try avec { journal.append("contrats"); return try issueListe.get() }
         }
         func contrat(id: String, context: MissionReadContext) async throws -> ContratDetail {
-            appels.append("contrat")
-            guard !details.isEmpty else { throw nonScripte }
-            return details.count > 1 ? details.removeFirst() : details[0]
+            try avec {
+                journal.append("contrat")
+                guard !details.isEmpty else { throw nonScripte }
+                return details.count > 1 ? details.removeFirst() : details[0]
+            }
         }
         func original(contrat: ContratDetail, context: MissionReadContext) async throws -> OriginalContrat {
-            appels.append("original"); return try original.get()
+            try avec { journal.append("original"); return try issueOriginal.get() }
         }
         func admissionRecette(contratId: String, context: MissionReadContext) async throws -> AdmissionSignatureRecette? {
-            appels.append("admission"); return admission
+            avec { journal.append("admission"); return issueAdmission }
         }
         func envoyerOtp(contratId: String, empreinte: String, context: MissionReadContext) async throws -> IssueEnvoiOtp {
-            appels.append("envoyerOtp")
-            if attenteEnvoi > .zero { try await Task.sleep(for: attenteEnvoi) }
-            return try envoi.get()
+            let attente = avec { journal.append("envoyerOtp"); return attenteEnvoi }
+            if attente > .zero { try await Task.sleep(for: attente) }
+            return try avec { try issueEnvoi.get() }
         }
         func signer(contratId: String, code: String, empreinte: String, context: MissionReadContext) async throws -> IssueSignature {
-            appels.append("signer:\(code)"); return try signature.get()
+            try avec { journal.append("signer:\(code)"); return try issueSignature.get() }
         }
         func certificat(contratId: String, context: MissionReadContext) async throws -> [SignatureCertificat] {
-            appels.append("certificat")
-            if let certificatErreur { throw certificatErreur }
-            return certificatLignes
+            try avec {
+                journal.append("certificat")
+                if let certificatErreur { throw certificatErreur }
+                return certificatLignes
+            }
         }
         func fichierOriginal(contrat: OriginalContrat, context: MissionReadContext) async throws -> URL {
-            appels.append("fichier"); throw nonScripte
+            try avec { journal.append("fichier"); throw nonScripte }
         }
     }
 
@@ -114,8 +126,8 @@ final class ContratModelTests: XCTestCase {
 
     func testChargementNominalPoseLaCleDeLaSessionSurLOriginalControle() async throws {
         let port = PortScripte()
-        await port.poser(details: [detail()])
-        await port.poser(original: .success(originalA))
+        port.poser(details: [detail()])
+        port.poser(original: .success(originalA))
         let model = try await modele(port)
         XCTAssertEqual(model.etat, .chargement)
         await model.charger()
@@ -124,13 +136,13 @@ final class ContratModelTests: XCTestCase {
         XCTAssertNil(model.indisponibilite)
         XCTAssertEqual(model.session.cle, CleSessionOtp(contratId: "k-1", empreinte: Self.empreinte, documentPret: true))
         XCTAssertEqual(model.signature, .possible)
-        let appels = await port.appels
+        let appels = port.appels
         XCTAssertEqual(appels, ["contrat", "original"], "ni certificat (aucune signature), ni admission (compte réel)")
     }
 
     func testCddSansOriginalNeDemandeJamaisLOriginal() async throws {
         let port = PortScripte()
-        await port.poser(details: [detail(type: "CDD", chemin: nil)])
+        port.poser(details: [detail(type: "CDD", chemin: nil)])
         let model = try await modele(port)
         await model.charger()
         XCTAssertEqual(model.etat, .charge)
@@ -138,14 +150,14 @@ final class ContratModelTests: XCTestCase {
         XCTAssertNil(model.original)
         XCTAssertEqual(model.signature, .indisponible)
         XCTAssertEqual(model.session.cle.documentPret, false)
-        let appelsOriginal = await port.compte("original")
+        let appelsOriginal = port.compte("original")
         XCTAssertEqual(appelsOriginal, 0, "décision 19 : aucune action soignant, aucun rendu")
     }
 
     func testOriginalIndisponibleLaisseLeContratLisibleSansSignature() async throws {
         let port = PortScripte()
-        await port.poser(details: [detail()])
-        await port.poser(original: .failure(ContratOriginalIndisponible(motif: .storageMismatch)))
+        port.poser(details: [detail()])
+        port.poser(original: .failure(ContratOriginalIndisponible(motif: .storageMismatch)))
         let model = try await modele(port)
         await model.charger()
         XCTAssertEqual(model.etat, .charge)
@@ -156,13 +168,13 @@ final class ContratModelTests: XCTestCase {
 
     func testRenduServeurPuisRelectureDuContrat() async throws {
         let port = PortScripte()
-        await port.poser(details: [detail(chemin: nil), detail()])
-        await port.poser(original: .success(originalA))
+        port.poser(details: [detail(chemin: nil), detail()])
+        port.poser(original: .success(originalA))
         let model = try await modele(port)
         await model.charger()
         XCTAssertEqual(model.contrat?.storagePath, "k-1/a.html", "contrat relu après le rendu serveur")
         XCTAssertEqual(model.original, originalA)
-        let appels = await port.appels
+        let appels = port.appels
         XCTAssertEqual(appels, ["contrat", "original", "contrat"])
     }
 
@@ -170,8 +182,8 @@ final class ContratModelTests: XCTestCase {
         let port = PortScripte()
         var relu = detail()
         relu.hashDocument = String(repeating: "c", count: 64)
-        await port.poser(details: [detail(chemin: nil), relu])
-        await port.poser(original: .success(originalA))
+        port.poser(details: [detail(chemin: nil), relu])
+        port.poser(original: .success(originalA))
         let model = try await modele(port)
         await model.charger()
         XCTAssertNil(model.original, "l'original rendu doit être celui que le contrat relu porte")
@@ -180,33 +192,33 @@ final class ContratModelTests: XCTestCase {
 
     func testCertificatLuQuandUneSignatureExisteEtErreurNonBloquante() async throws {
         let port = PortScripte()
-        await port.poser(details: [detail(etablissement: true)])
-        await port.poser(original: .success(originalA))
-        await port.poser(certificat: [], erreur: JoleneError(.network, "Connexion impossible."))
+        port.poser(details: [detail(etablissement: true)])
+        port.poser(original: .success(originalA))
+        port.poser(certificat: [], erreur: JoleneError(.network, "Connexion impossible."))
         let model = try await modele(port)
         await model.charger()
         XCTAssertEqual(model.etat, .charge, "un certificat illisible ne masque pas le contrat")
         XCTAssertEqual(model.erreurCertificat, "Connexion impossible.")
-        let appels = await port.compte("certificat")
+        let appels = port.compte("certificat")
         XCTAssertEqual(appels, 1)
     }
 
     func testCompteTestSansAdmissionRenvoieVersLeWeb() async throws {
         let port = PortScripte()
-        await port.poser(details: [detail(test: true)])
-        await port.poser(original: .success(originalA))
+        port.poser(details: [detail(test: true)])
+        port.poser(original: .success(originalA))
         let model = try await modele(port)
         await model.charger()
         XCTAssertEqual(model.signature, .renvoiWeb, "décision 18 : continuer sur jolene.app")
-        let admissions = await port.compte("admission")
+        let admissions = port.compte("admission")
         XCTAssertEqual(admissions, 1)
     }
 
     func testCompteTestAdmisReprendUnCodeEncoreValide() async throws {
         let port = PortScripte()
-        await port.poser(details: [detail(test: true)])
-        await port.poser(original: .success(originalA))
-        await port.poser(admission: AdmissionSignatureRecette(expireLe: Self.maintenant.addingTimeInterval(1_800), peutEnvoyer: false,
+        port.poser(details: [detail(test: true)])
+        port.poser(original: .success(originalA))
+        port.poser(admission: AdmissionSignatureRecette(expireLe: Self.maintenant.addingTimeInterval(1_800), peutEnvoyer: false,
                                                               peutValider: true, otpExpireLe: Self.maintenant.addingTimeInterval(300)))
         let model = try await modele(port)
         await model.charger()
@@ -215,7 +227,7 @@ final class ContratModelTests: XCTestCase {
         XCTAssertEqual(model.session.secondesRestantes(maintenant: Self.maintenant), 300)
         model.accepter(true)
         await model.envoyerCode()
-        let envois = await port.compte("envoyerOtp")
+        let envois = port.compte("envoyerOtp")
         XCTAssertEqual(envois, 0, "aucun nouvel envoi hors budget de recette (`can_send` faux)")
     }
 
@@ -227,8 +239,8 @@ final class ContratModelTests: XCTestCase {
         XCTAssertFalse(model.sessionExpired)
         let expire = PortScripte()
         let autre = try await modele(expire)
-        await expire.poser(details: [detail()])
-        await expire.poser(original: .failure(JoleneError(.unauthorized, "Votre session a expiré. Reconnectez-vous.")))
+        expire.poser(details: [detail()])
+        expire.poser(original: .failure(JoleneError(.unauthorized, "Votre session a expiré. Reconnectez-vous.")))
         await autre.charger()
         XCTAssertTrue(autre.sessionExpired)
         XCTAssertEqual(autre.etat, .echec("Votre session a expiré. Reconnectez-vous."))
@@ -237,8 +249,8 @@ final class ContratModelTests: XCTestCase {
     func testEchecInconnuDonneLeMessageGenerique() async throws {
         struct Inconnue: Error {}
         let port = PortScripte()
-        await port.poser(details: [detail()])
-        await port.poser(original: .failure(Inconnue()))
+        port.poser(details: [detail()])
+        port.poser(original: .failure(Inconnue()))
         let model = try await modele(port)
         await model.charger()
         XCTAssertEqual(model.etat, .echec(MessagesContrats.indisponible), "jamais le détail technique d'une erreur inconnue")
@@ -248,50 +260,50 @@ final class ContratModelTests: XCTestCase {
 
     func testEnvoiUniquePuisSignatureEtRelecture() async throws {
         let port = PortScripte()
-        await port.poser(details: [detail(), detail(soignant: true, statut: "SIGNE_SOIGNANT")])
-        await port.poser(original: .success(originalA))
-        await port.poser(envoi: .success(.envoye(OtpEnvoye(role: "soignant", telephoneMasque: "+**********00",
+        port.poser(details: [detail(), detail(soignant: true, statut: "SIGNE_SOIGNANT")])
+        port.poser(original: .success(originalA))
+        port.poser(envoi: .success(.envoye(OtpEnvoye(role: "soignant", telephoneMasque: "+**********00",
                                                             expireDansMinutes: 10, smsEnvoyes: 1, smsRestants: 2))),
                          attente: .milliseconds(50))
-        await port.poser(signature: .success(.signee(contratComplet: false)))
+        port.poser(signature: .success(.signee(contratComplet: false)))
         let model = try await modele(port)
         await model.charger()
         model.accepter(true)
         async let premier: Void = model.envoyerCode()
         async let second: Void = model.envoyerCode()
         _ = await (premier, second)
-        let envois = await port.compte("envoyerOtp")
+        let envois = port.compte("envoyerOtp")
         XCTAssertEqual(envois, 1, "double tap : une seule requête")
         XCTAssertEqual(model.session.etape, .otpEnvoye)
         model.saisirCode("000000")
         await model.signer()
         XCTAssertEqual(model.session.etape, .signe)
         XCTAssertEqual(model.contrat?.signatureSoignant, true, "contrat relu après la signature")
-        let appels = await port.appels
+        let appels = port.appels
         XCTAssertEqual(appels, ["contrat", "original", "envoyerOtp", "signer:000000", "contrat", "certificat"])
     }
 
     func testCodeIncompletJamaisEnvoyeAuPort() async throws {
         let port = PortScripte()
-        await port.poser(details: [detail()])
-        await port.poser(original: .success(originalA))
-        await port.poser(envoi: .success(.envoye(OtpEnvoye(telephoneMasque: "+**********00", expireDansMinutes: 10))))
+        port.poser(details: [detail()])
+        port.poser(original: .success(originalA))
+        port.poser(envoi: .success(.envoye(OtpEnvoye(telephoneMasque: "+**********00", expireDansMinutes: 10))))
         let model = try await modele(port)
         await model.charger()
         model.accepter(true)
         await model.envoyerCode()
         model.saisirCode("12a")
         await model.signer()
-        let signatures = await port.appels.filter { $0.hasPrefix("signer") }
+        let signatures = port.appels.filter { $0.hasPrefix("signer") }
         XCTAssertEqual(signatures, [])
         XCTAssertEqual(model.session.retour, .erreur(LibellesWeb.SignatureOtp.codeSixChiffresRequis))
     }
 
     func testEchecDeTransportDuCodeAfficheLeMessageDeLErreur() async throws {
         let port = PortScripte()
-        await port.poser(details: [detail()])
-        await port.poser(original: .success(originalA))
-        await port.poser(envoi: .failure(JoleneError(.network, "Connexion impossible. Vérifiez votre réseau puis réessayez.")))
+        port.poser(details: [detail()])
+        port.poser(original: .success(originalA))
+        port.poser(envoi: .failure(JoleneError(.network, "Connexion impossible. Vérifiez votre réseau puis réessayez.")))
         let model = try await modele(port)
         await model.charger()
         model.accepter(true)
@@ -304,7 +316,7 @@ final class ContratModelTests: XCTestCase {
 
     func testListeFiltreeCommeLeWebEtEchec() async throws {
         let port = PortScripte()
-        await port.poser(liste: .success([ContratResume(id: "a", missionId: "m", statut: "SIGNE_COMPLET"),
+        port.poser(liste: .success([ContratResume(id: "a", missionId: "m", statut: "SIGNE_COMPLET"),
                                           ContratResume(id: "b", missionId: "m", statut: "EN_ATTENTE_SIGNATURES")]))
         let (controller, snapshot) = try await pret(port)
         let liste = ContratsListeModel(controller: controller, snapshot: snapshot, filtreInitial: .initial(statut: "SIGNE_COMPLET"))
@@ -312,9 +324,9 @@ final class ContratModelTests: XCTestCase {
         XCTAssertEqual(liste.affiches.map(\.id), ["a"])
         liste.choisir(.tous)
         XCTAssertEqual(liste.affiches.map(\.id), ["a", "b"], "filtre local, aucune relecture")
-        let lectures = await port.compte("contrats")
+        let lectures = port.compte("contrats")
         XCTAssertEqual(lectures, 1)
-        await port.poser(liste: .failure(JoleneError(.network, "Connexion impossible.")))
+        port.poser(liste: .failure(JoleneError(.network, "Connexion impossible.")))
         await liste.charger()
         XCTAssertEqual(liste.etat, .echec("Connexion impossible."))
     }
