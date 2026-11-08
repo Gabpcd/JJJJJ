@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { CalendarClock, Hash, RefreshCw, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { useEtabPermissions } from '@/hooks/useEtabPermissions';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { toast } from 'sonner';
 import {
@@ -35,6 +36,10 @@ function nowLocalInput(): string {
  *
  * Rafraîchissement par polling (5 s) : dès que le soignant pointe, le code change
  * et le nouveau s'affiche ici.
+ *
+ * Réservé à la permission « pointage » de l'établissement de la mission
+ * (fn_mes_permissions_etab ; le serveur ne sert code_pointage_actif qu'à ces
+ * membres, B5b). Sans elle : message neutre, aucune lecture d'état ni polling.
  */
 interface Segment { id: string; debut: string; fin: string | null }
 interface EtatPointage {
@@ -77,7 +82,40 @@ function dureeSegment(debut: string, fin: string | null): string {
   return h > 0 ? `${h}h${String(min % 60).padStart(2, '0')}` : `${min} min`;
 }
 
-export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
+export function AffichageCodeRotatifEtab({ missionId, etablissementId }: { missionId: string; etablissementId: string }) {
+  const { loading, error, permissions, recharger } = useEtabPermissions(etablissementId);
+
+  if (loading) {
+    return <div className="card-base text-sm text-muted-foreground" role="status">Vérification des accès au pointage…</div>;
+  }
+  if (error) {
+    return (
+      <div className="card-base border-destructive/30" role="alert">
+        <p className="font-semibold text-destructive">Code de pointage indisponible</p>
+        <p className="mt-1 text-xs text-muted-foreground">Vos droits d’accès au pointage n’ont pas pu être vérifiés.</p>
+        <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => { void recharger(); }}>
+          Réessayer les accès
+        </BoutonY2K>
+      </div>
+    );
+  }
+  if (!permissions.pointage) {
+    return (
+      <div className="card-base">
+        <div className="flex items-center gap-2">
+          <Hash className="h-5 w-5 text-primary" aria-hidden="true" />
+          <h2 className="font-semibold text-foreground">Code de pointage</h2>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Le code de pointage est réservé aux membres disposant du droit de pointage pour cet établissement.
+        </p>
+      </div>
+    );
+  }
+  return <AffichageCodeRotatifHabilite missionId={missionId} />;
+}
+
+function AffichageCodeRotatifHabilite({ missionId }: { missionId: string }) {
   const [maintenant, setMaintenant] = useState(() => new Date());
   useEffect(() => {
     const intervalle = window.setInterval(() => setMaintenant(new Date()), 15_000);

@@ -7,6 +7,7 @@ import DetailPresencesMission from './DetailPresencesMission';
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   rpc: vi.fn(),
+  carteCode: vi.fn(),
 }));
 
 vi.mock('@/integrations/supabase/client', () => ({
@@ -26,7 +27,9 @@ vi.mock('@/components/LayoutAdmin', () => ({
 }));
 
 vi.mock('@/components/ChargementPage', () => ({ ChargementPage: () => <p>Chargement</p> }));
-vi.mock('@/components/pointage/AffichageCodeRotatifEtab', () => ({ AffichageCodeRotatifEtab: () => null }));
+vi.mock('@/components/pointage/AffichageCodeRotatifEtab', () => ({
+  AffichageCodeRotatifEtab: (props: unknown) => { mocks.carteCode(props); return null; },
+}));
 vi.mock('@/hooks/usePageTitle', () => ({ usePageTitle: vi.fn() }));
 
 function creerBuilder(data: unknown) {
@@ -50,6 +53,7 @@ describe('DetailPresencesMission — planning prévisionnel', () => {
     vi.setSystemTime(new Date('2026-07-31T14:30:00+02:00'));
     mocks.from.mockReset();
     mocks.rpc.mockReset();
+    mocks.carteCode.mockReset();
     mocks.rpc.mockResolvedValue({
       data: {
         heures_reelles: 999,
@@ -156,6 +160,8 @@ describe('DetailPresencesMission — planning prévisionnel', () => {
     expect(screen.queryByText(/Heures réelles inférieures à 90% du planifié/i)).not.toBeInTheDocument();
     expect(creneauxBuilder.eq).toHaveBeenCalledWith('est_pause', false);
     expect(creneauxBuilder.eq).not.toHaveBeenCalledWith('type_creneau', 'PREVISIONNEL');
+    // La carte du code vérifie la permission « pointage » sur l'établissement de la mission.
+    expect(mocks.carteCode).toHaveBeenCalledWith({ missionId: 'mission-1', etablissementId: 'etablissement-1' });
   });
 
   it('donne à l’admin un chemin visible et audité pour régulariser les heures', async () => {
@@ -178,6 +184,7 @@ describe('DetailPresencesMission — planning prévisionnel', () => {
     expect(screen.getByRole('button', { name: /Intervenir sur les heures ou le paiement/i })).toBeInTheDocument();
     expect(screen.getByText(/toute correction financière reste confirmée séparément/i)).toBeInTheDocument();
     expect(screen.getByText('Brut simulé avec compléments')).toBeInTheDocument();
+    expect(mocks.carteCode).not.toHaveBeenCalled();
   });
 
   it('ne présente jamais un faux net salarié pour une mission libérale', async () => {
