@@ -116,6 +116,9 @@ jobs:
       - name: Vérifier les empreintes inventaire explicites
         run: node --test tests/node/security-definer-inventory.node.mjs tests/node/litige-resolveur-garde.node.mjs
 
+      - name: Visibilité établissement (B5b) — corps LIVE, empreintes et diff sans réseau
+        run: node --test tests/node/visibilite-etablissement-permission.node.mjs
+
       - name: Contestation de paiement (B3) — migration et instantané sans réseau
         run: node --test tests/node/contestation-paiement-soignant.node.mjs
 
@@ -983,6 +986,29 @@ jobs:
         run: |
           createdb pointage_rotation
           psql -X -v ON_ERROR_STOP=1 -d pointage_rotation -f tests/security/pointage-rotation-isolated.test.sql
+      - name: Visibilité établissement (B5b) — réponses par rôle et refus du rejeu PostgreSQL 17 isolé
+        env:
+          PGOPTIONS: '-c jolene.isolated_sql_test=on'
+        run: |
+          createdb visibilite_etab_permission
+          psql -X -v ON_ERROR_STOP=1 -d visibilite_etab_permission -f tests/security/visibilite-etablissement-permission-isolated.test.sql
+          # Le rejeu DOIT échouer au préflight, après une première application réussie.
+          createdb visibilite_etab_rejeu
+          sortie="$RUNNER_TEMP/visibilite-rejeu.out"
+          erreurs="$RUNNER_TEMP/visibilite-rejeu.err"
+          if psql -X -v ON_ERROR_STOP=1 -d visibilite_etab_rejeu -f tests/security/visibilite-etablissement-permission-rejeu.test.sql > "$sortie" 2> "$erreurs"; then
+            cat "$sortie" "$erreurs"
+            echo "::error::Le rejeu de la migration B5b a été accepté."
+            exit 1
+          fi
+          cat "$sortie" "$erreurs"
+          grep -Fq 'VISIBILITE_ETAB_PREMIERE_APPLICATION_OK' "$sortie"
+          grep -Fq 'VISIBILITE_ETAB_PREFLIGHT_SOURCE_DRIFT: fn_etat_pointage_mission(uuid)' "$erreurs"
+          if grep -Fq 'VISIBILITE_ETAB_REJEU_ACCEPTE' "$sortie"; then
+            echo "::error::Le rejeu de la migration B5b a dépassé le préflight."
+            exit 1
+          fi
+
       - name: Pointage — scanner et fin rétroactive sans code suivant PostgreSQL 17 isolé
         run: |
           createdb scanner_sans_code_suivant
