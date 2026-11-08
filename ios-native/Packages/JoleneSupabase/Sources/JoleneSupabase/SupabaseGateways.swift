@@ -61,7 +61,7 @@ public enum SupabaseGateways {
     static func câblerLot3(_ gateways: inout Gateways, client: SupabaseClient) {
         gateways.push = UnwiredPushRegistrationPort()                      // T4
         gateways.notifications = UnwiredNotificationsCenterPort()          // T5
-        gateways.preferences = UnwiredNotificationPreferencesPort()        // T6
+        gateways.preferences = SupabasePreferencesGateway(client: client)  // T6
         gateways.inscription = UnwiredInscriptionPort()                    // T7, T8
         gateways.profil = UnwiredProfilPort()                              // T9
         gateways.avatar = UnwiredAvatarStoragePort()                       // T10
