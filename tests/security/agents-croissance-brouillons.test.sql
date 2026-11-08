@@ -130,6 +130,15 @@ BEGIN
      OR (SELECT count(*) FROM public.growth_brouillons WHERE cible_id = 'ZZGROW007' AND statut = 'BROUILLON') <> 1 THEN
     RAISE EXCEPTION 'Une cible expirée doit être reproposée — %', v_res;
   END IF;
+  -- … mais un brouillon VALIDÉ puis expiré (envoi possible hors suivi) ne l'est pas.
+  UPDATE public.growth_brouillons
+     SET statut = 'VALIDE', valide_le = now(), expire_le = now() - interval '1 minute'
+   WHERE cible_id = 'ZZGROW007' AND statut = 'BROUILLON';
+  v_res := private.fn_growth_agents_executer('CRON');
+  IF (SELECT count(*) FROM public.growth_brouillons WHERE cible_id = 'ZZGROW007') <> 2
+     OR EXISTS (SELECT 1 FROM public.growth_brouillons WHERE cible_id = 'ZZGROW007' AND statut <> 'EXPIRE') THEN
+    RAISE EXCEPTION 'Un brouillon validé puis expiré ne doit pas libérer sa cible — %', v_res;
+  END IF;
 
   -- 5. Orchestrateur : le cron respecte l'interrupteur.
   UPDATE public.growth_config SET valeur = 'false' WHERE cle = 'agents_croissance_actifs';

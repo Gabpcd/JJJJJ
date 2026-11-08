@@ -273,8 +273,8 @@ BEGIN
     IF EXISTS (SELECT 1 FROM public.preferences_notifications pn
                WHERE pn.utilisateur_id = v_uid AND pn.canal_email IS FALSE)
        OR EXISTS (SELECT 1 FROM public.preferences_notifications_par_evenement pe
-                  WHERE pe.utilisateur_id = v_uid AND pe.type_evenement = 'SERIE_ONBOARDING'
-                    AND upper(pe.canal) = 'EMAIL' AND pe.actif IS FALSE) THEN
+                  WHERE pe.utilisateur_id = v_uid AND pe.type_evenement::text = 'SERIE_ONBOARDING'
+                    AND pe.canal::text = 'EMAIL' AND pe.actif IS FALSE) THEN
       RETURN 'EMAILS_DESACTIVES';
     END IF;
     IF public.fn_sales_outreach_est_interdit(
@@ -411,7 +411,9 @@ BEGIN
         AND NOT EXISTS (
           SELECT 1 FROM public.growth_brouillons b
           WHERE b.cible_type = 'PROSPECT_ETABLISSEMENT' AND b.cible_id = p.finess
-            AND b.statut <> 'EXPIRE'
+            -- Seul un brouillon jamais validé puis expiré libère la cible : un
+            -- brouillon validé a pu être envoyé sans « J'ai envoyé ».
+            AND NOT (b.statut = 'EXPIRE' AND b.valide_le IS NULL)
         )
     ) s
     ) q
@@ -428,7 +430,8 @@ BEGIN
     IF EXISTS (
       SELECT 1 FROM public.growth_brouillons b
       WHERE lower(b.destinataire_email) = lower(r.email)
-        AND b.statut IN ('BROUILLON', 'VALIDE', 'ENVOYE')
+        AND (b.statut IN ('BROUILLON', 'VALIDE', 'ENVOYE')
+             OR (b.statut = 'EXPIRE' AND b.valide_le IS NOT NULL))
     ) THEN
       CONTINUE;
     END IF;
@@ -602,7 +605,8 @@ BEGIN
       JOIN public.etablissements e ON e.id = m.etablissement_id
       WHERE m.statut = 'OUVERTE' AND m.debut_le > now()
         AND m.profession_requise::text = v_prof
-        AND e.adresse_departement = v_dept;
+        AND e.adresse_departement = v_dept
+        AND public.fn_mission_publique(m.id) IS NOT NULL;
 
       SELECT t.bmo_projets_recrutement AS projets, round(t.bmo_difficulte_pct) AS pct, t.bmo_annee AS annee
         INTO v_bmo
@@ -1076,11 +1080,14 @@ BEGIN
             SELECT 1 FROM public.etablissements e
             WHERE e.id::text = b.cible_id AND e.supprime_le IS NULL AND e.est_compte_test IS FALSE));
 
-  -- Un brouillon (même validé) non envoyé expire ; sa clé est libérée pour
-  -- qu'un agent puisse reproposer la cible plus tard.
+  -- Un brouillon non envoyé expire, même validé. Seul un brouillon jamais
+  -- validé libère sa clé (cible reproposable) ; un brouillon validé a pu être
+  -- envoyé sans constat, sa cible reste donc exclue.
   UPDATE public.growth_brouillons
      SET statut = 'EXPIRE', maj_le = now(),
-         idempotence_key = idempotence_key || ':expire:' || id
+         idempotence_key = CASE WHEN valide_le IS NULL
+                                THEN idempotence_key || ':expire:' || id
+                                ELSE idempotence_key END
    WHERE statut IN ('BROUILLON', 'VALIDE') AND expire_le IS NOT NULL AND expire_le < now();
   GET DIAGNOSTICS v_expires = ROW_COUNT;
 
@@ -1317,6 +1324,9 @@ BEGIN
         PERFORM cron.alter_job(job_id := v_job.jobid, active := p_actif);
       END LOOP;
     END IF;
+    INSERT INTO public.growth_agent_executions (agent, declencheur, fin_le, details)
+    VALUES ('PLANIFICATION', 'ADMIN', now(),
+      jsonb_build_object('actif', p_actif, 'par', auth.uid()));
   END IF;
 
   IF v_cron THEN
@@ -1330,8 +1340,10 @@ BEGIN
 
   RETURN jsonb_build_object(
     'actif', private.fn_growth_config('agents_croissance_actifs', 'false') = 'true'
-             AND (NOT v_cron OR NOT EXISTS (
-               SELECT 1 FROM jsonb_array_elements(v_jobs) x WHERE (x->>'active')::boolean IS NOT TRUE)),
+             AND (NOT v_cron OR (
+               jsonb_array_length(v_jobs) = 2
+               AND NOT EXISTS (
+                 SELECT 1 FROM jsonb_array_elements(v_jobs) x WHERE (x->>'active')::boolean IS NOT TRUE))),
     'pg_cron', v_cron,
     'jobs', v_jobs);
 END;
