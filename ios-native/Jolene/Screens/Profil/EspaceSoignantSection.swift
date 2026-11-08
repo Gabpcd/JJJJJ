@@ -4,12 +4,14 @@ import JoleneDesign
 
 /// Section « Mon espace » du Profil (décision 24 du lot 2 : pas de sixième onglet) : Mes présences, Mes documents,
 /// Mes contrats. Titres des pages web (`LibellesWeb.ListePresences.titre`, `LibellesWeb.EspaceSoignant`) ; titre de la
-/// section : texte opérationnel inventorié (`LibellesPresences.EspaceSoignant.titreSection`).
+/// section : texte opérationnel inventorié (`LibellesPresences.EspaceSoignant.titreSection`, même texte que
+/// `LibellesJustificatifs.monEspace` de T7). Une ligne par tranche : T4a (`profil-presences`), T7 (`profil-documents`,
+/// `MesDocumentsScreen`), T9a (`profil-contrats`) ; T4b y ajoute le consentement GPS (`profil-gps-consentement`).
 ///
-/// « Mes documents » et « Mes contrats » ouvrent un écran provisoire honnête jusqu'aux tranches T7 et T9a
-/// (`placeholder-documents`, `placeholder-contrats`), qui le remplacent et migrent les identifiants de
-/// `DemoPresencesTests`. T4b ajoute ici une ligne (consentement GPS, `profil-gps-consentement`).
+/// « Mes contrats » ouvre un écran provisoire honnête jusqu'à T9a (`placeholder-contrats`), qui le remplace et migre
+/// les identifiants de `DemoPresencesTests`.
 struct EspaceSoignantSection: View {
+    let container: AppContainer
     @ObservedObject var session: SessionStore
     let snapshot: SessionSnapshot
     let ouvrirOnglet: (MainTabView.Tab) -> Void
@@ -24,10 +26,9 @@ struct EspaceSoignantSection: View {
             .accessibilityIdentifier("profil-presences")
 
             NavigationLink {
-                PlaceholderScreen(titre: LibellesWeb.EspaceSoignant.mesDocuments, identifier: "placeholder-documents",
-                                  description: LibellesPresences.Provisoire.documents, etat: LibellesPresences.Provisoire.etat)
+                MesDocumentsScreen(container: container, session: session, snapshot: snapshot)
             } label: {
-                Label(LibellesWeb.EspaceSoignant.mesDocuments, systemImage: "doc.text")
+                Label(LibellesWeb.EspaceSoignant.mesDocuments, systemImage: "folder")
             }
             .accessibilityIdentifier("profil-documents")
 

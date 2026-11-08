@@ -123,15 +123,17 @@ final class DemoPresencesTests: JoleneUITestCase {
         record("\(proofPrefix)-presences-onglets")
     }
 
-    func testMesDocumentsEtMesContratsProvisoiresJusquaT7EtT9a() throws {
+    /// Migré à l'intégration de T7 : « Mes documents » ouvre l'écran natif (`documents-screen`, onglet Justificatifs par
+    /// défaut, contenu affirmé par `DemoDocumentsTests`) ; « Mes contrats » reste provisoire jusqu'à T9a.
+    func testMesDocumentsNatifEtMesContratsProvisoireJusquaT9a() throws {
         launchDemo()
         connexionDemo()
         ouvrirProfil()
 
         tapDansProfil("profil-documents")
-        require("Mes documents : écran provisoire (T7)") { self.containerVisible(self.element("placeholder-documents")) }
-        XCTAssertTrue(text("Disponible au lot 2").exists)
-        XCTAssertTrue(text("Vos justificatifs arrivent dans l'application avec la suite du lot 2.").exists)
+        require("Mes documents : écran natif (T7)") { self.containerVisible(self.element("documents-screen")) }
+        require("L'onglet Justificatifs est ouvert par défaut") { self.element("documents-tab-justificatifs").isSelected }
+        XCTAssertFalse(element("placeholder-documents").exists, "écran provisoire retiré par T7")
         record("\(proofPrefix)-profil-documents")
         revenir()
 

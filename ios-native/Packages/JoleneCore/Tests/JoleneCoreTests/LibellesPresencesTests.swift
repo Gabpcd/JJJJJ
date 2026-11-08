@@ -53,8 +53,8 @@ final class LibellesPresencesTests: XCTestCase {
                     LibellesPresences.Liste.videAVenirDescription, LibellesPresences.Liste.videActivesDescription,
                     LibellesPresences.Liste.videAujourdhuiDescription, LibellesPresences.Liste.videHistoriqueDescription,
                     LibellesPresences.Bloc.aucunHoraire, LibellesPresences.EspaceSoignant.titreSection,
-                    LibellesPresences.Provisoire.etat, LibellesPresences.Provisoire.documents,
-                    LibellesPresences.Provisoire.contrats, LibellesPresences.Provisoire.pointage]
+                    LibellesPresences.Provisoire.etat, LibellesPresences.Provisoire.contrats,
+                    LibellesPresences.Provisoire.pointage]
         let tutoiement: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
         for texte in tous {
             XCTAssertFalse(texte.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -171,7 +171,6 @@ final class LibellesPresencesTests: XCTestCase {
     func testTextesOperationnelsInventories() {
         XCTAssertEqual(LibellesPresences.EspaceSoignant.titreSection, "Mon espace", "décision 24 du lot 2")
         XCTAssertEqual(LibellesPresences.Provisoire.etat, "Disponible au lot 2")
-        XCTAssertEqual(LibellesPresences.Provisoire.documents, "Vos justificatifs arrivent dans l'application avec la suite du lot 2.")
         XCTAssertEqual(LibellesPresences.Provisoire.contrats, "Vos contrats arrivent dans l'application avec la suite du lot 2.")
         XCTAssertEqual(LibellesPresences.Provisoire.pointage, "Le pointage dans l'application arrive avec la suite du lot 2.")
     }

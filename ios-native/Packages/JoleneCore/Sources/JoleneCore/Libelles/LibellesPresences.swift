@@ -169,11 +169,11 @@ public enum LibellesPresences {
         public static let titreSection = "Mon espace"
     }
 
-    /// Textes provisoires, inventoriés : retirés par la tranche qui livre l'écran (T4b pointage, T7 justificatifs,
-    /// T9a contrats), qui migre aussi les identifiants des XCUITest. Même forme que l'onglet provisoire du lot 0.
+    /// Textes provisoires, inventoriés : retirés par la tranche qui livre l'écran (T4b pointage, T7 justificatifs —
+    /// retiré à l'intégration de T7 —, T9a contrats), qui migre aussi les identifiants des XCUITest. Même forme que
+    /// l'onglet provisoire du lot 0.
     public enum Provisoire {
         public static let etat = "Disponible au lot 2"
-        public static let documents = "Vos justificatifs arrivent dans l'application avec la suite du lot 2."
         public static let contrats = "Vos contrats arrivent dans l'application avec la suite du lot 2."
         public static let pointage = "Le pointage dans l'application arrive avec la suite du lot 2."
     }

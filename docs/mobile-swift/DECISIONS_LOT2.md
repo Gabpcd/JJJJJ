@@ -501,6 +501,54 @@
   - `ConsultationDocuments.effacerTout()` à la fermeture de QuickLook et au changement d'epoch ;
   - démo : `-JOLENE_DEMO_SCENARIO upload-incertain` → `DemoDocumentsGateway(scenario: .uploadIncertain)` posé par
     `AppContainer` (DEBUG) ; `DemoWorld.gateways()` garde `.normal`.
+- **T7 — application (L2-T7, 8 novembre 2026)** :
+  - écrans : `Jolene/Screens/Documents/MesDocumentsScreen.swift` (onglets Justificatifs, Contrats, DPAE dans l'ordre du
+    web, Justificatifs par défaut ; modèle `@StateObject` de l'écran, partagé par les onglets), `JustificatifsView.swift`,
+    `TeleversementSheet.swift`, `AttestationSanteView.swift` ; médias `Jolene/Composition/Media/` (`CameraCaptureView`,
+    `PhotoPickerView`, `DocumentPickerView`, `QuickLookView`, `DemoMediaPicker`) ; `JoleneDesign/Components/StatusBadge.swift` ;
+    Core : `Documents/LibellesJustificatifs.swift`, `PresentationJustificatifs.swift`, `SelectionFichier.swift`,
+    `Demo/DemoSourcesDocument.swift` (+ `Resources/media-demo/justificatif-demo.heic`, copie octet pour octet de la fixture
+    HEIC de T6). Aucune règle dans les vues : `PresentationJustificatifs` dérive bandeaux, en-tête, expirations,
+    incohérence, cartes, documents complémentaires et issues de `DossierDocuments` et de l'horloge des gateways ;
+  - textes : libellés du web relus ligne à ligne (`LibellesJustificatifsTests`), tels quels ou vouvoyés (décision 9 du
+    lot 1, comme `MessagesDocuments`) ; textes de l'attestation repris de `TextesWeb.AttestationSante` (TL), badge et état
+    d'envoi de `LibellesWeb.AttestationSante` ; cinq textes opérationnels inventoriés ci-dessous (« Textes opérationnels hors
+    web (T7) ») ; aucun texte juridique nouveau ni reformulé. Les libellés vouvoyés vivent dans
+    `LibellesJustificatifs`, pas dans `LibellesWeb` : la garde Node exige l'égalité au caractère près avec le web, que
+    le vouvoiement rompt (même choix que `MessagesDocuments`, T6) ;
+  - **non affichés, HARD STOP n°4** (« En attente de Gabrielle ») : bandeau RCP (`DocumentsSoignant.tsx` l.623-624,
+    l.634 : restriction de l'exercice libéral et obligation d'assurance), textes d'accès des documents complémentaires
+    (l.866-869 : pré-éligibilité étudiante ; l.882-884 : accès aux remplacements de médecin) ; leur carte garde titre,
+    statut et bouton. L'alerte RCP reste visible dans la carte de l'exigence (statut) et dans le bandeau d'incohérence
+    (« Votre assurance RCP est expirée », l.293) ;
+  - **non portés** : suppression d'un justificatif (§1.2, renvoi web) ; boutons vers le profil web (« Explorer les
+    missions », « Préparer mon dossier », « Renseigner ma profession → », « Préciser mon mode d’exercice », l.514-553) :
+    le Profil natif ne modifie ni la profession ni le mode d'exercice, aucun bouton sans effet ; encart « À quoi sert ton
+    RIB ? » (l.821-849 : relation d'employeur, versements Stripe du lot 3) ; confettis et mascotte (visuel seul) ;
+  - écarts assumés : titre d'une carte d'un type absent de `TYPES_DOCUMENTS` = son code (le web l.685 laisse un titre
+    vide) ; date de téléversement illisible : nom seul (le web lèverait `RangeError`) ; « vérification en cours » retirée
+    de la tête d'écran dès que le verdict est relu (`PresentationJustificatifs.issueAffichee`, le badge le porte, comme le
+    toast éphémère du web) ; refus Storage : « Téléversement impossible : » suivi du repli générique (le natif ne
+    transporte pas le message brut de Storage, consigne T7) ; motif de rejet de la revérification lu sur la pièce relue
+    (le web lit celui de l'analyse, l.320) ; libellé saisi borné à 500 points de code dès la saisie ;
+  - cycle : `charger()` au `.task` de l'onglet (chaque apparition), au tirer-pour-rafraîchir et au retour au premier plan
+    (`scenePhase == .active`) ; `arreterSuivi()` à la disparition ; `exigenceSuivante` ouvre la feuille si aucune n'est
+    ouverte, puis `oublierExigenceSuivante()` ; `oublierDossierComplet()` 2,5 s après ; 429, revue manuelle relue ou 60 s
+    sans tentative → « Document téléversé. Vérification manuelle en attente. » (issue du modèle, aucun renvoi) ;
+  - `source` toujours passée par les sélecteurs (`FichierSelectionne.photo/galerie/fichier`, revue fraîche de T6, m3 :
+    le défaut `.fichiers` de `FichierDocument.preparer` n'est jamais emprunté par l'écran) ; consultation : seule la copie
+    fermée est effacée (`CopiesConsultees.effacer`, revue de T6 m2 : `effacerTout()` casserait l'autre fenêtre iPad),
+    `effacerTout()` à la première apparition sous un nouvel epoch ;
+  - points d'extension : `AppContainer.recusJustificatifs` (`Screens/Documents/RecusJustificatifs.swift` : magasin en
+    mémoire partagé en démo, `KeychainReceiptStore` sinon) en attendant `Appareil` de T4b, qui le remplace par
+    `appareil.recus` ; `EspaceSoignantSection` (Profil › « Mon espace ») créée par T7 avec la seule ligne « Mes
+    documents » (`profil-documents`), T4a y ajoute ses lignes ; renvois web (onglets DPAE et Contrats, journal
+    illisible, drapeau à faux) par `PresentateurRenvoiWeb` seulement, aucun bouton tant que T10 ne l'injecte pas ;
+    `MesDocumentsScreen(ongletInitial:)` attend la route `?tab=` de T10 ;
+  - `AppContainer` : `mediaDemo` (`DemoMediaPicker`, `-JOLENE_DEMO_SOURCE_DOC`, DEBUG) et, conformément à la consigne
+    ci-dessus, `-JOLENE_DEMO_SCENARIO upload-incertain` → `DemoDocumentsGateway(scenario: .uploadIncertain)` (DEBUG) ;
+  - compteur DEBUG `documents-demo-envois` (monde démo seulement : uploads acceptés et appels `verify-document`), preuve
+    « une seule fois » des XCUITest, absent en Release.
 
 - **T9a** (lecture, livrée par T8 côté données) : `ContratModel` (`JoleneCore/Contrats/ContratModel.swift`) et
   `ContratsListeModel` portent l'état ; bandeaux, compte à rebours, statut, pied de page, certificat et zone de
@@ -570,6 +618,10 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | §3 T4a « BlocPointageView » (carte mission) ; « PresenceHistoriqueRow » (ligne) | carte et ligne ouvrent la mission (web l.57, l.685) | non cliquables jusqu'à T5a ; « Détail », « Voir ou signaler un litige » et « Voir le contrat » : renvois web rendus seulement avec le présentateur de T10 | gap verrouillé : en démo, le détail d'une mission de `demo-presences.json` est introuvable ; aucun bouton sans effet avant T10 |
 | `PresencesSoignant.tsx` l.722-726 (« Code : … » d'une présence) | code de pointage de la présence affiché | non affiché | aucune colonne `code_*` n'est lue (gap « B1-ter » de la migration B1, projection `PresenceLue`) |
 | `PresencesSoignant.tsx` l.459-477 (écran d'erreur) | une relecture en échec affiche l'écran d'erreur (`isError`) | présences gardées, encart `presences-refresh-error` ; écran d'erreur au premier chargement seulement | règle du lot 1 (`AccueilModel`, `MissionsListModel`) : jamais de démontage sur un rafraîchissement |
+| §3 T7 « Tests d'abord » (« CARTE_IDENTITE affichée « Rejeté ✗ » », « « Vérifié ✓ » ») | libellés de `STATUTS_VERIFICATION` | cartes des exigences : « Rejeté » et « Vérifié ✅ » (`DocumentsSoignant.tsx` l.763, l.697) ; `STATUTS_VERIFICATION` seulement pour les documents complémentaires (l.856-897) | T7 : parité de la page web, qui n'emploie pas ces libellés sur les cartes d'exigences |
+| §3 T7 `JustificatifsView` (« bannière cohérence, expiration proche ») ; `DocumentsSoignant.tsx` l.611-640 | bandeaux du web | bandeau d'incohérence et d'expiration portés ; bandeau RCP et textes d'accès des documents complémentaires non affichés | HARD STOP n°4 (restriction d'exercice, obligation d'assurance) : « En attente de Gabrielle » |
+| §3 T7 « Fichiers » (`DemoMediaPicker.swift`) ; §2.8 (« fichiers fictifs de 3 pixels ») | fichiers démo dans l'app | règle et octets dans JoleneCore (`Demo/DemoSourcesDocument.swift`, `Resources/media-demo/`), `DemoMediaPicker` (app) ne fait que les rendre ; PNG = trois pixels du pilote, HEIC = fixture de T6, PDF vide, `trop-gros` = PDF de 10 Mo + 1 octet | T7 : testables par `swift test` (préparation identique aux vrais sélecteurs) |
+| §3 T7 « Dépendances » (T4a : `EspaceSoignantSection`) ; §2.2 (`Appareil` injecté par `AppContainer`, T4b) | consommés | `EspaceSoignantSection` créée par T7 (ligne « Mes documents ») ; magasin de reçus par `AppContainer.recusJustificatifs` (point d'extension) | T4a et T4b non intégrés à la base de T7 : fusion d'une ligne par tranche à l'intégration |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 
@@ -619,7 +671,7 @@ vérifier » et « Vérifier ma session » sont ceux de l'Accueil du lot 1 (`Acc
 | `LibellesPresences.EspaceSoignant.titreSection` | « Mon espace » | décision 24 du lot 2 (section du Profil ; aucune page web ne regroupe ces trois écrans) | `LibellesPresencesTests.testTextesOperationnelsInventories` |
 | `LibellesPresences.Provisoire.etat` | « Disponible au lot 2 » | provisoire (forme de l'onglet provisoire du lot 0), retiré par T4b, T7 et T9a | idem |
 | `LibellesPresences.Provisoire.pointage` | « Le pointage dans l'application arrive avec la suite du lot 2. » | provisoire, retiré par T4b | idem |
-| `LibellesPresences.Provisoire.documents` | « Vos justificatifs arrivent dans l'application avec la suite du lot 2. » | provisoire, retiré par T7 | idem |
+| `LibellesPresences.Provisoire.documents` | « Vos justificatifs arrivent dans l'application avec la suite du lot 2. » | provisoire, **retiré à l'intégration de T7** (8 novembre 2026 : constante et assertions supprimées, « Mes documents » ouvre `MesDocumentsScreen`) | — |
 | `LibellesPresences.Provisoire.contrats` | « Vos contrats arrivent dans l'application avec la suite du lot 2. » | provisoire, retiré par T9a | idem |
 
 ## Textes opérationnels hors web (T8)
@@ -637,6 +689,28 @@ aucun texte de consentement, de signature ni de contrat (HARD STOP n°4 : tous v
 envoyé au numéro masqué. Valide 10 min. » (`LibellesWeb.SignatureOtp.numeroMasque`, l.296, et la durée du minuteur,
 l.145) là où le web afficherait `undefined`.
 
+## Textes opérationnels hors web (T7)
+
+Non juridiques (aucune marque de `MARQUES_JURIDIQUES`), vouvoyés ; aucun équivalent web : le web n'a ni journal de
+reçus ni réconciliation d'envoi (`DocumentsSoignant.tsx` l.361-431), ni section regroupant présences, documents et
+contrats. Modèle : `RecuScan.messageRecuEnCours` / `messageIllisible` (pilote `attemptJournal.ts`). Tous les autres
+libellés de l'écran sont ceux du web, repris tels quels ou vouvoyés (`Documents/LibellesJustificatifs.swift`, garde
+`LibellesJustificatifsTests`, qui relit chaque ligne web).
+
+| Constante | Texte | Source | Test |
+|---|---|---|---|
+| `LibellesJustificatifs.envoiAVerifier` | « L'envoi du document est en cours de vérification. Ne le renvoyez pas : cette page se mettra à jour. » | nouveau (T7) : `IssueEnvoiDocument.incertain`, reçu `started` gardé, aucun renvoi (décision 14) | `LibellesJustificatifsTests.testTextesOperationnelsInventories`, `PresentationJustificatifsTests` |
+| `LibellesJustificatifs.envoiNonRecu` | « Le document n'a pas été reçu. Choisissez-le de nouveau puis réessayez. » | nouveau (T7) : `.nonEnvoye`, aucun octet conservé, nouvelle sélection (décision 14) | idem |
+| `LibellesJustificatifs.envoiPrecedentAVerifier` | « Un autre envoi de document doit être vérifié avant de continuer. » | nouveau (T7) : `EtatEnvoi.recuEnCours`, sur le modèle de `RecuScan.messageRecuEnCours` | idem |
+| `LibellesJustificatifs.suiviIllisible` | « Le suivi sécurisé des envois ne peut pas être vérifié. Aucun nouveau document ne peut être envoyé. » | nouveau (T7) : `EtatEnvoi.suiviIllisible`, sur le modèle de `RecuScan.messageIllisible` ; renvoi web `DocumentsModel.renvoiWeb` | idem |
+| `LibellesJustificatifs.monEspace` | « Mon espace » | blueprint §7 Q24 (section « Mon espace » du Profil) ; titre de section | idem |
+
+Repris d'écrans natifs déjà livrés, sans texte nouveau : « Cet espace n'est pas encore disponible dans l'application.
+Rendez-vous sur jolene.app. » (`MobileAccess.unsupportedRole`, lot 0 : onglets DPAE et Contrats, drapeau
+`ios_natif_documents_actif` à faux), « Voir sur jolene.app » (`AccueilScreen.swift` l.283, lot 1), « Session à
+vérifier » / « Vérifier ma session » (`MissionsListScreen.swift` l.107-108, lot 1) et
+`SessionController.sessionExpiredMessage`.
+
 ## En attente de Gabrielle
 
 Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranche indiquée.
@@ -650,6 +724,15 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
   « à valider » (`TextesWeb.Presences.bandeauAValider`, affiché par `PresencesScreen` avec `?filtre=a_valider`, donc
   atteignable seulement après T10). Les textes tutoyés du web restent verbatim tant qu'un wording vouvoyé n'est pas
   validé.
+- **T7** (justificatifs) : textes web non repris par TL, qui énoncent une restriction d'exercice ou une obligation
+  (CLAUDE.md, HARD STOP n°4 : « blocage ou restriction d'un mode d'exercice »), non affichés par le natif tant qu'ils ne
+  sont pas validés (verbatim tutoyé dans `TextesWeb`, ou wording vouvoyé) : bandeau RCP de `DocumentsSoignant.tsx`
+  l.623 (« Ton assurance RCP est expirée. Pense à la renouveler. »), l.624 (« Tu ne peux pas postuler aux missions
+  libérales tant que ta RCP n'est pas à jour. »), l.634 (« L'assurance RCP est obligatoire pour l'exercice libéral et
+  mixte. Téléverse ton attestation RCP. ») ; textes d'accès des documents complémentaires l.866-869 (contrôle avant
+  « pré-éligibilité » étudiante) et l.882-884 (licence « contrôlée avant tout accès aux remplacements de médecin ») ;
+  encart RIB l.830-843 (relation d'employeur, renvoi vers les versements du lot 3). Point d'extension :
+  `PresentationJustificatifs.complementaires` (`description` nil) et `DossierDocuments.alerteRcp` (T6), non affichée.
 - **T9b** (écran de signature OTP) : go explicite avant merge (captures xcresult des trois formats, liste des textes).
 - **T5b** (contestation depuis une présence) : go explicite avant merge.
 - **Décision Q9 — délai de contestation** (sources primaires : `PanneauContestation.tsx` l.43-46 et l.347, l.354,
