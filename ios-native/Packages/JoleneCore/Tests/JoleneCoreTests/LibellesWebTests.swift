@@ -70,6 +70,74 @@ final class LibellesWebTests: XCTestCase {
         XCTAssertEqual(LibellesWeb.Certificat.contrat(numero: "", id: "c-001"), "Contrat c-001")
     }
 
+    /// Liste des contrats (`ListeContrats.tsx`, T9a) : filtres (l.121), pastille de statut (l.163), états vides du
+    /// soignant (l.128-145) et carte mobile (l.210-223).
+    func testListeDesContratsCommeLeRenduWeb() {
+        let liste = LibellesWeb.Contrats.self
+        XCTAssertEqual(liste.titre, "Mes contrats")
+        XCTAssertEqual(FiltreContrat.allCases.map(liste.libelleFiltre), ["Tous", "En attente", "Signés", "Annulés"])
+        XCTAssertEqual(liste.libelleFiltre(.enAttenteSignatures), "En attente")
+        XCTAssertEqual(liste.libelleFiltre(.annule), "Annulés")
+        XCTAssertEqual(liste.badge(.signe), "✅ Signé")
+        XCTAssertEqual(liste.badge(.enAttente), "⏳ En attente")
+        XCTAssertEqual(liste.badge(.annule), "❌ Annulé")
+        XCTAssertEqual(liste.titreVide(.enAttenteSignatures), "Aucun contrat en attente")
+        XCTAssertEqual(liste.titreVide(.signeComplet), "Aucun contrat")
+        XCTAssertEqual(liste.titreVide(.tous), liste.videTitre)
+        XCTAssertEqual(liste.titreVide(.annule), liste.videTitre)
+        XCTAssertEqual(liste.descriptionVide(.tous), "Vos contrats apparaîtront ici après avoir accepté une mission.")
+        XCTAssertEqual(liste.descriptionVide(.annule), "Aucun contrat annulé.")
+        XCTAssertEqual(liste.descriptionVide(.enAttenteSignatures), "Aucun contrat en attente de signature pour le moment.")
+        XCTAssertEqual(liste.descriptionVide(.signeComplet), "Aucun contrat signé pour le moment.")
+        XCTAssertEqual(liste.numero(nil), "—")
+        XCTAssertEqual(liste.numero(""), "—")
+        XCTAssertEqual(liste.numero("DEMO-0002"), "DEMO-0002")
+        XCTAssertEqual(liste.mission(intitule: "Démonstration · Mission terminée 1"), "📋 Démonstration · Mission terminée 1")
+        XCTAssertEqual(liste.mission(intitule: nil), "📋 —")
+        XCTAssertEqual(liste.typeEtDate(type: "CDD", dateFormatee: "29/10/2026"), "CDD · Créé le 29/10/2026")
+        XCTAssertEqual(liste.typeEtDate(type: nil, dateFormatee: "29/10/2026"), " · Créé le 29/10/2026")
+        XCTAssertEqual(liste.action(aSigner: true), "✍️ Signer le contrat")
+        XCTAssertEqual(liste.action(aSigner: false), "Voir le contrat")
+        XCTAssertEqual(liste.indisponiblesTitre, "Contrats indisponibles")
+        XCTAssertEqual(liste.chargementNAbouti, "Le chargement n'a pas abouti. Réessayez dans un instant.")
+        XCTAssertEqual(liste.reessayer, "Réessayer")
+    }
+
+    /// Page du contrat (`ContratMission.tsx`, T9a) : en-tête (l.591-597), section Signatures (l.666-706), préparation
+    /// du document (l.372-377, l.388), zone « Votre signature » (l.711), boutons (l.611, l.614), téléchargement (l.428).
+    func testPageDuContratCommeLeRenduWeb() {
+        let contrat = LibellesWeb.Contrat.self
+        XCTAssertEqual(contrat.titre(numero: "DEMO-0001"), "Contrat DEMO-0001")
+        XCTAssertEqual(contrat.titre(numero: nil), "Contrat ", "`Contrat {contrat.numero_contrat}` : rien après l'espace")
+        XCTAssertEqual(contrat.statut(.signe), "Statut : ✅ Signé")
+        XCTAssertEqual(contrat.statut(.annule), "Statut : ❌ Annulé")
+        XCTAssertEqual(contrat.statut(.enAttente), "Statut : ⏳ En attente de signatures")
+        XCTAssertEqual(contrat.ligneSignature(.etablissement, signee: true, dateFormatee: "29/10/2026 à 02:00"),
+                       "Établissement : ✅ Signé le 29/10/2026 à 02:00")
+        XCTAssertEqual(contrat.ligneSignature(.soignant, signee: false, dateFormatee: nil), "Soignant(e) : ⏳ En attente")
+        XCTAssertEqual(contrat.ligneSignature(.soignant, signee: false, dateFormatee: "29/10/2026 à 02:00"), "Soignant(e) : ⏳ En attente")
+        XCTAssertEqual(contrat.ligneSignature(.soignant, signee: true, dateFormatee: nil), "Soignant(e) : ✅ Signé")
+        XCTAssertEqual(contrat.renduRefuse(messageServeur: nil),
+                       "Le document contractuel final n’a pas pu être préparé. Réessayez avant de signer.")
+        XCTAssertEqual(contrat.renduRefuse(messageServeur: ""), contrat.renduRefuse(messageServeur: nil), "`motifBrut ?` : vide = absent")
+        XCTAssertEqual(contrat.renduRefuse(messageServeur: "Contrat introuvable."),
+                       "Le document contractuel final n’a pas pu être préparé. Contrat introuvable. Réessayez avant de signer.")
+        // `String(motifBrut).slice(0, 180)` : 180 unités UTF-16 au plus.
+        let long = String(repeating: "é", count: 200)
+        XCTAssertEqual(contrat.renduRefuse(messageServeur: long),
+                       contrat.renduImpossible + " " + String(repeating: "é", count: 180) + " " + contrat.reessayerAvantDeSigner)
+        XCTAssertEqual(contrat.renduIncomplet, "Le document contractuel final est encore incomplet. Réessayez avant de signer.")
+        XCTAssertEqual(contrat.votreSignature, "Votre signature")
+        XCTAssertEqual(contrat.signaturesTitre, "Signatures")
+        XCTAssertEqual(contrat.telecharger, "Télécharger le contrat")
+        XCTAssertEqual(contrat.imprimer, "Imprimer")
+        XCTAssertEqual(contrat.introuvable, "Contrat introuvable")
+        XCTAssertEqual(contrat.aucunTelechargeable, "Aucun contrat téléchargeable pour le moment.")
+        XCTAssertEqual(contrat.formatDateHeure, "dd/MM/yyyy 'à' HH:mm")
+        XCTAssertEqual(LibellesWeb.Certificat.formatDateHeure, "dd/MM/yyyy 'à' HH:mm:ss")
+        XCTAssertEqual(LibellesWeb.Certificat.telechargerPdf, "Télécharger PDF")
+    }
+
     /// `String(valeur).padStart(2, '0')` du web.
     func testDeuxChiffres() {
         XCTAssertEqual(LibellesWeb.deuxChiffres(0), "00")

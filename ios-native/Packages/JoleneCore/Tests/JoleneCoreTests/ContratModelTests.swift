@@ -41,6 +41,7 @@ final class ContratModelTests: XCTestCase {
         private var certificatLignes: [SignatureCertificat] = []
         private var certificatErreur: Error?
         private var issueListe: Result<[ContratResume], Error> = .success([])
+        private var issueFichier: Result<URL, Error> = .failure(nonScripte)
         private var attenteEnvoi: Duration = .zero
         private var journal: [String] = []
 
@@ -58,6 +59,7 @@ final class ContratModelTests: XCTestCase {
         func poser(signature: Result<IssueSignature, Error>) { avec { issueSignature = signature } }
         func poser(certificat: [SignatureCertificat], erreur: Error? = nil) { avec { certificatLignes = certificat; certificatErreur = erreur } }
         func poser(liste: Result<[ContratResume], Error>) { avec { issueListe = liste } }
+        func poser(fichier: Result<URL, Error>) { avec { issueFichier = fichier } }
 
         func contrats(context: MissionReadContext) async throws -> [ContratResume] {
             try avec { journal.append("contrats"); return try issueListe.get() }
@@ -91,7 +93,7 @@ final class ContratModelTests: XCTestCase {
             }
         }
         func fichierOriginal(contrat: OriginalContrat, context: MissionReadContext) async throws -> URL {
-            try avec { journal.append("fichier"); throw nonScripte }
+            try avec { journal.append("fichier"); return try issueFichier.get() }
         }
     }
 
@@ -310,6 +312,56 @@ final class ContratModelTests: XCTestCase {
         await model.envoyerCode()
         XCTAssertEqual(model.session.retour, .erreur("Connexion impossible. Vérifiez votre réseau puis réessayez."))
         XCTAssertEqual(model.session.etape, .idle)
+    }
+
+    // MARK: - Partage (T9a)
+
+    func testPartageSansOriginalControleNAppelleJamaisLePort() async throws {
+        let port = PortScripte()
+        port.poser(details: [detail(type: "CDD", chemin: nil)])
+        let model = try await modele(port)
+        await model.charger()
+        let url = await model.preparerPartage()
+        XCTAssertNil(url)
+        XCTAssertEqual(model.erreurPartage, "Aucun contrat téléchargeable pour le moment.", "texte du web (`ContratMission.tsx` l.428)")
+        let fichiers = port.compte("fichier")
+        XCTAssertEqual(fichiers, 0, "seul l'original contrôlé est partagé, jamais une reconstitution")
+    }
+
+    func testPartageEcritLaCopieDeLOriginalControle() async throws {
+        let port = PortScripte()
+        let copie = FileManager.default.temporaryDirectory.appendingPathComponent("Contrat-C-1.html")
+        port.poser(details: [detail()])
+        port.poser(original: .success(originalA))
+        port.poser(fichier: .success(copie))
+        let model = try await modele(port)
+        let avantChargement = await model.preparerPartage()
+        XCTAssertNil(avantChargement, "rien à partager avant le contrôle de l'original")
+        await model.charger()
+        let url = await model.preparerPartage()
+        XCTAssertEqual(url, copie)
+        XCTAssertNil(model.erreurPartage)
+        let fichiers = port.compte("fichier")
+        XCTAssertEqual(fichiers, 1)
+    }
+
+    func testPartageEnEchecPublieLeMessageDuPort() async throws {
+        let port = PortScripte()
+        port.poser(details: [detail()])
+        port.poser(original: .success(originalA))
+        port.poser(fichier: .failure(JoleneError(.unknown, FichierContratTemporaire.messageIndisponible)))
+        let model = try await modele(port)
+        await model.charger()
+        let url = await model.preparerPartage()
+        XCTAssertNil(url)
+        XCTAssertEqual(model.erreurPartage, FichierContratTemporaire.messageIndisponible)
+        struct Inconnue: Error {}
+        port.poser(fichier: .failure(Inconnue()))
+        _ = await model.preparerPartage()
+        XCTAssertEqual(model.erreurPartage, FichierContratTemporaire.messageIndisponible, "jamais le détail technique d'une erreur inconnue")
+        port.poser(fichier: .success(FileManager.default.temporaryDirectory))
+        _ = await model.preparerPartage()
+        XCTAssertNil(model.erreurPartage, "un nouvel essai efface le message précédent")
     }
 
     // MARK: - Liste
