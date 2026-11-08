@@ -5,8 +5,10 @@ import Foundation
 /// natives renvoient vers le web avec l'URL canonique (`https://jolene.app/...`, query et fragment
 /// conservés).
 ///
-/// Une route native n'a pas forcément d'écran livré : `DeepLinkIntent.destination` la renvoie vers
-/// Safari tant que la tranche de son écran n'est pas mergée (`DeepLinkIntent.ecranNatifLivre`).
+/// Une route native n'a pas forcément d'écran livré : `DestinationLien.destination` la renvoie vers
+/// Safari tant que la tranche de son écran n'est pas mergée (`DestinationLien.ecranNatifLivre`).
+/// Tout consommateur (coordinateur L1-T10, `EcranNatif(route:)`, taps push) part de
+/// `DestinationLien.destination`, jamais de la route brute. Description masquée : `LienMasque.swift`.
 public enum JoleneRoute: Equatable, Sendable {
     case connexion
     /// `/reset-password` : identifiants extraits de la query et du fragment, `nil` si le lien
@@ -24,9 +26,10 @@ public enum JoleneRoute: Equatable, Sendable {
     case serieDetail(id: String)
     /// Onglet Revenus (`/soignant/mes-gains` et ses alias) ; section issue de `?tab=` ou de l'alias.
     case revenus(section: SectionRevenus)
-    /// Hub du compte, onglet Profil (`Screens/ProfileScreen.swift`) : `/soignant/mon-compte`,
-    /// `parametres`, `parametres-complet` ; `score`, `fiabilite`, `fiabilite-legacy` tant que la page
-    /// score est au lot 4.
+    /// Hub du compte, onglet Profil (`Screens/ProfileScreen.swift`, onglet web
+    /// `/soignant/mon-compte`, `BarreNavigation.tsx` l.37) : `/soignant/mon-compte`, `parametres`,
+    /// `parametres-complet` ; `score`, `fiabilite`, `fiabilite-legacy` tant que la page score est au
+    /// lot 4 (blueprint v2 §3 T3 ; écart assumé : le hub n'affiche pas de score, `DECISIONS_LOT3.md`).
     case monCompte
     /// Édition du profil (lot 3, T9) : `/soignant/profil` et l'alias `reputation`.
     case profil
@@ -84,7 +87,8 @@ public enum RetourConnect: Equatable, Sendable {
     /// `?success=true` (lu comme `searchParams.get('success') === 'true'`, `PageStripeConnect.tsx`
     /// l.28) : relecture forcée du statut, jamais un succès en soi.
     case succes
-    /// `?refresh=true` : lien expiré ; un nouveau lien n'est demandé que sur un tap.
+    /// `?refresh=true` (`refresh_url`, `stripe-connect-onboard/index.ts` l.202) : lien expiré ; un
+    /// nouveau lien n'est demandé que sur un tap. Ajout natif : le web ne lit jamais `refresh`.
     case rafraichir
 
     /// `success` l'emporte sur `refresh`, comme le web qui ne lit que `success`.

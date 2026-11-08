@@ -212,8 +212,10 @@ final class LinksRouterTests: XCTestCase {
         }
     }
 
-    /// `?success=` et `?refresh=` lus comme `searchParams.get(...) === 'true'` (`PageStripeConnect.tsx`
-    /// l.27-28) : valeur exacte, première occurrence, décodage `x-www-form-urlencoded`.
+    /// `?success=` lu comme `searchParams.get('success') === 'true'` (`PageStripeConnect.tsx` l.28) :
+    /// valeur exacte, première occurrence, décodage `x-www-form-urlencoded`. `?refresh=` vient de la
+    /// `refresh_url` de `stripe-connect-onboard/index.ts` l.202 ; le web ne le lit jamais :
+    /// `RetourConnect.rafraichir` est un ajout natif, lu avec la même règle.
     func testRetourStripeConnectStrict() {
         let cas: [(String, RetourConnect?)] = [
             ("", nil),

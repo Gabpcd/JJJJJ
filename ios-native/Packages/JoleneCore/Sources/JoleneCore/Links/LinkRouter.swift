@@ -21,14 +21,14 @@ import Foundation
 /// | `/soignant/mes-gains` (`?tab=` → section, lot 3)  | `.revenus(section:)`              |
 /// | alias `mes-factures-honoraires`, `mes-avances`, `bulletins-paie` (`Navigate`, l.395-397) | `.revenus(section: .factures / .avances / .bulletins)` |
 /// | `/soignant/profil`, `reputation` (lot 3)          | `.profil` (édition)               |
-/// | `/soignant/mon-compte`, `parametres`, `parametres-complet` ; `score`, `fiabilite`, `fiabilite-legacy` (page score au lot 4) | `.monCompte` (hub) |
+/// | `/soignant/mon-compte`, `parametres`, `parametres-complet` ; `score`, `fiabilite`, `fiabilite-legacy` (page score au lot 4, écart assumé) | `.monCompte` (hub) |
 /// | `/soignant/notifications` (lot 3)                 | `.notifications`                  |
 /// | `/soignant/parametres/notifications` (lot 3)      | `.parametresNotifications`        |
 /// | `/soignant/stripe-connect` (`?success=true` / `?refresh=true`, lot 3) | `.stripeConnect(retour:)` |
 /// | `/etablissement/*`, `/etab/invitation/*`          | `.etablissement(URL)`             |
 /// | tout le reste (`/admin/*`, `/groupe/*`, `/contrat/*`, `/auth/psc/callback`, `/inscription/etablissement`, `/inscription/soignant/completion`, autres `/inscription/*`, autres `/soignant/*`, chemins hors AASA) | `.safari(URL)` |
 ///
-/// Le routeur ne dit pas si l'écran d'une route native est livré : `DeepLinkIntent` renvoie vers
+/// Le routeur ne dit pas si l'écran d'une route native est livré : `DestinationLien` renvoie vers
 /// Safari une route dont la tranche d'écran n'est pas encore mergée. Limite connue : `?tab=` n'est
 /// lu que pour Revenus ; les autres onglets en query (`?tab=passees`) ne sont pas portés.
 public enum LinkRouter {
@@ -47,7 +47,7 @@ public enum LinkRouter {
     }
 
     /// Route d'un Universal Link et URL canonique du lien (`https://jolene.app` + chemin, query et
-    /// fragment), reprise par `DeepLinkIntent` pour un renvoi Safari.
+    /// fragment), reprise par `DestinationLien` pour un renvoi Safari.
     static func routage(url: URL) -> (route: JoleneRoute, canonique: URL)? {
         guard url.scheme?.lowercased() == "https",
               let host = url.host?.lowercased(), AASAPatterns.hosts.contains(host),
