@@ -28,6 +28,19 @@ final class DemoNotificationsGatewayTests: XCTestCase {
         XCTAssertEqual(liste.compactMap(\.creeLe), liste.compactMap(\.creeLe).sorted(by: >), "cree_le décroissant")
     }
 
+    /// Revue L3-T5, m10 : mêmes règles que la gateway Supabase (`order=cree_le.desc.nullsfirst`, parité du DESC sans
+    /// suffixe du web) : une ligne sans `cree_le` vient en tête, puis les autres du plus récent au plus ancien.
+    func testTriNullsFirstCommeSupabase() async throws {
+        func ligne(_ id: String, _ creeLe: String?) -> NotificationJolene {
+            NotificationJolene(id: id, type: "SYSTEM", titre: "Démonstration · \(id)", corps: "c", lue: true, creeLe: creeLe)
+        }
+        let lignes = [ligne("ancienne", "2026-11-01T08:00:00.000Z"), ligne("sans-date", nil),
+                      ligne("recente", "2026-11-01T22:00:00.000Z")]
+        let gateway = DemoNotificationsGateway(charger: { lignes })
+        let liste = try await gateway.liste(context: DemoWorld.context)
+        XCTAssertEqual(liste.map(\.id), ["sans-date", "recente", "ancienne"])
+    }
+
     func testAutreCompteRefuse() async {
         let gateway = DemoNotificationsGateway()
         let autre = MissionReadContext(userId: "autre", email: nil, profile: SoignantProfile(id: "autre", profession: "IDE"))

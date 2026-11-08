@@ -53,6 +53,7 @@ final class DemoPushTests: JoleneUITestCase {
     func testAppareilNonDemandeAucunPromptNiCarte() throws {
         launchDemo() // défaut démo : autorisation jamais demandée
         signInDemo()
+        let espaceOuvert = Date()
         aucuneAlerte()
         openProfile()
         let list = element("profile-list")
@@ -65,8 +66,10 @@ final class DemoPushTests: JoleneUITestCase {
                        "Jamais demandé, canal inconnu dans le hub : aucune carte, rien n'est affirmé")
         XCTAssertFalse(element("push-ouvrir-reglages").exists)
         aucuneAlerte()
-        // T5 : 1re session démo (compteur en mémoire vive) : jamais de pré-prompt (D1).
-        XCTAssertFalse(element("push-preprompt").exists, "1re session : aucun pré-prompt")
+        // T5 : 1re session démo (compteur en mémoire vive) : jamais de pré-prompt (D1). L'absence n'est affirmée
+        // qu'une fois le délai d'affichage écoulé (revue L3-T5, m7 : avant 5 s, elle ne prouverait rien).
+        attendreLaFinDuDelaiDuPrePrompt(depuis: espaceOuvert)
+        XCTAssertFalse(element("push-preprompt").exists, "1re session : aucun pré-prompt, délai écoulé")
         record("\(proofPrefix)-push-non-demande")
     }
 
@@ -87,9 +90,9 @@ final class DemoPushTests: JoleneUITestCase {
 
     // Tap à froid simulé (`-JOLENE_SIMULER_PUSH <TYPE>[:<valeur>][:<lien>]`, DEBUG démo) : mémorisé avant la session,
     // rejoué par le premier espace prêt après la connexion, rôle lu dans le snapshot (blueprint §2.5). Six types
-    // ouvrent un écran natif ; un renvoi web (litige) est vérifié par la route présentée (`push-tap-cible`, DEBUG),
-    // faute de présentateur `.safari` avant L1-T10. Les autres types (factures, paiements, préférences) sont
-    // prouvés au niveau 1 (`PushTapIntentTests.testCiblesDesTypesPrincipaux`).
+    // ouvrent un écran natif ; les renvois web (litige, contrat à signer) sont vérifiés par la route présentée
+    // (`push-tap-cible`, DEBUG et démo seulement), faute de présentateur `.safari` avant L1-T10. Les autres types
+    // (factures, paiements, préférences) sont prouvés au niveau 1 (`PushTapIntentTests.testCiblesDesTypesPrincipaux`).
 
     func testTapRappelMissionOuvreLeDetail() throws {
         try tapOuvreLeDetail("RAPPEL_MISSION:demo-assignee-001", titre: "Démonstration · Mission assignée 1",
@@ -135,6 +138,21 @@ final class DemoPushTests: JoleneUITestCase {
         }
         XCTAssertEqual(element("push-tap-cible").label, "notifications")
         record("\(proofPrefix)-push-tap-centre")
+    }
+
+    /// Blueprint §3 T5 : `CONTRAT_A_SIGNER:contrat_id` → `/contrat/<id>` (renvoi web tant que l'écran du lot 2 n'est
+    /// pas intégré, aucun présentateur `.safari` avant L1-T10) : route présentée vérifiée, l'espace reste affiché.
+    func testTapContratASignerVersLeWebDuContrat() throws {
+        launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", "CONTRAT_A_SIGNER:contrat_id=demo-contrat-001"])
+        signInDemo()
+        let cible = element("push-tap-cible")
+        require("Le tap est présenté (renvoi web du contrat)", timeout: 30) { cible.exists }
+        XCTAssertEqual(cible.label, "safari https://jolene.app/contrat/demo-contrat-001", "page web canonique du contrat")
+        XCTAssertTrue(containerVisible(element("accueil-screen")), "sans présentateur `.safari` (L1-T10), l'espace reste affiché")
+        XCTAssertFalse(element("access-blocked").exists)
+        XCTAssertFalse(element("env-blocked").exists)
+        aucuneAlerte()
+        record("\(proofPrefix)-push-tap-contrat")
     }
 
     func testTapLitigeVersLeWebSansEcranBloquant() throws {
@@ -218,6 +236,21 @@ final class DemoPushTests: JoleneUITestCase {
         require("Le bouton retour est disponible") { self.visible(retour) }
         retour.tap()
         require("Retour à l'Accueil") { self.containerVisible(self.element("accueil-screen")) && !titre.exists }
+    }
+
+    /// Délai d'affichage du pré-prompt après l'ouverture de l'espace (`PrePromptPush.delaiAffichage`, JoleneCore,
+    /// web `DemandePermissionPush.tsx` l.79), plus une marge pour le rendu.
+    static let delaiPrePrompt: TimeInterval = 5
+    static let margePrePrompt: TimeInterval = 2
+
+    /// Attend que le délai du pré-prompt soit écoulé depuis `debut` (attente inversée : aucune condition, durée
+    /// bornée), pour qu'une absence affirmée ensuite ne soit pas vide.
+    private func attendreLaFinDuDelaiDuPrePrompt(depuis debut: Date) {
+        let reste = Self.delaiPrePrompt + Self.margePrePrompt - Date().timeIntervalSince(debut)
+        guard reste > 0 else { return }
+        let ecoule = XCTestExpectation(description: "délai du pré-prompt écoulé")
+        ecoule.isInverted = true
+        wait(for: [ecoule], timeout: reste)
     }
 
     /// Aucune alerte au login (D1) : ni alerte de l'app, ni feuille SpringBoard (garde de câblage en démo,

@@ -9,11 +9,14 @@ import XCTest
 ///   `formatDistanceToNow` (« il y a environ 2 heures »), « Voir » sur les seules destinations présentables ;
 /// - tap sur une non lue : marquée lue (relue dans l'acteur démo) puis ouverture du détail de la mission ; au
 ///   retour, la pastille a disparu ; une non lue vers Mes missions bascule sur l'onglet ;
-/// - lignes déjà lues vers un renvoi web (factures, Stripe, préférences, litiges) : pas de bouton tant que le
-///   présentateur `.safari` (L1-T10) n'est pas injecté (jamais un bouton sans effet) ;
+/// - lignes déjà lues vers un renvoi web (factures, Stripe, préférences, litiges) ou sans lien : chacune amenée à
+///   l'écran et rendue, puis affirmée sans bouton ni « Voir » tant que le présentateur `.safari` (L1-T10) n'est pas
+///   injecté (jamais un bouton sans effet) ;
 /// - aucune requête réseau (`network-sentinel`).
-/// Les règles (relecture, échec du marquage, lien invalide, epoch) sont prouvées au niveau 1
-/// (`CentreNotificationsTests`, `DemoNotificationsGatewayTests`, `SupabaseNotificationsGatewayTests`).
+/// Les règles (relecture, échec du marquage et sa réconciliation, annulation, lien invalide, epoch, échec du
+/// tirer-pour-rafraîchir) sont prouvées au niveau 1 (`CentreNotificationsTests`, `DemoNotificationsGatewayTests`,
+/// `SupabaseNotificationsGatewayTests`), comme la relecture du compteur de l'Accueil après une lecture
+/// (`AccueilModelTests`, jeton de péremption) : le compteur démo est figé par `demo-dashboard.json`.
 final class DemoNotificationsTests: JoleneUITestCase {
     func testCentreDepuisLAccueilMarquerLuePuisOuvrir() throws {
         launchDemo()
@@ -40,14 +43,24 @@ final class DemoNotificationsTests: JoleneUITestCase {
         for fragment in ["Démonstration · Rappel de mission", "il y a environ 2 heures", "Voir"] {
             XCTAssertTrue(libelle.contains(fragment), "« \(fragment) » absent de « \(libelle) »")
         }
-        // Déjà lues, renvoi web sans présentateur `.safari` : aucune action possible, donc aucun bouton.
-        for id in ["003", "004", "005", "006", "007"] {
-            XCTAssertFalse(app.buttons.matching(identifier: "notification-demo-notification-\(id)").firstMatch.exists,
-                           "ligne \(id) : jamais un bouton sans effet")
-        }
+        XCTAssertEqual(premiere.elementType, .button, "non lue vers un écran natif : un bouton")
         record("\(proofPrefix)-notifications-liste")
 
-        // Non lue → marquée lue (relue) → détail de la mission démo.
+        // Déjà lues, renvoi web sans présentateur `.safari` : aucune action possible, donc aucun bouton. Chaque ligne
+        // est d'abord amenée à l'écran et exigée rendue (la pile est paresseuse : une ligne non rendue rendrait
+        // l'assertion négative vide, revue L3-T5 m7), puis affirmée non bouton.
+        for id in ["003", "004", "005", "006", "007"] {
+            let ligne = element("notification-demo-notification-\(id)")
+            scrollTo(ligne, in: centre)
+            require("La ligne \(id) est rendue") { ligne.exists }
+            XCTAssertNotEqual(ligne.elementType, .button, "ligne \(id) : jamais un bouton sans effet")
+            XCTAssertFalse(app.buttons.matching(identifier: "notification-demo-notification-\(id)").firstMatch.exists,
+                           "ligne \(id) : jamais un bouton sans effet")
+            XCTAssertFalse(ligne.label.contains("Voir"), "ligne \(id) : pas de « Voir » sans destination présentable")
+        }
+
+        // Non lue → marquée lue (relue) → détail de la mission démo (retour en haut de la liste d'abord).
+        scrollTo(premiere, in: centre, downward: false)
         degager(premiere, dans: centre)
         premiere.tap()
         let titre = element("mission-detail-title")
