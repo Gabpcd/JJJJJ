@@ -43,6 +43,24 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.role is SupabaseRoleGateway)
         XCTAssertTrue(gateways.missions is SupabaseMissionsGateway)
         XCTAssertEqual(gateways.clock.now(), Date(timeIntervalSince1970: 1))
+        XCTAssertTrue(gateways.audit is SupabaseAuditGateway)
+        XCTAssertTrue(gateways.flags is SupabaseFlagsGateway)
+        XCTAssertTrue(gateways.compte is SupabaseAccountGateway)
+    }
+
+    /// Aucune liste propre à ce monde : les ports encore stubs côté Supabase doivent être
+    /// exactement ceux du monde démo (`DemoWorld.gateways()`, figés par la source unique
+    /// `DemoWorldTests.portsEnAttenteLot1`). Une PR qui câble un port dans un seul monde fait
+    /// diverger les deux ensembles et rougit ce test ; T12 exige `unwiredPorts.isEmpty`.
+    func testAucunPortNonCable() {
+        let supabase = SupabaseGateways.make(client: TestClient.make()).unwiredPorts
+        let demo = DemoWorld.gateways().unwiredPorts
+        XCTAssertEqual(supabase, demo,
+                       "un port doit être câblé dans SupabaseGateways.make(client:) ET DemoWorld.gateways() dans la même PR")
+        XCTAssertFalse(supabase.contains("audit"), "T1 câble l'audit")
+        XCTAssertFalse(supabase.contains("flags"), "T1 câble les drapeaux")
+        XCTAssertFalse(supabase.contains("dashboard"), "T3 câble le tableau de bord")
+        XCTAssertFalse(supabase.contains("compte"), "T8 câble la suppression de compte")
     }
 
     func testClientOptionsUsePkceInjectedStorageAndJoleneHeader() {

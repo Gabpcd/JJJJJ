@@ -22,8 +22,7 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selection) {
             NavigationStack {
-                PlaceholderScreen(titre: "Accueil", identifier: "placeholder-accueil",
-                                  description: "Votre tableau de bord et vos prochaines missions arrivent au lot 1.")
+                AccueilScreen(session: session, snapshot: snapshot) { selection = $0 }
             }
             .tabItem { Label("Accueil", systemImage: "house") }
             .tag(Tab.accueil)
@@ -60,5 +59,6 @@ struct MainTabView: View {
             .accessibilityIdentifier("tab-profil")
         }
         .tint(JoleneColor.rose700)
+        // Fond de carte (`carteTuiles`) : injecté à la racine par `RootView` (revue T4a), hérité ici.
     }
 }

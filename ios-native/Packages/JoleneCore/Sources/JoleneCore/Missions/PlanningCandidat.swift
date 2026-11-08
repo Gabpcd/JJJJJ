@@ -82,11 +82,15 @@ public enum PlanningCandidatRules {
                 || creneau.finRenseignee.flatMap(PlanningHorlogeParis.instant) == nil
         }
         let exact = !erreur && !planifies.isEmpty && !planningIncomplet && !illisible
+        // Millisecondes entières, comme `getTime()` : `timeIntervalSince` en secondes `Double`
+        // diverge du web au dernier bit sur une borne PostgREST à fraction (vecteur golden
+        // `construirePlanningCandidat/microsecondes-postgrest`).
         let totalHeures = planifies.reduce(0.0) { total, creneau in
             guard let fin = creneau.finRenseignee,
                   let debutDate = PlanningHorlogeParis.instant(creneau.debut),
                   let finDate = PlanningHorlogeParis.instant(fin) else { return total }
-            return total + max(0, finDate.timeIntervalSince(debutDate) / 3600)
+            let ecartMs = DateHeureParis.millisecondes(finDate) - DateHeureParis.millisecondes(debutDate)
+            return total + max(0, Double(ecartMs) / 3_600_000)
         }
         var periodeEtendue = planifies.count > 1
         if !periodeEtendue, let premier = planifies.first, let fin = premier.finRenseignee,

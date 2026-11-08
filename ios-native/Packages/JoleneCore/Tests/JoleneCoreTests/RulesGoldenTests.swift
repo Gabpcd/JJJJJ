@@ -92,7 +92,9 @@ struct VecteurGolden: Decodable {
 /// `scripts/mobile/export-golden-vectors.mjs` (règle : si un vecteur diverge,
 /// on corrige le port Swift, jamais le vecteur).
 enum Golden {
-    static let fichiers = ["date-heure-paris", "format-mission", "heures-hebdomadaires-mission", "disponibilite-pointage"]
+    static let fichiers = ["date-heure-paris", "format-mission", "heures-hebdomadaires-mission", "disponibilite-pointage",
+                           // Lot 1, T2 : planning candidat, sélection de série, complétude du planning.
+                           "planning-candidat", "selection-serie-candidat", "completude-planning-mission"]
     static let minimumTotal = 200
 
     struct FichierIntrouvable: Error, CustomStringConvertible {

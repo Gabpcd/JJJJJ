@@ -46070,7 +46070,7 @@ BEGIN
           'montant_majoration_nuit', COALESCE(m.montant_majoration_nuit, 0),
           'montant_majoration_dimanche', COALESCE(m.montant_majoration_dimanche, 0),
           'montant_majoration_ferie', COALESCE(m.montant_majoration_ferie, 0),
-          'score', COALESCE(ms.score_global, 0),
+          'score', ms.score_global,
           'breakdown', COALESCE(ms.breakdown, '{}'::jsonb),
           'paiement_rapide', (
             v_flag_pr AND m.type_contrat_recherche = 'LIBERAL'

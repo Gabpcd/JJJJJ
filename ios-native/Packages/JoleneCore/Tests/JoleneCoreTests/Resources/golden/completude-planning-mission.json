@@ -1,0 +1,1753 @@
+[
+  {
+    "name": "analyserCompletudePlanningMission/dst-mars-nuit-11h",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 1
+      },
+      "creneaux": [
+        {
+          "id": "u",
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "u",
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 11
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/dst-octobre-nuit-13h",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 1
+      },
+      "creneaux": [
+        {
+          "id": "u",
+          "debut": "2026-10-24T20:00:00+02:00",
+          "fin": "2026-10-25T08:00:00+01:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "u",
+          "debut": "2026-10-24T20:00:00+02:00",
+          "fin": "2026-10-25T08:00:00+01:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 13
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/duree-tiers-heure",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 1
+      },
+      "creneaux": [
+        {
+          "id": "u",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T15:20:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "u",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T15:20:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 7.333333333333333
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/legacy-sans-offset",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 1
+      },
+      "creneaux": [
+        {
+          "id": "u",
+          "debut": "2026-07-06T08:00:00",
+          "fin": "2026-07-06T15:30",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "u",
+          "debut": "2026-07-06T08:00:00",
+          "fin": "2026-07-06T15:30",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 7.5
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/ligne-debut-illisible",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 1
+      },
+      "creneaux": [
+        {
+          "id": "u",
+          "debut": "pas une date",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/ligne-duree-nulle",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 1
+      },
+      "creneaux": [
+        {
+          "id": "u",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T08:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/ligne-fin-avant-debut",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 1
+      },
+      "creneaux": [
+        {
+          "id": "u",
+          "debut": "2026-07-06T16:00:00+02:00",
+          "fin": "2026-07-06T08:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/ligne-fin-illisible",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 1
+      },
+      "creneaux": [
+        {
+          "id": "u",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "pas une date",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/ligne-fin-vide",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "multi",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-08T16:00:00+02:00",
+        "nb_creneaux": 3
+      },
+      "creneaux": [
+        {
+          "id": "j3",
+          "debut": "2026-07-08T08:00:00+02:00",
+          "fin": "2026-07-08T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "vide",
+          "debut": "2026-07-07T08:00:00+02:00",
+          "fin": "",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/ligne-plus-de-24h-valide",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 1
+      },
+      "creneaux": [
+        {
+          "id": "u",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-07T10:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "u",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-07T10:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 26
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/ligne-sans-fin-comptee-brute",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "multi",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-08T16:00:00+02:00",
+        "nb_creneaux": 3
+      },
+      "creneaux": [
+        {
+          "id": "j3",
+          "debut": "2026-07-08T08:00:00+02:00",
+          "fin": "2026-07-08T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "ouvert",
+          "debut": "2026-07-07T08:00:00+02:00",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/ligne-sans-fin-en-plus",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "multi",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-08T16:00:00+02:00",
+        "nb_creneaux": 3
+      },
+      "creneaux": [
+        {
+          "id": "j3",
+          "debut": "2026-07-08T08:00:00+02:00",
+          "fin": "2026-07-08T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j2",
+          "debut": "2026-07-07T08:00:00+02:00",
+          "fin": "2026-07-07T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "ouvert",
+          "debut": "2026-07-09T08:00:00+02:00",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/meme-debut-ordre-stable",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "multi",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-08T16:00:00+02:00",
+        "nb_creneaux": 2
+      },
+      "creneaux": [
+        {
+          "id": "b",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "a",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T12:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "b",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "a",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T12:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 2,
+      "dureeTotaleHeures": 12
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/millisecondes",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 1
+      },
+      "creneaux": [
+        {
+          "id": "u",
+          "debut": "2026-07-06T08:00:00.250+02:00",
+          "fin": "2026-07-06T16:00:00.750+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "u",
+          "debut": "2026-07-06T08:00:00.250+02:00",
+          "fin": "2026-07-06T16:00:00.750+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8.00013888888889
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-0-effectif-seul-repli",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 0
+      },
+      "creneaux": [
+        {
+          "id": "effectif",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-0-pause-seule-repli",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 0
+      },
+      "creneaux": [
+        {
+          "id": "pause",
+          "debut": "2026-07-06T12:00:00+02:00",
+          "fin": "2026-07-06T12:30:00+02:00",
+          "est_pause": true,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-0-repli-sans-ligne",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 0
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-0-une-ligne-aucun-repli",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 0
+      },
+      "creneaux": [
+        {
+          "id": "l1",
+          "debut": "2026-07-06T09:00:00+02:00",
+          "fin": "2026-07-06T17:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-absent-creneaux-absents",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00"
+      }
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-absent-effectif-seul-repli",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00"
+      },
+      "creneaux": [
+        {
+          "id": "effectif",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-absent-pause-seule-repli",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00"
+      },
+      "creneaux": [
+        {
+          "id": "pause",
+          "debut": "2026-07-06T12:00:00+02:00",
+          "fin": "2026-07-06T12:30:00+02:00",
+          "est_pause": true,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-absent-repli-sans-ligne",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00"
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-absent-une-ligne-aucun-repli",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00"
+      },
+      "creneaux": [
+        {
+          "id": "l1",
+          "debut": "2026-07-06T09:00:00+02:00",
+          "fin": "2026-07-06T17:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-moins-1-effectif-seul-repli",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": -1
+      },
+      "creneaux": [
+        {
+          "id": "effectif",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-moins-1-pause-seule-repli",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": -1
+      },
+      "creneaux": [
+        {
+          "id": "pause",
+          "debut": "2026-07-06T12:00:00+02:00",
+          "fin": "2026-07-06T12:30:00+02:00",
+          "est_pause": true,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-moins-1-repli-sans-ligne",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": -1
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-moins-1-une-ligne-aucun-repli",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": -1
+      },
+      "creneaux": [
+        {
+          "id": "l1",
+          "debut": "2026-07-06T09:00:00+02:00",
+          "fin": "2026-07-06T17:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-null-effectif-seul-repli",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": null
+      },
+      "creneaux": [
+        {
+          "id": "effectif",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-null-pause-seule-repli",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": null
+      },
+      "creneaux": [
+        {
+          "id": "pause",
+          "debut": "2026-07-06T12:00:00+02:00",
+          "fin": "2026-07-06T12:30:00+02:00",
+          "est_pause": true,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-null-repli-sans-ligne",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": null
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/nb-null-une-ligne-aucun-repli",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": null
+      },
+      "creneaux": [
+        {
+          "id": "l1",
+          "debut": "2026-07-06T09:00:00+02:00",
+          "fin": "2026-07-06T17:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/postgrest-plus-00-00",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": 1
+      },
+      "creneaux": [
+        {
+          "id": "u",
+          "debut": "2026-07-06T06:00:00+00:00",
+          "fin": "2026-07-06T14:00:00+00:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "u",
+          "debut": "2026-07-06T06:00:00+00:00",
+          "fin": "2026-07-06T14:00:00+00:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/repli-24h-exactes",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "nb_creneaux": null,
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-07T08:00:00+02:00"
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-07T08:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 24
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/repli-24h-plus-1s",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "nb_creneaux": null,
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-07T08:00:01+02:00"
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/repli-dates-seules",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "nb_creneaux": null,
+        "id": "p",
+        "debut_le": "2026-07-06",
+        "fin_le": "2026-07-07"
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06",
+          "fin": "2026-07-07",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 24
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/repli-dst-mars-23h",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "nb_creneaux": null,
+        "id": "p",
+        "debut_le": "2026-03-28T20:00:00+01:00",
+        "fin_le": "2026-03-29T20:00:00+02:00"
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T20:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 23
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/repli-dst-octobre-25h",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "nb_creneaux": null,
+        "id": "p",
+        "debut_le": "2026-10-24T20:00:00+02:00",
+        "fin_le": "2026-10-25T20:00:00+01:00"
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/repli-duree-nulle",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "nb_creneaux": null,
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T08:00:00+02:00"
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/repli-enveloppe-illisible",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "nb_creneaux": null,
+        "id": "p",
+        "debut_le": "pas une date",
+        "fin_le": "2026-07-06T16:00:00+02:00"
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/repli-fin-avant-debut",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "nb_creneaux": null,
+        "id": "p",
+        "debut_le": "2026-07-06T16:00:00+02:00",
+        "fin_le": "2026-07-06T08:00:00+02:00"
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/repli-legacy-sans-offset",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "nb_creneaux": null,
+        "id": "p",
+        "debut_le": "2026-07-06T08:00:00",
+        "fin_le": "2026-07-06T16:00:00"
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-p",
+          "debut": "2026-07-06T08:00:00",
+          "fin": "2026-07-06T16:00:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/repli-sans-id",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "nb_creneaux": null,
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00"
+      },
+      "creneaux": []
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-2026-07-06T08:00:00+02:00",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/trois-lignes-nb-1",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "multi",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-08T16:00:00+02:00",
+        "nb_creneaux": 1
+      },
+      "creneaux": [
+        {
+          "id": "j3",
+          "debut": "2026-07-08T08:00:00+02:00",
+          "fin": "2026-07-08T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j2",
+          "debut": "2026-07-07T08:00:00+02:00",
+          "fin": "2026-07-07T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/trois-lignes-nb-2",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "multi",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-08T16:00:00+02:00",
+        "nb_creneaux": 2
+      },
+      "creneaux": [
+        {
+          "id": "j3",
+          "debut": "2026-07-08T08:00:00+02:00",
+          "fin": "2026-07-08T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j2",
+          "debut": "2026-07-07T08:00:00+02:00",
+          "fin": "2026-07-07T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/trois-lignes-nb-3",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "multi",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-08T16:00:00+02:00",
+        "nb_creneaux": 3
+      },
+      "creneaux": [
+        {
+          "id": "j3",
+          "debut": "2026-07-08T08:00:00+02:00",
+          "fin": "2026-07-08T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j2",
+          "debut": "2026-07-07T08:00:00+02:00",
+          "fin": "2026-07-07T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "j1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j2",
+          "debut": "2026-07-07T08:00:00+02:00",
+          "fin": "2026-07-07T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j3",
+          "debut": "2026-07-08T08:00:00+02:00",
+          "fin": "2026-07-08T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 3,
+      "dureeTotaleHeures": 24
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/trois-lignes-nb-4",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "multi",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-08T16:00:00+02:00",
+        "nb_creneaux": 4
+      },
+      "creneaux": [
+        {
+          "id": "j3",
+          "debut": "2026-07-08T08:00:00+02:00",
+          "fin": "2026-07-08T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j2",
+          "debut": "2026-07-07T08:00:00+02:00",
+          "fin": "2026-07-07T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/trois-lignes-plus-pause-et-effectif",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "multi",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-08T16:00:00+02:00",
+        "nb_creneaux": 3
+      },
+      "creneaux": [
+        {
+          "id": "j3",
+          "debut": "2026-07-08T08:00:00+02:00",
+          "fin": "2026-07-08T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j2",
+          "debut": "2026-07-07T08:00:00+02:00",
+          "fin": "2026-07-07T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "pause",
+          "debut": "2026-07-06T12:00:00+02:00",
+          "fin": "2026-07-06T12:30:00+02:00",
+          "est_pause": true,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "effectif",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "j1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j2",
+          "debut": "2026-07-07T08:00:00+02:00",
+          "fin": "2026-07-07T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "j3",
+          "debut": "2026-07-08T08:00:00+02:00",
+          "fin": "2026-07-08T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 3,
+      "dureeTotaleHeures": 24
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/trois-nuits-dst-mars",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "m",
+        "debut_le": "2026-03-27T20:00:00+01:00",
+        "fin_le": "2026-03-30T08:00:00+02:00",
+        "nb_creneaux": 3
+      },
+      "creneaux": [
+        {
+          "id": "n2",
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "n1",
+          "debut": "2026-03-27T20:00:00+01:00",
+          "fin": "2026-03-28T08:00:00+01:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "n3",
+          "debut": "2026-03-29T20:00:00+02:00",
+          "fin": "2026-03-30T08:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "n1",
+          "debut": "2026-03-27T20:00:00+01:00",
+          "fin": "2026-03-28T08:00:00+01:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "n2",
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "n3",
+          "debut": "2026-03-29T20:00:00+02:00",
+          "fin": "2026-03-30T08:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 3,
+      "dureeTotaleHeures": 35
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/vitest-creneau-invalide",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "mission-1",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-08-31T16:00:00+02:00",
+        "nb_creneaux": 1
+      },
+      "creneaux": [
+        {
+          "id": "creneau-1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T07:59:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/vitest-longue-legacy-sans-planning",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "mission-longue-legacy",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-08-31T16:00:00+02:00",
+        "nb_creneaux": null
+      }
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/vitest-nombre-exact",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "mission-1",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-08-31T16:00:00+02:00",
+        "nb_creneaux": 2
+      },
+      "creneaux": [
+        {
+          "id": "creneau-1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "creneau-2",
+          "debut": "2026-08-31T08:00:00+02:00",
+          "fin": "2026-08-31T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "creneau-1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "creneau-2",
+          "debut": "2026-08-31T08:00:00+02:00",
+          "fin": "2026-08-31T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 2,
+      "dureeTotaleHeures": 16
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/vitest-repli-legacy-ponctuel",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "mission-legacy",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-07-06T16:00:00+02:00",
+        "nb_creneaux": null
+      }
+    },
+    "expected": {
+      "complet": true,
+      "creneauxPlanifies": [
+        {
+          "id": "mission-ponctuelle-mission-legacy",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "nombrePlanifie": 1,
+      "dureeTotaleHeures": 8
+    }
+  },
+  {
+    "name": "analyserCompletudePlanningMission/vitest-reponse-tronquee",
+    "input": {
+      "fonction": "analyserCompletudePlanningMission",
+      "mission": {
+        "id": "mission-1",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-08-31T16:00:00+02:00",
+        "nb_creneaux": 2
+      },
+      "creneaux": [
+        {
+          "id": "creneau-1",
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    "expected": {
+      "complet": false,
+      "creneauxPlanifies": [],
+      "nombrePlanifie": 0,
+      "dureeTotaleHeures": 0
+    }
+  }
+]
