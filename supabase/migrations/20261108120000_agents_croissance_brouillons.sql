@@ -23,7 +23,7 @@
 -- 1. Réglages (texte, comme le reste du moteur d'acquisition)
 -- ---------------------------------------------------------------------------
 INSERT INTO public.growth_config (cle, valeur, maj_le) VALUES
-  ('agents_croissance_actifs', 'true', now()),
+  ('agents_croissance_actifs', 'false', now()),
   ('agents_departements_cibles', '75,92,56', now()),
   ('agents_types_cibles', 'EHPAD,HANDICAP,DOMICILE,CENTRE_SANTE,HOPITAL,DIALYSE,ECOLE_SANTE', now()),
   ('agents_prospection_quota_jour', '20', now()),
@@ -1190,12 +1190,64 @@ BEGIN
 END;
 $body$;
 
+-- Interrupteur de la préparation automatique : p_actif NULL = lecture seule.
+-- Active/désactive les deux crons ET growth_config.agents_croissance_actifs.
+-- Les agents n'écrivent que des brouillons : aucun envoi n'en dépend.
+CREATE OR REPLACE FUNCTION public.fn_admin_growth_planification(p_actif boolean DEFAULT NULL)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $body$
+DECLARE
+  v_job record;
+  v_cron boolean := EXISTS (SELECT 1 FROM pg_catalog.pg_extension WHERE extname = 'pg_cron');
+  v_jobs jsonb := '[]'::jsonb;
+BEGIN
+  IF auth.uid() IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Accès admin requis' USING ERRCODE = '42501';
+  END IF;
+
+  IF p_actif IS NOT NULL THEN
+    INSERT INTO public.growth_config (cle, valeur, maj_le)
+    VALUES ('agents_croissance_actifs', CASE WHEN p_actif THEN 'true' ELSE 'false' END, now())
+    ON CONFLICT (cle) DO UPDATE SET valeur = EXCLUDED.valeur, maj_le = now();
+    IF v_cron THEN
+      FOR v_job IN
+        SELECT j.jobid FROM cron.job j
+        WHERE j.jobname IN ('jolene_growth_agents_quotidien', 'jolene_growth_rapport_hebdo')
+      LOOP
+        PERFORM cron.alter_job(job_id := v_job.jobid, active := p_actif);
+      END LOOP;
+    END IF;
+  END IF;
+
+  IF v_cron THEN
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+             'jobname', j.jobname, 'schedule', j.schedule, 'active', j.active)
+             ORDER BY j.jobname), '[]'::jsonb)
+      INTO v_jobs
+    FROM cron.job j
+    WHERE j.jobname IN ('jolene_growth_agents_quotidien', 'jolene_growth_rapport_hebdo');
+  END IF;
+
+  RETURN jsonb_build_object(
+    'actif', private.fn_growth_config('agents_croissance_actifs', 'false') = 'true'
+             AND (NOT v_cron OR NOT EXISTS (
+               SELECT 1 FROM jsonb_array_elements(v_jobs) x WHERE (x->>'active')::boolean IS NOT TRUE)),
+    'pg_cron', v_cron,
+    'jobs', v_jobs);
+END;
+$body$;
+
 REVOKE ALL ON FUNCTION public.fn_admin_growth_entonnoir(integer) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.fn_admin_growth_executer_agents() FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.fn_admin_growth_brouillon_decider(uuid, text, text, text, text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.fn_admin_growth_planification(boolean) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.fn_admin_growth_entonnoir(integer) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.fn_admin_growth_executer_agents() TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.fn_admin_growth_brouillon_decider(uuid, text, text, text, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.fn_admin_growth_planification(boolean) TO authenticated, service_role;
 
 INSERT INTO private.security_definer_inventory (signature, categorie, definition_md5, justification, recense_le)
 SELECT x.signature, 'ADMIN_EST_ADMIN_VALIDE', pg_catalog.md5(p.prosrc), x.justification, pg_catalog.now()
@@ -1205,7 +1257,9 @@ FROM (VALUES
   ('fn_admin_growth_executer_agents()', 'public.fn_admin_growth_executer_agents()',
    'UID non NULL + est_admin() ; lance les agents qui écrivent des brouillons, aucun envoi. Source : 20261108120000_agents_croissance_brouillons.sql'),
   ('fn_admin_growth_brouillon_decider(uuid,text,text,text,text)', 'public.fn_admin_growth_brouillon_decider(uuid,text,text,text,text)',
-   'UID non NULL + est_admin() ; verrou FOR UPDATE, garde STOP fn_sales_outreach_est_interdit et préférences email, journalisation CRM existante ; n''envoie rien. Source : 20261108120000_agents_croissance_brouillons.sql')
+   'UID non NULL + est_admin() ; verrou FOR UPDATE, garde STOP fn_sales_outreach_est_interdit et préférences email, journalisation CRM existante ; n''envoie rien. Source : 20261108120000_agents_croissance_brouillons.sql'),
+  ('fn_admin_growth_planification(boolean)', 'public.fn_admin_growth_planification(boolean)',
+   'UID non NULL + est_admin() ; active/désactive uniquement les deux crons jolene_growth_* (brouillons, aucun envoi) et le drapeau growth_config associé ; NULL = lecture. Source : 20261108120000_agents_croissance_brouillons.sql')
 ) AS x(signature, regsig, justification)
 JOIN pg_catalog.pg_proc p ON p.oid = x.regsig::pg_catalog.regprocedure
 ON CONFLICT (signature) DO UPDATE
@@ -1230,12 +1284,19 @@ BEGIN
   LOOP
     PERFORM cron.unschedule(v_job.jobid);
   END LOOP;
+  -- Créés DÉSACTIVÉS partout (le staging reste fermé, et en production
+  -- l'activation est un geste explicite de la fondatrice depuis l'admin :
+  -- fn_admin_growth_planification(true)).
   -- 06:50 heure de Paris en hiver : brouillons prêts pour la session de 9 h.
-  PERFORM cron.schedule('jolene_growth_agents_quotidien', '50 5 * * *',
-    $job$SELECT private.fn_growth_agents_executer('CRON')$job$);
+  PERFORM cron.alter_job(
+    job_id := cron.schedule('jolene_growth_agents_quotidien', '50 5 * * *',
+      $job$SELECT private.fn_growth_agents_executer('CRON')$job$),
+    active := false);
   -- Lundi 06:15 heure de Paris en hiver : rapport de la semaine écoulée.
-  PERFORM cron.schedule('jolene_growth_rapport_hebdo', '15 5 * * 1',
-    $job$SELECT private.fn_growth_snapshot_hebdo()$job$);
+  PERFORM cron.alter_job(
+    job_id := cron.schedule('jolene_growth_rapport_hebdo', '15 5 * * 1',
+      $job$SELECT private.fn_growth_snapshot_hebdo()$job$),
+    active := false);
 EXCEPTION
   WHEN undefined_table OR invalid_schema_name OR insufficient_privilege THEN
     RAISE NOTICE 'pg_cron indisponible : planification différée';

@@ -46,6 +46,12 @@ interface Execution {
   erreur: string | null;
 }
 
+interface Planification {
+  actif: boolean;
+  pg_cron: boolean;
+  jobs: Array<{ jobname: string; schedule: string; active: boolean }>;
+}
+
 interface RapportHebdo {
   semaine_debut: string;
   donnees: EntonnoirCroissance;
@@ -281,6 +287,8 @@ export default function AdminAgentsCroissance() {
   const [rapports, setRapports] = useState<RapportHebdo[]>([]);
   const [executions, setExecutions] = useState<Execution[]>([]);
   const [lancement, setLancement] = useState(false);
+  const [planif, setPlanif] = useState<Planification | null>(null);
+  const [bascule, setBascule] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
   const chargerFile = useCallback(async () => {
@@ -305,11 +313,26 @@ export default function AdminAgentsCroissance() {
   }, [jours]);
 
   const chargerExecutions = useCallback(async () => {
-    const { data, error } = await db.from('growth_agent_executions')
-      .select('id, agent, declencheur, debut_le, brouillons_crees, erreur')
-      .order('debut_le', { ascending: false }).limit(40);
-    if (!error) setExecutions((data ?? []) as Execution[]);
+    const [exec, plan] = await Promise.all([
+      db.from('growth_agent_executions')
+        .select('id, agent, declencheur, debut_le, brouillons_crees, erreur')
+        .order('debut_le', { ascending: false }).limit(40),
+      db.rpc('fn_admin_growth_planification', { p_actif: null }),
+    ]);
+    if (!exec.error) setExecutions((exec.data ?? []) as Execution[]);
+    if (plan.error) setErreur(plan.error.message); else setPlanif(plan.data as Planification);
   }, []);
+
+  const basculerPlanification = async (actif: boolean) => {
+    setBascule(true);
+    const { data, error } = await db.rpc('fn_admin_growth_planification', { p_actif: actif });
+    setBascule(false);
+    if (error) { toast.error(error.message); return; }
+    setPlanif(data as Planification);
+    toast.success(actif
+      ? 'Préparation automatique activée : brouillons chaque matin à 6 h 50, rapport le lundi. Aucun envoi.'
+      : 'Préparation automatique en pause.');
+  };
 
   useEffect(() => { if (vue === 'file') void chargerFile(); }, [vue, chargerFile]);
   useEffect(() => { if (vue === 'entonnoir') void chargerEntonnoir(); }, [vue, chargerEntonnoir]);
@@ -470,6 +493,33 @@ export default function AdminAgentsCroissance() {
           </TabsContent>
 
           <TabsContent value="agents" className="mt-5 space-y-4">
+            <CardY2K hoverLift={false} data-testid="planification-croissance">
+              <CardY2KContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-semibold text-foreground">Préparation automatique</h3>
+                    {planif === null ? null : planif.actif
+                      ? <BadgeY2K variant="success" size="sm">Activée</BadgeY2K>
+                      : <BadgeY2K variant="warning" size="sm">En pause</BadgeY2K>}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {planif?.actif
+                      ? 'Les agents préparent les brouillons chaque matin à 6 h 50 et figent le rapport le lundi. Rien n’est envoyé sans vous.'
+                      : 'Les agents ne tournent que si vous cliquez sur « Préparer maintenant ». Activez la préparation pour recevoir les brouillons chaque matin.'}
+                  </p>
+                </div>
+                {planif === null ? null : (
+                  <BoutonY2K
+                    size="sm"
+                    variant={planif.actif ? 'secondary' : 'primary'}
+                    onClick={() => basculerPlanification(!planif.actif)}
+                    loading={bascule}
+                  >
+                    {planif.actif ? 'Mettre en pause' : 'Activer la préparation automatique'}
+                  </BoutonY2K>
+                )}
+              </CardY2KContent>
+            </CardY2K>
             <div className="grid gap-4 lg:grid-cols-2">
               {(Object.keys(AGENTS) as AgentCroissance[]).map((a) => {
                 const derniere = derniereParAgent.get(a);
@@ -491,7 +541,7 @@ export default function AdminAgentsCroissance() {
               })}
             </div>
             <p className="text-xs text-muted-foreground">
-              Planification : agents chaque jour à 6 h 50 (heure de Paris en hiver), rapport hebdomadaire le lundi à 6 h 15. Réglages dans
+              Horaires (heure de Paris en hiver) : agents chaque jour à 6 h 50, rapport hebdomadaire le lundi à 6 h 15. Réglages dans
               growth_config (départements cibles, quota quotidien, signature, mention d’opposition).
             </p>
           </TabsContent>

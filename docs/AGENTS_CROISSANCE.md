@@ -101,9 +101,16 @@ Ce sont quatre routines SQL quotidiennes, plus un rapport hebdomadaire. **Aucune
 que ce soit** : ni pg_net, ni Resend, ni SMS, ni publication. Elles n'appellent pas de LLM, donc
 ne coûtent rien en tokens.
 
+Les deux crons (`jolene_growth_agents_quotidien`, `jolene_growth_rapport_hebdo`) sont créés
+**désactivés**, en production comme sur le staging, qui doit rester sans cron actif. La fondatrice
+les active depuis l'onglet Agents (« Activer la préparation automatique »). Ce bouton appelle
+`fn_admin_growth_planification(true)` et ne demande aucun SQL manuel en production.
+« Préparer maintenant » lance les agents à la demande, que la préparation automatique soit active
+ou non.
+
 | Agent | Quand | Produit |
 |---|---|---|
-| Prospection établissements | chaque jour à 05:50 UTC | Jusqu'à 20 premiers emails par jour (file plafonnée à 60), plus les relances étapes 2 et 3 des contacts CRM échus. Détail ci-dessous. |
+| Prospection établissements | chaque jour à 05:50 UTC, une fois activé | Jusqu'à 20 premiers emails par jour (file plafonnée à 60), plus les relances étapes 2 et 3 des contacts CRM échus. Détail ci-dessous. |
 | Posts sociaux | chaque jour (idempotent à la semaine) | 1 post Facebook par département × {AS, IDE} et 1 post LinkedIn par semaine. Chiffres réels : missions ouvertes réelles, ou à défaut données BMO publiques. Groupes suggérés. |
 | Missions à pourvoir | chaque jour | 1 post par mission réelle ouverte depuis plus de 6 h, sans candidature, avec lien `/mission/:id` et UTM |
 | Réactivation | chaque jour | Email aux inscrits réels bloqués (documents, vérification, candidature, première mission), au plus un tous les 14 jours, `preferences_notifications` respecté |
@@ -163,13 +170,15 @@ Il n'y a aucune mention réglementaire.
 ## 6. Ce qui attend le feu vert de Gabrielle
 
 1. **Merge de cette PR** (tiering B9 : nouvelles tables RLS, RPC SECURITY DEFINER, GRANT ; HARD
-   STOP n°4 sur le wording du §5). Après le merge, les crons produisent des brouillons dès le
-   lendemain 06:50 (heure de Paris).
-2. **Premiers envois réels** : c'est la fondatrice qui valide et envoie chaque email depuis son Gmail.
-3. **Réactivation des imports BOAMP, BMO et FINESS** (crons en pause) : à rejouer après correction
+   STOP n°4 sur le wording du §5).
+2. **Activation** : dans Admin → Agents de croissance → onglet Agents, cliquer sur « Activer la
+   préparation automatique ». Les brouillons arrivent ensuite chaque matin à 06:50 (heure de Paris).
+   On peut aussi cliquer sur « Préparer maintenant » pour en avoir tout de suite.
+3. **Premiers envois réels** : c'est la fondatrice qui valide et envoie chaque email depuis son Gmail.
+4. **Réactivation des imports BOAMP, BMO et FINESS** (crons en pause) : à rejouer après correction
    de l'authentification de service, une source à la fois, en surveillant le CPU.
-4. **`automatisations_marketing_actives=true`** (relance, digest, avis) : non recommandé avant
+5. **`automatisations_marketing_actives=true`** (relance, digest, avis) : non recommandé avant
    d'avoir ajouté le lien de désinscription en 1 clic et le respect de `preferences_notifications`
    dans ces trois Edge Functions.
-5. **Activer Vercel Web Analytics** (ou un équivalent sans cookie) pour mesurer le trafic SEO.
-6. **Instruction juridique** de l'argument « vacation directe vs intérim » (§3) avant tout usage public.
+6. **Activer Vercel Web Analytics** (ou un équivalent sans cookie) pour mesurer le trafic SEO.
+7. **Instruction juridique** de l'argument « vacation directe vs intérim » (§3) avant tout usage public.

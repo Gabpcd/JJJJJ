@@ -19,12 +19,14 @@ BEGIN
   -- 1. Droits : RPC admin fermées à anon, primitives private fermées à tous.
   IF has_function_privilege('anon', 'public.fn_admin_growth_brouillon_decider(uuid,text,text,text,text)', 'EXECUTE')
      OR has_function_privilege('anon', 'public.fn_admin_growth_entonnoir(integer)', 'EXECUTE')
-     OR has_function_privilege('anon', 'public.fn_admin_growth_executer_agents()', 'EXECUTE') THEN
+     OR has_function_privilege('anon', 'public.fn_admin_growth_executer_agents()', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.fn_admin_growth_planification(boolean)', 'EXECUTE') THEN
     RAISE EXCEPTION 'RPC croissance ouverte à anon';
   END IF;
   IF NOT has_function_privilege('authenticated', 'public.fn_admin_growth_brouillon_decider(uuid,text,text,text,text)', 'EXECUTE')
      OR NOT has_function_privilege('authenticated', 'public.fn_admin_growth_entonnoir(integer)', 'EXECUTE')
-     OR NOT has_function_privilege('authenticated', 'public.fn_admin_growth_executer_agents()', 'EXECUTE') THEN
+     OR NOT has_function_privilege('authenticated', 'public.fn_admin_growth_executer_agents()', 'EXECUTE')
+     OR NOT has_function_privilege('authenticated', 'public.fn_admin_growth_planification(boolean)', 'EXECUTE') THEN
     RAISE EXCEPTION 'GRANT authenticated manquant sur une RPC croissance';
   END IF;
   IF has_function_privilege('authenticated', 'private.fn_growth_agents_executer(text)', 'EXECUTE')
@@ -173,6 +175,12 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN v_refus := true;
   END;
   IF NOT v_refus THEN RAISE EXCEPTION 'Un non-admin a pu lire l''entonnoir'; END IF;
+  v_refus := false;
+  BEGIN
+    PERFORM public.fn_admin_growth_planification(true);
+  EXCEPTION WHEN insufficient_privilege THEN v_refus := true;
+  END;
+  IF NOT v_refus THEN RAISE EXCEPTION 'Un non-admin a pu activer la planification'; END IF;
   IF EXISTS (SELECT 1 FROM public.growth_brouillons) THEN
     RAISE EXCEPTION 'RLS : un non-admin lit growth_brouillons';
   END IF;
@@ -227,13 +235,34 @@ BEGIN
     RAISE EXCEPTION 'Une opposition tardive doit rejeter le brouillon : %', v_res;
   END IF;
 
-  -- 8. Crons planifiés quand pg_cron est présent.
-  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') AND (
-       NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'jolene_growth_agents_quotidien' AND active)
-    OR NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'jolene_growth_rapport_hebdo' AND active)
-    OR EXISTS (SELECT 1 FROM cron.job WHERE jobname LIKE 'jolene_growth_%' AND command ~* '(net\.http|send-email|resend)')
-  ) THEN
-    RAISE EXCEPTION 'Crons croissance absents ou contenant un appel d''envoi';
+  -- 8. Crons créés désactivés ; seul l'interrupteur admin les active.
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    IF (SELECT count(*) FROM cron.job WHERE jobname IN ('jolene_growth_agents_quotidien', 'jolene_growth_rapport_hebdo')) <> 2
+       OR EXISTS (SELECT 1 FROM cron.job WHERE jobname LIKE 'jolene_growth_%' AND active)
+       OR EXISTS (SELECT 1 FROM cron.job WHERE jobname LIKE 'jolene_growth_%' AND command ~* '(net\.http|send-email|resend)') THEN
+      RAISE EXCEPTION 'Crons croissance absents, actifs à la migration ou contenant un appel d''envoi';
+    END IF;
+    PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+    PERFORM set_config('request.jwt.claims', jsonb_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    v_res := public.fn_admin_growth_planification(NULL);
+    IF (v_res->>'actif')::boolean IS NOT FALSE THEN
+      RAISE EXCEPTION 'Lecture de planification : inactif attendu — %', v_res;
+    END IF;
+    v_res := public.fn_admin_growth_planification(true);
+    EXECUTE 'RESET ROLE';
+    IF (v_res->>'actif')::boolean IS NOT TRUE
+       OR (SELECT count(*) FROM cron.job WHERE jobname LIKE 'jolene_growth_%' AND active) <> 2
+       OR private.fn_growth_config('agents_croissance_actifs', 'false') <> 'true' THEN
+      RAISE EXCEPTION 'Activation admin incomplète — %', v_res;
+    END IF;
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    v_res := public.fn_admin_growth_planification(false);
+    EXECUTE 'RESET ROLE';
+    IF EXISTS (SELECT 1 FROM cron.job WHERE jobname LIKE 'jolene_growth_%' AND active)
+       OR private.fn_growth_config('agents_croissance_actifs', 'true') <> 'false' THEN
+      RAISE EXCEPTION 'Mise en pause admin incomplète — %', v_res;
+    END IF;
   END IF;
 END;
 $test$;

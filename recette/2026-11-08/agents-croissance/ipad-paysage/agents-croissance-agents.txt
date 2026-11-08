@@ -11,6 +11,10 @@
     - tab "Entonnoir"
     - tab "Agents" [selected]
   - tabpanel "Agents":
+    - heading "Préparation automatique" [level=3]
+    - text: Activée
+    - paragraph: Les agents préparent les brouillons chaque matin à 6 h 50 et figent le rapport le lundi. Rien n’est envoyé sans vous.
+    - button "Mettre en pause"
     - heading "Prospection établissements" [level=3]
     - text: Brouillons seulement
     - paragraph: Chaque matin, jusqu’à 20 premiers emails et les relances dues, pour les établissements des marchés pilotes (FINESS), en excluant les oppositions.
@@ -27,4 +31,4 @@
     - text: Brouillons seulement
     - paragraph: Inscrits réels bloqués (documents, vérification, première candidature ou première mission), préférences email respectées.
     - paragraph: "Dernier passage : 08/11/2026 12:05 (manuel) · 0 brouillon(s)"
-    - paragraph: "Planification : agents chaque jour à 6 h 50 (heure de Paris en hiver), rapport hebdomadaire le lundi à 6 h 15. Réglages dans growth_config (départements cibles, quota quotidien, signature, mention d’opposition)."
+    - paragraph: "Horaires (heure de Paris en hiver) : agents chaque jour à 6 h 50, rapport hebdomadaire le lundi à 6 h 15. Réglages dans growth_config (départements cibles, quota quotidien, signature, mention d’opposition)."

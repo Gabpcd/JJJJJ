@@ -61,6 +61,8 @@ async function simulerAgents(page: Page) {
   const decisions: Array<{ p_id: string; p_action: string; p_sujet: string | null }> = [];
   let executions: Array<Record<string, unknown>> = [];
   let lancements = 0;
+  let planifActive = false;
+  const bascules: Array<boolean | null> = [];
   const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-expose-headers': 'content-range' };
 
   await page.route('**/rest/v1/growth_brouillons**', async (route) => {
@@ -78,6 +80,13 @@ async function simulerAgents(page: Page) {
   await page.route('**/rest/v1/rpc/fn_admin_growth_entonnoir', async (route) => {
     expect(route.request().postDataJSON()).toEqual({ p_jours: 7 });
     return route.fulfill({ json: entonnoir, headers: cors });
+  });
+  await page.route('**/rest/v1/rpc/fn_admin_growth_planification', async (route) => {
+    const p = route.request().postDataJSON();
+    bascules.push(p.p_actif);
+    if (p.p_actif !== null) planifActive = p.p_actif;
+    const jobs = ['jolene_growth_agents_quotidien', 'jolene_growth_rapport_hebdo'].map((jobname) => ({ jobname, schedule: jobname.endsWith('hebdo') ? '15 5 * * 1' : '50 5 * * *', active: planifActive }));
+    return route.fulfill({ json: { actif: planifActive, pg_cron: true, jobs }, headers: cors });
   });
   await page.route('**/rest/v1/rpc/fn_admin_growth_executer_agents', async (route) => {
     lancements++;
@@ -111,7 +120,7 @@ async function simulerAgents(page: Page) {
     (window as unknown as { __ouverts: string[] }).__ouverts = [];
     window.open = ((url?: string | URL) => { (window as unknown as { __ouverts: string[] }).__ouverts.push(String(url)); return null; }) as typeof window.open;
   }, { id: ids.user });
-  return { etat, brouillons, decisions, lancements: () => lancements };
+  return { etat, brouillons, decisions, lancements: () => lancements, bascules };
 }
 
 test('admin — agents de croissance : file, validation Gmail, constat d’envoi, opposition, reprise, entonnoir', async ({ page }, info) => {
@@ -190,9 +199,16 @@ test('admin — agents de croissance : file, validation Gmail, constat d’envoi
   await expect(page.getByText('Le premier rapport sera figé lundi matin pour la semaine écoulée.')).toBeVisible();
   await preuve(page, 'agents-croissance-entonnoir', info);
 
-  // État 6 — agents : lancement manuel, brouillons seulement.
+  // État 6 — agents : préparation automatique en pause par défaut, activation explicite.
   await page.getByRole('tab', { name: 'Agents' }).click();
+  const planification = page.getByTestId('planification-croissance');
+  await expect(planification.getByText('En pause', { exact: true })).toBeVisible();
   await expect(page.getByText('Dernier passage : aucun pour l’instant')).toHaveCount(4);
+  await planification.getByRole('button', { name: 'Activer la préparation automatique' }).click();
+  await expect(planification.getByText('Activée', { exact: true })).toBeVisible();
+  await expect(planification.getByRole('button', { name: 'Mettre en pause' })).toBeVisible();
+  await stabiliserLectures(page); await page.reload();
+  await expect(page.getByTestId('planification-croissance').getByText('Activée', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Préparer maintenant' }).click();
   await expect(page.getByText('27 nouveau(x) brouillon(s). Rien n’a été envoyé.')).toBeVisible();
   await expect(page.getByText(/Dernier passage : .*\(manuel\) · 20 brouillon\(s\)/)).toBeVisible();
@@ -202,6 +218,7 @@ test('admin — agents de croissance : file, validation Gmail, constat d’envoi
 
   // Aucune écriture hors des trois RPC prévues, aucune requête externe.
   expect(sim.decisions.map((d) => d.p_action)).toEqual(['VALIDER', 'VALIDER', 'MARQUER_ENVOYE']);
+  expect(sim.bascules).toEqual([null, true, null, null]);
   expect(sim.etat.ecritures).toEqual([]);
   expect(sim.etat.inconnues).toEqual([]);
   expect(sim.etat.erreurs).toEqual([]);
