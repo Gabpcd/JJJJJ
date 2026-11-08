@@ -59,6 +59,11 @@ function replaceTemplateVariables(template: string, values: Record<string, strin
   return template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, rawKey) => values[rawKey.trim()] ?? '');
 }
 
+// Types de contrat dont le pied de page porte la mention « Contrat salarié écrit ».
+// CDDU et VACATION sont des contrats salariés : décision de Gabrielle du 08/11/2026
+// (HARD STOP n°4), ils ne reçoivent plus la mention de prestation libérale.
+export const TYPES_CONTRAT_MENTION_SALARIEE = ['CDD', 'SALARIE', 'CDDU', 'VACATION'];
+
 function cddSansOriginal(contrat: any): boolean {
   return contrat?.type_contrat === 'CDD' && !contratPossedeSignature(contrat)
     && !contrat.storage_path && !contrat.hash_document && !contrat.contenu_html_rendu_le
@@ -830,7 +835,7 @@ export default function ContratMission() {
 
         <p className="text-[10px] text-muted-foreground/60 italic text-center mt-4">
           {texteEmployeur ? 'Contrat salarié préparé selon le cadre déclaré par l’employeur. '
-            : ['CDD', 'SALARIE'].includes(contrat.type_contrat || '')
+            : TYPES_CONTRAT_MENTION_SALARIEE.includes(contrat.type_contrat || '')
             ? 'Contrat salarié écrit — art. L.1242-12 du Code du travail. '
             : 'Contrat de prestation entre l’établissement et le professionnel libéral. '}
           Signature électronique simple. {!texteEmployeur && 'Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires.'}
