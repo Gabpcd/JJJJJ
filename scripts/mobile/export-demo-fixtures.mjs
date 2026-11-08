@@ -5,7 +5,7 @@
  * Reproduit à l'identique l'algorithme de `mobile-native/src/data/demoGateway.ts`
  * (30 missions, 3 établissements fictifs, profil DEMO_CONTEXT) avec une horloge
  * fixée, puis écrit les fichiers JSON à clés snake_case (contrat PostgREST),
- * lus par `JoleneCore` (DemoMissionsGateway, DemoDashboardGateway) et par les XCUITest.
+ * lus par `JoleneCore` (DemoMissionsGateway, DemoDashboardGateway, DemoPreferencesGateway) et par les XCUITest.
  *
  * Horloge fixée : 2026-11-02T00:00:00Z. Les missions démarrent donc du
  * 2026-11-03 au 2026-12-02 (07:00 UTC, ou 20:00 UTC une mission sur quatre).
@@ -231,12 +231,42 @@ export function buildDemoDashboard(now = new Date(FIXED_NOW), missions = buildDe
   };
 }
 
+/**
+ * Lot 3, T6 : préférences de notifications du profil fictif. `preferences` = corps de
+ * `fn_obtenir_mes_preferences_notifications()` (ligne `preferences_notifications` aux défauts serveur
+ * — e-mail, push, in-app actifs, SMS coupé — et trois exceptions par événement du catalogue soignant) ;
+ * `soignant` = `soignants.select('sms_alertes_actives, type_exercice')`, régime dérivé du profil démo.
+ * Lu par `DemoPreferencesGateway` et par les XCUITest (`DemoPreferencesTests`).
+ */
+export function buildDemoPreferences() {
+  return {
+    fixed_now: FIXED_NOW,
+    preferences: {
+      global: {
+        canal_email: true,
+        canal_sms: false,
+        canal_push: true,
+        canal_in_app: true,
+        cree_le: '2026-10-01T08:00:00+00:00',
+        mis_a_jour_le: '2026-10-01T08:00:00+00:00',
+      },
+      par_evenement: [
+        { type_evenement: 'NOUVELLE_MISSION_MATCHANT_FILTRE', canal: 'EMAIL', actif: false },
+        { type_evenement: 'LITIGE_RESOLU', canal: 'PUSH', actif: false },
+        { type_evenement: 'SERIE_ONBOARDING', canal: 'EMAIL', actif: false },
+      ],
+    },
+    soignant: { sms_alertes_actives: true, type_exercice: DEMO_PROFILE.profile.type_exercice },
+  };
+}
+
 export function buildFixtures() {
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
     'demo-etablissements.json': { fixed_now: FIXED_NOW, etablissements: DEMO_ETABLISSEMENTS },
     'demo-profile.json': { fixed_now: FIXED_NOW, ...DEMO_PROFILE },
     'demo-dashboard.json': buildDemoDashboard(),
+    'demo-preferences.json': buildDemoPreferences(), // lot 3, T6
   };
 }
 

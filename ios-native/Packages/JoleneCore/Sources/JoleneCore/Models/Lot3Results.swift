@@ -49,43 +49,8 @@ public struct NotificationJolene: Equatable, Sendable, Identifiable {
 
 // MARK: - Préférences de notifications (T6)
 
-/// Enum SQL `canal_notification` (`public.sql` l.22-27).
-public enum CanalNotification: String, CaseIterable, Sendable {
-    case email = "EMAIL"
-    case sms = "SMS"
-    case push = "PUSH"
-    case inApp = "IN_APP"
-}
-
-/// Exception par événement (`par_evenement[]` de `fn_obtenir_mes_preferences_notifications`).
-public struct PreferenceEvenement: Equatable, Sendable {
-    public var typeEvenement: String
-    public var canal: CanalNotification
-    public var actif: Bool
-
-    public init(typeEvenement: String, canal: CanalNotification, actif: Bool) {
-        self.typeEvenement = typeEvenement; self.canal = canal; self.actif = actif
-    }
-}
-
-/// Préférences relues : les quatre canaux globaux sont exigés (jamais de défaut affiché) ;
-/// `smsAlertesActives` vient de `soignants.sms_alertes_actives`, écrit à part de la RPC ; nil =
-/// ligne `soignants` non lue (web `profilSmsPresent` faux : alerte ni affichée ni écrite). Seule
-/// source de l'alerte SMS pour `NotificationPreferencesPort.enregistrer(_:context:)`.
-public struct PreferencesNotifications: Equatable, Sendable {
-    public var canalEmail: Bool
-    public var canalSms: Bool
-    public var canalPush: Bool
-    public var canalInApp: Bool
-    public var parEvenement: [PreferenceEvenement]
-    public var smsAlertesActives: Bool?
-
-    public init(canalEmail: Bool, canalSms: Bool, canalPush: Bool, canalInApp: Bool,
-                parEvenement: [PreferenceEvenement], smsAlertesActives: Bool? = nil) {
-        self.canalEmail = canalEmail; self.canalSms = canalSms; self.canalPush = canalPush; self.canalInApp = canalInApp
-        self.parEvenement = parEvenement; self.smsAlertesActives = smsAlertesActives
-    }
-}
+// `CanalNotification`, `PreferenceEvenement` et `PreferencesNotifications` vivent depuis T6 dans
+// `Notifications/PreferencesNotifications.swift`, avec le catalogue `EVENTS_SOIGNANT` et leurs règles.
 
 // MARK: - Inscription (T7, T8)
 
