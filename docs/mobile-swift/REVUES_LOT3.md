@@ -853,9 +853,14 @@ Consignées par l'auteur de la tranche (`lot3/l3-t5-v2`) ; écarts et point de f
     taps, contexte du pré-prompt (ajouts localisés).
   - `JoleneUITests/StagingConnexionTests.swift` (lot 0) : `-JOLENE_SESSION_COUNT 1` au lancement STAGING.
   - `Jolene/Composition/PresentateurRenvoiWeb.swift` (L1-T10) : commentaire seulement.
-- **Ligne de DestinationLien** : `.notifications` à `true` ; les tranches T6, T9, T12-T14a qui passent leur ligne
-  ajoutent aussi leur cible dans `CibleNotification.init` et `MainTabView.presenter` (sinon `.aucune` : le tap
-  n'ouvre rien).
+  - Corrections de la revue fraîche : `JoleneCore/Accueil/AccueilModel.swift` (L1-T3, ajout additif
+    `loadIfStale(peremption:)`), `AccueilPresentation.swift` (commentaires), `Links/DestinationLien.swift` (T3a,
+    commentaire seulement).
+- **Ligne de DestinationLien** : `.notifications` à `true` ; les tranches T6, T7, T8, T9, T13, T14a qui passent leur
+  ligne ajoutent aussi leur cible dans `CibleNotification` et `MainTabView.presenter`. Depuis la correction de la
+  revue fraîche (M1, ci-dessous), c'est verrouillé : la garde `CentreNotificationsTests` rougit sinon, et l'écran
+  retombe sur son renvoi web (jamais un tap sans effet). À l'intégration de T6 et T9 avec T5, la garde est rouge
+  tant que leurs cibles ne sont pas ajoutées (voulu).
 - **Vérifications de l'auteur** : voir la sortie de la tranche (commandes et résultats) ; les XCUITest n'ont pas été
   lancés (consigne de la tâche) : CI trois formats à relire dans le `xcresult` (0 échec, `skipped = 0`).
 
@@ -893,3 +898,53 @@ L'auteur n'avait pu lancer aucun build (disque plein à la vague 2). Vérificati
 - **Non exécuté** : aucun test sur simulateur (consigne de la tâche). Les XCUITest de T5 (`DemoPushTests` +9,
   `DemoNotificationsTests`, `DemoAccueilTests` migré) sont compilés mais n'ont jamais tourné : **condition de merge
   maintenue**, CI trois formats verte relue dans le `xcresult` (0 échec, `skipped = 0`, `passed = total`).
+
+### Corrections de la revue fraîche (08/11/2026)
+
+Revue fraîche : aucun bloquant, un majeur (M1), douze mineurs (m1-m12). Tests d'abord (commit `test(ios-native):
+L3-T5 — garde…`), puis code et documentation. Tous les mineurs sont corrigés, sauf m12, consigné dans
+`DECISIONS_LOT3.md`.
+
+- **M1** : nouvelle garde `CentreNotificationsTests.testToutEcranNatifLivreAUneCibleNativePresentable`. Elle prend un
+  lien par genre de route (switch exhaustif sans `default`) et toute la famille push golden, puis exige pour chaque
+  route où `ecranNatifLivre == true` une cible native présentable (ni `.aucune` ni `.web`), hors exclusion nommée
+  `connexion`, `resetPassword`, `confirmerInscription`. Vérifiée rouge en simulant la ligne de T9 passée à `true`
+  sans cible : 7 échecs `/soignant/profil`, puis ligne remise.
+  - La cible Revenus porte sa section (`.revenus(section:)`) ; seule `.apercu` est présentable avant T13.
+  - Repli d'exécution : un écran livré sans cible retombe sur `.web(.safari(canonique))`, jamais sur `.aucune`.
+- **m1** : `AccueilModel.loadIfStale(peremption:)` (jeton avancé à chaque lecture relue dans le centre,
+  `CentreNotificationsModel.lectures`) ; `AccueilScreen` utilise `.task(id: peremption)`. Prouvé au niveau 1 : le
+  compteur démo est figé par `demo-dashboard.json`.
+- **m2** : un marquage en échec ou en délai dépassé relit la liste, silencieusement et en gardant le message.
+- **m3** : `rafraichir()` ajoute l'encart `notifications-refresh-error`, au texte web `erreurChargement`.
+- **m4** : la tâche d'ouverture est annulée à la disparition du centre. Le modèle ne rend aucune cible et n'affiche
+  ni message ni relecture après une annulation.
+- **m5** : `estPresentable(…, depuisCentre:)` : le centre n'est pas présentable depuis le centre. `.accueil` vide
+  `cheminAccueil`. `presenter` ne présente qu'une cible présentable.
+- **m6** : `DemoPushTests.testTapContratASignerVersLeWebDuContrat`.
+- **m7** : chaque ligne déjà lue est amenée à l'écran et exigée rendue avant l'assertion « pas un bouton ».
+  L'absence du pré-prompt n'est affirmée qu'après le délai de 5 s, plus une marge (attente inversée bornée).
+- **m8** : `push-tap-cible` n'est exposé qu'en DEBUG et en démo (`container.isDemo`).
+- **m9** : `OngletEspace` (JoleneCore) ; `MainTabView.Tab` en est un alias. La correspondance depuis `EcranNatif` est
+  supprimée.
+- **m10** :
+  - la démo trie en NULLS FIRST (`plusRecenteDAbord`, test dédié) ;
+  - `notification-voir-<id>` est retiré de la doc et du code, car il n'était pas exposé ;
+  - la carte du pré-prompt n'a plus d'`isLoading`, car elle n'était jamais visible ;
+  - les commentaires d'`AccueilPresentation` sont mis à jour.
+- **m11** : l'indication est gardée, en attente de Gabrielle. Elle est désormais la constante
+  `CentreNotificationsTextes.indicationOuvrirCentre`, épinglée par un test.
+- **m12** : consigné (parité web, RLS ; écarter ce tap supposerait de distinguer la déconnexion volontaire dans
+  `SessionStore`, fichier de T4).
+- **Tests ajustés, et pourquoi** :
+  - `testEchecDuMarquageNOuvreRien` : le script fournit les relectures de réconciliation. Sinon le port rendrait une
+    liste vide et la ligne disparaîtrait : c'est le nouveau comportement voulu par m2, pas un affaiblissement ;
+  - `testVoirEtLigneActionnable` affirmait « Voir » sur une ligne vers le centre, qui n'ouvrait rien (m5) ;
+  - les cas `.onglet(…)` deviennent les cibles explicites (m9).
+- **Vérification** (Xcode 16.4, Swift 6.1.2) :
+  - JoleneCore : 510 tests, 0 échec, 0 avertissement (build propre `--build-tests -strict-concurrency=complete`) ;
+  - JoleneSupabase : 227 tests, 0 échec, 0 avertissement hors `checkouts/` ;
+  - `xcodegen generate` : seul écart, le groupe vide `Jolene/Resources`, non retenu ;
+  - `xcodebuild build-for-testing` : `TEST BUILD SUCCEEDED`, 0 avertissement de nos sources ;
+  - exporteurs `--check` sans diff ; `node --test` des contrats : 60 tests, 0 échec.
+- **Non exécuté** : XCUITest (compilés seulement). La condition de merge sur la CI trois formats est maintenue.
