@@ -1,4 +1,3 @@
-import { getMissionMatchInfo } from '@/lib/profession-hierarchy';
 import { supabase } from '@/integrations/supabase/client';
 import { associerCreneauxAuxMissions } from '@/components/planning/planning-candidat';
 import { enregistrerParcours } from '@/lib/inscriptionProgressive';
@@ -54,8 +53,5 @@ export async function chargerOffresSauvegardeesInscription() {
   return (await chargerMissionsInscription()).filter(m => ids.has(m.id));
 }
 
-export function missionCorrespondProfessionInscription(requise: string, selection: string, compte: string) {
-  if (selection) return requise === selection;
-  return !compte || requise === compte
-    || getMissionMatchInfo(compte, null, requise, null, true)?.type === 'HIERARCHIE_NATURELLE';
-}
+// Règle pure partagée avec le filtre du paquet de swipe (vecteurs golden iOS).
+export { missionCorrespondProfessionInscription } from '@/lib/filtre-paquet-swipe';

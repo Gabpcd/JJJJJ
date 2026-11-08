@@ -13,6 +13,7 @@ import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { cn } from '@/lib/utils';
 import { PlanningMissionCandidat } from '@/components/planning/PlanningMissionCandidat';
 import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
+import { raisonsScore } from '@/lib/raisons-score-matching';
 import {
   construirePlanningCandidat,
   creneauContientNuit,
@@ -96,37 +97,6 @@ function contratLabel(m: MissionSwipePayload): string | null {
   if (t === 'LIBERAL') return 'Libéral';
   if (t === 'TOUS') return 'Salarié ou libéral';
   return null;
-}
-
-/** 7d — clés alignées sur le breakdown v3 (l'ancienne clé `fiabilite` ne
- *  matchait jamais : le backend émet `soignant_fiabilite`). */
-const RAISON_LABELS: Record<string, string> = {
-  distance: 'proche de chez toi',
-  tarif: 'bien payée vs le marché',
-  horaire: 'à tes horaires préférés',
-  etablissement: 'établissement bien noté',
-  urgence: 'mission urgente',
-  soignant_fiabilite: 'ton profil correspond',
-  connaissance_etab: 'tu connais cet établissement',
-  paiement_rapide: 'paiement rapide ⚡',
-};
-
-/** Raisons épinglées en priorité quand elles sont > 0 (bonus forts à faible
- *  valeur numérique — un tri par points les enterrerait). */
-const RAISONS_EPINGLEES = ['connaissance_etab', 'paiement_rapide'];
-
-/** « Pourquoi 85 ? » → les 2 contributeurs les plus parlants, en clair. */
-function raisonsScore(breakdown: Record<string, unknown>): string {
-  const b = breakdown || {};
-  const epinglees = RAISONS_EPINGLEES.filter(
-    (k) => typeof b[k] === 'number' && (b[k] as number) > 0,
-  );
-  const autres = Object.entries(b)
-    .filter(([k, v]) => RAISON_LABELS[k] && !RAISONS_EPINGLEES.includes(k)
-      && typeof v === 'number' && (v as number) > 0)
-    .sort((a, bb) => (bb[1] as number) - (a[1] as number))
-    .map(([k]) => k);
-  return [...epinglees, ...autres].slice(0, 2).map((k) => RAISON_LABELS[k]).join(' · ');
 }
 
 export function CardMissionSwipe({ mission, onTap, className }: Props) {

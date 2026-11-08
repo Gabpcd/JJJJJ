@@ -15,6 +15,6 @@ let package = Package(
     dependencies: [.package(path: "../JoleneCore")],
     targets: [
         .target(name: "JoleneDesign", dependencies: ["JoleneCore"], swiftSettings: strictConcurrency),
-        .testTarget(name: "JoleneDesignTests", dependencies: ["JoleneDesign"], swiftSettings: strictConcurrency),
+        .testTarget(name: "JoleneDesignTests", dependencies: ["JoleneDesign", "JoleneCore"], swiftSettings: strictConcurrency),
     ]
 )
