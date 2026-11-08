@@ -252,10 +252,12 @@
   - M1, règle des 8 s : `RecuScan.delaiAbsenceProuvee` reste 8 s (décision 2). `PointageModel` attend EN PLUS 8 s
     sur l'horloge monotone du processus (`ProcessInfo.systemUptime`) quand l'essai y a démarré : une horloge
     d'appareil avancée ne raccourcit pas l'attente ; pour un essai d'un autre processus (app relancée), seul l'écart
-    d'horloge murale de la gateway s'applique. Risque résiduel consigné : PostgREST peut attendre jusqu'à 10 s une
-    connexion (`PGRST003`) avant d'ouvrir la transaction ; un scan appliqué après un verdict « non reçu » est
-    rattrapé par le suivi de l'état (15 s) et, si le soignant ressaisit le code, par le refus anti-rejeu `23514`
-    (2 min, `public.sql` l.55661) qui relance la réconciliation (`PointageRules.estAntiRejeu`) : jamais de double scan.
+    d'horloge murale de la gateway s'applique. L'attente du pool PostgREST (`PGRST003`, jusqu'à 10 s avant la
+    transaction) est chiffrée par la revue fraîche de L2-T3 (m2, ci-dessous) : un essai sorti sans réponse n'est
+    déclaré « non reçu » qu'après sa sortie + 10 s + 8 s monotones. Un scan appliqué malgré tout après un verdict
+    « non reçu » (essai d'un autre processus) est rattrapé par le suivi de l'état (15 s) et, si le soignant ressaisit
+    le code, par le refus anti-rejeu `23514` (2 min, `public.sql` l.55661) qui relance la réconciliation
+    (`PointageRules.estAntiRejeu`).
   - M2 : reçu `prepared` orphelin → `marquerNonEnvoye`, journalisé, puis effacé (`started` précède toujours l'unique
     requête) ; reçu terminal (`refused`, `not_sent`) → effacé ; un essai en vol dans le processus (autre bloc de
     pointage) n'est jamais réconcilié par un autre modèle (`PointageModel`, ensemble des essais en vol).
@@ -264,6 +266,49 @@
     `.contract`. Le modèle publie `PointageModel.Chargement.indisponible(message)`, l'envoi reste impossible.
   - Réponse de `fn_scanner_code_pointage` : la forme d'après B1 (sans code suivant) et celle d'avant donnent le même
     succès (liste blanche `ScanEnregistre`) ; la réponse brute ne sort jamais de la gateway.
+- **T3 — revue fraîche de L2-T3 (8 novembre 2026)**, réponse aux majeurs M-A, M-B et aux mineurs m1 à m8 :
+  - M-A, HTTP 200 jamais « non reçu » : `fn_scanner_code_pointage` trouve la mission par le seul code (`public.sql`
+    l.55639-55644) ; le code de la mission A saisi dans le bloc B pointe A. Un HTTP 200 prouve le COMMIT (amendement de
+    la correction 10). La gateway confirme d'abord sur la mission du reçu (preuve hors base ET état), puis relit la
+    ligne du scan sans filtre de mission (`creneau_effectif_id` et `numero_scan` de la réponse, `soignant_id`,
+    `id_terminal` ; `sp_select` l.79931) et l'état de sa mission → `IssueScan.enregistreSurAutreMission(missionId:…)` ;
+    à défaut (lecture en échec, réponse hors contrat, ligne introuvable, état non basculé) → `IssueScan.accepteSansPreuve`,
+    jamais `.incertain`. Le modèle solde le reçu dans les deux cas, sans réconciliation (filtrée sur la mission du reçu,
+    elle conclurait « non reçu ») : `Issue.enregistreSurAutreMission(type, missionId:)`, ou `Issue.suiviIllisible`
+    (renvoi web `/soignant/presences`, ce bloc n'envoie plus rien). La démo applique la même règle (code de la mission
+    a saisi dans le bloc b → enregistré sur a ; jamais bloqué en vérification par l'horloge fixe).
+  - M-A, limite consignée (réponse perdue) : un scan appliqué sur une AUTRE mission dont la réponse est perdue
+    (transport, délai `bounded`) reste réconcilié sur la mission du reçu ; après l'attente (m2), le verdict est
+    « non reçu » sur cette mission. Le reçu v1 ne porte la base des preuves que de sa mission (`preuvesAvant`) : sans
+    base pour les autres missions, une ligne d'une autre mission ne se distingue pas d'un scan antérieur, sauf à
+    comparer l'heure du serveur à celle de l'appareil (non fiable). Atténuations : l'état de l'autre bloc (15 s) et la
+    liste des présences montrent le segment ouvert ; une ressaisie dans les 2 min est refusée par l'anti-rejeu
+    `23514`. Risque résiduel : une ressaisie du code courant de A (dans un bloc ou l'autre) plus de 2 min après
+    pointerait A une seconde fois. Levée possible, hors lot 2 : reçu v2 avec la base des preuves du terminal sur toutes les missions
+    `ASSIGNEE`/`EN_COURS` du soignant, relue avant l'envoi (règle des versions ci-dessous), ou clé d'idempotence côté
+    serveur (B9).
+  - M-B, réapparition : `PointageModel.activer()` (appelée aussi par `charger()` et `suivre()`) rend le bloc de nouveau
+    opérant après `desactiver()` ; une génération avance à chaque disparition et toute opération commencée avant ne
+    publie plus rien. Une issue décidée par le serveur (succès, refus, « non reçu », M-A) solde quand même le reçu si
+    l'epoch n'a pas changé (même utilisateur) ; un epoch périmé garde le reçu pour la réconciliation au retour.
+  - m1 : `PGRST301`-`PGRST303` au scan (rollback prouvé), session absente ou 401/403 hors PostgREST →
+    `JoleneError(.unauthorized)` levée par la gateway ; le modèle publie `sessionExpired` et `.verification`, garde le
+    reçu `started` (réconcilié au retour de l'utilisateur, nouvel epoch), sans relecture ni renvoi ; `.unauthorized`
+    pendant la réconciliation arrête les relectures et publie `sessionExpired` aussitôt ; `NON_AUTHENTIFIE` de
+    `fn_relancer_validation_presence` (l.53023) → `.unauthorized`, jamais « Relance impossible. ».
+  - m2, chiffrage : un essai sorti sans réponse (délai `bounded`, transport, `.incertain`, session expirée) n'est
+    déclaré « non reçu » qu'après, sur l'horloge monotone, son instant de sortie (au moins le délai `bounded` s'il est
+    dépassé) + 10 s (`PointageModel.attentePoolPostgREST`, attente du pool, `PGRST003`) + 8 s
+    (`RecuScan.delaiAbsenceProuvee`, `statement_timeout`) ; 15 + 10 + 8 = 33 s pour un délai `bounded` de 15 s. Risque
+    résiduel : un essai d'un autre processus (app relancée moins de 18 s après l'envoi) n'a que l'écart de 8 s de
+    l'horloge murale.
+  - m5 : `fn_etablissements_safe` en échec → instantané sans noms (`[:]`, repli du web à l'affichage), comme
+    `fetchEtablissementsSafe` (`src/lib/etablissements.ts` l.31-38) ; session expirée et annulation remontent.
+  - m6 : `finLe` reste celui de l'init du modèle ; la relecture de `missions.fin_le` après la FERMETURE (web l.156)
+    relève de T5a (consigne T5a).
+  - m7 : `charger()` ne relit rien pendant un envoi (l'envoi relit lui-même l'état).
+  - m8 : `MetadonneesScan` masque coordonnées et précision dans `description`, `debugDescription` et sa réflexion
+    (`customMirror`) ; seul `encode` les écrit, pour `p_metadata`.
 - **T4a** (après T3) : instantané par `gateways.pointage.presences(context:)` ; onglets par
   `InstantanePresences.listes(maintenant:)` (horloge `chargeLe`), historique par `lignesHistorique(soignantId:)`,
   `PointageRules.ongletInitial(parametre:missionsAujourdhui:missionsEnCours:)`, `filtreAValider`,
@@ -272,12 +317,22 @@
   vouvoyée de la décision 6, sinon le message serveur tel quel ; `.recuEnCours` → `RecuScan.messageRecuEnCours` ;
   `.suiviIllisible` → `RecuScan.messageIllisible` et renvoi web `/soignant/presences` ; `.horsLigne`,
   `.verification`, `.nonRecu`, `.enregistre` → textes du web (`PointageRotatifSoignant.tsx` l.143) ou à inventorier
-  ici ; `PointageRules.action` → libellés l.106-108. Cycle de vie : `charger()` à l'apparition, `suivre()` dans le
-  `.task` du bloc, `desactiver()` à sa disparition, `reconcilier()` au retour au premier plan. La position est
+  ici ; `.enregistreSurAutreMission(type, missionId:)` (revue fraîche de L2-T3, M-A) → même succès du web (l.143),
+  puis rechargement de l'instantané des présences (le bloc de la mission pointée change d'état) ; toute précision sur
+  la mission pointée est un texte opérationnel à inventorier ici ; `.suiviIllisible` couvre aussi un HTTP 200 sans
+  preuve relue ; `sessionExpired` → écran de reconnexion du lot 1 ; `PointageRules.action` → libellés l.106-108.
+  Cycle de vie (revue fraîche de L2-T3, M-B) : `.task { await model.charger(); await model.suivre() }` (l'un et
+  l'autre réactivent le bloc : en SwiftUI, une vue poussée dans un `NavigationStack` sous un `TabView` reçoit
+  `onDisappear` puis `onAppear` à chaque changement d'onglet et garde son `@StateObject`), `desactiver()` à la
+  disparition, `reconcilier()` au retour au premier plan ; `charger()` ne relit rien pendant un envoi. La position est
   demandée par l'écran (consentement, `LocationPort`) et passée à `pointer(code:gps:)` ; nil = jamais demandée.
+  `MetadonneesScan` ne s'affiche ni ne se journalise (ses descriptions masquent les coordonnées).
   `DemoPointageGateway.Scenario` (`scan-incertain`) est lu de `-JOLENE_DEMO_SCENARIO` par `AppContainer`.
 - **T5a** (après T3) : `PointageModel.notationAProposer` ne tient pas la mémoire « une fois par mission et par
-  utilisateur » (clé de la notation) ; détail par `gateways.pointage.detail` (créneaux tous types, `resume` nil sur
+  utilisateur » (clé de la notation) ; `finLe` est celui de l'init du modèle, alors que le web relit `missions.fin_le`
+  juste après la FERMETURE (`PointageRotatifSoignant.tsx` l.156) : T5a relit la fin prévue avant de proposer la note
+  (revue fraîche de L2-T3, m6) ; aucune note n'est proposée par `.enregistreSurAutreMission` (la mission notée serait
+  celle du code, pas celle du bloc) ; détail par `gateways.pointage.detail` (créneaux tous types, `resume` nil sur
   `{error}`) ; `relancerValidation` → `IssueRelance.envoyee(message: nil)` : repli du web « Établissement relancé. »
   (`DetailPresencesMission.tsx` l.122).
 - **T6** : reçu par `ReceiptJournal<RecuDocument>(store: appareil.recus)` (domaine `document`, essai = `s3Cle`),
@@ -337,6 +392,9 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | §2.3 (`PointagePort`) | huit méthodes | + `preuvesScan(missionId:context:) -> [PreuveScan]` (projection `PreuveScan.colonnes`), défaut « non câblé » en extension du protocole | T3 : la base `preuvesAvant` du reçu (§2.5) doit être relue avant l'envoi et aucune méthode du port ne la rendait ; le défaut garde les doubles de test et le stub de T1 inchangés |
 | §3 T3 « Fichiers » (`EtatPointage.swift`, `InstantanePresences.swift`) | `EtatPointage.swift` créé par T3 ; `InstantanePresences` décodé en `MissionRecord` | `EtatPointage` reste dans `Models/Lot2Results.swift` (posé et testé par T1, non redéfini) ; relecture qui confirme un scan dans `PointageRules.etatConfirme` ; `InstantanePresences` déplacé dans `Pointage/InstantanePresences.swift`, lignes `MissionPresenceLue`, `PresenceLue`, `MissionDePresence` décodées une à une (projections réduites : aucun montant, aucune colonne `code_pointage_*`) | consigne T3 de T2b (`profession_requise` absent du select du web, `statut` NULLable) ; gap « B1-ter » de la migration B1 |
 | §2.4 (`fn_scanner_code_pointage`, succès) | réponse avec le code suivant et sa signature | deux formes décodées à l'identique : celle d'après B1 (`fix/scanner-code-sans-code-suivant`) et celle d'avant ; `fn_declarer_fin_retroactive` (même retrait par B1) n'est pas appelée par le natif | B1 validée par Gabrielle, dans la chaîne de merge sériel |
+| §2.3 (`IssueScan`) ; §2.5 « succès → relecture etat + scans_pointage » | succès relu sur la mission du reçu, sinon incertain | + `IssueScan.enregistreSurAutreMission(missionId:typeScan:numeroScan:)` (ligne du scan relue sans filtre de mission par `creneau_effectif_id` et `numero_scan`, état de sa mission confirmé) et `IssueScan.accepteSansPreuve` (HTTP 200 non confirmé) ; un HTTP 200 n'est jamais `.incertain` ni réconcilié ; `PointageModel.Issue.enregistreSurAutreMission` | revue fraîche de T3 (M-A) : la RPC trouve la mission par le seul code ; un 200 relu sur la seule mission du reçu finissait en « non reçu » et invitait à pointer une seconde fois |
+| §2.5 « absent → « non reçu » seulement si la relecture a lieu ≥ 8 s après `started` » | 8 s | 8 s, et pour un essai sorti sans réponse : instant de sortie (au moins le délai `bounded`) + 10 s (pool PostgREST) + 8 s, monotones | revue fraîche de T3 (m2) : PostgREST peut encore valider pendant l'attente du pool puis le `statement_timeout` |
+| §3 T3 (`PointageModel` : « réponse ignorée si l'écran ou l'epoch a changé ») | écran disparu → modèle inerte | `activer()` (et `charger()`, `suivre()`) réactive le bloc ; génération : une opération d'avant la disparition ne publie rien, une issue décidée solde quand même le reçu (même epoch) | revue fraîche de T3 (M-B) : en SwiftUI, le `@StateObject` survit à un changement d'onglet |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 

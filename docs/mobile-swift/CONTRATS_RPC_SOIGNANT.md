@@ -427,6 +427,19 @@ CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", 
   `PointageRules.estCodeInvalide` : `P0002` et le message exact de l.55649) ; l'autre `P0002` (l.55775) reste
   verbatim. Aucune colonne `code_pointage_*` de `missions` n'est jamais demandée par le natif (gap « B1-ter »
   nommé par la migration B1 : le code rotatif reste lisible par le soignant assigné en PostgREST direct).
+- **Code d'une autre mission (revue fraîche de T3, M-A)** : la fonction trouve la mission par le seul code
+  (`WHERE code_pointage_actif = p_code`, l.55639-55644) ; un soignant qui a deux missions `ASSIGNEE`/`EN_COURS` et
+  saisit dans le bloc B le code de la mission A pointe A. Un HTTP 200 prouve le COMMIT (PostgREST construit la
+  réponse après lui, amendement de la correction 10) : il n'aboutit jamais à « non reçu ». Non confirmé sur la mission
+  du reçu, la ligne du scan est relue **sans filtre de mission** :
+  `scans_pointage?select=<PreuveScan.selection>&soignant_id=eq.<uid>&creneau_effectif_id=eq.<réponse>&numero_scan=eq.<réponse>&id_terminal=eq.<terminal>&limit=2`
+  (lisible par `sp_select`, l.79931 ; même projection, jamais `code_saisi`, `ip_address`, `latitude`, `longitude`),
+  puis `fn_etat_pointage_mission` de la mission trouvée → `IssueScan.enregistreSurAutreMission` ; sinon
+  `IssueScan.accepteSansPreuve` (suivi non vérifiable, renvoi web). Réponse perdue d'un scan appliqué sur une autre
+  mission : limite consignée dans `DECISIONS_LOT2.md` (consignes T3, revue fraîche de L2-T3).
+- **Session expirée (m1)** : `PGRST301`-`PGRST303` (rollback prouvé) ou session absente / 401-403 hors PostgREST →
+  `JoleneError(.unauthorized)` levée par `scanner`, jamais un refus métier ; reçu `started` gardé, réconcilié au
+  retour de l'utilisateur.
 - **Preuve STAGING** : T11 — deux lignes `scans_pointage` (OUVERTURE puis FERMETURE, `numero_scan` 1 puis 2,
   `id_terminal ~ '^TERM_IOS_[A-Z2-7]{20}$'`, `precision_gps_m` non nul), segment `EFFECTIF` fermé,
   `missions.statut = 'EN_COURS'`, `presences.perimetre_gps_valide = true`.
@@ -635,7 +648,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_relancer_validation_presence"("p_mission
   24 h). Succès `{success:true, message}` avec « Établissement relancé. Il a été notifié de valider tes présences. »
   (l.53070-53071), notification `RAPPEL_VALIDATION_PRESENCE` à l'établissement et audit `PRESENCE_RELANCE_VALIDATION`.
 - **Messages affichés** : `message` serveur verbatim quand il existe (tutoyé côté serveur, décision 9 du lot 1) ;
-  code sans message → repli du web « Relance impossible. » (l.123), jamais le code brut.
+  code sans message → repli du web « Relance impossible. » (l.123), jamais le code brut ; `NON_AUTHENTIFIE` (l.53023)
+  → `JoleneError(.unauthorized)` (session expirée), jamais ce repli (revue fraîche de T3, m1).
 
 ## fn_presences_detail_mission
 
