@@ -248,6 +248,38 @@
   `profession_requise`, que `MissionRecord.init(from:)` exige (`Models/Mission.swift`) : la décoder en `MissionRecord`
   lèverait `keyNotFound`. T3 ajoute `profession_requise` à son select, ou décode son propre type tolérant conforme à
   `MissionPresenceRepresentable` (`Pointage/ListesPresences.swift`).
+- **T3 — application (L2-T3, 8 novembre 2026)**, réponse aux mineurs M1 à M3 de la revue fraîche de T1 :
+  - M1, règle des 8 s : `RecuScan.delaiAbsenceProuvee` reste 8 s (décision 2). `PointageModel` attend EN PLUS 8 s
+    sur l'horloge monotone du processus (`ProcessInfo.systemUptime`) quand l'essai y a démarré : une horloge
+    d'appareil avancée ne raccourcit pas l'attente ; pour un essai d'un autre processus (app relancée), seul l'écart
+    d'horloge murale de la gateway s'applique. Risque résiduel consigné : PostgREST peut attendre jusqu'à 10 s une
+    connexion (`PGRST003`) avant d'ouvrir la transaction ; un scan appliqué après un verdict « non reçu » est
+    rattrapé par le suivi de l'état (15 s) et, si le soignant ressaisit le code, par le refus anti-rejeu `23514`
+    (2 min, `public.sql` l.55661) qui relance la réconciliation (`PointageRules.estAntiRejeu`) : jamais de double scan.
+  - M2 : reçu `prepared` orphelin → `marquerNonEnvoye`, journalisé, puis effacé (`started` précède toujours l'unique
+    requête) ; reçu terminal (`refused`, `not_sent`) → effacé ; un essai en vol dans le processus (autre bloc de
+    pointage) n'est jamais réconcilié par un autre modèle (`PointageModel`, ensemble des essais en vol).
+  - M3 : `{error}` de `fn_etat_pointage_mission` → `JoleneError(.unknown, <message serveur verbatim>)` (« Mission
+    introuvable », « Accès interdit ») ; « Non authentifié » → `.unauthorized` ; objet sans clé discriminante →
+    `.contract`. Le modèle publie `PointageModel.Chargement.indisponible(message)`, l'envoi reste impossible.
+  - Réponse de `fn_scanner_code_pointage` : la forme d'après B1 (sans code suivant) et celle d'avant donnent le même
+    succès (liste blanche `ScanEnregistre`) ; la réponse brute ne sort jamais de la gateway.
+- **T4a** (après T3) : instantané par `gateways.pointage.presences(context:)` ; onglets par
+  `InstantanePresences.listes(maintenant:)` (horloge `chargeLe`), historique par `lignesHistorique(soignantId:)`,
+  `PointageRules.ongletInitial(parametre:missionsAujourdhui:missionsEnCours:)`, `filtreAValider`,
+  `historiqueAffiche`. Aucun texte dans `Pointage/` : les libellés des onglets et des lignes viennent du web.
+- **T4b** (après T3) : `PointageModel` n'affiche aucun texte. `Issue.refuse(message:codeInvalide: true)` → forme
+  vouvoyée de la décision 6, sinon le message serveur tel quel ; `.recuEnCours` → `RecuScan.messageRecuEnCours` ;
+  `.suiviIllisible` → `RecuScan.messageIllisible` et renvoi web `/soignant/presences` ; `.horsLigne`,
+  `.verification`, `.nonRecu`, `.enregistre` → textes du web (`PointageRotatifSoignant.tsx` l.143) ou à inventorier
+  ici ; `PointageRules.action` → libellés l.106-108. Cycle de vie : `charger()` à l'apparition, `suivre()` dans le
+  `.task` du bloc, `desactiver()` à sa disparition, `reconcilier()` au retour au premier plan. La position est
+  demandée par l'écran (consentement, `LocationPort`) et passée à `pointer(code:gps:)` ; nil = jamais demandée.
+  `DemoPointageGateway.Scenario` (`scan-incertain`) est lu de `-JOLENE_DEMO_SCENARIO` par `AppContainer`.
+- **T5a** (après T3) : `PointageModel.notationAProposer` ne tient pas la mémoire « une fois par mission et par
+  utilisateur » (clé de la notation) ; détail par `gateways.pointage.detail` (créneaux tous types, `resume` nil sur
+  `{error}`) ; `relancerValidation` → `IssueRelance.envoyee(message: nil)` : repli du web « Établissement relancé. »
+  (`DetailPresencesMission.tsx` l.122).
 - **T6** : reçu par `ReceiptJournal<RecuDocument>(store: appareil.recus)` (domaine `document`, essai = `s3Cle`),
   mêmes règles que T3 ; `MimeDocument` est `Codable` dans sa déclaration (`Documents/ClassementDocument.swift`),
   ne pas y ajouter de conformité rétroactive.
@@ -302,6 +334,9 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | §2.4 (statuts des stubs de test) | `42501` → 403, `23503` → 409, `P0001`, `22023`, `23514` → 400, autres `P0…` → 500 | + classes `40` (rollback de transaction) et `57` (dont `57014`, `statement_timeout`) → 500 | revue fraîche de T1 : statuts réels de PostgREST |
 | §2.5 « Réconciliation » | preuve : `mission_id` = reçu, id hors baseline, même `id_terminal` | + `numero_scan > nb_scans_avant`, mission vérifiée par `RecuScan.reconcilier` lui-même (projection `PreuveScan` avec `mission_id`) ; relecture datée avant `started` (heure reculée) → verdict `horlogeIncoherente`, fail-closed, jamais « non reçu » ; §2.3 : `IssueScan.horlogeIncoherente` ajoutée, verdicts traduits par `IssueScan(reconciliation:)` (`.aRelire` → `.incertain`) ; reçu effacé après « non reçu » | revue fraîche de T1 : un oubli du filtre `mission_id` par la requête de T3 aurait donné un faux succès ; une horloge reculée laissait un `aRelire` sans fin ; seconde revue : `IssueScan` ne savait pas exprimer ce verdict et aucune phase terminale n'était atteignable après « non reçu » |
 | §2.6 (`RecuDocument` v1 : `userId`, `epoch`, `s3Cle`, `typeDocument`, `mime`, `tailleOctets`, `documentId?`, `phase`) | aucun nom de fichier ni libellé | + `nomFichier` (nom d'origine, non blanc, ≤ 255 points de code) et `libelle?` (≤ 500), immuables pour un même essai | seconde revue fraîche de T1 : le rejeu de `fn_remplacer_document_soignant` exige `p_nom_fichier` non vide (`public.sql` l.53114) et perdrait le libellé saisi ; ajoutés dès la v1 pour ne pas imposer une v2 à T6 |
+| §2.3 (`PointagePort`) | huit méthodes | + `preuvesScan(missionId:context:) -> [PreuveScan]` (projection `PreuveScan.colonnes`), défaut « non câblé » en extension du protocole | T3 : la base `preuvesAvant` du reçu (§2.5) doit être relue avant l'envoi et aucune méthode du port ne la rendait ; le défaut garde les doubles de test et le stub de T1 inchangés |
+| §3 T3 « Fichiers » (`EtatPointage.swift`, `InstantanePresences.swift`) | `EtatPointage.swift` créé par T3 ; `InstantanePresences` décodé en `MissionRecord` | `EtatPointage` reste dans `Models/Lot2Results.swift` (posé et testé par T1, non redéfini) ; relecture qui confirme un scan dans `PointageRules.etatConfirme` ; `InstantanePresences` déplacé dans `Pointage/InstantanePresences.swift`, lignes `MissionPresenceLue`, `PresenceLue`, `MissionDePresence` décodées une à une (projections réduites : aucun montant, aucune colonne `code_pointage_*`) | consigne T3 de T2b (`profession_requise` absent du select du web, `statut` NULLable) ; gap « B1-ter » de la migration B1 |
+| §2.4 (`fn_scanner_code_pointage`, succès) | réponse avec le code suivant et sa signature | deux formes décodées à l'identique : celle d'après B1 (`fix/scanner-code-sans-code-suivant`) et celle d'avant ; `fn_declarer_fin_retroactive` (même retrait par B1) n'est pas appelée par le natif | B1 validée par Gabrielle, dans la chaîne de merge sériel |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 
@@ -329,6 +364,12 @@ aucun ne cite de valeur stockée. Gardés mot pour mot par les tests indiqués.
 | `KeychainTerminalIdentity.messageVerrouille` | « Le trousseau de cet appareil est verrouillé. Déverrouillez l'appareil puis réessayez. » | nouveau (T1, revue fraîche) : `errSecInteractionNotAllowed`, transitoire | `KeychainTerminalIdentityTests.testTextesOperationnelsInventories` |
 | `KeychainTerminalIdentity.messageIndisponible` | « L'identifiant de cet appareil n'a pas pu être lu. Le pointage est momentanément indisponible : réessayez. » | nouveau (T1) ; remplace « … redémarrez l'application. », faux pour une valeur illisible | idem |
 | `KeychainTerminalIdentity.messageIllisible` | « L'identifiant de cet appareil est illisible. Le pointage n'est pas disponible dans l'application sur cet appareil : pointez depuis jolene.app. » | nouveau (T1, revue fraîche) : valeur stockée hors format, jamais réécrite ; recours web (consigne T4b) | idem |
+| `PointageModel.messageEtatIndisponible`, `PointageQuery.fallbackEtat` | « Impossible de charger son état. » | web `PointageRotatifSoignant.tsx` l.86, repris tel quel (T3) | `PointageModelTests`, `SupabasePointageGatewayTests` |
+| `PointageQuery.fallbackRelance` | « Relance impossible. » | web `DetailPresencesMission.tsx` l.123, repris tel quel (T3) | `SupabasePointageGatewayTests.testDetailCarteMasqueeSurErreurEtRelanceVerbatim` |
+| `PointageQuery.fallbackPresences` | « Impossible de charger vos présences. Réessayez. » | nouveau (T3) : échec de lecture, modèle des replis du lot 1 | `SupabasePointageGatewayTests` |
+| `PointageQuery.fallbackScan` | « Impossible d'enregistrer le pointage. Réessayez. » | nouveau (T3) : rollback prouvé hors exceptions déclarées (repli de `SupabaseErrorMapping`) | `SupabasePointageGatewayTests.testRollbacksHorsListeEtContrat` |
+| `PointageQuery.fallbackLocalisation` | « Impossible d'enregistrer votre choix de localisation. Réessayez. » | nouveau (T3) : `fn_consentir_gps` en échec ou relecture vide (aucune hypothèse locale) | `SupabasePointageGatewayTests.testConsentementLuPuisEnregistreEtRelu` |
+| `PointageQuery.fallbackDetail` | « Impossible de charger le détail des présences. Réessayez. » | nouveau (T3) : repli de la synthèse serveur, jamais affiché (carte masquée) | `SupabasePointageGatewayTests` |
 
 ## En attente de Gabrielle
 
