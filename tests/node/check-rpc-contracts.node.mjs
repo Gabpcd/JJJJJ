@@ -856,10 +856,27 @@ test('CONTRATS fn_etat_pointage_mission : clés de réponse et refus du dump, co
     `fn_etat_pointage_mission : affectation de v_is_etab changée — fiche (est_etab null côté soignant), consigne T3 et « Motif à auditer » : ${BASCULE_MAIN}`);
   assert.ok(body.includes("'est_etab', v_is_etab"), `fn_etat_pointage_mission : est_etab n est plus renvoyé tel quel — fiche et consigne T3 : ${BASCULE_MAIN}`);
   assert.ok(corpsSql(read(SOURCES.schema), enteteFn('est_admin_valide')).includes('SELECT COALESCE(EXISTS ('), 'est_admin_valide : plus de COALESCE');
-  for (const temoin of ['`est_etab` : `null` pour tout compte sans établissement (soignant assigné compris), jamais `false`',
+  for (const temoin of ['est_etab vaut null pour tout compte sans établissement (soignant assigné compris), jamais false ; non décodé côté soignant',
     'jamais décodé côté soignant', '`Bool?`']) {
     assert.ok(fiche.includes(temoin), `fiche fn_etat_pointage_mission : « ${temoin} » absent`);
   }
+  // Clôture de T0 : garde sur les deux lignes SQL citées par la fiche, l'affectation de v_is_etab et le renvoi de
+  // est_etab. La fiche cite leurs numéros exacts au dump ; un décalage (re-baseline) ou une correction de la garde
+  // (PR B9 des gardes NULL : `COALESCE`, est_etab deviendrait false) la fait rougir.
+  const lignesDump = read(SOURCES.schema).split('\n');
+  const enteteEtat = lignesDump.findIndex(l => l.startsWith(enteteFn('fn_etat_pointage_mission')));
+  assert.ok(enteteEtat >= 0, 'fn_etat_pointage_mission absente du dump');
+  const numeros = ['v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id();', "'est_etab', v_is_etab"]
+    .map(sql => {
+      const i = lignesDump.findIndex((l, n) => n > enteteEtat && l.trim() === sql);
+      assert.ok(i > enteteEtat, `fn_etat_pointage_mission : ligne « ${sql} » absente du dump — fiche (est_etab) et consigne T3 : ${BASCULE_MAIN}`);
+      return i + 1;
+    });
+  for (const n of numeros) {
+    assert.ok(fiche.includes(`l.${n}`), `fiche fn_etat_pointage_mission : ligne SQL l.${n} non citée (numéros du dump décalés ?) : ${BASCULE_MAIN}`);
+  }
+  assert.ok(fiche.includes(`garde \`tests/node/check-rpc-contracts.node.mjs\` sur l.${numeros[0]} et l.${numeros[1]}`),
+    `fiche fn_etat_pointage_mission : garde sur l.${numeros[0]} et l.${numeros[1]} non annoncée`);
   const consignes = aplati(section(read('docs/mobile-swift/DECISIONS_LOT2.md'), 'Consignes aux tranches suivantes'));
   assert.ok(consignes.includes('**T3**') && consignes.includes('`est_etab: null`') && consignes.includes('fn_etat_pointage_mission'),
     'consigne T3 (stubs et fixtures de fn_etat_pointage_mission avec est_etab: null) absente');
@@ -1301,21 +1318,43 @@ test('B9 RLS/auth : constats de T0 (système ① appelable, gardes ternaires, fn
   const b9 = aplati(sousSection(section(read('docs/mobile-swift/DECISIONS_LOT2.md'), 'En attente de Gabrielle'),
     'B9 (PR préparées et poussées, jamais mergées sans go)'));
   for (const temoin of ['fn_creer_notification', 'l.82276', '`auth.uid() IS NULL`', 'FIXÉ', 'docs/audit-fonctionnel-pre-lancement.md',
-    'fn_codes_pointage_mission', 'fn_pointer_arrivee', '`perimetre_gps_valide = true`', 'fn_generer_qr_mission', 'fn_valider_scan_qr',
-    'Trois chaînes', 'fn_generer_code_secours_mission', 'l.37478', 'l.83013', 'fn_valider_code_secours', '`CODE_SECOURS`',
+    'fn_codes_pointage_mission', 'fn_generer_qr_mission', 'fn_generer_code_secours_mission',
     'pointer à distance', 'REVOKE EXECUTE', 'FROM authenticated', 'neuf RPC ①', 'SyncHorsLigne', 'IS DISTINCT FROM', 'COALESCE',
     'un gap connu reste verrouillé', 'définition live', 'PR backend séparée', 'fn_presences_detail_mission', 'fn_etat_pointage_mission']) {
     assert.ok(b9.includes(temoin), `En attente de Gabrielle › B9 : ${temoin} absent`);
   }
-  assert.ok(!/Deux chaînes|huit RPC/.test(b9), 'En attente de Gabrielle › B9 : décompte périmé (trois chaînes, neuf RPC ①)');
+  assert.ok(!/Deux chaînes|huit RPC/.test(b9), 'En attente de Gabrielle › B9 : décompte périmé (neuf RPC ①)');
+  // Clôture de T0 : l'audit des gardes NULL est traité à part (PR B9 dédiée). Les listes partielles de constats de T0
+  // (gardes ternaires, chaînes de pointage à distance, « Motif à auditer ») laissent place à un renvoi unique et daté.
+  assert.equal((b9.match(/docs\/mobile-swift\/AUDIT_GARDES_NULL_2026-11-03\.md/g) ?? []).length, 1,
+    'En attente de Gabrielle › B9 : renvoi unique à l annexe AUDIT_GARDES_NULL_2026-11-03.md attendu');
+  const renvoi = b9.slice(b9.indexOf('**Gardes NULL'), b9.indexOf('**Remontée**'));
+  assert.ok(renvoi.length > 0, 'En attente de Gabrielle › B9 : renvoi « Gardes NULL » absent (avant « Remontée »)');
+  for (const temoin of ['3 novembre 2026', 'docs/mobile-swift/AUDIT_GARDES_NULL_2026-11-03.md', '`fix/gardes-null-security-definer`',
+    'fn_presences_detail_mission', 'fn_etat_pointage_mission', '« Motif à auditer »', 'définition live']) {
+    assert.ok(renvoi.includes(temoin), `En attente de Gabrielle › B9 › Gardes NULL : ${temoin} absent`);
+  }
+  assert.ok(!/Trois chaînes|\*\*Motif à auditer|\*\*Constat T0 \(nouveau, RLS\/auth\)\*\* : `fn_presences_detail_mission`|l\.48920-48923|l\.65067-65072/.test(b9),
+    'En attente de Gabrielle › B9 : liste partielle de constats de gardes NULL encore présente (remplacée par le renvoi à l audit)');
+  // La PR B1 couvre aussi fn_declarer_fin_retroactive ; les PR B9 du 3/11 ont reçu le go du 8/11 (merge sériel).
+  const b1 = b9.slice(b9.indexOf('**B1**'), b9.indexOf('**S1**'));
+  assert.ok(b1.includes('`fn_declarer_fin_retroactive`'), 'En attente de Gabrielle › B9 › B1 : fn_declarer_fin_retroactive absente');
+  const debutGo = b9.indexOf('**Go du 8 novembre 2026**');
+  assert.ok(debutGo >= 0, 'En attente de Gabrielle › B9 : go du 8 novembre 2026 absent');
+  const finGo = b9.indexOf(' - **', debutGo);
+  const go = b9.slice(debutGo, finGo < 0 ? undefined : finGo);
+  for (const temoin of ['3 novembre', 'B1', 'B3', 'B4', 'B5b', 'S1', 'merge sériel']) {
+    assert.ok(go.includes(temoin), `go du 8 novembre 2026 : ${temoin} absent`);
+  }
   // Les deux propositions (REVOKE ou gardes) couvrent le générateur du code de secours.
-  const proposition = b9.slice(b9.indexOf('**Proposition**', b9.indexOf('Trois chaînes')));
+  const proposition = b9.slice(b9.indexOf('**Proposition**', b9.indexOf('neuf RPC ①')));
   assert.ok(proposition.includes('REVOKE EXECUTE') && proposition.includes('IS DISTINCT FROM'));
   assert.ok((proposition.slice(0, proposition.indexOf('un gap connu reste verrouillé')).match(/fn_generer_code_secours_mission/g) ?? []).length >= 2,
     'Proposition B9 : fn_generer_code_secours_mission absente de l une des deux options (REVOKE, gardes)');
   const fiche1 = sectionContrats('Interdit côté natif : système de pointage ①');
+  // Décompte d'audit en plancher documenté (≥ 3) : l'audit des gardes NULL, traité à part, peut en relever davantage.
   for (const temoin of ['toujours GRANT `authenticated` en production', 'PostgREST', 'pointer à distance', 'B9', 'REVOKE EXECUTE',
-    'Trois gardes', 'fn_generer_code_secours_mission', 'l.37478', 'l.83013', '`CODE_SECOURS`']) {
+    'Au moins trois gardes', '(≥ 3)', 'fn_generer_code_secours_mission', 'l.37478', 'l.83013', '`CODE_SECOURS`']) {
     assert.ok(fiche1.includes(temoin), `fiche système ① : ${temoin} absent`);
   }
   assert.ok(!/Deux gardes|huit RPC|\(huit,/.test(fiche1), 'fiche système ① : décompte périmé (trois gardes, neuf RPC)');
@@ -1376,27 +1415,54 @@ function gardesNuesEtablissement(schema) {
   }
   return [...out].sort();
 }
-test('B9 RLS/auth : « Motif à auditer » — gardes nues à mon_etablissement_id() des RPC authenticated, liste reproductible', () => {
+// Clôture de T0 : le décompte d'audit n'est plus une égalité stricte mais un plancher documenté (≥), annoncé par le
+// renvoi « Gardes NULL » de DECISIONS_LOT2.md › En attente de Gabrielle › B9. L'audit des gardes NULL du 3 novembre
+// 2026 (annexe AUDIT_GARDES_NULL_2026-11-03.md, PR B9 dédiée) en relève davantage : un décompte plus élevé au dump ne
+// fait pas rougir T0 ; une garde de la liste corrigée (ou un plancher non atteint) la fait basculer (BASCULE_MAIN).
+const PLANCHER_GARDES_NUES = 18; // relevé du dump #1097 : 17 conditions `IF`/`ELSIF` + l'affectation de v_is_etab
+const ANNEXE_AUDIT_GARDES_NULL = 'docs/mobile-swift/AUDIT_GARDES_NULL_2026-11-03.md';
+/** Fonctions qui ont une entrée (verdict) dans l'annexe : lignes `- <nom>[ / <nom> | , <nom> | + <nom>] — <verdict>`. */
+function fonctionsAuditees(annexe) {
+  const out = new Set();
+  for (const [, noms] of annexe.matchAll(/^- ([a-z0-9_ ,/+]+?) — (?:EXPLOITABLE|non exploitable) \[/gm)) {
+    for (const nom of noms.split(/\s*(?:\/|,|\+)\s*/)) if (nom) out.add(nom.trim());
+  }
+  return out;
+}
+test('B9 RLS/auth : gardes nues à mon_etablissement_id() des RPC authenticated — plancher documenté, renvoi à l audit', () => {
   const schema = read(SOURCES.schema);
   for (const [name, garde] of GARDES_NUES_ETAB) {
-    assert.ok(corpsSql(schema, enteteFn(name)).includes(garde), `${name} : garde nue corrigée (« ${garde} ») : liste « Motif à auditer » à ${BASCULE_MAIN}`);
+    assert.ok(corpsSql(schema, enteteFn(name)).includes(garde), `${name} : garde nue corrigée (« ${garde} ») : GARDES_NUES_ETAB et plancher à ${BASCULE_MAIN}`);
     assert.ok(new RegExp(`\\nGRANT ALL ON FUNCTION "public"\\."${name}"\\([^\\n]*\\) TO "authenticated";\\n`).test(schema), `${name} : plus de GRANT authenticated`);
   }
   for (const [name, [entete, temoin]] of Object.entries(GARDES_NUES_EXCLUES)) {
     assert.ok(corpsSql(schema, entete).includes(temoin), `${name} : exclusion à revoir (témoin « ${temoin} » absent)`);
   }
+  // Plancher (≥), pas égalité : chaque garde relevée par T0 l'est encore par la méthode, et le total atteint le plancher.
+  const trouvees = gardesNuesEtablissement(schema).filter(n => !(n in GARDES_NUES_EXCLUES));
   const attendu = GARDES_NUES_ETAB.map(([n]) => n).filter(n => n !== 'fn_etat_pointage_mission');
-  assert.deepEqual(gardesNuesEtablissement(schema).filter(n => !(n in GARDES_NUES_EXCLUES)), attendu,
-    `gardes nues à mon_etablissement_id() : la liste du dump a changé — mettre à jour GARDES_NUES_ETAB et « Motif à auditer » (${BASCULE_MAIN})`);
+  assert.deepEqual(attendu.filter(n => !trouvees.includes(n)), [],
+    `gardes nues à mon_etablissement_id() : une garde relevée par T0 n est plus nue — GARDES_NUES_ETAB et plancher (${BASCULE_MAIN})`);
+  assert.ok(GARDES_NUES_ETAB.length >= PLANCHER_GARDES_NUES, `GARDES_NUES_ETAB sous le plancher documenté (≥ ${PLANCHER_GARDES_NUES})`);
+  assert.ok(new Set([...trouvees, 'fn_etat_pointage_mission']).size >= PLANCHER_GARDES_NUES,
+    `gardes nues au dump sous le plancher documenté (≥ ${PLANCHER_GARDES_NUES} RPC) : ${BASCULE_MAIN}`);
+  // Renvoi unique et daté de DECISIONS_LOT2.md › En attente de Gabrielle › B9.
   const b9 = aplati(sousSection(section(read('docs/mobile-swift/DECISIONS_LOT2.md'), 'En attente de Gabrielle'),
     'B9 (PR préparées et poussées, jamais mergées sans go)'));
-  const motif = b9.slice(b9.indexOf('**Motif à auditer'), b9.indexOf('**Remontée**'));
-  assert.ok(motif.length > 0, '« Motif à auditer » absent');
-  assert.ok(motif.includes(`${GARDES_NUES_ETAB.length} RPC`), `« Motif à auditer » : décompte ${GARDES_NUES_ETAB.length} RPC absent`);
-  assert.ok(!motif.includes('18 fois'), '« Motif à auditer » : ancien décompte non reproductible');
-  for (const [name] of GARDES_NUES_ETAB) assert.ok(motif.includes(`\`${name}\``), `« Motif à auditer » : ${name} absente`);
-  for (const name of Object.keys(GARDES_NUES_EXCLUES)) assert.ok(motif.includes(`\`${name}\``), `« Motif à auditer » : exclusion ${name} non motivée`);
-  assert.ok(motif.includes('tests/node/check-rpc-contracts.node.mjs'), '« Motif à auditer » : méthode reproductible non référencée');
+  const renvoi = b9.slice(b9.indexOf('**Gardes NULL'), b9.indexOf('**Remontée**'));
+  assert.ok(renvoi.length > 0, 'renvoi « Gardes NULL » absent');
+  assert.ok(renvoi.includes(`≥ ${PLANCHER_GARDES_NUES} RPC`), `renvoi « Gardes NULL » : plancher ≥ ${PLANCHER_GARDES_NUES} RPC non documenté`);
+  assert.ok(!renvoi.includes('18 fois'), 'renvoi « Gardes NULL » : ancien décompte non reproductible');
+  assert.ok(renvoi.includes('`gardesNuesEtablissement`') && renvoi.includes('tests/node/check-rpc-contracts.node.mjs'),
+    'renvoi « Gardes NULL » : méthode reproductible non référencée');
+  // Annexe : copie du rapport d'audit, avec un verdict pour chaque garde relevée par T0 et pour les deux exclusions.
+  const annexe = read(ANNEXE_AUDIT_GARDES_NULL);
+  assert.ok(annexe.includes('3 novembre 2026') && annexe.includes('`fix/gardes-null-security-definer`'), 'annexe : date ou PR B9 absente');
+  const auditees = fonctionsAuditees(annexe);
+  for (const name of [...GARDES_NUES_ETAB.map(([n]) => n), ...Object.keys(GARDES_NUES_EXCLUES), 'fn_declarer_fin_retroactive']) {
+    assert.ok(auditees.has(name), `annexe ${ANNEXE_AUDIT_GARDES_NULL} : aucun verdict pour ${name}`);
+  }
+  assert.ok(auditees.size >= PLANCHER_GARDES_NUES, `annexe : ${auditees.size} fonctions auditées, plancher ${PLANCHER_GARDES_NUES}`);
 });
 
 // Revue fraîche de T0 : check-rpc-contracts.mjs lit le supplément STAGING (statut `staging_seulement`) ; tant que
