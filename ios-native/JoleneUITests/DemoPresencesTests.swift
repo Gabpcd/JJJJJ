@@ -113,7 +113,11 @@ final class DemoPresencesTests: JoleneUITestCase {
             require("L'onglet \(libelle) est visible") { self.visible(onglet) }
             XCTAssertEqual(onglet.label, libelle, "libellé entier de l'onglet")
             XCTAssertTrue(app.frame.insetBy(dx: -1, dy: -1).contains(onglet.frame), "\(libelle) tient dans la fenêtre")
-            XCTAssertGreaterThanOrEqual(onglet.frame.height, 44, "\(libelle) : cible tactile d'au moins 44 pt")
+            // Cadre relu en virgule flottante après conversion d'échelle : iPhone 17 rend `minHeight: 44` en
+            // 43,99999999999997 pt (run CI 42528556340). Comparaison au millième de point, très en deçà d'un pixel
+            // (1/3 pt) : une cible réellement plus petite que 44 pt échoue toujours.
+            let hauteur = (onglet.frame.height * 1000).rounded() / 1000
+            XCTAssertGreaterThanOrEqual(hauteur, 44, "\(libelle) : cible tactile d'au moins 44 pt")
             let texte = onglet.staticTexts[libelle]
             if texte.exists {
                 XCTAssertTrue(onglet.frame.insetBy(dx: -1, dy: -1).contains(texte.frame), "\(libelle) : texte non tronqué hors du bouton")
