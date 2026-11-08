@@ -18,6 +18,9 @@ import JoleneDesign
 ///   dans l'app par lien universel) ;
 /// - refus d'un lien de réinitialisation PKCE (option B, décision 7 du lot 1) : alerte au texte décidé, présentée
 ///   après la fermeture d'un renvoi affiché, un item numéroté par refus (revue B8 de T3b, m1) ;
+/// - (intégration de T7) confirmation d'inscription et pages `/inscription/soignant` / `reprendre` : déposées dans
+///   `BoiteLiensInscription`, présentées hors de l'espace par `RootView` (confirmation au-dessus de tout état, compte
+///   rapide sur l'écran de connexion une fois la session résolue) ;
 /// - fin d'identité native (`FinIdentiteWebPort`, appelé par `SessionStore` ; revue B8 de T3b, M1) : le renvoi affiché
 ///   est fermé, puis, hors démo, le magasin de données du navigateur intégré est effacé
 ///   (`SFSafariViewController.DataStore.default.clearWebsiteData`, iOS 16) ; un renvoi demandé pendant l'effacement
@@ -56,6 +59,8 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
 
     let estDemo: Bool
     private let aiguillage: AiguillageLiens
+    /// Liens d'inscription consommés hors de l'espace (intégration de T7) : déposés ici, présentés par `RootView`.
+    private let inscription: BoiteLiensInscription
     /// Effacement du magasin du navigateur intégré (nil en démo : aucun effet).
     private let effaceur: EffaceurDonneesWeb?
     private var numero = 0
@@ -63,8 +68,9 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
     private var lienAuLancement: URL?
     private var racineAffichee = false
 
-    init(taps: BoiteTapsPush, estDemo: Bool, effaceur: EffaceurDonneesWeb?) {
+    init(taps: BoiteTapsPush, inscription: BoiteLiensInscription, estDemo: Bool, effaceur: EffaceurDonneesWeb?) {
         self.estDemo = estDemo
+        self.inscription = inscription
         self.effaceur = estDemo ? nil : effaceur
         aiguillage = AiguillageLiens(taps: taps)
     }
@@ -182,6 +188,11 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
             presenter(route)
         case .refusReinitialisation?:
             presentations.refuser()
+        case .inscription(let lien)?:
+            // Intégration de T7 : confirmation ou page d'inscription, présentée hors de l'espace par `RootView`
+            // (`BoiteLiensInscription`) ; le renvoi affiché est fermé d'abord, comme pour une navigation.
+            fermerRenvoiWeb()
+            inscription.recevoir(lien)
         case nil:
             break
         }

@@ -32,10 +32,10 @@ public enum JoleneRoute: Equatable, Sendable {
     /// `/soignant/mon-compte`, `BarreNavigation.tsx` l.37) : `/soignant/mon-compte`, `parametres`,
     /// `parametres-complet` ; `score`, `fiabilite`, `fiabilite-legacy` tant que la page score est au
     /// lot 4 (blueprint v2 §3 T3 ; écart assumé : le hub n'affiche pas de score, `DECISIONS_LOT3.md`).
-    /// `/soignant/profil?tab=confidentialite` (export RGPD et suppression de compte) le rejoindra avec l'export RGPD
-    /// du hub (L3-T11) ; d'ici là, renvoi web (revue B8 de T3b, m3).
+    /// `/soignant/profil?tab=confidentialite` (export RGPD et suppression de compte) aussi, depuis que le hub porte
+    /// l'export RGPD (L3-T11, intégration du lot 3 ; revue B8 de T3b, m3).
     case monCompte
-    /// Édition du profil (lot 3, T9) : `/soignant/profil` (hors onglet `confidentialite`, renvoi web) et l'alias
+    /// Édition du profil (lot 3, T9) : `/soignant/profil` (hors onglet `confidentialite`, qui mène au hub) et l'alias
     /// `reputation`.
     case profil
     /// Centre de notifications (lot 3, T5) : `/soignant/notifications`.

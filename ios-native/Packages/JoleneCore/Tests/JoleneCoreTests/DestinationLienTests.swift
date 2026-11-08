@@ -77,6 +77,12 @@ final class DestinationLienTests: XCTestCase {
             ("https://jolene.app/inscription/soignant?profession=IDE&ville=Lyon",
              .inscription(EtapeInscription(page: .soignant, query: "profession=IDE&ville=Lyon"))),                 // T7
             ("https://jolene.app/inscription/reprendre", .inscription(EtapeInscription(page: .reprendre, query: nil))), // T7
+            // T7 (intégration du lot 3) : `ConfirmationInscriptionScreen`, présenté hors de l'espace par le coordinateur.
+            ("https://jolene.app/inscription/confirmer?token_hash=h&type=signup",
+             .confirmerInscription(credentials: .tokenHash(tokenHash: "h", otpType: "signup"))),                    // T7
+            ("https://jolene.app/inscription/confirmer?code=c", .confirmerInscription(credentials: .pkce(code: "c"))), // T7 (D10)
+            ("https://jolene.app/inscription/confirmer#access_token=a&refresh_token=r&type=signup",
+             .confirmerInscription(credentials: .implicit(accessToken: "a", refreshToken: "r"))),                  // T7
         ]
         for c in cas {
             let d = try XCTUnwrap(lien(c.lien), c.lien)
@@ -92,20 +98,18 @@ final class DestinationLienTests: XCTestCase {
 
     // MARK: Liens de rappel d'authentification sans écran natif (lot 3, T3b)
 
-    /// Reliquat L1-T10 (T3b, `DECISIONS_LOT3.md`) : le coordinateur de liens est livré, pas les écrans de
-    /// réinitialisation ni de confirmation d'inscription (T7). Leur lien part vers sa page web canonique, query et
-    /// fragment conservés (la page web vérifie `token_hash` et le format implicit), au lieu d'une route native sans
-    /// écran qui n'ouvrirait rien. Le refus de `?code=` sur `/reset-password` (option B, décision 7 du lot 1) ne
-    /// dépend pas de cette ligne : `DeepLinkIntent` le lit sur la route (`DeepLinkIntentTests`).
+    /// Reliquat L1-T10 (T3b, `DECISIONS_LOT3.md`) : le coordinateur de liens est livré, pas l'écran de
+    /// réinitialisation. Son lien part vers sa page web canonique, query et fragment conservés (la page web vérifie
+    /// `token_hash` et le format implicit), au lieu d'une route native sans écran qui n'ouvrirait rien. Le refus de
+    /// `?code=` sur `/reset-password` (option B, décision 7 du lot 1) ne dépend pas de cette ligne : `DeepLinkIntent`
+    /// le lit sur la route (`DeepLinkIntentTests`). La confirmation d'inscription en est sortie à l'intégration de T7
+    /// (`ConfirmationInscriptionScreen`, `testRoutesLot3AvecEcranLivreSontNatives`).
     func testLiensDeRappelSansEcranNatifRenvoyesVersSafariCanonique() throws {
         let cas: [(String, JoleneRoute)] = [
             ("/reset-password?token_hash=h&type=recovery", .resetPassword(credentials: .tokenHash(tokenHash: "h", otpType: "recovery"))),
             ("/reset-password#access_token=a&refresh_token=r&type=recovery",
              .resetPassword(credentials: .implicit(accessToken: "a", refreshToken: "r"))),
             ("/reset-password", .resetPassword(credentials: nil)),
-            ("/inscription/confirmer?token_hash=h&type=signup",
-             .confirmerInscription(credentials: .tokenHash(tokenHash: "h", otpType: "signup"))),
-            ("/inscription/confirmer?code=c", .confirmerInscription(credentials: .pkce(code: "c"))),
         ]
         for (chemin, route) in cas {
             let d = try XCTUnwrap(lien("https://jolene.app" + chemin), chemin)
@@ -405,12 +409,13 @@ final class DestinationLienTests: XCTestCase {
     /// `true` = destination dans l'app, écran provisoire compris : le coordinateur de liens (L1-T10, livré par
     /// L3-T3b) présente la route ; `false` = renvoi web canonique. Le reset et la confirmation d'inscription
     /// étaient à `true` « à l'arrivée de L1-T10 » : T3b n'apporte que le coordinateur, sans leurs écrans ; à `true`,
-    /// leur lien n'aurait rien ouvert (`CibleNotification.aucune`).
+    /// leur lien n'aurait rien ouvert (`CibleNotification.aucune`). La confirmation repasse à `true` à l'intégration de
+    /// T7, qui livre son écran et sa présentation hors de l'espace (`AiguillageLiens.Action.inscription`).
     func testTableDesEcransLivres() {
         let table: [(JoleneRoute, Bool, String)] = [
             (.connexion, true, "lot 0"),
             (.resetPassword(credentials: nil), false, "écran de réinitialisation natif non livré (reliquat L1-T10, T3b)"),
-            (.confirmerInscription(credentials: nil), false, "T7 — écran de confirmation d'inscription"),
+            (.confirmerInscription(credentials: nil), true, "T7 : ConfirmationInscriptionScreen, hors espace"),
             (.accueil, true, "lot 1"),
             (.explorer, true, "lot 1"),
             (.missions, true, "placeholder jusqu'à L1-T5"),

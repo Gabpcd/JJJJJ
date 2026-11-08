@@ -50,6 +50,9 @@ final class DeepLinkIntentTests: XCTestCase {
             ("https://jolene.app/soignant/reputation", .profil),
             ("https://www.jolene.app/soignant/notifications?utm_source=mail#haut", .centre),
             ("https://jolene.app/soignant/parametres/notifications", .preferences),
+            // Onglet « Confidentialité » du profil web (export RGPD, suppression de compte) : le hub natif porte les deux
+            // depuis L3-T11 (intégration du lot 3 ; revue B8 de T3b, m3, garde de `LinksRouterTests`).
+            ("https://jolene.app/soignant/profil?tab=confidentialite#suppression-compte", .monCompte),
         ]
         for (lien, cible) in cas {
             let obtenue = try intention(lien)
@@ -75,14 +78,9 @@ final class DeepLinkIntentTests: XCTestCase {
             "https://jolene.app/soignant/stripe-connect?refresh=true",                // T14a
             "https://jolene.app/soignant/missions/serie/s1",                          // lot 4 (décision 11 du lot 1)
             "https://jolene.app/soignant/litiges#l1",
-            // Onglet « Confidentialité » du profil web (export RGPD, suppression de compte) : renvoi web tant que le hub
-            // natif n'a pas l'export (L3-T11 ; revue B8 de T3b, m3, garde de `LinksRouterTests`).
-            "https://jolene.app/soignant/profil?tab=confidentialite#suppression-compte",
-            "https://jolene.app/inscription/soignant?profession=IDE&ville=Lyon",      // T7
-            "https://jolene.app/inscription/reprendre",                               // T7
+            // T7 (confirmation, `soignant`, `reprendre`) : présentées hors de l'espace depuis l'intégration du lot 3
+            // (`testLiensDInscriptionEtDeConfirmationPresentesHorsDeLEspace`) ; la complétion attend T8.
             "https://jolene.app/inscription/completer?ref=ABCD-12",                   // T8
-            "https://jolene.app/inscription/confirmer?token_hash=h&type=signup",      // T7
-            "https://jolene.app/inscription/confirmer?code=c",                        // T7 (D10 : `code` accepté)
             "https://jolene.app/reset-password?token_hash=h&type=recovery",           // reset natif non livré
             "https://jolene.app/reset-password#access_token=a&refresh_token=r&type=recovery",
             "https://jolene.app/reset-password",                                      // sans identifiants
@@ -140,10 +138,12 @@ final class DeepLinkIntentTests: XCTestCase {
     }
 
     /// Liens consommés hors de l'espace : liste **nommée et fermée** (`CLAUDE.md`, « un gap connu reste verrouillé »).
-    /// Une route native livrée qui n'a pas de cible dans l'espace (connexion ; demain l'inscription et la confirmation
-    /// de T7, le reset natif) tombe ici ; l'aiguillage ne l'ouvre pas. Toute autre route qui y tomberait (une tranche
-    /// passe sa ligne de `ecranNatifLivre` à `true` sans présentation hors espace) fait échouer ce test : il faut
-    /// alors sa présentation dans `AiguillageLiens` (et l'app), puis sa ligne ici, justifiée dans `DECISIONS_LOT3.md`.
+    /// Une route native livrée qui n'a pas de cible dans l'espace tombe ici : la connexion (rien à ouvrir) ; depuis
+    /// l'intégration de T7, la confirmation d'inscription et les pages `soignant` / `reprendre`, présentées hors de
+    /// l'espace (action `.inscription`, déposée par le coordinateur dans `BoiteLiensInscription`, lue par `RootView`) ;
+    /// demain le reset natif. Toute autre route qui y tomberait (une tranche passe sa ligne de `ecranNatifLivre` à `true`
+    /// sans présentation hors espace) fait échouer ce test : il faut alors sa présentation dans `AiguillageLiens` (et
+    /// l'app), puis sa ligne ici, justifiée dans `DECISIONS_LOT3.md`.
     func testToutLienHorsEspaceAppartientALaListeNommee() throws {
         let golden = try Golden.charger("push-routing").filter { $0.fonction == "navigationPathForEvent" }
             .compactMap { $0.expected.string }
@@ -151,17 +151,62 @@ final class DeepLinkIntentTests: XCTestCase {
         for chemin in Self.liensParGenre + golden {
             let lien = try XCTUnwrap(DestinationLien(link: chemin), chemin)
             guard case .horsEspace(let destination) = DeepLinkIntent(lien) else { continue }
+            let aiguillage = AiguillageLiens(taps: BoiteTapsPush())
             switch destination.destination {
-            case .connexion: horsEspace.insert("connexion")
-            default: XCTFail("\(chemin) : lien hors espace sans présentation nommée (\(destination))")
+            case .connexion:
+                horsEspace.insert("connexion")
+                XCTAssertNil(aiguillage.recevoir(DeepLinkIntent(lien)), "\(chemin) : écran de connexion, rien à ouvrir")
+            case .confirmerInscription:
+                horsEspace.insert("confirmation")
+                XCTAssertEqual(aiguillage.recevoir(DeepLinkIntent(lien)), .inscription(destination), chemin)
+            case .inscription(let etape) where etape.page == .soignant || etape.page == .reprendre:
+                horsEspace.insert("inscription")
+                XCTAssertEqual(aiguillage.recevoir(DeepLinkIntent(lien)), .inscription(destination), chemin)
+            default:
+                XCTFail("\(chemin) : lien hors espace sans présentation nommée (\(destination))")
             }
+            XCTAssertFalse(aiguillage.aUnLienEnAttente, "\(chemin) : jamais mémorisé pour un espace à venir")
         }
-        XCTAssertEqual(horsEspace, ["connexion"], "seule la connexion est consommée hors de l'espace, sans action")
+        XCTAssertEqual(horsEspace, ["connexion", "confirmation", "inscription"],
+                       "liste nommée : connexion (sans action), confirmation et inscription (T7, présentées hors espace)")
         let aiguillage = AiguillageLiens(taps: BoiteTapsPush())
         XCTAssertNil(aiguillage.recevoir(url: url("https://jolene.app/connexion")), "écran de connexion : rien à ouvrir")
         XCTAssertFalse(aiguillage.aUnLienEnAttente, "jamais mémorisé")
         _ = aiguillage.ouvrirEspace(snapshot(epoch: 1))
         XCTAssertNil(aiguillage.recevoir(url: url("https://jolene.app/connexion")), "espace prêt : on y reste")
+    }
+
+    /// Intégration du lot 3 (T7 × T3b) : la confirmation d'inscription (`token_hash`, implicit, `code` — D10) et les
+    /// pages `soignant` / `reprendre` sont livrées par T7 et consommées **hors de l'espace** (écran de connexion,
+    /// confirmation présentée au-dessus de tout état, aiguillage d'onboarding) : l'aiguillage rend `.inscription` avec la
+    /// destination reçue (query conservée : profession pré-remplie, `?ref=` pour le lot 4), avec ou sans espace ouvert,
+    /// sans jamais la mémoriser ni la rejouer ; la vue de session décide (une identité ouverte n'a pas d'inscription à
+    /// faire, la confirmation est présentée quel que soit l'état). La complétion (`completer`, T8) reste un renvoi web.
+    func testLiensDInscriptionEtDeConfirmationPresentesHorsDeLEspace() throws {
+        let aiguillage = AiguillageLiens(taps: BoiteTapsPush())
+        let confirmation = try XCTUnwrap(DestinationLien(url: url("https://jolene.app/inscription/confirmer?token_hash=h&type=signup")))
+        XCTAssertEqual(confirmation.destination, .confirmerInscription(credentials: .tokenHash(tokenHash: "h", otpType: "signup")))
+        XCTAssertEqual(aiguillage.recevoir(url: url("https://jolene.app/inscription/confirmer?token_hash=h&type=signup")),
+                       .inscription(confirmation), "sans session : présentée aussitôt")
+        XCTAssertEqual(aiguillage.recevoir(url: url("https://jolene.app/inscription/confirmer?code=c")),
+                       .inscription(try XCTUnwrap(DestinationLien(url: url("https://jolene.app/inscription/confirmer?code=c")))),
+                       "D10 : `code` accepté pour la confirmation (l'option B ne vaut que pour le reset)")
+        let rapide = try XCTUnwrap(DestinationLien(url: url("https://www.jolene.app/inscription/soignant?profession=IDE&ville=Lyon")))
+        XCTAssertEqual(rapide.destination, .inscription(EtapeInscription(page: .soignant, query: "profession=IDE&ville=Lyon")),
+                       "query conservée (profession pré-remplie)")
+        XCTAssertEqual(aiguillage.recevoir(url: url("https://www.jolene.app/inscription/soignant?profession=IDE&ville=Lyon")),
+                       .inscription(rapide))
+        XCTAssertFalse(aiguillage.aUnLienEnAttente, "jamais mémorisé")
+        XCTAssertNil(aiguillage.ouvrirEspace(snapshot(epoch: 1)), "rien n'est rejoué à l'ouverture de l'espace")
+        let reprise = try XCTUnwrap(DestinationLien(url: url("https://jolene.app/inscription/reprendre")))
+        XCTAssertEqual(aiguillage.recevoir(url: url("https://jolene.app/inscription/reprendre")), .inscription(reprise),
+                       "espace ouvert : même action, la vue de session l'écarte")
+        XCTAssertEqual(aiguillage.recevoir(url: url("https://jolene.app/inscription/confirmer?token_hash=h&type=signup")),
+                       .inscription(confirmation), "espace ouvert : la confirmation est présentée au-dessus de tout état")
+        let completer = url("https://jolene.app/inscription/completer?ref=ABCD-12")
+        XCTAssertEqual(aiguillage.recevoir(url: completer), .renvoiWeb(.safari(completer)), "T8 non livrée : renvoi web")
+        // Un tap ou un lien mémorisé ne mène jamais à l'inscription (aucun vecteur push n'y pointe) : sans action.
+        XCTAssertNil(aiguillage.ouvrirEspace(snapshot(epoch: 2)))
     }
 
     /// Toute destination de l'espace (table des routes et famille push golden) donne, espace ouvert, une navigation
@@ -188,6 +233,8 @@ final class DeepLinkIntentTests: XCTestCase {
                 renvois += 1
             case .refusReinitialisation?:
                 XCTAssertEqual(intention, .reinitialisationRefusee, chemin)
+            case .inscription(let destination)?:
+                XCTAssertEqual(intention, .horsEspace(destination), "\(chemin) : présenté hors de l'espace (T7)")
             case nil:
                 guard case .horsEspace = intention else {
                     XCTFail("\(chemin) : aucune action pour \(intention)")
@@ -462,8 +509,11 @@ final class DeepLinkIntentTests: XCTestCase {
         XCTAssertEqual(DeepLinkIntent.reinitialisationRefusee.description, "DeepLinkIntent.reinitialisationRefusee")
         XCTAssertEqual(try intention("https://jolene.app/soignant/notifications").description,
                        "DeepLinkIntent.espace(DestinationLien(route: notifications, chemin: /soignant/notifications, destination: natif))")
+        let confirmation = try XCTUnwrap(DestinationLien(url: url("https://jolene.app/inscription/confirmer?token_hash=SECRET9&type=signup")))
+        let rapide = try XCTUnwrap(DestinationLien(url: url("https://jolene.app/inscription/soignant?ref=SECRET10")))
         for action in [AiguillageLiens.Action.naviguer(.mission(id: "SECRET7"), route: .missionDetail(id: "SECRET7"), epoch: 1),
-                       .renvoiWeb(.safari(url("https://jolene.app/contrat/SECRET8")))] {
+                       .renvoiWeb(.safari(url("https://jolene.app/contrat/SECRET8"))),
+                       .inscription(confirmation), .inscription(rapide)] {
             var sortie = ""
             dump(action, to: &sortie)
             for texte in textes(action) + [sortie] {

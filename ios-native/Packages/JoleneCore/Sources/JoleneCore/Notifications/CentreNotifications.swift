@@ -95,8 +95,8 @@ public enum CibleNotification: Equatable, Sendable {
     /// l'entrée « Réglages › Notifications » du hub.
     case preferences
     /// Édition du profil (`/soignant/profil`, alias `/soignant/reputation`, T9 ; tout `?tab=` sauf `confidentialite`,
-    /// renvoi web tant que le hub n'a pas l'export RGPD, L3-T11), empilée sur l'onglet Profil comme l'entrée « Mon
-    /// profil » du hub.
+    /// qui mène au hub depuis l'export RGPD de L3-T11), empilée sur l'onglet Profil comme l'entrée « Mon profil » du
+    /// hub.
     case profil
     /// Renvoi web (`.safari` ou `.etablissement`), présenté par le présentateur de renvoi web s'il est injecté
     /// (coordinateur des liens, L3-T3b) ; reset `token_hash`/implicit compris, tant que son écran natif n'est pas

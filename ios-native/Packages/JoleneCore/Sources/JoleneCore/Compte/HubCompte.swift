@@ -2,7 +2,7 @@ import Foundation
 
 /// Entrées du hub « Mon compte » livrées par le lot 3, T11, hors écrans natifs (`MonCompteSoignant.tsx`).
 /// Chaque entrée passe par `JoleneRoute` puis `DestinationLien.destination` : une page web s'ouvre par le
-/// présentateur `.safari` (L1-T10), jamais par `openURL` ; tant qu'il n'est pas injecté, l'entrée n'est pas
+/// présentateur `.safari` (coordinateur des liens de L3-T3b), jamais par `openURL` ; tant qu'il n'est pas injecté, l'entrée n'est pas
 /// affichée (jamais un lien sans effet).
 public enum HubCompte {
     public struct Lien: Identifiable, Equatable, Sendable {

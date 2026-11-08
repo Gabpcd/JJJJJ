@@ -19,8 +19,9 @@ import XCTest
 ///   JSON. » (`SectionConfidentialite.tsx` l.73), boutons réactivés, fichier supprimé ; un refus du serveur
 ///   (variante `JOLENE_FORCE_EXPORT_ECHEC=1`, message verbatim de `fn_rgpd_exporter_rate_limited`) est affiché et
 ///   n'ouvre aucune feuille ;
-/// - « Aide & légal » n'existe pas tant que le présentateur Safari de L1-T10 n'est pas injecté (jamais un lien
-///   sans effet : verrou du gap, remplacé par l'ouverture Safari à l'arrivée de T10).
+/// - « Aide & légal » : depuis l'intégration du lot 3 (présentateur Safari du coordinateur des liens de L3-T3b, qui
+///   remplace L1-T10), chaque entrée ouvre sa page publique par le renvoi web (URL canonique, double démo sans
+///   réseau) ; avant, le test exigeait leur absence (verrou du gap).
 /// Persistance du thème, présentation différée tant que le hub est hors écran, suppression du fichier en fin de
 /// session, aplatissement CSV, audit et refus GoTrue sont prouvés au niveau 1 (`PreferenceThemeTests`,
 /// `ExportRGPDModelTests`, `ExportRGPDTests`, `MotDePasseModelTests`, `SupabaseMotDePasseGatewayTests`).
@@ -211,10 +212,31 @@ final class DemoCompteLot3Tests: JoleneUITestCase {
         require("Nouvel essai manuel possible") { csv.isEnabled && self.element("compte-export-json").isEnabled }
         record("\(proofPrefix)-compte-export-refus")
 
-        // « Aide & légal » : aucun lien tant que le présentateur Safari (L1-T10) n'est pas injecté.
-        scrollTo(element("compte-suppression-info"), in: liste)
-        for identifiant in ["compte-aide", "compte-confidentialite", "compte-cgu", "compte-mentions-legales"] {
-            XCTAssertFalse(element(identifiant).exists, "\(identifiant) : jamais un lien sans effet")
+        compteSentinelleSansRequete()
+    }
+
+    /// Intégration du lot 3 (règle 8) : le présentateur `.safari` du coordinateur des liens (L3-T3b) est injecté, la
+    /// section « Aide & légal » (`MonCompteSoignant.tsx` l.126-136) est donc montée ; chaque entrée ouvre sa page
+    /// publique, URL canonique (double démo `renvoi-web-demo`, aucune requête réseau), jamais `openURL`. Avant T3b, le
+    /// test exigeait l'absence des quatre entrées (jamais un lien sans effet).
+    func testAideEtLegalOuvreLesPagesPubliquesParLeRenvoiWeb() throws {
+        launchDemo()
+        compteSeConnecter()
+        compteOuvrirProfil()
+        let liste = element("profile-list")
+        let pages = [("compte-aide", "Centre d'aide", "https://jolene.app/aide"),
+                     ("compte-confidentialite", "Confidentialité", "https://jolene.app/confidentialite"),
+                     ("compte-cgu", "Conditions générales", "https://jolene.app/cgu"),
+                     ("compte-mentions-legales", "Mentions légales", "https://jolene.app/mentions-legales")]
+        for (identifiant, libelle, url) in pages {
+            let entree = element(identifiant)
+            scrollTo(entree, in: liste)
+            XCTAssertTrue(entree.label.contains(libelle), "libellé verbatim web : \(entree.label)")
+            tap(identifiant)
+            liensRenvoiWebAffiche(url)
+            if identifiant == "compte-cgu" { record("\(proofPrefix)-compte-aide-legal-cgu") }
+            liensFermerRenvoiWeb()
+            require("Retour au hub après le renvoi") { self.containerVisible(liste) }
         }
         compteSentinelleSansRequete()
     }

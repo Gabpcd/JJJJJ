@@ -13,7 +13,7 @@ import JoleneDesign
 /// - T11 : « Connexion & sécurité » (« Changer mon mot de passe », `compte-mdp-ouvrir` ; issue d'une demande dont
 ///   l'écran a été dépilé, `compte-mdp-issue-hub`), « Mes données (RGPD) » (export JSON / CSV ; feuille de partage
 ///   présentée hub à l'écran seulement), « Aide & légal » (pages publiques en Safari, montée seulement avec le
-///   présentateur `.safari` de L1-T10) ;
+///   présentateur `.safari` du coordinateur des liens, L3-T3b) ;
 /// - lot 1, T8 : « Suppression de compte », dernière section.
 /// Entrées natives en liens par valeur (`ProfilEditionRoute`, `PreferencesNotificationsRoute` enregistrées par
 /// `MainTabView` ; `MotDePasseRoute` enregistrée ici, sur la liste et non dans ses lignes). Entrées web : `JoleneRoute`
@@ -96,7 +96,7 @@ struct ProfileScreen: View {
             }
             ExportRGPDSection(model: export, exposerResidus: container.isDemo) // lot 3, T11
             if let presentateurRenvoiWeb {
-                AideEtLegalSection(presentateur: presentateurRenvoiWeb) // lot 3, T11 : après L1-T10
+                AideEtLegalSection(presentateur: presentateurRenvoiWeb) // lot 3, T11 (présentateur de L3-T3b)
             }
             // Lot 1, T8 (Apple 5.1.1) : dernière section.
             SuppressionCompteSection(session: session, snapshot: snapshot, finDeCompte: container.finDeCompte)

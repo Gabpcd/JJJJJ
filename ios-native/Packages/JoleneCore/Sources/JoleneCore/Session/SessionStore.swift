@@ -33,7 +33,8 @@ import Combine
 /// Lot 3, T3b (revue fraîche B8, M1) — port du navigateur intégré `FinIdentiteWebPort`, optionnel (nil :
 /// comportement inchangé), indépendant du push : `identiteTerminee()` une fois par fin d'identité
 /// (`signOut` après la révocation, `signOutLocally` après la purge, absence de session confirmée après une
-/// identité), avant chaque `signIn`, jamais sur une fin transitoire ni au lancement à froid sans session.
+/// identité), avant chaque `signIn` et avant la relecture d'une identité ouverte par l'inscription
+/// (`ouvrirIdentiteInscription`, intégration T7), jamais sur une fin transitoire ni au lancement à froid sans session.
 @MainActor
 public final class SessionStore: ObservableObject {
     @Published public private(set) var state: SessionState {
@@ -84,6 +85,16 @@ public final class SessionStore: ObservableObject {
         if !state.isReady { state = .loading }
         appliquer(await controller.startPublication())
         canRetryRestore = await controller.canRetryRestore
+    }
+
+    /// Lot 3, intégration T7 × T3b (revue B8 de T3b, m4) : relecture de la session après une identité ouverte par
+    /// l'inscription **hors de `signIn`** (compte créé avec session puis parcours démarré, lien de confirmation échangé,
+    /// `RootView`). Comme avant `signIn`, le navigateur intégré est vidé d'abord : l'identité qui s'ouvre ne trouve
+    /// jamais les données web d'une autre (renvoi ouvert sans identité native, écart n°1 de T3b ; identité remplacée par
+    /// un lien de confirmation reçu dans un espace ouvert).
+    public func ouvrirIdentiteInscription() async {
+        finIdentiteWeb?.identiteTerminee()
+        await start()
     }
 
     public func signIn(email: String, password: String) async {

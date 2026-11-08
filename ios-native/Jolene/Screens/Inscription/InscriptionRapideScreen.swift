@@ -15,7 +15,7 @@ import JoleneDesign
 /// Identifiants : `inscription-scroll`, `inscription-email`, `inscription-password`, `inscription-profession`,
 /// `inscription-cgu` (case), `inscription-cgu-texte`, `inscription-<champ>-erreur`, `inscription-submit`,
 /// `inscription-confirmation-envoyee`, `inscription-erreur`, `inscription-renvoi-web` (seulement avec le
-/// présentateur `.safari` de L1-T10), `inscription-se-connecter`.
+/// présentateur `.safari` du coordinateur des liens, L3-T3b), `inscription-se-connecter`.
 struct InscriptionRapideScreen: View {
     @StateObject private var model: InscriptionRapideModel
     /// « Se connecter » : retour à l'écran de connexion avec l'adresse saisie.

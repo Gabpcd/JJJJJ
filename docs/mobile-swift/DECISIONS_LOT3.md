@@ -856,6 +856,65 @@ absente de toutes les branches : point d'entrée unique des liens universels et 
   `schema-snapshot` ne fait plus rougir JoleneCore (revue B8, m5). Textes natifs sans équivalent web : puce « T11 — textes sans équivalent
   web » de la section HARD STOP ci-dessous. **B9** : non (D18).
 
+## Intégration de T3b, T7 et T11 sur `feat/ios-lot3` (vague 3, 09/11/2026)
+
+Fusions `--no-ff`, dans l'ordre : `origin/main` (#1120, #1122, hors `ios-native/`), `origin/fix/ios-tests-instables`
+(trois tests iOS instables du lot 1 : `require` borné et tracé, `dragSliderPastMinimum`, annulations du port Explorer),
+`lot3/l3-t3b-v2`, `lot3/l3-t7-v2`, `lot3/l3-t11-v2`. T7 et T11 ont été écrites sur une base sans le coordinateur de
+T3b : leurs points d'extension « en attendant L1-T10 / T3b » sont branchés ici, sans changer aucune règle ni aucun
+texte. Correctif d'intégration (tests d'abord), chaque test changé étant faux pour la base fusionnée, jamais affaibli :
+
+- **Confirmation et inscription présentées hors de l'espace (T7 × T3b, consigne de T3b).**
+  - `DestinationLien.ecranNatifLivre(.confirmerInscription)` repasse à `true` : T3b l'avait mise à `false`
+    « jusqu'à T7 », qui livre `ConfirmationInscriptionScreen` (`InscriptionModelsTests` et la garde de
+    `CentreNotificationsTests` étaient rouges à la fusion).
+  - `AiguillageLiens.Action.inscription(DestinationLien)` : un lien `.horsEspace` de confirmation ou de page
+    `soignant` / `reprendre` rend cette action aussitôt, avec ou sans espace, jamais mémorisée ni rejouée ; la
+    connexion reste sans action. `DeepLinkCoordinator` (initialisé avec `AppContainer.liensInscription`) ferme le
+    renvoi affiché puis dépose le lien dans `BoiteLiensInscription`, que `RootView` présente (confirmation au-dessus
+    de tout état ; compte rapide hors session). La liste nommée de
+    `DeepLinkIntentTests.testToutLienHorsEspaceAppartientALaListeNommee` devient connexion, confirmation, inscription ;
+    nouveau test `testLiensDInscriptionEtDeConfirmationPresentesHorsDeLEspace` ; exclusion nommée de
+    `CentreNotificationsTests` : connexion, confirmation, pages `soignant` et `reprendre` (le reset, renvoi web depuis
+    T3b, n'y est plus).
+  - `RootView` : un lien `/inscription/soignant` reçu pendant la restauration (lancement à froid, `-JOLENE_OPEN_URL`)
+    reste dans la boîte jusqu'à l'issue de la session (`onChange(of: session.state)`) ; T7 l'écartait avant de savoir
+    s'il y avait une identité, ce qui rendait le lien de lancement inerte.
+  - Revue B8 de T3b, m4 (T7) : `SessionStore.ouvrirIdentiteInscription()` vide le navigateur intégré
+    (`FinIdentiteWebPort`) avant la relecture d'une identité ouverte **hors de `signIn`** — compte créé avec session
+    puis parcours démarré, lien de confirmation échangé (y compris celui d'un autre compte reçu dans un espace ouvert).
+    `RootView` l'appelle à la place de `start()` dans ces deux cas ; test
+    `SessionStoreFinIdentiteWebTests.testOuvertureDIdentiteParLInscriptionEstPrecedeeDUnAppel`. **Restent** :
+    `refreshSession` de T8 et le reset natif (même appel avant d'ouvrir l'identité, consigne inchangée de T3b).
+  - Écart consigné (non juridique) : les pages `/cgu` et `/confidentialite` de la phrase de consentement restent un
+    `SFSafariViewController` présenté par une feuille du formulaire (T7), et non par le présentateur de T3b : le
+    formulaire est lui-même une feuille dans l'aiguillage d'onboarding (« Je suis soignant ») et la racine ne peut pas
+    présenter par-dessus (une seule feuille par niveau, limite connue de T3b). Cette feuille disparaît avec son hôte à
+    toute fin d'identité, et le magasin effacé est le même (`SFSafariViewController.DataStore.default`). En démo, ces
+    deux liens ouvriraient la page réelle : aucun XCUITest ne les touche ; à reprendre si une recette démo les exerce.
+- **`?tab=confidentialite` → hub (T11 × T3b, consigne de T3b et recommandation de T11).** La ligne de `LinkRouter`
+  passe de `.safari(canonique)` à `.monCompte` dès que le port `exportRGPD` est câblé (garde
+  `LinksRouterTests.testOngletConfidentialiteSuitLExportRGPDDuHub`, rouge à la fusion) ; cas déplacés dans
+  `LinksRouterTests`, `DeepLinkIntentTests` (`testRoutesNativesLivreesVontDansLEspace`) et
+  `CentreNotificationsTests.testCibleDesDestinations`. Aucune notification du dump ne vise ce `?tab=`.
+- **« Aide & légal » monté (T11 × T3b).** Le présentateur `.safari` est injecté à la racine : la section du hub
+  s'affiche. `DemoCompteLot3Tests` affirmait son absence ; remplacé (règle 8, consigne de T11) par
+  `testAideEtLegalOuvreLesPagesPubliquesParLeRenvoiWeb` (quatre pages, URL canonique sur le double démo).
+  `DemoInscriptionTests` : le renvoi web du refus captcha (D25, `inscription-renvoi-web`) existe désormais —
+  `testRefusCaptchaAfficheLeMessageGeneriqueSansRenvoi` devient `…EtLeRenvoiWeb` (bouton, puis page
+  `/inscription/soignant` sur le double). « Je représente un établissement » de l'aiguillage apparaît de même.
+- **XCUITest ajoutés à `DemoLiensLot3Tests`** (trois formats, compilés, non lancés localement) : `/soignant/mon-compte`
+  → hub (revue n°2 de T3b, m5) ; `?tab=confidentialite#suppression-compte` → hub avec l'export ;
+  `/inscription/soignant?profession=IDE` → compte rapide, profession pré-remplie (formulaire accepté sans choisir la
+  profession) ; `/inscription/confirmer?token_hash=demo&type=signup` → confirmation, puis aiguillage et complétion en
+  attente (consigne de T7 « à l'arrivée du coordinateur »).
+- **Écarts au blueprint v2 §3 T11 actés par l'intégrateur (revue B8 de T11, m9)** : pas d'entrée centre de
+  notifications au hub (le hub web n'en a pas) ; pas d'entrées Paiements / Stripe ni Coordonnées bancaires (reprises
+  par T14a et T14b) ; bloc du lot 0 en tête du hub. « Aide & légal » n'est plus un écart (monté ci-dessus). Écarts non
+  juridiques, sans texte nouveau.
+- Aucun texte nouveau, aucun texte juridique, aucune RPC, aucune écriture serveur. B9 inchangé : T7 reste soumise au
+  go de Gabrielle et au préalable captcha (section T7).
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.

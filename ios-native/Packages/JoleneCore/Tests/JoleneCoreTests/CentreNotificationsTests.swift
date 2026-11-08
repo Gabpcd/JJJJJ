@@ -421,10 +421,15 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(try cible("/soignant/profil?tab=principal"), .profil)
         XCTAssertEqual(try cible("/soignant/reputation"), .profil)
         // Point de fusion T3b / T11 (revue L3-T9 m2 ; revue B8 de T3b, m3) : l'onglet confidentialité du web (export RGPD,
-        // suppression de compte) reste un renvoi web tant que le hub natif n'a pas l'export (L3-T11, garde de
+        // suppression de compte) mène au hub natif, qui porte les deux depuis L3-T11 (intégration du lot 3, garde de
         // `LinksRouterTests`) ; aucune notification du dump ne vise ce `?tab=`.
-        XCTAssertEqual(try cible("/soignant/profil?tab=confidentialite"),
-                       .web(.safari(URL(string: "https://jolene.app/soignant/profil?tab=confidentialite")!)))
+        XCTAssertEqual(try cible("/soignant/profil?tab=confidentialite"), .monCompte)
+        // Intégration du lot 3 (T7) : confirmation et pages d'inscription présentées hors de l'espace, rien depuis
+        // l'espace (exclusion nommée de la garde ci-dessous).
+        XCTAssertEqual(try cible("/inscription/confirmer?token_hash=h&type=signup"), .aucune)
+        XCTAssertEqual(try cible("/inscription/soignant?profession=IDE"), .aucune)
+        XCTAssertEqual(try cible("/inscription/completer?ref=ABCD-12"),
+                       .web(.safari(URL(string: "https://jolene.app/inscription/completer?ref=ABCD-12")!)), "T8 non livrée")
         // Destination effective, jamais la route brute : factures et paiements restent des renvois web (D4, T13).
         XCTAssertEqual(try cible("/soignant/mes-gains?tab=factures"),
                        .web(.safari(URL(string: "https://jolene.app/soignant/mes-gains?tab=factures")!)))

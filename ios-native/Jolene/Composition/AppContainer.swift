@@ -47,8 +47,9 @@ final class AppContainer: ObservableObject {
     /// Lot 1, T8 : avis de fin de compte partagé entre l'écran de suppression et la racine.
     let finDeCompte = AvisFinDeCompte()
     /// Lot 3, T7 : liens d'inscription (`/inscription/confirmer`, `/inscription/soignant`, `/inscription/reprendre`)
-    /// consommés hors de l'espace prêt ; point d'extension du coordinateur de liens (L1-T10 / T3b), lu par `RootView`.
-    let liensInscription = BoiteLiensInscription()
+    /// consommés hors de l'espace prêt ; alimentés par le coordinateur des liens (T3b, intégration du lot 3), lus par
+    /// `RootView`.
+    let liensInscription: BoiteLiensInscription
     /// Lot 3, T11 : thème de l'app (D16), appliqué à la racine (`ThemeRacine`) ; par appareil (`UserDefaults`,
     /// clé `jolene.theme`) en staging et production, mémoire vive en démo (chaque lancement démo part de Système).
     let theme: PreferenceThemeModel
@@ -83,8 +84,11 @@ final class AppContainer: ObservableObject {
         let boite = NotificationCenterDelegate.shared.boite
         tapsPush = boite
         // Revue B8 de T3b, M1 : le coordinateur est aussi le port `FinIdentiteWebPort` de la session (fermeture du renvoi
-        // affiché, effacement du magasin `SFSafariViewController` hors démo).
-        let liens = DeepLinkCoordinator(taps: boite, estDemo: environment.mode == .demo,
+        // affiché, effacement du magasin `SFSafariViewController` hors démo). Intégration de T7 : il dépose les liens
+        // d'inscription dans `liensInscription`, que `RootView` présente hors de l'espace.
+        let inscription = BoiteLiensInscription()
+        liensInscription = inscription
+        let liens = DeepLinkCoordinator(taps: boite, inscription: inscription, estDemo: environment.mode == .demo,
                                         effaceur: environment.mode == .demo ? nil : EffaceurDonneesSafari())
         self.liens = liens
         theme = PreferenceThemeModel(stockage: environment.mode == .demo ? MemoireStockageAppareil() : UserDefaultsStockageAppareil())

@@ -10,11 +10,12 @@ import XCTest
 /// - la création annonce le lien de confirmation (texte verbatim l.322-324) et le bouton devient
 ///   « J’ai confirmé mon email » ; la connexion qui suit ouvre l'aiguillage, jamais l'espace soignant sans profil ;
 /// - un compte existant (`-JOLENE_DEMO_INSCRIPTION_REFUS USER_ALREADY_REGISTERED`) propose « Se connecter et
-///   continuer » ; un refus captcha (`CAPTCHA_FAILED`) affiche le message générique du web, sans renvoi web tant
-///   que le présentateur `.safari` (L1-T10) n'existe pas ;
+///   continuer » ; un refus captcha (`CAPTCHA_FAILED`) affiche le message générique du web et le renvoi vers
+///   l'inscription web (D25), présenté par le présentateur `.safari` du coordinateur des liens (L3-T3b) ;
 /// - « Se connecter » ramène à l'écran de connexion avec l'adresse saisie.
-/// Le lien `/inscription/confirmer` (`-JOLENE_OPEN_URL`) attend le coordinateur de liens de L1-T10 / T3b : il est
-/// prouvé au niveau 1 (`ConfirmationInscriptionModel`, `DemoInscriptionGateway`, `SupabaseInscriptionGateway`).
+/// Les liens `/inscription/confirmer` et `/inscription/soignant` (`-JOLENE_OPEN_URL`, coordinateur des liens de
+/// L3-T3b) sont prouvés par `DemoLiensLot3Tests` (intégration du lot 3), et au niveau 1 (`ConfirmationInscriptionModel`,
+/// `DemoInscriptionGateway`, `SupabaseInscriptionGateway`, `DeepLinkIntentTests`).
 ///
 /// Formats : iPhone, iPad portrait, iPad paysage (`JOLENE_UI_ORIENTATION`, `proofPrefix`) ; chaque contrôle est
 /// amené à l'écran par un défilement borné (`scrollTo`) avant d'être exigé atteignable (PRINCIPES §6).
@@ -99,7 +100,10 @@ final class DemoInscriptionTests: JoleneUITestCase {
         require("La connexion ouvre l'espace du compte existant", timeout: 30) { self.tabBarExists }
     }
 
-    func testRefusCaptchaAfficheLeMessageGeneriqueSansRenvoi() throws {
+    /// Intégration du lot 3 (règle 8) : le présentateur `.safari` est injecté depuis L3-T3b, le renvoi vers l'inscription
+    /// web (D25) existe donc et ouvre sa page (double démo `renvoi-web-demo`, aucune requête réseau). Avant T3b, le
+    /// test exigeait son absence (jamais un bouton sans effet).
+    func testRefusCaptchaAfficheLeMessageGeneriqueEtLeRenvoiWeb() throws {
         launchDemo(extraArguments: [Self.argumentRefus, "CAPTCHA_FAILED"])
         let scroll = ouvrirInscription()
         remplir(scroll, email: Self.nouvelEmail)
@@ -107,10 +111,16 @@ final class DemoInscriptionTests: JoleneUITestCase {
         let erreur = element("inscription-erreur")
         require("Le refus est affiché", timeout: 30) { erreur.exists }
         XCTAssertTrue(erreur.label.hasSuffix(Self.erreurInattendue), "message générique du web : \(erreur.label)")
-        XCTAssertFalse(element("inscription-renvoi-web").exists, "aucun renvoi sans présentateur Safari (L1-T10)")
         XCTAssertFalse(element("inscription-confirmation-envoyee").exists)
         XCTAssertEqual(element("inscription-submit").label, "Créer mon compte", "rien n'est supposé créé")
+        let renvoi = element("inscription-renvoi-web")
+        scrollTo(renvoi, in: scroll)
+        XCTAssertEqual(renvoi.label, "Créer un compte soignant", "libellé verbatim (PageConnexion.tsx l.334)")
         record("\(proofPrefix)-inscription-captcha")
+        tap("inscription-renvoi-web")
+        liensRenvoiWebAffiche("https://jolene.app/inscription/soignant")
+        liensFermerRenvoiWeb()
+        require("Le formulaire reste affiché, refus compris") { self.containerVisible(scroll) && erreur.exists }
     }
 
     func testSeConnecterRameneALaConnexionAvecLAdresseSaisie() throws {

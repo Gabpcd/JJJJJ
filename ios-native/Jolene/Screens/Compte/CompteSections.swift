@@ -208,9 +208,9 @@ final class FeuillePartageExport {
 }
 
 /// Section « Aide & légal » (`MonCompteSoignant.tsx` l.126-136) : pages publiques ouvertes par le présentateur
-/// `.safari` (L1-T10, `DestinationLien.destination`), jamais par `openURL`. Montée seulement si le présentateur
-/// est injecté : jamais un lien sans effet (verrou du gap, `DemoCompteLot3Tests` affirme son absence en
-/// attendant T10). Identifiants : `compte-aide`, `compte-confidentialite`, `compte-cgu`, `compte-mentions-legales`.
+/// `.safari` (coordinateur des liens de L3-T3b, reliquat L1-T10 ; `DestinationLien.destination`), jamais par `openURL`. Montée seulement si le présentateur
+/// est injecté : jamais un lien sans effet (injecté à la racine depuis l'intégration du lot 3 ; `DemoCompteLot3Tests`
+/// ouvre chaque page). Identifiants : `compte-aide`, `compte-confidentialite`, `compte-cgu`, `compte-mentions-legales`.
 struct AideEtLegalSection: View {
     let presentateur: any PresentateurRenvoiWeb
 

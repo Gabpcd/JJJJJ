@@ -18,10 +18,12 @@ import Foundation
 ///   fragment conservés), section de Revenus non portée (`?tab=`), chemin servi par Safari, espace établissement.
 ///   Présentée **aussitôt**, session ouverte ou non : un renvoi n'a pas besoin de l'espace soignant (inscription,
 ///   établissement, compte bloqué) ;
-/// - `.horsEspace` : route native livrée **sans** cible dans l'espace (aujourd'hui `/connexion` seule : l'écran de
-///   connexion s'affiche déjà sans session, et l'espace prêt y reste). Liste nommée et fermée, gardée par
-///   `DeepLinkIntentTests.testToutLienHorsEspaceAppartientALaListeNommee` : T7 (inscription et confirmation
-///   natives) y ajoute sa présentation hors espace avec sa ligne de `ecranNatifLivre` ;
+/// - `.horsEspace` : route native livrée **sans** cible dans l'espace. Liste nommée et fermée, gardée par
+///   `DeepLinkIntentTests.testToutLienHorsEspaceAppartientALaListeNommee` : `/connexion` (l'écran de connexion
+///   s'affiche déjà sans session, et l'espace prêt y reste : aucune action) ; depuis l'intégration de T7, la
+///   confirmation d'inscription et les pages `/inscription/soignant` et `/inscription/reprendre` (action
+///   `AiguillageLiens.Action.inscription`, déposée par le coordinateur dans `BoiteLiensInscription`, présentée par
+///   `RootView`) ;
 /// - `.espace` : destination de l'espace soignant prêt (onglet, section, détail, écran empilé) ; mémorisée tant
 ///   qu'aucun espace n'est ouvert, rejouée une fois prêt (`AiguillageLiens`).
 ///
@@ -131,7 +133,10 @@ public enum DeepLinkIntent: Equatable, Sendable, CustomStringConvertible, Custom
 /// - une destination de l'espace dont la cible n'est pas présentable (section de Revenus avant sa tranche,
 ///   repli de `CibleNotification` vers le web) retombe sur son renvoi web canonique : jamais un lien sans effet
 ///   (revue L3-T5, m3) ;
-/// - `.horsEspace` (connexion) : aucune action ; `.reinitialisationRefusee` : refus, jamais mémorisé.
+/// - `.horsEspace` : connexion, aucune action ; confirmation et pages `soignant` / `reprendre` d'inscription (T7),
+///   action `.inscription` rendue aussitôt, avec ou sans espace, jamais mémorisée ni rejouée (la vue de session
+///   décide : une identité ouverte n'a pas d'inscription à faire, la confirmation est présentée au-dessus de tout
+///   état) ; `.reinitialisationRefusee` : refus, jamais mémorisé.
 ///
 /// Écart consigné (comme les taps, revue L3-T5 m12) : un lien reçu sur l'écran de connexion après une déconnexion
 /// est rejoué pour l'identité qui se connecte ensuite, comme le web ; la destination est relue sous sa RLS.
@@ -146,12 +151,16 @@ public final class AiguillageLiens {
         case renvoiWeb(JoleneRoute)
         /// Lien de réinitialisation PKCE refusé (option B) : `DeepLinkIntent.Textes.reinitialisationRefusee`.
         case refusReinitialisation
+        /// Lien d'inscription consommé hors de l'espace (intégration de T7) : confirmation (`/inscription/confirmer`) ou
+        /// page `soignant` / `reprendre`, déposée par le coordinateur dans `BoiteLiensInscription` (lue par `RootView`).
+        case inscription(DestinationLien)
 
         public var description: String {
             switch self {
             case .naviguer(_, let route, let epoch): return "Action.naviguer(\(route), epoch: \(epoch))"
             case .renvoiWeb(let route): return "Action.renvoiWeb(\(route))"
             case .refusReinitialisation: return "Action.refusReinitialisation"
+            case .inscription(let lien): return "Action.inscription(\(lien))"
             }
         }
 
@@ -187,8 +196,11 @@ public final class AiguillageLiens {
         switch intention {
         case .reinitialisationRefusee:
             return .refusReinitialisation
-        case .horsEspace:
-            return nil
+        case .horsEspace(let lien):
+            switch lien.destination {
+            case .confirmerInscription, .inscription: return .inscription(lien)
+            default: return nil
+            }
         case .renvoiWeb(let lien):
             if let affiche = renvoiAffiche, affiche == lien.destination.externalURL { return nil }
             return .renvoiWeb(lien.destination)

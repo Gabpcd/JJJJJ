@@ -74,7 +74,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .resetPassword:
             return false                                 // reset natif non livré (reliquat L1-T10) ; `?code=` refusé par `DeepLinkIntent` (option B)
         case .confirmerInscription:
-            return false                                 // T7 — écran de confirmation d'inscription
+            return true                                  // T7 — `ConfirmationInscriptionScreen` (hors espace : `BoiteLiensInscription`)
         case .missions:
             return true                                  // onglet Mes missions : placeholder jusqu'à L1-T5
         case .serieDetail:

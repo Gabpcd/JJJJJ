@@ -21,6 +21,11 @@ import XCTest
 ///   ensuite, jamais le code servi par Safari ;
 /// - libellé DEBUG `deeplink-route` (démo) : route effectivement présentée par le coordinateur (apparition de la
 ///   feuille, exécution de la navigation par l'espace) ;
+/// - (revue B8 de T3b, m5 ; intégration de L3-T11) `/soignant/mon-compte` et l'onglet `?tab=confidentialite` du
+///   profil web ouvrent le hub natif, qui porte l'export RGPD ;
+/// - (intégration de T7) `/inscription/soignant?profession=IDE` ouvre le compte rapide natif hors session, profession
+///   pré-remplie ; `/inscription/confirmer?token_hash=demo&type=signup` confirme le compte démo et ouvre l'aiguillage
+///   d'onboarding (complétion en attente de T8), sans espace ni renvoi web ;
 /// - aucune requête réseau (`network-sentinel`).
 /// Les règles (classement de chaque route, option B du reset, dernier lien gagnant, lien contre tap, epoch, renvoi
 /// jamais rejoué comme lien universel) sont prouvées au niveau 1 (`DeepLinkIntentTests`). Le lien universel réel
@@ -169,6 +174,96 @@ final class DemoLiensLot3Tests: JoleneUITestCase {
         require("L'écran de connexion est de nouveau affiché") { self.containerVisible(self.element("login-scroll")) }
         XCTAssertEqual(element("deeplink-route").label, "safari \(lien)", "seul le renvoi a été présenté")
     }
+
+    // MARK: Hub et onglet « Confidentialité » (revue B8 de T3b, m5 ; intégration de L3-T11)
+
+    /// Revue B8 de T3b, m5 : `/soignant/mon-compte` reçu avant la connexion ouvre le hub natif après `.ready` (onglet
+    /// Profil à sa racine), jamais un renvoi web.
+    func testLienMonCompteOuvreLeHubNatif() throws {
+        launchDemo(extraArguments: ["-JOLENE_OPEN_URL", "https://jolene.app/soignant/mon-compte"])
+        liensAucunePresentationSurLaConnexion()
+        liensConnexionDemo()
+        let hub = element("profile-list")
+        require("Le hub natif est ouvert après `.ready`", timeout: 30) {
+            self.containerVisible(hub) && self.element("profile-email").exists
+        }
+        XCTAssertFalse(element("renvoi-web-demo").exists, "hub natif : jamais un renvoi web")
+        XCTAssertEqual(element("deeplink-route").label, "monCompte")
+        record("\(proofPrefix)-liens-mon-compte")
+    }
+
+    /// Intégration de L3-T11 : l'onglet « Confidentialité » du profil web (export RGPD et suppression de compte,
+    /// `?tab=confidentialite#suppression-compte`, entrée « Supprimer mon compte » du hub web) mène au hub natif, qui porte
+    /// l'export (« Mes données (RGPD) ») et la suppression ; ce n'est plus un renvoi web.
+    func testOngletConfidentialiteDuProfilOuvreLeHubAvecLExport() throws {
+        launchDemo(extraArguments: ["-JOLENE_OPEN_URL", "https://jolene.app/soignant/profil?tab=confidentialite#suppression-compte"])
+        liensAucunePresentationSurLaConnexion()
+        liensConnexionDemo()
+        let hub = element("profile-list")
+        require("Le hub natif est ouvert après `.ready`", timeout: 30) { self.containerVisible(hub) }
+        XCTAssertFalse(element("renvoi-web-demo").exists, "export RGPD au hub : jamais un renvoi web")
+        XCTAssertFalse(element("profil-screen").exists, "jamais l'édition du profil pour cet onglet")
+        XCTAssertEqual(element("deeplink-route").label, "monCompte")
+        let export = element("compte-export-json")
+        scrollTo(export, in: hub)
+        require("L'export RGPD est atteignable au hub") { self.visible(export) && export.isEnabled }
+        record("\(proofPrefix)-liens-confidentialite-hub")
+    }
+
+    // MARK: Inscription (intégration de T7 avec le coordinateur)
+
+    /// `/inscription/soignant?profession=IDE` reçu au lancement, sans session : le compte rapide natif s'ouvre une fois
+    /// la restauration terminée (jamais un renvoi web, jamais l'espace), profession du lien pré-remplie : le formulaire
+    /// envoyé sans toucher à la profession est accepté (lien de confirmation annoncé, aucun message sous la profession).
+    func testLienInscriptionSoignantOuvreLeCompteRapideProfessionPreRemplie() throws {
+        launchDemo(extraArguments: ["-JOLENE_OPEN_URL", "https://jolene.app/inscription/soignant?profession=IDE"])
+        let scroll = element("inscription-scroll")
+        require("Le compte rapide natif est ouvert", timeout: 30) { self.containerVisible(scroll) }
+        XCTAssertFalse(element("renvoi-web-demo").exists, "écran natif livré (T7) : jamais un renvoi web")
+        XCTAssertFalse(tabBarExists, "aucun espace sans compte")
+        record("\(proofPrefix)-liens-inscription-soignant")
+        let email = element("inscription-email")
+        focus(email, in: scroll)
+        email.typeText("lien-soignant@example.invalid")
+        let password = element("inscription-password")
+        email.typeText("\n")
+        if !hasKeyboardFocus(password) { focus(password, in: scroll) }
+        require("Le mot de passe a le focus clavier") { self.hasKeyboardFocus(password) }
+        password.typeText(Self.motDePasseInscription)
+        password.typeText("\n")
+        require("Le clavier est fermé après le mot de passe") { !self.app.keyboards.firstMatch.exists }
+        let cgu = element("inscription-cgu")
+        scrollTo(cgu, in: scroll)
+        tap("inscription-cgu")
+        require("Le consentement est coché") { cgu.isSelected }
+        let submit = element("inscription-submit")
+        scrollTo(submit, in: scroll)
+        tap("inscription-submit")
+        let confirmation = element("inscription-confirmation-envoyee")
+        require("Le lien de confirmation est annoncé : la profession du lien a été retenue", timeout: 30) { confirmation.exists }
+        XCTAssertFalse(element("inscription-profession-erreur").exists, "profession pré-remplie depuis le lien")
+    }
+
+    /// `/inscription/confirmer?token_hash=demo&type=signup` reçu au lancement (lien de l'e-mail de confirmation) : la
+    /// confirmation native vérifie le lien (monde démo), ouvre l'identité du nouveau compte, puis l'aiguillage
+    /// d'onboarding mène à la complétion en attente (T8) ; jamais l'espace soignant sans profil (D9), jamais un renvoi
+    /// web.
+    func testLienDeConfirmationOuvreLAiguillageDOnboarding() throws {
+        launchDemo(extraArguments: ["-JOLENE_OPEN_URL", "https://jolene.app/inscription/confirmer?token_hash=demo&type=signup"])
+        let completion = element("onboarding-completion")
+        require("Le lien confirmé ouvre l'aiguillage, puis la complétion en attente", timeout: 30) {
+            self.containerVisible(completion)
+        }
+        XCTAssertFalse(element("confirmation-inscription-erreur").exists, "lien démo accepté")
+        XCTAssertFalse(element("renvoi-web-demo").exists, "écran natif livré (T7) : jamais un renvoi web")
+        XCTAssertFalse(tabBarExists, "jamais l'espace soignant sans profil (D9)")
+        record("\(proofPrefix)-liens-confirmation-onboarding")
+        tap("logout-button")
+        require("La déconnexion ramène à la connexion", timeout: 15) { self.visible(self.element("login-scroll")) }
+    }
+
+    /// Mot de passe fictif accepté uniquement par le monde démo (même motif que `DemoInscriptionTests`).
+    private static let motDePasseInscription = "demonstration-8"
 
     // MARK: Étapes
 

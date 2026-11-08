@@ -217,6 +217,37 @@ final class SessionStoreFinIdentiteWebTests: XCTestCase {
                        "appelé avant la connexion : l'identité suivante ne trouve aucune donnée web")
     }
 
+    // MARK: - Identité ouverte par l'inscription (intégration T7 × T3b ; revue B8 de T3b, m4)
+
+    /// L3-T7 ouvre une identité hors de `signIn` : compte créé avec session (`signUp`) puis parcours démarré, ou lien de
+    /// confirmation échangé (`verifyOTP`, `setSession`, `exchangeCodeForSession`). La racine relit alors la session par
+    /// `ouvrirIdentiteInscription()`, qui vide d'abord le navigateur intégré, une fois : l'identité qui s'ouvre ne
+    /// trouve jamais les données web d'une autre (renvoi ouvert sans identité native, écart n°1 ; identité remplacée
+    /// par un lien de confirmation reçu dans un espace ouvert).
+    func testOuvertureDIdentiteParLInscriptionEstPrecedeeDUnAppel() async throws {
+        // Sans identité (écran de connexion) : le SDK reçoit la session de l'inscription, puis la racine relit.
+        let restaurations = MutableAuthState(restored: nil, restoreError: nil)
+        let monde = MondePush(restaurations: restaurations)
+        let (store, espion) = store(monde)
+        await store.start()
+        XCTAssertEqual(store.state, .signedOut(message: nil))
+        XCTAssertEqual(espion.appels, 0)
+        await restaurations.set(restored: MondePush.utilisateur, restoreError: nil)
+        await store.ouvrirIdentiteInscription()
+        XCTAssertTrue(store.state.isReady, "la session ouverte par l'inscription est relue")
+        XCTAssertEqual(espion.appels, 1, "une fois, avant la relecture")
+        XCTAssertEqual(espion.etatsAuMomentDeLAppel, [.signedOut(message: nil)],
+                       "appelé avant que l'identité n'ouvre son espace : aucun renvoi ne la sert avec d'autres données")
+
+        // Identité déjà ouverte (lien de confirmation d'un autre compte reçu dans l'espace) : même appel, une fois.
+        let (store2, espion2) = self.store(MondePush())
+        await store2.start()
+        XCTAssertTrue(store2.state.isReady)
+        await store2.ouvrirIdentiteInscription()
+        XCTAssertEqual(espion2.appels, 1)
+        XCTAssertTrue(store2.state.isReady)
+    }
+
     func testConnexionApresUneFinTransitoireRemplaceLIdentiteSansDonneesWeb() async throws {
         // Profil illisible (fin transitoire, aucun appel), puis connexion par mot de passe depuis l'écran affiché :
         // l'identité suivante peut être une autre ; les données web de la précédente sont effacées avant.

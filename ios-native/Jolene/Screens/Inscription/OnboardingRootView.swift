@@ -10,7 +10,7 @@ import JoleneDesign
 /// - établissement → renvoi web (message existant du lot 0) ;
 /// - ni parcours ni intention → « Choisissez votre espace… » ; « Je suis soignant » ouvre le compte rapide en mode
 ///   session ouverte (profession et consentement → `fn_demarrer_inscription`) ; « Je représente un établissement »
-///   n'existe qu'avec le présentateur `.safari` de L1-T10 (jamais un bouton sans effet) ;
+///   n'existe qu'avec le présentateur `.safari` du coordinateur des liens, L3-T3b (jamais un bouton sans effet) ;
 /// - échec → texte web l.80 et « Réessayer ».
 ///
 /// Identifiants : `onboarding-chargement`, `onboarding-completion`, `onboarding-etablissement`, `onboarding-screen`,

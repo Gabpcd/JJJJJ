@@ -204,21 +204,19 @@ final class LinksRouterTests: XCTestCase {
         XCTAssertEqual(route("https://jolene.app/soignant/profil?tab=principal"), .profil)
     }
 
-    /// L3-T3b (point de fusion de la revue L3-T9, m2 ; revue B8 de T3b, m3) : l'onglet « Confidentialité » du profil
-    /// web (`ProfilSoignant.tsx` l.42-44 et l.505-507, `SectionConfidentialite` : export RGPD et suppression de compte ;
-    /// entrée « Supprimer mon compte » du hub web vers `?tab=confidentialite#suppression-compte`,
-    /// `MonCompteSoignant.tsx` l.135) reste un **renvoi web** (URL canonique, query et fragment conservés) : le hub natif
-    /// porte la suppression (L1-T8, `SuppressionCompteSection`) mais pas encore l'export (L3-T11). Les autres onglets,
-    /// `?tab=` absent ou inconnu compris, mènent à l'édition. Comparaison exacte, comme le web.
-    func testOngletConfidentialiteDuProfilEnRenvoiWebJusquALExportAuHub() throws {
+    /// L3-T3b (point de fusion de la revue L3-T9, m2 ; revue B8 de T3b, m3), puis intégration de L3-T11 : l'onglet
+    /// « Confidentialité » du profil web (`ProfilSoignant.tsx` l.42-44 et l.505-507, `SectionConfidentialite` : export
+    /// RGPD et suppression de compte ; entrée « Supprimer mon compte » du hub web vers
+    /// `?tab=confidentialite#suppression-compte`, `MonCompteSoignant.tsx` l.135) mène au **hub** natif (`.monCompte`),
+    /// qui porte la suppression (L1-T8, `SuppressionCompteSection`) et l'export (L3-T11, `ExportRGPDSection`). Les autres
+    /// onglets, `?tab=` absent ou inconnu compris, mènent à l'édition. Comparaison exacte, comme le web.
+    func testOngletConfidentialiteDuProfilMeneAuHubQuiPorteLExport() throws {
         for lien in ["https://jolene.app/soignant/profil?tab=confidentialite",
                      "https://jolene.app/soignant/profil?tab=confidentialite#suppression-compte",
                      "https://www.jolene.app/soignant/profil/?x=1&tab=confidentialite"] {
-            let canonique = try XCTUnwrap(DestinationLien(url: URL(string: lien)!), lien).canonique
-            XCTAssertEqual(route(lien), .safari(canonique), lien)
+            XCTAssertEqual(route(lien), .monCompte, lien)
         }
-        let interne = try XCTUnwrap(DestinationLien(link: "/soignant/profil?tab=confidentialite"))
-        XCTAssertEqual(LinkRouter.resolve(link: "/soignant/profil?tab=confidentialite"), .safari(interne.canonique))
+        XCTAssertEqual(LinkRouter.resolve(link: "/soignant/profil?tab=confidentialite"), .monCompte)
         for query in ["", "?tab=principal", "?tab=preferences", "?tab=Confidentialite", "?tab=inconnu", "?onglet=confidentialite"] {
             XCTAssertEqual(route("https://jolene.app/soignant/profil" + query), .profil, query)
         }

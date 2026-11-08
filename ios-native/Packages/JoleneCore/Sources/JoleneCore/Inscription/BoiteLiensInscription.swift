@@ -1,10 +1,11 @@
 import Foundation
 import Combine
 
-/// Point d'extension des liens d'inscription (lot 3, T7) pour le coordinateur de liens de L1-T10 / T3b, absent de
-/// la base du lot 3 (`DECISIONS_LOT3.md`, « T3 livrée en deux temps » et section T7) : ces liens sont consommés
-/// **hors de l'espace prêt** (écran de connexion, aiguillage d'onboarding), comme la connexion et le reset ; le
-/// coordinateur y dépose la `DestinationLien` reçue (Universal Link, `-JOLENE_OPEN_URL`) et `RootView` présente :
+/// Liens d'inscription (lot 3, T7), alimentés par le coordinateur de liens de L3-T3b depuis l'intégration du lot 3
+/// (`AiguillageLiens.Action.inscription`, `DeepLinkCoordinator` ; `DECISIONS_LOT3.md`, section T7 et intégration) :
+/// ces liens sont consommés **hors de l'espace prêt** (écran de connexion, aiguillage d'onboarding), comme la
+/// connexion ; le coordinateur y dépose la `DestinationLien` reçue (Universal Link, `-JOLENE_OPEN_URL`) et `RootView`
+/// présente :
 /// - `/inscription/confirmer` → écran de confirmation (une demande par lien reçu, au-dessus de tout état) ;
 /// - `/inscription/soignant` et `/inscription/reprendre` → « Créer un compte » (profession du lien pré-remplie)
 ///   ou aiguillage d'onboarding, selon la session.

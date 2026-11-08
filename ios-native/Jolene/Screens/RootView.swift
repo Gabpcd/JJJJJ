@@ -36,7 +36,7 @@ struct RootView: View {
 /// - `.blocked` d'une identité sans espace soignant (rôle `INCONNU` ou profil incomplet,
 ///   `OnboardingResolution.concerne`) : aiguillage d'onboarding (`OnboardingRootView`) au lieu de l'écran bloquant ;
 ///   tout autre `.blocked` garde l'écran du lot 0 ; `SessionController` et `MobileAccess` sont inchangés ;
-/// - liens d'inscription déposés par le coordinateur de liens (`BoiteLiensInscription`, L1-T10 / T3b) :
+/// - liens d'inscription déposés par le coordinateur des liens (`BoiteLiensInscription`, L3-T3b, intégration du lot 3) :
 ///   confirmation présentée au-dessus de tout état, puis relecture de la session ; `/inscription/soignant` hors
 ///   session ouvre le compte rapide, profession du lien pré-remplie.
 private struct SessionRootView: View {
@@ -99,10 +99,14 @@ private struct SessionRootView: View {
         .task { if case .idle = session.state { await session.start() } }
         .onAppear { consommer(liens.inscription) }
         .onChange(of: liens.inscription) { etape in consommer(etape) }
+        // Intégration du lot 3 : un lien reçu au lancement (restauration en cours) attend l'issue de la session.
+        .onChange(of: session.state) { _ in consommer(liens.inscription) }
         .fullScreenCover(item: confirmation) { demande in
             ConfirmationInscriptionScreen(controller: session.controller, credentials: demande.credentials) { confirme in
                 liens.retirerConfirmation()
-                if confirme { Task { await session.start() } }
+                // Intégration T7 × T3b (revue B8 de T3b, m4) : identité ouverte hors de `signIn`, le navigateur intégré
+                // est vidé avant la relecture.
+                if confirme { Task { await session.ouvrirIdentiteInscription() } }
             }
         }
     }
@@ -123,17 +127,28 @@ private struct SessionRootView: View {
             loginEmail = email
             Task { await session.signIn(email: email, password: motDePasse) }
         case .parcoursDemarre:
-            Task { await session.start() }
+            // Compte créé avec session (`signUp`) : identité ouverte hors de `signIn` (intégration T7 × T3b, revue B8
+            // de T3b, m4), le navigateur intégré est vidé avant la relecture.
+            Task { await session.ouvrirIdentiteInscription() }
         }
     }
 
     /// Lien `/inscription/soignant` ou `/inscription/reprendre` déposé par le coordinateur : hors session, la page
     /// soignant ouvre le compte rapide et la reprise la connexion (web : `Navigate to /connexion`) ; avec une identité,
-    /// l'aiguillage d'onboarding (ou l'espace prêt) est déjà l'écran de la session.
+    /// l'aiguillage d'onboarding (ou l'espace prêt) est déjà l'écran de la session. Intégration du lot 3 : un lien reçu
+    /// pendant la restauration (lancement à froid, `-JOLENE_OPEN_URL`) reste dans la boîte jusqu'à l'issue de la
+    /// session (`onChange(of: session.state)`), au lieu d'être écarté avant de savoir s'il y a une identité.
     private func consommer(_ etape: EtapeInscription?) {
         guard let etape else { return }
-        liens.retirerInscription()
-        guard case .signedOut = session.state, finDeCompte.issue == nil else { return }
-        inscription = etape.page == .soignant ? etape : nil
+        switch session.state {
+        case .idle, .loading:
+            return
+        case .signedOut:
+            liens.retirerInscription()
+            guard finDeCompte.issue == nil else { return }
+            inscription = etape.page == .soignant ? etape : nil
+        case .blocked, .ready:
+            liens.retirerInscription()
+        }
     }
 }
