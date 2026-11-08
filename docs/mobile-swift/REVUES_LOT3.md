@@ -439,6 +439,82 @@ Y ajouter les mineurs 3 et 4.
 - Aucun correctif d'intégration n'a été nécessaire, donc pas de commit `fix(ios-native): intégration lot 3 …`. Les
   dossiers de build (`.build` des packages, `-derivedDataPath`) ont été supprimés après vérification.
 
+## L3-T3
+
+> **Intégrée sous le nom « L3-T3a » seulement** (livraison partielle). T3 reste ouverte jusqu'à T3b (coordinateur de
+> liens de L1-T10, XCUITest sur trois formats) et sa propre revue fraîche B8.
+
+### Revue fraîche B8 — L3-T3
+
+**Verdict : CLÔTURABLE, pour la livraison partielle L3-T3a seulement.** Aucun bloquant, aucun majeur, sept mineurs. **T3 n'est pas close** : le critère « Universal Links complets » n'est pas atteint tant que T3b n'est pas faite (coordinateur et XCUITest sur 3 formats). L'auteur le dit lui-même et le consigne.
+
+#### Périmètre
+
+J'ai relu `git diff origin/feat/ios-lot3...origin/lot3/l3-t3-v2` en entier : base `2297747d`, HEAD `84ece4a4`, 7 commits, 10 fichiers, +1 039/−33. Ordre des commits : tests d'abord à chaque passe (`35c1fa97`, `16bc5253`, `df5a5b30`), puis le code, puis la doc (`84ece4a4`). La revue s'est faite en lecture seule : ni build, ni test, ni appel MCP, car rien ne touche au backend. Les journaux de l'auteur (`t3fix-test*.log` : 376 tests, 0 échec, 0 avertissement) sont un indice, pas une preuve ; la CI tranchera.
+
+#### Ce qui a été vérifié
+
+- **Absence de L1-T10, confirmée.** Aucune branche distante n'a `onOpenURL`, `onContinueUserActivity`, `DeepLinkCoordinator.swift` ou `DeepLinkIntent.swift`. Les seules occurrences sont des commentaires (`PresentateurRenvoiWeb.swift`, qui n'est qu'un protocole sans implémentation). Il était donc impossible de livrer T3 en entier ; requalifier la branche en T3a avec un reliquat T3b est honnête : PARITE ne change aucun statut et aucun critère n'est revendiqué.
+- **Nom `DestinationLien`.** Le renommage est justifié : LOT1_PLAN l.53 et l.304-305 attribuent `Links/DeepLinkIntent.swift` et `DeepLinkIntentTests` à L1-T10, avec un autre rôle (intention différée, epoch). Les branches WIP du lot 3 (`wip/lot3-l3-t6`, `t9`) ne font référence ni à l'ancien nom ni au nouveau.
+- **Table de routage.** Toutes les sources web citées sont exactes :
+  - `src/App.tsx` : l.286, 290, 291, 313, 314, 325, 327, 335, 339, 341, 393, 395-397, 399-400, 417-418, 433, 437 ;
+  - `MesGains.tsx` : l.833 et l.899-900 ;
+  - `PageStripeConnect.tsx` : `success === 'true'` ;
+  - `stripe-connect-onboard` : l.202-203 ;
+  - `pushNative.ts` : l.294-296 ;
+  - `BarreNavigation.tsx` : l.37 ;
+  - `InscriptionRapide.tsx` : l.35-42 ;
+  - `InscriptionSoignant.tsx` : l.109-117.
+
+  PSC, `/inscription/etablissement`, `/inscription/soignant/completion` et `/inscription/succes` restent dans Safari. L'AASA garde ses 15 motifs. La séparation `.profil` / `.monCompte` et le maintien de score et fiabilité sur le hub suivent le blueprint v2, et l'écart est consigné.
+- **`DestinationLien.ecranNatifLivre`.** Les `switch` sont exhaustifs, y compris sur `SectionRevenus` et `EtapeInscription.Page` : un nouveau cas ou la fusion de `.favoris` (L1-T4b) ne compilera pas sans sa ligne, ce qui verrouille bien le gap. `.serieDetail` part en Safari, conformément à la décision 11 du lot 1. Factures, bulletins et avances restent web (D4).
+- **Vecteurs push.** J'ai recalculé les familles depuis `push-routing.json` : 890 chemins non nuls, mêmes 15 familles et mêmes décomptes, avec 448 destinations natives et 442 renvois web. Le test n'est plus tautologique : la famille se lit sur le texte du chemin, indépendamment du routeur.
+- **Masquage (PRINCIPES §7).** Tout segment hors vocabulaire est masqué. La query et le fragment ne sont signalés que par leur présence. Les identifiants de rappel passent par la description déjà masquée d'`AuthCallbackCredentials`. Les tests couvrent les jetons de chemin (`/etab/invitation`, `/contrat`, missions, série) et de query/fragment, sous trois formes : `describing`, `reflecting` et l'interpolation.
+- **Comportement à l'exécution.** `AccueilPresentation.renvoiWeb` rend les mêmes valeurs qu'avant pour `/soignant/presences` et `/soignant/notifications`. Sans ce passage par `DestinationLien`, le bouton de notifications de l'Accueil aurait disparu dès T3a. Aucun autre consommateur de `JoleneRoute` n'existe dans l'app ni dans JoleneSupabase, et l'app n'est pas modifiée.
+- **Points de fusion avec le lot 1.** Ils sont exacts :
+  - `lot1/t9` `EcransNatifs.swift` l.42-50 : `/soignant/mon-compte` y donnerait `nil` en silence ;
+  - `FeatureFlagsTests` l.147 ;
+  - `lot1/t4b` `case favoris` ;
+  - `lot1/t5` `MesMissionsPresentationTests` : non affecté ;
+  - `lot3/l3-t4-v2` : aucun fichier commun.
+- **Concurrence Swift 6.** Tous les types sont des valeurs `Sendable`, les `static let` portent des types `Sendable`, rien n'est `@MainActor` et aucune erreur n'est avalée.
+- **HARD STOP n°4 et B9.** Aucun texte visible par l'utilisateur ni texte juridique. Aucune RPC, aucune logique Stripe : `RetourConnect` ne fait que lire une query, et sa doc impose de relire le statut. Je ne classe pas la tranche en B9.
+- **Régressions des lots 0 et 1.** Identifiants d'accessibilité, `DemoNoNetworkTests` (imports Foundation seuls, pas d'`URLSession`), sentinelle réseau démo et XCUITest sur les 3 formats : rien n'est touché. Aucun XCUITest n'est ajouté, donc aucune fragilité iPad n'est introduite.
+- **Secrets.** Seulement des littéraux de test (`SECRET1`…`SECRET10`, `ABCD-12`, `XY12`).
+
+#### Constats mineurs
+
+1. **Numéros de ligne de PARITE décalés d'une ligne** : `DECISIONS_LOT3.md:193`, `:196` et `DestinationLienTests.swift:73`. Le détail de série est à la l.49 (et non l.48), `/soignant/score` à la l.63 (et non l.62). Citer la route plutôt que le numéro.
+2. **Commentaires qui renvoient à la route brute** : `PushRouting.swift:5` et `LinkRouter.swift:43-44` (et `AccueilScreen.swift:15`, hors diff) orientent encore vers `LinkRouter.resolve(link:)`, contre la règle de `JoleneRoute.swift:10-11`. Pointer vers `DestinationLien(link:)?.destination`. En T3b, l'API du coordinateur et des taps ne doit accepter qu'une `DestinationLien`.
+3. **En-tête de `DestinationLien.swift:9`** : il promet « la page web au lieu d'un écran vide », mais les onglets provisoires Mes missions et Revenus (l.78-83) comptent comme livrés. Reformuler l'en-tête.
+4. **Masquage limité à `description`** : `dump()` et `Mirror` exposent encore `canonique`, les identifiants et la query d'inscription (`LienMasque.swift:48`, `:81` ; `DestinationLien.swift:28`). Ajouter `CustomReflectable` avec un test, ou au moins étendre la règle écrite.
+5. **`LienMasque.swift:32`** : `url.path` décode `%2F`, ce qui coupe un segment dynamique en plusieurs. Préférer `url.path(percentEncoded: true)`.
+6. **`DECISIONS_LOT3.md:178`** : l'IBAN n'est pas une sous-ligne de `/soignant/mes-gains`. Le web le monte dans `MonCompteSoignant.tsx` l.164. Corriger la justification de T14b ; la conclusion « sans objet » ne change pas.
+7. **Suivi de T3b** : il ne figure que dans `DECISIONS_LOT3.md`. Ajouter une ligne dans `PORTE_LOT3.md` (ou dans la clôture T17), et faire consigner par l'intégrateur « L3-T3a seulement » dans `REVUES_LOT3.md`.
+
+#### Notes pour T3b (pas des défauts de T3a)
+
+- Le libellé DEBUG `deeplink-route` attendu par T5 ne doit pas reprendre `description` : celle-ci masque les identifiants, et T5 ne pourrait plus vérifier vers quelle mission un tap mène. Prévoir un format propre au DEBUG.
+- Depuis le masquage, les messages d'échec d'`XCTAssertEqual` montrent deux `.safari` différents sous le même gabarit. Les tests contournent le problème en passant le lien en message ; garder cette habitude.
+
+#### Conditions avant merge
+
+- CI verte : `swift test` des deux packages en `strict-concurrency=complete` sans avertissement, et exporteurs sans diff.
+- L'intégration sur `feat/ios-lot3` porte le nom « L3-T3a » ; T3 reste ouverte jusqu'à T3b et sa propre revue B8.
+- Les tranches T5, T7 et T14a restent bloquées par L1-T10, qu'il faudra fusionner selon les points consignés dans `DECISIONS_LOT3.md`.
+
+### Intégration sur `feat/ios-lot3` (intégrateur, 2026-11-08)
+
+- `git merge --no-ff origin/lot3/l3-t3-v2` (`84ece4a4`) → `4ed3f5a0`, sans conflit, sous le titre « Merge branch
+  'lot3/l3-t3-v2' into feat/ios-lot3 (L3-T3a seulement) ». **Ce qui est intégré est la livraison partielle L3-T3a**
+  (`DestinationLien`, `LienMasque`, table de routage du lot 3, vecteurs push par famille) ; **T3 n'est pas close** :
+  T3b (coordinateur de liens de L1-T10, `onOpenURL`/`onContinueUserActivity`, XCUITest `DemoLiensLot3Tests` sur
+  iphone, ipad-portrait et ipad-landscape) reste à livrer, avec sa propre revue fraîche B8 (condition 2 et mineur 7
+  de la revue, part de l'intégrateur). Les tranches T5, T7 et T14a restent bloquées par L1-T10.
+- Les sept mineurs restent ouverts pour l'auteur (ou pour T3b) ; la ligne de suivi de T3b dans `PORTE_LOT3.md` (ou
+  dans la clôture T17), demandée par le mineur 7, n'est pas ajoutée par l'intégration.
+- Vérifications : exécutées sur la pointe qui contient T3a et T4 (section L3-T4 ci-dessous, `c57d0a0d`).
+
 ## L3-T4
 
 ### Consignes de l'auteur pour l'intégration (corrections de la revue B8)
@@ -610,3 +686,146 @@ reproduire ici par l'intégrateur.
     **L1-T9**) : compteur `absencesConfirmees`, `Publication`, `publication`, `startPublication()`,
     `handleAuthEventPublication(_:)` (internes au module). Au merge de L1-T9, garder les deux côtés ;
     `lockForBiometrics()` n'incrémente pas le compteur (puce D3 ci-dessus).
+
+### Revue fraîche B8 — L3-T4
+
+**Verdict : CLOTURABLE.** Aucun constat bloquant ni majeur, 7 constats mineurs. Le merge reste soumis à la CI trois formats : voir « Conditions de merge ».
+
+#### Ce que j'ai relu
+
+- Le diff complet `origin/feat/ios-lot3...origin/lot3/l3-t4-v2` : 42 fichiers, +3 232 / −47, six commits de `9ff6e265` à `3b94f927`.
+- Le cadre : `LOT3_PLAN.md` v2 (§1.1, §2.3 à 2.7, corrections 11, 12, 16, §3 T4), `LOTS_2_5_DECISIONS.md`, `DECISIONS_LOT3.md` (D1 à D3), `PRINCIPES.md`, `CLAUDE.md`.
+- Le dump `supabase/schema/public.sql` : l.30176-30223, l.64628-64696, et les GRANT l.82446-82448 et l.85471-85473.
+- Les sources web : `pushNative.ts`, `pushDeviceToken.ts`, `AuthContext.tsx` l.140-277, `PageParametresNotifications.tsx` l.100-200 et l.320-360, `MonCompteSoignant.tsx` l.115.
+- `origin/lot1/t9`, pour vérifier les consignes de merge.
+
+Lecture seule : aucun build, aucun test, aucun appel Supabase.
+
+#### Points vérifiés, conformes
+
+##### Contrat RPC
+- **`fn_upsert_token_push`** (`void`) passe par `appelerSansCorps` (`execute()` sans décodage, conforme à la correction 16) : 204 et 200 vide valent succès.
+  - 22023 est traité par `exceptionsMetier` avant `SupabaseErrorMapping`, puis rendu en `.contract`, sans renvoi.
+  - 42501 devient `.unauthorized`. Le coordinateur avale l'erreur, sans jamais déconnecter.
+- **`fn_desactiver_mon_token_push`** (jsonb en 200) :
+  - `{success:false}` rend `.nonDesactive` avant `leverSiErreur`, donc jamais « session expirée ».
+  - `{}` et `{success:true, error}` ne sont jamais traités comme des succès.
+- Les corps SQL du dump correspondent aux bornes 16-4096, aux messages et au périmètre `auth.uid()`.
+- Les 11 tests `StubURLProtocol` sont pertinents.
+
+##### PushCoordinator
+- **Garde-fous** : epoch plus génération ; contrôle d'identité via `gateways(for:)` avant l'appel ; nouvelle lecture de `actif` après `await controller.epoch`.
+- **Rejoindre plutôt que doubler** : un enregistrement déjà en cours est rejoint.
+- **Délais** : 15 s pour obtenir le token APNs, 2,5 s pour la RPC puis 2,5 s pour la désinscription, comme le web.
+- **Ordre du logout** : RPC, puis désinscription, puis oubli, puis `controller.signOut()`. C'est conforme à D2 et à la correction 11.
+- **Journal DEBUG** : sans token ni message.
+
+##### Fin de session subie
+- Elle n'est déclenchée que sur une absence **confirmée** (`absencesConfirmees`).
+- J'ai vérifié `SupabaseAuthGateway.restoreSession` : il ne rend `nil` que sans session, sur `sessionMissing` ou sur une réponse 4xx. Les erreurs réseau lèvent bien une erreur, donc un lancement hors ligne ne désinscrit rien.
+- Les cas transitoires (restauration, rôle, profil) et la double publication sont couverts par des tests synchronisés sur des conditions observables.
+
+##### Concurrence (Swift 5 + StrictConcurrency)
+- Types `Sendable`, `PushRegistrar` en `@MainActor` avec une continuation par appel.
+- L'annulation est reprise par `onCancel`, et `bounded` annule le perdant.
+- `didSet` sur `@Published` est appelé dans le main actor.
+
+##### Textes (HARD STOP n°4)
+- Les 8 textes de la carte sont verbatim de l.341 à l.352, apostrophes typographiques comprises ; je les ai comparés ligne à ligne et un test les épingle.
+- « Notifications » vient de `MonCompteSoignant.tsx` l.115.
+- Seul « Ouvrir les réglages » n'a pas de source web ; il est consigné pour Gabrielle. Aucun texte juridique nouveau.
+
+##### Régressions des lots 0 et 1
+- Les identifiants de `ProfileScreen` sont inchangés.
+- En démo par défaut (`nonDemandee`), aucune section n'apparaît, donc DemoCompteTests et les autres tests ne bougent pas.
+- La démo n'utilise que des doubles : ni `UNUserNotificationCenter` ni APNs. DemoNoNetworkTests reste satisfait (ni import réseau ni `URLSession`), et la sentinelle reste à 0.
+- `CompteModel` garde un comportement équivalent (une ligne).
+- Les changements d'API JoleneDesign sont additifs.
+- `-JOLENE_PUSH_*` est réservé à DEBUG, et le token factice au mode staging.
+
+##### Contrats, projet, secrets
+- Contrats : `rpc-contracts.json`, `check-rpc-contracts.mjs`, les fiches, le tableau de synthèse et le test node sont cohérents.
+- `pbxproj` ne contient que des ajouts de fichiers. L'entitlement `aps-environment` existait déjà.
+- Aucun littéral ressemblant à un secret : les tokens sont calculés.
+
+#### Constats mineurs
+
+1. **D3 / L1-T9, dette de merge** (`SessionStore.swift:87-101`).
+   - Il n'y a ni audit ni `async let`, et le test « ordre audit → push → signOut » manque.
+   - L'écart est justifié (`origin/lot1/t9` absent de `main` et de `feat/ios-lot3`) et consigné.
+   - À faire : condition explicite du merge de L1-T9. Appliquer la résolution documentée dans `REVUES_LOT3.md` et ajouter les 4 tests listés.
+2. **Garantie documentée mais pas imposée** (`PushCoordinator.swift:201-210`).
+   - « Le nouvel enregistrement attend la désinscription précédente » n'est vrai que pour `surReady` (`SessionStore.swift:166-170`).
+   - `surActive` (`JoleneApp.swift:30-31`, `EtatNotificationsAppareilModel.swift:56`) peut s'intercaler pendant `desinscrireLocalement` :
+     - `desinscrire()` annule alors sa continuation (`PushRegistrar.swift:40-43`) ;
+     - `oublier()` efface son token.
+   - La fenêtre est quasi nulle en pratique.
+   - À faire : faire attendre la fin de session en cours par `enregistrer()`, ou corriger la doc. Ajouter un test.
+3. **`PermissionCard.showsPrimary` n'est pas utilisé par `body`** (`PermissionCard.swift:86` et `:137`).
+   - Les assertions `JoleneDesignLot3Tests.swift:517-518` ne gardent donc pas le rendu.
+   - À faire : utiliser le helper dans `body`, ou le supprimer avec son test.
+4. **« Ouvrir les réglages » sur une erreur d'enregistrement** (`EtatNotificationsAppareil.swift:72-77`).
+   - Le texte l.352 dit « Vérifiez votre connexion puis réessayez. » et le web propose une relance (l.356-360) ; Réglages ne corrige rien ici.
+   - À trancher en T6 et à ajouter à la liste de Gabrielle.
+5. **Surface provisoire dans le hub** (`ProfileScreen.swift:54-64`, fichier de T11).
+   - Deux écarts de règle sont documentés : l.346 au lieu de l.347 quand le canal est inconnu ; « jamais demandée » masquée alors que le web affiche l.349.
+   - Risque de « deux surfaces » : T6 doit retirer la section et migrer DemoPushTests dans la même tranche.
+6. **Traçabilité du commit `4908b8d4`**.
+   - Son message affirme une lecture live en production, ce qui contredit la règle 4 et la déclaration finale de l'auteur.
+   - À faire : rectifier dans le message d'intégration et dans `REVUES_LOT3.md`, sans force-push.
+7. **Preuve niveau 2 jamais exécutée**.
+   - DemoPushTests (3 tests × 3 formats) et les nouveaux cas JoleneDesign n'ont jamais tourné.
+   - Le build-for-testing complet n'a pas été relancé après `3b94f927`.
+
+#### Conditions de merge
+
+- CI trois formats verte, relue dans le `xcresult` : 0 échec, `skipped = 0`, `passed = total`.
+- Au merge de L1-T9 dans `feat/ios-lot3` : résolution `async let` et les 4 tests de `REVUES_LOT3.md` §L3-T4. Ne jamais garder audit et désactivation en série.
+
+### Intégration sur `feat/ios-lot3` (intégrateur, 2026-11-08)
+
+- `git merge --no-ff origin/lot3/l3-t4-v2` (`3b94f927`) → `c57d0a0d`, après L3-T3a, sans conflit. Le seul fichier
+  commun avec L3-T3a, `docs/mobile-swift/DECISIONS_LOT3.md`, a été fusionné automatiquement : les ajouts de T3a
+  (requalification en T3a, reliquat T3b, points de fusion) et ceux de T4 (écart D3, libellé « Ouvrir les réglages »
+  parmi les textes à relire par Gabrielle) sont tous conservés. Aucun conflit sémantique : les deux tranches ne
+  partagent aucun fichier Swift, et aucun consommateur de `JoleneRoute` (`.profil` scindé en `.profil`/`.monCompte`
+  par T3a) n'existe dans les fichiers de T4 (compilation et tests ci-dessous). `project.pbxproj` n'étant pas en
+  conflit, `xcodegen generate` n'était pas requis ; lancé quand même pour contrôle, il reproduit les ajouts de T4 à
+  l'identique et ne diffère que par le groupe vide `Resources` (dossier `ios-native/Jolene/Resources` vide, donc non
+  versionné et absent d'un worktree neuf ; groupe déjà présent sur la base) : régénération annulée, aucun diff
+  commité.
+- **Rectification de traçabilité (mineur 6).** Le message du commit `4908b8d4` affirme que les définitions live de
+  `fn_upsert_token_push` et `fn_desactiver_mon_token_push` ont été relues en lecture seule en production. Cette
+  affirmation contredit la règle 4 des décisions des lots 2 à 5 (lecture seule en production réservée aux PR
+  backend) et la déclaration finale de l'auteur ; **elle n'est pas retenue comme preuve**. La conformité du contrat
+  repose sur le dump `supabase/schema/public.sql` (l.30176-30223, l.64628-64696 ; GRANT l.82446-82448 et
+  l.85471-85473), relu par la revue B8 ci-dessus ; les fiches de `CONTRATS_RPC_SOIGNANT.md` renvoient au dump
+  (mineur 10 des consignes de l'auteur). Rectification portée aussi par le message du merge `c57d0a0d` ; l'historique
+  de la branche n'est pas réécrit (aucun force-push).
+- **Vérifications exécutées sur `c57d0a0d`** (pointe contenant L3-T3a et L3-T4) :
+  - `node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs
+    tests/node/check-rpc-contracts-lot3.node.mjs` : 137 tests, 0 échec, 0 ignoré.
+  - Exporteurs relancés en écriture puis en contrôle : `export-golden-vectors.mjs` (4 306 vecteurs) et
+    `export-demo-fixtures.mjs` (4 fichiers) sans diff ; `check-rpc-contracts.mjs --update` puis
+    `check-rpc-contracts.mjs` : 41 RPC, aucune dérive, aucun diff ; `fn_upsert_token_push` et
+    `fn_desactiver_mon_token_push` en `consommee` (lot 3), câblées par T4.
+  - `swift build --build-tests` puis `swift test`, avec `-Xswiftc -strict-concurrency=complete`, toolchain locale
+    Xcode 16.4 (16F6) : JoleneCore 449 tests XCTest, 0 échec, 0 ignoré, 0 avertissement ; JoleneSupabase 217 tests,
+    0 échec, 0 ignoré, 0 avertissement (hors `.build/checkouts/` ; les messages « CoreData: error: Failed to create
+    NSXPCConnection » du runner xctest sont du bruit du bac à sable, sans échec associé).
+  - `xcodebuild build-for-testing -scheme Jolene` sur le simulateur existant « Jolene iPhone 16 Pro Max » (iOS 18.6),
+    `-derivedDataPath` dans le worktree, `COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO` : `TEST BUILD
+    SUCCEEDED`, 0 avertissement de compilation (seules les notes « Metadata extraction skipped » de
+    `appintentsmetadataprocessor`). Cibles compilées : app, JoleneUITests (dont `DemoPushTests`), JoleneCoreTests,
+    JoleneSupabaseTests et JoleneDesignTests (dont les nouveaux cas de `JoleneDesignLot3Tests`). C'est le
+    build-for-testing complet que le mineur 7 disait non relancé après `3b94f927`.
+- **Non exécuté** : aucun test sur simulateur, ni unitaire iOS ni XCUITest (disque presque plein, consigne de la
+  tâche). `DemoPushTests` (3 tests × iphone, ipad-portrait, ipad-landscape) et les nouveaux cas de
+  `JoleneDesignLot3Tests` n'ont donc toujours pas tourné : **condition de merge maintenue**, CI trois formats verte
+  relue dans le `xcresult` (0 échec, `skipped = 0`, `passed = total`), en Xcode 26.4.1 (16.4 en local).
+- Mineurs 1 à 5 ouverts : le 1 est une condition du merge de L1-T9 dans `feat/ios-lot3` (résolution `async let` et
+  quatre tests, consignes de l'auteur ci-dessus ; jamais audit et désactivation en série) ; le 4 est à trancher en T6
+  et à ajouter à la liste de Gabrielle ; le 5 est levé par T6 (retrait de la section provisoire du hub et migration de
+  `DemoPushTests` dans la même tranche).
+- Aucun correctif d'intégration n'a été nécessaire, donc pas de commit `fix(ios-native): intégration lot 3 …`. Les
+  dossiers de build (`.build` des packages, `-derivedDataPath`) ont été supprimés après vérification.
