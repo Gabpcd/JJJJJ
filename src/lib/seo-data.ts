@@ -1,5 +1,3 @@
-import { PROFESSIONS } from '@/lib/constantes';
-
 export interface VilleSEO {
   slug: string;
   nom: string;

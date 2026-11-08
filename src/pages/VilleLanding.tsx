@@ -4,6 +4,8 @@ import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { PROFESSIONS_SEO, getVilleBySlug, VILLES_SEO } from '@/lib/seo-data';
 import { MissionsPubliquesSEO } from '@/components/MissionsPubliquesSEO';
+import { PageSEOIntrouvable } from '@/components/PageSEOIntrouvable';
+import { metaVille, urlAbsolue, estVilleVilleMetier, PROFESSIONS_SEO_VILLE_METIER, cheminVilleMetier } from '@/lib/seo-routes';
 import { MapPin, Users, Building2, Clock, ArrowRight, Stethoscope, Activity } from 'lucide-react';
 
 function AnimatedCounter({ target, suffix = '' }: { target: number; suffix?: string }) {
@@ -40,23 +42,48 @@ export default function VilleLanding() {
   const navigate = useNavigate();
   const ville = villeSlug ? getVilleBySlug(villeSlug) : undefined;
 
-  // Capitalize slug as fallback display name
-  const villeNom = ville?.nom || (villeSlug ? villeSlug.charAt(0).toUpperCase() + villeSlug.slice(1).replace(/-/g, ' ') : 'votre ville');
-  const villeDept = ville?.departement || '';
+  // Slug inconnu : page noindex (pas de soft-404 indexable) + liens vers les pages connues.
+  if (!ville) {
+    return <PageSEOIntrouvable titre="Ville non référencée" liens={VILLES_SEO.slice(0, 30).map((v) => ({ href: `/emploi-soignant/${v.slug}`, label: v.nom }))} />;
+  }
+
+  const villeNom = ville.nom;
+  const meta = metaVille(ville);
 
   return (
     <>
       <SEOHead
-        title={`Missions soignants à ${villeNom} | Jolene Santé`}
-        description={`Missions de remplacement santé à ${villeNom}${villeDept ? ` (${villeDept})` : ''} : infirmiers, aides-soignants et professionnels de santé. Inscription gratuite et contrats clairement indiqués.`}
-        url={`https://jolene.app/emploi-soignant/${villeSlug}`}
+        title={meta.title}
+        description={meta.description}
+        url={urlAbsolue(meta.path)}
       />
       <SEOPageLayout
-        heroTitle={`Missions soignants à ${villeNom}`}
-        heroSubtitle={`Trouvez des remplacements et CDD courts en santé à ${villeNom}${villeDept ? ` (${villeDept})` : ''}. Hôpitaux, cliniques, EHPAD et établissements médico-sociaux.`}
+        heroTitle={meta.h1}
+        heroSubtitle={meta.intro[0]}
         ctaText="Voir les missions disponibles"
         ctaHref="/inscription/soignant"
       >
+        {estVilleVilleMetier(ville.slug) && (
+          <section className="py-12 md:py-16">
+            <div className="max-w-5xl mx-auto px-4">
+              <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-6">
+                Missions par métier à {villeNom}
+              </h2>
+              <div className="flex flex-wrap justify-center gap-3">
+                {PROFESSIONS_SEO_VILLE_METIER.map((p) => (
+                  <a
+                    key={p.slug}
+                    href={cheminVilleMetier(ville.slug, p.slug)}
+                    className="inline-flex items-center gap-1.5 bg-card border border-border rounded-lg px-4 py-2 text-sm font-medium text-foreground hover:border-primary/40 hover:text-primary transition-colors"
+                  >
+                    {p.label} à {villeNom}
+                  </a>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Professions grid */}
         <section className="py-16 md:py-20">
           <div className="max-w-6xl mx-auto px-4">
@@ -149,7 +176,7 @@ export default function VilleLanding() {
               Missions soignants dans d'autres villes
             </h2>
             <div className="flex flex-wrap justify-center gap-3">
-              {VILLES_SEO.filter(v => v.slug !== villeSlug).slice(0, 12).map((v) => (
+              {VILLES_SEO.filter(v => v.slug !== ville.slug).slice(0, 12).map((v) => (
                 <a
                   key={v.slug}
                   href={`/emploi-soignant/${v.slug}`}
@@ -162,7 +189,7 @@ export default function VilleLanding() {
             </div>
           </div>
         </section>
-        <MissionsPubliquesSEO ville={villeNom} campagne={`seo-ville-${villeSlug || ''}`} />
+        <MissionsPubliquesSEO ville={villeNom} campagne={`seo-ville-${ville.slug}`} />
       </SEOPageLayout>
     </>
   );

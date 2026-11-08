@@ -1,12 +1,13 @@
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Clock, ArrowRight, Flame, AlertCircle } from 'lucide-react';
 import { useMissionsPubliques } from '@/hooks/useMissionsPubliques';
-import { lienInscriptionRecherche, memoriserRecherchePublique } from '@/lib/recherchePubliqueInscription';
+import { lienInscriptionRecherche, memoriserRecherchePublique, type UtmInscription } from '@/lib/recherchePubliqueInscription';
 
 interface Props {
   profession?: string;   // valeur enum (IDE, AS…) ou undefined = toutes
   ville?: string;        // nom de ville ou undefined = toutes
   campagne: string;      // slug pour l'UTM (ex. "seo-paris", "seo-ide")
+  utm?: UtmInscription;  // UTM complets (prioritaires sur `campagne`) — pages ville × métier
 }
 
 function libelleContrat(type: string | null | undefined) {
@@ -19,12 +20,12 @@ function libelleContrat(type: string | null | undefined) {
  * Liste publique de missions ouvertes (RPC anon fn_missions_publiques_recherche)
  * pour les landing pages SEO ville/métier. CTA inscription avec UTM tracées.
  */
-export function MissionsPubliquesSEO({ profession, ville, campagne }: Props) {
+export function MissionsPubliquesSEO({ profession, ville, campagne, utm }: Props) {
   const navigate = useNavigate();
   const { missions, total, loading, erreur, rechercher } = useMissionsPubliques(profession, ville);
   const ouvrirInscription = () => {
     memoriserRecherchePublique({ profession, ville });
-    navigate(lienInscriptionRecherche({ profession, ville }, campagne));
+    navigate(lienInscriptionRecherche({ profession, ville }, utm ?? campagne));
   };
 
   return (

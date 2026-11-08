@@ -5,6 +5,8 @@ import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { getProfessionBySlug, PROFESSIONS_SEO } from '@/lib/seo-data';
 import { MissionsPubliquesSEO } from '@/components/MissionsPubliquesSEO';
+import { PageSEOIntrouvable } from '@/components/PageSEOIntrouvable';
+import { metaMetier, urlAbsolue, estProfessionVilleMetier, VILLES_VILLE_METIER, cheminVilleMetier } from '@/lib/seo-routes';
 import { Euro, Clock, ShieldCheck, TrendingUp, Stethoscope, ArrowRight } from 'lucide-react';
 
 const avantages = [
@@ -46,25 +48,51 @@ export default function ProfessionLanding() {
   const navigate = useNavigate();
   const profession = professionSlug ? getProfessionBySlug(professionSlug) : undefined;
 
-  const professionLabel = profession?.label || (professionSlug ? professionSlug.replace(/-/g, ' ') : 'Profession');
-  const professionDesc = profession?.description || 'Trouvez des missions adaptées à votre profession sur Jolene Santé.';
-  const salaire = profession?.salaire_moyen || '20-40\u20AC/h';
+  // Slug inconnu : page noindex (pas de soft-404 indexable) + liens vers les pages connues.
+  if (!profession) {
+    return <PageSEOIntrouvable titre="Métier non référencé" liens={PROFESSIONS_SEO.map((p) => ({ href: `/metier/${p.slug}`, label: p.label }))} />;
+  }
+
+  const professionLabel = profession.label;
+  const salaire = profession.salaire_moyen;
+  const meta = metaMetier(profession);
 
   const faq = (professionSlug && faqParProfession[professionSlug]) ? faqParProfession[professionSlug] : defaultFaq;
 
   return (
     <>
       <SEOHead
-        title={`Missions ${professionLabel} — remplacements & CDD courts | Jolene Santé`}
-        description={`${professionDesc} Taux horaire moyen : ${salaire}. Inscription gratuite, profils vérifiés et modalités de paiement affichées avant candidature.`}
-        url={`https://jolene.app/metier/${professionSlug}`}
+        title={meta.title}
+        description={meta.description}
+        url={urlAbsolue(meta.path)}
       />
       <SEOPageLayout
-        heroTitle={`Missions ${professionLabel}`}
-        heroSubtitle={professionDesc}
+        heroTitle={meta.h1}
+        heroSubtitle={meta.intro[0]}
         ctaText="M'inscrire gratuitement"
         ctaHref="/inscription/soignant"
       >
+        {estProfessionVilleMetier(profession.slug) && (
+          <section className="py-12 md:py-16">
+            <div className="max-w-5xl mx-auto px-4">
+              <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-6">
+                Missions {professionLabel} par ville
+              </h2>
+              <div className="flex flex-wrap justify-center gap-3">
+                {VILLES_VILLE_METIER.map((v) => (
+                  <a
+                    key={v.slug}
+                    href={cheminVilleMetier(v.slug, profession.slug)}
+                    className="inline-flex items-center gap-1.5 bg-card border border-border rounded-lg px-4 py-2 text-sm font-medium text-foreground hover:border-primary/40 hover:text-primary transition-colors"
+                  >
+                    {v.nom}
+                  </a>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Benefits grid */}
         <section className="py-16 md:py-20">
           <div className="max-w-6xl mx-auto px-4">
@@ -153,7 +181,7 @@ export default function ProfessionLanding() {
             </div>
           </div>
         </section>
-        <MissionsPubliquesSEO profession={profession?.valeur} campagne={`seo-metier-${professionSlug || ''}`} />
+        <MissionsPubliquesSEO profession={profession.valeur} campagne={`seo-metier-${profession.slug}`} />
       </SEOPageLayout>
     </>
   );
