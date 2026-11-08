@@ -67,7 +67,8 @@ final class EtatNotificationsAppareilTests: XCTestCase {
                      "lecture système immédiate : rien n'est affiché avant elle")
         XCTAssertEqual(E.message(autorisation: .accordee, enregistrementConfirme: nil), E.verification,
                        "autorisé, enregistrement en cours de vérification (web 'loading')")
-        XCTAssertEqual(E.message(autorisation: .accordee, enregistrementConfirme: true), E.autorisees)
+        XCTAssertEqual(E.message(autorisation: .accordee, enregistrementConfirme: true), E.autorisees,
+                       "hub, canal inconnu : l.346 (le web exige `canal_push` vrai, sinon l.347 : écart consigné, levé par T6)")
         XCTAssertEqual(E.message(autorisation: .provisoire, enregistrementConfirme: true), E.autorisees)
         XCTAssertEqual(E.message(autorisation: .accordee, enregistrementConfirme: false), E.nonEnregistre)
         XCTAssertEqual(E.message(autorisation: .provisoire, enregistrementConfirme: false), E.nonEnregistre)

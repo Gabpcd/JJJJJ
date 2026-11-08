@@ -848,7 +848,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   l'appel est ignoré. Déconnexion subie (`.signedOut` du SDK, revalidation qui ne trouve plus de session, depuis
   un espace prêt ou bloqué) : désinscription locale seule, sans appel (JWT absent), après la publication de
   l'écran de connexion. Suppression de compte : désinscription locale avant la purge, sans appel. Lancement sans
-  session avec un token laissé par une session précédente : désinscription locale et oubli, sans appel.
+  session (le SDK n'a rien restauré) avec un token laissé par une session précédente : désinscription locale et
+  oubli, sans appel. Ces fins de session ne partent que d'une absence de session confirmée par
+  `SessionController` (`absencesConfirmees`) : un `.signedOut` transitoire (restauration impossible hors ligne,
+  rôle ou profil illisible, et au merge de L1-T9 le verrou biométrique) ne désinscrit rien et garde le token.
 - **Signature SQL** (`supabase/schema/public.sql` l.30176) :
 
 ```sql

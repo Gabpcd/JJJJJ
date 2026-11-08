@@ -13,12 +13,17 @@ import Combine
 /// - `signOut` → `push.avantDeconnexion` (désactivation du token, JWT encore valide, bornée à 2,5 s,
 ///   puis désinscription locale) AVANT `controller.signOut()`, qui avance l'epoch avant le réseau ; un
 ///   second appel pendant la déconnexion est ignoré (`deconnexionEnCours`) ;
-/// - `.signedOut` publié après une identité (`.ready` ou `.blocked`) hors déconnexion voulue — session
-///   effacée par le SDK, revalidation qui ne trouve plus de session — → `push.surDeconnexionSubie`
-///   (désinscription locale seule, sans RPC : JWT absent), lancée APRÈS la publication (`finDeSessionPush`) :
-///   l'écran de connexion n'attend pas la désinscription ;
-/// - premier `.signedOut` sans identité (lancement à froid sans session) → `push.surSessionAbsente` (oubli
-///   d'un token laissé par une session précédente) ;
+/// - `.signedOut` qui porte une absence de session **confirmée par le contrôleur** (revue B8 : restauration
+///   sans session, `.signedOut` du SDK avec une identité active ; `SessionController.Publication`), hors
+///   déconnexion voulue :
+///   - après une identité (`.ready` ou `.blocked`) → `push.surDeconnexionSubie` (désinscription locale seule,
+///     sans RPC : JWT absent), lancée APRÈS la publication (`finDeSessionPush`) : l'écran de connexion
+///     n'attend pas la désinscription ;
+///   - sans identité (lancement à froid, « Réessayer » qui ne trouve plus de session) →
+///     `push.surSessionAbsente` (oubli d'un token laissé par une session précédente) ;
+/// - tout autre `.signedOut` (restauration, rôle ou profil en échec transitoire : le SDK peut encore détenir
+///   la session ; connexion refusée ; au merge de L1-T9, verrou biométrique) → rien : token conservé,
+///   identité suivie inchangée. La cause n'est jamais déduite du texte du message ni de `canRetryRestore` ;
 /// - suppression de compte (`signOutLocally`) → `push.surDeconnexionSubie` avant la purge, sans RPC.
 ///
 /// D3 (audit `DECONNEXION` de L1-T9 lancé EN PARALLÈLE de la désactivation, `async let`) : L1-T9 n'est
@@ -52,8 +57,12 @@ public final class SessionStore: ObservableObject {
     private var identitePubliee = false
     /// Lot 3, T4 : epoch du dernier `.ready` publié depuis la dernière fin de session.
     private var dernierEpochPret: Int?
-    /// Lot 3, T4 : un `.signedOut` a déjà été publié dans ce processus (contrôle du lancement fait).
-    private var finDeSessionVue = false
+    /// Lot 3, T4 : absences de session confirmées par le contrôleur déjà vues (`SessionController.Publication`) ;
+    /// une même absence publiée deux fois (retour de `start()` et boucle d'événements) n'est traitée qu'une fois.
+    private var absencesVues = 0
+    /// Lot 3, T4 : vrai seulement pendant la publication (`appliquer`) d'un état qui porte une absence de session
+    /// confirmée encore jamais vue ; lu par `suivrePush`. Toute autre affectation de `state` le trouve faux.
+    private var publicationConfirmeAbsence = false
 
     public init(controller: SessionController, push: PushCoordinator? = nil) {
         self.controller = controller
@@ -65,7 +74,7 @@ public final class SessionStore: ObservableObject {
     /// la vérification (pas de `.loading` intermédiaire : reprise après 30 minutes).
     public func start() async {
         if !state.isReady { state = .loading }
-        state = await controller.start()
+        appliquer(await controller.startPublication())
         canRetryRestore = await controller.canRetryRestore
     }
 
@@ -108,7 +117,7 @@ public final class SessionStore: ObservableObject {
 
     /// Relit l'état courant de l'acteur sans déclencher d'opération.
     public func refresh() async {
-        state = await controller.state
+        appliquer(await controller.publication)
         canRetryRestore = await controller.canRetryRestore
     }
 
@@ -120,9 +129,9 @@ public final class SessionStore: ObservableObject {
         let controller = self.controller
         authEventsTask = Task { [weak self] in
             for await event in controller.authEvents() {
-                let state = await controller.handleAuthEvent(event)
+                let publication = await controller.handleAuthEventPublication(event)
                 guard let self else { return }
-                self.state = state
+                self.appliquer(publication)
                 self.canRetryRestore = await controller.canRetryRestore
                 self.evenementsAuthTraites += 1
             }
@@ -134,8 +143,18 @@ public final class SessionStore: ObservableObject {
 
     // MARK: - Lot 3, T4 (push)
 
-    /// Suit chaque publication de `state` (voir l'en-tête) : ouverture d'un espace, fin de session subie,
-    /// lancement sans session.
+    /// Publie l'état rendu par le contrôleur avec la cause qu'il porte : `publicationConfirmeAbsence` n'est vrai
+    /// que pendant l'affectation de `state` (donc pendant `suivrePush`), et seulement pour une absence de
+    /// session confirmée encore jamais vue.
+    private func appliquer(_ publication: SessionController.Publication) {
+        publicationConfirmeAbsence = publication.absencesConfirmees > absencesVues
+        absencesVues = max(absencesVues, publication.absencesConfirmees)
+        defer { publicationConfirmeAbsence = false }
+        state = publication.state
+    }
+
+    /// Suit chaque publication de `state` (voir l'en-tête) : ouverture d'un espace, fin de session subie
+    /// confirmée, lancement sans session confirmé.
     private func suivrePush(depuis ancien: SessionState) {
         guard let push else { return }
         switch state {
@@ -152,23 +171,32 @@ public final class SessionStore: ObservableObject {
         case .blocked:
             identitePubliee = true
         case .signedOut:
+            if finsDeSessionVoulues > 0 {
+                // `signOut` / `signOutLocally` : le coordinateur est déjà prévenu, l'identité est partie.
+                oublierIdentiteSuivie()
+                return
+            }
+            // Échec transitoire, connexion refusée, (L1-T9) verrou biométrique : le SDK peut encore détenir la
+            // session ; rien n'est désinscrit ni oublié, l'identité suivie reste celle d'avant.
+            guard publicationConfirmeAbsence else { return }
             let identitePerdue = identitePubliee
             let epochPerdu = dernierEpochPret
-            let premiereFin = !finDeSessionVue
-            identitePubliee = false
-            dernierEpochPret = nil
-            finDeSessionVue = true
-            guard finsDeSessionVoulues == 0 else { return }
+            oublierIdentiteSuivie()
             if identitePerdue {
-                // Session effacée par le SDK ou absente à la revalidation : JWT absent, désinscription seule.
+                // Session effacée par le SDK ou absente à la restauration : JWT absent, désinscription seule.
                 finDeSessionPush = Task { await push.surDeconnexionSubie(epoch: epochPerdu) }
-            } else if premiereFin {
-                // Lancement sans session : un token laissé par la session précédente est oublié.
+            } else {
+                // Aucune session ni identité ouverte : un token laissé par une session précédente est oublié.
                 finDeSessionPush = Task { await push.surSessionAbsente() }
             }
         case .idle, .loading:
             break
         }
+    }
+
+    private func oublierIdentiteSuivie() {
+        identitePubliee = false
+        dernierEpochPret = nil
     }
 
     /// Epoch de l'identité ouverte (espace prêt ou bloqué : JWT présent), nil sans identité.

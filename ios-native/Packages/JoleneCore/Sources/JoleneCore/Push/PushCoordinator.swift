@@ -165,7 +165,11 @@ public actor PushCoordinator {
             Self.journaliser("Enregistrement du token en échec : \(Self.motif(error))")
             return
         }
-        guard actif(courante), await controller.epoch == snapshot.epoch else { return }
+        guard actif(courante) else { return }
+        let epochCourant = await controller.epoch
+        // Réentrance : une déconnexion a pu s'exécuter entièrement pendant cette lecture (génération avancée,
+        // token oublié) ; la génération est relue après la suspension, sans suspension avant l'écriture.
+        guard actif(courante), epochCourant == snapshot.epoch else { return }
         confirme = (snapshot.epoch, token)
         memoire.memoriser(TokenPushMemorise(token: token, userId: snapshot.user.id))
     }
@@ -195,7 +199,8 @@ public actor PushCoordinator {
     }
 
     /// Fin de session sans JWT utilisable, aucune RPC : session effacée par le SDK ou absente à la
-    /// revalidation (`epoch` : celui de l'identité perdue, connu de l'appelant), suppression du compte
+    /// revalidation — absence confirmée par le contrôleur, jamais un échec transitoire — (`epoch` : celui de
+    /// l'identité perdue, connu de l'appelant), suppression du compte
     /// (`epoch` : celui de l'identité qui part, avant la purge). Ferme cet epoch et ceux que le coordinateur
     /// connaît, sans lire l'epoch courant du contrôleur : la fin subie est traitée après la publication de
     /// l'état et une identité suivante, déjà ouverte, ne doit jamais être fermée.
@@ -204,10 +209,12 @@ public actor PushCoordinator {
         await desinscrireLocalement()
     }
 
-    /// Aucune session au lancement (le SDK n'a rien restauré, aucune identité ouverte dans ce processus) :
-    /// un token mémorisé vient d'une session close hors de l'app (application tuée pendant la déconnexion,
-    /// refresh refusé hors ligne) ; aucun JWT, donc aucune RPC : désinscription locale puis oubli. Sans
-    /// token mémorisé, rien (aucun appel système inutile).
+    /// Absence de session **confirmée** par le contrôleur sans identité ouverte (le SDK n'a rien restauré, ou a
+    /// effacé une session jamais ouverte comme espace) : un token mémorisé vient d'une session close hors de
+    /// l'app (application tuée pendant la déconnexion, refresh refusé) ; aucun JWT, donc aucune RPC :
+    /// désinscription locale puis oubli. Sans token mémorisé, rien (aucun appel système inutile). Jamais
+    /// appelé sur un échec transitoire (restauration hors ligne, profil illisible) : le SDK détient encore la
+    /// session et l'appareil doit continuer de recevoir les push (`SessionStore`, revue B8).
     public func surSessionAbsente() async {
         guard memoire.lire() != nil else { return }
         Self.journaliser("Token mémorisé sans session : désinscription locale")

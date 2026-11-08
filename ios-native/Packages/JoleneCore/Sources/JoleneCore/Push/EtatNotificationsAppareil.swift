@@ -7,7 +7,9 @@ import Foundation
 /// - autorisation pas encore lue → aucune carte (la lecture native est immédiate) ;
 /// - autorisé (ou provisoire), enregistrement en cours de vérification → l.343 ;
 /// - autorisé et enregistrement confirmé → l.346, ou l.347 si les préférences (T6) savent le canal push
-///   coupé dans Jolene ;
+///   coupé dans Jolene. Canal inconnu (hub provisoire) → l.346 : le web n'affiche l.346 que si
+///   `global.canal_push` est vrai (sinon l.347) ; écart du hub consigné dans `REVUES_LOT3.md` (section L3-T4),
+///   levé par T6 (`canalPush` lu des préférences) ;
 /// - autorisé sans enregistrement confirmé → l.352 (`registration-error`) ;
 /// - jamais demandé → l.349 (`prompt`) **seulement si le canal push est connu actif** : le texte affirme
 ///   « Le canal est actif dans Jolene » ; canal inconnu (hub) ou coupé → aucune carte (le web affiche l.349
