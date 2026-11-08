@@ -71,6 +71,9 @@ final class AppContainer: ObservableObject {
         let boite = NotificationCenterDelegate.shared.boite
         tapsPush = boite
         theme = PreferenceThemeModel(stockage: environment.mode == .demo ? MemoireStockageAppareil() : UserDefaultsStockageAppareil())
+        // Lot 3, T11 (revue B8, m8) : un fichier d'export RGPD laissé par un arrêt brutal (feuille de partage jamais
+        // fermée) est retiré dès le lancement, sans attendre le prochain hub ni la prochaine connexion.
+        DossierExportTemporaire.systeme.purgerResidus()
 
         // Un mode inconnu (`unknownModeRaw`) est refusé par `validate()` avant tout choix de gateways.
         if let error = Self.refusal(of: environment) {

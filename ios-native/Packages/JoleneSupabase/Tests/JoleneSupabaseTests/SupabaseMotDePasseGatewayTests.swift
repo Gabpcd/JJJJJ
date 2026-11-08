@@ -10,6 +10,9 @@ import XCTest
 /// 2. `update(user: UserAttributes(password:))` (PUT `/auth/v1/user`), une seule fois ;
 /// refus GoTrue traduits comme `extraireMessageErreur` (textes web verbatim), réauthentification exigée
 /// (« secure password change ») → refus verrouillé, session absente ou JWT refusé → session expirée.
+/// Revue B8 : `same_password` avec un nouveau distinct de l'ancien vérifié (rejeu d'un PUT abouti) → `.modifie`,
+/// 5xx/408 sur le PUT → issue inconnue (m1) ; garde d'identité consultée entre la vérification et la mise à jour,
+/// session recréée retirée si l'identité est partie (m2).
 /// Aucun mot de passe dans un message ; aucune requête hors contrat, aucun renvoi.
 final class SupabaseMotDePasseGatewayTests: XCTestCase {
     private let registry = StubRegistry.shared
@@ -262,7 +265,8 @@ final class SupabaseMotDePasseGatewayTests: XCTestCase {
         let client = try await connecte()
         registry.add("POST", token, respond: .json(200, TestClient.sessionJSON()))
         registry.add("PUT", user, respond: refus(422, code: "same_password", message: Self.refusMemeMotDePasse))
-        XCTAssertEqual(try await changer(client), .modifie)
+        let issue = try await changer(client)
+        XCTAssertEqual(issue, .modifie)
         XCTAssertEqual(registry.requests(to: user).count, 1)
     }
 
@@ -322,7 +326,8 @@ final class SupabaseMotDePasseGatewayTests: XCTestCase {
         // Avant toute mise à jour, rien n'a changé : le refus générique du web reste juste.
         let client = try await connecte()
         registry.add("POST", token, respond: refus(500, code: "unexpected_failure", message: "Internal Server Error"))
-        XCTAssertEqual(try await changer(client), .refuse(message: "Une erreur est survenue. Veuillez réessayer."))
+        let issue = try await changer(client)
+        XCTAssertEqual(issue, .refuse(message: "Une erreur est survenue. Veuillez réessayer."))
         XCTAssertTrue(registry.requests(to: user).isEmpty)
     }
 

@@ -16,6 +16,8 @@ extension DemoFixtures {
 actor DemoMotDePasseStore {
     private var actuel = DemoMotDePasseGateway.ancienDemo
 
+    func verifier(_ ancien: String) -> Bool { ancien == actuel }
+
     func changer(ancien: String, nouveau: String) -> ResultatMotDePasse {
         guard ancien == actuel else { return .ancienIncorrect }
         actuel = nouveau
@@ -33,11 +35,15 @@ public struct DemoMotDePasseGateway: MotDePassePort {
 
     public init() {}
 
-    public func changer(ancien: String, nouveau: String, context: MissionReadContext) async throws -> ResultatMotDePasse {
+    public func changer(ancien: String, nouveau: String, context: MissionReadContext,
+                        identiteCourante: @escaping @Sendable () async -> Bool) async throws -> ResultatMotDePasse {
         try MissionBusiness.validateContext(context)
         guard context.userId == DemoWorld.context.userId else {
             throw JoleneError(.demoOnly, DemoWorld.messageDemoSeulement)
         }
+        // Même ordre que GoTrue : ancien vérifié, garde d'identité, puis mise à jour (revue B8, m2).
+        guard await store.verifier(ancien) else { return .ancienIncorrect }
+        guard await identiteCourante() else { throw MotDePasse.identitePartie }
         return await store.changer(ancien: ancien, nouveau: nouveau)
     }
 }

@@ -1,8 +1,26 @@
 import Foundation
 import Combine
 
+/// Issue d'un changement de mot de passe terminé après le retrait de son écran (revue B8, m3), affichée par le hub
+/// (`compte-mdp-issue-hub`) : textes de l'écran, verbatim.
+public struct IssueChangementHorsEcran: Equatable, Sendable {
+    public let texte: String
+    public let estSucces: Bool
+
+    public init(texte: String, estSucces: Bool) {
+        self.texte = texte
+        self.estSucces = estSucces
+    }
+}
+
 /// Modèle de l'écran « Changer mon mot de passe » (lot 3, T11, D13), port de `ChangementMotDePasse.tsx`
-/// l.26-110 :
+/// l.26-110. Tenu par le hub (`ProfileScreen`), et non par l'écran (revue B8, m3) : un retour programmé de la
+/// pile du Profil (tap push, ligne du centre) en pleine demande ne perd pas l'issue, alors que le mot de passe a
+/// pu changer. L'écran signale son ouverture (`ouvertureEcran`) et son retrait de la pile (`retraitEcran`) :
+/// - retrait hors demande : formulaire, issue et verrou effacés (démontage du composant web) ;
+/// - retrait pendant la demande : elle continue, son issue est annoncée par le hub (`issueAuHub`) jusqu'à la
+///   réouverture de l'écran.
+/// Règles :
 /// - formulaire DÉRIVÉ de la saisie (force, correspondance, validité) : rien n'est re-saisi ni figé ;
 /// - une seule demande à la fois (`enCours`, garde `enCours.current` l.44) ;
 /// - `.modifie` → champs vidés puis « Mot de passe modifié avec succès. » ; l'audit
@@ -28,6 +46,8 @@ public final class MotDePasseModel: ObservableObject {
     @Published public private(set) var reauthentificationExigee = false
     /// Jeton d'annonce VoiceOver des encarts (`InlineNotice.announcementID`).
     @Published public private(set) var annonces = 0
+    /// Instance de l'écran empilée sur le Profil (jeton de `ouvertureEcran`), nil hors de la pile.
+    @Published public private(set) var ecranOuvert: UUID?
 
     private let session: SessionStore
     private let snapshot: SessionSnapshot
@@ -35,6 +55,41 @@ public final class MotDePasseModel: ObservableObject {
     public init(session: SessionStore, snapshot: SessionSnapshot) {
         self.session = session
         self.snapshot = snapshot
+    }
+
+    // MARK: - Écran (revue B8, m3)
+
+    /// Issue à annoncer par le hub : celle d'une demande terminée alors que son écran n'est plus sur la pile.
+    public var issueAuHub: IssueChangementHorsEcran? {
+        guard ecranOuvert == nil else { return nil }
+        if let succes { return IssueChangementHorsEcran(texte: succes, estSucces: true) }
+        if let erreur { return IssueChangementHorsEcran(texte: erreur, estSucces: false) }
+        return nil
+    }
+
+    /// L'écran `jeton` est affiché (apparition ; un retour d'onglet le réaffirme).
+    public func ouvertureEcran(_ jeton: UUID) {
+        ecranOuvert = jeton
+    }
+
+    /// L'écran `jeton` a quitté la pile (retour de l'utilisateur, ou retour programmé). Sans effet si un autre
+    /// écran l'a déjà remplacé. Hors demande : formulaire, issue et verrou effacés ; pendant la demande : rien
+    /// n'est effacé, l'issue ira au hub.
+    public func retraitEcran(_ jeton: UUID) {
+        guard ecranOuvert == jeton else { return }
+        ecranOuvert = nil
+        guard !enCours else { return }
+        reinitialiser()
+    }
+
+    private func reinitialiser() {
+        reauthentificationExigee = false
+        ancien = ""
+        nouveau = ""
+        confirmation = ""
+        succes = nil
+        erreur = nil
+        sessionExpiree = false
     }
 
     // MARK: - Formulaire dérivé
@@ -63,10 +118,14 @@ public final class MotDePasseModel: ObservableObject {
         let port = gateways.motDePasse
         let context = snapshot.context
         let (ancienSaisi, nouveauSaisi) = (ancien, nouveau)
+        // Garde d'identité (revue B8, m2) : consultée par le port entre la vérification et la mise à jour.
+        let (controleur, epoch) = (session.controller, snapshot.epoch)
+        let identiteCourante: @Sendable () async -> Bool = { await controleur.epoch == epoch }
         let issue: ResultatMotDePasse
         do {
             issue = try await bounded(timeout: session.controller.resolutionTimeout) {
-                try await port.changer(ancien: ancienSaisi, nouveau: nouveauSaisi, context: context)
+                try await port.changer(ancien: ancienSaisi, nouveau: nouveauSaisi, context: context,
+                                       identiteCourante: identiteCourante)
             }
         } catch {
             guard await memeEpoch(), !(error is CancellationError) else { return }

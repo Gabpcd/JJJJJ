@@ -122,6 +122,23 @@ public enum MotDePasse {
         return Textes.erreurGenerique
     }
 
+    // MARK: - Issues GoTrue sans équivalent web (revue B8, m1 et m2)
+
+    /// Octets que bcrypt (hachage des mots de passe GoTrue) prend en compte : les 72 premiers.
+    public static let octetsBcrypt = 72
+
+    /// `same_password` reçu sur la mise à jour, l'ancien mot de passe venant d'être vérifié : si le nouveau en
+    /// diffère pour GoTrue (octet par octet en UTF-8, sur les 72 octets que lit bcrypt), le mot de passe vaut DÉJÀ
+    /// le nouveau — rejeu par le SDK d'un PUT abouti dont la réponse a été perdue, ou changement concurrent vers
+    /// la même valeur. Sinon (nouveau égal à l'ancien pour bcrypt), c'est le vrai refus du web.
+    public static func memeMotDePasseProuveLaModification(ancien: String, nouveau: String) -> Bool {
+        Array(ancien.utf8.prefix(octetsBcrypt)) != Array(nouveau.utf8.prefix(octetsBcrypt))
+    }
+
+    /// Identité de l'écran partie entre la vérification de l'ancien mot de passe et la mise à jour (garde du
+    /// port) : aucune mise à jour. Jamais affiché (réponse d'un epoch périmé, ignorée par le modèle).
+    public static let identitePartie = JoleneError(.cancelled, "Chargement annulé.")
+
     /// Textes de l'écran. Repris mot pour mot du web (gardés par `CompteVerbatimTests`), sauf les deux
     /// textes natifs sans équivalent web listés dans `DECISIONS_LOT3.md` (à relire par Gabrielle).
     public enum Textes {
@@ -152,7 +169,9 @@ public enum MotDePasse {
         public static let erreurGenerique = "Une erreur est survenue. Veuillez réessayer."
 
         /// Natif, sans équivalent web (D13) : le serveur exige une réauthentification (« secure password
-        /// change », nonce) ; aucun flux OTP au lot 3, renvoi vers « Mot de passe oublié ? ».
+        /// change », nonce) ; aucun flux OTP au lot 3, renvoi vers « Mot de passe oublié ? ». Ce lien de l'écran de
+        /// connexion (`login-forgot`) arrive avec L1-T10, et ne s'atteint qu'après une déconnexion : dépendance
+        /// consignée dans les manques de T11 (`DECISIONS_LOT3.md`), texte à relire par Gabrielle.
         public static let reauthentificationRequise =
             "Ce changement exige une nouvelle vérification de votre identité. Utilisez « Mot de passe oublié ? » pour choisir un nouveau mot de passe."
         /// Natif, sans équivalent web : délai dépassé ou coupure pendant le changement, le serveur a pu

@@ -10,9 +10,10 @@ import JoleneDesign
 /// - lot 3, T9 : « Mon profil » (`ProfilEntreeSection`, `profil-ouvrir`) ;
 /// - « Réglages » : « Notifications » (T6, préférences, `profile-preferences-notifications`, hôte de la carte
 ///   d'autorisation de T4 : aucune seconde carte ici) et le thème Système / Clair / Sombre (T11, D16) ;
-/// - T11 : « Connexion & sécurité » (« Changer mon mot de passe », `compte-mdp-ouvrir`), « Mes données (RGPD) »
-///   (export JSON / CSV), « Aide & légal » (pages publiques en Safari, montée seulement avec le présentateur `.safari`
-///   de L1-T10) ;
+/// - T11 : « Connexion & sécurité » (« Changer mon mot de passe », `compte-mdp-ouvrir` ; issue d'une demande dont
+///   l'écran a été dépilé, `compte-mdp-issue-hub`), « Mes données (RGPD) » (export JSON / CSV ; feuille de partage
+///   présentée hub à l'écran seulement), « Aide & légal » (pages publiques en Safari, montée seulement avec le
+///   présentateur `.safari` de L1-T10) ;
 /// - lot 1, T8 : « Suppression de compte », dernière section.
 /// Entrées natives en liens par valeur (`ProfilEditionRoute`, `PreferencesNotificationsRoute` enregistrées par
 /// `MainTabView` ; `MotDePasseRoute` enregistrée ici, sur la liste et non dans ses lignes). Entrées web : `JoleneRoute`
@@ -27,6 +28,9 @@ struct ProfileScreen: View {
     /// Export RGPD : modèle tenu par le hub (et non par sa section, ligne d'une liste paresseuse) pour que la
     /// feuille de partage survive au défilement.
     @StateObject private var export: ExportRGPDModel
+    /// Mot de passe : modèle tenu par le hub (revue B8, m3) pour qu'un retour programmé de la pile en pleine
+    /// demande ne perde pas l'issue (annoncée ici, `compte-mdp-issue-hub`).
+    @StateObject private var motDePasse: MotDePasseModel
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
 
     init(container: AppContainer, session: SessionStore, snapshot: SessionSnapshot) {
@@ -34,6 +38,7 @@ struct ProfileScreen: View {
         self.session = session
         self.snapshot = snapshot
         _export = StateObject(wrappedValue: ExportRGPDModel(session: session, snapshot: snapshot))
+        _motDePasse = StateObject(wrappedValue: MotDePasseModel(session: session, snapshot: snapshot))
     }
 
     var body: some View {
@@ -82,8 +87,14 @@ struct ProfileScreen: View {
                         .frame(minHeight: 44, alignment: .leading)
                 }
                 .accessibilityIdentifier("compte-mdp-ouvrir")
+                if let issue = motDePasse.issueAuHub {
+                    InlineNotice(issue.texte, tone: issue.estSucces ? .success : .error, identifier: "compte-mdp-issue-hub",
+                                 announcesOnAppear: true, announcementID: motDePasse.annonces)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: JoleneSpacing.sm, leading: 0, bottom: JoleneSpacing.sm, trailing: 0))
+                }
             }
-            ExportRGPDSection(model: export) // lot 3, T11
+            ExportRGPDSection(model: export, exposerResidus: container.isDemo) // lot 3, T11
             if let presentateurRenvoiWeb {
                 AideEtLegalSection(presentateur: presentateurRenvoiWeb) // lot 3, T11 : après L1-T10
             }
@@ -95,38 +106,17 @@ struct ProfileScreen: View {
         .background(JoleneColor.lavender.ignoresSafeArea())
         .navigationTitle("Profil")
         .navigationDestination(for: MotDePasseRoute.self) { _ in
-            MotDePasseScreen(session: session, snapshot: snapshot)
+            MotDePasseScreen(model: motDePasse)
         }
-        .sheet(item: Binding(get: { export.partage }, set: { if $0 == nil { export.partageTermine(complete: false) } })) { fichier in
-            PartageExportSheet(fichier: fichier, exposerNom: container.isDemo) { complete in
-                export.partageTermine(complete: complete)
-            }
+        // Export RGPD (revue B8, M1 et m3) : la feuille n'est présentée que hub à l'écran, une seule fois, par
+        // UIKit (`FeuillePartageExport`, fin unique `completionWithItemsHandler`) ; un export abouti pendant qu'un
+        // autre onglet ou un écran empilé est affiché attend le retour du hub.
+        .onAppear { export.hubAffiche(true) }
+        .onDisappear { export.hubAffiche(false) }
+        .onChange(of: export.fichierAPresenter) { fichier in
+            guard let fichier else { return }
+            FeuillePartageExport.presenter(fichier, model: export, exposerNom: container.isDemo)
         }
-    }
-}
-
-/// Feuille de partage de l'export, avec, en DEBUG et en démo seulement, le nom du fichier partagé
-/// (`compte-export-pret`, preuve XCUITest posée DANS la feuille : le contenu qu'elle recouvre n'est plus exposé).
-private struct PartageExportSheet: View {
-    let fichier: FichierAPartager
-    let exposerNom: Bool
-    let termine: @MainActor @Sendable (Bool) -> Void
-
-    var body: some View {
-        PartageFichierView(url: fichier.url, termine: termine)
-            .ignoresSafeArea()
-            #if DEBUG
-            .overlay(alignment: .topLeading) {
-                if exposerNom {
-                    Text(fichier.nom)
-                        .font(.system(size: 1))
-                        .foregroundStyle(.clear)
-                        .frame(width: 1, height: 1)
-                        .allowsHitTesting(false)
-                        .accessibilityIdentifier("compte-export-pret")
-                }
-            }
-            #endif
     }
 }
 

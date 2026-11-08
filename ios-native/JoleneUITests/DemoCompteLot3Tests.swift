@@ -177,11 +177,14 @@ final class DemoCompteLot3Tests: JoleneUITestCase {
         let json = compteAmenerExport()
         let pret = compteOuvrirFeuille()
 
-        let copier = app.descendants(matching: .any).matching(NSPredicate(
-            format: "(elementType == %d OR elementType == %d) AND label IN %@",
-            XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.cell.rawValue, Self.libellesCopier)).firstMatch
-        require("L'action « Copier » de la feuille est atteignable", timeout: 30) { self.visible(copier) }
-        copier.tap()
+        // « Copier » : bouton ou cellule selon la version de la feuille système.
+        let libelleCopier = NSPredicate(format: "label IN %@", Self.libellesCopier)
+        let boutonCopier = app.buttons.matching(libelleCopier).firstMatch
+        let celluleCopier = app.cells.matching(libelleCopier).firstMatch
+        require("L'action « Copier » de la feuille est atteignable", timeout: 30) {
+            self.visible(boutonCopier) || self.visible(celluleCopier)
+        }
+        (visible(boutonCopier) ? boutonCopier : celluleCopier).tap()
         let succes = element("compte-export-succes")
         require("Le partage abouti est annoncé", timeout: 30) { succes.exists }
         XCTAssertTrue(succes.label.hasSuffix(Self.exportJSONReussi), "texte verbatim web (l.73) : \(succes.label)")

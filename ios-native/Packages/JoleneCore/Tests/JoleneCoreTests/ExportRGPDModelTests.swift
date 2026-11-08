@@ -232,6 +232,7 @@ final class ExportRGPDModelTests: XCTestCase {
         XCTAssertEqual(model.succes, "Données exportées en JSON.")
         XCTAssertFalse(FileManager.default.fileExists(atPath: partage.url.path))
         XCTAssertEqual(DossierExportTemporaire(racine: racine).residus, 0)
+        XCTAssertEqual(model.residus, 0, "preuve DEBUG `compte-export-residus` : lue dans le dossier du modèle")
     }
 
     func testHubAfficheLaFeuilleSuitLExportSansDelai() async throws {
@@ -241,6 +242,7 @@ final class ExportRGPDModelTests: XCTestCase {
         let partage = try XCTUnwrap(s.model.partage)
         XCTAssertEqual(s.model.fichierAPresenter, partage)
         XCTAssertEqual(DossierExportTemporaire(racine: racine).residus, 1, "un seul dossier d'export écrit")
+        XCTAssertEqual(s.model.residus, 1)
         s.model.feuillePresentee(partage)
         s.model.partageTermine(complete: false)
         XCTAssertNil(s.model.succes, "feuille fermée sans partage : aucun succès fabriqué")

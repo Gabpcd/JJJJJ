@@ -38,8 +38,9 @@ public struct FichierExportRGPD: Equatable, Sendable {
 /// contenu est celui du serveur, jamais recalculé : JSON indenté `JSON.stringify(data, null, 2)` (l.68) ou CSV
 /// aplati par `flatten` (l.53-64), dans l'ordre des clés d'un objet JavaScript (`JSONOrdonne`).
 public enum ExportRGPD {
-    /// Refus de limite de `fn_rgpd_exporter_rate_limited` (dump l.55385, définition live relue le 08/11/2026) :
-    /// valeur JSON réelle (le littéral SQL double l'apostrophe). Serveur, verbatim ; utilisé par la démo.
+    /// Refus de limite de `fn_rgpd_exporter_rate_limited` (définition live relue le 08/11/2026) : valeur JSON
+    /// réelle (le littéral SQL double l'apostrophe). Serveur, verbatim ; utilisé par la démo. Ligne du dump
+    /// indicative : `CompteVerbatimTests` localise le texte dans le corps de la fonction.
     // source: supabase/schema/public.sql:55385
     public static let refusLimiteServeur = "Trop d'exports en peu de temps. Réessayez dans quelques minutes."
 
@@ -88,8 +89,22 @@ public enum ExportRGPD {
     public static func contenuCSV(_ racine: JSONOrdonne) -> String {
         var lignes: [(String, String)] = []
         aplatir(racine, prefixe: "", dans: &lignes)
-        let corps = lignes.map { ligne in [ligne.0, ligne.1].map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }.joined(separator: ",") }
+        let corps = lignes.map { ligne in [ligne.0, ligne.1].map(celluleCSV).joined(separator: ",") }
         return "Champ,Valeur\n" + corps.joined(separator: "\n")
+    }
+
+    /// `"${String(c).replace(/"/g, '""')}"` (l.64), scalaire par scalaire (revue B8, m4) : la recherche de
+    /// `String` suit l'équivalence canonique et ne verrait pas un `"` suivi d'une marque combinante ; le web, lui,
+    /// double chaque unité `"`.
+    static func celluleCSV(_ valeur: String) -> String {
+        var cellule = String.UnicodeScalarView()
+        cellule.append("\"")
+        for scalaire in valeur.unicodeScalars {
+            cellule.append(scalaire)
+            if scalaire == "\"" { cellule.append("\"") }
+        }
+        cellule.append("\"")
+        return String(cellule)
     }
 
     private static func aplatir(_ valeur: JSONOrdonne, prefixe: String, dans lignes: inout [(String, String)]) {

@@ -1,12 +1,18 @@
 import Foundation
 
-/// Membre d'un objet JSON, dans l'ordre d'énumération d'un objet JavaScript.
+/// Membre d'un objet JSON, dans l'ordre d'énumération d'un objet JavaScript. Égalité octet pour octet (UTF-8) des
+/// clés, comme JavaScript compare des unités UTF-16 : l'égalité de `String` suit l'équivalence canonique (« é »
+/// NFC = NFD), que ni `JSON.parse` ni un jsonb n'appliquent (revue B8, m4).
 public struct MembreJSON: Equatable, Sendable {
     public var cle: String
     public var valeur: JSONOrdonne
 
     public init(cle: String, valeur: JSONOrdonne) {
         self.cle = cle; self.valeur = valeur
+    }
+
+    public static func == (a: MembreJSON, b: MembreJSON) -> Bool {
+        JSONOrdonne.memesOctets(a.cle, b.cle) && a.valeur == b.valeur
     }
 }
 
@@ -44,10 +50,27 @@ public indirect enum JSONOrdonne: Equatable, Sendable {
         return valeur
     }
 
-    /// Valeur d'un membre (dernière valeur d'une clé), nil si absent ou si ce n'est pas un objet.
+    /// Valeur d'un membre (dernière valeur d'une clé), nil si absent ou si ce n'est pas un objet. Clé comparée
+    /// octet pour octet (`data.error` du web : jamais une clé seulement canoniquement équivalente).
     public subscript(cle: String) -> JSONOrdonne? {
         guard case .objet(let membres) = self else { return nil }
-        return membres.first { $0.cle == cle }?.valeur
+        return membres.first { Self.memesOctets($0.cle, cle) }?.valeur
+    }
+
+    /// Égalité JavaScript de deux chaînes : mêmes octets UTF-8 (donc mêmes unités UTF-16), sans normalisation.
+    static func memesOctets(_ a: String, _ b: String) -> Bool { a.utf8.elementsEqual(b.utf8) }
+
+    /// Égalité de valeurs JavaScript : chaînes et clés octet pour octet (revue B8, m4).
+    public static func == (a: JSONOrdonne, b: JSONOrdonne) -> Bool {
+        switch (a, b) {
+        case (.null, .null): return true
+        case let (.booleen(x), .booleen(y)): return x == y
+        case let (.nombre(x), .nombre(y)): return x == y
+        case let (.chaine(x), .chaine(y)): return memesOctets(x, y)
+        case let (.tableau(x), .tableau(y)): return x == y
+        case let (.objet(x), .objet(y)): return x == y
+        default: return false
+        }
     }
 
     /// Valeur « vraie » au sens JavaScript (`ToBoolean`) : tout sauf `null`, `false`, `0`, `-0`, `NaN` et `""`.
@@ -182,7 +205,9 @@ private struct Analyseur {
     private mutating func objet(profondeur: Int) throws -> JSONOrdonne {
         position += 1
         var membres: [MembreJSON] = []
-        var index: [String: Int] = [:]
+        // Clés indexées par leurs octets UTF-8 : un dictionnaire de `String` fusionnerait deux clés NFC et NFD
+        // distinctes pour `JSON.parse` et le jsonb (revue B8, m4).
+        var index: [[UInt8]: Int] = [:]
         espaces()
         if position < octets.count, octets[position] == UInt8(ascii: "}") {
             position += 1
@@ -197,10 +222,11 @@ private struct Analyseur {
             position += 1
             espaces()
             let valeur = try valeur(profondeur: profondeur + 1)
-            if let existant = index[cle] {
+            let octetsCle = Array(cle.utf8)
+            if let existant = index[octetsCle] {
                 membres[existant].valeur = valeur
             } else {
-                index[cle] = membres.count
+                index[octetsCle] = membres.count
                 membres.append(MembreJSON(cle: cle, valeur: valeur))
             }
             espaces()
