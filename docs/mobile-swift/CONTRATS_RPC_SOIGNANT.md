@@ -357,7 +357,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_suggestions_missions_pour_soignant"("p_l
   FERMETURE d'un segment `mission_creneaux` `EFFECTIF`. Reçu `RecuScan` écrit avant l'appel (`LOT2_PLAN.md`
   §2.6), **une seule requête**, jamais de renvoi automatique, aucune file hors ligne (décision 2) ; succès
   affiché seulement après relecture de `fn_etat_pointage_mission` et de `scans_pointage`.
-- **Signature SQL** (`supabase/schema/public.sql` l.55622) :
+- **Signature SQL** (`supabase/schema/public.sql` l.55671) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", "p_metadata" "jsonb" DEFAULT NULL::"jsonb") RETURNS "jsonb"
@@ -372,35 +372,36 @@ CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", 
   (`src/components/pointage/PointageRotatifSoignant.tsx` l.122-126) : `id_terminal` toujours (`TERM_IOS_` +
   20 caractères base32, décision 7), `latitude`, `longitude`, `precision_gps_m` seulement si le consentement
   GPS est donné **et** la position précise disponible (décision 5) ; jamais `ip_address` (lue par le serveur
-  l.55731 et l.55806 mais non envoyée par le web). Le serveur horodate (`v_now := now()`, l.55628) : un code rejoué plus
+  l.55780 et l.55855 mais non envoyée par le web). Le serveur horodate (`v_now := now()`, l.55677) : un code rejoué plus
   tard serait un faux pointage, d'où l'absence de file.
 - **Contrat de réponse (HTTP 200)** : `{type_scan_effectue, prochain_type_scan, creneau_effectif_id,
-  horodatage_effectif, horodatage_arrondi, numero_scan, validation_etab_requise, nouveau_code, nouveau_hmac}`
-  (l.55871-55886). Le décodeur Swift est une **liste blanche** sans `nouveau_code` ni `nouveau_hmac` (fiche
+  horodatage_effectif, horodatage_arrondi, numero_scan, validation_etab_requise}` (l.55920-55931), sans
+  `nouveau_code` ni `nouveau_hmac` depuis B1 (#1117, migration `20261102205212_scanner_code_sans_code_suivant.sql`).
+  Le décodeur Swift reste une **liste blanche** qui ne lit ni `nouveau_code` ni `nouveau_hmac` (fiche
   « `fn_scanner_code_pointage` : `nouveau_code` jamais lu »). Aucun refus en jsonb : tous les refus sont des
   exceptions.
 - **Exceptions PostgREST de la RPC** (message `PostgrestError.message` verbatim ; `%` = valeur formatée par le
   serveur) :
-  - `P0002` (`no_data_found`) « Code de pointage invalide ou expiré. » (l.55649) — seule surcharge client,
+  - `P0002` (`no_data_found`) « Code de pointage invalide ou expiré. » (l.55698) — seule surcharge client,
     celle du web (`PointageRotatifSoignant.tsx` l.135-136 : « Code de pointage invalide ou expiré. Demande le code
     actuel à l’établissement. »), dont seule la personne du verbe change (décision 6) : « Code de pointage invalide
     ou expiré. Demandez le code actuel à l’établissement. » (forme exacte, apostrophe typographique ’ du web) ;
-  - `42501` (`insufficient_privilege`) « Vous n'êtes pas assigné(e) à cette mission. » (l.55652) — **refus métier, jamais une session expirée** ;
-  - `23514` (`check_violation`) « Scan déjà pris en compte. Prochain scan possible dans % secondes. » (l.55662, anti-rejeu de 2 min) ;
-  - `23514` « Le contrat doit être signé avant le pointage. » (l.55677, OUVERTURE seulement) ;
-  - `23514` « Pointage trop tôt. Mission commence à %. Possible à partir de %. » (l.55686, 15 min avant le premier créneau PREVISIONNEL, heures `Europe/Paris`) ;
-  - `P0002` « Aucun créneau effectif ouvert à fermer. » (l.55775, FERMETURE) ;
-  - `23514` « La fin réelle doit être postérieure au début réel du créneau. » (l.55778, FERMETURE).
+  - `42501` (`insufficient_privilege`) « Vous n'êtes pas assigné(e) à cette mission. » (l.55701) — **refus métier, jamais une session expirée** ;
+  - `23514` (`check_violation`) « Scan déjà pris en compte. Prochain scan possible dans % secondes. » (l.55711, anti-rejeu de 2 min) ;
+  - `23514` « Le contrat doit être signé avant le pointage. » (l.55726, OUVERTURE seulement) ;
+  - `23514` « Pointage trop tôt. Mission commence à %. Possible à partir de %. » (l.55735, 15 min avant le premier créneau PREVISIONNEL, heures `Europe/Paris`) ;
+  - `P0002` « Aucun créneau effectif ouvert à fermer. » (l.55824, FERMETURE) ;
+  - `23514` « La fin réelle doit être postérieure au début réel du créneau. » (l.55827, FERMETURE).
 - **Exceptions des triggers de la première OUVERTURE** (INSERT `presences`, puis UPDATE `missions` vers
-  `EN_COURS`) : `trg_01_exiger_conformite_premier_pointage` (l.75592) et `trg_01_exiger_conformite_mission_en_cours`
-  (l.75588) appellent `fn_exiger_conformite_demarrage_mission` (l.35858) :
+  `EN_COURS`) : `trg_01_exiger_conformite_premier_pointage` (l.75639) et `trg_01_exiger_conformite_mission_en_cours`
+  (l.75635) appellent `fn_exiger_conformite_demarrage_mission` (l.35907) :
   - `22023` « Mission et soignant requis » ;
   - `42501` « Le soignant n'est pas affecté à cette mission. » ;
   - `23514` « La mission ne peut pas être démarrée dans son état actuel. » ;
   - `23503` « Profil soignant introuvable. » ;
   - `23514` « Le contrat signé par les deux parties est requis avant le pointage. » ;
   - `23514` « Les justificatifs requis ne sont plus tous vérifiés. Déposez ou faites valider la preuve courante avant de démarrer. » ;
-  - `dec_fenetre_pointage` (BEFORE INSERT `presences`, l.75384) : `P0001` « Pointage trop tôt. La mission commence à %. »
+  - `dec_fenetre_pointage` (BEFORE INSERT `presences`, l.75431) : `P0001` « Pointage trop tôt. La mission commence à %. »
     (l.1961, 30 min avant `missions.debut_le`, heure formatée **sans** fuseau, donc en UTC : affiché verbatim,
     correctif backend à proposer hors lot 2, `LOT2_PLAN.md` §5).
   - Liste non exhaustive des autres triggers qui peuvent lever (`LOT2_PLAN.md` correction 10) : tout autre
@@ -414,7 +415,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", 
 - **Relecture** : `fn_etat_pointage_mission` (`nb_scans` = `numero_scan`, `prochain_type_scan` basculé) puis
   `scans_pointage?select=id,numero_scan,type_scan,scanne_le,id_terminal,precision_gps_m&mission_id=eq.<id>&order=numero_scan.desc`
   (une preuve hors de la base du reçu, même `id_terminal`) ; jamais `code_saisi`, `ip_address`, `latitude`,
-  `longitude` (lisibles par `sp_select` l.79931 mais inutiles). Réconciliation : première relecture immédiate ;
+  `longitude` (lisibles par `sp_select` l.79978 mais inutiles). Réconciliation : première relecture immédiate ;
   « non reçu » seulement ≥ 8 s après `started` (décision 2), et pour un essai sorti sans réponse après sa sortie
   + 10 s + 8 s monotones (revue fraîche de T3, m2 ; seconde revue, mi-2).
 - **Câblage (T3)** : la projection relue est `PreuveScan.selection`
@@ -429,16 +430,16 @@ CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", 
   par le modèle (seconde revue fraîche de T3, mi-1) : des relectures lentes ne rendent jamais un 200 incertain. Rollback prouvé
   (`RPCResponse.appelerMutation` : `.refusDefinitif`) → `IssueScan.refuse` (SQLSTATE si c'en est un) ; transport,
   passerelle, `PGRST001` → `.incertain`. Seule la surcharge du web s'applique au message (décision 6,
-  `PointageRules.estCodeInvalide` : `P0002` et le message exact de l.55649) ; l'autre `P0002` (l.55775) reste
+  `PointageRules.estCodeInvalide` : `P0002` et le message exact de l.55698) ; l'autre `P0002` (l.55824) reste
   verbatim. Aucune colonne `code_pointage_*` de `missions` n'est jamais demandée par le natif (gap « B1-ter »
   nommé par la migration B1 : le code rotatif reste lisible par le soignant assigné en PostgREST direct).
 - **Code d'une autre mission (revue fraîche de T3, M-A)** : la fonction trouve la mission par le seul code
-  (`WHERE code_pointage_actif = p_code`, l.55639-55644) ; un soignant qui a deux missions `ASSIGNEE`/`EN_COURS` et
+  (`WHERE code_pointage_actif = p_code`, l.55688-55693) ; un soignant qui a deux missions `ASSIGNEE`/`EN_COURS` et
   saisit dans le bloc B le code de la mission A pointe A. Un HTTP 200 prouve le COMMIT (PostgREST construit la
   réponse après lui, amendement de la correction 10) : il n'aboutit jamais à « non reçu ». Non confirmé sur la mission
   du reçu, la ligne du scan est relue **sans filtre de mission** :
   `scans_pointage?select=<PreuveScan.selection>&soignant_id=eq.<uid>&creneau_effectif_id=eq.<réponse>&numero_scan=eq.<réponse>&id_terminal=eq.<terminal>&limit=2`
-  (lisible par `sp_select`, l.79931 ; même projection, jamais `code_saisi`, `ip_address`, `latitude`, `longitude`),
+  (lisible par `sp_select`, l.79978 ; même projection, jamais `code_saisi`, `ip_address`, `latitude`, `longitude`),
   puis `fn_etat_pointage_mission` de la mission trouvée → `IssueScan.enregistreSurAutreMission` ; sinon
   `IssueScan.accepteSansPreuve` (suivi non vérifiable, renvoi web). Réponse perdue d'un scan appliqué sur une autre
   mission : limite consignée dans `DECISIONS_LOT2.md` (consignes T3, revue fraîche de L2-T3).
@@ -454,7 +455,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", 
 - **Statut natif** : consommée lot 2 (T3 : `SupabasePointageGateway.etat` ; `{error}` lu avant le décodage et levé en `JoleneError(.unknown, <message serveur verbatim>)`, « Non authentifié » → `.unauthorized`).
 - **Usage prévu** : état du pointage d'une mission, relu toutes les 15 s quand le bloc est visible
   (`PointageRotatifSoignant.tsx` l.64-72) et après chaque scan (règle « aucun succès fabriqué »).
-- **Signature SQL** (`supabase/schema/public.sql` l.35145) :
+- **Signature SQL** (`supabase/schema/public.sql` l.35194) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_etat_pointage_mission"("p_mission_id" "uuid") RETURNS "jsonb"
@@ -465,23 +466,23 @@ CREATE OR REPLACE FUNCTION "public"."fn_etat_pointage_mission"("p_mission_id" "u
 - **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_etat_pointage_mission(uuid)` — Mixte tenant / admin : la fonction distingue en interne soignant, établissement et admin ; appel avec le JWT utilisateur.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : absente (types.ts en retard sur le schéma).
-- **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}` (l.35162) ; `{error:'Accès interdit'}`
-  (l.35169) ; succès `{statut, intitule, prochain_type_scan, nb_scans, segment_ouvert, segments, code_pointage_actif, est_etab}`
-  (l.35180-35190) : `statut`, `intitule`, `prochain_type_scan` (`OUVERTURE`/`FERMETURE`), `nb_scans`,
+- **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}` (l.35211) ; `{error:'Accès interdit'}`
+  (l.35218) ; succès `{statut, intitule, prochain_type_scan, nb_scans, segment_ouvert, segments, code_pointage_actif, est_etab}`
+  (l.35229-35239) : `statut`, `intitule`, `prochain_type_scan` (`OUVERTURE`/`FERMETURE`), `nb_scans`,
   `segment_ouvert` (`COALESCE(…, false)`, jamais nul), `segments` (`[{id, debut, fin}]`, créneaux `EFFECTIF` triés
-  par début), `code_pointage_actif` (non nul pour l'établissement seulement, l.35188), `est_etab`. Décodeur en
+  par début), `code_pointage_actif` (non nul pour l'établissement seulement, l.35237), `est_etab`. Décodeur en
   liste blanche : **`code_pointage_actif` jamais décodé** côté soignant, même présent. `{error}` → refus verbatim
   (parité `PointageRotatifSoignant.tsx` l.81-92).
 - **est_etab vaut null pour tout compte sans établissement (soignant assigné compris), jamais false ; non décodé côté soignant.**
-  `v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id()` (l.35165) : `est_admin()` rend
+  `v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id()` (l.35214) : `est_admin()` rend
   un booléen non nul (`est_admin_valide`, `COALESCE(EXISTS …)`, l.4852), `mon_etablissement_id()` vaut NULL hors
-  établissement (l.67092), donc `false OR NULL` = NULL, renvoyé tel quel (`'est_etab', v_is_etab`, l.35189) : JSON
+  établissement (l.67139), donc `false OR NULL` = NULL, renvoyé tel quel (`'est_etab', v_is_etab`, l.35238) : JSON
   `null`. Seul un compte d'un **autre** établissement reçoit `false` (il passe la garde quand
   `soignant_assigne_id` est NULL). `est_etab` n'est jamais décodé côté soignant (à défaut, `Bool?` ignoré) : un
   décodage en `Bool` non optionnel échouerait sur toutes les réponses réelles, alors qu'un stub `false` passerait.
   Stubs et fixtures de T3 : `est_etab: null` (`DECISIONS_LOT2.md`, « Consignes aux tranches suivantes ») ; garde
-  `tests/node/check-rpc-contracts.node.mjs` sur l.35165 et l.35189, et aucune fixture `est_etab: false`.
-- **Écart constaté (hors lot 2, B9 RLS/auth)** : la garde d'accès (l.35165-35170) est en logique ternaire.
+  `tests/node/check-rpc-contracts.node.mjs` sur l.35214 et l.35238, et aucune fixture `est_etab: false`.
+- **Écart constaté (hors lot 2, B9 RLS/auth)** : la garde d'accès (l.35214-35219) est en logique ternaire.
   Pour un utilisateur sans établissement, `mon_etablissement_id()` vaut NULL, donc `v_is_etab` vaut NULL et
   `NOT v_is_etab AND NOT v_is_soignant` vaut NULL : le refus « Accès interdit » n'est jamais renvoyé à un
   soignant **non assigné**, qui lit statut, intitulé et segments (le code reste masqué). Constat sur le dump
@@ -1279,10 +1280,13 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
 
 ## `fn_scanner_code_pointage` : `nouveau_code` jamais lu
 
-- **Constat** (`LOT2_PLAN.md` correction 9) : la réponse de `fn_scanner_code_pointage` contient encore le code
-  suivant de la mission (`'nouveau_code', v_new_code` et `'nouveau_hmac', v_new_hmac`, `public.sql` l.55872-55873).
-  Un soignant qui le lirait pourrait fermer son segment hors de l'établissement. Le web l'ignore
-  (`PointageRotatifSoignant.tsx` ne lit que `type_scan_effectue`) ; le pilote RN l'écartait explicitement.
+- **Constat** (`LOT2_PLAN.md` correction 9) : jusqu'à B1, la réponse de `fn_scanner_code_pointage` contenait le
+  code suivant de la mission (`'nouveau_code', v_new_code` et `'nouveau_hmac', v_new_hmac`, l.55872-55873 du dump
+  re-baseliné par #1097). Un soignant qui le lirait pourrait fermer son segment hors de l'établissement. Le web
+  l'ignore (`PointageRotatifSoignant.tsx` ne lit que `type_scan_effectue`) ; le pilote RN l'écartait explicitement.
+  **B1 est mergée sur `main`** (#1117, 8 novembre 2026) : le dump re-baseliné ne renvoie plus ces deux clés
+  (`RETURN jsonb_build_object(…)`, `public.sql` l.55920-55931) ; la rotation du code et son HMAC stocké sont
+  inchangés.
 - **Règle native** : décodeur en **liste blanche** — `type_scan_effectue`, `prochain_type_scan`,
   `creneau_effectif_id`, `horodatage_effectif`, `horodatage_arrondi`, `numero_scan`, `validation_etab_requise` ;
   `nouveau_code` et `nouveau_hmac` ne sont ni décodés, ni conservés, ni journalisés, ni joints à un rapport
@@ -1300,6 +1304,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   pas tant que le lot 2 n'y est pas : la garde rougit au merge de `main` dans `feat/ios-lot2` qui suit la
   re-baseline du dump après B1, et ce merge (ou le commit qui le suit sur `feat/ios-lot2`) bascule la garde et la
   fiche. Si T0 est déjà sur `main` quand B1 arrive, la PR B1 les bascule elle-même.
+- **Bascule faite** (intégration du lot 2 du 8 novembre 2026, merge de `main` dans `feat/ios-lot2` après la
+  re-baseline du dump par #1117) : la garde exige désormais que le corps de `fn_scanner_code_pointage` ne renvoie
+  **plus** `nouveau_code` ni `nouveau_hmac` (un retour arrière de B1 la fait rougir) ; la liste blanche et
+  l'absence de ces clés dans les sources Swift restent gardées.
 
 ## Edge `verify-document`
 

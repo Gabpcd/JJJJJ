@@ -823,15 +823,17 @@ test('CONTRATS fn_scanner_code_pointage : exceptions de la RPC et des triggers d
   }
 });
 
-test('CONTRATS fn_scanner_code_pointage : nouveau_code renvoyé tant que B1 n est pas mergée, jamais lu par le natif', () => {
+test('CONTRATS fn_scanner_code_pointage : nouveau_code retiré par B1 (#1117), jamais lu par le natif', () => {
   const body = corpsSql(read(SOURCES.schema), enteteFn('fn_scanner_code_pointage'));
-  // Bascule avec B1 : B1 vise `main`, où cette garde n'existe pas tant que le lot 2 n'y est pas. Elle rougit au merge
-  // de `main` dans `feat/ios-lot2` qui suit la re-baseline du dump après B1 : ce merge (ou le commit qui le suit sur
-  // `feat/ios-lot2`) bascule la garde et la fiche. Si T0 est déjà sur `main` quand B1 arrive, la PR B1 les bascule.
-  assert.ok(body.includes("'nouveau_code', v_new_code") && body.includes("'nouveau_hmac', v_new_hmac"),
-    'nouveau_code n est plus renvoyé (B1 mergée, dump re-baseliné) : au merge de main dans feat/ios-lot2, basculer la fiche « nouveau_code jamais lu » de CONTRATS_RPC_SOIGNANT.md et cette garde');
+  // Bascule faite (intégration du lot 2, 8 novembre 2026) : B1 est mergée sur `main` (#1117) et le dump re-baseliné ne
+  // renvoie plus le code suivant ; la garde a basculé au merge de `main` dans `feat/ios-lot2`, comme prévu par
+  // DECISIONS_LOT2.md « Ordonnancement et branches ». Elle rougit désormais sur un retour arrière de B1.
+  assert.ok(!body.includes("'nouveau_code'") && !body.includes("'nouveau_hmac'"),
+    'fn_scanner_code_pointage renvoie de nouveau nouveau_code ou nouveau_hmac (retour arrière de B1 ?) : revoir la fiche « nouveau_code jamais lu » de CONTRATS_RPC_SOIGNANT.md et le décodeur en liste blanche');
   const fiche = sectionContrats('`fn_scanner_code_pointage` : `nouveau_code` jamais lu');
   assert.ok(fiche.includes('B1') && fiche.includes('liste blanche'), 'fiche nouveau_code : B1 / liste blanche absents');
+  assert.ok(fiche.includes('**B1 est mergée sur `main`** (#1117') && fiche.includes('**Bascule faite**'),
+    'fiche nouveau_code : merge de B1 (#1117) et bascule de la garde non consignés');
   // Revue de T0 : une bascule « dans la PR B1 » est irréalisable tant que T0 n'est pas sur `main`. Le tableau
   // « Amendements du blueprint » de DECISIONS_LOT2.md cite la formulation amendée : il est exclu du contrôle.
   const decisions = read('docs/mobile-swift/DECISIONS_LOT2.md');

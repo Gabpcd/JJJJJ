@@ -169,7 +169,10 @@
   `CONTRATS_RPC_SOIGNANT.md` et le constat de ce mémo. Si T0 est déjà sur `main`, la PR elle-même les bascule.
   Cas connus :
   - **B1** (`nouveau_code` retiré) : garde « `nouveau_code` renvoyé tant que B1 n'est pas mergée », fiche
-    « `nouveau_code` jamais lu ».
+    « `nouveau_code` jamais lu ». **Basculées le 8 novembre 2026** (B1 mergée sur `main` par #1117, merge de `main`
+    dans `feat/ios-lot2` à l'intégration de T3, T6 et T8) : la garde exige l'absence de `nouveau_code` et de
+    `nouveau_hmac` dans le dump ; les fiches `fn_scanner_code_pointage` et `fn_etat_pointage_mission` citent les
+    numéros de ligne du dump re-baseliné.
   - **PR backend B9 des constats ci-dessous** : `REVOKE` des neuf RPC ① ou correction des gardes ternaires
     (`IS DISTINCT FROM`, `COALESCE`) de `fn_codes_pointage_mission`, `fn_generer_qr_mission`,
     `fn_generer_code_secours_mission`, `fn_presences_detail_mission`, `fn_etat_pointage_mission` et des autres RPC
@@ -600,7 +603,8 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
   définition live) ; bascule de la fiche et de la garde de T0 : « Ordonnancement et branches ». La PR B1
   (`fix/scanner-code-sans-code-suivant`) couvre aussi `fn_declarer_fin_retroactive` : même retrait de `nouveau_code`
   et `nouveau_hmac` de sa réponse (le soignant assigné peut l'appeler lui-même en PostgREST) et verrou de sa garde
-  d'autorisation, qui vaut NULL pour un compte sans lien avec la mission.
+  d'autorisation, qui vaut NULL pour un compte sans lien avec la mission. **Mergée sur `main`** après le go du
+  8 novembre 2026 (#1117) ; fiche et garde basculées dans `feat/ios-lot2` le même jour.
 - **S1** — allocateur STAGING de capacité SMS de signature (`scripts/ci/allouer-capacite-sms-signature-staging.mjs`,
   workflow protégé) : secrets STAGING, fonctions `SECURITY DEFINER` du supplément, données.
 - **T11** — go au dispatch du workflow STAGING du lot 2 et du mode `--appareil` de sa fixture pour T12 (secrets
