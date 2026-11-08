@@ -522,8 +522,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_remplacer_document_soignant"("p_type_doc
 - **Usage** : Enregistrement du token APNs (`p_plateforme = IOS`) à chaque session (`.ready` d'un nouvel epoch) et
   au retour au premier plan, seulement si l'appareil autorise déjà les notifications (jamais de demande implicite, D1) ;
   identité vérifiée (epoch) avant l'appel ; token mémorisé (`KeychainPushTokenStore`, service `app.jolene.push`) après
-  le succès. Définition live relue le 2026-11-08 (production, lecture seule) : corps identique au dump (`md5(prosrc)`),
-  `SECURITY DEFINER`, `search_path=pg_catalog, public`, EXECUTE `authenticated` oui, `anon` non.
+  le succès. Contrat lu dans le dump du 01/11/2026 : `SECURITY DEFINER`, `search_path=pg_catalog, public`
+  (l.64629-64630), EXECUTE `authenticated` et `service_role`, révoqué de `PUBLIC` (l.85471-85473).
 - **Signature SQL** (`supabase/schema/public.sql` l.64628) :
 
 ```sql
@@ -839,13 +839,16 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
 ## fn_desactiver_mon_token_push
 
 - **Statut natif** : consommée (lot 3, T4) par `JoleneSupabase/Push/SupabasePushGateway.swift`, appelée par
-  `JoleneCore/Push/PushCoordinator.swift` depuis `SessionStore.signOut`. Définition live relue le 2026-11-08
-  (production, lecture seule) : corps identique au dump (`md5(prosrc)`), EXECUTE `authenticated` oui, `anon` non.
+  `JoleneCore/Push/PushCoordinator.swift` depuis `SessionStore.signOut`. Contrat lu dans le dump du 01/11/2026 :
+  `SECURITY DEFINER` (l.30177), EXECUTE `authenticated` et `service_role`, révoqué de `PUBLIC` (l.82446-82448).
 - **Usage** : Déconnexion volontaire : désactivation du token APNs mémorisé (`KeychainPushTokenStore`,
   service `app.jolene.push`) **avant** `controller.signOut()` — le JWT est requis (correction 11) —, bornée à
   **2,5 s** comme le web (`src/lib/pushDeviceToken.ts` l.90-92, l.113 ; décision D3), puis
-  `unregisterForRemoteNotifications()` et oubli du token, que la RPC ait répondu ou non. Déconnexion subie
-  (`.signedOut` du SDK) et suppression de compte : désinscription locale seule, sans appel (JWT absent).
+  `unregisterForRemoteNotifications()` et oubli du token, que la RPC ait répondu ou non ; un second tap pendant
+  l'appel est ignoré. Déconnexion subie (`.signedOut` du SDK, revalidation qui ne trouve plus de session, depuis
+  un espace prêt ou bloqué) : désinscription locale seule, sans appel (JWT absent), après la publication de
+  l'écran de connexion. Suppression de compte : désinscription locale avant la purge, sans appel. Lancement sans
+  session avec un token laissé par une session précédente : désinscription locale et oubli, sans appel.
 - **Signature SQL** (`supabase/schema/public.sql` l.30176) :
 
 ```sql

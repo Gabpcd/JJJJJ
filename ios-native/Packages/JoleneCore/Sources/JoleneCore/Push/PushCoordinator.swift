@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Coordinateur push du lot 3, tranche T4 (blueprint `docs/mobile-swift/LOT3_PLAN.md` §2.5 ; D1-D3 ;
 /// corrections 11 et 16). Port de `initNativePush` / `enregistrerToken` (`src/lib/pushNative.ts` l.25-38,
@@ -16,12 +17,17 @@ import Foundation
 /// `controller.signOut()`, le JWT étant requis) : `fn_desactiver_mon_token_push(token mémorisé)` bornée à
 /// `delaiDesactivation` (2,5 s, D3), puis `unregisterForRemoteNotifications()` et oubli du token, que la RPC
 /// ait abouti ou non. Sans token mémorisé ou sans identité, aucune RPC (jamais « tous les tokens du
-/// compte », web l.61-67). Déconnexion subie (`.signedOut` du SDK) et suppression de compte
-/// (`surDeconnexionSubie`) : désinscription locale et oubli seulement.
+/// compte », web l.61-67). Déconnexion subie (session effacée par le SDK ou absente à la revalidation)
+/// et suppression de compte (`surDeconnexionSubie(epoch:)`) : désinscription locale et oubli seulement.
+/// Lancement sans session (`surSessionAbsente`) : un token laissé par une session précédente est oublié
+/// après la désinscription locale ; sans token, rien.
 ///
 /// Concurrence : un enregistrement en vol pour le même epoch est rejoint, jamais doublé ; toute
-/// déconnexion l'abandonne (génération) et ferme les epochs courants (aucun réenregistrement de
-/// l'identité qui part, même si un retour au premier plan survient pendant la désactivation).
+/// déconnexion l'abandonne (génération) et ferme les epochs de l'identité qui part (aucun
+/// réenregistrement, même si un retour au premier plan survient pendant la désactivation).
+///
+/// Journal DEBUG (§2.4 ; T17 distingue non autorisé, APNs muet, 22023 et réseau) : étape et catégorie
+/// d'erreur seulement (`motif(_:)`), jamais le token, l'identifiant ni le message. Rien en Release.
 public actor PushCoordinator {
     /// Délai de la désactivation et de la désinscription locale (`pushDeviceToken.ts` l.90-92, l.113 : 2 500 ms).
     public static let delaiDesactivation: TimeInterval = 2.5
@@ -54,6 +60,8 @@ public actor PushCoordinator {
     private var confirme: (epoch: Int, token: String)?
     private var enCours: Enregistrement?
     private var numeroSuivant = 0
+    /// Appels qui ont rejoint un enregistrement en vol (preuve des tests ; jamais lu par l'app).
+    private(set) var enregistrementsRejoints = 0
 
     public init(controller: SessionController, permission: PushPermissionPort, registrar: PushRegistrarPort,
                 memoire: PushTokenStorePort, delaiDesactivation: TimeInterval = PushCoordinator.delaiDesactivation,
@@ -106,6 +114,7 @@ public actor PushCoordinator {
     private func enregistrer(_ snapshot: SessionSnapshot) async {
         guard snapshot.epoch >= epochMinimal else { return }
         if let enCours, enCours.epoch == snapshot.epoch, enCours.generation == generation {
+            enregistrementsRejoints += 1
             await enCours.tache.value
             return
         }
@@ -124,6 +133,7 @@ public actor PushCoordinator {
         guard autorisation.permetEnregistrement else {
             // Autorisation retirée dans Réglages : plus rien n'est confirmé (web l.85-86).
             confirme = nil
+            Self.journaliser("Enregistrement sans objet : autorisation \(autorisation.rawValue)")
             return
         }
         let registrar = self.registrar
@@ -131,11 +141,15 @@ public actor PushCoordinator {
         do {
             brut = try await bounded(timeout: delaiTokenEffectif) { try await registrar.enregistrer() }
         } catch {
+            Self.journaliser("Token APNs indisponible : \(Self.motif(error))")
             return
         }
         guard actif(courante) else { return }
         let token = Self.hex(brut)
-        guard Self.tokenValide(token) else { return }
+        guard Self.tokenValide(token) else {
+            Self.journaliser("Token APNs hors des bornes du serveur (\(token.count) caractères)")
+            return
+        }
         if let confirme, confirme.epoch == snapshot.epoch, confirme.token == token { return }
         // Identité vérifiée avant l'appel : un epoch périmé n'écrit rien (web l.25-29).
         guard let gateways = await controller.gateways(for: snapshot.epoch), actif(courante) else { return }
@@ -148,6 +162,7 @@ public actor PushCoordinator {
         } catch {
             // Best-effort : rien n'est confirmé, le prochain `.ready` ou premier plan réessaie.
             if confirme?.epoch == snapshot.epoch { confirme = nil }
+            Self.journaliser("Enregistrement du token en échec : \(Self.motif(error))")
             return
         }
         guard actif(courante), await controller.epoch == snapshot.epoch else { return }
@@ -169,20 +184,40 @@ public actor PushCoordinator {
             let port = gateways.push
             let token = memorise.token
             // Refus `{success:false}`, erreur ou délai dépassé : la désinscription locale a lieu quand même.
-            _ = try? await bounded(timeout: delaiDesactivationEffectif) { try await port.desactiver(token: token) }
+            do {
+                let issue = try await bounded(timeout: delaiDesactivationEffectif) { try await port.desactiver(token: token) }
+                if issue == .nonDesactive { Self.journaliser("Désactivation du token refusée par le serveur") }
+            } catch {
+                Self.journaliser("Désactivation du token en échec : \(Self.motif(error))")
+            }
         }
         await desinscrireLocalement()
     }
 
-    /// Déconnexion subie (`.signedOut` du SDK) ou suppression du compte : JWT absent ou révoqué, aucune RPC.
-    public func surDeconnexionSubie() async {
-        await fermer(epoch: nil)
+    /// Fin de session sans JWT utilisable, aucune RPC : session effacée par le SDK ou absente à la
+    /// revalidation (`epoch` : celui de l'identité perdue, connu de l'appelant), suppression du compte
+    /// (`epoch` : celui de l'identité qui part, avant la purge). Ferme cet epoch et ceux que le coordinateur
+    /// connaît, sans lire l'epoch courant du contrôleur : la fin subie est traitée après la publication de
+    /// l'état et une identité suivante, déjà ouverte, ne doit jamais être fermée.
+    public func surDeconnexionSubie(epoch perdu: Int?) async {
+        abandonner(jusqua: [perdu, enCours?.epoch, confirme?.epoch].compactMap { $0 }.max())
+        await desinscrireLocalement()
+    }
+
+    /// Aucune session au lancement (le SDK n'a rien restauré, aucune identité ouverte dans ce processus) :
+    /// un token mémorisé vient d'une session close hors de l'app (application tuée pendant la déconnexion,
+    /// refresh refusé hors ligne) ; aucun JWT, donc aucune RPC : désinscription locale puis oubli. Sans
+    /// token mémorisé, rien (aucun appel système inutile).
+    public func surSessionAbsente() async {
+        guard memoire.lire() != nil else { return }
+        Self.journaliser("Token mémorisé sans session : désinscription locale")
         await desinscrireLocalement()
     }
 
     /// Abandonne l'enregistrement en vol et ferme les epochs ouverts jusqu'ici : d'abord ceux que le
-    /// coordinateur connaît (sans suspension), puis l'epoch courant du contrôleur ; un enregistrement
-    /// lancé pendant cette lecture est abandonné à son tour.
+    /// coordinateur connaît (sans suspension), puis l'epoch courant du contrôleur (déconnexion voulue :
+    /// l'identité qui part est encore l'identité courante) ; un enregistrement lancé pendant cette lecture
+    /// est abandonné à son tour.
     private func fermer(epoch connu: Int?) async {
         abandonner(jusqua: [connu, enCours?.epoch, confirme?.epoch].compactMap { $0 }.max())
         let courant = await controller.epoch
@@ -200,7 +235,33 @@ public actor PushCoordinator {
     /// `unregisterForRemoteNotifications()` (borné comme le web l.113), puis oubli du token.
     private func desinscrireLocalement() async {
         let registrar = self.registrar
-        _ = try? await bounded(timeout: delaiDesactivationEffectif) { await registrar.desinscrire() }
+        do {
+            try await bounded(timeout: delaiDesactivationEffectif) { await registrar.desinscrire() }
+        } catch {
+            Self.journaliser("Désinscription APNs : \(Self.motif(error))")
+        }
         memoire.oublier()
+    }
+
+    // MARK: - Journal DEBUG
+
+    /// Catégorie d'une erreur pour le journal : genre de `JoleneError` (« délai dépassé » pour la borne de
+    /// `bounded`), annulation, sinon domaine et code (`didFailToRegisterForRemoteNotificationsWithError`).
+    /// Jamais le message : il pourrait citer un token ou un texte serveur.
+    static func motif(_ erreur: Error) -> String {
+        if erreur is CancellationError { return "annulé" }
+        if let jolene = erreur as? JoleneError {
+            let delai = jolene.kind == .network && jolene.message == SessionController.timeoutMessage
+            return delai ? "network (délai dépassé)" : "\(jolene.kind)"
+        }
+        let ns = erreur as NSError
+        return "\(ns.domain) \(ns.code)"
+    }
+
+    /// Journal DEBUG (`app.jolene`, catégorie `push`) ; le texte ne contient ni token ni identifiant.
+    private static func journaliser(_ texte: String) {
+        #if DEBUG
+        Logger(subsystem: "app.jolene", category: "push").debug("\(texte, privacy: .public)")
+        #endif
     }
 }

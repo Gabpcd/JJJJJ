@@ -288,7 +288,8 @@ final class PushCoordinatorTests: XCTestCase {
         await monde.coordinator.surReady(snapshot)
         let enregistrements = await monde.registrar.enregistrements
         XCTAssertEqual(enregistrements, 0, "aucun enregistrement APNs pour l'identité perdue")
-        XCTAssertEqual(monde.journal.entrees, ["desinscrire", "oublier"])
+        XCTAssertEqual(monde.journal.entrees, ["auth.signOut", "desinscrire", "oublier"],
+                       "session effacée (le double journalise `auth.signOut`), puis désinscription et oubli, sans RPC")
     }
 
     func testDeconnexionSubieNeFermeJamaisLIdentiteSuivante() async throws {

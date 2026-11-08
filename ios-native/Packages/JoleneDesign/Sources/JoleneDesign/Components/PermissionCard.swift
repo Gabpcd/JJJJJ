@@ -5,7 +5,8 @@ import SwiftUI
 /// avantages (`bg-muted/50`, coches) et note, puis « Activer les notifications » / « Plus tard ». Sert au
 /// pré-prompt push (T5, D1 : jamais au login, à partir du 2e lancement) et, sans avantages ni action
 /// secondaire, à la carte d'état d'autorisation (T4, `EtatNotificationsAppareilRow`, reprise par les
-/// préférences de T6). La carte ne demande rien au système : l'écran appelle le port d'autorisation
+/// préférences de T6) — sans action principale non plus (`onPrimary: nil`, aucun bouton) quand aucun
+/// réglage n'est utile. La carte ne demande rien au système : l'écran appelle le port d'autorisation
 /// **au tap seulement** et décide quand l'afficher.
 ///
 /// Identifiants (PRINCIPES §6) : racine `identifier` (`.contain`, les enfants gardent les leurs) ; boutons
@@ -81,6 +82,8 @@ public struct PermissionCard: View {
     nonisolated public static func isPrimaryEnabled(isLoading: Bool) -> Bool { !isLoading }
     /// « Plus tard » attend aussi la fin de la demande système en cours.
     nonisolated public static func isSecondaryEnabled(isLoading: Bool) -> Bool { !isLoading }
+    /// Bouton principal affiché seulement s'il a une action (carte d'état : aucun réglage utile → aucun bouton).
+    nonisolated public static func showsPrimary(onPrimary: (() -> Void)?) -> Bool { onPrimary != nil }
 
     /// Largeur maximale de la carte, fond et arrondi compris (`sm:max-w-md` du dialogue web, 448 px).
     nonisolated public static let maxWidth: CGFloat = 480
@@ -95,10 +98,12 @@ public struct PermissionCard: View {
 
     private let content: Content
     private let isLoading: Bool
-    private let onPrimary: () -> Void
+    private let onPrimary: (() -> Void)?
     private let onSecondary: (() -> Void)?
 
-    public init(_ content: Content, isLoading: Bool = false, onPrimary: @escaping () -> Void, onSecondary: (() -> Void)? = nil) {
+    /// - Parameter onPrimary: action du bouton principal ; nil : aucun bouton principal (`content.primaryTitle`
+    ///   n'est alors pas affiché).
+    public init(_ content: Content, isLoading: Bool = false, onPrimary: (() -> Void)?, onSecondary: (() -> Void)? = nil) {
         self.content = content; self.isLoading = isLoading; self.onPrimary = onPrimary; self.onSecondary = onSecondary
     }
 
@@ -129,12 +134,14 @@ public struct PermissionCard: View {
                 benefitsBox
             }
             VStack(spacing: JoleneSpacing.sm) {
-                JoleneButton(content.primaryTitle, style: .primary, isLoading: isLoading) {
-                    guard Self.isPrimaryEnabled(isLoading: isLoading) else { return }
-                    onPrimary()
+                if let onPrimary { // `showsPrimary(onPrimary:)`
+                    JoleneButton(content.primaryTitle, style: .primary, isLoading: isLoading) {
+                        guard Self.isPrimaryEnabled(isLoading: isLoading) else { return }
+                        onPrimary()
+                    }
+                    .disabled(!Self.isPrimaryEnabled(isLoading: isLoading))
+                    .accessibilityIdentifier(content.primaryIdentifier)
                 }
-                .disabled(!Self.isPrimaryEnabled(isLoading: isLoading))
-                .accessibilityIdentifier(content.primaryIdentifier)
                 if let secondaryTitle = content.secondaryTitle, let onSecondary {
                     JoleneButton(secondaryTitle, style: .secondary) {
                         guard Self.isSecondaryEnabled(isLoading: isLoading) else { return }

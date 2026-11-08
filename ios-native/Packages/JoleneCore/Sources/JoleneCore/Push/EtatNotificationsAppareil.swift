@@ -1,16 +1,24 @@
 import Foundation
 
-/// Carte « Autorisation du téléphone » (lot 3, T4 ; reprise par les préférences de T6) : état système
-/// des notifications de l'appareil et de son enregistrement. Textes **verbatim** de
-/// `src/pages/PageParametresNotifications.tsx` (HARD STOP n°4), choisis comme le web l.147-155 et
-/// l.341-352 :
-/// - lecture en cours → l.343 ;
-/// - autorisé (ou provisoire) et enregistrement confirmé → l.346, ou l.347 si les préférences (T6)
-///   savent le canal push coupé dans Jolene ;
+/// Carte « Autorisation du téléphone » (lot 3, T4 ; hôte définitif : les préférences de T6, voir
+/// `REVUES_LOT3.md`, section L3-T4) : état système des notifications de l'appareil et de son
+/// enregistrement. Textes **verbatim** de `src/pages/PageParametresNotifications.tsx` (HARD STOP n°4),
+/// choisis comme le web l.147-155 et l.341-352 :
+/// - autorisation pas encore lue → aucune carte (la lecture native est immédiate) ;
+/// - autorisé (ou provisoire), enregistrement en cours de vérification → l.343 ;
+/// - autorisé et enregistrement confirmé → l.346, ou l.347 si les préférences (T6) savent le canal push
+///   coupé dans Jolene ;
 /// - autorisé sans enregistrement confirmé → l.352 (`registration-error`) ;
-/// - jamais demandé → l.349 (`prompt`, affiché par le web quel que soit le canal) ;
+/// - jamais demandé → l.349 (`prompt`) **seulement si le canal push est connu actif** : le texte affirme
+///   « Le canal est actif dans Jolene » ; canal inconnu (hub) ou coupé → aucune carte (le web affiche l.349
+///   quel que soit le canal : écart assumé, à confirmer par T6) ;
 /// - refusé → l.350 (`denied`).
 /// `indisponible` (l.351) est repris pour T6 ; la lecture native de l'autorisation ne peut pas échouer.
+///
+/// Bouton « Ouvrir les réglages » (`ouvrirReglages`, sans source web) seulement quand un réglage système
+/// est utile : refusé, ou autorisé sans enregistrement confirmé. Absent quand l'autorisation n'a jamais été
+/// demandée (Réglages n'a pas d'entrée Notifications tant que l'app n'a rien demandé ; l'activation relève
+/// du pré-prompt de T5 et des préférences de T6) et quand tout est en ordre (superflu).
 public enum EtatNotificationsAppareil {
     /// `PageParametresNotifications.tsx` l.341.
     public static let titre = "Autorisation du téléphone"
@@ -32,25 +40,43 @@ public enum EtatNotificationsAppareil {
     /// Titre de la section du hub : entrée « Notifications » de la section « Réglages » du web
     /// (`src/pages/MonCompteSoignant.tsx` l.115).
     public static let sectionHub = "Notifications"
+    /// Libellé du bouton qui ouvre la page Notifications de l'app dans Réglages
+    /// (`UIApplication.openNotificationSettingsURLString`). **Sans source web** (le web n'ouvre pas les
+    /// réglages système) : nommé au §1.1 du blueprint, action non juridique, à relire par Gabrielle
+    /// (`DECISIONS_LOT3.md`, HARD STOP n°4) ; épinglé par `EtatNotificationsAppareilTests`.
+    public static let ouvrirReglages = "Ouvrir les réglages"
 
-    /// Message de la carte. `autorisation` nil : lecture en cours. `canalPush` : canal push de Jolene,
-    /// connu des préférences seulement (T6) ; nil ailleurs.
-    public static func message(autorisation: AutorisationPush?, enregistrementConfirme: Bool,
-                               canalPush: Bool? = nil) -> String {
-        guard let autorisation else { return verification }
+    /// Message de la carte, nil quand elle ne doit rien affirmer (aucune carte).
+    /// - Parameters:
+    ///   - autorisation: nil tant que l'autorisation système n'est pas lue.
+    ///   - enregistrementConfirme: nil tant que l'enregistrement n'est pas vérifié (autorisé seulement).
+    ///   - canalPush: canal push de Jolene, connu des préférences seulement (T6) ; nil dans le hub.
+    public static func message(autorisation: AutorisationPush?, enregistrementConfirme: Bool?,
+                               canalPush: Bool? = nil) -> String? {
+        guard let autorisation else { return nil }
         switch autorisation {
         case .accordee, .provisoire:
+            guard let enregistrementConfirme else { return verification }
             guard enregistrementConfirme else { return nonEnregistre }
             return canalPush == false ? canalDesactive : autorisees
         case .nonDemandee:
-            return aAutoriser
+            return canalPush == true ? aAutoriser : nil
         case .refusee:
             return bloquees
         }
     }
 
+    /// Vrai quand « Ouvrir les réglages » sert à quelque chose : refusé, ou autorisé sans enregistrement confirmé.
+    public static func proposeReglages(autorisation: AutorisationPush?, enregistrementConfirme: Bool?) -> Bool {
+        switch autorisation {
+        case .refusee: return true
+        case .accordee, .provisoire: return enregistrementConfirme == false
+        case .nonDemandee, nil: return false
+        }
+    }
+
     /// Ton de la carte (web l.328-332 : succès pour `granted`, alerte sinon).
-    public static func estPositif(autorisation: AutorisationPush?, enregistrementConfirme: Bool) -> Bool {
-        (autorisation?.permetEnregistrement ?? false) && enregistrementConfirme
+    public static func estPositif(autorisation: AutorisationPush?, enregistrementConfirme: Bool?) -> Bool {
+        (autorisation?.permetEnregistrement ?? false) && enregistrementConfirme == true
     }
 }

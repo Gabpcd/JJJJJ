@@ -438,3 +438,99 @@ Y ajouter les mineurs 3 et 4.
   apportée par la CI, en Xcode 26.4.1 (16.4 en local).
 - Aucun correctif d'intégration n'a été nécessaire, donc pas de commit `fix(ios-native): intégration lot 3 …`. Les
   dossiers de build (`.build` des packages, `-derivedDataPath`) ont été supprimés après vérification.
+
+## L3-T4
+
+### Consignes de l'auteur pour l'intégration (corrections de la revue B8)
+
+Consignées par l'auteur de la tranche (`lot3/l3-t4-v2`), à la demande de la revue fraîche du 08/11/2026 ; le
+rapport de revue lui-même reste à reproduire ici par l'intégrateur.
+
+- **D3 — audit `DECONNEXION` et désactivation du token en parallèle, au merge de L1-T9.** L1-T9 (`origin/lot1/t9`)
+  n'est ni sur `main` ni sur `feat/ios-lot3` : T4 n'a ni `async let` ni test d'ordre (écart consigné sous D3 dans
+  `DECISIONS_LOT3.md`). Au merge de L1-T9 dans `feat/ios-lot3`, le conflit de
+  `ios-native/Packages/JoleneCore/Sources/JoleneCore/Session/SessionStore.swift` **ne se résout pas en gardant les
+  deux côtés** : `await auditerDeconnexion()` (borné à `resolutionTimeout`, 15 s) suivi de
+  `await desactiverPushAvantDeconnexion()` (borné à 2,5 s) mettrait les deux appels en série, contre D3 (« ne jamais
+  bloquer une déconnexion hors ligne »), et aucun test de T4 ne le verrait. Résolution attendue :
+
+  ```swift
+  public func signOut() async {
+      guard !deconnexionEnCours else { return }
+      deconnexionEnCours = true
+      finsDeSessionVoulues += 1
+      defer {
+          finsDeSessionVoulues -= 1
+          deconnexionEnCours = false
+      }
+      canRetryRestore = false
+      // D3 : deux appels JWT indépendants, lancés ensemble ; la révocation suit dès que les deux ont rendu ou expiré.
+      async let audit: Void = auditerDeconnexion()
+      async let push: Void = desactiverPushAvantDeconnexion()
+      _ = await (audit, push)
+      state = await controller.signOut()
+      canRetryRestore = await controller.canRetryRestore
+      biometrie.oublierIdentite()
+  }
+  ```
+
+  - `deconnexionEnCours` : une seule déclaration, celle de T4 (`@Published public private(set)`, lue par l'écran
+    bloqué de `RootView`) ; la variable privée de L1-T9 disparaît, sa garde est la même.
+  - `state` : garder le `didSet { suivrePush(depuis: oldValue) }` de T4 sur la déclaration de L1-T9. Les
+    publications de L1-T9 (`publier()`, `lockForBiometrics()`, boucle d'événements) passent toutes par `state` :
+    rien d'autre à ajouter pour l'enregistrement ni pour la désinscription subie.
+  - `observeAuthEvents` : garder la boucle de L1-T9 (`preparer`/`publier`, `biometrie.oublierIdentite()`) et y
+    ajouter `self.evenementsAuthTraites += 1` en fin d'itération (preuve des tests de T4).
+  - `auditerDeconnexion()` lit `state` avant toute mutation ; `epochDeLIdentiteOuverte()` de T4 fait la même lecture
+    et peut la remplacer.
+  - Tests à ajouter dans `SessionStorePushTests` (avec le double d'audit de L1-T9) :
+    `testSignOutLanceAuditEtDesactivationEnParallele` — `audit.deconnexion()` et `desactiver` retenus chacun par une
+    `Gate` : les deux appels sont observés commencés alors qu'aucun n'a rendu et `auth.signOut` est absent ;
+    ouverture de la première barrière → toujours aucun `auth.signOut` ; ouverture de la seconde → `auth.signOut`
+    en dernier ; et `testSignOutHorsLigneBorneParLePlusLongDesDeuxDelais` — audit muet (`resolutionTimeout` 0,2 s)
+    et désactivation muette (`delaiDesactivation` 0,2 s) : `signOut` dure moins de 0,35 s, soit le plus long des
+    deux délais et non leur somme.
+- **Fin de session subie (mineurs 1 et 2).** La désinscription locale suit toute publication de `.signedOut` après
+  une identité (`.ready` ou `.blocked`) hors `signOut`/`signOutLocally` : événement du SDK, revalidation qui ne
+  trouve plus de session. Elle part après la publication (`finDeSessionPush`) : l'écran de connexion n'attend pas
+  la désinscription. Premier `.signedOut` sans identité (lancement à froid) : `surSessionAbsente` oublie un token
+  laissé par une session précédente, sans RPC. `surDeconnexionSubie(epoch:)` ferme l'epoch perdu sans lire l'epoch
+  courant du contrôleur (une identité suivante n'est jamais fermée) ; l'enregistrement d'un nouvel espace attend
+  la fin de la désinscription précédente.
+- **Double tap sur « Se déconnecter » (mineur 3).** `SessionStore.signOut` ignore un second appel pendant la
+  déconnexion (`deconnexionEnCours`, publié) ; l'écran bloqué (`access-blocked`, `logout-button`) montre l'attente
+  et désactive le bouton (`BlockingScreen(secondaryIsLoading:)`).
+- **Tests sans délai arbitraire (mineur 8).** `PushCoordinatorTests` attend `enregistrementsRejoints` au lieu de
+  50 ms ; `SessionStorePushTests` attend `evenementsAuthTraites` et `finDeSessionPush` au lieu de yields et 50 ms.
+- **Carte « Autorisation du téléphone » : une seule surface (T6, T11 ; mineur 4).** L'hôte prévu par le blueprint est l'écran
+  de préférences de T6 (§3 T6 : `push-etat-appareil` de T4 dans `PreferencesScreen`), et le hub
+  `Jolene/Screens/ProfileScreen.swift` appartient au seul T11. T4 monte la carte dans le hub **à titre provisoire**
+  (section « Notifications », après « Application ») avec le modèle `EtatNotificationsAppareilModel` (JoleneCore,
+  lu à l'affichage et au retour au premier plan) et la vue `Jolene/Screens/Profil/EtatNotificationsAppareilRow.swift`.
+  - **T6** monte la carte dans `PreferencesScreen` avec `model.canalPush` lu des préférences (`global.canal_push`)
+    et **retire la section provisoire du hub dans la même tranche**, en migrant `DemoPushTests` (identifiants
+    `push-etat-appareil`, `push-etat-appareil-message`, `push-ouvrir-reglages`) vers l'écran de préférences.
+  - **T11** n'ajoute pas de seconde carte : l'entrée « Notifications » du hub ouvre les préférences
+    (`.parametresNotifications`). Si T11 passe avant T6, T11 garde la section provisoire telle quelle et T6 la retire.
+  - Règles d'affichage (`EtatNotificationsAppareil`, testées) : autorisation jamais demandée → texte l.349 (« Le canal
+    est actif dans Jolene… ») **seulement si `canal_push` est connu vrai** ; dans le hub (canal inconnu) comme avec un
+    canal coupé, aucune carte. Le web affiche l.349 quel que soit le canal : écart à confirmer par T6. Bouton
+    « Ouvrir les réglages » seulement si refusé, ou autorisé sans enregistrement confirmé ; absent quand
+    l'autorisation n'a jamais été demandée (Réglages n'a pas d'entrée Notifications tant que l'app n'a rien demandé,
+    l'activation relève de T5/T6) et quand tout est en ordre.
+- **Libellé « Ouvrir les réglages » (mineur 5).** Sans source web (le web n'ouvre pas les réglages système) ; nommé
+  au §1.1 du blueprint, déjà employé par les tests de T1b ; action non juridique. Constante
+  `EtatNotificationsAppareil.ouvrirReglages`, épinglée par `EtatNotificationsAppareilTests` ; listé à relire par
+  Gabrielle dans `DECISIONS_LOT3.md` (HARD STOP n°4, textes sans équivalent web).
+- **Ce que `DemoPushTests` prouve (mineurs 6 et 7).** Niveau 2 : carte et bouton selon l'autorisation, retour à la
+  connexion sans attente ni erreur. L'ordre « désactivation → désinscription → oubli → révocation » et l'absence de
+  demande système sont prouvés au niveau 1 (`SessionStorePushTests`, `PushCoordinatorTests`,
+  `EtatNotificationsAppareilModelTests`) ; en démo, l'absence de feuille SpringBoard ne garde que contre un câblage
+  du centre de notifications réel. Chaque contrôle exigé est amené à l'écran par `scrollTo` borné. Ces XCUITest
+  n'ont pas été exécutés localement : la CI trois formats doit les confirmer.
+- **Journal DEBUG (mineur 9).** `PushCoordinator` journalise (`Logger`, `app.jolene`, catégorie `push`, DEBUG
+  seulement) l'étape et la catégorie d'erreur (`motif(_:)` : genre de `JoleneError`, « délai dépassé », domaine et
+  code APNs), jamais le token, l'identifiant ni le message.
+- **Contrats (mineur 10).** Les fiches `fn_upsert_token_push` et `fn_desactiver_mon_token_push` de
+  `CONTRATS_RPC_SOIGNANT.md` ne citent plus de relecture en production (règle 4 du mémo des lots 2 à 5 : lecture
+  live réservée aux PR backend) ; elles renvoient au dump du 01/11/2026 (sécurité, `search_path`, GRANT).
