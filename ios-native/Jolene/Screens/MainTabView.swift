@@ -25,7 +25,9 @@ import JoleneDesign
 ///   exécute ses demandes de navigation (`DemandeNavigation`, epoch de l'espace) par `presenter(_:depuisCentre:)` :
 ///   onglet, détail de mission sur l'Accueil, centre de notifications, préférences et édition du profil sur le
 ///   Profil ; un renvoi web passe par le présentateur `.safari` du coordinateur (injecté à la racine). Le libellé DEBUG
-///   `deeplink-route` (démo seulement) est posé par le coordinateur, à la racine ; il remplace `push-tap-cible` ;
+///   `deeplink-route` (démo seulement) est posé par le coordinateur, à la racine, quand cet espace exécute la demande
+///   (`demandeTraitee`, revue B8 de T3b, m7) ; il remplace `push-tap-cible`. Explorer, l'Accueil et le Profil
+///   reviennent à leur racine (piles par chemin ; revue B8 de T3b, m5) ;
 /// - une notification lue dans le centre périme le compteur de l'Accueil (`lecturesCentre`, jeton de péremption
 ///   d'`AccueilModel`, revue L3-T5 m1).
 struct MainTabView: View {
@@ -41,6 +43,8 @@ struct MainTabView: View {
     @StateObject private var prePrompt: PrePromptPushModel
     @State private var selection: Tab = .accueil
     @State private var cheminAccueil = NavigationPath()
+    /// Pile de l'onglet Explorer (revue B8 de T3b, m5) : un lien ou un tap vers Explorer revient à sa racine.
+    @State private var cheminExplorer = NavigationPath()
     /// Pile de l'onglet Profil (intégration du lot 3) : préférences de notifications et édition du profil.
     @State private var cheminProfil = NavigationPath()
     /// Notifications lues dans le centre (jeton de péremption du compteur de l'Accueil).
@@ -72,7 +76,7 @@ struct MainTabView: View {
             .tag(Tab.accueil)
             .accessibilityIdentifier("tab-accueil")
 
-            NavigationStack {
+            NavigationStack(path: $cheminExplorer) {
                 MissionsListScreen(session: session, snapshot: snapshot)
             }
             .tabItem { Label("Explorer", systemImage: "magnifyingglass") }
@@ -158,7 +162,9 @@ struct MainTabView: View {
             selection = .accueil
             cheminAccueil = NavigationPath()
         case .explorer:
+            // Revue B8 de T3b, m5 : un détail empilé sur Explorer est retiré (Mes missions et Revenus n'ont pas de pile).
             selection = .explorer
+            cheminExplorer = NavigationPath()
         case .missions:
             selection = .missions
         case .revenus:

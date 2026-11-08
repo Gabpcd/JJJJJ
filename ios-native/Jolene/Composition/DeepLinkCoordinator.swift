@@ -7,8 +7,8 @@ import JoleneDesign
 /// unique des liens universels (`onOpenURL`, `onContinueUserActivity(NSUserActivityTypeBrowsingWeb)`), de l'argument
 /// DEBUG `-JOLENE_OPEN_URL` (`AppContainer`) et des taps push (`BoiteTapsPush`, relue par l'espace prêt).
 ///
-/// La décision vit dans JoleneCore (`DeepLinkIntent`, `AiguillageLiens`, niveau 1 : `DeepLinkIntentTests`) ; le
-/// coordinateur exécute ses actions :
+/// La décision vit dans JoleneCore (`DeepLinkIntent`, `AiguillageLiens`, `PresentationsRacine`, niveau 1 :
+/// `DeepLinkIntentTests`, `PresentationsRacineTests`) ; le coordinateur exécute ses actions :
 /// - navigation dans l'espace prêt : `demande` (cible `CibleNotification` + epoch), exécutée par
 ///   `MainTabView.presenter` (onglet, retour à la racine, écran empilé) puis acquittée ; une demande d'un autre epoch
 ///   n'est jamais exécutée ;
@@ -16,44 +16,56 @@ import JoleneDesign
 ///   `PointDEntreeLiens`) — `SFSafariViewController` en staging/production, double démo sans réseau
 ///   (`renvoi-web-demo`, URL lue dans `renvoi-web-url`) ; jamais `openURL` (les chemins `/soignant/*` reviendraient
 ///   dans l'app par lien universel) ;
-/// - refus d'un lien de réinitialisation PKCE (option B, décision 7 du lot 1) : alerte au texte décidé.
+/// - refus d'un lien de réinitialisation PKCE (option B, décision 7 du lot 1) : alerte au texte décidé, présentée
+///   après la fermeture d'un renvoi affiché, un item numéroté par refus (revue B8 de T3b, m1) ;
+/// - fin d'identité native (`FinIdentiteWebPort`, appelé par `SessionStore` ; revue B8 de T3b, M1) : le renvoi affiché
+///   est fermé, puis, hors démo, le magasin de données du navigateur intégré est effacé
+///   (`SFSafariViewController.DataStore.default.clearWebsiteData`, iOS 16) ; un renvoi demandé pendant l'effacement
+///   est différé jusqu'à sa fin. En démo, aucun effacement (le double n'a ni réseau ni données).
+///
+/// L'anti-boucle (« un `.safari` issu de l'app n'est jamais rejoué comme lien universel ») et le libellé DEBUG
+/// `deeplink-route` ne sont posés qu'à la présentation effective (revue B8 de T3b, m1 et m7) : apparition du contenu
+/// de la feuille pour un renvoi, exécution par l'espace (`demandeTraitee`) pour une navigation.
 ///
 /// DEBUG et démo seulement : libellé `deeplink-route` de la dernière route présentée (format de
 /// `PushTapIntent.libelleDebug` : cas de route, identifiant ou URL canonique ; données de démonstration, jamais en
-/// STAGING où elles seraient réelles, revue L3-T5 m8). Il remplace `push-tap-cible` de L3-T5 (consigne de T5).
+/// STAGING où elles seraient réelles, revue L3-T5 m8). Il remplace `push-tap-cible` de L3-T5 (consigne de T5) ; et
+/// `-JOLENE_OPEN_URL_SUIVANT` (lien remis par le double du renvoi, `renvoi-web-lien-suivant`, revue B8 de T3b, m1).
 ///
-/// Limite connue : la feuille du renvoi est présentée par la racine ; un lien entrant reçu pendant qu'une autre
-/// feuille est ouverte (filtres d'Explorer) n'est pas présenté par-dessus (une seule feuille par niveau en SwiftUI).
+/// Limite connue : la feuille et l'alerte sont présentées par la racine ; tant qu'une autre feuille est ouverte (filtres
+/// d'Explorer), elles ne s'affichent pas par-dessus (une seule feuille par niveau en SwiftUI). Aucun état ne reste
+/// collé : le même lien est redemandé sous un nouvel item, un refus suivant est un nouvel item (`PresentationsRacine`).
 @MainActor
-final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb {
+final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIdentiteWebPort {
     /// Navigation demandée à l'espace prêt de `epoch`.
     struct DemandeNavigation: Equatable {
         let numero: Int
         let epoch: Int
         let cible: CibleNotification
-    }
-
-    /// Renvoi web affiché (feuille `sheet(item:)`).
-    struct RenvoiWeb: Identifiable, Equatable {
-        let id: Int
-        let url: URL
+        /// Destination effective (libellé DEBUG `deeplink-route`, posé quand l'espace exécute la demande).
+        let route: JoleneRoute
     }
 
     @Published private(set) var demande: DemandeNavigation?
-    @Published var renvoiWeb: RenvoiWeb?
-    @Published var refusReinitialisation = false
+    /// Feuille du renvoi web et alerte du refus (`PresentationsRacine`, niveau 1).
+    @Published private(set) var presentations = PresentationsRacine()
     /// Libellé DEBUG de la dernière route présentée (`deeplink-route`), démo seulement.
     @Published private(set) var derniereRoute: String?
+    /// `-JOLENE_OPEN_URL_SUIVANT` (DEBUG, démo) : lien remis par le double du renvoi web (`renvoi-web-lien-suivant`).
+    @Published private(set) var lienSuivantDemo: URL?
 
     let estDemo: Bool
     private let aiguillage: AiguillageLiens
+    /// Effacement du magasin du navigateur intégré (nil en démo : aucun effet).
+    private let effaceur: EffaceurDonneesWeb?
     private var numero = 0
     /// Lien reçu au lancement, avant que la racine ne soit affichée (`-JOLENE_OPEN_URL`, lu par `AppContainer.init`).
     private var lienAuLancement: URL?
     private var racineAffichee = false
 
-    init(taps: BoiteTapsPush, estDemo: Bool) {
+    init(taps: BoiteTapsPush, estDemo: Bool, effaceur: EffaceurDonneesWeb?) {
         self.estDemo = estDemo
+        self.effaceur = estDemo ? nil : effaceur
         aiguillage = AiguillageLiens(taps: taps)
     }
 
@@ -68,6 +80,19 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb {
     /// renvoi web présenté aussitôt ait une fenêtre où s'afficher (un lien de l'espace est de toute façon mémorisé).
     func recevoirAuLancement(url: URL) {
         if racineAffichee { recevoir(url: url) } else { lienAuLancement = url }
+    }
+
+    /// `-JOLENE_OPEN_URL_SUIVANT` (DEBUG, démo seulement) : lien remis par le double du renvoi web.
+    func preparerLienSuivantDemo(_ url: URL) {
+        guard estDemo else { return }
+        lienSuivantDemo = url
+    }
+
+    /// Bouton `renvoi-web-lien-suivant` du double démo : le lien est reçu comme un lien universel, une seule fois.
+    func remettreLienSuivantDemo() {
+        guard estDemo, let url = lienSuivantDemo else { return }
+        lienSuivantDemo = nil
+        recevoir(url: url)
     }
 
     /// Apparition de la racine de la fenêtre (`PointDEntreeLiens`).
@@ -94,30 +119,53 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb {
         if demande?.epoch == epoch { demande = nil }
     }
 
-    /// La demande a été exécutée par l'espace (une seule fois).
+    /// La demande a été exécutée par l'espace (une seule fois) : sa route est alors effectivement présentée.
     func demandeTraitee(_ traitee: DemandeNavigation) {
-        if demande == traitee { demande = nil }
+        guard demande == traitee else { return }
+        demande = nil
+        noter(traitee.route)
     }
 
     // MARK: Présentateur `.safari`
 
     /// Présente `route` (`.safari`, `.etablissement`) dans une feuille ; sans effet pour une route native.
     func presenter(_ route: JoleneRoute) {
-        guard let url = route.externalURL else { return }
-        numero += 1
-        renvoiWeb = RenvoiWeb(id: numero, url: url)
+        presentations.demanderRenvoi(route)
+    }
+
+    func fermerRenvoiWeb() {
+        presentations.fermerRenvoi()
+    }
+
+    /// Contenu de la feuille `id` apparu : anti-boucle et libellé DEBUG posés ici, jamais à la demande.
+    func renvoiApparu(_ id: Int) {
+        guard let route = presentations.apparition(id) else { return }
         aiguillage.renvoiWebPresente(route)
         noter(route)
     }
 
-    /// Fin de présentation d'une feuille de renvoi (`onDismiss`). Une feuille remplacée par un nouveau renvoi garde
-    /// l'anti-boucle du nouveau : seule une fermeture sans remplacement le lève.
-    func renvoiWebFerme() {
-        if renvoiWeb == nil { aiguillage.renvoiWebFerme() }
+    /// Contenu de la feuille `id` disparu : l'anti-boucle est levé s'il s'agissait du renvoi affiché.
+    func renvoiDisparu(_ id: Int) {
+        if presentations.disparition(id) { aiguillage.renvoiWebFerme() }
     }
 
-    func fermerRenvoiWeb() {
-        renvoiWeb = nil
+    /// Fin de la présentation de la feuille (`onDismiss`) : un refus en attente est présenté.
+    func renvoiCongedie() {
+        presentations.congediement()
+    }
+
+    /// Alerte du refus fermée par l'utilisateur.
+    func refusAcquitte(_ id: Int) {
+        presentations.refusAcquitte(id)
+    }
+
+    // MARK: Fin d'identité (revue B8 de T3b, M1)
+
+    func identiteTerminee() {
+        fermerRenvoiWeb()
+        guard let effaceur else { return }
+        presentations.debutEffacement()
+        effaceur.effacer { [weak self] in self?.presentations.finEffacement() }
     }
 
     // MARK: Exécution
@@ -129,13 +177,11 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb {
         case let .naviguer(cible, route, epoch)?:
             fermerRenvoiWeb()
             numero += 1
-            demande = DemandeNavigation(numero: numero, epoch: epoch, cible: cible)
-            noter(route)
+            demande = DemandeNavigation(numero: numero, epoch: epoch, cible: cible, route: route)
         case .renvoiWeb(let route)?:
             presenter(route)
         case .refusReinitialisation?:
-            fermerRenvoiWeb()
-            refusReinitialisation = true
+            presentations.refuser()
         case nil:
             break
         }
@@ -145,6 +191,26 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb {
         #if DEBUG
         if estDemo { derniereRoute = PushTapIntent.libelleDebug(route) }
         #endif
+    }
+}
+
+/// Effacement du magasin de données du navigateur intégré (revue B8 de T3b, M1), injecté hors démo.
+@MainActor
+protocol EffaceurDonneesWeb: AnyObject {
+    /// Efface cookies, cache et stockage local accumulés par les `SFSafariViewController` de l'app, puis appelle `fin`
+    /// sur le main actor.
+    func effacer(puis fin: @escaping @MainActor @Sendable () -> Void)
+}
+
+/// `SFSafariViewController.DataStore.default` (iOS 16.0, cible de déploiement de l'app) : « website data accrued from
+/// browsing activity within your app », stockage local, ressources en cache et cookies compris
+/// (`SFSafariViewControllerDataStore.h`).
+@MainActor
+final class EffaceurDonneesSafari: EffaceurDonneesWeb {
+    func effacer(puis fin: @escaping @MainActor @Sendable () -> Void) {
+        SFSafariViewController.DataStore.default.clearWebsiteData {
+            Task { @MainActor in fin() }
+        }
     }
 }
 
@@ -162,16 +228,15 @@ struct PointDEntreeLiens: ViewModifier {
                 guard let url = activite.webpageURL else { return }
                 coordinateur.recevoir(url: url)
             }
-            .sheet(item: $coordinateur.renvoiWeb, onDismiss: { coordinateur.renvoiWebFerme() }) { renvoi in
-                if coordinateur.estDemo {
-                    RenvoiWebDemoScreen(url: renvoi.url) { coordinateur.fermerRenvoiWeb() }
-                } else {
-                    RenvoiWebSafari(url: renvoi.url) { coordinateur.fermerRenvoiWeb() }
-                        .ignoresSafeArea()
-                }
+            .sheet(item: liaisonRenvoi, onDismiss: { coordinateur.renvoiCongedie() }) { renvoi in
+                contenuRenvoi(renvoi)
+                    .onAppear { coordinateur.renvoiApparu(renvoi.id) }
+                    .onDisappear { coordinateur.renvoiDisparu(renvoi.id) }
             }
-            .alert(DeepLinkIntent.Textes.reinitialisationRefusee, isPresented: $coordinateur.refusReinitialisation) {
-                Button(DeepLinkIntent.Textes.fermer, role: .cancel) {}
+            // Un hôte par refus (`.id`) : un refus jamais affiché (feuille ouverte ailleurs) ne fait pas taire le suivant.
+            .background {
+                HoteRefusReinitialisation(refus: coordinateur.presentations.refus) { coordinateur.refusAcquitte($0) }
+                    .id(coordinateur.presentations.refus?.id ?? 0)
             }
             #if DEBUG
             .overlay(alignment: .topLeading) {
@@ -185,6 +250,43 @@ struct PointDEntreeLiens: ViewModifier {
                 }
             }
             #endif
+    }
+
+    /// Item de la feuille : `PresentationsRacine.renvoi` ; une fermeture par l'utilisateur (balayage) le retire.
+    private var liaisonRenvoi: Binding<PresentationsRacine.Renvoi?> {
+        Binding(get: { coordinateur.presentations.renvoi },
+                set: { nouveau in if nouveau == nil { coordinateur.fermerRenvoiWeb() } })
+    }
+
+    @ViewBuilder
+    private func contenuRenvoi(_ renvoi: PresentationsRacine.Renvoi) -> some View {
+        if coordinateur.estDemo {
+            RenvoiWebDemoScreen(url: renvoi.url, lienSuivant: coordinateur.lienSuivantDemo,
+                                remettreLienSuivant: { coordinateur.remettreLienSuivantDemo() },
+                                fermer: { coordinateur.fermerRenvoiWeb() })
+        } else {
+            RenvoiWebSafari(url: renvoi.url) { coordinateur.fermerRenvoiWeb() }
+                .ignoresSafeArea()
+        }
+    }
+}
+
+/// Hôte de l'alerte du refus de réinitialisation (option B, décision 7 du lot 1), recréé pour chaque refus.
+private struct HoteRefusReinitialisation: View {
+    let refus: PresentationsRacine.Refus?
+    let acquitter: (Int) -> Void
+
+    var body: some View {
+        Color.clear
+            .allowsHitTesting(false)
+            .alert(DeepLinkIntent.Textes.reinitialisationRefusee, isPresented: affichee) {
+                Button(DeepLinkIntent.Textes.fermer, role: .cancel) {}
+            }
+    }
+
+    private var affichee: Binding<Bool> {
+        Binding(get: { refus != nil },
+                set: { visible in if !visible, let refus { acquitter(refus.id) } })
     }
 }
 
@@ -221,9 +323,13 @@ private struct RenvoiWebSafari: UIViewControllerRepresentable {
 }
 
 /// Double démo du renvoi web (aucune requête réseau, sentinelle « 0 requête ») : l'URL qui serait ouverte, lue par les
-/// XCUITest (`renvoi-web-url`), et « Fermer » (`renvoi-web-fermer`). Données de démonstration seulement.
+/// XCUITest (`renvoi-web-url`), et « Fermer » (`renvoi-web-fermer`). Données de démonstration seulement. DEBUG : le
+/// lien de `-JOLENE_OPEN_URL_SUIVANT` (son URL pour libellé, `renvoi-web-lien-suivant`) est remis comme un lien
+/// universel reçu pendant le renvoi (revue B8 de T3b, m1).
 private struct RenvoiWebDemoScreen: View {
     let url: URL
+    let lienSuivant: URL?
+    let remettreLienSuivant: () -> Void
     let fermer: () -> Void
 
     var body: some View {
@@ -234,6 +340,14 @@ private struct RenvoiWebDemoScreen: View {
                     .foregroundStyle(JoleneColor.midnight)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("renvoi-web-url")
+                #if DEBUG
+                if let lienSuivant {
+                    Button(lienSuivant.absoluteString, action: remettreLienSuivant)
+                        .font(JoleneFont.caption)
+                        .frame(minHeight: 44, alignment: .leading)
+                        .accessibilityIdentifier("renvoi-web-lien-suivant")
+                }
+                #endif
                 Spacer(minLength: 0)
             }
             .padding(JoleneSpacing.lg)

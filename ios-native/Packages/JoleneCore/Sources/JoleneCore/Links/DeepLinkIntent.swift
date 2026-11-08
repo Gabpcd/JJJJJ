@@ -77,7 +77,21 @@ public enum DeepLinkIntent: Equatable, Sendable, CustomStringConvertible, Custom
     public static let argumentOuverture = "-JOLENE_OPEN_URL"
 
     public static func ouvertureSimulee(arguments: [String]) -> URL? {
-        guard let position = arguments.firstIndex(of: argumentOuverture), arguments.indices.contains(position + 1),
+        valeur(de: argumentOuverture, dans: arguments)
+    }
+
+    /// `-JOLENE_OPEN_URL_SUIVANT <url>` (revue B8 de T3b, m1) : lien universel remis **pendant** un renvoi affiché, par
+    /// le bouton `renvoi-web-lien-suivant` du double démo du présentateur `.safari` (DEBUG et démo seulement, honoré par
+    /// `AppContainer`). Preuve XCUITest d'un lien reçu pendant un renvoi (refus `?code=` présenté après la fermeture de
+    /// la feuille), sans attente par délai ; mêmes refus qu'un lien universel réel.
+    public static let argumentLienSuivant = "-JOLENE_OPEN_URL_SUIVANT"
+
+    public static func lienSuivantSimule(arguments: [String]) -> URL? {
+        valeur(de: argumentLienSuivant, dans: arguments)
+    }
+
+    private static func valeur(de argument: String, dans arguments: [String]) -> URL? {
+        guard let position = arguments.firstIndex(of: argument), arguments.indices.contains(position + 1),
               !arguments[position + 1].isEmpty else { return nil }
         return URL(string: arguments[position + 1])
     }
@@ -212,12 +226,14 @@ public final class AiguillageLiens {
         taps.fermerEspace(epoch: epoch)
     }
 
-    /// Renvoi web affiché par le présentateur `.safari` (lien entrant, centre, Accueil, profil).
+    /// Renvoi web **effectivement affiché** par le présentateur `.safari` (lien entrant, centre, Accueil, profil) :
+    /// appelé à l'apparition du contenu de la feuille (`PresentationsRacine.apparition`), jamais à la demande — une
+    /// feuille que la racine n'a pas pu présenter ne fait pas ignorer le même lien (revue B8 de T3b, m1).
     public func renvoiWebPresente(_ route: JoleneRoute) {
         renvoiAffiche = route.externalURL
     }
 
-    /// Feuille du renvoi web fermée.
+    /// Fin de l'affichage du renvoi web (disparition du contenu de la feuille, `PresentationsRacine.disparition`).
     public func renvoiWebFerme() {
         renvoiAffiche = nil
     }

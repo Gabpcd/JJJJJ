@@ -31,10 +31,12 @@ public enum JoleneRoute: Equatable, Sendable {
     /// Hub du compte, onglet Profil (`Screens/ProfileScreen.swift`, onglet web
     /// `/soignant/mon-compte`, `BarreNavigation.tsx` l.37) : `/soignant/mon-compte`, `parametres`,
     /// `parametres-complet` ; `score`, `fiabilite`, `fiabilite-legacy` tant que la page score est au
-    /// lot 4 (blueprint v2 §3 T3 ; écart assumé : le hub n'affiche pas de score, `DECISIONS_LOT3.md`) ;
-    /// `/soignant/profil?tab=confidentialite` (export RGPD et suppression de compte, portés par le hub ; T3b).
+    /// lot 4 (blueprint v2 §3 T3 ; écart assumé : le hub n'affiche pas de score, `DECISIONS_LOT3.md`).
+    /// `/soignant/profil?tab=confidentialite` (export RGPD et suppression de compte) le rejoindra avec l'export RGPD
+    /// du hub (L3-T11) ; d'ici là, renvoi web (revue B8 de T3b, m3).
     case monCompte
-    /// Édition du profil (lot 3, T9) : `/soignant/profil` (hors onglet `confidentialite`) et l'alias `reputation`.
+    /// Édition du profil (lot 3, T9) : `/soignant/profil` (hors onglet `confidentialite`, renvoi web) et l'alias
+    /// `reputation`.
     case profil
     /// Centre de notifications (lot 3, T5) : `/soignant/notifications`.
     case notifications

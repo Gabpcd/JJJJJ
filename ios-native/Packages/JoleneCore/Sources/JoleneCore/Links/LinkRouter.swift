@@ -22,7 +22,8 @@ import Foundation
 /// | `/soignant/mes-gains` (`?tab=` → section, lot 3)  | `.revenus(section:)`              |
 /// | alias `mes-factures-honoraires`, `mes-avances`, `bulletins-paie` (`Navigate`, l.395-397) | `.revenus(section: .factures / .avances / .bulletins)` |
 /// | `/soignant/profil`, `reputation` (lot 3)          | `.profil` (édition)               |
-/// | `/soignant/mon-compte`, `parametres`, `parametres-complet` ; `score`, `fiabilite`, `fiabilite-legacy` (page score au lot 4, écart assumé) ; `/soignant/profil?tab=confidentialite` (export RGPD et suppression, lot 3 T3b) | `.monCompte` (hub) |
+/// | `/soignant/mon-compte`, `parametres`, `parametres-complet` ; `score`, `fiabilite`, `fiabilite-legacy` (page score au lot 4, écart assumé) | `.monCompte` (hub) |
+/// | `/soignant/profil?tab=confidentialite` (export RGPD et suppression ; hub à L3-T11, quand il porte l'export) | `.safari(URL)` |
 /// | `/soignant/notifications` (lot 3)                 | `.notifications`                  |
 /// | `/soignant/parametres/notifications` (lot 3)      | `.parametresNotifications`        |
 /// | `/soignant/stripe-connect` (`?success=true` / `?refresh=true`, lot 3) | `.stripeConnect(retour:)` |
@@ -92,10 +93,11 @@ public enum LinkRouter {
         case "/soignant/mes-avances": return .revenus(section: .avances)
         case "/soignant/bulletins-paie": return .revenus(section: .bulletins)
         // Onglet « Confidentialité » du profil web (`ProfilSoignant.tsx` l.42-44, l.505-507 : export RGPD, suppression
-        // de compte ; « Supprimer mon compte » du hub web, `MonCompteSoignant.tsx` l.135) : le hub natif porte ces
-        // deux sections (L1-T8, L3-T11). Comparaison exacte de `?tab=`, comme le web ; l'alias `reputation` redirige
-        // sans query (`src/App.tsx` l.393).
-        case "/soignant/profil": return FormQuery(query).get("tab") == "confidentialite" ? .monCompte : .profil
+        // de compte ; « Supprimer mon compte » du hub web, `MonCompteSoignant.tsx` l.135) : renvoi web tant que le hub
+        // natif n'a que la suppression (L1-T8) et pas l'export (L3-T11, revue B8 de T3b, m3). **T11** passe cette ligne
+        // à `.monCompte` en câblant l'export (garde `LinksRouterTests.testOngletConfidentialiteSuitLExportRGPDDuHub`).
+        // Comparaison exacte de `?tab=`, comme le web ; l'alias `reputation` redirige sans query (`src/App.tsx` l.393).
+        case "/soignant/profil": return FormQuery(query).get("tab") == "confidentialite" ? .safari(canonical) : .profil
         case "/soignant/reputation": return .profil
         case "/soignant/mon-compte", "/soignant/parametres", "/soignant/parametres-complet",
              "/soignant/score", "/soignant/fiabilite", "/soignant/fiabilite-legacy":

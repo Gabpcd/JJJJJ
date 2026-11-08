@@ -71,10 +71,13 @@ public struct PushTapIntent: Equatable, Sendable, CustomStringConvertible, Custo
         return PushTapIntent(donnees: donnees)
     }
 
-    /// Libellé DEBUG de la route effectivement présentée (`push-tap-cible`, XCUITest de T5) : cas de route et,
-    /// pour un renvoi web ou un détail, l'URL canonique ou l'identifiant. Données de démonstration seulement :
-    /// jamais journalisé (PRINCIPES §7), exposé par `MainTabView` en build DEBUG **et** en mode démo uniquement
-    /// (revue L3-T5, m8 : jamais dans l'arbre d'accessibilité d'un build DEBUG STAGING, identifiants réels).
+    /// Libellé DEBUG de la route effectivement présentée (`deeplink-route`, XCUITest des liens et des taps ; il
+    /// remplace `push-tap-cible` de T5) : cas de route et, pour un renvoi web ou un détail, l'URL canonique ou
+    /// l'identifiant. Données de démonstration seulement : jamais journalisé (PRINCIPES §7), posé par le coordinateur
+    /// des liens à la racine de la fenêtre (`DeepLinkCoordinator`, L3-T3b) — à l'exécution de la navigation par
+    /// l'espace et à l'apparition effective de la feuille du renvoi (revue B8 de T3b, m7) —, en build DEBUG **et** en
+    /// mode démo uniquement (revue L3-T5, m8 : jamais dans l'arbre d'accessibilité d'un build DEBUG STAGING,
+    /// identifiants réels).
     public static func libelleDebug(_ route: JoleneRoute) -> String {
         switch route {
         case .safari(let url): return "safari \(url.absoluteString)"
