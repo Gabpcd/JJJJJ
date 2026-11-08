@@ -14,6 +14,40 @@ private extension KeyedDecodingContainer {
         guard let valeur = try? decodeIfPresent(T.self, forKey: cle) else { return nil }
         return valeur
     }
+
+    /// Tableau tolérant ÉLÉMENT par élément : un élément mal formé est écarté, les autres sont gardés ; une valeur
+    /// qui n'est pas un tableau donne `[]`.
+    func tolerantParElement<T: Decodable>(_ type: T.Type, _ cle: Key) -> [T] {
+        guard let elements = try? decodeIfPresent([ElementTolerant<T>].self, forKey: cle) else { return [] }
+        return elements.compactMap(\.valeur)
+    }
+}
+
+/// Élément d'un tableau décodé sans faire échouer ses voisins.
+private struct ElementTolerant<T: Decodable>: Decodable {
+    let valeur: T?
+
+    init(from decoder: Decoder) throws {
+        valeur = try? T(from: decoder)
+    }
+}
+
+/// Forme `{error}` HTTP 200 des RPC jsonb (`jsonb_build_object('error', …)`) et clés discriminantes d'un succès :
+/// une réponse de refus ne se décode jamais en état vide plausible (revue fraîche de T1, blueprint §2.4).
+private enum CleRefus: String, CodingKey {
+    case error
+}
+
+private func exigerSucces<K: CodingKey>(_ decoder: Decoder, cles: [K], type: String) throws {
+    if try decoder.container(keyedBy: CleRefus.self).contains(.error) {
+        throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
+                                                debugDescription: "\(type) : réponse de refus {error}, jamais un état vide"))
+    }
+    let conteneur = try decoder.container(keyedBy: K.self)
+    for cle in cles where !conteneur.contains(cle) {
+        throw DecodingError.keyNotFound(cle, .init(codingPath: decoder.codingPath,
+                                                    debugDescription: "\(type) : clé discriminante absente"))
+    }
 }
 
 // MARK: - Pointage (T3)
@@ -35,7 +69,10 @@ public struct SegmentPointage: Codable, Equatable, Sendable {
 
 /// `fn_etat_pointage_mission(p_mission_id)` (`public.sql` l.35180-35190), en liste blanche :
 /// `code_pointage_actif` (nul pour le soignant, l.35188) et `est_etab` (nul pour tout compte sans
-/// établissement) ne sont jamais décodés. Un refus `{error}` HTTP 200 est traité par la gateway (T3).
+/// établissement) ne sont jamais décodés. Un refus `{error}` HTTP 200 (l.35162, l.35169) est traité par la
+/// gateway (T3, `.refuse` verbatim) ; le décodeur le refuse aussi, comme un objet sans `nb_scans` ni
+/// `prochain_type_scan` (clés toujours présentes dans un succès, valeurs nulles comprises). Tolérance par
+/// valeur et par segment.
 public struct EtatPointage: Codable, Equatable, Sendable {
     public var statut: String?
     public var intitule: String?
@@ -58,13 +95,14 @@ public struct EtatPointage: Codable, Equatable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
+        try exigerSucces(decoder, cles: [CodingKeys.nbScans, .prochainTypeScan], type: "EtatPointage")
         let c = try decoder.container(keyedBy: CodingKeys.self)
         statut = c.tolerant(String.self, .statut)
         intitule = c.tolerant(String.self, .intitule)
         prochainTypeScan = c.tolerant(TypeScan.self, .prochainTypeScan)
         nbScans = c.tolerant(Int.self, .nbScans)
         segmentOuvert = c.tolerant(Bool.self, .segmentOuvert)
-        segments = c.tolerant([SegmentPointage].self, .segments) ?? []
+        segments = c.tolerantParElement(SegmentPointage.self, .segments)
     }
 }
 
@@ -111,27 +149,29 @@ public struct ScanEnregistre: Codable, Equatable, Sendable {
 
 /// Ligne `scans_pointage` relue pour la réconciliation (blueprint §3 T3, corrigé v2) : projection
 /// imposée, jamais `code_saisi`, `ip_address`, `latitude` ni `longitude` (pourtant lisibles, `sp_select`
-/// l.79931).
+/// l.79931). `mission_id` (revue fraîche de T1) : `RecuScan.reconcilier` vérifie lui-même la mission du reçu.
 public struct PreuveScan: Codable, Equatable, Sendable {
-    public static let colonnes = ["id", "numero_scan", "type_scan", "scanne_le", "id_terminal", "precision_gps_m"]
+    public static let colonnes = ["id", "mission_id", "numero_scan", "type_scan", "scanne_le", "id_terminal", "precision_gps_m"]
     /// Valeur du paramètre PostgREST `select`.
     public static var selection: String { colonnes.joined(separator: ",") }
 
     public var id: String
+    public var missionId: String?
     public var numeroScan: Int?
     public var typeScan: TypeScan?
     public var scanneLe: String?
     public var idTerminal: String?
     public var precisionGpsM: Double?
 
-    public init(id: String, numeroScan: Int? = nil, typeScan: TypeScan? = nil, scanneLe: String? = nil,
-                idTerminal: String? = nil, precisionGpsM: Double? = nil) {
-        self.id = id; self.numeroScan = numeroScan; self.typeScan = typeScan; self.scanneLe = scanneLe
-        self.idTerminal = idTerminal; self.precisionGpsM = precisionGpsM
+    public init(id: String, missionId: String? = nil, numeroScan: Int? = nil, typeScan: TypeScan? = nil,
+                scanneLe: String? = nil, idTerminal: String? = nil, precisionGpsM: Double? = nil) {
+        self.id = id; self.missionId = missionId; self.numeroScan = numeroScan; self.typeScan = typeScan
+        self.scanneLe = scanneLe; self.idTerminal = idTerminal; self.precisionGpsM = precisionGpsM
     }
 
     enum CodingKeys: String, CodingKey {
         case id
+        case missionId = "mission_id"
         case numeroScan = "numero_scan"
         case typeScan = "type_scan"
         case scanneLe = "scanne_le"
@@ -142,6 +182,7 @@ public struct PreuveScan: Codable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
+        missionId = c.tolerant(String.self, .missionId)
         numeroScan = c.tolerant(Int.self, .numeroScan)
         typeScan = c.tolerant(TypeScan.self, .typeScan)
         scanneLe = c.tolerant(String.self, .scanneLe)
@@ -213,16 +254,18 @@ public enum IssueRelance: Equatable, Sendable {
 
 /// Synthèse serveur de `fn_presences_detail_mission` (l.48938-48958) affichée par la carte du détail
 /// (`DetailPresencesMission.tsx` l.338-339). `heures_reelles` n'est jamais décodée (le web l'écarte,
-/// l.341-344 : les `EFFECTIF` fermés font foi).
+/// l.341-344 : les `EFFECTIF` fermés font foi). Un refus `{error}` HTTP 200 (l.48918, l.48922) ou un objet
+/// sans le booléen `pointage_effectue` (présent dans les deux formes de succès, l.48928 et l.48939) ne se
+/// décode pas : `DetailPresences.resume` reste nil et la carte est masquée (§2.4), jamais affichée vide.
 public struct ResumePresencesServeur: Codable, Equatable, Sendable {
-    public var pointageEffectue: Bool?
+    public var pointageEffectue: Bool
     public var dureePauseMin: Double?
     public var distanceM: Double?
     public var alerteTeleportation: Bool?
     public var methodeArrivee: String?
     public var methodeDepart: String?
 
-    public init(pointageEffectue: Bool? = nil, dureePauseMin: Double? = nil, distanceM: Double? = nil,
+    public init(pointageEffectue: Bool, dureePauseMin: Double? = nil, distanceM: Double? = nil,
                 alerteTeleportation: Bool? = nil, methodeArrivee: String? = nil, methodeDepart: String? = nil) {
         self.pointageEffectue = pointageEffectue; self.dureePauseMin = dureePauseMin; self.distanceM = distanceM
         self.alerteTeleportation = alerteTeleportation; self.methodeArrivee = methodeArrivee; self.methodeDepart = methodeDepart
@@ -238,8 +281,9 @@ public struct ResumePresencesServeur: Codable, Equatable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
+        try exigerSucces(decoder, cles: [CodingKeys.pointageEffectue], type: "ResumePresencesServeur")
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        pointageEffectue = c.tolerant(Bool.self, .pointageEffectue)
+        pointageEffectue = try c.decode(Bool.self, forKey: .pointageEffectue)
         dureePauseMin = c.tolerant(Double.self, .dureePauseMin)
         distanceM = c.tolerant(Double.self, .distanceM)
         alerteTeleportation = c.tolerant(Bool.self, .alerteTeleportation)

@@ -1,21 +1,28 @@
 import Foundation
 
-// Socle des reçus durables du lot 2 (blueprint `docs/mobile-swift/LOT2_PLAN.md` §2.6, PRINCIPES §4).
+// Socle des reçus durables (blueprint `docs/mobile-swift/LOT2_PLAN.md` §2.6, PRINCIPES §4).
 //
-// Le journal qui les écrit en Keychain (`JoleneCore/Receipts/ReceiptJournal.swift` et
-// `JoleneSupabase/Keychain/KeychainReceiptStore.swift`, service `app.jolene.receipts`, une clé par
-// utilisateur et par domaine) est livré par la tranche T7 du lot 1, absente de la base de T1 (décision 23).
-// Point d'extension minimal posé ici : tout reçu du lot 2 se décrit par `RecuDurable` (domaine, utilisateur,
-// état terminal, encodage versionné et relecture fail-closed), de sorte que le journal de T7 puisse les
-// stocker sans changer d'API. Les transitions sont des fonctions pures : aucun stockage ici.
+// Tout reçu se décrit par `RecuDurable` (domaine, utilisateur, essai, état terminal, succession des phases,
+// encodage versionné et relecture fail-closed) ; le journal générique `ReceiptJournal` (même dossier) les écrit
+// dans un `ReceiptStorePort` (Keychain : `JoleneSupabase/Keychain/KeychainReceiptStore.swift`, service
+// `app.jolene.receipts`), une clé par utilisateur et par domaine. Décision 23 du lot 2 : la tranche T7 du lot 1,
+// qui devait livrer ce journal, n'existe sur aucune branche ; T1 du lot 2 le livre et T7 le consomme sans changer
+// son API (`docs/mobile-swift/DECISIONS_LOT2.md`). Les transitions des reçus sont des fonctions pures.
 
-/// Ce qu'un magasin de reçus borné par utilisateur et par domaine doit savoir d'un reçu.
+/// Ce qu'un journal de reçus borné par utilisateur et par domaine doit savoir d'un reçu.
 public protocol RecuDurable: Equatable, Sendable {
-    /// Domaine de la clé du journal (`scan`, `document` ; `justificatif` au lot 1).
+    /// Domaine de la clé du journal (`scan`, `document` ; `justificatif` au lot 1) : `^[a-z][a-z_]{0,31}$`.
     static var domaine: String { get }
     var userId: String { get }
-    /// Vrai quand plus rien n'est en vol : le journal peut le remplacer ou l'effacer.
+    /// Identifiant de l'essai : deux reçus du même essai décrivent la même action (même envoi, même scan).
+    var attemptId: String { get }
+    /// Vrai quand plus rien n'est en vol : le journal peut le remplacer par un autre essai ou l'effacer.
     var estTermine: Bool { get }
+    /// Contrôle de succession dans le journal. `precedent` : reçu du MÊME essai déjà journalisé, nil s'il n'y en a
+    /// pas (premier enregistrement : phase initiale `prepared` seulement, `de: "absent"`). Champs immuables
+    /// identiques (`RecuErreur.champInvalide(nom)`), puis réécriture à l'identique ou transition du graphe
+    /// (`RecuErreur.transitionInterdite`). Jamais de retour en arrière.
+    func verifierSuccession(apres precedent: Self?) throws
     /// JSON versionné, clés triées, sans secret, sans code saisi, sans octet de fichier ni URL signée.
     func encoder() throws -> Data
     /// Relecture stricte : version inconnue, clé inattendue ou invariant rompu → `RecuErreur.illisible` ;
@@ -36,8 +43,15 @@ public enum RecuErreur: Error, Equatable, Sendable {
     case champInvalide(String)
     /// Transition hors du graphe (phases encodées).
     case transitionInterdite(de: String, vers: String)
-    /// Reçu illisible ou altéré.
+    /// Reçu illisible ou altéré, ou journal inaccessible (`ReceiptJournal` : tout échec du magasin).
     case illisible
+}
+
+extension RecuErreur {
+    /// Premier enregistrement d'un essai hors de sa phase initiale.
+    static func premierEnregistrement(vers phase: String) -> RecuErreur {
+        .transitionInterdite(de: "absent", vers: phase)
+    }
 }
 
 enum RecuValidation {

@@ -5,9 +5,9 @@ import Foundation
 /// Écrit AVANT `fn_scanner_code_pointage` (`prepared`), puis `started` juste avant l'unique requête.
 /// Le code saisi, les coordonnées et tout jeton du serveur n'y figurent jamais. Aucune file, aucun renvoi :
 /// une réponse perdue se réconcilie par relecture de `scans_pointage` (`reconcilier(scans:relueLe:)`) —
-/// une preuve absente de la baseline et du même terminal prouve la réception ; son absence ne prouve la
-/// non-réception que 8 s après l'envoi. Phases : `prepared` → `started` → `refused` ; `prepared` →
-/// `not_sent` (hors ligne). Le journal de T7 (lot 1) le stocke sous le domaine `scan`.
+/// une preuve de la mission du reçu, absente de la baseline, du même terminal et de numéro postérieur prouve la
+/// réception ; son absence ne prouve la non-réception que 8 s après l'envoi. Phases : `prepared` → `started` →
+/// `refused` ; `prepared` → `not_sent` (hors ligne). `ReceiptJournal<RecuScan>` le stocke sous le domaine `scan`.
 public struct RecuScan: RecuDurable, Codable {
     public static let domaine = "scan"
     public static let versionCourante = 1
@@ -16,9 +16,9 @@ public struct RecuScan: RecuDurable, Codable {
     /// §2.5 (corrigé v2) : `statement_timeout` du rôle `authenticated` (migration `20260720172000` l.6-7).
     public static let delaiAbsenceProuvee: TimeInterval = 8
 
-    /// Texte opérationnel du pilote (`mobile-native/src/workflows/presence/attemptJournal.ts` l.70), non juridique.
+    /// Texte opérationnel du pilote (`mobile-native/src/workflows/presence/attemptJournal.ts` l.71), non juridique.
     public static let messageRecuEnCours = "Un autre pointage doit être réconcilié avant de continuer."
-    /// Texte opérationnel du pilote (`attemptJournal.ts` l.15) : reçu illisible, aucun nouveau scan (fail-closed).
+    /// Texte opérationnel du pilote (`attemptJournal.ts` l.16) : reçu illisible, aucun nouveau scan (fail-closed).
     public static let messageIllisible = "Le suivi sécurisé du pointage ne peut pas être vérifié. Aucun nouveau scan ne peut être envoyé."
 
     public enum Phase: String, Codable, Sendable {
@@ -131,26 +131,80 @@ public struct RecuScan: RecuDurable, Codable {
     // MARK: - Réconciliation
 
     public enum VerdictReconciliation: Equatable, Sendable {
-        /// Preuve hors baseline du même terminal : le scan a été reçu (aucun second scan).
+        /// Preuve de la mission, hors baseline, du même terminal et de numéro postérieur : le scan a été reçu
+        /// (aucun second scan).
         case recu(PreuveScan)
         /// Aucune preuve, relecture trop tôt : relire de nouveau.
         case aRelire
         /// Aucune preuve 8 s ou plus après l'envoi : non reçu (saisie du code courant demandée).
         case nonRecu
+        /// Aucune preuve et relecture datée AVANT le passage `started` (heure de l'appareil reculée) : l'écoulement
+        /// des 8 s n'est pas établi. Fail-closed explicite : jamais `.nonRecu` ; le reçu reste `started`, aucun
+        /// nouveau scan ; l'écran l'affiche comme un suivi non vérifiable (`messageIllisible`) au lieu de relire en
+        /// boucle. Le verdict redevient `.nonRecu` dès que l'horloge dépasse `demarreLe + 8 s`.
+        case horlogeIncoherente
     }
 
-    /// Verdict pur sur les lignes `scans_pointage` relues pour la mission (`PreuveScan.colonnes`).
+    /// Verdict pur sur les lignes `scans_pointage` relues (`PreuveScan.colonnes`). La mission est vérifiée ici même
+    /// si la requête de relecture la filtre déjà : un scan du même terminal sur une autre mission n'est jamais une
+    /// preuve. Le numéro doit dépasser `nbScansAvant` (`numero_scan = COALESCE(nb_scans, 0) + 1`, `public.sql`
+    /// l.55667) ; une ligne sans numéro ou sans mission ne prouve rien.
     public func reconcilier(scans: [PreuveScan], relueLe: Date) throws -> VerdictReconciliation {
         guard phase == .started else {
             throw RecuErreur.transitionInterdite(de: phase.rawValue, vers: "reconciled")
         }
         guard let demarreLe, (try? valider()) != nil else { throw RecuErreur.illisible }
         let baseline = Set(preuvesAvant)
-        let nouvelles = scans.filter { !baseline.contains($0.id) && $0.idTerminal == terminalId }
+        let nouvelles = scans.filter { preuve in
+            guard preuve.missionId == missionId, preuve.idTerminal == terminalId, !baseline.contains(preuve.id),
+                  let numero = preuve.numeroScan else { return false }
+            return numero > nbScansAvant
+        }
         if let preuve = nouvelles.max(by: { ($0.numeroScan ?? 0) < ($1.numeroScan ?? 0) }) {
             return .recu(preuve)
         }
-        return relueLe.timeIntervalSince(demarreLe) >= Self.delaiAbsenceProuvee ? .nonRecu : .aRelire
+        let ecoule = relueLe.timeIntervalSince(demarreLe)
+        guard ecoule >= 0 else { return .horlogeIncoherente }
+        return ecoule >= Self.delaiAbsenceProuvee ? .nonRecu : .aRelire
+    }
+
+    // MARK: - Succession dans le journal
+
+    public func verifierSuccession(apres precedent: RecuScan?) throws {
+        guard let precedent else {
+            guard phase == .prepared else { throw RecuErreur.premierEnregistrement(vers: phase.rawValue) }
+            return
+        }
+        let immuables: [(String, Bool)] = [
+            ("version", version == precedent.version), ("userId", userId == precedent.userId),
+            ("epoch", epoch == precedent.epoch), ("attemptId", attemptId == precedent.attemptId),
+            ("missionId", missionId == precedent.missionId), ("terminalId", terminalId == precedent.terminalId),
+            ("typeAttendu", typeAttendu == precedent.typeAttendu), ("nbScansAvant", nbScansAvant == precedent.nbScansAvant),
+            ("preuvesAvant", preuvesAvant == precedent.preuvesAvant), ("gps", gps == precedent.gps),
+        ]
+        if let ecart = immuables.first(where: { !$0.1 }) { throw RecuErreur.champInvalide(ecart.0) }
+        if phase == precedent.phase {
+            // Réécriture à l'identique (dates relues à la milliseconde près : encodage JSON en secondes flottantes).
+            guard sqlstate == precedent.sqlstate, Self.memeInstant(demarreLe, precedent.demarreLe) else {
+                throw RecuErreur.transitionInterdite(de: precedent.phase.rawValue, vers: phase.rawValue)
+            }
+            return
+        }
+        let admises: [Phase: Set<Phase>] = [.prepared: [.started, .notSent], .started: [.refused]]
+        guard admises[precedent.phase, default: []].contains(phase) else {
+            throw RecuErreur.transitionInterdite(de: precedent.phase.rawValue, vers: phase.rawValue)
+        }
+        if precedent.phase == .started {
+            guard Self.memeInstant(demarreLe, precedent.demarreLe) else { throw RecuErreur.champInvalide("demarreLe") }
+        }
+    }
+
+    static func memeInstant(_ a: Date?, _ b: Date?) -> Bool {
+        switch (a, b) {
+        case (nil, nil): return true
+        case let (a?, b?): return abs(a.timeIntervalSince(b)) < 0.001
+        default: return false
+        }
     }
 
     // MARK: - Encodage durable

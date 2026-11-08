@@ -49,8 +49,10 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   avec le lot 3). Pas de troisième init : chaque monde assigne ses ports du lot 2 après l'init
   complet du lot 1, dans une fonction unique `câblerLot2(_:)` (`DemoWorld`, `SupabaseGateways`) ;
   liste attendue unique `DemoWorldTests.portsEnAttenteLot2`. Les capacités d'appareil (position,
-  réseau, identifiant terminal) ne sont pas des gateways : struct `Appareil`
+  réseau, identifiant terminal, magasin des reçus durables) ne sont pas des gateways : struct `Appareil`
   (`Ports/AppareilPorts.swift`), injectée par `AppContainer` à côté de `Gateways`, réelle ou démo.
+  Clôture du lot 2 : `unwiredPorts.filter(Lot2PortsTests.portsLot2.contains).isEmpty` (P10 amendé,
+  `docs/mobile-swift/DECISIONS_LOT2.md`).
 
 ## 3. Aucun succès fabriqué
 
@@ -70,6 +72,12 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
 
 - Avant tout upload Storage et avant tout scan de pointage, un reçu est écrit en
   Keychain avec les phases `prepared` → `started` → `refused` / `not_sent` / terminé.
+- Journal générique (`JoleneCore/Receipts/ReceiptJournal.swift`, livré par le lot 2 T1, décision 23 de
+  `DECISIONS_LOT2.md`) : une clé par utilisateur et par domaine (`scan`, `document`, `justificatif`),
+  service Keychain `app.jolene.receipts` (`AfterFirstUnlockThisDeviceOnly`, jamais synchronisé, conservé
+  à la déconnexion, relu seulement par le même utilisateur) ; un seul essai en vol par domaine ; relecture
+  après chaque écriture ; tout échec du trousseau ou reçu illisible bloque l'action (fail-closed), sans
+  réparation automatique.
 - Règle : **aucun renvoi automatique**. Après un arrêt forcé ou une coupure, l'app
   réconcilie par relecture serveur (état de la présence, ligne `documents_soignants`)
   et ne rejoue une action que si la relecture prouve qu'elle n'a pas été reçue.

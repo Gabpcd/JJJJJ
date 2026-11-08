@@ -2,8 +2,10 @@ import Foundation
 
 // Ports d'appareil du lot 2 (blueprint `docs/mobile-swift/LOT2_PLAN.md` §2.2, tranche T1). Ce ne sont pas
 // des gateways backend : `Appareil` est injecté par `AppContainer` à côté de `Gateways`, avec une
-// implémentation réelle (cible app, wrappers `@MainActor` de T4b ; Keychain : `KeychainTerminalIdentity`,
-// JoleneSupabase) et une démo (ci-dessous : aucun prompt système, aucun réseau). Méthodes `async` : une
+// implémentation réelle (cible app, wrappers `@MainActor` de T4b ; Keychain : `KeychainTerminalIdentity` et
+// `KeychainReceiptStore`, JoleneSupabase) et une démo (ci-dessous et `Receipts/ReceiptJournal.swift` : aucun
+// prompt système, aucun réseau). Le protocole du magasin de reçus vit avec le journal (`ReceiptStorePort`,
+// `Receipts/ReceiptJournal.swift`), pour que T7 du lot 1 le reprenne sans ce fichier. Méthodes `async` : une
 // implémentation isolée au MainActor (CoreLocation) peut s'y conformer en concurrence stricte.
 
 // MARK: - Position
@@ -83,22 +85,25 @@ public enum IdentifiantTerminal {
 
 // MARK: - Assemblage
 
-/// Capacités d'appareil injectées à côté de `Gateways`. Le magasin de reçus durables (`ReceiptStorePort`,
-/// lot 1 T7, blueprint §2.2) n'y figure pas encore : il arrive avec le journal de T7.
+/// Capacités d'appareil injectées à côté de `Gateways`, dont le magasin des reçus durables (`ReceiptStorePort`,
+/// blueprint §2.2 ; livré par T1 du lot 2, décision 23) que lit et écrit `ReceiptJournal` : `KeychainReceiptStore`
+/// (JoleneSupabase) en réel, `MagasinRecusEnMemoire` en démo.
 public struct Appareil: Sendable {
     public var localisation: LocationPort
     public var reseau: NetworkPathPort
     public var terminal: TerminalIdentityPort
+    public var recus: ReceiptStorePort
 
-    public init(localisation: LocationPort, reseau: NetworkPathPort, terminal: TerminalIdentityPort) {
-        self.localisation = localisation; self.reseau = reseau; self.terminal = terminal
+    public init(localisation: LocationPort, reseau: NetworkPathPort, terminal: TerminalIdentityPort,
+                recus: ReceiptStorePort) {
+        self.localisation = localisation; self.reseau = reseau; self.terminal = terminal; self.recus = recus
     }
 
-    /// Appareil du mode démo ; surcharges DEBUG `-JOLENE_DEMO_GPS` et `-JOLENE_DEMO_RESEAU` lues par
-    /// `AppContainer` (T4b).
+    /// Appareil du mode démo (magasin de reçus vierge en mémoire) ; surcharges DEBUG `-JOLENE_DEMO_GPS` et
+    /// `-JOLENE_DEMO_RESEAU` lues par `AppContainer` (T4b).
     public static func demo(gps: ScenarioGpsDemo = .accorde, reseau: ScenarioReseauDemo = .enLigne) -> Appareil {
         Appareil(localisation: DemoLocationPort(scenario: gps), reseau: DemoNetworkPathPort(scenario: reseau),
-                 terminal: DemoTerminalIdentity())
+                 terminal: DemoTerminalIdentity(), recus: MagasinRecusEnMemoire())
     }
 }
 

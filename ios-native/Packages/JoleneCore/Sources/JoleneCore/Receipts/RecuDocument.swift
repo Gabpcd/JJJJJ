@@ -1,7 +1,5 @@
 import Foundation
 
-extension MimeDocument: Codable {}
-
 /// Reçu durable d'un envoi de justificatif, v1 (blueprint lot 2 §2.5-§2.6, décision 14).
 ///
 /// Écrit AVANT l'upload Storage avec la clé déterministe du web (`src/pages/DocumentsSoignant.tsx` l.372 :
@@ -44,6 +42,39 @@ public struct RecuDocument: RecuDurable, Codable {
     }
 
     public var estTermine: Bool { phase == .verificationDemandee || phase == .refused || phase == .notSent }
+
+    /// L'essai d'un justificatif est sa clé Storage déterministe (horodatage en millisecondes compris) : deux
+    /// sélections donnent deux essais, une réconciliation reste le même essai.
+    public var attemptId: String { s3Cle }
+
+    /// Graphe des phases (voir l'en-tête) ; `documentId` ne s'ajoute qu'au passage `registered` puis ne change plus.
+    public func verifierSuccession(apres precedent: RecuDocument?) throws {
+        guard let precedent else {
+            guard phase == .prepared else { throw RecuErreur.premierEnregistrement(vers: phase.rawValue) }
+            return
+        }
+        let immuables: [(String, Bool)] = [
+            ("version", version == precedent.version), ("userId", userId == precedent.userId),
+            ("epoch", epoch == precedent.epoch), ("s3Cle", s3Cle == precedent.s3Cle),
+            ("typeDocument", typeDocument == precedent.typeDocument), ("mime", mime == precedent.mime),
+            ("tailleOctets", tailleOctets == precedent.tailleOctets),
+        ]
+        if let ecart = immuables.first(where: { !$0.1 }) { throw RecuErreur.champInvalide(ecart.0) }
+        if phase == precedent.phase {
+            guard documentId == precedent.documentId else { throw RecuErreur.champInvalide("documentId") }
+            return
+        }
+        let admises: [Phase: Set<Phase>] = [
+            .prepared: [.started, .notSent],
+            .started: [.stored, .registered, .refused, .notSent],
+            .stored: [.registered, .refused],
+            .registered: [.verificationDemandee],
+        ]
+        guard admises[precedent.phase, default: []].contains(phase) else {
+            throw RecuErreur.transitionInterdite(de: precedent.phase.rawValue, vers: phase.rawValue)
+        }
+        if precedent.documentId != nil, documentId != precedent.documentId { throw RecuErreur.champInvalide("documentId") }
+    }
 
     // MARK: - Préparation
 

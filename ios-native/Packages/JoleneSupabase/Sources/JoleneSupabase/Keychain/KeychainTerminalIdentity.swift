@@ -8,14 +8,23 @@ import Security
 /// sous un service distinct de la session : la déconnexion (purge de `app.jolene.session`) le conserve.
 /// Jamais `identifierForVendor` ni empreinte d'appareil.
 ///
-/// Fail-closed : une lecture en échec (trousseau verrouillé avant le premier déverrouillage, entitlement
-/// absent…) ou une valeur stockée hors format lève `JoleneError(.environment)` SANS générer ni écrire un
-/// second identifiant ; un écrivain concurrent (`errSecDuplicateItem`) gagne : sa valeur est relue.
+/// Fail-closed : toute issue autre qu'une valeur valide ou absente lève `JoleneError(.environment)` SANS générer
+/// ni écrire un second identifiant ; un écrivain concurrent (`errSecDuplicateItem`) gagne : sa valeur est relue.
+/// Trois cas, trois messages (revue fraîche de T1) :
+/// - trousseau verrouillé (`errSecInteractionNotAllowed`, avant le premier déverrouillage) : transitoire, aucun
+///   échec mémorisé, l'appel suivant relit ;
+/// - autre échec du trousseau (entitlement absent, erreur interne) : réessayer ;
+/// - valeur stockée hors format : permanente (jamais réécrite, décision 7 ; l'élément survit à la réinstallation),
+///   donc recours web : le pointage se fait sur jolene.app, qui n'utilise pas cet identifiant
+///   (`src/lib/terminal.ts`). Voie de récupération consignée dans `docs/mobile-swift/DECISIONS_LOT2.md`.
+/// Textes non juridiques, sans source web (inventaire « Textes opérationnels hors web » du même mémo) ; ils ne
+/// citent jamais la valeur stockée.
 public struct KeychainTerminalIdentity: TerminalIdentityPort {
     public static let service = "app.jolene.terminal"
     public static let compte = "id_terminal"
-    /// Message technique (non juridique) ; ne cite jamais la valeur stockée.
-    public static let messageIndisponible = "L'identifiant de cet appareil n'a pas pu être lu. Le pointage est indisponible : redémarrez l'application."
+    public static let messageVerrouille = "Le trousseau de cet appareil est verrouillé. Déverrouillez l'appareil puis réessayez."
+    public static let messageIndisponible = "L'identifiant de cet appareil n'a pas pu être lu. Le pointage est momentanément indisponible : réessayez."
+    public static let messageIllisible = "L'identifiant de cet appareil est illisible. Le pointage n'est pas disponible dans l'application sur cet appareil : pointez depuis jolene.app."
 
     private let store: any KeychainItemStore
 
@@ -31,10 +40,10 @@ public struct KeychainTerminalIdentity: TerminalIdentityPort {
         switch statut {
         case errSecSuccess, errSecDuplicateItem:
             // Relecture avant de rendre la valeur : celle du trousseau fait foi (écrivain concurrent compris).
-            guard let relu = try lire() else { throw Self.erreur }
+            guard let relu = try lire() else { throw Self.erreur(statut: errSecItemNotFound) }
             return relu
         default:
-            throw Self.erreur
+            throw Self.erreur(statut: statut)
         }
     }
 
@@ -44,17 +53,20 @@ public struct KeychainTerminalIdentity: TerminalIdentityPort {
         switch statut {
         case errSecSuccess:
             guard let data, let valeur = String(data: data, encoding: .utf8), IdentifiantTerminal.estValide(valeur) else {
-                throw Self.erreur
+                throw JoleneError(.environment, Self.messageIllisible)
             }
             return valeur
         case errSecItemNotFound:
             return nil
         default:
-            throw Self.erreur
+            throw Self.erreur(statut: statut)
         }
     }
 
-    private static var erreur: JoleneError { JoleneError(.environment, messageIndisponible) }
+    /// Échec du trousseau : verrouillé (transitoire) ou autre.
+    private static func erreur(statut: OSStatus) -> JoleneError {
+        JoleneError(.environment, statut == errSecInteractionNotAllowed ? messageVerrouille : messageIndisponible)
+    }
 
     static func base() -> [String: Any] {
         [
