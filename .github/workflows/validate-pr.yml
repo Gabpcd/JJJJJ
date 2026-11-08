@@ -56,7 +56,10 @@ jobs:
         run: npm test -- --reporter=dot
 
       - name: Garde de livraison mobile
-        run: node --test tests/node/mobile-delivery-plan.node.mjs
+        # check-rpc-contracts.node.mjs : contrats RPC du client Swift (RPC_SUIVIES, fiches
+        # CONTRATS_RPC_SOIGNANT.md confrontées à public.sql et à l'edge delete-account, décisions
+        # du lot 1). Sans filtre de chemins : tourne aussi sur les PR qui ne touchent que la doc.
+        run: node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs
 
       - name: Gardes de la recette financière isolée
         run: node --test tests/node/recette-escrow-safety.node.mjs
@@ -114,6 +117,9 @@ jobs:
 
       - name: Visibilité établissement (B5b) — corps LIVE, empreintes et diff sans réseau
         run: node --test tests/node/visibilite-etablissement-permission.node.mjs
+
+      - name: Contestation de paiement (B3) — migration et instantané sans réseau
+        run: node --test tests/node/contestation-paiement-soignant.node.mjs
 
       - name: Isolation du draft contrat SQL sans réseau
         run: node --test tests/node/contrat-v11-sql-proof.node.mjs
@@ -678,7 +684,7 @@ jobs:
           fi
           # Les sept sources ont déjà été exécutées, puis comparées aux 90
           # statements du registre et au catalogue revu après installation V2.
-          # Les bancs PG17 rejouent leurs sources ; les 63 suites ci-dessous
+          # Les bancs PG17 rejouent leurs sources ; les 64 suites ci-dessous
           # restent exécutées sur staging, sous SAVEPOINT/ROLLBACK.
           if [ "${PAIEMENTS_INSTALLATION_MODE:-}" = 'installed' ]; then
             test "$CONNECT_INSTALLATION_MODE" != 'installed'
@@ -749,6 +755,7 @@ jobs:
             tests/security/avoirs-imputation-staging.test.sql
             tests/security/stripe-disponibilite-connect.test.sql
             tests/security/connect-onboarding-payout-acl.test.sql
+            tests/non-regression/sql/contestation-paiement-soignant.test.sql
           )
           # Sans migration, ne pas exiger des fonctions main absentes du
           # staging : cette voie prouve seulement les trois bancs F1 LIVE.
@@ -1000,6 +1007,12 @@ jobs:
             echo "::error::Le rejeu de la migration B5b a dépassé le préflight."
             exit 1
           fi
+
+      - name: Pointage — scanner et fin rétroactive sans code suivant PostgreSQL 17 isolé
+        run: |
+          createdb scanner_sans_code_suivant
+          JOLENE_SCANNER_WITNESS=LOCAL_EPHEMERE PGDATABASE=scanner_sans_code_suivant \
+            python3 scripts/ci/scanner-code-sans-code-suivant-pg17.py
 
       - name: Avoirs — exclusion des impayés PostgreSQL 17 isolé
         env:

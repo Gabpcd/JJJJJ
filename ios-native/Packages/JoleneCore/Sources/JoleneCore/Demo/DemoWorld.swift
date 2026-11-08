@@ -26,7 +26,29 @@ public enum DemoWorld {
     /// Un jeu de ports complet, horloge fixée comprise. Chaque appel crée une session
     /// démo vierge (pas de session restaurée avant `signIn`).
     public static func gateways() -> Gateways {
-        Gateways(auth: DemoAuthGateway(), role: DemoRoleGateway(), missions: DemoMissionsGateway(), clock: FixedClock(fixedNow))
+        gateways(drapeaux: [:])
+    }
+
+    /// Variante avec surcharges de drapeaux (`DemoFlagsGateway`). Chaque port du lot 1 est
+    /// câblé ici dans la même PR que sa tranche ; un port encore stub y est nommé explicitement
+    /// (`DemoWorldTests.testAucunPortNonCable`).
+    public static func gateways(drapeaux: [String: Bool]) -> Gateways {
+        Gateways(
+            auth: DemoAuthGateway(),
+            role: DemoRoleGateway(),
+            missions: DemoMissionsGateway(),
+            clock: FixedClock(fixedNow),
+            dashboard: DemoDashboardGateway(clock: FixedClock(fixedNow)),
+            candidature: UnwiredCandidaturePort(),      // T6a, T7
+            presence: UnwiredPresencePort(),            // T6c
+            favoris: UnwiredFavorisPort(),              // T4b
+            mesMissions: UnwiredMesMissionsPort(),      // T5
+            compte: DemoAccountGateway(),
+            audit: DemoAuditGateway(),
+            flags: DemoFlagsGateway(surcharges: drapeaux),
+            recovery: UnwiredRecoveryPort(),            // T10
+            justificatifs: UnwiredJustificatifStoragePort() // T7
+        )
     }
 }
 
@@ -81,7 +103,17 @@ public struct DemoRoleGateway: RolePort {
 /// (`MissionBusiness`). Refuse tout contexte dont l'identifiant n'est pas celui du
 /// profil fictif : la démo n'est jamais un repli pour un compte réel.
 public struct DemoMissionsGateway: MissionsPort {
-    public init() {}
+    /// Source des missions ASSIGNEE ouvrables en détail depuis l'Accueil (T3 : fiches de
+    /// `demo-dashboard.json`). Lue seulement pour un identifiant absent de `demo-missions.json` :
+    /// une fixture de tableau de bord illisible ne casse jamais le détail Explorer. Point de fusion
+    /// T5 : cette source devient celle des missions ASSIGNEE de Mes missions (`LOT1_PLAN.md` §3 T5).
+    private let missionsAssignees: @Sendable () throws -> [DemoFixtures.MissionFixture]
+
+    public init(missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
+        try DemoFixtures.loadDashboard().missionsAssignees
+    }) {
+        self.missionsAssignees = missionsAssignees
+    }
 
     public func profile(userId: String) async throws -> SoignantProfile? {
         userId == DemoWorld.context.userId ? DemoWorld.context.profile : nil
@@ -97,7 +129,11 @@ public struct DemoMissionsGateway: MissionsPort {
     public func mission(id: String, context: MissionReadContext) async throws -> Mission? {
         try check(context)
         let (missions, etablissements) = try chargerFixtures()
-        guard let fixture = missions.first(where: { $0.record.id == id }) else { return nil }
+        if let fixture = missions.first(where: { $0.record.id == id }) {
+            return enrich(fixture, context: context, etablissements: etablissements)
+        }
+        // T3 : les missions ASSIGNEE du tableau de bord démo s'ouvrent en détail, sans entrer dans Explorer.
+        guard let fixture = try missionsAssignees().first(where: { $0.record.id == id }) else { return nil }
         return enrich(fixture, context: context, etablissements: etablissements)
     }
 

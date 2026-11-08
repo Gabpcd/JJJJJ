@@ -64,6 +64,8 @@ struct MissionDetailScreen: View {
                 if let contrat = mission.record.typeContratRecherche { detailRow("Contrat recherché", value: contrat, identifier: "mission-detail-contrat") }
                 detailRow("Profession requise", value: mission.record.professionRequise, identifier: "mission-detail-profession")
             }
+            // Lot 1 (T4a) : carte en lecture seule, sur les coordonnées serveur de l'établissement.
+            if let point = CarteMission.point(pour: mission) { MissionMapView(point: point) }
             card {
                 Text("Créneaux").font(JoleneFont.headline).foregroundStyle(JoleneColor.midnight)
                 if mission.creneauxPlanifies.isEmpty {

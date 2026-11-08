@@ -25,7 +25,9 @@ public actor SessionController {
     public static let defaultResolutionTimeout: TimeInterval = 15
 
     private let configured: Gateways
-    private let resolutionTimeout: TimeInterval
+    /// Délai de chaque appel de port. Public et `nonisolated` (lot 1) : les modèles d'écran
+    /// bornent leurs lectures et mutations au même délai via `bounded(timeout:_:)`.
+    public nonisolated let resolutionTimeout: TimeInterval
     private var currentEpoch = 0
     private var currentState: SessionState = .idle
     private var activeUserId: String?
@@ -72,7 +74,7 @@ public actor SessionController {
         let auth = configured.auth
         let restored: AuthenticatedUser?
         do {
-            restored = try await bounded { try await auth.restoreSession() }
+            restored = try await bounded(timeout: resolutionTimeout) { try await auth.restoreSession() }
         } catch {
             guard startedAt == currentEpoch else { return currentState }
             if revalidating { return currentState }
@@ -104,7 +106,7 @@ public actor SessionController {
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let user: AuthenticatedUser
         do {
-            user = try await bounded { try await auth.signIn(email: trimmedEmail, password: password) }
+            user = try await bounded(timeout: resolutionTimeout) { try await auth.signIn(email: trimmedEmail, password: password) }
         } catch {
             guard signedInAt == currentEpoch else { return currentState }
             currentState = .signedOut(message: Self.signInMessage(for: error))
@@ -129,6 +131,24 @@ public actor SessionController {
             // Le port est responsable de l'effacement local (Keychain) ; une erreur
             // de révocation distante ne doit pas ressusciter l'identité.
         }
+        guard signedOutAt == currentEpoch else { return currentState }
+        return currentState
+    }
+
+    /// Fin de session locale après la suppression du compte (lot 1, T8) : comme `signOut()`, l'identité
+    /// est retirée (epoch avancé, état `.signedOut(nil)`) AVANT la purge, si bien que l'événement
+    /// `.signedOut` que le SDK émet ensuite est ignoré par `handleAuthEvent` : jamais « Votre session a
+    /// expiré » après une suppression. La purge passe par `AuthPort.signOutLocally()`, sans révocation
+    /// globale (l'edge `delete-account` a déjà révoqué les sessions), bornée à `resolutionTimeout` et
+    /// tolérée en échec (le port retire la session locale avant tout appel réseau).
+    public func signOutLocally() async -> SessionState {
+        bumpEpoch()
+        activeUserId = nil
+        restoreRetryable = false
+        currentState = .signedOut(message: nil)
+        let signedOutAt = currentEpoch
+        let auth = configured.auth
+        _ = try? await bounded(timeout: resolutionTimeout) { await auth.signOutLocally() }
         guard signedOutAt == currentEpoch else { return currentState }
         return currentState
     }
@@ -186,7 +206,7 @@ public actor SessionController {
         let rolePort = gateways.role
         var serverRole: RoleResult?
         do {
-            serverRole = try await bounded { try await rolePort.currentRole() }
+            serverRole = try await bounded(timeout: resolutionTimeout) { try await rolePort.currentRole() }
         } catch {
             guard currentEpoch == expected else { return nil }
             if provisional == nil {
@@ -207,7 +227,7 @@ public actor SessionController {
         let userId = user.id
         let profile: SoignantProfile?
         do {
-            profile = try await bounded { try await missionsPort.profile(userId: userId) }
+            profile = try await bounded(timeout: resolutionTimeout) { try await missionsPort.profile(userId: userId) }
         } catch {
             guard currentEpoch == expected else { return nil }
             return quiet ? nil : .signedOut(message: Self.profileLoadFailedMessage)
@@ -219,36 +239,6 @@ public actor SessionController {
 
         let context = MissionReadContext(userId: user.id, email: user.email, profile: profile)
         return .ready(SessionSnapshot(user: user, role: role, profile: profile, context: context, epoch: expected))
-    }
-
-    /// Borne un appel de port à `resolutionTimeout`. Le premier des deux (réponse ou délai)
-    /// gagne ; le perdant est annulé sans être attendu : un port qui ignorerait l'annulation
-    /// ne peut pas retenir la session (un groupe de tâches structuré attendrait ses enfants).
-    /// Le dépassement est une erreur réseau générique (`timeoutMessage`).
-    private func bounded<T: Sendable>(_ operation: @escaping @Sendable () async throws -> T) async throws -> T {
-        let nanoseconds = UInt64(max(0, resolutionTimeout) * 1_000_000_000)
-        let race = AsyncThrowingStream<T, Error> { continuation in
-            let work = Task {
-                do {
-                    continuation.yield(try await operation())
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            let timer = Task {
-                try await Task.sleep(nanoseconds: nanoseconds)
-                continuation.finish(throwing: JoleneError(.network, SessionController.timeoutMessage))
-            }
-            continuation.onTermination = { _ in
-                work.cancel()
-                timer.cancel()
-            }
-        }
-        for try await value in race {
-            return value
-        }
-        throw JoleneError(.network, SessionController.timeoutMessage)
     }
 
     /// Message générique de connexion. Jamais l'erreur brute du SDK : elle pourrait
