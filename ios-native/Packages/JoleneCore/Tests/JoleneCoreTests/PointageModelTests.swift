@@ -297,7 +297,7 @@ final class PointageModelTests: XCTestCase {
         XCTAssertEqual(port.compte("reconcilier"), 2)
         // m2 : sorti par le délai `bounded`, la requête a pu attendre le pool PostgREST (10 s) puis s'exécuter (8 s).
         XCTAssertEqual(try XCTUnwrap(temps.attentes.first), attenteNonRecu(apres: 0.2), accuracy: 1e-9,
-                       "délai `bounded` + 10 s + 8 s monotones avant la première relecture")
+                       "relecture immédiate sans preuve, puis délai `bounded` + 10 s + 8 s monotones avant la suivante (mi-2)")
         XCTAssertEqual(model.issue, .enregistre(.ouverture))
         XCTAssertTrue(magasin.vide)
         await jamais.open()
@@ -311,11 +311,53 @@ final class PointageModelTests: XCTestCase {
         await model.charger()
         await model.pointer(code: "123456", gps: nil)
         XCTAssertEqual(try XCTUnwrap(temps.attentes.first), attenteNonRecu(apres: 0), accuracy: 1e-9,
-                       "réponse perdue : attente du pool et du `statement_timeout` avant tout verdict (m2)")
+                       "réponse perdue : attente du pool et du `statement_timeout` avant le verdict « non reçu » (m2, mi-2)")
         XCTAssertEqual(model.issue, .nonRecu, "saisie du code courant demandée")
         XCTAssertEqual(port.compte("scanner"), 1)
         XCTAssertEqual(magasin.phases, ["prepared", "started", "effacé"])
         XCTAssertTrue(model.peutEnvoyer)
+    }
+
+    /// Seconde revue fraîche de T3 (mi-2) : relecture immédiate après une réponse perdue (blueprint §2.5) ; une preuve
+    /// déjà présente est confirmée sans attendre le délai du « non reçu ».
+    func testPreuveDejaPresenteConfirmeeSansAttente() async throws {
+        let port = PortScripte(etats: [.success(etat()), .success(etat()), .success(etat(.fermeture, nbScans: 1, statut: "EN_COURS"))],
+                               scans: [.incertain], reconciliations: [.enregistre(typeScan: .ouverture, numeroScan: 1)])
+        let temps = TempsTest()
+        let magasin = MagasinEspion()
+        let (model, _) = try await modele(port, magasin: magasin, temps: temps)
+        await model.charger()
+        await model.pointer(code: "123456", gps: nil)
+        XCTAssertEqual(model.issue, .enregistre(.ouverture))
+        XCTAssertTrue(temps.attentes.isEmpty, "aucune attente avant la première relecture")
+        XCTAssertEqual(port.compte("reconcilier"), 1)
+        XCTAssertTrue(magasin.vide)
+    }
+
+    /// mi-2 : un « non reçu » relu avant la fin de l'attente monotone reste « à relire » ; pendant l'attente, l'envoi est
+    /// terminé (`charger()` relit l'état) et aucune seconde réconciliation ne part en parallèle.
+    func testNonRecuAvantLeDelaiARelireHorsEnvoi() async throws {
+        let port = PortScripte(etats: [.success(etat())], scans: [.incertain],
+                               reconciliations: [.nonRecu, .enregistre(typeScan: .ouverture, numeroScan: 1)])
+        let metronome = Metronome()
+        let (model, _) = try await modele(port, attendre: { await metronome.attendre($0) })
+        await model.charger()
+        let envoi = Task { await model.pointer(code: "123456", gps: nil) }
+        await metronome.attenteEnCours()
+        XCTAssertFalse(model.envoiEnCours, "envoi terminé : seule la vérification attend")
+        XCTAssertEqual(model.issue, .verification)
+        XCTAssertFalse(model.peutEnvoyer)
+        XCTAssertEqual(port.compte("reconcilier"), 1, "relecture immédiate")
+        let lectures = port.compte("etat")
+        await model.charger()
+        XCTAssertEqual(port.compte("etat"), lectures + 1, "état relu pendant l'attente")
+        XCTAssertEqual(port.compte("reconcilier"), 1, "aucune seconde réconciliation en parallèle")
+        let durees = await metronome.durees
+        XCTAssertEqual(try XCTUnwrap(durees.first), attenteNonRecu(apres: 0), accuracy: 1e-9, "reste de l'attente du « non reçu » (m2)")
+        await metronome.tic()
+        await envoi.value
+        XCTAssertEqual(model.issue, .enregistre(.ouverture), "« non reçu » trop tôt : relu, puis preuve trouvée")
+        XCTAssertEqual(port.compte("scanner"), 1)
     }
 
     func testIncertainPersistantResteEnVerification() async throws {
@@ -501,8 +543,105 @@ final class PointageModelTests: XCTestCase {
         await model.pointer(code: "123456", gps: nil)
         XCTAssertEqual(port.compte("scanner"), 1, "aucun nouveau scan depuis ce bloc")
         await model.rafraichir()
-        XCTAssertEqual(model.issue, .suiviIllisible)
+        XCTAssertEqual(model.issue, .suiviIllisible, "même génération : le message reste affiché")
         XCTAssertEqual(port.compte("reconcilier"), 0)
+        // Seconde revue fraîche de T3 (mi-3) : levé par le premier `charger()` réussi après une réapparition du bloc
+        // (onglet rouvert, écran rechargé au retour du renvoi web) ; l'état est relu et un nouvel envoi relit sa base.
+        model.desactiver()
+        await model.charger()
+        XCTAssertNil(model.issue, "réapparition : état relu, bloc de nouveau opérant")
+        XCTAssertTrue(model.peutEnvoyer)
+        await model.pointer(code: "123456", gps: nil)
+        XCTAssertEqual(port.compte("scanner"), 2, "nouvel envoi, base relue")
+        XCTAssertEqual(port.compte("reconcilier"), 0, "un HTTP 200 n'est jamais réconcilié")
+    }
+
+    // MARK: - Reçu commun soldé par un autre bloc (seconde revue fraîche de T3, MJ-1)
+
+    /// Blocs A (`m-1`) et B (`m-2`) du même écran, sur le même journal (un reçu par utilisateur) et la même horloge
+    /// monotone ; A envoie un scan dont la réponse est perdue, puis ses relectures ne concluent pas.
+    private func blocsAvecAEnSuivi(scans: [IssueScan] = [.incertain], reconciliations: [IssueScan]) async throws
+        -> (a: PointageModel, b: PointageModel, port: PortScripte, magasin: MagasinEspion) {
+        let port = PortScripte(etats: [.success(etat())], scans: scans, reconciliations: reconciliations)
+        let magasin = MagasinEspion()
+        let temps = TempsTest()
+        let banc = try await nouveauBanc(port, magasin: magasin)
+        let a = bloc(mission, banc, temps: temps)
+        let b = bloc("m-2", banc, temps: temps)
+        await a.charger()
+        await b.charger()
+        await a.pointer(code: "123456", gps: nil)
+        return (a, b, port, magasin)
+    }
+
+    private var relecturesSansConclusion: [IssueScan] {
+        Array(repeating: IssueScan.incertain, count: PointageModel.maxRelectures)
+    }
+
+    func testRecuSoldeParUnAutreBlocEnregistreLeveLaVerification() async throws {
+        let (a, b, port, magasin) = try await blocsAvecAEnSuivi(
+            reconciliations: relecturesSansConclusion + [.enregistre(typeScan: .ouverture, numeroScan: 1)])
+        XCTAssertEqual(a.issue, .verification, "relectures sans conclusion : A attend")
+        XCTAssertFalse(a.peutEnvoyer)
+        await b.reconcilier()
+        XCTAssertTrue(magasin.vide, "reçu commun soldé par la réconciliation du bloc B")
+        XCTAssertNil(b.issue, "B ne publie rien pour l'essai de la mission m-1")
+        await a.rafraichir()
+        XCTAssertNotEqual(a.issue, .verification, "A n'est plus figé en vérification")
+        XCTAssertEqual(a.issue, .enregistre(.ouverture), "issue conclue par B rendue au bloc de la mission du reçu")
+        XCTAssertTrue(a.peutEnvoyer)
+        XCTAssertEqual(port.compte("scanner"), 1, "aucun second scan")
+    }
+
+    func testRecuSoldeParUnAutreBlocNonRecuLeveLaVerification() async throws {
+        let (a, b, port, magasin) = try await blocsAvecAEnSuivi(reconciliations: relecturesSansConclusion + [.nonRecu])
+        XCTAssertEqual(a.issue, .verification)
+        await b.reconcilier()
+        XCTAssertTrue(magasin.vide)
+        XCTAssertNil(b.issue)
+        await a.rafraichir()
+        XCTAssertEqual(a.issue, .nonRecu, "saisie du code courant demandée au bloc A")
+        XCTAssertTrue(a.peutEnvoyer)
+        XCTAssertEqual(port.compte("scanner"), 1)
+    }
+
+    /// `.suiviIllisible` venu de la réconciliation (heure de l'appareil reculée) : le reçu reste `started` ; quand B le
+    /// solde (horloge revenue), A reprend la main.
+    func testSuiviIllisibleDeReconciliationSoldeParUnAutreBlocLeve() async throws {
+        let (a, b, port, magasin) = try await blocsAvecAEnSuivi(reconciliations: [.horlogeIncoherente, .nonRecu])
+        XCTAssertEqual(a.issue, .suiviIllisible, "horloge incohérente : suivi non vérifiable")
+        XCTAssertFalse(a.peutEnvoyer)
+        await b.reconcilier()
+        XCTAssertTrue(magasin.vide)
+        XCTAssertNil(b.issue)
+        await a.rafraichir()
+        XCTAssertEqual(a.issue, .nonRecu)
+        XCTAssertTrue(a.peutEnvoyer)
+        XCTAssertEqual(port.compte("scanner"), 1)
+    }
+
+    /// Reçu disparu sans issue transmise : la vérification est levée (l'état vient d'être relu ; tout nouvel envoi relit
+    /// sa base), jamais un succès supposé.
+    func testRecuDisparuSansIssueTransmiseLeveLaVerification() async throws {
+        let (a, _, port, magasin) = try await blocsAvecAEnSuivi(reconciliations: [.incertain])
+        XCTAssertEqual(a.issue, .verification)
+        let recu = try await journal(magasin).lire(userId: utilisateurPointage.id)
+        try await journal(magasin).effacer(XCTUnwrap(recu))
+        await a.rafraichir()
+        XCTAssertNil(a.issue)
+        XCTAssertTrue(a.peutEnvoyer)
+        XCTAssertEqual(port.compte("scanner"), 1)
+    }
+
+    /// Le reçu de A toujours en attente : A reste en vérification (aucune levée prématurée).
+    func testRecuToujoursEnAttenteGardeLaVerification() async throws {
+        let (a, b, _, magasin) = try await blocsAvecAEnSuivi(reconciliations: [.incertain])
+        await b.reconcilier()
+        XCTAssertFalse(magasin.vide)
+        await a.rafraichir()
+        XCTAssertEqual(a.issue, .verification)
+        XCTAssertFalse(a.peutEnvoyer)
+        XCTAssertNil(b.issue, "B n'affiche pas la vérification de l'essai de A")
     }
 
     func testDemoCodeDeLaMissionASaisiDansLeBlocB() async throws {
@@ -547,8 +686,11 @@ final class PointageModelTests: XCTestCase {
         await retenue.open()
         await envoi.value
         XCTAssertNil(model.issue, "réponse émise avant la disparition : ignorée")
-        XCTAssertEqual(port.compte("etat"), 2, "aucune relecture publiée pour une réponse ignorée")
         XCTAssertEqual(magasin.phases, ["prepared", "started", "effacé"], "essai décidé par le serveur : reçu soldé quand même")
+        // Seconde revue fraîche de T3 (mi-4) : le bloc réactivé pendant l'envoi (son `charger()` a sauté la lecture)
+        // relit son état dans la génération courante dès la fin de l'envoi, sans attendre le tic de 15 s.
+        XCTAssertEqual(port.compte("etat"), 3, "état relu pour le bloc réactivé")
+        XCTAssertEqual(model.etat?.prochainTypeScan, .fermeture, "aucun état ni libellé périmé")
         // De nouveau opérant : charger, puis pointer.
         await model.charger()
         XCTAssertEqual(model.etat?.prochainTypeScan, .fermeture)
@@ -556,6 +698,27 @@ final class PointageModelTests: XCTestCase {
         await model.pointer(code: "654321", gps: nil)
         XCTAssertEqual(port.compte("scanner"), 2)
         XCTAssertEqual(model.issue, .enregistre(.fermeture))
+    }
+
+    /// mi-4 : réponse perdue pendant la disparition, bloc réactivé avant la fin de l'envoi : le reçu `started` est
+    /// réconcilié dans la génération courante (la réponse elle-même reste ignorée).
+    func testReponsePerduePendantLaDisparitionReconcilieeApresReactivation() async throws {
+        let retenue = Gate()
+        let port = PortScripte(etats: [.success(etat())], scans: [.incertain],
+                               reconciliations: [.enregistre(typeScan: .ouverture, numeroScan: 1)], retenue: retenue)
+        let magasin = MagasinEspion()
+        let (model, _) = try await modele(port, magasin: magasin)
+        await model.charger()
+        let envoi = Task { await model.pointer(code: "123456", gps: nil) }
+        await port.entreeScanner.wait()
+        model.desactiver()
+        await model.charger()
+        await retenue.open()
+        await envoi.value
+        XCTAssertEqual(port.compte("reconcilier"), 1, "réconcilié par le bloc réactivé")
+        XCTAssertEqual(model.issue, .enregistre(.ouverture), "relecture de la génération courante")
+        XCTAssertTrue(magasin.vide)
+        XCTAssertEqual(port.compte("scanner"), 1)
     }
 
     func testDesactiverSansReactivationRendLeBlocInerte() async throws {

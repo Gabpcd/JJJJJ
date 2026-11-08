@@ -133,6 +133,24 @@ final class DemoPointageGatewayTests: XCTestCase {
         XCTAssertNotEqual(verdict, .nonRecu)
     }
 
+    /// Seconde revue fraîche de T3 (mi-6) : même garde que `SupabasePointageGateway.scanner`, le terminal du reçu est
+    /// celui des métadonnées envoyées ; sinon erreur de contrat et rien n'est appliqué.
+    func testTerminalDuRecuDifferentDesMetadonneesRefuseEnContrat() async throws {
+        let gateway = DemoPointageGateway()
+        let started = try await recu(gateway, mission: "demo-presence-a")
+        let autreTerminal = MetadonneesScan(idTerminal: "TERM_IOS_AUTREAUTREAUTREAUTRE", observation: nil)
+        do {
+            _ = try await gateway.scanner(code: "123456", metadonnees: autreTerminal, recu: started, context: context)
+            XCTFail("terminal du reçu différent : erreur de contrat attendue")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur.kind, .contract)
+        }
+        let etat = try await gateway.etat(missionId: "demo-presence-a", context: context)
+        XCTAssertEqual(etat.nbScans, 0, "rien n'est appliqué")
+        let recues = await gateway.metadonneesRecues
+        XCTAssertTrue(recues.isEmpty)
+    }
+
     func testScanIncertainPuisReconciliation() async throws {
         let gateway = DemoPointageGateway(scenario: .scanIncertain)
         let started = try await recu(gateway, mission: "demo-presence-a")
