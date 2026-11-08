@@ -187,11 +187,11 @@ BEGIN
     v_resultat:=public.fn_contester_paiement_soignant(v_ps,v_appel);
     EXECUTE 'RESET ROLE';
     IF v_resultat->>'error_code' IS DISTINCT FROM v_nom OR v_resultat ? 'success'
-      OR v_resultat->>'error' IS DISTINCT FROM CASE
+      OR v_resultat->>'error' IS DISTINCT FROM (CASE
         WHEN v_nom='NON_AUTHENTIFIE' THEN 'Non authentifié ou compte inactif'
         WHEN v_nom='ACCES_REFUSE' THEN 'Accès refusé'
         WHEN v_appel IS NULL OR btrim(v_appel)='' THEN 'Motif requis'
-        ELSE 'Motif trop long (500 caractères maximum)' END
+        ELSE 'Motif trop long (500 caractères maximum)' END)
     THEN RAISE EXCEPTION 'B3 contestation : refus % inattendu : %',v_nom,v_resultat; END IF;
   END LOOP;
   PERFORM set_config('request.jwt.claim.sub',v_soignant::text,true);
