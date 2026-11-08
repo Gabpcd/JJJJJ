@@ -93,7 +93,8 @@ public enum ProfilEdition {
         /// `MissionDetailScreen.swift`), réutilisés tels quels : revalider la session plutôt que rejouer l'appel.
         public static let sessionAVerifier = "Session à vérifier"
         public static let verifierSession = "Vérifier ma session"
-        /// Libellé natif des renvois web du lot 1 (`AccueilScreen.swift`).
+        /// Libellé natif du renvoi web des notifications de l'Accueil au lot 1, retiré de l'Accueil par L3-T5 (centre
+        /// natif) : sans équivalent web, listé parmi les textes à relire par Gabrielle (`DECISIONS_LOT3.md`).
         public static let voirSurLeWeb = "Voir sur jolene.app"
         /// `ProfilSoignant.tsx` l.499.
         public static let enregistrer = "Enregistrer les modifications"

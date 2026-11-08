@@ -157,8 +157,11 @@ final class ProfilVerbatimTests: XCTestCase {
         XCTAssertTrue(puce.contains("« \(T.enregistrementEchec) »"), "DECISIONS_LOT3.md liste le message de repli")
         let web = try Self.sourceDepot(Self.principal)
         XCTAssertFalse(web.contains(T.typeExerciceWeb), "aucune source web : le libellé n'est pas présenté comme verbatim")
-        // « Voir sur jolene.app » : libellé natif des renvois web du lot 1 (Accueil), réutilisé tel quel.
-        let accueil = try Self.sourceDepot("ios-native/Jolene/Screens/Accueil/AccueilScreen.swift")
-        XCTAssertTrue(accueil.contains("\"\(T.voirSurLeWeb)\""))
+        // « Voir sur jolene.app » : libellé natif du renvoi web des notifications de l'Accueil au lot 1. Intégration du
+        // lot 3 : L3-T5 remplace ce renvoi par le centre natif (`AccueilScreen.swift` ne le porte plus), le libellé n'est
+        // donc plus partagé avec l'Accueil ; il est listé avec les textes natifs à relire par Gabrielle.
+        XCTAssertEqual(T.voirSurLeWeb, "Voir sur jolene.app")
+        XCTAssertTrue(puce.contains("« \(T.voirSurLeWeb) »"), "DECISIONS_LOT3.md liste le libellé du bouton de renvoi")
+        XCTAssertFalse(web.contains(T.voirSurLeWeb), "aucune source web : le libellé n'est pas présenté comme verbatim")
     }
 }

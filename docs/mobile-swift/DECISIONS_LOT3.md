@@ -520,7 +520,10 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   d'exercice » : le web affiche la section elle-même, que le natif ne porte pas, correction 8) et message de repli
   d'un enregistrement refusé sans message serveur « Votre profil n'a pas pu être enregistré. Réessayez. » (le web
   passe par `extraireMessageErreur`), constantes `ProfilEdition.Textes.typeExerciceWeb` et `.enregistrementEchec`
-  épinglées par `ProfilVerbatimTests`.
+  épinglées par `ProfilVerbatimTests` ; (intégration du lot 3, T5 × T9) libellé « Voir sur jolene.app » du bouton
+  `profil-exercice-web-action` (affiché seulement avec le présentateur `.safari` de L1-T10) : repris du renvoi web
+  des notifications de l'Accueil au lot 1, que T5 remplace par le centre natif, il n'existe plus que dans l'édition
+  du profil (constante `ProfilEdition.Textes.voirSurLeWeb`, épinglée par `ProfilVerbatimTests`).
 - (T9, revue B8) Refus d'enregistrement du profil : textes web verbatim d'`extraireMessageErreur`
   (`src/lib/erreurs.ts` l.510, l.511, l.514) pour 23505 et 23514, message serveur verbatim pour `{error}` et P0001
   (`dec_verifier_age_minimum`, `public.sql` l.3893), épinglés par `ProfilVerbatimTests` ; libellés natifs du lot 1
