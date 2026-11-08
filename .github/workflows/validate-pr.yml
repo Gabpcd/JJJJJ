@@ -978,6 +978,11 @@ jobs:
         run: |
           createdb pointage_rotation
           psql -X -v ON_ERROR_STOP=1 -d pointage_rotation -f tests/security/pointage-rotation-isolated.test.sql
+      - name: Pointage — scanner et fin rétroactive sans code suivant PostgreSQL 17 isolé
+        run: |
+          createdb scanner_sans_code_suivant
+          JOLENE_SCANNER_WITNESS=LOCAL_EPHEMERE PGDATABASE=scanner_sans_code_suivant \
+            python3 scripts/ci/scanner-code-sans-code-suivant-pg17.py
 
       - name: Avoirs — exclusion des impayés PostgreSQL 17 isolé
         env:
