@@ -63,7 +63,7 @@ public enum DemoWorld {
         gateways.contestation = UnwiredContestationPort()          // T5b
         gateways.notation = UnwiredNotationPort()                  // T5a
         gateways.documents = UnwiredDocumentsPort()                // T6
-        gateways.contrats = UnwiredContratsPort()                  // T8
+        gateways.contrats = DemoContratsGateway(clock: FixedClock(fixedNow)) // T8
     }
 }
 

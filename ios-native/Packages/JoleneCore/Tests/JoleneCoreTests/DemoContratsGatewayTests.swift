@@ -10,9 +10,9 @@ final class DemoContratsGatewayTests: XCTestCase {
 
     func testListeDesTroisContratsDemo() async throws {
         let liste = try await DemoContratsGateway().contrats(context: contexte)
-        XCTAssertEqual(liste.map(\.id), ["demo-contrat-001", "demo-contrat-003", "demo-contrat-002"], "cree_le décroissant (l.71)")
+        XCTAssertEqual(liste.map(\.id), ["demo-contrat-003", "demo-contrat-001", "demo-contrat-002"], "cree_le décroissant (l.71)")
         XCTAssertEqual(liste.map(\.statut), ["EN_ATTENTE_SIGNATURES", "EN_ATTENTE_SIGNATURES", "SIGNE_COMPLET"])
-        XCTAssertEqual(liste.first?.mission?.intitule, "Démonstration · Mission assignée 1")
+        XCTAssertEqual(liste.first { $0.id == "demo-contrat-001" }?.mission?.intitule, "Démonstration · Mission assignée 1")
         XCTAssertTrue(liste.allSatisfy { $0.soignantId == contexte.userId })
     }
 
@@ -89,7 +89,8 @@ final class DemoContratsGatewayTests: XCTestCase {
 
     func testCinqCodesFauxPuisTropDeTentativesEtPlafondDeSms() async throws {
         let gateway = DemoContratsGateway()
-        let empreinte = try XCTUnwrap(try await gateway.contrat(id: "demo-contrat-001", context: contexte).hashDocument)
+        let lu = try await gateway.contrat(id: "demo-contrat-001", context: contexte)
+        let empreinte = try XCTUnwrap(lu.hashDocument)
         _ = try await gateway.envoyerOtp(contratId: "demo-contrat-001", empreinte: empreinte, context: contexte)
         var restantes: [Int?] = []
         for _ in 0..<5 {
@@ -109,7 +110,8 @@ final class DemoContratsGatewayTests: XCTestCase {
 
     func testScenarioOtpExpire() async throws {
         let gateway = DemoContratsGateway(scenario: .otpExpire)
-        let empreinte = try XCTUnwrap(try await gateway.contrat(id: "demo-contrat-001", context: contexte).hashDocument)
+        let lu = try await gateway.contrat(id: "demo-contrat-001", context: contexte)
+        let empreinte = try XCTUnwrap(lu.hashDocument)
         _ = try await gateway.envoyerOtp(contratId: "demo-contrat-001", empreinte: empreinte, context: contexte)
         let issue = try await gateway.signer(contratId: "demo-contrat-001", code: "000000", empreinte: empreinte, context: contexte)
         XCTAssertEqual(issue, .refuse(code: "OTP_EXPIRE", message: TextesWeb.SignatureOtp.otpExpire, tentativesRestantes: nil))

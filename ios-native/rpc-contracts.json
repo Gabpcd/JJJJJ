@@ -545,7 +545,7 @@
     },
     {
       "name": "fn_envoyer_otp_signature",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": {
         "args": "{ p_contrat_id: string }",
@@ -574,7 +574,7 @@
     },
     {
       "name": "fn_signer_contrat_otp",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": {
         "args": "{ p_contrat_id: string; p_hash_document?: string; p_otp_code: string; p_signature_image?: string }",

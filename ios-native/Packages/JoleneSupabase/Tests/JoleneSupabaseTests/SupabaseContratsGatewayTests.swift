@@ -120,7 +120,7 @@ final class SupabaseContratsGatewayTests: XCTestCase {
         let requete = try XCTUnwrap(registry.requests(to: cheminTable).first)
         XCTAssertEqual(requete.query("select"), ContratResume.selection)
         XCTAssertEqual(requete.query("soignant_id"), "eq.\(TestClient.userId)")
-        XCTAssertEqual(requete.query("order"), "cree_le.desc")
+        XCTAssertEqual(requete.query("order"), "cree_le.desc.nullsfirst", "même tri que `order(cree_le, desc)` du web (NULLS FIRST par défaut)")
         XCTAssertTrue(registry.unmatched.isEmpty)
     }
 
@@ -284,7 +284,7 @@ final class SupabaseContratsGatewayTests: XCTestCase {
         let requete = try XCTUnwrap(registry.requests(to: cheminSignatures).first)
         XCTAssertEqual(requete.query("select"), SignatureCertificat.selection, "GRANT colonne par colonne : jamais select=*")
         XCTAssertEqual(requete.query("contrat_id"), "eq.\(id)")
-        XCTAssertEqual(requete.query("order"), "cree_le.asc")
+        XCTAssertEqual(requete.query("order"), "cree_le.asc.nullslast")
     }
 
     // MARK: - Envoi du code

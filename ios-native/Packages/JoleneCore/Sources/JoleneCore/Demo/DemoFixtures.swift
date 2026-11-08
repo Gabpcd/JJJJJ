@@ -48,6 +48,41 @@ public enum DemoFixtures {
         }
     }
 
+    /// Lot 2, T8 : contrats démo (`demo-contrats.json`) ; les originaux « Storage » sont des fichiers HTML à part,
+    /// octets rendus par le moteur serveur (`originalDemo(fichier:)`).
+    public struct ContratsFile: Decodable, Sendable {
+        public struct Original: Decodable, Equatable, Sendable {
+            public var contratId: String
+            public var storagePath: String
+            public var fichier: String
+            enum CodingKeys: String, CodingKey { case contratId = "contrat_id", storagePath = "storage_path", fichier }
+        }
+
+        public var fixedNow: String
+        public var contrats: [ContratDetail]
+        public var missions: [MissionContrat]
+        public var originaux: [Original]
+        public var signatures: [SignatureCertificat]
+        enum CodingKeys: String, CodingKey { case fixedNow = "fixed_now", contrats, missions, originaux, signatures }
+    }
+
+    public static func loadContrats() throws -> ContratsFile { try load("demo-contrats") }
+
+    /// Octets d'un original démo (`demo-contrat-00N.html`), jamais réécrits.
+    public static func originalDemo(fichier: String) throws -> Data {
+        let nom = (fichier as NSString).deletingPathExtension
+        guard (fichier as NSString).pathExtension == "html",
+              let url = Bundle.module.url(forResource: nom, withExtension: "html", subdirectory: sousDossier)
+                ?? Bundle.module.url(forResource: nom, withExtension: "html") else {
+            throw JoleneError(.contract, "Fixture démo introuvable : \(fichier).")
+        }
+        do {
+            return try Data(contentsOf: url)
+        } catch {
+            throw JoleneError(.contract, "Fixture démo illisible : \(fichier).")
+        }
+    }
+
     public static func loadMissions() throws -> MissionsFile { try load("demo-missions") }
     public static func loadEtablissements() throws -> EtablissementsFile { try load("demo-etablissements") }
     public static func loadProfile() throws -> ProfileFile { try load("demo-profile") }

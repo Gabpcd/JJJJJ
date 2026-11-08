@@ -528,87 +528,8 @@ public struct CoherenceDocuments: Codable, Equatable, Sendable {
 
 // MARK: - Contrats (T8)
 
-/// Carte de la liste des contrats (`contrats_mission`, RLS l.79073).
-public struct ContratResume: Codable, Equatable, Sendable, Identifiable {
-    public var id: String
-    public var missionId: String
-    public var statut: String
-    public var typeContrat: String?
-    public var creeLe: String?
-
-    public init(id: String, missionId: String, statut: String, typeContrat: String? = nil, creeLe: String? = nil) {
-        self.id = id; self.missionId = missionId; self.statut = statut; self.typeContrat = typeContrat; self.creeLe = creeLe
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id, statut
-        case missionId = "mission_id"
-        case typeContrat = "type_contrat"
-        case creeLe = "cree_le"
-    }
-}
-
-/// Contrat relu (`contrats_mission`). Statut affiché = statut serveur ; le compte à rebours est dérivé
-/// de `cree_le` (`CompteARebours72h`), jamais stocké.
-public struct ContratDetail: Codable, Equatable, Sendable, Identifiable {
-    public var id: String
-    public var missionId: String
-    public var statut: String
-    public var typeContrat: String?
-    public var contenuHtml: String?
-    public var hashDocument: String?
-    public var storagePath: String?
-    public var contenuHtmlRenduLe: String?
-    public var signatureSoignant: Bool?
-    public var signatureEtablissement: Bool?
-    public var signatureSoignantLe: String?
-    public var signatureEtablissementLe: String?
-    public var creeLe: String?
-
-    public init(id: String, missionId: String, statut: String, typeContrat: String? = nil, contenuHtml: String? = nil,
-                hashDocument: String? = nil, storagePath: String? = nil, contenuHtmlRenduLe: String? = nil,
-                signatureSoignant: Bool? = nil, signatureEtablissement: Bool? = nil, signatureSoignantLe: String? = nil,
-                signatureEtablissementLe: String? = nil, creeLe: String? = nil) {
-        self.id = id; self.missionId = missionId; self.statut = statut; self.typeContrat = typeContrat
-        self.contenuHtml = contenuHtml; self.hashDocument = hashDocument; self.storagePath = storagePath
-        self.contenuHtmlRenduLe = contenuHtmlRenduLe; self.signatureSoignant = signatureSoignant
-        self.signatureEtablissement = signatureEtablissement; self.signatureSoignantLe = signatureSoignantLe
-        self.signatureEtablissementLe = signatureEtablissementLe; self.creeLe = creeLe
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id, statut
-        case missionId = "mission_id"
-        case typeContrat = "type_contrat"
-        case contenuHtml = "contenu_html"
-        case hashDocument = "hash_document"
-        case storagePath = "storage_path"
-        case contenuHtmlRenduLe = "contenu_html_rendu_le"
-        case signatureSoignant = "signature_soignant"
-        case signatureEtablissement = "signature_etablissement"
-        case signatureSoignantLe = "signature_soignant_le"
-        case signatureEtablissementLe = "signature_etablissement_le"
-        case creeLe = "cree_le"
-    }
-
-    /// Preuves de signature lues par les règles de `ContratMissionUi` (T2).
-    public var preuve: PreuveSignatureContrat {
-        PreuveSignatureContrat(statut: statut, signatureSoignant: signatureSoignant, signatureEtablissement: signatureEtablissement,
-                               signatureSoignantLe: signatureSoignantLe, signatureEtablissementLe: signatureEtablissementLe)
-    }
-}
-
-/// Original contrôlé (§2.5) : SHA-256 du HTML UTF-8 = `hash_document` = SHA-256 des octets Storage.
-/// Seul ce type est affiché, partagé ou signé ; `empreinte` est l'empreinte affichée et signée.
-public struct OriginalContrat: Equatable, Sendable {
-    public var contratId: String
-    public var html: String
-    public var empreinte: String
-
-    public init(contratId: String, html: String, empreinte: String) {
-        self.contratId = contratId; self.html = html; self.empreinte = empreinte
-    }
-}
+/// Carte, détail et original du contrat : `Contrats/ContratModels.swift` (T8, projections explicites,
+/// décodage tolérant). Ci-dessous, les issues OTP et la ligne de certificat posées par T1.
 
 /// Succès de `fn_envoyer_otp_signature` (l.33286-33293). Ne prouve pas l'envoi réel du SMS ; seul
 /// `telephone_masked` serveur s'affiche.

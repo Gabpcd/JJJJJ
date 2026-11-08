@@ -63,7 +63,7 @@ public enum SupabaseGateways {
         gateways.contestation = UnwiredContestationPort()          // T5b
         gateways.notation = UnwiredNotationPort()                  // T5a
         gateways.documents = UnwiredDocumentsPort()                // T6
-        gateways.contrats = UnwiredContratsPort()                  // T8
+        gateways.contrats = SupabaseContratsGateway(client: client, clock: gateways.clock) // T8
     }
 
     /// Construction du client : options vérifiées dans `SupabaseClientOptions` de 2.55.5
