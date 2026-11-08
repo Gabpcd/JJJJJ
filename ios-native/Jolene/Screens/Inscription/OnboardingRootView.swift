@@ -34,6 +34,8 @@ struct OnboardingRootView: View {
     var body: some View {
         contenu
             .task { await model.chargerSiNecessaire() }
+            // Un `.blocked` d'une autre identité peut succéder à celui-ci sans démonter la vue : relecture.
+            .onChange(of: session.state) { _ in Task { await model.chargerSiNecessaire() } }
     }
 
     @ViewBuilder private var contenu: some View {

@@ -369,6 +369,24 @@ final class InscriptionModelsTests: XCTestCase {
         XCTAssertEqual(port.appels, ["contexte"], "aucune lecture de plus pour l'identité partie")
     }
 
+    func testNouvelleIdentiteRelitLAiguillageMemeIdentiteNon() async {
+        let port = ScriptedInscription()
+        port.contextes = [.success(contexte(intention: nil)), .success(contexte(intention: nil))]
+        port.parcoursLus = [.success(Self.parcoursSoignant), .success(nil)]
+        let controller = controleur(port, auth: AuthNouveauCompte())
+        _ = await controller.start()
+        let model = OnboardingModel(controller: controller)
+        await model.chargerSiNecessaire()
+        XCTAssertEqual(model.etat, .completerSoignant(Self.parcoursSoignant))
+        await model.chargerSiNecessaire()
+        XCTAssertEqual(port.appels.count, 2, "même identité : aucune relecture")
+        _ = await controller.signOut()
+        _ = await controller.signIn(email: "autre@example.invalid", password: "x")
+        await model.chargerSiNecessaire()
+        XCTAssertEqual(model.etat, .choixEspace(email: "nouveau@example.invalid"), "identité changée : état relu")
+        XCTAssertEqual(port.appels.count, 4)
+    }
+
     // MARK: - Point d'extension des liens
 
     func testLiensDInscriptionConsommesHorsDeLEspace() throws {

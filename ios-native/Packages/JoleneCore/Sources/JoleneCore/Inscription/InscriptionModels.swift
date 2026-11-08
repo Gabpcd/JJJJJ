@@ -208,6 +208,8 @@ public final class OnboardingModel: ObservableObject {
     private let controller: SessionController
     /// Numéro du dernier chargement lancé : seul ce chargement publie.
     private var generation = 0
+    /// Epoch de l'identité dont l'état affiché a été lu (nil avant toute publication).
+    private var epochAffiche: Int?
 
     public init(controller: SessionController) {
         self.controller = controller
@@ -235,6 +237,7 @@ public final class OnboardingModel: ObservableObject {
                 etape = OnboardingResolution.etape(parcours: parcours, intention: nil)
             }
             guard await controller.epoch == epoch, generation == courant else { return }
+            epochAffiche = epoch
             switch etape {
             case .completerSoignant(let lu): etat = .completerSoignant(lu)
             case .espaceEtablissement: etat = .espaceEtablissement
@@ -244,13 +247,19 @@ public final class OnboardingModel: ObservableObject {
         } catch {
             if error is CancellationError || (error as? JoleneError)?.kind == .cancelled || Task.isCancelled { return }
             guard await controller.epoch == epoch, generation == courant else { return }
+            epochAffiche = epoch
             etat = .erreur
         }
     }
 
-    /// Apparition de l'écran : premier chargement seulement (un échec attend « Réessayer »).
+    /// Apparition de l'écran ou nouvel état de session : premier chargement, ou relecture si l'identité a changé
+    /// depuis l'état affiché (un `.blocked` peut succéder à un autre `.blocked` sans démonter la vue) ; sinon rien
+    /// (un échec attend « Réessayer »).
     public func chargerSiNecessaire() async {
-        guard case .chargement = etat else { return }
-        await charger()
+        if case .chargement = etat {
+            await charger()
+            return
+        }
+        if await controller.epoch != epochAffiche { await charger() }
     }
 }
