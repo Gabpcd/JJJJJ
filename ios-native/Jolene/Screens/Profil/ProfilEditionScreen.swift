@@ -1,8 +1,10 @@
 import SwiftUI
+import UIKit
 import JoleneCore
 import JoleneDesign
 
-/// « Mon profil » (lot 3, T9), ouvert depuis le hub `ProfileScreen` (entrée `profil-ouvrir`). Nom
+/// « Mon profil » (lot 3, T9), ouvert depuis le hub `ProfileScreen` (entrée `profil-ouvrir`,
+/// `ProfilEntreeSection`). Nom
 /// distinct du hub (`Screens/ProfileScreen.swift`, onglet Profil) : jamais deux surfaces pour la même
 /// route (CLAUDE.md, « livré ≠ mergé »). Lecture en liste blanche et édition relue
 /// (`ProfilEditionModel`) ; textes du web verbatim (`ProfilEdition.Textes`). Type d'exercice et
@@ -69,12 +71,19 @@ struct ProfilEditionScreen: View {
         carte {
             ChoixModesExerciceSection(choix: model.choixModes, prefixe: "profil",
                                       basculer: { model.basculerMode($0, selectionne: $1) },
-                                      reessayer: { Task { await model.verifierModes() } })
+                                      reessayer: reessaiModes)
         }
         carte { taux }
         carte { rayon }
-        typeExercice
+        if ProfilEdition.afficheRenvoiTypeExercice(profil) { typeExercice }
         enregistrement
+    }
+
+    /// « Réessayer la vérification » : absent quand une nouvelle lecture ne peut pas aboutir (port non câblé).
+    private var reessaiModes: (() -> Void)? {
+        guard model.reessaiModesPossible else { return nil }
+        let model = self.model
+        return { Task { await model.verifierModes() } }
     }
 
     private func entete(_ profil: ProfilComplet) -> some View {
@@ -123,6 +132,8 @@ struct ProfilEditionScreen: View {
                 .font(JoleneFont.callout)
                 .foregroundStyle(JoleneColor.midnight)
                 .environment(\.locale, Locale(identifier: "fr_FR"))
+                // Jour civil sans fuseau : le sélecteur affiche et rend la date dans le fuseau de la conversion.
+                .environment(\.timeZone, DateNaissance.fuseau)
                 .frame(minHeight: 44)
                 .accessibilityIdentifier("profil-date-naissance")
         } else {
@@ -355,9 +366,11 @@ private struct ChampProfil: View {
 /// Date de naissance `AAAA-MM-JJ` (colonne `date`) ↔ `Date` du sélecteur, calendrier grégorien en UTC
 /// (aucun décalage de fuseau sur un jour civil).
 enum DateNaissance {
+    static let fuseau = TimeZone(identifier: "UTC") ?? .current
+
     private static let calendrier: Calendar = {
         var calendrier = Calendar(identifier: .gregorian)
-        calendrier.timeZone = TimeZone(identifier: "UTC") ?? .current
+        calendrier.timeZone = fuseau
         return calendrier
     }()
 

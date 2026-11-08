@@ -2,7 +2,9 @@ import Foundation
 import JoleneCore
 import Supabase
 
-/// `ProfilPort` sur Supabase (lot 3, T9), comme `ProfilSoignant.tsx` l.153-200 et l.246-297 :
+/// `ProfilPort` sur Supabase (lot 3, T9), comme `ProfilSoignant.tsx` l.153-200 et l.246-297 (définitions
+/// live relues en lecture seule le 08/11/2026 : corps identiques au dump, `SECURITY DEFINER`, EXECUTE
+/// `authenticated`) :
 /// - lecture `fn_mon_profil_soignant_complet()` (JWT du soignant) : « Non authentifié » → session
 ///   expirée, tout autre `{error}` (« Profil introuvable ») → message serveur verbatim ; puis décodage en
 ///   LISTE BLANCHE (`ProfilComplet.depuis`, garde `validerProfilSoignant`) : une ligne invalide ou d'un
@@ -18,7 +20,8 @@ import Supabase
 public struct SupabaseProfilGateway: ProfilPort {
     public static let lectureRPC = "fn_mon_profil_soignant_complet"
     public static let ecritureRPC = "fn_modifier_mon_profil"
-    public static let fallbackMessage = "Votre profil n'a pas pu être enregistré. Réessayez."
+    /// Repli d'un refus d'enregistrement sans message serveur (texte natif, `ProfilEdition.Textes`).
+    public static let fallbackMessage = ProfilEdition.Textes.enregistrementEchec
 
     private let client: SupabaseClient
 

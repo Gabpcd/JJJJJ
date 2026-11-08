@@ -51,6 +51,7 @@ struct ProfileScreen: View {
                 }
                 #endif
             }
+            ProfilEntreeSection(session: session, snapshot: snapshot) // Lot 3, T9 : « Mon profil » (point de fusion T11)
             // Lot 3, T4 : autorisation des notifications de l'appareil, sous « Notifications » comme l'entrée
             // du hub web (`MonCompteSoignant.tsx` l.115) ; placée après « Application » pour ne déplacer ni
             // « Se déconnecter » ni les identifiants du lot 0 testés par les XCUITest existants. Section

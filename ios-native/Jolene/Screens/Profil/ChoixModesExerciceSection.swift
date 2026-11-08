@@ -12,7 +12,8 @@ struct ChoixModesExerciceSection: View {
     let choix: ChoixModesExercice
     let prefixe: String
     let basculer: (PreferenceModeExercice, Bool) -> Void
-    let reessayer: () -> Void
+    /// nil : aucune nouvelle tentative possible (référentiel non câblé), le bouton n'est pas affiché.
+    let reessayer: (() -> Void)?
 
     private typealias Textes = ChoixModesExercice.Textes
 
@@ -35,11 +36,13 @@ struct ChoixModesExerciceSection: View {
             }
             if choix.indisponible {
                 message(Textes.indisponible, identifiant: "modes-indisponible")
-                Button(Textes.reessayer, action: reessayer)
-                    .font(JoleneFont.callout.weight(.semibold))
-                    .foregroundStyle(JoleneColor.rose800)
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("\(prefixe)-modes-reessayer")
+                if let reessayer {
+                    Button(Textes.reessayer, action: reessayer)
+                        .font(JoleneFont.callout.weight(.semibold))
+                        .foregroundStyle(JoleneColor.rose800)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("\(prefixe)-modes-reessayer")
+                }
             }
             if choix.liberalNonPropose {
                 message(Textes.liberalNonPropose, identifiant: "modes-liberal-non-propose")

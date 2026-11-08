@@ -93,7 +93,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
             case .completer: return false                // T8 — complétion du profil
             }
         case .profil:
-            return false                                 // T9 — édition du profil
+            return true                                  // T9 — édition du profil (`ProfilEditionScreen`), alias `reputation`
         case .revenus(section: .paiementsAConfirmer):
             return false                                 // T13 — paiements à confirmer
         case .stripeConnect:

@@ -58,7 +58,7 @@ export const CONTRACTS_PATH = join(ROOT, 'ios-native', 'rpc-contracts.json');
 export const RPC_SUIVIES = [
   { name: 'fn_get_my_role', statut: 'lot0', lot: 0 },
   { name: 'fn_etablissements_safe', statut: 'lot0', lot: 0 },
-  { name: 'fn_mon_profil_soignant_complet', statut: 'a_venir', lot: 3 },
+  { name: 'fn_mon_profil_soignant_complet', statut: 'consommee', lot: 3 }, // L3-T9 : SupabaseProfilGateway
   { name: 'fn_dashboard_soignant_complet', statut: 'consommee', lot: 1 }, // T3 : SupabaseDashboardGateway
   { name: 'fn_confirmer_action_planning_v1', statut: 'a_venir', lot: 1 },
   { name: 'fn_suggestions_missions_pour_soignant', statut: 'a_venir', lot: 4 }, // reclassée (revue B8 de T3)
@@ -91,7 +91,7 @@ export const RPC_SUIVIES = [
   { name: 'fn_demarrer_inscription', statut: 'a_venir', lot: 3 },
   { name: 'fn_enregistrer_parcours_inscription', statut: 'a_venir', lot: 3 },
   { name: 'fn_types_exercice_autorises', statut: 'a_venir', lot: 3 },
-  { name: 'fn_modifier_mon_profil', statut: 'a_venir', lot: 3 },
+  { name: 'fn_modifier_mon_profil', statut: 'consommee', lot: 3 }, // L3-T9 : SupabaseProfilGateway
   { name: 'fn_rgpd_exporter_rate_limited', statut: 'a_venir', lot: 3 },
   { name: 'fn_confirmer_paiement_soignant', statut: 'a_venir', lot: 3 },
   { name: 'fn_contester_paiement_soignant', statut: 'a_venir', lot: 3 },

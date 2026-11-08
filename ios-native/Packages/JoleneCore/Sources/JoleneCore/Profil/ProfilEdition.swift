@@ -75,9 +75,13 @@ public enum ProfilEdition {
         public static let rayonMaximum = "100 km"
         /// `SectionProfilPrincipal.tsx` l.897.
         public static let typeExercice = "Type d'exercice"
-        /// Sans équivalent web (non juridique, à relire par Gabrielle) : renvoi libellé du type
-        /// d'exercice et de l'attestation de cumul, servis par la page web (HARD STOP n°4).
+        /// Sans équivalent web (non juridique, à relire par Gabrielle, `DECISIONS_LOT3.md`) : renvoi
+        /// libellé du type d'exercice et de l'attestation de cumul, servis par la page web (HARD STOP n°4).
         public static let typeExerciceWeb = "Le type d'exercice se modifie sur jolene.app."
+        /// Sans équivalent web (non juridique, à relire par Gabrielle) : repli d'un refus d'enregistrement
+        /// sans message serveur (le web passe par `extraireMessageErreur`, non porté) ; message de
+        /// `SupabaseProfilGateway` et du modèle.
+        public static let enregistrementEchec = "Votre profil n'a pas pu être enregistré. Réessayez."
         /// Libellé natif des renvois web du lot 1 (`AccueilScreen.swift`).
         public static let voirSurLeWeb = "Voir sur jolene.app"
         /// `ProfilSoignant.tsx` l.499.
@@ -109,6 +113,13 @@ public enum ProfilEdition {
         return .safari(url)
     }
 
+    /// La section web « Type d'exercice » n'existe que pour une profession connue
+    /// (`{profession && …}`, `SectionProfilPrincipal.tsx` l.895-896) : le renvoi suit la même condition.
+    public static func afficheRenvoiTypeExercice(_ profil: ProfilComplet) -> Bool {
+        guard let profession = profil.profession else { return false }
+        return !profession.isEmpty
+    }
+
     /// Audit de consultation (web l.157-163) : `DONNEES_PERSO_CONSULTATION`, ressource `soignant`.
     public static let auditTypeRessource = "soignant"
     public static let auditDetails = ["page": "profil"]
@@ -122,10 +133,12 @@ public enum ProfilEdition {
 /// - enregistrement : seuls les champs changés (`ModificationProfil.depuis`), une seule demande par
 ///   appui, succès annoncé seulement sur le profil RELU rendu par le port ; refus serveur verbatim ;
 ///   délai dépassé ou réseau : relecture du profil (la saisie est conservée, aucun renvoi
-///   automatique) ; après un succès, la session est revalidée pour que le profil de la session
-///   (rayon, contrats, taux lus par Explorer) suive la base, comme `invaliderProfilNavigation` du web ;
+///   automatique) ; après un succès, la session est revalidée (silencieusement, sans démonter les
+///   onglets) pour que le profil de la session (rayon, contrats, taux lus par Explorer) suive la base,
+///   comme `invaliderProfilNavigation` du web ; le bouton n'attend pas cette revalidation ;
 /// - modes d'exercice autorisés : `gateways.inscription.typesExercice` (`fn_types_exercice_autorises`,
-///   câblé par T8) ; erreur ou réponse absente → état « indisponible » du web.
+///   câblé par T8, point d'extension) ; erreur ou réponse absente → état « indisponible » du web ; port
+///   encore non câblé → même état, sans « Réessayer la vérification » (jamais un bouton sans effet).
 @MainActor
 public final class ProfilEditionModel: ObservableObject {
     public enum Etat: Equatable, Sendable {
@@ -139,6 +152,9 @@ public final class ProfilEditionModel: ObservableObject {
         case chargement
         case disponibles([String])
         case indisponible
+        /// `InscriptionPort` encore non câblé (T8) : le référentiel ne peut pas être lu, présenté comme
+        /// « indisponible » sans nouvelle tentative possible.
+        case nonCable
     }
 
     @Published public private(set) var etat: Etat = .chargement
@@ -184,8 +200,12 @@ public final class ProfilEditionModel: ObservableObject {
         let types: [String]?
         if case let .disponibles(valeurs) = modes { types = valeurs } else { types = nil }
         return ChoixModesExercice.presenter(valeur: formulaire.typesContrat, typesAutorises: types,
-                                            chargement: modes == .chargement, indisponible: modes == .indisponible)
+                                            chargement: modes == .chargement,
+                                            indisponible: modes == .indisponible || modes == .nonCable)
     }
+
+    /// « Réessayer la vérification » n'est proposé que si une nouvelle lecture peut aboutir.
+    public var reessaiModesPossible: Bool { modes == .indisponible }
 
     public func basculerMode(_ mode: PreferenceModeExercice, selectionne: Bool) {
         formulaire.typesContrat = ChoixModesExercice.basculer(formulaire.typesContrat, mode: mode, selectionne: selectionne)
@@ -211,7 +231,7 @@ public final class ProfilEditionModel: ObservableObject {
             return
         }
         await auditerConsultation(gateways)
-        if modes == .inactif || modes == .indisponible { await verifierModes() }
+        if modes == .inactif || modes == .indisponible || modes == .nonCable { await verifierModes() }
     }
 
     /// « Réessayer la vérification » des modes d'exercice autorisés (`reessayer` du web).
@@ -221,8 +241,12 @@ public final class ProfilEditionModel: ObservableObject {
             return
         }
         guard let gateways = await session.controller.gateways(for: snapshot.epoch) else { return }
-        modes = .chargement
         let port = gateways.inscription
+        guard !(port is UnwiredPort) else {
+            modes = .nonCable
+            return
+        }
+        modes = .chargement
         do {
             let types = try await bounded(timeout: session.controller.resolutionTimeout) {
                 try await port.typesExercice(profession: profession)
@@ -242,32 +266,41 @@ public final class ProfilEditionModel: ObservableObject {
         let aEnvoyer = modification
         guard !aEnvoyer.estVide else { return }
         enregistrementEnCours = true
-        defer { enregistrementEnCours = false }
+        let reussi = await envoyer(aEnvoyer)
+        enregistrementEnCours = false
+        // Revalidation silencieuse de la session (profil d'Explorer) : le bouton ne l'attend pas.
+        if reussi { await session.start() }
+    }
+
+    /// Une seule demande ; vrai seulement si le profil RELU a été appliqué (succès annoncé).
+    private func envoyer(_ aEnvoyer: ModificationProfil) async -> Bool {
         succes = nil
         erreur = nil
-        guard let gateways = await session.controller.gateways(for: snapshot.epoch) else { return }
+        guard let gateways = await session.controller.gateways(for: snapshot.epoch) else { return false }
         let port = gateways.profil
         let context = snapshot.context
         do {
             let relu = try await bounded(timeout: session.controller.resolutionTimeout) {
                 try await port.modifier(aEnvoyer, context: context)
             }
-            guard await memeEpoch() else { return }
+            guard await memeEpoch() else { return false }
             appliquer(relu, conserverSaisie: false)
             succes = ProfilEdition.Textes.succes
             annonces += 1
-            await session.start()
+            return true
         } catch {
-            guard await memeEpoch(), !(error is CancellationError) else { return }
+            guard await memeEpoch(), !(error is CancellationError) else { return false }
             let jolene = error as? JoleneError
-            if jolene?.kind == .cancelled { return }
+            if jolene?.kind == .cancelled { return false }
             sessionExpiree = jolene?.kind == .unauthorized
-            erreur = jolene?.message ?? ProfilEdition.Textes.chargementEchec
+            erreur = jolene?.message ?? ProfilEdition.Textes.enregistrementEchec
             annonces += 1
-            // Délai dépassé ou réseau : le serveur a pu enregistrer. Relecture, saisie conservée.
+            // Délai dépassé ou réseau : le serveur a pu enregistrer. Relecture (bouton toujours verrouillé,
+            // aucun second envoi possible pendant ce temps), saisie conservée.
             if jolene?.kind == .network, let relu = try? await lire(gateways), await memeEpoch() {
                 appliquer(relu, conserverSaisie: true)
             }
+            return false
         }
     }
 

@@ -66,7 +66,7 @@
     },
     {
       "name": "fn_mon_profil_soignant_complet",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "never",
@@ -933,7 +933,7 @@
     },
     {
       "name": "fn_modifier_mon_profil",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "{ p_adresse_code_postal?: string; p_adresse_lat?: number; p_adresse_lng?: number; p_adresse_rue?: string; p_adresse_ville?: string; p_annees_experience?: number; p_attestation_cumul_activite?: boolean; p_avatar_url?: string; p_bio?: string; p_consentement_gps?: boolean; p_date_naissance?: string; p_disponible_urgence?: boolean; p_est_cumul_activite?: boolean; p_est_salarie_etablissement?: boolean; p_nom?: string; p_numero_adeli?: string; p_numero_rpps?: string; p_prenom?: string; p_profession?: string; p_rayon_deplacement_km?: number; p_specialites?: string[]; p_taux_horaire_minimum?: number; p_telephone?: string; p_type_exercice?: string; p_types_contrat?: string[]; p_types_contrat_acceptes?: string; p_urgence_rayon_km?: number; p_ville_recherche?: string; p_ville_urgence?: string }",

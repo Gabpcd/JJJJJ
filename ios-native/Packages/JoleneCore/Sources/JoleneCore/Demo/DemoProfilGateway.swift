@@ -65,8 +65,7 @@ public struct DemoProfilGateway: ProfilPort {
             if nom == "p_numero_rpps", rppsVerifie { continue }
             switch valeur {
             case .texte(let texte):
-                let trimmed = (nom == "p_prenom" || nom == "p_nom") ? texte.trimmingCharacters(in: .whitespaces) : texte
-                ligne[colonne] = .chaine(trimmed)
+                ligne[colonne] = .chaine((nom == "p_prenom" || nom == "p_nom") ? texte.btrimSQL : texte)
             case .entier(let entier): ligne[colonne] = .nombre(Double(entier))
             case .reel(let reel): ligne[colonne] = .nombre(reel)
             case .textes(let textes): ligne[colonne] = .chaine(textes.joined(separator: ","))
@@ -101,6 +100,10 @@ public struct DemoProfilGateway: ProfilPort {
 }
 
 private extension String {
+    /// `btrim(x)` sans second argument : retire les seules espaces U+0020 aux deux bords (ni tabulation, ni
+    /// espace insécable).
+    var btrimSQL: String { trimmingCharacters(in: CharacterSet(charactersIn: " ")) }
+
     /// `NULLIF(btrim(x), '') IS NULL` : vide ou seulement des espaces.
-    var estVideSQL: Bool { trimmingCharacters(in: .whitespaces).isEmpty }
+    var estVideSQL: Bool { btrimSQL.isEmpty }
 }
