@@ -49,6 +49,9 @@ final class AppContainer: ObservableObject {
     /// Lot 3, T7 : liens d'inscription (`/inscription/confirmer`, `/inscription/soignant`, `/inscription/reprendre`)
     /// consommés hors de l'espace prêt ; point d'extension du coordinateur de liens (L1-T10 / T3b), lu par `RootView`.
     let liensInscription = BoiteLiensInscription()
+    /// Lot 3, T11 : thème de l'app (D16), appliqué à la racine (`ThemeRacine`) ; par appareil (`UserDefaults`,
+    /// clé `jolene.theme`) en staging et production, mémoire vive en démo (chaque lancement démo part de Système).
+    let theme: PreferenceThemeModel
     #if DEBUG
     let networkSentinel: NetworkSentinel.Monitor?
     #endif
@@ -84,6 +87,10 @@ final class AppContainer: ObservableObject {
         let liens = DeepLinkCoordinator(taps: boite, estDemo: environment.mode == .demo,
                                         effaceur: environment.mode == .demo ? nil : EffaceurDonneesSafari())
         self.liens = liens
+        theme = PreferenceThemeModel(stockage: environment.mode == .demo ? MemoireStockageAppareil() : UserDefaultsStockageAppareil())
+        // Lot 3, T11 (revue B8, m8) : un fichier d'export RGPD laissé par un arrêt brutal (feuille de partage jamais
+        // fermée) est retiré dès le lancement, sans attendre le prochain hub ni la prochaine connexion.
+        DossierExportTemporaire.systeme.purgerResidus()
 
         // Un mode inconnu (`unknownModeRaw`) est refusé par `validate()` avant tout choix de gateways.
         if let error = Self.refusal(of: environment) {
@@ -173,7 +180,9 @@ final class AppContainer: ObservableObject {
     /// `JOLENE_FORCE_OUBLI_POINTAGE=1` sert le tableau de bord démo avec un oubli de pointage
     /// (`DemoDashboardGateway(missionsOubliees:)`, `DemoAccueilTests.testOubliDePointageOuvreLesPresencesSurLeWeb`) ;
     /// lot 3, T7 : `-JOLENE_DEMO_INSCRIPTION_REFUS <code>` (`RefusInscriptionDemo`, blueprint §2.7) rejoue un refus
-    /// d'inscription (`DemoInscriptionTests`). Jamais compilé en Release.
+    /// d'inscription (`DemoInscriptionTests`) ; lot 3, T11 : `JOLENE_FORCE_EXPORT_ECHEC=1` fait refuser l'export RGPD
+    /// avec le message serveur verbatim (`DemoCompteLot3Tests.testExportRefuseParLeServeurAfficheLeMessageSansFeuille`).
+    /// Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
         var gateways = DemoWorld.gateways()
@@ -190,6 +199,9 @@ final class AppContainer: ObservableObject {
         }
         if let variante = processEnvironment[VarianteProfilDemo.variableEnvironnement].flatMap(VarianteProfilDemo.init(rawValue:)) {
             gateways.profil = DemoProfilGateway(variante: variante) // lot 3, T9
+        }
+        if processEnvironment["JOLENE_FORCE_EXPORT_ECHEC"] == "1" {
+            gateways.exportRGPD = DemoExportRGPDGateway(refus: ExportRGPD.refusLimiteServeur) // lot 3, T11
         }
         return gateways
         #else

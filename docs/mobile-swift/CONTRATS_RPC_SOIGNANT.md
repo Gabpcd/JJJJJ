@@ -102,7 +102,7 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_enregistrer_parcours_inscription` | à venir | 3 (T8, B9) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
 | `fn_types_exercice_autorises` | à venir | 3 (T8, T9) | PUBLIC_VOLONTAIRE | anon, authenticated, service_role | déclarée |
 | `fn_modifier_mon_profil` | consommée lot 3 (T9) | 3 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_rgpd_exporter_rate_limited` | à venir | 3 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_rgpd_exporter_rate_limited` | consommée lot 3 (T11) | 3 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_confirmer_paiement_soignant` | à venir | 3 (T13, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_contester_paiement_soignant` | à venir | 3 (T13, B3 mergée #1118, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_consulter_mon_iban` | à venir | 3 (T14b, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -1091,12 +1091,14 @@ CREATE OR REPLACE FUNCTION "public"."fn_modifier_mon_profil"("p_prenom" "text" D
 
 ## fn_rgpd_exporter_rate_limited
 
-- **Statut natif** : à venir (lot 3, T11).
-- **Usage prévu** : Export RGPD (JSON, et CSV aplati comme le web, sans recalcul) depuis le hub Compte — écart de
-  placement assumé : le web le monte dans l'onglet confidentialité du profil (`SectionConfidentialite.tsx` l.30-78,
-  monté par `ProfilSoignant.tsx` l.506) ; fichier temporaire `NSFileProtectionComplete`, supprimé à la fermeture de
-  la feuille de partage ; le contenu n'est jamais affiché ni journalisé par l'app.
-- **Signature SQL** (`supabase/schema/public.sql` l.55321) :
+- **Statut natif** : consommée (lot 3, T11) par `JoleneSupabase/Compte/SupabaseExportGateway.swift`, appelée par
+  le modèle de la section « Mes données (RGPD) » du hub (`JoleneCore/Compte/ExportRGPDModel.swift`).
+- **Usage** : export RGPD (JSON `JSON.stringify(data, null, 2)` et CSV aplati par `flatten`, comme le web, sans
+  recalcul) depuis le hub Compte — écart de placement assumé : le web le monte dans l'onglet confidentialité du
+  profil (`SectionConfidentialite.tsx` l.30-78, monté par `ProfilSoignant.tsx` l.506) ; fichier temporaire écrit
+  avec `NSFileProtectionComplete` dans un dossier propre à l'export, supprimé à la fermeture de la feuille de
+  partage (résidus purgés à l'ouverture suivante) ; le contenu n'est jamais affiché ni journalisé par l'app.
+- **Signature SQL** (`supabase/schema/public.sql` l.55370) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_rgpd_exporter_rate_limited"() RETURNS "jsonb"
@@ -1107,19 +1109,27 @@ CREATE OR REPLACE FUNCTION "public"."fn_rgpd_exporter_rate_limited"() RETURNS "j
 - **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_rgpd_exporter_rate_limited()`.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** : `Args: never` ; `Returns: Json`.
-- **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` (l.55330) ;
-  `{error:"Trop d'exports en peu de temps. Réessayez dans quelques minutes."}` (l.55336 : 30 exports par heure,
-  `fn_verifier_rate_limit(…, 'rgpd_export', 30, 3600)` l.55334 ; valeur JSON réelle, le littéral SQL double
-  l'apostrophe) ; sinon le jsonb de `fn_rgpd_exporter_donnees_soignant` (l.55339), écrit tel quel. Un `{error}` est
-  affiché verbatim et **aucun fichier n'est écrit**.
-- **Audit** : `fn_rgpd_exporter_donnees_soignant` écrit déjà `RGPD_EXPORT_DONNEES` (l.55304-55311) ; le web en ajoute
-  un second par `fn_ecrire_audit_safe` (`SectionConfidentialite.tsx` l.44). T11 suit le blueprint (audit
-  `RGPD_EXPORT_DONNEES` best-effort, parité web) : doublon consigné, sans effet utilisateur.
-- **Signalement (hors lot 3, non corrigé ici)** : la clé `notations_recues` de l'export (l.55300) lit
+- **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` (l.55379) ;
+  `{error:"Trop d'exports en peu de temps. Réessayez dans quelques minutes."}` (l.55385 : 30 exports par heure,
+  `fn_verifier_rate_limit(…, 'rgpd_export', 30, 3600)` l.55383 ; valeur JSON réelle, le littéral SQL double
+  l'apostrophe) ; sinon le jsonb de `fn_rgpd_exporter_donnees_soignant` (l.55388 ; 32 clés, l.55318-55351), écrit
+  tel quel. Un `{error}` « vrai » (test JavaScript du web, l.37) est affiché verbatim et **aucun fichier n'est
+  écrit** ; « Non authentifié » → session expirée ; corps non objet → refus de contrat.
+- **Lecture native** (T11) : POST sans paramètre, une seule fois ; corps rendu **octet pour octet**
+  (`execute()` → `Data`, jamais `AnyJSON` qui passe par un dictionnaire) puis relu dans l'ordre des clés d'un
+  objet JavaScript (`JSONOrdonne` : indices de tableau d'abord, puis ordre d'insertion = ordre du jsonb) : le fichier
+  natif est celui du web, clé pour clé (`ExportRGPDTests`, attendus produits par le code web lui-même).
+- **Audit** : `fn_rgpd_exporter_donnees_soignant` écrit déjà `RGPD_EXPORT_DONNEES` (l.55353-55360) ; le web en ajoute
+  un second par `fn_ecrire_audit_safe` (`SectionConfidentialite.tsx` l.42-48). T11 suit le blueprint (audit
+  `RGPD_EXPORT_DONNEES` best-effort après l'écriture du fichier, détails `{format}`, parité web) : doublon consigné,
+  sans effet utilisateur.
+- **Signalement (hors lot 3, non corrigé ici)** : la clé `notations_recues` de l'export (l.55349) lit
   `notations_missions` avec `masque = false` **sans** `publie_le IS NOT NULL` : l'export d'un soignant contient les
   notes reçues **non publiées** (double-aveugle D8), contrairement à la vue canonique `evaluations_publiees`
-  (l.69517, principe « Publication différée » de `CLAUDE.md`). Dump du 01/11/2026, à confirmer sur la définition
-  live ; PR backend séparée à décider par Gabrielle (droit d'accès RGPD contre double-aveugle), voir
+  (principe « Publication différée » de `CLAUDE.md`). **Écart confirmé sur la définition live** (lecture seule
+  `pg_get_functiondef`, 08/11/2026, T11 : corps identique au dump). L'écran natif n'affiche rien du contenu : il
+  transmet le fichier du serveur à la feuille de partage, comme le web ; la fuite passe donc par le fichier, sur les
+  deux surfaces. PR backend séparée à décider par Gabrielle (droit d'accès RGPD contre double-aveugle), voir
   `DECISIONS_LOT3.md`.
 - **Preuve STAGING** : export non vide (T16).
 

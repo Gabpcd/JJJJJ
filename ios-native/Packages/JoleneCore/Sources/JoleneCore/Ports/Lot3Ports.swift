@@ -72,8 +72,20 @@ public protocol GeocodagePort: Sendable {
 }
 
 /// Changement de mot de passe (ancien vérifié, D13) — tranche T11.
+///
+/// `identiteCourante` (revue B8 de T11, m2) : garde consultée UNE fois, après la vérification de l'ancien mot de
+/// passe et avant la mise à jour. Fausse (l'identité de l'écran est partie : révocation, refresh refusé), aucune
+/// mise à jour ne part, la session que la vérification a pu recréer est retirée, et l'appel lève `.cancelled`.
 public protocol MotDePassePort: Sendable {
-    func changer(ancien: String, nouveau: String, context: MissionReadContext) async throws -> ResultatMotDePasse
+    func changer(ancien: String, nouveau: String, context: MissionReadContext,
+                 identiteCourante: @escaping @Sendable () async -> Bool) async throws -> ResultatMotDePasse
+}
+
+public extension MotDePassePort {
+    /// Sans garde (doubles et tests des ports) : l'identité est tenue pour courante.
+    func changer(ancien: String, nouveau: String, context: MissionReadContext) async throws -> ResultatMotDePasse {
+        try await changer(ancien: ancien, nouveau: nouveau, context: context, identiteCourante: { true })
+    }
 }
 
 /// Export RGPD (`fn_rgpd_exporter_rate_limited`) — tranche T11. Un refus `{error}` est levé avec
@@ -203,7 +215,8 @@ public struct UnwiredGeocodagePort: GeocodagePort, UnwiredPort {
 
 public struct UnwiredMotDePassePort: MotDePassePort, UnwiredPort {
     public init() {}
-    public func changer(ancien: String, nouveau: String, context: MissionReadContext) async throws -> ResultatMotDePasse {
+    public func changer(ancien: String, nouveau: String, context: MissionReadContext,
+                        identiteCourante: @escaping @Sendable () async -> Bool) async throws -> ResultatMotDePasse {
         throw Lot3.erreur("mot de passe", "T11")
     }
 }

@@ -211,8 +211,8 @@ final class DemoWorldTests: XCTestCase {
     /// (`DemoWorld`, `SupabaseGateways`) et le retire d'ici dans la même PR ;
     /// `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes. Liste vide à la
     /// clôture du lot 3.
-    static let portsEnAttenteLot3 = ["avatar", // T9 : `profil` câblé ; T7 : `inscription` câblé (T8 refuse encore, testé ci-dessous)
-                                     "geocodage", "motDePasse", "exportRGPD", "revenus", "paiements", "iban",
+    static let portsEnAttenteLot3 = ["avatar", // T9 : `profil` câblé ; T7 : `inscription` câblé (T8 refuse encore, testé ci-dessous) ; T11 : `motDePasse`, `exportRGPD`
+                                     "geocodage", "revenus", "paiements", "iban",
                                      "stripeConnect"] // T4 : `push` câblé (DemoPushGateway) ; T5 : `notifications` ; T6 : `preferences` câblé (DemoPreferencesGateway)
 
     func testAucunPortNonCable() {

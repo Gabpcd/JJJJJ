@@ -298,9 +298,9 @@ public enum PreferencesTextes {
     /// Repli du web quand l'erreur n'a pas de message (`err?.message || 'Erreur enregistrement'`, l.244).
     public static let echecEnregistrement = "Erreur enregistrement"
 
-    /// Entrée du hub Profil vers cet écran : section « Réglages » (`src/pages/MonCompteSoignant.tsx` l.113) et
-    /// ligne « Notifications » (l.115). Posée par T6 à la place de la carte provisoire de T4 ; reprise par T11.
-    public static let sectionHub = "Réglages"
+    /// Entrée du hub Profil vers cet écran : ligne « Notifications » (`src/pages/MonCompteSoignant.tsx` l.115) de la
+    /// section « Réglages » (l.113, titre tenu par le seul `HubCompte.titreReglages`, revue B8 de T11, m7). Posée par
+    /// T6 à la place de la carte provisoire de T4 ; reprise par T11.
     public static let entreeHub = "Notifications"
     public static let identifiantEntreeHub = "profile-preferences-notifications"
 

@@ -354,7 +354,8 @@ devient `.monCompte`. T3a donne aussi une section à `.revenus`. Plusieurs branc
     la lecture suivante ; un second tap pendant l'activation est ignoré. Les toasts du web (l.176, l.178, l.182) ne
     sont pas portés : la carte affiche l'état relu (l.346, l.350, l.351).
   - `EtatNotificationsAppareil.sectionHub` (titre de la section provisoire) est retiré ; les libellés du hub sont
-    `PreferencesTextes.sectionHub` et `PreferencesTextes.entreeHub`.
+    `HubCompte.titreReglages` (seule source du titre « Réglages » depuis la revue B8 de T11, m7 :
+    `PreferencesTextes.sectionHub` retiré) et `PreferencesTextes.entreeHub`.
 - **Écarts au web assumés (non juridiques).**
   - Après `{success:true}`, l'app relit les préférences et n'annonce « Préférences enregistrées » que si la relecture
     concorde avec la demande (PRINCIPES §3) ; relecture non concordante → « Erreur enregistrement » (repli verbatim
@@ -730,6 +731,131 @@ absente de toutes les branches : point d'entrée unique des liens universels et 
   la page… ») pour un refus captcha.
 - **B9.** Go humain requis (D18) : consentement CGU transmis par `p_cgu` à `fn_demarrer_inscription`.
 
+## T11 — hub Compte : mot de passe, thème, export RGPD (branche `lot3/l3-t11-v2`, 08/11/2026)
+
+- **Livré.** Hub `ProfileScreen.swift` étendu (seule surface, correction 18) :
+  - « Réglages » : « Notifications » (préférences de T6, `profile-preferences-notifications`, inchangée, aucune
+    seconde carte d'autorisation) et le thème Système / Clair / Sombre (D16, `compte-theme-*`) ;
+  - « Connexion & sécurité » › « Changer mon mot de passe » (`compte-mdp-ouvrir` → `MotDePasseScreen`) ;
+  - « Mes données (RGPD) » : export JSON / CSV (`compte-export-*`) par la feuille de partage ;
+  - « Aide & légal » (centre d'aide, confidentialité, CGU, mentions légales), servie par Safari ;
+  - « Mon profil » (T9) et « Suppression de compte » (L1-T8, dernière section) conservées.
+  Ports `motDePasse` et `exportRGPD` câblés dans les deux mondes (`DemoMotDePasseGateway`, `DemoExportRGPDGateway`,
+  `SupabaseMotDePasseGateway`, `SupabaseExportGateway`) ; `fn_rgpd_exporter_rate_limited` consommée.
+- **Ordre du hub (écart assumé).** Le bloc du lot 0 (« Compte », « Se déconnecter », « Application ») reste en tête :
+  les XCUITest des lots 0 à 3 lisent `profile-email`, `logout-button` et `network-sentinel` sans défilement, et ces
+  tests ne sont pas exécutables localement. Le reste suit l'ordre du hub web ; le web place « Se déconnecter » après
+  « Aide & légal ». Aucun identifiant existant n'a été déplacé ni renommé (règle 8 sans objet).
+- **Mot de passe (D13).**
+  - Ancien vérifié par `signIn` sur l'email de la session courante, si cette session est celle de l'écran ; un
+    utilisateur renvoyé différent est un refus.
+  - `.session(même id)` émis par `signIn` puis `update(user:)` n'avance pas l'epoch (test
+    `MotDePasseModelTests.testSessionDuMemeUtilisateurNeChangePasDEpoch`).
+  - Refus GoTrue traduits comme `extraireMessageErreur` (table `traductions`, `weak_password`, message générique) ;
+    jamais le message anglais.
+  - Réauthentification exigée (`reauthentication_needed` / `_not_valid`) : refus verrouillé pour la durée de
+    l'écran, sans flux OTP. Ce cas est presque inaccessible : la vérification ouvre une session neuve, et GoTrue
+    n'exige le nonce que pour une session de plus de 24 h.
+  - Écarts assumés : pas de bouton « Afficher / Cacher » (champs sécurisés iOS) ; toasts web rendus en encarts
+    annoncés ; délai ou coupure → message natif « non confirmé » (le serveur a pu changer le mot de passe), jamais
+    un succès.
+  - Garde d'identité (revue B8, m2) : le port reçoit `identiteCourante` (epoch de l'écran), consultée une fois entre
+    la vérification et la mise à jour. Si un `.signedOut` (révocation, refresh refusé) arrive pendant le `signIn` de
+    vérification, ce `signIn` recrée une session dans le SDK alors que l'app affiche la connexion
+    (`SessionController` ignore `.session` sans identité active) : aucune mise à jour ne part, et cette session est
+    retirée par `signOut(scope: .local)`, seulement si le SDK tient encore le jeton de la vérification (une connexion
+    arrivée après n'est jamais retirée). Course résiduelle consignée : une reconnexion du même utilisateur entre la
+    révocation et la réponse du `signIn` voit sa session remplacée par celle de la vérification, puis retirée ;
+    l'écran de connexion s'affiche à nouveau (aucun changement de mot de passe).
+  - Modèle tenu par le hub (revue B8, m3) : `MainTabView` remet la pile du Profil à sa racine sur un tap push ou une
+    ligne du centre (`.monCompte`, `.preferences`, `.profil`), ce qui dépile `MotDePasseScreen` en pleine demande
+    (`navigationBarBackButtonHidden` ne couvre pas un retour programmé). La demande continue, et son issue est
+    annoncée par le hub (`compte-mdp-issue-hub`, textes de l'écran) jusqu'à la réouverture de l'écran. Un retrait
+    hors demande efface formulaire, issue et verrou (démontage du composant web) ; un changement d'onglet ne retire
+    pas l'écran (jeton `JetonEcranMotDePasse`, état de l'instance). `MainTabView` n'est pas modifié. Preuve
+    niveau 1 (`MotDePasseModelTests`, `testEcranRetirePendant…`, `testRetrait…`).
+- **Rejeu du SDK (revue B8, m1 ; remplace la « limite du SDK » de la première livraison).** Le client
+  d'authentification de supabase-swift 2.55.5 rejoue une fois un PUT ou un POST sur une erreur réseau transitoire ou
+  un 408/5xx (`RetryRequestInterceptor`, `Auth/Internal/APIClient.swift` l.11-16 ; délai d'une seconde). La gateway
+  n'appelle `update(user:)` qu'une fois et le rejeu porte le même corps. Le transport n'est pas changé ; la gateway
+  interprète désormais les deux issues ambiguës :
+  - `same_password` alors que l'ancien vient d'être vérifié et que le nouveau en diffère (octets UTF-8, sur les
+    72 octets que lit bcrypt : `MotDePasse.memeMotDePasseProuveLaModification`) prouve que le mot de passe vaut déjà
+    le nouveau (rejeu d'un PUT abouti dont la réponse a été perdue) → `.modifie`, « Mot de passe modifié avec
+    succès. » ; un nouveau égal à l'ancien (ou de mêmes 72 premiers octets) reste le refus web générique ;
+  - 5xx ou 408 sur le PUT (après le rejeu) : issue inconnue (`JoleneError(.unknown)` →
+    `confirmationIndisponible`), jamais « Une erreur est survenue. Veuillez réessayer. ». Sur la vérification
+    (`signIn`), rien n'a changé : le refus générique du web reste juste.
+  Le cas `same_password` de la table des refus de la première livraison était faux pour un nouveau distinct :
+  déplacé vers des tests dédiés (`SupabaseMotDePasseGatewayTests`, « Rejeu du SDK et issue inconnue »). Les autres
+  appels GoTrue de l'app (connexion du lot 0) ne mutent rien : un rejeu y est sans effet de bord.
+- **Thème (D16).**
+  - Le choix est appliqué à la racine par `ThemeRacine` (une ligne de `JoleneApp.swift`) : `preferredColorScheme`,
+    plus le style des fenêtres de la scène. Ce second réglage couvre le retour à « Système » sous iOS 16 et les
+    contrôleurs UIKit présentés.
+  - Persistance par appareil (`UserDefaults`, clé `jolene.theme`, sans identifiant de compte) en staging et
+    production, en mémoire vive en démo, comme le pré-prompt de T5. Elle est prouvée au niveau 1
+    (`PreferenceThemeTests`) ; le XCUITest prouve l'application (`compte-theme-effectif`, DEBUG et démo).
+- **Export RGPD.**
+  - Contrat serveur relu sur la définition live (lecture seule, 08/11/2026) : corps identiques au dump.
+  - Corps lu octet pour octet, puis relu dans l'ordre des clés d'un objet JavaScript (`JSONOrdonne`). JSON
+    `JSON.stringify(…, null, 2)` et CSV `flatten` sont identiques au web ; les attendus des tests ont été produits
+    par le code web lui-même, sous Node.
+  - Fichier écrit avec `NSFileProtectionComplete` dans un dossier propre à l'export, supprimé à la fin de la
+    feuille ; les résidus d'un arrêt brutal sont purgés au lancement (`AppContainer`) et à la création du hub ; une
+    fin de session feuille ouverte (epoch avancé, hub détruit) supprime le fichier sans attendre et ferme la feuille
+    (revue B8, m8).
+  - Feuille de partage, une seule source de fin (revue B8, M1) : `UIActivityViewController` présenté par UIKit
+    depuis le contrôleur au sommet de la fenêtre (popover centré sans flèche sur iPad), fin UNIQUEMENT dans
+    `completionWithItemsHandler`, relayée de façon synchrone (`MainActor.assumeIsolated`) à
+    `ExportRGPDModel.partageTermine(complete:)`. La `.sheet` SwiftUI de la première livraison est retirée : quand une
+    activité aboutit, le contrôleur se ferme lui-même, et le setter du binding (`complete: false`) arrivait avant le
+    handler, qui tombait sur un fichier déjà retiré — « Données exportées en JSON. » ne s'affichait jamais.
+  - Présentation seulement hub à l'écran (revue B8, m3) : un export abouti pendant qu'un autre onglet ou un écran
+    empilé est affiché attend le retour du hub (`ExportRGPDModel.fichierAPresenter`, `hubAffiche`), boutons inactifs
+    entre-temps ; jamais une feuille présentée depuis un onglet caché, jamais deux feuilles.
+  - Preuves : niveau 1 (`ExportRGPDModelTests`, présentation, fin unique, fin de session, purge) ; niveau 2
+    (`DemoCompteLot3Tests`, trois formats, compilé, non lancé localement) : feuille fermée sans partage → aucun
+    succès, boutons réactivés, fichier supprimé (libellé DEBUG `compte-export-residus` = « 0 »), « 0 requête » ;
+    « Copier » → « Données exportées en JSON. ».
+  - Écarts assumés : « Données exportées en JSON. » seulement après un partage abouti (le web l'annonce aussi
+    feuille fermée) ; audit `RGPD_EXPORT_DONNEES` après l'écriture du fichier (le web l'écrit avant) ; corps non
+    objet → refus de contrat (le web l'exporterait).
+  - Unicode (revue B8, m4) : doublement des `"` du CSV scalaire par scalaire (un `"` suivi d'une marque combinante
+    est doublé, comme `replace(/"/g, '""')`), clés et chaînes comparées octet pour octet (deux clés « é » NFC et NFD,
+    distinctes pour `JSON.parse` et le jsonb, ne sont plus fusionnées) ; vecteur produit par le web sous Node
+    (`ExportRGPDTests.testUnicodeSansEquivalenceCanoniqueCommeJavaScript`).
+  - Variante de recette DEBUG `JOLENE_FORCE_EXPORT_ECHEC=1` : refus serveur verbatim en démo.
+- **Signalement `notations_recues` (confirmé live).** L'écran n'expose rien du contenu : il transmet à la feuille de
+  partage le fichier du serveur, comme le web. Les notes reçues non publiées passent donc par le fichier, sur les
+  deux surfaces. Ce point est serveur et n'est pas corrigé ici (voir « En attente de Gabrielle »).
+- **Manques et points d'extension (aucune entrée sans écran ni présentateur : jamais un lien sans effet).**
+  - « Aide & légal » n'est monté qu'avec le présentateur `.safari` de L1-T10 (absent de la base).
+    `DemoCompteLot3Tests` affirme son absence ; T10 remplace cette assertion par l'ouverture Safari.
+  - Paiements et Stripe (T14a) : aucune entrée. La règle web `estLiberal` (l.45-48) lit aussi `statut_liberal`,
+    absent du snapshot.
+  - Coordonnées bancaires (T14b) : sous-ligne de `/soignant/mon-compte`, sans route ; T14b pose son entrée.
+  - Sécurité biométrique : L1-T9 absent de la base.
+  - « Contacter Jolene » : modale web `ModalContacterJolene`, sans page ni équivalent natif.
+  - Centre de notifications : pas d'entrée au hub (le web n'en a pas, il s'ouvre depuis l'Accueil).
+  - Renvoi « Mot de passe oublié ? » du refus verrouillé (revue B8, m6) : ce lien de l'écran de connexion
+    (`login-forgot`) n'existe pas sur `LoginScreen.swift` dans cette base ; il arrive avec L1-T10, et ne s'atteint
+    qu'après une déconnexion. Dépendance à L1-T10 ; le texte (`MotDePasse.Textes.reauthentificationRequise`) reste à
+    relire par Gabrielle (section HARD STOP). Le cas est presque inaccessible (session de vérification neuve).
+- **Écarts au blueprint v2 §3 T11, à acter par l'intégrateur (revue B8, m9).**
+  - Pas d'entrée `.notifications` (centre) au hub : le hub web n'en a pas, le centre s'ouvre depuis l'Accueil (T5).
+  - Pas d'entrées Paiements / Stripe ni Coordonnées bancaires, même en renvoi Safari : reprises T14a et T14b.
+  - « Aide & légal » masqué tant que le présentateur `.safari` de L1-T10 manque : reprise T10.
+  - Bloc du lot 0 en tête du hub (ordre ci-dessus).
+- **Point de fusion T3b.** `/soignant/profil?tab=confidentialite` (RGPD et suppression sur le web) ouvre toujours
+  l'édition native. Le hub porte désormais l'export et la suppression : recommandation pour T3b, router ce `?tab=`
+  vers `.monCompte` (fichiers de T3, non modifiés ici).
+- **HARD STOP n°4.** Textes repris du web à leur ligne (`CompteVerbatimTests`), textes RGPD de l'export en tutoiement
+  verbatim, aucun texte juridique nouveau. Refus serveur de l'export localisés dans le corps de
+  `fn_rgpd_exporter_rate_limited` (en-tête de la fonction dans le dump), ligne du dump seulement indicative : un
+  `schema-snapshot` ne fait plus rougir JoleneCore (revue B8, m5). Textes natifs sans équivalent web : puce « T11 — textes sans équivalent
+  web » de la section HARD STOP ci-dessous. **B9** : non (D18).
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -786,6 +912,16 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   (`PasswordCriteriaList`, le web n'a que la coche) ; « Ouvre le centre de notifications » (indication de « Voir »
   sur le compteur de l'Accueil, L3-T5, `CentreNotificationsTextes.indicationOuvrirCentre`). Le texte affiché reste
   verbatim web.
+- **T11 — textes sans équivalent web** (non juridiques, à relire par Gabrielle), un texte par ligne :
+  - refus verrouillé de la réauthentification (`MotDePasse.Textes.reauthentificationRequise`) :
+    « Ce changement exige une nouvelle vérification de votre identité. Utilisez « Mot de passe oublié ? » pour choisir un nouveau mot de passe. »
+  - issue inconnue du changement (`MotDePasse.Textes.confirmationIndisponible`) :
+    « Le changement de votre mot de passe n'a pas pu être confirmé. Vérifiez votre connexion puis réessayez. »
+  - libellés du thème (D16 ; le web n'a que « Passer en thème clair / sombre ») : « Thème », « Système », « Clair », « Sombre ».
+
+  Constantes épinglées par `CompteVerbatimTests`. Textes RGPD de l'export (« Mes données (RGPD) », « Télécharge
+  l'intégralité de tes données personnelles dans le format de ton choix. ») : verbatim web en tutoiement, à valider
+  avant tout vouvoiement (§6.7).
 - Seuls les textes non juridiques passent du tutoiement web au vouvoiement (décision 9 du lot 1).
 - (T3b) Texte **sans équivalent web**, non juridique, déjà décidé (décision 7 du lot 1, `LOT1_PLAN.md` l.403) et repris
   mot pour mot : « Ce lien ne permet pas de réinitialiser le mot de passe depuis l'application. » (refus d'un lien de
@@ -832,7 +968,9 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   reçues non publiées (double-aveugle D8), contrairement à la vue canonique `evaluations_publiees` et au principe
   « Publication différée » de `CLAUDE.md`. À confirmer sur la définition live, puis à arbitrer (droit d'accès RGPD
   contre double-aveugle) avant toute PR backend ; aucune correction au lot 3, le natif ne fait que transmettre le
-  fichier par la feuille de partage.
+  fichier par la feuille de partage. **Confirmé sur la définition live** par T11 (lecture seule
+  `pg_get_functiondef`, 08/11/2026) : l'écran natif n'affiche rien du contenu, le fichier transmis à la feuille de
+  partage contient ces notes, comme sur le web.
 
 ## Ce qui n'est pas une décision de ce mémo
 

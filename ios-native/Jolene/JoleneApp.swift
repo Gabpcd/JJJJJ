@@ -15,6 +15,7 @@ struct JoleneApp: App {
             RootView(container: container)
                 // Lot 3, T3b : liens universels, présentateur `.safari`, refus du reset PKCE (`DeepLinkCoordinator`).
                 .modifier(PointDEntreeLiens(coordinateur: container.liens))
+                .modifier(ThemeRacine(theme: container.theme)) // lot 3, T11 : thème Système / Clair / Sombre (D16)
                 .onChange(of: scenePhase) { phase in handleScenePhase(phase) }
         }
     }

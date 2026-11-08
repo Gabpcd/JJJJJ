@@ -55,6 +55,7 @@ const LOT3_CONSOMMEES = new Map([
   ['fn_mon_profil_soignant_complet', ['T9', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Profil/SupabaseProfilGateway.swift']],
   ['fn_modifier_mon_profil', ['T9', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Profil/SupabaseProfilGateway.swift']],
   ['fn_demarrer_inscription', ['T7', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Inscription/SupabaseInscriptionGateway.swift']],
+  ['fn_rgpd_exporter_rate_limited', ['T11', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Compte/SupabaseExportGateway.swift']],
 ]);
 // Hors manifeste (capture du 2026-07-29) : classement manuel documentaire (correction 13).
 const HORS_MANIFESTE = ['fn_demarrer_inscription', 'fn_enregistrer_parcours_inscription'];
@@ -358,6 +359,8 @@ test('CONTRATS : fn_rgpd_exporter_rate_limited — refus en valeur JSON réelle'
   assert.deepEqual(erreurs, ['Non authentifié', "Trop d'exports en peu de temps. Réessayez dans quelques minutes."]);
   for (const e of erreurs) assert.ok(fiche.includes(`"${e}"`) || fiche.includes(`'${e}'`), `refus absent : ${e}`);
   ficheContient(fiche, 'fn_rgpd_exporter_rate_limited', ['30', 'RGPD_EXPORT_DONNEES'], 'élément');
+  // T11 : corps rendu octet pour octet (ordre des clés du jsonb jusqu'au fichier), signalement `publie_le` confirmé live.
+  ficheContient(fiche, 'fn_rgpd_exporter_rate_limited', ['octet pour octet', 'publie_le IS NOT NULL', 'confirmé sur la définition live'], 'élément T11');
 });
 
 test('CONTRATS : paiements déclarés — refus de la confirmation, contestation corrigée par B3 (#1118)', () => {

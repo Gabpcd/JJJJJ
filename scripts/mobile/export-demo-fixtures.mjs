@@ -319,6 +319,52 @@ export function buildDemoProfilComplet(now = new Date(FIXED_NOW)) {
   };
 }
 
+/**
+ * Clés d'un objet dans l'ordre de sortie d'un jsonb PostgreSQL (longueur en octets, puis octets), récursivement :
+ * la fixture d'export a l'ordre de la réponse réelle, que l'app conserve jusqu'au fichier exporté.
+ */
+function ordreJsonb(valeur) {
+  if (Array.isArray(valeur)) return valeur.map(ordreJsonb);
+  if (valeur === null || typeof valeur !== 'object') return valeur;
+  const octets = (cle) => Buffer.from(cle, 'utf8');
+  const cles = Object.keys(valeur).sort((a, b) => octets(a).length - octets(b).length || Buffer.compare(octets(a), octets(b)));
+  return Object.fromEntries(cles.map((cle) => [cle, ordreJsonb(valeur[cle])]));
+}
+
+/**
+ * Lot 3, T11 : export RGPD du profil fictif. Réponse de `fn_rgpd_exporter_rate_limited()` (= jsonb de
+ * `fn_rgpd_exporter_donnees_soignant`, `supabase/schema/public.sql` l.55318-55351 : mêmes 32 clés), clés dans
+ * l'ordre d'un jsonb. Profil réduit aux colonnes du profil démo (aucune donnée sensible : le serveur retire
+ * `numero_secu`, la démo n'invente ni IBAN ni SIRET), notifications et préférences des fixtures démo.
+ * Lu octet pour octet par `DemoExportRGPDGateway` et par les XCUITest (`DemoCompteLot3Tests`).
+ */
+export function buildDemoExportRgpd(now = new Date(FIXED_NOW)) {
+  const p = DEMO_PROFILE.profile;
+  const instant = now.toISOString().replace('.000Z', '+00:00');
+  const preferences = buildDemoPreferences().preferences;
+  const vides = [
+    'missions', 'candidatures', 'presences', 'factures_honoraires', 'bulletins_paie', 'cotisations_sociales',
+    'mandats_facturation', 'cessions_creance', 'factor_advances', 'paiements_soignant', 'contrats_mission', 'documents',
+    'evaluations_recues', 'evaluations_donnees', 'messages_chat', 'messages_litige', 'messages_mission', 'partages_rib',
+    'parrainages', 'serie_email_envois', 'filtres_sauvegardes', 'favoris_etablissements', 'prevoyance_liste_attente',
+    'notations_donnees', 'notations_recues', 'scoring_breakdown_historique',
+  ];
+  return ordreJsonb({
+    export_date: instant,
+    utilisateur_id: p.id,
+    profil: {
+      id: p.id, prenom: 'Camille', nom: 'Démo', email: DEMO_PROFILE.email, profession: p.profession,
+      type_contrat: p.type_contrat, type_exercice: p.type_exercice, adresse_lat: p.adresse_lat, adresse_lng: p.adresse_lng,
+      rayon_deplacement_km: p.rayon_deplacement_km, types_contrat_acceptes: p.types_contrat_acceptes,
+      taux_horaire_minimum: p.taux_horaire_minimum, tous_documents_valides: p.tous_documents_valides, ville_recherche: null,
+    },
+    ...Object.fromEntries(vides.map((cle) => [cle, []])),
+    notifications: buildDemoNotifications(now).notifications.map(({ type, titre, corps, lue, cree_le }) => ({ type, titre, corps, lue, cree_le })),
+    preferences_notifications: preferences.global,
+    preferences_notifications_par_evenement: preferences.par_evenement,
+  });
+}
+
 export function buildFixtures() {
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
@@ -328,6 +374,7 @@ export function buildFixtures() {
     'demo-notifications.json': buildDemoNotifications(),
     'demo-preferences.json': buildDemoPreferences(), // lot 3, T6
     'demo-profil-complet.json': buildDemoProfilComplet(),
+    'demo-export-rgpd.json': buildDemoExportRgpd(), // lot 3, T11
   };
 }
 
