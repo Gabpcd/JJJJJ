@@ -196,9 +196,9 @@ public struct SupabaseContratsGateway: ContratsPort {
         case .refusDefinitif(_, let erreur):
             throw erreur
         case .incertain(let erreur):
-            // Réponse perdue : la signature a pu être appliquée. Relue, jamais renvoyée.
-            if let relue = try? await signatureRelue(contratId: contratId, empreinte: empreinte, context: context),
-               let complet = relue {
+            // Réponse perdue : la signature a pu être appliquée. Relue, jamais renvoyée. `try?` aplatit `Bool??` :
+            // relecture en échec et preuve non confirmée donnent toutes deux `nil` → l'incertain d'origine est restitué.
+            if let complet = try? await signatureRelue(contratId: contratId, empreinte: empreinte, context: context) {
                 return .signee(contratComplet: complet)
             }
             throw erreur
