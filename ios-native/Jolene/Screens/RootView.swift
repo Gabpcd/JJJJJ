@@ -20,7 +20,8 @@ struct RootView: View {
             EnvironmentBlockedScreen(error: error, mode: container.environment.mode,
                                      unknownModeRaw: container.environment.unknownModeRaw)
         } else if let session = container.session {
-            SessionRootView(container: container, session: session, finDeCompte: container.finDeCompte)
+            SessionRootView(container: container, session: session, finDeCompte: container.finDeCompte,
+                            liens: container.liensInscription)
         } else {
             EnvironmentBlockedScreen(error: JoleneError(.environment, "Configuration de l'application invalide."),
                                      mode: container.environment.mode)
@@ -28,13 +29,27 @@ struct RootView: View {
     }
 }
 
+/// Lot 3, T7 (propriétaire unique de ce fichier au lot 3) — inscription soignant :
+/// - `.signedOut` : « Créer un compte soignant » (`login-create-account`) remplace la connexion par le compte rapide
+///   (`InscriptionRapideScreen`) ; « Se connecter », « J’ai confirmé mon email » et « Se connecter et continuer »
+///   ramènent à la connexion avec l'adresse saisie (la connexion par mot de passe passe par `SessionStore.signIn`) ;
+/// - `.blocked` d'une identité sans espace soignant (rôle `INCONNU` ou profil incomplet,
+///   `OnboardingResolution.concerne`) : aiguillage d'onboarding (`OnboardingRootView`) au lieu de l'écran bloquant ;
+///   tout autre `.blocked` garde l'écran du lot 0 ; `SessionController` et `MobileAccess` sont inchangés ;
+/// - liens d'inscription déposés par le coordinateur de liens (`BoiteLiensInscription`, L1-T10 / T3b) :
+///   confirmation présentée au-dessus de tout état, puis relecture de la session ; `/inscription/soignant` hors
+///   session ouvre le compte rapide, profession du lien pré-remplie.
 private struct SessionRootView: View {
     let container: AppContainer
     @ObservedObject var session: SessionStore
     /// Lot 1, T8 : signalé avant que la suppression de compte ne retire la session ; tant qu'il n'est
     /// pas acquitté, l'écran de fin remplace la connexion (jamais « Votre session a expiré »).
     @ObservedObject var finDeCompte: AvisFinDeCompte
+    /// Lot 3, T7 : liens d'inscription reçus hors de l'espace prêt.
+    @ObservedObject var liens: BoiteLiensInscription
     @State private var loginEmail = ""
+    /// Lot 3, T7 : compte rapide affiché à la place de la connexion (page et query du lien éventuel).
+    @State private var inscription: EtapeInscription?
 
     var body: some View {
         Group {
@@ -49,12 +64,22 @@ private struct SessionRootView: View {
             case let .signedOut(message):
                 if let fin = finDeCompte.issue {
                     CompteSupprimeScreen(fin: fin) { finDeCompte.acquitter() }
+                } else if let etape = inscription {
+                    InscriptionRapideScreen(controller: session.controller,
+                                            profession: InscriptionRules.professionDepuisLien(etape),
+                                            seConnecter: { email in
+                                                loginEmail = email
+                                                inscription = nil
+                                            }, issue: suivre)
                 } else {
                     LoginScreen(email: $loginEmail, errorMessage: message, isDemo: container.isDemo,
-                                retryRestore: session.canRetryRestore ? { await session.start() } : nil) { email, password in
+                                retryRestore: session.canRetryRestore ? { await session.start() } : nil,
+                                creerCompte: { inscription = EtapeInscription(page: .soignant, query: nil) }) { email, password in
                         await session.signIn(email: email, password: password)
                     }
                 }
+            case let .blocked(access) where OnboardingResolution.concerne(access):
+                OnboardingRootView(session: session)
             case let .blocked(access):
                 BlockingScreen(
                     title: "Espace non disponible",
@@ -72,5 +97,43 @@ private struct SessionRootView: View {
             }
         }
         .task { if case .idle = session.state { await session.start() } }
+        .onAppear { consommer(liens.inscription) }
+        .onChange(of: liens.inscription) { etape in consommer(etape) }
+        .fullScreenCover(item: confirmation) { demande in
+            ConfirmationInscriptionScreen(controller: session.controller, credentials: demande.credentials) { confirme in
+                liens.retirerConfirmation()
+                if confirme { Task { await session.start() } }
+            }
+        }
+    }
+
+    /// Confirmation déposée par le coordinateur ; la fermer la retire de la boîte.
+    private var confirmation: Binding<BoiteLiensInscription.Confirmation?> {
+        Binding(get: { liens.confirmation }, set: { nouvelle in
+            if nouvelle == nil { liens.retirerConfirmation() }
+        })
+    }
+
+    /// Suite du compte rapide : connexion par mot de passe (aiguillage selon l'espace relu) ou relecture de la session
+    /// après un parcours démarré.
+    private func suivre(_ issue: InscriptionRapideModel.Issue) {
+        inscription = nil
+        switch issue {
+        case let .connexion(email, motDePasse):
+            loginEmail = email
+            Task { await session.signIn(email: email, password: motDePasse) }
+        case .parcoursDemarre:
+            Task { await session.start() }
+        }
+    }
+
+    /// Lien `/inscription/soignant` ou `/inscription/reprendre` déposé par le coordinateur : hors session, la page
+    /// soignant ouvre le compte rapide et la reprise la connexion (web : `Navigate to /connexion`) ; avec une identité,
+    /// l'aiguillage d'onboarding (ou l'espace prêt) est déjà l'écran de la session.
+    private func consommer(_ etape: EtapeInscription?) {
+        guard let etape else { return }
+        liens.retirerInscription()
+        guard case .signedOut = session.state, finDeCompte.issue == nil else { return }
+        inscription = etape.page == .soignant ? etape : nil
     }
 }

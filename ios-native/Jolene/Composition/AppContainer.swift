@@ -37,6 +37,9 @@ final class AppContainer: ObservableObject {
     private(set) var prePrompt: ContextePrePromptPush?
     /// Lot 1, T8 : avis de fin de compte partagé entre l'écran de suppression et la racine.
     let finDeCompte = AvisFinDeCompte()
+    /// Lot 3, T7 : liens d'inscription (`/inscription/confirmer`, `/inscription/soignant`, `/inscription/reprendre`)
+    /// consommés hors de l'espace prêt ; point d'extension du coordinateur de liens (L1-T10 / T3b), lu par `RootView`.
+    let liensInscription = BoiteLiensInscription()
     #if DEBUG
     let networkSentinel: NetworkSentinel.Monitor?
     #endif
@@ -87,7 +90,7 @@ final class AppContainer: ObservableObject {
             NetworkSentinel.install()
             networkSentinel = NetworkSentinel.Monitor.shared
             #endif
-            let gateways = Self.demoGateways(processEnvironment: processEnvironment)
+            let gateways = Self.demoGateways(arguments: arguments, processEnvironment: processEnvironment)
             clock = gateways.clock
             let controller = SessionController(gateways: gateways)
             let permission = DemoPushPermission(etat: Self.autorisationPushDemo(arguments: arguments))
@@ -144,11 +147,15 @@ final class AppContainer: ObservableObject {
     /// (`DemoAccueilTests.testAccueilErreurPuisReprise`) ; lot 3, T6 : `JOLENE_FORCE_PREFERENCES_ECHEC=1`,
     /// de même pour les préférences de notifications (`DemoPreferencesEchecGateway`,
     /// `DemoPreferencesTests.testPreferencesErreurPuisReprise`) ; lot 3, T9 : `JOLENE_DEMO_PROFIL=<variante>`
-    /// (`VarianteProfilDemo`) sert le profil démo dans une variante de recette (`DemoProfilTests`).
-    /// Jamais compilé en Release.
-    private static func demoGateways(processEnvironment: [String: String]) -> Gateways {
+    /// (`VarianteProfilDemo`) sert le profil démo dans une variante de recette (`DemoProfilTests`) ; lot 3, T7 :
+    /// `-JOLENE_DEMO_INSCRIPTION_REFUS <code>` (`RefusInscriptionDemo`, blueprint §2.7) rejoue un refus d'inscription
+    /// (`DemoInscriptionTests`). Jamais compilé en Release.
+    private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
         var gateways = DemoWorld.gateways()
+        if let refus = RefusInscriptionDemo(arguments: arguments), let auth = gateways.auth as? DemoAuthGateway {
+            gateways.inscription = DemoInscriptionGateway(auth: auth, refus: refus) // lot 3, T7
+        }
         if processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] == "1" {
             gateways.dashboard = DemoDashboardEchecGateway()
         }

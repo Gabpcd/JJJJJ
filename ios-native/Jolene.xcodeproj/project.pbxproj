@@ -31,13 +31,17 @@
 		7D1B8941C12710BA10806436 /* AccueilScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60887A94696AA6108F556C2 /* AccueilScreen.swift */; };
 		7D9EC7EEACF825A03C5D6935 /* JoleneDesign in Frameworks */ = {isa = PBXBuildFile; productRef = AD05F490DB7A1E31B77DE468 /* JoleneDesign */; };
 		7EE48E9A00576297AD1657A1 /* ProfileScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E98C75CA1BDE25BD8822BDE0 /* ProfileScreen.swift */; };
+		8D7D962ADDA6BAC05F1D3E5B /* InscriptionRapideScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60699FAD6300F1A017021FE2 /* InscriptionRapideScreen.swift */; };
 		8F1F3B7AC29459F237E608AE /* DemoConsultationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07388306B298067BAF72F868 /* DemoConsultationTests.swift */; };
 		8FF2D016E024DEC2B0131A7E /* EnvironmentGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8934442A0F8427B109291C /* EnvironmentGuardTests.swift */; };
+		9DE4879FA571EB99B73E9496 /* ConfirmationInscriptionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 676FE905DF85E7AE14260D5C /* ConfirmationInscriptionScreen.swift */; };
 		A10FB98D441023FB1102B6DA /* PushRegistrar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A71CD95CD6F4F5866918816 /* PushRegistrar.swift */; };
 		A90CAD5C43F42E1946238456 /* EtatNotificationsAppareilRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4548B776A71B3D851883356 /* EtatNotificationsAppareilRow.swift */; };
 		AA33BE43A88764C0D2AEC169 /* CompteSupprimeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CC77CAAD0BCDB6F1C7C4BCD /* CompteSupprimeScreen.swift */; };
+		AE9B5CE2089FF23231F2639D /* OnboardingRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0DFC0FF6ADC695DE2FD5332 /* OnboardingRootView.swift */; };
 		B13F80A62CBEABBC35FD66EE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 246F44BC2A339EC8645FD77E /* Assets.xcassets */; };
 		B1EE0AE3F1ABB031B7B9FBDE /* PushAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B43E8DC20E74CFD2FACC575F /* PushAppDelegate.swift */; };
+		B2BBA8856C98FD5860E7103C /* DemoInscriptionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CB770AAEE245B16B5B601D7 /* DemoInscriptionTests.swift */; };
 		B3446B6871D7FBE2076E8D6B /* EnvironmentBlockedScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A24F006640FB3D9605D893FA /* EnvironmentBlockedScreen.swift */; };
 		B5B9B1365AC084EB90B1587E /* DemoPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A633219A5D169F90CE80EA99 /* DemoPreferencesTests.swift */; };
 		B63D824E311B24377F19A806 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D05CBBCD86659DF4895A2323 /* PrivacyInfo.xcprivacy */; };
@@ -87,7 +91,9 @@
 		41D47AC775A9BD1F3BA87C34 /* JoleneUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = JoleneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		54FD5A2A491C046BB3B80DAC /* DemoExplorerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoExplorerTests.swift; sourceTree = "<group>"; };
 		57522BC17747DB1695651ECD /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		60699FAD6300F1A017021FE2 /* InscriptionRapideScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InscriptionRapideScreen.swift; sourceTree = "<group>"; };
 		65406E8F54F9DFF36EF8782E /* JoleneSupabase */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JoleneSupabase; path = Packages/JoleneSupabase; sourceTree = SOURCE_ROOT; };
+		676FE905DF85E7AE14260D5C /* ConfirmationInscriptionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationInscriptionScreen.swift; sourceTree = "<group>"; };
 		6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StagingConnexionTests.swift; sourceTree = "<group>"; };
 		6F98E168F9C28FBB06551D7B /* Production.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Production.xcconfig; sourceTree = "<group>"; };
 		70EB2E65EA45ACA03AFE4DE7 /* ProfilEditionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilEditionScreen.swift; sourceTree = "<group>"; };
@@ -96,10 +102,12 @@
 		7F524C6906946AF70D55B8DD /* PrePromptPushScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrePromptPushScreen.swift; sourceTree = "<group>"; };
 		8849E363C23BD3AB5AC2ABB6 /* Jolene.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Jolene.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8871298678DD982E3D6C3C26 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		8CB770AAEE245B16B5B601D7 /* DemoInscriptionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoInscriptionTests.swift; sourceTree = "<group>"; };
 		8FF358A28EB5478C49CB891A /* FiltresSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiltresSheet.swift; sourceTree = "<group>"; };
 		92467ECFCEBFFC4A3024CA6F /* AjoutCalendrierMission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AjoutCalendrierMission.swift; sourceTree = "<group>"; };
 		95F239F5C89642EA9DEEAE04 /* DemoCompteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoCompteTests.swift; sourceTree = "<group>"; };
 		9CC77CAAD0BCDB6F1C7C4BCD /* CompteSupprimeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompteSupprimeScreen.swift; sourceTree = "<group>"; };
+		A0DFC0FF6ADC695DE2FD5332 /* OnboardingRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingRootView.swift; sourceTree = "<group>"; };
 		A24F006640FB3D9605D893FA /* EnvironmentBlockedScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentBlockedScreen.swift; sourceTree = "<group>"; };
 		A633219A5D169F90CE80EA99 /* DemoPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPreferencesTests.swift; sourceTree = "<group>"; };
 		A82414C2B39FC0B682E516B6 /* Jolene.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Jolene.entitlements; sourceTree = "<group>"; };
@@ -183,6 +191,7 @@
 				636ED369FD9F3FC3E2860BCA /* Accueil */,
 				4F589E2C82C18C2E528C0437 /* Compte */,
 				BE4B978D5F7B33DE3E893841 /* Explorer */,
+				7BC8582AF111753661D53649 /* Inscription */,
 				869C78517769F191D1819DB3 /* Notifications */,
 				953B102CBE49DABD151A725F /* Profil */,
 				3ADE85FEBF65F5B8CC60AA7C /* Push */,
@@ -249,6 +258,16 @@
 			path = Packages;
 			sourceTree = "<group>";
 		};
+		7BC8582AF111753661D53649 /* Inscription */ = {
+			isa = PBXGroup;
+			children = (
+				676FE905DF85E7AE14260D5C /* ConfirmationInscriptionScreen.swift */,
+				60699FAD6300F1A017021FE2 /* InscriptionRapideScreen.swift */,
+				A0DFC0FF6ADC695DE2FD5332 /* OnboardingRootView.swift */,
+			);
+			path = Inscription;
+			sourceTree = "<group>";
+		};
 		869C78517769F191D1819DB3 /* Notifications */ = {
 			isa = PBXGroup;
 			children = (
@@ -294,6 +313,7 @@
 				95F239F5C89642EA9DEEAE04 /* DemoCompteTests.swift */,
 				07388306B298067BAF72F868 /* DemoConsultationTests.swift */,
 				54FD5A2A491C046BB3B80DAC /* DemoExplorerTests.swift */,
+				8CB770AAEE245B16B5B601D7 /* DemoInscriptionTests.swift */,
 				F3F1FEAB1353A97204BA1A18 /* DemoNotificationsTests.swift */,
 				A633219A5D169F90CE80EA99 /* DemoPreferencesTests.swift */,
 				D65489D1594FDE00944062B4 /* DemoProfilTests.swift */,
@@ -416,9 +436,11 @@
 				496EB218D427D36B5164DC14 /* AppContainer.swift in Sources */,
 				0174BFA8BE84B1166A1CBC63 /* ChoixModesExerciceSection.swift in Sources */,
 				AA33BE43A88764C0D2AEC169 /* CompteSupprimeScreen.swift in Sources */,
+				9DE4879FA571EB99B73E9496 /* ConfirmationInscriptionScreen.swift in Sources */,
 				B3446B6871D7FBE2076E8D6B /* EnvironmentBlockedScreen.swift in Sources */,
 				A90CAD5C43F42E1946238456 /* EtatNotificationsAppareilRow.swift in Sources */,
 				EB4448BA06429EF4C7504957 /* FiltresSheet.swift in Sources */,
+				8D7D962ADDA6BAC05F1D3E5B /* InscriptionRapideScreen.swift in Sources */,
 				D3C7C3722CF27996A3A3CA9F /* JoleneApp.swift in Sources */,
 				BA3D823586A58A6220538174 /* LoginScreen.swift in Sources */,
 				35B21204F757910A731C8D4B /* MainTabView.swift in Sources */,
@@ -428,6 +450,7 @@
 				DD5D9790C224E0A18AFCB9DC /* NetworkSentinel.swift in Sources */,
 				108A5A026DD80CDCFA098BE8 /* NotificationCenterDelegate.swift in Sources */,
 				13C886560C8EC3AF8C90DBE9 /* NotificationsScreen.swift in Sources */,
+				AE9B5CE2089FF23231F2639D /* OnboardingRootView.swift in Sources */,
 				2A94C1A0F00563A7348B0C89 /* PlaceholderScreen.swift in Sources */,
 				D1A49193A61DE1121538F634 /* PrePromptPushScreen.swift in Sources */,
 				2126D8FC78A781B4AE10FC61 /* PreferencesScreen.swift in Sources */,
@@ -452,6 +475,7 @@
 				1B95D14A610032E076A08B5C /* DemoCompteTests.swift in Sources */,
 				8F1F3B7AC29459F237E608AE /* DemoConsultationTests.swift in Sources */,
 				F06D11FE9236C6488B87AE69 /* DemoExplorerTests.swift in Sources */,
+				B2BBA8856C98FD5860E7103C /* DemoInscriptionTests.swift in Sources */,
 				06E53C28EC5560600ABDEA27 /* DemoNotificationsTests.swift in Sources */,
 				B5B9B1365AC084EB90B1587E /* DemoPreferencesTests.swift in Sources */,
 				4CB0366CDA13BFA04A0DB949 /* DemoProfilTests.swift in Sources */,
