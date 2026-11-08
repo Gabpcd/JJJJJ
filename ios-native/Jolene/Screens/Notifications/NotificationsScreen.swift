@@ -97,10 +97,14 @@ struct NotificationsScreen: View {
         }
     }
 
-    /// Tap sur une ligne : marquage relu puis ouverture, dans une tâche annulée à la disparition du centre.
+    /// Tap sur une ligne : marquage relu puis ouverture, dans une tâche annulée à la disparition du centre. Une seule
+    /// à la fois : un double tap rapide ne remplace jamais la tâche en cours (elle resterait sinon hors d'atteinte
+    /// de l'annulation).
     private func ouvrirLigne(_ notification: NotificationJolene) {
+        guard tacheOuverture == nil else { return }
         let renvoiWeb = renvoiWebDisponible
         tacheOuverture = Task {
+            defer { tacheOuverture = nil }
             let lecturesAvant = model.lectures
             let cible = await model.ouvrir(notification, renvoiWebDisponible: renvoiWeb)
             if model.lectures != lecturesAvant { surLecture() }
