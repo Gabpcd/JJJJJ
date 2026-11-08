@@ -403,7 +403,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_etat_pointage_mission"("p_mission_id" "u
   par début), `code_pointage_actif` (non nul pour l'établissement seulement, l.35188), `est_etab`. Décodeur en
   liste blanche : **`code_pointage_actif` jamais décodé** côté soignant, même présent. `{error}` → refus verbatim
   (parité `PointageRotatifSoignant.tsx` l.81-92).
-- **`est_etab` : `null` pour tout compte sans établissement (soignant assigné compris), jamais `false`.**
+- **est_etab vaut null pour tout compte sans établissement (soignant assigné compris), jamais false ; non décodé côté soignant.**
   `v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id()` (l.35165) : `est_admin()` rend
   un booléen non nul (`est_admin_valide`, `COALESCE(EXISTS …)`, l.4852), `mon_etablissement_id()` vaut NULL hors
   établissement (l.67092), donc `false OR NULL` = NULL, renvoyé tel quel (`'est_etab', v_is_etab`, l.35189) : JSON
@@ -416,8 +416,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_etat_pointage_mission"("p_mission_id" "u
   Pour un utilisateur sans établissement, `mon_etablissement_id()` vaut NULL, donc `v_is_etab` vaut NULL et
   `NOT v_is_etab AND NOT v_is_soignant` vaut NULL : le refus « Accès interdit » n'est jamais renvoyé à un
   soignant **non assigné**, qui lit statut, intitulé et segments (le code reste masqué). Constat sur le dump
-  `public.sql` (#1097), à confirmer sur la définition live par une PR backend séparée (B9, « Motif à auditer » de
-  `DECISIONS_LOT2.md`) ; le natif n'appelle la RPC que pour ses missions et n'en dépend pas.
+  `public.sql` (#1097), traité par l'audit des gardes NULL du 3 novembre 2026 (B9 : renvoi « Gardes NULL » de
+  `DECISIONS_LOT2.md` › En attente de Gabrielle) ; le natif n'appelle la RPC que pour ses missions et n'en dépend pas.
 - **Preuve STAGING** : T11 (relecture après OUVERTURE et FERMETURE).
 
 ## fn_envoyer_otp_signature
@@ -1316,8 +1316,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_generer_code_secours_mission"("p_mission
 
 - **Toujours appelables** (revue fraîche de T0) : « mortes » côté web, les neuf RPC sont toujours GRANT
   `authenticated` en production (`public.sql` l.81953, l.83013, l.83079, l.83997, l.84003, l.84009, l.84015,
-  l.85495, l.85523) : PostgREST les sert à tout compte connecté. Trois gardes d'accès en logique ternaire
-  (`mon_etablissement_id()` NULL pour un soignant) permettent à un soignant de pointer à distance :
+  l.85495, l.85523) : PostgREST les sert à tout compte connecté. Au moins trois gardes (≥ 3) d'accès en logique
+  ternaire (`mon_etablissement_id()` NULL pour un soignant) permettent à un soignant de pointer à distance :
   1. `fn_codes_pointage_mission` (l.23799) lui rend `code_arrivee` et `code_depart`, que `fn_pointer_arrivee` et
      `fn_pointer_depart` acceptent sans GPS avec `perimetre_gps_valide = true` (l.47449-47455, l.47577-47582) ;
   2. `fn_generer_qr_mission` (l.38006) laisse le soignant assigné générer son propre jeton, que `fn_valider_scan_qr`

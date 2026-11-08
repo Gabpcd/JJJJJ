@@ -238,43 +238,27 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
 ### B9 (PR préparées et poussées, jamais mergées sans go)
 
 - **B1** — `fn_scanner_code_pointage` sans `nouveau_code` ni `nouveau_hmac` (fonction `SECURITY DEFINER`, depuis la
-  définition live) ; bascule de la fiche et de la garde de T0 : « Ordonnancement et branches ».
+  définition live) ; bascule de la fiche et de la garde de T0 : « Ordonnancement et branches ». La PR B1
+  (`fix/scanner-code-sans-code-suivant`) couvre aussi `fn_declarer_fin_retroactive` : même retrait de `nouveau_code`
+  et `nouveau_hmac` de sa réponse (le soignant assigné peut l'appeler lui-même en PostgREST) et verrou de sa garde
+  d'autorisation, qui vaut NULL pour un compte sans lien avec la mission.
 - **S1** — allocateur STAGING de capacité SMS de signature (`scripts/ci/allouer-capacite-sms-signature-staging.mjs`,
   workflow protégé) : secrets STAGING, fonctions `SECURITY DEFINER` du supplément, données.
 - **T11** — go au dispatch du workflow STAGING du lot 2 et du mode `--appareil` de sa fixture pour T12 (secrets
   service_role et comptes TEST exposés à l'environnement protégé, création et nettoyage de données STAGING).
-- **Constat T0 (nouveau, RLS/auth)** : `fn_presences_detail_mission` (l.48920-48923) et `fn_etat_pointage_mission`
-  (l.35165-35170) ont une garde d'accès en logique ternaire (`mon_etablissement_id()` NULL pour un soignant) : un
-  soignant non assigné qui connaît l'identifiant d'une mission lit la synthèse de présence d'un autre soignant
-  (horaires, distance, alertes) ou ses segments de pointage. Constat sur le dump `public.sql` ; une PR backend séparée
-  (B9) doit le confirmer sur la définition live et corriger la garde. Le natif n'appelle ces RPC que pour ses
-  missions et n'en dépend pas.
-- **Constat T0 (nouveau, RLS/auth) — système ① toujours appelable, pointage à distance** (revue fraîche de T0 ;
-  constat sur le dump `public.sql`, à confirmer sur la définition live par une PR backend séparée, B9) : les neuf RPC ①
-  de `RPC_POINTAGE_SYSTEME_1` (décision 1 amendée) ne sont plus montées côté web, mais gardent le `GRANT … TO
+- **Go du 8 novembre 2026** : les PR B9 du 3 novembre — B1 du lot 2 (scanner, `fix/scanner-code-sans-code-suivant`),
+  B3 du lot 3 (contestation de paiement, `fix/contestation-paiement-soignant`), B4 (score de matching, B1 du lot 4,
+  `fix/score-matching-inconnu-null`), B5b du lot 5 (visibilité établissement par permission,
+  `fix/visibilite-etablissement-par-permission`) et S1 du lot 2 (allocateur SMS, `feat/staging-capacite-sms-signature`)
+  — ont reçu le go de Gabrielle le 8 novembre 2026 et passent en merge sériel sur `main` (CI verte et revue fraîche B8
+  clôturable, par la file de merge de la session principale : `LOTS_2_5_DECISIONS`, règle 5).
+- **Système ① toujours appelable** (constat T0 sur le dump `public.sql`, RLS/auth) : les neuf RPC ① de
+  `RPC_POINTAGE_SYSTEME_1` (décision 1 amendée) ne sont plus montées côté web, mais gardent le `GRANT … TO
   authenticated` en production (l.81953, l.83013, l.83079, l.83997, l.84003, l.84009, l.84015, l.85495, l.85523) :
-  PostgREST les sert à tout compte connecté. Trois chaînes permettent à un soignant de **pointer à distance** :
-  1. `fn_codes_pointage_mission` (l.23784) garde l'accès par `NOT est_admin() AND v_mission.etablissement_id !=
-     mon_etablissement_id()` (l.23799) ; `mon_etablissement_id()` vaut NULL pour un soignant, la condition vaut
-     NULL et la garde laisse passer : la RPC renvoie `code_arrivee` et `code_depart` de n'importe quelle mission
-     (et les crée par `UPDATE missions` s'ils manquent). `fn_pointer_arrivee` (l.47421) accepte ensuite ce code
-     **sans GPS** (l.47449-47455 : méthode `CODE`, `perimetre_gps_valide = true`), `dec_antifraude_presence` ne
-     recalculant le périmètre que si des coordonnées sont jointes (l.646) ; `fn_pointer_depart` fait de même avec
-     `code_depart` (l.47577-47582).
-  2. `fn_generer_qr_mission` (l.37981) garde l'accès par `NOT (est_admin() OR v_mission.etablissement_id =
-     mon_etablissement_id())` (l.38006), qui vaut aussi NULL pour un soignant : le soignant assigné génère son propre
-     jeton, que `fn_valider_scan_qr` (l.65545) accepte (affectation vérifiée, GPS non bloquant : « QR = source de
-     vérité »).
-  3. `fn_generer_code_secours_mission` (l.37455, seconde revue fraîche de T0) garde l'accès par la même condition
-     `NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id())` (l.37478), NULL pour un soignant, et
-     reste GRANT `authenticated` (l.83013) : elle rend au soignant un code de secours **en clair** (`'code', v_code`,
-     l.37510-37517), pour n'importe quelle mission. `fn_valider_code_secours` (l.64991) l'accepte en ne vérifiant que
-     l'affectation (l.65012), sans contrôle de position dans la RPC (coordonnées facultatives, enregistrées telles
-     quelles ; sans coordonnées, `dec_antifraude_presence` ne recalcule rien, l.646), et inscrit la présence
-     `CODE_SECOURS` à l'arrivée comme au départ (l.65067-65072, l.65085-65091). Le REVOKE de la seule
-     `fn_valider_code_secours` fermerait la chaîne, mais laisserait le générateur rendre des codes en clair.
-  L'anti-triche du pointage est contournée, et les heures ainsi pointées faussent en aval la paie, la facturation et
-  l'escrow. Les fiches ① de `CONTRATS_RPC_SOIGNANT.md` les décrivent comme mortes côté web : elles restent appelables.
+  PostgREST les sert à tout compte connecté. Avec les gardes NULL de `fn_codes_pointage_mission`,
+  `fn_generer_qr_mission` et `fn_generer_code_secours_mission`, elles permettent à un soignant de **pointer à
+  distance** (chaînes et verdicts : renvoi « Gardes NULL » ci-dessous). Les fiches ① de `CONTRATS_RPC_SOIGNANT.md`
+  les décrivent comme mortes côté web : elles restent appelables.
   **Proposition** (PR backend séparée, B9, depuis la définition live, garde-fou 9.0 n°2) : `REVOKE EXECUTE ON
   FUNCTION … FROM authenticated` sur les neuf RPC ①, `fn_generer_code_secours_mission` comprise, après vérification
   que `SyncHorsLigne` (monté par `LayoutApp.tsx`, rejoue `fn_pointer_*` depuis `src/lib/horsLigne.ts`) ne porte
@@ -291,27 +275,17 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
   **Proposition** (PR backend séparée, B9, depuis la définition live) : retirer l'appel web (le trigger
   `trg_notifier_creation_litige` notifie déjà) puis `REVOKE EXECUTE … FROM authenticated`, ou contrôler le
   destinataire et le type, avec un rejet explicite.
-- **Motif à auditer par ces PR backend** : garde d'accès dont une comparaison `=`, `!=` ou `<>` à
-  `mon_etablissement_id()` n'est protégée ni par `IS DISTINCT FROM` ni par `IS NULL` : elle vaut NULL pour tout
-  compte sans établissement et la garde laisse passer. Au dump, 18 RPC `GRANT … TO authenticated` en ont une
-  (méthode reproductible : `gardesNuesEtablissement` de `tests/node/check-rpc-contracts.node.mjs`, conditions
-  `IF`/`ELSIF … THEN` de chaque RPC `authenticated`, plus l'affectation de `v_is_etab` ; la garde rougit si la liste
-  change) : `fn_activer_garantie_mission` (l.5494), `fn_booster_mission` (l.20964), `fn_codes_pointage_mission`
-  (l.23799), `fn_creer_reclamation_score` (l.27534), `fn_declarer_honoraires_retrocession` (l.29085),
-  `fn_definir_retrocession_mission` (l.29754), `fn_deposer_chorus` (l.30155), `fn_diffuser_pool_urgence`
-  (l.31426-31429), `fn_enregistrer_numero_dpae` (l.32360), `fn_etablissement_pour_mission` (l.34899-34903),
-  `fn_etat_pointage_mission` (affectation l.35165, garde l.35168), `fn_generer_code_secours_mission` (l.37478),
-  `fn_generer_donnees_dpae` (l.37547), `fn_generer_facture` (l.37629), `fn_generer_qr_mission` (l.38006),
-  `fn_presences_detail_mission` (l.48920-48921), `fn_rebooker_soignant` (l.51626), `fn_soignants_urgence`
-  (l.57324). Relevées par la méthode mais neutralisées par le reste de la condition (exclues) :
-  `fn_ouvrir_litige_rate_limited` (surcharge à `p_facture_id`, l.46602-46610 : conjonction avec
-  `fn_a_permission_etablissement('contrats', …) IS TRUE`, faux pour un soignant) et
-  `fn_soignant_stripe_connect_actif` (l.57262-57266 : comparaison dans le `WHERE` d'un `NOT EXISTS`, NULL → refus).
-  Hors RPC `authenticated`, cinq conditions de même forme sont à auditer avec leurs appelants : triggers
-  `dec_valider_paiement_facture` (l.3826), `fn_protect_paiement_soignant` (l.50566),
-  `fn_verrouiller_proposition_litige_en_attente` (l.66800-66816), fonctions `fn_generer_facture_mensuelle_internal_20260801`
-  (l.37797) et `fn_modifier_reference_paiement_internal_20260801` (l.44195). Hors lot 2 sauf les cinq RPC des
-  constats ci-dessus ; audit croisé sur les définitions live, exploitabilité à établir RPC par RPC.
+- **Gardes NULL des fonctions `SECURITY DEFINER` — renvoi unique à l'audit du 3 novembre 2026** : les listes
+  partielles de constats de T0 (gardes ternaires de `fn_presences_detail_mission` et `fn_etat_pointage_mission`,
+  chaînes de pointage à distance du système ①, « Motif à auditer ») sont remplacées par l'audit des gardes NULL du
+  3 novembre 2026, relu en lecture seule sur la définition live de chaque fonction en production : rapport en annexe,
+  `docs/mobile-swift/AUDIT_GARDES_NULL_2026-11-03.md` (verdict, gravité et correction proposée par fonction).
+  Corrections : PR B9 dédiée `fix/gardes-null-security-definer`, hors lot 2. Garde de T0 : plancher documenté,
+  **≥ 18 RPC** `GRANT … TO authenticated` dont une condition compare nûment à `mon_etablissement_id()` au dump
+  (méthode `gardesNuesEtablissement` de `tests/node/check-rpc-contracts.node.mjs`, plus l'affectation de `v_is_etab`
+  de `fn_etat_pointage_mission`) ; un décompte plus élevé ne la fait pas rougir, la correction d'une garde relevée par
+  T0 la fait basculer (« Ordonnancement et branches »). Le natif n'appelle `fn_etat_pointage_mission` et
+  `fn_presences_detail_mission` que pour ses missions et n'en dépend pas.
 - **Remontée** : ces constats sont à remonter à Gabrielle par la session principale, hors branche, sans attendre la PR
   de `feat/ios-lot2` (aucune PR n'est ouverte sur cette branche avant la fin du lot 1).
 
