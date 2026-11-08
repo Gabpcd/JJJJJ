@@ -478,6 +478,86 @@ ci-dessus, « à l'intégration »). Ajoutées par l'intégrateur, sans changer 
 - **Point de fusion T3b maintenu (revue L3-T9 m2)** : `/soignant/profil?tab=confidentialite` (RGPD et suppression
   sur le web) ouvre aussi l'édition native ; aucune notification du dump ne pointe vers ce `?tab=` (vecteurs push :
   `/soignant/profil` et `?tab=a` seulement). À trancher par T3b / T11 (renvoi vers le hub, qui porte la suppression).
+  **Tranché par T3b** (section suivante) : le hub.
+
+## T3b — coordinateur des liens et points d'entrée (reliquat L1-T10, fin de T3 ; branche `lot3/l3-t3b-v2`, 08/11/2026)
+
+T3b ferme T3 (sous réserve de sa revue fraîche B8 et de la CI trois formats) en livrant la partie « liens » de L1-T10,
+absente de toutes les branches : point d'entrée unique des liens universels et des taps push.
+
+- **Livré.**
+  - JoleneCore `Links/DeepLinkIntent.swift` : `DeepLinkIntent` (classement d'un lien : `.espace`, `.renvoiWeb`,
+    `.horsEspace`, `.reinitialisationRefusee`), `AiguillageLiens` (mémorisation avant `.ready`, rejeu une seule fois
+    par le premier espace prêt, epoch, taps push par `BoiteTapsPush`, anti-boucle du renvoi web), argument DEBUG
+    `-JOLENE_OPEN_URL`, texte du refus.
+  - App `Composition/DeepLinkCoordinator.swift` : coordinateur (`ObservableObject`, implémentation de
+    `PresentateurRenvoiWeb`), modificateur `PointDEntreeLiens` posé par `JoleneApp` (`onOpenURL`,
+    `onContinueUserActivity(NSUserActivityTypeBrowsingWeb)`, présentateur dans l'environnement, feuille du renvoi web,
+    alerte du refus, libellé DEBUG `deeplink-route`), `SFSafariViewController` en staging/production, double démo sans
+    réseau `renvoi-web-demo` (URL dans `renvoi-web-url`, « Fermer » `renvoi-web-fermer`).
+  - `AppContainer` : `liens` + `-JOLENE_OPEN_URL` (DEBUG, démo et staging) ; `MainTabView` : l'espace signale son
+    ouverture, chaque tap et sa fermeture au coordinateur, et exécute ses demandes de navigation par `presenter`
+    (inchangé ; `CibleNotification` `.preferences` et `.profil` compris).
+- **Mappage de chaque route** : écran natif si `DestinationLien.ecranNatifLivre`, sinon `.safari(canonique)` par le
+  présentateur de renvoi web, jamais `openURL`. Natifs aujourd'hui : Accueil, Explorer, Mes missions (placeholder),
+  détail de mission, Revenus aperçu (placeholder), hub `mon-compte`, édition du profil, centre de notifications,
+  préférences. Web : sections factures/bulletins/avances (D4) et paiements (T13), Stripe Connect (T14a), inscription
+  (T7/T8), détail de série (lot 4), reset et confirmation (ci-dessous), tout chemin servi par Safari, espace
+  établissement.
+- **Choix et écarts (non juridiques).**
+  1. **Renvoi web présenté aussitôt, avec ou sans session.** `LOT1_PLAN.md` §2.5 mémorise tout lien jusqu'à
+     `.ready` ; T3b ne mémorise que les destinations de l'espace. Un renvoi n'a pas besoin de l'espace, et un lien
+     d'inscription, d'établissement ou reçu sur un compte bloqué ne serait sinon jamais présenté (aucun `.ready`).
+  2. **Reset du mot de passe.** L'écran natif de L1-T10 (`SupabaseRecoveryGateway`, `ResetPasswordScreen`,
+     quarantaine de la session de recovery, « Mot de passe oublié ? ») n'est sur aucune branche et n'est pas livré
+     ici (point d'extension) : `ecranNatifLivre(.resetPassword)` passe de `true` (« vrai à l'arrivée de L1-T10 ») à
+     `false`. Un lien `token_hash` ou implicit ouvre la page web canonique (qui sait le vérifier) ; **option B**
+     (décision 7 du lot 1) : un lien `?code=` est refusé dans l'app, jamais échangé ni servi par Safari (le verifier
+     n'existe que dans le navigateur demandeur), par une alerte au texte de la décision 7
+     (`DeepLinkIntent.Textes.reinitialisationRefusee`, `LOT1_PLAN.md` l.403). Le refus est lu sur la route : il
+     survivra à la livraison de l'écran natif.
+  3. **Confirmation d'inscription** : `ecranNatifLivre(.confirmerInscription)` passe à `false` jusqu'à T7 (renvoi web
+     canonique, la page web vérifie le lien).
+  4. Tests changés, et pourquoi (tests faux pour la base fusionnée, pas affaiblis) : `DestinationLienTests`
+     (`testTableDesEcransLivres` ; reset et confirmation sortent de `testRoutesDesLots0Et1InchangeesEtNatives` vers
+     `testLiensDeRappelSansEcranNatifRenvoyesVersSafariCanonique`) et `CentreNotificationsTests` (exclusion nommée
+     réduite à `connexion` ; lien de reset depuis l'espace : renvoi web au lieu de `.aucune`). Les lignes à `true`
+     décrivaient des écrans que T3b n'apporte pas : avec le coordinateur branché, ces liens n'auraient rien ouvert.
+  5. **Lien et tap en attente** : le plus récent l'emporte à l'ouverture de l'espace, l'autre sert de repli s'il ne
+     mène nulle part ; les deux sont consommés. La règle d'epoch de `BoiteTapsPush` (L3-T5) est inchangée.
+  6. **Anti-boucle** : tant qu'un renvoi est affiché, le même lien revenu par lien universel est ignoré (« un `.safari`
+     issu de l'app n'est jamais rejoué comme lien universel », `LOT1_PLAN.md` §3 T10).
+  7. **Repli d'une cible non présentable** sur le renvoi web canonique (revue L3-T5, m3, levé dans l'aiguillage).
+  8. **`push-tap-cible` remplacé par `deeplink-route`** (consigne de T5 ; revue L3-T5 m7 levé : le libellé est posé
+     quand le coordinateur présente la route). Démo seulement (m8), à la racine de la fenêtre.
+  9. Une navigation ou un refus ferment d'abord le renvoi web affiché (le dernier lien reçu reste visible).
+  10. `/soignant/profil?tab=confidentialite` (point de fusion de la revue L3-T9, m2) **mène au hub** (`.monCompte`) :
+      sur le web, cet onglet porte l'export RGPD et la suppression de compte (`SectionConfidentialite`), que le hub
+      natif porte (L1-T8, L3-T11) ; « Supprimer mon compte » du hub web y renvoie (`MonCompteSoignant.tsx` l.135).
+      Aucune notification du dump ne vise ce `?tab=` (décomptes push inchangés).
+  11. `.horsEspace` (route native livrée sans cible dans l'espace) : liste nommée et fermée réduite à `/connexion`
+      (rien à ouvrir), gardée par `DeepLinkIntentTests.testToutLienHorsEspaceAppartientALaListeNommee`.
+- **Limites connues.** Une seule feuille par niveau en SwiftUI : un lien reçu pendant qu'une autre feuille est
+  ouverte (filtres d'Explorer) n'affiche pas son renvoi web. Les drapeaux `ios_natif_*_actif` ne filtrent pas encore
+  les liens (`EcransNatifs` de `origin/lot1/t9` absent de la base, point de fusion inchangé). Remise réelle d'un lien
+  universel (AASA, CDN Apple, Mail) : niveau 5 seulement (`RECETTE_DEVICE_LOT3.md`).
+- **Migrations d'identifiants XCUITest (règle 8)** : `DemoPushTests` (`push-tap-cible` → `deeplink-route` ; contrat
+  et litige : présentation réelle du renvoi, URL vérifiée sur le double démo) ; `DemoNotificationsTests` (lignes lues
+  003, 004, 006 vers le web : boutons « Voir », 006 ouvre sa page ; 007 sans lien inchangée) ; `DemoProfilTests`
+  (`profil-exercice-web-action` présent, ouvre `/soignant/profil?tab=principal`) ; `DemoAccueilTests` (absence de
+  `accueil-oubli-pointage-action` gardée : la démo n'a aucun oubli de pointage ; **point ouvert** : une variante démo
+  avec un oubli prouverait le bouton, verrou T12 n°2 du lot 1 — le présentateur est injecté).
+- **Consignes aux tranches suivantes** (remplacent « une ligne de `DeepLinkCoordinator.swift` ») : la tranche qui
+  livre un écran passe sa ligne de `ecranNatifLivre`, ajoute sa cible (`CibleNotification`, `estPresentable`,
+  `MainTabView.presenter`) et un cas de tap ; le coordinateur ne change pas. **T7** : inscription et confirmation sont
+  consommées hors de l'espace — passer leurs lignes à `true` fait rougir
+  `DeepLinkIntentTests.testToutLienHorsEspaceAppartientALaListeNommee` tant que leur présentation hors espace
+  (`AiguillageLiens`, `DeepLinkCoordinator`, `RootView`) n'est pas ajoutée. **Reset natif** (reste de L1-T10, sans
+  tranche au lot 3) : même verrou ; le refus `?code=` est déjà en place. **T11** : les entrées du hub passent par
+  `JoleneRoute` puis `DestinationLien.destination` ; `?tab=confidentialite` arrive sur le hub. **T14a** : le retour
+  `?success=true` arrive par le même coordinateur (relecture `force=true`, jamais une preuve).
+- **HARD STOP n°4** : aucun texte juridique ; textes repris : refus du reset (décision 7 du lot 1), « Fermer »
+  (`FiltresSheet.swift` l.64). Le double démo n'affiche que l'URL (données de démonstration).
 
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
@@ -535,6 +615,10 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   sur le compteur de l'Accueil, L3-T5, `CentreNotificationsTextes.indicationOuvrirCentre`). Le texte affiché reste
   verbatim web.
 - Seuls les textes non juridiques passent du tutoiement web au vouvoiement (décision 9 du lot 1).
+- (T3b) Texte **sans équivalent web**, non juridique, déjà décidé (décision 7 du lot 1, `LOT1_PLAN.md` l.403) et repris
+  mot pour mot : « Ce lien ne permet pas de réinitialiser le mot de passe depuis l'application. » (refus d'un lien de
+  réinitialisation `?code=`, `DeepLinkIntent.Textes.reinitialisationRefusee`, épinglé par `DeepLinkIntentTests`) ;
+  bouton « Fermer » repris de `FiltresSheet.swift` l.64.
 
 ## En attente de Gabrielle (§6 du blueprint)
 
@@ -564,6 +648,11 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 - **§6.10 TestFlight externe** : groupe de soignants pilotes, informations de test, Beta App Review ; décision
   explicite, le build parlant à la production.
 - **§6.11 Captcha** : mesurer `PORTE_LOT0.md` 3.1 et 3.2 avant d'ouvrir T7 ; en cas de refus captcha, D25 s'applique.
+- **Signalé par T3b (hors §6)** : le reset natif du mot de passe (reste de L1-T10 : `SupabaseRecoveryGateway`,
+  `ResetPasswordScreen`, quarantaine de la session de recovery, « Mot de passe oublié ? ») n'a de tranche ni au lot 1
+  (mergé sans T10) ni au lot 3 ; en attendant, le lien `token_hash` ouvre la page web et `?code=` est refusé
+  (option B). À planifier (préalable inchangé : modèle d'e-mail « Reset Password » au format `token_hash`, §6.6 du
+  lot 1).
 - **Signalé par la T0 (hors §6)** : `fn_rgpd_exporter_donnees_soignant` (`public.sql` l.55300, dump du 01/11/2026) lit
   `notations_missions` avec `masque = false` **sans** `publie_le IS NOT NULL` : l'export RGPD contient les notes
   reçues non publiées (double-aveugle D8), contrairement à la vue canonique `evaluations_publiees` et au principe
