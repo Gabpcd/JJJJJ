@@ -62,6 +62,9 @@ final class Lot2PortsTests: XCTestCase {
         await refuse("T3") { _ = try await g.pointage.reconcilier(recu: recuScan, context: c) }
         await refuse("T3") { _ = try await g.pointage.detail(missionId: "m-1", context: c) }
         await refuse("T3") { _ = try await g.pointage.relancerValidation(missionId: "m-1", context: c) }
+        // Ajout de T3 (amendement du §2.3) : base `preuvesAvant` du reçu ; le défaut ne rend jamais une base vide.
+        await refuse("T3") { _ = try await g.pointage.preuvesScan(missionId: "m-1", context: c) }
+        await refuse("T3") { _ = try await PortTemoinLot2().preuvesScan(missionId: "m-1", context: c) }
         await refuse("T5b") { _ = try await g.contestation.litige(presenceId: "p-1", context: c) }
         await refuse("T5b") { _ = try await g.contestation.fenetreOuverte(missionId: "m-1", context: c) }
         await refuse("T5b") {

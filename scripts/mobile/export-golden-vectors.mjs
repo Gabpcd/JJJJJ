@@ -2103,10 +2103,10 @@ function vecteursPresencesSoignantListes() {
     }
     for (const liste of Object.values(args.creneauxParMission)) liste.forEach(verifierCreneau);
     for (const contrat of args.contrats ?? []) {
-      // `contrats_mission.statut` est NULLable (`public.sql` l.68786, `types.ts`) mais
-      // `ContratPointage.statut` ne décode pas encore nul : hors domaine jusqu'à T3 (décodage
-      // tolérant puis vecteur `statut: null` dans `grille/contrats/choix`, consigne T3 de DECISIONS_LOT2.md).
-      domaine(R, typeof contrat.id === 'string' && typeof contrat.mission_id === 'string' && typeof contrat.statut === 'string'
+      // `contrats_mission.statut` est NULLable (`public.sql` l.68786, `types.ts`) : `ContratPointage`
+      // le décode en `""` depuis T3 (même effet que le web : non terminal, priorité 0), d'où le vecteur
+      // `statut: null` de `grille/contrats/choix` (consigne T3 de DECISIONS_LOT2.md).
+      domaine(R, typeof contrat.id === 'string' && typeof contrat.mission_id === 'string' && estChaineOuNul(contrat.statut)
         && estChaineOuNul(contrat.cree_le), 'contrat : id, mission_id, statut, cree_le');
     }
     for (const etablissement of Object.values(args.etablissements ?? {})) {
@@ -2435,6 +2435,10 @@ function vecteursPresencesSoignantListes() {
       contrat('premier', 'egalite', 'ENVOYE', '2026-10-01T00:00:00Z'), contrat('second', 'egalite', 'ENVOYE', '2026-10-01T00:00:00Z'),
       contrat('seul-terminal-minuscules', 'casse', 'annule', '2026-10-01T00:00:00Z'),
       contrat('legacy', 'formats', 'ENVOYE', '2026-10-01T02:00:00'), contrat('utc', 'formats', 'ENVOYE', '2026-10-01T00:30:00Z'),
+      // Statut nul (colonne NULLable, consigne T3) : non terminal, priorité 0 ; le plus récent l'emporte sur un
+      // ENVOYE, jamais sur un SIGNE_COMPLET.
+      contrat('nul-recent', 'statut-nul', null, '2026-10-02T00:00:00Z'), contrat('envoye-ancien', 'statut-nul', 'ENVOYE', '2026-10-01T00:00:00Z'),
+      contrat('nul', 'statut-nul-signe', null, '2026-10-03T00:00:00Z'), contrat('signe', 'statut-nul-signe', 'SIGNE_COMPLET', '2026-10-01T00:00:00Z'),
       contrat('pour-m1', 'm1', 'SIGNE_COMPLET', '2026-10-01T00:00:00Z'),
     ],
     maintenant: MAINTENANT,
