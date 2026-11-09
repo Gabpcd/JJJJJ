@@ -413,6 +413,64 @@ final class ConsentementGpsModelTests: XCTestCase {
         XCTAssertEqual(model.ligneProfil, .interrupteur(actif: false))
     }
 
+    // MARK: - Seconde revue fraîche de T4b : session à vérifier dans le Profil (m1)
+
+    /// Modèle dont l'instantané est celui du `SessionStore` (revalidé par « Vérifier ma session »).
+    private func modeleAvecSession(_ port: PortConsentement) async throws -> (ConsentementGpsModel, SessionStore) {
+        var gateways = Gateways(auth: PretAuth(), role: NeutralRole(), missions: PretMissions(), clock: FixedClock(DemoWorld.fixedNow))
+        gateways.pointage = port
+        gateways.audit = AuditEspion()
+        let store = SessionStore(controller: SessionController(gateways: gateways))
+        await store.start()
+        let snapshot = try XCTUnwrap(store.state.snapshot, "session prête attendue")
+        return (ConsentementGpsModel(controller: store.controller, snapshot: snapshot), store)
+    }
+
+    func testLigneDuProfilSessionExpireeALaLectureVerifieLaSessionPuisRelit() async throws {
+        let port = PortConsentement(valeur: true, lectures: [JoleneError(.unauthorized, SessionController.sessionExpiredMessage), nil])
+        let (model, store) = try await modeleAvecSession(port)
+        await model.charger()
+        XCTAssertEqual(model.ligneProfil, .sessionAVerifier,
+                       "401 à la lecture : « Réessayer » ne peut rien réparer, la session est à vérifier (bloc du lot 1)")
+        XCTAssertNil(model.retourLigneProfil)
+        await model.verifierSession(store)
+        XCTAssertFalse(model.sessionExpired, "session revalidée, même identité")
+        XCTAssertEqual(model.ligneProfil, .interrupteur(actif: true), "consentement relu après la revalidation")
+        XCTAssertEqual(port.journal, ["lire", "lire"], "une seule relecture, aucun enregistrement")
+    }
+
+    func testLigneDuProfilSessionExpireeALaBasculeMasqueEtLeveLeRetourDEchec() async throws {
+        let port = PortConsentement(valeur: true, erreurEnregistrement: JoleneError(.unauthorized, SessionController.sessionExpiredMessage))
+        let (model, store) = try await modeleAvecSession(port)
+        await model.charger()
+        await model.basculer(false)
+        XCTAssertEqual(model.ligneProfil, .sessionAVerifier, "401 au retrait : la session est à vérifier")
+        XCTAssertEqual(model.retour, .echec(SessionController.sessionExpiredMessage))
+        XCTAssertNil(model.retourLigneProfil, "le bloc de session porte déjà le message : aucun doublon sous la ligne")
+        await model.verifierSession(store)
+        XCTAssertEqual(model.ligneProfil, .interrupteur(actif: true), "valeur relue au serveur, jamais l'hypothèse du retrait")
+        XCTAssertNil(model.retour, "l'échec d'avant la revalidation ne décrit plus l'état : levé")
+        XCTAssertEqual(port.enregistrements, 1, "« Vérifier ma session » ne rejoue jamais le retrait")
+    }
+
+    func testVerifierSessionDuProfilSansSessionExpireeNeRelitRien() async throws {
+        let port = PortConsentement(valeur: true)
+        let (model, store) = try await modeleAvecSession(port)
+        await model.charger()
+        await model.verifierSession(store)
+        XCTAssertEqual(port.journal, ["lire"], "session déjà valide : rien à reprendre")
+        XCTAssertEqual(model.ligneProfil, .interrupteur(actif: true))
+    }
+
+    func testVerifierSessionDuProfilSousUneAutreIdentiteNeRelitRien() async throws {
+        let port = PortConsentement(valeur: true, lectures: [JoleneError(.unauthorized, SessionController.sessionExpiredMessage), nil])
+        let (model, store) = try await modeleAvecSession(port)
+        await model.charger()
+        await store.signOut()
+        await model.verifierSession(store)
+        XCTAssertEqual(port.journal, ["lire"], "nouvel epoch : la ligne est reconstruite, ce modèle ne relit rien")
+    }
+
     // MARK: - Revue fraîche de T4b : envoi unique (m1)
 
     func testDoubleTapSurAutoriserUnSeulEnregistrementEtUnSeulAudit() async throws {

@@ -10,25 +10,20 @@ import XCTest
 /// Preuves « aucune requête » et « une seule fois » : `pointage-demo-scans` (DEBUG) lit les scans appliqués par le monde
 /// démo et ceux qui portent une position (« N scan · M avec position »), sans jamais afficher de coordonnée. Il est relu à
 /// chaque issue du pointage et sur l'action explicite `pointage-demo-relire` ; sa valeur d'accessibilité compte les
-/// lectures : chaque affirmation suit une lecture postérieure à l'action (`compteursRelus`, revue fraîche de T4b, m3),
-/// jamais un compteur resté celui du lancement. Scénarios
-/// DEBUG : `-JOLENE_DEMO_GPS refuse | reduite`, `-JOLENE_DEMO_RESEAU horsligne`, `-JOLENE_DEMO_QR 123456 | illisible |
-/// refus`, `-JOLENE_DEMO_SCENARIO scan-incertain`. Aucune attente par délai fixe : tout passe par `require`.
+/// lectures : chaque affirmation de compte suit une lecture postérieure à l'action (`compteursRelus`, revue fraîche de
+/// T4b, m3 ; seconde revue, m8 : « un seul scan » compris), jamais un compteur resté celui du lancement ou relu à
+/// l'instant du succès. Scénarios DEBUG : `-JOLENE_DEMO_GPS refuse | reduite`, `-JOLENE_DEMO_RESEAU horsligne`,
+/// `-JOLENE_DEMO_QR 123456 | illisible | refus` (lecture sur l'action explicite `pointage-scanner-demo-lire`, seconde revue
+/// fraîche, MJ1), `-JOLENE_DEMO_SCENARIO scan-incertain`. Aucune attente par délai fixe : tout passe par `require`.
+/// Étapes communes : `DemoPointageUITestCase` ; états d'erreur et reprise : `DemoPointageEtatsTests`.
 ///
 /// Identifiants : `pointage-zone-<m>`, `pointage-code-<m>`, `pointage-qr-<m>`, `pointage-submit-<m>`,
 /// `pointage-message-<m>`, `pointage-qr-message-<m>`, `pointage-position-<m>`, `pointage-en-service-<m>`,
 /// `pointage-segment-<m>-<n>`, `pointage-scanner`, `pointage-scanner-message`, `pointage-scanner-fermer`,
-/// `gps-consent-sheet`, `gps-consent-accepter`, `gps-consent-refuser`, `gps-consent-retour`, `bandeau-sans-gps`,
-/// `hors-ligne-bandeau`, `profil-gps-consentement`, `profil-gps-explication`, `profil-gps-retour`, `pointage-demo-relire`.
-final class DemoPointageTests: JoleneUITestCase {
-    private static let missionA = "demo-presence-a"
-    private static let missionB = "demo-presence-b"
-
-    /// `LibellesPresences.Pointage.codeInvalide` (décision 6, vouvoyée, apostrophe du web).
-    private static let codeInvalide = "Code de pointage invalide ou expiré. Demandez le code actuel à l’établissement."
-    private static let segmentOuvert = "Pointage enregistré — segment ouvert"
-    private static let segmentFerme = "Pointage enregistré — segment fermé"
-
+/// `pointage-scanner-demo-lire`, `gps-consent-sheet`, `gps-consent-accepter`, `gps-consent-refuser`, `gps-consent-retour`,
+/// `bandeau-sans-gps`, `hors-ligne-bandeau`, `profil-gps-consentement`, `profil-gps-explication`, `profil-gps-retour`,
+/// `pointage-demo-relire`.
+final class DemoPointageTests: DemoPointageUITestCase {
     // MARK: - Saisie, consentement, refus verbatim, ouverture puis fermeture
 
     func testConsentementAccepteRefusVerbatimPuisOuvertureEtFermeture() throws {
@@ -70,10 +65,9 @@ final class DemoPointageTests: JoleneUITestCase {
         require("Segment 1 en cours") { segment.exists && segment.label.contains("Segment 1") && segment.label.contains("→ en cours") }
         XCTAssertTrue(segment.label.contains("01h00"), "début du segment à l'heure du scan (horloge démo, Paris)")
         require("En service depuis l'ouverture") { self.libelle("pointage-en-service-\(Self.missionA)").contains("En service depuis 01h00") }
-        require("Un scan appliqué, avec position (consentement donné)") {
-            self.element("pointage-demo-scans").label == "1 scan · 1 avec position"
-        }
         XCTAssertEqual(valeur("pointage-code-\(Self.missionA)"), "", "champ vidé après un succès (web l.144)")
+        XCTAssertEqual(compteursRelus(dans: ecran), "1 scan · 1 avec position",
+                       "un scan appliqué, avec position (consentement donné), relu après le succès")
         record("\(proofPrefix)-pointage-ouverture")
 
         // Mission b (segment ouvert depuis la veille) : départ, segment fermé.
@@ -83,7 +77,7 @@ final class DemoPointageTests: JoleneUITestCase {
         require("Départ enregistré et relu", timeout: 30) { self.libelle("pointage-message-\(Self.missionB)").contains(Self.segmentFerme) }
         let segmentB = element("pointage-segment-\(Self.missionB)-1")
         require("Segment de la mission b fermé") { segmentB.exists && segmentB.label.contains("23h00 → 01h00") }
-        require("Deux scans appliqués, chacun une fois") { self.element("pointage-demo-scans").label == "2 scan · 2 avec position" }
+        XCTAssertEqual(compteursRelus(dans: ecran), "2 scan · 2 avec position", "deux scans appliqués, chacun une fois (relu)")
         record("\(proofPrefix)-pointage-fermeture")
     }
 
@@ -106,7 +100,7 @@ final class DemoPointageTests: JoleneUITestCase {
             self.libelle("bandeau-sans-gps").contains("Pointage sans localisation activé. Lorsque tu pointeras, l'établissement validera manuellement ta présence.")
         }
         XCTAssertTrue(libelle("gps-consent-retour").contains("Pointage sans GPS activé"), "retour du web (l.95)")
-        require("Scan appliqué sans aucune coordonnée") { self.element("pointage-demo-scans").label == "1 scan · 0 avec position" }
+        XCTAssertEqual(compteursRelus(dans: ecran), "1 scan · 0 avec position", "scan appliqué une fois, sans aucune coordonnée (relu)")
         record("\(proofPrefix)-pointage-sans-gps")
     }
 
@@ -122,9 +116,7 @@ final class DemoPointageTests: JoleneUITestCase {
         require("Pointage réussi malgré le refus de l'appareil", timeout: 30) {
             self.libelle("pointage-message-\(Self.missionA)").contains(Self.segmentOuvert)
         }
-        require("Aucun champ de coordonnée dans le scan enregistré") {
-            self.element("pointage-demo-scans").label == "1 scan · 0 avec position"
-        }
+        XCTAssertEqual(compteursRelus(dans: ecran), "1 scan · 0 avec position", "aucun champ de coordonnée dans le scan enregistré (relu)")
         XCTAssertFalse(element("bandeau-sans-gps").exists, "consentement donné : le bandeau ne suit qu'un refus du consentement")
         record("\(proofPrefix)-pointage-gps-refuse")
     }
@@ -170,13 +162,16 @@ final class DemoPointageTests: JoleneUITestCase {
         connexionDemo()
         let ecran = ouvrirMesPresences()
         ouvrirScanner(Self.missionA, dans: ecran)
-        // Le scanner démo rend deux détections du même QR : un seul code est remis, la feuille se ferme.
+        record("\(proofPrefix)-pointage-qr-scanner")
+        // Lecture démo sur action explicite (MJ1) : deux détections du même QR, un seul code remis, la feuille se ferme.
+        lireQRDemo()
         accepterConsentement()
         require("QR lu et pointage enregistré", timeout: 30) {
             self.libelle("pointage-message-\(Self.missionA)").contains(Self.segmentOuvert)
         }
         XCTAssertFalse(element("pointage-scanner").exists, "feuille du scanner fermée après la remise")
-        require("Un seul scan malgré deux détections") { self.element("pointage-demo-scans").label == "1 scan · 1 avec position" }
+        XCTAssertEqual(compteursRelus(dans: ecran), "1 scan · 1 avec position",
+                       "un seul scan malgré deux détections, relu après le succès (un second envoi s'y verrait)")
         XCTAssertFalse(element("pointage-segment-\(Self.missionA)-2").exists, "un seul segment")
         record("\(proofPrefix)-pointage-qr")
     }
@@ -186,6 +181,7 @@ final class DemoPointageTests: JoleneUITestCase {
         connexionDemo()
         let ecran = ouvrirMesPresences()
         ouvrirScanner(Self.missionA, dans: ecran)
+        lireQRDemo()
         require("QR non reconnu : message du web, caméra conservée", timeout: 30) {
             self.libelle("pointage-scanner-message").contains("QR non reconnu. Saisissez le code à 6 chiffres.")
         }
@@ -205,6 +201,8 @@ final class DemoPointageTests: JoleneUITestCase {
         connexionDemo()
         let ecran = ouvrirMesPresences()
         ouvrirScanner(Self.missionA, dans: ecran)
+        // Refus de la caméra rendu sur action explicite (MJ1) : la feuille se ferme, la saisie manuelle reste.
+        lireQRDemo()
         require("Caméra refusée : message du web (l.192)", timeout: 30) {
             self.libelle("pointage-qr-message-\(Self.missionA)").contains("Scan impossible. Saisissez le code manuellement.")
         }
@@ -232,7 +230,8 @@ final class DemoPointageTests: JoleneUITestCase {
         require("Pointage enregistré par réconciliation", timeout: 45) {
             self.libelle("pointage-message-\(Self.missionA)").contains(Self.segmentOuvert)
         }
-        require("Un seul scan appliqué : jamais de renvoi") { self.element("pointage-demo-scans").label == "1 scan · 1 avec position" }
+        XCTAssertEqual(compteursRelus(dans: ecran), "1 scan · 1 avec position",
+                       "un seul scan appliqué, relu après la réconciliation : jamais de renvoi")
         XCTAssertTrue(element("pointage-segment-\(Self.missionA)-1").exists)
         XCTAssertFalse(element("pointage-segment-\(Self.missionA)-2").exists, "un seul segment créé")
         record("\(proofPrefix)-pointage-reconcilie")
@@ -244,10 +243,8 @@ final class DemoPointageTests: JoleneUITestCase {
         launchDemo()
         connexionDemo()
         ouvrirProfil()
-        let liste = element("profile-list")
         let interrupteur = element("profil-gps-consentement")
-        require("L'interrupteur du consentement est rendu") { interrupteur.exists }
-        if !visible(interrupteur) { scrollTo(interrupteur, in: liste) }
+        amenerDansLeProfil(interrupteur, etats: ["profil-gps-chargement", "profil-gps-erreur", "profil-gps-consentement"])
         require("Consentement lu (NULL : éteint)") { interrupteur.isEnabled }
         XCTAssertEqual(interrupteur.value as? String, "0", "NULL n'est jamais présenté comme un consentement donné")
         XCTAssertTrue(text("Consentement GPS").exists, "titre du web (SectionPreferences.tsx l.129)")
@@ -304,135 +301,5 @@ final class DemoPointageTests: JoleneUITestCase {
         }
         XCTAssertFalse(element("gps-consent-sheet").exists)
         XCTAssertEqual(compteursRelus(dans: ecran), "1 scan · 0 avec position")
-    }
-
-    // MARK: - Étapes
-
-    private func connexionDemo() {
-        let scroll = element("login-scroll")
-        require("L'écran de connexion est affiché") { self.containerVisible(scroll) }
-        let email = element("login-email")
-        focus(email, in: scroll)
-        email.typeText(Self.demoEmail)
-        let password = element("login-password")
-        email.typeText("\n")
-        if !hasKeyboardFocus(password) { focus(password, in: scroll) }
-        require("Le mot de passe a le focus clavier") { self.hasKeyboardFocus(password) }
-        password.typeText(Self.demoPassword)
-        let submit = element("login-submit")
-        require("Le bouton de connexion est activé") { submit.isEnabled }
-        if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
-        submit.tap()
-        require("La session démo est prête", timeout: 30) { self.tabBarExists }
-    }
-
-    private func ouvrirProfil() {
-        tabButton("tab-profil", label: "Profil").tap()
-        require("Le profil est affiché") { self.containerVisible(self.element("profile-list")) }
-    }
-
-    /// Ligne de « Mon espace » (sous « Application ») : défilement borné, puis tap natif.
-    private func tapDansProfil(_ identifiant: String) {
-        let ligne = element(identifiant)
-        if !visible(ligne) { scrollTo(ligne, in: element("profile-list")) }
-        tap(identifiant)
-    }
-
-    @discardableResult
-    private func ouvrirMesPresences() -> XCUIElement {
-        ouvrirProfil()
-        tapDansProfil("profil-presences")
-        let ecran = element("presences-screen")
-        require("La page Présences est chargée", timeout: 30) {
-            self.containerVisible(ecran) && self.element("presences-tab-aujourdhui").isSelected && !self.element("presences-loading").exists
-        }
-        require("La zone de pointage de la mission a est prête", timeout: 30) { self.element("pointage-code-\(Self.missionA)").exists }
-        XCTAssertFalse(element("presences-error").exists, "aucune erreur en démo")
-        return ecran
-    }
-
-    /// Saisie au clavier numérique du champ de la mission (focus exigé avant `typeText`).
-    private func saisir(_ code: String, mission: String, dans ecran: XCUIElement) {
-        let champ = element("pointage-code-\(mission)")
-        require("Le champ du code de \(mission) est rendu", timeout: 30) { champ.exists }
-        scrollTo(champ, in: ecran)
-        focus(champ, in: ecran)
-        // Un code refusé reste dans le champ (comme le web) : effacé avant la nouvelle saisie. Le texte est centré : un
-        // toucher au bord de fin place le curseur après le dernier chiffre, puis autant d'effacements que de chiffres
-        // (au plus trois passes, bornées).
-        var passes = 0
-        while let present = valeur("pointage-code-\(mission)"), !present.isEmpty, passes < 3 {
-            champ.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
-            champ.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: present.count))
-            passes += 1
-        }
-        require("Le champ est vide avant la saisie") { self.valeur("pointage-code-\(mission)") == "" }
-        champ.typeText(code)
-        require("Le code saisi est dans le champ") { (champ.value as? String) == code }
-    }
-
-    /// Le bouton d'action, amené hors du clavier (un glissement de la page le ferme), puis touché.
-    private func appuyerSurPointer(_ mission: String, dans ecran: XCUIElement) {
-        let bouton = element("pointage-submit-\(mission)")
-        var glissements = 0
-        while (coveredByKeyboard(bouton) || !fullyVisible(bouton, inside: ecran)) && glissements < 10 {
-            drag(ecran, fromY: 0.55, toY: 0.45)
-            if !coveredByKeyboard(bouton), !fullyVisible(bouton, inside: ecran) { scrollTo(bouton, in: ecran) }
-            glissements += 1
-        }
-        tap("pointage-submit-\(mission)")
-    }
-
-    private func ouvrirScanner(_ mission: String, dans ecran: XCUIElement) {
-        let qr = element("pointage-qr-\(mission)")
-        require("Le bouton QR est rendu", timeout: 30) { qr.exists }
-        scrollTo(qr, in: ecran)
-        tap("pointage-qr-\(mission)")
-        require("La feuille du scanner est présentée") { self.element("pointage-scanner").exists }
-    }
-
-    private func accepterConsentement() {
-        let feuille = element("gps-consent-sheet")
-        require("La feuille de consentement est affichée", timeout: 30) { feuille.exists }
-        let accepter = element("gps-consent-accepter")
-        if !visible(accepter) { scrollTo(accepter, in: feuille) }
-        tap("gps-consent-accepter")
-        require("La feuille de consentement est fermée", timeout: 30) { !self.element("gps-consent-sheet").exists }
-    }
-
-    /// Interrupteur SwiftUI : touché sur sa poignée (bord de fin), le libellé seul ne le bascule pas.
-    private func basculer(_ interrupteur: XCUIElement) {
-        require("L'interrupteur est actif") { interrupteur.isEnabled && self.visible(interrupteur) }
-        let poignee = interrupteur.switches.firstMatch
-        let cible = poignee.exists ? poignee : interrupteur
-        cible.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
-    }
-
-    private func libelle(_ identifiant: String) -> String {
-        element(identifiant).label
-    }
-
-    /// Lectures des compteurs démo faites depuis le lancement (valeur d'accessibilité de `pointage-demo-scans`).
-    private func lecturesCompteurs() -> Int {
-        Int(element("pointage-demo-scans").value as? String ?? "") ?? 0
-    }
-
-    /// Compteurs démo relus APRÈS l'action qui précède (revue fraîche de T4b, m3) : `pointage-demo-relire` touché, puis une
-    /// lecture nouvelle exigée avant de rendre le libellé.
-    private func compteursRelus(dans ecran: XCUIElement) -> String {
-        let avant = lecturesCompteurs()
-        let relire = element("pointage-demo-relire")
-        require("Le bouton de relecture des compteurs démo est rendu") { relire.exists }
-        scrollTo(relire, in: ecran)
-        tap("pointage-demo-relire")
-        require("Compteurs relus après l'action") { self.lecturesCompteurs() > avant }
-        return element("pointage-demo-scans").label
-    }
-
-    private func valeur(_ identifiant: String) -> String? {
-        let champ = element(identifiant)
-        let texte = champ.value as? String
-        // Un champ vide expose son indication (`placeholderValue`) comme valeur.
-        return texte == champ.placeholderValue ? "" : texte
     }
 }

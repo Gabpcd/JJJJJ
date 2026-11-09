@@ -50,6 +50,101 @@ final class PointageSaisieTests: XCTestCase {
         XCTAssertEqual(DemoPointageGateway.Scenario(arguments: ["-JOLENE_DEMO_SCENARIO", "scan-incertain"]), .scanIncertain)
         XCTAssertEqual(DemoPointageGateway.Scenario(arguments: ["-JOLENE_DEMO_SCENARIO", "upload-incertain"]), .normal,
                        "scénario d'un autre domaine")
+        // Seconde revue fraîche de T4b (m2) : scénarios de reprise.
+        XCTAssertEqual(DemoPointageGateway.Scenario(arguments: ["-JOLENE_DEMO_SCENARIO", "session-expiree-scan"]), .sessionExpireeScan)
+        XCTAssertEqual(DemoPointageGateway.Scenario(arguments: ["-JOLENE_DEMO_SCENARIO", "session-expiree-consentement"]),
+                       .sessionExpireeConsentement)
+        XCTAssertEqual(DemoPointageGateway.Scenario(arguments: ["-JOLENE_DEMO_SCENARIO", "consentement-echec"]), .consentementEchec)
+        XCTAssertEqual(ScenarioDocumentsDemo(rawValue: "session-expiree-scan"), nil, "inconnu des justificatifs : leur scénario reste normal")
+    }
+
+    // MARK: - Drapeaux d'écran du monde démo (seconde revue fraîche de T4b, m3)
+
+    func testSurchargesDeDrapeauxDepuisLesArguments() {
+        XCTAssertEqual(DemoFlagsGateway.surcharges(arguments: []), [:])
+        XCTAssertEqual(DemoFlagsGateway.surcharges(arguments: ["-JOLENE_FLAG_ios_natif_presences_actif", "false"]),
+                       ["ios_natif_presences_actif": false])
+        XCTAssertEqual(DemoFlagsGateway.surcharges(arguments: ["-JOLENE_MODE", "demo", "-JOLENE_FLAG_ios_natif_contrats_actif", "true",
+                                                              "-JOLENE_FLAG_ios_natif_documents_actif", "false"]),
+                       ["ios_natif_contrats_actif": true, "ios_natif_documents_actif": false])
+        XCTAssertEqual(DemoFlagsGateway.surcharges(arguments: ["-JOLENE_FLAG_ios_natif_presences_actif", "non"]), [:],
+                       "valeur autre que true/false : ignorée (fail-open)")
+        XCTAssertEqual(DemoFlagsGateway.surcharges(arguments: ["-JOLENE_FLAG_ios_natif_presences_actif"]), [:], "valeur absente")
+        XCTAssertEqual(DemoFlagsGateway.surcharges(arguments: ["-JOLENE_FLAG_", "false"]), [:], "clé vide")
+    }
+
+    func testDrapeauDesPresencesSurchargeDansLeMondeDemo() async {
+        let desactive = DemoWorld.gateways(drapeaux: DemoFlagsGateway.surcharges(arguments: ["-JOLENE_FLAG_ios_natif_presences_actif", "false"]))
+        let presences = await desactive.flags.ecranActif(.presences)
+        XCTAssertFalse(presences, "coupe-circuit du pointage honoré")
+        let documents = await desactive.flags.ecranActif(.documents)
+        XCTAssertTrue(documents, "les autres écrans restent fail-open")
+        let parDefaut = await DemoWorld.gateways().flags.ecranActif(.presences)
+        XCTAssertTrue(parDefaut)
+    }
+
+    // MARK: - Scénarios de reprise dans le monde démo, de bout en bout (seconde revue fraîche de T4b, m2)
+
+    /// Monde démo du scénario, session ouverte par la connexion démo (comme `AppContainer` en DEBUG).
+    private func mondeDemo(_ scenario: DemoPointageGateway.Scenario) async throws -> (SessionStore, SessionSnapshot) {
+        var gateways = DemoWorld.gateways()
+        scenario.installer(dans: &gateways)
+        let store = SessionStore(controller: SessionController(gateways: gateways))
+        await store.start()
+        await store.signIn(email: DemoWorld.context.email, password: "demonstration")
+        let snapshot = try XCTUnwrap(store.state.snapshot, "session démo prête attendue")
+        return (store, snapshot)
+    }
+
+    func testScenarioSessionExpireeAuScanVerifierMaSessionReconcilieSansRenvoi() async throws {
+        let (store, snapshot) = try await mondeDemo(.sessionExpireeScan)
+        let appareil = Appareil.demo()
+        let model = PointageModel(missionId: "demo-presence-a", finLe: nil, controller: store.controller, snapshot: snapshot,
+                                  appareil: appareil, attendre: { _ in }, monotone: { 0 })
+        let consentement = ConsentementGpsModel(controller: store.controller, snapshot: snapshot)
+        await consentement.charger()
+        await model.charger()
+        await model.pointer(code: "123456", gps: nil)
+        XCTAssertTrue(model.sessionExpired)
+        XCTAssertEqual(model.issue, .verification)
+        XCTAssertEqual(AffichageZonePointage(pointage: model, consentement: consentement), .sessionAVerifier,
+                       "la zone montre « Session à vérifier » (M1) pendant que le monde démo répond 401")
+        await model.rafraichir()
+        XCTAssertEqual(AffichageZonePointage(pointage: model, consentement: consentement), .sessionAVerifier,
+                       "le suivi de 15 s ne lève pas le bloc : la session reste expirée jusqu'à « Vérifier ma session »")
+        await model.verifierSession(store, consentement: consentement)
+        XCTAssertEqual(model.issue, .enregistre(.ouverture), "le reçu gardé est réconcilié par relecture")
+        XCTAssertFalse(model.sessionExpired)
+        guard let gateways = await store.controller.gateways(for: snapshot.epoch),
+              let demo = gateways.pointage as? DemoPointageGateway else { return XCTFail("pointage démo attendu") }
+        let scans = await demo.metadonneesRecues
+        XCTAssertEqual(scans.count, 1, "jamais de renvoi du code")
+    }
+
+    func testScenarioSessionExpireeALaLectureDuConsentementDansLeProfil() async throws {
+        let (store, snapshot) = try await mondeDemo(.sessionExpireeConsentement)
+        let model = ConsentementGpsModel(controller: store.controller, snapshot: snapshot)
+        await model.charger()
+        XCTAssertEqual(model.ligneProfil, .sessionAVerifier)
+        await model.charger()
+        XCTAssertEqual(model.ligneProfil, .sessionAVerifier, "« Réessayer » n'y ferait rien : 401 jusqu'à la revalidation")
+        await model.verifierSession(store)
+        XCTAssertEqual(model.ligneProfil, .interrupteur(actif: false), "NULL relu après la revalidation, affiché éteint (D-T4b-1)")
+    }
+
+    func testScenarioEchecDuConsentementPuisNouvelleReponse() async throws {
+        let (store, snapshot) = try await mondeDemo(.consentementEchec)
+        let model = ConsentementGpsModel(controller: store.controller, snapshot: snapshot)
+        await model.charger()
+        XCTAssertEqual(model.decision, .recueillir)
+        let premier = await model.repondre(accepte: true, localisation: nil)
+        XCTAssertNil(premier, "échec : rien n'est enregistré, aucun pointage ne part")
+        XCTAssertEqual(model.retour, .echec(SessionController.timeoutMessage))
+        XCTAssertEqual(model.decision, .recueillir, "aucune hypothèse locale : la feuille reviendra au prochain pointage")
+        model.oublierRetour()
+        let second = await model.repondre(accepte: true, localisation: nil)
+        XCTAssertEqual(second, true)
+        XCTAssertEqual(model.decision, .localiser)
     }
 
     // MARK: - Réseau

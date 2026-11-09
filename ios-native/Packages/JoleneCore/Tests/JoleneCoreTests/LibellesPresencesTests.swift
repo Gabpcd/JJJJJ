@@ -170,6 +170,11 @@ final class LibellesPresencesTests: XCTestCase {
     /// la section « Mon espace » garde un texte opérationnel de T4a.
     func testTextesOperationnelsInventories() {
         XCTAssertEqual(LibellesPresences.EspaceSoignant.titreSection, "Mon espace", "décision 24 du lot 2")
+        // Seconde revue fraîche de T4b (m3) : coupe-circuit `ios_natif_presences_actif`, texte du lot 0 repris tel quel.
+        XCTAssertEqual(LibellesPresences.Liste.ecranNonDisponible,
+                       "Cet espace n'est pas encore disponible dans l'application. Rendez-vous sur jolene.app.")
+        XCTAssertEqual(LibellesPresences.Liste.ecranNonDisponible, LibellesJustificatifs.espaceNonDisponible,
+                       "même texte que le coupe-circuit des documents (T7)")
     }
 
     // MARK: - Zone de pointage (T4b)
