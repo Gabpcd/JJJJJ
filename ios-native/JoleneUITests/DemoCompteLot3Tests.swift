@@ -299,8 +299,16 @@ final class DemoCompteLot3Tests: JoleneUITestCase {
         return pret
     }
 
-    /// Ferme la feuille sans rien partager : son bouton de fermeture (iPhone ; iPad s'il en a un), sinon un tap natif
-    /// hors du popover (iPad), dans la zone de fermeture que UIKit expose (`PopoverDismissRegion`).
+    /// Ferme la feuille sans rien partager : son bouton de fermeture s'il en a un, sinon un tap natif dans la zone de
+    /// fermeture que UIKit expose (`PopoverDismissRegion`), hors du cadre de la feuille.
+    ///
+    /// Intégration du lot 3 (premier run CI, 42536888984, UI — iphone) : sur iPhone (iOS 26.2), la feuille n'a pas de
+    /// bouton « Close » / « Fermer » et `PopoverDismissRegion` (voile de la présentation en feuille) couvre tout
+    /// l'écran ; le coin bas gauche visé pour le popover de l'iPad tombe SOUS la feuille, qui est restée ouverte. Sur
+    /// iPhone, le tap vise donc le voile au-dessus du bord haut de la feuille (libellé DEBUG `compte-export-pret`, posé
+    /// en (0, 0) de la vue de la feuille) ; si la feuille est encore là au terme d'une attente bornée (détente haute),
+    /// elle est glissée vers le bas depuis son bord haut, geste de fermeture d'une feuille. La fermeture reste exigée
+    /// par l'appelant (`!pret.exists`), aucune assertion n'est relâchée.
     private func compteFermerFeuilleSansPartage() {
         let fermer = app.buttons.matching(NSPredicate(format: "label IN %@ OR identifier IN %@",
                                                       Self.libellesFermer, Self.libellesFermer)).firstMatch
@@ -308,8 +316,19 @@ final class DemoCompteLot3Tests: JoleneUITestCase {
         require("La feuille de partage peut être fermée", timeout: 30) { self.visible(fermer) || horsPopover.exists }
         if visible(fermer) {
             fermer.tap()
-        } else {
+        } else if UIDevice.current.userInterfaceIdiom == .pad {
             horsPopover.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.97)).tap()
+        } else {
+            let pret = element("compte-export-pret")
+            let origine = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+            let milieu = app.frame.width / 2
+            let bordHaut = pret.frame.minY - app.frame.minY
+            origine.withOffset(CGVector(dx: milieu, dy: max(2, bordHaut / 2))).tap()
+            if !pret.waitForNonExistence(timeout: 10) {
+                let depart = origine.withOffset(CGVector(dx: milieu, dy: bordHaut + 12))
+                let arrivee = origine.withOffset(CGVector(dx: milieu, dy: app.frame.height - 4))
+                depart.press(forDuration: 0.05, thenDragTo: arrivee, withVelocity: .fast, thenHoldForDuration: 0)
+            }
         }
     }
 
