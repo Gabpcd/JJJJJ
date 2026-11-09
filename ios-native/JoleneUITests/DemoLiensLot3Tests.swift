@@ -116,7 +116,7 @@ final class DemoLiensLot3Tests: JoleneUITestCase {
         let lien = "https://jolene.app/soignant/mes-gains?tab=factures"
         launchDemo(extraArguments: ["-JOLENE_OPEN_URL", lien])
         liensRenvoiWebAffiche(lien)
-        XCTAssertFalse(element("placeholder-revenus").exists, "jamais l'onglet natif pour une section non portée")
+        XCTAssertFalse(element("revenus-screen").exists, "jamais l'onglet natif pour une section non portée (L3-T12)")
         record("\(proofPrefix)-liens-revenus-factures")
         liensFermerRenvoiWeb()
         XCTAssertEqual(element("deeplink-route").label, "safari \(lien)")
