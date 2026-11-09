@@ -43,11 +43,26 @@ final class LibellesDetailPresencesTests: XCTestCase {
         XCTAssertTrue(notation.contains("La note n\\'a pas pu être enregistrée — tu pourras noter depuis la mission."), "source web changée")
         XCTAssertEqual(LibellesDetailPresences.Notation.erreurEnregistrement, "La note n'a pas pu être enregistrée. Réessayez.")
         XCTAssertEqual(LibellesDetailPresences.voirSurLeWeb, "Voir sur jolene.app", "libellé du lot 1 (AccueilScreen)")
+        // Échec de lecture du détail (revue fraîche de T5a, m11) : titres du lot 1 repris, repli lisible quand le port
+        // ne porte aucun message (jamais un message vide).
+        typealias Echec = LibellesDetailPresences.Echec
+        XCTAssertEqual(Echec.sessionAVerifier, "Session à vérifier", "texte du lot 1 (MissionsListScreen)")
+        XCTAssertEqual(Echec.verifierMaSession, "Vérifier ma session", "texte du lot 1 (MissionsListScreen)")
+        XCTAssertEqual(Echec.chargementImpossible,
+                       "Le détail de vos présences n'a pas pu être chargé. Vérifiez votre connexion puis réessayez.")
+        XCTAssertEqual(Echec.message(nil, sessionExpiree: false), Echec.chargementImpossible)
+        XCTAssertEqual(Echec.message("", sessionExpiree: false), Echec.chargementImpossible, "message vide : repli")
+        XCTAssertEqual(Echec.message("  ", sessionExpiree: true), SessionController.sessionExpiredMessage)
+        XCTAssertEqual(Echec.message(nil, sessionExpiree: true), "Votre session a expiré. Reconnectez-vous.")
+        XCTAssertEqual(Echec.message("Le service ne répond pas.", sessionExpiree: false), "Le service ne répond pas.",
+                       "message du port tel quel")
     }
 
     func testAucunTexteTutoyeVideNiJuridique() {
         let tous = [LibellesDetailPresences.Notation.description, LibellesDetailPresences.Notation.remerciement,
-                    LibellesDetailPresences.Notation.erreurEnregistrement, LibellesDetailPresences.voirSurLeWeb]
+                    LibellesDetailPresences.Notation.erreurEnregistrement, LibellesDetailPresences.voirSurLeWeb,
+                    LibellesDetailPresences.Echec.sessionAVerifier, LibellesDetailPresences.Echec.verifierMaSession,
+                    LibellesDetailPresences.Echec.chargementImpossible]
             + LibellesDetailPresences.Notation.criteres
         let tutoiement: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
         for texte in tous {

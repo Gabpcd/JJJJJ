@@ -20,20 +20,31 @@ final class NotationModelTests: XCTestCase {
         var issues: [Result<IssueNotation, Error>] = []
         private(set) var envois: [(missionId: String, note: Int, criteres: CriteresNotation?)] = []
         private(set) var lecturesFin = 0
+        /// Portes (entrée ouverte par le port, sortie attendue) : la réponse reste en vol tant que le test n'ouvre pas.
+        var porteNoter: (entree: Gate, sortie: Gate)?
+        var porteFin: (entree: Gate, sortie: Gate)?
 
         func noter(missionId: String, note: Int, criteres: CriteresNotation?,
                    context: MissionReadContext) async throws -> IssueNotation {
-            let issue = lock.withLock { () -> Result<IssueNotation, Error> in
+            let (issue, porte) = lock.withLock { () -> (Result<IssueNotation, Error>, (entree: Gate, sortie: Gate)?) in
                 envois.append((missionId, note, criteres))
-                return issues.isEmpty ? .success(.enregistree) : issues.removeFirst()
+                return (issues.isEmpty ? .success(.enregistree) : issues.removeFirst(), porteNoter)
+            }
+            if let porte {
+                await porte.entree.open()
+                await porte.sortie.wait()
             }
             return try issue.get()
         }
 
         func finPrevue(missionId: String, context: MissionReadContext) async throws -> String? {
-            let reponse = lock.withLock { () -> Result<String?, Error> in
+            let (reponse, porte) = lock.withLock { () -> (Result<String?, Error>, (entree: Gate, sortie: Gate)?) in
                 lecturesFin += 1
-                return fin
+                return (fin, porteFin)
+            }
+            if let porte {
+                await porte.entree.open()
+                await porte.sortie.wait()
             }
             return try reponse.get()
         }
@@ -181,8 +192,160 @@ final class NotationModelTests: XCTestCase {
         XCTAssertFalse(notation.ouverte, "« déjà notée » : rien à montrer, la feuille se ferme comme un succès (l.58-61)")
         XCTAssertEqual(notation.retour, .remerciement)
         XCTAssertEqual(port.envois.count, 3)
-        notation.oublierRetour()
+        notation.oublierRemerciement()
         XCTAssertNil(notation.retour)
+    }
+
+    // MARK: - Remerciement éphémère et fermeture de la feuille (revue fraîche de T5a, m4)
+
+    func testRemerciementEphemereEtSeulementLui() async throws {
+        // Le web affiche un toast de 5 s (`toastOptions={{ duration: 5000 }}`, `src/App.tsx` l.536) : la zone efface le
+        // remerciement après ce délai. `oublierRemerciement` n'efface jamais une erreur.
+        XCTAssertEqual(NotationModel.dureeRemerciementSecondes, 5)
+        let port = PortNotation()
+        port.issues = [.success(.refusee(message: "Mission déjà notée pour un autre sens.")), .success(.enregistree)]
+        let notation = try await model(port)
+        await notation.proposer()
+        notation.choisirNote(3)
+        await notation.envoyer()
+        notation.oublierRemerciement()
+        XCTAssertEqual(notation.retour, .erreur("Mission déjà notée pour un autre sens."), "une erreur n'est pas un remerciement")
+        await notation.envoyer()
+        XCTAssertEqual(notation.retour, .remerciement)
+        notation.oublierRemerciement()
+        XCTAssertNil(notation.retour)
+    }
+
+    func testFermetureProgrammatiqueNEffacePasLeRemerciement() async throws {
+        // SwiftUI peut réécrire `false` dans le Binding de `.sheet` après une fermeture décidée par le modèle (envoi
+        // réussi) : ce n'est pas un « Plus tard », le remerciement reste affiché.
+        let port = PortNotation()
+        let notation = try await model(port)
+        await notation.proposer()
+        notation.choisirNote(4)
+        await notation.envoyer()
+        XCTAssertFalse(notation.ouverte)
+        notation.fermetureParLUtilisateur()
+        XCTAssertEqual(notation.retour, .remerciement, "fermeture programmatique : remerciement conservé")
+    }
+
+    func testFermetureParLUtilisateurVautPlusTard() async throws {
+        let port = PortNotation()
+        port.issues = [.failure(JoleneError(.network, "Le service ne répond pas."))]
+        let memoire = MemoireNotationEnMemoire()
+        let notation = try await model(port, memoire: memoire)
+        await notation.proposer()
+        notation.choisirNote(2)
+        await notation.envoyer()
+        XCTAssertEqual(notation.retour, .erreur("La note n'a pas pu être enregistrée. Réessayez."))
+        notation.fermetureParLUtilisateur()
+        XCTAssertFalse(notation.ouverte, "glissement vers le bas : la feuille se ferme comme « Plus tard »")
+        XCTAssertNil(notation.retour, "l'erreur de la feuille fermée n'est plus affichée")
+        XCTAssertEqual(notation.note, 0)
+        XCTAssertTrue(memoire.dejaProposee(userId: "u-1", missionId: "m-1"), "la mémoire reste posée")
+    }
+
+    // MARK: - Concurrence (revue fraîche de T5a, m5 et m7)
+
+    func testDoubleTapSurEnvoyerUnSeulEnvoi() async throws {
+        let port = PortNotation()
+        let entree = Gate(), sortie = Gate()
+        port.porteNoter = (entree, sortie)
+        let notation = try await model(port)
+        await notation.proposer()
+        notation.choisirNote(4)
+        let premier = Task { await notation.envoyer() }
+        await entree.wait()
+        XCTAssertTrue(notation.envoiEnCours)
+        XCTAssertFalse(notation.peutEnvoyer)
+        await notation.envoyer()
+        notation.choisirNote(1)
+        notation.basculerDetail()
+        notation.plusTard()
+        XCTAssertTrue(notation.ouverte, "pendant l'envoi : « Plus tard » est sans effet")
+        XCTAssertEqual(notation.note, 4, "pendant l'envoi : la note ne change pas")
+        await sortie.open()
+        await premier.value
+        XCTAssertEqual(port.envois.count, 1, "double tap : un seul appel")
+        XCTAssertEqual(port.envois.first?.note, 4)
+        XCTAssertEqual(notation.retour, .remerciement)
+        XCTAssertFalse(notation.envoiEnCours)
+    }
+
+    func testReponseTardiveApresChangementDEpochPendantLEnvoi() async throws {
+        for issue in [Result<IssueNotation, Error>.success(.enregistree),
+                      .success(.refusee(message: "Mission déjà notée pour un autre sens.")),
+                      .failure(JoleneError(.unauthorized, "Votre session a expiré."))] {
+            let port = PortNotation()
+            port.issues = [issue]
+            let entree = Gate(), sortie = Gate()
+            port.porteNoter = (entree, sortie)
+            let (controller, snapshot) = try await pret(port)
+            let notation = NotationModel(missionId: "m-1", controller: controller, snapshot: snapshot, memoire: MemoireNotationEnMemoire())
+            await notation.proposer()
+            notation.choisirNote(5)
+            let envoi = Task { await notation.envoyer() }
+            await entree.wait()
+            _ = await controller.signOut()
+            await sortie.open()
+            await envoi.value
+            XCTAssertNil(notation.retour, "epoch périmé : rien n'est publié (\(issue))")
+            XCTAssertFalse(notation.sessionExpired)
+            XCTAssertFalse(notation.envoiEnCours)
+        }
+    }
+
+    func testFinPrevueTardiveApresChangementDEpochNeProposeRien() async throws {
+        let port = PortNotation()
+        let entree = Gate(), sortie = Gate()
+        port.porteFin = (entree, sortie)
+        let memoire = MemoireNotationEnMemoire()
+        let (controller, snapshot) = try await pret(port)
+        let notation = NotationModel(missionId: "m-1", controller: controller, snapshot: snapshot, memoire: memoire)
+        let proposition = Task { await notation.proposer() }
+        await entree.wait()
+        _ = await controller.signOut()
+        await sortie.open()
+        await proposition.value
+        XCTAssertFalse(notation.ouverte, "epoch périmé : aucune feuille")
+        XCTAssertFalse(memoire.dejaProposee(userId: "u-1", missionId: "m-1"), "rien n'est mémorisé")
+    }
+
+    func testZoneDisparuePendantLaRelectureNeMarquePasLaNote() async throws {
+        // La zone lie la proposition à sa vue (`.task(id:)`) : la disparition annule la tâche. Comme le web
+        // (`if (!actif.current) return` avant `localStorage.setItem`, `PointageRotatifSoignant.tsx` l.157), la note n'est
+        // alors ni marquée ni ouverte, et reste proposable à la réapparition.
+        let port = PortNotation()
+        let entree = Gate(), sortie = Gate()
+        port.porteFin = (entree, sortie)
+        let memoire = MemoireNotationEnMemoire()
+        let notation = try await model(port, memoire: memoire)
+        let proposition = Task { await notation.proposer() }
+        await entree.wait()
+        proposition.cancel()
+        await sortie.open()
+        await proposition.value
+        XCTAssertFalse(notation.ouverte)
+        XCTAssertFalse(memoire.dejaProposee(userId: "u-1", missionId: "m-1"), "tâche annulée : mémoire non posée")
+
+        port.porteFin = nil
+        await notation.proposer()
+        XCTAssertTrue(notation.ouverte, "réapparition de la zone : la note est proposée")
+        XCTAssertTrue(memoire.dejaProposee(userId: "u-1", missionId: "m-1"))
+    }
+
+    func testDoublePropositionConcurrenteUneSeuleRelecture() async throws {
+        let port = PortNotation()
+        let entree = Gate(), sortie = Gate()
+        port.porteFin = (entree, sortie)
+        let notation = try await model(port)
+        let premiere = Task { await notation.proposer() }
+        await entree.wait()
+        await notation.proposer()
+        await sortie.open()
+        await premiere.value
+        XCTAssertEqual(port.lecturesFin, 1, "une seule relecture de fin_le à la fois")
+        XCTAssertTrue(notation.ouverte)
     }
 
     func testSessionExpireeALEnvoi() async throws {

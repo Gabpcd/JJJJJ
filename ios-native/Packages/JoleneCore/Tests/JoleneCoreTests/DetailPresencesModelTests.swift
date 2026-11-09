@@ -23,6 +23,7 @@ final class DetailPresencesModelTests: XCTestCase {
         private(set) var appelsRelance = 0
         private(set) var appelsDetail = 0
         var porteRelance: (entree: Gate, sortie: Gate)?
+        var porteDetail: (entree: Gate, sortie: Gate)?
 
         init(detail: Result<DetailPresences, Error>, fiche: Result<FicheDetailPresences, Error>) {
             detailReponse = detail; ficheReponse = fiche
@@ -31,7 +32,14 @@ final class DetailPresencesModelTests: XCTestCase {
         private var refus: JoleneError { JoleneError(.contract, "jamais appelé par le détail des présences") }
 
         func detail(missionId: String, context: MissionReadContext) async throws -> DetailPresences {
-            let r = lock.withLock { () -> Result<DetailPresences, Error> in appelsDetail += 1; return detailReponse }
+            let (r, porte) = lock.withLock { () -> (Result<DetailPresences, Error>, (entree: Gate, sortie: Gate)?) in
+                appelsDetail += 1
+                return (detailReponse, porteDetail)
+            }
+            if let porte {
+                await porte.entree.open()
+                await porte.sortie.wait()
+            }
             return try r.get()
         }
         func ficheDetail(missionId: String, context: MissionReadContext) async throws -> FicheDetailPresences {
@@ -166,6 +174,67 @@ final class DetailPresencesModelTests: XCTestCase {
         await model.charger()
         XCTAssertEqual(model.etat, .chargement, "nouvel epoch : aucune publication")
         XCTAssertEqual(p.appelsDetail, 0, "aucune lecture sans gateways valides")
+    }
+
+    /// Revue fraîche de T5a, m7 : l'epoch change PENDANT les lectures (réponse ou erreur tardive) : rien n'est publié.
+    func testEpochQuiChangePendantLesLecturesAbandonneLaReponse() async throws {
+        for reponse in [Result<DetailPresences, Error>.success(DetailPresences(missionId: "m-1", creneaux: creneaux,
+                                                                                resume: ResumePresencesServeur(pointageEffectue: true))),
+                        .failure(JoleneError(.unauthorized, "Votre session a expiré.")),
+                        .failure(JoleneError(.network, "Le service ne répond pas."))] {
+            let p = port()
+            p.detailReponse = reponse
+            let entree = Gate(), sortie = Gate()
+            p.porteDetail = (entree, sortie)
+            let (controller, snapshot) = try await pret(p)
+            let model = DetailPresencesModel(missionId: "m-1", controller: controller, snapshot: snapshot)
+            let chargement = Task { await model.charger() }
+            await entree.wait()
+            _ = await controller.signOut()
+            await sortie.open()
+            await chargement.value
+            XCTAssertEqual(model.etat, .chargement, "epoch périmé pendant la lecture : aucune publication (\(reponse))")
+            XCTAssertFalse(model.sessionExpired)
+            XCTAssertEqual(p.appelsDetail, 1)
+        }
+    }
+
+    /// Revue fraîche de T5a, m7 : une réponse de relance arrivée après un changement d'epoch n'est pas affichée.
+    func testRelanceTardiveApresChangementDEpochNAfficheRien() async throws {
+        let p = port()
+        let (controller, snapshot) = try await pret(p)
+        let model = DetailPresencesModel(missionId: "m-1", controller: controller, snapshot: snapshot)
+        await model.charger()
+        let entree = Gate(), sortie = Gate()
+        p.porteRelance = (entree, sortie)
+        p.relances = [.failure(JoleneError(.unauthorized, "Votre session a expiré."))]
+        let relance = Task { await model.relancer() }
+        await entree.wait()
+        _ = await controller.signOut()
+        await sortie.open()
+        await relance.value
+        XCTAssertNil(model.retourRelance, "epoch périmé : aucun retour affiché")
+        XCTAssertFalse(model.sessionExpired)
+        XCTAssertFalse(model.relanceEnCours)
+    }
+
+    /// Une lecture plus récente gagne : la réponse tardive d'un premier `charger()` ne remplace pas la seconde.
+    func testLecturePlusRecenteGagne() async throws {
+        let p = port(resume: nil)
+        let entree = Gate(), sortie = Gate()
+        p.porteDetail = (entree, sortie)
+        let (controller, snapshot) = try await pret(p)
+        let model = DetailPresencesModel(missionId: "m-1", controller: controller, snapshot: snapshot)
+        let premiere = Task { await model.charger() }
+        await entree.wait()
+        p.porteDetail = nil
+        p.detailReponse = .success(DetailPresences(missionId: "m-1", creneaux: creneaux, resume: ResumePresencesServeur(pointageEffectue: true)))
+        await model.charger()
+        let seconde = try XCTUnwrap(model.presentation)
+        XCTAssertNotNil(seconde.synthese, "seconde lecture : synthèse serveur")
+        await sortie.open()
+        await premiere.value
+        XCTAssertEqual(model.presentation, seconde, "la première réponse, tardive, est abandonnée")
     }
 
     // MARK: - Relance
