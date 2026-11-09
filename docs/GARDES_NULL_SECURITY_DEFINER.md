@@ -2,9 +2,10 @@
 
 > Statut : **PR B9 en attente du go explicite de Gabrielle** (SECURITY DEFINER,
 > autorisation, escrow, facturation). Migration
-> `supabase/migrations/20261103013434_gardes_null_security_definer.sql`.
-> **Ordre de merge imposé** : ce lot passe après les quatre branches B9 du 02/11
-> (§7). La garde statique le refuse tant que scanner et B5b ne sont pas mergés.
+> `supabase/migrations/20261109010957_gardes_null_security_definer.sql`
+> (renommée le 09/11 : ex-`20261103013434`, antérieure aux migrations du 08/11).
+> **Ordre de merge imposé** (§7) : les quatre branches B9 du 02/11 sont mergées ;
+> dans la file sérielle, ce lot passe après #1123 puis #1124.
 
 ## 1. Le défaut
 
@@ -33,8 +34,13 @@ rôle d'établissement (`fn_role_etablissement_courant(NULL) IS NULL → RETURN 
 
 ## 2. Correctif livré (20 fonctions)
 
-Une seule différence par fonction, partie de la définition LIVE (md5 relu le
-2026-11-03, identique au dump) : la comparaison passe sous `COALESCE(..., false)`.
+Une seule différence par fonction, partie de la définition LIVE (relue en lecture
+seule le 03/11, puis le 09/11 après les merges du 08/11 #1114, #1117, #1118, #1119
+et #1120 : `md5(prosrc)`, `md5(pg_get_functiondef)`, arguments, résultat,
+`proconfig`, ACL et inventaire identiques, aucune des 20 fonctions redéfinie
+entre-temps). Le texte exact de `pg_get_functiondef` est versionné dans
+`tests/security/fixtures/gardes-null-security-definer-live.sql`. La comparaison
+passe sous `COALESCE(..., false)`.
 Un `NULL` vaut « pas d'accès ». Les appelants dont la comparaison valait déjà
 `true` ou `false` gardent exactement le même résultat. Messages, ACL,
 volatilité et `search_path` sont inchangés (`CREATE OR REPLACE`, aucun GRANT).
@@ -107,8 +113,8 @@ merge » échoue : main ne peut pas afficher une raison « corrigée » fausse.
 
 | Fonction | Preuve exigée | Raison |
 |---|---|---|
-| `fn_declarer_fin_retroactive` (`v_caller_is_etab_admin`, `v_caller_is_soignant`) | `OR COALESCE(v_caller_is_etab_admin, false)` et `NOT (COALESCE(v_caller_is_soignant, false)` (migration `20261102205212`) | Même défaut, corrigé par la PR B9 `fix/scanner-code-sans-code-suivant` (COALESCE à l'usage). La redéfinir ici depuis le LIVE réintroduirait `nouveau_code`/`nouveau_hmac` si cette migration passait après. **Exploitable en LIVE** (md5 `845c6a3f…` relu le 03/11) tant que cette PR n'est pas mergée. |
-| `fn_etat_pointage_mission` (`v_is_etab`, `v_is_soignant`) | `IF NOT COALESCE(v_is_etab, false) AND NOT COALESCE(v_is_soignant, false) THEN` (migration `20261102210943`) | Même défaut, corrigé par la PR B9 B5b `fix/visibilite-etablissement-par-permission` (COALESCE à l'usage, code réservé à la permission `pointage`), partie du même LIVE (md5 `3fe46580…`). La garder ici faisait échouer la seconde PR mergée. |
+| `fn_declarer_fin_retroactive` (`v_caller_is_etab_admin`, `v_caller_is_soignant`) | `OR COALESCE(v_caller_is_etab_admin, false)` et `NOT (COALESCE(v_caller_is_soignant, false)` (migration `20261102205212`) | Même défaut, corrigé par la PR B9 #1117 `fix/scanner-code-sans-code-suivant` (COALESCE à l'usage), **mergée le 08/11** ; les deux preuves figurent dans le corps LIVE relu le 09/11. La redéfinir ici réintroduirait `nouveau_code`/`nouveau_hmac`. |
+| `fn_etat_pointage_mission` (`v_is_etab`, `v_is_soignant`) | `IF NOT COALESCE(v_is_etab, false) AND NOT COALESCE(v_is_soignant, false) THEN` (migration `20261102210943`) | Même défaut, corrigé par la PR B9 B5b #1119 `fix/visibilite-etablissement-par-permission` (COALESCE à l'usage, code réservé à la permission `pointage`), **mergée le 08/11** ; preuve présente dans le corps LIVE relu le 09/11. |
 | `fn_creer_reclamation_score` (`v_proprio_id != v_uid`) | — | Branche SOIGNANT : `v_uid` testé `IS NULL` en tête, `v_proprio_id` lu dans `evenements_score_soignant.soignant_id` (NOT NULL) après le test `v_event.id IS NULL` : jamais NULL. |
 | `dec_valider_paiement_facture` | — | Trigger `factures` : la RLS UPDATE est réservée à `est_admin()`. Le NULL est porteur pour le contexte système (webhook, cron sans `auth.uid()`) qui passe la facture `PAYEE`. |
 | `fn_ouvrir_litige_rate_limited` (surcharge 4 arguments ; garde et `v_initie_par`) | — | NULL seulement si la mission n'a pas de soignant assigné. La lecture `factures_honoraires … soignant_id = NULL` ne trouve alors rien et refuse ; le `CASE` de `v_initie_par`, calculé après la garde, retombe sur « ETABLISSEMENT », seule branche qui a pu passer. |
@@ -211,7 +217,8 @@ Proposition, à instruire dans une PR B9 dédiée :
 ### Gaps connus non verrouillés — PR B9 dédiées à ouvrir en priorité
 
 Le principe CLAUDE.md « un gap connu reste verrouillé » n'est **pas** satisfait
-pour ces trois cas : ils sont documentés, pas rendus impossibles.
+pour les deux premiers cas : ils sont documentés, pas rendus impossibles (le
+troisième est fermé depuis le 08/11).
 
 * **CP5b, pointage par codes statiques (gravité haute, fraude)** :
   `fn_pointer_arrivee`/`fn_pointer_depart` acceptent `p_code_arrivee`/`p_code_depart`
@@ -230,8 +237,8 @@ pour ces trois cas : ils sont documentés, pas rendus impossibles.
   facture_id IS NOT NULL` avec un message explicite, ou `REVOKE EXECUTE … FROM
   authenticated` (aucun appelant web ni iOS) et mise à jour de
   `supabase/SECURITY_DEFINER_MANIFEST.json`.
-* **`fn_declarer_fin_retroactive`** : exploitable en LIVE tant que
-  `fix/scanner-code-sans-code-suivant` n'est pas mergée (§3).
+* ~~`fn_declarer_fin_retroactive`~~ : fermé par #1117, mergée et déployée le
+  08/11 (preuve relue dans le corps LIVE le 09/11, §3).
 
 ### Autres suites
 
@@ -261,33 +268,49 @@ pour ces trois cas : ils sont documentés, pas rendus impossibles.
 
 * Garde statique : `node --test tests/node/gardes-null-security-definer.node.mjs`
   (scanner et ses choix, dump, ordre de merge, migrations à partir de
-  `20261103013434`, différence unique par corps LIVE, branchement CI). Le test
-  « ordre de merge » est **rouge par construction** tant que scanner et B5b ne
-  sont pas mergés et cette branche rebasée.
+  `20261109010957`, horodatage postérieur au registre distant et à #1124,
+  **aucune chaîne hexadécimale ≥ 32** dans les fichiers du lot, différence unique
+  par corps LIVE comparée texte à texte à la fixture `pg_get_functiondef`, dump
+  aligné, manifeste du préflight, branchement CI).
+* Migration : préflight et postflight **calculés** (aucune empreinte écrite en
+  dur, GitGuardian refuse les chaînes hexadécimales ou base64 de 32 caractères et
+  plus). Le préflight capture chaque corps LIVE, exige la garde LIVE une seule
+  fois et l'absence de sa correction (rejeu refusé :
+  `GARDES_NULL_PREFLIGHT_SOURCE_DRIFT`) et une empreinte d'inventaire égale au
+  `md5` du corps LIVE. Le postflight exige
+  `md5(replace(nouveau corps, garde corrigée, garde LIVE)) = md5(corps LIVE)`,
+  des attributs et ACL inchangés, puis aligne l'inventaire sur le nouveau corps.
+  Toute dérive annule la migration entière (`GARDES_NULL_POSTFLIGHT_*`).
 * Recette SQL : `tests/security/gardes-null-security-definer.test.sql`, exécutée
-  sur staging par `validate-pr`, sous ROLLBACK. Elle couvre 82 refus et
-  49 appelants légitimes et vérifie l'absence d'effet. Pool urgence : un soignant
-  fixture éligible (même cohorte test, documents vérifiés) rend le pool non vide
-  et les autres soignants éligibles sont exclus le temps du test ; A et ADM
-  obtiennent exactement ce soignant (téléphone compris) et une diffusion, S, T, R
-  et B 0. `fn_deposer_chorus` est exercée sur une facture fixture EMISE.
-  **Jamais exécutée à ce jour** : elle le sera à l'ouverture de la PR.
+  sur staging par `validate-pr` (job `sql-transaction`, même transaction que la
+  migration, sous ROLLBACK). Elle couvre 82 refus et 49 appelants légitimes et
+  vérifie l'absence d'effet. Pool urgence : un soignant fixture éligible (même
+  cohorte test, documents vérifiés) rend le pool non vide et les autres soignants
+  éligibles sont exclus le temps du test ; A et ADM obtiennent exactement ce
+  soignant (téléphone compris) et une diffusion, S, T, R et B 0.
+  `fn_deposer_chorus` est exercée sur une facture fixture EMISE. **Exécutable
+  seulement en CI** (base staging nécessaire, aucun PostgreSQL local) : jamais
+  exécutée hors CI à ce jour.
 * Post-déploiement, en lecture seule :
 
 ```sql
 -- Corps, inventaire et ACL (20 lignes attendues, toutes à true / true / false / true :
--- corps_ok, inventaire_ok, anon, authenticated).
-SELECT v.signature, md5(p.prosrc) = v.md5 AS corps_ok, i.definition_md5 = v.md5 AS inventaire_ok,
+-- corps_ok, inventaire_ok, anon, authenticated). Empreintes calculées.
+SELECT v.signature,
+       pg_catalog.strpos(p.prosrc, v.garde_corrigee) > 0 AS corps_ok,
+       i.definition_md5 = pg_catalog.md5(p.prosrc) AS inventaire_ok,
        has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
        has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated
-FROM (VALUES ('fn_valider_alerte_presence(uuid)', '1ff0c4c48ccd906f161e1a9174034505')
-             /* … les 19 autres couples du manifeste de la migration … */) AS v(signature, md5)
+FROM (VALUES ('fn_valider_alerte_presence(uuid)',
+              'IF NOT COALESCE(v_presence.etablissement_id = v_etab_id, false) AND NOT est_admin() THEN')
+             /* … les 19 autres couples (signature, garde corrigée) du manifeste de la migration … */
+     ) AS v(signature, garde_corrigee)
 JOIN pg_proc p ON p.oid = to_regprocedure('public.' || v.signature)
 JOIN private.security_definer_inventory i ON i.signature = v.signature;
 
 -- Registre (statements peuplés).
 SELECT version, name, cardinality(statements) > 0 AS statements_ok
-FROM supabase_migrations.schema_migrations WHERE version = '20261103013434';
+FROM supabase_migrations.schema_migrations WHERE version = '20261109010957';
 
 -- Audit a posteriori : codes de secours, QR et numéros DPAE émis par un compte
 -- ni membre de l'établissement, ni propriétaire historique, ni admin.
@@ -309,43 +332,51 @@ se reconnaît pas a posteriori.
 
 ## 7. Ordre de merge
 
-Branches B9 du 02/11 dont la migration précède `20261103013434` :
+Branches B9 du 02/11 dont la migration précède celle de ce lot, **toutes mergées
+sur main le 08/11** (fusion `origin/main` du 09/11 dans cette branche, sans
+rebase) :
 
 | Ordre | Branche | Migration | Lien avec ce lot |
 |---|---|---|---|
-| 1 | `fix/score-matching-inconnu-null` | `20261102204820` | aucune fonction commune (`fn_obtenir_missions_swipe`) |
-| 2 | `fix/scanner-code-sans-code-suivant` | `20261102205212` | porte le correctif de `fn_declarer_fin_retroactive` : **verrou** (entrée REVUES conditionnée) |
-| 3 | `fix/contestation-paiement-soignant` | `20261102205808` | aucune fonction commune (`fn_contester_paiement_soignant`) |
-| 4 | `fix/visibilite-etablissement-par-permission` (B5b) | `20261102210943` | porte le correctif de `fn_etat_pointage_mission` : **verrou** (entrée REVUES conditionnée) |
-| 5 | `fix/gardes-null-security-definer` (ce lot) | `20261103013434` | en dernier |
+| 1 | `fix/score-matching-inconnu-null` (#1114) | `20261102204820` | aucune fonction commune (`fn_obtenir_missions_swipe`) |
+| 2 | `fix/scanner-code-sans-code-suivant` (#1117) | `20261102205212` | porte le correctif de `fn_declarer_fin_retroactive` : **verrou** (entrée REVUES conditionnée, tenue) |
+| 3 | `fix/contestation-paiement-soignant` (#1118) | `20261102205808` | aucune fonction commune (`fn_contester_paiement_soignant`) |
+| 4 | `fix/visibilite-etablissement-par-permission` (B5b, #1119) | `20261102210943` | porte le correctif de `fn_etat_pointage_mission` : **verrou** (entrée REVUES conditionnée, tenue) |
 
-Les quatre premières s'ordonnent entre elles selon leurs propres contraintes ;
-aucune ne redéfinit l'une des 20 fonctions de ce lot (vérifié sur leurs fichiers
-du 03/11). La protection stricte de main impose de les merger une par une ;
-avant le merge de ce lot :
+File de merge sériel restante :
 
-1. rebaser cette branche sur main. Essai de merge local du 03/11 (main
-   `12d50b7d` + les quatre branches dans l'ordre ci-dessus + ce lot) : seuls
-   conflits dans `.github/workflows/validate-pr.yml`, `supabase/schema/public.sql`
-   fusionne seul (fonctions disjointes). Garder les deux côtés, avec une
-   contrainte : dans `SQL_TESTS`, placer
-   `tests/security/gardes-null-security-definer.test.sql` **avant**
-   `tests/non-regression/sql/contestation-paiement-soignant.test.sql`, dont le
-   test node exige d'être en fin de liste. `tests/node/paiements-staging-installed.node.mjs`
-   compte les suites de `SQL_TESTS` : 64 sur cette branche comme sur
-   contestation, donc **65** après rebase (garder les deux `assert.match`, et le
-   commentaire « les 65 suites » de `validate-pr.yml`) ;
-2. `node --test tests/node/gardes-null-security-definer.node.mjs` doit être
-   entièrement vert, test « ordre de merge » compris. Sur l'essai de merge :
-   7/7 verts, et les tests node de B5b (8/8) et de contestation (8/8) aussi ;
-3. relire les md5 LIVE des 20 fonctions (le contrôle « avant » de la migration
-   refuse toute divergence) ;
-4. `validate-pr` rejoue la recette SQL sur staging.
+| Ordre | PR | Migration | Lien avec ce lot |
+|---|---|---|---|
+| 5 | #1123 `fix/dpae-contrats-cddu-vacation` | — (front seul) | aucun fichier commun |
+| 6 | #1124 `fix/dpae-serveur-cddu-vacation` | `20261108223500` | redéfinit `fn_mes_dpae`, `fn_rappel_dpae_quotidien`, `fn_pointer_arrivee`, `fn_annuler_candidature_soignant`, `dec_email_contrat_signe_complet` : **aucune des 20 fonctions** de ce lot (vérifié sur son fichier du 09/11), aucun corps commun |
+| 7 | `fix/gardes-null-security-definer` (ce lot) | `20261109010957` | en dernier |
 
-Si ce lot devait malgré tout passer avant l'une des quatre : la garde statique le
-refuse pour scanner et B5b ; pour score-matching et contestation, renommer leur
-migration après `20261103013434` (CLAUDE.md, migrations règle 2, même si
-`deploy-supabase` accepte `--include-all`) et la repartir de son LIVE.
+Ce lot a été renommé de `20261103013434` en `20261109010957` : la migration de
+#1124 (`20261108223500`) lui serait sinon postérieure, et `supabase db push`
+refuserait l'ordre (CLAUDE.md, migrations règle 2). La garde statique exige
+désormais un horodatage postérieur à `20261108223500` et à la dernière version du
+registre de production (`20261102210943` au 09/11).
+
+Après le merge de #1124, la fusion de main dans cette branche donnera des
+conflits **textuels seulement**, à résoudre en gardant les deux côtés :
+
+1. `.github/workflows/validate-pr.yml` : `SQL_TESTS` passe à **66** suites (main
+   64 + #1124 + ce lot) ; garder `tests/security/dpae-contrats-cddu-vacation.test.sql`
+   et `tests/security/gardes-null-security-definer.test.sql`, la contestation
+   restant **en fin de liste** (exigence de son test node), et le commentaire
+   « les 66 suites » ;
+2. `tests/node/paiements-staging-installed.node.mjs` : compte à 66, garder les
+   `assert.match` des deux suites ;
+3. `supabase/schema/public.sql` : fonctions disjointes, fusion attendue sans
+   conflit ;
+4. puis rejouer `node --test tests/node/gardes-null-security-definer.node.mjs`
+   (entièrement vert) et relire les corps LIVE des 20 fonctions : le préflight
+   refuse toute divergence.
+
+Si ce lot devait malgré tout passer avant #1124, rien ne casse côté SQL
+(fonctions disjointes) ; seule la migration de #1124 deviendrait antérieure à la
+dernière version distante et devrait être renommée après `20261109010957`
+(CLAUDE.md, migrations règle 2).
 
 ## 8. Recette frontend
 

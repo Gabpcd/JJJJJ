@@ -15,9 +15,25 @@ import { test } from 'node:test';
 const read = path => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 const md5 = value => createHash('md5').update(value, 'utf8').digest('hex');
 
-const MIGRATION = '20261103013434_gardes_null_security_definer.sql';
+const MIGRATION = '20261109010957_gardes_null_security_definer.sql';
 const DOC = 'docs/GARDES_NULL_SECURITY_DEFINER.md';
 const SQL_SUITE = 'tests/security/gardes-null-security-definer.test.sql';
+// pg_get_functiondef LIVE exact des 20 fonctions, avant correctif (relu le 09/11).
+const LIVE = 'tests/security/fixtures/gardes-null-security-definer-live.sql';
+// Dernière version du registre de production relue le 09/11, et migration de la
+// PR voisine #1124 (fix/dpae-serveur-cddu-vacation), mergée avant ce lot.
+const DERNIERE_VERSION_DISTANTE = '20261102210943';
+const MIGRATION_1124 = '20261108223500';
+// Fichiers de ce lot : aucune chaîne hexadécimale ≥ 32 (GitGuardian, empreintes calculées).
+const FICHIERS_DU_LOT = [
+  `supabase/migrations/${MIGRATION}`, LIVE, SQL_SUITE, DOC,
+  'tests/node/gardes-null-security-definer.node.mjs',
+  'e2e/recette-complete-gardes-null.spec.ts', 'e2e/helpers/recette-complete-gardes-null.ts',
+];
+// Littéral SQL tel que la migration et la recette l'écrivent.
+const litteralSql = v => /[\n\\]/.test(v)
+  ? `E'${v.replace(/\\/g, '\\\\').replace(/'/g, "''").replace(/\n/g, '\\n')}'`
+  : `'${v.replace(/'/g, "''")}'`;
 
 // ── Analyse ────────────────────────────────────────────────────────────────
 
@@ -243,70 +259,73 @@ export function corpsEffectif(r, { migrations = migrationsDuDepot(), lire = name
 
 const preuveTenue = (r, options) => squash(code(corpsEffectif(r, options).body)).includes(squash(r.preuve));
 
-// ── Manifeste de la migration (LIVE relu le 2026-11-03) ───────────────────
+// ── Manifeste de la migration (LIVE relu le 2026-11-03, puis le 2026-11-09) ──
+//
+// Aucune empreinte écrite en dur : la référence LIVE est la fixture
+// pg_get_functiondef versionnée, comparée texte à texte.
 
 const CORRECTIFS = [
-  ['fn_valider_alerte_presence(uuid)', '05a6e15c497e28d6f94b9cd1c243c811', '1ff0c4c48ccd906f161e1a9174034505',
+  ['fn_valider_alerte_presence(uuid)',
     '    IF v_presence.etablissement_id != v_etab_id AND NOT est_admin() THEN',
     '    IF NOT COALESCE(v_presence.etablissement_id = v_etab_id, false) AND NOT est_admin() THEN'],
-  ['fn_codes_pointage_mission(uuid)', 'ca8d9013f736db6d3dca03b595aecf48', '478bc3d59e15a1a1c844443863a86d49',
+  ['fn_codes_pointage_mission(uuid)',
     '  IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN',
     '  IF NOT est_admin() AND NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) THEN'],
-  ['fn_generer_code_secours_mission(uuid,text)', '3fbae3ee7274f92165cccb0ab705bdcd', '76c8e19c6f16a642b968d91a7850752b',
+  ['fn_generer_code_secours_mission(uuid,text)',
     '  IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN',
     '  IF NOT (est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false)) THEN'],
-  ['fn_generer_qr_mission(uuid,text)', '6196379d17503a467d24beeb038b8897', '75869cf50e34d68dd982a6714c010c0b',
+  ['fn_generer_qr_mission(uuid,text)',
     '  IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN',
     '  IF NOT (est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false)) THEN'],
-  ['fn_soignants_urgence(uuid)', '9dcc20b932437733fbbdf5474cd1b39e', '9b8f736b8f7fd19729e26cc56f28d2c4',
+  ['fn_soignants_urgence(uuid)',
     '  IF NOT (public.est_admin() OR v_mission.etablissement_id = public.mon_etablissement_id()) THEN',
     '  IF NOT (public.est_admin() OR COALESCE(v_mission.etablissement_id = public.mon_etablissement_id(), false)) THEN'],
-  ['fn_generer_donnees_dpae(uuid)', 'fd81d58a2e18b98fe7f57d458b467079', '1070a34cb7025565225d732ed7ac3906',
+  ['fn_generer_donnees_dpae(uuid)',
     '  IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN',
     '  IF NOT (est_admin() OR COALESCE(v_etab_id = mon_etablissement_id(), false)) THEN'],
-  ['fn_enregistrer_numero_dpae(uuid,text)', '1f54235815e67141e4994cb9a604aa2b', '0d6fb5c6692759e3972746d8dbc196f9',
+  ['fn_enregistrer_numero_dpae(uuid,text)',
     '  IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN',
     '  IF NOT (est_admin() OR COALESCE(v_etab_id = mon_etablissement_id(), false)) THEN'],
-  ['fn_rebooker_soignant(uuid,uuid,timestamp with time zone,timestamp with time zone)', 'd404ad86634519ac9a63b3202e52d2db', '53a208f0c1ee8c78a6faab262f47eaa4',
+  ['fn_rebooker_soignant(uuid,uuid,timestamp with time zone,timestamp with time zone)',
     '  IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN',
     '  IF NOT COALESCE(v_m.etablissement_id = public.mon_etablissement_id(), false) AND NOT public.est_admin() THEN'],
-  ['fn_booster_mission(uuid)', 'c22963698c0cbfc4cd6de19bb474f520', 'e57ceb0273b02fab0215e2d33e251200',
+  ['fn_booster_mission(uuid)',
     '  IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN',
     '  IF NOT COALESCE(v_m.etablissement_id = public.mon_etablissement_id(), false) AND NOT public.est_admin() THEN'],
-  ['fn_presences_detail_mission(uuid)', '5063c38138004b599a721412b029c5ff', '1f653d7d432a87a356f3f62910a7ee38',
+  ['fn_presences_detail_mission(uuid)',
     '    IF v_mission.etablissement_id != mon_etablissement_id() AND NOT est_admin() \n       AND v_mission.soignant_assigne_id != auth.uid() THEN',
     '    IF NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin()\n       AND NOT COALESCE(v_mission.soignant_assigne_id = auth.uid(), false) THEN'],
-  ['fn_activer_garantie_mission(uuid,boolean)', '4f170971145ed66ddad01805abebae6f', '00b0feecc9dfc4893a04bc94b584a013',
+  ['fn_activer_garantie_mission(uuid,boolean)',
     '  IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
     '  IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'],
-  ['fn_deposer_chorus(uuid,text)', '3a42d1cf3e8bb1aecedd28c4e0782cae', '8b310b8e4c6bbabd58b039a9e915c675',
+  ['fn_deposer_chorus(uuid,text)',
     '    IF v_facture.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
     '    IF NOT COALESCE(v_facture.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'],
-  ['fn_generer_facture(uuid)', '5314c8689cd382ad000be9e7a9df6b29', '078777ead10a6a4d500694551299622b',
+  ['fn_generer_facture(uuid)',
     '    IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN',
     '    IF NOT est_admin() AND NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) THEN'],
-  ['fn_diffuser_pool_urgence(uuid)', 'ba942f8cc9f7997930c5bdc9d32af9df', '07cd19c650da67e2b8128d32d0ffbfe6',
+  ['fn_diffuser_pool_urgence(uuid)',
     '    OR v_etablissement_id = public.mon_etablissement_id()\n  ) THEN',
     '    OR COALESCE(v_etablissement_id = public.mon_etablissement_id(), false)\n  ) THEN'],
-  ['fn_etablissement_pour_mission(uuid)', '1f9bc93c9cf7e4b097ace3a78720c689', '55493a7014ae20761ebf86fdab938f1c',
+  ['fn_etablissement_pour_mission(uuid)',
     '    ) AND mon_etablissement_id() != p_etablissement_id AND NOT est_admin() THEN',
     '    ) AND NOT COALESCE(mon_etablissement_id() = p_etablissement_id, false) AND NOT est_admin() THEN'],
-  ['fn_annuler_serie(uuid)', '71d57002916d856d6530d90f749676e1', '06255e7b0d58441d46ac69798276dfae',
+  ['fn_annuler_serie(uuid)',
     '    IF NOT est_admin_etablissement() AND NOT est_admin() THEN',
     '    IF NOT COALESCE(est_admin_etablissement(), false) AND NOT est_admin() THEN'],
-  ['fn_assigner_mission_admin(uuid,uuid,text)', '502101a70656f3b5e5eb01c14f23d5de', '3a3523b9ac79ebd8e34a5ef58e749de3',
+  ['fn_assigner_mission_admin(uuid,uuid,text)',
     '  IF NOT (public.est_admin() OR public.est_admin_etablissement()) THEN',
     '  IF NOT (public.est_admin() OR COALESCE(public.est_admin_etablissement(), false)) THEN'],
-  ['fn_creer_reclamation_score(uuid,text,text,text,text)', '34855c0d2b9062792aa49dbafc32ae6b', '18be67db062364dadbd298fb90884947',
+  ['fn_creer_reclamation_score(uuid,text,text,text,text)',
     "  IF p_evenement_type = 'ETAB' AND v_proprio_id != mon_etablissement_id() THEN",
     "  IF p_evenement_type = 'ETAB' AND NOT COALESCE(v_proprio_id = mon_etablissement_id(), false) THEN"],
-  ['fn_declarer_honoraires_retrocession(uuid,numeric,text)', '093135e6e6086e183023c612aa7bfa92', '4223483a5500b8d865c4f529af6f1a99',
+  ['fn_declarer_honoraires_retrocession(uuid,numeric,text)',
     '  IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
     '  IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'],
-  ['fn_definir_retrocession_mission(uuid,numeric)', '89a25f4acaeed41f2850acea6d15530e', '52393260c791cbb5093278f303a93ebd',
+  ['fn_definir_retrocession_mission(uuid,numeric)',
     '  IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
     '  IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'],
-].map(([signature, avant, apres, garde, correctif]) => ({ signature, name: signature.split('(')[0], avant, apres, garde, correctif }));
+].map(([signature, garde, correctif]) => ({ signature, name: signature.split('(')[0], garde, correctif }));
 
 // Règle auth.uid : appliquée à toutes les migrations à partir de celle-ci mais,
 // dans le dump, seulement aux fonctions de ce lot et de REVUES (verrou de
@@ -377,11 +396,11 @@ test('REVUES conditionnées : la preuve suit la redéfinition la plus récente (
   const commentaire = def('BEGIN -- NOT COALESCE(ok, false)\n ok := x = mon_etablissement_id(); IF NOT ok THEN RETURN; END IF; END;');
   const cas = (migrations, fichiers, dump) => preuveTenue(r, { migrations, lire: name => fichiers[name], dump });
   // PR B9 dépendante non mergée, dump LIVE vulnérable : refus.
-  assert.equal(cas(['20261103013434_ce_lot.sql'], { '20261103013434_ce_lot.sql': '' }, vuln), false);
+  assert.equal(cas(['20261109010957_ce_lot.sql'], { '20261109010957_ce_lot.sql': '' }, vuln), false);
   // Preuve en commentaire seulement : refus.
   assert.equal(cas([], {}, commentaire), false);
   // PR B9 mergée (migration présente), dump pas encore re-baseliné : accepté.
-  assert.equal(cas(['20261102210943_b.sql', '20261103013434_ce_lot.sql'], { '20261102210943_b.sql': corrige, '20261103013434_ce_lot.sql': '' }, vuln), true);
+  assert.equal(cas(['20261102210943_b.sql', '20261109010957_ce_lot.sql'], { '20261102210943_b.sql': corrige, '20261109010957_ce_lot.sql': '' }, vuln), true);
   // Une migration ultérieure redéfinit sans le correctif : refus.
   assert.equal(cas(['20261102210943_b.sql', '20261104000000_regression.sql'], { '20261102210943_b.sql': corrige, '20261104000000_regression.sql': vuln }, corrige), false);
   // Dump re-baseliné après déploiement : accepté.
@@ -418,35 +437,71 @@ test('migrations à partir de celle-ci : aucune nouvelle garde NULL', () => {
   }
 });
 
+test('migration : une seule migration, postérieure au registre distant et à #1124, aucune empreinte en dur', () => {
+  const fichiers = migrationsDuDepot().filter(name => name.endsWith('_gardes_null_security_definer.sql'));
+  assert.deepEqual(fichiers, [MIGRATION]);
+  const version = MIGRATION.slice(0, 14);
+  assert.ok(version > DERNIERE_VERSION_DISTANTE, `${version} doit suivre la dernière version distante ${DERNIERE_VERSION_DISTANTE}`);
+  assert.ok(version > MIGRATION_1124, `${version} doit suivre la migration de #1124 (${MIGRATION_1124})`);
+  for (const chemin of FICHIERS_DU_LOT) {
+    assert.doesNotMatch(read(chemin), /[0-9a-fA-F]{32,}/, `${chemin} : chaîne hexadécimale ≥ 32 (empreinte en dur)`);
+  }
+  assert.doesNotMatch(read(LIVE), /^\s*(?:BEGIN|COMMIT|ROLLBACK);\s*$/m);
+});
+
 test('migration : une seule différence (la garde) depuis chaque corps LIVE, dump aligné', () => {
   const migration = read(`supabase/migrations/${MIGRATION}`);
   const dump = functions(read('supabase/schema/public.sql'));
+  const live = functions(read(LIVE));
   const bodies = functions(migration);
-  assert.equal(bodies.length, CORRECTIFS.length);
   assert.equal(CORRECTIFS.length, 20);
   assert.deepEqual(bodies.map(f => f.name), CORRECTIFS.map(c => c.name));
-  for (const c of CORRECTIFS) {
-    const body = bodies.find(f => f.name === c.name).body;
-    assert.equal(md5(body), c.apres, `${c.name} : corps proposé`);
-    assert.equal(body.split(c.correctif).length, 2, `${c.name} : garde corrigée unique`);
-    assert.equal(md5(body.replace(c.correctif, c.garde)), c.avant, `${c.name} : seule la garde diffère du LIVE`);
+  assert.deepEqual(live.map(f => f.name), CORRECTIFS.map(c => c.name));
+  CORRECTIFS.forEach((c, i) => {
+    const propose = bodies[i];
+    const avant = live[i];
+    assert.ok(propose.securityDefiner && avant.securityDefiner, `${c.name} : SECURITY DEFINER`);
+    // En-tête pg_get_functiondef identique (signature, résultat, langage, sécurité, search_path).
+    assert.equal(propose.header, avant.header, `${c.name} : en-tête modifié`);
+    assert.equal(avant.body.split(c.garde).length, 2, `${c.name} : garde LIVE unique`);
+    assert.equal(avant.body.split(c.correctif).length, 1, `${c.name} : correctif déjà présent dans le LIVE`);
+    assert.equal(propose.body.split(c.correctif).length, 2, `${c.name} : garde corrigée unique`);
+    assert.equal(propose.body.split(c.garde).length, 1, `${c.name} : garde LIVE encore présente`);
+    // Seule la garde diffère du LIVE (comparaison texte à texte, empreintes calculées).
+    assert.equal(md5(propose.body.replace(c.correctif, c.garde)), md5(avant.body), `${c.name} : autre différence que la garde`);
+    assert.equal(propose.body.replace(c.correctif, c.garde), avant.body);
     const enDump = dump.filter(f => f.schema === 'public' && f.name === c.name);
     assert.equal(enDump.length, 1, `${c.name} : surcharge inattendue dans le dump`);
-    assert.equal(md5(enDump[0].body), c.apres, `${c.name} : dump non aligné`);
-    assert.ok(migration.includes(`'${c.signature}', `) && migration.includes(`'${c.avant}', '${c.apres}')`), `${c.name} : manifeste avant/après`);
-    assert.ok(bodies.find(f => f.name === c.name).securityDefiner);
-  }
+    assert.equal(enDump[0].body, propose.body, `${c.name} : dump non aligné`);
+    // Manifeste du préflight : ordre, signature, garde LIVE et correctif en littéraux SQL.
+    assert.ok(migration.includes(`      (${i + 1}, '${c.signature}',\n`), `${c.name} : ligne ${i + 1} du manifeste`);
+    assert.ok(migration.includes(`       ${litteralSql(c.garde)},\n       ${litteralSql(c.correctif)})`), `${c.name} : garde et correctif du manifeste`);
+  });
   const squelette = migration.replace(/--[^\n]*/g, '').replace(/\$fonction\$[\s\S]*?\$fonction\$/g, () => '$fonction$ $fonction$');
-  assert.doesNotMatch(squelette, /\b(?:GRANT|REVOKE|DROP|ALTER\s+FUNCTION|ALTER\s+TABLE|TRUNCATE|DELETE\s+FROM|INSERT\s+INTO)\b/i);
+  // Seule table créée : la table temporaire du préflight (ON COMMIT DROP).
+  assert.doesNotMatch(squelette.replace(/\) ON COMMIT DROP;/, ');'), /\b(?:GRANT|REVOKE|DROP|ALTER\s+FUNCTION|ALTER\s+TABLE|TRUNCATE|DELETE\s+FROM)\b/i);
+  assert.deepEqual([...squelette.matchAll(/INSERT\s+INTO\s+([\w.]+)/gi)].map(m => m[1]), ['_gardes_null_avant']);
+  assert.match(squelette, /CREATE TEMP TABLE _gardes_null_avant \([\s\S]*?\) ON COMMIT DROP;/);
   assert.doesNotMatch(migration, /^[ \t]*(?:BEGIN|COMMIT|ROLLBACK);[ \t]*$/m);
   assert.deepEqual([...squelette.matchAll(/UPDATE\s+([\w.]+)/gi)].map(m => m[1]), ['private.security_definer_inventory']);
   assert.ok(squelette.indexOf('$gardes_null_avant$;') < squelette.indexOf('CREATE OR REPLACE FUNCTION'));
   assert.ok(squelette.lastIndexOf('CREATE OR REPLACE FUNCTION') < squelette.indexOf('DO $gardes_null_apres$'));
-  assert.equal([...squelette.matchAll(/IF n <> 20 THEN/g)].length, 2);
+  assert.equal([...squelette.matchAll(/CREATE OR REPLACE FUNCTION/g)].length, 20);
+  // Préflight : garde LIVE exactement une fois, correctif absent, inventaire = md5 calculé du LIVE.
+  assert.match(squelette, /pg_catalog\.replace\(p\.prosrc, r\.ancienne_garde, ''\)\)\)\s*\/ pg_catalog\.length\(r\.ancienne_garde\) <> 1/);
+  assert.match(squelette, /pg_catalog\.strpos\(p\.prosrc, r\.nouvelle_garde\) > 0/);
+  assert.match(squelette, /i\.definition_md5 = pg_catalog\.md5\(p\.prosrc\)\)/);
+  assert.match(squelette, /SELECT pg_catalog\.count\(\*\) FROM _gardes_null_avant\) <> 20 THEN/);
+  // Postflight : seule la garde diffère, inventaire suivi, rejeu impossible.
+  assert.match(squelette, /pg_catalog\.md5\(pg_catalog\.replace\(r\.nouveau_prosrc, r\.nouvelle_garde, r\.ancienne_garde\)\)\s*IS DISTINCT FROM pg_catalog\.md5\(r\.ancien_prosrc\)/);
+  assert.match(squelette, /r\.nouvelle_acl IS DISTINCT FROM r\.ancienne_acl/);
+  assert.match(squelette, /SET definition_md5 = pg_catalog\.md5\(r\.nouveau_prosrc\)/);
+  assert.match(squelette, /AND i\.definition_md5 = pg_catalog\.md5\(r\.ancien_prosrc\);/);
+  assert.match(squelette, /IF n <> 20 THEN/);
   assert.doesNotMatch(squelette, /'fn_etat_pointage_mission\(/);
   // Hors périmètre volontaire : fin rétroactive (B9 scanner), état de pointage
-  // (B5b) et volet 2 du helper.
-  assert.doesNotMatch(squelette, /FUNCTION\s+public\.(?:fn_declarer_fin_retroactive|fn_etat_pointage_mission|est_admin_etablissement|mon_etablissement_id|dec_proteger_\w+|fn_protect_\w+)\(/);
+  // (B5b), helpers d'identité, volet 2 du helper et fonctions de #1124.
+  assert.doesNotMatch(squelette, /FUNCTION\s+public\.(?:fn_declarer_fin_retroactive|fn_etat_pointage_mission|est_admin_etablissement|mon_etablissement_id|dec_proteger_\w+|fn_protect_\w+|fn_mes_dpae|fn_rappel_dpae_quotidien|fn_pointer_arrivee|fn_annuler_candidature_soignant|dec_email_contrat_signe_complet)\(/);
 });
 
 test('recette SQL sous ROLLBACK branchée dans validate-pr, documentation et ordre de merge présents', () => {
@@ -457,7 +512,13 @@ test('recette SQL sous ROLLBACK branchée dans validate-pr, documentation et ord
   assert.match(sql, /^BEGIN;$/m);
   assert.match(sql, /ROLLBACK;\s*$/);
   assert.match(sql, /RAISE EXCEPTION USING ERRCODE = 'JGN01'/);
-  for (const c of CORRECTIFS) assert.ok(sql.includes(`public.${c.name}(`), `${c.name} absente de la recette SQL`);
+  for (const c of CORRECTIFS) {
+    assert.ok(sql.includes(`public.${c.name}(`), `${c.name} absente de la recette SQL`);
+    // Contrôle d'installation de la recette : garde corrigée et garde LIVE en littéraux, aucune empreinte.
+    assert.ok(sql.includes(`        ('${c.signature}',\n         ${litteralSql(c.garde)},\n         ${litteralSql(c.correctif)})`),
+      `${c.name} : contrôle d'installation absent de la recette SQL`);
+  }
+  assert.match(sql, /AND i\.definition_md5 = pg_catalog\.md5\(p\.prosrc\)/);
   assert.match(sql, /public\.fn_regenerer_qr_mission\(/);
   assert.doesNotMatch(sql, /public\.fn_etat_pointage_mission\(/);
   const doc = read(DOC);

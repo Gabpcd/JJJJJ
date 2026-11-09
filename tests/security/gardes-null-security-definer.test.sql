@@ -1,4 +1,4 @@
--- B9 gardes NULL des SECURITY DEFINER (migration 20261103013434).
+-- B9 gardes NULL des SECURITY DEFINER (migration 20261109010957).
 -- Vraies fixtures, vrais helpers d'identité (mon_etablissement_id, est_admin,
 -- est_admin_etablissement) et vraies RPC, appelées sous le JWT de chaque rôle.
 -- Aucun trigger désactivé, aucune fonction remplacée ; tout est annulé.
@@ -57,35 +57,80 @@ DECLARE
   n_refus integer := 0;
   n_passe integer := 0;
 BEGIN
-  -- Les 20 corps corrigés sont en place, l'inventaire suit, ACL inchangées.
+  -- Les 20 corps corrigés sont en place (garde corrigée présente une fois, garde
+  -- LIVE absente), l'inventaire suit le corps (empreinte calculée, aucune en
+  -- dur), ACL inchangées.
   IF (SELECT count(*)
       FROM (VALUES
-        ('fn_valider_alerte_presence(uuid)', '1ff0c4c48ccd906f161e1a9174034505'),
-        ('fn_codes_pointage_mission(uuid)', '478bc3d59e15a1a1c844443863a86d49'),
-        ('fn_generer_code_secours_mission(uuid,text)', '76c8e19c6f16a642b968d91a7850752b'),
-        ('fn_generer_qr_mission(uuid,text)', '75869cf50e34d68dd982a6714c010c0b'),
-        ('fn_soignants_urgence(uuid)', '9b8f736b8f7fd19729e26cc56f28d2c4'),
-        ('fn_generer_donnees_dpae(uuid)', '1070a34cb7025565225d732ed7ac3906'),
-        ('fn_enregistrer_numero_dpae(uuid,text)', '0d6fb5c6692759e3972746d8dbc196f9'),
-        ('fn_rebooker_soignant(uuid,uuid,timestamp with time zone,timestamp with time zone)', '53a208f0c1ee8c78a6faab262f47eaa4'),
-        ('fn_booster_mission(uuid)', 'e57ceb0273b02fab0215e2d33e251200'),
-        ('fn_presences_detail_mission(uuid)', '1f653d7d432a87a356f3f62910a7ee38'),
-        ('fn_activer_garantie_mission(uuid,boolean)', '00b0feecc9dfc4893a04bc94b584a013'),
-        ('fn_deposer_chorus(uuid,text)', '8b310b8e4c6bbabd58b039a9e915c675'),
-        ('fn_generer_facture(uuid)', '078777ead10a6a4d500694551299622b'),
-        ('fn_diffuser_pool_urgence(uuid)', '07cd19c650da67e2b8128d32d0ffbfe6'),
-        ('fn_etablissement_pour_mission(uuid)', '55493a7014ae20761ebf86fdab938f1c'),
-        ('fn_annuler_serie(uuid)', '06255e7b0d58441d46ac69798276dfae'),
-        ('fn_assigner_mission_admin(uuid,uuid,text)', '3a3523b9ac79ebd8e34a5ef58e749de3'),
-        ('fn_creer_reclamation_score(uuid,text,text,text,text)', '18be67db062364dadbd298fb90884947'),
-        ('fn_declarer_honoraires_retrocession(uuid,numeric,text)', '4223483a5500b8d865c4f529af6f1a99'),
-        ('fn_definir_retrocession_mission(uuid,numeric)', '52393260c791cbb5093278f303a93ebd')
-      ) AS v(signature, md5_apres)
+        ('fn_valider_alerte_presence(uuid)',
+         '    IF v_presence.etablissement_id != v_etab_id AND NOT est_admin() THEN',
+         '    IF NOT COALESCE(v_presence.etablissement_id = v_etab_id, false) AND NOT est_admin() THEN'),
+        ('fn_codes_pointage_mission(uuid)',
+         '  IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN',
+         '  IF NOT est_admin() AND NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) THEN'),
+        ('fn_generer_code_secours_mission(uuid,text)',
+         '  IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN',
+         '  IF NOT (est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false)) THEN'),
+        ('fn_generer_qr_mission(uuid,text)',
+         '  IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN',
+         '  IF NOT (est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false)) THEN'),
+        ('fn_soignants_urgence(uuid)',
+         '  IF NOT (public.est_admin() OR v_mission.etablissement_id = public.mon_etablissement_id()) THEN',
+         '  IF NOT (public.est_admin() OR COALESCE(v_mission.etablissement_id = public.mon_etablissement_id(), false)) THEN'),
+        ('fn_generer_donnees_dpae(uuid)',
+         '  IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN',
+         '  IF NOT (est_admin() OR COALESCE(v_etab_id = mon_etablissement_id(), false)) THEN'),
+        ('fn_enregistrer_numero_dpae(uuid,text)',
+         '  IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN',
+         '  IF NOT (est_admin() OR COALESCE(v_etab_id = mon_etablissement_id(), false)) THEN'),
+        ('fn_rebooker_soignant(uuid,uuid,timestamp with time zone,timestamp with time zone)',
+         '  IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN',
+         '  IF NOT COALESCE(v_m.etablissement_id = public.mon_etablissement_id(), false) AND NOT public.est_admin() THEN'),
+        ('fn_booster_mission(uuid)',
+         '  IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN',
+         '  IF NOT COALESCE(v_m.etablissement_id = public.mon_etablissement_id(), false) AND NOT public.est_admin() THEN'),
+        ('fn_presences_detail_mission(uuid)',
+         E'    IF v_mission.etablissement_id != mon_etablissement_id() AND NOT est_admin() \n       AND v_mission.soignant_assigne_id != auth.uid() THEN',
+         E'    IF NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin()\n       AND NOT COALESCE(v_mission.soignant_assigne_id = auth.uid(), false) THEN'),
+        ('fn_activer_garantie_mission(uuid,boolean)',
+         '  IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
+         '  IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'),
+        ('fn_deposer_chorus(uuid,text)',
+         '    IF v_facture.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
+         '    IF NOT COALESCE(v_facture.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'),
+        ('fn_generer_facture(uuid)',
+         '    IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN',
+         '    IF NOT est_admin() AND NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) THEN'),
+        ('fn_diffuser_pool_urgence(uuid)',
+         E'    OR v_etablissement_id = public.mon_etablissement_id()\n  ) THEN',
+         E'    OR COALESCE(v_etablissement_id = public.mon_etablissement_id(), false)\n  ) THEN'),
+        ('fn_etablissement_pour_mission(uuid)',
+         '    ) AND mon_etablissement_id() != p_etablissement_id AND NOT est_admin() THEN',
+         '    ) AND NOT COALESCE(mon_etablissement_id() = p_etablissement_id, false) AND NOT est_admin() THEN'),
+        ('fn_annuler_serie(uuid)',
+         '    IF NOT est_admin_etablissement() AND NOT est_admin() THEN',
+         '    IF NOT COALESCE(est_admin_etablissement(), false) AND NOT est_admin() THEN'),
+        ('fn_assigner_mission_admin(uuid,uuid,text)',
+         '  IF NOT (public.est_admin() OR public.est_admin_etablissement()) THEN',
+         '  IF NOT (public.est_admin() OR COALESCE(public.est_admin_etablissement(), false)) THEN'),
+        ('fn_creer_reclamation_score(uuid,text,text,text,text)',
+         '  IF p_evenement_type = ''ETAB'' AND v_proprio_id != mon_etablissement_id() THEN',
+         '  IF p_evenement_type = ''ETAB'' AND NOT COALESCE(v_proprio_id = mon_etablissement_id(), false) THEN'),
+        ('fn_declarer_honoraires_retrocession(uuid,numeric,text)',
+         '  IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
+         '  IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'),
+        ('fn_definir_retrocession_mission(uuid,numeric)',
+         '  IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
+         '  IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN')
+      ) AS v(signature, ancienne_garde, nouvelle_garde)
       JOIN pg_catalog.pg_proc p ON p.oid = pg_catalog.to_regprocedure('public.' || v.signature)
       JOIN private.security_definer_inventory i ON i.signature = v.signature
       WHERE p.prosecdef
-        AND pg_catalog.md5(p.prosrc) = v.md5_apres
-        AND i.definition_md5 = v.md5_apres
+        AND (pg_catalog.length(p.prosrc)
+             - pg_catalog.length(pg_catalog.replace(p.prosrc, v.nouvelle_garde, '')))
+            / pg_catalog.length(v.nouvelle_garde) = 1
+        AND pg_catalog.strpos(p.prosrc, v.ancienne_garde) = 0
+        AND i.definition_md5 = pg_catalog.md5(p.prosrc)
         AND NOT pg_catalog.has_function_privilege('anon', p.oid, 'EXECUTE')
         AND pg_catalog.has_function_privilege('authenticated', p.oid, 'EXECUTE')
         AND pg_catalog.has_function_privilege('service_role', p.oid, 'EXECUTE')) <> 20 THEN

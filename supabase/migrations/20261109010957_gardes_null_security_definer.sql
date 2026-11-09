@@ -11,12 +11,12 @@
 -- continue. Les 20 fonctions ci-dessous (SECURITY DEFINER, EXECUTE accordé à
 -- authenticated) laissaient ainsi passer un soignant, ou un membre révoqué :
 -- validation de sa propre présence (déclenche la file escrow), lecture des
--- codes de pointage statiques, code de secours et QR de pointage, téléphones
--- du pool urgence, données DPAE du contrat, numéro DPAE, rebooking, boost
--- facturé, garantie de remplacement, dépôt Chorus, facture de commission,
--- diffusion du pool, présences d'une mission d'un tiers, fiche établissement,
--- réclamation sur un événement de score d'établissement, honoraires et régime
--- de rétrocession.
+-- codes de pointage statiques, code de secours et QR de pointage (pointage à
+-- distance), téléphones du pool urgence, données DPAE du contrat, numéro DPAE,
+-- rebooking, boost facturé, garantie de remplacement, dépôt Chorus, facture de
+-- commission, diffusion du pool, présences d'une mission d'un tiers, fiche
+-- établissement, réclamation sur un événement de score d'établissement,
+-- honoraires et régime de rétrocession.
 --
 -- Correctif. Une seule différence par fonction : la comparaison avec
 -- mon_etablissement_id() (ou est_admin_etablissement(), ou auth.uid() quand
@@ -24,7 +24,7 @@
 -- désormais « pas d'accès » ; les appelants dont la comparaison valait déjà
 -- true ou false (membre de l'établissement, membre d'un autre établissement,
 -- soignant assigné là où il est attendu, administrateur plateforme) gardent
--- exactement le même résultat. Messages de refus, corps, propriétaire, ACL,
+-- exactement le même résultat. Messages de refus, propriétaire, ACL,
 -- volatilité et search_path inchangés (CREATE OR REPLACE, aucun GRANT).
 --
 -- Contexte système. Quinze de ces fonctions n'ont pas de garde
@@ -35,23 +35,32 @@
 -- le JWT de l'utilisateur, edge functions, iOS, scripts) : pas de régression
 -- attendue. Détail : docs/GARDES_NULL_SECURITY_DEFINER.md §2.
 --
--- Sources : définitions LIVE production relues le 2026-11-03 en lecture seule
--- (md5(prosrc), pg_get_function_arguments, pg_get_function_result, proconfig,
--- has_function_privilege, private.security_definer_inventory). Les 20 corps
--- LIVE sont identiques à supabase/schema/public.sql (empreintes « avant »
--- ci-dessous). Toutes les gardes « avant » précèdent la première
--- redéfinition : une seule source divergente refuse la migration entière.
+-- Sources : définitions LIVE production relues en lecture seule le 03/11/2026
+-- puis le 09/11/2026, après les merges du 08/11 (#1114, #1117, #1118, #1119,
+-- #1120) : md5(prosrc), md5(pg_get_functiondef), arguments, résultat,
+-- proconfig, ACL et private.security_definer_inventory identiques pour les
+-- 20 fonctions. Aucune n'a été redéfinie depuis le 03/11. Les corps LIVE sont
+-- versionnés dans tests/security/fixtures/gardes-null-security-definer-live.sql
+-- (pg_get_functiondef exact).
+--
+-- Gardes, toutes dans la transaction de la migration (aucune empreinte écrite
+-- en dur, toutes sont calculées) :
+--   * préflight : propriétaire, SECURITY DEFINER, volatilité, search_path,
+--     arguments, résultat, ACL et inventaire LIVE attendus (empreinte de
+--     l'inventaire = md5 du corps LIVE) ; la garde LIVE figure exactement une
+--     fois, sa correction jamais. Les corps LIVE sont capturés ;
+--   * postflight : md5(nouveau corps, garde ramenée à sa forme LIVE) =
+--     md5(corps LIVE capturé), attributs et ACL inchangés, inventaire mis à
+--     jour sur le nouveau corps. Toute autre différence (corps LIVE dérivé hors
+--     de la garde) ou un rejeu annule la migration entière.
+-- Aucun BEGIN/COMMIT : la CLI possède la transaction.
 --
 -- Hors périmètre, volontairement :
---   * fn_declarer_fin_retroactive : même défaut, corrigé par la PR B9
---     fix/scanner-code-sans-code-suivant (migration 20261102205212). La
---     redéfinir ici à partir du LIVE réintroduirait nouveau_code/nouveau_hmac
---     si cette migration passait après.
---   * fn_etat_pointage_mission : même défaut, corrigé par la PR B9 B5b
---     fix/visibilite-etablissement-par-permission (migration 20261102210943,
---     COALESCE à l'usage et code réservé à la permission « pointage »), partie
---     du même LIVE (md5 3fe46580…). La garder ici ferait échouer la seconde
---     PR mergée, quel que soit l'ordre.
+--   * fn_declarer_fin_retroactive : même défaut, corrigé par la PR B9 #1117
+--     (fix/scanner-code-sans-code-suivant, migration 20261102205212, mergée).
+--   * fn_etat_pointage_mission : même défaut, corrigé par la PR B9 B5b #1119
+--     (fix/visibilite-etablissement-par-permission, migration 20261102210943,
+--     mergée : COALESCE à l'usage et code réservé à la permission « pointage »).
 --   * est_admin_etablissement() et les cinq triggers qui la nient
 --     (dec_proteger_mission_soignant, dec_proteger_presence_soignant,
 --     fn_protect_mission_financials, fn_protect_presence_integrity,
@@ -62,78 +71,230 @@
 --     docs/GARDES_NULL_SECURITY_DEFINER.md et verrouillé par
 --     tests/node/gardes-null-security-definer.node.mjs.
 --
--- Ordre de merge (docs/GARDES_NULL_SECURITY_DEFINER.md §7). Ce lot passe en
--- dernier des branches B9 du 02/11, dont les migrations le précèdent :
+-- Ordre de merge (docs/GARDES_NULL_SECURITY_DEFINER.md §7). Les quatre
+-- branches B9 du 02/11 sont mergées sur main :
 --   20261102204820 fix/score-matching-inconnu-null
 --   20261102205212 fix/scanner-code-sans-code-suivant   (verrou : garde statique)
 --   20261102205808 fix/contestation-paiement-soignant
 --   20261102210943 fix/visibilite-etablissement-par-permission (B5b, verrou : garde statique)
--- Aucune ne redéfinit l'une des 20 fonctions ci-dessous. La garde statique
--- refuse ce lot tant que les correctifs scanner et B5b ne sont pas dans le
--- dépôt (entrées REVUES conditionnées à leur preuve). Si ce lot devait passer
--- avant l'une des quatre, la renommer après 20261103013434 (CLAUDE.md,
--- migrations règle 2) et repartir de son LIVE.
+-- File de merge sériel : #1123 (front seul), puis #1124
+-- (fix/dpae-serveur-cddu-vacation, migration 20261108223500), puis ce lot.
+-- #1124 redéfinit fn_mes_dpae, fn_rappel_dpae_quotidien, fn_pointer_arrivee,
+-- fn_annuler_candidature_soignant et dec_email_contrat_signe_complet : aucune
+-- des 20 fonctions ci-dessous, donc aucun corps commun ; l'horodatage de ce lot
+-- lui est postérieur. Le préflight refuse toute fonction du lot dont le corps
+-- LIVE aurait changé entre-temps.
 -- Garde statique : tests/node/gardes-null-security-definer.node.mjs.
 -- Recette SQL sous ROLLBACK : tests/security/gardes-null-security-definer.test.sql.
+
+SET LOCAL lock_timeout = '5s';
 
 DO $gardes_null_avant$
 DECLARE
   r record;
   p record;
-  n integer := 0;
 BEGIN
+  -- Corps LIVE capturés pour le postflight (même transaction).
+  CREATE TEMP TABLE _gardes_null_avant (
+    ordre integer PRIMARY KEY,
+    fonction_oid oid NOT NULL,
+    signature text NOT NULL,
+    arguments text NOT NULL,
+    resultat text NOT NULL,
+    volatilite text NOT NULL,
+    configuration text[] NOT NULL,
+    categorie text NOT NULL,
+    ancien_prosrc text NOT NULL,
+    ancienne_acl text,
+    ancienne_garde text NOT NULL,
+    nouvelle_garde text NOT NULL
+  ) ON COMMIT DROP;
+
   FOR r IN
     SELECT * FROM (VALUES
-    ('fn_valider_alerte_presence(uuid)', 'p_presence_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '05a6e15c497e28d6f94b9cd1c243c811', '1ff0c4c48ccd906f161e1a9174034505'),
-    ('fn_codes_pointage_mission(uuid)', 'p_mission_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', 'ca8d9013f736db6d3dca03b595aecf48', '478bc3d59e15a1a1c844443863a86d49'),
-    ('fn_generer_code_secours_mission(uuid,text)', 'p_mission_id uuid, p_type text DEFAULT ''UNIVERSEL''::text', 'jsonb', 'v', ARRAY['search_path=public, extensions']::text[], 'MIXTE_TENANT_ADMIN', '3fbae3ee7274f92165cccb0ab705bdcd', '76c8e19c6f16a642b968d91a7850752b'),
-    ('fn_generer_qr_mission(uuid,text)', 'p_mission_id uuid, p_type text DEFAULT ''UNIVERSEL''::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '6196379d17503a467d24beeb038b8897', '75869cf50e34d68dd982a6714c010c0b'),
-    ('fn_soignants_urgence(uuid)', 'p_mission_id uuid', 'TABLE(soignant_id uuid, id uuid, prenom text, nom text, score_fiabilite integer, distance_km numeric, urgence_rayon_km integer, telephone text)', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '9dcc20b932437733fbbdf5474cd1b39e', '9b8f736b8f7fd19729e26cc56f28d2c4'),
-    ('fn_generer_donnees_dpae(uuid)', 'p_contrat_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', 'fd81d58a2e18b98fe7f57d458b467079', '1070a34cb7025565225d732ed7ac3906'),
-    ('fn_enregistrer_numero_dpae(uuid,text)', 'p_contrat_id uuid, p_dpae_numero text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '1f54235815e67141e4994cb9a604aa2b', '0d6fb5c6692759e3972746d8dbc196f9'),
-    ('fn_rebooker_soignant(uuid,uuid,timestamp with time zone,timestamp with time zone)', 'p_soignant_id uuid, p_mission_modele_id uuid, p_debut timestamp with time zone, p_fin timestamp with time zone', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', 'd404ad86634519ac9a63b3202e52d2db', '53a208f0c1ee8c78a6faab262f47eaa4'),
-    ('fn_booster_mission(uuid)', 'p_mission_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', 'c22963698c0cbfc4cd6de19bb474f520', 'e57ceb0273b02fab0215e2d33e251200'),
-    ('fn_presences_detail_mission(uuid)', 'p_mission_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '5063c38138004b599a721412b029c5ff', '1f653d7d432a87a356f3f62910a7ee38'),
-    ('fn_activer_garantie_mission(uuid,boolean)', 'p_mission_id uuid, p_actif boolean', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '4f170971145ed66ddad01805abebae6f', '00b0feecc9dfc4893a04bc94b584a013'),
-    ('fn_deposer_chorus(uuid,text)', 'p_facture_id uuid, p_chorus_id text DEFAULT NULL::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '3a42d1cf3e8bb1aecedd28c4e0782cae', '8b310b8e4c6bbabd58b039a9e915c675'),
-    ('fn_generer_facture(uuid)', 'p_mission_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '5314c8689cd382ad000be9e7a9df6b29', '078777ead10a6a4d500694551299622b'),
-    ('fn_diffuser_pool_urgence(uuid)', 'p_mission_id uuid', 'integer', 'v', ARRAY['search_path=pg_catalog, public, private']::text[], 'MIXTE_TENANT_ADMIN', 'ba942f8cc9f7997930c5bdc9d32af9df', '07cd19c650da67e2b8128d32d0ffbfe6'),
-    ('fn_etablissement_pour_mission(uuid)', 'p_etablissement_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '1f9bc93c9cf7e4b097ace3a78720c689', '55493a7014ae20761ebf86fdab938f1c'),
-    ('fn_annuler_serie(uuid)', 'p_serie_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '71d57002916d856d6530d90f749676e1', '06255e7b0d58441d46ac69798276dfae'),
-    ('fn_assigner_mission_admin(uuid,uuid,text)', 'p_mission_id uuid, p_soignant_id uuid, p_choix_contrat text DEFAULT NULL::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '502101a70656f3b5e5eb01c14f23d5de', '3a3523b9ac79ebd8e34a5ef58e749de3'),
-    ('fn_creer_reclamation_score(uuid,text,text,text,text)', 'p_evenement_id uuid, p_evenement_type text, p_motif_categorie text, p_texte_libre text, p_justificatif_storage_path text DEFAULT NULL::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'RPC_UTILISATEUR_AUTH_INTERNE', '34855c0d2b9062792aa49dbafc32ae6b', '18be67db062364dadbd298fb90884947'),
-    ('fn_declarer_honoraires_retrocession(uuid,numeric,text)', 'p_mission_id uuid, p_montant_honoraires numeric, p_justificatif_cle text DEFAULT NULL::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '093135e6e6086e183023c612aa7bfa92', '4223483a5500b8d865c4f529af6f1a99'),
-    ('fn_definir_retrocession_mission(uuid,numeric)', 'p_mission_id uuid, p_pct numeric', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '89a25f4acaeed41f2850acea6d15530e', '52393260c791cbb5093278f303a93ebd')
-    ) AS v(signature, arguments, resultat, volatilite, configuration, categorie, md5_avant, md5_apres)
+      (1, 'fn_valider_alerte_presence(uuid)',
+       'p_presence_id uuid',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '    IF v_presence.etablissement_id != v_etab_id AND NOT est_admin() THEN',
+       '    IF NOT COALESCE(v_presence.etablissement_id = v_etab_id, false) AND NOT est_admin() THEN'),
+      (2, 'fn_codes_pointage_mission(uuid)',
+       'p_mission_id uuid',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '  IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN',
+       '  IF NOT est_admin() AND NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) THEN'),
+      (3, 'fn_generer_code_secours_mission(uuid,text)',
+       'p_mission_id uuid, p_type text DEFAULT ''UNIVERSEL''::text',
+       'jsonb',
+       'v', ARRAY['search_path=public, extensions']::text[], 'MIXTE_TENANT_ADMIN',
+       '  IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN',
+       '  IF NOT (est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false)) THEN'),
+      (4, 'fn_generer_qr_mission(uuid,text)',
+       'p_mission_id uuid, p_type text DEFAULT ''UNIVERSEL''::text',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '  IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN',
+       '  IF NOT (est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false)) THEN'),
+      (5, 'fn_soignants_urgence(uuid)',
+       'p_mission_id uuid',
+       'TABLE(soignant_id uuid, id uuid, prenom text, nom text, score_fiabilite integer, distance_km numeric, urgence_rayon_km integer, telephone text)',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '  IF NOT (public.est_admin() OR v_mission.etablissement_id = public.mon_etablissement_id()) THEN',
+       '  IF NOT (public.est_admin() OR COALESCE(v_mission.etablissement_id = public.mon_etablissement_id(), false)) THEN'),
+      (6, 'fn_generer_donnees_dpae(uuid)',
+       'p_contrat_id uuid',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '  IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN',
+       '  IF NOT (est_admin() OR COALESCE(v_etab_id = mon_etablissement_id(), false)) THEN'),
+      (7, 'fn_enregistrer_numero_dpae(uuid,text)',
+       'p_contrat_id uuid, p_dpae_numero text',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '  IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN',
+       '  IF NOT (est_admin() OR COALESCE(v_etab_id = mon_etablissement_id(), false)) THEN'),
+      (8, 'fn_rebooker_soignant(uuid,uuid,timestamp with time zone,timestamp with time zone)',
+       'p_soignant_id uuid, p_mission_modele_id uuid, p_debut timestamp with time zone, p_fin timestamp with time zone',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '  IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN',
+       '  IF NOT COALESCE(v_m.etablissement_id = public.mon_etablissement_id(), false) AND NOT public.est_admin() THEN'),
+      (9, 'fn_booster_mission(uuid)',
+       'p_mission_id uuid',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '  IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN',
+       '  IF NOT COALESCE(v_m.etablissement_id = public.mon_etablissement_id(), false) AND NOT public.est_admin() THEN'),
+      (10, 'fn_presences_detail_mission(uuid)',
+       'p_mission_id uuid',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       E'    IF v_mission.etablissement_id != mon_etablissement_id() AND NOT est_admin() \n       AND v_mission.soignant_assigne_id != auth.uid() THEN',
+       E'    IF NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin()\n       AND NOT COALESCE(v_mission.soignant_assigne_id = auth.uid(), false) THEN'),
+      (11, 'fn_activer_garantie_mission(uuid,boolean)',
+       'p_mission_id uuid, p_actif boolean',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '  IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
+       '  IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'),
+      (12, 'fn_deposer_chorus(uuid,text)',
+       'p_facture_id uuid, p_chorus_id text DEFAULT NULL::text',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '    IF v_facture.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
+       '    IF NOT COALESCE(v_facture.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'),
+      (13, 'fn_generer_facture(uuid)',
+       'p_mission_id uuid',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '    IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN',
+       '    IF NOT est_admin() AND NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) THEN'),
+      (14, 'fn_diffuser_pool_urgence(uuid)',
+       'p_mission_id uuid',
+       'integer',
+       'v', ARRAY['search_path=pg_catalog, public, private']::text[], 'MIXTE_TENANT_ADMIN',
+       E'    OR v_etablissement_id = public.mon_etablissement_id()\n  ) THEN',
+       E'    OR COALESCE(v_etablissement_id = public.mon_etablissement_id(), false)\n  ) THEN'),
+      (15, 'fn_etablissement_pour_mission(uuid)',
+       'p_etablissement_id uuid',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '    ) AND mon_etablissement_id() != p_etablissement_id AND NOT est_admin() THEN',
+       '    ) AND NOT COALESCE(mon_etablissement_id() = p_etablissement_id, false) AND NOT est_admin() THEN'),
+      (16, 'fn_annuler_serie(uuid)',
+       'p_serie_id uuid',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '    IF NOT est_admin_etablissement() AND NOT est_admin() THEN',
+       '    IF NOT COALESCE(est_admin_etablissement(), false) AND NOT est_admin() THEN'),
+      (17, 'fn_assigner_mission_admin(uuid,uuid,text)',
+       'p_mission_id uuid, p_soignant_id uuid, p_choix_contrat text DEFAULT NULL::text',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '  IF NOT (public.est_admin() OR public.est_admin_etablissement()) THEN',
+       '  IF NOT (public.est_admin() OR COALESCE(public.est_admin_etablissement(), false)) THEN'),
+      (18, 'fn_creer_reclamation_score(uuid,text,text,text,text)',
+       'p_evenement_id uuid, p_evenement_type text, p_motif_categorie text, p_texte_libre text, p_justificatif_storage_path text DEFAULT NULL::text',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'RPC_UTILISATEUR_AUTH_INTERNE',
+       '  IF p_evenement_type = ''ETAB'' AND v_proprio_id != mon_etablissement_id() THEN',
+       '  IF p_evenement_type = ''ETAB'' AND NOT COALESCE(v_proprio_id = mon_etablissement_id(), false) THEN'),
+      (19, 'fn_declarer_honoraires_retrocession(uuid,numeric,text)',
+       'p_mission_id uuid, p_montant_honoraires numeric, p_justificatif_cle text DEFAULT NULL::text',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '  IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
+       '  IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'),
+      (20, 'fn_definir_retrocession_mission(uuid,numeric)',
+       'p_mission_id uuid, p_pct numeric',
+       'jsonb',
+       'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN',
+       '  IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
+       '  IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN')
+    ) AS v(ordre, signature, arguments, resultat, volatilite, configuration, categorie,
+           ancienne_garde, nouvelle_garde)
+    ORDER BY ordre
   LOOP
-    n := n + 1;
-    SELECT * INTO p FROM pg_catalog.pg_proc
-    WHERE oid = pg_catalog.to_regprocedure('public.' || r.signature);
-    IF NOT FOUND OR pg_catalog.md5(p.prosrc) <> r.md5_avant
-      OR p.prosecdef IS DISTINCT FROM true OR p.provolatile <> r.volatilite
+    SELECT pr.oid, pr.prosrc, pr.prosecdef, pr.provolatile::text AS volatilite,
+           pr.proconfig, pr.proacl, pr.proowner,
+           pg_catalog.pg_get_userbyid(pr.proowner) AS proprietaire,
+           pg_catalog.pg_get_function_arguments(pr.oid) AS arguments,
+           pg_catalog.pg_get_function_result(pr.oid) AS resultat
+      INTO p
+      FROM pg_catalog.pg_proc pr
+     WHERE pr.oid = pg_catalog.to_regprocedure('public.' || r.signature);
+    IF NOT FOUND
+      OR p.proprietaire IS DISTINCT FROM 'postgres'
+      OR p.prosecdef IS NOT TRUE
+      OR p.volatilite IS DISTINCT FROM r.volatilite
       OR p.proconfig IS DISTINCT FROM r.configuration
-      OR pg_catalog.pg_get_userbyid(p.proowner) <> 'postgres'
-      OR pg_catalog.pg_get_function_arguments(p.oid) <> r.arguments
-      OR pg_catalog.pg_get_function_result(p.oid) <> r.resultat
-      OR (SELECT count(*) FROM private.security_definer_inventory i
-          WHERE i.signature = r.signature
-            AND i.categorie = r.categorie
-            AND i.definition_md5 = r.md5_avant) <> 1
-      OR EXISTS (SELECT FROM private.security_definer_inventory i
-                 WHERE i.signature = 'public.' || r.signature)
-    THEN RAISE EXCEPTION 'GARDES_NULL_SOURCE_AVANT_OU_INVENTAIRE_DIVERGENT : %', r.signature; END IF;
+      OR p.arguments IS DISTINCT FROM r.arguments
+      OR p.resultat IS DISTINCT FROM r.resultat
+      -- La garde LIVE figure exactement une fois, sa correction jamais (rejeu
+      -- ou correction concurrente refusés).
+      OR (pg_catalog.length(p.prosrc)
+          - pg_catalog.length(pg_catalog.replace(p.prosrc, r.ancienne_garde, '')))
+         / pg_catalog.length(r.ancienne_garde) <> 1
+      OR pg_catalog.strpos(p.prosrc, r.nouvelle_garde) > 0
+    THEN
+      RAISE EXCEPTION 'GARDES_NULL_PREFLIGHT_SOURCE_DRIFT: %', r.signature;
+    END IF;
     IF pg_catalog.has_function_privilege('anon', p.oid, 'EXECUTE')
       OR NOT pg_catalog.has_function_privilege('authenticated', p.oid, 'EXECUTE')
       OR NOT pg_catalog.has_function_privilege('service_role', p.oid, 'EXECUTE')
-      OR EXISTS (SELECT FROM pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) a
-                 WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE')
-    THEN RAISE EXCEPTION 'GARDES_NULL_ACL_AVANT_DIVERGENTE : %', r.signature; END IF;
+      OR EXISTS (
+        SELECT FROM pg_catalog.aclexplode(COALESCE(p.proacl, pg_catalog.acldefault('f', p.proowner))) a
+         WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE')
+    THEN
+      RAISE EXCEPTION 'GARDES_NULL_PREFLIGHT_ACL_DRIFT: %', r.signature;
+    END IF;
+    -- Inventaire : une seule ligne, catégorie attendue, empreinte du corps LIVE
+    -- (calculée).
+    IF (SELECT pg_catalog.count(*) FROM private.security_definer_inventory i
+         WHERE i.signature IN (r.signature, 'public.' || r.signature)) <> 1
+      OR NOT EXISTS (
+        SELECT FROM private.security_definer_inventory i
+         WHERE i.signature = r.signature
+           AND i.categorie = r.categorie
+           AND i.definition_md5 = pg_catalog.md5(p.prosrc))
+    THEN
+      RAISE EXCEPTION 'GARDES_NULL_PREFLIGHT_INVENTAIRE_DRIFT: %', r.signature;
+    END IF;
+
+    INSERT INTO _gardes_null_avant VALUES (
+      r.ordre, p.oid, r.signature, p.arguments, p.resultat, p.volatilite,
+      p.proconfig, r.categorie, p.prosrc, p.proacl::text,
+      r.ancienne_garde, r.nouvelle_garde);
   END LOOP;
-  IF n <> 20 THEN RAISE EXCEPTION 'GARDES_NULL_PERIMETRE_INCOMPLET : % fonctions', n; END IF;
-END;
+
+  IF (SELECT pg_catalog.count(*) FROM _gardes_null_avant) <> 20 THEN
+    RAISE EXCEPTION 'GARDES_NULL_PREFLIGHT_INCOMPLET';
+  END IF;
+END
 $gardes_null_avant$;
 
--- fn_valider_alerte_presence(uuid) : LIVE 05a6e15c497e28d6f94b9cd1c243c811 → 1ff0c4c48ccd906f161e1a9174034505
+-- 1/20 fn_valider_alerte_presence(uuid) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_valider_alerte_presence(p_presence_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -163,7 +324,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_codes_pointage_mission(uuid) : LIVE ca8d9013f736db6d3dca03b595aecf48 → 478bc3d59e15a1a1c844443863a86d49
+-- 2/20 fn_codes_pointage_mission(uuid) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_codes_pointage_mission(p_mission_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -200,7 +361,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_generer_code_secours_mission(uuid,text) : LIVE 3fbae3ee7274f92165cccb0ab705bdcd → 76c8e19c6f16a642b968d91a7850752b
+-- 3/20 fn_generer_code_secours_mission(uuid,text) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_generer_code_secours_mission(p_mission_id uuid, p_type text DEFAULT 'UNIVERSEL'::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -269,7 +430,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_generer_qr_mission(uuid,text) : LIVE 6196379d17503a467d24beeb038b8897 → 75869cf50e34d68dd982a6714c010c0b
+-- 4/20 fn_generer_qr_mission(uuid,text) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_generer_qr_mission(p_mission_id uuid, p_type text DEFAULT 'UNIVERSEL'::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -343,7 +504,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_soignants_urgence(uuid) : LIVE 9dcc20b932437733fbbdf5474cd1b39e → 9b8f736b8f7fd19729e26cc56f28d2c4
+-- 5/20 fn_soignants_urgence(uuid) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_soignants_urgence(p_mission_id uuid)
  RETURNS TABLE(soignant_id uuid, id uuid, prenom text, nom text, score_fiabilite integer, distance_km numeric, urgence_rayon_km integer, telephone text)
  LANGUAGE plpgsql
@@ -393,7 +554,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_generer_donnees_dpae(uuid) : LIVE fd81d58a2e18b98fe7f57d458b467079 → 1070a34cb7025565225d732ed7ac3906
+-- 6/20 fn_generer_donnees_dpae(uuid) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_generer_donnees_dpae(p_contrat_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -483,7 +644,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_enregistrer_numero_dpae(uuid,text) : LIVE 1f54235815e67141e4994cb9a604aa2b → 0d6fb5c6692759e3972746d8dbc196f9
+-- 7/20 fn_enregistrer_numero_dpae(uuid,text) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_enregistrer_numero_dpae(p_contrat_id uuid, p_dpae_numero text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -588,7 +749,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_rebooker_soignant(uuid,uuid,timestamp with time zone,timestamp with time zone) : LIVE d404ad86634519ac9a63b3202e52d2db → 53a208f0c1ee8c78a6faab262f47eaa4
+-- 8/20 fn_rebooker_soignant(uuid,uuid,timestamp with time zone,timestamp with time zone) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_rebooker_soignant(p_soignant_id uuid, p_mission_modele_id uuid, p_debut timestamp with time zone, p_fin timestamp with time zone)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -655,7 +816,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_booster_mission(uuid) : LIVE c22963698c0cbfc4cd6de19bb474f520 → e57ceb0273b02fab0215e2d33e251200
+-- 9/20 fn_booster_mission(uuid) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_booster_mission(p_mission_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -722,7 +883,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_presences_detail_mission(uuid) : LIVE 5063c38138004b599a721412b029c5ff → 1f653d7d432a87a356f3f62910a7ee38
+-- 10/20 fn_presences_detail_mission(uuid) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_presences_detail_mission(p_mission_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -779,7 +940,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_activer_garantie_mission(uuid,boolean) : LIVE 4f170971145ed66ddad01805abebae6f → 00b0feecc9dfc4893a04bc94b584a013
+-- 11/20 fn_activer_garantie_mission(uuid,boolean) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_activer_garantie_mission(p_mission_id uuid, p_actif boolean)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -801,7 +962,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_deposer_chorus(uuid,text) : LIVE 3a42d1cf3e8bb1aecedd28c4e0782cae → 8b310b8e4c6bbabd58b039a9e915c675
+-- 12/20 fn_deposer_chorus(uuid,text) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_deposer_chorus(p_facture_id uuid, p_chorus_id text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -830,7 +991,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_generer_facture(uuid) : LIVE 5314c8689cd382ad000be9e7a9df6b29 → 078777ead10a6a4d500694551299622b
+-- 13/20 fn_generer_facture(uuid) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_generer_facture(p_mission_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -884,7 +1045,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_diffuser_pool_urgence(uuid) : LIVE ba942f8cc9f7997930c5bdc9d32af9df → 07cd19c650da67e2b8128d32d0ffbfe6
+-- 14/20 fn_diffuser_pool_urgence(uuid) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_diffuser_pool_urgence(p_mission_id uuid)
  RETURNS integer
  LANGUAGE plpgsql
@@ -913,7 +1074,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_etablissement_pour_mission(uuid) : LIVE 1f9bc93c9cf7e4b097ace3a78720c689 → 55493a7014ae20761ebf86fdab938f1c
+-- 15/20 fn_etablissement_pour_mission(uuid) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_etablissement_pour_mission(p_etablissement_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -945,7 +1106,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_annuler_serie(uuid) : LIVE 71d57002916d856d6530d90f749676e1 → 06255e7b0d58441d46ac69798276dfae
+-- 16/20 fn_annuler_serie(uuid) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_annuler_serie(p_serie_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -971,7 +1132,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_assigner_mission_admin(uuid,uuid,text) : LIVE 502101a70656f3b5e5eb01c14f23d5de → 3a3523b9ac79ebd8e34a5ef58e749de3
+-- 17/20 fn_assigner_mission_admin(uuid,uuid,text) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_assigner_mission_admin(p_mission_id uuid, p_soignant_id uuid, p_choix_contrat text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -996,7 +1157,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_creer_reclamation_score(uuid,text,text,text,text) : LIVE 34855c0d2b9062792aa49dbafc32ae6b → 18be67db062364dadbd298fb90884947
+-- 18/20 fn_creer_reclamation_score(uuid,text,text,text,text) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_creer_reclamation_score(p_evenement_id uuid, p_evenement_type text, p_motif_categorie text, p_texte_libre text, p_justificatif_storage_path text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1122,7 +1283,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_declarer_honoraires_retrocession(uuid,numeric,text) : LIVE 093135e6e6086e183023c612aa7bfa92 → 4223483a5500b8d865c4f529af6f1a99
+-- 19/20 fn_declarer_honoraires_retrocession(uuid,numeric,text) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_declarer_honoraires_retrocession(p_mission_id uuid, p_montant_honoraires numeric, p_justificatif_cle text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1183,7 +1344,7 @@ BEGIN
 END;
 $fonction$;
 
--- fn_definir_retrocession_mission(uuid,numeric) : LIVE 89a25f4acaeed41f2850acea6d15530e → 52393260c791cbb5093278f303a93ebd
+-- 20/20 fn_definir_retrocession_mission(uuid,numeric) : corps LIVE, seule la garde change.
 CREATE OR REPLACE FUNCTION public.fn_definir_retrocession_mission(p_mission_id uuid, p_pct numeric)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1211,66 +1372,75 @@ END;
 $fonction$;
 
 -- CREATE OR REPLACE conserve propriétaire et ACL ; aucun GRANT ni REVOKE.
--- Catégorie et justification d'inventaire inchangées ; seule l'empreinte suit le corps.
+-- Postflight : seule la garde diffère du corps LIVE capturé (empreintes
+-- calculées) ; l'inventaire suit le nouveau corps (catégorie et justification
+-- inchangées). Toute autre différence annule la migration entière.
 DO $gardes_null_apres$
 DECLARE
   r record;
-  p record;
   n integer := 0;
 BEGIN
   FOR r IN
-    SELECT * FROM (VALUES
-    ('fn_valider_alerte_presence(uuid)', 'p_presence_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '05a6e15c497e28d6f94b9cd1c243c811', '1ff0c4c48ccd906f161e1a9174034505'),
-    ('fn_codes_pointage_mission(uuid)', 'p_mission_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', 'ca8d9013f736db6d3dca03b595aecf48', '478bc3d59e15a1a1c844443863a86d49'),
-    ('fn_generer_code_secours_mission(uuid,text)', 'p_mission_id uuid, p_type text DEFAULT ''UNIVERSEL''::text', 'jsonb', 'v', ARRAY['search_path=public, extensions']::text[], 'MIXTE_TENANT_ADMIN', '3fbae3ee7274f92165cccb0ab705bdcd', '76c8e19c6f16a642b968d91a7850752b'),
-    ('fn_generer_qr_mission(uuid,text)', 'p_mission_id uuid, p_type text DEFAULT ''UNIVERSEL''::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '6196379d17503a467d24beeb038b8897', '75869cf50e34d68dd982a6714c010c0b'),
-    ('fn_soignants_urgence(uuid)', 'p_mission_id uuid', 'TABLE(soignant_id uuid, id uuid, prenom text, nom text, score_fiabilite integer, distance_km numeric, urgence_rayon_km integer, telephone text)', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '9dcc20b932437733fbbdf5474cd1b39e', '9b8f736b8f7fd19729e26cc56f28d2c4'),
-    ('fn_generer_donnees_dpae(uuid)', 'p_contrat_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', 'fd81d58a2e18b98fe7f57d458b467079', '1070a34cb7025565225d732ed7ac3906'),
-    ('fn_enregistrer_numero_dpae(uuid,text)', 'p_contrat_id uuid, p_dpae_numero text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '1f54235815e67141e4994cb9a604aa2b', '0d6fb5c6692759e3972746d8dbc196f9'),
-    ('fn_rebooker_soignant(uuid,uuid,timestamp with time zone,timestamp with time zone)', 'p_soignant_id uuid, p_mission_modele_id uuid, p_debut timestamp with time zone, p_fin timestamp with time zone', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', 'd404ad86634519ac9a63b3202e52d2db', '53a208f0c1ee8c78a6faab262f47eaa4'),
-    ('fn_booster_mission(uuid)', 'p_mission_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', 'c22963698c0cbfc4cd6de19bb474f520', 'e57ceb0273b02fab0215e2d33e251200'),
-    ('fn_presences_detail_mission(uuid)', 'p_mission_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '5063c38138004b599a721412b029c5ff', '1f653d7d432a87a356f3f62910a7ee38'),
-    ('fn_activer_garantie_mission(uuid,boolean)', 'p_mission_id uuid, p_actif boolean', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '4f170971145ed66ddad01805abebae6f', '00b0feecc9dfc4893a04bc94b584a013'),
-    ('fn_deposer_chorus(uuid,text)', 'p_facture_id uuid, p_chorus_id text DEFAULT NULL::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '3a42d1cf3e8bb1aecedd28c4e0782cae', '8b310b8e4c6bbabd58b039a9e915c675'),
-    ('fn_generer_facture(uuid)', 'p_mission_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '5314c8689cd382ad000be9e7a9df6b29', '078777ead10a6a4d500694551299622b'),
-    ('fn_diffuser_pool_urgence(uuid)', 'p_mission_id uuid', 'integer', 'v', ARRAY['search_path=pg_catalog, public, private']::text[], 'MIXTE_TENANT_ADMIN', 'ba942f8cc9f7997930c5bdc9d32af9df', '07cd19c650da67e2b8128d32d0ffbfe6'),
-    ('fn_etablissement_pour_mission(uuid)', 'p_etablissement_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '1f9bc93c9cf7e4b097ace3a78720c689', '55493a7014ae20761ebf86fdab938f1c'),
-    ('fn_annuler_serie(uuid)', 'p_serie_id uuid', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '71d57002916d856d6530d90f749676e1', '06255e7b0d58441d46ac69798276dfae'),
-    ('fn_assigner_mission_admin(uuid,uuid,text)', 'p_mission_id uuid, p_soignant_id uuid, p_choix_contrat text DEFAULT NULL::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '502101a70656f3b5e5eb01c14f23d5de', '3a3523b9ac79ebd8e34a5ef58e749de3'),
-    ('fn_creer_reclamation_score(uuid,text,text,text,text)', 'p_evenement_id uuid, p_evenement_type text, p_motif_categorie text, p_texte_libre text, p_justificatif_storage_path text DEFAULT NULL::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'RPC_UTILISATEUR_AUTH_INTERNE', '34855c0d2b9062792aa49dbafc32ae6b', '18be67db062364dadbd298fb90884947'),
-    ('fn_declarer_honoraires_retrocession(uuid,numeric,text)', 'p_mission_id uuid, p_montant_honoraires numeric, p_justificatif_cle text DEFAULT NULL::text', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '093135e6e6086e183023c612aa7bfa92', '4223483a5500b8d865c4f529af6f1a99'),
-    ('fn_definir_retrocession_mission(uuid,numeric)', 'p_mission_id uuid, p_pct numeric', 'jsonb', 'v', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN', '89a25f4acaeed41f2850acea6d15530e', '52393260c791cbb5093278f303a93ebd')
-    ) AS v(signature, arguments, resultat, volatilite, configuration, categorie, md5_avant, md5_apres)
+    SELECT a.*, pr.prosrc AS nouveau_prosrc, pr.proacl::text AS nouvelle_acl,
+           pr.prosecdef AS nouveau_secdef, pr.provolatile::text AS nouvelle_volatilite,
+           pr.proconfig AS nouvelle_configuration, pr.proacl, pr.proowner,
+           pg_catalog.pg_get_userbyid(pr.proowner) AS proprietaire,
+           pg_catalog.pg_get_function_arguments(pr.oid) AS nouveaux_arguments,
+           pg_catalog.pg_get_function_result(pr.oid) AS nouveau_resultat
+      FROM _gardes_null_avant a
+      LEFT JOIN pg_catalog.pg_proc pr ON pr.oid = a.fonction_oid
+     ORDER BY a.ordre
   LOOP
-    n := n + 1;
-    SELECT * INTO p FROM pg_catalog.pg_proc
-    WHERE oid = pg_catalog.to_regprocedure('public.' || r.signature);
-    IF NOT FOUND OR pg_catalog.md5(p.prosrc) <> r.md5_apres
-      OR p.prosecdef IS DISTINCT FROM true OR p.provolatile <> r.volatilite
-      OR p.proconfig IS DISTINCT FROM r.configuration
-      OR pg_catalog.pg_get_userbyid(p.proowner) <> 'postgres'
-      OR pg_catalog.pg_get_function_arguments(p.oid) <> r.arguments
-      OR pg_catalog.pg_get_function_result(p.oid) <> r.resultat
-    THEN RAISE EXCEPTION 'GARDES_NULL_SOURCE_OU_ACL_APRES_DIVERGENTE : %', r.signature; END IF;
-    IF pg_catalog.has_function_privilege('anon', p.oid, 'EXECUTE')
-      OR NOT pg_catalog.has_function_privilege('authenticated', p.oid, 'EXECUTE')
-      OR NOT pg_catalog.has_function_privilege('service_role', p.oid, 'EXECUTE')
-      OR EXISTS (SELECT FROM pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) a
-                 WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE')
-    THEN RAISE EXCEPTION 'GARDES_NULL_ACL_APRES_DIVERGENTE : %', r.signature; END IF;
+    IF r.nouveau_prosrc IS NULL
+      OR r.proprietaire IS DISTINCT FROM 'postgres'
+      OR r.nouveau_secdef IS NOT TRUE
+      OR r.nouvelle_volatilite IS DISTINCT FROM r.volatilite
+      OR r.nouvelle_configuration IS DISTINCT FROM r.configuration
+      OR r.nouveaux_arguments IS DISTINCT FROM r.arguments
+      OR r.nouveau_resultat IS DISTINCT FROM r.resultat
+      OR r.nouvelle_acl IS DISTINCT FROM r.ancienne_acl
+      OR r.nouveau_prosrc = r.ancien_prosrc
+      OR (pg_catalog.length(r.nouveau_prosrc)
+          - pg_catalog.length(pg_catalog.replace(r.nouveau_prosrc, r.nouvelle_garde, '')))
+         / pg_catalog.length(r.nouvelle_garde) <> 1
+      OR pg_catalog.strpos(r.nouveau_prosrc, r.ancienne_garde) > 0
+      -- Seule différence admise avec le corps LIVE capturé : la garde.
+      OR pg_catalog.md5(pg_catalog.replace(r.nouveau_prosrc, r.nouvelle_garde, r.ancienne_garde))
+         IS DISTINCT FROM pg_catalog.md5(r.ancien_prosrc)
+    THEN
+      RAISE EXCEPTION 'GARDES_NULL_POSTFLIGHT_CORPS_OU_ATTRIBUTS: %', r.signature;
+    END IF;
+    IF pg_catalog.has_function_privilege('anon', r.fonction_oid, 'EXECUTE')
+      OR NOT pg_catalog.has_function_privilege('authenticated', r.fonction_oid, 'EXECUTE')
+      OR NOT pg_catalog.has_function_privilege('service_role', r.fonction_oid, 'EXECUTE')
+      OR EXISTS (
+        SELECT FROM pg_catalog.aclexplode(COALESCE(r.proacl, pg_catalog.acldefault('f', r.proowner))) a
+         WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE')
+    THEN
+      RAISE EXCEPTION 'GARDES_NULL_POSTFLIGHT_ACL: %', r.signature;
+    END IF;
     UPDATE private.security_definer_inventory i
-    SET definition_md5 = r.md5_apres, recense_le = now()
-    WHERE i.signature = r.signature
-      AND i.categorie = r.categorie
-      AND i.definition_md5 = r.md5_avant;
-    IF NOT FOUND OR (SELECT count(*) FROM private.security_definer_inventory i
-        WHERE i.signature = r.signature
-          AND i.categorie = r.categorie
-          AND i.definition_md5 = pg_catalog.md5(p.prosrc)) <> 1
-    THEN RAISE EXCEPTION 'GARDES_NULL_INVENTAIRE_NON_MIS_A_JOUR : %', r.signature; END IF;
+       SET definition_md5 = pg_catalog.md5(r.nouveau_prosrc), recense_le = pg_catalog.now()
+     WHERE i.signature = r.signature
+       AND i.categorie = r.categorie
+       AND i.definition_md5 = pg_catalog.md5(r.ancien_prosrc);
+    IF NOT FOUND
+      OR (SELECT pg_catalog.count(*) FROM private.security_definer_inventory i
+           WHERE i.signature IN (r.signature, 'public.' || r.signature)) <> 1
+      OR NOT EXISTS (
+        SELECT FROM private.security_definer_inventory i
+         WHERE i.signature = r.signature
+           AND i.categorie = r.categorie
+           AND i.definition_md5 = pg_catalog.md5(r.nouveau_prosrc))
+    THEN
+      RAISE EXCEPTION 'GARDES_NULL_POSTFLIGHT_INVENTAIRE: %', r.signature;
+    END IF;
+    n := n + 1;
   END LOOP;
-  IF n <> 20 THEN RAISE EXCEPTION 'GARDES_NULL_PERIMETRE_INCOMPLET : % fonctions', n; END IF;
-END;
+  IF n <> 20 THEN
+    RAISE EXCEPTION 'GARDES_NULL_POSTFLIGHT_INCOMPLET: %', n;
+  END IF;
+END
 $gardes_null_apres$;
 
 NOTIFY pgrst, 'reload schema';
