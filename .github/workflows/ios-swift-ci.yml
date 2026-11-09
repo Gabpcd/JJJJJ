@@ -416,6 +416,22 @@ jobs:
         run: |
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-presences.xcresult"
           set +e
+          # Diagnostic du gel iPhone (runs 42559541711 à 42593663323 : fil principal de l'app occupé après un
+          # glissement, clavier numérique ouvert). Dès que xcodebuild signale une app qui ne redevient pas inactive,
+          # trois `sample` du processus Jolene à 60 s d'écart, joints à l'artefact (gel-presences-sample-<n>.txt).
+          journal="$JOLENE_UI_OUTPUT/test-without-building-presences.log"
+          (
+            for n in 1 2 3; do
+              until grep -qE "App event loop idle notification not received|main thread busy|exceeded execution time allowance" "$journal" 2>/dev/null; do sleep 10; done
+              pid="$(pgrep -n -f '/Jolene.app/Jolene' || true)"
+              if [ -n "$pid" ]; then
+                sortie="$JOLENE_UI_OUTPUT/gel-presences-sample-$n.txt"
+                sample "$pid" 5 -file "$sortie" >/dev/null 2>&1 || sudo -n sample "$pid" 5 -file "$sortie" >/dev/null 2>&1 || true
+              fi
+              sleep 60
+            done
+          ) &
+          veilleur=$!
           xcodebuild test-without-building \
             -project ios-native/Jolene.xcodeproj \
             -scheme Jolene \
@@ -435,6 +451,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             > "$JOLENE_UI_OUTPUT/test-without-building-presences.log" 2>&1
           code=$?
+          kill "$veilleur" 2>/dev/null || true
           set -e
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-presences.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
@@ -452,6 +469,22 @@ jobs:
         run: |
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-pointage.xcresult"
           set +e
+          # Diagnostic du gel iPhone (runs 42559541711 à 42593663323 : fil principal de l'app occupé après un
+          # glissement, clavier numérique ouvert). Dès que xcodebuild signale une app qui ne redevient pas inactive,
+          # trois `sample` du processus Jolene à 60 s d'écart, joints à l'artefact (gel-pointage-sample-<n>.txt).
+          journal="$JOLENE_UI_OUTPUT/test-without-building-pointage.log"
+          (
+            for n in 1 2 3; do
+              until grep -qE "App event loop idle notification not received|main thread busy|exceeded execution time allowance" "$journal" 2>/dev/null; do sleep 10; done
+              pid="$(pgrep -n -f '/Jolene.app/Jolene' || true)"
+              if [ -n "$pid" ]; then
+                sortie="$JOLENE_UI_OUTPUT/gel-pointage-sample-$n.txt"
+                sample "$pid" 5 -file "$sortie" >/dev/null 2>&1 || sudo -n sample "$pid" 5 -file "$sortie" >/dev/null 2>&1 || true
+              fi
+              sleep 60
+            done
+          ) &
+          veilleur=$!
           xcodebuild test-without-building \
             -project ios-native/Jolene.xcodeproj \
             -scheme Jolene \
@@ -469,6 +502,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             > "$JOLENE_UI_OUTPUT/test-without-building-pointage.log" 2>&1
           code=$?
+          kill "$veilleur" 2>/dev/null || true
           set -e
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-pointage.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
