@@ -59,6 +59,9 @@ struct MainTabView: View {
             .accessibilityIdentifier("tab-profil")
         }
         .tint(JoleneColor.rose700)
+        // Lot 2 T4b : capacités d'appareil et zone de pointage (point d'extension de T4a), au-dessus des onglets.
+        .environment(\.appareil, container.appareil)
+        .environment(\.fabriqueZonePointage, container.fabriqueZonePointage)
         .onDisappear { FichierContratTemporaire.effacerTout() } // lot 2 T9a : copies de contrats effacées au changement d'epoch
         // Fond de carte (`carteTuiles`) : injecté à la racine par `RootView` (revue T4a), hérité ici.
     }

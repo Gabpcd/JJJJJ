@@ -11,17 +11,25 @@ import JoleneDesign
 /// par la route de T10 avec `?filtre=a_valider`). Onglet Aujourd'hui : blocs de pointage puis « Présences validées
 /// récemment » ; Actives : blocs des missions EN_COURS ; Historique : bandeau « à valider » (`TextesWeb.Presences`,
 /// verbatim, texte HARD STOP n°4 de TL en attente de la validation de Gabrielle) quand le lien le demande, puis les
-/// lignes. Exclus de T4a : bandeaux hors
-/// ligne et sans GPS, consentement GPS (T4b), notation (T5a), contestation (T5b).
+/// lignes. T4b : bandeaux hors ligne (`HorsLigneBandeau`) et sans GPS (`BandeauSansGpsView`) en tête, retour du
+/// consentement, services des zones de pointage (`ServicesPointage` : consentement GPS de la page, état du réseau suivi
+/// par `Appareil.reseau`, relecture de l'instantané après un pointage enregistré, m1). Exclus : notation (T5a),
+/// contestation (T5b).
 ///
 /// Actions des états vides : onglets de l'app (les routes web `/soignant/missions` et `/soignant/planning` sont
 /// « Mes missions », `/soignant/recherche-missions` est Explorer, `LinkRouter`).
 struct PresencesScreen: View {
     @StateObject private var model: PresencesModel
+    @StateObject private var consentement: ConsentementGpsModel
+    @StateObject private var reseau = EtatReseauModel()
     @ObservedObject private var session: SessionStore
     private let snapshot: SessionSnapshot
     private let ouvrirOnglet: (MainTabView.Tab) -> Void
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.appareil) private var appareil
+    #if DEBUG
+    @StateObject private var compteursDemo = CompteursPointageDemo()
+    #endif
 
     init(session: SessionStore, snapshot: SessionSnapshot, parametreOnglet: String? = nil, parametreFiltre: String? = nil,
          ouvrirOnglet: @escaping (MainTabView.Tab) -> Void) {
@@ -30,6 +38,7 @@ struct PresencesScreen: View {
         self.ouvrirOnglet = ouvrirOnglet
         _model = StateObject(wrappedValue: PresencesModel(controller: session.controller, snapshot: snapshot,
                                                           parametreOnglet: parametreOnglet, parametreFiltre: parametreFiltre))
+        _consentement = StateObject(wrappedValue: ConsentementGpsModel(controller: session.controller, snapshot: snapshot))
     }
 
     var body: some View {
@@ -39,6 +48,7 @@ struct PresencesScreen: View {
                     .font(JoleneFont.callout)
                     .foregroundStyle(JoleneColor.bubblegum)
                     .fixedSize(horizontal: false, vertical: true)
+                bandeaux
                 switch model.state {
                 case .loading:
                     chargement
@@ -64,14 +74,63 @@ struct PresencesScreen: View {
             .frame(maxWidth: .infinity)
         }
         .refreshable { await model.load() }
+        // T4b : le pavé numérique n'a pas de touche Entrée ; un défilement le ferme et découvre le bouton de pointage.
+        .scrollDismissesKeyboard(.immediately)
         .accessibilityIdentifier("presences-screen")
         .background(JoleneColor.lavender.ignoresSafeArea())
         .navigationTitle(LibellesWeb.ListePresences.titre)
+        .environment(\.servicesPointage, services)
         // Premier affichage, relance après une tâche annulée, relecture au-delà de 60 s (`staleTime`).
         .task { await model.loadIfStale() }
+        .task { await consentement.charger() }
+        .task {
+            // Suivi du réseau tant que la page est affichée (tâche annulée à sa disparition).
+            if let appareil { await reseau.suivre(appareil.reseau) }
+        }
+        #if DEBUG
+        .task { await compteursDemo.relire(session: session, snapshot: snapshot) }
+        #endif
         .onChange(of: scenePhase) { phase in
             if phase == .active { Task { await model.loadIfStale() } }
         }
+    }
+
+    /// Services des zones de pointage ; `recharger` relit l'instantané après un pointage enregistré (m1).
+    private var services: ServicesPointage {
+        let model = model
+        #if DEBUG
+        let session = session, snapshot = snapshot, compteurs = compteursDemo
+        return ServicesPointage(consentement: consentement, reseau: reseau) {
+            await model.load()
+            await compteurs.relire(session: session, snapshot: snapshot)
+        }
+        #else
+        return ServicesPointage(consentement: consentement, reseau: reseau) { await model.load() }
+        #endif
+    }
+
+    // MARK: - Bandeaux (T4b)
+
+    @ViewBuilder private var bandeaux: some View {
+        if reseau.horsLigne { HorsLigneBandeau() }
+        if consentement.bandeauSansGps { BandeauSansGpsView() }
+        if let retour = consentement.retour {
+            InlineNotice(LibellesPresences.Pointage.retourConsentement(retour),
+                         tone: LibellesPresences.Pointage.tonConsentement(retour).inlineNotice,
+                         identifier: "gps-consent-retour", announcesOnAppear: true)
+        }
+        #if DEBUG
+        if let libelle = compteursDemo.libelle {
+            HStack {
+                Text(verbatim: "Pointages enregistrés (démo)")
+                Spacer()
+                Text(verbatim: libelle)
+                    .foregroundStyle(JoleneColor.bubblegum)
+                    .accessibilityIdentifier("pointage-demo-scans")
+            }
+            .font(JoleneFont.caption)
+        }
+        #endif
     }
 
     // MARK: - États
@@ -263,3 +322,20 @@ private struct OngletsPresences: View {
         }
     }
 }
+
+#if DEBUG
+/// Scans appliqués par le monde démo et, parmi eux, ceux qui portent une position (preuve « une seule fois » et « aucune
+/// coordonnée » des XCUITest) ; nil hors démo. Aucune coordonnée n'est affichée. DEBUG seulement.
+@MainActor
+final class CompteursPointageDemo: ObservableObject {
+    @Published private(set) var libelle: String?
+
+    func relire(session: SessionStore, snapshot: SessionSnapshot) async {
+        guard let gateways = await session.controller.gateways(for: snapshot.epoch),
+              let demo = gateways.pointage as? DemoPointageGateway else { return }
+        let scans = await demo.metadonneesRecues
+        let avecPosition = scans.filter { $0.latitude != nil || $0.longitude != nil || $0.precisionGpsM != nil }.count
+        libelle = "\(scans.count) scan · \(avecPosition) avec position"
+    }
+}
+#endif

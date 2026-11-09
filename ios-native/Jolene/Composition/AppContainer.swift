@@ -22,6 +22,13 @@ final class AppContainer: ObservableObject {
     /// Lot 2, T7 : sélecteurs de médias du monde démo (`DemoMediaPicker`, fichier de `-JOLENE_DEMO_SOURCE_DOC` en DEBUG),
     /// à la place de l'appareil photo, de la photothèque et de Fichiers ; nil hors démo (vrais sélecteurs).
     private(set) var mediaDemo: DemoMediaPicker?
+    /// Lot 2, T4b : capacités d'appareil (position, réseau, identifiant terminal, magasin des reçus durables), réelles ou
+    /// démo (`Appareil.demo`, scénarios `-JOLENE_DEMO_GPS` et `-JOLENE_DEMO_RESEAU` en DEBUG), injectées à côté des
+    /// gateways (blueprint §2.2) ; scanner de QR réel ou démo (`-JOLENE_DEMO_QR` en DEBUG) ; fabrique de la zone de
+    /// pointage, injectée au-dessus des onglets par `MainTabView`.
+    let appareil: Appareil
+    let scannerQR: ModeScannerQR
+    let fabriqueZonePointage: FabriqueZonePointageNative
     #if DEBUG
     let networkSentinel: NetworkSentinel.Monitor?
     #endif
@@ -50,6 +57,12 @@ final class AppContainer: ObservableObject {
         }
         #endif
         self.environment = environment
+
+        let appareil = Self.appareil(mode: environment.mode, arguments: arguments)
+        let scanner = Self.scanner(mode: environment.mode, arguments: arguments)
+        self.appareil = appareil
+        scannerQR = scanner
+        fabriqueZonePointage = FabriqueZonePointageNative(appareil: appareil, scanner: scanner)
 
         // Un mode inconnu (`unknownModeRaw`) est refusé par `validate()` avant tout choix de gateways.
         if let error = Self.refusal(of: environment) {
@@ -118,8 +131,39 @@ final class AppContainer: ObservableObject {
         if scenarioDocuments != .normal {
             gateways.documents = DemoDocumentsGateway(scenario: scenarioDocuments)
         }
+        // Lot 2 T4b : `-JOLENE_DEMO_SCENARIO scan-incertain` (premier scan appliqué, réponse perdue, réconciliation).
+        let scenarioPointage = DemoPointageGateway.Scenario(arguments: arguments)
+        if scenarioPointage != .normal {
+            gateways.pointage = DemoPointageGateway(scenario: scenarioPointage)
+        }
         #endif
         return gateways
+    }
+
+    /// Appareil réel (Staging, Production : CoreLocation, `NWPathMonitor`, trousseau) ou démo (aucun prompt système,
+    /// aucun réseau ; scénarios DEBUG). Un mode refusé par la garde d'environnement reçoit l'appareil démo, jamais utilisé
+    /// (aucune session n'est construite).
+    private static func appareil(mode: JoleneMode, arguments: [String]) -> Appareil {
+        switch mode {
+        case .demo:
+            #if DEBUG
+            return Appareil.demo(gps: ScenarioGpsDemo(arguments: arguments), reseau: ScenarioReseauDemo(arguments: arguments))
+            #else
+            return Appareil.demo()
+            #endif
+        case .staging, .production:
+            return Appareil(localisation: LocationService(), reseau: NetworkMonitor(), terminal: KeychainTerminalIdentity(),
+                            recus: KeychainReceiptStore())
+        }
+    }
+
+    private static func scanner(mode: JoleneMode, arguments: [String]) -> ModeScannerQR {
+        guard mode == .demo else { return .reel }
+        #if DEBUG
+        return .demo(ScenarioQRDemo(arguments: arguments))
+        #else
+        return .demo(ScenarioQRDemo(arguments: []))
+        #endif
     }
 
     private static func refusal(of environment: JoleneEnvironment) -> JoleneError? {
