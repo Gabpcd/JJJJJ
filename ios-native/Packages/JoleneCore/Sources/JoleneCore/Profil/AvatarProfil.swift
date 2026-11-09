@@ -20,6 +20,19 @@ public enum AvatarProfil {
     /// `createSignedUrl(path, 5 * 365 * 24 * 60 * 60)` (l.148) : 5 ans, l'URL est lue par les listes et la messagerie.
     public static let dureeURLSigneeSecondes = 5 * 365 * 24 * 60 * 60
 
+    /// Étapes réseau d'un changement de photo, au plus (revue B8 de T10, m7) : relecture d'un reçu interrompu soldé
+    /// d'abord, dépôt du JPEG (≤ 2 Mo), URL signée, `fn_modifier_mon_profil`, relecture `fn_mon_profil_soignant_complet`.
+    /// Les écritures du reçu sont locales (trousseau).
+    public static let etapesReseauEnvoi = 5
+
+    /// Budget PROPRE à l'envoi (revue B8 de T10, m7) : une étape réseau = un délai de résolution
+    /// (`SessionController.resolutionTimeout`, 15 s en production), soit 75 s pour toute la chaîne. Un seul délai de
+    /// 15 s annulait sur réseau lent un envoi peut-être lié côté serveur ; la borne demeure (jamais d'attente infinie)
+    /// et une issue inconnue reste relue avant toute annonce. Le web n'a pas de délai sur cet envoi.
+    public static func delaiEnvoi(resolution: TimeInterval) -> TimeInterval {
+        resolution * Double(etapesReseauEnvoi)
+    }
+
     /// `${user.id}/avatar-${Date.now()}.jpg` (l.135-136, extension `.jpg` au lieu de `.webp`, D14). Le premier segment
     /// est l'identifiant de l'utilisateur : la politique `pol_storage_jolene_insert` (`fn_peut_gerer_objet_jolene`)
     /// n'autorise que ce dossier.
@@ -55,6 +68,37 @@ public enum AvatarProfil {
         /// Bouton d'annulation des feuilles natives, repris tel quel (`ConfirmationSheet`, L1-T1b).
         public static let annuler = "Annuler"
     }
+}
+
+/// Issue d'un sélecteur de photo (photothèque `PHPickerViewController`, appareil photo `UIImagePickerController`), rendue
+/// par la cible app à `AvatarProfilModel.recevoir` (revue B8 de T10, M1) : une ANNULATION n'est jamais confondue avec un
+/// fichier choisi mais ILLISIBLE.
+public enum SelectionPhotoAvatar: Equatable, Sendable {
+    /// Aucun résultat (feuille fermée sans choix, « Annuler » de l'appareil photo) : ni message ni envoi.
+    case annulee
+    /// Une photo est choisie et ses octets sont en cours de lecture (photo iCloud à télécharger…) : la feuille se
+    /// ferme et l'écran montre un indicateur jusqu'à `octets` ou `illisible`.
+    case lectureEnCours
+    /// Octets d'origine lus (HEIC d'iPhone compris), convertis puis envoyés.
+    case octets(Data)
+    /// Une photo était choisie mais ses octets n'ont pas pu être lus (photo iCloud indisponible hors ligne,
+    /// représentation illisible, prise de vue non encodable) : « Impossible de lire le fichier sélectionné. » (web
+    /// `documentUpload.ts` l.174), rien n'est envoyé.
+    case illisible
+}
+
+/// Description sans les octets de l'image (jamais journalisés) : leur nombre seul.
+extension SelectionPhotoAvatar: CustomStringConvertible, CustomDebugStringConvertible {
+    public var description: String {
+        switch self {
+        case .annulee: return "SelectionPhotoAvatar.annulee"
+        case .lectureEnCours: return "SelectionPhotoAvatar.lectureEnCours"
+        case let .octets(donnees): return "SelectionPhotoAvatar.octets(\(donnees.count) octets)"
+        case .illisible: return "SelectionPhotoAvatar.illisible"
+        }
+    }
+
+    public var debugDescription: String { description }
 }
 
 /// Refus CERTAIN d'un changement de photo : rien n'a été lié au profil (fichier refusé avant l'envoi, stockage ou

@@ -31,17 +31,19 @@ struct ProfilEditionRoute: Hashable {}
 struct ProfilEditionScreen: View {
     @StateObject private var model: ProfilEditionModel
     @StateObject private var avatar: AvatarProfilModel
-    private let estDemo: Bool
+    /// Démo seulement : issue des sources de la photo sans feuille système (`AppContainer.selectionAvatarDemo`).
+    private let selectionAvatarDemo: SelectionPhotoAvatar?
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
     /// Sélecteur de date ouvert sur une date non renseignée : il affiche `DateNaissance.parDefaut` sans l'écrire.
     @State private var selecteurDateOuvert = false
 
     private typealias Textes = ProfilEdition.Textes
 
-    init(session: SessionStore, snapshot: SessionSnapshot, localisation: LocalisationPort? = nil, estDemo: Bool = false) {
+    init(session: SessionStore, snapshot: SessionSnapshot, localisation: LocalisationPort? = nil,
+         selectionAvatarDemo: SelectionPhotoAvatar? = nil) {
         _model = StateObject(wrappedValue: ProfilEditionModel(session: session, snapshot: snapshot, localisation: localisation))
         _avatar = StateObject(wrappedValue: AvatarProfilModel(session: session, snapshot: snapshot))
-        self.estDemo = estDemo
+        self.selectionAvatarDemo = selectionAvatarDemo
     }
 
     var body: some View {
@@ -87,7 +89,7 @@ struct ProfilEditionScreen: View {
     private func contenu(_ profil: ProfilComplet) -> some View {
         entete(profil)
         carte {
-            AvatarProfilSection(model: avatar, prenom: profil.prenom, nom: profil.nom, estDemo: estDemo)
+            AvatarProfilSection(model: avatar, prenom: profil.prenom, nom: profil.nom, selectionDemo: selectionAvatarDemo)
                 .task { await avatar.demarrer(avatarUrl: profil.avatarUrl) }
         }
         carte { informations(profil) }

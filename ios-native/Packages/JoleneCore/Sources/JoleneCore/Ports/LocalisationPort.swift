@@ -9,9 +9,11 @@ import Foundation
 // Point de fusion (consigné dans `docs/mobile-swift/DECISIONS_LOT3.md`, section T10) : à l'arrivée du lot 2,
 // `LocalisationProfilProvisoire` est supprimée et ce port est servi par un adaptateur de quelques lignes sur
 // `Appareil.localisation` (`autorisation()` → `demanderAutorisation()` si `.nonDeterminee` → `positionUnique(delai:)`,
-// `ObservationGps.disponible` → `.disponible`, `.refusee` → `.refusee`, le reste → `.indisponible`). Les noms de ce
-// fichier ne recouvrent aucun type du lot 2 (`LocationPort`, `AutorisationPosition`, `ObservationGps`,
-// `DemoLocationPort`, `LocationPolicy`) : la fusion ne produit aucune double déclaration.
+// `ObservationGps.disponible` → `.disponible`, `.refusee` → `.refusee`, `.precisionReduite` →
+// `LocalisationPolicy.issuePrecisionReduite` (`.indisponible`), le reste → `.indisponible`). Les noms de ce fichier ne
+// recouvrent aucun type du lot 2 (`LocationPort`, `AutorisationPosition`, `ObservationGps`, `DemoLocationPort`,
+// `LocationPolicy`) : la fusion ne produit aucune double déclaration. Verrou : `FusionLocalisationLot2Tests` échoue dès
+// que le port du lot 2 arrive alors que `LocalisationProfilProvisoire` existe encore (revue B8 de T10, m1).
 
 /// Issue d'une demande de position unique pour le profil. Seule `.disponible` porte des coordonnées ; elles ne
 /// sont jamais affichées ni journalisées (blueprint §2.6) : la description du cas les masque.
@@ -44,6 +46,17 @@ public protocol LocalisationPort: Sendable {
 public enum LocalisationPolicy {
     /// `obtenirGeoloc({ enableHighAccuracy: true, timeout: 15_000 })` (`SectionProfilPrincipal.tsx` l.628).
     public static let delaiProfil: TimeInterval = 15
+
+    /// Issue du profil quand l'utilisateur n'a accordé que la position APPROXIMATIVE (« Position exacte » coupée).
+    /// Décision du 09/11/2026 (`DECISIONS_LOT3.md`, « Décisions déléguées du 8 novembre 2026 ») : aucune coordonnée
+    /// n'est demandée ni transmise, issue `.indisponible` (message du web, saisie manuelle de la ville), comme
+    /// `ObservationGps.precisionReduite` du lot 2, qui ne porte aucune coordonnée (décision 5 du lot 2) et que
+    /// l'adaptateur de la fusion traduira de la même façon : le comportement ne change pas à la fusion.
+    public static let issuePrecisionReduite: PositionPonctuelle = .indisponible
+
+    /// Attente bornée de la réponse à la feuille système d'autorisation (revue B8 de T10, m12) : au-delà, la demande
+    /// rend `.indisponible` ; une réponse donnée plus tard vaut pour l'appui suivant.
+    public static let delaiAutorisationProfil: TimeInterval = 60
 }
 
 // MARK: - Démo

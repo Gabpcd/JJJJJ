@@ -19,7 +19,8 @@ public struct RefusStockageAvatar: Error, Equatable, Sendable {
 }
 
 /// Essais d'avatar en cours dans ce processus : la réconciliation ne touche jamais le reçu d'un envoi encore en vol
-/// (écran rouvert pendant un envoi), qui se terminera lui-même.
+/// (écran rouvert pendant un envoi), qui se terminera lui-même, ni celui qu'une autre réconciliation est en train de
+/// solder (revue B8 de T10, m6 : deux réconciliations du même reçu ne s'entrelacent jamais).
 public actor RegistreEnvoisAvatar {
     public static let partage = RegistreEnvoisAvatar()
     private var essais: Set<String> = []
@@ -41,6 +42,13 @@ public actor RegistreEnvoisAvatar {
 /// 5. succès : reçu effacé, URL relue rendue.
 /// Toute autre erreur (délai, réseau, HTTP 5xx) laisse le reçu en `started` ou `stored` : issue inconnue, que
 /// `reconcilier` tranche par relecture de `avatar_url`.
+///
+/// Reçu ILLISIBLE (octets présents mais indécodables : version inconnue, JSON altéré, autre utilisateur ; revue B8 de
+/// T10, m8) : l'envoi reste fail-closed (rien ne part), mais `reconcilier` — ouverture de l'écran — le retire, essai
+/// inconnu clos sans requête ; la photo affichée est `avatar_url` relue à l'ouverture, et le prochain envoi choisi par
+/// l'utilisateur repart d'un reçu neuf. Sans cette reprise, un reçu illisible bloquait tout envoi pour toujours (le
+/// trousseau survit à la réinstallation). Une erreur du MAGASIN (trousseau verrouillé, refus du système) n'est pas un
+/// reçu illisible : rien n'est effacé, la réconciliation échoue fermée.
 public struct EnvoiAvatar: AvatarStoragePort {
     private let stockage: StockageAvatarPort
     private let profil: ProfilPort
@@ -59,8 +67,8 @@ public struct EnvoiAvatar: AvatarStoragePort {
         try MissionBusiness.validateContext(context)
         guard !jpeg.isEmpty else { throw RefusAvatar(AvatarProfil.Textes.fichierVide) }
         guard jpeg.count <= AvatarProfil.tailleMaxOctets else { throw RefusAvatar(AvatarProfil.Textes.fichierTropLourd) }
-        // 1. Reçu précédent soldé (relecture), jamais rejoué.
-        _ = try await reconcilier(context: context)
+        // 1. Reçu précédent soldé (relecture), jamais rejoué ; reçu illisible : refus (fail-closed, aucune reprise ici).
+        _ = try await reconcilier(context: context, reprendreIllisible: false)
         let userId = context.userId
         // 2. Reçu durable avant toute requête.
         let recu = RecuAvatar(userId: userId, attemptId: identifiant(),
@@ -77,10 +85,38 @@ public struct EnvoiAvatar: AvatarStoragePort {
     }
 
     public func reconcilier(context: MissionReadContext) async throws -> ReconciliationAvatar {
+        try await reconcilier(context: context, reprendreIllisible: true)
+    }
+
+    public func image(url: URL) async -> Data? { await stockage.image(url: url) }
+
+    // MARK: - Interne
+
+    private func reconcilier(context: MissionReadContext, reprendreIllisible: Bool) async throws -> ReconciliationAvatar {
         try MissionBusiness.validateContext(context)
         let recu: RecuAvatar?
-        do { recu = try await recus.lire(userId: context.userId) } catch { throw RefusAvatar(AvatarProfil.Textes.echecEnvoi) }
-        guard let recu, await !registre.contient(recu.attemptId) else { return .aucune }
+        do {
+            recu = try await recus.lire(userId: context.userId)
+        } catch let erreur as RecuAvatar.Erreur where reprendreIllisible && (erreur == .illisible || erreur == .utilisateurDifferent) {
+            // Reçu illisible (m8) : essai inconnu, retiré sans requête ; `avatar_url` relue à l'ouverture fait foi.
+            try await effacer(userId: context.userId)
+            return .aucune
+        } catch {
+            throw RefusAvatar(AvatarProfil.Textes.echecEnvoi)
+        }
+        // Essai en vol (envoi ou autre réconciliation) : jamais touché.
+        guard let recu, await registre.debuter(recu.attemptId) else { return .aucune }
+        do {
+            let issue = try await solder(recu, context: context)
+            await registre.terminer(recu.attemptId)
+            return issue
+        } catch {
+            await registre.terminer(recu.attemptId)
+            throw error
+        }
+    }
+
+    private func solder(_ recu: RecuAvatar, context: MissionReadContext) async throws -> ReconciliationAvatar {
         if recu.estTermine {
             try await effacer(recu)
             return .aucune
@@ -99,10 +135,6 @@ public struct EnvoiAvatar: AvatarStoragePort {
         try await effacer(recu)
         return .nonConfirmee
     }
-
-    public func image(url: URL) async -> Data? { await stockage.image(url: url) }
-
-    // MARK: - Interne
 
     private func envoyer(_ prepare: RecuAvatar, jpeg: Data, context: MissionReadContext) async throws -> URL {
         try await journaliser(prepare)
@@ -155,6 +187,13 @@ public struct EnvoiAvatar: AvatarStoragePort {
     }
 
     private func effacer(_ recu: RecuAvatar) async throws {
-        do { try await recus.effacer(userId: recu.userId) } catch { throw RefusAvatar(AvatarProfil.Textes.echecEnvoi) }
+        try await effacer(userId: recu.userId)
+    }
+
+    /// Effacement BRUT par clé (`avatar.<userId>`), lisible ou non : seule voie de reprise d'un reçu illisible. Point de
+    /// fusion : servi par `ReceiptStorePort.effacer(CleRecu)` du lot 2, jamais par `ReceiptJournal.effacer`, qui exige
+    /// un reçu lisible.
+    private func effacer(userId: String) async throws {
+        do { try await recus.effacer(userId: userId) } catch { throw RefusAvatar(AvatarProfil.Textes.echecEnvoi) }
     }
 }

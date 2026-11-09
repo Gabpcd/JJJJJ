@@ -7,6 +7,9 @@ import JoleneDesign
 /// effet), aide ou « Position enregistrée — … » (coordonnées jamais affichées), avis de la localisation. La ville de
 /// recherche, posée par la position, reste le champ T9 placé juste dessous dans la même carte.
 ///
+/// Revue B8 de T10 : bouton inactif pendant un enregistrement (`peutLocaliser`, m5) ; avis annoncé par son propre jeton
+/// (`annoncesLocalisation`, m4), jamais réannoncé par « Enregistrer ».
+///
 /// Identifiants : `profil-adresse`, `profil-localiser`, `profil-position-aide`, `profil-localisation-avis`.
 struct AdresseProfilSection: View {
     @ObservedObject var model: ProfilEditionModel
@@ -25,7 +28,7 @@ struct AdresseProfilSection: View {
                              style: .secondary, isLoading: model.localisationEnCours) {
                     Task { await model.localiser() }
                 }
-                .disabled(model.localisationEnCours)
+                .disabled(!model.peutLocaliser)
                 .accessibilityIdentifier("profil-localiser")
             }
             Text(model.formulaire.positionRenseignee ? Textes.positionEnregistree : Textes.aide)
@@ -37,10 +40,10 @@ struct AdresseProfilSection: View {
                 switch avis {
                 case let .succes(message):
                     InlineNotice(message, tone: .success, identifier: "profil-localisation-avis", announcesOnAppear: true,
-                                 announcementID: model.annonces)
+                                 announcementID: model.annoncesLocalisation)
                 case let .erreur(message):
                     InlineNotice(message, tone: .error, identifier: "profil-localisation-avis", announcesOnAppear: true,
-                                 announcementID: model.annonces)
+                                 announcementID: model.annoncesLocalisation)
                 }
             }
         }

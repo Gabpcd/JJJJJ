@@ -108,7 +108,7 @@ struct MainTabView: View {
                     .navigationDestination(for: ProfilEditionRoute.self) { _ in
                         // Lot 3, T10 : localisation provisoire du profil (`AppContainer.localisationProfil`).
                         ProfilEditionScreen(session: session, snapshot: snapshot, localisation: container.localisationProfil,
-                                            estDemo: container.isDemo)
+                                            selectionAvatarDemo: container.selectionAvatarDemo)
                     }
             }
             .tabItem { Label("Profil", systemImage: "person") }

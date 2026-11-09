@@ -17,10 +17,24 @@ public struct SupabaseAvatarStorage: StockageAvatarPort {
     private let session: URLSession
 
     /// `session` : lecture de l'image à l'URL signée (tests : transport injecté).
-    public init(client: SupabaseClient, session: URLSession = .shared) {
+    public init(client: SupabaseClient, session: URLSession = SupabaseAvatarStorage.sessionParDefaut) {
         self.client = client
         self.session = session
     }
+
+    /// Session de lecture de l'avatar (revue B8 de T10, m11) : éphémère, SANS cache HTTP (ni disque ni mémoire), sans
+    /// cookie ni identifiant mémorisé. `URLSession.shared` gardait dans le cache disque partagé l'URL signée (jeton
+    /// valable 5 ans) et les octets de l'image. Une seule session pour l'app.
+    public static let sessionParDefaut: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.httpCookieStorage = nil
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.httpShouldSetCookies = false
+        configuration.urlCredentialStorage = nil
+        return URLSession(configuration: configuration)
+    }()
 
     public func deposer(chemin: String, jpeg: Data, context: MissionReadContext) async throws {
         try MissionQuery.validate(context: context)
@@ -46,7 +60,7 @@ public struct SupabaseAvatarStorage: StockageAvatarPort {
     /// vide ou erreur → nil.
     public func image(url: URL) async -> Data? {
         guard url.scheme == "https" else { return nil }
-        var requete = URLRequest(url: url)
+        var requete = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
         requete.timeoutInterval = 15
         guard let (donnees, reponse) = try? await session.data(for: requete),
               let http = reponse as? HTTPURLResponse, (200..<300).contains(http.statusCode), !donnees.isEmpty else { return nil }

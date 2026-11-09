@@ -78,7 +78,8 @@ public protocol AvatarStoragePort: Sendable {
     /// Rend l'URL relue dans `avatar_url` après `fn_modifier_mon_profil(p_avatar_url:)`. Refus certain →
     /// `RefusAvatar` (message affiché tel quel) ; toute autre erreur laisse l'issue inconnue (`reconcilier`).
     func televerser(jpeg: Data, context: MissionReadContext) async throws -> URL
-    /// Reçu laissé par un envoi interrompu : relecture de `avatar_url`, jamais de second envoi automatique.
+    /// Reçu laissé par un envoi interrompu : relecture de `avatar_url`, jamais de second envoi automatique. Un reçu
+    /// illisible est retiré (essai inconnu clos, sans requête ; revue B8 de T10, m8) ; une erreur du magasin lève.
     func reconcilier(context: MissionReadContext) async throws -> ReconciliationAvatar
     /// Octets de l'avatar à l'URL relue (nil si illisibles) ; jamais journalisés.
     func image(url: URL) async -> Data?

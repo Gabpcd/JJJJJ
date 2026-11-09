@@ -17,12 +17,22 @@ extension DemoFixtures {
         }
         return try Data(contentsOf: url)
     }
+
+    /// Issue des deux sources démo (aucune feuille système) : la photo de démonstration, ou `.illisible` si le scénario
+    /// le demande ou si la ressource manque (jamais une annulation silencieuse ; revue B8 de T10, M1).
+    public static func selectionAvatarDemo(scenario: ScenarioAvatarDemo?) -> SelectionPhotoAvatar {
+        guard scenario != .illisible, let octets = try? avatarDemo() else { return .illisible }
+        return .octets(octets)
+    }
 }
 
 /// Valeurs de l'argument DEBUG `-JOLENE_DEMO_AVATAR` (lu par `AppContainer`, démo seulement).
 public enum ScenarioAvatarDemo: String, CaseIterable, Sendable {
     /// Le stockage refuse le dépôt (réponse 403 simulée) : reçu `refused`, aucun `p_avatar_url`.
     case refus
+    /// La photo choisie ne peut pas être lue (photo iCloud indisponible hors ligne, simulée) : « Impossible de lire le
+    /// fichier sélectionné. », rien n'est envoyé ; le stockage reste normal.
+    case illisible
 
     public static let argument = "-JOLENE_DEMO_AVATAR"
 
