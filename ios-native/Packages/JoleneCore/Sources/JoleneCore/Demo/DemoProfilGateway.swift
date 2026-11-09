@@ -87,6 +87,7 @@ public struct DemoProfilGateway: ProfilPort {
         "p_rayon_deplacement_km": "rayon_deplacement_km", "p_numero_rpps": "numero_rpps", "p_avatar_url": "avatar_url",
         "p_types_contrat": "types_contrat_acceptes", "p_bio": "bio", "p_annees_experience": "annees_experience",
         "p_taux_horaire_minimum": "taux_horaire_minimum", "p_ville_recherche": "ville_recherche",
+        "p_adresse_lat": "adresse_lat", "p_adresse_lng": "adresse_lng", // T10
     ]
 
     private func verifier(_ context: MissionReadContext) throws {

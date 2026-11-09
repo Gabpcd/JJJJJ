@@ -6,8 +6,9 @@ import Foundation
 // qu'après relecture serveur (PRINCIPES §3) ; refus métier = issues de `Models/Lot3Results.swift`,
 // erreurs de transport = `JoleneError`. Les treize ports backend sont des champs du bloc « Lot 3 »
 // de `Gateways` ; les quatre capacités système (fin de fichier) sont injectées par `AppContainer`,
-// avec des doubles en démo et en test. La localisation ponctuelle n'a pas de port au lot 3 : elle
-// réutilise `LocationPort` du lot 2 (`Ports/AppareilPorts.swift`, L2-T1), sans variante.
+// avec des doubles en démo et en test. La localisation ponctuelle du profil (T10) a un port minimal et provisoire,
+// `LocalisationPort` (`Ports/LocalisationPort.swift`), remplacé à la fusion par un adaptateur sur `LocationPort` du
+// lot 2 (`Ports/AppareilPorts.swift`, L2-T1, absent de la base du lot 3).
 
 // MARK: - Ports backend (bloc « Lot 3 » de `Gateways`)
 
@@ -71,10 +72,16 @@ public protocol ProfilPort: Sendable {
     func modifier(_ champs: ModificationProfil, context: MissionReadContext) async throws -> ProfilComplet
 }
 
-/// Avatar (`jolene-documents/<uid>/avatar-<ts>.jpg`, reçu durable avant l'envoi) — tranche T10.
+/// Avatar (`jolene-documents/<uid>/avatar-<ts>.jpg`, reçu durable avant l'envoi) — tranche T10. Implémentation des
+/// deux mondes : `EnvoiAvatar` (`Profil/EnvoiAvatar.swift`) sur un `StockageAvatarPort`.
 public protocol AvatarStoragePort: Sendable {
-    /// Rend l'URL relue dans `avatar_url` après `fn_modifier_mon_profil(p_avatar_url:)`.
+    /// Rend l'URL relue dans `avatar_url` après `fn_modifier_mon_profil(p_avatar_url:)`. Refus certain →
+    /// `RefusAvatar` (message affiché tel quel) ; toute autre erreur laisse l'issue inconnue (`reconcilier`).
     func televerser(jpeg: Data, context: MissionReadContext) async throws -> URL
+    /// Reçu laissé par un envoi interrompu : relecture de `avatar_url`, jamais de second envoi automatique.
+    func reconcilier(context: MissionReadContext) async throws -> ReconciliationAvatar
+    /// Octets de l'avatar à l'URL relue (nil si illisibles) ; jamais journalisés.
+    func image(url: URL) async -> Data?
 }
 
 /// Géocodage inverse best-effort (`api-adresse.data.gouv.fr`, D15) — tranche T10.
@@ -217,7 +224,11 @@ public struct UnwiredProfilPort: ProfilPort, UnwiredPort {
 
 public struct UnwiredAvatarStoragePort: AvatarStoragePort, UnwiredPort {
     public init() {}
-    public func televerser(jpeg: Data, context: MissionReadContext) async throws -> URL { throw Lot3.erreur("avatar", "T10") }
+    private var erreur: JoleneError { Lot3.erreur("avatar", "T10") }
+    public func televerser(jpeg: Data, context: MissionReadContext) async throws -> URL { throw erreur }
+    public func reconcilier(context: MissionReadContext) async throws -> ReconciliationAvatar { throw erreur }
+    /// Aucune lecture possible sans port câblé : jamais une image plausible.
+    public func image(url: URL) async -> Data? { nil }
 }
 
 public struct UnwiredGeocodagePort: GeocodagePort, UnwiredPort {

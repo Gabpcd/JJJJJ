@@ -22,17 +22,26 @@ struct ProfilEditionRoute: Hashable {}
 /// `profil-rpps-verifie`, `profil-ville-recherche`, `profil-bio`, `profil-experience`, `profil-mode-*`,
 /// `profil-taux-min`, `profil-taux-min-valeur`, `profil-rayon`, `profil-rayon-valeur`,
 /// `profil-exercice-web`, `profil-exercice-web-action`, `profil-enregistre`, `profil-erreur`,
-/// `profil-enregistrer`.
+/// `profil-enregistrer` ; T10 : `profil-avatar*` (`AvatarProfilSection`), `profil-adresse`, `profil-localiser`,
+/// `profil-position-aide`, `profil-localisation-avis` (`AdresseProfilSection`).
+///
+/// Lot 3, T10 : photo de profil en tête (`AvatarProfilModel`, reçu durable et relecture de `avatar_url`) ; carte
+/// « Adresse » avec « Utiliser ma position actuelle » (port `LocalisationPort` injecté par `MainTabView` depuis
+/// `AppContainer.localisationProfil`, provisoire jusqu'à la fusion avec le lot 2) au-dessus de la ville de recherche.
 struct ProfilEditionScreen: View {
     @StateObject private var model: ProfilEditionModel
+    @StateObject private var avatar: AvatarProfilModel
+    private let estDemo: Bool
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
     /// Sélecteur de date ouvert sur une date non renseignée : il affiche `DateNaissance.parDefaut` sans l'écrire.
     @State private var selecteurDateOuvert = false
 
     private typealias Textes = ProfilEdition.Textes
 
-    init(session: SessionStore, snapshot: SessionSnapshot) {
-        _model = StateObject(wrappedValue: ProfilEditionModel(session: session, snapshot: snapshot))
+    init(session: SessionStore, snapshot: SessionSnapshot, localisation: LocalisationPort? = nil, estDemo: Bool = false) {
+        _model = StateObject(wrappedValue: ProfilEditionModel(session: session, snapshot: snapshot, localisation: localisation))
+        _avatar = StateObject(wrappedValue: AvatarProfilModel(session: session, snapshot: snapshot))
+        self.estDemo = estDemo
     }
 
     var body: some View {
@@ -77,8 +86,15 @@ struct ProfilEditionScreen: View {
     @ViewBuilder
     private func contenu(_ profil: ProfilComplet) -> some View {
         entete(profil)
+        carte {
+            AvatarProfilSection(model: avatar, prenom: profil.prenom, nom: profil.nom, estDemo: estDemo)
+                .task { await avatar.demarrer(avatarUrl: profil.avatarUrl) }
+        }
         carte { informations(profil) }
-        carte { villeRecherche }
+        carte {
+            AdresseProfilSection(model: model)
+            villeRecherche
+        }
         carte { presentation }
         carte {
             ChoixModesExerciceSection(choix: model.choixModes, prefixe: "profil",

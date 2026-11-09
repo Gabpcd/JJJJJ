@@ -940,6 +940,116 @@ texte. Correctif d'intégration (tests d'abord), chaque test changé étant faux
   geste vise désormais le voile au-dessus du bord haut de la feuille, puis, si elle est encore là, la glisse vers le
   bas ; l'assertion de fermeture et les suivantes sont inchangées.
 
+## T10 — photo de profil et localisation (branche `lot3/l3-t10-v2`, 09/11/2026)
+
+- **Livré.**
+  - Photo : `JoleneCore/Profil/AvatarProfil.swift` (règles d'`AvatarUpload.tsx` l.33-61, l.116-170 : bucket
+    `jolene-documents`, chemin `<uid>/avatar-<ms>.jpg`, 256 px sans agrandissement, qualité 0,8, 2 Mo, URL signée de
+    5 ans ; `ConversionAvatar` : tout format lu par ImageIO, HEIC compris, réduit par
+    `CGImageSourceCreateThumbnailAtIndex` sans décoder l'original en pleine taille, orientation EXIF appliquée, fond
+    blanc sous la transparence, AUCUNE métadonnée recopiée — position GPS de la photo comprise), `EnvoiAvatar.swift`
+    (enchaînement des deux mondes : reçu durable, dépôt, URL signée, `fn_modifier_mon_profil(p_avatar_url)` par le
+    port du profil, relecture de `avatar_url`), `RecuAvatar.swift`, `AvatarProfilModel.swift` ; JoleneSupabase
+    `Profil/SupabaseAvatarStorage.swift` (Storage, `upsert: false`, 4xx = refus certain, 5xx et réseau = issue
+    inconnue) et `Keychain/KeychainRecusAvatar.swift` ; app `Composition/AvatarPicker.swift` (`PHPickerViewController`
+    hors processus, sans autorisation photothèque ; `UIImagePickerController` pour l'appareil photo) et
+    `Screens/Profil/AvatarProfilSection.swift`.
+  - Localisation : `JoleneCore/Ports/LocalisationPort.swift` (port minimal provisoire, démo
+    `DemoLocalisationProfil`), `Profil/GeocodageInverse.swift` et `Profil/ProfilLocalisation.swift` (port de
+    `reverseGeocode`, `src/lib/geocodage.ts` l.16-34, et de `demanderGeolocalisation`, `SectionProfilPrincipal.tsx`
+    l.625-643), `ProfilEditionModel.localiser()` ; JoleneSupabase `Geo/ApiAdresseGeocodage.swift` (GET
+    `https://api-adresse.data.gouv.fr/reverse/?lon=&lat=`, en-tête `Accept` seul, session éphémère sans cookie, tout
+    échec → nil) ; app `Composition/LocalisationProfilProvisoire.swift` (CoreLocation, `requestLocation`, 15 s) et
+    `Screens/Profil/AdresseProfilSection.swift`. `ModificationProfil` envoie désormais `p_adresse_lat` /
+    `p_adresse_lng` (en paire, jamais effacées) ; `p_adresse_rue`, `p_adresse_ville`, `p_adresse_code_postal` restent
+    interdits (le web les envoie à `null`, sans effet sous `COALESCE`, `public.sql` l.43992-43994).
+  - Câblage des deux mondes (`DemoWorld.câblerLot3`, `SupabaseGateways.câblerLot3`) : `avatar` et `geocodage` sortent
+    de `DemoWorldTests.portsEnAttenteLot3`. Démo sans réseau : objets en mémoire, URL signée sur l'hôte réservé
+    `demo.invalid` lue par le port (jamais résolue), géocodage « Place Bellecour 69002 Lyon », photo source HEIC de
+    synthèse (`Resources/media-demo/avatar-demo.heic`) ; DEBUG : `-JOLENE_DEMO_AVATAR refus`,
+    `-JOLENE_DEMO_LOCALISATION accordee|refusee|indisponible`, `-JOLENE_DEMO_GEOCODAGE echec`.
+- **Reçu et réconciliation (PRINCIPES §3-§4).** Reçu `prepared` écrit puis RELU avant toute requête (échec du
+  trousseau ou reçu illisible : rien n'est envoyé, message d'échec du web) ; `started` avant le dépôt ; refus 4xx du
+  stockage → `refused`, aucune URL signée ni `p_avatar_url` ; `stored` après le dépôt ; succès annoncé seulement si
+  `avatar_url` relue est l'URL envoyée, puis reçu effacé. Délai, coupure ou 5xx laissent le reçu en `started` ou
+  `stored` : la réconciliation (ouverture de l'écran, ou juste après l'erreur) relit `avatar_url` — URL du reçu →
+  « Photo mise à jour ! », sinon essai clos `not_sent` et message d'échec ; jamais de second dépôt ni de
+  `p_avatar_url` rejoué. Un essai encore en vol dans le processus (écran rouvert pendant l'envoi) n'est jamais
+  réconcilié (`RegistreEnvoisAvatar`). Un nouvel envoi choisi par l'utilisateur solde d'abord le reçu précédent.
+- **Écarts assumés (non juridiques).**
+  1. JPEG au lieu du WebP du web (D14) ; limite de 2 Mo appliquée au JPEG envoyé (blueprint v2), pas au fichier
+     d'origine.
+  2. Les « coordonnées techniques » du web (`SectionProfilPrincipal.tsx` l.875) ne sont jamais affichées (§2.6) ;
+     pictogrammes décoratifs « 📍 » retirés (comme en T9) ; un libellé d'adresse vide donne « Position récupérée. »
+     (le web afficherait « 📍 » seul).
+  3. La position, comme sur le web, n'est écrite qu'avec « Enregistrer les modifications » ; la photo est enregistrée
+     dès son choix (le web aussi, `AvatarUpload` l.153-155).
+  4. Choix de la source en ligne sous le bouton (photothèque ; appareil photo s'il existe, toujours en démo) plutôt
+     qu'une feuille système : identifiants stables sur iPhone et iPad (PRINCIPES §6). Textes sans équivalent web
+     (non juridiques, à relire) : « Choisir dans la photothèque », « Prendre une photo » ; « Annuler » est repris de
+     `ConfirmationSheet.swift` l.34 (L1-T1b).
+  5. Démo : reçus en mémoire vive (`RecusAvatarEnMemoire`, comme les reçus démo du lot 2), pas dans le trousseau
+     (« reçu Keychain réel » du blueprint §2.7) : le mode démo reste sans état entre deux lancements et le simulateur
+     non signé de la CI n'a pas d'accès fiable au trousseau ; nom d'objet démo daté par l'horloge système (deux photos
+     d'une session ne partagent jamais un chemin, `upsert: false`). Libellé DEBUG démo `profil-avatar-etat`
+     (« photo » / « initiales », jamais l'URL), même modèle que `deeplink-route`.
+  6. Le web limite l'origine aux PNG, JPEG, WebP (`accept`, l.209) ; le natif accepte tout format lu par ImageIO
+     (HEIC d'iPhone d'abord) puisqu'il ne transmet que le JPEG converti.
+- **Manques et points de fusion des lots (aucun ne dépend de `feat/ios-lot2`).**
+  1. **Localisation.** Le blueprint v2 réutilise `LocationPort` du lot 2 (`Ports/AppareilPorts.swift`, L2-T1 ;
+     `LocationService`, L2-T4b), absent de la base. Aucun second service n'est créé : un port MINIMAL
+     (`LocalisationPort.localiser(delai:)`) et une implémentation isolée `LocalisationProfilProvisoire`, seule
+     utilisatrice de CoreLocation hors lot 2, injectée par `AppContainer.localisationProfil` dans le seul écran du
+     profil. À la fusion : supprimer `LocalisationProfilProvisoire.swift`, servir `LocalisationPort` par un adaptateur
+     sur `Appareil.localisation` (`autorisation()` → `demanderAutorisation()` si `.nonDeterminee` →
+     `positionUnique(delai:)` ; `.disponible` → `.disponible`, `.refusee` → `.refusee`, `.indisponible` et
+     `.precisionReduite` → `.indisponible`), et `DemoLocalisationProfil` par `DemoLocationPort` si sa position
+     convient. Aucun nom ne recouvre un type du lot 2. Écart à surveiller à la fusion : le lot 2 rend
+     `.precisionReduite` sans coordonnées (décision 5 du lot 2) ; pour le profil, une ville suffit, l'implémentation
+     provisoire accepte la précision réduite.
+  2. **Journal des reçus.** Le blueprint utilise `ReceiptJournal` « du lot 1 T7 », qui n'existe sur aucune branche
+     du lot 1 ; il est livré par L2-T1 (`Receipts/ReceiptJournal.swift`, `RecuDurable.swift`, `KeychainReceiptStore`).
+     Point d'extension : `RecuAvatar` porte déjà les membres de `RecuDurable` (domaine `avatar`, `userId`,
+     `attemptId`, `estTermine`, `verifierSuccession(apres:)`, `encoder()`, `decoder(_:userId:)`), `RecusAvatarPort`
+     est le seul magasin, et `KeychainRecusAvatar` (provisoire) reprend le service `app.jolene.receipts` et le compte
+     `avatar.<userId>` du magasin du lot 2. À la fusion : `extension RecuAvatar: RecuDurable {}`, `RecuAvatar.Erreur`
+     → `RecuErreur`, `RecusAvatarPort` servi par `ReceiptJournal<RecuAvatar>` sur `KeychainReceiptStore`, suppression
+     de `KeychainRecusAvatar` ; un reçu écrit avant la fusion reste relisible (mêmes service, compte et JSON).
+  3. **Sélecteurs de photo.** `AvatarPicker.swift` (profil) et `Media/PhotoPickerView.swift` (justificatifs, lot 2)
+     coexistent : usages distincts, à unifier à la fusion si leurs contrats convergent.
+  4. **Chaîne `NSCameraUsageDescription`** (lot 0) : « … photographier vos documents professionnels et scanner les QR
+     codes de pointage. » ne nomme pas la photo de profil. Non modifiée : la garde `check-textes-juridiques-ios` du
+     lot 2 (`CHAINES_INFO_PLIST`) verrouille ces chaînes mot pour mot, et l'app Capacitor sert déjà la photo de profil
+     avec la même chaîne. Texte proposé pour la tranche qui la changera avec sa garde (texte opérationnel, vouvoyé) :
+     « Jolene utilise la caméra pour photographier vos documents professionnels, prendre votre photo de profil et
+     scanner les QR codes de pointage. » `NSLocationWhenInUseUsageDescription` nomme déjà la localisation du profil ;
+     la photothèque passe par `PHPickerViewController`, sans autorisation.
+  5. **CI.** Nouvel éclat « lot3-profil-photo » (`DemoPhotoPositionTests`, cinq XCUITest, trois formats) : l'éclat
+     « lot3-notifications » (15 min sur iphone au run 42541548740) aurait dépassé 20 min ; job porté à 170 min (cinq
+     éclats de 30 min et le build), résumé et artefact étendus. Point de fusion avec le lot 2 : garder tous les éclats
+     et unir les `-skip-testing` de l'éclat socle.
+- **Constats serveur (aucune correction écrite, lecture du dump seulement).**
+  - Un dépôt réussi suivi d'un refus ou d'une coupure de `fn_modifier_mon_profil` laisse un objet orphelin dans
+    `jolene-documents` : aucune politique UPDATE/DELETE (`20260713222000` l.1395-1412), comme sur le web. Rien n'est
+    exposé (URL signée jamais liée) ; un nettoyage serveur des avatars non référencés serait une tranche backend (B9,
+    données) — non ouverte.
+  - `api-adresse.data.gouv.fr` répondait 200 au format attendu le 09/11/2026 (requête de contrôle sur un lieu public,
+    sans identifiant) ; la migration annoncée vers la Géoplateforme n'est pas vérifiée ici : si le service s'arrête,
+    le web et le natif rendent « Position récupérée. » sans ville (best-effort), rien ne casse.
+- **Tests.** JoleneCore : `ConversionAvatarTests` (fixture HEIC de synthèse `Resources/media/avatar-source.heic`,
+  orientation EXIF 6 et GPS fictif), `RecuAvatarTests`, `EnvoiAvatarTests` (403 → `refused`, aucun `p_avatar_url` ;
+  arrêt entre dépôt et RPC → relecture, aucun second envoi ; perte de réponse confirmée par relecture ; essai en vol),
+  `AvatarLocalisationModelTests`, `AvatarLocalisationVerbatimTests`, `DemoAvatarLocalisationTests`,
+  `ModificationPositionTests`, et les gardes `DemoWorldTests` / `Lot3PortsTests` mises à jour ; JoleneSupabase :
+  `SupabaseAvatarStorageTests`, `ApiAdresseGeocodageTests`, `KeychainRecusAvatarTests`, `SupabaseGatewaysTests`
+  (mondes comparés) ; XCUITest `DemoPhotoPositionTests` (trois formats, compilés, non lancés localement). Tests T9
+  inchangés (aucun affaibli) ; `p_adresse_lat` / `p_adresse_lng` passent des paramètres interdits aux autorisés
+  (périmètre T10 du blueprint), la garde « 29 paramètres classés une fois » reste verte.
+- **HARD STOP n°4.** Aucun texte juridique ; textes repris verbatim (`AvatarUpload.tsx` l.164, l.166, l.179 ;
+  `documentUpload.ts` l.135, l.139, l.174 ; `SectionProfilPrincipal.tsx` l.637, l.861, l.871) ou vouvoyés (l.640,
+  l.875, l.876), épinglés par `AvatarLocalisationVerbatimTests`. Décision déléguée sur le destinataire des
+  coordonnées : section « Décisions déléguées du 8 novembre 2026 ».
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -1007,10 +1117,51 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   l'intégralité de tes données personnelles dans le format de ton choix. ») : verbatim web en tutoiement, à valider
   avant tout vouvoiement (§6.7).
 - Seuls les textes non juridiques passent du tutoiement web au vouvoiement (décision 9 du lot 1).
+- **T10 — textes sans équivalent web** (non juridiques, à relire par Gabrielle) : « Choisir dans la photothèque »,
+  « Prendre une photo » (choix de la source de la photo de profil, `AvatarProfil.Textes`) ; « Annuler » repris de
+  `ConfirmationSheet.swift` l.34 ; libellé DEBUG démo `profil-avatar-etat` (« photo » / « initiales », jamais en
+  Release). Textes web verbatim ou vouvoyés : section T10, épinglés par `AvatarLocalisationVerbatimTests`.
 - (T3b) Texte **sans équivalent web**, non juridique, déjà décidé (décision 7 du lot 1, `LOT1_PLAN.md` l.403) et repris
   mot pour mot : « Ce lien ne permet pas de réinitialiser le mot de passe depuis l'application. » (refus d'un lien de
   réinitialisation `?code=`, `DeepLinkIntent.Textes.reinitialisationRefusee`, épinglé par `DeepLinkIntentTests`) ;
   bouton « Fermer » repris de `FiltresSheet.swift` l.64.
+
+## Décisions déléguées du 8 novembre 2026
+
+Gabrielle a délégué le 08/11/2026 toutes les décisions, juridiques comprises (« arrête de me demander et prends les
+décisions, avance seul ») ; les PR B9 restent préparées sans merge. Chaque décision est instruite sur des sources
+primaires vérifiables, en distinguant JUGÉ (jurisprudence), doctrine et choix de conformité Jolene.
+
+### T10 — coordonnées du profil transmises au géocodage inverse (`api-adresse.data.gouv.fr`)
+
+- **Question.** « Utiliser ma position actuelle » envoie la latitude et la longitude de l'appareil (avec son adresse
+  IP, inhérente à toute requête) au service public `api-adresse.data.gouv.fr`, hors Supabase. Faut-il bloquer ou
+  différer ce flux dans le natif tant que la politique de confidentialité ne nomme pas ce destinataire ?
+- **Faits du dépôt.** Le web fait exactement cet envoi depuis l'écran profil (`src/lib/geocodage.ts` l.16-19, appelé
+  par `SectionProfilPrincipal.tsx` l.628-632) ; le natif le reproduit sans rien y ajouter (aucun identifiant, aucun
+  jeton, aucun cookie : `ApiAdresseGeocodage`, `ApiAdresseGeocodageTests`). La politique de confidentialité
+  (`src/pages/PageConfidentialite.tsx`) annonce la « localisation volontaire du profil » (§2.3, l.51) et sa base
+  juridique (§2.6, l.65), mais son tableau des sous-traitants (§3.2, l.92-108) ne nomme pas ce service.
+- **Sources primaires (vérifiées sur le texte publié du règlement (UE) 2016/679, EUR-Lex, CELEX 32016R0679, le
+  09/11/2026).** Art. 4, point 1 : une personne est identifiable notamment « par référence à un identifiant, tel
+  qu'un nom, un numéro d'identification, des données de localisation, un identifiant en ligne » — les coordonnées de
+  l'appareil sont des données personnelles. Art. 4, point 9 : le « destinataire » est « la personne physique ou
+  morale, l'autorité publique, le service ou tout autre organisme qui reçoit communication de données à caractère
+  personnel, qu'il s'agisse ou non d'un tiers ». Art. 13, paragraphe 1, point e) : la personne concernée est informée
+  des « destinataires ou les catégories de destinataires des données à caractère personnel, s'ils existent ».
+- **Force des sources.** Texte du règlement (droit positif). Aucune jurisprudence ni doctrine citée : aucune n'a été
+  vérifiée pour ce cas. La qualification du service (sous-traitant au sens de l'art. 4, point 8, ou destinataire
+  responsable de son propre traitement) n'est pas tranchée ici : dans les deux cas, l'art. 13 impose d'informer du
+  destinataire, et le tableau §3.2 ne le fait pas.
+- **Décision (choix de conformité Jolene).** Le natif livre le géocodage à l'identique du web (D15), sans blocage :
+  même flux, même minimisation (coordonnées seules, à l'appui explicite de l'utilisateur, jamais en tâche de fond,
+  aucune conservation côté app), et aucun texte juridique nouveau dans l'app (la politique est une page web, servie
+  par le renvoi web du hub). La lacune d'information est une lacune du **texte web** existant, commune aux deux
+  surfaces : elle se corrige sur le web d'abord (ajout du service d'adresse de l'État parmi les destinataires du
+  §3.2 de `PageConfidentialite.tsx`), puis le natif suit par la garde des textes — PR web séparée, hors de cette
+  tranche (légal exposé, B9 : préparée sans merge). Ne pas différer le natif ne crée aucun flux nouveau : différer
+  seulement le natif laisserait le web inchangé et n'améliorerait pas l'information des personnes.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
 
 ## En attente de Gabrielle (§6 du blueprint)
 
@@ -1039,6 +1190,9 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   réel).
 - **§6.10 TestFlight externe** : groupe de soignants pilotes, informations de test, Beta App Review ; décision
   explicite, le build parlant à la production.
+- **T10 (appareil, §6.2)** : photo HEIC prise avec l'appareil photo et photo choisie dans la photothèque (feuilles
+  système réelles), autorisation de position réelle (accordée, refusée, précision réduite) et géocodage réel sur
+  iPhone — `RECETTE_DEVICE_LOT3.md` §6 ; ces feuilles n'existent pas en démo.
 - **§6.11 Captcha** : mesurer `PORTE_LOT0.md` 3.1 et 3.2 avant d'ouvrir T7 ; en cas de refus captcha, D25 s'applique.
   (T7, 08/11/2026) Toujours « non mesurées » : T7 est livrée en natif sous réserve de ces mesures, à faire avant son
   merge ; un refus captcha mesuré impose D25 (renvoi web de « Créer un compte »).

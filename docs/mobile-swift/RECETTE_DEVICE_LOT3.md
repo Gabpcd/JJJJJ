@@ -95,6 +95,9 @@ mémorisé pour jolene.app ; lien non réécrit par un traceur SMTP ; build appa
 |---|---|---|
 | Photo HEIC prise avec l'appareil photo, puis avatar | JPEG 256 px envoyé, `avatar_url` relu, image affichée après relancement (D14) | — |
 | Reçu d'avatar après arrêt forcé entre l'upload et la RPC | relecture `avatar_url` au retour, pas de second upload automatique | — |
+| Photo choisie dans la photothèque (`PHPickerViewController`, HEIC d'iPhone) | aucune demande d'accès aux photos ; JPEG 256 px sans métadonnée GPS dans l'objet Storage (lu en STAGING), « Photo mise à jour ! » | — |
+| « Utiliser ma position actuelle », première fois (L3-T10) | feuille système avec la chaîne `NSLocationWhenInUseUsageDescription` du lot 0 ; accordée → ville renseignée par l'API Adresse, rien d'écrit avant « Enregistrer » ; refusée → « Localisation refusée ou indisponible. Vous pouvez saisir votre adresse manuellement. » | — |
+| Position en précision réduite (Réglages › Confidentialité › Service de localisation › Jolene › Position exacte coupée) | ville renseignée (une ville suffit au profil) | — |
 | Thème sombre (Réglages iOS sombre, puis choix « Sombre » dans l'app) | contrastes lisibles sur tous les écrans du lot 3 ; préférence conservée après relancement (D16) | — |
 | Export RGPD partagé vers Fichiers | fichier JSON non vide, supprimé du conteneur temporaire après la feuille de partage | — |
 

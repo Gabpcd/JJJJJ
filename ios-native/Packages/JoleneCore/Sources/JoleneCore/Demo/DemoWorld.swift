@@ -64,8 +64,8 @@ public enum DemoWorld {
         // T7 (compte, confirmation, parcours) ; complétion et `register-soignant` refusées jusqu'à T8.
         gateways.inscription = DemoInscriptionGateway(auth: gateways.auth as? DemoAuthGateway ?? DemoAuthGateway())
         gateways.profil = DemoProfilGateway()                              // T9
-        gateways.avatar = UnwiredAvatarStoragePort()                       // T10
-        gateways.geocodage = UnwiredGeocodagePort()                        // T10
+        gateways.avatar = DemoWorld.avatar(profil: gateways.profil)       // T10 (même ligne démo que `profil`)
+        gateways.geocodage = DemoGeocodage()                               // T10
         gateways.motDePasse = DemoMotDePasseGateway()                      // T11
         gateways.exportRGPD = DemoExportRGPDGateway()                      // T11
         gateways.revenus = UnwiredRevenusPort()                            // T12

@@ -52,7 +52,10 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   attendue unique `DemoWorldTests.portsEnAttenteLot3`, comparée entre les deux mondes par
   `SupabaseGatewaysTests`. Les capacités système du lot 3 (autorisation et enregistrement
   push, flux hébergé, rapport de crash) sont des ports hors `Gateways`, injectés par
-  `AppContainer` ; la localisation reste le `LocationPort` du lot 2, sans variante.
+  `AppContainer` ; la localisation est le `LocationPort` du lot 2, sans variante. Seule exception, provisoire et
+  consignée (`DECISIONS_LOT3.md`, section T10) : tant que le lot 2 n'est pas fusionné, la position du profil passe par
+  le port minimal `LocalisationPort` et une implémentation isolée (`LocalisationProfilProvisoire`), supprimée à la
+  fusion au profit d'un adaptateur sur `Appareil.localisation`.
 
 ## 3. Aucun succès fabriqué
 
