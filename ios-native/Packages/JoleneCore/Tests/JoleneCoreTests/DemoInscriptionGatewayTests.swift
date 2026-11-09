@@ -71,6 +71,31 @@ final class DemoInscriptionGatewayTests: XCTestCase {
         XCTAssertEqual(contexte?.emailConfirme, true)
     }
 
+    /// Revue fraîche B8 de L3-TJ (mineur 4) : le cas « session ouverte » de l'aiguillage (« Choisissez votre espace… »,
+    /// puis « Je suis soignant » en feuille) doit être atteignable en démo pour que l'XCUITest de TJ3 le couvre. Lien de
+    /// confirmation démo d'un compte confirmé **sans** intention d'inscription ni parcours (compte créé hors de
+    /// l'inscription progressive) : `token_hash=demo-sans-intention`.
+    func testLienDeConfirmationSansIntentionOuvreLeChoixDEspace() async throws {
+        let (auth, gateway) = monde()
+        let confirme = try await gateway.confirmer(.tokenHash(tokenHash: "demo-sans-intention", otpType: "signup"))
+        XCTAssertEqual(confirme, .sessionOuverte)
+        let restaure = try await auth.restoreSession()
+        XCTAssertEqual(restaure?.id, DemoInscriptionGateway.nouveauSoignantId, "session relue après la confirmation")
+        let contexte = try await gateway.contexte()
+        XCTAssertNil(contexte?.intention, "compte sans intention d'inscription")
+        XCTAssertEqual(contexte?.emailConfirme, true)
+        XCTAssertEqual(contexte?.email, "nouveau-soignant@example.invalid")
+        let parcours = try await gateway.parcours(userId: DemoInscriptionGateway.nouveauSoignantId)
+        XCTAssertNil(parcours)
+        XCTAssertEqual(OnboardingResolution.etape(parcours: parcours, intention: contexte?.intention), .choixEspace)
+        // « Je suis soignant » (session ouverte) : profession et consentement → `fn_demarrer_inscription` simulé.
+        let demarre = try await gateway.demarrer(intention: intention)
+        XCTAssertEqual(demarre.typeCompte, "SOIGNANT")
+        XCTAssertEqual(OnboardingResolution.etape(parcours: demarre, intention: nil), .completerSoignant(demarre))
+        let relu = try await gateway.parcours(userId: DemoInscriptionGateway.nouveauSoignantId)
+        XCTAssertEqual(relu, demarre, "parcours relu après le démarrage")
+    }
+
     func testParcoursDemarreUneFoisPuisRelu() async throws {
         let (auth, gateway) = monde()
         _ = try await gateway.creerCompte(email: "nouveau@example.invalid", motDePasse: "motdepasse", intention: intention)

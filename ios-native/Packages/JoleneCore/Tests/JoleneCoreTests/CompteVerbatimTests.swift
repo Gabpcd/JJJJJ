@@ -2,9 +2,9 @@ import XCTest
 @testable import JoleneCore
 
 /// Textes du hub « Mon compte » livrés par le lot 3, T11 (HARD STOP n°4) : mot de passe, export RGPD, thème,
-/// « Aide & légal ». Chaque texte affiché repris du web figure tel quel à sa ligne source ; les textes RGPD de
-/// l'export restent en tutoiement (le natif suit le web mot pour mot) ; textes RGPD et textes sans équivalent web
-/// (non juridiques) tranchés par délégation (L3-TJ, décision TJ2 de `DECISIONS_LOT3.md`).
+/// « Aide & légal ». Chaque texte affiché repris du web figure tel quel à sa ligne source ; le titre RGPD de l'export
+/// est verbatim, sa description web inexacte (« l'intégralité ») n'est pas portée (critère de TJ8) ; textes RGPD et
+/// textes sans équivalent web (non juridiques) tranchés par délégation (L3-TJ, décision TJ2 de `DECISIONS_LOT3.md`).
 final class CompteVerbatimTests: XCTestCase {
     private typealias M = MotDePasse.Textes
     private typealias E = ExportRGPD.Textes
@@ -42,7 +42,7 @@ final class CompteVerbatimTests: XCTestCase {
             (MotDePasse.auditTypeRessource, mdp, 86), (AuditAction.donneesPersoModification.rawValue, mdp, 85),
             ("champ: 'mot_de_passe'", mdp, 88), ("new Date().toISOString()", mdp, 88),
             (M.erreurGenerique, erreurs, 532),
-            (E.titre, confidentialite, 111), (E.description, confidentialite, 114), (E.exporterJSON, confidentialite, 123),
+            (E.titre, confidentialite, 111), (E.exporterJSON, confidentialite, 123),
             (E.enCours, confidentialite, 123), (E.exporterCSV, confidentialite, 131), (E.enCours, confidentialite, 131),
             ("Données exportées en ${fmt.toUpperCase()}.", confidentialite, 73),
             (ExportRGPD.auditTypeRessource, confidentialite, 45), (AuditAction.rgpdExportDonnees.rawValue, confidentialite, 44),
@@ -75,16 +75,43 @@ final class CompteVerbatimTests: XCTestCase {
         XCTAssertEqual(FormatExportRGPD.csv.libelle, "CSV")
     }
 
-    func testTextesRGPDDeLExportRestentEnTutoiementVerbatim() throws {
-        // HARD STOP n°4 : texte RGPD du web, non reformulé, tutoiement compris (décision TJ2 de L3-TJ, par délégation :
-        // le natif suit le web mot pour mot ; un vouvoiement ou une correction passe d'abord par le web, puis par la
-        // garde de ce fichier).
-        XCTAssertEqual(E.description, "Télécharge l'intégralité de tes données personnelles dans le format de ton choix.")
+    /// Texte web de la description de l'export (`SectionConfidentialite.tsx` l.114), inexact au regard du serveur et du
+    /// RGPD (TJ2). Il n'est cité ici que comme témoin : jamais dans les sources de l'app.
+    private static let descriptionWebInexacte = "Télécharge l'intégralité de tes données personnelles dans le format de ton choix."
+
+    /// Sources de l'app et de ses paquets (hors tests).
+    private static let dossiersSources = ["ios-native/Jolene", "ios-native/Packages/JoleneCore/Sources",
+                                          "ios-native/Packages/JoleneDesign/Sources", "ios-native/Packages/JoleneSupabase/Sources"]
+
+    func testTitreRGPDVerbatimEtDescriptionInexacteNonPortee() throws {
+        // HARD STOP n°4, décision TJ2 de L3-TJ (revue fraîche B8, majeur 2) : un seul critère pour un texte juridique du
+        // web inexact, celui de TJ8 — il n'est pas porté (ne pas porter n'est pas reformuler) ; le titre et les boutons
+        // restent verbatim. Quand la PR web corrige l.114, le témoin rougit : le nouveau texte est instruit puis porté
+        // verbatim (tutoiement compris), et cette garde le suit.
         XCTAssertEqual(E.titre, "Mes données (RGPD)")
-        let (puce, _) = try DecisionsLot3Document.puceDeleguee("- **Textes RGPD de l'export** (T11), validés verbatim")
-        for texte in [E.titre, E.description] {
-            XCTAssertTrue(puce.contains("« \(texte) »"), "décision TJ2 : « \(texte) » validé verbatim")
+        let web = try Self.lignes(Self.confidentialite)
+        XCTAssertTrue(web[114 - 1].contains(Self.descriptionWebInexacte),
+                      "témoin web : l.114 a changé (PR web de TJ2 ?) — instruire le nouveau texte, puis le porter verbatim")
+        let (puce, sousSection) = try DecisionsLot3Document.puceDeleguee("- **Textes RGPD de l'export** (T11)")
+        XCTAssertTrue(sousSection.contains("### TJ2 — "), "décision TJ2 (textes de T11)")
+        XCTAssertTrue(puce.contains("« \(E.titre) »"), "décision TJ2 : « \(E.titre) » validé verbatim")
+        XCTAssertTrue(puce.contains("« \(Self.descriptionWebInexacte) »") && puce.contains("**non portée**")
+                      && puce.contains("critère de TJ8"), "décision TJ2 : description citée, non portée, critère de TJ8")
+        // Aucune source de l'app ni de ses paquets ne porte la description (ni constante, ni identifiant d'affichage).
+        var racine = URL(fileURLWithPath: #filePath)
+        for _ in 0..<6 { racine.deleteLastPathComponent() }
+        var porteurs: [String] = []
+        for dossier in Self.dossiersSources {
+            let base = racine.appendingPathComponent(dossier)
+            guard let parcours = FileManager.default.enumerator(at: base, includingPropertiesForKeys: nil) else { continue }
+            for case let fichier as URL in parcours where fichier.pathExtension == "swift" {
+                let texte = try String(contentsOf: fichier, encoding: .utf8)
+                if texte.contains("l'intégralité de tes données") || texte.contains("\"compte-export-info\"") {
+                    porteurs.append(fichier.lastPathComponent)
+                }
+            }
         }
+        XCTAssertEqual(porteurs, [], "description inexacte de l'export portée par : \(porteurs)")
     }
 
     /// Corps de `fn_rgpd_exporter_rate_limited` dans le dump, localisé par son en-tête (revue B8, m5) : un
@@ -179,6 +206,21 @@ final class CompteVerbatimTests: XCTestCase {
         let suite = decisions[section.upperBound...]
         let t11 = suite.range(of: "\n## ").map { suite[..<$0.lowerBound] } ?? suite
         XCTAssertTrue(t11.contains("login-forgot") && t11.contains("L1-T10"), "dépendance du renvoi à L1-T10 consignée")
+        // Revue fraîche B8 de L3-TJ (mineur 2), verrou « un gap connu reste verrouillé » : tant que la connexion native
+        // n'a pas `login-forgot`, ce renvoi est sans effet ; TJ2 l'accepte jusqu'à L1-T10 avec ses motifs, et le
+        // préalable est inscrit au §6.10 (TestFlight externe).
+        let connexion = try Self.source("ios-native/Jolene/Screens/LoginScreen.swift")
+        guard !connexion.contains("\"login-forgot\"") else { return }
+        let (puce, _) = try DecisionsLot3Document.puceDeleguee(
+            "- **T11 — textes sans équivalent web** (non juridiques), validés par délégation")
+        XCTAssertTrue(puce.contains("renvoi sans effet") && puce.contains("L1-T10"), "TJ2 : renvoi sans effet qualifié")
+        let attente = try DecisionsLot3Document.section("## En attente de Gabrielle", dans: decisions)
+        let debut = try XCTUnwrap(attente.range(of: "**§6.10"), "§6.10 de « En attente de Gabrielle »")
+        let apres610 = attente[debut.lowerBound...]
+        let p610 = apres610.range(of: "\n- ").map { apres610[..<$0.lowerBound] } ?? apres610
+        for element in ["Préalable", "« Mot de passe oublié ? »", "`login-forgot`", "L1-T10", "un gap connu reste verrouillé"] {
+            XCTAssertTrue(p610.contains(element), "§6.10 : « \(element) » (préalable TestFlight externe)")
+        }
     }
 
     func testAideEtLegalSontDesRenvoisSafariCanoniques() throws {

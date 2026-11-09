@@ -14,7 +14,10 @@ import XCTest
 ///   l'inscription web (D25), présenté par le présentateur `.safari` du coordinateur des liens (L3-T3b) ;
 /// - « Se connecter » ramène à l'écran de connexion avec l'adresse saisie ;
 /// - (L3-TJ, décision TJ3) le lien « CGU » de la phrase de consentement ouvre, en démo, le double sans réseau du renvoi
-///   web sur `https://jolene.app/cgu`, jamais la page réelle ; le formulaire est rendu tel quel à la fermeture.
+///   web sur `https://jolene.app/cgu`, jamais la page réelle ; le formulaire est rendu tel quel à la fermeture ; de
+///   même (revue fraîche B8 de L3-TJ) quand le formulaire est lui-même une feuille de l'aiguillage d'onboarding
+///   (session ouverte, « Je suis soignant » : cas qui motive TJ3), compte confirmé sans intention d'inscription
+///   (`token_hash=demo-sans-intention`, `DemoInscriptionGateway.tokenHashSansIntention`).
 /// Les liens `/inscription/confirmer` et `/inscription/soignant` (`-JOLENE_OPEN_URL`, coordinateur des liens de
 /// L3-T3b) sont prouvés par `DemoLiensLot3Tests` (intégration du lot 3), et au niveau 1 (`ConfirmationInscriptionModel`,
 /// `DemoInscriptionGateway`, `SupabaseInscriptionGateway`, `DeepLinkIntentTests`).
@@ -147,6 +150,39 @@ final class DemoInscriptionTests: JoleneUITestCase {
         require("Le formulaire est de nouveau affiché") { self.containerVisible(scroll) && texte.exists }
         XCTAssertFalse(cgu.isSelected, "lire les CGU ne coche pas le consentement")
         XCTAssertEqual(element("inscription-submit").label, "Créer mon compte", "rien n'est supposé créé")
+    }
+
+    /// Lien de confirmation démo d'un compte confirmé sans intention d'inscription ni parcours.
+    static let lienConfirmationSansIntention = "https://jolene.app/inscription/confirmer?token_hash=demo-sans-intention&type=signup"
+
+    /// Revue fraîche B8 de L3-TJ (mineur 4) : le cas qui motive TJ3. Session ouverte sans espace ni intention →
+    /// aiguillage « Choisissez votre espace… » → « Je suis soignant » présente le formulaire **en feuille**
+    /// (`OnboardingRootView`, mode `.sessionOuverte`) ; son lien « CGU » ouvre la feuille locale dans cette feuille, sur
+    /// le double sans réseau (`renvoi-web-demo`, `https://jolene.app/cgu`), jamais la page réelle ; « Fermer » rend la
+    /// feuille du formulaire telle quelle, consentement non coché, rien démarré.
+    func testLienCGUDepuisLAiguillageSessionOuverteOuvreLeDoubleDemoSansReseau() throws {
+        launchDemo(extraArguments: ["-JOLENE_OPEN_URL", Self.lienConfirmationSansIntention])
+        let soignant = element("onboarding-soignant")
+        require("Le lien confirmé ouvre l'aiguillage « Choisissez votre espace… »", timeout: 30) { self.visible(soignant) }
+        XCTAssertFalse(element("onboarding-completion").exists, "compte sans intention : aucun parcours démarré")
+        XCTAssertFalse(tabBarExists, "jamais l'espace soignant sans profil (D9)")
+        tap("onboarding-soignant")
+        let scroll = element("inscription-scroll")
+        require("Le formulaire « Je suis soignant » est présenté en feuille") { self.containerVisible(scroll) }
+        XCTAssertFalse(element("inscription-email").exists, "session ouverte : ni adresse ni mot de passe à saisir")
+        XCTAssertFalse(element("inscription-password").exists, "session ouverte : ni adresse ni mot de passe à saisir")
+        let texte = element("inscription-cgu-texte")
+        scrollTo(texte, in: scroll)
+        XCTAssertEqual(texte.label, Self.consentement, "consentement verbatim (l.264-284)")
+        let cgu = element("inscription-cgu")
+        XCTAssertFalse(cgu.isSelected, "consentement non coché au départ")
+        toucherLienCGU(dans: texte)
+        liensRenvoiWebAffiche("https://jolene.app/cgu")
+        record("\(proofPrefix)-inscription-cgu-demo-session-ouverte")
+        liensFermerRenvoiWeb()
+        require("La feuille du formulaire est de nouveau affichée") { self.containerVisible(scroll) && texte.exists }
+        XCTAssertFalse(cgu.isSelected, "lire les CGU ne coche pas le consentement")
+        XCTAssertFalse(element("onboarding-completion").exists, "ouvrir les CGU ne démarre aucun parcours")
     }
 
     func testSeConnecterRameneALaConnexionAvecLAdresseSaisie() throws {
