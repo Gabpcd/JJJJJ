@@ -1581,6 +1581,14 @@ sans changer aucune règle ni aucun texte affiché :
   point de départ d'un glissement ne tombe plus jamais sur un curseur (zone tactile comprise) : couloir gauche,
   sinon droit (`PasDeDefilement.abscisseDeGlissement`, testée). Défaut latent de `drag`, révélé par la position du
   curseur après l'ajout de la photo et de la position (T10).
+- **Recette CI, run 42606279978 (`738b10c6`, deuxième et dernier essai)** : iphone et ipad-landscape verts
+  (1 158 tests chacun, 0 ignoré) ; ipad-portrait rouge sur deux tests de l'éclat « lot3-compte », verts au même run
+  sur les deux autres formats et au run 42579729412 sur ipad-portrait : `DemoCompteLot3Tests`
+  (`testExportJSONFeuilleFermeeSansPartageAucunSucces`, tap unique hors popover tombé dans le cadre du bouton source,
+  popover resté ouvert) et `DemoLiensLot3Tests` (`testRouteNonLivreeRenvoiWebAussitotSansSession`, « Se connecter »
+  touché sans effet visible). Défauts de TEST (geste unique non confirmé), sans lien avec les fusions ni avec les
+  correctifs ci-dessus ; corrections proposées dans `REVUES_LOT3.md` (section d'intégration de la vague 4), à
+  livrer avec une nouvelle recette des trois formats avant tout merge du lot.
 
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 

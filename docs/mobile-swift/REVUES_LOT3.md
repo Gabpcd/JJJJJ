@@ -1656,6 +1656,157 @@ Non bloquants, à traiter en suivi ou avant le merge.
 - **Conditions de merge inchangées** : go B9 ; `DemoCompletionInscriptionTests` passe à 8 XCUITest × 3 formats (éclat
   « lot3-inscription »), compilés, jamais lancés localement — run CI vert préalable au merge.
 
+### Revue fraîche B8 — L3-T8 (n°2)
+
+**Verdict : CLÔTURABLE.** Aucun bloquant, aucun majeur, six mineurs.
+
+Le merge reste soumis à quatre conditions :
+- un run CI vert de l'éclat « lot3-inscription » sur les trois formats (les 8 XCUITest n'ont jamais tourné) ;
+- le go B9 de Gabrielle ;
+- la preuve STAGING au dispatch de T16 ;
+- la recette sur appareil.
+
+#### Ce que j'ai relu
+- Le diff complet `origin/feat/ios-lot3...origin/lot3/l3-t8-v2` : 4 commits, 51 fichiers, +3689/−168, base `01473089`.
+- Les sources web : `InscriptionSoignant.tsx`, `inscriptionProgressive.ts`, `ChoixModesExercice.tsx`, `DeclarationEtudiant.tsx`, `useTypesExerciceAutorises.ts`, `preferencesModesExercice.ts`, `constantes.ts`.
+- Côté serveur : `register-soignant/index.ts`, ainsi que `fn_enregistrer_parcours_inscription`, `fn_types_exercice_autorises`, `fn_get_my_role`, `dec_verifier_type_exercice_profession` et `dec_verifier_profession_etudiant` dans `public.sql`, et le seed `20260714084802`.
+- Le blueprint v2 (§3 T8).
+- Lecture seule : aucun build, aucun test, aucun appel MCP.
+
+#### Vérifié sans constat
+- **B1 (brouillon étudiant).**
+  - `estEtudiant` est lu en booléen seulement, comme `restaurerFormulaire`.
+  - Il y a deux verrous : à l'ouverture (`parcoursEtudiant` masque le formulaire et les deux boutons d'envoi) et dans `finaliser` des deux gateways, sur le brouillon relu par le serveur. Avec ce second verrou, `register-soignant` n'est jamais appelée. Sans lui, elle écrirait `est_etudiant = false` (l.309).
+  - Le natif n'écrit jamais `estEtudiant` ni `scolarite*` : les listes `clesBrouillon` et `clesFinalisation` sont testées.
+  - Aucun texte nouveau.
+- **M1 (issues inconnues).**
+  - `issueIndeterminee` couvre tout statut ≥ 500, tout 2xx illisible et les 409 ALREADY, IN_PROGRESS et USER_ALREADY. J'ai vérifié chaque cas contre index.ts (l.205-212, l.329-332, l.404-407).
+  - `fn_get_my_role` ne rend SOIGNANT qu'avec une ligne `soignants` dont `supprime_le` est nul : la relecture est donc saine.
+  - Le RLS soignant repose sur `auth.uid()` et non sur `app_metadata` : ouvrir l'espace après un 409 sans `refreshSession` est sans risque.
+  - Un 401 est une session expirée, et le 503 FINALIZATION_PENDING donne une déconnexion locale avec le message affiché à la connexion.
+  - Une erreur de contrat ou un dépassement de délai (`bounded` lève `.network`, jamais une annulation) mène à une relecture, jamais à un renvoi.
+- **Concurrence.**
+  - Un seul envoi à la fois : `enCours`, `enregistrementEnCours` et `relectureEnCours` sont posés avant la première suspension.
+  - L'epoch n'est capturé que pour l'identité du parcours (`epoch(identite:)`, comparaison sans casse), et une réponse arrivée pour une identité partie est ignorée.
+  - Les générations de `verifierModes` sont gérées. m2 est corrigé : une lecture annulée revient à `.inactif`.
+  - `refreshSession` pour le même utilisateur ne fait pas avancer l'epoch.
+  - `.id(userId|modifieLe)` recrée le modèle à chaque relecture du parcours.
+- **Parité web.**
+  - Téléphone (l.228), majorité 18 × 365,25 j (l.214-220), borne du sélecteur calculée en UTC, comme le contrôle `UNDERAGE` du runtime.
+  - Liste des informations manquantes dans l'ordre l.355, RPPS par profession (l.221-225), phrase du type unique (l.68).
+  - Retrait du libéral (l.191-199), conforme à T8-J1 ; ChoixModes l.15-16 et l.29.
+  - `rayon` transmis seulement s'il vient du brouillon.
+- **Textes verbatim.** J'ai relu par sondage les 46 annotations : le fichier et la ligne sont exacts. Les messages serveur de la démo sont exacts (l.208, 237, 241, 252, 266, 270, 328, 367 ; public.sql l.32505).
+- **Décisions déléguées T8-J1 à T8-J5.** Les sources primaires sont exactes et vérifiables : ChoixModes l.12, 20-27, 43 ; DeclarationEtudiant l.105 ; ListeCandidatures l.287 ; public.sql l.4518 et l.32487 ; constantes l.55 et l.61 ; explorationInscription l.32 ; en-tête du seed. Chaque décision porte la ligne de délégation du 08/11/2026.
+- **Liens, contrats et CI.**
+  - `DestinationLien` : `.completer` vaut `true`.
+  - L'exclusion nommée `inscriptionCompleter` est cohérente, et les identifiants (`onboarding-completion` → `completion-screen`) sont migrés partout.
+  - `rpc-contracts.json`, la garde et le test lot 3 sont alignés.
+  - Le fixture démo vient du seed (17 professions), et le test croise web = enum DB = natif = référentiel.
+  - L'éclat CI est bien isolé (skip dans le socle, résumé à cinq éclats, plafond de 170 min, même marge qu'avant).
+- **Sécurité.**
+  - Aucun journal, `print`, `sleep`, ni littéral qui ressemble à un secret.
+  - Le Bearer vient de `auth.session`.
+  - Les données d'identité ne sont jamais journalisées.
+  - Les surcharges démo restent en DEBUG.
+- **Tests.**
+  - Les tests modifiés épinglaient le défaut relevé à la revue n°1 ; aucun n'est affaibli.
+  - Les doubles du niveau 1 discriminent bien les cas : rôle INCONNU ou SOIGNANT, profil créé avant l'erreur.
+  - Les XCUITest attendent sur des conditions (pas de délai fixe), défilent jusqu'aux contrôles et tournent sur les trois formats.
+
+#### Mineurs
+1. **Retour du renvoi web sans relire le parcours** (`CompletionProfilScreen.swift:87-97`), hors brouillon étudiant. Un brouillon enregistré sur le web pendant la visite peut être écrasé par la saisie native périmée (fusion `donnees || p_donnees`) avant que le verrou serveur ne bascule l'écran. Correction : relecture silencieuse, et remontage seulement si `modifie_le` a changé.
+2. **Rôle démo toujours SOIGNANT** (`DemoWorld.swift:119-125`). En démo, la relecture au retour passe par `ouvrirIdentiteInscription()` alors que la production prend la branche `.aucun`. Le XCUITest étudiant (`DemoCompletionInscriptionTests.swift:111-123`) ne prouve donc pas la relecture. Correction : rôle INCONNU pour `demo-nouveau-soignant` jusqu'à la bascule, et assertion d'un effet observable.
+3. **Recette étudiant incohérente** (`RECETTE_DEVICE_LOT3.md:75`). La complétion se fait sur jolene.app (production, URL en dur) mais la preuve est demandée en SQL STAGING. Correction : préciser l'environnement.
+4. **Compteurs périmés** : `DECISIONS_LOT3.md:995` et `:1002` (6 XCUITest, 52 annotations), `REVUES_LOT3.md:1641` (6 × 3). Les bons chiffres sont 8 et 53.
+5. **Force de T8-J4 mal classée** (`DECISIONS_LOT3.md:1145`). Elle n'est dans aucune des trois catégories ; correction : « choix de conformité Jolene ».
+6. **Garde verbatim qui se tait** (`CompletionVerbatimTests.swift:21`). Elle fait `XCTSkip` si une source est déplacée ; correction : `XCTFail`.
+
+#### Hors périmètre, notés
+- m3 (la mission choisie pendant l'exploration web n'est pas rouverte après la complétion) est consigné pour le lot 4.
+- La garde `check-textes-juridiques-ios` reste à rattacher à la fusion des lots 2 et 3.
+
+## L3-T10
+
+### Revue fraîche B8 — L3-T10 (n°2)
+
+**Verdict : CLOTURABLE.** Aucun bloquant, aucun majeur, 9 mineurs et 1 rappel.
+
+**Périmètre relu :** tout le diff `origin/feat/ios-lot3...origin/lot3/l3-t10-v2` (6 commits jusqu'à `8ab5b69c`, 50 fichiers), à savoir :
+- JoleneCore : sources, tests et ressources ;
+- JoleneSupabase ;
+- cible app et XCUITest ;
+- CI et docs.
+
+J'ai aussi relu le blueprint v2 §3 T10 et `LOTS_2_5_DECISIONS.md`. Aucune écriture, aucun build, MCP Supabase en lecture seule.
+
+#### Vérifications faites
+
+##### Photo de profil
+- **Corrections de la revue n°1.**
+  - **M1 corrigé.** `SelectionPhotoAvatar` distingue l'annulation de la lecture impossible. Côté photothèque, un fournisseur présent avec des données nil ou une erreur donne `.illisible` ; côté appareil photo, un `jpegData` nil aussi. Le message affiché est verbatim `documentUpload.ts` l.174. Les tests unitaires couvrent l'epoch, et le XCUITest les trois formats.
+  - **m4 à m13** : corrections constatées dans le code ou la doc.
+- **Enchaînement de l'envoi.**
+  - Reçu durable : prepared → started → stored, puis refused ou not_sent, écrit et relu avant toute requête.
+  - Une réponse 4xx du stockage est un refus certain : aucune URL signée, aucun `p_avatar_url`.
+  - Le succès n'est annoncé que si `avatar_url` relue est l'URL envoyée.
+  - Jamais de second dépôt ni de RPC rejouée. Le registre protège les essais encore en cours et empêche deux réconciliations simultanées.
+  - Le magasin en panne reste fail-closed. Un reçu illisible n'est retiré qu'à la réconciliation d'ouverture.
+  - L'espion des phases (m9) fait échouer les tests si une phase terminale n'est pas journalisée avant l'effacement.
+- **Conversion.** HEIC vers JPEG 256 px par vignette ImageIO, orientation EXIF appliquée, aucune métadonnée recopiée, fond blanc sous la transparence. Le HEIC démo ne porte aucun EXIF ; la fixture de test porte un GPS fictif rond (45 N, 4 E).
+- **Concurrence et identité.** Swift 6 : MainActor et Sendable cohérents. L'epoch est vérifié avant chaque publication, y compris pendant l'envoi et pendant la réconciliation. Rien n'est journalisé : description du reçu masquée, octets et position jamais affichés dans un message.
+- **Session de lecture de l'image** : éphémère, sans cache HTTP ni cookie ni identifiant mémorisé.
+
+##### Position
+- `p_adresse_lat` / `p_adresse_lng` partent toujours en paire, jamais pour effacer. La garde « 29 paramètres » reste verte et aucun test T9 n'est affaibli.
+- La localisation et l'enregistrement se verrouillent mutuellement, dans le modèle et pas seulement sur les boutons.
+- Dans `LocalisationProfilProvisoire`, chaque continuation est reprise une seule fois et toutes les attentes sont bornées (autorisation 60 s, position 15 s). L'écran ne peut donc pas rester bloqué avec « Enregistrer » inactif.
+
+##### Contrat serveur (lecture seule en production)
+- Paramètres `p_adresse_lat` / `p_adresse_lng` de type `numeric`, colonnes `numeric`.
+- `COALESCE` confirmé sur la position et sur `avatar_url`.
+- **Aucun des 23 triggers de `soignants` ne touche `adresse_lat` ni `avatar_url`.** Le serveur n'annule donc ni la position ni la photo en silence.
+- Migration `20260713222000` : l.1342 (types autorisés, dont `image/jpeg`) et l.1395-1412 (politiques Storage) sont exactes.
+
+##### Textes et sources web
+- Lignes web vérifiées sur le dépôt :
+  - `AvatarUpload.tsx` l.119-171, l.179, l.209 ;
+  - `SectionProfilPrincipal.tsx` l.625-643 et l.859-877 ;
+  - `geocodage.ts` l.16-34 ;
+  - `ProfilSoignant.tsx` l.318-326.
+- Vouvoiements non juridiques conformes. Aucun texte juridique nouveau. Textes sans équivalent web listés : « Choisir dans la photothèque », « Prendre une photo ».
+
+##### Décision juridique déléguée (géocodage)
+- Sources primaires exactes : RGPD art. 4 points 1 et 9, art. 13 §1 e).
+- Références du dépôt exactes, sauf une citation (m5) : §3.2 l.92-108, tbody l.97-107, ligne APNs l.106.
+- La ligne « décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026 » est présente. Le flux est identique au web, sans blocage.
+
+##### Démo, tests, CI, régressions
+- Démo sans réseau, compteur de la sentinelle à 0 vérifié. Variantes DEBUG uniquement.
+- XCUITest : 6 tests × 3 formats dans un éclat dédié, ajouté au résumé et à l'artefact, et exclu de l'éclat socle. Aucune attente par délai fixe.
+- Aucune régression des identifiants T9, aucune route modifiée, aucun littéral ressemblant à un secret, rien hors périmètre.
+
+#### Mineurs (détail dans `mineurs`)
+1. **m1** — L'image de l'avatar n'est jamais chargée si `.task` est annulé pendant l'ouverture (changement d'onglet) : le garde `demarre` empêche toute reprise.
+2. **m2** — Après un délai dépassé, la relecture « juste après l'erreur » rend presque toujours `.aucune`, car l'essai est encore réservé. C'est sûr, mais la doc est inexacte.
+3. **m3** — La lecture photothèque/iCloud n'a ni borne ni annulation : le bouton peut rester bloqué.
+4. **m4** — `jpegData(compressionQuality: 1)` de la prise de vue pleine résolution tourne sur le fil principal.
+5. **m5** — La décision cite « localisation volontaire du profil » à la l.51 ; l'expression est à la l.65.
+6. **m6** — La PR web B9 sur `PageConfidentialite.tsx` §3.2 n'est inscrite dans aucune porte.
+7. **m7** — L'écart au blueprint v2 sur la localisation est acceptable car consigné et verrouillé. Il faut néanmoins faire de la recette appareil (CoreLocation sans test unitaire) une condition du merge.
+8. **m8** — « En-tête Accept seul » est inexact : URLSession ajoute `User-Agent`, `Accept-Language` et `Accept-Encoding`.
+9. **m9** — `UIImage(data:)` est recalculé à chaque rendu.
+10. **Rappel** — `NSCameraUsageDescription` reste un prérequis bloquant de soumission (`PORTE_LOT3` 6.7).
+
+#### Reste à faire hors revue
+- **Recette appareil de Gabrielle** (`RECETTE_DEVICE_LOT3.md` §6) :
+  - HEIC réel, photothèque et appareil photo ;
+  - photo iCloud en mode Avion ;
+  - appareil photo en plein écran sur iPad ;
+  - autorisation de position accordée, refusée, en précision réduite ;
+  - géocodage réel.
+- **Run CI vert** des trois formats pour passer la ligne de parité à « natif ».
+
 ## Intégration de T3b, T7 et T11 (vague 3, 09/11/2026) — vérifications et recette CI
 
 ### Fusions et correctifs
@@ -1821,6 +1972,78 @@ Détail et sources : `DECISIONS_LOT3.md`, section « T12 — corrections de la r
   `DemoRevenusTests` (7 tests, trois formats) compilés, **jamais lancés** : la preuve reste la CI (éclat
   `lot3-revenus`).
 
+### Revue fraîche B8 — L3-T12 (n°3)
+
+**Verdict : CLÔTURABLE.** Aucun bloquant ni majeur. Deux mineurs restent ouverts : une documentation périmée et des lectures en double possibles.
+
+La branche reste **B9** (paiements et escrow). Le merge exige toujours le go explicite de Gabrielle et l'éclat CI `lot3-revenus` vert sur les trois formats. Les 7 tests `DemoRevenusTests` sont compilés mais n'ont jamais été lancés.
+
+#### Ce que j'ai relu
+- `git diff origin/feat/ios-lot3...origin/lot3/l3-t12-v2`, en entier : 36 fichiers, 7 commits jusqu'à `e2c54698`. La base `01473089` est bien le merge-base.
+- Les sources web aux lignes citées, toutes vérifiées sur la branche :
+  - `MesGains.tsx` : l.56-59, 72, 92-163, 243-244, 564-565, 663-667, 698-805, 837, 918, 937, 943 ;
+  - `PageStripeConnect.tsx` : l.45-115, 178, 300, 302, 367, 387-418 ;
+  - `PaiementsEscrowAVenir.tsx` : l.37-187 ;
+  - `DetailMissionSoignant.tsx` : l.444-458, 1241-1271 ;
+  - `NoteNetEstime.tsx` : l.13-16 ;
+  - `pushNative.ts` : l.291-293.
+- Le dump `public.sql` : l.42233 et 42396 (définitions), 42254, 42269-42297, 42460-42465 (réponse), 57303-57326 (`fn_soignant_stripe_connect_actif`), 68108 (`est_compte_test boolean NOT NULL`), 73209 (`paiements_escrow.mission_id` UNIQUE, donc pas de doublon d'identifiant dans les `ForEach`).
+- **MCP Supabase, lecture seule** :
+  - `prosrc` live de `fn_mes_paiements_escrow` et de `fn_soignant_stripe_connect_actif` : identiques au dump ;
+  - EXECUTE `authenticated` = vrai et `anon` = faux pour les quatre RPC lues (dont `fn_etablissements_safe`) ;
+  - droit SELECT `authenticated` vrai sur les colonnes lues de `soignants`, `missions`, `paiements_soignant` et `presences`.
+
+#### Corrections des revues n°1 et n°2 : vérifiées
+- **M1 n°1, visibilité des totaux.** Les totaux suivent les conditions d'affichage du web : `LIBERAL` ou `MIXTE` (l.178, l.300), hors compte de test (l.302, l.367), avec `stripe_connect_actif` vrai (substitut de `statut === 'COMPLET'`, l.367).
+  - La RPC n'est pas appelée hors de ces cas.
+  - Le test faux `SALARIE + statut_liberal ACTIF` est corrigé.
+  - Le résidu, l'edge `stripe-connect-status`, est consigné en écart 10.
+- **M1 n°2, litige.** Le `Link` web vers `/soignant/missions/${l.mission_id}` (l.153-154) est rendu par un renvoi `.safari` vers la page canonique de la mission.
+  - Le bouton n'existe qu'avec le présentateur `.safari`.
+  - L'identifiant est encodé comme un segment de chemin.
+  - Aucun autre état n'est cliquable, comme sur le web (l.156).
+  - Le test d'épinglage des sources rougit si le web change de destination.
+  - Le choix de la page de la mission plutôt que `/soignant/litiges` est justifié : la RPC ne fournit pas `litige_id`.
+- **m2 n°2, état des lignes.** `derniersPaiements` est réappliqué à toutes les lignes affichées à chaque lecture, comme `setPaiementsMap` (l.140-142). Le test reproduit l'exemple de la revue.
+- **m3 n°2, audit.** L'audit est écrit une fois par epoch, ce qui correspond au plan v2 (« audit consultation une fois »). L'écart 11 est consigné. C'est une trace interne, sans règle exposée à l'utilisateur : aucune décision juridique n'était requise.
+- **Corrections n°1 m1 à m7.** Péremption de 60 s, jeton, audit non bloquant qui survit à l'annulation, page jamais sautée, `require` avant lecture, vrai bouton « Voir mission … » : présents et testés.
+
+#### Correction et robustesse
+- **Décodage tolérant :**
+  - nombres finis exigés (l.74-76) ;
+  - `{error}` en HTTP 200 → « indisponible » pour les totaux, refus de contrat pour l'escrow ;
+  - `numeric` accepté en texte ;
+  - colonnes Rist ignorées (témoin 280 €, jamais 320 €) ;
+  - la `select` reprend mot pour mot l.95 et l.102, avec test-garde.
+- **Erreurs PostgREST :** elles passent toutes par `SupabaseErrorMapping`. `.unauthorized` et `.cancelled` sont relevés avant le repli. Un échec de `fn_etablissements_safe` laisse les noms absents, comme `enrichirEtablissements` du web.
+- **Concurrence (Swift 6) :** modèle `@MainActor`. Compteurs de génération par section. Contrôle d'epoch après chaque `await`. L'annulation n'est jamais affichée comme une erreur. Une réponse tardive après déconnexion n'est pas publiée (test).
+- **Régime et montants :** le régime vient du contrat de la mission (`type_contrat_applique ?? type_contrat_recherche`, l.56-59). Les notes de bas de page ne regardent que `type_contrat_applique` (l.243-244). `soignants.type_exercice` ne sert qu'à décider si la section des totaux existe, comme sur le web. Aucun montant n'est recalculé : les `honoraires_cents` sont seulement divisés par 100 (règle #11).
+- **Parité des états :** vide, erreur, chargement et reprise suivent le web. Les écarts 1 à 12 sont consignés et non juridiques.
+- **Textes :** les sept libellés escrow et les notes « net estimé » sont verbatim, tutoiement compris, et épinglés ligne par ligne. Les cinq textes adaptés sont listés pour relecture. Ni « garanti » ni « stationne ».
+- **Routes et coordinateur :** aucune nouvelle route ni cible. `revenus(.apercu)` était déjà livrée. Les sections `factures`, `bulletins` et `avances` restent des renvois web. Pile `cheminRevenus` et jeton dans `presenter(.revenus)`.
+- **Données sensibles et secrets :** rien n'est journalisé, aucun littéral ne ressemble à un secret, aucun fichier hors périmètre.
+- **Régressions :** identifiants migrés (`placeholder-revenus` → `revenus-screen`). `DemoWorldTests.portsEnAttenteLot3` est mis à jour. Le monde démo n'utilise que des fixtures et `DemoAuditGateway`, donc aucun réseau.
+- **XCUITests :**
+  - 7 tests, trois formats via la matrice ;
+  - aucune attente par délai fixe (`require` partout) ;
+  - éclat `lot3-revenus` bien rangé dans `-skip-testing` du socle, le résumé et les artefacts ;
+  - plafond du job à 175 min, au-dessus de 5 × 30 min plus le build.
+
+#### Mineurs
+1. **m1, documentation périmée** (correctif M1 n°2) :
+   - `docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md` l.1310-1311 : « le litige mène au détail natif de la mission » ;
+   - `DemoRevenusGatewayTests.swift` l.32 : message « (détail natif) » ;
+   - `scripts/mobile/export-demo-fixtures.mjs` l.388 : « (détail natif ouvrable) ».
+
+   À remplacer par « page web de la mission (`/soignant/missions/:id`, `.safari`, écart 12) ».
+2. **m2, lectures en double possibles.** `chargerSiNecessaire` n'ignore pas une section déjà en vol. Au retour au premier plan par un lien universel ou un tap, onglet Revenus affiché, `.task(id:)` (RevenusScreen.swift l.61) et la tâche `scenePhase` (l.64-67) relisent toutes les sections. La génération jette la première réponse : rien de faux n'est affiché et l'audit reste unique. Correction possible : un marqueur de lecture en cours par section.
+
+#### Avant le merge
+- Le go explicite de Gabrielle (B9).
+- L'éclat CI `lot3-revenus` vert sur iphone, ipad-portrait et ipad-landscape, avec `skipped = 0`, dont `testLigneEnLitigeOuvreLaPageWebDeLaMission`.
+- La relecture par Gabrielle des cinq textes adaptés ou nouveaux.
+
+
 ## L3-TJ
 
 ### Corrections de l'auteur (revue fraîche B8 n°1, 09/11/2026, tests d'abord)
@@ -1879,3 +2102,215 @@ correction, pour un défaut du document ou du code (aucun test faux, aucun test 
   verts, `DemoInscriptionTests` (7 XCUITest, dont les deux de L3-TJ) et `DemoCompteLot3Tests` démarrés, 0 échec,
   `skipped = 0`. Si « lot3-compte » ou « lot3-inscription » dépasse encore 20 min sur un format, découper à nouveau
   (décision 22).
+
+### Revue fraîche B8 — L3-TJ (n°2)
+
+**Verdict : CLÔTURABLE.** Aucun bloquant, aucun majeur, quatre mineurs.
+
+Diff relu en entier : `origin/feat/ios-lot3...origin/lot3/l3-tj-v2`, quatre commits, 28 fichiers. Revue en lecture seule : aucun build, aucun test, aucune requête MCP.
+
+#### Corrections de la revue n°1 : vérifiées
+- **Majeur 1 (TJ6, règle 2) : corrigé.**
+  - `RIB_COURANT_REQUIS` et `RIB_NON_CONCORDANT` reprennent le texte serveur de `RIB_VERIFIE_REQUIS` (public.sql l.32351).
+  - Le titre (l.306) et l'action (l.316) de `SectionPaiements.tsx` sont exacts.
+  - Chaque refus de `fn_lier_iban_verifie_document` sort bien avant l'UPDATE : refus de l.39470 à l.39526, UPDATE à l.39533.
+  - La garde Node vérifie l'ordre « refus avant UPDATE » et l'absence du texte de l.308.
+- **Majeur 2 (TJ2 contre TJ8) : corrigé.**
+  - `ExportRGPD.Textes.description` et `compte-export-info` sont retirés.
+  - Il ne reste aucune référence dans les sources ni dans les tests UI (vérifié par grep). Aucun autre texte de l'app ne contient « intégralité », donc l'assertion de `DemoCompteLot3Tests` ne peut pas échouer à tort.
+  - Le témoin de la ligne web l.114 est en place.
+- **Mineurs 1 à 5 : corrigés.**
+  - `evaluations_recues` (l.55334) contre `pol_eval_select` (l.79230) : constaté dans le dump.
+  - Condition de publication de l.51292 : exacte.
+  - Renvois périmés : remplacés.
+  - Éclat « lot3-inscription » :
+    - cohérent sur les cinq points de la CI : étape, `-skip-testing` du socle, résumé, boucle des xcresult, artefact ;
+    - plafond du job à 170 min, soit 5 × 30 + 20, même marge qu'avant.
+
+#### Sources vérifiées
+- **Code web**, toutes exactes à la ligne :
+  - `InscriptionRapide.tsx` l.68, 264-284, 267, 276 ;
+  - `erreurs.ts` l.132-137, 178, 532 ;
+  - `SectionConfidentialite.tsx` l.33, 44-45, 73, 111, 114, 123, 131 ;
+  - `PageConfidentialite.tsx` l.57-58, 62, 196, 200, 208-209 ;
+  - `SectionPaiements.tsx` l.259-262, 280, 302, 306, 308, 316, 339 ;
+  - `PageConnexion.tsx` l.345 ;
+  - `BandeauPaiementDeclare.tsx` l.51, 55, 61, 62, 64, 190, 397, 407 ;
+  - `inscriptionProgressive.ts` l.33-34 et l.50-51.
+- **Serveur**, exact à la ligne :
+  - `public.sql` l.30161-30163, 71018 (`parcours_inscription`), 55300-55364 (32 clés aujourd'hui, donc 33 après la PR), 55321, 55349, 55388, 27445-27455, 51281-51296, 69564-69584, 79426, 79230, 32300-32356, 39451-39568, 25619-25686 ;
+  - `register-soignant/index.ts` l.216-226 et l.376-387 ;
+  - migration D8, l.5-6, l.24 et l.398-399.
+- **Droit**, citations conformes au texte :
+  - RGPD art. 4, 1) ; 5, § 1, a) ; 7, § 2 ; 12, § 1 et § 3 ; 13, § 1 ; 15, § 1, § 3 et § 4 ; 20, § 1 ; 23, § 1, i) ;
+  - considérants 59 et 63 ;
+  - Code civil art. 1119, al. 1.
+- **Ligne de délégation** : présente dans TJ1 à TJ8, et nulle part il ne reste « à relire par Gabrielle » dans le mémo.
+
+#### Code de TJ3
+- `PageWebLocale` reprend exactement le contenu du coordinateur :
+  - le double démo en démo ;
+  - ailleurs, `RenvoiWebSafari` avec lecteur désactivé, bouton `.close` et délégué qui appelle `fermer`.
+- La valeur `presentationPageWeb` est posée sur la racine (`JoleneApp` → `RootView`). Elle atteint donc `OnboardingRootView`, sa feuille et la feuille locale, par le même héritage que `presentateurRenvoiWeb`.
+- Concurrence et Sendable : rien à signaler.
+- Côté démo :
+  - le jeton `token_hash=demo-sans-intention` n'existe que dans la passerelle démo ;
+  - `DeepLinkIntent` n'impose aucun format au `token_hash` ;
+  - la session est relue après la confirmation.
+- Aucun littéral qui ressemble à un secret, aucun fichier hors périmètre.
+- Tests UI :
+  - le repli par coordonnées de `toucherLienCGU` tient, que la marge haute soit comptée dans le cadre ou non ;
+  - toutes les attentes sont bornées, aucune n'est un délai fixe ;
+  - les deux XCUITest tournent sur les trois formats.
+
+#### Mineurs
+- **m1 — Date proposée par TJ4** (`DECISIONS_LOT3.md` l.1209-1218).
+  - La date `publication_automatique_au_plus_tot_le` contredit le plafond d'un mois dès que `notation_publication_jours` dépasse 30.
+  - Correction attendue : la borner à `LEAST(…, cree_le + 1 mois)`, ou documenter qu'elle ne vaut que pour la voie cron.
+- **m2 — Raisonnement juridique de TJ4** (l.1178-1193).
+  - L'art. 12, § 4 n'est pas instruit : motifs de la non-suite et droit de réclamation auprès de la CNIL pour la part différée.
+  - « Fixe le moment de la communication » est inexact : l'export libre-service ne transmet jamais le contenu plus tard, c'est à la personne de réexporter.
+  - Correction attendue : compléter TJ4 avant d'écrire la PR backend B9.
+- **m3 — Quatre incohérences dans des lignes éditées du mémo.**
+  - §6.6 (l.1368) liste encore B3 parmi les go B9 en attente, alors que B3 est mergé (#1118).
+  - l.1031 annonce « une seule lecture » live, alors que TJ4 en cite trois, dont `pg_policy`.
+  - l.1396 annonce « aucun délai serveur » décidé, alors que TJ4 fixe un plafond d'un mois.
+  - l.730 (T7) ne mentionne pas le double démo de TJ3.
+- **m4 — Garde vide possible** (`CompteVerbatimTests.swift` l.106).
+  - Le parcours des dossiers sources réussit sans rien vérifier si un dossier manque.
+  - Correction attendue : exiger que chaque dossier existe et qu'au moins `ExportRGPD.swift` et `CompteSections.swift` soient lus.
+
+#### Conditions avant de clore (rien à corriger dans la branche)
+- **CI UI sur les trois formats**, lancée par l'intégrateur par `workflow_dispatch` :
+  - les cinq éclats verts ;
+  - `DemoInscriptionTests` (7 tests) et `DemoCompteLot3Tests` démarrés ;
+  - 0 échec et `skipped = 0`.
+- **Ce que cette CI tranchera** : les deux XCUITest de L3-TJ n'ont jamais tourné. Elle dira si `presentationPageWeb` atteint bien la feuille ouverte depuis la feuille d'onboarding.
+- **Go B9** : il reste dû au merge du lot, puisque ces textes touchent au consentement et aux CGU.
+
+Note : pendant la lecture, j'ai écrit trois fichiers temporaires dans le scratchpad partagé : `diff_code.txt`, `diff_docs.txt` et `public.sql`, copie du dump de la branche. Ils ont pu écraser des fichiers du même nom. Rien n'a été écrit dans le dépôt.
+
+## Intégration de T8, T10, T12 et L3-TJ (vague 4, 09/11/2026) — vérifications et recette CI
+
+### Fusions et correctifs
+
+- Base `origin/feat/ios-lot3` (`01473089`), branche d'intégration `int-lot3-v4`, fusions `--no-ff` dans l'ordre :
+  `origin/main` (`f9a8c236`, #1115, hors `ios-native/`) → `480a92f7` ; `origin/fix/ios-tests-instables` (`454c88ec`,
+  PR #1125 : ses deux derniers commits seulement, `be551b66` étant déjà intégré en vague 3) → `ba49eaf4` (conflit
+  `project.pbxproj`, régénéré) ; `lot3/l3-t8-v2` (`beea994e`) → `2d4f9d40`, sans conflit ; `lot3/l3-t10-v2`
+  (`8ab5b69c`) → `f5ac86cb` ; `lot3/l3-t12-v2` (`e2c54698`) → `c93278a7` ; `lot3/l3-tj-v2` (`dc71c33b`) → `48425fe6`.
+- Conflits résolus en gardant les deux côtés (détail : `DECISIONS_LOT3.md`, section « Intégration de T8, T10, T12 et
+  L3-TJ ») :
+  - `ios-swift-ci.yml` (T10, T12, L3-TJ) : chaque tranche ajoutait son éclat au même endroit ; T8 et L3-TJ créaient
+    tous deux « lot3-inscription » → un seul éclat avec `DemoInscriptionTests` et `DemoCompletionInscriptionTests` ;
+    « lot3-profil-photo » (T10), « lot3-revenus » (T12) ; sept éclats, job à 230 min ;
+  - `DemoWorldTests.portsEnAttenteLot3` (T10, T12) : restent `paiements`, `iban`, `stripeConnect` ;
+  - `AppContainer` (T12 : commentaire des surcharges démo), `DeepLinkCoordinator` (L3-TJ : `fermeturesRenvoiWeb` de
+    T8 et `presentationPageWeb` de TJ3 injectés tous deux), `DemoInscriptionGateway` (L3-TJ : documentation de la
+    complétion de T8 et du jeton `demo-sans-intention`), `export-demo-fixtures.mjs` (T12 : générateurs de T8 et de
+    T12) ;
+  - `PARITE_SOIGNANT.md` (T10), `DECISIONS_LOT3.md` (T10, T12, L3-TJ : sections des tranches, HARD STOP, section
+    déléguée unique, §6.6, §6.7, §6.10), `REVUES_LOT3.md` (L3-TJ : sections L3-T12 et L3-TJ) ;
+  - `project.pbxproj` : régénéré par `xcodegen generate` après chaque fusion.
+- Correctif `85ea5968` (« fix(ios-native): intégration lot 3 … ») :
+  - **relevé des attentes bloquées par éclat** (défaut révélé par la fusion de #1125 avec l'éclatement de la
+    vague 3) : l'étape lisait `attachments/manifest.json`, que l'éclatement n'exporte plus ; elle lit le manifest de
+    chaque éclat (`ECLATS`) ;
+  - **gardes Node fausses pour la base fusionnée**, étendues et jamais affaiblies : « décisions déléguées » (TJ1 à
+    TJ8 d'abord, puis T8-J1 à T8-J5, T10, T12, chacune avec sa ligne de délégation ; témoins `PageCGU.tsx` l.115 et
+    `PaiementsEscrowAVenir.tsx` l.56) et « éclats UI du lot 3 » (sept éclats, liste `ECLATS` du relevé) ;
+  - **décisions déléguées prises à l'intégration** (`DECISIONS_LOT3.md`, « Décisions déléguées du 8 novembre
+    2026 ») : textes non juridiques de la photo de profil (T10) ; instruction selon TJ8 des libellés escrow, de la
+    note « net estimé » et des cinq textes adaptés de T12 — ce qui remplace la condition « relecture par Gabrielle
+    des cinq textes » de la revue n°3 de T12.
+- Correctifs de la recette CI (tests d'abord, défauts de TEST révélés par la base fusionnée, aucun test affaibli,
+  aucun budget relevé ; détail : `DECISIONS_LOT3.md`, section « Intégration de T8, T10, T12 et L3-TJ ») :
+  - `22052edb` (tests, rouges) puis `4aaa18a1` : `scrollTo` ramène vers le centre une cible déjà dans le cadre du
+    conteneur au lieu de reprendre la direction de recherche (`PartageUITests/PasDeDefilement.swift`, partagé avec
+    JoleneCoreTests) ; `focus` redescend un champ recouvert par une barre de navigation atteignable avant de le
+    toucher ; `DemoRevenusTests.testErreurPuisReprise` défile jusqu'à « Réessayer » avant le tap ;
+  - `948150a0` (tests, rouges) puis `738b10c6` : un glissement de `drag` ne part jamais d'un curseur (zone tactile
+    comprise), couloir latéral sinon (`PasDeDefilement.abscisseDeGlissement`).
+
+### Vérifications locales (pointe `738b10c6`, Xcode 16.4, Swift 6.1.2)
+
+- `swift build --build-tests -Xswiftc -strict-concurrency=complete` puis `swift test` : **JoleneCore 1 010 tests,
+  0 échec, 0 ignoré** (810 en vague 3 ; 999 à la fusion, plus les 11 `PasDeDefilementTests`), 0 avertissement ;
+  **JoleneSupabase 355 tests, 0 échec** (309 en vague 3),
+  0 avertissement hors `.build/checkouts/` (« CoreData: error: Failed to create NSXPCConnection » : bruit du bac à
+  sable, sans échec). `.build` supprimé après chaque package.
+- `xcodegen generate` : aucun diff après les régénérations des fusions ; `xcodebuild build-for-testing` (Debug,
+  `generic/platform=iOS Simulator`, `-derivedDataPath` dans le worktree, sans signature) : **TEST BUILD SUCCEEDED**,
+  cibles de tests UI comprises, 0 avertissement de nos sources (seules les notes d'`appintentsmetadataprocessor`).
+  DerivedData supprimé.
+- Exporteurs sans diff : `export-golden-vectors.mjs` (4 306 vecteurs), `export-demo-fixtures.mjs` (dont les
+  fixtures de T8 et T12), `check-rpc-contracts.mjs` (41 RPC, aucune dérive ; `fn_enregistrer_parcours_inscription`,
+  `fn_types_exercice_autorises` (T8), `fn_mes_revenus_connect`, `fn_mes_paiements_escrow` (T12) en `consommee`).
+  `node --test` : `check-rpc-contracts.node.mjs` et `check-rpc-contracts-lot3.node.mjs` **62 tests**,
+  `mobile-delivery-plan.node.mjs` **77 tests** : 0 échec, 0 ignoré. La garde `check-textes-juridiques-ios.mjs`
+  (L2-TL) n'est pas sur la base du lot 3 : gardes verbatim locales (`InscriptionVerbatimTests`,
+  `CompletionVerbatimTests`, `CompteVerbatimTests`, `ProfilVerbatimTests`, `AvatarLocalisationVerbatimTests`,
+  `RevenusPresentationTests`) vertes.
+- Aucun simulateur lancé localement ; aucune écriture en production ni sur STAGING ; aucun appel MCP.
+
+### Recette d'interface (`ios-swift-ci.yml`, `workflow_dispatch` sur `feat/ios-lot3`, sept éclats)
+
+- Run [42579729412](https://github.com/Gabpcd/JJJJJ/actions/runs/42579729412) (`85ea5968`, recette initiale) :
+  Cœur et Packages verts. **UI — ipad-portrait vert** : 1 147 réussis, 0 échoué, 0 ignoré (socle 1 077,
+  lot3-compte 18, lot3-push 15, lot3-notifications 9, lot3-inscription 15, lot3-profil-photo 6, lot3-revenus 7),
+  126 captures en portrait ; éclats 11,4 / 14,7 / 10,4 / 14,3 / 7,3 / 7,9 / 4,8 min ; relevé des attentes bloquées
+  par éclat opérationnel (9 attentes absorbées relevées). **UI — ipad-landscape** : 1 144 / 1 147, rouges
+  `DemoPreferencesTests.testPreferencesDemoModifieesEnregistreesPuisRelues`,
+  `DemoProfilTests.testEditionDeLaVilleDeRechercheEnregistreeRelueEtRetrouvee`,
+  `DemoRevenusTests.testErreurPuisReprise`. **UI — iphone** : 1 145 / 1 147, rouges la même attente de la ville
+  (blocage unique de 20,9 s, budget de 15 s, runner surchargé : 44 attentes absorbées) et
+  `DemoRevenusTests.testErreurPuisReprise`. Essai 1 : `4aaa18a1`.
+- Run [42593592247](https://github.com/Gabpcd/JJJJJ/actions/runs/42593592247) (`4aaa18a1`) : Cœur et Packages
+  verts. **UI — iphone vert** : 1 154 réussis, 0 échoué, 0 ignoré ; éclats 11,9 / 15,5 / 13,8 / 16,5 / 6,1 / 5,4 /
+  4,8 min ; les trois tests corrigés passent (préférences 282 s, ville 147 s, reprise des revenus 42 s). **UI —
+  ipad-landscape** : 1 153 / 1 154, rouge `DemoProfilTests.testPrenomVideRefuseAvecLeMessageServeur` (glissements
+  partis du curseur `profil-rayon`). UI — ipad-portrait annulé par le lancement de l'essai 2 (même groupe de
+  concurrence). Essai 2 : `738b10c6`.
+- Run [42606279978](https://github.com/Gabpcd/JJJJJ/actions/runs/42606279978) (`738b10c6`, essai 2, dernier
+  autorisé) : Cœur — golden et contrats : succès ; Packages — swift test macOS : succès.
+  - **UI — iphone : vert**, 1 158 réussis, 0 échoué, 0 ignoré (socle 1 088, lot3-compte 18, lot3-push 15,
+    lot3-notifications 9, lot3-inscription 15, lot3-profil-photo 6, lot3-revenus 7), 126 captures en portrait ;
+    éclats 12,6 / 12,1 / 11,8 / 17,8 / 8,1 / 8,3 / 5,1 min ; 4 attentes absorbées relevées.
+  - **UI — ipad-landscape : vert**, 1 158 réussis, 0 échoué, 0 ignoré, 126 captures en paysage ; éclats 14,2 /
+    19,5 / 16,6 / 19,3 / 8,1 / 8,1 / 6,8 min (« lot3-compte » et « lot3-notifications » sous le seuil de 20 min, de
+    peu) ; les quatre tests corrigés passent (préférences 322 s, ville 183 s, prénom vide 90 s, reprise des revenus
+    50 s) ; 9 attentes absorbées relevées.
+  - **UI — ipad-portrait : rouge**, 1 156 / 1 158, 0 ignoré, éclat « lot3-compte » seul en échec (les six autres
+    verts) : `DemoCompteLot3Tests.testExportJSONFeuilleFermeeSansPartageAucunSucces` (l.167, « La feuille de partage
+    est fermée » : le tap unique sur `PopoverDismissRegion` en (0,03 ; 0,97), soit (24,6 ; 1 144,6), tombe dans le
+    cadre du bouton source « Exporter JSON » (20…800 × 1 119…1 167) et le popover reste ouvert ; même cadre et même
+    tap verts au run 42579729412) et `DemoLiensLot3Tests.testRouteNonLivreeRenvoiWebAussitotSansSession` (l.316,
+    session jamais prête : « Se connecter » touché en son centre, clavier ouvert, mot de passe saisi, ni chargement
+    ni erreur affichés ; vert sur iphone et ipad-landscape au même run, et sur les trois formats au run
+    42579729412). Deux défauts de TEST d'un seul geste non confirmé (aucun code de l'app ni aucun test touché par
+    l'intégration n'y intervient) ; corrections proposées, non poussées faute d'essai restant : sur iPad, retoucher
+    la zone hors popover loin du bouton source tant que la feuille reste ouverte (borné), comme la branche iPhone
+    glisse la feuille ; à la connexion, constater le chargement ou l'erreur après le tap et, sans l'un ni l'autre,
+    retoucher une fois.
+- **Bilan** : classes de tous les éclats démarrées sur les trois formats ; iphone et ipad-landscape verts sur la tête
+  poussée ; ipad-portrait rouge sur deux tests instables de l'éclat « lot3-compte ». Les XCUITest de T8
+  (`DemoCompletionInscriptionTests`, 8), T10 (`DemoPhotoPositionTests`, 6), T12 (`DemoRevenusTests`, 7) et L3-TJ
+  (`DemoInscriptionTests`, 7 dont 2 nouveaux) ont tous tourné et passé sur les trois formats (éclats
+  « lot3-inscription », « lot3-profil-photo », « lot3-revenus » verts partout au run 42606279978) : conditions « CI
+  trois formats » des revues de T8, T10, T12 et L3-TJ remplies pour leurs propres tests ; la recette du lot reste à
+  reprendre sur ipad-portrait (deux essais épuisés).
+
+### Ce qui reste avant tout merge sur `main`
+
+- Recette CI verte des trois formats sur une tête qui corrige les deux tests instables d'ipad-portrait
+  (`DemoCompteLot3Tests`, `DemoLiensLot3Tests`).
+- **Go B9 de Gabrielle** : T7, T8 (inscription, consentement), T12 (paiements, escrow), et les textes de
+  consentement et de CGU de L3-TJ ; PR backend de l'export RGPD (TJ4) à préparer.
+- Recette sur appareil (`RECETTE_DEVICE_LOT3.md`) : complétion (T8 : sélecteur de date, clavier, VoiceOver, parcours
+  étudiant), photo et position (T10 : HEIC réel, photothèque, appareil photo, iCloud en mode Avion, iPad,
+  autorisation de position, géocodage réel), revenus (T12), liens universels réels, feuille de partage.
+- Preuves STAGING au dispatch de T16 (complétion relue, objet Storage et `avatar_url` relus).
+- Prérequis de soumission (lot 6) : `NSCameraUsageDescription` (T10, m3) ; « Mot de passe oublié ? » natif avant
+  TestFlight externe (TJ2).
+- Mineurs ouverts : T8 m1-m6, T10 m1-m9, T12 m1-m2, L3-TJ m1-m4 (revues ci-dessus), plus ceux des vagues
+  précédentes.
