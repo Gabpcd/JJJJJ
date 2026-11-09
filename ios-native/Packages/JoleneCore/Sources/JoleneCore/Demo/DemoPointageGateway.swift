@@ -226,7 +226,7 @@ public actor DemoPointageGateway: PointagePort {
     /// Fiche du détail (T5a) : mission du pointage (statut courant du monde) ou de l'historique ; première présence par
     /// arrivée parmi les présences de la fixture (aucune mesure GPS en démo : contrôles sans distance ni précision).
     public func ficheDetail(missionId: String, context: MissionReadContext) async throws -> FicheDetailPresences {
-        try verifier(context)
+        try await verifier(context)
         let m = try charger()
         var mission = (m.fixture.missions + m.fixture.missionsHistorique).first { $0.id == missionId }
         if let statut = m.statuts[missionId] { mission?.statut = statut }

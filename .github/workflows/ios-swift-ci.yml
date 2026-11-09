@@ -507,7 +507,7 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-documents.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat documents) : code $code"
-      - name: test-without-building — éclat contrats (XCUITest Contrats : lecture et signature) (${{ matrix.format }})
+      - name: test-without-building — éclat contrats (XCUITest Contrats, lecture et signature) (${{ matrix.format }})
         id: tests_contrats
         # Lancé même si un éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
         if: always() && steps.build.outcome == 'success'
@@ -630,42 +630,57 @@ jobs:
         # <fichier>-<ligne>.txt` à chaque attente qui a mesuré du temps non décompté, réussie ou non.
         # Un dépassement du budget de blocage fait déjà échouer le test ; les blocages ABSORBÉS sous
         # le budget, eux, ne doivent pas passer inaperçus dans un job vert : ils sont relevés depuis
-        # le manifest.json de `xcresulttool export attachments` (étape « Résumé xcresult »), en
-        # section du résumé et en annotation sur la ligne de l’appelant (GitHub n’affiche que les
+        # le manifest.json de `xcresulttool export attachments` (étape « Résumé xcresult » : un dossier
+        # par éclat, `attachments/<éclat>/manifest.json`, DECISIONS_LOT2 décision 22), en section du
+        # résumé et en annotation sur la ligne de l’appelant (GitHub n’affiche que les
         # 10 premières annotations d’une étape ; le tableau du résumé les liste toutes). Relevé
         # d’information seulement : il ne décide jamais du statut du job (continue-on-error).
         continue-on-error: true
         run: |
           # shellcheck disable=SC2016
           node --input-type=module -e '
-            import { readFileSync, existsSync, appendFileSync } from "node:fs";
+            import { readFileSync, existsSync, appendFileSync, readdirSync } from "node:fs";
             import { join } from "node:path";
             const format = process.env.JOLENE_UI_FORMAT;
             const attachments = join(process.env.JOLENE_UI_OUTPUT, "attachments");
-            const manifeste = join(attachments, "manifest.json");
+            // Une exportation par éclat (attachments/<éclat>/manifest.json) : chaque éclat est relevé.
+            let eclats = [];
+            try { eclats = readdirSync(attachments, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name).sort(); } catch { eclats = []; }
+            const releves = [], nonReleves = [];
+            for (const eclat of eclats) {
+              const dossier = join(attachments, eclat);
+              const manifeste = join(dossier, "manifest.json");
+              let tests = null;
+              try { tests = JSON.parse(readFileSync(manifeste, "utf8")); } catch { tests = null; }
+              if (Array.isArray(tests)) releves.push({ eclat, dossier, tests });
+              else nonReleves.push(`${eclat} (${existsSync(manifeste) ? "manifest.json illisible" : "aucun manifest.json exporté"})`);
+            }
             // Échappements des commandes de workflow GitHub (message, puis propriétés) et des cellules Markdown.
             const esc = v => String(v).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
             const prop = v => esc(v).replace(/:/g, "%3A").replace(/,/g, "%2C");
             const cell = v => String(v).replace(/\|/g, "\\|").replace(/\s+/g, " ");
             const lignes = ["", `#### Attentes bloquées absorbées — ${format}`, ""];
-            let tests = null;
-            try { tests = JSON.parse(readFileSync(manifeste, "utf8")); } catch { tests = null; }
-            if (!Array.isArray(tests)) {
-              lignes.push(`- ${existsSync(manifeste) ? "manifest.json illisible" : "aucun manifest.json exporté"} : attentes bloquées NON relevées par ce run`);
-              console.log(`::warning::Attentes bloquées non relevées (${format}) : manifest.json des pièces jointes absent ou illisible.`);
+            if (nonReleves.length) {
+              lignes.push(`- éclats NON relevés : ${nonReleves.join(", ")}`);
+              console.log(`::warning::Attentes bloquées non relevées (${format}) pour : ${nonReleves.join(", ")}.`);
+            }
+            if (!releves.length) {
+              lignes.push("- aucun manifest.json lisible : attentes bloquées NON relevées par ce run");
+              console.log(`::warning::Attentes bloquées non relevées (${format}) : aucun manifest.json de pièces jointes lisible.`);
             } else {
               const bloquees = [];
-              for (const t of tests) for (const a of t.attachments ?? []) {
+              for (const { eclat, dossier, tests } of releves) for (const t of tests) for (const a of t.attachments ?? []) {
                 const nom = a.suggestedHumanReadableName ?? "";
                 if (!nom.includes("-attente-bloquee-")) continue;
                 let texte = "";
-                try { texte = readFileSync(join(attachments, a.exportedFileName ?? ""), "utf8"); } catch { texte = ""; }
+                try { texte = readFileSync(join(dossier, a.exportedFileName ?? ""), "utf8"); } catch { texte = ""; }
                 const champ = libelle => texte.match(new RegExp(`^${libelle} : (.+)$`, "m"))?.[1].trim();
                 // Appelant : ligne « Appelant : Fichier.swift:N » du rapport, à défaut le nom de la pièce
                 // jointe (`<préfixe>-attente-bloquee-<Fichier>-<N>_<rang>_<UUID>.txt` une fois exportée).
                 const parRapport = (champ("Appelant") ?? "").match(/^(.+\.swift):(\d+)$/);
                 const parNom = nom.match(/-attente-bloquee-(.+)-(\d+)(?:_\d+_[0-9A-Fa-f-]+)?\.txt$/);
                 bloquees.push({
+                  eclat,
                   test: t.testIdentifier ?? "?",
                   fichier: parRapport?.[1] ?? (parNom ? `${parNom[1]}.swift` : null),
                   ligne: parRapport?.[2] ?? parNom?.[2] ?? null,
@@ -676,14 +691,14 @@ jobs:
                 });
               }
               if (!bloquees.length) {
-                lignes.push("- aucune : aucun `require` n’a mesuré de temps non décompté");
+                lignes.push(`- aucune : aucun \`require\` n’a mesuré de temps non décompté (éclats relevés : ${releves.map(r => r.eclat).join(", ")})`);
               } else {
                 lignes.push(`${bloquees.length} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app). Relevé d’information : le job n’échoue pas pour cela.`, "",
-                  "| Test | Appelant | Attente | Non décompté | Budget de blocage | Issue |", "| --- | --- | --- | --- | --- | --- |");
+                  "| Éclat | Test | Appelant | Attente | Non décompté | Budget de blocage | Issue |", "| --- | --- | --- | --- | --- | --- | --- |");
                 for (const b of bloquees) {
                   const appelant = b.fichier ? `${b.fichier}:${b.ligne}` : "?";
-                  lignes.push(`| ${cell(b.test)} | \`${cell(appelant)}\` | ${cell(b.attente)} | ${cell(b.nonDecompte)} | ${cell(b.budget)} | ${cell(b.issue)} |`);
-                  const message = `Attente bloquée absorbée (${format}) : « ${b.attente} », ${b.nonDecompte} non décomptées (budget de blocage ${b.budget}), ${b.issue} — ${b.test}`;
+                  lignes.push(`| ${cell(b.eclat)} | ${cell(b.test)} | \`${cell(appelant)}\` | ${cell(b.attente)} | ${cell(b.nonDecompte)} | ${cell(b.budget)} | ${cell(b.issue)} |`);
+                  const message = `Attente bloquée absorbée (${format}) : « ${b.attente} », ${b.nonDecompte} non décomptées (budget de blocage ${b.budget}), ${b.issue} — ${b.test} (éclat ${b.eclat})`;
                   const cible = b.fichier && b.ligne ? ` file=${prop(`ios-native/JoleneUITests/${b.fichier}`)},line=${prop(b.ligne)}` : "";
                   console.log(`::warning${cible}::${esc(message)}`);
                 }

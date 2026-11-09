@@ -862,6 +862,13 @@
     affirme aussi le remerciement éphémère (`notation-remerciement` présent après l'envoi, absent après
     `NotationModel.dureeRemerciementSecondes`, 5 s comme les toasts du web, `src/App.tsx` l.536, attendu par
     `require`, jamais par un délai fixe) et le glissement vers le bas de la feuille (vaut « Plus tard », m4).
+    **État après l'intégration du 9 novembre 2026** : T4b et T5a ont été développées en parallèle, et la base de T4b
+    n'avait pas `NotationSheet.swift` ; la ligne `.notationAuDepart` n'est donc posée nulle part (`PointageCodeView`
+    ne l'appelle pas). La notation au départ final reste à brancher, avec ses tests d'abord : la ligne dans la zone de
+    pointage, une mission démo EN_COURS dont `fin_le` ≤ 00h30 UTC (exporteur des fixtures, puis tests qui comptent les
+    missions démo) et le XCUITest « départ final → feuille → 4 étoiles → envoyée » sur les trois formats, dans l'éclat
+    « pointage ». L'intégrateur ne l'ajoute pas (fonctionnalité nouvelle, hors de la résolution des conflits) ; P10
+    « notation » reste non livrée, à confier à la prochaine tranche du pointage ou à T10.
   - **T5b** : le panneau de contestation d'une présence validée se monte dans `DetailPresencesScreen` sous les contrôles
     (point d'extension commenté) ; la présence lue est `FicheDetailPresences.presence` (`valide_le`, `id`), relue par
     `DetailPresencesModel.charger()` ; aucun texte de délai (Q9).
