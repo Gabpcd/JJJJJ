@@ -106,6 +106,20 @@
     `presences` sur STAGING » ; aucune donnée de production.
 22. **Durée de la CI UI** : matrice actuelle conservée (3 formats, une étape) ; découpage en éclats par domaine
     (`-only-testing` Présences / Documents / Contrats) dès qu'un format dépasse 20 min mesurées.
+    **Appliquée à l'intégration de T4a, T7 et T9a (9 novembre 2026).** L'étape unique a été mesurée de 25 à 29 min au
+    run 42528556340. Au run 42532108708, elle dépassait ses 30 min sur iphone et ipad-landscape. `ios-swift-ci.yml`
+    exécute désormais deux éclats successifs dans chaque job de format, chacun borné à 30 min :
+    - « socle » : JoleneCoreTests, JoleneDesignTests et XCUITest des lots 0 et 1 ;
+    - « lot2 » : `-only-testing` `DemoPresencesTests`, `DemoDocumentsTests`, `DemoContratsTests`, lancé même si le socle
+      échoue.
+
+    Le résumé exige les deux éclats verts, au moins un test par éclat, les trois classes du lot 2 démarrées, ainsi que
+    le total ≥ 100, `failed = 0` et `skipped = 0` inchangés. Le plafond du job passe de 60 à 75 min. Les classes STAGING
+    de T11 s'ajouteront aux `-skip-testing` de l'éclat socle ; un nouvel éclat sera ouvert si « lot2 » dépasse à son
+    tour 20 min (T4b, T5a, T9b, T10). Mesures du premier run vert (42536866359), socle puis lot2 : iphone 13,3 puis
+    19,7 min ; ipad-portrait 10,7 puis 11,2 min ; ipad-landscape 13,1 puis **20,7 min**. L'éclat « lot2 » dépasse donc
+    déjà le seuil en paysage. **Consigne à T4b** : séparer « lot2 » par domaine (Présences / Documents / Contrats)
+    avant d'y ajouter `DemoPointageTests`.
 23. **Journal de reçus : celui du lot 1 T7 est réutilisé** ; si T1 du lot 2 démarrait avant son intégration, T1
     livrerait le journal générique et T7 le consommerait sans changer son API. Ordonnancement retenu : T1 attendait
     l'intégration de T7 et démarrait dans la vague 1 du lot 2, pas dans la vague 0.
@@ -659,7 +673,7 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | §3 T7 « Fichiers » (`DemoMediaPicker.swift`) ; §2.8 (« fichiers fictifs de 3 pixels ») | fichiers démo dans l'app | règle et octets dans JoleneCore (`Demo/DemoSourcesDocument.swift`, `Resources/media-demo/`), `DemoMediaPicker` (app) ne fait que les rendre ; PNG = trois pixels du pilote, HEIC = fixture de T6, PDF vide, `trop-gros` = PDF de 10 Mo + 1 octet | T7 : testables par `swift test` (préparation identique aux vrais sélecteurs) |
 | §3 T7 « Dépendances » (T4a : `EspaceSoignantSection`) ; §2.2 (`Appareil` injecté par `AppContainer`, T4b) | consommés | `EspaceSoignantSection` créée par T7 (ligne « Mes documents ») ; magasin de reçus par `AppContainer.recusJustificatifs` (point d'extension) | T4a et T4b non intégrés à la base de T7 : fusion d'une ligne par tranche à l'intégration |
 | §3 T9a « Fichiers » (`EspaceSoignantSection.swift`, `MesDocumentsScreen.swift`, `BlocPointageView.swift`) | destinations « Mes contrats », onglet Contrats, « Voir le contrat » natifs | `ContratsDestination` (une ligne par point d'entrée) + entrée provisoire `profil-contrats` dans `ProfileScreen` (`ContratsEntreeProfil`) ; bascule à l'intégration (« Consignes », « Intégration de T9a ») | T9a : T4a et T7 tournent en parallèle, leurs fichiers n'existent pas sur sa base (`feat/ios-lot2` `51b32cc8`) ; rien n'est inventé à leur place |
-| §3 T9a « zone de signature en renvoi web jusqu'à T9b » | renvoi web | zone « Votre signature » (`contrat-renvoi-web`) : messages de préparation du web (l.377 motif serveur verbatim, l.388) puis, avec le présentateur `.safari` (lot 1 T10), « ✍️ Signer le contrat » (libellé de la carte web qui ouvre la même page, `ListeContrats.tsx` l.223) ; sans présentateur, « Signature non disponible pour le moment » (`SignerContratOtp.tsx` l.230, repris hors de son contexte d'origine : document non prêt) et aucun bouton | « jamais un bouton sans effet » (`PresentateurRenvoiWeb`, verrou de `DemoAccueilTests`) ; aucun texte nouveau |
+| §3 T9a « zone de signature en renvoi web jusqu'à T9b » | renvoi web | zone « Votre signature » (`contrat-renvoi-web`) : messages de préparation du web (l.377 motif serveur verbatim, l.388) puis, avec le présentateur `.safari` (lot 1 T10), « ✍️ Signer le contrat » (libellé de la carte web qui ouvre la même page, `ListeContrats.tsx` l.223) ; sans présentateur, « Signature non disponible pour le moment » (`SignerContratOtp.tsx` l.230, repris hors de son contexte d'origine : erreur bloquante du serveur `CONTRAT_INACTIF`, `CONTRAT_DEJA_COMPLET` ou `DEJA_SIGNE`, l.222-236 ; description corrigée à l'intégration, revue de T9a m1) et aucun bouton | « jamais un bouton sans effet » (`PresentateurRenvoiWeb`, verrou de `DemoAccueilTests`) ; aucun texte nouveau |
 | Consigne T9a (« textes de rendu l.377, l.388, l.394, l.715 ») | quatre textes affichés | l.377 (avec et sans motif) et l.388 ajoutés à `LibellesWeb.Contrat` et affichés ; l.394 non repris : même texte que l.377 sans motif (rendu `renduRefuse(messageServeur: nil)`), et un échec de transport de l'edge reste une erreur d'écran entière (`ContratModel`, revue de T8 mineur 5) ; l.715 (« Préparation du document contractuel final… ») non repris : le natif n'a pas d'état intermédiaire visible, le chargement couvre l'écran | T9a : aucune modification de `ContratModel.charger` (T8), aucun texte affiché sans son état |
 | Décision 17 / §3 T9a lecteur (`WKWebView`, `loadHTMLString(html, baseURL: nil)`, règle `WKContentRuleList`, méta CSP) | règle « bloquant toute ressource » ; défilement du lecteur | six règles, une par schéma de chargement (`^https?:`, `^wss?:`, `^ftps?:`, `^file:`, `^data:`, `^blob:` : les filtres WebKit n'acceptent pas l'alternative), installées avant le chargement, rien chargé si la compilation échoue ; en-tête injecté = CSP + `<meta name="viewport">` (sans viewport, la page serait rendue à 980 px) ; lecteur non défilant, hauteur du document (`scrollView.contentSize`) : l'écran défile seul, fond blanc en mode sombre (l'original n'a pas de thème sombre). Règles pures dans `JoleneCore/Contrats/LecteurContrat.swift` (`LecteurContratTests`) | décision 17 ; un défilement imbriqué captait les glissements des XCUITest et de VoiceOver |
 | §3 T9a `ShareSheet.swift` (« `UIActivityViewController`, effacement à la fermeture ») | feuille | présentée par UIKit au-dessus de la scène (popover centré sur iPad), `completionWithItemsHandler` → effacement ; copie aussi effacée à la disparition de l'écran et toutes les copies au changement d'epoch (`MainTabView.onDisappear`, une ligne) | une feuille UIKit enveloppée dans une feuille SwiftUI perd sa liaison à la fermeture programmatique |
@@ -795,8 +809,14 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
     <date> » (liste et page du contrat) sont rangés dans `LibellesWeb` (libellés d'état, hors HARD STOP, verbatim et gardés
     par TL) ; les déplacer dans `TextesWeb` les soumettrait à la validation de TL ;
   - **zone « Votre signature » sans présentateur** : « Signature non disponible pour le moment » (`SignerContratOtp.tsx`
-    l.230) y est repris hors de son contexte web (document non prêt) pour annoncer la signature sur jolene.app avant
-    lot 1 T10 ; aucun texte nouveau n'a été écrit.
+    l.230) y est repris hors de son contexte web. Sur le web, ce titre accompagne une erreur bloquante du serveur
+    (`CONTRAT_INACTIF`, `CONTRAT_DEJA_COMPLET`, `DEJA_SIGNE`, l.222-236, suivie du message serveur) ; l'écran natif
+    l'affiche seul, sans bouton, tant que lot 1 T10 n'injecte pas le présentateur `.safari`, et n'annonce jamais la
+    signature sur jolene.app. Aucun texte nouveau n'a été écrit. (Description corrigée à l'intégration du
+    8 novembre 2026, revue fraîche de T9a, m1.)
+  - **lien vers la page du certificat** (revue fraîche de T9a, m2) : `contrat-certificat-ouvrir` porte
+    `TextesWeb.Certificat.titrePage` (texte HARD STOP, `CertificatSignaturePage.tsx`) dans un contexte que la page web du
+    contrat n'a pas (la page web n'a pas ce lien). Rien n'est changé côté natif sans sa décision.
 - **T5b** (contestation depuis une présence) : go explicite avant merge.
 - **Décision Q9 — délai de contestation** (sources primaires : `PanneauContestation.tsx` l.43-46 et l.347, l.354,
   l.394 ; `fn_fenetre_contestation_ouverte` l.36600-36622 ; `fn_litiges_escalader_auto` l.40712, l.40726-40730 ;
