@@ -211,7 +211,7 @@ public enum LibellesWeb {
 
     /// Panneau de contestation (`PanneauContestation.tsx`) : en-tête (l.262) et formulaire
     /// d'ouverture (l.361-392). Libellés de statut : `TextesWeb.Contestation`. Aucun texte de délai
-    /// (Q9, en attente de Gabrielle).
+    /// (Q9, tranchée par délégation le 8 novembre 2026 : la fenêtre est décidée par le serveur).
     public enum Contestation {
         // source: src/components/PanneauContestation.tsx:262
         public static let titre = "Contestation"

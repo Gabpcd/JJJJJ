@@ -7,7 +7,9 @@
 > qui l'interdit côté Swift) et Q2 (aucune file hors ligne pour le code rotatif). Ce mémo fait foi ; le plan
 > `docs/PLAN_APP_NATIVE_SWIFT.md` n'est pas réécrit (l.62, l.180, l.183 et l.186 portent un renvoi ici).
 > Les décisions juridiques que le blueprint renvoie à Gabrielle (HARD STOP n°4) et les PR de catégorie B9 **ne sont
-> pas implémentées** : elles sont listées sous « En attente de Gabrielle ».
+> pas implémentées** : elles sont listées sous « En attente de Gabrielle ». **Mise à jour du 8 novembre 2026** :
+> Gabrielle a délégué toutes les décisions, juridiques comprises ; les HARD STOP n°4 du lot 2 sont tranchés sous
+> « Décisions déléguées du 8 novembre 2026 » (tranche L2-TJ) ; restent en attente les PR B9 et la présence physique.
 
 ## Règles d'application
 
@@ -47,7 +49,7 @@
    enregistré par `fn_consentir_gps` puis relu, audit `RGPD_CONSENTEMENT_DONNE` (parité web) ; autorisation iOS
    « Lorsque l'app est active » demandée seulement après « Autoriser » ; un refus ne bloque jamais le pointage.
    **Retrait et réactivation depuis le Profil natif portés au lot 2** (T4b : le texte promet le retrait « depuis
-   votre profil ») avec les textes de `SectionPreferences.tsx` (tutoyés, verbatim tant que non validés) et sans
+   votre profil ») avec les textes de `SectionPreferences.tsx` (tutoyés, verbatim : validés par D1 du 8 novembre 2026) et sans
    audit `GPS_CONSENTEMENT_*` (absent du CHECK `journaux_audit_action_check`).
 5. **Précision réduite iOS : aucune coordonnée envoyée** quand `accuracyAuthorization == .reducedAccuracy` (scan sans
    GPS + encart « Position exacte ») ; pas de `requestTemporaryFullAccuracyAuthorization` (nouvelle chaîne
@@ -70,7 +72,8 @@
    réponse et clôture : renvoi web. Les textes de délai du panneau web (l.347, l.354, l.394) ne sont pas affichés.
    La décision juridique (aligner `delai_contestation_pointage_h` sur 72 h, retirer la phrase d'escalade du web)
    relève de Gabrielle : **non implémentée**, voir « En attente de Gabrielle ». T5b attend ce go ; le reste du lot
-   n'en dépend pas.
+   n'en dépend pas. **Tranchée le 8 novembre 2026 par délégation** (D12 de « Décisions déléguées du 8 novembre
+   2026 ») : valeur cible 72 h par une PR de paramétrage B9 hors lot, aucun texte de délai côté natif, go de T5b (D11).
 10. **Notation rapide : parité web** (une fois par mission, après une FERMETURE quand `now ≥ fin_le − 30 min`, note
     globale répliquée sur les quatre critères, détail optionnel, « Plus tard ») ; mémoire locale par utilisateur ;
     aucune lecture de `notations_missions` ; pas d'invite de parrainage (lot 4).
@@ -534,7 +537,8 @@
     l.634 : restriction de l'exercice libéral et obligation d'assurance), textes d'accès des documents complémentaires
     (l.866-869 : pré-éligibilité étudiante ; l.882-884 : accès aux remplacements de médecin) ; leur carte garde titre,
     statut et bouton. L'alerte RCP reste visible dans la carte de l'exigence (statut) et dans le bandeau d'incohérence
-    (« Votre assurance RCP est expirée », l.293) ;
+    (« Votre assurance RCP est expirée », l.293) ; **levé le 8 novembre 2026** (L2-TJ, D3 et D4 de « Décisions
+    déléguées du 8 novembre 2026 ») : bandeau RCP et textes d'accès affichés verbatim (`TextesWeb.Justificatifs`) ;
   - **non portés** : suppression d'un justificatif (§1.2, renvoi web) ; boutons vers le profil web (« Explorer les
     missions », « Préparer mon dossier », « Renseigner ma profession → », « Préciser mon mode d’exercice », l.514-553) :
     le Profil natif ne modifie ni la profession ni le mode d'exercice, aucun bouton sans effet ; encart « À quoi sert ton
@@ -669,7 +673,7 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | `PresencesSoignant.tsx` l.722-726 (« Code : … » d'une présence) | code de pointage de la présence affiché | non affiché | aucune colonne `code_*` n'est lue (gap « B1-ter » de la migration B1, projection `PresenceLue`) |
 | `PresencesSoignant.tsx` l.459-477 (écran d'erreur) | une relecture en échec affiche l'écran d'erreur (`isError`) | présences gardées, encart `presences-refresh-error` ; écran d'erreur au premier chargement seulement | règle du lot 1 (`AccueilModel`, `MissionsListModel`) : jamais de démontage sur un rafraîchissement |
 | §3 T7 « Tests d'abord » (« CARTE_IDENTITE affichée « Rejeté ✗ » », « « Vérifié ✓ » ») | libellés de `STATUTS_VERIFICATION` | cartes des exigences : « Rejeté » et « Vérifié ✅ » (`DocumentsSoignant.tsx` l.763, l.697) ; `STATUTS_VERIFICATION` seulement pour les documents complémentaires (l.856-897) | T7 : parité de la page web, qui n'emploie pas ces libellés sur les cartes d'exigences |
-| §3 T7 `JustificatifsView` (« bannière cohérence, expiration proche ») ; `DocumentsSoignant.tsx` l.611-640 | bandeaux du web | bandeau d'incohérence et d'expiration portés ; bandeau RCP et textes d'accès des documents complémentaires non affichés | HARD STOP n°4 (restriction d'exercice, obligation d'assurance) : « En attente de Gabrielle » |
+| §3 T7 `JustificatifsView` (« bannière cohérence, expiration proche ») ; `DocumentsSoignant.tsx` l.611-640 | bandeaux du web | bandeau d'incohérence et d'expiration portés ; bandeau RCP et textes d'accès des documents complémentaires non affichés (affichés depuis L2-TJ, D3-D4) | HARD STOP n°4 (restriction d'exercice, obligation d'assurance) : « En attente de Gabrielle », tranché par délégation le 8 novembre 2026 |
 | §3 T7 « Fichiers » (`DemoMediaPicker.swift`) ; §2.8 (« fichiers fictifs de 3 pixels ») | fichiers démo dans l'app | règle et octets dans JoleneCore (`Demo/DemoSourcesDocument.swift`, `Resources/media-demo/`), `DemoMediaPicker` (app) ne fait que les rendre ; PNG = trois pixels du pilote, HEIC = fixture de T6, PDF vide, `trop-gros` = PDF de 10 Mo + 1 octet | T7 : testables par `swift test` (préparation identique aux vrais sélecteurs) |
 | §3 T7 « Dépendances » (T4a : `EspaceSoignantSection`) ; §2.2 (`Appareil` injecté par `AppContainer`, T4b) | consommés | `EspaceSoignantSection` créée par T7 (ligne « Mes documents ») ; magasin de reçus par `AppContainer.recusJustificatifs` (point d'extension) | T4a et T4b non intégrés à la base de T7 : fusion d'une ligne par tranche à l'intégration |
 | §3 T9a « Fichiers » (`EspaceSoignantSection.swift`, `MesDocumentsScreen.swift`, `BlocPointageView.swift`) | destinations « Mes contrats », onglet Contrats, « Voir le contrat » natifs | `ContratsDestination` (une ligne par point d'entrée) + entrée provisoire `profil-contrats` dans `ProfileScreen` (`ContratsEntreeProfil`) ; bascule à l'intégration (« Consignes », « Intégration de T9a ») | T9a : T4a et T7 tournent en parallèle, leurs fichiers n'existent pas sur sa base (`feat/ios-lot2` `51b32cc8`) ; rien n'est inventé à leur place |
@@ -771,62 +775,256 @@ Rendez-vous sur jolene.app. » (`MobileAccess.unsupportedRole`, lot 0 : onglets 
 vérifier » / « Vérifier ma session » (`MissionsListScreen.swift` l.107-108, lot 1) et
 `SessionController.sessionExpiredMessage`.
 
+## Décisions déléguées du 8 novembre 2026
+
+Mandat : le 8 novembre 2026, Gabrielle a délégué toutes les décisions, juridiques comprises (« arrête de me demander et
+prends les décisions, avance seul »). Les HARD STOP n°4 du lot 2, jusqu'ici « En attente de Gabrielle », sont donc
+instruits et tranchés ci-dessous par la tranche L2-TJ (branche `lot2/l2-tj-v2`). Restent hors de cette délégation :
+les PR B9 (go explicite au merge, règle 3 de `LOTS_2_5_DECISIONS`) et ce qui exige la présence physique de Gabrielle
+(appareil, numéros de téléphone, comptes Apple ou Twilio), toujours listés sous « En attente de Gabrielle ».
+
+Règles appliquées à chaque point :
+- **le natif suit le web mot pour mot** (décision de la vague 4) : tout texte juridique ou de consentement est repris
+  verbatim du web ou du serveur, tutoiement compris, avec sa source (fichier:ligne), et gardé au caractère près par
+  `tests/node/textes-juridiques-ios.node.mjs`. Le passage des textes juridiques au vouvoiement se fera d'abord sur le
+  web (PR HARD STOP), puis le natif suivra par la garde. Aucun wording juridique n'est inventé par le natif ;
+- **force des sources** : TEXTE (loi, règlement, décret : source primaire), JUGÉ (jurisprudence publiée), doctrine
+  (Apple, autorité administrative), choix de conformité Jolene (CGU de production, paramètre ou règle serveur relus
+  dans `supabase/schema/public.sql`). Une restriction exposée à l'utilisateur n'est retenue que si le serveur
+  l'applique réellement (lu dans le dump) ;
+- aucune écriture en production ni sur STAGING, aucun changement web ou serveur dans cette tranche : les corrections
+  hors natif sont consignées comme PR à préparer, hors lot 2.
+
+### D1 — TL : textes juridiques et de consentement verbatim (P9, validation écrite)
+
+- **Décision** : les textes de `JoleneCore/Legal/TextesWeb.swift` sont validés pour l'affichage natif, tels quels.
+  T4b, T7, T9a et T9b ne sont plus bloquées par la validation écrite de TL ; la revue sur iPhone (P9, appareil) reste
+  à faire par Gabrielle (« En attente de Gabrielle »).
+- **Consentement GPS et retrait** (`ConsentementGPS.tsx` l.25-65, `BandeauSansGPS.tsx` l.9, `SectionPreferences.tsx`
+  l.129-136 et l.161) — TEXTE : Règlement (UE) 2016/679 (RGPD), art. 6, § 1, a) (base légale citée « Art. 6.1.a
+  RGPD »), art. 7, § 3 (retrait à tout moment, aussi simple que le consentement), art. 7, § 4 et considérant 42
+  (consentement libre : aucun préjudice en cas de refus), art. 13 (information). Choix de conformité Jolene : CGU de
+  production §4.4 (`PageCGU.tsx` l.97-104 : position demandée au seul moment du pointage, aucun suivi continu ni en
+  arrière-plan, coordonnées brutes supprimées sous 90 jours) ; le natif n'a aucun `UIBackgroundModes` (§2.1).
+  Conformité : un refus ne bloque jamais le pointage (décision 4) et le retrait est porté par le Profil natif (T4b,
+  correction 15), condition de livraison de l'écran de consentement. Le natif n'écrit aucun audit
+  `GPS_CONSENTEMENT_*` (absent du CHECK).
+- **Attestation de santé** (`DocumentsSoignant.tsx` l.75, l.93, l.106, l.112, l.132) — TEXTE : Code pénal, art. 441-7
+  (attestation faisant état de faits matériellement inexacts : un an et 15 000 €) ; Code de la santé publique,
+  art. L.3111-4 (obligation vaccinale des professionnels exposés). JUGÉ : Cass. crim., 7 mars 2012, n° 11-82.153,
+  publié au bulletin : « seules les déclarations établies en faveur d'un tiers bénéficiaire constituent une
+  attestation ou un certificat » au sens de l'art. 441-7 ; une déclaration sur l'honneur faite pour soi-même n'y entre
+  pas. Choix de conformité Jolene : déclaration sur l'honneur au lieu de stocker des pièces de santé
+  (`fn_trg_bloquer_documents_sante`, `docs/CONFORMITE.md` ; RGPD art. 5, § 1, c) et art. 9). Décision : affichage
+  verbatim maintenu (texte de production, aucun wording inventé) ; « toute fausse déclaration est passible de
+  poursuites » reste exact (responsabilité civile et contractuelle), mais la référence à l'art. 441-7 est fragile pour
+  une auto-déclaration (arrêt précité). **PR web à préparer hors lot** (HARD STOP, wording) : revoir la parenthèse
+  « (Art. 441-7 du Code pénal) » de la l.112 ; le natif suivra par la garde.
+- **Contrat : bandeaux, CDD à préparer, document figé, pied de page, mode OTP** (`ContratMission.tsx` l.559-579,
+  l.608, l.628-642, l.745-748, l.827, l.836-842) — TEXTE : Code civil, art. 1366 (l'écrit électronique a la même force
+  probante que l'écrit papier, sous réserve d'identification de son auteur et d'intégrité) et art. 1367 (signature
+  électronique : procédé fiable d'identification garantissant son lien avec l'acte ; la fiabilité n'est présumée que
+  dans les conditions du décret n° 2017-1416 du 28 septembre 2017, c'est-à-dire pour une signature qualifiée) ;
+  Règlement (UE) n° 910/2014 (eIDAS), art. 25, § 1 (une signature non qualifiée ne peut être privée d'effet au seul
+  motif de sa forme). « Conforme art. 1366-1367 Code civil » affirme le respect des conditions d'identification et
+  d'intégrité (OTP SMS, horodatage, empreinte SHA-256 de l'original, `fn_signer_contrat_otp`), pas une présomption de
+  fiabilité ; le pied de page dit « Signature électronique simple. » et le certificat renvoie à un prestataire qualifié
+  pour une signature qualifiée : cohérent, validé.
+- **Art. L.1242-12 du Code du travail** (mention « Contrat salarié écrit ») : voir D6.
+- **`MESSAGES_ERREUR`** (`SignerContratOtp.tsx` l.30-45) : messages liés aux codes de `fn_envoyer_otp_signature` et
+  `fn_signer_contrat_otp` (choix Jolene, aucun énoncé de droit hors l'intégrité `HASH_DOCUMENT_CHANGE`), validés.
+- **Compte à rebours 72 h** (`Countdown72hSignature.tsx` l.43, l.69-70) : choix Jolene appliqué par le serveur (cron
+  d'expiration : contrats non signés `cree_le + 72 h` → `EXPIRE` et mission annulée, `public.sql` l.53042-53045) ;
+  état dérivé de `cree_le`, jamais stocké. Validé.
+- **Certificat** (`CertificatSignature.tsx` l.95-175, `CertificatSignaturePage.tsx` l.185-215) : document probatoire
+  conforme aux textes ci-dessus (signature simple ou avancée, renvoi au prestataire qualifié pour eIDAS qualifiée).
+  Validé. Observation hors lot, non bloquante : « signature électronique sécurisée » (l.172-175, l.214) est une
+  notion du décret n° 2001-272, abrogé par le décret n° 2017-1416 ; à moderniser côté web (PR HARD STOP), le natif
+  suivra.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D2 — T4a : bandeau « à valider » et texte de relance
+
+- **Textes** : `TextesWeb.Presences.bandeauAValider` (`PresencesSoignant.tsx` l.658), `relanceTitre` et
+  `relanceExplication` (`DetailPresencesMission.tsx` l.697-698).
+- **Sources** : choix Jolene appliqué par le serveur — `fn_valider_presences_72h_auto` (`public.sql` l.65474-65500 :
+  paramètre `delai_autovalidation_presence_h`, défaut 72 ; exclut les présences en litige ou en alerte de fraude) ;
+  CGU de production §4.6 (`PageCGU.tsx` l.115 : « En l'absence de contestation, les présences peuvent être validées
+  automatiquement après 72 heures ») ; CGU art. 2 et 4.5 (`PageCGU.tsx` l.48, l.109 : l'établissement est l'employeur
+  légal, Jolene n'est ni employeur ni tiers-déclarant) pour « En salarié, le salaire est versé par l'établissement
+  employeur ».
+- **Décision** : validés verbatim, tutoiement compris. Consigne : toute modification de `delai_autovalidation_presence_h`
+  impose une PR HARD STOP des textes (web puis natif), le délai étant écrit dans le texte.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D3 — T7 : bandeau RCP (affiché)
+
+- **Textes** (`DocumentsSoignant.tsx`) : l.623 « Ton assurance RCP est expirée. Pense à la renouveler. », l.624 « Tu ne
+  peux pas postuler aux missions libérales tant que ta RCP n'est pas à jour. », l.634 « L'assurance RCP est obligatoire
+  pour l'exercice libéral et mixte. Téléverse ton attestation RCP. ».
+- **Sources** : TEXTE — Code de la santé publique, art. L.1142-2 (les professionnels de santé exerçant à titre libéral
+  sont tenus de souscrire une assurance de responsabilité civile professionnelle) et art. L.1142-25 (manquement puni de
+  45 000 € d'amende) ; l'exercice mixte comporte une part libérale, soumise à l'obligation. Choix de conformité Jolene,
+  **appliqué par le serveur** : `fn_documents_ok_pour_mission(…, 'LIBERAL')` (`public.sql` l.31652-31730) exige chaque
+  pièce critique `LIBERAL_ONLY` vérifiée et non expirée (RCP_ASSURANCE critique `LIBERAL_ONLY` à expiration, matrice
+  paramétrée `documents_requis_par_profession`), appelée à la candidature (`fn_accepter_mission_urgence` l.5178,
+  `fn_enregistrer_swipe` l.32857, `fn_finaliser_attribution_mission` l.36806, `fn_proposer_mission_soignant` l.49361) ;
+  `dec_verifier_docs_avant_debut` (l.3903-3926) refuse le démarrage d'une mission libérale sans RCP valide. La
+  restriction affichée est donc exacte et dérivée d'une table paramétrée (aucune règle en dur).
+- **Décision** : affichés verbatim, tutoiement du web compris (`TextesWeb.Justificatifs.rcpExpiree`,
+  `rcpExpireeRestriction`, `rcpObligatoire`), par `PresentationJustificatifs.bandeauRcp` (règle de T6
+  `DossierDocuments.alerteRcp`), entre les expirations proches et l'incohérence comme le web ; identifiants
+  `documents-rcp`, `documents-rcp-expiree`, `documents-rcp-restriction`, `documents-rcp-obligatoire` ; démo
+  `-JOLENE_DEMO_SCENARIO rcp-expiree` ; tests `PresentationJustificatifsTests.testBandeauRcpCommeLeWeb`,
+  `DemoDocumentsGatewayTests.testScenarioRcpExpireeMontreLeBandeauRcp`, XCUITest
+  `DemoDocumentsTests.testRcpExpireeAfficheLeBandeauDuWeb`.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D4 — T7 : textes d'accès des documents complémentaires (affichés)
+
+- **Textes** (`DocumentsSoignant.tsx`) : l.867-868 (scolarité : « … contrôle les crédits, stages, unités
+  d'enseignement et attestations exigés avant d'ouvrir une pré-éligibilité. ») et l.882-883 (licence : « … délivrée
+  par le Conseil de l'Ordre : elle est contrôlée avant tout accès aux remplacements de médecin. »).
+- **Sources** : TEXTE — Code de la santé publique, art. L.4131-2 (autorisation d'exercer comme remplaçant d'un médecin
+  délivrée pour une durée limitée par le conseil départemental de l'ordre des médecins). Choix de conformité Jolene,
+  **appliqué par le serveur** : validation d'une attestation de scolarité refusée sans
+  `conditions_scolarite_confirmees` (« l'année seule ne suffit pas », `fn_admin_moderer_document` l.11260-11284) et
+  sans formation ni année compatibles avec la profession (`fn_professions_autorisees_scolarite`, l.11762-11789) ;
+  licence retenue seulement vérifiée, valide au plus 13 mois et avec sa spécialité canonique
+  (`fn_recalculer_preuves_etudiant_internal_20260810`, l.52125-52150). Les deux textes décrivent exactement ces
+  contrôles.
+- **Décision** : affichés verbatim, tutoiement compris (`TextesWeb.Justificatifs.accesScolarite`, `accesLicence`), dans
+  `PresentationJustificatifs.complementaires` ; identifiant `document-description-<TYPE>` ; tests
+  `PresentationJustificatifsTests.testDocumentsComplementairesAvecTextesDAccesDuWeb`, XCUITest
+  `DemoDocumentsTests.testDocumentsComplementairesAffichentLesTextesDAccesDuWeb`.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D5 — T7 : encart RIB (non porté au lot 2)
+
+- **Texte** : « À quoi sert ton RIB ? » (`DocumentsSoignant.tsx` l.821-849, variantes l.830-843).
+- **Sources** : exact sur le fond — l'établissement employeur lit le RIB du salarié pour sa mission
+  (`fn_consulter_rib_soignant_internal_20260801`, `public.sql` l.25619) ; information sur les destinataires conforme à
+  l'art. 13, § 1, e) du RGPD ; CGU art. 4.5 (établissement employeur).
+- **Décision** : texte jugé exact, **non porté au lot 2** pour une raison non juridique : ses deux variantes renvoient à
+  des écrans absents du natif (bouton « Configurer mes versements → » vers `/soignant/stripe-connect` ; chemin
+  « Mon compte → Coordonnées bancaires »), versements du lot 3. Les afficher sans destination enfreindrait « aucun
+  bouton sans effet ». À porter verbatim avec le lot 3.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D6 — Mention du pied de page des contrats CDDU et VACATION (revue fraîche de T8, mineur 10)
+
+- **Décision juridique** : prise par Gabrielle elle-même le 08/11/2026 et livrée sur le web par #1122 (`b2e75eb6`) :
+  `TYPES_CONTRAT_MENTION_SALARIEE = ['CDD', 'SALARIE', 'CDDU', 'VACATION']` (`ContratMission.tsx` l.65) reçoivent
+  « Contrat salarié écrit — art. L.1242-12 du Code du travail. ». TEXTE : Code du travail, art. L.1242-12 (le CDD est
+  établi par écrit et comporte la définition précise de son motif) et art. L.1242-2, 3° (CDD d'usage) ; la vacation
+  salariée de droit privé est un CDD.
+- **Reprise native** (cette tranche) : `ContratRules.mentionPiedDePage` lit `TextesWeb.Contrat.typesMentionSalariee`,
+  gardé type par type contre la constante du web (la garde lit désormais une liste nommée `const … = [...]`) ; zone de
+  rendu du pied de page recopiée (l.836-842) ; tests `ContratRulesTests.testMentionSalarieePourCdduEtVacationCommeLeWeb`
+  et garde Node « TJ : les types à mention salariée… ». La règle pure du web vit dans une page TSX, hors de
+  l'exporteur golden : pas de vecteur, cas CDDU et VACATION ajoutés aux tests.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026 (reprise native ; la règle juridique est
+  celle de Gabrielle, #1122)
+
+### D7 — Originaux de démonstration lisibles par l'App Review
+
+- **Faits** : `demo-contrat-001.html` et `demo-contrat-002.html` sont rendus par le moteur serveur (`rendreCddEmployeur`
+  + `wrapInDocument`) ; toutes les données de partie sont marquées fictives (« Établissement fictif République »,
+  « Représentant fictif — Direction fictive », « Camille Démo », « Donnée fictive de démonstration », numéros
+  `DEMO-0001` et `DEMO-0002`). Aucune personne ni organisation réelle, aucun document présenté comme authentique.
+- **Sources** : doctrine Apple — App Store Review Guidelines, 2.1 (fournir un compte ou un mode de démonstration
+  complet) ; le texte contractuel montré est celui du gabarit de production (parité exacte avec ce qu'un soignant lit).
+- **Décision** : conservés et lisibles en mode démo. Condition : ils restent produits par
+  `scripts/mobile/export-demo-fixtures.mjs` (exporteur sans diff) et marqués fictifs ; toute donnée réelle y est
+  interdite.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D8 — Classement des statuts de signature
+
+- « ✅ Signé », « ⏳ En attente », « Statut : … », « Établissement : ✅ Signé le <date> » (liste et page du contrat) restent
+  dans `LibellesWeb` (hors HARD STOP, verbatim, gardés par la même garde). Motif (CLAUDE.md, HARD STOP n°4 : restriction
+  d'exercice, avertissement citant une loi, wording à portée contractuelle) : ce sont des libellés d'état dérivés des
+  drapeaux serveur (`signature_soignant`, `signature_etablissement`, `statut`), sans énoncé de droit ; l'affirmation
+  probatoire vit dans le certificat (`TextesWeb.Certificat`, HARD STOP). Choix de conformité Jolene.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D9 — Zone « Votre signature » sans présentateur
+
+- « Signature non disponible pour le moment » (`SignerContratOtp.tsx` l.230), affiché seul et sans bouton tant que le
+  présentateur `.safari` (lot 1 T10) n'est pas injecté : exact (la signature n'est pas disponible dans l'app à ce
+  moment), aucun énoncé de droit, aucun texte nouveau. Maintenu jusqu'à T9b (signature native) ; cette tranche ne touche
+  pas l'écran de signature (T9b en parallèle).
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D10 — Lien vers la page du certificat
+
+- `contrat-certificat-ouvrir` garde `TextesWeb.Certificat.titrePage` (« Certificat de signature »,
+  `CertificatSignaturePage.tsx` l.185) : titre de la page ouverte, simple navigation, aucun énoncé nouveau ; la page
+  est dans le périmètre §1.1 « Certificat et partage ». Conservé.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D11 — Go de T9b (signature OTP) et de T5b (contestation)
+
+- **T9b** : go donné. Conditions inchangées du blueprint : textes de `TextesWeb.SignatureOtp` et `TextesWeb.Contrat`
+  seulement (D1), consentement et code liés à `(contratId, empreinte, documentPret)`, OTP SMS seul (décision 18), renvoi
+  web pour un compte TEST sans admission ; captures xcresult des trois formats dans la PR ; revue sur iPhone (P9) par
+  Gabrielle avant « livré ».
+- **T5b** : go donné, avec D12 : fenêtre lue au serveur (`fn_fenetre_contestation_ouverte`), aucun texte de délai,
+  aucun appel `fn_creer_notification`.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D12 — Q9 : délai de contestation d'une présence (48 h serveur, 72 h web)
+
+- **Faits** (sources primaires) :
+  - serveur, choix Jolene paramétré : `fn_fenetre_contestation_ouverte` (`public.sql` l.36627-36715) ouvre
+    `DESACCORD_HEURES_POINTAGE` tant que `valide_le + delai_contestation_pointage_h` n'est pas dépassé, défaut 48 h
+    (l.36649-36657) ; valeur semée « 48 » (« Fenêtre 48h post-pointage », `db/migrations_archive/20260417130000_cp_litiges_1_ddl.sql`
+    l.158). La valeur actuelle en production n'est pas relue (lecture limitée aux définitions, règle 3) ;
+  - web : constante client de 72 h (`PanneauContestation.tsx` l.43-46, « Lot 13 : … alignée sur la spec (72 h, comme
+    l'auto-validation) ») et textes l.347 (« 72h pour répondre »), l.354 et l.394 (« Sans résolution sous 72 h,
+    l'admin plateforme tranchera. ») ;
+  - CGU de production : §4.6 (`PageCGU.tsx` l.115) : auto-validation possible « après 72 heures » en l'absence de
+    contestation, aucun délai de contestation fixé ; l.182 : solution amiable recherchée sous 30 jours, puis tribunaux ;
+  - escalade : `fn_litiges_escalader_auto` (`public.sql` l.40761-40884) passe un litige sans réponse en
+    `EN_MEDIATION` après `delai_escalade_liberal_h` (semé à 72 h) en libéral et `delai_escalade_salarie_jours_ouvres`
+    (5 jours ouvrés) en salarié : ni « 72h pour répondre » en salarié, ni arbitrage de l'admin.
+- **Droit** : TEXTE — Code civil, art. 1110 et 1190 (les CGU sont un contrat d'adhésion, interprété dans le doute contre
+  celui qui l'a proposé : un utilisateur à qui l'interface annonce 72 h peut opposer ces 72 h à Jolene) et art. 1104
+  (bonne foi) ; Code du travail, art. L.3245-1 (action en paiement du salaire : trois ans) et Code civil, art. 2254,
+  al. 3 (la prescription des salaires ne s'aménage pas par contrat) : la fenêtre ne borne que le canal de litige de la
+  plateforme, jamais le droit d'agir du soignant.
+- **Décision** :
+  1. **valeur cible 72 h** pour `delai_contestation_pointage_h` : favorable au soignant, alignée sur l'auto-validation
+     72 h des CGU §4.6 et sur ce que le web annonce depuis le Lot 13 ; une fenêtre serveur plus courte que celle annoncée
+     fermerait la contestation à des utilisateurs à qui l'interface la dit ouverte (art. 1190) ;
+  2. **PR de paramétrage à préparer hors lot** (rien n'est écrit par cette tranche ; catégorie B9, données de
+     production, go explicite au merge) : migration `INSERT INTO public.parametres_litiges (cle, valeur, description)
+     VALUES ('delai_contestation_pointage_h', '72', 'Fenêtre 72 h après validation pour contester une présence (Q9,
+     DECISIONS_LOT2 D12).') ON CONFLICT (cle) DO UPDATE SET valeur = EXCLUDED.valeur, description =
+     EXCLUDED.description, modifie_le = now();` ; aligner `tests/litiges/cp1-ddl.test.sql` si une assertion porte sur
+     « 48 », puis la fiche `fn_fenetre_contestation_ouverte` de `CONTRATS_RPC_SOIGNANT.md` (valeur en vigueur ; le
+     défaut 48 h du code, gardé par `check-rpc-contracts.node.mjs`, ne change pas) ;
+  3. **PR web HARD STOP à préparer hors lot** : retirer « l'admin plateforme tranchera » (l.354, seconde phrase de
+     l.394) et « 72h pour répondre » (l.347), faux en salarié, sans les remplacer ; une fois le paramètre à 72 h, la
+     phrase « Vous avez 72 h après la validation pour contester. » (l.394) devient exacte ; remplacer la constante
+     client `DELAI_CONTESTATION_MS` par `fn_fenetre_contestation_ouverte` (une seule source, CLAUDE.md « État dérivé ») ;
+     le retrait de l'appel client `fn_creer_notification` reste la proposition B9 ci-dessous ;
+  4. **natif** : aucun texte de délai (verrou `ANCRES_Q9` maintenu dans la garde, motif mis à jour) ; bouton de
+     contestation conditionné par le serveur (décision 9) ; go de T5b (D11).
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
 ## En attente de Gabrielle
 
-Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranche indiquée.
+Depuis la délégation du 8 novembre 2026, ne restent ici que ce qui exige la présence physique de Gabrielle (appareil,
+numéros de téléphone, comptes Apple ou Twilio) et les PR B9 (go explicite au merge). Les points HARD STOP n°4 du lot 2
+(TL, T4a, T7, T9a, T9b, T5b, Q9) sont tranchés sous « Décisions déléguées du 8 novembre 2026 ». Rien de ce qui suit
+n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranche indiquée.
 
-### HARD STOP n°4 (juridique exposé à l'utilisateur)
+### HARD STOP n°4 — revue sur appareil (présence physique)
 
-- **TL** : validation écrite des textes juridiques et de consentement listés avec leur source dans la PR TL
-  (consentement GPS et retrait, attestation santé avec la mention de l'art. 441-7 du Code pénal, bandeaux et mentions
-  du contrat, art. 1366-1367 du Code civil, art. L.1242-12 du Code du travail, `MESSAGES_ERREUR`, compte à rebours
-  72 h, certificat) avant que T4b, T7, T9a et T9b soient déclarées livrées, ainsi que T4a pour le bandeau du filtre
-  « à valider » (`TextesWeb.Presences.bandeauAValider`, affiché par `PresencesScreen` avec `?filtre=a_valider`, donc
-  atteignable seulement après T10). Les textes tutoyés du web restent verbatim tant qu'un wording vouvoyé n'est pas
-  validé.
-- **T7** (justificatifs) : textes web non repris par TL, qui énoncent une restriction d'exercice ou une obligation
-  (CLAUDE.md, HARD STOP n°4 : « blocage ou restriction d'un mode d'exercice »), non affichés par le natif tant qu'ils ne
-  sont pas validés (verbatim tutoyé dans `TextesWeb`, ou wording vouvoyé) : bandeau RCP de `DocumentsSoignant.tsx`
-  l.623 (« Ton assurance RCP est expirée. Pense à la renouveler. »), l.624 (« Tu ne peux pas postuler aux missions
-  libérales tant que ta RCP n'est pas à jour. »), l.634 (« L'assurance RCP est obligatoire pour l'exercice libéral et
-  mixte. Téléverse ton attestation RCP. ») ; textes d'accès des documents complémentaires l.866-869 (contrôle avant
-  « pré-éligibilité » étudiante) et l.882-884 (licence « contrôlée avant tout accès aux remplacements de médecin ») ;
-  encart RIB l.830-843 (relation d'employeur, renvoi vers les versements du lot 3). Point d'extension :
-  `PresentationJustificatifs.complementaires` (`description` nil) et `DossierDocuments.alerteRcp` (T6), non affichée.
-- **T9b** (écran de signature OTP) : go explicite avant merge (captures xcresult des trois formats, liste des textes).
-- **T9a** (lecture des contrats, aucun texte nouveau) : les textes HARD STOP affichés par T9a sont ceux de TL
-  (`TextesWeb.Contrat` : bandeaux, CDD à préparer, document figé et empreinte, document d'origine indisponible, « déjà
-  signé », pied de page ; `TextesWeb.CompteARebours` ; `TextesWeb.Certificat` : certificat, mentions des art. 1366-1367
-  du Code civil et d'eIDAS, empreinte et son explication) : T9a n'est déclarée livrée qu'après la validation écrite de TL.
-  Points à trancher par Gabrielle (rien n'est changé côté natif sans sa décision) :
-  - **mention du pied de page** (revue fraîche de T8, mineur 10) : `ContratRules.mentionPiedDePage` reprend fidèlement le
-    web (`ContratMission.tsx` l.831-837) : tout `type_contrat` autre que CDD et SALARIE (CDDU, VACATION…) reçoit « Contrat
-    de prestation entre l’établissement et le professionnel libéral. », qualification juridique fausse pour un CDDU ou une
-    vacation salariée. Correction à décider sur le web d'abord (PR HARD STOP), puis reprise verbatim ;
-  - **originaux de démonstration** (même mineur) : `demo-contrat-001.html` et `demo-contrat-002.html`, rendus par le moteur
-    serveur avec des données « employeur » fictives qui le disent, sont lisibles en mode démo, donc par l'App Review ;
-  - **classement des statuts de signature** : « ✅ Signé », « ⏳ En attente », « Statut : … », « Établissement : ✅ Signé le
-    <date> » (liste et page du contrat) sont rangés dans `LibellesWeb` (libellés d'état, hors HARD STOP, verbatim et gardés
-    par TL) ; les déplacer dans `TextesWeb` les soumettrait à la validation de TL ;
-  - **zone « Votre signature » sans présentateur** : « Signature non disponible pour le moment » (`SignerContratOtp.tsx`
-    l.230) y est repris hors de son contexte web. Sur le web, ce titre accompagne une erreur bloquante du serveur
-    (`CONTRAT_INACTIF`, `CONTRAT_DEJA_COMPLET`, `DEJA_SIGNE`, l.222-236, suivie du message serveur) ; l'écran natif
-    l'affiche seul, sans bouton, tant que lot 1 T10 n'injecte pas le présentateur `.safari`, et n'annonce jamais la
-    signature sur jolene.app. Aucun texte nouveau n'a été écrit. (Description corrigée à l'intégration du
-    8 novembre 2026, revue fraîche de T9a, m1.)
-  - **lien vers la page du certificat** (revue fraîche de T9a, m2) : `contrat-certificat-ouvrir` porte
-    `TextesWeb.Certificat.titrePage` (texte HARD STOP, `CertificatSignaturePage.tsx`) dans un contexte que la page web du
-    contrat n'a pas (la page web n'a pas ce lien). Rien n'est changé côté natif sans sa décision.
-- **T5b** (contestation depuis une présence) : go explicite avant merge.
-- **Décision Q9 — délai de contestation** (sources primaires : `PanneauContestation.tsx` l.43-46 et l.347, l.354,
-  l.394 ; `fn_fenetre_contestation_ouverte` l.36600-36622 ; `fn_litiges_escalader_auto` l.40712, l.40726-40730 ;
-  `PageCGU.tsx` l.114-115). Le web affiche 72 h, le serveur applique `parametres_litiges.delai_contestation_pointage_h`,
-  défaut **48 h**, et la « CGU §4.6 » invoquée ne fixe aucun délai de contestation. Recommandation soumise (non
-  implémentée) : aligner `delai_contestation_pointage_h` sur 72 h par une PR de paramétrage séparée (`INSERT … ON
-  CONFLICT (cle) DO UPDATE`, B9 données prod) et retirer côté web la phrase d'escalade « l'admin plateforme
-  tranchera » (fausse en salarié), sans la remplacer tant qu'aucun texte n'est validé.
-- **P9** : revue sur iPhone des écrans de consentement GPS, d'attestation santé et de signature avant de déclarer le
-  lot livré.
+- **P9** : revue sur iPhone des écrans de consentement GPS (T4b), d'attestation santé et des justificatifs (T7 : bandeau
+  RCP et textes d'accès, D3-D4) et de signature (T9b) avant de déclarer le lot livré ; les textes eux-mêmes sont validés
+  (D1).
 
 ### B9 (PR préparées et poussées, jamais mergées sans go)
 
@@ -882,6 +1080,10 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
   `fn_presences_detail_mission` que pour ses missions et n'en dépend pas.
 - **Remontée** : ces constats sont à remonter à Gabrielle par la session principale, hors branche, sans attendre la PR
   de `feat/ios-lot2` (aucune PR n'est ouverte sur cette branche avant la fin du lot 1).
+- **Q9 — PR de paramétrage `delai_contestation_pointage_h` = 72** (décision D12 du 8 novembre 2026) : à préparer hors
+  lot 2 (migration `INSERT … ON CONFLICT (cle) DO UPDATE`, écrasement d'une valeur de production : B9), puis go explicite
+  au merge. Aucune écriture par les tranches iOS ; restent ouverts, comme les autres points B9 ci-dessus (S1 relève de
+  la file de merge, T11 du dispatch STAGING), sans changement par la tranche L2-TJ.
 
 ### Actions manuelles (STAGING, appareil, Apple)
 
@@ -890,7 +1092,8 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
 - Fournir deux numéros de téléphone réels (soignant et établissement de recette) et le compte Twilio de recette en
   secrets d'environnement ; confirmer `canal_sms` et des comptes TEST confirmés pour la portée.
 - Indiquer si `ANTHROPIC_API_KEY` est configurée sur STAGING (sinon P4 se prouve par la file de revue manuelle).
-- Relever `parametres_litiges.delai_contestation_pointage_h` sur STAGING et en production (lecture seule).
+- Relever `parametres_litiges.delai_contestation_pointage_h` sur STAGING et en production (lecture seule) : sans effet
+  sur D12 (la PR de paramétrage pose 72 quelle que soit la valeur), utile pour la note de la PR.
 - Recette appareil T12 : iPhone avec TestFlight Staging 2.0.0 (26), front web lancé localement contre STAGING pour
   afficher le QR, SMS reçu, arrêts forcés, photo HEIC non identitaire ; archive et upload du build 26.
 - Hors lot 2, à anticiper : clé APNs sous `GDU5AA28M9` (lot 3) ; compte de démonstration capable de signer, ou mention
