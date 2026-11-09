@@ -58,14 +58,18 @@ final class AppContainer: ObservableObject {
         #endif
         self.environment = environment
 
-        let appareil = Self.appareil(mode: environment.mode, arguments: arguments)
+        // Un mode inconnu (`unknownModeRaw`) est refusé par `validate()` avant tout choix de gateways.
+        let refus = Self.refusal(of: environment)
+        // Garde d'environnement d'abord (seconde revue fraîche de T4b, m7) : un mode refusé (mauvaise clé,
+        // `JOLENE_FORCE_BAD_KEY`, mode inconnu) reçoit l'appareil démo, jamais utilisé (aucune session n'est construite) ;
+        // aucun service réel (CoreLocation, `NWPathMonitor`, trousseau) n'est créé pour lui.
+        let appareil = refus == nil ? Self.appareil(mode: environment.mode, arguments: arguments) : Appareil.demo()
         let scanner = Self.scanner(mode: environment.mode, arguments: arguments)
         self.appareil = appareil
         scannerQR = scanner
         fabriqueZonePointage = FabriqueZonePointageNative(appareil: appareil, scanner: scanner)
 
-        // Un mode inconnu (`unknownModeRaw`) est refusé par `validate()` avant tout choix de gateways.
-        if let error = Self.refusal(of: environment) {
+        if let error = refus {
             #if DEBUG
             networkSentinel = nil
             #endif
@@ -119,11 +123,12 @@ final class AppContainer: ObservableObject {
     /// du processus, comme `JOLENE_FORCE_BAD_KEY`) fait échouer le premier chargement de l'Accueil
     /// (`DemoDashboardEchecGateway`) pour la recette de l'état d'erreur et de la reprise
     /// (`DemoAccueilTests.testAccueilErreurPuisReprise`) ; lot 2 T7 : `-JOLENE_DEMO_SCENARIO upload-incertain`
-    /// pose `DemoDocumentsGateway(scenario: .uploadIncertain)` (réponse perdue après application, `DemoDocumentsTests`).
-    /// Jamais compilé en Release.
+    /// pose `DemoDocumentsGateway(scenario: .uploadIncertain)` (réponse perdue après application, `DemoDocumentsTests`) ;
+    /// lot 2 T4b (seconde revue fraîche, m3) : `-JOLENE_FLAG_<cle> true|false` surcharge un drapeau d'écran
+    /// (`DemoFlagsGateway.surcharges`, coupe-circuit D-FLAGS). Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
-        var gateways = DemoWorld.gateways()
         #if DEBUG
+        var gateways = DemoWorld.gateways(drapeaux: DemoFlagsGateway.surcharges(arguments: arguments))
         if processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] == "1" {
             gateways.dashboard = DemoDashboardEchecGateway()
         }
@@ -131,18 +136,18 @@ final class AppContainer: ObservableObject {
         if scenarioDocuments != .normal {
             gateways.documents = DemoDocumentsGateway(scenario: scenarioDocuments)
         }
-        // Lot 2 T4b : `-JOLENE_DEMO_SCENARIO scan-incertain` (premier scan appliqué, réponse perdue, réconciliation).
-        let scenarioPointage = DemoPointageGateway.Scenario(arguments: arguments)
-        if scenarioPointage != .normal {
-            gateways.pointage = DemoPointageGateway(scenario: scenarioPointage)
-        }
-        #endif
+        // Lot 2 T4b : `-JOLENE_DEMO_SCENARIO scan-incertain` (premier scan appliqué, réponse perdue, réconciliation) ;
+        // seconde revue fraîche (m2) : `session-expiree-scan`, `session-expiree-consentement` (pointage et authentification
+        // démo liés : « Vérifier ma session » revalide), `consentement-echec`.
+        DemoPointageGateway.Scenario(arguments: arguments).installer(dans: &gateways)
         return gateways
+        #else
+        return DemoWorld.gateways()
+        #endif
     }
 
     /// Appareil réel (Staging, Production : CoreLocation, `NWPathMonitor`, trousseau) ou démo (aucun prompt système,
-    /// aucun réseau ; scénarios DEBUG). Un mode refusé par la garde d'environnement reçoit l'appareil démo, jamais utilisé
-    /// (aucune session n'est construite).
+    /// aucun réseau ; scénarios DEBUG). Appelé seulement pour un mode accepté par la garde d'environnement (`init`).
     private static func appareil(mode: JoleneMode, arguments: [String]) -> Appareil {
         switch mode {
         case .demo:

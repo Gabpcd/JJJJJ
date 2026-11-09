@@ -27,6 +27,13 @@ public enum LibellesPresences {
         // source: src/pages/PresencesSoignant.tsx:764 (vouvoyé : « Ton »)
         public static let videHistoriqueDescription = "Votre historique de pointages apparaîtra ici."
 
+        /// Coupe-circuit `ios_natif_presences_actif` à faux (D-FLAGS ; seconde revue fraîche de T4b, m3) : page Présences
+        /// remplacée par un renvoi web. Texte du lot 0 (`MobileAccess.unsupportedRole`), repris tel quel, comme
+        /// `LibellesJustificatifs.espaceNonDisponible` (T7).
+        public static var ecranNonDisponible: String {
+            MobileAccess.unsupportedRole(nil).message ?? ""
+        }
+
         /// Libellé vocalisé du compteur de l'onglet « À venir » (l.520) : « <n> mission(s) à venir ».
         public static func badgeAVenir(_ nombre: Int) -> String {
             let web = LibellesWeb.ListePresences.self

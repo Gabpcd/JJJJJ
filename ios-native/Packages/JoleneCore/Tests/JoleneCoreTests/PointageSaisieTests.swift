@@ -91,7 +91,7 @@ final class PointageSaisieTests: XCTestCase {
         scenario.installer(dans: &gateways)
         let store = SessionStore(controller: SessionController(gateways: gateways))
         await store.start()
-        await store.signIn(email: DemoWorld.context.email, password: "demonstration")
+        await store.signIn(email: DemoWorld.user.email ?? "demonstration@example.invalid", password: "demonstration")
         let snapshot = try XCTUnwrap(store.state.snapshot, "session démo prête attendue")
         return (store, snapshot)
     }

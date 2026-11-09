@@ -14,15 +14,23 @@ import JoleneDesign
 /// États (revue fraîche de T4b, M3 ; `ConsentementGpsModel.ligneProfil`) : indicateur pendant la lecture ; en échec, le
 /// message du port et « Réessayer » (le web passe aussi en erreur de chargement, `ProfilSoignant.tsx` l.199-200,
 /// l.409-412) ; l'interrupteur et son explication seulement pour une valeur relue (un consentement donné n'est jamais
-/// affiché retiré). Identifiants : `profil-gps-consentement` (interrupteur), `profil-gps-explication`, `profil-gps-retour`,
-/// `profil-gps-chargement`, `profil-gps-erreur`, `profil-gps-reessayer` ; feuille : `gps-consent-sheet`.
+/// affiché retiré). Session expirée (401 à la lecture ou à la bascule ; seconde revue fraîche de T4b, m1) : bloc
+/// « Session à vérifier » du lot 1 (`LibellesPresences.Pointage`, mêmes textes que la zone de pointage) et « Vérifier ma
+/// session » (`ConsentementGpsModel.verifierSession` : `SessionStore.start()`, puis relecture), jamais un « Réessayer »
+/// qui échouerait de nouveau. Identifiants : `profil-gps-consentement` (interrupteur), `profil-gps-explication`,
+/// `profil-gps-retour`, `profil-gps-chargement`, `profil-gps-erreur`, `profil-gps-reessayer`, `profil-gps-session-expired`,
+/// `profil-gps-session-check` ; feuille : `gps-consent-sheet`.
 struct ConsentementGpsRow: View {
     private typealias T = TextesWeb.ProfilConsentementGps
 
+    private typealias L = LibellesPresences.Pointage
+
+    private let session: SessionStore
     @StateObject private var model: ConsentementGpsModel
     @Environment(\.appareil) private var appareil
 
     init(session: SessionStore, snapshot: SessionSnapshot) {
+        self.session = session
         _model = StateObject(wrappedValue: ConsentementGpsModel(controller: session.controller, snapshot: snapshot))
     }
 
@@ -49,8 +57,17 @@ struct ConsentementGpsRow: View {
                     .accessibilityIdentifier("profil-gps-reessayer")
             case let .interrupteur(actif):
                 interrupteur(actif: actif)
+            case .sessionAVerifier:
+                InlineNotice(L.messageSessionExpiree, title: L.sessionAVerifier, tone: .warning,
+                             identifier: "profil-gps-session-expired", announcesOnAppear: true)
+                JoleneButton(L.verifierMaSession, style: .secondary) {
+                    let session = session, model = model
+                    Task { await model.verifierSession(session) }
+                }
+                .accessibilityIdentifier("profil-gps-session-check")
             }
-            if let retour = model.retour {
+            // Aucun retour pendant « Session à vérifier » : le bloc porte déjà le message (`retourLigneProfil`).
+            if let retour = model.retourLigneProfil {
                 InlineNotice(LibellesPresences.Pointage.retourConsentement(retour),
                              tone: LibellesPresences.Pointage.tonConsentement(retour).inlineNotice, identifier: "profil-gps-retour",
                              announcesOnAppear: true)

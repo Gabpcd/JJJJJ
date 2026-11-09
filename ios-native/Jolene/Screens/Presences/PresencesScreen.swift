@@ -18,6 +18,12 @@ import JoleneDesign
 ///
 /// Actions des états vides : onglets de l'app (les routes web `/soignant/missions` et `/soignant/planning` sont
 /// « Mes missions », `/soignant/recherche-missions` est Explorer, `LinkRouter`).
+///
+/// Coupe-circuit D-FLAGS `ios_natif_presences_actif` (seconde revue fraîche de T4b, m3 ; fail-open, comme
+/// `ios_natif_documents_actif` dans `MesDocumentsScreen`) : lu à l'apparition ; à faux, la page entière (onglets et zones de
+/// pointage) devient un renvoi web `/soignant/presences` (`presences-desactive-renvoi`, bouton `presences-desactive-web`
+/// seulement avec le présentateur des renvois web de T10 : aucun bouton sans effet). La ligne du consentement du Profil
+/// reste native (retrait promis par le texte de consentement, correction 15).
 struct PresencesScreen: View {
     @StateObject private var model: PresencesModel
     @StateObject private var consentement: ConsentementGpsModel
@@ -27,6 +33,9 @@ struct PresencesScreen: View {
     private let ouvrirOnglet: (MainTabView.Tab) -> Void
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.appareil) private var appareil
+    @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
+    /// Drapeau `ios_natif_presences_actif`, fail-open tant qu'il n'est pas lu.
+    @State private var ecranActif = true
     #if DEBUG
     @StateObject private var compteursDemo = CompteursPointageDemo()
     #endif
@@ -42,6 +51,37 @@ struct PresencesScreen: View {
     }
 
     var body: some View {
+        Group {
+            if ecranActif { page } else { renvoiDesactive }
+        }
+        .navigationTitle(LibellesWeb.ListePresences.titre)
+        .task { ecranActif = await Self.drapeau(session: session, snapshot: snapshot) }
+    }
+
+    private static func drapeau(session: SessionStore, snapshot: SessionSnapshot) async -> Bool {
+        guard let gateways = await session.controller.gateways(for: snapshot.epoch) else { return true }
+        return await gateways.flags.ecranActif(.presences)
+    }
+
+    /// Renvoi web de la page (drapeau à faux) : texte du lot 0, bouton seulement si un présentateur est injecté.
+    private var renvoiDesactive: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: JoleneSpacing.md) {
+                InlineNotice(LibellesPresences.Liste.ecranNonDisponible, tone: .info, identifier: "presences-desactive-renvoi")
+                if let presentateurRenvoiWeb, let route = PresencesRenvois.presences {
+                    JoleneButton(LibellesPresences.Pointage.voirSurJolene, style: .secondary) { presentateurRenvoiWeb.presenter(route) }
+                        .accessibilityIdentifier("presences-desactive-web")
+                }
+            }
+            .padding(JoleneSpacing.lg)
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
+        }
+        .accessibilityIdentifier("presences-screen")
+        .background(JoleneColor.lavender.ignoresSafeArea())
+    }
+
+    private var page: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: JoleneSpacing.lg) {
                 Text(LibellesPresences.Liste.sousTitre)
@@ -78,7 +118,6 @@ struct PresencesScreen: View {
         .scrollDismissesKeyboard(.immediately)
         .accessibilityIdentifier("presences-screen")
         .background(JoleneColor.lavender.ignoresSafeArea())
-        .navigationTitle(LibellesWeb.ListePresences.titre)
         .environment(\.servicesPointage, services)
         // Premier affichage, relance après une tâche annulée, relecture au-delà de 60 s (`staleTime`).
         .task { await model.loadIfStale() }

@@ -77,14 +77,21 @@ actor DemoSessionStore {
 
 /// Accepte n'importe quel email et mot de passe non vides et renvoie l'utilisateur démo
 /// confirmé. `restoreSession` renvoie `nil` au premier lancement, puis l'utilisateur
-/// après `signIn`, jusqu'à `signOut`.
+/// après `signIn`, jusqu'à `signOut`. Lot 2 (T4b, seconde revue fraîche, m2) : liée à une
+/// `ExpirationSessionDemo` (scénarios DEBUG `session-expiree-*`), une restauration d'une
+/// session ouverte (« Vérifier ma session » → `SessionController.start`) la revalide.
 public struct DemoAuthGateway: AuthPort {
     private let store = DemoSessionStore()
+    private let expiration: ExpirationSessionDemo?
 
-    public init() {}
+    public init(expiration: ExpirationSessionDemo? = nil) {
+        self.expiration = expiration
+    }
 
     public func restoreSession() async throws -> AuthenticatedUser? {
-        await store.current()
+        let user = await store.current()
+        if user != nil { await expiration?.revalider() }
+        return user
     }
 
     public func signIn(email: String, password: String) async throws -> AuthenticatedUser {

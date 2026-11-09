@@ -5,7 +5,9 @@ import JoleneDesign
 /// Feuille de consentement à la géolocalisation (lot 2, T4b ; décision 4), port de `ConsentementGPS.tsx` l.16-71 :
 /// textes verbatim de `TextesWeb.ConsentementGps` (HARD STOP n°4, tranche TL), dans l'ordre du web (titre, description,
 /// « Ce que nous faisons », « Ce que nous ne faisons pas », base légale, « Je refuse », « Autoriser la localisation »).
-/// Ouverte avant le premier pointage quand `soignants.consentement_gps` est NULL ; aucune autorisation iOS n'est demandée
+/// Ouverte avant le premier pointage quand `soignants.consentement_gps` est NULL (décision 4 ; écart assumé et consigné,
+/// seconde revue fraîche de T4b, m4 : le web vivant ne la présente jamais, `pointerArrivee` qui l'ouvre, l.306-313, n'est
+/// pas appelé, et `PointageRotatifSoignant.tsx` l.123 pointe sans GPS) ; aucune autorisation iOS n'est demandée
 /// avant un « Autoriser » (le modèle la demande après la relecture). Choix explicite exigé : la feuille ne se ferme pas
 /// d'un glissement (écart assumé : le dialogue web traite une fermeture comme un refus, l.18 ; ici aucun choix n'est
 /// enregistré sans un bouton). Identifiants : `gps-consent-sheet`, `gps-consent-accepter`, `gps-consent-refuser`.

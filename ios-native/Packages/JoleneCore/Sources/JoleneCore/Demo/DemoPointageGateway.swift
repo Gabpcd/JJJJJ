@@ -10,13 +10,28 @@ import Foundation
 /// `23514` (87 secondes) ; le code d'une mission saisi dans le bloc d'une autre pointe la mission du code
 /// (`.enregistreSurAutreMission`, revue fraîche de T3, M-A) ; scénario `scan-incertain` (`-JOLENE_DEMO_SCENARIO`, lu par
 /// `AppContainer` en T4b) : le premier scan est appliqué puis sa réponse est perdue (`.incertain`), la réconciliation le
-/// retrouve par relecture (sur la mission du reçu seulement : limite consignée dans `DECISIONS_LOT2.md`).
+/// retrouve par relecture (sur la mission du reçu seulement : limite consignée dans `DECISIONS_LOT2.md`). Scénarios de
+/// reprise (seconde revue fraîche de T4b, m2) : `session-expiree-scan`, `session-expiree-consentement` (session expirée
+/// côté « serveur » par `ExpirationSessionDemo` : tout appel répond 401 jusqu'à sa revalidation par l'authentification
+/// démo liée, `Scenario.installer(dans:)`) et `consentement-echec`.
 public actor DemoPointageGateway: PointagePort {
-    /// Valeurs de `-JOLENE_DEMO_SCENARIO` qui concernent le pointage.
+    /// Valeurs de `-JOLENE_DEMO_SCENARIO` qui concernent le pointage. Chacune n'agit qu'une fois, puis le monde redevient
+    /// normal.
     public enum Scenario: String, CaseIterable, Sendable {
         case normal
         case scanIncertain = "scan-incertain"
+        /// Le premier scan est appliqué, puis sa réponse est un 401 (session expirée) : rien n'est affirmé, le reçu est
+        /// gardé ; tout appel répond 401 jusqu'à « Vérifier ma session », puis la réconciliation retrouve le scan.
+        case sessionExpireeScan = "session-expiree-scan"
+        /// La première lecture du consentement répond 401 ; tout appel répond 401 jusqu'à « Vérifier ma session ».
+        case sessionExpireeConsentement = "session-expiree-consentement"
+        /// Le premier `fn_consentir_gps` échoue comme un service indisponible (`SessionController.timeoutMessage`), sans
+        /// rien écrire ; le suivant aboutit.
+        case consentementEchec = "consentement-echec"
     }
+
+    /// Réponse d'une session expirée (401 PostgREST traduit par le lot 0).
+    public static let erreurSessionExpiree = JoleneError(.unauthorized, SessionController.sessionExpiredMessage)
 
     public static let codeInconnuDemo = "100001"
     public static let codeAntiRejeuDemo = "100002"
@@ -65,6 +80,7 @@ public actor DemoPointageGateway: PointagePort {
 
     private let clock: any ClockPort
     private var scenario: Scenario
+    private let expiration: ExpirationSessionDemo
     private var monde: Monde?
     private var rotations = 0
     private var relances: Set<String> = []
@@ -72,15 +88,17 @@ public actor DemoPointageGateway: PointagePort {
     /// mémoire seulement, coordonnées fictives, jamais décrites (`MetadonneesScan.description`).
     public private(set) var metadonneesRecues: [MetadonneesScan] = []
 
-    public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow), scenario: Scenario = .normal) {
+    public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow), scenario: Scenario = .normal,
+                expiration: ExpirationSessionDemo = ExpirationSessionDemo()) {
         self.clock = clock
         self.scenario = scenario
+        self.expiration = expiration
     }
 
     // MARK: - PointagePort
 
     public func presences(context: MissionReadContext) async throws -> InstantanePresences {
-        try verifier(context)
+        try await verifier(context)
         let m = try charger()
         let missions = m.fixture.missions.map { mission -> MissionPresenceLue in
             var lue = mission
@@ -94,20 +112,29 @@ public actor DemoPointageGateway: PointagePort {
     }
 
     public func etat(missionId: String, context: MissionReadContext) async throws -> EtatPointage {
-        try verifier(context)
+        try await verifier(context)
         let m = try charger()
         guard let etat = Self.etat(missionId, m) else { throw JoleneError(.unknown, Self.messageMissionIntrouvable) }
         return etat
     }
 
     public func consentementGps(context: MissionReadContext) async throws -> Bool? {
-        try verifier(context)
+        try await verifier(context)
+        if scenario == .sessionExpireeConsentement {
+            scenario = .normal
+            await expiration.expirer()
+            throw Self.erreurSessionExpiree
+        }
         return try charger().consentement
     }
 
     public func enregistrerConsentementGps(_ accepte: Bool, context: MissionReadContext) async throws -> Bool {
-        try verifier(context)
+        try await verifier(context)
         _ = try charger()
+        if scenario == .consentementEchec {
+            scenario = .normal
+            throw JoleneError(.network, SessionController.timeoutMessage)
+        }
         monde?.consentement = accepte
         // Relecture : la valeur rendue est celle du monde, jamais l'hypothèse de l'appelant.
         guard let relu = monde?.consentement else { throw JoleneError(.unknown, DemoWorld.messageDemoSeulement) }
@@ -116,7 +143,7 @@ public actor DemoPointageGateway: PointagePort {
 
     public func scanner(code: String, metadonnees: MetadonneesScan, recu: RecuScan,
                         context: MissionReadContext) async throws -> IssueScan {
-        try verifier(context)
+        try await verifier(context)
         // Mêmes gardes que `SupabasePointageGateway.envoyerScan` (seconde revue fraîche de T3, mi-6).
         guard recu.phase == .started, recu.userId == context.userId, recu.terminalId == metadonnees.idTerminal else {
             throw JoleneError(.contract, DemoWorld.messageDemoSeulement)
@@ -153,6 +180,12 @@ public actor DemoPointageGateway: PointagePort {
             scenario = .normal
             return .incertain
         }
+        if scenario == .sessionExpireeScan {
+            // Appliqué, puis la réponse est un 401 : la session « serveur » reste expirée jusqu'à sa revalidation.
+            scenario = .normal
+            await expiration.expirer()
+            throw Self.erreurSessionExpiree
+        }
         // Relecture, comme la gateway Supabase : le code désigne la mission (revue fraîche de T3, M-A). Code d'une autre
         // mission saisi dans ce bloc → scan enregistré là ; sinon la preuve doit être celle du reçu. Un scan appliqué
         // n'est jamais `.incertain` (avec l'horloge fixe, sa réconciliation resterait « à relire » sans fin).
@@ -165,18 +198,18 @@ public actor DemoPointageGateway: PointagePort {
     }
 
     public func reconcilier(recu: RecuScan, context: MissionReadContext) async throws -> IssueScan {
-        try verifier(context)
+        try await verifier(context)
         let m = try charger()
         return IssueScan(reconciliation: try recu.reconcilier(scans: m.preuves[recu.missionId] ?? [], relueLe: clock.now()))
     }
 
     public func preuvesScan(missionId: String, context: MissionReadContext) async throws -> [PreuveScan] {
-        try verifier(context)
+        try await verifier(context)
         return try charger().preuves[missionId] ?? []
     }
 
     public func detail(missionId: String, context: MissionReadContext) async throws -> DetailPresences {
-        try verifier(context)
+        try await verifier(context)
         let m = try charger()
         let creneaux = m.creneaux.filter { $0.missionId == missionId }
         guard !creneaux.isEmpty || m.statuts[missionId] != nil else { return DetailPresences(missionId: missionId) }
@@ -185,15 +218,16 @@ public actor DemoPointageGateway: PointagePort {
     }
 
     public func relancerValidation(missionId: String, context: MissionReadContext) async throws -> IssueRelance {
-        try verifier(context)
+        try await verifier(context)
         guard relances.insert(missionId).inserted else { return .refusee(message: Self.messageDejaRelance) }
         return .envoyee(message: Self.messageRelanceEnvoyee)
     }
 
     // MARK: - Monde
 
-    private func verifier(_ context: MissionReadContext) throws {
+    private func verifier(_ context: MissionReadContext) async throws {
         guard context.userId == DemoWorld.context.userId else { throw JoleneError(.demoOnly, DemoWorld.messageDemoSeulement) }
+        if await expiration.expiree { throw Self.erreurSessionExpiree }
     }
 
     private func charger() throws -> Monde {

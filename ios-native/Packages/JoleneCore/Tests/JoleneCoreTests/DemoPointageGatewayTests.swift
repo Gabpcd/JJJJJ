@@ -234,7 +234,7 @@ final class DemoPointageGatewayTests: XCTestCase {
         XCTAssertNil(avant)
         let toujours = await expiration.expiree
         XCTAssertTrue(toujours, "aucune session ouverte : rien à revalider")
-        _ = try await auth.signIn(email: DemoWorld.context.email, password: "demonstration")
+        _ = try await auth.signIn(email: DemoWorld.user.email ?? "demonstration@example.invalid", password: "demonstration")
         let restaure = try await auth.restoreSession()
         XCTAssertEqual(restaure, DemoWorld.user)
         let apres = await expiration.expiree

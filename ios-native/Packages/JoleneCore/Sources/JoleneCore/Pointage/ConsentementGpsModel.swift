@@ -8,7 +8,12 @@ import Foundation
 ///
 /// Règles :
 /// - lecture `soignants.consentement_gps` (`PointagePort.consentementGps`) ; NULL → feuille de consentement avant le
-///   premier pointage (`decision == .recueillir`, parité `PresencesSoignant.tsx` l.310-311) ;
+///   premier pointage (`decision == .recueillir`, décision 4 du blueprint). Ce n'est pas une parité : sur le web, seuls
+///   `pointerArrivee` (`PresencesSoignant.tsx` l.306-313, feuille ouverte l.310-311) et `pointerDepart` (l.386) ouvrent
+///   la feuille, et ni l'un ni l'autre n'est appelé ; le flux rotatif vivant (`PointageRotatifSoignant.tsx` l.123) ne la
+///   présente jamais et pointe sans GPS tant que le consentement n'est pas vrai. Écart assumé (le natif recueille le
+///   consentement que le web vivant ne demande pas), consigné au tableau des écarts T4b de `PARITE_SOIGNANT.md` (seconde
+///   revue fraîche de T4b, m4) ;
 /// - réponse à la feuille (`repondre`) : `fn_consentir_gps(p_accepte)` puis relecture (la valeur relue fait foi, jamais
 ///   l'hypothèse de l'écran), puis audit `RGPD_CONSENTEMENT_DONNE` best-effort, acceptation comme refus (web l.67-74,
 ///   l.87-94 ; détails `type: gps`, `consentement`, écrits en texte par `AuditPort`) ; l'autorisation iOS « Lorsque l'app
@@ -25,6 +30,9 @@ import Foundation
 ///   `RGPD_CONSENTEMENT_DONNE` du premier consentement) ; une bascule depuis NULL sans feuille (retrait) est auditée de même ;
 /// - ligne du Profil (`ligneProfil`, revue fraîche de T4b, M3) : indicateur pendant la lecture, message du port et
 ///   « Réessayer » en échec, interrupteur seulement pour une valeur relue (jamais un consentement donné affiché retiré) ;
+///   session expirée (401 à la lecture ou à la bascule) → « Session à vérifier » et « Vérifier ma session »
+///   (`verifierSession` : session revalidée, puis relecture, jamais un rejeu de la bascule ; seconde revue fraîche de
+///   T4b, m1), comme la zone de pointage (M1) ;
 /// - une seule réponse à la fois : `enCours` est posé de façon synchrone, avant le premier `await` (revue fraîche de T4b,
 ///   m1, modèle de `PointageModel.envoiEnCours`) : un double toucher ne fait qu'un `fn_consentir_gps` et qu'un audit ;
 ///   pendant la demande, l'interrupteur montre le choix en vol (`valeurDemandee`), puis la valeur relue ;
@@ -71,6 +79,9 @@ public final class ConsentementGpsModel: ObservableObject {
         case indisponible(String)
         /// Interrupteur : choix en vol pendant une demande, sinon la valeur relue (NULL éteint, D-T4b-1).
         case interrupteur(actif: Bool)
+        /// Session expirée (401) : bloc « Session à vérifier » du lot 1 et « Vérifier ma session » (`verifierSession`) ; un
+        /// « Réessayer » ne réparerait rien (seconde revue fraîche de T4b, m1). L'emporte sur tout autre état.
+        case sessionAVerifier
     }
 
     @Published public private(set) var etat: Etat = .chargement
@@ -113,11 +124,17 @@ public final class ConsentementGpsModel: ObservableObject {
     public var interrupteurActif: Bool { etat == .lu(true) }
 
     public var ligneProfil: LigneProfil {
+        if sessionExpired { return .sessionAVerifier }
         switch etat {
         case .chargement: return .chargement
         case let .indisponible(message): return .indisponible(message)
         case .lu: return .interrupteur(actif: valeurDemandee ?? interrupteurActif)
         }
+    }
+
+    /// Retour affiché sous la ligne du Profil : aucun pendant « Session à vérifier » (le bloc porte déjà le message).
+    public var retourLigneProfil: Retour? {
+        ligneProfil == .sessionAVerifier ? nil : retour
     }
 
     public func charger() async {
@@ -183,6 +200,25 @@ public final class ConsentementGpsModel: ObservableObject {
         if premiereReponse { await auditer(relu) }
         guard await estCourant() else { return }
         retour = .bascule(actif: relu)
+    }
+
+    /// « Vérifier ma session » de la ligne du Profil (seconde revue fraîche de T4b, m1 ; règle de
+    /// `PresencesModel.verifierSession`) : revalide la session (lot 1 ; une session révoquée ramène à la connexion, nouvel
+    /// epoch, et la ligne est reconstruite), puis, si elle reste celle de ce modèle, reprend la lecture (`reprendreApresSession`).
+    public func verifierSession(_ session: SessionStore) async {
+        await session.start()
+        guard session.state.snapshot?.epoch == snapshot.epoch else { return }
+        await reprendreApresSession()
+    }
+
+    /// Après une revalidation de la session pour le même epoch (`verifierSession`, ou celle de la zone de pointage,
+    /// `PointageModel.verifierSession`) : un consentement dont la lecture ou l'enregistrement avait expiré est relu, et le
+    /// retour d'échec de cet enregistrement est levé (il ne décrit plus l'état). Rien n'est rejoué ; rien à faire sans
+    /// session expirée.
+    func reprendreApresSession() async {
+        guard sessionExpired else { return }
+        if case .echec? = retour { retour = nil }
+        await charger()
     }
 
     /// Feuille du Profil fermée sans réponse : rien n'est enregistré.
