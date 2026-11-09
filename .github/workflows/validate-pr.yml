@@ -695,7 +695,7 @@ jobs:
           fi
           # Les sept sources ont déjà été exécutées, puis comparées aux 90
           # statements du registre et au catalogue revu après installation V2.
-          # Les bancs PG17 rejouent leurs sources ; les 66 suites ci-dessous
+          # Les bancs PG17 rejouent leurs sources ; les 67 suites ci-dessous
           # restent exécutées sur staging, sous SAVEPOINT/ROLLBACK.
           if [ "${PAIEMENTS_INSTALLATION_MODE:-}" = 'installed' ]; then
             test "$CONNECT_INSTALLATION_MODE" != 'installed'
@@ -768,6 +768,7 @@ jobs:
             tests/security/gardes-null-security-definer.test.sql
             tests/security/connect-onboarding-payout-acl.test.sql
             tests/security/dpae-contrats-cddu-vacation.test.sql
+            tests/security/agents-croissance-brouillons.test.sql
             tests/non-regression/sql/contestation-paiement-soignant.test.sql
           )
           # Sans migration, ne pas exiger des fonctions main absentes du
