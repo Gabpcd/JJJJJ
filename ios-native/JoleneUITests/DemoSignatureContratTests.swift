@@ -177,6 +177,8 @@ final class DemoSignatureContratTests: JoleneUITestCase {
     /// Saisit le code dans le champ OTP UIKit (`OTPField`, `contract-otp`) après lui avoir donné le focus.
     private func saisirCode(_ code: String, dans champ: XCUIElement, ecran: XCUIElement) {
         require("Le champ du code est rendu") { champ.exists }
+        // Le champ remplace le bouton d'envoi : il peut se trouver sous le bord de l'écran, que `focus` ne fait pas défiler.
+        if !visible(champ) && !app.keyboards.firstMatch.exists { scrollTo(champ, in: ecran) }
         focus(champ, in: ecran)
         champ.typeText(code)
         require("Le code saisi est affiché") { (champ.value as? String) == code }
