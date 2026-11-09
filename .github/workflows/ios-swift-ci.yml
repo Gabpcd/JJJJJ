@@ -360,6 +360,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoPresencesTests \
             -skip-testing:JoleneUITests/DemoDocumentsTests \
             -skip-testing:JoleneUITests/DemoContratsTests \
+            -skip-testing:JoleneUITests/DemoSignatureContratTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -396,6 +397,7 @@ jobs:
             -only-testing:JoleneUITests/DemoPresencesTests \
             -only-testing:JoleneUITests/DemoDocumentsTests \
             -only-testing:JoleneUITests/DemoContratsTests \
+            -only-testing:JoleneUITests/DemoSignatureContratTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -431,7 +433,7 @@ jobs:
             // de l éclat lot2 doivent toutes avoir démarré (un -only-testing mal nommé n exécute rien).
             const eclats = [
               { nom: "socle", code: process.env.CODE_SOCLE, classes: [] },
-              { nom: "lot2", code: process.env.CODE_LOT2, classes: ["DemoPresencesTests", "DemoDocumentsTests", "DemoContratsTests"] },
+              { nom: "lot2", code: process.env.CODE_LOT2, classes: ["DemoPresencesTests", "DemoDocumentsTests", "DemoContratsTests", "DemoSignatureContratTests"] },
             ];
             let total = 0, passed = 0, failed = 0, skipped = 0, log = "";
             const lignes = [`### UI — ${process.env.JOLENE_UI_FORMAT}`, ""];

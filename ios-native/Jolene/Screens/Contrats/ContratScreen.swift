@@ -10,11 +10,13 @@ import JoleneDesign
 /// signature », « déjà signé », pied de page juridique. Règles : `ContratRules` ; textes : `TextesWeb` (HARD STOP
 /// n°4, verbatim) et `LibellesWeb`, assemblés par `ContratPresentation` ; aucune règle ni aucun texte écrit ici.
 ///
-/// Signature : aucune signature native dans T9a. La zone « Votre signature » (`ContratRules.zoneSignatureVisible`,
-/// l.709) est un renvoi web vers `/contrat/:id` (décision 18) : bouton seulement quand le présentateur `.safari`
-/// (lot 1 T10) est injecté, sinon « Signature non disponible pour le moment » (jamais un bouton sans effet) ; elle
-/// porte aussi les erreurs de préparation du document final du web (l.713-717). T9b (HARD STOP n°4) la remplace par
-/// `SignatureOtpView` (`ContratModel.session`).
+/// Signature (T9b) : la zone « Votre signature » (`ContratModel.zoneSignature(maintenant:)`, l.709) est la signature
+/// OTP native `SignatureOtpView` (session OTP de T8, décision 18), réévaluée chaque seconde pour le minuteur (horloge
+/// des gateways) ; « Signature non disponible pour le moment » n'y apparaît que sur une erreur bloquante du serveur
+/// (`CONTRAT_INACTIF`, `CONTRAT_DEJA_COMPLET`, `DEJA_SIGNE`, l.222-236). Compte TEST sans admission de recette : renvoi
+/// web vers `/contrat/:id`, bouton seulement quand le présentateur `.safari` (lot 1 T10) est injecté (jamais un bouton
+/// sans effet). La zone porte aussi les erreurs de préparation du document final du web (l.713-717). Le défilement
+/// ferme le clavier numérique du code (qui n'a pas de touche de validation).
 ///
 /// Partage : copie temporaire `Contrat-<numéro>.html` des octets contrôlés (`ContratModel.preparerPartage`), feuille
 /// système, copie effacée à la fermeture de la feuille et à la disparition de l'écran ; toutes les copies sont
@@ -23,8 +25,8 @@ import JoleneDesign
 /// `contrat-titre`, `contrat-statut`, `contrat-cdd-a-preparer`, `contrat-partager`, `contrat-imprimer`,
 /// `contrat-partage-erreur`, `contrat-empreinte`, `contrat-lecteur`, `contrat-contenu-indisponible`,
 /// `contrat-certificat`, `contrat-certificat-ouvrir`, `contrat-signatures` (+ `-etablissement`, `-soignant`),
-/// `contrat-renvoi-web` (+ `-action`, `-indisponible`), `contrat-preparation`, `contrat-deja-signe`,
-/// `contrat-pied-de-page`.
+/// `contrat-zone-signature` (+ `SignatureOtpView`), `contrat-renvoi-web` (+ `-message`, `-action`),
+/// `contrat-preparation`, `contrat-deja-signe`, `contrat-pied-de-page`.
 struct ContratScreen: View {
     @StateObject private var model: ContratModel
     @ObservedObject private var session: SessionStore
@@ -75,6 +77,7 @@ struct ContratScreen: View {
             .frame(maxWidth: 900)
             .frame(maxWidth: .infinity)
         }
+        .scrollDismissesKeyboard(.immediately)
         .background(JoleneColor.lavender.ignoresSafeArea())
         .navigationTitle(LibellesWeb.Contrat.titrePrefixe)
         .navigationBarTitleDisplayMode(.inline)
@@ -135,7 +138,9 @@ struct ContratScreen: View {
             .accessibilityIdentifier("contrat-certificat-ouvrir")
         }
         signatures(contrat)
-        if ContratRules.zoneSignatureVisible(contrat) { zoneSignature(contrat) }
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            if let zone = model.zoneSignature(maintenant: model.horloge.now()) { zoneSignature(zone) }
+        }
         if ContratRules.dejaSigneParMoi(contrat) {
             Text(TextesWeb.Contrat.dejaSigne)
                 .font(JoleneFont.callout.weight(.semibold))
@@ -300,8 +305,8 @@ struct ContratScreen: View {
         .accessibilityIdentifier("contrat-signatures")
     }
 
-    /// Zone « Votre signature » (l.708-817) en renvoi web jusqu'à T9b.
-    private func zoneSignature(_ contrat: ContratDetail) -> some View {
+    /// Zone « Votre signature » (l.708-817) : signature OTP native, ou renvoi web d'un compte TEST sans admission.
+    private func zoneSignature(_ zone: ZoneSignature) -> some View {
         carte {
             Text(LibellesWeb.Contrat.votreSignature)
                 .font(JoleneFont.headline)
@@ -310,18 +315,23 @@ struct ContratScreen: View {
             if let preparation = ContratPresentation.messagePreparation(motif: model.indisponibilite) {
                 InlineNotice(preparation, tone: .warning, identifier: "contrat-preparation")
             }
-            if let presentateur = presentateurRenvoiWeb, let route = ContratPresentation.renvoiSignature(contratId: contrat.id) {
-                JoleneButton(LibellesWeb.Contrats.signerLeContrat) { presentateur.presenter(route) }
-                    .accessibilityIdentifier("contrat-renvoi-web-action")
-            } else {
-                Text(LibellesWeb.SignatureOtp.signatureNonDisponible)
-                    .font(JoleneFont.callout)
-                    .foregroundStyle(JoleneColor.bubblegum)
-                    .accessibilityIdentifier("contrat-renvoi-web-indisponible")
+            switch zone {
+            case .otp(let presentation):
+                SignatureOtpView(model: model, presentation: presentation)
+            case let .renvoiWeb(message, route):
+                VStack(alignment: .leading, spacing: JoleneSpacing.md) {
+                    InlineNotice(message, tone: .info, identifier: "contrat-renvoi-web-message")
+                    if let presentateur = presentateurRenvoiWeb, let route {
+                        JoleneButton(LibellesWeb.Contrats.signerLeContrat) { presentateur.presenter(route) }
+                            .accessibilityIdentifier("contrat-renvoi-web-action")
+                    }
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("contrat-renvoi-web")
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("contrat-renvoi-web")
+        .accessibilityIdentifier("contrat-zone-signature")
     }
 
     private func carte<Contenu: View>(@ViewBuilder _ contenu: () -> Contenu) -> some View {

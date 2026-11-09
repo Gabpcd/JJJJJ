@@ -189,9 +189,10 @@ final class DemoSignatureContratTests: JoleneUITestCase {
         champ.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
         require("Le champ garde le focus clavier") { self.hasKeyboardFocus(champ) }
         champ.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 6))
+        // Champ vide : XCUITest rend alors le texte indicatif (« 6 chiffres ») comme valeur.
         require("Le champ du code est vide") {
             let valeur = (champ.value as? String) ?? ""
-            return !valeur.contains(where: \.isNumber)
+            return valeur.isEmpty || valeur == champ.placeholderValue
         }
     }
 

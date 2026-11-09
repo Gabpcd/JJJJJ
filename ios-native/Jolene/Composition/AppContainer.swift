@@ -106,8 +106,8 @@ final class AppContainer: ObservableObject {
     /// du processus, comme `JOLENE_FORCE_BAD_KEY`) fait échouer le premier chargement de l'Accueil
     /// (`DemoDashboardEchecGateway`) pour la recette de l'état d'erreur et de la reprise
     /// (`DemoAccueilTests.testAccueilErreurPuisReprise`) ; lot 2 T7 : `-JOLENE_DEMO_SCENARIO upload-incertain`
-    /// pose `DemoDocumentsGateway(scenario: .uploadIncertain)` (réponse perdue après application, `DemoDocumentsTests`).
-    /// Jamais compilé en Release.
+    /// pose `DemoDocumentsGateway(scenario: .uploadIncertain)` (réponse perdue après application, `DemoDocumentsTests`) ;
+    /// lot 2 T9b : `otp-expire` et `compte-test` posent `DemoContratsGateway(scenario:)`. Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         var gateways = DemoWorld.gateways()
         #if DEBUG
@@ -117,6 +117,12 @@ final class AppContainer: ObservableObject {
         let scenarioDocuments = ScenarioDocumentsDemo(arguments: arguments)
         if scenarioDocuments != .normal {
             gateways.documents = DemoDocumentsGateway(scenario: scenarioDocuments)
+        }
+        // Lot 2 T9b : `-JOLENE_DEMO_SCENARIO otp-expire` (tout code refusé `OTP_EXPIRE`) ou `compte-test` (compte TEST
+        // sans admission : renvoi web de la signature), `DemoSignatureContratTests`.
+        let scenarioContrats = ScenarioDemoContrats(arguments: arguments)
+        if scenarioContrats != .nominal {
+            gateways.contrats = DemoContratsGateway(scenario: scenarioContrats)
         }
         #endif
         return gateways

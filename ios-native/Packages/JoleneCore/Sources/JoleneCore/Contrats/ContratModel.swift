@@ -11,9 +11,13 @@ import Combine
 /// certificat si une partie a signé (erreur non bloquante) ; admission de recette pour un compte TEST (sans
 /// admission : renvoi web, décision 18). La session OTP est indexée sur (contrat, empreinte, original prêt).
 ///
-/// OTP : la session décide si une requête part (une seule à la fois, `SessionSignatureOtp`) ; la gateway relit
-/// avant d'annoncer une signature ; après une signature, le contrat et le certificat sont relus. Aucun renvoi
-/// automatique, aucune file.
+/// OTP : la session décide si une requête part (une seule à la fois, `SessionSignatureOtp`, epoch vérifié avant
+/// chaque requête) ; la gateway relit avant d'annoncer une signature ; le contrat et le certificat sont relus ici
+/// avant que la confirmation soit publiée (T9b), et aussi après un échec de transport, un délai épuisé ou un refus qui
+/// ferme la signature (`SignatureOtpPresentation.codesIndisponibles`), chaque relecture sous son propre délai : l'écran
+/// montre toujours l'état du serveur, jamais un succès supposé (revue fraîche de T8, mineurs 2 et 9). Aucun renvoi
+/// automatique, aucune file. Recette STAGING : capacité échue localement → renvoi web, actions suspendues pendant la
+/// relecture de l'admission (`actionsSuspendues`, l.761 ; mineur 8).
 @MainActor
 public final class ContratModel: ObservableObject {
     public enum Etat: Equatable, Sendable {
@@ -41,6 +45,9 @@ public final class ContratModel: ObservableObject {
     @Published public private(set) var sessionExpired = false
     /// Échec de la préparation du fichier à partager ou imprimer (T9a), `nil` sinon.
     @Published public private(set) var erreurPartage: String?
+    /// Relecture de l'admission de recette en cours après un envoi (`actionsSuspendues`, `ContratMission.tsx` l.761) :
+    /// formulaire conservé, aucune action (STAGING seulement).
+    @Published public private(set) var actionsSuspendues = false
 
     public let contratId: String
     private let controller: SessionController
@@ -59,15 +66,45 @@ public final class ContratModel: ObservableObject {
     /// Horloge des gateways (démo : horloge fixée), seule source du minuteur et du compte à rebours.
     public var horloge: ClockPort { ports?.clock ?? SystemClock() }
 
-    public var signature: DisponibiliteSignature {
-        guard let contrat, original != nil, ContratRules.zoneSignatureVisible(contrat) else { return .indisponible }
-        return contrat.estCompteTest && admission == nil ? .renvoiWeb : .possible
+    public var signature: DisponibiliteSignature { disponibiliteSignature(maintenant: horloge.now()) }
+
+    /// Disponibilité à l'instant donné : un compte TEST n'a l'OTP qu'avec une admission de recette non échue (le web
+    /// ferme la capacité à son échéance, `ContratMission.tsx` l.315-317, et bascule sur un autre mode ; décision 18 :
+    /// renvoi web), original contrôlé ou non ; un compte réel l'a dès que l'original est contrôlé.
+    public func disponibiliteSignature(maintenant: Date) -> DisponibiliteSignature {
+        guard let contrat, ContratRules.zoneSignatureVisible(contrat) else { return .indisponible }
+        if contrat.estCompteTest && !admissionOuverte(maintenant: maintenant) { return .renvoiWeb }
+        return original != nil ? .possible : .indisponible
     }
 
     /// `nouvelEnvoiAutorise` (`ContratMission.tsx` l.762) : compte réel, ou recette admise avec un envoi restant.
-    public var nouvelEnvoiAutorise: Bool {
+    public var nouvelEnvoiAutorise: Bool { nouvelEnvoiAutorise(maintenant: horloge.now()) }
+
+    public func nouvelEnvoiAutorise(maintenant: Date) -> Bool {
         guard let contrat else { return false }
-        return !contrat.estCompteTest || admission?.peutEnvoyer == true
+        return !contrat.estCompteTest || (admissionOuverte(maintenant: maintenant) && admission?.peutEnvoyer == true)
+    }
+
+    /// Zone « Votre signature » à afficher (`ContratMission.tsx` l.709) : `nil` quand le web la masque (CDD à préparer,
+    /// déjà signé, contrat complet, annulé ou expiré), sauf juste après une signature de cette session, dont la
+    /// confirmation relue reste affichée ; renvoi web pour un compte TEST sans admission ; sinon la signature OTP
+    /// (formulaire désactivé tant que l'original n'est pas contrôlé, comme `documentPret` du web).
+    public func zoneSignature(maintenant: Date) -> ZoneSignature? {
+        guard let contrat else { return nil }
+        let presentation = SignatureOtpPresentation(session: session, maintenant: maintenant,
+                                                    nouvelEnvoiAutorise: nouvelEnvoiAutorise(maintenant: maintenant),
+                                                    actionsSuspendues: actionsSuspendues)
+        if session.etape == .signe { return .otp(presentation) }
+        guard ContratRules.zoneSignatureVisible(contrat) else { return nil }
+        if disponibiliteSignature(maintenant: maintenant) == .renvoiWeb {
+            return .renvoiWeb(message: ZoneSignature.messageRenvoiWeb, route: ContratPresentation.renvoiSignature(contratId: contrat.id))
+        }
+        return .otp(presentation)
+    }
+
+    private func admissionOuverte(maintenant: Date) -> Bool {
+        guard let admission else { return false }
+        return admission.expireLe > maintenant
     }
 
     // MARK: - Chargement
@@ -146,9 +183,12 @@ public final class ContratModel: ObservableObject {
         session.saisir(texte)
     }
 
-    /// « Recevoir le code SMS pour signer » : une seule requête, réponse ignorée si la clé a changé entre-temps.
+    /// « Recevoir le code SMS pour signer » : une seule requête (epoch vérifié avant), réponse ignorée si la clé a
+    /// changé entre-temps ; un refus qui ferme la signature relit le contrat.
     public func envoyerCode() async {
-        guard let gateways = ports, let demande = session.demanderEnvoi(nouvelEnvoiAutorise: nouvelEnvoiAutorise) else { return }
+        guard let gateways = ports, !actionsSuspendues, await controller.epoch == snapshot.epoch,
+              let demande = session.demanderEnvoi(nouvelEnvoiAutorise: nouvelEnvoiAutorise(maintenant: gateways.clock.now()))
+        else { return }
         let port = gateways.contrats
         let context = snapshot.context
         do {
@@ -157,7 +197,12 @@ public final class ContratModel: ObservableObject {
             }
             guard await controller.epoch == snapshot.epoch else { return }
             session.terminerEnvoi(issue, demande: demande, maintenant: gateways.clock.now())
-            if case .envoye = issue, contrat?.estCompteTest == true { await relireAdmission(gateways) }
+            switch issue {
+            case .envoye:
+                if contrat?.estCompteTest == true { await relireAdmission(gateways) }
+            case .refuse(let code, _, _):
+                if let code, SignatureOtpPresentation.codesIndisponibles.contains(code) { await publierSiEpoch(relire(gateways)) }
+            }
         } catch {
             guard await controller.epoch == snapshot.epoch else { return }
             let erreur = Self.traduire(error)
@@ -166,10 +211,12 @@ public final class ContratModel: ObservableObject {
         }
     }
 
-    /// « Signer » : code de six chiffres et consentement exigés par la session ; succès relu par la gateway, puis
-    /// contrat et certificat relus ici.
+    /// « Signer » : code de six chiffres et consentement exigés par la session (epoch vérifié avant la requête) ; un
+    /// succès relu par la gateway n'est publié qu'avec le contrat et le certificat relus ici ; échec de transport, délai
+    /// épuisé ou refus qui ferme la signature : état du serveur relu (jamais un succès supposé, jamais un second envoi).
     public func signer() async {
-        guard let gateways = ports, let demande = session.demanderSignature(maintenant: gateways.clock.now()),
+        guard let gateways = ports, !actionsSuspendues, await controller.epoch == snapshot.epoch,
+              let demande = session.demanderSignature(maintenant: gateways.clock.now()),
               case .signature(let code) = demande.nature else { return }
         let port = gateways.contrats
         let context = snapshot.context
@@ -178,13 +225,25 @@ public final class ContratModel: ObservableObject {
                 try await port.signer(contratId: demande.contratId, code: code, empreinte: demande.empreinte, context: context)
             }
             guard await controller.epoch == snapshot.epoch else { return }
-            session.terminerSignature(issue, demande: demande)
-            if case .signee = issue { await relireApresSignature(gateways) }
+            switch issue {
+            case .signee:
+                let relu = await relire(gateways)
+                guard await controller.epoch == snapshot.epoch else { return }
+                publier(relu)
+                session.terminerSignature(issue, demande: demande)
+            case .refuse(let codeRefus, _, _):
+                session.terminerSignature(issue, demande: demande)
+                if let codeRefus, SignatureOtpPresentation.codesIndisponibles.contains(codeRefus) { await publierSiEpoch(relire(gateways)) }
+            }
         } catch {
             guard await controller.epoch == snapshot.epoch else { return }
             let erreur = Self.traduire(error)
             if erreur.kind == .unauthorized { sessionExpired = true }
             session.echouerSignature(message: erreur.kind == .cancelled ? nil : erreur.message, demande: demande)
+            // La signature a pu être appliquée malgré l'échec : l'écran montre l'état relu du serveur. Rien n'est relu
+            // avec une session expirée ni après une annulation (écran quitté).
+            guard erreur.kind != .unauthorized, erreur.kind != .cancelled else { return }
+            await publierSiEpoch(relire(gateways))
         }
     }
 
@@ -223,30 +282,58 @@ public final class ContratModel: ObservableObject {
 
     // MARK: - Relectures
 
-    private func relireApresSignature(_ gateways: Gateways) async {
+    /// État relu du serveur : contrat, puis certificat si une partie a signé.
+    private struct Relecture {
+        var contrat: ContratDetail?
+        var signatures: [SignatureCertificat]?
+        var erreurCertificat: String?
+    }
+
+    /// Relit le contrat et son certificat, chaque lecture sous son propre délai (best-effort : une lecture du contrat en
+    /// échec laisse l'état affiché inchangé ; un certificat illisible reste une erreur non bloquante).
+    private func relire(_ gateways: Gateways) async -> Relecture {
         let port = gateways.contrats
         let context = snapshot.context
         let id = contratId
         let delai = controller.resolutionTimeout
-        guard let relu = try? await bounded(timeout: delai, { try await port.contrat(id: id, context: context) }),
-              await controller.epoch == snapshot.epoch else { return }
-        contrat = relu
-        guard ContratRules.certificatVisible(relu) else { return }
+        guard let relu = try? await bounded(timeout: delai, { try await port.contrat(id: id, context: context) }) else {
+            return Relecture()
+        }
+        var resultat = Relecture(contrat: relu)
+        guard ContratRules.certificatVisible(relu) else { return resultat }
         do {
-            let lignes = try await bounded(timeout: delai) { try await port.certificat(contratId: id, context: context) }
-            guard await controller.epoch == snapshot.epoch else { return }
+            resultat.signatures = try await bounded(timeout: delai) { try await port.certificat(contratId: id, context: context) }
+        } catch {
+            resultat.erreurCertificat = Self.traduire(error).message
+        }
+        return resultat
+    }
+
+    /// Publie une relecture d'un seul tenant (contrat et certificat ensemble) si l'epoch n'a pas changé.
+    private func publierSiEpoch(_ relu: Relecture) async {
+        guard await controller.epoch == snapshot.epoch else { return }
+        publier(relu)
+    }
+
+    private func publier(_ relu: Relecture) {
+        guard let contratRelu = relu.contrat else { return }
+        contrat = contratRelu
+        if let lignes = relu.signatures {
             signatures = lignes
             erreurCertificat = nil
-        } catch {
-            erreurCertificat = Self.traduire(error).message
+        } else if let erreur = relu.erreurCertificat {
+            erreurCertificat = erreur
         }
     }
 
-    /// Admission relue après un envoi (`onOtpEnvoye` → `relireSmsRecette`, l.765) : budget et échéance du code.
+    /// Admission relue après un envoi (`onOtpEnvoye` → `relireSmsRecette`, l.765) : budget et échéance du code ; le
+    /// formulaire reste affiché, sans action possible, pendant la relecture (`actionsSuspendues`, l.761).
     private func relireAdmission(_ gateways: Gateways) async {
         let port = gateways.contrats
         let context = snapshot.context
         let id = contratId
+        actionsSuspendues = true
+        defer { actionsSuspendues = false }
         let recette = try? await bounded(timeout: controller.resolutionTimeout) {
             try await port.admissionRecette(contratId: id, context: context)
         }

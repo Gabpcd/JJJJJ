@@ -57,6 +57,8 @@ public struct SessionSignatureOtp: Equatable, Sendable {
 
     /// `OTP_DUREE_SEC` (l.28).
     public static let dureeOtpSecondes = 10 * 60
+    /// Refus du serveur qui constate l'échéance du code (`MESSAGES_ERREUR`, l.39).
+    static let codeOtpExpire = "OTP_EXPIRE"
 
     public private(set) var cle: CleSessionOtp
     public private(set) var etape: Etape = .idle
@@ -195,11 +197,18 @@ public struct SessionSignatureOtp: Equatable, Sendable {
         case .signee(let complet):
             etape = .signe
             contratComplet = complet
+            // Le code a servi : il ne survit pas à la signature (mémoire seulement, jamais au-delà de son usage).
+            code = ""
             retour = .succes(TextesWeb.SignatureOtp.confirmationSignature(contratComplet: complet))
         case .refuse(let code, let message, let restantes):
             appliquerRefus(code: code, message: message,
                            bloquant: code.map { TextesWeb.SignatureOtp.codesBloquants.contains($0) } ?? false)
             if let restantes { tentativesRestantes = restantes }
+            // `OTP_EXPIRE` : le serveur a constaté l'échéance (`otp_envoye_a` de plus de 10 min, preuve passée à
+            // `expire` par `fn_signer_contrat_otp`) ; il fait foi (décision 25) : le code est expiré ici aussi, quel que
+            // soit l'écart d'horloge (minuteur « Expiré », champ et « Signer » désactivés, « Recevoir un nouveau
+            // code », l.305, l.317, l.339, l.344). Un nouvel envoi repose une échéance de 10 min.
+            if code == Self.codeOtpExpire, etape == .otpEnvoye { echeanceOtp = .distantPast }
         }
     }
 
@@ -240,4 +249,46 @@ public struct SessionSignatureOtp: Equatable, Sendable {
             retour = .erreur(message)
         }
     }
+}
+
+// MARK: - Descriptions sans le code
+
+/// Le code saisi n'apparaît dans aucune description (journal, message d'assertion, `dump`) : seul son nombre de chiffres
+/// est montré. La valeur reste lisible par `code` et transmise au port par `DemandeOtp.Nature.signature(code:)`.
+extension SessionSignatureOtp: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    public var description: String {
+        "SessionSignatureOtp(contrat: \(cle.contratId), etape: \(etape.rawValue), accepte: \(accepte), chiffres: \(code.count))"
+    }
+
+    public var debugDescription: String { description }
+
+    public var customMirror: Mirror {
+        Mirror(self, children: [
+            "cle": cle, "etape": etape, "accepte": accepte, "chiffresSaisis": code.count,
+            "telephoneMasque": telephoneMasque as Any, "smsRestants": smsRestants as Any,
+            "tentativesRestantes": tentativesRestantes as Any, "echeanceOtp": echeanceOtp as Any, "retour": retour as Any,
+            "erreurBloquante": erreurBloquante as Any, "operationEnCours": operationEnCours,
+            "contratComplet": contratComplet as Any,
+        ], displayStyle: .struct)
+    }
+}
+
+extension DemandeOtp: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    public var description: String { "DemandeOtp(\(nature), contrat: \(contratId))" }
+    public var debugDescription: String { description }
+    public var customMirror: Mirror {
+        Mirror(self, children: ["nature": nature, "contratId": contratId, "empreinte": empreinte], displayStyle: .struct)
+    }
+}
+
+extension DemandeOtp.Nature: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    public var description: String {
+        switch self {
+        case .envoi: return "envoi"
+        case .signature(let code): return "signature(chiffres: \(code.count))"
+        }
+    }
+
+    public var debugDescription: String { description }
+    public var customMirror: Mirror { Mirror(self, children: [:], displayStyle: .enum) }
 }

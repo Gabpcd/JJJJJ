@@ -5,9 +5,24 @@ public enum ScenarioDemoContrats: Equatable, Sendable {
     case nominal
     /// Tout code saisi est refusé `OTP_EXPIRE` (`LOT2_PLAN.md` §2.8).
     case otpExpire
+    /// Le soignant démo est un compte TEST (`soignants.est_compte_test`), sans admission de recette (aucune en démo,
+    /// comme en production) : la signature est un renvoi web (décision 18, T9b).
+    case compteTest
+
+    public static let argument = "-JOLENE_DEMO_SCENARIO"
 
     public init(argument: String?) {
-        self = argument == "otp-expire" ? .otpExpire : .nominal
+        switch argument {
+        case "otp-expire": self = .otpExpire
+        case "compte-test": self = .compteTest
+        default: self = .nominal
+        }
+    }
+
+    /// Valeur qui suit `-JOLENE_DEMO_SCENARIO` ; celle d'un autre domaine (`scan-incertain`, `upload-incertain`) ou
+    /// absente : `.nominal`.
+    public init(arguments: [String]) {
+        self.init(argument: ArgumentsDemo.valeur(Self.argument, dans: arguments))
     }
 }
 
@@ -131,7 +146,7 @@ actor EtatDemoContrats {
         contrat.mission = f.missions.first { $0.id == missionId }
         let etablissements = (try? DemoFixtures.loadEtablissements().etablissements) ?? []
         contrat.etablissementNom = etablissements.first { $0.id == etablissementId }?.nom
-        contrat.estCompteTest = false
+        contrat.estCompteTest = scenario == .compteTest
         return contrat
     }
 
