@@ -55,6 +55,8 @@ const LOT3_CONSOMMEES = new Map([
   ['fn_mon_profil_soignant_complet', ['T9', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Profil/SupabaseProfilGateway.swift']],
   ['fn_modifier_mon_profil', ['T9', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Profil/SupabaseProfilGateway.swift']],
   ['fn_demarrer_inscription', ['T7', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Inscription/SupabaseInscriptionGateway.swift']],
+  ['fn_enregistrer_parcours_inscription', ['T8', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Inscription/SupabaseInscriptionGateway.swift']],
+  ['fn_types_exercice_autorises', ['T8', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Inscription/SupabaseInscriptionGateway.swift']],
   ['fn_rgpd_exporter_rate_limited', ['T11', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Compte/SupabaseExportGateway.swift']],
 ]);
 // Hors manifeste (capture du 2026-07-29) : classement manuel documentaire (correction 13).

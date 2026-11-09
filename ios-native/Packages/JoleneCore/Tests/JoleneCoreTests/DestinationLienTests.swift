@@ -23,9 +23,6 @@ final class DestinationLienTests: XCTestCase {
              "https://jolene.app/soignant/stripe-connect?success=true"),                                            // T14a
             ("https://jolene.app/soignant/stripe-connect?refresh=true", .stripeConnect(retour: .rafraichir),
              "https://jolene.app/soignant/stripe-connect?refresh=true"),                                            // T14a
-            ("https://jolene.app/inscription/completer?ref=ABCD-12#x",
-             .inscription(EtapeInscription(page: .completer, query: "ref=ABCD-12")),
-             "https://jolene.app/inscription/completer?ref=ABCD-12#x"),                                             // T8
             ("https://jolene.app/soignant/mes-gains?tab=paiements", .revenus(section: .paiementsAConfirmer),
              "https://jolene.app/soignant/mes-gains?tab=paiements"),                                                // T13
         ]
@@ -77,6 +74,9 @@ final class DestinationLienTests: XCTestCase {
             ("https://jolene.app/inscription/soignant?profession=IDE&ville=Lyon",
              .inscription(EtapeInscription(page: .soignant, query: "profession=IDE&ville=Lyon"))),                 // T7
             ("https://jolene.app/inscription/reprendre", .inscription(EtapeInscription(page: .reprendre, query: nil))), // T7
+            // T8 : `CompletionProfilScreen` dans l'aiguillage d'onboarding (hors espace, `BoiteLiensInscription`).
+            ("https://jolene.app/inscription/completer?ref=ABCD-12#x",
+             .inscription(EtapeInscription(page: .completer, query: "ref=ABCD-12"))),                               // T8
             // T7 (intégration du lot 3) : `ConfirmationInscriptionScreen`, présenté hors de l'espace par le coordinateur.
             ("https://jolene.app/inscription/confirmer?token_hash=h&type=signup",
              .confirmerInscription(credentials: .tokenHash(tokenHash: "h", otpType: "signup"))),                    // T7
@@ -427,7 +427,7 @@ final class DestinationLienTests: XCTestCase {
             (.parametresNotifications, true, "T6"),
             (.inscription(EtapeInscription(page: .soignant, query: nil)), true, "T7 : InscriptionRapideScreen, hors espace"),
             (.inscription(EtapeInscription(page: .reprendre, query: nil)), true, "T7 : OnboardingRootView, hors espace"),
-            (.inscription(EtapeInscription(page: .completer, query: nil)), false, "T8"),
+            (.inscription(EtapeInscription(page: .completer, query: nil)), true, "T8 : CompletionProfilScreen, hors espace"),
             (.profil, true, "T9 : ProfilEditionScreen"),
             (.revenus(section: .paiementsAConfirmer), false, "T13"),
             (.stripeConnect(retour: nil), false, "T14a"),

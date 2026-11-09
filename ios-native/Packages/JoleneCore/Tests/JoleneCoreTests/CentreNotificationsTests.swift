@@ -428,8 +428,7 @@ final class CentreNotificationsTests: XCTestCase {
         // l'espace (exclusion nommée de la garde ci-dessous).
         XCTAssertEqual(try cible("/inscription/confirmer?token_hash=h&type=signup"), .aucune)
         XCTAssertEqual(try cible("/inscription/soignant?profession=IDE"), .aucune)
-        XCTAssertEqual(try cible("/inscription/completer?ref=ABCD-12"),
-                       .web(.safari(URL(string: "https://jolene.app/inscription/completer?ref=ABCD-12")!)), "T8 non livrée")
+        XCTAssertEqual(try cible("/inscription/completer?ref=ABCD-12"), .aucune, "T8 : complétion hors espace")
         // Destination effective, jamais la route brute : factures et paiements restent des renvois web (D4, T13).
         XCTAssertEqual(try cible("/soignant/mes-gains?tab=factures"),
                        .web(.safari(URL(string: "https://jolene.app/soignant/mes-gains?tab=factures")!)))
@@ -558,7 +557,8 @@ final class CentreNotificationsTests: XCTestCase {
     /// action `.inscription`, `BoiteLiensInscription` lue par `RootView`) — un compte ouvert n'a pas d'inscription à
     /// faire.
     private static let sansCibleDansLEspace: Set<GenreRoute> = [.connexion, .confirmerInscription,
-                                                                .inscriptionSoignant, .inscriptionReprendre]
+                                                                .inscriptionSoignant, .inscriptionReprendre,
+                                                                .inscriptionCompleter] // T8 : complétion hors espace
 
     /// Garde « un gap connu reste verrouillé » (`CLAUDE.md`) : toute route dont l'écran natif est livré
     /// (`DestinationLien.ecranNatifLivre == true`), parmi la table des routes et toute la famille push des vecteurs

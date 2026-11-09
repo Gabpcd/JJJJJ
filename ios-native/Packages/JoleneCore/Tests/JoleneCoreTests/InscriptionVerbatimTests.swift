@@ -134,7 +134,7 @@ final class InscriptionVerbatimTests: XCTestCase {
                 verifiees += 1
             }
         }
-        XCTAssertEqual(verifiees, 44, "toutes les annotations sont relues (42 + 2)")
+        XCTAssertEqual(verifiees, 52, "toutes les annotations sont relues (42 + 2 de T7, + 8 refus serveur démo de T8)")
     }
 
     func testAucunTexteNouveauNiTutoiementNiMentionJuridiqueReformulee() {

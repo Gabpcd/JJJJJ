@@ -2,7 +2,8 @@ import XCTest
 @testable import JoleneCore
 
 /// Inscription du monde démo (lot 3, T7 ; blueprint §2.7) : aucun réseau, comptes en mémoire vive partagés avec la
-/// connexion démo, refus du serveur rejoués verbatim, complétion (T8) refusée explicitement.
+/// connexion démo, refus du serveur rejoués verbatim ; complétion (T8) : brouillon fusionné, référentiel du seed,
+/// `register-soignant` simulée (contrôles et messages verbatim) puis bascule vers l'espace `demo-soignant`.
 final class DemoInscriptionGatewayTests: XCTestCase {
     private let intention = InscriptionRules.intention(profession: "IDE", cgu: true)
 
@@ -128,29 +129,142 @@ final class DemoInscriptionGatewayTests: XCTestCase {
         XCTAssertNil(contexte?.intention)
     }
 
-    /// Verrou du gap T8 (`CLAUDE.md`, « un gap connu reste verrouillé ») : brouillon, modes d'exercice et finalisation
-    /// refusent explicitement dans les deux mondes tant que T8 n'est pas livrée.
-    func testCompletionRefuseeJusquATrancheT8() async {
+    // MARK: - Complétion (T8)
+
+    /// Ouvre le nouveau compte démo (lien de confirmation) et démarre son parcours soignant.
+    private func compteAvecParcours(refus: RefusInscriptionDemo? = nil,
+                                    profession: String = "IDE") async throws -> (DemoAuthGateway, DemoInscriptionGateway) {
+        let (auth, gateway) = monde(refus: refus)
+        _ = try await gateway.creerCompte(email: "nouveau@example.invalid", motDePasse: "motdepasse",
+                                          intention: InscriptionRules.intention(profession: profession, cgu: true))
+        _ = try await auth.signIn(email: "nouveau@example.invalid", password: "motdepasse")
+        _ = try await gateway.demarrer(intention: InscriptionRules.intention(profession: profession, cgu: true))
+        return (auth, gateway)
+    }
+
+    private static func formulaire(profession: String = "IDE", rpps: String = "") -> FormulaireInscription {
+        FormulaireInscription(prenom: "Léa", nom: "Martin", telephone: "0612345678", dateNaissance: "1990-05-14",
+                              profession: profession, typesContrat: ["CDD"], rpps: rpps)
+    }
+
+    func testCompletionLivreeDansLeMondeDemo() {
         let (_, gateway) = monde()
-        let attendu = UnwiredPorts.erreur(port: "complétion de l'inscription", tranche: "T8", lot: 3)
-        XCTAssertTrue(attendu.message.contains("T8 du lot 3"))
-        // Intégration du lot 3 (T7 × T9) : la complétion se déclare non livrée, l'édition du profil n'offre donc pas
-        // « Réessayer la vérification » des modes d'exercice ; T8 passe ce drapeau à `true` avec ses appels.
-        XCTAssertFalse(gateway.completionLivree)
-        let operations: [() async throws -> Void] = [
-            { _ = try await gateway.enregistrerBrouillon(FormulaireInscription(prenom: "Léa")) },
-            { _ = try await gateway.typesExercice(profession: "IDE") },
-            { _ = try await gateway.finaliser(FormulaireInscription(prenom: "Léa")) },
-        ]
-        for operation in operations {
-            do {
-                try await operation()
-                XCTFail("refus T8 attendu")
-            } catch let erreur as JoleneError {
-                XCTAssertEqual(erreur, attendu)
-            } catch {
-                XCTFail("erreur inattendue : \(error)")
-            }
+        XCTAssertTrue(gateway.completionLivree, "T8 : brouillon, modes d'exercice et finalisation servis")
+        XCTAssertTrue(DemoWorld.gateways().inscription.completionLivree)
+        XCTAssertFalse(UnwiredInscriptionPort().completionLivree, "le stub non câblé reste verrouillé")
+    }
+
+    func testBrouillonFusionneEtReluSansParcoursRefuse() async throws {
+        let (auth, sansParcours) = monde()
+        _ = try await sansParcours.creerCompte(email: "n@example.invalid", motDePasse: "motdepasse", intention: intention)
+        _ = try await auth.signIn(email: "n@example.invalid", password: "motdepasse")
+        do {
+            _ = try await sansParcours.enregistrerBrouillon(FormulaireInscription(prenom: "Léa"))
+            XCTFail("P0002 attendu sans parcours")
+        } catch let refus as RefusInscription {
+            XCTAssertEqual(refus, RefusInscription(code: "SQLSTATE_P0002", message: "Inscription introuvable."))
         }
+        let (_, gateway) = try await compteAvecParcours()
+        let premier = try await gateway.enregistrerBrouillon(FormulaireInscription(prenom: "Léa", typesContrat: ["CDD"], rayon: 25))
+        XCTAssertEqual(premier.brouillon.prenom, "Léa")
+        XCTAssertEqual(premier.brouillon.profession, "IDE", "profession du parcours conservée")
+        let second = try await gateway.enregistrerBrouillon(FormulaireInscription(nom: "Martin", typesContrat: ["CDD", "LIBERAL"]))
+        XCTAssertEqual(second.brouillon.prenom, "Léa", "fusion de premier niveau : une clé absente est conservée")
+        XCTAssertEqual(second.brouillon.nom, "Martin")
+        XCTAssertEqual(second.brouillon.rayon, 25)
+        XCTAssertEqual(second.brouillon.typesContrat, ["CDD", "LIBERAL"])
+        let relu = try await gateway.parcours(userId: DemoInscriptionGateway.nouveauSoignantId)
+        XCTAssertEqual(relu, second, "brouillon relu par la lecture du parcours")
+    }
+
+    func testReferentielDuSeedPourToutesLesIdentites() async throws {
+        let (auth, gateway) = monde()
+        _ = try await auth.signIn(email: DemoWorld.context.email ?? "", password: "x")
+        let ide = try await gateway.typesExercice(profession: "IDE")
+        XCTAssertEqual(ide, ["SALARIE", "LIBERAL", "MIXTE"], "référentiel public : servi aussi à l'espace démo (édition du profil)")
+        let aideSoignant = try await gateway.typesExercice(profession: "AS")
+        XCTAssertEqual(aideSoignant, ["SALARIE"])
+        let inconnue = try await gateway.typesExercice(profession: "PILOTE")
+        XCTAssertEqual(inconnue, ["SALARIE", "LIBERAL", "MIXTE"], "défaut serveur `COALESCE` d'une profession absente")
+        let (_, indisponible) = monde(refus: .referentielIndisponible)
+        do {
+            _ = try await indisponible.typesExercice(profession: "IDE")
+            XCTFail("référentiel indisponible attendu")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur.kind, .network)
+        }
+    }
+
+    func testFinalisationBasculeVersLEspaceDemoApresRelecture() async throws {
+        let (auth, gateway) = try await compteAvecParcours()
+        let resultat = try await gateway.finaliser(Self.formulaire())
+        XCTAssertEqual(resultat, .finalisee(soignantId: DemoWorld.context.userId))
+        let restaure = try await auth.restoreSession()
+        XCTAssertEqual(restaure, DemoWorld.user, "session relue : espace `demo-soignant` (blueprint §2.7)")
+        do {
+            _ = try await gateway.parcours(userId: DemoInscriptionGateway.nouveauSoignantId)
+            XCTFail("le nouveau compte a disparu au profit de l'espace démo")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur.kind, .demoOnly)
+        }
+    }
+
+    func testFinalisationRefuseeCommeRegisterSoignantAvecSesMessagesVerbatim() async throws {
+        let cas: [(RefusInscriptionDemo?, String, FormulaireInscription, ResultatFinalisation)] = [
+            (.mineur, "IDE", Self.formulaire(),
+             .refusee(code: "UNDERAGE", message: "Vous devez avoir au moins 18 ans pour vous inscrire.")),
+            (.rppsDejaEnregistre, "IDE", Self.formulaire(),
+             .refusee(code: "RPPS_ALREADY_REGISTERED",
+                      message: "Ce numéro RPPS est déjà associé à un compte Jolene. Connectez-vous à ce compte, ou contactez le support si ce n'est pas vous.")),
+            (.finalisationEnAttente, "IDE", Self.formulaire(),
+             .finalisationEnAttente(message: "Votre profil est enregistré. Reconnectez-vous pour reprendre votre espace.")),
+            (nil, "MEDECIN", Self.formulaire(profession: "MEDECIN"),
+             .refusee(code: "RPPS_FORMAT_INVALID", message: "Le numéro RPPS est obligatoire pour votre profession (11 chiffres).")),
+            (nil, "IDE", Self.formulaire(rpps: "123"),
+             .refusee(code: "RPPS_FORMAT_INVALID", message: "Numéro RPPS invalide (11 chiffres attendus).")),
+            (nil, "IDE", FormulaireInscription(prenom: "", nom: "Martin", dateNaissance: "1990-05-14", profession: "IDE"),
+             .refusee(code: "MISSING_REQUIRED_FIELDS", message: "Champs obligatoires manquants (prénom, nom, profession).")),
+            (nil, "IDE", FormulaireInscription(prenom: "Léa", nom: "Martin", dateNaissance: "", profession: "IDE"),
+             .refusee(code: "MISSING_REQUIRED_FIELDS", message: "Date de naissance requise.")),
+        ]
+        for (refus, profession, formulaire, attendu) in cas {
+            let (auth, gateway) = try await compteAvecParcours(refus: refus, profession: profession)
+            let resultat = try await gateway.finaliser(formulaire)
+            XCTAssertEqual(resultat, attendu, "\(refus?.rawValue ?? "contrôle serveur")")
+            let restaure = try await auth.restoreSession()
+            XCTAssertEqual(restaure?.id, DemoInscriptionGateway.nouveauSoignantId, "refus : aucune bascule")
+        }
+    }
+
+    func testArgumentsDeLancementDesRefusDeLaCompletion() {
+        for refus in [RefusInscriptionDemo.mineur, .rppsDejaEnregistre, .finalisationEnAttente, .referentielIndisponible] {
+            XCTAssertEqual(RefusInscriptionDemo(arguments: [RefusInscriptionDemo.argument, refus.rawValue]), refus)
+        }
+    }
+
+    func testRefusDeLaCompletionSansEffetSurLaCreationDuCompte() async throws {
+        for refus in [RefusInscriptionDemo.mineur, .rppsDejaEnregistre, .finalisationEnAttente, .referentielIndisponible] {
+            let (_, gateway) = monde(refus: refus)
+            let resultat = try await gateway.creerCompte(email: "a@b.c", motDePasse: "motdepasse", intention: intention)
+            XCTAssertEqual(resultat, .confirmationEnvoyee, refus.rawValue)
+        }
+    }
+
+    func testVarianteDeBrouillonSimuleUneRepriseSansModeCoche() async throws {
+        XCTAssertEqual(VarianteBrouillonDemo(rawValue: "complet"), .complet)
+        XCTAssertEqual(VarianteBrouillonDemo.variableEnvironnement, "JOLENE_DEMO_BROUILLON")
+        let auth = DemoAuthGateway()
+        let gateway = DemoInscriptionGateway(auth: auth, brouillon: .complet)
+        _ = try await gateway.confirmer(.tokenHash(tokenHash: DemoInscriptionGateway.tokenHashDemo, otpType: "signup"))
+        let parcours = try await gateway.demarrer(intention: InscriptionRules.intention(profession: "IDE", cgu: true))
+        let brouillon = parcours.brouillon
+        XCTAssertEqual(brouillon.profession, "IDE", "profession de l'intention, figée")
+        XCTAssertEqual([brouillon.prenom, brouillon.nom], ["Camille", "Démo"])
+        XCTAssertTrue(CompletionRules.telephoneValide(brouillon.telephone ?? ""))
+        XCTAssertTrue(CompletionRules.majeur(dateNaissance: brouillon.dateNaissance, maintenant: DemoWorld.fixedNow))
+        XCTAssertEqual(brouillon.typesContrat, [], "aucun mode coché : le choix reste à l'utilisateur")
+        XCTAssertNil(brouillon.rpps)
+        let sansVariante = try await DemoInscriptionGateway(auth: DemoAuthGateway()).typesExercice(profession: "AS")
+        XCTAssertEqual(sansVariante, ["SALARIE"])
     }
 }

@@ -346,27 +346,261 @@ final class SupabaseInscriptionGatewayTests: XCTestCase {
 
     // MARK: - Complétion (T8)
 
-    func testCompletionRefuseeJusquATrancheT8() async {
-        let attendu = UnwiredPorts.erreur(port: "complétion de l'inscription", tranche: "T8", lot: 3)
-        let g = gateway()
-        // Intégration du lot 3 (T7 × T9) : complétion déclarée non livrée (édition du profil sans « Réessayer la
-        // vérification » des modes) ; T8 passe ce drapeau à `true` avec ses appels.
-        XCTAssertFalse(g.completionLivree)
-        let operations: [() async throws -> Void] = [
-            { _ = try await g.enregistrerBrouillon(FormulaireInscription(prenom: "Léa")) },
-            { _ = try await g.typesExercice(profession: "IDE") },
-            { _ = try await g.finaliser(FormulaireInscription(prenom: "Léa")) },
+    private let brouillonRPC = "/rest/v1/rpc/fn_enregistrer_parcours_inscription"
+    private let typesRPC = "/rest/v1/rpc/fn_types_exercice_autorises"
+    private let edge = "/functions/v1/register-soignant"
+
+    private static let formulaire = FormulaireInscription(prenom: "Léa", nom: "Martin", telephone: "", dateNaissance: "1990-05-14",
+                                                          profession: "IDE", typesContrat: ["CDD", "LIBERAL"], rpps: "", rayon: nil)
+
+    /// Ligne `parcours_inscription` relue après la fusion du brouillon.
+    private func ligneBrouillon(userId: String = TestClient.userId) -> String {
+        """
+        {"user_id":"\(userId)","type_compte":"SOIGNANT",
+         "donnees":{"profession":"IDE","prenom":"Léa","nom":"Martin","telephone":"","dateNaissance":"1990-05-14","typesContrat":["CDD","LIBERAL"],"rpps":""},
+         "consentement_cgu_le":"2026-11-02T10:00:00+00:00","consentement_cgv_le":null,
+         "cree_le":"2026-11-02T10:00:00+00:00","modifie_le":"2026-11-09T10:00:00+00:00"}
+        """
+    }
+
+    /// Réponse d'erreur partagée des edges (`_shared/errors.ts` l.34-46 : `error` miroir de `message`).
+    private func erreurEdge(_ statut: Int, _ code: String, _ message: String) -> StubResponse {
+        .json(statut, #"{"ok":false,"code":"\#(code)","message":"\#(message)","error":"\#(message)"}"#)
+    }
+
+    private func stubRefresh(_ reponse: StubResponse) {
+        registry.add("POST", token, where: { $0.query("grant_type") == "refresh_token" }, respond: reponse)
+    }
+
+    private func appelsRefresh() -> [RecordedRequest] {
+        registry.requests(to: token).filter { $0.query("grant_type") == "refresh_token" }
+    }
+
+    func testNomsDuContratDeLaCompletion() {
+        XCTAssertEqual(SupabaseInscriptionGateway.brouillonRPC, "fn_enregistrer_parcours_inscription")
+        XCTAssertEqual(SupabaseInscriptionGateway.typesExerciceRPC, "fn_types_exercice_autorises")
+        XCTAssertEqual(SupabaseInscriptionGateway.finalisationEdge, "register-soignant")
+        XCTAssertEqual(SupabaseInscriptionGateway.exceptionsBrouillon, ["22023", "P0002"])
+        // Intégration du lot 3 (T7 × T9) : T8 livre la complétion, « Réessayer la vérification » des modes d'exercice
+        // devient effectif dans l'édition du profil.
+        XCTAssertTrue(gateway().completionLivree)
+    }
+
+    func testBrouillonEnvoieLaListeBlancheEtRelitLaLigne() async throws {
+        let client = try await connecte()
+        registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon()))
+        let parcours = try await gateway(client).enregistrerBrouillon(Self.formulaire)
+        XCTAssertEqual(parcours.userId, TestClient.userId)
+        XCTAssertEqual(parcours.brouillon.prenom, "Léa")
+        XCTAssertEqual(parcours.brouillon.typesContrat, ["CDD", "LIBERAL"])
+        XCTAssertEqual(parcours.modifieLe, "2026-11-09T10:00:00+00:00")
+        let corps = try self.corps(brouillonRPC)
+        XCTAssertEqual(corps.allKeys as? [String], ["p_donnees"])
+        let donnees = try XCTUnwrap(corps["p_donnees"] as? NSDictionary)
+        XCTAssertEqual(Set(donnees.allKeys as? [String] ?? []), ["prenom", "nom", "telephone", "dateNaissance", "typesContrat", "rpps"])
+        XCTAssertTrue(Set(donnees.allKeys as? [String] ?? []).isSubset(of: CompletionRules.clesBrouillon))
+        XCTAssertNil(donnees["profession"], "profession figée : jamais réécrite")
+        XCTAssertNil(donnees["email"])
+        XCTAssertEqual(donnees["typesContrat"] as? [String], ["CDD", "LIBERAL"])
+        XCTAssertEqual(registry.requests(to: brouillonRPC).count, 1)
+    }
+
+    func testExceptionsDuBrouillonRestitueesAvantLeMapping() async throws {
+        let client = try await connecte()
+        let cas: [(String, String, String)] = [
+            (#"{"code":"22023","message":"Champ non autorisé dans le brouillon.","details":null,"hint":null}"#,
+             "SQLSTATE_22023", "Champ non autorisé dans le brouillon."),
+            (#"{"code":"P0002","message":"Inscription introuvable.","details":null,"hint":null}"#,
+             "SQLSTATE_P0002", "Inscription introuvable."),
         ]
-        for operation in operations {
+        for (corps, code, message) in cas {
+            registry.reset()
+            registry.add("POST", brouillonRPC, respond: .json(400, corps))
             do {
-                try await operation()
-                XCTFail("refus T8 attendu")
-            } catch let erreur as JoleneError {
-                XCTAssertEqual(erreur, attendu)
+                _ = try await gateway(client).enregistrerBrouillon(Self.formulaire)
+                XCTFail("refus attendu")
+            } catch let refus as RefusInscription {
+                XCTAssertEqual(refus, RefusInscription(code: code, message: message), "message serveur verbatim")
             } catch {
-                XCTFail("erreur inattendue : \(error)")
+                XCTFail("exception non restituée : \(error)")
+            }
+            XCTAssertEqual(registry.requests(to: brouillonRPC).count, 1)
+        }
+        registry.reset()
+        registry.add("POST", brouillonRPC, respond: .json(403, #"{"code":"42501","message":"Session invalide.","details":null,"hint":null}"#))
+        do {
+            _ = try await gateway(client).enregistrerBrouillon(Self.formulaire)
+            XCTFail("session expirée attendue")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur.kind, .unauthorized)
+        }
+    }
+
+    func testBrouillonDUnAutreUtilisateurOuSansSessionRefuse() async throws {
+        let client = try await connecte()
+        registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon(userId: "autre")))
+        do {
+            _ = try await gateway(client).enregistrerBrouillon(Self.formulaire)
+            XCTFail("ligne d'un autre utilisateur : contrat attendu")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur.kind, .contract)
+        }
+        registry.reset()
+        do {
+            _ = try await gateway().enregistrerBrouillon(Self.formulaire)
+            XCTFail("session absente : refus attendu")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur, JoleneError(.unauthorized, CompletionTextes.sessionAbsente))
+        }
+        XCTAssertTrue(registry.requests.isEmpty, "aucun appel sans session")
+    }
+
+    func testReferentielDesModesTableauDeChainesSinonIndisponible() async throws {
+        let client = try await connecte()
+        registry.add("POST", typesRPC, respond: .json(200, #"["SALARIE"]"#))
+        let types = try await gateway(client).typesExercice(profession: "AS")
+        XCTAssertEqual(types, ["SALARIE"])
+        let corps = try self.corps(typesRPC)
+        XCTAssertEqual(corps, ["p_profession": "AS"] as NSDictionary)
+        let requete = try XCTUnwrap(registry.requests(to: typesRPC).first)
+        XCTAssertEqual(requete.header("Authorization"), "Bearer \(try XCTUnwrap(client.auth.currentSession?.accessToken))",
+                       "appelé avec le JWT de la session d'inscription, jamais en anonyme")
+        for illisible in [#"{"error":"x"}"#, #"[1,"LIBERAL"]"#, #""SALARIE""#, "null"] {
+            registry.reset()
+            registry.add("POST", typesRPC, respond: .json(200, illisible))
+            let lu = try await gateway(client).typesExercice(profession: "IDE")
+            XCTAssertNil(lu, "\(illisible) : référentiel indisponible, jamais supposé")
+        }
+        registry.reset()
+        registry.add("POST", typesRPC, respond: .networkFailure())
+        do {
+            _ = try await gateway(client).typesExercice(profession: "IDE")
+            XCTFail("erreur de transport attendue")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur.kind, .network)
+        }
+    }
+
+    func testFinalisationBrouillonPuisRegisterSoignantPuisRafraichissement() async throws {
+        let client = try await connecte()
+        let jeton = try XCTUnwrap(client.auth.currentSession?.accessToken)
+        registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon()))
+        registry.add("POST", edge, respond: .json(200, #"{"ok":true,"success":true,"soignant_id":"\#(TestClient.userId)"}"#))
+        stubRefresh(.json(200, TestClient.sessionJSON(role: "SOIGNANT")))
+        let resultat = try await gateway(client).finaliser(Self.formulaire)
+        XCTAssertEqual(resultat, .finalisee(soignantId: TestClient.userId))
+        XCTAssertEqual(registry.requests.map(\.path), [token, brouillonRPC, edge, token],
+                       "connexion du test, brouillon, register-soignant, puis refreshSession")
+        let appel = try XCTUnwrap(registry.requests(to: edge).first)
+        XCTAssertEqual(appel.method, "POST")
+        XCTAssertEqual(appel.header("Authorization"), "Bearer \(jeton)", "Bearer de la session, jamais la clé publishable")
+        let corps = try XCTUnwrap(appel.bodyJSON as? NSDictionary)
+        XCTAssertEqual(Set(corps.allKeys as? [String] ?? []),
+                       ["prenom", "nom", "telephone", "dateNaissance", "profession", "typesContrat", "rpps"])
+        XCTAssertEqual(corps["profession"] as? String, "IDE")
+        XCTAssertTrue(corps["telephone"] is NSNull, "`form.telephone || null`")
+        XCTAssertTrue(corps["rpps"] is NSNull, "`form.rpps || null`")
+        XCTAssertNil(corps["est_etudiant"], "parcours étudiant en renvoi web (D11)")
+        XCTAssertNil(corps["rayon"], "aucun rayon par défaut côté app (serveur : 30 km)")
+        XCTAssertEqual(appelsRefresh().count, 1)
+        XCTAssertTrue(registry.unmatched.isEmpty)
+    }
+
+    func testChaqueRefusDeRegisterSoignantRendSonMessageVerbatimSansRafraichissement() async throws {
+        let client = try await connecte()
+        let cas: [(Int, String, String)] = [
+            (400, "UNDERAGE", "Vous devez avoir au moins 18 ans pour vous inscrire."),
+            (400, "RPPS_FORMAT_INVALID", "Le numéro RPPS est obligatoire pour votre profession (11 chiffres)."),
+            (400, "RPPS_TRAITS_MISMATCH", "Les informations saisies (nom, prénom) ne correspondent pas au numéro RPPS."),
+            (409, "RPPS_ALREADY_REGISTERED", "Ce numéro RPPS est déjà associé à un compte Jolene. Connectez-vous à ce compte, ou contactez le support si ce n'est pas vous."),
+            (409, "ACCOUNT_ALREADY_REGISTERED", "Ce compte soignant existe déjà. Connectez-vous pour continuer."),
+            (429, "RATE_LIMITED", "Trop de tentatives. Réessayez dans quelques minutes."),
+            (503, "ACCOUNT_RESERVATION_UNAVAILABLE", "Inscription momentanément indisponible. Réessayez dans quelques minutes."),
+            (500, "INTERNAL_ERROR", "Erreur serveur. Notre équipe a été notifiée. Réessayez dans quelques minutes."),
+        ]
+        for (statut, code, message) in cas {
+            registry.reset()
+            registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon()))
+            registry.add("POST", edge, respond: erreurEdge(statut, code, message))
+            let resultat = try await gateway(client).finaliser(Self.formulaire)
+            XCTAssertEqual(resultat, .refusee(code: code, message: message), "\(statut) \(code)")
+            XCTAssertEqual(registry.requests(to: edge).count, 1, "aucun renvoi")
+            XCTAssertTrue(appelsRefresh().isEmpty, "refus : aucune session rafraîchie")
+        }
+        // Corps illisible (page de passerelle) : repli du web l.224, aucun code.
+        registry.reset()
+        registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon()))
+        registry.add("POST", edge, respond: .json(502, "<html>Bad gateway</html>"))
+        let illisible = try await gateway(client).finaliser(Self.formulaire)
+        XCTAssertEqual(illisible, .refusee(code: nil, message: CompletionTextes.saisieConservee))
+    }
+
+    func testFinalisationEnAttenteDemandeLaDeconnexionLocale() async throws {
+        let client = try await connecte()
+        registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon()))
+        registry.add("POST", edge, respond: erreurEdge(503, "ACCOUNT_FINALIZATION_PENDING",
+                                                       "Votre profil est enregistré. Reconnectez-vous pour reprendre votre espace."))
+        let resultat = try await gateway(client).finaliser(Self.formulaire)
+        XCTAssertEqual(resultat, .finalisationEnAttente(message: "Votre profil est enregistré. Reconnectez-vous pour reprendre votre espace."))
+        XCTAssertTrue(appelsRefresh().isEmpty)
+    }
+
+    func testSessionRefuseeParLEdgeEstUneSessionExpiree() async throws {
+        let client = try await connecte()
+        for (code, message) in [("INVALID_TOKEN", "Session invalide. Reconnectez-vous et réessayez."),
+                                ("ACCOUNT_AUTH_INACTIVE", "Ce compte est déjà associé à un autre espace Jolene. Utilisez une autre adresse ou contactez le support.")] {
+            registry.reset()
+            registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon()))
+            registry.add("POST", edge, respond: erreurEdge(401, code, message))
+            do {
+                _ = try await gateway(client).finaliser(Self.formulaire)
+                XCTFail("401 : session expirée attendue")
+            } catch let erreur as JoleneError {
+                XCTAssertEqual(erreur.kind, .unauthorized, code)
             }
         }
-        XCTAssertTrue(registry.requests.isEmpty)
+    }
+
+    func testSucces2xxSansDrapeauOuSansIdentifiantEstUneErreurDeContrat() async throws {
+        let client = try await connecte()
+        for corps in ["{}", #"{"success":true}"#, #"{"ok":true,"soignant_id":""}"#, "[]"] {
+            registry.reset()
+            registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon()))
+            registry.add("POST", edge, respond: .json(200, corps))
+            do {
+                let resultat = try await gateway(client).finaliser(Self.formulaire)
+                if corps == "[]" {
+                    XCTAssertEqual(resultat, .refusee(code: nil, message: CompletionTextes.saisieConservee), "corps non objet : refus")
+                } else {
+                    XCTFail("\(corps) : jamais un succès fabriqué (\(resultat))")
+                }
+            } catch let erreur as JoleneError {
+                XCTAssertEqual(erreur.kind, .contract, corps)
+            }
+            XCTAssertTrue(appelsRefresh().isEmpty, corps)
+        }
+    }
+
+    func testRafraichissementRefuseApresLeProfilCreeImposeLaReconnexion() async throws {
+        let client = try await connecte()
+        registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon()))
+        registry.add("POST", edge, respond: .json(200, #"{"ok":true,"success":true,"soignant_id":"\#(TestClient.userId)"}"#))
+        stubRefresh(goTrue(400, "refresh_token_not_found", "Invalid Refresh Token: Refresh Token Not Found"))
+        let resultat = try await gateway(client).finaliser(Self.formulaire)
+        XCTAssertEqual(resultat, .finalisationEnAttente(message: CompletionTextes.profilEnregistreReconnecter),
+                       "« Votre profil est enregistré. Reconnectez-vous pour ouvrir votre espace. » (web l.236)")
+        XCTAssertEqual(appelsRefresh().count, 1)
+    }
+
+    func testBrouillonRefuseInterromptLaFinalisationSansAppelerLEdge() async throws {
+        let client = try await connecte()
+        registry.add("POST", brouillonRPC, respond: .json(400, #"{"code":"P0002","message":"Inscription introuvable.","details":null,"hint":null}"#))
+        do {
+            _ = try await gateway(client).finaliser(Self.formulaire)
+            XCTFail("refus du brouillon attendu")
+        } catch let refus as RefusInscription {
+            XCTAssertEqual(refus.message, "Inscription introuvable.")
+        }
+        XCTAssertTrue(registry.requests(to: edge).isEmpty, "finaliserProfil : brouillon d'abord, edge jamais appelée après un refus")
     }
 }

@@ -3,7 +3,8 @@ import XCTest
 /// Inscription soignant en démo (lot 3, T7) : écran de connexion → « Créer un compte soignant » → compte rapide
 /// (`InscriptionRapide.tsx`, textes verbatim, consentement aux CGU et à la politique de confidentialité) → lien de
 /// confirmation envoyé → « J’ai confirmé mon email » → aiguillage d'onboarding (parcours démarré par
-/// `fn_demarrer_inscription` simulé) → complétion en attente (T8). Aucune requête réseau (`DemoInscriptionGateway`).
+/// `fn_demarrer_inscription` simulé) → complétion du profil (T8, `DemoCompletionInscriptionTests`). Aucune requête
+/// réseau (`DemoInscriptionGateway`).
 ///
 /// Ce que ces tests prouvent (niveau 2), et seulement cela :
 /// - la saisie refusée affiche les quatre messages du web sous leurs champs, sans appel ;
@@ -54,7 +55,7 @@ final class DemoInscriptionTests: JoleneUITestCase {
         record("\(proofPrefix)-inscription-erreurs")
     }
 
-    func testCreationPuisConfirmationOuvreLAiguillageEtLaCompletionEnAttente() throws {
+    func testCreationPuisConfirmationOuvreLAiguillageEtLaCompletion() throws {
         launchDemo()
         let scroll = ouvrirInscription()
         remplir(scroll, email: Self.nouvelEmail)
@@ -72,14 +73,20 @@ final class DemoInscriptionTests: JoleneUITestCase {
         record("\(proofPrefix)-inscription-confirmation")
 
         tap("inscription-submit")
-        let completion = element("onboarding-completion")
-        require("L'aiguillage ouvre la complétion en attente (parcours soignant démarré)", timeout: 30) {
+        // T8 (règle 8) : l'écran bloquant provisoire `onboarding-completion` est remplacé par la complétion du profil.
+        let completion = element("completion-screen")
+        require("L'aiguillage ouvre la complétion du profil (parcours soignant démarré)", timeout: 30) {
             self.containerVisible(completion)
         }
+        let profession = element("completion-profession")
+        scrollTo(profession, in: completion)
+        XCTAssertTrue(profession.label.contains(Self.professionIDE), "profession du formulaire, figée : \(profession.label)")
         XCTAssertFalse(tabBarExists, "jamais l'espace soignant sans profil (D9)")
         XCTAssertFalse(element("access-blocked").exists, "l'écran bloquant du lot 0 n'est plus affiché pour l'inscription")
         record("\(proofPrefix)-inscription-onboarding")
 
+        let deconnexion = element("logout-button")
+        scrollTo(deconnexion, in: completion)
         tap("logout-button")
         require("La déconnexion ramène à la connexion", timeout: 15) { self.visible(self.element("login-scroll")) }
     }

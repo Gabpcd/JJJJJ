@@ -101,18 +101,20 @@ final class DemoProfilTests: JoleneUITestCase {
         record("\(proofPrefix)-profil-prenom-vide")
     }
 
-    func testTypeDExerciceEnRenvoiEtModesSansReferentiel() throws {
+    /// T8 (liste de contrôle de T9, `DECISIONS_LOT3.md`) : le référentiel est câblé ; l'assertion « référentiel non
+    /// câblé » est remplacée par les modes autorisés (seed `regles_exercice_profession` : IDE salarié, libéral, mixte).
+    func testTypeDExerciceEnRenvoiEtModesAutorisesParLeReferentiel() throws {
         launchDemo()
         signInDemo()
         ouvrirProfil()
         let ecran = element("profil-screen")
-        let indisponible = element("profil-modes-indisponible")
-        scrollTo(indisponible, in: ecran)
-        XCTAssertEqual(indisponible.label, Self.indisponible, "texte verbatim web (ChoixModesExercice.tsx l.43)")
-        XCTAssertFalse(element("profil-modes-reessayer").exists,
-                       "référentiel non câblé (T8) : aucun « Réessayer la vérification » sans effet")
-        XCTAssertTrue(element("profil-mode-salarie").exists, "le mode salarié reste accessible")
-        XCTAssertTrue(element("profil-mode-liberal").exists, "le libéral coché du profil démo reste visible")
+        let salarie = element("profil-mode-salarie")
+        scrollTo(salarie, in: ecran)
+        require("Le référentiel est lu : le libéral est proposé à l'IDE") { self.element("profil-mode-liberal").exists }
+        XCTAssertTrue(salarie.exists, "le mode salarié est proposé")
+        XCTAssertFalse(element("profil-modes-indisponible").exists, "référentiel lu : aucune indisponibilité")
+        XCTAssertFalse(element("profil-modes-reessayer").exists, "aucune nouvelle vérification à proposer")
+        XCTAssertFalse(element("profil-modes-liberal-non-propose").exists, "libéral autorisé pour IDE")
 
         let exercice = element("profil-exercice-web")
         scrollTo(exercice, in: ecran)
