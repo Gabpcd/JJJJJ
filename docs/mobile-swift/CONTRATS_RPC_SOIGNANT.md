@@ -1021,8 +1021,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_enregistrer_parcours_inscription"("p_don
   `scolariteAnnee`, `siret`, `finess`, `type`, `rue`, `ville`, `codePostal`, `departement`, `emailContact`,
   `telephoneContact`, `numeroLicence`, `missionProfession`, `missionVille`, `missionDate`, `missionDebut`,
   `missionFin`, `missionChoisie`, `brouillonMission`, `missionFormulaire`. Clés soignant envoyées par le natif :
-  `prenom`, `nom`, `telephone`, `dateNaissance`, `typesContrat`, `rpps`, `rayon` ; `estSalarieEtablissement` n'est
-  qu'un affichage côté web, jamais transmis à `register-soignant` (correction 21).
+  `prenom`, `nom`, `telephone`, `dateNaissance`, `typesContrat`, `rpps`, `rayon`, `estSalarieEtablissement` (réponse
+  « salarié(e) » enregistrée et restaurée comme le web, jamais transmise à `register-soignant`, correction 21 ; revue B8
+  de T8, m4). `estEtudiant`, `scolariteFormation`, `scolariteAnnee` : lues seulement, jamais écrites par le natif ; un
+  brouillon `estEtudiant: true` n'est jamais finalisé en natif (D11, revue B8 de T8, B1).
 - **Preuve STAGING** : brouillon relu dans `parcours_inscription.donnees` pendant la complétion (T16).
 
 ## fn_types_exercice_autorises
@@ -1370,7 +1372,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_paiements_escrow"() RETURNS "jsonb"
   `index.ts`, `_shared/errors.ts` et `_shared/attribution.ts` identiques au dépôt. Corps envoyé : `CompletionRules.corpsFinalisation`
   (ni `lat`/`lng`, ni `est_etudiant`/`etudiant_details`, ni `navigateur`, ni `attribution`) ; 200 exige `success` ou `ok`
   vrai et un `soignant_id` (sinon erreur de contrat, jamais un succès) ; 503 `ACCOUNT_FINALIZATION_PENDING` et échec du
-  `refreshSession()` → déconnexion locale et message ; 401 → session expirée ; autres refus → `message` verbatim. Pas une RPC :
+  `refreshSession()` → déconnexion locale et message ; 401 → session expirée ; (revue B8 de T8) brouillon relu déclaré
+  étudiant → aucun appel de l'edge (D11, verrou, B1) ; issue inconnue — tout statut ≥ 500, 2xx illisible, 409
+  `ACCOUNT_ALREADY_REGISTERED` / `ACCOUNT_REGISTRATION_IN_PROGRESS` / `USER_ALREADY_REGISTERED`
+  (`CompletionRules.issueIndeterminee`) → rôle relu, `message` verbatim en repli (M1) ; Bearer d'une session valide
+  (`auth.session`, m1) ; autres refus → `message` verbatim. Pas une RPC :
   `supabase/functions/register-soignant/index.ts`, appelée par `client.functions.invoke("register-soignant")`
   comme le web (`src/lib/inscriptionProgressive.ts` l.169-238).
 - **Transport** : `POST`, corps JSON `{prenom, nom, telephone, dateNaissance, profession, typesContrat, rpps, rayon,

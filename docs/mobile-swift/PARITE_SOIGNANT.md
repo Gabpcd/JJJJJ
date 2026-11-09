@@ -41,6 +41,10 @@ avec le présentateur `.safari` (`DECISIONS_LOT3.md`, section « Intégration de
 Lot 3, T8 (branche `lot3/l3-t8-v2`, 2026-11-09) : `/inscription/completer` devient native (complétion du profil dans
 l'aiguillage d'onboarding, présentée hors de l'espace comme la reprise) ; parcours étudiant en renvoi web (D11) ;
 preuve `DemoCompletionInscriptionTests` (éclat CI « lot3-inscription »), statut inchangé tant que le run n'est pas vert.
+Revue fraîche B8 de T8 : un brouillon déclaré étudiant sur le web n'est jamais finalisé en natif (renvoi vers la
+complétion web seulement, rôle relu au retour) ; la réponse « salarié(e) » est enregistrée et restaurée comme le web ;
+écart restant : après la complétion, le web ouvre la mission choisie pendant l'exploration (`missionChoisie`), le natif
+ouvre l'espace par défaut (`DECISIONS_LOT3.md`, section « T8 — corrections de la revue fraîche B8 »).
 
 Sous-lignes (préfixées `›`) : une route web qui regroupe plusieurs onglets ou vues est détaillée pour que
 chaque preuve soit attribuable ; la ligne de la route passe « natif » quand toutes ses sous-lignes le sont.

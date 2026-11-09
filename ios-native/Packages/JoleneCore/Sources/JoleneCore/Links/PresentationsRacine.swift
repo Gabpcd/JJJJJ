@@ -18,7 +18,9 @@ import Foundation
 ///   refus jamais affiché ne fait pas taire les suivants ; l'acquittement porte le numéro de l'item ;
 /// - **fin d'identité (M1)** : la feuille est fermée (`fermerRenvoi()`), et un renvoi demandé pendant l'effacement des
 ///   données web (`debutEffacement()` … `finEffacement()`) est différé jusqu'à sa fin ; une nouvelle fin d'identité
-///   l'abandonne.
+///   l'abandonne ;
+/// - **retour d'un renvoi (lot 3, T8 — revue B8, M1)** : chaque disparition d'un renvoi affiché avance `fermetures`,
+///   relu par l'écran qui l'a ouvert (relecture du rôle au retour de la complétion web d'un étudiant).
 public struct PresentationsRacine: Equatable, Sendable {
     /// Renvoi web : numéro d'item, route externe (`.safari`, `.etablissement`) et son URL.
     public struct Renvoi: Identifiable, Equatable, Sendable {
@@ -44,6 +46,9 @@ public struct PresentationsRacine: Equatable, Sendable {
     public private(set) var renvoiDiffere: JoleneRoute?
     /// Effacements des données web en cours (fins d'identité rapprochées).
     public private(set) var effacementsEnCours = 0
+    /// Nombre de renvois effectivement affichés puis disparus (lot 3, T8 — revue B8, M1) : l'écran qui a ouvert un renvoi
+    /// (complétion web d'un étudiant) relit le rôle quand ce compteur avance. Une feuille jamais affichée ne compte pas.
+    public private(set) var fermetures = 0
     private var numero = 0
 
     public init() {}
@@ -73,6 +78,7 @@ public struct PresentationsRacine: Equatable, Sendable {
     public mutating func disparition(_ id: Int) -> Bool {
         guard renvoiAffiche?.id == id else { return false }
         renvoiAffiche = nil
+        fermetures += 1
         return true
     }
 

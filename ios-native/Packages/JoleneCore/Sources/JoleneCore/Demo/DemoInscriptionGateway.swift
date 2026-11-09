@@ -16,6 +16,9 @@ public enum RefusInscriptionDemo: String, CaseIterable, Sendable {
     case finalisationEnAttente = "ACCOUNT_FINALIZATION_PENDING"
     /// T8 — `fn_types_exercice_autorises` en échec : état « indisponible » du web (aucun référentiel supposé).
     case referentielIndisponible = "TYPES_EXERCICE_INDISPONIBLE"
+    /// T8 (revue B8, M1) — `register-soignant` 409 `ACCOUNT_ALREADY_REGISTERED` : le profil existe déjà (créé par une
+    /// tentative précédente, ou sur le web) ; issue inconnue, l'espace s'ouvre après relecture du rôle.
+    case compteDejaFinalise = "ACCOUNT_ALREADY_REGISTERED"
 
     public static let argument = "-JOLENE_DEMO_INSCRIPTION_REFUS"
 
@@ -30,9 +33,11 @@ public enum RefusInscriptionDemo: String, CaseIterable, Sendable {
 /// Brouillon serveur simulé au démarrage du parcours démo (DEBUG, `JOLENE_DEMO_BROUILLON=<variante>`, lu par
 /// `AppContainer`) : reprise d'une complétion commencée ailleurs (web) pour la recette de T8 sans piloter le sélecteur
 /// de date. `complet` : identité du profil démo (Camille Démo, née le 14/05/1990) et un numéro de téléphone fictif ;
-/// aucun mode d'exercice coché.
+/// aucun mode d'exercice coché. `etudiant` (revue B8 de T8, B1) : le même brouillon, déclaré étudiant sur le web
+/// (« Je suis étudiant(e) en santé », `estEtudiant: true`) puis « Enregistrer et continuer plus tard ».
 public enum VarianteBrouillonDemo: String, Sendable, CaseIterable {
     case complet
+    case etudiant
 
     public static let variableEnvironnement = "JOLENE_DEMO_BROUILLON"
 
@@ -42,6 +47,10 @@ public enum VarianteBrouillonDemo: String, Sendable, CaseIterable {
         case .complet:
             return FormulaireInscription(prenom: "Camille", nom: "Démo", telephone: "01 99 00 00 01", dateNaissance: "1990-05-14",
                                          profession: profession)
+        case .etudiant:
+            var brouillon = VarianteBrouillonDemo.complet.brouillon(profession: profession)
+            brouillon.estEtudiant = true
+            return brouillon
         }
     }
 }
@@ -78,7 +87,7 @@ actor DemoComptesInscription {
 
     /// `UPDATE parcours_inscription SET donnees = donnees || p_donnees` (fusion de premier niveau, `public.sql`
     /// l.32503-32505) : seules les clés transmises (`CompletionRules.donneesBrouillon`) remplacent les anciennes ; nil
-    /// sans parcours (`P0002`).
+    /// sans parcours (`P0002`). La déclaration étudiant n'est jamais transmise : elle est conservée.
     func enregistrer(_ formulaire: FormulaireInscription) -> ParcoursInscription? {
         guard var ligne = parcours else { return nil }
         var brouillon = ligne.brouillon
@@ -88,6 +97,7 @@ actor DemoComptesInscription {
         if let dateNaissance = formulaire.dateNaissance { brouillon.dateNaissance = dateNaissance }
         if let rpps = formulaire.rpps { brouillon.rpps = rpps }
         if let rayon = formulaire.rayon { brouillon.rayon = rayon }
+        if let estSalarie = formulaire.estSalarieEtablissement { brouillon.estSalarieEtablissement = estSalarie }
         brouillon.typesContrat = formulaire.typesContrat
         ligne.brouillon = brouillon
         ligne.modifieLe = DemoInscriptionGateway.horodatage
@@ -153,6 +163,9 @@ public struct DemoInscriptionGateway: InscriptionPort {
     static let refusRppsDejaEnregistre = "Ce numéro RPPS est déjà associé à un compte Jolene. Connectez-vous à ce compte, ou contactez le support si ce n'est pas vous."
     // source: supabase/functions/register-soignant/index.ts:367
     static let refusFinalisationEnAttente = "Votre profil est enregistré. Reconnectez-vous pour reprendre votre espace."
+    /// 409 `ACCOUNT_ALREADY_REGISTERED` (revue B8 de T8, M1) : repli affiché seulement si l'espace n'est pas relu.
+    // source: supabase/functions/register-soignant/index.ts:208
+    static let refusCompteDejaFinalise = "Ce compte soignant existe déjà. Connectez-vous pour continuer."
 
     /// Défaut serveur d'une profession absente du référentiel (`COALESCE`, `fn_types_exercice_autorises`).
     static let typesParDefaut = ["SALARIE", "LIBERAL", "MIXTE"]
@@ -187,7 +200,7 @@ public struct DemoInscriptionGateway: InscriptionPort {
         case .captcha?:
             throw InscriptionRules.refusCreation(messageServeur: "captcha protection: request disallowed (invalid-input-response)",
                                                  codeServeur: "captcha_failed")
-        case .mineur?, .rppsDejaEnregistre?, .finalisationEnAttente?, .referentielIndisponible?, nil:
+        case .mineur?, .rppsDejaEnregistre?, .finalisationEnAttente?, .referentielIndisponible?, .compteDejaFinalise?, nil:
             break // refus de la complétion (T8), sans effet sur la création du compte
         }
         await comptes.creer(email: adresse, intention: intention)
@@ -249,14 +262,20 @@ public struct DemoInscriptionGateway: InscriptionPort {
         return fichier.typesExercice[profession] ?? Self.typesParDefaut
     }
 
-    /// `register-soignant` simulée : brouillon d'abord (comme `finaliserProfil`), refus scripté, contrôles serveur
-    /// (l.235-271, messages verbatim), puis bascule relue vers l'espace `demo-soignant`.
+    /// `register-soignant` simulée : brouillon d'abord (comme `finaliserProfil`), verrou du parcours étudiant sur le
+    /// brouillon relu (D11, comme `SupabaseInscriptionGateway`), refus scripté, contrôles serveur (l.235-271, messages
+    /// verbatim), puis bascule relue vers l'espace `demo-soignant`.
     public func finaliser(_ formulaire: FormulaireInscription) async throws -> ResultatFinalisation {
-        _ = try await enregistrerBrouillon(formulaire)
+        let relu = try await enregistrerBrouillon(formulaire)
+        if CompletionRules.parcoursEtudiant(relu.brouillon) { return .parcoursEtudiant }
         switch refus {
         case .mineur?: return .refusee(code: "UNDERAGE", message: Self.refusMineur)
         case .rppsDejaEnregistre?: return .refusee(code: "RPPS_ALREADY_REGISTERED", message: Self.refusRppsDejaEnregistre)
         case .finalisationEnAttente?: return .finalisationEnAttente(message: Self.refusFinalisationEnAttente)
+        case .compteDejaFinalise?:
+            // Profil déjà créé par une tentative précédente : l'espace existe, la réponse est une issue inconnue.
+            try await basculerVersLEspaceDemo()
+            return .indeterminee(message: Self.refusCompteDejaFinalise)
         case .compteExistant?, .captcha?, .referentielIndisponible?, nil: break
         }
         let profession = formulaire.profession ?? ""
@@ -273,13 +292,18 @@ public struct DemoInscriptionGateway: InscriptionPort {
         if ProfessionsRpps.exigeRpps(profession) && rpps.isEmpty {
             return .refusee(code: "RPPS_FORMAT_INVALID", message: Self.refusRppsRequis)
         }
+        try await basculerVersLEspaceDemo()
+        return .finalisee(soignantId: DemoWorld.context.userId)
+    }
+
+    /// Fin de l'inscription démo : le nouveau compte devient l'espace `demo-soignant`, session relue.
+    private func basculerVersLEspaceDemo() async throws {
         await comptes.finaliser()
         await session.set(DemoWorld.user)
         // Relecture après mutation : aucune session supposée.
         guard await session.current() == DemoWorld.user else {
             throw JoleneError(.unknown, CompletionTextes.saisieConservee)
         }
-        return .finalisee(soignantId: DemoWorld.context.userId)
     }
 
     /// La démo ne sert que son nouveau compte : tout autre identifiant est refusé (`.demoOnly`).

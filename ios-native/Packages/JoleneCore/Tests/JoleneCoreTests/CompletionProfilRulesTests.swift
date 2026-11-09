@@ -168,7 +168,7 @@ final class CompletionProfilRulesTests: XCTestCase {
     }
 
     /// Revue B8 de T8, B1 : un brouillon est « étudiant » quand `estEtudiant` vaut `true` (web : `est_etudiant:
-    /// form.estEtudiant ?? false`, `inscriptionProgressive.ts` l.189, booléen restauré seulement) ; la finalisation
+    /// form.estEtudiant ?? false`, `inscriptionProgressive.ts` l.190, booléen restauré seulement) ; la finalisation
     /// native lui est refusée (D11, verrou), quelle que soit la scolarité saisie.
     func testParcoursEtudiantSurUnBooleenVraiSeulement() {
         XCTAssertTrue(R.parcoursEtudiant(FormulaireInscription(profession: "AS", estEtudiant: true)))
@@ -178,7 +178,7 @@ final class CompletionProfilRulesTests: XCTestCase {
 
     /// Revue B8 de T8, M1 (PRINCIPES §5 : une mutation sans issue certaine exige une relecture) : les réponses de
     /// `register-soignant` qui n'excluent pas un profil créé sont des issues inconnues — tout statut ≥ 500 (passerelle,
-    /// délai de l'edge, `INTERNAL_ERROR` du `catch` final l.405-407), une réponse 2xx illisible, et les codes 409 qui
+    /// délai de l'edge, `INTERNAL_ERROR` du `catch` final l.404-407), une réponse 2xx illisible, et les codes 409 qui
     /// disent le compte finalisé, en cours de finalisation ou déjà présent dans `soignants` (l.205-212, l.329-332).
     /// Les refus certains (validation, RPPS d'un autre compte, débit) et le 503 `ACCOUNT_FINALIZATION_PENDING` (traité à
     /// part : déconnexion locale) n'en sont pas.

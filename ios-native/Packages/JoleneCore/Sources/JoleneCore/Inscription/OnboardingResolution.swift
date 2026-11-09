@@ -48,7 +48,8 @@ public enum OnboardingResolution {
     /// `registrationDraft` : `null` (aucune ligne) → nil ; ligne d'un autre utilisateur, type inconnu, `donnees` non
     /// objet ou `modifie_le` absent → erreur (jamais un parcours supposé). Le brouillon ne reprend que les clés de la
     /// liste blanche de `fn_enregistrer_parcours_inscription` portées par `FormulaireInscription`, chacune avec son
-    /// type (une valeur d'un autre type est ignorée).
+    /// type (une valeur d'un autre type est ignorée, comme `restaurerFormulaire`, `inscriptionProgressive.ts`
+    /// l.126-149), réponse « salarié(e) » et déclaration étudiant comprises (revue B8 de T8, m4 et B1 : booléens seuls).
     public static func parcours(depuis valeur: ValeurJSON?, userId: String) throws -> ParcoursInscription? {
         guard let valeur, valeur != .null else { return nil }
         guard case .objet(let ligne) = valeur, let proprietaire = chaine(ligne["user_id"]),
@@ -69,11 +70,18 @@ public enum OnboardingResolution {
         return FormulaireInscription(prenom: chaine(donnees["prenom"]), nom: chaine(donnees["nom"]),
                                      telephone: chaine(donnees["telephone"]), dateNaissance: chaine(donnees["dateNaissance"]),
                                      profession: chaine(donnees["profession"]), typesContrat: typesContrat,
-                                     rpps: chaine(donnees["rpps"]), rayon: rayon)
+                                     rpps: chaine(donnees["rpps"]), rayon: rayon,
+                                     estSalarieEtablissement: booleen(donnees["estSalarieEtablissement"]),
+                                     estEtudiant: booleen(donnees["estEtudiant"]))
     }
 
     private static func chaine(_ valeur: ValeurJSON?) -> String? {
         if case .chaine(let texte)? = valeur { return texte }
+        return nil
+    }
+
+    private static func booleen(_ valeur: ValeurJSON?) -> Bool? {
+        if case .booleen(let vrai)? = valeur { return vrai }
         return nil
     }
 

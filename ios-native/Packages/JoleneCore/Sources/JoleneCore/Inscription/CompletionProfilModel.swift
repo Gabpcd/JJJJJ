@@ -5,8 +5,11 @@ import Combine
 /// (`/inscription/completer`) et de `finaliserProfil` (`src/lib/inscriptionProgressive.ts` l.169-238).
 ///
 /// Règles :
-/// - saisie initialisée depuis le brouillon serveur (`parcours.donnees`, liste blanche) ; profession **figée** du
-///   parcours (principe « État dérivé ») ; jamais de brouillon local ;
+/// - saisie initialisée depuis le brouillon serveur (`parcours.donnees`, liste blanche, réponse « salarié(e) »
+///   comprise) ; profession **figée** du parcours (principe « État dérivé ») ; jamais de brouillon local ;
+/// - brouillon déclaré étudiant (`estEtudiant: true`, web) : la finalisation native est verrouillée — aucun appel,
+///   aucun texte nouveau, seule la complétion web est proposée (D11 ; revue B8 de T8, B1). Le verrou est posé par le
+///   parcours lu à l'ouverture et par le brouillon relu au moment de la finalisation (`.parcoursEtudiant`) ;
 /// - modes proposés : `fn_types_exercice_autorises` (table paramétrée, aucune règle en dur) ; `LIBERAL` retiré quand le
 ///   référentiel ne le propose pas, conservé tant qu'il est inconnu (jamais ajoutable sans confirmation) ;
 /// - « Enregistrer et continuer plus tard » : brouillon relu par le serveur (`fn_enregistrer_parcours_inscription`),
@@ -14,15 +17,19 @@ import Combine
 /// - « Enregistrer mon profil » : garde du formulaire web (l.354-357), puis `InscriptionPort.finaliser` (brouillon,
 ///   `register-soignant`, `refreshSession()`), borné, un seul envoi à la fois, aucun renvoi automatique :
 ///   - profil créé → rôle relu (`fn_get_my_role`) ; SOIGNANT → `SessionStore.ouvrirIdentiteInscription()` (navigateur
-///     intégré vidé, intégration T7 × T3b, puis `start()` : seul `.ready` relu prouve l'espace) ; sinon message web
-///     « Votre profil est enregistré. Reconnectez-vous… » ;
-///   - refus serveur → message serveur verbatim, saisie conservée, aucune relecture ;
+///     intégré vidé, intégration T7 × T3b, puis `start()` : seul `.ready` relu prouve l'espace) ; sinon, comme un
+///     échec de `refreshSession`, message web « Votre profil est enregistré. Reconnectez-vous… » annoncé à la
+///     connexion puis déconnexion locale (revue B8 de T8, m5) ;
+///   - refus serveur certain → message serveur verbatim, saisie conservée, aucune relecture ;
 ///   - 503 `ACCOUNT_FINALIZATION_PENDING` (ou session non rafraîchie) → message annoncé à la connexion, puis
 ///     déconnexion locale (`SessionStore.signOutLocally`) ;
-///   - issue inconnue (délai, réseau, réponse illisible) → relecture du rôle : un profil créé ouvre l'espace, sinon le
-///     texte réseau du web ou « Votre saisie est conservée. Réessayez. » ;
-/// - epoch : capturé au premier appel ; une réponse arrivée pour une identité partie est ignorée ; une annulation
-///   n'est jamais une erreur. Rien n'est journalisé (identité, téléphone, date de naissance, RPPS).
+///   - issue inconnue (délai, réseau, réponse illisible, 5xx, 409 d'un profil possible : `.indeterminee`, revue B8 de
+///     T8, M1) → relecture du rôle : un profil créé ouvre l'espace, sinon le message serveur verbatim, le texte réseau
+///     du web ou « Votre saisie est conservée. Réessayez. » ;
+/// - retour du renvoi web (complétion étudiante sur `/inscription/completer`) → relecture du rôle (M1) ;
+/// - epoch : capturé au premier appel, et seulement pour l'identité du parcours (`parcours.userId`, revue B8 de T8,
+///   m6) ; une réponse arrivée pour une identité partie est ignorée ; une annulation n'est jamais une erreur. Rien n'est
+///   journalisé (identité, téléphone, date de naissance, RPPS).
 @MainActor
 public final class CompletionProfilModel: ObservableObject {
     public enum Modes: Equatable, Sendable {
@@ -32,9 +39,11 @@ public final class CompletionProfilModel: ObservableObject {
         case indisponible
     }
 
-    /// Issue d'une finalisation, pour la vue.
+    /// Issue d'une finalisation (ou d'une relecture), pour la vue.
     public enum Issue: Equatable, Sendable {
-        /// Profil créé, rôle soignant relu : l'identité est relue par `SessionStore` (`.ready` = preuve).
+        /// Rôle soignant relu (le profil existe) : l'identité est rouverte par `SessionStore.ouvrirIdentiteInscription()`.
+        /// Ce n'est pas la preuve de l'espace : l'interface suit l'état de session, et seul `.ready` relu l'ouvre (un
+        /// profil illisible garde l'aiguillage d'onboarding).
         case espaceOuvert
         /// Déconnexion locale faite ; `message` (verbatim serveur ou web) est affiché sur l'écran de connexion.
         case deconnecte(message: String)
@@ -53,9 +62,11 @@ public final class CompletionProfilModel: ObservableObject {
         }
     }
     @Published public private(set) var typesContrat: [String]
-    /// Réponse « Êtes-vous actuellement salarié(e)… ? » : affichage seul (avertissement d'exclusivité), jamais transmise
-    /// (correction 21).
+    /// Réponse « Êtes-vous actuellement salarié(e)… ? » : avertissement d'exclusivité et brouillon (comme le web, revue
+    /// B8 de T8, m4), jamais transmise à `register-soignant` (correction 21).
     @Published public var estSalarieEtablissement: Bool?
+    /// Brouillon déclaré étudiant : finalisation native verrouillée, complétion web seulement (D11 ; revue B8 de T8, B1).
+    @Published public private(set) var parcoursEtudiant: Bool
     @Published public private(set) var modes: Modes = .inactif
     @Published public private(set) var erreur: String?
     @Published public private(set) var enCours = false
@@ -75,6 +86,18 @@ public final class CompletionProfilModel: ObservableObject {
     private let annoncerDeconnexion: (String) -> Void
     private var epoch: Int?
     private var generationModes = 0
+    /// Relecture du rôle au retour du renvoi web : aucun envoi pendant ce temps.
+    private var relectureEnCours = false
+
+    /// Repli d'une relecture du rôle qui ne trouve pas d'espace soignant.
+    private enum Repli {
+        /// Message affiché, saisie conservée (issue inconnue).
+        case message(String)
+        /// Profil créé (200) mais espace non relu : message annoncé à la connexion, puis déconnexion locale (m5).
+        case deconnexion(String)
+        /// Rien (retour du renvoi web sans complétion).
+        case aucun
+    }
 
     /// - Parameters:
     ///   - maintenant: horloge de la garde de majorité (tests).
@@ -95,6 +118,8 @@ public final class CompletionProfilModel: ObservableObject {
         // `PROFESSIONS_SANS_RPPS` hors AS : numéro vidé (l.203-208).
         self.rpps = CompletionRules.afficheRpps(profession: profession) ? CompletionRules.filtrerRpps(brouillon.rpps ?? "") : ""
         self.typesContrat = brouillon.typesContrat
+        self.estSalarieEtablissement = brouillon.estSalarieEtablissement
+        self.parcoursEtudiant = CompletionRules.parcoursEtudiant(brouillon)
         self.rayon = brouillon.rayon
     }
 
@@ -137,10 +162,12 @@ public final class CompletionProfilModel: ObservableObject {
             ? nil : CompletionTextes.dateNaissanceMineur
     }
 
-    /// Saisie transmise : brouillon et `register-soignant` (clés de la liste blanche seulement).
+    /// Saisie transmise : brouillon et `register-soignant` (clés de la liste blanche seulement). La déclaration
+    /// étudiant n'en fait jamais partie (lue seulement, D11).
     public var formulaire: FormulaireInscription {
         FormulaireInscription(prenom: prenom, nom: nom, telephone: telephone, dateNaissance: dateNaissance ?? "",
-                              profession: profession, typesContrat: typesContrat, rpps: afficheRpps ? rpps : "", rayon: rayon)
+                              profession: profession, typesContrat: typesContrat, rpps: afficheRpps ? rpps : "", rayon: rayon,
+                              estSalarieEtablissement: estSalarieEtablissement)
     }
 
     public func basculerMode(_ mode: PreferenceModeExercice, selectionne: Bool) {
@@ -150,7 +177,8 @@ public final class CompletionProfilModel: ObservableObject {
 
     // MARK: - Référentiel des modes
 
-    /// Lecture de `fn_types_exercice_autorises` (premier affichage et « Réessayer la vérification »).
+    /// Lecture de `fn_types_exercice_autorises` (premier affichage et « Réessayer la vérification »). Annulée (le
+    /// `.task` de la vue coupé), elle rend l'état `.inactif` pour que le `.task` suivant la relance (revue B8 de T8, m2).
     public func verifierModes() async {
         guard !profession.isEmpty else {
             modes = .inactif
@@ -170,7 +198,11 @@ public final class CompletionProfilModel: ObservableObject {
             modes = types.map(Modes.disponibles) ?? .indisponible
             typesContrat = CompletionRules.contratsApresReferentiel(typesContrat, typesAutorises: types)
         } catch {
-            if Self.estAnnulation(error) { return }
+            if Self.estAnnulation(error) {
+                // Jamais un chargement sans fin : seule la lecture la plus récente remet l'état à relancer.
+                if courant == generationModes, modes == .chargement { modes = .inactif }
+                return
+            }
             guard await session.controller.epoch == epoch, courant == generationModes else { return }
             modes = .indisponible
         }
@@ -180,7 +212,7 @@ public final class CompletionProfilModel: ObservableObject {
 
     /// « Enregistrer et continuer plus tard » : vrai quand le brouillon a été relu par le serveur.
     public func enregistrerPlusTard() async -> Bool {
-        guard !enCours, !enregistrementEnCours else { return false }
+        guard !enCours, !enregistrementEnCours, !relectureEnCours else { return false }
         enregistrementEnCours = true
         defer { enregistrementEnCours = false }
         erreur = nil
@@ -200,10 +232,10 @@ public final class CompletionProfilModel: ObservableObject {
 
     // MARK: - Finalisation
 
-    /// « Enregistrer mon profil ». Rend l'issue quand l'identité a été relue ou fermée, nil sinon (message affiché ou
-    /// réponse ignorée).
+    /// « Enregistrer mon profil ». Rend l'issue quand l'identité a été relue ou fermée, nil sinon (message affiché,
+    /// parcours étudiant verrouillé ou réponse ignorée).
     public func finaliser() async -> Issue? {
-        guard !enCours, !enregistrementEnCours, professionValide else { return nil }
+        guard !enCours, !enregistrementEnCours, !relectureEnCours, professionValide, !parcoursEtudiant else { return nil }
         tentative = true
         erreur = nil
         let manques = CompletionRules.manques(prenom: prenom, nom: nom, telephone: telephone, dateNaissance: dateNaissance,
@@ -225,7 +257,8 @@ public final class CompletionProfilModel: ObservableObject {
             guard await session.controller.epoch == epoch else { return nil }
             switch resultat {
             case .finalisee:
-                return await ouvrirEspace(gateways, epoch: epoch, sinon: CompletionTextes.profilEnregistreReconnecter)
+                return await ouvrirEspace(gateways, epoch: epoch,
+                                          sinon: .deconnexion(CompletionTextes.profilEnregistreReconnecter))
             case .refusee(_, let message):
                 afficher(message)
                 return nil
@@ -233,6 +266,12 @@ public final class CompletionProfilModel: ObservableObject {
                 annoncerDeconnexion(message)
                 await session.signOutLocally()
                 return .deconnecte(message: message)
+            case .indeterminee(let message):
+                return await ouvrirEspace(gateways, epoch: epoch, sinon: .message(message))
+            case .parcoursEtudiant:
+                // Déclaration étudiant relue par le serveur : l'écran ne propose plus que la complétion web (D11).
+                parcoursEtudiant = true
+                return nil
             }
         } catch {
             if Self.estAnnulation(error) { return nil }
@@ -248,8 +287,18 @@ public final class CompletionProfilModel: ObservableObject {
             // Issue inconnue : le profil a pu être créé. Relecture du rôle, jamais un renvoi.
             let message = (error as? JoleneError)?.kind == .network ? InscriptionTextes.connexionInstable
                 : CompletionTextes.saisieConservee
-            return await ouvrirEspace(gateways, epoch: epoch, sinon: message)
+            return await ouvrirEspace(gateways, epoch: epoch, sinon: .message(message))
         }
+    }
+
+    /// Retour du renvoi web (complétion étudiante sur `/inscription/completer`, D11 ; revue B8 de T8, M1) : le rôle est
+    /// relu ; un profil créé sur le web ouvre l'espace, sinon rien n'est affiché (fermer la page n'est pas un échec).
+    public func relireApresRenvoiWeb() async -> Issue? {
+        guard !enCours, !enregistrementEnCours, !relectureEnCours else { return nil }
+        relectureEnCours = true
+        defer { relectureEnCours = false }
+        guard let (gateways, epoch) = await gatewaysCourantes() else { return nil }
+        return await ouvrirEspace(gateways, epoch: epoch, sinon: .aucun)
     }
 
     /// Délai de la finalisation : deux fois la borne d'un appel (brouillon, puis `register-soignant` qui peut interroger
@@ -260,27 +309,39 @@ public final class CompletionProfilModel: ObservableObject {
 
     // MARK: - Interne
 
-    /// Rôle relu : SOIGNANT → identité relue (`.ready` prouve l'espace) ; sinon `message`, saisie conservée.
-    private func ouvrirEspace(_ gateways: Gateways, epoch: Int, sinon message: String) async -> Issue? {
+    /// Rôle relu : SOIGNANT → identité relue (`.ready` prouve l'espace) ; sinon `repli`.
+    private func ouvrirEspace(_ gateways: Gateways, epoch: Int, sinon repli: Repli) async -> Issue? {
         let role = gateways.role
         let relu = try? await bounded(timeout: session.controller.resolutionTimeout) { try await role.currentRole() }
         guard await session.controller.epoch == epoch else { return nil }
         guard relu?.role == UserRole.soignant.rawValue else {
-            afficher(message)
-            return nil
+            switch repli {
+            case .message(let message):
+                afficher(message)
+                return nil
+            case .deconnexion(let message):
+                annoncerDeconnexion(message)
+                await session.signOutLocally()
+                return .deconnecte(message: message)
+            case .aucun:
+                return nil
+            }
         }
         await session.ouvrirIdentiteInscription()
         return .espaceOuvert
     }
 
+    /// Ports de l'epoch capturé. Premier appel : l'epoch n'est capturé que si l'identité active est celle du parcours
+    /// (revue B8 de T8, m6) ; ensuite `gateways(for:)` refuse un epoch périmé.
     private func gatewaysCourantes() async -> (Gateways, Int)? {
         let controller = session.controller
         let courant: Int
         if let epoch {
             courant = epoch
         } else {
-            courant = await controller.epoch
-            epoch = courant
+            guard let capture = await controller.epoch(identite: parcours.userId) else { return nil }
+            courant = capture
+            epoch = capture
         }
         guard let gateways = await controller.gateways(for: courant) else { return nil }
         return (gateways, courant)

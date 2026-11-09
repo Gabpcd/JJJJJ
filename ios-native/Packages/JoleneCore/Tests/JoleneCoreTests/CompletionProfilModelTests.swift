@@ -364,7 +364,7 @@ final class CompletionProfilModelTests: XCTestCase {
         XCTAssertEqual(s.model.modes, .disponibles(["SALARIE", "LIBERAL", "MIXTE"]), "relance effective")
     }
 
-    /// m4 : la réponse « salarié(e) » est restaurée depuis le brouillon (web l.134-136) : l'avertissement d'exclusivité
+    /// m4 : la réponse « salarié(e) » est restaurée depuis le brouillon (web l.135-138) : l'avertissement d'exclusivité
     /// survit à la reprise.
     func testReponseSalarieRestaureeDepuisLeBrouillon() async {
         let s = await scenario(FormulaireInscription(prenom: "Léa", profession: "IDE", estSalarieEtablissement: true))

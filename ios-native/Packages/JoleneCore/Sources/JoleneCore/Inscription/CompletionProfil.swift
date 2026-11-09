@@ -145,16 +145,21 @@ public enum CompletionRules {
     /// `/^[+]?[0-9\s]{8,15}$/` sur `form.telephone.trim()` (l.228). `\s` : blanc Unicode, comme en JavaScript.
     private static let motifTelephone = #"^[+]?[0-9\s]{8,15}$"#
     /// Clés du brouillon envoyées par le natif (liste blanche de `fn_enregistrer_parcours_inscription`, fiche
-    /// `CONTRATS_RPC_SOIGNANT.md`) : jamais email, mot de passe, jeton, coordonnées ni profession (figée du parcours).
-    public static let clesBrouillon: Set<String> = ["prenom", "nom", "telephone", "dateNaissance", "typesContrat", "rpps", "rayon"]
+    /// `CONTRATS_RPC_SOIGNANT.md`) : jamais email, mot de passe, jeton, coordonnées ni profession (figée du parcours) ;
+    /// la réponse « salarié(e) » comme le web (revue B8 de T8, m4) ; la déclaration étudiant (`estEtudiant`,
+    /// `scolarite*`) jamais : lue seulement, le serveur la conserve (`donnees || p_donnees`, D11).
+    public static let clesBrouillon: Set<String> = ["prenom", "nom", "telephone", "dateNaissance", "typesContrat", "rpps", "rayon",
+                                                    "estSalarieEtablissement"]
     /// Clés du corps de `register-soignant` envoyées par le natif (lues par l'edge, l.230) : ni `lat`/`lng`, ni
-    /// `est_etudiant`/`etudiant_details` (parcours étudiant en renvoi web, D11), ni `navigateur`, ni `attribution`.
+    /// `est_etudiant`/`etudiant_details` (un brouillon étudiant n'est jamais finalisé en natif, D11 : `parcoursEtudiant`),
+    /// ni la réponse « salarié(e) » (correction 21), ni `navigateur`, ni `attribution`.
     public static let clesFinalisation: Set<String> = ["prenom", "nom", "telephone", "dateNaissance", "profession", "typesContrat",
                                                        "rpps", "rayon"]
     /// 18 années de 365,25 jours (l.219).
     static let dureeMajorite: TimeInterval = 18 * 365.25 * 86_400
 
-    private static let calendrierUTC: Calendar = {
+    /// Calendrier grégorien en UTC : dates `AAAA-MM-JJ` (minuit UTC, `new Date(…)` du web) et borne du sélecteur.
+    public static let calendrierUTC: Calendar = {
         var calendrier = Calendar(identifier: .gregorian)
         calendrier.timeZone = TimeZone(identifier: "UTC") ?? .current
         return calendrier
@@ -203,8 +208,10 @@ public enum CompletionRules {
         return maintenant.timeIntervalSince(date) >= dureeMajorite
     }
 
-    /// Borne haute du sélecteur (`max` l.554 : aujourd'hui moins 18 ans, même jour civil).
-    public static func dateMaximale(maintenant: Date, calendrier: Calendar = .current) -> Date {
+    /// Borne haute du sélecteur (`max` l.554 : aujourd'hui moins 18 ans, même jour civil), dans le calendrier du
+    /// sélecteur (UTC, `DateNaissance.fuseau`) et jamais dans le fuseau de l'appareil, qui la décalerait d'un jour près
+    /// de minuit (revue B8 de T8, m8) ; même jour civil que le contrôle `UNDERAGE` de `register-soignant` (l.243-254).
+    public static func dateMaximale(maintenant: Date, calendrier: Calendar = CompletionRules.calendrierUTC) -> Date {
         calendrier.date(byAdding: .year, value: -18, to: maintenant) ?? maintenant
     }
 
@@ -267,7 +274,16 @@ public enum CompletionRules {
         if let dateNaissance = formulaire.dateNaissance { donnees["dateNaissance"] = .chaine(dateNaissance) }
         if let rpps = formulaire.rpps { donnees["rpps"] = .chaine(rpps) }
         if let rayon = formulaire.rayon { donnees["rayon"] = .nombre(Double(rayon)) }
+        if let estSalarie = formulaire.estSalarieEtablissement { donnees["estSalarieEtablissement"] = .booleen(estSalarie) }
         return donnees
+    }
+
+    /// Brouillon déclaré étudiant sur le web (`est_etudiant: form.estEtudiant ?? false`, `inscriptionProgressive.ts`
+    /// l.190 ; booléen restauré seulement) : la finalisation native est refusée sans appel de `register-soignant`, qui
+    /// écrirait `est_etudiant = false` (index.ts l.309) et ferait perdre le cadre étudiant à l'établissement
+    /// (`CADRE_ETUDIANT_AS_CONFIRME`) ; seule la complétion web est proposée (D11, verrou ; revue B8 de T8, B1).
+    public static func parcoursEtudiant(_ brouillon: FormulaireInscription) -> Bool {
+        brouillon.estEtudiant == true
     }
 
     /// Corps de `register-soignant` (l.181-192) : `telephone || null`, `rpps || null` ; `rayon` seulement s'il vient du
@@ -292,4 +308,22 @@ public enum CompletionRules {
 
     /// Code machine de `register-soignant` qui impose la déconnexion locale (503, l.365-367).
     public static let codeFinalisationEnAttente = "ACCOUNT_FINALIZATION_PENDING"
+
+    /// Codes de refus de `register-soignant` qui n'excluent pas un profil créé (revue B8 de T8, M1) : la réservation dit
+    /// le compte soignant déjà finalisé (`ACCOUNT_ALREADY_REGISTERED`) ou en cours de finalisation
+    /// (`ACCOUNT_REGISTRATION_IN_PROGRESS`, index.ts l.205-212) ; l'INSERT `soignants` heurte une contrainte autre que le
+    /// RPPS, clé primaire comprise (`USER_ALREADY_REGISTERED`, l.329-332).
+    public static let codesProfilPossible: Set<String> = ["ACCOUNT_ALREADY_REGISTERED", "ACCOUNT_REGISTRATION_IN_PROGRESS",
+                                                          "USER_ALREADY_REGISTERED"]
+
+    /// Issue inconnue d'une réponse de `register-soignant` qui n'est pas un succès (PRINCIPES §5 : une mutation sans
+    /// issue certaine exige une relecture ; revue B8 de T8, M1) : statut ≥ 500 (passerelle, délai de l'edge, `catch`
+    /// final l.404-407 qui peut suivre l'INSERT), réponse 2xx illisible, ou code de `codesProfilPossible`. Le rôle est
+    /// alors relu (`fn_get_my_role` ne rend `SOIGNANT` qu'avec une ligne `soignants`, `public.sql` l.38295-38301) ; le
+    /// 503 `ACCOUNT_FINALIZATION_PENDING` garde son traitement (déconnexion locale).
+    public static func issueIndeterminee(statut: Int, code: String?) -> Bool {
+        if code == codeFinalisationEnAttente { return false }
+        if let code, codesProfilPossible.contains(code) { return true }
+        return statut >= 500 || (200..<300).contains(statut)
+    }
 }

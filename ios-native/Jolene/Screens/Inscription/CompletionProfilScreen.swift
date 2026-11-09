@@ -11,19 +11,29 @@ import JoleneDesign
 /// l'édition du profil) ; « Je suis étudiant(e) en santé » et le parcours étudiant restent sur le web (D11), le bouton
 /// n'existe qu'avec le présentateur `.safari` (jamais un bouton sans effet). Pas de champ rayon (correction 21).
 ///
+/// Revue fraîche B8 de T8 : un brouillon déclaré étudiant sur le web (B1, `CompletionProfilModel.parcoursEtudiant`)
+/// n'affiche ni formulaire ni « Enregistrer mon profil » : seul le renvoi vers la complétion web est proposé, aucun texte
+/// nouveau (sans présentateur : texte web « Votre espace est momentanément indisponible. Réessayez. ») ; au retour d'un
+/// renvoi ouvert depuis cet écran (`fermeturesRenvoiWeb`), le rôle est relu (M1) — un profil créé sur le web ouvre
+/// l'espace, et un parcours étudiant est relu (le brouillon a pu changer sur le web).
+///
 /// Identifiants : `completion-screen`, `completion-titre`, `completion-prenom`, `completion-nom`, `completion-telephone`,
 /// `completion-telephone-erreur`, `completion-date-naissance`, `completion-date-naissance-renseigner`,
 /// `completion-date-naissance-erreur`, `completion-profession`, `completion-profession-erreur`,
-/// `completion-etudiant-web`, `completion-mode-*` et `completion-modes-*` (`ChoixModesExerciceSection`),
-/// `completion-rpps`, `completion-rpps-aucun`, `completion-type-unique`, `completion-salarie` (`-oui`, `-non`),
-/// `completion-exclusivite`, `completion-referentiel-indisponible`, `completion-erreur`, `completion-enregistrer`,
-/// `completion-plus-tard`, `logout-button`.
+/// `completion-etudiant-web`, `completion-etudiant-indisponible`, `completion-mode-*` et `completion-modes-*`
+/// (`ChoixModesExerciceSection`), `completion-rpps`, `completion-rpps-aucun`, `completion-type-unique`,
+/// `completion-salarie` (`-oui`, `-non`), `completion-exclusivite`, `completion-referentiel-indisponible`,
+/// `completion-erreur`, `completion-enregistrer`, `completion-plus-tard`, `logout-button`.
 struct CompletionProfilScreen: View {
     @ObservedObject private var session: SessionStore
     @StateObject private var model: CompletionProfilModel
     @Environment(\.presentateurRenvoiWeb) private var presentateur
+    /// Renvois affichés puis fermés (revue B8 de T8, M1) : relecture du rôle au retour de la complétion web.
+    @Environment(\.fermeturesRenvoiWeb) private var fermeturesRenvoiWeb
     /// Sélecteur ouvert sur une date non renseignée : il affiche `DateNaissance.parDefaut` sans l'écrire.
     @State private var selecteurDateOuvert = false
+    /// Compteur `fermeturesRenvoiWeb` au moment où la complétion web a été ouverte depuis cet écran.
+    @State private var retourWebAttendu: Int?
     private let recharger: () -> Void
     private let seDeconnecter: () -> Void
 
@@ -50,7 +60,9 @@ struct CompletionProfilScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: JoleneSpacing.xl) {
                     entete
-                    if model.professionValide {
+                    if model.professionValide && model.parcoursEtudiant {
+                        completionWebEtudiant
+                    } else if model.professionValide {
                         formulaire
                     } else {
                         // Parcours sans profession du catalogue : contrat rompu (`fn_demarrer_inscription` l'exige).
@@ -71,7 +83,18 @@ struct CompletionProfilScreen: View {
             .scrollDismissesKeyboard(.interactively)
             .accessibilityIdentifier("completion-screen")
         }
-        .task { if model.modes == .inactif { await model.verifierModes() } }
+        .task { if model.modes == .inactif && !model.parcoursEtudiant { await model.verifierModes() } }
+        .onChange(of: fermeturesRenvoiWeb) { fermetures in
+            guard let depart = retourWebAttendu, fermetures > depart else { return }
+            retourWebAttendu = nil
+            let model = self.model
+            let etudiant = model.parcoursEtudiant
+            let recharger = self.recharger
+            Task {
+                // Profil créé sur le web : l'espace s'ouvre ; sinon un parcours étudiant relit le brouillon serveur.
+                if await model.relireApresRenvoiWeb() == nil, etudiant { recharger() }
+            }
+        }
     }
 
     // MARK: - Sections
@@ -104,10 +127,7 @@ struct CompletionProfilScreen: View {
             lectureSeule(T.profession, valeur: MissionPresentation.professionLabel(model.profession),
                          identifiant: "completion-profession")
         }
-        if let presentateur {
-            JoleneButton(T.etudiant, style: .secondary) { presentateur.presenter(.safari(Self.completionWeb)) }
-                .accessibilityIdentifier("completion-etudiant-web")
-        }
+        boutonCompletionWeb(style: .secondary)
         carte {
             ChoixModesExerciceSection(choix: model.choixModes, prefixe: "completion",
                                       basculer: { model.basculerMode($0, selectionne: $1) }, reessayer: reessaiModes)
@@ -117,13 +137,38 @@ struct CompletionProfilScreen: View {
         enregistrement
     }
 
+    /// Brouillon déclaré étudiant (B1, D11) : la complétion se termine sur le web, aucun formulaire natif.
+    @ViewBuilder private var completionWebEtudiant: some View {
+        if presentateur != nil {
+            boutonCompletionWeb(style: .primary)
+        } else {
+            InlineNotice(InscriptionTextes.espaceIndisponible, tone: .error, identifier: "completion-etudiant-indisponible",
+                         announcesOnAppear: true)
+        }
+    }
+
+    /// « 🎓 Je suis étudiant(e) en santé » : complétion web (`/inscription/completer`) par le présentateur `.safari` ;
+    /// absent sans présentateur (jamais un bouton sans effet). Le retour est suivi (`retourWebAttendu`).
+    @ViewBuilder private func boutonCompletionWeb(style: JoleneButton.Style) -> some View {
+        if let presentateur {
+            JoleneButton(T.etudiant, style: style) {
+                retourWebAttendu = fermeturesRenvoiWeb
+                presentateur.presenter(.safari(Self.completionWeb))
+            }
+            .disabled(model.enCours || model.enregistrementEnCours)
+            .accessibilityIdentifier("completion-etudiant-web")
+        }
+    }
+
     @ViewBuilder private var dateNaissance: some View {
         VStack(alignment: .leading, spacing: JoleneSpacing.xs) {
             if model.dateNaissance.flatMap(DateNaissance.date) != nil || selecteurDateOuvert {
                 // Le sélecteur AFFICHE `parDefaut` sans l'écrire (principe « État dérivé ») ; borne haute : 18 ans
-                // révolus (`max`, l.554). L'âge reste contrôlé par `register-soignant` (`UNDERAGE`, verbatim).
+                // révolus (`max`, l.554), calculée en UTC comme le sélecteur (revue B8 de T8, m8). L'âge reste contrôlé
+                // par `register-soignant` (`UNDERAGE`, verbatim).
                 DatePicker(T.dateNaissance, selection: DateNaissance.liaison($model.dateNaissance),
-                           in: ...CompletionRules.dateMaximale(maintenant: Date()), displayedComponents: .date)
+                           in: ...CompletionRules.dateMaximale(maintenant: Date(), calendrier: CompletionRules.calendrierUTC),
+                           displayedComponents: .date)
                     .font(JoleneFont.callout)
                     .foregroundStyle(JoleneColor.midnight)
                     .environment(\.locale, Locale(identifier: "fr_FR"))

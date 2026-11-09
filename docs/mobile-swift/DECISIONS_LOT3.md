@@ -1003,6 +1003,80 @@ texte. Correctif d'intégration (tests d'abord), chaque test changé étant faux
 - **B9.** Inscription (consentement relayé par l'audit `RGPD_CONSENTEMENT_DONNE` côté serveur) : branche poussée, jamais
   mergée sans le go de Gabrielle (D18).
 
+### T8 — corrections de la revue fraîche B8 (09/11/2026)
+
+Tests d'abord (commit de tests rouge à la compilation : API absente), puis correction. Tests changés parce qu'ils
+épinglaient le défaut relevé, jamais affaiblis : `SupabaseInscriptionGatewayTests` (409 `ACCOUNT_ALREADY_REGISTERED`,
+503, 500 et 502 illisible tenus pour des refus certains ; corps 2xx `[]` refus certain), `OnboardingResolutionTests` et
+`CompletionProfilModelTests` (réponse « salarié(e) » ni restaurée ni enregistrée), `InscriptionVerbatimTests`
+(53 annotations : + le message serveur du 409 rejoué en démo).
+
+- **B1 — brouillon étudiant (option a de la revue : verrou, aucun texte nouveau).** `estEtudiant` (et la réponse
+  « salarié(e) ») sont lus dans `parcours_inscription.donnees` en booléens seuls, comme `restaurerFormulaire`
+  (`inscriptionProgressive.ts` l.126-149). Un brouillon `estEtudiant: true` n'est **jamais** finalisé en natif :
+  `CompletionProfilModel.parcoursEtudiant` (parcours lu à l'ouverture) masque le formulaire et « Enregistrer mon
+  profil », et l'écran ne propose que le bouton existant « 🎓 Je suis étudiant(e) en santé » (complétion web,
+  `/inscription/completer`) ; sans présentateur `.safari`, le texte web « Votre espace est momentanément indisponible.
+  Réessayez. ». Défense en profondeur : `finaliser` des deux gateways relit le brouillon fusionné par le serveur et rend
+  `ResultatFinalisation.parcoursEtudiant` **sans appeler** `register-soignant` (déclaration faite sur le web pendant que
+  l'écran natif restait ouvert) ; le modèle bascule alors l'écran. Le natif n'écrit jamais `estEtudiant` ni
+  `scolarite*` (le serveur les conserve : `donnees || p_donnees`). Motif du choix (a) plutôt que (b) : D11 et T8-J5
+  renvoient le parcours étudiant au web ; transmettre `est_etudiant: true` sans afficher ni permettre de modifier la
+  déclaration (formation, année, conditions de `DeclarationEtudiant.tsx`) ferait du natif une déclaration silencieuse ;
+  le verrou rend le chemin cassé impossible (`CLAUDE.md`, « un gap connu reste verrouillé »). Conséquence évitée :
+  `register-soignant` écrivait `est_etudiant = false` (index.ts l.309) — l'établissement ne voyait plus le cadre
+  étudiant ni la confirmation `CADRE_ETUDIANT_AS_CONFIRME` (`ListeCandidatures.tsx` l.287), et
+  `dec_verifier_profession_etudiant` (`public.sql` l.4518) ne s'appliquait plus. Tests : `OnboardingResolutionTests`,
+  `CompletionProfilRulesTests` (règle, clés du brouillon et du corps), `CompletionProfilModelTests` (verrou initial et
+  bascule serveur), `SupabaseInscriptionGatewayTests` (aucune requête vers l'edge, `"true"` et `false` ne sont pas des
+  déclarations), `DemoInscriptionGatewayTests` et XCUITest `testBrouillonEtudiantNeProposeQueLaCompletionWebPuisRelitAuRetour`
+  (variante démo `JOLENE_DEMO_BROUILLON=etudiant`).
+- **M1 — issues inconnues relues.** `CompletionRules.issueIndeterminee(statut:code:)` : tout statut ≥ 500 (passerelle,
+  délai de l'edge, `catch` final l.404-407 qui peut suivre l'INSERT), une réponse 2xx illisible, et les 409
+  `ACCOUNT_ALREADY_REGISTERED`, `ACCOUNT_REGISTRATION_IN_PROGRESS` (index.ts l.205-212) et `USER_ALREADY_REGISTERED`
+  (contrainte de `soignants` hors RPPS, clé primaire comprise, l.329-332) rendent `ResultatFinalisation.indeterminee`
+  (le 503 `ACCOUNT_FINALIZATION_PENDING` garde la déconnexion locale). Le modèle relit alors le rôle
+  (`fn_get_my_role` ne rend `SOIGNANT` qu'avec une ligne `soignants`, `public.sql` l.38295-38301) : profil relu →
+  `ouvrirIdentiteInscription`, sinon message serveur verbatim en repli (« Votre saisie est conservée. Réessayez. » pour
+  un corps illisible). Extension assumée au-delà de « ≥ 500 sans code » : un 5xx codé (`INTERNAL_ERROR`, erreurs du
+  runtime) n'exclut pas davantage un profil créé, et la relecture n'ouvre jamais un espace sans ligne `soignants`.
+  **Retour du renvoi web étudiant** : `PresentationsRacine.fermetures` (compteur des renvois affichés puis fermés,
+  injecté par `PointDEntreeLiens` dans l'environnement `fermeturesRenvoiWeb`) ; l'écran qui a ouvert la complétion web
+  relit le rôle au retour (`relireApresRenvoiWeb`) — profil créé sur le web → espace ouvert ; sinon, pour un parcours
+  étudiant, relecture du parcours (le brouillon a pu changer sur le web), aucun message. Tests : `CompletionProfilRulesTests`,
+  `SupabaseInscriptionGatewayTests`, `CompletionProfilModelTests`, `PresentationsRacineTests`, `DemoInscriptionGatewayTests`
+  et XCUITest `testCompteDejaFinaliseOuvreLEspaceApresRelectureDuRole` (refus démo `ACCOUNT_ALREADY_REGISTERED`).
+- **m1** : Bearer de `register-soignant` pris de `client.auth.session` (rafraîchie si expirée, comme
+  `SupabaseAccountGateway`), session absente → « Reconnectez-vous pour reprendre votre inscription. ». Comportement
+  observable inchangé tant que le brouillon (PostgREST) précède l'edge : le test épingle le Bearer frais, il n'était pas
+  rouge avant la correction.
+- **m2** : une lecture du référentiel annulée (`.task` coupé) remet `modes` à `.inactif` si elle est la plus récente ;
+  le `.task` suivant la relance (test rouge avant : l'écran restait sur « Vérification… »).
+- **m3 — consigné, non porté (écart de parité non juridique).** Après la complétion, le web ouvre
+  `/soignant/missions/<missionChoisie>` quand le brouillon en contient une (UUID, `InscriptionSoignant.tsx`
+  l.369-370 ; posée par l'exploration avant inscription, `explorationInscription.ts` l.32), sinon
+  `/soignant/recherche-missions` ; le natif ouvre l'espace par défaut (Accueil). Motif : le natif n'a pas
+  d'exploration avant le profil complet (D9), `missionChoisie` ne vient donc que d'une exploration web ; la porter
+  exige une entrée du coordinateur de liens depuis l'onboarding (intention mémorisée avant `.ready`), hors de cette
+  correction. À reprendre avec l'exploration (lot 4) ; la mission reste accessible depuis l'espace.
+- **m4** : la réponse « salarié(e) » est enregistrée dans le brouillon (`estSalarieEtablissement`, liste blanche
+  serveur) et restaurée comme le web (`donneesFormulaire` l.152-167, `restaurerFormulaire` l.135-138), jamais
+  transmise à `register-soignant` ; T8-J2 corrigée en conséquence.
+- **m5** : profil créé (200) mais rôle relu sans espace → même issue que l'échec de `refreshSession` : message web
+  « Votre profil est enregistré. Reconnectez-vous pour ouvrir votre espace. » annoncé à la connexion, puis déconnexion
+  locale. Documentation de `Issue.espaceOuvert` corrigée : ce n'est pas la preuve de l'espace, l'interface suit l'état
+  de session (`.ready` relu).
+- **m6** : l'epoch n'est capturé que si l'identité active est celle du parcours (`SessionController.epoch(identite:)`,
+  accesseur en lecture seule, aucun effet sur l'état ni sur l'epoch) ; sinon aucun envoi.
+- **m7** : `DemoCompletionInscriptionTests` relit la sentinelle « 0 requête » du hub dès que l'espace est ouvert
+  (complétion nominale et 409 démo) ; elle n'est exposée que par le hub Profil. Huit XCUITest × trois formats, compilés,
+  jamais lancés localement : **le run CI vert de l'éclat « lot3-inscription » reste un préalable au merge**.
+- **m8** : `CompletionRules.dateMaximale` calcule la borne dans le calendrier UTC du sélecteur (défaut et appel de
+  l'écran) ; test du 28 février 2026 à 23:30 UTC (borne 28/02/2008, celle de Paris serait le 29).
+- Aucun texte nouveau, aucun texte juridique : textes existants (bouton étudiant, `espaceIndisponible`) et message
+  serveur verbatim du 409 (`register-soignant/index.ts` l.208, rejoué par la démo). Aucune RPC nouvelle, aucune
+  écriture serveur ; B9 inchangé (go de Gabrielle).
+
 ## Décisions déléguées du 8 novembre 2026
 
 Gabrielle a délégué toutes les décisions, juridiques comprises, le 8 novembre 2026 (« arrête de me demander et prends
@@ -1038,11 +1112,15 @@ délibération ou un texte que l'auteur n'a pas pu relire.
 
 - **Question** : afficher à la complétion la question « Êtes-vous actuellement salarié(e) d'un établissement de
   santé ? » et l'avertissement « Vérifiez que votre contrat de travail n'inclut pas de clause d'exclusivité. ».
-- **Sources** : `src/pages/InscriptionSoignant.tsx` l.75-86 (texte), l.101-142 et `src/lib/inscriptionProgressive.ts`
-  l.179-192 (la réponse n'est pas transmise à `register-soignant`, correction 21).
+- **Sources** : `src/pages/InscriptionSoignant.tsx` l.75-86 (texte), l.134 (état du formulaire) ;
+  `src/lib/inscriptionProgressive.ts` l.152-167 (`donneesFormulaire` : la réponse est enregistrée dans le brouillon),
+  l.135-138 (`restaurerFormulaire` : restaurée), l.179-192 (non transmise à `register-soignant`, correction 21) ;
+  liste blanche serveur `public.sql` l.32487.
 - **Force** : choix de conformité Jolene (information de l'utilisateur, aucune règle ni aucun texte de loi cité).
-- **Décision** : affichage verbatim du web, réponse jamais transmise ni enregistrée dans le brouillon ; aucun ajout ni
-  aucune reformulation (pas de citation d'article, pas de conséquence juridique annoncée).
+- **Décision** : affichage verbatim du web ; réponse enregistrée dans le brouillon et restaurée comme le web, jamais
+  transmise à `register-soignant` ; aucun ajout ni aucune reformulation (pas de citation d'article, pas de conséquence
+  juridique annoncée). (Corrigé le 09/11/2026, revue B8 de T8, m4 : la première rédaction disait la réponse « ni
+  enregistrée dans le brouillon », ce qui décrivait le web de façon inexacte.)
 - Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
 
 ### T8-J3 — Libellés des modes et phrase du type d'exercice unique
@@ -1082,6 +1160,11 @@ délibération ou un texte que l'auteur n'a pas pu relire.
 - **Force** : choix de conformité Jolene.
 - **Décision** : renvoi web (bouton « 🎓 Je suis étudiant(e) en santé », verbatim l.105, vers `/inscription/completer`
   par le présentateur `.safari`) ; aucune condition ni aucune référence réglementaire n'est affichée en natif.
+  (Complété le 09/11/2026, revue B8 de T8, B1) Un brouillon déjà déclaré étudiant sur le web (`estEtudiant: true`) n'est
+  jamais finalisé en natif : seul ce renvoi est proposé, `register-soignant` n'est pas appelée (elle écrirait
+  `est_etudiant = false`, index.ts l.309) ; le rôle est relu au retour. Option retenue : verrou plutôt que transmission
+  de `est_etudiant` / `etudiant_details` sans affichage ni modification possible de la déclaration (détail dans la
+  section « T8 — corrections de la revue fraîche B8 »). Force : choix de conformité Jolene (D11).
 - Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
 
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle

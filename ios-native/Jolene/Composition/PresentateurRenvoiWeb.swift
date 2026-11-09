@@ -28,10 +28,22 @@ private struct PresentateurRenvoiWebKey: EnvironmentKey {
     static let defaultValue: (any PresentateurRenvoiWeb)? = nil
 }
 
+private struct FermeturesRenvoiWebKey: EnvironmentKey {
+    static let defaultValue = 0
+}
+
 extension EnvironmentValues {
     /// Présentateur des renvois web, injecté à la racine par le coordinateur des liens (`nil` hors de la fenêtre).
     var presentateurRenvoiWeb: (any PresentateurRenvoiWeb)? {
         get { self[PresentateurRenvoiWebKey.self] }
         set { self[PresentateurRenvoiWebKey.self] = newValue }
+    }
+
+    /// Nombre de renvois affichés puis fermés (`PresentationsRacine.fermetures`, lot 3 T8 — revue B8, M1), injecté à la
+    /// racine avec le présentateur : l'écran qui a ouvert un renvoi relit l'état serveur quand il avance (complétion
+    /// web d'un étudiant → relecture du rôle). 0 hors de la fenêtre.
+    var fermeturesRenvoiWeb: Int {
+        get { self[FermeturesRenvoiWebKey.self] }
+        set { self[FermeturesRenvoiWebKey.self] = newValue }
     }
 }

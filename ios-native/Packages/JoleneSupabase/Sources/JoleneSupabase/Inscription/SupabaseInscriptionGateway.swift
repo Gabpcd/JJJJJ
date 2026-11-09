@@ -25,12 +25,16 @@ import Supabase
 ///   verbatim ; ligne relue en liste blanche, propriétaire vérifié ;
 /// - `typesExercice` : `fn_types_exercice_autorises(p_profession)` avec le JWT de la session ; tableau de chaînes, sinon
 ///   nil (référentiel indisponible, comme `!Array.isArray(data)` du web) ;
-/// - `finaliser` : brouillon d'abord (`finaliserProfil` l.178), puis `register-soignant` (POST, Bearer de la session,
-///   corps `CompletionRules.corpsFinalisation`) décodée par `EdgeResponse` : 200 `success`/`ok` vrai avec
-///   `soignant_id` → `refreshSession()` (échec → « Votre profil est enregistré. Reconnectez-vous… », web l.236) ;
-///   401 → session expirée ; 503 `ACCOUNT_FINALIZATION_PENDING` → déconnexion locale demandée ; tout autre refus →
-///   message serveur verbatim (`message`, sinon `error`, sinon « Votre saisie est conservée. Réessayez. ») ; un 2xx
-///   sans drapeau de succès est une erreur de contrat (jamais un succès fabriqué). Une requête par étape, aucun renvoi.
+/// - `finaliser` : brouillon d'abord (`finaliserProfil` l.178) ; brouillon relu déclaré étudiant (`estEtudiant: true`,
+///   web) → `.parcoursEtudiant` sans appeler l'edge (D11, verrou ; revue B8 de T8, B1) ; sinon `register-soignant`
+///   (POST, Bearer d'une session valide `auth.session`, rafraîchie si expirée, comme `SupabaseAccountGateway` — revue
+///   B8 de T8, m1 ; corps `CompletionRules.corpsFinalisation`) décodée par `EdgeResponse` : 200 `success`/`ok` vrai
+///   avec `soignant_id` → `refreshSession()` (échec → « Votre profil est enregistré. Reconnectez-vous… », web l.236) ;
+///   401 → session expirée ; 503 `ACCOUNT_FINALIZATION_PENDING` → déconnexion locale demandée ; issue inconnue (5xx,
+///   2xx illisible, 409 d'un profil possible : `CompletionRules.issueIndeterminee`, revue B8 de T8, M1) →
+///   `.indeterminee`, le modèle relit le rôle ; tout autre refus → refus certain ; message serveur verbatim
+///   (`message`, sinon `error`, sinon « Votre saisie est conservée. Réessayez. ») ; un 2xx objet sans drapeau de succès
+///   est une erreur de contrat (jamais un succès fabriqué). Une requête par étape, aucun renvoi.
 public struct SupabaseInscriptionGateway: InscriptionPort {
     public static let demarrageRPC = "fn_demarrer_inscription"
     public static let tableParcours = "parcours_inscription"
@@ -210,10 +214,11 @@ public struct SupabaseInscriptionGateway: InscriptionPort {
     }
 
     public func finaliser(_ formulaire: FormulaireInscription) async throws -> ResultatFinalisation {
-        _ = try await enregistrerBrouillon(formulaire)
-        guard let session = client.auth.currentSession else {
-            throw JoleneError(.unauthorized, CompletionTextes.sessionAbsente)
-        }
+        let relu = try await enregistrerBrouillon(formulaire)
+        // D11, verrou (revue B8 de T8, B1) : la déclaration étudiant du brouillon serveur n'est jamais finalisée en natif
+        // (`register-soignant` écrirait `est_etudiant = false`, index.ts l.309).
+        if CompletionRules.parcoursEtudiant(relu.brouillon) { return .parcoursEtudiant }
+        let session = try await Self.sessionValide(client)
         let corps = try Self.anyJSON(.objet(CompletionRules.corpsFinalisation(formulaire)))
         let options = FunctionInvokeOptions(method: .post, headers: ["Authorization": "Bearer \(session.accessToken)"],
                                             body: corps)
@@ -222,6 +227,9 @@ public struct SupabaseInscriptionGateway: InscriptionPort {
         if let refus = try reponse.refus(fallback: CompletionTextes.saisieConservee) {
             if refus.code == CompletionRules.codeFinalisationEnAttente {
                 return .finalisationEnAttente(message: refus.message)
+            }
+            if CompletionRules.issueIndeterminee(statut: refus.statut, code: refus.code) {
+                return .indeterminee(message: refus.message)
             }
             return .refusee(code: refus.code, message: refus.message)
         }
@@ -236,6 +244,20 @@ public struct SupabaseInscriptionGateway: InscriptionPort {
             return .finalisationEnAttente(message: CompletionTextes.profilEnregistreReconnecter)
         }
         return .finalisee(soignantId: soignantId)
+    }
+
+    /// Session valide pour le Bearer de l'edge (`auth.session` : rafraîchie si expirée), jamais `currentSession` seul
+    /// (revue B8 de T8, m1 ; même lecture que `SupabaseAccountGateway`). Absente → « Reconnectez-vous pour reprendre
+    /// votre inscription. » (web l.177) ; annulation → `.cancelled` ; autre échec → `SupabaseErrorMapping`.
+    static func sessionValide(_ client: SupabaseClient) async throws -> Session {
+        do {
+            return try await client.auth.session
+        } catch AuthError.sessionMissing {
+            throw JoleneError(.unauthorized, CompletionTextes.sessionAbsente)
+        } catch {
+            if error is CancellationError { throw JoleneError(.cancelled, SupabaseErrorMapping.cancelledMessage) }
+            throw SupabaseErrorMapping.map(error, fallback: CompletionTextes.sessionAbsente)
+        }
     }
 
     // MARK: - JSON
