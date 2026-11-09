@@ -1028,7 +1028,14 @@ texte. Correctif d'intégration (tests d'abord), chaque test changé étant faux
      « lot3-notifications » (15 min sur iphone au run 42541548740) aurait dépassé 20 min ; job porté à 170 min (cinq
      éclats de 30 min et le build), résumé et artefact étendus. Point de fusion avec le lot 2 : garder tous les éclats
      et unir les `-skip-testing` de l'éclat socle.
-- **Constats serveur (aucune correction écrite, lecture du dump seulement).**
+- **Contrat relu en lecture seule sur la production le 09/11/2026** (MCP, `SELECT` sur `storage.buckets` et
+  `pg_policies`, `pg_get_functiondef`) : bucket `jolene-documents` privé, limite 25 Mo, MIME autorisés dont
+  `image/jpeg` (les types XML ajoutés par `20260718130836` sont aussi présents) ; seules politiques
+  `pol_storage_jolene_insert` (INSERT, `fn_peut_gerer_objet_jolene(name)`) et `pol_storage_jolene_select` (SELECT) ;
+  `fn_peut_gerer_objet_jolene` exige le premier segment du chemin égal à `auth.uid()` ; `fn_modifier_mon_profil`
+  garde `adresse_lat = COALESCE(p_adresse_lat, adresse_lat)` et `avatar_url = COALESCE(p_avatar_url, avatar_url)`.
+  Conforme au contrat des gateways ; aucune écriture.
+- **Constats serveur (aucune correction écrite).**
   - Un dépôt réussi suivi d'un refus ou d'une coupure de `fn_modifier_mon_profil` laisse un objet orphelin dans
     `jolene-documents` : aucune politique UPDATE/DELETE (`20260713222000` l.1395-1412), comme sur le web. Rien n'est
     exposé (URL signée jamais liée) ; un nettoyage serveur des avatars non référencés serait une tranche backend (B9,
