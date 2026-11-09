@@ -124,6 +124,10 @@ final class DemoSignatureContratTests: JoleneUITestCase {
         require("La case de consentement est rendue") { consentement.exists }
         scrollTo(consentement, in: ecran)
         tap("contrat-consentement")
+        // Le bouton d'envoi est sous la case : sur iPhone, il peut rester sous le bord de l'écran et la barre d'onglets
+        // une fois la case amenée à l'écran (run 42568134868, iPhone : bouton à y = 839,7 pour un écran de 874 pt).
+        // Il est amené à l'écran avant le toucher, comme dans `testSignatureOtpCodeFauxPuisCodeAccepteRelu`.
+        scrollTo(element("contrat-otp-envoyer"), in: ecran)
         tap("contrat-otp-envoyer")
         require("Le code est envoyé") { self.element("contrat-otp-envoye").exists }
         saisirCode("000000", dans: element("contract-otp"), ecran: ecran)
