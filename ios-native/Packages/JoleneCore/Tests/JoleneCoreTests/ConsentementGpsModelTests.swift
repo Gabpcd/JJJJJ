@@ -35,11 +35,18 @@ final class ConsentementGpsModelTests: XCTestCase {
         private var trace: [String] = []
         /// Valeur que le serveur retient, quelle que soit la demande (relecture ≠ hypothèse).
         private let valeurImposee: Bool?
+        /// Ouverte quand `fn_consentir_gps` est en vol ; `retenue` la garde en vol tant que le test ne l'ouvre pas.
+        let entreeEnregistrement = Gate()
+        let retenue: Gate?
 
-        init(valeur: Bool?, lectures: [JoleneError?] = [nil], erreurEnregistrement: JoleneError? = nil, valeurImposee: Bool? = nil) {
+        init(valeur: Bool?, lectures: [JoleneError?] = [nil], erreurEnregistrement: JoleneError? = nil, valeurImposee: Bool? = nil,
+             retenue: Gate? = nil) {
             self.valeur = valeur; self.lectures = lectures; self.erreurEnregistrement = erreurEnregistrement
-            self.valeurImposee = valeurImposee
+            self.valeurImposee = valeurImposee; self.retenue = retenue
         }
+
+        /// Nombre d'appels `fn_consentir_gps` reçus.
+        var enregistrements: Int { journal.filter { $0.hasPrefix("fn_consentir_gps") }.count }
 
         var journal: [String] { lock.lock(); defer { lock.unlock() }; return trace }
 
@@ -62,7 +69,10 @@ final class ConsentementGpsModelTests: XCTestCase {
 
         func consentementGps(context: MissionReadContext) async throws -> Bool? { try noterLecture().get() }
         func enregistrerConsentementGps(_ accepte: Bool, context: MissionReadContext) async throws -> Bool {
-            try noterEnregistrement(accepte).get()
+            let resultat = noterEnregistrement(accepte)
+            await entreeEnregistrement.open()
+            if let retenue { await retenue.wait() }
+            return try resultat.get()
         }
 
         func presences(context: MissionReadContext) async throws -> InstantanePresences { throw nonScripte }
@@ -84,6 +94,9 @@ final class ConsentementGpsModelTests: XCTestCase {
     private struct AuditEspion: AuditPort {
         let journal = JournalAudit()
         var erreur: JoleneError?
+        /// Ouverte quand l'audit est en vol ; `retenue` le garde en vol tant que le test ne l'ouvre pas (m2).
+        let entree = Gate()
+        var retenue: Gate?
 
         func connexion() async throws -> AuditResultat { .enregistre }
         func deconnexion() async throws -> AuditResultat { .enregistre }
@@ -92,6 +105,8 @@ final class ConsentementGpsModelTests: XCTestCase {
                     context: MissionReadContext) async throws -> AuditResultat {
             let detail = details.keys.sorted().map { "\($0)=\(details[$0] ?? "")" }.joined(separator: ",")
             await journal.noter("\(action.rawValue) \(typeRessource) \(idRessource) \(detail)")
+            await entree.open()
+            if let retenue { await retenue.wait() }
             if let erreur { throw erreur }
             return .enregistre
         }
@@ -285,6 +300,212 @@ final class ConsentementGpsModelTests: XCTestCase {
         XCTAssertNil(relu, "epoch quitté : rien n'est envoyé ni publié")
         XCTAssertEqual(port.journal, ["lire"])
         XCTAssertEqual(model.etat, .lu(nil))
+    }
+
+    // MARK: - Revue fraîche de T4b : premier consentement depuis le Profil (M2)
+
+    func testActivationDepuisLeProfilSansReponsePresenteLaFeuilleSansAucuneRPC() async throws {
+        let port = PortConsentement(valeur: nil)
+        let audit = AuditEspion()
+        let (model, _) = try await modele(port, audit: audit)
+        await model.charger()
+        XCTAssertFalse(model.feuilleRequise)
+        await model.basculer(true)
+        XCTAssertTrue(model.feuilleRequise, "NULL → activé : la feuille verbatim (finalité, durée, base légale) d'abord (RGPD art. 4, 11 ; art. 13)")
+        XCTAssertEqual(port.journal, ["lire"], "aucun `fn_consentir_gps` avant la réponse à la feuille")
+        let ecritures = await audit.journal.ecritures
+        XCTAssertTrue(ecritures.isEmpty)
+        XCTAssertEqual(model.etat, .lu(nil), "rien n'est supposé : l'interrupteur reste éteint")
+        XCTAssertNil(model.retour)
+        XCTAssertFalse(model.enCours)
+    }
+
+    func testFeuilleDuProfilAccepteeEnregistreRelitAuditeEtActive() async throws {
+        let port = PortConsentement(valeur: nil)
+        let audit = AuditEspion()
+        let (model, _) = try await modele(port, audit: audit)
+        await model.charger()
+        await model.basculer(true)
+        let localisation = DemoLocationPort(scenario: .accorde)
+        let relu = await model.repondre(accepte: true, localisation: localisation)
+        XCTAssertEqual(relu, true)
+        XCTAssertFalse(model.feuilleRequise, "la feuille se ferme après la réponse")
+        XCTAssertEqual(port.journal, ["lire", "fn_consentir_gps(true)", "relire"], "RPC puis relecture, comme au premier pointage")
+        let ecritures = await audit.journal.ecritures
+        XCTAssertEqual(ecritures, ["RGPD_CONSENTEMENT_DONNE soignant u-consentement consentement=true,type=gps"],
+                       "premier consentement audité (correction 15 du blueprint)")
+        XCTAssertTrue(model.interrupteurActif)
+        XCTAssertEqual(model.retour, .enregistre, "retour du web après la feuille (`PresencesSoignant.tsx` l.76)")
+        let demandes = await localisation.demandes
+        XCTAssertEqual(demandes, 1, "autorisation iOS demandée seulement après « Autoriser » (décision 4)")
+    }
+
+    func testFeuilleDuProfilRefuseeEnregistreFauxEtAudite() async throws {
+        let port = PortConsentement(valeur: nil)
+        let audit = AuditEspion()
+        let (model, _) = try await modele(port, audit: audit)
+        await model.charger()
+        await model.basculer(true)
+        let localisation = DemoLocationPort(scenario: .accorde)
+        let relu = await model.repondre(accepte: false, localisation: localisation)
+        XCTAssertEqual(relu, false)
+        XCTAssertFalse(model.feuilleRequise)
+        let ecritures = await audit.journal.ecritures
+        XCTAssertEqual(ecritures, ["RGPD_CONSENTEMENT_DONNE soignant u-consentement consentement=false,type=gps"])
+        XCTAssertFalse(model.interrupteurActif)
+        XCTAssertEqual(model.retour, .sansGps)
+        let demandes = await localisation.demandes
+        XCTAssertEqual(demandes, 0)
+    }
+
+    func testFeuilleDuProfilEnEchecSeFermeSansHypothese() async throws {
+        let port = PortConsentement(valeur: nil, erreurEnregistrement: JoleneError(.network, "Réseau indisponible."))
+        let (model, _) = try await modele(port)
+        await model.charger()
+        await model.basculer(true)
+        let relu = await model.repondre(accepte: true, localisation: nil)
+        XCTAssertNil(relu)
+        XCTAssertFalse(model.feuilleRequise, "la feuille se ferme ; le message d'échec est affiché sous l'interrupteur")
+        XCTAssertEqual(model.retour, .echec("Réseau indisponible."))
+        XCTAssertEqual(model.etat, .lu(nil))
+    }
+
+    func testFermerLaFeuilleDuProfilSansReponseNEnregistreRien() async throws {
+        let port = PortConsentement(valeur: nil)
+        let (model, _) = try await modele(port)
+        await model.charger()
+        await model.basculer(true)
+        model.fermerFeuille()
+        XCTAssertFalse(model.feuilleRequise)
+        XCTAssertEqual(port.journal, ["lire"])
+        XCTAssertEqual(model.etat, .lu(nil))
+    }
+
+    func testReponseAUneValeurNulleSansFeuilleAuditeLaPremiereReponse() async throws {
+        // Filet (revue fraîche de T4b, M2) : une bascule vers « retiré » depuis NULL est une première réponse, auditée.
+        let port = PortConsentement(valeur: nil)
+        let audit = AuditEspion()
+        let (model, _) = try await modele(port, audit: audit)
+        await model.charger()
+        await model.basculer(false)
+        XCTAssertEqual(port.journal, ["lire", "fn_consentir_gps(false)", "relire"])
+        let ecritures = await audit.journal.ecritures
+        XCTAssertEqual(ecritures, ["RGPD_CONSENTEMENT_DONNE soignant u-consentement consentement=false,type=gps"])
+        XCTAssertEqual(model.retour, .bascule(actif: false))
+    }
+
+    // MARK: - Revue fraîche de T4b : ligne du Profil (M3)
+
+    func testLigneDuProfilChargementPuisErreurPuisReprise() async throws {
+        let port = PortConsentement(valeur: true, lectures: [JoleneError(.network, "Réseau indisponible."), nil])
+        let (model, _) = try await modele(port)
+        XCTAssertEqual(model.ligneProfil, .chargement, "pendant la lecture : indicateur, jamais un interrupteur éteint")
+        await model.charger()
+        XCTAssertEqual(model.ligneProfil, .indisponible("Réseau indisponible."),
+                       "lecture en échec : message du port et « Réessayer », jamais « consentement retiré »")
+        await model.charger()
+        XCTAssertEqual(model.ligneProfil, .interrupteur(actif: true), "reprise : la valeur relue")
+    }
+
+    func testLigneDuProfilNulAfficheLInterrupteurEteint() async throws {
+        let (model, _) = try await modele(PortConsentement(valeur: nil))
+        await model.charger()
+        XCTAssertEqual(model.ligneProfil, .interrupteur(actif: false))
+    }
+
+    // MARK: - Revue fraîche de T4b : envoi unique (m1)
+
+    func testDoubleTapSurAutoriserUnSeulEnregistrementEtUnSeulAudit() async throws {
+        let port = PortConsentement(valeur: nil)
+        let audit = AuditEspion()
+        let (model, _) = try await modele(port, audit: audit)
+        await model.charger()
+        let localisation = DemoLocationPort(scenario: .accorde)
+        // Deux touchers rapprochés : deux tâches enfilées avant que la première n'atteigne son premier `await`.
+        let premier = Task { await model.repondre(accepte: true, localisation: localisation) }
+        let second = Task { await model.repondre(accepte: true, localisation: localisation) }
+        let reponses = [await premier.value, await second.value]
+        XCTAssertEqual(port.enregistrements, 1, "un seul `fn_consentir_gps`")
+        let ecritures = await audit.journal.ecritures
+        XCTAssertEqual(ecritures.count, 1, "une seule ligne d'audit (journal immuable)")
+        XCTAssertEqual(reponses.compactMap { $0 }, [true], "le second toucher ne rend rien : aucun second pointage")
+        let demandes = await localisation.demandes
+        XCTAssertEqual(demandes, 1)
+    }
+
+    func testDoubleBasculeDuProfilUnSeulEnregistrement() async throws {
+        let port = PortConsentement(valeur: true)
+        let (model, _) = try await modele(port)
+        await model.charger()
+        let premier = Task { await model.basculer(false) }
+        let second = Task { await model.basculer(false) }
+        await premier.value
+        await second.value
+        XCTAssertEqual(port.enregistrements, 1)
+        XCTAssertEqual(model.etat, .lu(false))
+    }
+
+    func testInterrupteurAfficheLaDemandeEnVolPuisLaValeurRelue() async throws {
+        let retenue = Gate()
+        let port = PortConsentement(valeur: true, retenue: retenue)
+        let (model, _) = try await modele(port)
+        await model.charger()
+        let bascule = Task { await model.basculer(false) }
+        await port.entreeEnregistrement.wait()
+        XCTAssertEqual(model.ligneProfil, .interrupteur(actif: false),
+                       "pendant la demande, l'interrupteur montre le choix en vol (aucun retour visuel qui inviterait à un second toucher)")
+        XCTAssertTrue(model.enCours)
+        XCTAssertTrue(model.interrupteurActif, "la valeur relue n'a pas changé : aucune hypothèse locale")
+        await retenue.open()
+        await bascule.value
+        XCTAssertEqual(model.ligneProfil, .interrupteur(actif: false))
+        XCTAssertFalse(model.interrupteurActif)
+    }
+
+    func testBasculeEnEchecRevientALaValeurRelue() async throws {
+        let port = PortConsentement(valeur: true, erreurEnregistrement: JoleneError(.network, "Réseau indisponible."))
+        let (model, _) = try await modele(port)
+        await model.charger()
+        await model.basculer(false)
+        XCTAssertEqual(model.ligneProfil, .interrupteur(actif: true), "échec : retour à la valeur relue")
+    }
+
+    // MARK: - Revue fraîche de T4b : identité changée pendant la réponse (m2)
+
+    func testEpochQuittePendantLAuditRendNilSansAutorisationIOS() async throws {
+        let retenue = Gate()
+        var audit = AuditEspion()
+        audit.retenue = retenue
+        let port = PortConsentement(valeur: nil)
+        let (model, controller) = try await modele(port, audit: audit)
+        await model.charger()
+        let localisation = DemoLocationPort(scenario: .accorde)
+        let reponse = Task { await model.repondre(accepte: true, localisation: localisation) }
+        await audit.entree.wait()
+        _ = await controller.signOut()
+        await retenue.open()
+        let relu = await reponse.value
+        XCTAssertNil(relu, "epoch quitté : rien n'est rendu, donc aucun pointage ni position demandée")
+        XCTAssertNil(model.retour, "rien n'est publié")
+        let demandes = await localisation.demandes
+        XCTAssertEqual(demandes, 0, "aucun prompt iOS après une déconnexion")
+    }
+
+    func testEpochQuittePendantLaRPCRendNil() async throws {
+        let retenue = Gate()
+        let port = PortConsentement(valeur: nil, retenue: retenue)
+        let (model, controller) = try await modele(port)
+        await model.charger()
+        let localisation = DemoLocationPort(scenario: .accorde)
+        let reponse = Task { await model.repondre(accepte: true, localisation: localisation) }
+        await port.entreeEnregistrement.wait()
+        _ = await controller.signOut()
+        await retenue.open()
+        let relu = await reponse.value
+        XCTAssertNil(relu)
+        XCTAssertEqual(model.etat, .lu(nil), "la valeur relue d'un epoch quitté n'est pas publiée")
+        let demandes = await localisation.demandes
+        XCTAssertEqual(demandes, 0)
     }
 
     // MARK: - Position au moment du pointage (décisions 4 et 5)

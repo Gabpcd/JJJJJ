@@ -894,4 +894,57 @@ final class PointageModelTests: XCTestCase {
         XCTAssertEqual(model.issue, .verification)
         XCTAssertEqual(magasin.phases, ["prepared", "started"])
     }
+
+    // MARK: - Session expirée : bloc « Session à vérifier » de la zone (revue fraîche de T4b, M1)
+
+    /// Bloc dont l'instantané est celui du `SessionStore` (revalidé par « Vérifier ma session »).
+    private func blocAvecSession(_ port: PortScripte, magasin: MagasinEspion = MagasinEspion())
+        async throws -> (PointageModel, SessionStore, ConsentementGpsModel) {
+        let banc = try await nouveauBanc(port, magasin: magasin)
+        let store = SessionStore(controller: banc.controller)
+        await store.start()
+        let snapshot = try XCTUnwrap(store.state.snapshot)
+        let model = bloc(mission, Banc(controller: banc.controller, snapshot: snapshot, appareil: banc.appareil))
+        return (model, store, ConsentementGpsModel(controller: banc.controller, snapshot: snapshot))
+    }
+
+    func testSessionExpireeAuScanAfficheLaVerificationDeSessionPuisReconcilieApresRevalidation() async throws {
+        let port = PortScripte(etats: [.success(etat())], reconciliations: [.enregistre(typeScan: .ouverture, numeroScan: 1)],
+                               erreurScan: JoleneError(.unauthorized, "session expirée (test)"))
+        let magasin = MagasinEspion()
+        let (model, store, consentement) = try await blocAvecSession(port, magasin: magasin)
+        await model.charger()
+        await model.pointer(code: "123456", gps: nil)
+        XCTAssertEqual(model.issue, .verification)
+        XCTAssertEqual(AffichageZonePointage(pointage: model, consentement: consentement), .sessionAVerifier,
+                       "401 au scan : jamais « Vérification du pointage… » sans fin, le bloc de reconnexion du lot 1")
+        await model.verifierSession(store, consentement: consentement)
+        XCTAssertFalse(model.sessionExpired, "session revalidée, même identité : état relu")
+        XCTAssertEqual(port.compte("reconcilier"), 1, "le reçu gardé est réconcilié par relecture")
+        XCTAssertEqual(port.compte("scanner"), 1, "jamais de renvoi du code")
+        XCTAssertEqual(model.issue, .enregistre(.ouverture))
+        XCTAssertEqual(AffichageZonePointage(pointage: model, consentement: consentement), .saisie(etat()))
+        XCTAssertTrue(magasin.vide, "reçu soldé après la relecture")
+    }
+
+    func testSessionExpireeAuChargementAfficheLaVerificationDeSessionEtNonLIndisponibilite() async throws {
+        let port = PortScripte(etats: [.failure(JoleneError(.unauthorized, SessionController.sessionExpiredMessage)), .success(etat())])
+        let (model, store, consentement) = try await blocAvecSession(port)
+        await model.charger()
+        XCTAssertTrue(model.sessionExpired)
+        XCTAssertEqual(AffichageZonePointage(pointage: model, consentement: consentement), .sessionAVerifier,
+                       "un « Réessayer » ne peut rien réparer : la session est à vérifier")
+        await model.verifierSession(store, consentement: consentement)
+        XCTAssertEqual(AffichageZonePointage(pointage: model, consentement: consentement), .saisie(etat()))
+        XCTAssertEqual(port.compte("etat"), 2)
+    }
+
+    func testVerifierSessionSousUneAutreIdentiteNeRelitRien() async throws {
+        let port = PortScripte(etats: [.failure(JoleneError(.unauthorized, SessionController.sessionExpiredMessage)), .success(etat())])
+        let (model, store, consentement) = try await blocAvecSession(port)
+        await model.charger()
+        await store.signOut()
+        await model.verifierSession(store, consentement: consentement)
+        XCTAssertEqual(port.compte("etat"), 1, "nouvel epoch : la zone est reconstruite, ce bloc ne relit rien")
+    }
 }

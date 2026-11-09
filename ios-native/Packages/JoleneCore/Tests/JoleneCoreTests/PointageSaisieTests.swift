@@ -13,7 +13,7 @@ final class PointageSaisieTests: XCTestCase {
     func testDeuxDetectionsDuMemeQRNeRemettentQuUnCode() {
         var session = SessionScanQR()
         XCTAssertEqual(session.recevoir("123456"), .code("123456"))
-        XCTAssertEqual(session.recevoir("123456"), .ignore, "une seule remise par session (anti-rejeu de 2 min, l.55661)")
+        XCTAssertEqual(session.recevoir("123456"), .ignore, "une seule remise par session (anti-rejeu de 2 min, l.55710-55713)")
         XCTAssertEqual(session.recevoir("654321"), .ignore, "un autre QR après la remise est ignoré aussi")
         XCTAssertEqual(session.remis, "123456")
     }
@@ -95,4 +95,79 @@ final class PointageSaisieTests: XCTestCase {
             XCTAssertFalse(PointageRules.rechargerPresencesApres(issue), "\(issue) : le web ne relit qu'après un succès (l.145-149)")
         }
     }
+
+    // MARK: - Contenu de la zone de pointage (revue fraîche de T4b, M1)
+
+    func testZoneDerivee() {
+        let pret = EtatPointage(statut: "ASSIGNEE", prochainTypeScan: .ouverture, nbScans: 0, segmentOuvert: false)
+        let termine = EtatPointage(statut: "TERMINEE")
+        XCTAssertEqual(AffichageZonePointage(chargement: .chargement, sessionExpiree: false), .chargement)
+        XCTAssertEqual(AffichageZonePointage(chargement: .indisponible("Accès interdit"), sessionExpiree: false), .indisponible("Accès interdit"))
+        XCTAssertEqual(AffichageZonePointage(chargement: .pret(termine), sessionExpiree: false), .statutIndisponible)
+        XCTAssertEqual(AffichageZonePointage(chargement: .pret(pret), sessionExpiree: false), .saisie(pret))
+        for chargement: PointageModel.Chargement in [.chargement, .indisponible("Votre session a expiré. Reconnectez-vous."), .pret(pret)] {
+            XCTAssertEqual(AffichageZonePointage(chargement: chargement, sessionExpiree: true), .sessionAVerifier,
+                           "\(chargement) : session expirée (scan, réconciliation, état ou consentement) → bloc du lot 1")
+        }
+    }
+
+    // MARK: - Diffusion du dernier état du réseau (revue fraîche de T4b, m5)
+
+    /// Valeurs d'un flux terminé, dans l'ordre.
+    private func valeurs(_ flux: AsyncStream<Bool>) async -> [Bool] {
+        var vues: [Bool] = []
+        for await valeur in flux { vues.append(valeur) }
+        return vues
+    }
+
+    func testDiffusionRendLEtatCourantPuisChaqueChangement() async {
+        let diffusion = DiffusionDernierEtat<Bool>()
+        XCTAssertNil(diffusion.lire())
+        let avant = diffusion.flux()
+        diffusion.recevoir(true)
+        let apres = diffusion.flux()
+        diffusion.recevoir(true)
+        diffusion.recevoir(false)
+        XCTAssertEqual(diffusion.lire(), false)
+        diffusion.terminer()
+        let vuesAvant = await valeurs(avant)
+        let vuesApres = await valeurs(apres)
+        XCTAssertEqual(vuesAvant, [true, false], "état inconnu : rien d'envoyé à l'abonnement ; doublon ignoré")
+        XCTAssertEqual(vuesApres, [true, false], "abonnement après un état connu : cet état d'abord")
+    }
+
+    func testDiffusionDesabonneUnFluxAbandonne() async {
+        let diffusion = DiffusionDernierEtat<Bool>()
+        var flux: AsyncStream<Bool>? = diffusion.flux()
+        XCTAssertEqual(diffusion.nombreAbonnes, 1)
+        flux = nil
+        XCTAssertNil(flux)
+        XCTAssertEqual(diffusion.nombreAbonnes, 0, "flux abandonné : désabonné")
+    }
+
+    func testDiffusionAbonnementConcurrentNeRendJamaisUnEtatPerime() async {
+        // Un abonnement concurrent d'un changement reçoit l'état courant puis les changements, dans l'ordre : son dernier
+        // état est toujours le dernier état diffusé (le premier envoi d'un abonné est fait sous le verrou).
+        for _ in 0..<200 {
+            let diffusion = DiffusionDernierEtat<Bool>()
+            diffusion.recevoir(false)
+            let boite = BoiteFlux()
+            DispatchQueue.concurrentPerform(iterations: 2) { index in
+                if index == 0 { boite.poser(diffusion.flux()) } else { diffusion.recevoir(true) }
+            }
+            diffusion.terminer()
+            guard let flux = boite.flux else { return XCTFail("flux absent") }
+            let vues = await valeurs(flux)
+            XCTAssertEqual(vues.last, true, "état périmé après un changement concurrent : \(vues)")
+            XCTAssertTrue(vues == [true] || vues == [false, true], "ordre : \(vues)")
+        }
+    }
+}
+
+/// Flux posé par une file concurrente (test de diffusion).
+private final class BoiteFlux: @unchecked Sendable {
+    private let verrou = NSLock()
+    private var stocke: AsyncStream<Bool>?
+    func poser(_ flux: AsyncStream<Bool>) { verrou.lock(); stocke = flux; verrou.unlock() }
+    var flux: AsyncStream<Bool>? { verrou.lock(); defer { verrou.unlock() }; return stocke }
 }

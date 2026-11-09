@@ -197,9 +197,15 @@ final class LibellesPresencesTests: XCTestCase {
                        "Position approximative : le pointage a été envoyé sans position. Pour la joindre, activez « Position exacte » pour Jolene dans les réglages de localisation de l'appareil.")
         XCTAssertEqual(p.fermer, "Fermer")
         XCTAssertEqual(p.voirSurJolene, "Voir sur jolene.app", "texte du lot 1 (`AccueilScreen.swift`), repris par T7")
+        // Revue fraîche de T4b, M1 : bloc de reconnexion du lot 1 (`MissionsListScreen.swift`, `PresencesScreen`), repris tel quel.
+        XCTAssertEqual(p.sessionAVerifier, "Session à vérifier")
+        XCTAssertEqual(p.verifierMaSession, "Vérifier ma session")
+        XCTAssertEqual(p.sessionAVerifier, LibellesJustificatifs.sessionAVerifier, "même texte que T7")
+        XCTAssertEqual(p.verifierMaSession, LibellesJustificatifs.verifierMaSession)
+        XCTAssertEqual(p.messageSessionExpiree, SessionController.sessionExpiredMessage)
         let tutoiement: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
         for texte in [p.codeInvalide, p.verification, p.nonRecu, p.horsLigne, p.autreMission, p.positionApproximative, p.fermer,
-                      p.voirSurJolene] {
+                      p.voirSurJolene, p.sessionAVerifier, p.verifierMaSession, p.messageSessionExpiree] {
             let mots = texte.lowercased().components(separatedBy: CharacterSet.letters.inverted).filter { !$0.isEmpty }
             XCTAssertFalse(mots.contains { tutoiement.contains($0) }, "tutoiement dans « \(texte) »")
             for marque in ["consentement", "RGPD", "géolocalisation", "72", "Code civil", "litige"] {

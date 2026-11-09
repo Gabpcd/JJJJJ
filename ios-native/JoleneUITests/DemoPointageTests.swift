@@ -8,7 +8,10 @@ import XCTest
 /// affirment : un écart entre l'écran et le cœur fait échouer l'un des deux.
 ///
 /// Preuves « aucune requête » et « une seule fois » : `pointage-demo-scans` (DEBUG) lit les scans appliqués par le monde
-/// démo et ceux qui portent une position (« N scan · M avec position »), sans jamais afficher de coordonnée. Scénarios
+/// démo et ceux qui portent une position (« N scan · M avec position »), sans jamais afficher de coordonnée. Il est relu à
+/// chaque issue du pointage et sur l'action explicite `pointage-demo-relire` ; sa valeur d'accessibilité compte les
+/// lectures : chaque affirmation suit une lecture postérieure à l'action (`compteursRelus`, revue fraîche de T4b, m3),
+/// jamais un compteur resté celui du lancement. Scénarios
 /// DEBUG : `-JOLENE_DEMO_GPS refuse | reduite`, `-JOLENE_DEMO_RESEAU horsligne`, `-JOLENE_DEMO_QR 123456 | illisible |
 /// refus`, `-JOLENE_DEMO_SCENARIO scan-incertain`. Aucune attente par délai fixe : tout passe par `require`.
 ///
@@ -16,7 +19,7 @@ import XCTest
 /// `pointage-message-<m>`, `pointage-qr-message-<m>`, `pointage-position-<m>`, `pointage-en-service-<m>`,
 /// `pointage-segment-<m>-<n>`, `pointage-scanner`, `pointage-scanner-message`, `pointage-scanner-fermer`,
 /// `gps-consent-sheet`, `gps-consent-accepter`, `gps-consent-refuser`, `gps-consent-retour`, `bandeau-sans-gps`,
-/// `hors-ligne-bandeau`, `profil-gps-consentement`, `profil-gps-explication`, `profil-gps-retour`.
+/// `hors-ligne-bandeau`, `profil-gps-consentement`, `profil-gps-explication`, `profil-gps-retour`, `pointage-demo-relire`.
 final class DemoPointageTests: JoleneUITestCase {
     private static let missionA = "demo-presence-a"
     private static let missionB = "demo-presence-b"
@@ -54,8 +57,8 @@ final class DemoPointageTests: JoleneUITestCase {
         require("Refus du code inconnu, surcharge vouvoyée de la décision 6") {
             self.libelle("pointage-message-\(Self.missionA)").contains(Self.codeInvalide)
         }
-        XCTAssertEqual(element("pointage-demo-scans").label, "0 scan · 0 avec position", "un refus n'enregistre aucun scan")
         XCTAssertEqual(valeur("pointage-code-\(Self.missionA)"), "100001", "un refus garde le code saisi (comme le web)")
+        XCTAssertEqual(compteursRelus(dans: ecran), "0 scan · 0 avec position", "un refus n'enregistre aucun scan (relu après le refus)")
         record("\(proofPrefix)-pointage-refus")
 
         // Code affiché de la mission a : consentement déjà donné, aucune feuille ; segment ouvert, position jointe.
@@ -139,7 +142,7 @@ final class DemoPointageTests: JoleneUITestCase {
         require("Encart « Position exacte » (décision 5)") {
             self.libelle("pointage-position-\(Self.missionA)").contains("activez « Position exacte » pour Jolene")
         }
-        XCTAssertEqual(element("pointage-demo-scans").label, "1 scan · 0 avec position", "précision réduite : aucune coordonnée")
+        XCTAssertEqual(compteursRelus(dans: ecran), "1 scan · 0 avec position", "précision réduite : aucune coordonnée")
         record("\(proofPrefix)-pointage-precision-reduite")
     }
 
@@ -156,7 +159,7 @@ final class DemoPointageTests: JoleneUITestCase {
         XCTAssertFalse(bouton.isEnabled, "hors ligne : bouton désactivé, aucun scan mis en file (décision 2)")
         XCTAssertFalse(element("pointage-qr-\(Self.missionA)").isEnabled, "hors ligne : scanner désactivé")
         XCTAssertFalse(element("gps-consent-sheet").exists)
-        XCTAssertEqual(element("pointage-demo-scans").label, "0 scan · 0 avec position", "aucune action dans le monde démo")
+        XCTAssertEqual(compteursRelus(dans: ecran), "0 scan · 0 avec position", "aucune action dans le monde démo (relu après la saisie)")
         record("\(proofPrefix)-pointage-hors-ligne")
     }
 
@@ -194,7 +197,7 @@ final class DemoPointageTests: JoleneUITestCase {
             !self.element("pointage-scanner").exists && self.element("pointage-code-\(Self.missionA)").exists
         }
         XCTAssertFalse(element("gps-consent-sheet").exists, "aucun code remis : rien n'est demandé")
-        XCTAssertEqual(element("pointage-demo-scans").label, "0 scan · 0 avec position")
+        XCTAssertEqual(compteursRelus(dans: ecran), "0 scan · 0 avec position", "relu après la fermeture du scanner")
     }
 
     func testRefusDeLaCameraRendLaSaisieManuelle() throws {
@@ -252,12 +255,20 @@ final class DemoPointageTests: JoleneUITestCase {
                        "Sans GPS, tes pointages seront validés manuellement par l'établissement — rien à faire de ton côté.")
         record("\(proofPrefix)-profil-gps-nul")
 
+        // Premier consentement (NULL → activé, revue fraîche de T4b, M2) : la feuille verbatim d'abord, comme au premier
+        // pointage (finalité, durée de conservation, base légale), puis la RPC, la relecture et l'audit.
         basculer(interrupteur)
-        require("Réactivation relue au serveur") {
-            (interrupteur.value as? String) == "1" && self.libelle("profil-gps-retour").contains("Consentement GPS activé.")
+        let feuille = element("gps-consent-sheet")
+        require("Activer depuis NULL présente la feuille de consentement verbatim") { self.containerVisible(feuille) }
+        XCTAssertTrue(feuille.staticTexts.matching(NSPredicate(format: "label == %@", "Autorisation de géolocalisation")).firstMatch.exists)
+        XCTAssertTrue(feuille.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Base légale : consentement")).firstMatch.exists)
+        record("\(proofPrefix)-profil-gps-feuille")
+        accepterConsentement()
+        require("Premier consentement relu au serveur") {
+            (interrupteur.value as? String) == "1" && self.libelle("profil-gps-retour").contains("Consentement GPS enregistré.")
         }
         XCTAssertEqual(libelle("profil-gps-explication"), "Ta position sera capturée uniquement au moment de l'arrivée et du départ.")
-        record("\(proofPrefix)-profil-gps-active")
+        record("\(proofPrefix)-profil-gps-premier-consentement")
 
         basculer(interrupteur)
         require("Retrait relu au serveur") {
@@ -265,6 +276,19 @@ final class DemoPointageTests: JoleneUITestCase {
                 && self.libelle("profil-gps-retour").contains("Consentement GPS retiré — tes pointages seront validés manuellement par l'établissement.")
         }
         record("\(proofPrefix)-profil-gps-retire")
+
+        // Réactivation (faux → vrai) : la personne a déjà répondu, aucune feuille.
+        basculer(interrupteur)
+        require("Réactivation relue au serveur") {
+            (interrupteur.value as? String) == "1" && self.libelle("profil-gps-retour").contains("Consentement GPS activé.")
+        }
+        XCTAssertFalse(element("gps-consent-sheet").exists, "réactivation : aucune seconde feuille")
+        record("\(proofPrefix)-profil-gps-active")
+
+        basculer(interrupteur)
+        require("Second retrait relu au serveur") {
+            (interrupteur.value as? String) == "0" && self.libelle("profil-gps-retour").contains("Consentement GPS retiré")
+        }
 
         // Les présences lisent le même consentement : bandeau du refus, et le pointage part sans feuille.
         tapDansProfil("profil-presences")
@@ -279,7 +303,7 @@ final class DemoPointageTests: JoleneUITestCase {
             self.libelle("pointage-message-\(Self.missionA)").contains(Self.segmentOuvert)
         }
         XCTAssertFalse(element("gps-consent-sheet").exists)
-        XCTAssertEqual(element("pointage-demo-scans").label, "1 scan · 0 avec position")
+        XCTAssertEqual(compteursRelus(dans: ecran), "1 scan · 0 avec position")
     }
 
     // MARK: - Étapes
@@ -386,6 +410,23 @@ final class DemoPointageTests: JoleneUITestCase {
 
     private func libelle(_ identifiant: String) -> String {
         element(identifiant).label
+    }
+
+    /// Lectures des compteurs démo faites depuis le lancement (valeur d'accessibilité de `pointage-demo-scans`).
+    private func lecturesCompteurs() -> Int {
+        Int(element("pointage-demo-scans").value as? String ?? "") ?? 0
+    }
+
+    /// Compteurs démo relus APRÈS l'action qui précède (revue fraîche de T4b, m3) : `pointage-demo-relire` touché, puis une
+    /// lecture nouvelle exigée avant de rendre le libellé.
+    private func compteursRelus(dans ecran: XCUIElement) -> String {
+        let avant = lecturesCompteurs()
+        let relire = element("pointage-demo-relire")
+        require("Le bouton de relecture des compteurs démo est rendu") { relire.exists }
+        scrollTo(relire, in: ecran)
+        tap("pointage-demo-relire")
+        require("Compteurs relus après l'action") { self.lecturesCompteurs() > avant }
+        return element("pointage-demo-scans").label
     }
 
     private func valeur(_ identifiant: String) -> String? {
