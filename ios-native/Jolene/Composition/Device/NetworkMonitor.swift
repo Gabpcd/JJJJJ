@@ -8,72 +8,41 @@ import Network
 /// par `AppContainer`) ; tant que le premier état n'est pas connu, `estEnLigne()` l'attend au plus 2 s puis suppose la
 /// connexion présente (le refus éventuel vient alors du transport, jamais d'un scan mis de côté).
 ///
-/// `@unchecked Sendable` : tout l'état mutable (dernier état, abonnés) est protégé par `verrou`, dans des sections
-/// synchrones ; le moniteur rappelle sur sa propre file série.
+/// Dernier état et abonnés : `DiffusionDernierEtat` (JoleneCore, testée par `PointageSaisieTests`) ; le premier envoi d'un
+/// abonnement se fait sous son verrou, un changement concurrent ne le devance jamais (revue fraîche de T4b, m5). Le
+/// moniteur rappelle sur sa propre file série.
 final class NetworkMonitor: NetworkPathPort, @unchecked Sendable {
     private static let attentePremierEtat: TimeInterval = 2
     private static let pas: UInt64 = 100_000_000
 
     private let moniteur = NWPathMonitor()
     private let file = DispatchQueue(label: "app.jolene.reseau")
-    private let verrou = NSLock()
-    private var dernier: Bool?
-    private var abonnes: [UUID: AsyncStream<Bool>.Continuation] = [:]
+    private let diffusion = DiffusionDernierEtat<Bool>()
 
     init() {
-        moniteur.pathUpdateHandler = { [weak self] chemin in
-            self?.recevoir(chemin.status == .satisfied)
+        let diffusion = diffusion
+        moniteur.pathUpdateHandler = { chemin in
+            diffusion.recevoir(chemin.status == .satisfied)
         }
         moniteur.start(queue: file)
     }
 
     deinit {
         moniteur.cancel()
+        diffusion.terminer()
     }
 
     func estEnLigne() async -> Bool {
         var attente: TimeInterval = 0
         while attente < Self.attentePremierEtat {
-            if let valeur = lire() { return valeur }
+            if let valeur = diffusion.lire() { return valeur }
             try? await Task.sleep(nanoseconds: Self.pas)
             attente += Double(Self.pas) / 1_000_000_000
         }
-        return lire() ?? true
+        return diffusion.lire() ?? true
     }
 
     func changements() -> AsyncStream<Bool> {
-        AsyncStream { suite in
-            let id = UUID()
-            if let valeur = abonner(id, suite) { suite.yield(valeur) }
-            suite.onTermination = { [weak self] _ in self?.desabonner(id) }
-        }
-    }
-
-    // MARK: - Sections critiques (synchrones)
-
-    private func lire() -> Bool? {
-        verrou.lock(); defer { verrou.unlock() }
-        return dernier
-    }
-
-    private func recevoir(_ enLigne: Bool) {
-        verrou.lock()
-        let change = dernier != enLigne
-        dernier = enLigne
-        let suites = Array(abonnes.values)
-        verrou.unlock()
-        guard change else { return }
-        suites.forEach { $0.yield(enLigne) }
-    }
-
-    private func abonner(_ id: UUID, _ suite: AsyncStream<Bool>.Continuation) -> Bool? {
-        verrou.lock(); defer { verrou.unlock() }
-        abonnes[id] = suite
-        return dernier
-    }
-
-    private func desabonner(_ id: UUID) {
-        verrou.lock(); defer { verrou.unlock() }
-        abonnes[id] = nil
+        diffusion.flux()
     }
 }

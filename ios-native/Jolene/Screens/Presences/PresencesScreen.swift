@@ -100,12 +100,15 @@ struct PresencesScreen: View {
         let model = model
         #if DEBUG
         let session = session, snapshot = snapshot, compteurs = compteursDemo
-        return ServicesPointage(consentement: consentement, reseau: reseau) {
+        return ServicesPointage(consentement: consentement, reseau: reseau, recharger: {
             await model.load()
             await compteurs.relire(session: session, snapshot: snapshot)
-        }
+        }, apresIssue: {
+            // Compteurs démo relus à chaque issue, pas seulement après un succès (revue fraîche de T4b, m3).
+            await compteurs.relire(session: session, snapshot: snapshot)
+        })
         #else
-        return ServicesPointage(consentement: consentement, reseau: reseau) { await model.load() }
+        return ServicesPointage(consentement: consentement, reseau: reseau, recharger: { await model.load() })
         #endif
     }
 
@@ -126,7 +129,14 @@ struct PresencesScreen: View {
                 Spacer()
                 Text(verbatim: libelle)
                     .foregroundStyle(JoleneColor.bubblegum)
+                    .accessibilityValue(Text(verbatim: String(compteursDemo.lectures)))
                     .accessibilityIdentifier("pointage-demo-scans")
+                // Relecture explicite (preuve des XCUITest : une affirmation suit une lecture postérieure à l'action, m3).
+                Button { Task { await compteursDemo.relire(session: session, snapshot: snapshot) } } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .accessibilityLabel(Text(verbatim: "Relire les compteurs (démo)"))
+                .accessibilityIdentifier("pointage-demo-relire")
             }
             .font(JoleneFont.caption)
         }
@@ -325,10 +335,12 @@ private struct OngletsPresences: View {
 
 #if DEBUG
 /// Scans appliqués par le monde démo et, parmi eux, ceux qui portent une position (preuve « une seule fois » et « aucune
-/// coordonnée » des XCUITest) ; nil hors démo. Aucune coordonnée n'est affichée. DEBUG seulement.
+/// coordonnée » des XCUITest) ; nil hors démo. Aucune coordonnée n'est affichée. DEBUG seulement. `lectures` compte les
+/// relectures (valeur d'accessibilité) : un XCUITest exige une lecture postérieure à son action avant d'affirmer (m3).
 @MainActor
 final class CompteursPointageDemo: ObservableObject {
     @Published private(set) var libelle: String?
+    @Published private(set) var lectures = 0
 
     func relire(session: SessionStore, snapshot: SessionSnapshot) async {
         guard let gateways = await session.controller.gateways(for: snapshot.epoch),
@@ -336,6 +348,7 @@ final class CompteursPointageDemo: ObservableObject {
         let scans = await demo.metadonneesRecues
         let avecPosition = scans.filter { $0.latitude != nil || $0.longitude != nil || $0.precisionGpsM != nil }.count
         libelle = "\(scans.count) scan · \(avecPosition) avec position"
+        lectures += 1
     }
 }
 #endif

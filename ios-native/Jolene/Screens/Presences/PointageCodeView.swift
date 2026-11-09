@@ -33,12 +33,22 @@ final class FabriqueZonePointageNative: FabriqueZonePointage {
 /// `.indisponible` : sans coordonnées) → `PointageModel.pointer(code:gps:)` → succès relu : champ vidé, instantané des
 /// présences relu (revue fraîche de T4a, m1). Hors ligne (bandeau de la page) : boutons désactivés, aucun appel.
 ///
+/// Session expirée (au scan, pendant la réconciliation, à la lecture de l'état ou du consentement ; revue fraîche de T4b,
+/// M1) : la zone montre le bloc « Session à vérifier » du lot 1 (`AffichageZonePointage.sessionAVerifier`, mêmes textes
+/// que `PresencesScreen`) et « Vérifier ma session » (`PointageModel.verifierSession` : session revalidée, état relu,
+/// reçu gardé réconcilié sans renvoi), jamais « Vérification du pointage… » sans fin ni un « Réessayer » inopérant.
+///
+/// Consentement (revue fraîche de T4b, m1 et m4) : une seule réponse part (code en attente vidé de façon synchrone,
+/// `ConsentementGpsModel.enCours` posé avant tout `await`) ; un échec de l'enregistrement s'affiche aussi dans la zone qui
+/// a ouvert la feuille ; le retour du consentement est levé au pointage suivant.
+///
 /// Cycle de vie (consigne T4b) : `.task { charger(); suivre() }`, `desactiver()` à la disparition, `reconcilier()` au
 /// retour au premier plan. Identifiants : `pointage-zone-<mission>`, `pointage-code-<mission>`, `pointage-qr-<mission>`,
 /// `pointage-submit-<mission>`, `pointage-message-<mission>`, `pointage-renvoi-web-<mission>`, `pointage-qr-message-<mission>`,
 /// `pointage-position-<mission>`, `pointage-en-service-<mission>`, `pointage-segment-<mission>-<n>`,
 /// `pointage-chargement-<mission>`, `pointage-etat-indisponible-<mission>`, `pointage-reessayer-<mission>`,
-/// `pointage-statut-indisponible-<mission>`.
+/// `pointage-statut-indisponible-<mission>`, `pointage-session-expired-<mission>`, `pointage-session-check-<mission>`,
+/// `pointage-consentement-echec-<mission>`.
 struct PointageCodeView: View {
     private typealias L = LibellesPresences.Pointage
     private typealias W = LibellesWeb.Pointage
@@ -47,6 +57,7 @@ struct PointageCodeView: View {
     private let appareil: Appareil
     private let scanner: ModeScannerQR
     private let recharger: @MainActor @Sendable () async -> Void
+    private let apresIssue: @MainActor @Sendable () async -> Void
     @StateObject private var model: PointageModel
     @ObservedObject private var consentement: ConsentementGpsModel
     @ObservedObject private var reseau: EtatReseauModel
@@ -59,12 +70,15 @@ struct PointageCodeView: View {
     @State private var messageQR: String?
     @State private var codeEnAttente: String?
     @State private var derniereObservation: ObservationGps?
+    /// Cette zone a ouvert la feuille de consentement : un échec de l'enregistrement y est aussi affiché (m4).
+    @State private var consentementDemandeIci = false
 
     init(contexte: ZonePointageContexte, services: ServicesPointage, appareil: Appareil, scanner: ModeScannerQR) {
         self.contexte = contexte
         self.appareil = appareil
         self.scanner = scanner
         self.recharger = services.recharger
+        self.apresIssue = services.apresIssue
         _consentement = ObservedObject(wrappedValue: services.consentement)
         _reseau = ObservedObject(wrappedValue: services.reseau)
         _model = StateObject(wrappedValue: PointageModel(missionId: contexte.missionId, finLe: contexte.finLe,
@@ -87,21 +101,21 @@ struct PointageCodeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
-            switch model.chargement {
+            switch AffichageZonePointage(pointage: model, consentement: consentement) {
+            case .sessionAVerifier:
+                sessionAVerifier
             case .chargement:
                 chargement
             case let .indisponible(message):
                 indisponible(message)
-            case let .pret(etat):
-                if PointageRules.pointageDisponible(statut: etat.statut) {
-                    saisie(etat)
-                } else {
-                    Text(W.statutIndisponible)
-                        .font(JoleneFont.callout)
-                        .foregroundStyle(JoleneColor.bubblegum)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("pointage-statut-indisponible-\(missionId)")
-                }
+            case .statutIndisponible:
+                Text(W.statutIndisponible)
+                    .font(JoleneFont.callout)
+                    .foregroundStyle(JoleneColor.bubblegum)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("pointage-statut-indisponible-\(missionId)")
+            case let .saisie(etat):
+                saisie(etat)
             }
         }
         .padding(JoleneSpacing.md)
@@ -118,7 +132,9 @@ struct PointageCodeView: View {
             if phase == .active { Task { await model.reconcilier() } }
         }
         .onChange(of: model.issue) { issue in
-            guard let issue, PointageRules.rechargerPresencesApres(issue) else { return }
+            guard let issue else { return }
+            Task { await apresIssue() }
+            guard PointageRules.rechargerPresencesApres(issue) else { return }
             code = ""
             Task { await recharger() }
         }
@@ -153,6 +169,19 @@ struct PointageCodeView: View {
             InlineNotice(message, title: W.indisponibleTitre, tone: .error, identifier: "pointage-etat-indisponible-\(missionId)")
             JoleneButton(W.reessayer, style: .secondary) { Task { await model.charger() } }
                 .accessibilityIdentifier("pointage-reessayer-\(missionId)")
+        }
+    }
+
+    /// Bloc de reconnexion du lot 1 (M1) : la session est revalidée, jamais une relecture qui échouerait de nouveau.
+    private var sessionAVerifier: some View {
+        VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
+            InlineNotice(L.messageSessionExpiree, title: L.sessionAVerifier, tone: .warning,
+                         identifier: "pointage-session-expired-\(missionId)", announcesOnAppear: true)
+            JoleneButton(L.verifierMaSession, style: .secondary) {
+                let session = contexte.session, consentement = consentement
+                Task { await model.verifierSession(session, consentement: consentement) }
+            }
+            .accessibilityIdentifier("pointage-session-check-\(missionId)")
         }
     }
 
@@ -208,6 +237,11 @@ struct PointageCodeView: View {
     @ViewBuilder private var retours: some View {
         if let messageQR {
             InlineNotice(messageQR, tone: .warning, identifier: "pointage-qr-message-\(missionId)", announcesOnAppear: true)
+        }
+        // Échec de l'enregistrement du consentement demandé depuis cette zone : affiché ici aussi, pas seulement en tête de
+        // page (m4) ; la feuille reviendra au prochain pointage.
+        if consentementDemandeIci, case let .echec(message)? = consentement.retour {
+            InlineNotice(message, tone: .error, identifier: "pointage-consentement-echec-\(missionId)", announcesOnAppear: true)
         }
         if let issue = model.issue {
             let message = L.message(issue)
@@ -284,6 +318,9 @@ struct PointageCodeView: View {
     private func pointer(_ saisie: String) {
         guard peutAgir, let codeValide = PointageRules.codeSaisi(saisie) else { return }
         messageQR = nil
+        // Le retour d'un consentement précédent (enregistré, refusé ou en échec) est levé au pointage suivant (m4).
+        consentement.oublierRetour()
+        consentementDemandeIci = false
         preparation = true
         Task {
             // Consentement non encore lu (ou illisible) : relu avant de décider, jamais supposé.
@@ -292,6 +329,7 @@ struct PointageCodeView: View {
             case .recueillir:
                 preparation = false
                 codeEnAttente = codeValide
+                consentementDemandeIci = true
                 feuille = .consentement
             case .localiser:
                 await envoyer(codeValide, gps: true)
@@ -301,14 +339,17 @@ struct PointageCodeView: View {
         }
     }
 
+    /// Réponse à la feuille : le code en attente est pris et vidé de façon synchrone, un second toucher ne fait rien (m1) ;
+    /// le modèle ne laisse partir qu'une réponse (`enCours` posé avant tout `await`).
     private func repondre(_ accepte: Bool) {
-        let code = codeEnAttente
+        guard let code = codeEnAttente, !consentement.enCours else { return }
+        codeEnAttente = nil
         Task {
             let relu = await consentement.repondre(accepte: accepte, localisation: appareil.localisation)
             feuille = nil
-            codeEnAttente = nil
-            // Échec de l'enregistrement : aucune hypothèse locale, rien n'est envoyé (la feuille reviendra).
-            guard let relu, let code else { return }
+            // Échec de l'enregistrement ou identité changée : aucune hypothèse locale, rien n'est envoyé (la feuille
+            // reviendra) ; l'échec est affiché dans la zone (m4).
+            guard let relu else { return }
             preparation = true
             await envoyer(code, gps: relu)
         }

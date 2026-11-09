@@ -199,6 +199,13 @@ public enum LibellesPresences {
         /// Renvoi web d'un suivi non vérifiable (`PresencesRenvois.presences`), texte du lot 1 (`AccueilScreen.swift`).
         public static let voirSurJolene = "Voir sur jolene.app"
 
+        /// Bloc de session expirée de la zone (`AffichageZonePointage.sessionAVerifier`, revue fraîche de T4b, M1) : textes
+        /// du lot 1 (`MissionsListScreen.swift` l.107-108, `PresencesScreen`), repris tels quels, comme T7
+        /// (`LibellesJustificatifs.sessionAVerifier`).
+        public static let sessionAVerifier = "Session à vérifier"
+        public static let verifierMaSession = "Vérifier ma session"
+        public static let messageSessionExpiree = SessionController.sessionExpiredMessage
+
         /// Ton d'un retour, porté par l'icône de l'encart (jamais par la couleur seule).
         public enum Ton: Equatable, Sendable {
             case succes, info, attention, erreur

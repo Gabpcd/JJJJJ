@@ -10,23 +10,15 @@ import JoleneCore
 /// `requestTemporaryFullAccuracyAuthorization` (nouvelle chaîne `Info.plist`, refusée par la décision 5). Ne lève jamais,
 /// ne journalise rien (aucune coordonnée dans un journal, `LOT2_PLAN.md` §2.7). Chaîne d'autorisation : celle du lot 0
 /// (`NSLocationWhenInUseUsageDescription`, verrouillée par la garde `check-textes-juridiques-ios`).
+///
+/// Sélection de la position (périmée si antérieure à la demande moins 1 s, précision invalide), reprise UNIQUE de la
+/// suite, expiration et nouvelle demande : `DemandesPosition` (JoleneCore, `DemandePositionTests` ; revue fraîche de T4b,
+/// m8). Ici ne restent que la traduction des types CoreLocation et le pilotage du gestionnaire.
 @MainActor
 final class LocationService: NSObject, LocationPort, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private var attentesAutorisation: [CheckedContinuation<Void, Never>] = []
-    private var demande: Demande?
-
-    /// Demande de position en cours : instant de départ et suite à reprendre une seule fois.
-    private final class Demande {
-        let debut: Date
-        let jeton = UUID()
-        var suite: CheckedContinuation<ObservationGps, Never>?
-
-        init(debut: Date, suite: CheckedContinuation<ObservationGps, Never>) {
-            self.debut = debut
-            self.suite = suite
-        }
-    }
+    private let demandes = DemandesPosition()
 
     override init() {
         super.init()
@@ -54,15 +46,13 @@ final class LocationService: NSObject, LocationPort, CLLocationManagerDelegate {
         case .accordee(precise: false): return .precisionReduite
         case .accordee(precise: true): break
         }
-        terminer(.indisponible) // une demande précédente encore ouverte n'est jamais reprise deux fois
         return await withCheckedContinuation { (suite: CheckedContinuation<ObservationGps, Never>) in
-            let nouvelle = Demande(debut: Date(), suite: suite)
-            demande = nouvelle
+            // Une demande précédente encore ouverte est close `.indisponible` par `ouvrir` (jamais reprise deux fois).
+            let jeton = demandes.ouvrir(debut: Date()) { suite.resume(returning: $0) }
             manager.startUpdatingLocation()
-            let jeton = nouvelle.jeton
             Task { [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(max(0, min(delai, 3600)) * 1_000_000_000))
-                self?.expirer(jeton)
+                self?.conclure(self?.demandes.expirer(jeton))
             }
         }
     }
@@ -75,8 +65,8 @@ final class LocationService: NSObject, LocationPort, CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         // Valeurs extraites ici (types `Sendable`) : aucune `CLLocation` ne traverse la frontière d'isolement.
-        let fixes = locations.map { Fix(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude,
-                                        precision: $0.horizontalAccuracy, instant: $0.timestamp) }
+        let fixes = locations.map { FixPosition(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude,
+                                                precision: $0.horizontalAccuracy, instant: $0.timestamp) }
         Task { @MainActor [weak self] in self?.recevoir(fixes) }
     }
 
@@ -87,13 +77,6 @@ final class LocationService: NSObject, LocationPort, CLLocationManagerDelegate {
 
     // MARK: - Interne
 
-    private struct Fix: Sendable {
-        let latitude: Double
-        let longitude: Double
-        let precision: Double
-        let instant: Date
-    }
-
     private func autorisationChangee() {
         guard manager.authorizationStatus != .notDetermined else { return }
         let attentes = attentesAutorisation
@@ -101,36 +84,24 @@ final class LocationService: NSObject, LocationPort, CLLocationManagerDelegate {
         attentes.forEach { $0.resume() }
     }
 
-    private func recevoir(_ fixes: [Fix]) {
-        guard let demande else { return }
-        guard manager.accuracyAuthorization == .fullAccuracy else {
-            terminer(.precisionReduite)
-            return
-        }
-        // Première position postérieure à la demande (une position en cache, plus ancienne, est ignorée).
-        guard let fix = fixes.last(where: { $0.precision >= 0 && $0.instant >= demande.debut.addingTimeInterval(-1) }) else { return }
-        terminer(.disponible(latitude: fix.latitude, longitude: fix.longitude, precisionM: fix.precision))
+    private func recevoir(_ fixes: [FixPosition]) {
+        conclure(demandes.recevoir(fixes, precise: manager.accuracyAuthorization == .fullAccuracy))
     }
 
     private func echouer(_ code: CLError.Code?) {
+        let echec: EchecPosition
         switch code {
-        case .locationUnknown?: return // transitoire : CoreLocation continue de chercher jusqu'au délai
-        case .denied?: terminer(.refusee)
-        default: terminer(.indisponible)
+        case .locationUnknown?: echec = .transitoire // CoreLocation continue de chercher jusqu'au délai
+        case .denied?: echec = .refus
+        default: echec = .autre
         }
+        conclure(demandes.echouer(echec))
     }
 
-    private func expirer(_ jeton: UUID) {
-        guard demande?.jeton == jeton else { return }
-        terminer(.indisponible)
-    }
-
-    private func terminer(_ observation: ObservationGps) {
-        guard let courante = demande else { return }
-        demande = nil
+    /// Demande close (une issue vient d'être rendue) : le gestionnaire s'arrête.
+    private func conclure(_ issue: ObservationGps?) {
+        guard issue != nil, !demandes.enCours else { return }
         manager.stopUpdatingLocation()
-        courante.suite?.resume(returning: observation)
-        courante.suite = nil
     }
 
     private static func traduire(_ statut: CLAuthorizationStatus, precise: Bool) -> AutorisationPosition {

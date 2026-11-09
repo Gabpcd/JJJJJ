@@ -14,7 +14,7 @@ public enum PointageRules {
     /// Message serveur exact de `fn_scanner_code_pointage` pour un code inconnu (`public.sql` l.55649), seul message
     /// que le web surcharge (l.135-136) ; T4b affiche la forme vouvoyée de la décision 6.
     public static let messageServeurCodeInvalide = "Code de pointage invalide ou expiré."
-    /// Début du refus anti-rejeu de 2 min (`public.sql` l.55662, SQLSTATE 23514).
+    /// Début du refus anti-rejeu de 2 min (`public.sql` l.55711, SQLSTATE 23514).
     public static let debutMessageAntiRejeu = "Scan déjà pris en compte."
 
     /// Bloc de pointage affiché (l.94) ; tout autre statut, nul compris : « pas disponible pour le statut actuel ».
@@ -69,7 +69,7 @@ public enum PointageRules {
         sqlstate == "P0002" && message == messageServeurCodeInvalide
     }
 
-    /// Refus anti-rejeu (`23514`, l.55661-55662) : juste après une réponse perdue, il prouve qu'un scan de ce terminal
+    /// Refus anti-rejeu (`23514`, `public.sql` l.55710-55713) : juste après une réponse perdue, il prouve qu'un scan de ce terminal
     /// vient d'être enregistré ; le modèle relance alors la réconciliation (§2.5).
     public static func estAntiRejeu(sqlstate: String?, message: String) -> Bool {
         sqlstate == "23514" && message.hasPrefix(debutMessageAntiRejeu)

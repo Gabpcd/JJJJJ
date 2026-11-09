@@ -20,7 +20,7 @@ public actor DemoPointageGateway: PointagePort {
 
     public static let codeInconnuDemo = "100001"
     public static let codeAntiRejeuDemo = "100002"
-    /// Message serveur de l'anti-rejeu (`public.sql` l.55662), délai figé à 87 s pour la démo (blueprint §2.8).
+    /// Message serveur de l'anti-rejeu (`public.sql` l.55711), délai figé à 87 s pour la démo (blueprint §2.8).
     public static let messageAntiRejeuDemo = "Scan déjà pris en compte. Prochain scan possible dans 87 secondes."
     /// Messages serveur verbatim de `fn_relancer_validation_presence` (`public.sql` l.53052, l.53071 ; tutoyés côté
     /// serveur, repris tels quels : décision 9 du lot 1).

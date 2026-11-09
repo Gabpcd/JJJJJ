@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 /// Session d'un scanner de QR (blueprint lot 2 §3 T4b, décision 3) : un code n'est remis qu'une fois par session, quel que
-/// soit le nombre de détections (anti-rejeu serveur de 2 min, `public.sql` l.55661 ; tests web
+/// soit le nombre de détections (anti-rejeu serveur de 2 min, `public.sql` l.55710-55713 ; tests web
 /// `PointageRotatifSoignant.qr.test.tsx`) ; un payload qui n'est pas exactement six chiffres après `trim`
 /// (`PayloadQR.codePointage`) est signalé une fois, puis la caméra continue (la saisie manuelle reste disponible).
 public struct SessionScanQR: Sendable {
@@ -48,6 +48,43 @@ public final class EtatReseauModel: ObservableObject {
             guard !Task.isCancelled else { return }
             enLigne = valeur
         }
+    }
+}
+
+/// Contenu de la zone de pointage d'une mission (T4b ; revue fraîche de T4b, M1), dérivé du modèle du bloc et du
+/// consentement de la page : la vue n'ajoute aucune règle. Une session expirée (au scan, pendant la réconciliation, à la
+/// lecture de l'état ou du consentement) l'emporte sur tout autre état : bloc « Session à vérifier » du lot 1 et action
+/// « Vérifier ma session » (`PointageModel.verifierSession`), jamais « Vérification du pointage… » sans fin ni un
+/// « Réessayer » qui ne peut rien réparer (consigne T4b de `DECISIONS_LOT2.md` : « `sessionExpired` → écran de
+/// reconnexion du lot 1 »).
+public enum AffichageZonePointage: Equatable, Sendable {
+    case sessionAVerifier
+    case chargement
+    /// `{error}` serveur verbatim ou message de transport, avec « Réessayer ».
+    case indisponible(String)
+    /// Statut de mission non pointable (`LibellesWeb.Pointage.statutIndisponible`).
+    case statutIndisponible
+    case saisie(EtatPointage)
+
+    public init(chargement: PointageModel.Chargement, sessionExpiree: Bool) {
+        if sessionExpiree {
+            self = .sessionAVerifier
+            return
+        }
+        switch chargement {
+        case .chargement:
+            self = .chargement
+        case let .indisponible(message):
+            self = .indisponible(message)
+        case let .pret(etat):
+            self = PointageRules.pointageDisponible(statut: etat.statut) ? .saisie(etat) : .statutIndisponible
+        }
+    }
+
+    @MainActor
+    public init(pointage: PointageModel, consentement: ConsentementGpsModel?) {
+        self.init(chargement: pointage.chargement,
+                  sessionExpiree: pointage.sessionExpired || consentement?.sessionExpired == true)
     }
 }
 

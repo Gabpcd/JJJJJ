@@ -498,6 +498,54 @@
     `pointage-scanner-fermer`, `gps-consent-sheet`, `gps-consent-accepter`, `gps-consent-refuser`, `gps-consent-retour`,
     `bandeau-sans-gps`, `hors-ligne-bandeau`, `profil-gps-consentement`, `profil-gps-explication`, `profil-gps-retour` ;
     DEBUG : `pointage-demo-scans` (« N scan · M avec position », preuve « une seule fois » et « aucune coordonnée »).
+    Revue fraîche de T4b : `pointage-session-expired-<m>`, `pointage-session-check-<m>`, `pointage-consentement-echec-<m>`,
+    `profil-gps-chargement`, `profil-gps-erreur`, `profil-gps-reessayer` ; DEBUG : `pointage-demo-relire` (valeur
+    d'accessibilité de `pointage-demo-scans` = nombre de lectures).
+  - **Revue fraîche de L2-T4b (9 novembre 2026)**, réponse aux majeurs M1 à M3 et aux mineurs m1 à m8 (tests d'abord,
+    commit rouge puis vert) :
+    - M1, session expirée dans la zone : `AffichageZonePointage` (Core, `Pointage/SaisiePointage.swift`) dérive le
+      contenu de la zone. Si le modèle du bloc OU le consentement de la page ont une session expirée, il vaut
+      `.sessionAVerifier`, qui l'emporte sur tout autre état : « Vérification du pointage… » d'un 401 au scan, ou
+      « Pointage momentanément indisponible » d'un 401 au chargement. La zone montre alors le bloc du lot 1 : « Session à
+      vérifier », `SessionController.sessionExpiredMessage`, « Vérifier ma session ». L'action appelle
+      `PointageModel.verifierSession(_:consentement:)` : `session.start()`, puis, pour le même epoch, relecture du
+      consentement s'il avait expiré, de l'état, et réconciliation du reçu gardé, sans renvoi. Un nouvel epoch (session
+      révoquée, reconnexion) reconstruit la zone. Tests : `PointageModelTests.testSessionExpireeAuScan…`,
+      `…AuChargement…`, `testVerifierSessionSousUneAutreIdentiteNeRelitRien`, `PointageSaisieTests.testZoneDerivee` ;
+    - M2 : D-T4b-1 amendée (feuille verbatim puis `repondre` depuis NULL, audit du premier consentement) ; XCUITest du
+      Profil migré (NULL → feuille → accepter → retrait → réactivation sans feuille → retrait) ;
+    - M3 : `ConsentementGpsModel.ligneProfil` (`.chargement`, `.indisponible(message)`, `.interrupteur(actif:)`) ;
+      l'interrupteur et son explication n'existent qu'en `.interrupteur`. L'échec affiche le message du port et
+      « Réessayer » (`profil-gps-erreur`, `profil-gps-reessayer`, relance de `charger()`) ;
+      `testLigneDuProfilChargementPuisErreurPuisReprise` ;
+    - m1 : `repondre` et `basculer` posent `enCours` de façon synchrone, avant le premier `await`. La zone prend et vide
+      le code en attente de façon synchrone. Le Profil montre le choix en vol (`valeurDemandee`), désactivé, puis la
+      valeur relue ; un échec y revient. Tests : `testDoubleTapSurAutoriserUnSeulEnregistrementEtUnSeulAudit` (un
+      `fn_consentir_gps`, un audit, une position demandée), `testDoubleBasculeDuProfilUnSeulEnregistrement`,
+      `testInterrupteurAfficheLaDemandeEnVolPuisLaValeurRelue` ;
+    - m2 : `repondre` rend nil si l'epoch change après la RPC ou pendant l'audit, et ne demande alors aucune autorisation
+      iOS (`testEpochQuittePendantLAuditRendNilSansAutorisationIOS`) ;
+    - m3 : compteurs démo relus à chaque issue du pointage (`ServicesPointage.apresIssue`, DEBUG) et sur
+      `pointage-demo-relire`. Les XCUITest qui affirmaient « 0 scan » (refus, hors ligne, QR illisible) ou un compte juste
+      après un succès (précision réduite, Profil) passent par `compteursRelus` : une lecture postérieure à l'action est
+      exigée avant d'affirmer ;
+    - m4 : un échec de l'enregistrement du consentement s'affiche aussi dans la zone qui a ouvert la feuille
+      (`pointage-consentement-echec-<m>`). Le retour du consentement (enregistré, refusé, échec) est levé au pointage
+      suivant (`ConsentementGpsModel.oublierRetour()`), comme le toast éphémère du web ;
+    - m5 : `DiffusionDernierEtat` (Core) porte le dernier état et les abonnés de `NetworkMonitor`. Le premier envoi d'un
+      abonnement et la diffusion d'un changement se font sous le verrou ; les flux sont terminés à la fin du moniteur.
+      Tests : `PointageSaisieTests.testDiffusion…`, dont un abonnement concurrent d'un changement, répété 200 fois ;
+    - m6 : constat porté en B9 (« Purge datée des positions de `scans_pointage` ») et décidé par D-T4b-3 ;
+    - m7 : références mises à jour. Anti-rejeu de 2 min : `public.sql` l.55710-55713, message l.55711
+      (`SaisiePointage.swift`, `PointageSaisieTests.swift`, `PointageRules.swift`, `DemoPointageGateway.swift`).
+      `PlaceholderScreen.swift` ne renvoie plus à `LibellesPresences.Provisoire`. Reste hors de cette tranche : le
+      commentaire de `JoleneSupabase/Tests/JoleneSupabaseTests/RPCResponseExceptionsMetierTests.swift` (l.84, « l.55662-55664 »),
+      à mettre à jour avec la prochaine tranche qui touche ce paquet ;
+    - m8 : `DemandesPosition` et `FixPosition` (Core, `Pointage/DemandePosition.swift`) portent la logique de
+      `LocationService` : position périmée ignorée (avant la demande moins 1 s), précision invalide, précision réduite,
+      refus, erreur transitoire, expiration au délai de 15 s, nouvelle demande, reprise unique de la suite.
+      `LocationService` ne garde que la traduction CoreLocation et le pilotage du gestionnaire. Tests :
+      `DemandePositionTests` (10 tests). `FixPosition` masque ses coordonnées dans `description` et sa réflexion.
   - **T5a** : `PointageModel.notationAProposer` n'est pas encore affiché : T5a monte `NotationSheet` dans
     `PointageCodeView` (fichier de T4b, ajout localisé) et relit la fin prévue avant de proposer la note (consigne T5a
     ci-dessous) ; `ZonePointageContexte` porte désormais `horloge` et `services`, à transmettre si T5a construit d'autres
@@ -815,9 +863,17 @@ GPS et retours : `TextesWeb` (HARD STOP n°4).
 | `LibellesPresences.Pointage.positionApproximative` | « Position approximative : le pointage a été envoyé sans position. Pour la joindre, activez « Position exacte » pour Jolene dans les réglages de localisation de l'appareil. » | décision 5 (encart « Position exacte ») | idem, `testEncartDePositionApproximative` |
 | `LibellesPresences.Pointage.fermer` | « Fermer » | nouveau (T4b) : fermeture de la feuille du scanner (le dialogue web se ferme par sa croix) | idem |
 | `LibellesPresences.Pointage.voirSurJolene` | « Voir sur jolene.app » | lot 1 (`AccueilScreen.swift`), repris par T7 : renvoi web d'un suivi non vérifiable | idem |
+| `LibellesPresences.Pointage.sessionAVerifier` | « Session à vérifier » | lot 1 (`MissionsListScreen.swift` l.107, `PresencesScreen`), repris tel quel (comme `LibellesJustificatifs.sessionAVerifier`, T7) : bloc de session expirée de la zone (revue fraîche de T4b, M1) | idem |
+| `LibellesPresences.Pointage.verifierMaSession` | « Vérifier ma session » | lot 1 (`MissionsListScreen.swift` l.108), repris tel quel : action du bloc (M1) | idem |
+| `LibellesPresences.Pointage.messageSessionExpiree` | « Votre session a expiré. Reconnectez-vous. » | `SessionController.sessionExpiredMessage` (lot 0), repris tel quel (M1) | idem |
+
+Repris d'écrans déjà livrés, sans texte nouveau (revue fraîche de T4b, M3) : « Réessayer » de la ligne du consentement
+du Profil (`LibellesWeb.Pointage.reessayer`, même texte que le bouton web de `ProfilSoignant.tsx` l.412) ; l'indicateur
+de chargement de cette ligne reprend son libellé (`TextesWeb.ProfilConsentementGps.libelle`).
 
 DEBUG seulement (absents en Release, jamais vus par un utilisateur) : « Pointages enregistrés (démo) » et « N scan · M avec
-position » (`pointage-demo-scans`, preuve des XCUITest, sur le modèle de `documents-demo-envois`).
+position » (`pointage-demo-scans`, preuve des XCUITest, sur le modèle de `documents-demo-envois`), et le bouton
+`pointage-demo-relire` (libellé vocalisé « Relire les compteurs (démo) » ; revue fraîche de T4b, m3).
 
 ## Textes opérationnels hors web (T8)
 
@@ -884,13 +940,61 @@ un changement de wording part d'abord sur le web.
   (le responsable doit pouvoir démontrer le consentement) — textes de loi ; considérant 32 (le silence, les cases cochées
   par défaut ou l'inactivité ne valent pas consentement) — texte du règlement. Force : choix de conformité Jolene appuyé
   sur le texte. Effet : interrupteur éteint et explication du retrait (`explicationRetiree`, texte du web, aucun texte
-  nouveau) ; l'activer appelle `fn_consentir_gps(true)` comme le web. Décision prise par Claude sur délégation explicite
+  nouveau). Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+  **Amendement du 9 novembre 2026 (revue fraîche de T4b, M2)** : la première version disait « l'activer appelle
+  `fn_consentir_gps(true)` comme le web ». C'était inexact : le web n'active jamais depuis NULL, puisqu'il affiche déjà
+  l'interrupteur coché (`ProfilSoignant.tsx` l.194). Ce chemin faisait aussi consentir sans la feuille d'information et
+  sans l'audit que garde la correction 15 du blueprint (`LOT2_PLAN.md` l.41 : `RGPD_CONSENTEMENT_DONNE` « au premier
+  consentement »). Décision amendée : activer depuis NULL présente d'abord la feuille verbatim (`ConsentementGpsSheet`,
+  textes de TL déjà validés pour l'affichage par D-T4b-0 : finalité, « Données conservées 1 an puis supprimées », base
+  légale et droit de retrait). Sa réponse passe par `ConsentementGpsModel.repondre` : `fn_consentir_gps`, relecture, audit
+  `RGPD_CONSENTEMENT_DONNE` (détails `type: gps`, `consentement`), puis l'autorisation iOS après un « Autoriser »
+  seulement. Aucune RPC ne part avant cette réponse (`feuilleRequise`). La feuille ne se ferme que par ses boutons
+  (D-T4b-2). Par filet, une bascule depuis NULL qui n'est pas une activation (retrait) est auditée comme une première
+  réponse. Sources primaires :
+  - RGPD art. 4, point 11 (consentement « éclairé ») et considérant 42 (un consentement éclairé suppose de connaître au
+    moins le responsable et les finalités du traitement) ;
+  - art. 13, paragraphe 1, c) (finalités et base juridique) et paragraphe 2, a) (durée de conservation), informations à
+    fournir « au moment où les données sont obtenues » ;
+  - art. 7, paragraphe 1 (démontrer le consentement : d'où l'audit) — textes de loi ;
+  - CJUE, 1er octobre 2019, *Planet49*, C-673/17 : une case cochée par défaut, que l'utilisateur doit décocher pour
+    refuser, ne vaut pas consentement valable — **JUGÉ** (fonde l'affichage éteint de NULL).
+  Force : choix de conformité Jolene appuyé sur le texte et sur la jurisprudence de la CJUE. Aucun texte nouveau. Effet
+  côté web inchangé : le web devrait lui aussi cesser d'afficher NULL coché (PR web à proposer, hors chantier iOS).
+  Tests : `ConsentementGpsModelTests.testActivationDepuisLeProfilSansReponsePresenteLaFeuilleSansAucuneRPC`,
+  `testFeuilleDuProfilAccepteeEnregistreRelitAuditeEtActive`, `testFeuilleDuProfilRefuseeEnregistreFauxEtAudite`,
+  `testReponseAUneValeurNulleSansFeuilleAuditeLaPremiereReponse` ; XCUITest
+  `DemoPointageTests.testConsentementRetireEtReactiveDepuisLeProfil`. Décision prise par Claude sur délégation explicite
   de Gabrielle du 08/11/2026.
 - **D-T4b-2 — La feuille de consentement exige un choix explicite.** Le dialogue web enregistre un refus quand on le
   ferme (`ConsentementGPS.tsx` l.18, `onOpenChange` → `onRefuser`) ; le natif ne se ferme que par « Je refuse » ou
   « Autoriser la localisation ». Sources : RGPD art. 4, point 11 et art. 7, paragraphe 1 (le choix enregistré doit être
   celui exprimé par la personne) — textes de loi. Force : choix de conformité Jolene. Un refus n'est jamais pénalisant (le
   pointage part sans position) ; aucun texte nouveau. Décision prise par Claude sur délégation explicite de Gabrielle du
+  08/11/2026.
+- **D-T4b-3 — Durée de conservation des positions de pointage : le serveur tient la promesse « 1 an », le texte ne
+  change pas** (revue fraîche de T4b, m6 ; suite du constat de D-T4b-0). Faits relus au dump `supabase/schema/public.sql` :
+  - `fn_anonymiser_gps_anciennes` (l.18506-18520, cron `anonymiser-gps`) et `fn_purger_gps_ancien` (l.51387) n'effacent
+    que les coordonnées de `presences`, après 90 jours ;
+  - `scans_pointage.latitude`, `longitude`, `precision_gps_m` et `ip_address` ne sont effacées qu'à la suppression du
+    compte (`fn_supprimer_mon_compte`, l.60179-60181), jamais à une date ;
+  - or la feuille de consentement promet « Données conservées 1 an puis supprimées » (`src/components/ConsentementGPS.tsx`
+    l.38).
+
+  Sources primaires :
+  - RGPD art. 5, paragraphe 1, e) (limitation de la conservation) ;
+  - art. 13, paragraphe 2, a) (la durée annoncée doit être exacte) ;
+  - art. 7, paragraphe 1 (le consentement porte sur l'information donnée) — textes de loi.
+
+  Force : choix de conformité Jolene (aucune jurisprudence citée). Options :
+  - corriger le texte (allonger ou rendre vague la durée annoncée) : affaiblirait une garantie déjà donnée à chaque
+    soignant qui a consenti ;
+  - **purger côté serveur** (retenue) : effacer ces quatre colonnes de `scans_pointage` au plus tard un an après
+    `scanne_le`, par une fonction et un cron, depuis la définition live (garde-fou 9.0 n°2), avec un test SQL.
+
+  Cette PR backend relève de **B9** (suppression de données de production) : préparée hors chantier iOS, elle ne se merge
+  qu'avec le go de Gabrielle (« En attente de Gabrielle », B9 ci-dessous). Le natif affiche le texte du web inchangé. Le
+  web ne change pas tant que la purge n'est pas mergée. Décision prise par Claude sur délégation explicite de Gabrielle du
   08/11/2026.
 
 ## En attente de Gabrielle
@@ -961,6 +1065,21 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
   8 novembre 2026 (#1117) ; fiche et garde basculées dans `feat/ios-lot2` le même jour.
 - **S1** — allocateur STAGING de capacité SMS de signature (`scripts/ci/allouer-capacite-sms-signature-staging.mjs`,
   workflow protégé) : secrets STAGING, fonctions `SECURITY DEFINER` du supplément, données.
+- **Purge datée des positions de `scans_pointage`** (constat de D-T4b-0, décision D-T4b-3 ; revue fraîche de T4b, m6) :
+  - écart : la feuille de consentement promet « Données conservées 1 an puis supprimées »
+    (`src/components/ConsentementGPS.tsx` l.38) ; or `scans_pointage.latitude`, `longitude`, `precision_gps_m` et
+    `ip_address` ne sont effacées qu'à la suppression du compte (`fn_supprimer_mon_compte`, `public.sql` l.60179-60181) ;
+    les purges datées (`fn_anonymiser_gps_anciennes` l.18506, `fn_purger_gps_ancien` l.51387) ne visent que `presences` ;
+  - PR backend proposée (non préparée par le chantier iOS) : `fix/purge-positions-scans-pointage`, avec :
+    - une migration qui crée `fn_purger_positions_scans_pointage()` (`SECURITY DEFINER`, `search_path` fixé, `REVOKE` de
+      `PUBLIC`, aucun `GRANT` à `authenticated`) ; elle passe les quatre colonnes à NULL pour `scanne_le < now() -
+      interval '1 year'` ;
+    - le cron quotidien `jolene_purger_positions_scans_pointage` (garde `pg_extension pg_cron` pour les branches preview,
+      CLAUDE.md « Patterns backend (Lot 13) ») ;
+    - un test SQL : une ligne de plus d'un an est purgée, une ligne récente est intacte, aucun scan n'est supprimé ;
+    - une ligne `journaux_audit` par passage, après vérification du CHECK `journaux_audit_action_check` ;
+  - catégorie B9 (suppression de données de production, `SECURITY DEFINER`) : go explicite de Gabrielle avant le merge ;
+  - sans cette PR, la promesse « 1 an » reste fausse pour les scans : le texte n'est pas reformulé (D-T4b-3).
 - **T11** — go au dispatch du workflow STAGING du lot 2 et du mode `--appareil` de sa fixture pour T12 (secrets
   service_role et comptes TEST exposés à l'environnement protégé, création et nettoyage de données STAGING).
 - **Go du 8 novembre 2026** : les PR B9 du 3 novembre — B1 du lot 2 (scanner, `fix/scanner-code-sans-code-suivant`),

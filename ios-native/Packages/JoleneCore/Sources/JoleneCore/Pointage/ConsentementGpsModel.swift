@@ -18,10 +18,19 @@ import Foundation
 ///   client (`GPS_CONSENTEMENT_ACTIVE` / `_RETIRE` absentes du CHECK `journaux_audit_action_check` : la trace serveur
 ///   `DONNEES_PERSO_MODIFICATION` de `fn_consentir_gps` suffit, correction 15) ;
 /// - l'interrupteur du Profil n'est actif que pour un consentement relu VRAI : NULL (aucune réponse) s'affiche éteint, là
-///   où le web l'affiche coché (`ProfilSoignant.tsx` l.194, `!== false`) — décision déléguée du 8 novembre 2026
-///   (`DECISIONS_LOT2.md`) : un consentement non donné n'est jamais présenté comme donné ;
+///   où le web l'affiche coché (`ProfilSoignant.tsx` l.194, `!== false`) — décision déléguée D-T4b-1 du 8 novembre 2026
+///   (`DECISIONS_LOT2.md`, amendée par la revue fraîche de T4b, M2) : un consentement non donné n'est jamais présenté
+///   comme donné, et l'activer depuis NULL présente d'abord la feuille verbatim (`feuilleRequise`, consentement éclairé :
+///   finalité, durée de conservation, base légale), puis passe par `repondre` (RPC, relecture, audit
+///   `RGPD_CONSENTEMENT_DONNE` du premier consentement) ; une bascule depuis NULL sans feuille (retrait) est auditée de même ;
+/// - ligne du Profil (`ligneProfil`, revue fraîche de T4b, M3) : indicateur pendant la lecture, message du port et
+///   « Réessayer » en échec, interrupteur seulement pour une valeur relue (jamais un consentement donné affiché retiré) ;
+/// - une seule réponse à la fois : `enCours` est posé de façon synchrone, avant le premier `await` (revue fraîche de T4b,
+///   m1, modèle de `PointageModel.envoiEnCours`) : un double toucher ne fait qu'un `fn_consentir_gps` et qu'un audit ;
+///   pendant la demande, l'interrupteur montre le choix en vol (`valeurDemandee`), puis la valeur relue ;
 /// - consentement illisible (lecture en échec) : pointage sans position, sans feuille (jamais un GPS supposé) ;
-/// - réponse reçue pour un epoch quitté : abandonnée (rien n'est envoyé ni publié).
+/// - réponse reçue pour un epoch quitté, à n'importe quelle étape : abandonnée (rien n'est rendu, envoyé ni publié ; revue
+///   fraîche de T4b, m2).
 @MainActor
 public final class ConsentementGpsModel: ObservableObject {
     public enum Etat: Equatable, Sendable {
@@ -54,10 +63,25 @@ public final class ConsentementGpsModel: ObservableObject {
         case echec(String)
     }
 
+    /// Ligne du Profil (revue fraîche de T4b, M3) : l'interrupteur n'existe que pour une valeur relue.
+    public enum LigneProfil: Equatable, Sendable {
+        /// Lecture en cours : indicateur.
+        case chargement
+        /// Lecture en échec : message du port et « Réessayer » (`charger()`).
+        case indisponible(String)
+        /// Interrupteur : choix en vol pendant une demande, sinon la valeur relue (NULL éteint, D-T4b-1).
+        case interrupteur(actif: Bool)
+    }
+
     @Published public private(set) var etat: Etat = .chargement
     @Published public private(set) var enCours = false
     @Published public private(set) var retour: Retour?
     @Published public private(set) var sessionExpired = false
+    /// Profil : activation demandée alors que le soignant n'a jamais répondu (NULL) ; la feuille verbatim doit être
+    /// présentée, aucune RPC avant sa réponse (D-T4b-1 amendée, revue fraîche de T4b, M2).
+    @Published public private(set) var feuilleRequise = false
+    /// Choix en vol (bascule du Profil ou réponse à la feuille), affiché par l'interrupteur jusqu'à la relecture (m1).
+    @Published public private(set) var valeurDemandee: Bool?
 
     private let controller: SessionController
     private let snapshot: SessionSnapshot
@@ -88,6 +112,14 @@ public final class ConsentementGpsModel: ObservableObject {
     /// Interrupteur du Profil : actif seulement pour un consentement relu vrai (NULL éteint, décision déléguée).
     public var interrupteurActif: Bool { etat == .lu(true) }
 
+    public var ligneProfil: LigneProfil {
+        switch etat {
+        case .chargement: return .chargement
+        case let .indisponible(message): return .indisponible(message)
+        case .lu: return .interrupteur(actif: valeurDemandee ?? interrupteurActif)
+        }
+    }
+
     public func charger() async {
         generation += 1
         let courant = generation
@@ -105,23 +137,58 @@ public final class ConsentementGpsModel: ObservableObject {
         }
     }
 
-    /// Réponse à la feuille du premier pointage. Rend la valeur relue, nil si rien n'a été enregistré (échec, epoch quitté,
-    /// réponse déjà en cours). Après un consentement relu vrai, l'autorisation iOS est demandée (une fois, par `localisation`).
-    public func repondre(accepte: Bool, localisation: any LocationPort) async -> Bool? {
-        guard !enCours, let relu = await enregistrer(accepte) else { return nil }
+    /// Réponse à la feuille (premier pointage, ou première activation depuis le Profil). Rend la valeur relue, nil si rien
+    /// n'a été enregistré ou si l'identité a changé en route (échec, epoch quitté, réponse déjà en cours : m1, m2). Après un
+    /// consentement relu vrai, l'autorisation iOS est demandée (une fois, par `localisation`). Ferme la feuille du Profil.
+    public func repondre(accepte: Bool, localisation: (any LocationPort)?) async -> Bool? {
+        // Posé avant le premier `await` : un second toucher ne fait rien (m1).
+        guard !enCours else { return nil }
+        enCours = true
+        valeurDemandee = accepte
+        defer {
+            enCours = false
+            valeurDemandee = nil
+            feuilleRequise = false
+        }
+        guard let relu = await enregistrer(accepte) else { return nil }
         await auditer(relu)
-        guard await estCourant() else { return relu }
+        guard await estCourant() else { return nil }
         retour = relu ? .enregistre : .sansGps
-        if relu, await localisation.autorisation() == .nonDeterminee {
+        if relu, let localisation, await localisation.autorisation() == .nonDeterminee {
             await localisation.demanderAutorisation()
         }
+        guard await estCourant() else { return nil }
         return relu
     }
 
-    /// Retrait (`false`) ou réactivation (`true`) depuis le Profil, sans audit client.
+    /// Retrait (`false`) ou réactivation (`true`) depuis le Profil, sans audit client. Activer depuis NULL (aucune réponse)
+    /// n'appelle rien : la feuille verbatim est demandée (`feuilleRequise`), sa réponse passe par `repondre` (M2). Une
+    /// bascule depuis NULL qui n'est pas une activation est une première réponse : auditée comme elle.
     public func basculer(_ actif: Bool) async {
-        guard !enCours, let relu = await enregistrer(actif), await estCourant() else { return }
+        guard !enCours else { return }
+        let premiereReponse = etat == .lu(nil)
+        if actif, premiereReponse {
+            retour = nil
+            feuilleRequise = true
+            return
+        }
+        // Posé avant le premier `await` : une seconde bascule ne fait rien (m1).
+        enCours = true
+        valeurDemandee = actif
+        defer {
+            enCours = false
+            valeurDemandee = nil
+        }
+        guard let relu = await enregistrer(actif) else { return }
+        if premiereReponse { await auditer(relu) }
+        guard await estCourant() else { return }
         retour = .bascule(actif: relu)
+    }
+
+    /// Feuille du Profil fermée sans réponse : rien n'est enregistré.
+    public func fermerFeuille() {
+        guard !enCours else { return }
+        feuilleRequise = false
     }
 
     public func oublierRetour() {
@@ -141,11 +208,10 @@ public final class ConsentementGpsModel: ObservableObject {
     }
 
     /// `fn_consentir_gps` puis relecture ; publie la valeur relue, ou le message d'échec sans toucher à la valeur.
+    /// `enCours` est tenu par l'appelant (`repondre`, `basculer`).
     private func enregistrer(_ accepte: Bool) async -> Bool? {
-        guard let x = await contexte(), await estCourant() else { return nil }
-        enCours = true
-        defer { enCours = false }
         retour = nil
+        guard let x = await contexte(), await estCourant() else { return nil }
         let port = x.port, context = snapshot.context
         do {
             let relu = try await bounded(timeout: controller.resolutionTimeout) {
