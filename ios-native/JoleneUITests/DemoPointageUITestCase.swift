@@ -110,9 +110,11 @@ class DemoPointageUITestCase: JoleneUITestCase {
     func appuyerSurPointer(_ mission: String, dans ecran: XCUIElement) {
         let bouton = element("pointage-submit-\(mission)")
         var glissements = 0
-        while (coveredByKeyboard(bouton) || !fullyVisible(bouton, inside: ecran)) && glissements < 10 {
+        // Hors du clavier ET hors de la barre de navigation translucide (un toucher sous la barre l'atteint, elle) :
+        // `visibleSousLesBarres` (UITestSupport, run 42559541711).
+        while (coveredByKeyboard(bouton) || !visibleSousLesBarres(bouton, inside: ecran)) && glissements < 10 {
             drag(ecran, fromY: 0.55, toY: 0.45)
-            if !coveredByKeyboard(bouton), !fullyVisible(bouton, inside: ecran) { scrollTo(bouton, in: ecran) }
+            if !coveredByKeyboard(bouton), !visibleSousLesBarres(bouton, inside: ecran) { scrollTo(bouton, in: ecran) }
             glissements += 1
         }
         tap("pointage-submit-\(mission)")

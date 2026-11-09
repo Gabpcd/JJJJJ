@@ -404,16 +404,42 @@ class JoleneUITestCase: XCTestCase {
         start.press(forDuration: 0.25, thenDragTo: end, withVelocity: .default, thenHoldForDuration: 0.25)
     }
 
+    /// Bas des barres de navigation qui recouvrent le haut de `container` : sous iOS 26, les barres sont translucides
+    /// et le défilement passe sous elles. Un élément qui s'y trouve peut être déclaré atteignable par XCUITest, mais un
+    /// toucher à cet endroit atteint la barre, qui ramène le défilement en haut (run 42559541711, iPad paysage,
+    /// `DemoContratsTests.testContratSigneCertificatEtPartageDuFichierOriginal` : « Télécharger le contrat » sous la
+    /// barre, aucune feuille de partage). Seules comptent les barres qui commencent dans la moitié haute du conteneur :
+    /// la barre d'une page restée derrière une feuille commence au-dessus de la feuille et n'en masque rien.
+    func basDesBarresDeNavigation(sur container: XCUIElement) -> CGFloat? {
+        let cadre = container.frame
+        var bas: CGFloat?
+        for barre in app.navigationBars.allElementsBoundByIndex where barre.exists {
+            let f = barre.frame
+            guard !f.isEmpty, f.minY >= cadre.minY - 1, f.minY < cadre.midY,
+                  f.maxX > cadre.minX, f.minX < cadre.maxX else { continue }
+            bas = max(bas ?? f.maxY, f.maxY)
+        }
+        return bas
+    }
+
+    /// Entièrement visible dans `container` ET hors des barres de navigation qui en recouvrent le haut.
+    func visibleSousLesBarres(_ target: XCUIElement, inside container: XCUIElement) -> Bool {
+        guard fullyVisible(target, inside: container) else { return false }
+        guard let bas = basDesBarresDeNavigation(sur: container) else { return true }
+        return target.frame.minY >= bas - 1
+    }
+
     func scrollTo(_ target: XCUIElement, in container: XCUIElement, downward: Bool = true) {
         require("Le conteneur de défilement attendu est visible") { self.containerVisible(container) }
         var scrolls = 0
-        while !fullyVisible(target, inside: container) && scrolls < 20 {
+        while !visibleSousLesBarres(target, inside: container) && scrolls < 20 {
             var forward = downward
             var distance: CGFloat = 0.55
             if target.exists && !target.frame.isEmpty {
                 let frame = target.frame
                 let viewport = container.frame
-                if frame.minY < viewport.minY { forward = false } else if frame.maxY > viewport.maxY { forward = true } else {
+                let hautVisible = max(viewport.minY, basDesBarresDeNavigation(sur: container) ?? viewport.minY)
+                if frame.minY < hautVisible { forward = false } else if frame.maxY > viewport.maxY { forward = true } else {
                     // Dans le cadre du conteneur mais pas atteignable : masqué par ce qui le recouvre, la barre de
                     // navigation en haut (le défilement passe sous elle) ou le clavier en bas. On le ramène vers le
                     // centre : vers le bas s'il est dans la moitié haute, vers le haut sinon. Sans cela, une cible
@@ -428,7 +454,7 @@ class JoleneUITestCase: XCTestCase {
             scrolls += 1
         }
         require("Le contrôle demandé est entièrement visible après un défilement borné") {
-            self.fullyVisible(target, inside: container)
+            self.visibleSousLesBarres(target, inside: container)
         }
     }
 
