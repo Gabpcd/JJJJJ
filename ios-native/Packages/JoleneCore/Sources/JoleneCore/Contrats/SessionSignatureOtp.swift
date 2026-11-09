@@ -204,10 +204,11 @@ public struct SessionSignatureOtp: Equatable, Sendable {
             appliquerRefus(code: code, message: message,
                            bloquant: code.map { TextesWeb.SignatureOtp.codesBloquants.contains($0) } ?? false)
             if let restantes { tentativesRestantes = restantes }
-            // `OTP_EXPIRE` : le serveur a constaté l'échéance (`otp_envoye_a` de plus de 10 min, preuve passée à
-            // `expire` par `fn_signer_contrat_otp`) ; il fait foi (décision 25) : le code est expiré ici aussi, quel que
-            // soit l'écart d'horloge (minuteur « Expiré », champ et « Signer » désactivés, « Recevoir un nouveau
-            // code », l.305, l.317, l.339, l.344). Un nouvel envoi repose une échéance de 10 min.
+            // `OTP_EXPIRE` : le serveur a constaté l'échéance ; définition live de `fn_signer_contrat_otp` (relue le
+            // 9 novembre 2026) : `otp_envoye_a < now() - 10 min` → preuve passée à `expire`. Écart au web assumé par
+            // l'amendement T9b de DECISIONS_LOT2 (« otp-expire ») : le code est expiré ici aussi, quel que soit l'écart
+            // d'horloge (minuteur « Expiré », champ et « Signer » désactivés, « Recevoir un nouveau code », l.305,
+            // l.317, l.339, l.344), là où le web garde son minuteur. Un nouvel envoi repose une échéance de 10 min.
             if code == Self.codeOtpExpire, etape == .otpEnvoye { echeanceOtp = .distantPast }
         }
     }

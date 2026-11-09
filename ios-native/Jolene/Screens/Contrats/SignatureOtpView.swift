@@ -6,7 +6,8 @@ import JoleneDesign
 /// `SignatureOtpPresentation`, elle-même rendue depuis la session OTP de T8 (`ContratModel.session`). La vue ne décide
 /// rien : elle appelle `accepter(_:)`, `saisirCode(_:)`, `envoyerCode()` et `signer()` ; la session refuse toute
 /// requête qu'elle n'autorise pas (une seule à la fois : anti double envoi), la gateway relit avant d'annoncer une
-/// signature, le modèle relit le contrat et le certificat avant de publier la confirmation. Le code saisi vit dans la
+/// signature, le modèle relit le contrat et le certificat avant de publier la confirmation (relecture relancée une fois,
+/// puis « Réessayer » proposé sous la confirmation si elle échoue encore). Le code saisi vit dans la
 /// session (mémoire) et dans le champ UIKit, jamais ailleurs ; aucun journal. Textes : `TextesWeb.SignatureOtp`
 /// (HARD STOP n°4, verbatim) et `LibellesWeb.SignatureOtp`, assemblés par `SignatureOtpPresentation`.
 ///
@@ -14,36 +15,24 @@ import JoleneDesign
 /// `contrat-otp-envoye`, `contrat-otp-suspendu`, `contrat-consentement`, `contrat-otp-envoyer`,
 /// `contrat-otp-destinataire`, `contrat-otp-sms-restants`, `contrat-otp-minuteur`, `contract-otp` (`OTPField` du
 /// lot 0), `contrat-otp-tentatives`, `contrat-otp-renvoyer`, `contrat-signer`, `contrat-signe`,
-/// `contrat-signature-indisponible`.
+/// `contrat-relecture-erreur`, `contrat-relecture-reessayer`, `contrat-signature-indisponible`.
 struct SignatureOtpView: View {
     @ObservedObject var model: ContratModel
     let presentation: SignatureOtpPresentation
 
     var body: some View {
         switch presentation.mode {
-        case let .signee(confirmation, mention):
-            HStack(alignment: .top, spacing: JoleneSpacing.md) {
-                Image(systemName: "checkmark.shield.fill")
-                    .font(JoleneFont.headline)
-                    .foregroundStyle(JoleneColor.cyan900)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: JoleneSpacing.xs) {
-                    Text(confirmation)
-                        .font(JoleneFont.callout.weight(.semibold))
-                        .foregroundStyle(JoleneColor.midnight)
-                    Text(mention)
-                        .font(JoleneFont.caption)
-                        .foregroundStyle(JoleneColor.midnight)
-                        .fixedSize(horizontal: false, vertical: true)
+        case let .signee(confirmation, mention, actualisation):
+            VStack(alignment: .leading, spacing: JoleneSpacing.md) {
+                confirmationSignee(confirmation, mention: mention)
+                if let actualisation {
+                    // Contrat non relu après une signature confirmée (revue fraîche de T9b, m1) : l'écran le dit et propose
+                    // la relecture, sans démonter la page ni renvoyer le code.
+                    InlineNotice(actualisation, tone: .warning, identifier: "contrat-relecture-erreur", announcesOnAppear: true)
+                    JoleneButton(LibellesWeb.Contrats.reessayer, style: .secondary) { Task { await model.actualiser() } }
+                        .accessibilityIdentifier("contrat-relecture-reessayer")
                 }
-                Spacer(minLength: 0)
             }
-            .padding(JoleneSpacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(JoleneColor.cyan100)
-            .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.field))
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("contrat-signe")
         case let .indisponible(titre, message):
             InlineNotice(message, title: titre, tone: .warning, identifier: "contrat-signature-indisponible",
                          announcesOnAppear: true)
@@ -52,6 +41,33 @@ struct SignatureOtpView: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("contrat-signature-otp")
         }
+    }
+
+    /// Confirmation relue (l.209-221, `role="status"`) : annoncée à VoiceOver à son apparition (revue fraîche de T9b, m8).
+    private func confirmationSignee(_ confirmation: String, mention: String) -> some View {
+        HStack(alignment: .top, spacing: JoleneSpacing.md) {
+            Image(systemName: "checkmark.shield.fill")
+                .font(JoleneFont.headline)
+                .foregroundStyle(JoleneColor.cyan900)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: JoleneSpacing.xs) {
+                Text(confirmation)
+                    .font(JoleneFont.callout.weight(.semibold))
+                    .foregroundStyle(JoleneColor.midnight)
+                Text(mention)
+                    .font(JoleneFont.caption)
+                    .foregroundStyle(JoleneColor.midnight)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(JoleneSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(JoleneColor.cyan100)
+        .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.field))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("contrat-signe")
+        .annonceALApparition(InlineNotice.accessibilityLabel(tone: .success, title: confirmation, message: mention))
     }
 
     // MARK: - Formulaire
@@ -97,6 +113,8 @@ struct SignatureOtpView: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("contrat-otp-suspendu")
+                // `role="status"` (l.265) : annoncé à son apparition (revue fraîche de T9b, m8).
+                .annonceALApparition(suspension)
             }
 
             consentement(f)
@@ -165,7 +183,8 @@ struct SignatureOtpView: View {
         }
 
         OTPField(code: Binding(get: { model.session.code }, set: { model.saisirCode($0) }), identifier: "contract-otp",
-                 accessibilityLabel: LibellesWeb.SignatureOtp.champCodeAccessibilite)
+                 accessibilityLabel: LibellesWeb.SignatureOtp.champCodeAccessibilite,
+                 placeholder: LibellesWeb.SignatureOtp.champCodeIndication)
             .frame(maxWidth: .infinity, minHeight: 52)
             .disabled(!code.champActif)
             .opacity(code.champActif ? 1 : 0.5)

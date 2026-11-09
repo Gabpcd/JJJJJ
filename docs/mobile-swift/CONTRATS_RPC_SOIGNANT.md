@@ -549,7 +549,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_envoyer_otp_signature"("p_contrat_id" "u
 
 - **Statut natif** : consommée (lot 2, T8) par `SupabaseContratsGateway.signer` ; écran T9b `SignatureOtpView`
   (HARD STOP n°4 de l'écran de signature : go par délégation du 8 novembre 2026, définition live relue le
-  9 novembre 2026, sans dérive) ; le modèle relit le contrat et le certificat avant de publier la confirmation. Corps exact `{"p_contrat_id", "p_otp_code", "p_hash_document", "p_signature_image": null}` ;
+  9 novembre 2026, sans dérive) ; confirmation publiée sur la relecture de la gateway ci-dessous, avec le contrat et le certificat relus ensuite par le modèle (relecture du contrat en échec relancée une fois, puis actualisation proposée ; jeton refusé → session à vérifier ; revue fraîche de T9b, m1). Corps exact `{"p_contrat_id", "p_otp_code", "p_hash_document", "p_signature_image": null}` ;
   code hors `^[0-9]{6}$` ou empreinte hors format : refus local, aucune requête ; exception déclarée `23514`
   (`RPCResponse.appelerMutation(…, exceptionsMetier: ["23514"])`) restituée verbatim ; succès annoncé seulement
   après relecture du contrat (`signature_soignant`, même `hash_document`) et de la ligne `signatures_contrats` du
@@ -894,7 +894,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_signer_attestation_sante"() RETURNS "jso
 - **Usage prévu** : admettre un compte TEST à l'OTP réel sur STAGING (capacité S1). Appelée **uniquement** si
   l'environnement est STAGING et l'URL Supabase `https://mejpriaetwgtcstbgfid.supabase.co` (garde du web
   `src/lib/signatureSmsStagingAdmission.ts` l.1, l.6) ; en production elle n'existe pas (`PGRST202`) et n'est
-  jamais appelée. Sans admission, un compte TEST est renvoyé vers le web pour signer (décision 18).
+  jamais appelée. Sans admission, un compte TEST est renvoyé vers le web pour signer (décision 18). Admission ouverte
+  jusqu'à `can_send ? expires_at : otp_expires_at`, close sur une échéance nulle ou passée (`ContratMission.tsx`
+  l.311-312, `ContratModel.admissionOuverte` ; revue fraîche de T9b, m2).
 - **Signature SQL** (supplément, `CREATE FUNCTION public.fn_admission_otp_signature_recette(p_contrat_id uuid)`) :
   `RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=''`.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC,anon,service_role` puis `GRANT EXECUTE … TO authenticated` (l.141-142).

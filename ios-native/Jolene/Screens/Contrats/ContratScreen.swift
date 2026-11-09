@@ -16,18 +16,25 @@ import JoleneDesign
 /// (`CONTRAT_INACTIF`, `CONTRAT_DEJA_COMPLET`, `DEJA_SIGNE`, l.222-236). Compte TEST sans admission de recette : renvoi
 /// web vers `/contrat/:id`, bouton seulement quand le présentateur `.safari` (lot 1 T10) est injecté (jamais un bouton
 /// sans effet). La zone porte aussi les erreurs de préparation du document final du web (l.713-717). Le défilement
-/// ferme le clavier numérique du code (qui n'a pas de touche de validation).
+/// ferme le clavier numérique du code (qui n'a pas de touche de validation). Un jeton refusé pendant une action OTP ou une
+/// relecture, contrat affiché, ajoute en tête le bandeau « Session à vérifier » (mêmes textes que l'écran de session à
+/// vérifier ; revue fraîche de T9b, m1).
 ///
 /// Partage : copie temporaire `Contrat-<numéro>.html` des octets contrôlés (`ContratModel.preparerPartage`), feuille
 /// système, copie effacée à la fermeture de la feuille et à la disparition de l'écran ; toutes les copies sont
 /// effacées au changement d'epoch (`MainTabView`). Identifiants : `contrat-screen`, `contrat-chargement`,
-/// `contrat-erreur`, `contrat-reessayer`, `contrat-session-expiree`, `contrat-bandeau-<cas>`, `contrat-countdown`,
+/// `contrat-erreur`, `contrat-reessayer`, `contrat-session-expiree`, `contrat-session-bandeau` (+ `-verifier`),
+/// `contrat-bandeau-<cas>`, `contrat-countdown`,
 /// `contrat-titre`, `contrat-statut`, `contrat-cdd-a-preparer`, `contrat-partager`, `contrat-imprimer`,
 /// `contrat-partage-erreur`, `contrat-empreinte`, `contrat-lecteur`, `contrat-contenu-indisponible`,
 /// `contrat-certificat`, `contrat-certificat-ouvrir`, `contrat-signatures` (+ `-etablissement`, `-soignant`),
 /// `contrat-zone-signature` (+ `SignatureOtpView`), `contrat-renvoi-web` (+ `-message`, `-action`),
 /// `contrat-preparation`, `contrat-deja-signe`, `contrat-pied-de-page`.
 struct ContratScreen: View {
+    /// Textes de l'écran de session à vérifier (lot 1, `MissionsListScreen`), repris tels quels.
+    private static let sessionAVerifierTitre = "Session à vérifier"
+    private static let verifierMaSession = "Vérifier ma session"
+
     @StateObject private var model: ContratModel
     @ObservedObject private var session: SessionStore
     private let snapshot: SessionSnapshot
@@ -47,6 +54,7 @@ struct ContratScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: JoleneSpacing.lg) {
+                if model.sessionExpired, model.etat == .charge { sessionAVerifier }
                 switch model.etat {
                 case .chargement:
                     VStack(alignment: .leading, spacing: JoleneSpacing.md) {
@@ -56,15 +64,9 @@ struct ContratScreen: View {
                     }
                     .accessibilityIdentifier("contrat-chargement")
                 case let .echec(message) where model.sessionExpired:
-                    EmptyState(systemImage: "person.crop.circle.badge.exclamationmark", title: "Session à vérifier", message: message,
-                               identifier: "contrat-session-expiree", actionTitle: "Vérifier ma session",
-                               actionIdentifier: "contrat-session-verifier") {
-                        Task {
-                            await session.start()
-                            guard session.state.snapshot?.epoch == snapshot.epoch else { return }
-                            await model.charger()
-                        }
-                    }
+                    EmptyState(systemImage: "person.crop.circle.badge.exclamationmark", title: Self.sessionAVerifierTitre,
+                               message: message, identifier: "contrat-session-expiree", actionTitle: Self.verifierMaSession,
+                               actionIdentifier: "contrat-session-verifier") { Task { await verifierSession() } }
                 case let .echec(message):
                     EmptyState(systemImage: "questionmark.circle", title: LibellesWeb.Contrat.introuvable, message: message,
                                identifier: "contrat-erreur", actionTitle: LibellesWeb.Contrats.reessayer,
@@ -87,6 +89,25 @@ struct ContratScreen: View {
         .task { if model.contrat == nil { await model.charger() } }
         .refreshable { await model.charger() }
         .onDisappear { effacerCopie() }
+    }
+
+    // MARK: - Session
+
+    /// Bandeau « Session à vérifier » quand le contrat reste affiché (envoi du code, signature ou relecture refusés par le
+    /// jeton) : la page n'est pas démontée, la session est vérifiée puis le contrat relu.
+    private var sessionAVerifier: some View {
+        VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
+            InlineNotice(SessionController.sessionExpiredMessage, title: Self.sessionAVerifierTitre, tone: .warning,
+                         identifier: "contrat-session-bandeau", announcesOnAppear: true)
+            JoleneButton(Self.verifierMaSession, style: .secondary) { Task { await verifierSession() } }
+                .accessibilityIdentifier("contrat-session-bandeau-verifier")
+        }
+    }
+
+    private func verifierSession() async {
+        await session.start()
+        guard session.state.snapshot?.epoch == snapshot.epoch else { return }
+        await model.charger()
     }
 
     // MARK: - Contenu

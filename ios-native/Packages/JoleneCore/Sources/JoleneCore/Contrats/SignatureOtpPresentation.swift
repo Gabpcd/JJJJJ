@@ -77,8 +77,10 @@ public struct SignatureOtpPresentation: Equatable, Sendable {
     }
 
     public enum Mode: Equatable, Sendable {
-        /// Signature acceptée et relue : confirmation (l.214, ou son repli) et mention (l.216).
-        case signee(confirmation: String, mention: String)
+        /// Signature acceptée et relue : confirmation (l.214, ou son repli) et mention (l.216) ; `actualisation` quand le
+        /// contrat n'a pas pu être relu après la signature (`MessagesContrats.indisponible`, « Réessayer » ; revue fraîche
+        /// de T9b, m1), `nil` sinon.
+        case signee(confirmation: String, mention: String, actualisation: String?)
         /// Titre (l.230) et message du serveur (l.231).
         case indisponible(titre: String, message: String)
         case formulaire(Formulaire)
@@ -89,13 +91,16 @@ public struct SignatureOtpPresentation: Equatable, Sendable {
     /// - Parameters:
     ///   - nouvelEnvoiAutorise: compte réel, ou recette STAGING admise avec un envoi restant (`ContratMission.tsx` l.762).
     ///   - actionsSuspendues: relecture de l'admission de recette en cours (l.761).
-    public init(session: SessionSignatureOtp, maintenant: Date, nouvelEnvoiAutorise: Bool, actionsSuspendues: Bool) {
+    ///   - erreurRelecture: relecture du contrat en échec après une signature confirmée (`ContratModel.erreurRelecture`).
+    public init(session: SessionSignatureOtp, maintenant: Date, nouvelEnvoiAutorise: Bool, actionsSuspendues: Bool,
+                erreurRelecture: String? = nil) {
         if session.etape == .signe {
             let confirmation: String
             if case .succes(let message)? = session.retour, !message.isEmpty { confirmation = message } else {
                 confirmation = TextesWeb.SignatureOtp.contratSigne
             }
-            mode = .signee(confirmation: confirmation, mention: TextesWeb.SignatureOtp.signeAvecSucces)
+            mode = .signee(confirmation: confirmation, mention: TextesWeb.SignatureOtp.signeAvecSucces,
+                           actualisation: erreurRelecture)
             return
         }
         if let bloquante = session.erreurBloquante, let code = bloquante.code, Self.codesIndisponibles.contains(code) {

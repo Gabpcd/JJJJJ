@@ -4,22 +4,27 @@ import UIKit
 /// Champ OTP UIKit (six chiffres, clavier numérique, `oneTimeCode`), repris du témoin
 /// `mobile-native/ios-ui-tests/UIKitOtpReference/UIKitOtpReference.swift` : UIKit n'a pas
 /// de longueur maximale, le délégué refuse tout remplacement qui dépasserait six caractères
-/// sans tronquer. Branché par la signature de contrat (lot 2, T9b) : libellé d'accessibilité fourni par l'écran (texte
-/// du web), champ désactivé quand l'environnement SwiftUI l'est (`.disabled`).
+/// sans tronquer. Branché par la signature de contrat (lot 2, T9b) : libellé d'accessibilité et texte indicatif fournis
+/// par l'écran (textes du web), champ désactivé quand l'environnement SwiftUI l'est (`.disabled`).
 public struct OTPField: UIViewRepresentable {
     nonisolated public static let maximumLength = 6
 
     /// Libellé d'accessibilité du lot 0, quand l'écran n'en fournit pas.
     nonisolated public static let libelleParDefaut = "Code de signature, six chiffres"
+    /// Texte indicatif du lot 0, quand l'écran n'en fournit pas (la signature de contrat passe celui du web, revue
+    /// fraîche de T9b, m7).
+    nonisolated public static let indicationParDefaut = "6 chiffres"
 
     @Binding private var code: String
     private let identifier: String
     private let accessibilityLabel: String
+    private let placeholder: String
     private let onComplete: (String) -> Void
 
     public init(code: Binding<String>, identifier: String = "contract-otp", accessibilityLabel: String = OTPField.libelleParDefaut,
-                onComplete: @escaping (String) -> Void = { _ in }) {
-        self._code = code; self.identifier = identifier; self.accessibilityLabel = accessibilityLabel; self.onComplete = onComplete
+                placeholder: String = OTPField.indicationParDefaut, onComplete: @escaping (String) -> Void = { _ in }) {
+        self._code = code; self.identifier = identifier; self.accessibilityLabel = accessibilityLabel
+        self.placeholder = placeholder; self.onComplete = onComplete
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -28,7 +33,7 @@ public struct OTPField: UIViewRepresentable {
         let field = UITextField()
         field.accessibilityIdentifier = identifier
         field.accessibilityLabel = accessibilityLabel
-        field.placeholder = "6 chiffres"
+        field.placeholder = placeholder
         field.borderStyle = .roundedRect
         field.keyboardType = .numberPad
         field.textContentType = .oneTimeCode
@@ -51,6 +56,7 @@ public struct OTPField: UIViewRepresentable {
         context.coordinator.parent = self
         if field.text != code { field.text = code }
         field.accessibilityLabel = accessibilityLabel
+        if field.placeholder != placeholder { field.placeholder = placeholder }
         // `.disabled(true)` de SwiftUI n'atteint pas un `UITextField` enveloppé : l'état vient de l'environnement.
         let actif = context.environment.isEnabled
         if field.isEnabled != actif {
