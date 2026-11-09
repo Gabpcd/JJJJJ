@@ -37717,6 +37717,10 @@ $_$;
 ALTER FUNCTION "public"."fn_generer_facture"("p_mission_id" "uuid") OWNER TO "postgres";
 
 
+COMMENT ON FUNCTION "public"."fn_generer_facture"("p_mission_id" "uuid") IS 'Verrou double facturation (migration 20261109020404, docs/GARDES_NULL_SECURITY_DEFINER.md §5) : EXECUTE retiré à PUBLIC, anon et authenticated ; service_role seul. La facture de commission passe par les chemins canoniques.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_generer_facture_honoraires_mission"("p_mission_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -83069,7 +83073,6 @@ GRANT ALL ON FUNCTION "public"."fn_generer_donnees_dpae"("p_contrat_id" "uuid") 
 
 
 REVOKE ALL ON FUNCTION "public"."fn_generer_facture"("p_mission_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_generer_facture"("p_mission_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_generer_facture"("p_mission_id" "uuid") TO "service_role";
 
 
