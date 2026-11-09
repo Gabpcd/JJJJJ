@@ -95,7 +95,7 @@ La demande (établissements) passe avant l'offre : un soignant inscrit sans miss
   - Ces deux textes pourraient être un argument pour la vacation directe. **À instruire en
     HARD STOP n°4** avant toute mention publique.
 
-## 4. Agents livrés (`20261108120000_agents_croissance_brouillons.sql`)
+## 4. Agents livrés (`20261109082510_agents_croissance_brouillons.sql`)
 
 Ce sont quatre routines SQL quotidiennes, plus un rapport hebdomadaire. **Aucune n'envoie quoi
 que ce soit** : ni pg_net, ni Resend, ni SMS, ni publication. Elles n'appellent pas de LLM, donc

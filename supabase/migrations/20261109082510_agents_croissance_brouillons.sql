@@ -1363,13 +1363,13 @@ INSERT INTO private.security_definer_inventory (signature, categorie, definition
 SELECT x.signature, 'ADMIN_EST_ADMIN_VALIDE', pg_catalog.md5(p.prosrc), x.justification, pg_catalog.now()
 FROM (VALUES
   ('fn_admin_growth_entonnoir(integer)', 'public.fn_admin_growth_entonnoir(integer)',
-   'UID non NULL + est_admin() ; lecture agrégée de l''entonnoir, cohorte réelle uniquement, aucune donnée nominative. Source : 20261108120000_agents_croissance_brouillons.sql'),
+   'UID non NULL + est_admin() ; lecture agrégée de l''entonnoir, cohorte réelle uniquement, aucune donnée nominative. Source : 20261109082510_agents_croissance_brouillons.sql'),
   ('fn_admin_growth_executer_agents()', 'public.fn_admin_growth_executer_agents()',
-   'UID non NULL + est_admin() ; lance les agents qui écrivent des brouillons, aucun envoi. Source : 20261108120000_agents_croissance_brouillons.sql'),
+   'UID non NULL + est_admin() ; lance les agents qui écrivent des brouillons, aucun envoi. Source : 20261109082510_agents_croissance_brouillons.sql'),
   ('fn_admin_growth_brouillon_decider(uuid,text,text,text,text)', 'public.fn_admin_growth_brouillon_decider(uuid,text,text,text,text)',
-   'UID non NULL + est_admin() ; verrou FOR UPDATE, garde STOP fn_sales_outreach_est_interdit et préférences email, journalisation CRM existante ; n''envoie rien. Source : 20261108120000_agents_croissance_brouillons.sql'),
+   'UID non NULL + est_admin() ; verrou FOR UPDATE, garde STOP fn_sales_outreach_est_interdit et préférences email, journalisation CRM existante ; n''envoie rien. Source : 20261109082510_agents_croissance_brouillons.sql'),
   ('fn_admin_growth_planification(boolean)', 'public.fn_admin_growth_planification(boolean)',
-   'UID non NULL + est_admin() ; active/désactive uniquement les deux crons jolene_growth_* (brouillons, aucun envoi) et le drapeau growth_config associé ; NULL = lecture. Source : 20261108120000_agents_croissance_brouillons.sql')
+   'UID non NULL + est_admin() ; active/désactive uniquement les deux crons jolene_growth_* (brouillons, aucun envoi) et le drapeau growth_config associé ; NULL = lecture. Source : 20261109082510_agents_croissance_brouillons.sql')
 ) AS x(signature, regsig, justification)
 JOIN pg_catalog.pg_proc p ON p.oid = x.regsig::pg_catalog.regprocedure
 ON CONFLICT (signature) DO UPDATE

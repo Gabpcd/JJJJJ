@@ -1,7 +1,7 @@
 /**
  * Agents de croissance — logique pure partagée par la page admin.
  * Les agents SQL écrivent des brouillons ; rien n'est envoyé automatiquement.
- * Source : supabase/migrations/20261108120000_agents_croissance_brouillons.sql
+ * Source : supabase/migrations/20261109082510_agents_croissance_brouillons.sql
  */
 
 export type AgentCroissance =
