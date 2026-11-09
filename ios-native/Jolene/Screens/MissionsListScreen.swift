@@ -18,6 +18,18 @@ import JoleneDesign
 /// qu'enregistrer les critères ; ils sont appliqués dans `onDismiss`, une fois la feuille fermée,
 /// pour que la liste et le badge ne soient pas reconstruits pendant la transition de fermeture
 /// (feuille qui ne se rouvrait plus, run CI 42526135547). « Fermer » n'applique rien.
+///
+/// Ce correctif repose sur deux hypothèses SwiftUI, ni documentées ni prouvées par un test
+/// (revue B8, m3). Seules les passes vertes de
+/// `DemoExplorerTests.testFiltresSeRouvrentApresChaqueApplication` sur les 3 formats les
+/// corroborent :
+/// 1. `onDismiss` s'exécute après la fin de la transition de fermeture, et non au moment où la
+///    liaison repasse à `nil`. Sinon, l'application aurait de nouveau lieu pendant la transition,
+///    comme avant le correctif ;
+/// 2. une `Ouverture` d'identité neuve relance la présentation, même si UIKit a refusé la
+///    précédente et laissé la liaison non nulle sans feuille. Le prochain appui sur « Filtres »
+///    répare alors l'état. Le test unitaire `ExplorerFeuilleFiltresTests` prouve seulement que
+///    l'identité change, pas que SwiftUI représente la feuille.
 struct MissionRoute: Hashable {
     let id: String
 }
