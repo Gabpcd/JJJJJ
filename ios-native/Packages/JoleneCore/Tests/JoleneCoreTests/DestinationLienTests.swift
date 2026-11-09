@@ -421,7 +421,7 @@ final class DestinationLienTests: XCTestCase {
             (.missions, true, "placeholder jusqu'à L1-T5"),
             (.missionDetail(id: "m"), true, "lot 1"),
             (.serieDetail(id: "s"), false, "renvoi web, décision 11 du lot 1 ; lot 4"),
-            (.revenus(section: .apercu), true, "placeholder jusqu'à L3-T12"),
+            (.revenus(section: .apercu), true, "T12 : RevenusScreen (onglet Revenus)"),
             (.monCompte, true, "hub ProfileScreen"),
             (.notifications, true, "T5"),
             (.parametresNotifications, true, "T6"),

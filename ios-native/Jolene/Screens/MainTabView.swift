@@ -29,7 +29,9 @@ import JoleneDesign
 ///   (`demandeTraitee`, revue B8 de T3b, m7) ; il remplace `push-tap-cible`. Explorer, l'Accueil et le Profil
 ///   reviennent à leur racine (piles par chemin ; revue B8 de T3b, m5) ;
 /// - une notification lue dans le centre périme le compteur de l'Accueil (`lecturesCentre`, jeton de péremption
-///   d'`AccueilModel`, revue L3-T5 m1).
+///   d'`AccueilModel`, revue L3-T5 m1) ;
+/// - (lot 3, T12) onglet Revenus natif (`RevenusScreen`, pile `cheminRevenus`), à la place du placeholder du lot 0 ;
+///   ses renvois web et l'état vide passent par `presenter` (cible de l'espace), la surcouche du pré-prompt est gardée.
 struct MainTabView: View {
     /// Onglets de l'espace : enum dédié de JoleneCore (revue L3-T5, m9), jamais les drapeaux `EcranNatif`.
     typealias Tab = OngletEspace
@@ -47,6 +49,13 @@ struct MainTabView: View {
     @State private var cheminExplorer = NavigationPath()
     /// Pile de l'onglet Profil (intégration du lot 3) : préférences de notifications et édition du profil.
     @State private var cheminProfil = NavigationPath()
+    /// Pile de l'onglet Revenus (lot 3, T12), ramenée à sa racine par un lien ou un tap. Rien n'y est empilé depuis la
+    /// revue B8 n°2 de T12 (M1 : le paiement rapide en litige ouvre la page web de la mission) ; elle reste le point
+    /// d'extension des sections de T13, T14a et T14b.
+    @State private var cheminRevenus = NavigationPath()
+    /// Présentations de l'onglet Revenus par un lien ou un tap (jeton de péremption de `RevenusModel`, revue B8 de T12,
+    /// m1) : le web relit `/soignant/mes-gains` à chaque navigation, l'onglet natif relit alors ses sections.
+    @State private var presentationsRevenus = 0
     /// Notifications lues dans le centre (jeton de péremption du compteur de l'Accueil).
     @State private var lecturesCentre = 0
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
@@ -91,9 +100,12 @@ struct MainTabView: View {
             .tag(Tab.missions)
             .accessibilityIdentifier("tab-missions")
 
-            NavigationStack {
-                PlaceholderScreen(titre: "Revenus", identifier: "placeholder-revenus",
-                                  description: "Vos gains, factures et bulletins arrivent au lot 1.")
+            // Lot 3, T12 : onglet Revenus natif (remplace le placeholder du lot 0) ; ses renvois web (litige, factures,
+            // paie, présences) passent par `presenter`, et sa pile revient à sa racine sur un lien ou un tap.
+            NavigationStack(path: $cheminRevenus) {
+                RevenusScreen(session: session, snapshot: snapshot, peremption: presentationsRevenus) { cible in
+                    presenter(cible, depuisCentre: false)
+                }
             }
             .tabItem { Label("Revenus", systemImage: "banknote") }
             .tag(Tab.revenus)
@@ -164,14 +176,19 @@ struct MainTabView: View {
             selection = .accueil
             cheminAccueil = NavigationPath()
         case .explorer:
-            // Revue B8 de T3b, m5 : un détail empilé sur Explorer est retiré (Mes missions et Revenus n'ont pas de pile).
+            // Revue B8 de T3b, m5 : un détail empilé sur Explorer est retiré (Mes missions n'a pas de pile ; celle de
+            // Revenus, lot 3, T12, est vidée de même ci-dessous).
             selection = .explorer
             cheminExplorer = NavigationPath()
         case .missions:
             selection = .missions
         case .revenus:
-            // Seule la racine (`.apercu`) est présentable avant T12/T13 (garde de `estPresentable`).
+            // Seule la racine (`.apercu`) est présentable avant T13 (garde de `estPresentable`) ; lot 3, T12 : la pile de
+            // l'onglet revient à sa racine (revue B8 de T3b, m5), comme Explorer, et ses sections sont relues (jeton de
+            // péremption, revue B8 de T12, m1).
             selection = .revenus
+            cheminRevenus = NavigationPath()
+            presentationsRevenus += 1
         case .monCompte:
             selection = .profil
             cheminProfil = NavigationPath()

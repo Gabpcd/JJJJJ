@@ -387,6 +387,101 @@ export function buildDemoTypesExercice() {
   return { fixed_now: FIXED_NOW, source: REGLES_EXERCICE_SEED, types_exercice: types };
 }
 
+/** Horodatage `timestamptz` tel que PostgREST le sérialise (`+00:00`). */
+const timestamptz = (date) => date.toISOString().replace('.000Z', '+00:00');
+
+/**
+ * Lot 3, T12 : revenus du profil fictif. `exercice` = ligne `soignants(type_exercice, est_compte_test)` lue avant les
+ * totaux (colonnes de `PageStripeConnect.tsx` l.95 ; profil MIXTE hors compte de test : cartes rendues comme l.178,
+ * l.300 et l.367, revue B8 de T12, M1) ; `totaux` = réponse de `fn_mes_revenus_connect()` (`supabase/schema/public.sql`
+ * l.42396 : euros, drapeau Connect vrai = compte Connect complet). Sommes serveur fictives, jamais recalculées par l'app.
+ */
+export function buildDemoRevenus() {
+  return {
+    fixed_now: FIXED_NOW,
+    exercice: { type_exercice: DEMO_PROFILE.profile.type_exercice, est_compte_test: false },
+    totaux: { mois_en_cours: 195, total: 1425.6, en_attente: 780, stripe_connect_actif: true },
+  };
+}
+
+/**
+ * Lot 3, T12 : réponse de `fn_mes_paiements_escrow()` (`public.sql` l.42233) pour le profil fictif — les sept états,
+ * dans l'ordre serveur (rang de l'état, puis `mission_date` décroissante), clés dans l'ordre d'un jsonb. Le litige
+ * porte sur la mission ASSIGNEE démo 2 (détail natif ouvrable) ; `honoraires_cents` = part soignant figée à la
+ * confirmation (règle #11 de CLAUDE.md).
+ */
+export function buildDemoEscrow(now = new Date(FIXED_NOW)) {
+  const nom = (id) => DEMO_ETABLISSEMENTS.find((e) => e.id === id).nom;
+  const jour = (jours, heure) => timestamptz(instantDemo(now, jours, heure));
+  const assignee = buildDemoDashboard(now).missions_assignees.find((m) => m.id === 'demo-assignee-002');
+  const ligne = (missionId, intitule, etab, cents, etat, dateAffichee, missionDate, aLitige = false) => ordreJsonb({
+    mission_id: missionId, mission_intitule: intitule, etablissement_nom: nom(etab), honoraires_cents: cents, etat,
+    date_affichee: dateAffichee, mission_date: missionDate, a_litige: aLitige,
+  });
+  return {
+    fixed_now: now.toISOString(),
+    paiements: [
+      ligne('demo-escrow-001', 'Démonstration · Paiement rapide 1', 'demo-etab-3', 15000, 'RETARDE', jour(2, 8), jour(-5, 7)),
+      ligne('demo-assignee-002', assignee.intitule, assignee.etablissement_id, 24000, 'LITIGE', null,
+        timestamptz(new Date(assignee.debut_le)), true),
+      ligne('demo-escrow-003', 'Démonstration · Paiement rapide 3', 'demo-etab-1', 18000, 'ATTENTE_VALIDATION', null, jour(-1, 7)),
+      ligne('demo-escrow-004', 'Démonstration · Paiement rapide 4', 'demo-etab-3', 21000, 'VERSEMENT_EN_COURS', jour(1, 9), jour(-3, 7)),
+      ligne('demo-escrow-005', 'Démonstration · Paiement rapide 5', 'demo-etab-2', 24000, 'RESERVE', null, jour(5, 7)),
+      ligne('demo-escrow-006', 'Démonstration · Paiement rapide 6', 'demo-etab-3', 19500, 'VERSE', jour(-3, 10), jour(-10, 7)),
+      ligne('demo-escrow-007', 'Démonstration · Paiement rapide 7', 'demo-etab-1', 12000, 'ANNULE', null, jour(-15, 7)),
+    ],
+  };
+}
+
+/**
+ * Lot 3, T12 : missions TERMINEE du profil fictif (lignes `missions` complètes, dont `soignant_assigne_id`,
+ * `profession_requise` et les colonnes Rist que l'app ne lit pas, décision 5) et déclarations `paiements_soignant`
+ * (colonnes de `MesGains.tsx` l.102). Quatre cas du blueprint (§2.7) : salariée (déclaration à confirmer ; mêmes montants
+ * que la carte des gains de l'Accueil démo), libérale, contrat non choisi, plafond Rist historique (montant stocké
+ * 280 €, jamais rétabli à 320 €) ; plus une salariée confirmée après une contestation (dernière déclaration).
+ */
+export function buildDemoMissionsTerminees(now = new Date(FIXED_NOW)) {
+  const mission = (rang, jours, etab, service, applique, recherche, taux, brut, net, netEstime, rist = null) => {
+    const debut = instantDemo(now, jours, 7);
+    const fin = new Date(debut.getTime() + 8 * 3_600_000);
+    return {
+      id: `demo-terminee-${String(rang).padStart(3, '0')}`,
+      intitule: `Démonstration · Mission terminée ${rang}`,
+      debut_le: timestamptz(debut), fin_le: timestamptz(fin), duree_heures: 8, nb_creneaux: 1,
+      taux_horaire_base: taux, taux_rist_plafonne: rist, rist_plafond_applique: rist !== null,
+      net_a_payer: net, net_estime: netEstime, total_brut: brut, statut: 'TERMINEE', etablissement_id: etab, service,
+      type_contrat_applique: applique, type_contrat_recherche: recherche,
+      soignant_assigne_id: DEMO_PROFILE.user_id, profession_requise: DEMO_PROFILE.profile.profession,
+      presences: [{ valide_par_etablissement: true, valide_auto_72h_le: null, valide_le: timestamptz(new Date(fin.getTime() + 3_600_000)) }],
+    };
+  };
+  const paiement = (rang, missionRang, statut, montant, confirme, conteste, jours, heure) => {
+    const instant = timestamptz(instantDemo(now, jours, heure));
+    return {
+      id: `demo-paiement-${String(rang).padStart(3, '0')}`,
+      mission_id: `demo-terminee-${String(missionRang).padStart(3, '0')}`,
+      facture_honoraire_id: null, statut, montant_net: montant, confirme_par_soignant: confirme, conteste,
+      montant_du_reference: null, source_montant_du: null, methode: 'VIREMENT', reference_virement: null,
+      date_paiement: instant.slice(0, 10), modifie_le: instant, cree_le: instant,
+    };
+  };
+  return {
+    fixed_now: now.toISOString(),
+    missions: [
+      mission(1, -1, 'demo-etab-1', 'Médecine polyvalente', 'SALARIE', 'SALARIE', 26, 208, 224.6, 162.4),
+      mission(2, -13, 'demo-etab-3', 'Soins à domicile', 'LIBERAL', 'LIBERAL', 32, 256, 256, null),
+      mission(3, -21, 'demo-etab-2', 'Gériatrie', null, null, 30, 240, null, null),
+      mission(4, -28, 'demo-etab-1', 'Médecine polyvalente', 'SALARIE', 'SALARIE', 27, 216, 233.2, 170.5),
+      mission(5, -35, 'demo-etab-3', 'Soins à domicile', 'LIBERAL', 'LIBERAL', 40, 280, 280, null, 35),
+    ],
+    paiements: [
+      paiement(1, 1, 'DECLARE', 162.4, false, false, -1, 18),
+      paiement(2, 4, 'CONTESTE', 160, false, true, -25, 9),
+      paiement(3, 4, 'CONFIRME', 170.5, true, false, -21, 9),
+    ],
+  };
+}
+
 export function buildFixtures() {
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
@@ -398,6 +493,9 @@ export function buildFixtures() {
     'demo-profil-complet.json': buildDemoProfilComplet(),
     'demo-export-rgpd.json': buildDemoExportRgpd(), // lot 3, T11
     'demo-types-exercice.json': buildDemoTypesExercice(), // lot 3, T8
+    'demo-revenus.json': buildDemoRevenus(), // lot 3, T12
+    'demo-escrow.json': buildDemoEscrow(), // lot 3, T12
+    'demo-missions-terminees.json': buildDemoMissionsTerminees(), // lot 3, T12
   };
 }
 

@@ -107,8 +107,8 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_contester_paiement_soignant` | à venir | 3 (T13, B3 mergée #1118, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_consulter_mon_iban` | à venir | 3 (T14b, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_enregistrer_mon_iban` | à venir | 3 (T14b, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mes_revenus_connect` | à venir | 3 (T12, T14a, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mes_paiements_escrow` | à venir | 3 (T12, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_mes_revenus_connect` | consommée lot 3 (T12) | 3 (T12) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mes_paiements_escrow` | consommée lot 3 (T12) | 3 (T12) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 
 Quatre RPC sont absentes de `types.ts` (`fn_confirmer_action_planning_v1`, `fn_param_bool`,
 `fn_etat_pointage_mission`, `fn_remplacer_document_soignant`) : leur contrat est tenu par `public.sql` seul
@@ -1275,10 +1275,24 @@ CREATE OR REPLACE FUNCTION "public"."fn_enregistrer_mon_iban"("p_iban" "text", "
 
 ## fn_mes_revenus_connect
 
-- **Statut natif** : à venir (lot 3, T12 ; T14a pour l'écran Stripe Connect) — **B9** (paiements, D18).
-- **Usage prévu** : Totaux serveur de l'onglet Revenus et de l'écran Stripe Connect (web `PageStripeConnect.tsx`
-  l.70-82), affichés tels quels, jamais recalculés (D4) ; aucun KPI calculé côté client.
-- **Signature SQL** (`supabase/schema/public.sql` l.42347) :
+- **Statut natif** : consommée (lot 3, T12) par `JoleneSupabase/Revenus/SupabaseRevenusGateway.swift` (`totaux`),
+  appelée par le modèle de l'onglet Revenus (`JoleneCore/Revenus/RevenusModel.swift`) ; T14a la réutilisera pour l'écran
+  Stripe Connect — **B9** (paiements, D18 : PR préparée, jamais mergée sans le go de Gabrielle). Définition live relue
+  en lecture seule le 09/11/2026 (`pg_get_functiondef`) : identique au dump ; GRANT EXECUTE `authenticated` vérifié.
+- **Usage** : totaux serveur de l'onglet Revenus (« Ce mois », « Total réglé », « Autres paiements en attente » et la
+  note du web, `PageStripeConnect.tsx` l.392-417), affichés tels quels, jamais recalculés (D4) ; aucun KPI calculé côté
+  client. Visibilité = conditions d'**affichage** des cartes du web (revue B8 de T12, M1) : la lecture du web (l.94-111)
+  charge les totaux pour `LIBERAL`, `MIXTE` ou `statut_liberal = ACTIF` (l.106), mais ne les **rend** que pour
+  `isLiberal` (l.178, `LIBERAL || MIXTE`, appliqué l.300 ; `statut_liberal` ignoré), hors compte de test et pour un
+  compte Connect `COMPLET` (`!estCompteTest && !erreurStatut && statut === 'COMPLET'`, l.367). Le natif lit d'abord
+  `soignants(type_exercice, est_compte_test)` (sous-ensemble des colonnes de l.95), n'appelle la RPC que pour
+  `LIBERAL` ou `MIXTE` hors compte de test, et n'affiche les cartes que si `stripe_connect_actif` est vrai (même
+  réponse ; `false` ou drapeau inconnu → section absente) — sinon les `paiements_soignant` `CONFIRME` hors Connect d'un
+  salarié (réceptions de salaire) seraient présentés comme « Total réglé ». Sans ligne `soignants`, section en erreur
+  (« ne jamais déduire le mode d'exercice d'une lecture en panne », l.93). `stripe_connect_actif` vrai sans les trois
+  nombres finis → « Vos revenus sont temporairement indisponibles. » (adapté de l.389) et « Réessayer ». Écarts
+  résiduels (statut Connect lu en base plutôt que par l'edge) : `DECISIONS_LOT3.md`, section T12, écart 10.
+- **Signature SQL** (`supabase/schema/public.sql` l.42396) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_mes_revenus_connect"("p_mois_debut" "date" DEFAULT NULL::"date") RETURNS "jsonb"
@@ -1289,20 +1303,29 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_revenus_connect"("p_mois_debut" "dat
 - **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_mes_revenus_connect(date)`.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** : `Args: { p_mois_debut?: string }` ; `Returns: Json`.
-- **Contrat de réponse (HTTP 200)** : `{mois_en_cours, total, en_attente, stripe_connect_actif}` (l.42411-42416) :
+- **Contrat de réponse (HTTP 200)** : `{mois_en_cours, total, en_attente, stripe_connect_actif}` (l.42460-42465) :
   `mois_en_cours`, `total` et `en_attente` en euros (transferts Connect, paiements manuels `CONFIRME` hors Connect,
-  escrow `PAYE` ; l'attente additionne Connect `EN_ATTENTE` et l'escrow en cours) ; `stripe_connect_actif` booléen.
+  escrow `PAYE` ; l'attente additionne Connect `EN_ATTENTE` et l'escrow en cours) ; `stripe_connect_actif` booléen
+  = `fn_soignant_stripe_connect_actif(auth.uid())` (l.57303-57326 : ligne `stripe_connect_onboarding` `COMPLET` avec
+  `onboarding_complete`, `charges_enabled` et `payouts_enabled` vrais ; définition live relue en lecture seule le
+  09/11/2026, identique) — c'est lui qui décide l'affichage natif des cartes (revue B8 de T12, M1).
   Ni garde `auth.uid()` ni `{error}` : sans identité les sommes valent 0 (inatteignable avec le seul GRANT
-  `authenticated`). Les trois nombres doivent être finis (web l.73-76), sinon section en erreur. `p_mois_debut`
+  `authenticated`). Les trois nombres doivent être finis (web l.74-76), sinon section en erreur. `p_mois_debut`
   omis = mois courant.
 
 ## fn_mes_paiements_escrow
 
-- **Statut natif** : à venir (lot 3, T12) — **B9** (paiements/escrow, D18).
-- **Usage prévu** : « Paiements rapides » de l'onglet Revenus, libellés verbatim web (`PaiementsEscrowAVenir.tsx`
-  l.44-80, invariant « jamais garanti ») ; `etablissement_nom` est fourni par la RPC pour les missions du soignant
-  (JOIN sans filtre de cohorte, l.42205), sans passer par `fn_etablissements_safe`.
-- **Signature SQL** (`supabase/schema/public.sql` l.42184) :
+- **Statut natif** : consommée (lot 3, T12) par `JoleneSupabase/Revenus/SupabaseRevenusGateway.swift`
+  (`paiementsRapides`), appelée par le modèle de l'onglet Revenus (`JoleneCore/Revenus/RevenusModel.swift`) — **B9**
+  (paiements/escrow, D18 : PR préparée, jamais mergée sans le go de Gabrielle). Définition live relue en lecture seule
+  le 09/11/2026 : identique au dump ; GRANT EXECUTE `authenticated` vérifié.
+- **Usage** : bloc « Paiement rapide » de l'onglet Revenus, libellés verbatim web (`PaiementsEscrowAVenir.tsx`
+  l.44-80, tutoiement compris, invariant « jamais garanti ») ; groupes « À venir », « Récemment versé » (trois au plus),
+  « Annulés » ; état hors des sept : ligne non affichée ; section absente sans ligne (I5) ; le litige mène au détail
+  natif de la mission. `etablissement_nom` est fourni par la RPC pour les missions du soignant (JOIN sans filtre de
+  cohorte, l.42254), sans passer par `fn_etablissements_safe`. Tout corps autre qu'un tableau → refus de contrat
+  (jamais une liste vide plausible).
+- **Signature SQL** (`supabase/schema/public.sql` l.42233) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_mes_paiements_escrow"() RETURNS "jsonb"
@@ -1315,8 +1338,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_paiements_escrow"() RETURNS "jsonb"
 - **Signature TypeScript** : absente de `types.ts` (correction 13).
 - **Contrat de réponse (HTTP 200)** : un tableau jsonb, jamais `{error}` (`[]` sans ligne). Chaque élément :
   `mission_id`, `mission_intitule`, `etablissement_nom`, `honoraires_cents`, `etat`, `date_affichee`,
-  `mission_date`, `a_litige` (l.42234-42248). `etat` ∈ `VERSE`, `ANNULE`, `RETARDE`, `LITIGE`,
-  `VERSEMENT_EN_COURS`, `ATTENTE_VALIDATION`, `RESERVE` (l.42220-42230, dérivé de `paiements_escrow.statut` et des
+  `mission_date`, `a_litige` (l.42283-42297). `etat` ∈ `VERSE`, `ANNULE`, `RETARDE`, `LITIGE`,
+  `VERSEMENT_EN_COURS`, `ATTENTE_VALIDATION`, `RESERVE` (l.42269-42279, dérivé de `paiements_escrow.statut` et des
   présences) ; `date_affichee` nulle hors `VERSE`, `VERSEMENT_EN_COURS` et `RETARDE`. Ordre serveur conservé.
   `honoraires_cents` est figé à la confirmation (règle #11 de `CLAUDE.md`) : affiché sans recalcul.
 

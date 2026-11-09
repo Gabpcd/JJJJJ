@@ -115,7 +115,10 @@ public protocol ExportRGPDPort: Sendable {
 
 /// Revenus en lecture (`fn_mes_revenus_connect`, `fn_mes_paiements_escrow`, missions TERMINEE) — tranche T12.
 public protocol RevenusPort: Sendable {
-    func totaux(context: MissionReadContext) async throws -> TotauxRevenus
+    /// Totaux serveur ; `nil` = section sans objet, là où le web ne rend pas les cartes (`PageStripeConnect.tsx` l.178,
+    /// l.300, l.302, l.367 : ni `LIBERAL` ni `MIXTE`, compte de test, compte Connect non complet ;
+    /// `ExerciceRevenus.afficheTotaux`, `TotauxRevenus.visibles`), jamais un défaut à zéro.
+    func totaux(context: MissionReadContext) async throws -> TotauxRevenus?
     func paiementsRapides(context: MissionReadContext) async throws -> [PaiementRapide]
     func missionsTerminees(context: MissionReadContext, page: Int) async throws -> PageMissionsTerminees
 }
@@ -253,7 +256,7 @@ public struct UnwiredExportRGPDPort: ExportRGPDPort, UnwiredPort {
 public struct UnwiredRevenusPort: RevenusPort, UnwiredPort {
     public init() {}
     private var erreur: JoleneError { Lot3.erreur("revenus", "T12") }
-    public func totaux(context: MissionReadContext) async throws -> TotauxRevenus { throw erreur }
+    public func totaux(context: MissionReadContext) async throws -> TotauxRevenus? { throw erreur }
     public func paiementsRapides(context: MissionReadContext) async throws -> [PaiementRapide] { throw erreur }
     public func missionsTerminees(context: MissionReadContext, page: Int) async throws -> PageMissionsTerminees { throw erreur }
 }

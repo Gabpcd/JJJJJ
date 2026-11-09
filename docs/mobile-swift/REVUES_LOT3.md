@@ -1739,3 +1739,84 @@ Non bloquants, à traiter en suivi ou avant le merge.
   `SFSafariViewController`, feuille de partage.
 - Mineurs ouverts : T3b m1-m3 ; T7 m1, m3-m10 (m2 réduit) ; T11 m1-m4. Arbitrage `notations_recues` de l'export
   RGPD (« En attente de Gabrielle »).
+
+## L3-T12
+
+### Consignes de l'auteur pour l'intégration (branche `lot3/l3-t12-v2`, 09/11/2026)
+
+Revenus en lecture, **B9** (paiements, escrow) : PR préparée, jamais mergée sans le go explicite de Gabrielle. Base
+`origin/feat/ios-lot3` (`01473089`). Décisions, écarts et textes : `DECISIONS_LOT3.md`, section T12.
+
+- **Fichiers partagés touchés (ajouts localisés)** : `Ports/Lot3Ports.swift` (`RevenusPort.totaux` rend
+  `TotauxRevenus?`, stub aligné), `Models/Lot3Results.swift` (`MissionTerminee` : durée, taux, service, statut, nom
+  d'établissement, dernière déclaration), `Demo/DemoWorld.swift` et `SupabaseGateways.swift` (une ligne chacun),
+  `AppContainer.swift` (variante `JOLENE_FORCE_REVENUS_ECHEC`), `MainTabView.swift` (onglet Revenus, pile
+  `cheminRevenus`, cas `.revenus` de `presenter`), `DemoWorldTests.portsEnAttenteLot3` (« revenus » retiré),
+  `DestinationLienTests` (libellé seul), `check-rpc-contracts.mjs` + `rpc-contracts.json` + `CONTRATS_RPC_SOIGNANT.md`
+  + `check-rpc-contracts-lot3.node.mjs` (deux RPC consommées), `export-demo-fixtures.mjs` (trois fixtures),
+  `PARITE_SOIGNANT.md`, `ios-swift-ci.yml` (cinquième éclat).
+- **Au conflit avec T13** (paiements déclarés, même onglet) : garder les deux côtés dans `MainTabView` ; T13 ajoute sa
+  section dans `RevenusScreen` (au-dessus des paiements rapides, ordre du web l.384-386), rend
+  `.revenus(section: .paiementsAConfirmer)` présentable et range `DemoPaiementsTests` dans l'éclat `lot3-revenus`.
+- **Au conflit avec le lot 2** (`ios-swift-ci.yml`) : garder les éclats des deux lots, unir les `-skip-testing` du socle.
+- **Vérifications de l'auteur** (Xcode 16.4 local) : `swift build --build-tests` puis `swift test` avec
+  `-strict-concurrency=complete` : JoleneCore 858 tests, JoleneSupabase 323 tests, 0 échec, 0 ignoré, 0 avertissement ;
+  `xcodegen generate` ; `xcodebuild build-for-testing` → `TEST BUILD SUCCEEDED`, 0 avertissement dans nos sources ;
+  exporteurs golden et démo sans diff non voulu ; `check-rpc-contracts.mjs` à jour ; `node --test` des gardes RPC et du
+  plan de livraison : 137 réussis. XCUITest `DemoRevenusTests` (7 tests, trois formats) compilés, **jamais lancés** :
+  la preuve est la CI (éclat `lot3-revenus`, `xcresult` relu, `skipped = 0`).
+
+### Corrections de la revue fraîche B8 n°1 (auteur, branche `lot3/l3-t12-v2`, 09/11/2026)
+
+Détail et sources : `DECISIONS_LOT3.md`, section « T12 — corrections de la revue fraîche B8 ». Tests d'abord (commit
+séparé), puis correction ; aucun test sauté, désactivé ni affaibli.
+
+- **M1** (défaut du code ; test `("SALARIE", "ACTIF", true)` faux, corrigé) : totaux affichés seulement là où le web
+  rend ses cartes — `LIBERAL`/`MIXTE` (l.178, l.300), hors compte de test (l.302, l.367), `stripe_connect_actif` vrai
+  (`statut === 'COMPLET'`, l.367) ; lecture `soignants(type_exercice, est_compte_test)` ; résidus non juridiques
+  consignés (écart 10). Lecture seule sur la production : `fn_soignant_stripe_connect_actif` live identique au dump,
+  `est_compte_test` lisible par `authenticated`.
+- **m1** péremption 60 s à l'apparition et au premier plan + jeton sur `presenter(.revenus)` ; **m2** audit en tâche non
+  structurée (test rouge vérifié sur l'ancien code : spinner retenu, audit « annulé ») ; **m3** « Charger plus » masqué
+  sur erreur, page en échec relue ; **m4** `require` avant lecture des cartes ; **m5** bouton « Voir mission … » dans
+  la ligne (`revenus-mission-ouvrir-<id>`) ; **m6** `SuiviVersementsConnect` consigné (T14a) ; **m7** sources corrigées.
+- **Tests existants adaptés (sans affaiblissement)** : trois tests de `RevenusModelTests` lisaient le journal d'audit
+  aussitôt après `charger()`, ce que seule l'attente bloquante (le défaut m2) permettait ; ils attendent désormais
+  l'issue de l'écriture (`auditEnCours`) avant la même assertion.
+- **Fichiers partagés touchés** : `MainTabView.swift` (jeton `presentationsRevenus`, commentaire de pile corrigé),
+  `Lot3Ports.swift` (commentaire), `export-demo-fixtures.mjs` + `demo-revenus.json` (`est_compte_test: false`),
+  `CONTRATS_RPC_SOIGNANT.md`, `PARITE_SOIGNANT.md`.
+- **Vérifications de l'auteur** (Xcode 16.4 local) : `swift build --build-tests` puis `swift test` avec
+  `-strict-concurrency=complete` : JoleneCore 864 tests, JoleneSupabase 324 tests, 0 échec, 0 ignoré, 0 avertissement ;
+  `xcodebuild build-for-testing` → `TEST BUILD SUCCEEDED`, 0 avertissement dans nos sources (aucun fichier ajouté ni
+  retiré : pas de `xcodegen`) ; exporteurs démo et golden et `check-rpc-contracts.mjs --check` sans diff ; `node --test`
+  des gardes RPC et du plan de livraison : 137 réussis. XCUITest `DemoRevenusTests` (7 tests, trois formats) compilés,
+  **jamais lancés** : la preuve reste la CI (éclat `lot3-revenus`).
+
+### Corrections de la revue fraîche B8 n°2 (auteur, branche `lot3/l3-t12-v2`, 09/11/2026)
+
+Détail et sources : `DECISIONS_LOT3.md`, section « T12 — corrections de la revue fraîche B8 n°2 ». Tests d'abord
+(commit séparé), puis correction ; aucun test sauté, désactivé ni affaibli. Aucun texte nouveau, aucune RPC, aucune
+écriture serveur.
+
+- **M1** (défaut du code ; XCUITest qui figeait l'impasse : test faux, remplacé) : option (a). Le paiement rapide en
+  litige ouvre la page web canonique de la mission (`/soignant/missions/<id>`, destination exacte du `Link` web,
+  `PaiementsEscrowAVenir.tsx` l.152-155) par le présentateur `.safari`, jamais le détail natif, qui ne porte pas le bloc
+  litige (`DetailMissionSoignant.tsx` l.444-458, l.1241-1271). Page de la mission plutôt que `/soignant/litiges` :
+  `fn_mes_paiements_escrow` ne donne pas `litige_id`, la liste n'ouvrirait pas le litige ciblé ; le serveur choisit sur
+  la page le litige de cette mission et son état. Écart 12 et lignes `PARITE_SOIGNANT.md` ; bloc litige natif au lot 4.
+- **m1** commentaire de `DestinationLien` corrigé ; **m2** (défaut du code, test rouge vérifié sur l'ancien code :
+  quatre assertions) `PageMissionsTerminees.derniersPaiements` + `RevenusModel.appliquer` : toutes les lignes affichées
+  suivent les déclarations de la dernière lecture ; **m3** (documentation) audit « une fois par session (epoch) »,
+  écart 11, test d'épinglage.
+- **Fichiers partagés touchés** : `Models/Lot3Results.swift` (`PageMissionsTerminees.derniersPaiements`, paramètre
+  d'init requis : un constructeur de T13 devra le fournir), `Links/DestinationLien.swift` (commentaire), `MainTabView.swift`
+  (commentaires de la pile `cheminRevenus`, gardée pour T13/T14), `PARITE_SOIGNANT.md` (ligne
+  `/soignant/missions/:id` › litige ajoutée).
+- **Vérifications de l'auteur** (Xcode 16.4 local) : `swift build --build-tests` (depuis un `.build` vide) puis
+  `swift test` avec `-strict-concurrency=complete` : JoleneCore 868 tests, JoleneSupabase 324 tests, 0 échec, 0 ignoré,
+  0 avertissement ; `xcodebuild build-for-testing` → `TEST BUILD SUCCEEDED`, 0 avertissement dans nos sources (aucun
+  fichier ajouté ni retiré : pas de `xcodegen`) ; exporteurs golden et démo `--check` et `check-rpc-contracts.mjs`
+  sans diff ; `node --test` des gardes RPC (base et lot 3) et du plan de livraison : 137 réussis. XCUITest
+  `DemoRevenusTests` (7 tests, trois formats) compilés, **jamais lancés** : la preuve reste la CI (éclat
+  `lot3-revenus`).
