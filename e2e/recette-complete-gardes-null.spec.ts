@@ -192,7 +192,9 @@ test.describe('DPAE du contrat (fn_generer_donnees_dpae, fn_enregistrer_numero_d
     const { state } = banc;
     state.contratCree = true; state.mission.statut = 'ASSIGNEE'; state.mission.soignant_assigne_id = ids.soignant;
     state.mission.type_contrat_applique = 'SALARIE'; state.mission.type_contrat_recherche = 'SALARIE';
-    state.mission.type_paiement_soignant = 'BULLETIN_PAIE'; state.contrat.type_contrat = 'SALARIE';
+    state.mission.type_paiement_soignant = 'BULLETIN_PAIE';
+    // CHECK contrats_mission.type_contrat : CDD, CDDU, VACATION, REMPLACEMENT_LIBERAL (« SALARIE » n'existe pas en base).
+    state.contrat.type_contrat = 'CDD';
     state.contrat.contenu_html = '<article><h2>Contrat salarié fictif de recette</h2><p>Camille Recette — Clinique Simulation</p></article>';
     return banc;
   }

@@ -1,9 +1,12 @@
 # Gardes NULL des fonctions SECURITY DEFINER (B9)
 
 > Statut : **PR B9 en attente du go explicite de Gabrielle** (SECURITY DEFINER,
-> autorisation, escrow, facturation). Migration
+> autorisation, escrow, facturation). Migrations
 > `supabase/migrations/20261109010957_gardes_null_security_definer.sql`
-> (renommée le 09/11 : ex-`20261103013434`, antérieure aux migrations du 08/11).
+> (renommée le 09/11 : ex-`20261103013434`, antérieure aux migrations du 08/11)
+> et `supabase/migrations/20261109020404_verrou_double_facturation_generer_facture.sql`
+> (verrou du gap « double facturation », §5 ; décision prise par Claude sur
+> délégation explicite de Gabrielle du 08/11/2026).
 > **Ordre de merge imposé** (§7) : les quatre branches B9 du 02/11 sont mergées ;
 > dans la file sérielle, ce lot passe après #1123 puis #1124.
 
@@ -45,15 +48,31 @@ Un `NULL` vaut « pas d'accès ». Les appelants dont la comparaison valait déj
 `true` ou `false` gardent exactement le même résultat. Messages, ACL,
 volatilité et `search_path` sont inchangés (`CREATE OR REPLACE`, aucun GRANT).
 
+**Une exception voulue pour l'admin plateforme.** Partout ailleurs, l'admin
+passe par `est_admin()`. La branche établissement de `fn_creer_reclamation_score`
+n'a pas de `est_admin()` : l'admin, sans établissement, y passait par le `NULL`
+et y est désormais refusé (`NON_AUTORISE`). C'est voulu : une réclamation de
+score d'établissement se dépose depuis l'établissement, l'admin la **traite**
+(décision prise par Claude sur délégation explicite de Gabrielle du
+08/11/2026). Recette SQL : ADM dans les refus du cas 21.
+
+**`fn_etablissement_pour_mission` : resserrement conservé.** Un soignant partie
+à un contrat dont la mission a été réattribuée ne voit plus la fiche de
+l'établissement (« — »). Le contrat porte déjà l'identité de l'établissement,
+et une mission réattribuée ne doit plus exposer la fiche (décision prise par
+Claude sur délégation explicite de Gabrielle du 08/11/2026). Autoriser
+`contrats_mission.soignant_id = auth.uid()` changerait le prédicat : hors de ce
+lot.
+
 | Fonction | Gravité | Avant (appelant sans établissement) | Après |
 |---|---|---|---|
 | `fn_valider_alerte_presence` | critique | le soignant valide sa propre présence ; `dec_proteger_presence_soignant` et `fn_protect_presence_integrity` ne revertent pas (même NULL) → `trg_escrow_release_on_validation` | `Accès refusé` |
-| `fn_generer_facture` | critique | facture de commission créée sur la mission d'un tiers | `Accès refusé` |
+| `fn_generer_facture` | critique | facture de commission créée sur la mission d'un tiers | `Accès refusé` ; puis **EXECUTE retiré à authenticated et anon** (migration `20261109020404`, §5) : 42501 |
 | `fn_generer_code_secours_mission` | haute | le soignant se génère un code de secours puis pointe | `NON_AUTORISE` |
 | `fn_generer_qr_mission` (+ `fn_regenerer_qr_mission`) | haute | le soignant se génère un QR de pointage | `NON_AUTORISE` |
 | `fn_soignants_urgence` | haute | noms, scores et **téléphones** du pool urgence | 0 ligne |
 | `fn_generer_donnees_dpae` | haute | données DPAE d'un contrat (NIR, date et lieu de naissance, établissement) | `Non autorisé` |
-| `fn_presences_detail_mission` | haute | présences (heures réelles, retards, validité du périmètre GPS) de la mission d'un autre soignant | `Accès refusé` |
+| `fn_presences_detail_mission` | haute | présences (heures réelles, retards, validité du périmètre GPS) de la mission d'un autre soignant ; sur une mission **sans soignant assigné**, aussi pour un membre d'un **autre établissement** (les deux comparaisons valaient NULL) | `Accès refusé` |
 | `fn_enregistrer_numero_dpae` | moyenne | faux numéro DPAE + email « DPAE déclarée » | `Non autorisé` |
 | `fn_rebooker_soignant` | moyenne | mission REBOOK créée pour l'établissement d'un tiers | `Non autorisé` |
 | `fn_booster_mission` | moyenne | boost (option facturée) + notifications | `Non autorisé` |
@@ -88,7 +107,9 @@ Quinze fonctions du lot n'ont pas de garde `auth.uid() IS NULL` préalable :
 `fn_assigner_mission_admin`, `fn_declarer_honoraires_retrocession`,
 `fn_definir_retrocession_mission`. `est_admin()` exige un `auth.uid()` : un appel
 sans identité (service_role, cron, script) passait par le `NULL` et il est
-désormais refusé comme tout appelant sans établissement. Les cinq autres
+désormais refusé comme tout appelant sans établissement (recette SQL : acteur
+SYS refusé sur ces quinze fonctions ; il garde la fiche d'un établissement qui a
+une mission OUVERTE, comme tout compte). Les cinq autres
 (`fn_generer_code_secours_mission`, `fn_generer_qr_mission`,
 `fn_generer_donnees_dpae`, `fn_enregistrer_numero_dpae`,
 `fn_creer_reclamation_score`) refusaient déjà ce contexte (`NON_AUTHENTIFIE`).
@@ -217,8 +238,8 @@ Proposition, à instruire dans une PR B9 dédiée :
 ### Gaps connus non verrouillés — PR B9 dédiées à ouvrir en priorité
 
 Le principe CLAUDE.md « un gap connu reste verrouillé » n'est **pas** satisfait
-pour les deux premiers cas : ils sont documentés, pas rendus impossibles (le
-troisième est fermé depuis le 08/11).
+pour CP5b : il est documenté, pas rendu impossible. La double facturation est
+verrouillée par cette PR, la fin rétroactive depuis le 08/11.
 
 * **CP5b, pointage par codes statiques (gravité haute, fraude)** :
   `fn_pointer_arrivee`/`fn_pointer_depart` acceptent `p_code_arrivee`/`p_code_depart`
@@ -229,23 +250,43 @@ troisième est fermé depuis le 08/11).
   (web, iOS, mobile-native : aucun ne les passe à ce jour), puis `REVOKE SELECT`
   de table et GRANT colonne par colonne sur `code_arrivee`, `code_depart`,
   `code_pointage_actif`, `code_pointage_hmac`.
-* **Double facturation `fn_generer_facture` puis prélèvement SEPA automatique** :
-  la RPC ne refuse que `factures.mission_id = p_mission_id`, alors que la
-  facturation courante rattache les missions autrement. Une mission déjà
-  facturée peut recevoir une seconde facture de commission, prélevée par
-  `sepa-auto-charge`. Verrou proposé : refuser `commission_facturee OR
-  facture_id IS NOT NULL` avec un message explicite, ou `REVOKE EXECUTE … FROM
-  authenticated` (aucun appelant web ni iOS) et mise à jour de
-  `supabase/SECURITY_DEFINER_MANIFEST.json`.
+* **CP5b sera verrouillé après #1124, dans une PR B9 séparée** : #1124 redéfinit
+  `fn_pointer_arrivee` ; le verrou repartira de son corps LIVE post-#1124
+  (garde-fou 9.0 n°2).
+* ~~Double facturation `fn_generer_facture` puis prélèvement SEPA
+  automatique~~ : **verrouillé dans cette PR** (migration distincte
+  `20261109020404_verrou_double_facturation_generer_facture.sql`). Décision prise
+  par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+  * Gap : la RPC ne refuse que `factures.mission_id = p_mission_id`, alors que
+    la facturation courante rattache les missions autrement ; une mission déjà
+    facturée pouvait recevoir une seconde facture de commission, prélevée par
+    `sepa-auto-charge`.
+  * Appelants vérifiés le 09/11 : aucun dans `src/` (seul le type généré
+    `src/integrations/supabase/types.ts`), `supabase/functions/`, `ios-native/`,
+    `mobile-native/`, `scripts/` ; en production (lecture seule) 0 job
+    `cron.job`, 0 fonction `pg_proc` qui l'appelle, 0 appel dans
+    `pg_stat_statements` depuis sa remise à zéro du 11/08/2026.
+  * Verrou retenu, faute d'appelant client vivant : `REVOKE EXECUTE … FROM
+    PUBLIC, anon, authenticated`. Tout appel client reçoit 42501 ; service_role
+    garde EXECUTE ; corps, propriétaire et `search_path` inchangés. Inventaire
+    SECURITY DEFINER : `MIXTE_TENANT_ADMIN` → `SERVICE_ONLY_REVOQUE`. Le
+    préflight vérifie les ACL LIVE, le corps corrigé par `20261109010957` et
+    l'absence d'appelant interne ou cron ; le postflight vérifie le retrait.
+  * Gardes du verrou : recette SQL (A, ADM, S en authenticated et un anon :
+    42501), banc PostgreSQL 17 isolé (42501 et rejeu refusé), garde statique
+    (aucun appelant client dans le dépôt, dump aligné).
+  * `supabase/SECURITY_DEFINER_MANIFEST.json` n'est pas modifié : c'est
+    l'instantané figé du 29/07 (vérifié contre `20260729121443`), comme pour les
+    PR B9 précédentes.
 * ~~`fn_declarer_fin_retroactive`~~ : fermé par #1117, mergée et déployée le
   08/11 (preuve relue dans le corps LIVE le 09/11, §3).
 
 ### Autres suites
 
-* **RPC sans appelant front** : `fn_generer_facture`,
-  `fn_valider_alerte_presence` et `fn_deposer_chorus` ne sont appelées ni par le
-  web ni par iOS. On peut faire un `REVOKE EXECUTE … FROM authenticated` et mettre
-  à jour `supabase/SECURITY_DEFINER_MANIFEST.json`.
+* **RPC sans appelant front** : `fn_valider_alerte_presence` et
+  `fn_deposer_chorus` ne sont appelées ni par le web ni par iOS. On peut faire un
+  `REVOKE EXECUTE … FROM authenticated` sur le modèle de `20261109020404`
+  (`fn_generer_facture` est déjà verrouillée).
 * **Codes de secours** : dans `fn_generer_code_secours_mission`, poser
   `type_acteur` selon l'appelant (`ADMIN_PLATEFORME` si `est_admin()`). Dans
   `fn_valider_code_secours`, refuser un code dont `cree_par` est le soignant
@@ -267,35 +308,85 @@ troisième est fermé depuis le 08/11).
 ## 6. Vérifications
 
 * Garde statique : `node --test tests/node/gardes-null-security-definer.node.mjs`
-  (scanner et ses choix, dump, ordre de merge, migrations à partir de
-  `20261109010957`, horodatage postérieur au registre distant et à #1124,
-  **aucune chaîne hexadécimale ≥ 32** dans les fichiers du lot, différence unique
-  par corps LIVE comparée texte à texte à la fixture `pg_get_functiondef`, dump
-  aligné, manifeste du préflight, branchement CI).
-* Migration : préflight et postflight **calculés** (aucune empreinte écrite en
-  dur, GitGuardian refuse les chaînes hexadécimales ou base64 de 32 caractères et
-  plus). Le préflight capture chaque corps LIVE, exige la garde LIVE une seule
-  fois et l'absence de sa correction (rejeu refusé :
-  `GARDES_NULL_PREFLIGHT_SOURCE_DRIFT`) et une empreinte d'inventaire égale au
-  `md5` du corps LIVE. Le postflight exige
-  `md5(replace(nouveau corps, garde corrigée, garde LIVE)) = md5(corps LIVE)`,
-  des attributs et ACL inchangés, puis aligne l'inventaire sur le nouveau corps.
-  Toute dérive annule la migration entière (`GARDES_NULL_POSTFLIGHT_*`).
+  (13 tests) : scanner et ses choix, dump, ordre de merge, migrations à partir
+  de `20261109010957`, horodatages postérieurs au registre distant et à #1124,
+  **aucune chaîne hexadécimale ≥ 32** dans les fichiers du lot, différence
+  unique par corps LIVE comparée texte à texte à la fixture
+  `pg_get_functiondef`, dump aligné, manifeste du préflight, seconde migration
+  (REVOKE exact, gardes, inventaire, dump), aucun appelant client de
+  `fn_generer_facture`, bancs PostgreSQL 17 et leur câblage CI, matrice de la
+  recette SQL, et **aucun `CASE` nu dans une condition `IF`** des fichiers SQL
+  du lot (son `THEN` clôturerait le `IF` : défaut réel trouvé dans la recette
+  SQL du 03/11 et corrigé le 09/11).
+* Migrations : préflight et postflight **calculés** (aucune empreinte écrite en
+  dur, GitGuardian refuse les chaînes hexadécimales ou base64 de 32 caractères
+  et plus).
+  * `20261109010957` : le préflight capture chaque corps LIVE, exige la garde
+    LIVE une seule fois et l'absence de sa correction (rejeu refusé :
+    `GARDES_NULL_PREFLIGHT_SOURCE_DRIFT`) et une empreinte d'inventaire égale au
+    `md5` du corps LIVE. Le postflight exige
+    `md5(replace(nouveau corps, garde corrigée, garde LIVE)) = md5(corps LIVE)`,
+    des attributs et ACL inchangés, puis aligne l'inventaire sur le nouveau
+    corps. Toute dérive annule la migration entière (`GARDES_NULL_POSTFLIGHT_*`).
+  * `20261109020404` (verrou double facturation, §5) : préflight sur le corps
+    corrigé, les ACL LIVE, l'inventaire et l'absence d'appelant interne ou cron ;
+    postflight sur le retrait d'EXECUTE (ni PUBLIC, ni anon, ni authenticated,
+    service_role conservé) et l'inventaire `SERVICE_ONLY_REVOQUE`. Un rejeu
+    échoue (`VERROU_FACTURE_PREFLIGHT_ACL_DRIFT`).
 * Recette SQL : `tests/security/gardes-null-security-definer.test.sql`, exécutée
-  sur staging par `validate-pr` (job `sql-transaction`, même transaction que la
-  migration, sous ROLLBACK). Elle couvre 82 refus et 49 appelants légitimes et
-  vérifie l'absence d'effet. Pool urgence : un soignant fixture éligible (même
-  cohorte test, documents vérifiés) rend le pool non vide et les autres soignants
-  éligibles sont exclus le temps du test ; A et ADM obtiennent exactement ce
-  soignant (téléphone compris) et une diffusion, S, T, R et B 0.
-  `fn_deposer_chorus` est exercée sur une facture fixture EMISE. **Exécutable
-  seulement en CI** (base staging nécessaire, aucun PostgreSQL local) : jamais
-  exécutée hors CI à ce jour.
+  sur staging par `validate-pr` (job `sql-transaction`, même transaction que les
+  deux migrations, sous ROLLBACK). **103 refus et 52 appelants légitimes**, puis
+  4 refus 42501 du verrou facture, et l'absence d'effet des refus.
+  * Acteurs : S, T, R (sans établissement), B (autre établissement), A
+    (propriétaire), ADM et **SYS** (contexte système : `auth.uid()` NULL, rôle
+    `service_role` des claims), refusé sur les quinze fonctions du §2.
+  * `fn_presences_detail_mission` : mission assignée (cas 11) et **mission sans
+    soignant assigné** (cas 24, refus S, T, R, B, SYS ; A et ADM passent). Le
+    cas 24 est le seul qui exerce la seconde comparaison : il est rouge sur le
+    corps LIVE et sur les deux corps à demi corrigés (preuve ci-dessous).
+  * Passants : **réponse positive attendue** pour chaque cas, une seule forme
+    par cas : réponse exacte, objet contenu, contrôle métier exact levé après la
+    garde (SQLSTATE et message lus dans le code LIVE : validation de présence
+    avant fin de planning, code de secours avant affectation) ou réponse égale à
+    celle de la suite métier appelée directement dans le même contexte annulé
+    (`fn_assigner_mission_admin` → `fn_finaliser_attribution_mission`). Plus
+    aucune exception quelconque n'est comptée comme un passage.
+  * Pool urgence : un soignant fixture éligible (même cohorte test, documents
+    vérifiés) rend le pool non vide ; A et ADM obtiennent exactement ce soignant
+    (téléphone compris) et une diffusion, les refusés 0.
+  * **Exécutable seulement en CI** (base staging nécessaire, aucun PostgreSQL
+    local) : jamais exécutée hors CI à ce jour.
+* Bancs PostgreSQL 17 isolés (job `paiements-concurrence` de `validate-pr`) :
+  `tests/security/gardes-null-security-definer-isolated.test.sql` et
+  `…-rejeu.test.sql`, sur le banc B5b réutilisé
+  (`fixtures/visibilite-etablissement-permission-banc.sql` : helpers d'identité
+  LIVE, acteurs) complété par `fixtures/gardes-null-security-definer-banc.sql`
+  (les 20 corps LIVE, ACL et inventaire de production). Ils exécutent **les
+  vraies migrations** :
+  * matrice de `fn_presences_detail_mission` sur 7 acteurs × 2 missions × 4
+    phases (LIVE, deux variantes à demi corrigées, après migration) : chaque
+    variante à demi corrigée laisse encore fuir la mission non assignée, seule
+    la migration complète la refuse ;
+  * 20 corps : seule la garde a changé, inventaire suivi, ACL inchangées sauf
+    `fn_generer_facture` (42501 pour authenticated et anon) ;
+  * rejeu refusé (`GARDES_NULL_PREFLIGHT_SOURCE_DRIFT`), corps LIVE dérivé hors
+    garde refusé au postflight (`GARDES_NULL_POSTFLIGHT_CORPS_OU_ATTRIBUTS`),
+    rejeu du verrou refusé (`VERROU_FACTURE_PREFLIGHT_ACL_DRIFT`).
+  * **Exécutables seulement en CI** (aucun PostgreSQL local). Syntaxe validée
+    localement par le parseur PostgreSQL 17 (pglast/libpg_query).
+* Preuve locale du cas 24 (09/11, PostgreSQL 17.6 de production, `SELECT` pur
+  sans lecture de table ni écriture) : la garde évaluée avec les valeurs de la
+  mission sans soignant assigné laisse passer S, T, R, B et SYS sur le corps
+  LIVE, S, T, R, B et SYS sur la variante 1 (seule la comparaison
+  d'établissement corrigée), S, T, R et SYS sur la variante 2 (seule la
+  comparaison `auth.uid()` corrigée), et ne refuse les cinq que sur le corps
+  corrigé. La garde statique échoue aussi sur un corps de migration à demi
+  corrigé (deux tests rouges).
 * Post-déploiement, en lecture seule :
 
 ```sql
--- Corps, inventaire et ACL (20 lignes attendues, toutes à true / true / false / true :
--- corps_ok, inventaire_ok, anon, authenticated). Empreintes calculées.
+-- Corps, inventaire et ACL (20 lignes attendues : corps_ok, inventaire_ok à true ;
+-- anon à false ; authenticated à true sauf fn_generer_facture). Empreintes calculées.
 SELECT v.signature,
        pg_catalog.strpos(p.prosrc, v.garde_corrigee) > 0 AS corps_ok,
        i.definition_md5 = pg_catalog.md5(p.prosrc) AS inventaire_ok,
@@ -308,24 +399,45 @@ FROM (VALUES ('fn_valider_alerte_presence(uuid)',
 JOIN pg_proc p ON p.oid = to_regprocedure('public.' || v.signature)
 JOIN private.security_definer_inventory i ON i.signature = v.signature;
 
--- Registre (statements peuplés).
+-- Registre (statements peuplés) des deux migrations.
 SELECT version, name, cardinality(statements) > 0 AS statements_ok
-FROM supabase_migrations.schema_migrations WHERE version = '20261109010957';
+FROM supabase_migrations.schema_migrations WHERE version IN ('20261109010957', '20261109020404');
 
 -- Audit a posteriori : codes de secours, QR et numéros DPAE émis par un compte
--- ni membre de l'établissement, ni propriétaire historique, ni admin.
-SELECT ja.cree_le, ja.acteur_id, ja.details->>'evenement' AS evenement, m.id AS mission_id
-FROM journaux_audit ja
-LEFT JOIN codes_secours_mission cs ON ja.details->>'evenement' = 'CODE_SECOURS_GENERE' AND cs.id = ja.id_ressource
-LEFT JOIN qr_codes_mission q ON ja.details->>'evenement' = 'QR_GENERE' AND q.id = ja.id_ressource
-LEFT JOIN contrats_mission cm ON ja.details->>'evenement' = 'DPAE_NUMERO_ENREGISTRE' AND cm.id = ja.id_ressource
-JOIN missions m ON m.id = COALESCE(cs.mission_id, q.mission_id, cm.mission_id)
-WHERE ja.details->>'evenement' IN ('CODE_SECOURS_GENERE', 'QR_GENERE', 'DPAE_NUMERO_ENREGISTRE')
-  AND ja.acteur_id IS DISTINCT FROM m.etablissement_id
-  AND NOT EXISTS (SELECT 1 FROM membres_etablissement me
-                  WHERE me.user_id = ja.acteur_id AND me.etablissement_id = m.etablissement_id)
-  AND NOT EXISTS (SELECT 1 FROM equipe_admin ea WHERE ea.user_id = ja.acteur_id);
+-- ni membre de l'établissement, ni propriétaire historique, ni admin. Les codes
+-- et QR portent leur mission dans details->>'mission_id' ; le numéro DPAE est
+-- rattaché par son contrat (id_ressource). Les événements dont la mission a
+-- disparu sont comptés à part (NON_RESOLU), et signalés si l'acteur est un
+-- soignant : sans mission, l'audit ne prouve rien.
+WITH ev AS (
+  SELECT ja.cree_le, ja.acteur_id, ja.details->>'evenement' AS evenement,
+         CASE WHEN ja.details->>'evenement' = 'DPAE_NUMERO_ENREGISTRE'
+              THEN (SELECT cm.mission_id FROM contrats_mission cm WHERE cm.id = ja.id_ressource)
+              ELSE NULLIF(ja.details->>'mission_id', '')::uuid END AS mission_id
+    FROM journaux_audit ja
+   WHERE ja.details->>'evenement' IN ('CODE_SECOURS_GENERE', 'QR_GENERE', 'DPAE_NUMERO_ENREGISTRE')
+), classes AS (
+  SELECT ev.*, m.etablissement_id,
+         CASE
+           WHEN m.id IS NULL AND EXISTS (SELECT 1 FROM soignants s WHERE s.id = ev.acteur_id)
+             THEN 'NON_RESOLU_ACTEUR_SOIGNANT'
+           WHEN m.id IS NULL THEN 'NON_RESOLU'
+           WHEN ev.acteur_id IS NOT DISTINCT FROM m.etablissement_id
+             OR EXISTS (SELECT 1 FROM membres_etablissement me
+                         WHERE me.user_id = ev.acteur_id AND me.etablissement_id = m.etablissement_id)
+             OR EXISTS (SELECT 1 FROM equipe_admin ea WHERE ea.user_id = ev.acteur_id) THEN 'LEGITIME'
+           ELSE 'SUSPECT'
+         END AS classe
+    FROM ev LEFT JOIN missions m ON m.id = ev.mission_id
+)
+SELECT evenement, classe, count(*) AS n, count(DISTINCT acteur_id) AS acteurs
+FROM classes GROUP BY 1, 2 ORDER BY 1, 2;
+-- Puis le détail : SELECT * FROM classes WHERE classe IN ('SUSPECT', 'NON_RESOLU_ACTEUR_SOIGNANT').
 ```
+
+Relevé du 09/11 (production, lecture seule) : 1 597 `CODE_SECOURS_GENERE` et
+3 146 `QR_GENERE`, tous `NON_RESOLU` (missions de test supprimées), émis par
+2 comptes ; 0 `NON_RESOLU_ACTEUR_SOIGNANT`, 0 `SUSPECT`, 0 `DPAE_NUMERO_ENREGISTRE`.
 
 `fn_valider_alerte_presence` n'écrit pas d'audit : une auto-validation passée ne
 se reconnaît pas a posteriori.
@@ -349,7 +461,7 @@ File de merge sériel restante :
 |---|---|---|---|
 | 5 | #1123 `fix/dpae-contrats-cddu-vacation` | — (front seul) | aucun fichier commun |
 | 6 | #1124 `fix/dpae-serveur-cddu-vacation` | `20261108223500` | redéfinit `fn_mes_dpae`, `fn_rappel_dpae_quotidien`, `fn_pointer_arrivee`, `fn_annuler_candidature_soignant`, `dec_email_contrat_signe_complet` : **aucune des 20 fonctions** de ce lot (vérifié sur son fichier du 09/11), aucun corps commun |
-| 7 | `fix/gardes-null-security-definer` (ce lot) | `20261109010957` | en dernier |
+| 7 | `fix/gardes-null-security-definer` (ce lot) | `20261109010957`, `20261109020404` | en dernier |
 
 Ce lot a été renommé de `20261103013434` en `20261109010957` : la migration de
 #1124 (`20261108223500`) lui serait sinon postérieure, et `supabase db push`
@@ -357,26 +469,35 @@ refuserait l'ordre (CLAUDE.md, migrations règle 2). La garde statique exige
 désormais un horodatage postérieur à `20261108223500` et à la dernière version du
 registre de production (`20261102210943` au 09/11).
 
-Après le merge de #1124, la fusion de main dans cette branche donnera des
-conflits **textuels seulement**, à résoudre en gardant les deux côtés :
+Après le merge de #1124, fusionner main dans cette branche (sans rebase) et
+**porter le compte à 66 à la main** : simulation faite, git fusionne seul le
+commentaire « les 65 suites » et `assert.equal(…, 65)`, puisque les deux côtés
+font 64 → 65. Seuls les `assert.match` entrent en conflit. Le test paiements
+échouerait alors (66 suites pour 65 attendues) : rien de silencieux, mais le
+commentaire resterait faux.
 
 1. `.github/workflows/validate-pr.yml` : `SQL_TESTS` passe à **66** suites (main
    64 + #1124 + ce lot) ; garder `tests/security/dpae-contrats-cddu-vacation.test.sql`
    et `tests/security/gardes-null-security-definer.test.sql`, la contestation
-   restant **en fin de liste** (exigence de son test node), et le commentaire
-   « les 66 suites » ;
-2. `tests/node/paiements-staging-installed.node.mjs` : compte à 66, garder les
-   `assert.match` des deux suites ;
+   restant **en fin de liste** (exigence de son test node), et corriger le
+   commentaire en « les 66 suites » ;
+2. `tests/node/paiements-staging-installed.node.mjs` : compte, titre du test et
+   `assert.equal` à 66, garder les `assert.match` des deux suites ;
 3. `supabase/schema/public.sql` : fonctions disjointes, fusion attendue sans
    conflit ;
-4. puis rejouer `node --test tests/node/gardes-null-security-definer.node.mjs`
+4. l'étape PostgreSQL 17 isolée de ce lot est insérée avant celle du scanner,
+   celle de #1124 après : pas de conflit attendu ;
+5. puis rejouer `node --test tests/node/gardes-null-security-definer.node.mjs`
    (entièrement vert) et relire les corps LIVE des 20 fonctions : le préflight
    refuse toute divergence.
 
 Si ce lot devait malgré tout passer avant #1124, rien ne casse côté SQL
 (fonctions disjointes) ; seule la migration de #1124 deviendrait antérieure à la
-dernière version distante et devrait être renommée après `20261109010957`
+dernière version distante et devrait être renommée après `20261109020404`
 (CLAUDE.md, migrations règle 2).
+
+Les deux migrations de ce lot (`20261109010957` puis `20261109020404`) partent
+ensemble : le préflight du verrou exige le corps corrigé par la première.
 
 ## 8. Recette frontend
 

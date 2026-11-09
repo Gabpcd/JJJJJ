@@ -23,9 +23,15 @@
 -- elle partage la garde) passe sous COALESCE(..., false). Un NULL vaut
 -- désormais « pas d'accès » ; les appelants dont la comparaison valait déjà
 -- true ou false (membre de l'établissement, membre d'un autre établissement,
--- soignant assigné là où il est attendu, administrateur plateforme) gardent
--- exactement le même résultat. Messages de refus, propriétaire, ACL,
--- volatilité et search_path inchangés (CREATE OR REPLACE, aucun GRANT).
+-- soignant assigné là où il est attendu) gardent exactement le même résultat.
+-- L'administrateur plateforme aussi, partout où la garde lui ouvre l'accès par
+-- est_admin() ; une seule exception : la branche établissement de
+-- fn_creer_reclamation_score n'a pas de est_admin(), l'admin (sans
+-- établissement) y passait par le NULL et y est désormais refusé
+-- (NON_AUTORISE). Voulu : une réclamation de score se dépose depuis un
+-- établissement (décision prise par Claude sur délégation explicite de
+-- Gabrielle du 08/11/2026). Messages de refus, propriétaire, ACL, volatilité
+-- et search_path inchangés (CREATE OR REPLACE, aucun GRANT).
 --
 -- Contexte système. Quinze de ces fonctions n'ont pas de garde
 -- auth.uid() IS NULL préalable : service_role et les crons, qui passaient par
@@ -77,6 +83,9 @@
 --   20261102205212 fix/scanner-code-sans-code-suivant   (verrou : garde statique)
 --   20261102205808 fix/contestation-paiement-soignant
 --   20261102210943 fix/visibilite-etablissement-par-permission (B5b, verrou : garde statique)
+-- Le verrou du gap « double facturation » de fn_generer_facture vit dans une
+-- migration distincte, postérieure : 20261109020404 (REVOKE EXECUTE de
+-- authenticated, anon et PUBLIC) ; celle-ci n'y touche pas.
 -- File de merge sériel : #1123 (front seul), puis #1124
 -- (fix/dpae-serveur-cddu-vacation, migration 20261108223500), puis ce lot.
 -- #1124 redéfinit fn_mes_dpae, fn_rappel_dpae_quotidien, fn_pointer_arrivee,
