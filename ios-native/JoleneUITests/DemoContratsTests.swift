@@ -3,16 +3,15 @@ import XCTest
 /// Contrats en démonstration (lot 2, T9a ; `LOT2_PLAN.md` §3 T9a, décisions 17 à 19) : Profil › Mes contrats →
 /// liste filtrée comme le web (`ListeContrats.tsx`) → lecture d'un contrat dont l'original est contrôlé par son
 /// empreinte (fixtures `demo-contrat-00N.html`, horloge démo `2026-11-02T00:00:00Z`) → certificat, partage du fichier
-/// original, CDD à préparer. Aucune signature native dans cette tranche : la zone « Votre signature » est un renvoi
-/// web, sans bouton tant qu'aucun présentateur `.safari` n'est injecté (lot 1 T10 ; gap verrouillé, comme
-/// `DemoAccueilTests`) ; T9b remplacera la zone par la signature OTP. Aucune requête réseau (sentinelle).
+/// original, CDD à préparer. La zone « Votre signature » est la signature OTP native depuis T9b (ce fichier n'en
+/// vérifie que la présence ; parcours : `DemoSignatureContratTests`). Aucune requête réseau (sentinelle).
 ///
 /// Identifiants : `profil-contrats` (ligne de `EspaceSoignantSection` depuis l'intégration de T4a), `contrats-liste`,
 /// `contrats-filtre-<statut>`, `contrat-carte-<id>`, `contrats-vide`, `contrat-screen`, `contrat-countdown`,
 /// `contrat-titre`, `contrat-statut`, `contrat-lecteur`, `contrat-empreinte`, `contrat-partager`, `contrat-imprimer`,
 /// `contrat-certificat` (+ `-<signature>`), `contrat-certificat-ouvrir`, `certificat-screen`, `certificat-signatures-<signature>`,
 /// `certificat-empreinte`, `certificat-export`,
-/// `contrat-signatures` (+ `-etablissement`, `-soignant`), `contrat-renvoi-web` (+ `-action`, `-indisponible`), `contrat-deja-signe`,
+/// `contrat-signatures` (+ `-etablissement`, `-soignant`), `contrat-zone-signature`, `contrat-signature-otp`, `contrat-otp-envoyer`, `contrat-renvoi-web`, `contrat-deja-signe`,
 /// `contrat-cdd-a-preparer`, `contrat-contenu-indisponible`, `contrat-pied-de-page`.
 final class DemoContratsTests: JoleneUITestCase {
     /// `TextesWeb.CompteARebours.texte` à 62 h (contrat créé 10 h avant l'horloge démo).
@@ -21,7 +20,7 @@ final class DemoContratsTests: JoleneUITestCase {
     static let cddAPreparer = "Le contrat doit être préparé et confirmé par un représentant autorisé de l’employeur avant les signatures."
     /// `TextesWeb.Contrat.contenuPasDisponible` (l.637).
     static let contenuPasDisponible = "Le contenu du contrat n'est pas encore disponible."
-    /// `LibellesWeb.SignatureOtp.signatureNonDisponible` (`SignerContratOtp.tsx` l.230).
+    /// `LibellesWeb.SignatureOtp.signatureNonDisponible` (`SignerContratOtp.tsx` l.230), absent hors erreur bloquante.
     static let signatureNonDisponible = "Signature non disponible pour le moment"
 
     func testListeFiltresPuisContratEnAttenteLuSansRequete() throws {
@@ -71,14 +70,16 @@ final class DemoContratsTests: JoleneUITestCase {
         XCTAssertTrue(element("contrat-imprimer").exists, "impression du lecteur proposée")
         record("\(proofPrefix)-contrat-en-attente")
 
-        // Zone « Votre signature » : renvoi web, sans bouton tant que T10 n'a pas injecté le présentateur.
-        let indisponible = element("contrat-renvoi-web-indisponible")
-        require("La zone de signature est rendue") { indisponible.exists }
-        scrollTo(indisponible, in: ecran)
-        XCTAssertTrue(element("contrat-renvoi-web").exists, "zone de signature en renvoi web")
-        XCTAssertEqual(indisponible.label, Self.signatureNonDisponible)
-        XCTAssertFalse(element("contrat-renvoi-web-action").exists, "aucun bouton sans effet avant T10 (présentateur `.safari`)")
-        XCTAssertFalse(element("contract-otp").exists, "aucune signature native avant T9b")
+        // Zone « Votre signature » : signature OTP native depuis T9b (parcours complet : `DemoSignatureContratTests`) ;
+        // « Signature non disponible pour le moment » ne sert plus qu'aux erreurs bloquantes du serveur (l.222-236).
+        let envoyer = element("contrat-otp-envoyer")
+        require("La zone de signature est rendue") { envoyer.exists }
+        scrollTo(envoyer, in: ecran)
+        XCTAssertTrue(element("contrat-signature-otp").exists, "signature OTP native (T9b)")
+        XCTAssertFalse(envoyer.isEnabled, "aucun envoi sans consentement")
+        XCTAssertFalse(element("contrat-renvoi-web").exists, "compte réel : aucun renvoi web de la signature")
+        XCTAssertFalse(text(Self.signatureNonDisponible).exists, "réservé aux erreurs bloquantes du serveur")
+        XCTAssertFalse(element("contract-otp").exists, "aucun champ de code avant l'envoi")
         XCTAssertFalse(element("contrat-deja-signe").exists)
         XCTAssertEqual(element("contrat-signatures-etablissement").label, "Établissement : ⏳ En attente")
         XCTAssertEqual(element("contrat-signatures-soignant").label, "Soignant(e) : ⏳ En attente")
@@ -103,7 +104,7 @@ final class DemoContratsTests: JoleneUITestCase {
         require("Le contrat signé est affiché") { self.element("contrat-statut").exists }
         XCTAssertEqual(element("contrat-statut").label, "Statut : ✅ Signé")
         XCTAssertFalse(element("contrat-countdown").exists, "aucun compte à rebours pour un contrat signé")
-        XCTAssertFalse(element("contrat-renvoi-web").exists, "aucune zone de signature pour un contrat signé")
+        XCTAssertFalse(element("contrat-zone-signature").exists, "aucune zone de signature pour un contrat signé")
 
         let ligneEtablissement = element("contrat-certificat-demo-signature-002-etab")
         require("Le certificat résumé est rendu") { ligneEtablissement.exists }
@@ -157,7 +158,7 @@ final class DemoContratsTests: JoleneUITestCase {
         XCTAssertFalse(element("contrat-lecteur").exists, "aucun original : aucun lecteur, aucune reconstitution")
         XCTAssertFalse(element("contrat-partager").isEnabled, "rien à partager")
         XCTAssertFalse(element("contrat-imprimer").exists)
-        XCTAssertFalse(element("contrat-renvoi-web").exists, "aucune action soignant pour un CDD à préparer (décision 19)")
+        XCTAssertFalse(element("contrat-zone-signature").exists, "aucune action soignant pour un CDD à préparer (décision 19)")
         XCTAssertTrue(element("contrat-countdown").exists)
         record("\(proofPrefix)-contrat-cdd-a-preparer")
     }
