@@ -45,7 +45,11 @@ private final class CompletionScriptee: InscriptionPort, @unchecked Sendable {
     var finalisations: [Result<ResultatFinalisation, Error>] = []
     /// L'issue inconnue a quand même créé le profil côté serveur.
     var creeAvantErreur = false
+    /// `.finalisee` crée le profil (faux : profil créé mais rôle relu sans espace, revue B8 de T8, m5).
+    var creeSurFinalisee = true
     var retenue: Gate?
+    /// Retient la lecture du référentiel (annulation du `.task`, revue B8 de T8, m2).
+    var retenueTypes: Gate?
     let serveur: ServeurCompletion
     private var appelsRecus: [String] = []
     private var formulairesRecus: [FormulaireInscription] = []
@@ -74,7 +78,9 @@ private final class CompletionScriptee: InscriptionPort, @unchecked Sendable {
 
     func typesExercice(profession: String) async throws -> [String]? {
         noter("typesExercice(\(profession))")
-        return try suivant(\.types).get()
+        let resultat = suivant(\.types)
+        if let retenueTypes { await retenueTypes.wait() }
+        return try resultat.get()
     }
 
     func enregistrerBrouillon(_ brouillon: FormulaireInscription) async throws -> ParcoursInscription {
@@ -87,7 +93,8 @@ private final class CompletionScriptee: InscriptionPort, @unchecked Sendable {
         noter("finaliser", formulaire)
         let resultat = suivant(\.finalisations)
         if let retenue { await retenue.wait() }
-        if case .success(.finalisee) = resultat { await serveur.creerProfil() }
+        if case .success(.finalisee) = resultat, creeSurFinalisee { await serveur.creerProfil() }
+        if case .success(.indeterminee) = resultat, creeAvantErreur { await serveur.creerProfil() }
         if case .failure = resultat, creeAvantErreur { await serveur.creerProfil() }
         return try resultat.get()
     }
@@ -103,8 +110,8 @@ final class CompletionProfilModelTests: XCTestCase {
     /// 9 novembre 2026, 12:00 UTC.
     nonisolated private static let maintenant = Date(timeIntervalSince1970: 1_794_225_600)
 
-    private static func parcours(_ brouillon: FormulaireInscription) -> ParcoursInscription {
-        ParcoursInscription(userId: compteCompletion.id, typeCompte: "SOIGNANT", brouillon: brouillon,
+    private static func parcours(_ brouillon: FormulaireInscription, userId: String = compteCompletion.id) -> ParcoursInscription {
+        ParcoursInscription(userId: userId, typeCompte: "SOIGNANT", brouillon: brouillon,
                             consentementCguLe: "2026-11-02T00:00:00+00:00", modifieLe: "2026-11-02T00:00:00+00:00")
     }
 
@@ -123,7 +130,8 @@ final class CompletionProfilModelTests: XCTestCase {
     }
 
     private func scenario(_ brouillon: FormulaireInscription = brouillonComplet,
-                          timeout: TimeInterval = SessionController.defaultResolutionTimeout) async -> Scenario {
+                          timeout: TimeInterval = SessionController.defaultResolutionTimeout,
+                          userIdParcours: String = compteCompletion.id) async -> Scenario {
         let serveur = ServeurCompletion()
         let port = CompletionScriptee(serveur: serveur)
         var gateways = Gateways(auth: AuthCompletion(), role: RoleCompletion(serveur: serveur),
@@ -132,7 +140,8 @@ final class CompletionProfilModelTests: XCTestCase {
         let session = SessionStore(controller: SessionController(gateways: gateways, resolutionTimeout: timeout))
         await session.start()
         let annonces = Annonces()
-        let model = CompletionProfilModel(session: session, parcours: Self.parcours(brouillon), maintenant: { Self.maintenant },
+        let model = CompletionProfilModel(session: session, parcours: Self.parcours(brouillon, userId: userIdParcours),
+                                          maintenant: { Self.maintenant },
                                           annoncerDeconnexion: { annonces.messages.append($0) })
         return Scenario(model: model, session: session, port: port, serveur: serveur, annonces: annonces)
     }
@@ -243,11 +252,152 @@ final class CompletionProfilModelTests: XCTestCase {
         XCTAssertEqual(snapshot.user.id, compteCompletion.id)
         XCTAssertEqual(s.port.appels, ["finaliser"])
         let envoye = try XCTUnwrap(s.port.formulaires.first)
+        // Revue B8 de T8, m4 : la réponse « salarié(e) » part dans le brouillon comme sur le web (`donneesFormulaire`) ;
+        // `register-soignant` ne la reçoit jamais (`CompletionRules.corpsFinalisation`, correction 21).
         XCTAssertEqual(envoye, FormulaireInscription(prenom: "Léa", nom: "Martin", telephone: "0612345678", dateNaissance: "1990-05-14",
-                                                     profession: "IDE", typesContrat: ["CDD"], rpps: "", rayon: nil),
-                       "profession du parcours ; réponse « salarié(e) » jamais transmise (correction 21)")
+                                                     profession: "IDE", typesContrat: ["CDD"], rpps: "", rayon: nil,
+                                                     estSalarieEtablissement: true),
+                       "profession du parcours ; déclaration étudiant jamais réécrite")
+        XCTAssertNil(CompletionRules.corpsFinalisation(envoye)["estSalarieEtablissement"])
         XCTAssertNil(s.model.erreur)
         XCTAssertTrue(s.annonces.messages.isEmpty)
+    }
+
+    // MARK: - Revue fraîche B8 de T8
+
+    /// B1 : un brouillon étudiant (« Je suis étudiant(e) » sur le web, `estEtudiant: true`) n'est jamais finalisé en
+    /// natif — sans cela `register-soignant` écrirait `est_etudiant = false` (index.ts l.309) et l'établissement ne
+    /// verrait plus le cadre étudiant. Verrou explicite (CLAUDE.md, « un gap connu reste verrouillé ») : aucun appel,
+    /// aucun texte nouveau ; seule la complétion web est proposée (D11).
+    func testBrouillonEtudiantVerrouilleLaFinalisationNativeSansAucunAppel() async {
+        let s = await scenario(FormulaireInscription(prenom: "Léa", nom: "Martin", telephone: "0612345678",
+                                                     dateNaissance: "1990-05-14", profession: "AS", typesContrat: ["CDD"],
+                                                     estEtudiant: true))
+        XCTAssertTrue(s.model.parcoursEtudiant, "déclaration étudiant du brouillon serveur")
+        s.port.finalisations = [.success(.finalisee(soignantId: compteCompletion.id))]
+        let issue = await s.model.finaliser()
+        XCTAssertNil(issue)
+        XCTAssertTrue(s.port.appels.isEmpty, "verrou D11 : ni brouillon ni register-soignant")
+        XCTAssertNil(s.model.erreur, "aucun texte nouveau : l'écran ne propose que la complétion web")
+        XCTAssertTrue(estBloque(s.session), "jamais d'espace ouvert pour un parcours étudiant natif")
+        XCTAssertNil(s.model.formulaire.estEtudiant, "la déclaration n'est jamais réécrite par le natif")
+        let sansDeclaration = await scenario(FormulaireInscription(profession: "AS", estEtudiant: false))
+        XCTAssertFalse(sansDeclaration.model.parcoursEtudiant)
+    }
+
+    /// B1 : le brouillon relu par le serveur au moment de la finalisation (déclaration faite sur le web pendant que
+    /// l'écran natif restait ouvert) prime : `.parcoursEtudiant` bascule l'écran vers la complétion web, sans message.
+    func testBrouillonDevenuEtudiantAuServeurBasculeVersLaCompletionWeb() async {
+        let s = await scenario()
+        XCTAssertFalse(s.model.parcoursEtudiant)
+        s.port.finalisations = [.success(.parcoursEtudiant)]
+        let issue = await s.model.finaliser()
+        XCTAssertNil(issue)
+        XCTAssertTrue(s.model.parcoursEtudiant, "verrou D11 posé par la relecture serveur")
+        XCTAssertNil(s.model.erreur)
+        XCTAssertFalse(s.model.enCours)
+        let second = await s.model.finaliser()
+        XCTAssertNil(second)
+        XCTAssertEqual(s.port.appels, ["finaliser"], "plus aucun envoi natif ensuite")
+    }
+
+    /// M1, cas 2 : 409 `ACCOUNT_ALREADY_REGISTERED` (renvoi après une issue inconnue, délai côté client pendant que
+    /// l'edge termine, ou complétion faite sur le web) prouve un profil existant : rôle relu puis espace ouvert, jamais
+    /// l'impasse « Connectez-vous pour continuer » d'un utilisateur déjà connecté.
+    func testCompteDejaFinaliseRelitLeRoleEtOuvreLEspace() async {
+        let s = await scenario()
+        let message = "Ce compte soignant existe déjà. Connectez-vous pour continuer."
+        s.port.finalisations = [.success(.indeterminee(message: message))]
+        s.port.creeAvantErreur = true
+        let issue = await s.model.finaliser()
+        XCTAssertEqual(issue, .espaceOuvert)
+        if case .ready = s.session.state {} else { XCTFail("espace relu attendu : \(s.session.state)") }
+        XCTAssertNil(s.model.erreur, "le profil existe : aucun message")
+        XCTAssertEqual(s.port.appels, ["finaliser"], "aucun renvoi")
+    }
+
+    /// M1, cas 1 : 5xx illisible (passerelle, délai de l'edge) = issue inconnue. Sans profil relu, le message (repli
+    /// verbatim du web) est affiché, saisie conservée ; avec un profil relu, l'espace s'ouvre.
+    func testIssueIndetermineeSansProfilAfficheLeMessageApresRelecture() async {
+        let s = await scenario()
+        s.port.finalisations = [.success(.indeterminee(message: T.saisieConservee))]
+        let lecturesAvant = await s.serveur.lecturesRole
+        let issue = await s.model.finaliser()
+        XCTAssertNil(issue)
+        let lecturesApres = await s.serveur.lecturesRole
+        XCTAssertEqual(lecturesApres, lecturesAvant + 1, "issue inconnue : rôle relu une fois (PRINCIPES §5)")
+        XCTAssertEqual(s.model.erreur, T.saisieConservee)
+        XCTAssertEqual(s.model.prenom, "Léa")
+        XCTAssertTrue(estBloque(s.session))
+    }
+
+    /// M1 : au retour du renvoi web étudiant (complétion terminée sur `/inscription/completer`), le rôle est relu ;
+    /// un profil créé sur le web ouvre l'espace sans aucun envoi natif, sinon rien n'est affiché.
+    func testRetourDuRenvoiWebRelitLeRole() async {
+        let s = await scenario(FormulaireInscription(profession: "AS", estEtudiant: true))
+        let sansProfil = await s.model.relireApresRenvoiWeb()
+        XCTAssertNil(sansProfil)
+        XCTAssertNil(s.model.erreur, "retour sans complétion : aucun message")
+        XCTAssertTrue(estBloque(s.session))
+        await s.serveur.creerProfil()
+        let issue = await s.model.relireApresRenvoiWeb()
+        XCTAssertEqual(issue, .espaceOuvert)
+        if case .ready = s.session.state {} else { XCTFail("espace relu attendu : \(s.session.state)") }
+        XCTAssertTrue(s.port.appels.isEmpty, "aucun appel du port d'inscription : relecture du rôle seulement")
+    }
+
+    /// m2 : un `.task` coupé pendant la lecture du référentiel (feuille plein écran présentée, vue démontée) ne laisse
+    /// pas l'écran bloqué sur « Vérification… » : l'état repart à `.inactif`, que le `.task` suivant relance.
+    func testLectureDuReferentielAnnuleeRevientAInactif() async {
+        let s = await scenario()
+        let retenue = Gate()
+        s.port.retenueTypes = retenue
+        s.port.types = [.success(["SALARIE", "LIBERAL", "MIXTE"]), .success(["SALARIE", "LIBERAL", "MIXTE"])]
+        let lecture = Task { await s.model.verifierModes() }
+        while s.model.modes != .chargement { await Task.yield() }
+        lecture.cancel()
+        await lecture.value
+        XCTAssertEqual(s.model.modes, .inactif, "annulation : jamais un chargement sans fin")
+        await retenue.open()
+        s.port.retenueTypes = nil
+        await s.model.verifierModes()
+        XCTAssertEqual(s.model.modes, .disponibles(["SALARIE", "LIBERAL", "MIXTE"]), "relance effective")
+    }
+
+    /// m4 : la réponse « salarié(e) » est restaurée depuis le brouillon (web l.134-136) : l'avertissement d'exclusivité
+    /// survit à la reprise.
+    func testReponseSalarieRestaureeDepuisLeBrouillon() async {
+        let s = await scenario(FormulaireInscription(prenom: "Léa", profession: "IDE", estSalarieEtablissement: true))
+        XCTAssertEqual(s.model.estSalarieEtablissement, true)
+        XCTAssertEqual(s.model.formulaire.estSalarieEtablissement, true)
+        s.model.estSalarieEtablissement = false
+        XCTAssertEqual(s.model.formulaire.estSalarieEtablissement, false)
+    }
+
+    /// m5 : profil créé (200) mais rôle relu sans espace : même issue que l'échec de `refreshSession` — message annoncé
+    /// à la connexion puis déconnexion locale (« Votre profil est enregistré. Reconnectez-vous… », web l.236), jamais
+    /// une invitation à se reconnecter sans déconnexion.
+    func testProfilCreeMaisRoleNonReluDeconnecteLocalement() async {
+        let s = await scenario()
+        s.port.creeSurFinalisee = false
+        s.port.finalisations = [.success(.finalisee(soignantId: compteCompletion.id))]
+        let issue = await s.model.finaliser()
+        XCTAssertEqual(issue, .deconnecte(message: T.profilEnregistreReconnecter))
+        XCTAssertEqual(s.annonces.messages, [T.profilEnregistreReconnecter])
+        XCTAssertEqual(s.session.state, .signedOut(message: nil), "déconnexion locale, comme l'échec de refreshSession")
+    }
+
+    /// m6 : l'epoch n'est capturé que pour l'identité du parcours ; une session d'un autre utilisateur n'envoie jamais le
+    /// brouillon de ce parcours.
+    func testSessionDUnAutreUtilisateurQueLeParcoursNEnvoieRien() async {
+        let s = await scenario(userIdParcours: "autre-utilisateur")
+        s.port.finalisations = [.success(.finalisee(soignantId: "autre-utilisateur"))]
+        s.port.brouillons = [.success(())]
+        let issue = await s.model.finaliser()
+        XCTAssertNil(issue)
+        let brouillon = await s.model.enregistrerPlusTard()
+        XCTAssertFalse(brouillon)
+        XCTAssertTrue(s.port.appels.isEmpty, "aucun envoi pour une identité qui n'est pas celle du parcours")
     }
 
     func testRefusServeurAfficheLeMessageVerbatimSansRelecture() async {

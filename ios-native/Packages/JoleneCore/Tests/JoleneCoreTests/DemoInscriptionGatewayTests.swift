@@ -237,13 +237,56 @@ final class DemoInscriptionGatewayTests: XCTestCase {
     }
 
     func testArgumentsDeLancementDesRefusDeLaCompletion() {
-        for refus in [RefusInscriptionDemo.mineur, .rppsDejaEnregistre, .finalisationEnAttente, .referentielIndisponible] {
+        for refus in [RefusInscriptionDemo.mineur, .rppsDejaEnregistre, .finalisationEnAttente, .referentielIndisponible,
+                      .compteDejaFinalise] {
             XCTAssertEqual(RefusInscriptionDemo(arguments: [RefusInscriptionDemo.argument, refus.rawValue]), refus)
         }
+        XCTAssertEqual(RefusInscriptionDemo.compteDejaFinalise.rawValue, "ACCOUNT_ALREADY_REGISTERED")
+    }
+
+    /// Revue B8 de T8, M1 : 409 `ACCOUNT_ALREADY_REGISTERED` simulé — le profil existe déjà côté serveur (bascule vers
+    /// l'espace démo faite) et la réponse est une issue inconnue, message serveur verbatim en repli : le modèle relit le
+    /// rôle et ouvre l'espace.
+    func testCompteDejaFinaliseRendUneIssueIndetermineeProfilExistant() async throws {
+        let (auth, gateway) = try await compteAvecParcours(refus: .compteDejaFinalise)
+        let resultat = try await gateway.finaliser(Self.formulaire())
+        XCTAssertEqual(resultat, .indeterminee(message: "Ce compte soignant existe déjà. Connectez-vous pour continuer."))
+        let restaure = try await auth.restoreSession()
+        XCTAssertEqual(restaure, DemoWorld.user, "profil déjà créé : l'espace démo existe")
+    }
+
+    /// Revue B8 de T8, B1 : variante `JOLENE_DEMO_BROUILLON=etudiant` (brouillon d'un étudiant commencé sur le web) — la
+    /// finalisation démo rend `.parcoursEtudiant` comme `register-soignant` n'est jamais appelée en production, sans
+    /// bascule ; le brouillon fusionné garde la déclaration (jamais réécrite par le natif).
+    func testBrouillonEtudiantNEstJamaisFinaliseEnDemo() async throws {
+        XCTAssertEqual(VarianteBrouillonDemo(rawValue: "etudiant"), .etudiant)
+        let auth = DemoAuthGateway()
+        let gateway = DemoInscriptionGateway(auth: auth, brouillon: .etudiant)
+        _ = try await gateway.confirmer(.tokenHash(tokenHash: DemoInscriptionGateway.tokenHashDemo, otpType: "signup"))
+        let parcours = try await gateway.demarrer(intention: InscriptionRules.intention(profession: "AS", cgu: true))
+        XCTAssertEqual(parcours.brouillon.estEtudiant, true)
+        XCTAssertEqual(parcours.brouillon.profession, "AS")
+        let resultat = try await gateway.finaliser(Self.formulaire(profession: "AS"))
+        XCTAssertEqual(resultat, .parcoursEtudiant)
+        let restaure = try await auth.restoreSession()
+        XCTAssertEqual(restaure?.id, DemoInscriptionGateway.nouveauSoignantId, "aucune bascule vers l'espace démo")
+        let relu = try await gateway.parcours(userId: DemoInscriptionGateway.nouveauSoignantId)
+        XCTAssertEqual(relu?.brouillon.estEtudiant, true, "déclaration conservée (`donnees || p_donnees`)")
+        XCTAssertEqual(relu?.brouillon.prenom, "Léa", "saisie du formulaire fusionnée")
+    }
+
+    /// Revue B8 de T8, m4 : la réponse « salarié(e) » est fusionnée dans le brouillon démo comme sur le serveur.
+    func testReponseSalarieFusionneeDansLeBrouillonDemo() async throws {
+        let (_, gateway) = try await compteAvecParcours()
+        let relu = try await gateway.enregistrerBrouillon(FormulaireInscription(prenom: "Léa", estSalarieEtablissement: true))
+        XCTAssertEqual(relu.brouillon.estSalarieEtablissement, true)
+        let suivant = try await gateway.enregistrerBrouillon(FormulaireInscription(nom: "Martin"))
+        XCTAssertEqual(suivant.brouillon.estSalarieEtablissement, true, "clé absente : conservée")
     }
 
     func testRefusDeLaCompletionSansEffetSurLaCreationDuCompte() async throws {
-        for refus in [RefusInscriptionDemo.mineur, .rppsDejaEnregistre, .finalisationEnAttente, .referentielIndisponible] {
+        for refus in [RefusInscriptionDemo.mineur, .rppsDejaEnregistre, .finalisationEnAttente, .referentielIndisponible,
+                      .compteDejaFinalise] {
             let (_, gateway) = monde(refus: refus)
             let resultat = try await gateway.creerCompte(email: "a@b.c", motDePasse: "motdepasse", intention: intention)
             XCTAssertEqual(resultat, .confirmationEnvoyee, refus.rawValue)

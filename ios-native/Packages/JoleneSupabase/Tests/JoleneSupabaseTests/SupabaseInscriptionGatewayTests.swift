@@ -353,11 +353,12 @@ final class SupabaseInscriptionGatewayTests: XCTestCase {
     private static let formulaire = FormulaireInscription(prenom: "Léa", nom: "Martin", telephone: "", dateNaissance: "1990-05-14",
                                                           profession: "IDE", typesContrat: ["CDD", "LIBERAL"], rpps: "", rayon: nil)
 
-    /// Ligne `parcours_inscription` relue après la fusion du brouillon.
-    private func ligneBrouillon(userId: String = TestClient.userId) -> String {
+    /// Ligne `parcours_inscription` relue après la fusion du brouillon ; `extra` : clés supplémentaires de `donnees`
+    /// (déclaration étudiant du web, revue B8 de T8, B1).
+    private func ligneBrouillon(userId: String = TestClient.userId, extra: String = "") -> String {
         """
         {"user_id":"\(userId)","type_compte":"SOIGNANT",
-         "donnees":{"profession":"IDE","prenom":"Léa","nom":"Martin","telephone":"","dateNaissance":"1990-05-14","typesContrat":["CDD","LIBERAL"],"rpps":""},
+         "donnees":{"profession":"IDE","prenom":"Léa","nom":"Martin","telephone":"","dateNaissance":"1990-05-14","typesContrat":["CDD","LIBERAL"],"rpps":""\(extra)},
          "consentement_cgu_le":"2026-11-02T10:00:00+00:00","consentement_cgv_le":null,
          "cree_le":"2026-11-02T10:00:00+00:00","modifie_le":"2026-11-09T10:00:00+00:00"}
         """
@@ -506,6 +507,8 @@ final class SupabaseInscriptionGatewayTests: XCTestCase {
         XCTAssertTrue(registry.unmatched.isEmpty)
     }
 
+    /// Refus certains : message serveur verbatim, aucune relecture. Les issues inconnues (5xx, 409 d'un profil possible,
+    /// corps illisible) ont leur propre test (revue B8 de T8, M1 : ce test les épinglait à tort en refus certains).
     func testChaqueRefusDeRegisterSoignantRendSonMessageVerbatimSansRafraichissement() async throws {
         let client = try await connecte()
         let cas: [(Int, String, String)] = [
@@ -513,10 +516,8 @@ final class SupabaseInscriptionGatewayTests: XCTestCase {
             (400, "RPPS_FORMAT_INVALID", "Le numéro RPPS est obligatoire pour votre profession (11 chiffres)."),
             (400, "RPPS_TRAITS_MISMATCH", "Les informations saisies (nom, prénom) ne correspondent pas au numéro RPPS."),
             (409, "RPPS_ALREADY_REGISTERED", "Ce numéro RPPS est déjà associé à un compte Jolene. Connectez-vous à ce compte, ou contactez le support si ce n'est pas vous."),
-            (409, "ACCOUNT_ALREADY_REGISTERED", "Ce compte soignant existe déjà. Connectez-vous pour continuer."),
+            (409, "ACCOUNT_TYPE_MISMATCH", "Ce compte est déjà associé à un autre espace Jolene. Utilisez une autre adresse ou contactez le support."),
             (429, "RATE_LIMITED", "Trop de tentatives. Réessayez dans quelques minutes."),
-            (503, "ACCOUNT_RESERVATION_UNAVAILABLE", "Inscription momentanément indisponible. Réessayez dans quelques minutes."),
-            (500, "INTERNAL_ERROR", "Erreur serveur. Notre équipe a été notifiée. Réessayez dans quelques minutes."),
         ]
         for (statut, code, message) in cas {
             registry.reset()
@@ -527,12 +528,100 @@ final class SupabaseInscriptionGatewayTests: XCTestCase {
             XCTAssertEqual(registry.requests(to: edge).count, 1, "aucun renvoi")
             XCTAssertTrue(appelsRefresh().isEmpty, "refus : aucune session rafraîchie")
         }
-        // Corps illisible (page de passerelle) : repli du web l.224, aucun code.
-        registry.reset()
+    }
+
+    /// Revue B8 de T8, M1 : un 5xx (corps de passerelle illisible, délai de l'edge, `INTERNAL_ERROR` du `catch` final qui
+    /// peut suivre l'INSERT) et un 409 qui dit le profil créé ou en cours de création ne sont jamais des refus certains :
+    /// `.indeterminee` (relecture du rôle par le modèle), message serveur verbatim en repli, sinon le repli du web l.224.
+    func testIssuesInconnuesDeRegisterSoignantRendentUneIssueIndeterminee() async throws {
+        let client = try await connecte()
+        let lisibles: [(Int, String, String)] = [
+            (409, "ACCOUNT_ALREADY_REGISTERED", "Ce compte soignant existe déjà. Connectez-vous pour continuer."),
+            (409, "ACCOUNT_REGISTRATION_IN_PROGRESS", "Une inscription est déjà en cours pour ce compte. Patientez quelques instants puis réessayez."),
+            (409, "USER_ALREADY_REGISTERED", "Un compte existe déjà avec cet email. Connectez-vous ou utilisez une autre adresse."),
+            (503, "ACCOUNT_RESERVATION_UNAVAILABLE", "Inscription momentanément indisponible. Réessayez dans quelques minutes."),
+            (500, "INTERNAL_ERROR", "Erreur serveur. Notre équipe a été notifiée. Réessayez dans quelques minutes."),
+        ]
+        for (statut, code, message) in lisibles {
+            registry.reset()
+            registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon()))
+            registry.add("POST", edge, respond: erreurEdge(statut, code, message))
+            let resultat = try await gateway(client).finaliser(Self.formulaire)
+            XCTAssertEqual(resultat, .indeterminee(message: message), "\(statut) \(code)")
+            XCTAssertEqual(registry.requests(to: edge).count, 1, "aucun renvoi")
+            XCTAssertTrue(appelsRefresh().isEmpty)
+        }
+        // Corps illisibles (page de passerelle, délai, corps vide) : repli du web l.224, jamais un refus certain.
+        for illisible: StubResponse in [.json(502, "<html>Bad gateway</html>"), .json(504, ""), .json(500, "upstream timeout"),
+                                        .json(200, "<html>portail captif</html>")] {
+            registry.reset()
+            registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon()))
+            registry.add("POST", edge, respond: illisible)
+            let resultat = try await gateway(client).finaliser(Self.formulaire)
+            XCTAssertEqual(resultat, .indeterminee(message: CompletionTextes.saisieConservee))
+            XCTAssertTrue(appelsRefresh().isEmpty)
+        }
+    }
+
+    /// Revue B8 de T8, B1 : la déclaration étudiant du web (`estEtudiant: true`) relue dans le brouillon fusionné par le
+    /// serveur verrouille la finalisation native : `register-soignant` n'est jamais appelée (elle écrirait
+    /// `est_etudiant = false`, index.ts l.309). Toute autre valeur (`"true"`, `false`) n'est pas une déclaration.
+    func testBrouillonEtudiantNEstJamaisFinaliseEnNatif() async throws {
+        let client = try await connecte()
+        registry.add("POST", brouillonRPC,
+                     respond: .json(200, ligneBrouillon(extra: #","estEtudiant":true,"scolariteFormation":"IFSI","scolariteAnnee":"1""#)))
+        let resultat = try await gateway(client).finaliser(Self.formulaire)
+        XCTAssertEqual(resultat, .parcoursEtudiant)
+        XCTAssertTrue(registry.requests(to: edge).isEmpty, "verrou D11 : register-soignant jamais appelée")
+        XCTAssertTrue(appelsRefresh().isEmpty)
+        let donnees = try XCTUnwrap(try corps(brouillonRPC)["p_donnees"] as? NSDictionary)
+        XCTAssertNil(donnees["estEtudiant"], "la déclaration n'est jamais réécrite par le natif")
+        for nonDeclare in [#","estEtudiant":"true""#, #","estEtudiant":false"#] {
+            registry.reset()
+            registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon(extra: nonDeclare)))
+            registry.add("POST", edge, respond: .json(200, #"{"ok":true,"success":true,"soignant_id":"\#(TestClient.userId)"}"#))
+            stubRefresh(.json(200, TestClient.sessionJSON(role: "SOIGNANT")))
+            let fini = try await gateway(client).finaliser(Self.formulaire)
+            XCTAssertEqual(fini, .finalisee(soignantId: TestClient.userId), nonDeclare)
+        }
+    }
+
+    /// Revue B8 de T8, m4 : la réponse « salarié(e) » part dans le brouillon (liste blanche serveur), jamais vers
+    /// `register-soignant`.
+    func testReponseSalarieDansLeBrouillonJamaisDansRegisterSoignant() async throws {
+        let client = try await connecte()
+        registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon(extra: #","estSalarieEtablissement":true"#)))
+        registry.add("POST", edge, respond: .json(200, #"{"ok":true,"success":true,"soignant_id":"\#(TestClient.userId)"}"#))
+        stubRefresh(.json(200, TestClient.sessionJSON(role: "SOIGNANT")))
+        var formulaire = Self.formulaire
+        formulaire.estSalarieEtablissement = true
+        _ = try await gateway(client).finaliser(formulaire)
+        let donnees = try XCTUnwrap(try corps(brouillonRPC)["p_donnees"] as? NSDictionary)
+        XCTAssertEqual(donnees["estSalarieEtablissement"] as? Bool, true)
+        let edgeCorps = try corps(edge)
+        XCTAssertNil(edgeCorps["estSalarieEtablissement"])
+        XCTAssertNil(edgeCorps["est_etudiant"])
+    }
+
+    /// Revue B8 de T8, m1 : le Bearer de `register-soignant` est celui d'une session valide (`auth.session`, rafraîchie si
+    /// expirée, comme `SupabaseAccountGateway`), jamais un `currentSession` périmé. Le brouillon (PostgREST) rafraîchit
+    /// déjà la session juste avant : ce test épingle le Bearer frais, indépendamment de cet effet de bord.
+    func testBearerDeRegisterSoignantPrisDUneSessionValide() async throws {
+        let client = TestClient.make()
+        let expire = TestClient.sessionJSON(expiresAt: Date().timeIntervalSince1970 - 60, role: nil)
+        registry.add("POST", token, where: { $0.query("grant_type") == "password" }, respond: .json(200, expire))
+        _ = try await client.auth.signIn(email: TestClient.email, password: motDePasse)
+        let ancien = try XCTUnwrap(client.auth.currentSession?.accessToken)
+        let frais = TestClient.sessionJSON(expiresAt: Date().timeIntervalSince1970 + 3600, role: nil)
+        stubRefresh(.json(200, frais))
         registry.add("POST", brouillonRPC, respond: .json(200, ligneBrouillon()))
-        registry.add("POST", edge, respond: .json(502, "<html>Bad gateway</html>"))
-        let illisible = try await gateway(client).finaliser(Self.formulaire)
-        XCTAssertEqual(illisible, .refusee(code: nil, message: CompletionTextes.saisieConservee))
+        registry.add("POST", edge, respond: .json(200, #"{"ok":true,"success":true,"soignant_id":"\#(TestClient.userId)"}"#))
+        _ = try await gateway(client).finaliser(Self.formulaire)
+        let appel = try XCTUnwrap(registry.requests(to: edge).first)
+        XCTAssertNotEqual(appel.header("Authorization"), "Bearer \(ancien)", "jamais le jeton expiré")
+        XCTAssertTrue(appel.header("Authorization")?.hasPrefix("Bearer ") == true)
+        let rafraichi = try XCTUnwrap(registry.requests(to: brouillonRPC).first?.header("Authorization"))
+        XCTAssertEqual(appel.header("Authorization"), rafraichi, "même session valide que le brouillon")
     }
 
     func testFinalisationEnAttenteDemandeLaDeconnexionLocale() async throws {
@@ -570,7 +659,9 @@ final class SupabaseInscriptionGatewayTests: XCTestCase {
             do {
                 let resultat = try await gateway(client).finaliser(Self.formulaire)
                 if corps == "[]" {
-                    XCTAssertEqual(resultat, .refusee(code: nil, message: CompletionTextes.saisieConservee), "corps non objet : refus")
+                    // Revue B8 de T8, M1 : un 2xx illisible n'est pas un refus certain (le profil a pu être créé).
+                    XCTAssertEqual(resultat, .indeterminee(message: CompletionTextes.saisieConservee),
+                                   "corps non objet : issue inconnue, jamais un succès")
                 } else {
                     XCTFail("\(corps) : jamais un succès fabriqué (\(resultat))")
                 }

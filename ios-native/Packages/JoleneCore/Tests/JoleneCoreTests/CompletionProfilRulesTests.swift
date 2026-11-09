@@ -64,6 +64,25 @@ final class CompletionProfilRulesTests: XCTestCase {
                        DateComponents(year: 2008, month: 11, day: 9), "`max` du sélecteur : aujourd'hui moins 18 ans (l.554)")
     }
 
+    /// Revue B8 de T8, m8 : la borne du sélecteur se calcule dans le calendrier du sélecteur (UTC, `DateNaissance.fuseau`),
+    /// jamais dans le fuseau de l'appareil. Cas d'un 28 février 2026 à 23:30 UTC (1er mars 00:30 à Paris) : en UTC, 18
+    /// ans plus tôt est le 28 février 2008, comme le contrôle `UNDERAGE` de `register-soignant` (l.243-254, champs UTC du
+    /// runtime) ; calculée à Paris, la borne laisserait choisir le 29 février 2008, refusé ensuite par le serveur.
+    func testBorneDuSelecteurDansLeCalendrierUTCDuSelecteur() throws {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
+        let presqueMinuit = Date(timeIntervalSince1970: 1_772_321_400) // 2026-02-28T23:30:00Z
+        XCTAssertEqual(utc.dateComponents([.year, .month, .day, .hour], from: presqueMinuit),
+                       DateComponents(year: 2026, month: 2, day: 28, hour: 23))
+        let borne = R.dateMaximale(maintenant: presqueMinuit)
+        XCTAssertEqual(utc.dateComponents([.year, .month, .day], from: borne), DateComponents(year: 2008, month: 2, day: 28),
+                       "borne par défaut : calendrier UTC, quel que soit le fuseau de l'appareil")
+        var paris = Calendar(identifier: .gregorian)
+        paris.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Paris"))
+        XCTAssertEqual(utc.dateComponents([.year, .month, .day], from: R.dateMaximale(maintenant: presqueMinuit, calendrier: paris)),
+                       DateComponents(year: 2008, month: 2, day: 29), "témoin : le fuseau de Paris décalerait la borne d'un jour")
+    }
+
     func testInformationsAVerifierDansLOrdreDuWeb() {
         let manques = R.manques(prenom: "", nom: "", telephone: "06", dateNaissance: nil, profession: "MEDECIN",
                                 typesContrat: [], rpps: "123", maintenant: maintenant)
@@ -130,6 +149,60 @@ final class CompletionProfilRulesTests: XCTestCase {
         XCTAssertEqual(Set(minimal.keys), ["typesContrat"], "champ nil : non transmis")
     }
 
+    /// Revue B8 de T8, m4 et B1 : la réponse « salarié(e) » est enregistrée dans le brouillon comme le web
+    /// (`donneesFormulaire` l.152-167 garde `estSalarieEtablissement`), la déclaration étudiant ne l'est jamais par le
+    /// natif (lue seulement : le serveur la conserve, `donnees || p_donnees`, D11).
+    func testBrouillonGardeLaReponseSalarieJamaisLaDeclarationEtudiant() {
+        XCTAssertTrue(R.clesBrouillon.contains("estSalarieEtablissement"))
+        for lueSeulement in ["estEtudiant", "scolariteFormation", "scolariteAnnee"] {
+            XCTAssertFalse(R.clesBrouillon.contains(lueSeulement), "\(lueSeulement) : jamais écrit par le natif")
+        }
+        let donnees = R.donneesBrouillon(FormulaireInscription(profession: "AS", typesContrat: ["CDD"],
+                                                               estSalarieEtablissement: true, estEtudiant: true))
+        XCTAssertEqual(donnees["estSalarieEtablissement"], .booleen(true))
+        XCTAssertNil(donnees["estEtudiant"], "déclaration étudiant jamais réécrite (D11)")
+        XCTAssertTrue(Set(donnees.keys).isSubset(of: R.clesBrouillon))
+        XCTAssertEqual(R.donneesBrouillon(FormulaireInscription(estSalarieEtablissement: false))["estSalarieEtablissement"],
+                       .booleen(false))
+        XCTAssertNil(R.donneesBrouillon(FormulaireInscription())["estSalarieEtablissement"], "aucune réponse : non transmise")
+    }
+
+    /// Revue B8 de T8, B1 : un brouillon est « étudiant » quand `estEtudiant` vaut `true` (web : `est_etudiant:
+    /// form.estEtudiant ?? false`, `inscriptionProgressive.ts` l.189, booléen restauré seulement) ; la finalisation
+    /// native lui est refusée (D11, verrou), quelle que soit la scolarité saisie.
+    func testParcoursEtudiantSurUnBooleenVraiSeulement() {
+        XCTAssertTrue(R.parcoursEtudiant(FormulaireInscription(profession: "AS", estEtudiant: true)))
+        XCTAssertFalse(R.parcoursEtudiant(FormulaireInscription(profession: "AS", estEtudiant: false)))
+        XCTAssertFalse(R.parcoursEtudiant(FormulaireInscription(profession: "AS")))
+    }
+
+    /// Revue B8 de T8, M1 (PRINCIPES §5 : une mutation sans issue certaine exige une relecture) : les réponses de
+    /// `register-soignant` qui n'excluent pas un profil créé sont des issues inconnues — tout statut ≥ 500 (passerelle,
+    /// délai de l'edge, `INTERNAL_ERROR` du `catch` final l.405-407), une réponse 2xx illisible, et les codes 409 qui
+    /// disent le compte finalisé, en cours de finalisation ou déjà présent dans `soignants` (l.205-212, l.329-332).
+    /// Les refus certains (validation, RPPS d'un autre compte, débit) et le 503 `ACCOUNT_FINALIZATION_PENDING` (traité à
+    /// part : déconnexion locale) n'en sont pas.
+    func testIssuesInconnuesDeRegisterSoignant() {
+        let inconnues: [(Int, String?)] = [
+            (502, nil), (504, nil), (500, nil), (500, "INTERNAL_ERROR"), (503, "ACCOUNT_RESERVATION_UNAVAILABLE"),
+            (546, "WORKER_LIMIT"), (200, nil), (204, nil),
+            (409, "ACCOUNT_ALREADY_REGISTERED"), (409, "ACCOUNT_REGISTRATION_IN_PROGRESS"), (409, "USER_ALREADY_REGISTERED"),
+        ]
+        for (statut, code) in inconnues {
+            XCTAssertTrue(R.issueIndeterminee(statut: statut, code: code), "\(statut) \(code ?? "sans code")")
+        }
+        let certaines: [(Int, String?)] = [
+            (400, "UNDERAGE"), (400, "RPPS_FORMAT_INVALID"), (400, "RPPS_TRAITS_MISMATCH"), (400, "MISSING_REQUIRED_FIELDS"),
+            (409, "RPPS_ALREADY_REGISTERED"), (409, "ACCOUNT_TYPE_MISMATCH"), (429, "RATE_LIMITED"), (400, nil), (403, nil),
+            (503, "ACCOUNT_FINALIZATION_PENDING"),
+        ]
+        for (statut, code) in certaines {
+            XCTAssertFalse(R.issueIndeterminee(statut: statut, code: code), "\(statut) \(code ?? "sans code")")
+        }
+        XCTAssertEqual(R.codesProfilPossible,
+                       ["ACCOUNT_ALREADY_REGISTERED", "ACCOUNT_REGISTRATION_IN_PROGRESS", "USER_ALREADY_REGISTERED"])
+    }
+
     func testCorpsDeRegisterSoignantCommeFinaliserProfil() {
         let corps = R.corpsFinalisation(FormulaireInscription(prenom: "Léa", nom: "Martin", telephone: "", dateNaissance: "1990-05-14",
                                                               profession: "IDE", typesContrat: ["CDD"], rpps: "", rayon: nil))
@@ -147,6 +220,15 @@ final class CompletionProfilRulesTests: XCTestCase {
         XCTAssertEqual(avecRayon["rayon"], .nombre(40), "rayon du brouillon retransmis")
         XCTAssertEqual(avecRayon["rpps"], .chaine("10001234567"))
         XCTAssertEqual(avecRayon["telephone"], .chaine("0612345678"))
+        // Revue B8 de T8, m4 et B1 : ni la réponse « salarié(e) » (affichage et brouillon seulement, correction 21) ni la
+        // déclaration étudiant (finalisée sur le web seulement, D11) ne partent vers `register-soignant`.
+        let complet = R.corpsFinalisation(FormulaireInscription(prenom: "L", nom: "M", telephone: "0612345678",
+                                                                dateNaissance: "1990-05-14", profession: "AS", typesContrat: ["CDD"],
+                                                                rpps: "", estSalarieEtablissement: true, estEtudiant: true))
+        for absente in ["estSalarieEtablissement", "estEtudiant", "est_etudiant", "etudiant_details"] {
+            XCTAssertNil(complet[absente], absente)
+        }
+        XCTAssertTrue(Set(complet.keys).isSubset(of: R.clesFinalisation))
     }
 
     func testCodeDeFinalisationEnAttenteEtDelai() {

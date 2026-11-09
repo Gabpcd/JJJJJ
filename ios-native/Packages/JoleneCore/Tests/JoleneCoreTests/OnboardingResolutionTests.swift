@@ -73,9 +73,35 @@ final class OnboardingResolutionTests: XCTestCase {
         XCTAssertEqual(parcours.typeCompte, "SOIGNANT")
         XCTAssertEqual(parcours.modifieLe, "2026-11-02T10:00:00+00:00")
         XCTAssertEqual(parcours.consentementCguLe, "2026-11-02T09:59:00+00:00")
+        // Revue B8 de T8, m4 : la réponse « salarié(e) » est restaurée comme le web (`restaurerFormulaire` l.134-136).
         XCTAssertEqual(parcours.brouillon, FormulaireInscription(prenom: "Léa", nom: "Martin", telephone: "0600000000",
                                                                  dateNaissance: "1990-05-14", profession: "IDE",
-                                                                 typesContrat: ["SALARIE", "LIBERAL"], rpps: nil, rayon: 30))
+                                                                 typesContrat: ["SALARIE", "LIBERAL"], rpps: nil, rayon: 30,
+                                                                 estSalarieEtablissement: true))
+        XCTAssertNil(parcours.brouillon.estEtudiant, "aucune déclaration étudiant dans ce brouillon")
+    }
+
+    /// Revue B8 de T8, B1 et m4 : la déclaration étudiant du web (`estEtudiant`, `DeclarationEtudiant.tsx`) et la réponse
+    /// « salarié(e) » sont lues dans `parcours_inscription.donnees` (liste blanche serveur, `public.sql` l.32485-32490),
+    /// booléens seulement, comme `restaurerFormulaire` (`inscriptionProgressive.ts` l.126-149 : `typeof value === typeof
+    /// initial`, et le cas `estSalarieEtablissement` l.134-136) — une autre valeur est ignorée, jamais supposée.
+    func testBrouillonLitLaDeclarationEtudiantEtLaReponseSalarieEnBooleensSeulement() throws {
+        func brouillon(_ donnees: [String: ValeurJSON]) throws -> FormulaireInscription {
+            var objet = donnees
+            objet["profession"] = .chaine("AS")
+            return try XCTUnwrap(try OnboardingResolution.parcours(depuis: ligne(donnees: .objet(objet)), userId: userId)).brouillon
+        }
+        let etudiant = try brouillon(["estEtudiant": .booleen(true), "scolariteFormation": .chaine("IFSI"),
+                                      "scolariteAnnee": .chaine("1"), "estSalarieEtablissement": .booleen(false)])
+        XCTAssertEqual(etudiant.estEtudiant, true, "« Je suis étudiant(e) » déclaré sur le web")
+        XCTAssertEqual(etudiant.estSalarieEtablissement, false)
+        XCTAssertEqual(try brouillon(["estEtudiant": .booleen(false)]).estEtudiant, false)
+        for illisible: ValeurJSON in [.chaine("true"), .nombre(1), .null, .tableau([.booleen(true)])] {
+            let lu = try brouillon(["estEtudiant": illisible, "estSalarieEtablissement": illisible])
+            XCTAssertNil(lu.estEtudiant, "\(illisible) : ignoré comme sur le web")
+            XCTAssertNil(lu.estSalarieEtablissement, "\(illisible) : ignoré comme sur le web")
+        }
+        XCTAssertNil(try brouillon([:]).estEtudiant)
     }
 
     func testParcoursIncoherentEstUneErreurJamaisUnParcoursSuppose() {

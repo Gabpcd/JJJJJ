@@ -2,7 +2,9 @@ import XCTest
 
 /// Complétion du profil soignant en démo (lot 3, T8) : lien de confirmation (`-JOLENE_OPEN_URL`) → aiguillage
 /// d'onboarding → « Vos informations professionnelles » (`InscriptionSoignant.tsx` en mode parcours, textes verbatim)
-/// → `register-soignant` simulée → espace soignant. Aucune requête réseau (`DemoInscriptionGateway`).
+/// → `register-soignant` simulée → espace soignant. Aucune requête réseau (`DemoInscriptionGateway`) : la sentinelle
+/// `network-sentinel` du hub (« 0 requête ») est relue dès que l'espace est ouvert (revue B8 de T8, m7) — elle n'est
+/// exposée que par le hub Profil, que les parcours restés hors de l'espace n'atteignent pas.
 ///
 /// Ce que ces tests prouvent (niveau 2), et seulement cela :
 /// - un brouillon serveur repris (`JOLENE_DEMO_BROUILLON=complet`) remplit le formulaire ; la profession du parcours est
@@ -16,7 +18,12 @@ import XCTest
 /// - « Enregistrer et continuer plus tard » garde la saisie côté serveur : elle est retrouvée après déconnexion et
 ///   reconnexion du même compte (reprise après rechargement) ;
 /// - un référentiel indisponible affiche les deux messages du web, garde le mode salarié et propose « Réessayer la
-///   vérification ».
+///   vérification » ;
+/// - (revue B8 de T8, B1) un brouillon étudiant commencé sur le web (`JOLENE_DEMO_BROUILLON=etudiant`) ne propose que la
+///   complétion web (« 🎓 Je suis étudiant(e) en santé ») : ni formulaire natif ni « Enregistrer mon profil » ; au retour
+///   du renvoi web, le rôle est relu et l'écran reste la complétion web tant qu'aucun profil n'existe ;
+/// - (revue B8 de T8, M1) un 409 `ACCOUNT_ALREADY_REGISTERED` (profil déjà créé) ouvre l'espace après relecture du rôle,
+///   jamais l'impasse « Connectez-vous pour continuer » d'un utilisateur connecté.
 /// Règles, refus et relectures sont prouvés au niveau 1 (`CompletionProfilModelTests`, `CompletionProfilRulesTests`,
 /// `DemoInscriptionGatewayTests`, `SupabaseInscriptionGatewayTests`).
 ///
@@ -42,6 +49,9 @@ final class DemoCompletionInscriptionTests: JoleneUITestCase {
     static let finalisationEnAttente = "Votre profil est enregistré. Reconnectez-vous pour reprendre votre espace."
     static let referentielIndisponible = "Le référentiel est momentanément indisponible. Vous pouvez poursuivre votre inscription ; le mode libéral pourra être activé après contrôle."
     static let modesIndisponibles = "Vérification temporairement indisponible. Le mode salarié reste accessible. Vos choix sont conservés ; l’ajout du libéral nécessite une vérification."
+    static let etudiant = "🎓 Je suis étudiant(e) en santé"
+    /// Complétion web du parcours étudiant (D11), URL remise au double démo du renvoi web.
+    static let completionWeb = "https://jolene.app/inscription/completer"
 
     func testBrouillonReprisPuisProfilEnregistreOuvreLEspaceSoignant() throws {
         launchDemo(extraArguments: ["-JOLENE_OPEN_URL", Self.lienConfirmation], environment: [Self.variableBrouillon: "complet"])
@@ -78,6 +88,55 @@ final class DemoCompletionInscriptionTests: JoleneUITestCase {
         require("Le profil enregistré ouvre l'espace soignant", timeout: 30) { self.tabBarExists }
         XCTAssertFalse(element("completion-screen").exists)
         record("\(proofPrefix)-completion-espace")
+        sentinelleSansRequete("complétion démo jusqu'à l'espace : aucune requête réseau")
+    }
+
+    /// Revue B8 de T8, B1 : brouillon étudiant (« Je suis étudiant(e) » déclaré sur le web, puis « Enregistrer et continuer
+    /// plus tard ») — la finalisation native est verrouillée (D11) : seul le renvoi vers la complétion web est proposé,
+    /// aucun texte nouveau ; au retour, le rôle est relu et, sans profil créé, la complétion web reste proposée.
+    func testBrouillonEtudiantNeProposeQueLaCompletionWebPuisRelitAuRetour() throws {
+        launchDemo(extraArguments: ["-JOLENE_OPEN_URL", Self.lienConfirmation], environment: [Self.variableBrouillon: "etudiant"])
+        let ecran = ouvrirCompletion()
+        XCTAssertEqual(element("completion-titre").label, Self.titre)
+        let etudiant = element("completion-etudiant-web")
+        scrollTo(etudiant, in: ecran)
+        require("La complétion web de l'étudiant est proposée") { self.visible(etudiant) && etudiant.isEnabled }
+        XCTAssertEqual(etudiant.label, Self.etudiant, "libellé verbatim (DeclarationEtudiant.tsx l.105)")
+        XCTAssertFalse(element("completion-enregistrer").exists, "verrou D11 : jamais « Enregistrer mon profil » en natif")
+        XCTAssertFalse(element("completion-prenom").exists, "aucun formulaire natif pour un parcours étudiant")
+        XCTAssertFalse(element("completion-plus-tard").exists)
+        XCTAssertFalse(tabBarExists)
+        record("\(proofPrefix)-completion-etudiant")
+
+        tap("completion-etudiant-web")
+        let renvoi = element("renvoi-web-demo")
+        require("Le renvoi web de la complétion est présenté", timeout: 15) { renvoi.exists }
+        XCTAssertEqual(element("renvoi-web-url").label, Self.completionWeb, "page web de la complétion (parcours étudiant)")
+        tap("renvoi-web-fermer")
+        require("Retour : le rôle est relu, la complétion web reste proposée sans profil", timeout: 30) {
+            !self.element("renvoi-web-demo").exists && self.containerVisible(self.element("completion-screen"))
+                && self.element("completion-etudiant-web").exists
+        }
+        XCTAssertFalse(element("completion-enregistrer").exists)
+        XCTAssertFalse(element("completion-erreur").exists, "retour sans complétion : aucun message")
+        XCTAssertFalse(tabBarExists)
+        record("\(proofPrefix)-completion-etudiant-retour")
+    }
+
+    /// Revue B8 de T8, M1 : 409 `ACCOUNT_ALREADY_REGISTERED` (profil déjà créé, par exemple après une issue inconnue) :
+    /// issue inconnue relue — l'espace s'ouvre, le message « Connectez-vous pour continuer » n'est jamais affiché à un
+    /// utilisateur connecté.
+    func testCompteDejaFinaliseOuvreLEspaceApresRelectureDuRole() throws {
+        launchDemo(extraArguments: ["-JOLENE_OPEN_URL", Self.lienConfirmation, Self.argumentRefus, "ACCOUNT_ALREADY_REGISTERED"],
+                   environment: [Self.variableBrouillon: "complet"])
+        let ecran = ouvrirCompletion()
+        cocherSalarie(ecran)
+        envoyer(ecran)
+        require("Le profil existant ouvre l'espace soignant", timeout: 30) { self.tabBarExists }
+        XCTAssertFalse(element("completion-screen").exists)
+        XCTAssertFalse(element("completion-erreur").exists, "jamais l'impasse « Connectez-vous pour continuer »")
+        record("\(proofPrefix)-completion-compte-deja-finalise")
+        sentinelleSansRequete("issue inconnue relue en démo : aucune requête réseau")
     }
 
     func testSaisieIncompleteAfficheLaListeDuWebSansEnvoi() throws {
@@ -195,6 +254,17 @@ final class DemoCompletionInscriptionTests: JoleneUITestCase {
         let bouton = element("completion-enregistrer")
         scrollTo(bouton, in: ecran)
         tap("completion-enregistrer")
+    }
+
+    /// Hub Profil ouvert, sentinelle relue (« 0 requête », revue B8 de T8, m7).
+    private func sentinelleSansRequete(_ message: String) {
+        tabButton("tab-profil", label: "Profil").tap()
+        let hub = element("profile-list")
+        require("Le hub Profil est affiché") { self.containerVisible(hub) }
+        let sentinel = element("network-sentinel")
+        scrollTo(sentinel, in: hub, downward: false)
+        require("La sentinelle réseau est exposée") { sentinel.exists }
+        XCTAssertEqual(sentinel.label, "0 requête", message)
     }
 
     private func connexion(email adresse: String) {
