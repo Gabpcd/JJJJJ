@@ -61,7 +61,7 @@ public enum DemoWorld {
         gateways.push = DemoPushGateway()                                  // T4
         gateways.notifications = DemoNotificationsGateway()                // T5
         gateways.preferences = DemoPreferencesGateway()                    // T6
-        // T7 (compte, confirmation, parcours) ; complétion et `register-soignant` refusées jusqu'à T8.
+        // T7 (compte, confirmation, parcours) ; T8 (brouillon, modes d'exercice, `register-soignant` simulée).
         gateways.inscription = DemoInscriptionGateway(auth: gateways.auth as? DemoAuthGateway ?? DemoAuthGateway())
         gateways.profil = DemoProfilGateway()                              // T9
         gateways.avatar = UnwiredAvatarStoragePort()                       // T10

@@ -90,7 +90,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .inscription(let etape):
             switch etape.page {
             case .soignant, .reprendre: return true      // T7 — compte rapide, aiguillage onboarding (hors espace : `BoiteLiensInscription`)
-            case .completer: return false                // T8 — complétion du profil
+            case .completer: return true                 // T8 — `CompletionProfilScreen` dans l'aiguillage (hors espace : `BoiteLiensInscription`)
             }
         case .profil:
             return true                                  // T9 — édition du profil (`ProfilEditionScreen`), alias `reputation`

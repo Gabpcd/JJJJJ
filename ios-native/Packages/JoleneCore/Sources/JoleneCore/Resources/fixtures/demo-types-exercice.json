@@ -1,0 +1,79 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "source": "supabase/migrations/20260714084802_synchroniser_regles_profil_exercice.sql",
+  "types_exercice": {
+    "IDE": [
+      "SALARIE",
+      "LIBERAL",
+      "MIXTE"
+    ],
+    "AS": [
+      "SALARIE"
+    ],
+    "AES": [
+      "SALARIE"
+    ],
+    "IBODE": [
+      "SALARIE",
+      "LIBERAL",
+      "MIXTE"
+    ],
+    "IADE": [
+      "SALARIE",
+      "LIBERAL",
+      "MIXTE"
+    ],
+    "SAGE_FEMME": [
+      "SALARIE",
+      "LIBERAL",
+      "MIXTE"
+    ],
+    "KINE": [
+      "SALARIE",
+      "LIBERAL",
+      "MIXTE"
+    ],
+    "MEDECIN": [
+      "SALARIE",
+      "LIBERAL",
+      "MIXTE"
+    ],
+    "PHARMACIEN": [
+      "SALARIE"
+    ],
+    "MANIPULATEUR_RADIO": [
+      "SALARIE"
+    ],
+    "PREPARATEUR_PHARMA": [
+      "SALARIE"
+    ],
+    "DIETETICIEN": [
+      "SALARIE",
+      "LIBERAL",
+      "MIXTE"
+    ],
+    "ERGOTHERAPEUTE": [
+      "SALARIE",
+      "LIBERAL",
+      "MIXTE"
+    ],
+    "PSYCHOMOTRICIEN": [
+      "SALARIE",
+      "LIBERAL",
+      "MIXTE"
+    ],
+    "ORTHOPHONISTE": [
+      "SALARIE",
+      "LIBERAL",
+      "MIXTE"
+    ],
+    "DENTISTE": [
+      "SALARIE",
+      "LIBERAL",
+      "MIXTE"
+    ],
+    "AUXILIAIRE_PUERICULTURE": [
+      "SALARIE"
+    ]
+  }
+}

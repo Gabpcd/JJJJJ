@@ -21,7 +21,7 @@ import Foundation
 /// - `.horsEspace` : route native livrée **sans** cible dans l'espace. Liste nommée et fermée, gardée par
 ///   `DeepLinkIntentTests.testToutLienHorsEspaceAppartientALaListeNommee` : `/connexion` (l'écran de connexion
 ///   s'affiche déjà sans session, et l'espace prêt y reste : aucune action) ; depuis l'intégration de T7, la
-///   confirmation d'inscription et les pages `/inscription/soignant` et `/inscription/reprendre` (action
+///   confirmation d’inscription et les pages `/inscription/soignant`, `/inscription/reprendre` et (T8) `/inscription/completer` (action
 ///   `AiguillageLiens.Action.inscription`, déposée par le coordinateur dans `BoiteLiensInscription`, présentée par
 ///   `RootView`) ;
 /// - `.espace` : destination de l'espace soignant prêt (onglet, section, détail, écran empilé) ; mémorisée tant
@@ -133,7 +133,7 @@ public enum DeepLinkIntent: Equatable, Sendable, CustomStringConvertible, Custom
 /// - une destination de l'espace dont la cible n'est pas présentable (section de Revenus avant sa tranche,
 ///   repli de `CibleNotification` vers le web) retombe sur son renvoi web canonique : jamais un lien sans effet
 ///   (revue L3-T5, m3) ;
-/// - `.horsEspace` : connexion, aucune action ; confirmation et pages `soignant` / `reprendre` d'inscription (T7),
+/// - `.horsEspace` : connexion, aucune action ; confirmation et pages `soignant` / `reprendre` (T7) et `completer` (T8) d’inscription,
 ///   action `.inscription` rendue aussitôt, avec ou sans espace, jamais mémorisée ni rejouée (la vue de session
 ///   décide : une identité ouverte n'a pas d'inscription à faire, la confirmation est présentée au-dessus de tout
 ///   état) ; `.reinitialisationRefusee` : refus, jamais mémorisé.
@@ -152,7 +152,7 @@ public final class AiguillageLiens {
         /// Lien de réinitialisation PKCE refusé (option B) : `DeepLinkIntent.Textes.reinitialisationRefusee`.
         case refusReinitialisation
         /// Lien d'inscription consommé hors de l'espace (intégration de T7) : confirmation (`/inscription/confirmer`) ou
-        /// page `soignant` / `reprendre`, déposée par le coordinateur dans `BoiteLiensInscription` (lue par `RootView`).
+        /// page `soignant` / `reprendre` / `completer` (T8), déposée par le coordinateur dans `BoiteLiensInscription` (lue par `RootView`).
         case inscription(DestinationLien)
 
         public var description: String {

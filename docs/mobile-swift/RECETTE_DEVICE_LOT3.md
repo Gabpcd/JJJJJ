@@ -70,6 +70,8 @@ mémorisé pour jolene.app ; lien non réécrit par un traceur SMTP ; build appa
 | « Créer un compte » natif (adresse de Gabrielle, profession, CGU verbatim) | message web verbatim de confirmation envoyée (`InscriptionRapide.tsx` l.320-326) | — |
 | Tap sur le lien `token_hash` dans Mail iOS | l'app s'ouvre ; `verifyOTP(tokenHash:type:)` ; parcours relu ou démarré | — |
 | Complétion (`register-soignant`) | `.ready` relu, onglets soignant ; ligne `soignants` relue en SQL STAGING | — |
+| (T8) Complétion : sélecteur de date (borne 18 ans), clavier téléphone et RPPS, VoiceOver des erreurs, « Oui » → avertissement d'exclusivité verbatim | textes de `CompletionTextes` lus à l'écran, aucun zoom de champ, erreur annoncée | — |
+| (T8) « Enregistrer et continuer plus tard », fermeture de l'app, réouverture | brouillon relu (`parcours_inscription.donnees`), saisie retrouvée | — |
 | Lien `?code=` (si le modèle n'est pas encore au format `token_hash`) | échange tenté une fois, sinon repli « Se connecter » (D10) | — |
 
 ## 4. Stripe TEST — onboarding Connect et retour dans l'app (T17, critère Connect)

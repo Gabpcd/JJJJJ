@@ -51,10 +51,10 @@ public protocol InscriptionPort: Sendable {
     /// Contrats autorisés pour la profession (`fn_types_exercice_autorises`, table paramétrée) ; nil = référentiel indisponible.
     func typesExercice(profession: String) async throws -> [String]?
     func finaliser(_ formulaire: FormulaireInscription) async throws -> ResultatFinalisation
-    /// Vrai quand la complétion (brouillon, modes d'exercice, finalisation) est livrée (T8). Faux tant que ces trois
-    /// appels refusent explicitement (verrou du gap T8, `DemoInscriptionGateway`, `SupabaseInscriptionGateway`, stub
-    /// non câblé) : l'édition du profil (T9) tient alors les modes d'exercice pour non câblés, sans « Réessayer la
-    /// vérification » (jamais un bouton sans effet ; intégration du lot 3, T7 × T9).
+    /// Vrai quand la complétion (brouillon, modes d'exercice, finalisation) est servie. Livrée par T8 dans les deux
+    /// mondes (`DemoInscriptionGateway`, `SupabaseInscriptionGateway` : défaut du protocole) ; seul le stub non câblé
+    /// la refuse encore : l'édition du profil (T9) tient alors les modes d'exercice pour non câblés, sans « Réessayer
+    /// la vérification » (jamais un bouton sans effet ; intégration du lot 3, T7 × T9).
     var completionLivree: Bool { get }
 }
 

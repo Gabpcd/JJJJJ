@@ -39,6 +39,10 @@ struct RootView: View {
 /// - liens d'inscription déposés par le coordinateur des liens (`BoiteLiensInscription`, L3-T3b, intégration du lot 3) :
 ///   confirmation présentée au-dessus de tout état, puis relecture de la session ; `/inscription/soignant` hors
 ///   session ouvre le compte rapide, profession du lien pré-remplie.
+///
+/// Lot 3, T8 (propriétaire de ce fichier dans sa vague) — complétion du profil : une finalisation en attente
+/// (`register-soignant` 503 `ACCOUNT_FINALIZATION_PENDING`, ou session non rafraîchie) déconnecte localement ; son
+/// message (verbatim serveur ou web) est affiché sur l'écran de connexion (`login-error`) jusqu'à la session suivante.
 private struct SessionRootView: View {
     let container: AppContainer
     @ObservedObject var session: SessionStore
@@ -50,6 +54,8 @@ private struct SessionRootView: View {
     @State private var loginEmail = ""
     /// Lot 3, T7 : compte rapide affiché à la place de la connexion (page et query du lien éventuel).
     @State private var inscription: EtapeInscription?
+    /// Lot 3, T8 : message de la déconnexion locale d'une finalisation en attente, affiché à la connexion.
+    @State private var messageConnexion: String?
 
     var body: some View {
         Group {
@@ -72,14 +78,14 @@ private struct SessionRootView: View {
                                                 inscription = nil
                                             }, issue: suivre)
                 } else {
-                    LoginScreen(email: $loginEmail, errorMessage: message, isDemo: container.isDemo,
+                    LoginScreen(email: $loginEmail, errorMessage: message ?? messageConnexion, isDemo: container.isDemo,
                                 retryRestore: session.canRetryRestore ? { await session.start() } : nil,
                                 creerCompte: { inscription = EtapeInscription(page: .soignant, query: nil) }) { email, password in
                         await session.signIn(email: email, password: password)
                     }
                 }
             case let .blocked(access) where OnboardingResolution.concerne(access):
-                OnboardingRootView(session: session)
+                OnboardingRootView(session: session, annoncerDeconnexion: { messageConnexion = $0 })
             case let .blocked(access):
                 BlockingScreen(
                     title: "Espace non disponible",
@@ -100,7 +106,11 @@ private struct SessionRootView: View {
         .onAppear { consommer(liens.inscription) }
         .onChange(of: liens.inscription) { etape in consommer(etape) }
         // Intégration du lot 3 : un lien reçu au lancement (restauration en cours) attend l'issue de la session.
-        .onChange(of: session.state) { _ in consommer(liens.inscription) }
+        .onChange(of: session.state) { etat in
+            consommer(liens.inscription)
+            // T8 : le message de la déconnexion locale ne vaut que pour l'écran de connexion qui la suit.
+            if case .signedOut = etat {} else { messageConnexion = nil }
+        }
         .fullScreenCover(item: confirmation) { demande in
             ConfirmationInscriptionScreen(controller: session.controller, credentials: demande.credentials) { confirme in
                 liens.retirerConfirmation()

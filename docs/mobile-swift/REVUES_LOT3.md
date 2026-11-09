@@ -1612,6 +1612,35 @@ Non bloquants, à traiter en suivi ou avant le merge.
   blueprint actés.
 - Mineurs m1 à m4 ouverts (suivi de l'auteur). Recette CI : section suivante.
 
+## L3-T8
+
+### Consignes de l'auteur pour l'intégration (branche `lot3/l3-t8-v2`, 09/11/2026)
+
+- **Base** : `origin/feat/ios-lot3` (`01473089`). Détail, écarts et décisions déléguées T8-J1 à T8-J5 :
+  `DECISIONS_LOT3.md`, sections « T8 » et « Décisions déléguées du 8 novembre 2026 ».
+- **Fichiers partagés (ajouts localisés)** : `DemoWorld.swift` (commentaire de `câblerLot3`), `AppContainer.swift`
+  (surcharge DEBUG de l'inscription démo : refus et `JOLENE_DEMO_BROUILLON`), `DestinationLien.swift` (ligne
+  `.completer`), `CentreNotifications.swift` et `DeepLinkIntent.swift` (commentaires), `Lot3Ports.swift` (documentation de
+  `completionLivree`), `export-demo-fixtures.mjs` (`demo-types-exercice.json`), `check-rpc-contracts.mjs` et
+  `check-rpc-contracts-lot3.node.mjs` (deux RPC `consommee`), `rpc-contracts.json` (`--update`), `CONTRATS_RPC_SOIGNANT.md`,
+  `PARITE_SOIGNANT.md`, `RECETTE_DEVICE_LOT3.md`, `DECISIONS_LOT3.md`, `ios-swift-ci.yml` (éclat « lot3-inscription »,
+  job à 170 min), `project.pbxproj` (`xcodegen generate`). `RootView.swift` et `OnboardingRootView.swift` : propriétaire
+  T8 dans cette vague.
+- **Tests changés parce que faux pour la base T8 (jamais affaiblis)** : `DestinationLienTests` (ligne `.completer` à
+  `true`, cas déplacé vers les routes natives), `DeepLinkIntentTests` (complétion présentée hors de l'espace, liste nommée
+  inchangée), `CentreNotificationsTests` (exclusion nommée `inscriptionCompleter`, cible `.aucune`),
+  `InscriptionModelsTests` (la boîte consomme `/inscription/completer`), `DemoInscriptionGatewayTests` et
+  `SupabaseInscriptionGatewayTests` (verrou « livré par la tranche T8 » remplacé par les tests de la complétion),
+  `ProfilEditionModelTests` (référentiel démo servi), `InscriptionVerbatimTests` (52 annotations : + 8 messages serveur
+  de la démo), XCUITest `DemoInscriptionTests`, `DemoLiensLot3Tests` (`onboarding-completion` → `completion-screen`,
+  règle 8) et `DemoProfilTests` (modes autorisés au lieu du référentiel non câblé).
+- **Point de fusion avec le lot 2** : la garde `check-textes-juridiques-ios.mjs` (L2-TL, `feat/ios-lot2`) n'est pas sur la
+  base du lot 3 ; les textes T8 sont gardés localement (`CompletionVerbatimTests`, annotations `// source:`). À la fusion
+  des lots, rattacher `CompletionTextes` (et `InscriptionTextes`) à la garde ou l'étendre, sans reformuler. CI : garder
+  les éclats des deux lots et unir les `-skip-testing` de l'éclat socle (`DemoCompletionInscriptionTests` compris).
+- **Conditions de merge** : go B9 de Gabrielle (D18) ; CI trois formats verte, `DemoCompletionInscriptionTests` (6 × 3)
+  jamais lancé localement ; recette appareil (`RECETTE_DEVICE_LOT3.md`, section 3) ; preuve STAGING au dispatch de T16.
+
 ## Intégration de T3b, T7 et T11 (vague 3, 09/11/2026) — vérifications et recette CI
 
 ### Fusions et correctifs

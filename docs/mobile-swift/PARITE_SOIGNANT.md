@@ -38,6 +38,9 @@ Intégration du lot 3 (T3b, T7, T11 ; 2026-11-09) : `/soignant/profil?tab=confid
 porte l'export RGPD (L3-T11) ; la confirmation d'inscription et les pages `/inscription/soignant` et
 `/inscription/reprendre` sont présentées hors de l'espace par le coordinateur (T7) ; « Aide & légal » du hub est monté
 avec le présentateur `.safari` (`DECISIONS_LOT3.md`, section « Intégration de T3b, T7 et T11 »).
+Lot 3, T8 (branche `lot3/l3-t8-v2`, 2026-11-09) : `/inscription/completer` devient native (complétion du profil dans
+l'aiguillage d'onboarding, présentée hors de l'espace comme la reprise) ; parcours étudiant en renvoi web (D11) ;
+preuve `DemoCompletionInscriptionTests` (éclat CI « lot3-inscription »), statut inchangé tant que le run n'est pas vert.
 
 Sous-lignes (préfixées `›`) : une route web qui regroupe plusieurs onglets ou vues est détaillée pour que
 chaque preuve soit attribuable ; la ligne de la route passe « natif » quand toutes ses sous-lignes le sont.
@@ -48,7 +51,7 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
 | `/soignant/profil` (l.313) | `ProfilSoignant` | en cours (lot 3 T9 livrée sur `lot3/l3-t9-v2` : lecture en liste blanche + édition, entrée « Mon profil » du hub ; T10 : avatar et localisation ; lot 1 : soignant au profil incomplet renvoyé vers le web via Safari, décision 3) | 3 | — (« natif » à l'URL d'un run vert de `ios-swift-ci.yml` contenant `DemoProfilTests`) |
 | `/soignant/profil` › Identité, coordonnées, recherche | `ProfilSoignant` (l.153-200, l.246-297) | en cours (lot 3 T9 : `fn_mon_profil_soignant_complet` décodée en liste blanche, `fn_modifier_mon_profil` avec les seuls champs modifiés puis relecture ; aucun champ texte vidé envoyé, prénom/nom vidés refusés par le serveur ; modes d'exercice en état « indisponible » tant que `fn_types_exercice_autorises` n'est pas câblée par T8) | 3 | `ProfilEditionModelTests`, `SupabaseProfilGatewayTests`, `ProfilVerbatimTests` (niveau 1) ; prévu : `DemoProfilTests` en CI, STAGING T16 profil relu |
 | `/soignant/profil` › Avatar et localisation | `AvatarUpload`, `SectionProfilPrincipal` | à faire (lot 3 T10 : JPEG 256 px, URL signée 5 ans, reçu durable, D14 ; localisation après L2-T1, géocodage `api-adresse.data.gouv.fr`, D15) | 3 | — (prévu : `DemoProfilTests`, STAGING objet Storage + `avatar_url` relus, recette HEIC réel) |
-| `/soignant/profil` › Type d'exercice et cumul d'activité | `ProfilSoignant` l.252-256, l.274-278 (art. L1222-5) | renvoi web assumé (HARD STOP n°4, correction 8 du blueprint : règle juridique exposée, non portée ; D12) ; encart `profil-exercice-web` livré par T9, bouton « Voir sur jolene.app » (`profil-exercice-web-action`) présenté par le présentateur `.safari` depuis L3-T3b | 3 (renvoi) | — (à acquérir : `DemoProfilTests.testTypeDExerciceEnRenvoiEtModesSansReferentiel`, renvoi vers `/soignant/profil?tab=principal` vérifié sur le double démo, trois formats) |
+| `/soignant/profil` › Type d'exercice et cumul d'activité | `ProfilSoignant` l.252-256, l.274-278 (art. L1222-5) | renvoi web assumé (HARD STOP n°4, correction 8 du blueprint : règle juridique exposée, non portée ; D12) ; encart `profil-exercice-web` livré par T9, bouton « Voir sur jolene.app » (`profil-exercice-web-action`) présenté par le présentateur `.safari` depuis L3-T3b | 3 (renvoi) | — (à acquérir : `DemoProfilTests.testTypeDExerciceEnRenvoiEtModesAutorisesParLeReferentiel`, renvoi vers `/soignant/profil?tab=principal` vérifié sur le double démo, trois formats) |
 | `/soignant/mon-compte` (l.314) | `MonCompteSoignant` | à faire | 1 | — |
 | `/soignant/mon-compte` › Suppression de compte (`SectionConfidentialite`) | edge `delete-account` | natif (lot 1 T8, Apple 5.1.1 : onglet Profil › Suppression de compte ; texte RGPD verbatim web en tutoiement tant que non validé, HARD STOP n°4) | 1 | Niveau 1 : `SupabaseAccountGatewayTests` (une réponse de l'edge = un test), `CompteModelTests`, `CompteSuppressionVerbatimTests` ; niveau 2 : `DemoCompteTests` (ios-swift-ci.yml, 3 formats) ; niveau 3 à venir (T11) : STAGING `soignants.nom = 'Supprimé'` relu, B9 données, décision 13 |
 | `/soignant/mon-compte` › Sécurité (biométrie) | — (natif seulement, verrou `LAContext`, décision 1) | à faire | 1 (T9) | — (prévu : `DemoSessionTests`, `BiometricGateTests`, recette appareil Face ID) |
@@ -134,8 +137,9 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
   hors matrice `/soignant/*`, les routes `/inscription/soignant`, `/inscription/reprendre`, `/inscription/completer`
   et `/inscription/confirmer` deviennent natives (T7, T8), `/inscription/etablissement` reste en renvoi web et PSC
   n'est pas construit (D8). T7 (branche `lot3/l3-t7-v2`) : compte rapide, confirmation et aiguillage d'onboarding
-  natifs ; la complétion reste à T8 ; depuis l'intégration du lot 3, les liens sont présentés hors de l'espace par
-  le coordinateur de T3b (`DemoLiensLot3Tests`, `DECISIONS_LOT3.md`).
+  natifs ; T8 (branche `lot3/l3-t8-v2`) : complétion du profil et `register-soignant` natives
+  (`CompletionProfilScreen`, `DemoCompletionInscriptionTests`) ; depuis l'intégration du lot 3, les liens sont
+  présentés hors de l'espace par le coordinateur de T3b (`DemoLiensLot3Tests`, `DECISIONS_LOT3.md`).
 - **Lot 4** : parcours secondaires ; renvoi web assumé proposé pour premium, prévoyance, mandat et charges
   sociales (décision 3 : WebView bornée ou Safari, à trancher par Gabrielle).
 - Aucune ligne n'est « abandonné » à l initialisation ; ce statut exige une décision écrite de Gabrielle.
