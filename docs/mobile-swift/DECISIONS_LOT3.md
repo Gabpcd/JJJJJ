@@ -1510,6 +1510,50 @@ ou vocalisé), aucun texte juridique, aucune RPC nouvelle, aucune écriture serv
   consignée (écart 11). Test d'épinglage `testAuditUneSeuleFoisParSessionMemeApresRelecturesEtPages` (vert dès
   l'écriture : il fige le comportement documenté).
 
+## Intégration de T8, T10, T12 et L3-TJ sur `feat/ios-lot3` (vague 4, 09/11/2026)
+
+Fusions `--no-ff` sur la base `origin/feat/ios-lot3` (`01473089`), dans l'ordre : `origin/main` (`f9a8c236`, #1115,
+hors `ios-native/`), `origin/fix/ios-tests-instables` (`454c88ec`, PR #1125 : ses deux derniers commits, budget de
+blocage distinct du délai et relevé des attentes bloquées), `lot3/l3-t8-v2` (`beea994e`), `lot3/l3-t10-v2`
+(`8ab5b69c`), `lot3/l3-t12-v2` (`e2c54698`), `lot3/l3-tj-v2` (`dc71c33b`). Conflits résolus en gardant les deux côtés,
+sans changer aucune règle ni aucun texte affiché :
+
+- **CI UI, sept éclats.** T8, T10, T12 et L3-TJ ajoutaient chacune un éclat au même endroit, T8 et L3-TJ sous le
+  même nom « lot3-inscription » (T8 : `DemoCompletionInscriptionTests` ; L3-TJ : `DemoInscriptionTests`, sorti de
+  « lot3-compte », 19,1 min sur ipad-landscape au run 42549855710). Un seul éclat « lot3-inscription » porte les
+  deux classes (domaine de l'inscription, 15 XCUITest) ; « lot3-profil-photo » (T10) et « lot3-revenus » (T12)
+  s'ajoutent ; socle (`-skip-testing`), résumé, boucle des xcresult et artefact couvrent les sept éclats, job à
+  230 min (7 × 30 + 20). Aucun test retiré ni déplacé hors d'un éclat.
+- **Relevé des attentes bloquées (#1125 × vague 3, défaut révélé par la fusion).** L'étape de #1125 lisait
+  `attachments/manifest.json`, alors que l'éclatement de la vague 3 exporte les pièces jointes par éclat
+  (`attachments/<éclat>/`) : le relevé aurait toujours conclu « aucun manifest.json exporté », sans jamais rien
+  relever. Il lit désormais le manifest de chaque éclat (liste `ECLATS`, celle de la boucle des xcresult), avec une
+  colonne « Éclat » ; toujours informatif (`continue-on-error`). Garde : `check-rpc-contracts-lot3.node.mjs`
+  (même liste que la boucle, un manifest par éclat) ; script vérifié sur un jeu de pièces jointes simulé.
+- **Monde démo et composition.** `DemoWorldTests.portsEnAttenteLot3` : `avatar` et `geocodage` (T10), `revenus`
+  (T12) câblés, restent `paiements`, `iban`, `stripeConnect`. `AppContainer` : surcharges démo de T8
+  (`JOLENE_DEMO_BROUILLON`), T11 et T12 (`JOLENE_FORCE_REVENUS_ECHEC`). `PointDEntreeLiens` injecte
+  `fermeturesRenvoiWeb` (T8, retour d'un renvoi) et `presentationPageWeb` (L3-TJ, TJ3). `DemoInscriptionGateway` :
+  complétion de T8 et jeton `demo-sans-intention` de L3-TJ. `export-demo-fixtures.mjs` : fixtures de T8
+  (`demo-types-exercice.json`) et de T12 (`demo-revenus.json`, `demo-escrow.json`, `demo-missions-terminees.json`),
+  régénérées sans diff.
+- **Documents.** `PARITE_SOIGNANT.md` : ligne « Avatar et localisation » de T10, ligne « Type d'exercice » de T8.
+  Ce mémo : sections T8, T10, T12 dans cet ordre ; section HARD STOP : puces d'accessibilité et de T11 retirées par
+  L3-TJ (reprises par TJ5 et TJ2), puces de T10 et T12 tranchées par délégation ; §6.6, §6.7 et §6.10 réunis.
+  **Section « Décisions déléguées du 8 novembre 2026 » unique** : TJ1 à TJ8, puis T8-J1 à T8-J5 (écrites par T8 dans
+  sa section, déplacées sans changement de fond ; ligne de délégation au libellé exact de la règle, sans majuscule
+  initiale) et les deux décisions de T10, puis deux décisions prises à l'intégration : textes non juridiques de la
+  photo de profil (T10) et instruction, selon TJ8, des libellés escrow et de la note « net estimé » (T12, écrite
+  avant TJ8). Aucun texte n'attend plus la relecture de Gabrielle (garde de L3-TJ).
+- **Gardes rouges à la fusion (tests faux pour la base fusionnée, étendus, jamais affaiblis)** :
+  `check-rpc-contracts-lot3.node.mjs` « décisions déléguées » exigeait exactement TJ1 à TJ8 (état de L3-TJ seule) :
+  il exige TJ1 à TJ8 d'abord, puis la liste nommée des décisions des tranches, chacune avec sa ligne de délégation,
+  et épingle les sources de la décision T12 (`PageCGU.tsx` l.115, `PaiementsEscrowAVenir.tsx` l.56) ; « éclats UI du
+  lot 3 » ne connaissait que les quatre éclats de L3-TJ : carte étendue aux six éclats de lot, plus la liste
+  `ECLATS` du relevé.
+- `project.pbxproj` régénéré par `xcodegen generate` après chaque fusion. Aucune RPC nouvelle (contrats : 41 RPC,
+  aucune dérive), aucune écriture serveur ; B9 inchangé (T8 et T12 restent soumises au go de Gabrielle).
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.

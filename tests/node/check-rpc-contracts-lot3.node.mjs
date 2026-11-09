@@ -649,9 +649,24 @@ test('DECISIONS_LOT3.md : décisions déléguées du 8 novembre 2026 (L3-TJ) —
   ], 'élément');
   const ligne = 'décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026';
   const sousSections = deleguees.split('\n### ').slice(1);
-  assert.deepEqual(sousSections.map(t => t.slice(0, t.indexOf(' — '))), ['TJ1', 'TJ2', 'TJ3', 'TJ4', 'TJ5', 'TJ6', 'TJ7', 'TJ8']);
-  for (const sous of sousSections) assert.ok(sous.includes(`- ${ligne}`), `${sous.slice(0, 3)} : ligne de délégation absente`);
+  // Intégration du lot 3 (09/11/2026) : section unique — TJ1 à TJ8 d'abord, puis les décisions déléguées des tranches
+  // (T8-J1 à T8-J5, T10, et T12 instruite selon TJ8 à l'intégration), chacune avec sa ligne de délégation.
+  const titres = sousSections.map(t => t.slice(0, t.indexOf(' — ')));
+  assert.deepEqual(titres.slice(0, 8), ['TJ1', 'TJ2', 'TJ3', 'TJ4', 'TJ5', 'TJ6', 'TJ7', 'TJ8']);
+  assert.deepEqual(titres.slice(8), ['T8-J1', 'T8-J2', 'T8-J3', 'T8-J4', 'T8-J5', 'T10', 'T10', 'T10', 'T12'],
+    'décisions des tranches regroupées après TJ8, dans l ordre des tranches');
+  for (const sous of sousSections) assert.ok(sous.includes(`- ${ligne}`), `${sous.slice(0, sous.indexOf(' — '))} : ligne de délégation absente`);
   const [tj1, tj2, tj3, tj4, tj5, tj6, tj7, tj8] = sousSections;
+  // TJ8 appliquée à T12 (écrite avant TJ8) : libellés escrow et note « net estimé » instruits à l'intégration.
+  const t12 = sousSections[titres.lastIndexOf('T12')];
+  ficheContient(t12, 'T12', ['TJ8', 'PaiementsEscrowAVenir.tsx', 'NoteNetEstime.tsx', 'PageCGU.tsx', 'l.115',
+    'fn_valider_presences_72h_auto', 'règle #11', '« garanti »', '« stationne »'], 'élément');
+  const cgu = read('src/pages/PageCGU.tsx').split('\n');
+  assert.ok(cgu[115 - 1].includes("En l'absence de contestation, les présences peuvent être validées automatiquement après 72 heures."),
+    'témoin web : l.115 de PageCGU.tsx (auto-validation 72 h, décision T12) — relire la décision');
+  const escrowWeb = read('src/components/gains/PaiementsEscrowAVenir.tsx').split('\n');
+  assert.ok(escrowWeb[56 - 1].includes("l'établissement valide tes heures (automatique sous 72 h)"),
+    'témoin web : aide de ATTENTE_VALIDATION l.56 de PaiementsEscrowAVenir.tsx (décision T12) — relire la décision');
 
   // TJ1 (T7) : consentement p_cgu instruit sur le code natif, le serveur et l'edge ; art. 1119 et RGPD.
   ficheContient(tj1, 'TJ1', ['`p_cgu`', 'l.30161-30163', 'consentement_cgu_le', 'RGPD_CONSENTEMENT_DONNE', 'art. 1119',
@@ -783,11 +798,15 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
   // Revue fraîche B8 de L3-TJ (mineur 4) : `DemoInscriptionTests` sort de « lot3-compte » (19,1 min sur ipad-landscape
   // au run 42549855710, avant les deux XCUITest de L3-TJ ; seuil de 20 min, décision 22 de DECISIONS_LOT2).
   const wf = read('.github/workflows/ios-swift-ci.yml');
+  // Intégration du lot 3 (09/11/2026) : T8 (complétion) rejoint « lot3-inscription », T10 et T12 ont leur éclat ;
+  // ordre des étapes et de la boucle des xcresult.
   const eclats = new Map([
     ['lot3-compte', ['DemoLiensLot3Tests', 'DemoCompteLot3Tests']],
-    ['lot3-inscription', ['DemoInscriptionTests']],
     ['lot3-push', ['DemoPushTests']],
     ['lot3-notifications', ['DemoNotificationsTests', 'DemoPreferencesTests', 'DemoProfilTests']],
+    ['lot3-inscription', ['DemoInscriptionTests', 'DemoCompletionInscriptionTests']],
+    ['lot3-profil-photo', ['DemoPhotoPositionTests']],
+    ['lot3-revenus', ['DemoRevenusTests']],
   ]);
   const etapes = wf.split('\n      - name: ').slice(1);
   const etape = nom => etapes.find(e => e.startsWith(`test-without-building — éclat ${nom} `));
@@ -812,10 +831,16 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
   const boucle = wf.match(/for eclat in ([a-z0-9 -]+); do/);
   assert.ok(boucle, 'boucle des xcresult absente');
   assert.deepEqual(boucle[1].split(' '), ['socle', ...eclats.keys()], 'boucle des xcresult : tous les éclats');
+  // Intégration du lot 3 : le relevé des attentes bloquées lit le manifest.json de chaque éclat (même liste).
+  const releve = wf.match(/\n {10}ECLATS: ([a-z0-9 -]+)\n/);
+  assert.ok(releve, 'relevé des attentes bloquées : liste ECLATS absente');
+  assert.deepEqual(releve[1].split(' '), ['socle', ...eclats.keys()], 'relevé des attentes bloquées : tous les éclats');
+  assert.ok(wf.includes('const manifeste = join(attachments, "manifest.json");') && wf.includes('const attachments = join(racine, eclat);'),
+    'relevé des attentes bloquées : un manifest.json par éclat (attachments/<éclat>/)');
   for (const classe of toutes) {
     assert.equal(wf.split(`-only-testing:JoleneUITests/${classe} \\`).length - 1, 1, `${classe} : un seul éclat`);
   }
-  // Plafond du job au-dessus de la somme des éclats (5 × 30 min) et du build.
+  // Plafond du job au-dessus de la somme des éclats (socle compris, 30 min chacun) et du build.
   const plafond = Number(wf.match(/\n {2}ui:\n[\s\S]*?\n {4}timeout-minutes: (\d+)/)[1]);
   assert.ok(plafond >= 30 * (eclats.size + 1) + 20, `plafond du job UI trop bas : ${plafond} min`);
 });
