@@ -62,6 +62,7 @@ final class Lot2PortsTests: XCTestCase {
         await refuse("T3") { _ = try await g.pointage.reconcilier(recu: recuScan, context: c) }
         await refuse("T3") { _ = try await g.pointage.detail(missionId: "m-1", context: c) }
         await refuse("T3") { _ = try await g.pointage.relancerValidation(missionId: "m-1", context: c) }
+        await refuse("T5a") { _ = try await g.pointage.ficheDetail(missionId: "m-1", context: c) }
         // Ajout de T3 (amendement du §2.3) : base `preuvesAvant` du reçu ; le défaut ne rend jamais une base vide.
         await refuse("T3") { _ = try await g.pointage.preuvesScan(missionId: "m-1", context: c) }
         await refuse("T3") { _ = try await PortTemoinLot2().preuvesScan(missionId: "m-1", context: c) }
@@ -75,6 +76,7 @@ final class Lot2PortsTests: XCTestCase {
             _ = try await g.contestation.contester(missionId: "m-1", presenceId: "p-1", motif: "Heures erronées", context: c)
         }
         await refuse("T5a") { _ = try await g.notation.noter(missionId: "m-1", note: 5, criteres: nil, context: c) }
+        await refuse("T5a") { _ = try await g.notation.finPrevue(missionId: "m-1", context: c) }
         await refuse("T6") { _ = try await g.documents.dossier(context: c) }
         await refuse("T6") { _ = try await g.documents.preparerEnvoi(type: "DIPLOME", fichier: fichier, libelle: nil, context: c) }
         await refuse("T6") { _ = try await g.documents.envoyer(recu: recuDocument, octets: Data([0x25]), context: c) }
