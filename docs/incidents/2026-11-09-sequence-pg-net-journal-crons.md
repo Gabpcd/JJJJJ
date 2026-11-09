@@ -6,7 +6,7 @@
 - **08:06** — premiers échecs. Jusqu'à 10:05, la plupart des passages des crons
   Edge critiques échouent avec
   `duplicate key value violates unique constraint "cron_edge_execution_log_pkey"`.
-  Sur 4 h : `email-cron-hourly-immediate` 119 échecs, `honoraires-emission-demandes` 24,
+  Sur ces 2 h : `email-cron-hourly-immediate` 119 échecs, `honoraires-emission-demandes` 24,
   `jolene_process_externalisations` 23, `process-stripe-refunds-15min` 8,
   `escrow-release` 7, `escrow-debit-echeance` 2 (08:11 et 09:11).
 - **10:05-10:09** — le déploiement de #1124 (run deploy-supabase 42598226981)
@@ -27,7 +27,7 @@ Les tables de pg_net (`net.http_request_queue`, `net._http_response`) sont
 et la séquence repart de 1.
 
 `private.cron_edge_execution_log` (clé primaire `request_id`) conservait
-120 636 demandes depuis le 11 août, avec des identifiants jusqu'à 163 236.
+120 636 demandes depuis le 30 juillet, avec des identifiants jusqu'à 163 236.
 Chaque nouvel identifiant pg_net retombait sur une ligne déjà journalisée.
 L'INSERT de `private.fn_appeler_edge_critique` échouait alors, et annulait
 l'appel Edge dans la même transaction.
@@ -49,9 +49,12 @@ Migration `20261109102500_sequence_pg_net_journal_crons_edge.sql` :
 - La garde est rejouée une fois à la migration. En prod, c'est un no-op.
 
 Banc : `tests/security/sequence-pg-net-journal-crons-isolated.test.sql`
-(PostgreSQL 17 isolé, 7 scénarios : rattrapage, redémarrage simulé, régime
-normal sans saut, sonde de 9 appels dans une transaction, allowlist, ACL,
-absence de pg_net).
+(PostgreSQL 17 isolé, 8 scénarios : rattrapage, redémarrage simulé, séquence
+fraîche non appelée juste sous le journal, régime normal sans saut, sonde de
+9 appels dans une transaction, allowlist, ACL, absence de pg_net). Le verrou
+consultatif entre deux sessions n'est pas exercé par ce banc (une seule
+session) ; il l'est par construction : `pg_advisory_xact_lock` est tenu
+jusqu'au COMMIT de l'INSERT du journal.
 
 ## Reste à faire
 
@@ -60,6 +63,9 @@ absence de pg_net).
   à `fn_controler_crons_edge_critiques` les `cron.job_run_details` en `failed`
   des 10 jobs critiques depuis son dernier passage. Il émettrait alors la même
   alerte CRITICAL. PR séparée (B9 : crons escrow).
+- **Renommage pg_net.** Si une montée de version renomme
+  `net.http_request_queue_id_seq`, la garde devient un no-op. À revoir à
+  chaque montée de pg_net (aujourd'hui 0.19.5).
 - **Autre lecteur.** `private.notation_email_dispatch.request_id` (sans contrainte
   d'unicité) est relu par `fn_controler_rappels_notation_j1`, qui joint sur `id`
   seul. Il ne peut pas faire échouer un cron, mais après un redémarrage il peut

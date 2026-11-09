@@ -75,6 +75,14 @@ BEGIN
     RAISE EXCEPTION 'SAUT_EN_REGIME_NORMAL : % puis %', v_id, v_suivant;
   END IF;
 
+  -- 3 bis. Séquence non appelée posée exactement sur le maximum du journal :
+  --    le prochain nextval rendrait ce maximum, la garde doit sauter.
+  PERFORM setval('net.http_request_queue_id_seq', v_suivant, false);
+  v_suivant := private.fn_appeler_edge_critique('process-stripe-refunds-15min');
+  IF v_suivant <= v_id + 1 THEN
+    RAISE EXCEPTION 'IS_CALLED_IGNORE : identifiant %', v_suivant;
+  END IF;
+
   -- 4. Sonde de deploy-supabase : 9 appels dans une même transaction, juste
   --    après un redémarrage. Identifiants distincts, tous au-dessus du journal.
   PERFORM setval('net.http_request_queue_id_seq', 1, false);
@@ -119,4 +127,4 @@ BEGIN
 END
 $t$;
 
-SELECT 'sequence-pg-net-journal-crons : 7 scénarios OK' AS resultat;
+SELECT 'sequence-pg-net-journal-crons : 8 scénarios OK' AS resultat;

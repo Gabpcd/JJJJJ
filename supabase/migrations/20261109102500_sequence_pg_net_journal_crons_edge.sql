@@ -6,7 +6,7 @@
 -- Cause : Postgres a redémarré à 08:05:04 UTC. Les tables de pg_net sont
 -- UNLOGGED, leur séquence `net.http_request_queue_id_seq` aussi : après un
 -- redémarrage non propre, elle repart de 1. Or private.cron_edge_execution_log
--- garde depuis août 120 636 demandes, clé primaire `request_id` (jusqu'à
+-- garde depuis fin juillet 120 636 demandes, clé primaire `request_id` (jusqu'à
 -- 163 236) : chaque nouvel identifiant pg_net retombait sur une ligne déjà
 -- journalisée, l'INSERT échouait et annulait l'appel Edge. Le déploiement de
 -- #1124 a ensuite désactivé les crons et n'a pas pu les réactiver, la sonde
@@ -40,6 +40,7 @@ AS $function$
 DECLARE
   v_max_journal bigint;
   v_courant bigint;
+  v_appele boolean;
   v_cible bigint;
 BEGIN
   -- Sans pg_net (branches preview, bancs isolés), rien à resynchroniser.
@@ -64,9 +65,15 @@ BEGIN
     RETURN NULL;
   END IF;
 
-  SELECT s.last_value
-    INTO v_courant
+  SELECT s.last_value, s.is_called
+    INTO v_courant, v_appele
     FROM net.http_request_queue_id_seq s;
+
+  -- Dernier identifiant réellement émis : si `is_called` est faux, le prochain
+  -- nextval rendra `last_value` lui-même.
+  IF NOT v_appele THEN
+    v_courant := v_courant - 1;
+  END IF;
 
   -- En régime normal, la séquence est toujours au-dessus du journal (tout
   -- identifiant journalisé en sort). Elle n'y repasse que si elle a été
