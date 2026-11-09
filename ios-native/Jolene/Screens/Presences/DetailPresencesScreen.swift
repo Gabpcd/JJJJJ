@@ -8,8 +8,9 @@ import JoleneDesign
 ///
 /// Sections dans l'ordre du web : en-tête, synthèse (masquée sur refus serveur), créneaux travaillés par jour, contrôles
 /// du pointage, relance de l'établissement (titre et explication verbatim de `TextesWeb.Presences`, HARD STOP n°4 de TL),
-/// puis le récapitulatif financier en renvoi web (montants calculés côté client, non portés : LOT2_PLAN §1.2), rendu
-/// seulement avec le présentateur de T10 (jamais un bouton sans effet).
+/// puis le récapitulatif financier en renvoi web (montants calculés côté client, non portés : LOT2_PLAN §1.2), route
+/// forcée web (`PresencesRenvois.recapitulatifFinancier`), rendu seulement avec le présentateur de T10 (jamais un bouton
+/// sans effet). Échec de lecture : titres du lot 1 et repli lisible (`LibellesDetailPresences.Echec`).
 ///
 /// Point d'extension T5b : le panneau de contestation d'une présence validée se monte sous la section des contrôles
 /// (`ContestationSheet`), après le go HARD STOP n°4 (Q9) ; rien n'est rendu ici d'ici là.
@@ -34,14 +35,17 @@ struct DetailPresencesScreen: View {
                     EmptyState(systemImage: "questionmark.circle", title: LibellesWeb.DetailPresences.introuvableTitre,
                                message: LibellesWeb.DetailPresences.introuvableMessage, identifier: "presence-detail-introuvable")
                 case let .echec(message) where model.sessionExpired:
-                    EmptyState(systemImage: "person.crop.circle.badge.exclamationmark", title: "Session à vérifier",
-                               message: message ?? "", identifier: "presence-detail-session-expired",
-                               actionTitle: "Vérifier ma session", actionIdentifier: "presence-detail-session-check") {
+                    EmptyState(systemImage: "person.crop.circle.badge.exclamationmark", title: LibellesDetailPresences.Echec.sessionAVerifier,
+                               message: LibellesDetailPresences.Echec.message(message, sessionExpiree: true),
+                               identifier: "presence-detail-session-expired",
+                               actionTitle: LibellesDetailPresences.Echec.verifierMaSession,
+                               actionIdentifier: "presence-detail-session-check") {
                         Task { await model.verifierSession(session) }
                     }
                 case let .echec(message):
                     EmptyState(systemImage: "exclamationmark.triangle", title: LibellesPresences.Liste.erreurTitre,
-                               message: message ?? "", identifier: "presence-detail-error",
+                               message: LibellesDetailPresences.Echec.message(message, sessionExpiree: false),
+                               identifier: "presence-detail-error",
                                actionTitle: LibellesWeb.ListePresences.reessayer, actionIdentifier: "presence-detail-retry") {
                         Task { await model.charger() }
                     }
@@ -280,7 +284,9 @@ struct DetailPresencesScreen: View {
 
     @ViewBuilder
     private var recapitulatifFinancier: some View {
-        if let presentateurRenvoiWeb, let route = PresencesRenvois.detail(missionId: model.missionId) {
+        // Route forcée web (`PresencesRenvois.recapitulatifFinancier`) : elle ne disparaît pas quand T10 rend native la
+        // route de cet écran ; le bouton n'apparaît qu'avec le présentateur `.safari` (jamais un bouton sans effet).
+        if let presentateurRenvoiWeb, let route = PresencesRenvois.recapitulatifFinancier(missionId: model.missionId) {
             VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
                 titreSection(LibellesWeb.DetailPresences.recapitulatifFinancier, symbole: nil)
                 JoleneButton(LibellesDetailPresences.voirSurLeWeb, style: .secondary) { presentateurRenvoiWeb.presenter(route) }

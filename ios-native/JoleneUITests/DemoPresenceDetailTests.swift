@@ -9,8 +9,10 @@ import XCTest
 /// puis refus « déjà relancé ») ; présence validée et ligne reconstruite (aucune relance, aucun contrôle) ; détail d'une
 /// mission ASSIGNEE › « Présences et pointage » (onglet À venir) ; Accueil (scénario `accueil-pointage`) › widget
 /// « Aller pointer » (onglet Aujourd'hui) et « Pointer mon départ maintenant ». Gap verrouillé : le récapitulatif
-/// financier n'est qu'un renvoi web, absent sans le présentateur de T10. La feuille de notation se monte dans la zone de
-/// pointage de T4b (`notationAuDepart`) : son parcours XCUITest arrive avec cette zone.
+/// financier n'est qu'un renvoi web (route forcée web `PresencesRenvois.recapitulatifFinancier`, qui survit au routage
+/// natif de T10), absent sans le présentateur de T10. La feuille de notation se monte dans la zone de pointage de T4b
+/// (`notationAuDepart`) : son parcours XCUITest arrive avec cette zone. Sentinelle réseau « 0 requête » relue à la fin
+/// du parcours détail + relance et du parcours Accueil (PRINCIPES §7, niveau 2 ; LOT2_PLAN §2.8 ; revue fraîche, m3).
 final class DemoPresenceDetailTests: JoleneUITestCase {
     func testHistoriqueDetailDUnePresenceAValiderEtRelance() throws {
         launchDemo()
@@ -52,6 +54,12 @@ final class DemoPresenceDetailTests: JoleneUITestCase {
         XCTAssertFalse(element("presence-revenus-web").exists,
                        "récapitulatif financier : renvoi web sans présentateur (T10) : jamais un bouton sans effet")
         record("\(proofPrefix)-presence-detail-relance")
+
+        // Détail › Présences › Profil : le détail et la relance n'ont émis aucune requête réseau.
+        revenir()
+        attendrePresences()
+        revenir()
+        sentinelleSansRequete(depuisMonEspace: true)
     }
 
     func testDetailDUnePresenceValideeEtDUneLigneReconstruite() throws {
@@ -130,6 +138,10 @@ final class DemoPresenceDetailTests: JoleneUITestCase {
         depart.tap()
         attendrePresences()
         record("\(proofPrefix)-accueil-oubli-depart")
+
+        // Onglet Profil : l'Accueil du scénario `accueil-pointage` et la page Présences n'ont émis aucune requête.
+        tabButton("tab-profil", label: "Profil").tap()
+        sentinelleSansRequete(depuisMonEspace: false)
     }
 
     // MARK: - Étapes
@@ -214,6 +226,17 @@ final class DemoPresenceDetailTests: JoleneUITestCase {
         let retour = app.navigationBars.buttons.firstMatch
         require("Le bouton retour est disponible") { self.visible(retour) }
         retour.tap()
+    }
+
+    /// Sentinelle réseau du Profil (`network-sentinel`) : « 0 requête » en démonstration. Elle est au-dessus de « Mon
+    /// espace » : défilement borné vers le haut quand la liste en revient, vers le bas sur un Profil ouvert à sa racine.
+    private func sentinelleSansRequete(depuisMonEspace: Bool) {
+        let liste = element("profile-list")
+        require("Le profil est affiché") { self.containerVisible(liste) }
+        let sentinelle = element("network-sentinel")
+        if !visible(sentinelle) { scrollTo(sentinelle, in: liste, downward: !depuisMonEspace) }
+        require("La sentinelle réseau est exposée") { sentinelle.exists }
+        XCTAssertEqual(sentinelle.label, "0 requête", "aucune requête réseau en démonstration")
     }
 
     /// Défilement borné jusqu'au bloc, puis chaque fragment attendu parmi ses textes (requête limitée au bloc).

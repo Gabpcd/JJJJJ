@@ -15,6 +15,13 @@ public enum PointsEntreePresences {
 
     /// `ongletPresences` (l.638-645) : Aujourd'hui si un créneau planifié chevauche le jour de Paris, sinon Actives pour
     /// une mission EN_COURS, sinon À venir.
+    ///
+    /// Le web n'affiche ces boutons que sous `estAssigne &&` (l.1406, `soignant_assigne_id === user.id`, l.633). Le
+    /// natif ne relit pas `soignant_assigne_id` (projection `MissionQuery.missionSelect` du lot 0, inchangée) : la
+    /// condition est garantie par le serveur. L'espace natif ne s'ouvre qu'à un compte SOIGNANT (`MobileAccess.validate`,
+    /// `Models/Account.swift` l.35-38) et la RLS `pol_mission_select` (`supabase/schema/public.sql` l.79410, relue en
+    /// production le 9 novembre 2026) ne lui laisse lire une mission non OUVERTE que si `soignant_assigne_id = auth.uid()`.
+    /// Écart consigné (revue fraîche de T5a, m6) dans `DECISIONS_LOT2.md`.
     public static func entreeMission(statut: String, creneaux: [MissionSlot], maintenant: Date) -> EntreeMission? {
         switch statut {
         case "ASSIGNEE", "EN_COURS":

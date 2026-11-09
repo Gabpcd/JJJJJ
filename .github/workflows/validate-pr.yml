@@ -63,7 +63,10 @@ jobs:
         # (juridique) et de LibellesWeb.swift égale le texte du web, et le code web de chaque
         # assemblage est inchangé ; rougit aussi sur une PR web qui modifie l'un de ces textes ou
         # une zone de rendu (un simple décalage de lignes est toléré, avec un avertissement).
-        run: node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs tests/node/textes-juridiques-ios.node.mjs
+        # lecture-notes-ios.node.mjs (lot 2, T5a, double-aveugle des notations) : aucun littéral
+        # notations_missions / evaluations_publiees / from("notations…") dans le Swift de ios-native/
+        # (commentaires ignorés, assertions négatives de test listées et comptées).
+        run: node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs tests/node/textes-juridiques-ios.node.mjs tests/node/lecture-notes-ios.node.mjs
 
       - name: Gardes de la recette financière isolée
         run: node --test tests/node/recette-escrow-safety.node.mjs

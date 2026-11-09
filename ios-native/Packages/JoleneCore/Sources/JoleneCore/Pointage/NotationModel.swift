@@ -54,9 +54,13 @@ public final class MemoireNotationEnMemoire: MemoireNotation {
 ///   L2-T3, m6) et la feuille s'ouvre si `maintenant ≥ fin − 30 min`, mémoire posée d'abord. Toute erreur de relecture
 ///   ne propose rien (l.162 : « le prompt de note ne doit jamais gêner le pointage »). Aucun contrôle de statut côté
 ///   client : le serveur accepte une mission `EN_COURS` dont le départ est pointé (`fn_creer_notation_mission`).
+///   L'appelant lie `proposer()` à sa vue (`.task(id:)`) : une tâche annulée (zone disparue pendant la relecture) ou un
+///   epoch périmé ne marque rien et n'ouvre rien, comme `if (!actif.current) return` du web (l.157) ; la note reste
+///   proposable à la réapparition (revue fraîche de T5a, m5).
 /// - Note globale 1-5 en un tap ; « Détailler » pré-remplit les quatre critères avec la note (ou 3) ; sans détail, la
 ///   gateway réplique la note sur les quatre critères (l.47).
-/// - Envoi unique : `.enregistree` et `.dejaNotee` (silencieux, l.58-61) ferment la feuille avec le remerciement du web ;
+/// - Envoi unique : `.enregistree` et `.dejaNotee` (silencieux, l.58-61) ferment la feuille avec le remerciement du web,
+///   éphémère comme son toast (`dureeRemerciementSecondes`, `oublierRemerciement`) ;
 ///   un refus serveur s'affiche tel quel, feuille ouverte ; une erreur de transport affiche le texte opérationnel
 ///   `LibellesDetailPresences.Notation.erreurEnregistrement`. Aucune lecture de note (filtre centralisé
 ///   `evaluations_publiees`) : rien n'est jamais affiché d'une note, publiée ou non.
@@ -177,15 +181,30 @@ public final class NotationModel: ObservableObject {
         }
     }
 
-    /// « Plus tard » ou feuille fermée sans envoi (l.150-154, l.207) : la mémoire reste posée.
+    /// « Plus tard » (l.207, geste de l'utilisateur) : la mémoire reste posée.
     public func plusTard() {
         guard !envoiEnCours else { return }
         fermer()
         retour = nil
     }
 
-    /// Le remerciement a été affiché.
-    public func oublierRetour() {
+    /// Feuille fermée hors de son bouton (glissement vers le bas, l.150-154 : `onOpenChange(false)`) : vaut « Plus tard »
+    /// seulement si la feuille était encore ouverte. Une fermeture décidée par le modèle (envoi réussi, `ouverte` déjà
+    /// faux) n'efface donc jamais le remerciement, même si SwiftUI réécrit `false` dans le Binding de `.sheet` (revue
+    /// fraîche de T5a, m4).
+    public func fermetureParLUtilisateur() {
+        guard ouverte else { return }
+        plusTard()
+    }
+
+    /// Durée d'affichage du remerciement : celle des toasts du web (`toastOptions={{ duration: 5000 }}`,
+    /// `src/App.tsx` l.536). La zone efface le remerciement ensuite (`oublierRemerciement`).
+    public static let dureeRemerciementSecondes: TimeInterval = 5
+
+    /// Le remerciement a été affiché pendant `dureeRemerciementSecondes` : il disparaît (toast éphémère du web). Une
+    /// erreur n'est jamais effacée ici (elle vit dans la feuille ouverte).
+    public func oublierRemerciement() {
+        guard retour == .remerciement else { return }
         retour = nil
     }
 

@@ -250,7 +250,10 @@ test('validate-pr : la garde tourne dans « Garde de livraison mobile » et est 
   const workflow = readFileSync(join(root, '.github/workflows/validate-pr.yml'), 'utf8');
   const etape = workflow.split('- name: ').find(bloc => bloc.startsWith('Garde de livraison mobile'));
   assert.ok(etape, 'étape « Garde de livraison mobile » absente');
-  assert.ok(etape.includes('tests/node/lecture-notes-ios.node.mjs'), 'garde non lancée par validate-pr');
+  const run = etape.split('\n').find(l => /^\s+run: /.test(l));
+  assert.ok(run && run.includes('node --test') && run.includes('tests/node/lecture-notes-ios.node.mjs'),
+    `garde non lancée par validate-pr : ${run}`);
+  assert.ok(!/^\s+if: /m.test(etape) && !etape.includes('continue-on-error'), 'étape conditionnelle ou non bloquante');
   const decisions = readFileSync(join(root, 'docs/mobile-swift/DECISIONS_LOT2.md'), 'utf8');
   assert.ok(decisions.includes('`tests/node/lecture-notes-ios.node.mjs`'), 'garde non consignée dans DECISIONS_LOT2.md');
 });

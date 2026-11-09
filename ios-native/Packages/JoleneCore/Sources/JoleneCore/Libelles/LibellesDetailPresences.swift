@@ -34,6 +34,25 @@ public enum LibellesDetailPresences {
     /// libellé du lot 1, repris tel quel (`AccueilScreen`, « Voir sur jolene.app »).
     public static let voirSurLeWeb = "Voir sur jolene.app"
 
+    /// Échec de lecture du détail (revue fraîche de T5a, m11) : titre et action de la session expirée repris du lot 1
+    /// (`MissionsListScreen.swift` l.107-108, via `LibellesJustificatifs`), message du port tel quel, et repli lisible
+    /// quand le port n'en porte aucun (texte opérationnel inventorié, sur le modèle de
+    /// `MissionDetailModel.genericFailureMessage`) : jamais un message vide.
+    public enum Echec {
+        public static let sessionAVerifier = LibellesJustificatifs.sessionAVerifier
+        public static let verifierMaSession = LibellesJustificatifs.verifierMaSession
+        /// Texte opérationnel (inventorié, « Textes opérationnels hors web (T5a) »).
+        public static let chargementImpossible =
+            "Le détail de vos présences n'a pas pu être chargé. Vérifiez votre connexion puis réessayez."
+
+        /// Message affiché : celui du port s'il est lisible, sinon le message de session expirée du lot 0
+        /// (`SessionController.sessionExpiredMessage`) ou `chargementImpossible`.
+        public static func message(_ message: String?, sessionExpiree: Bool) -> String {
+            if let message, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return message }
+            return sessionExpiree ? SessionController.sessionExpiredMessage : chargementImpossible
+        }
+    }
+
     // MARK: - Formats du rendu React
 
     /// `value.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })` (l.43-45) : deux

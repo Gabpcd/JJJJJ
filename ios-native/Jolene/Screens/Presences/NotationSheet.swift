@@ -70,10 +70,23 @@ private struct NotationAuDepartHote<Contenu: View>: View {
                              announcesOnAppear: true)
             }
         }
-        .onChange(of: pointage.notationAProposer) { proposer in
-            if proposer { Task { await notation.proposer() } }
+        // Proposition liée à la vue (revue fraîche de T5a, m5) : `.task(id:)` est annulée si la zone disparaît pendant la
+        // relecture de `fin_le` ; `NotationModel.proposer` ne marque alors rien (web : `if (!actif.current) return`,
+        // `PointageRotatifSoignant.tsx` l.157) et la note reste proposable à la réapparition.
+        .task(id: pointage.notationAProposer) {
+            guard pointage.notationAProposer else { return }
+            await notation.proposer()
         }
-        .sheet(isPresented: Binding(get: { notation.ouverte }, set: { if !$0 { notation.plusTard() } })) {
+        // Remerciement éphémère (m4) : effacé après la durée des toasts du web, annulé si la zone disparaît avant.
+        .task(id: notation.retour) {
+            guard notation.retour == .remerciement else { return }
+            try? await Task.sleep(nanoseconds: UInt64(NotationModel.dureeRemerciementSecondes * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            notation.oublierRemerciement()
+        }
+        // Fermeture par l'utilisateur seulement (m4) : une fermeture décidée par le modèle (envoi réussi) n'efface pas le
+        // remerciement si SwiftUI réécrit `false` dans le Binding.
+        .sheet(isPresented: Binding(get: { notation.ouverte }, set: { if !$0 { notation.fermetureParLUtilisateur() } })) {
             NotationSheet(model: notation)
         }
     }
