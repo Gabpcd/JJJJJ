@@ -380,4 +380,41 @@ dernière version distante et devrait être renommée après `20261109010957`
 
 ## 8. Recette frontend
 
-Voir la section dédiée ci-dessous, complétée par la recette simulée.
+**Niveau : simulation avec réponses simulées** (`e2e/recette-complete-gardes-null.spec.ts`,
+configuration `e2e/playwright.recette-complete.config.ts`, build
+`VITE_SUPABASE_URL=http://127.0.0.1:8890`, `RECETTE_START_SERVER=1 CI=true`). Les
+écrans sont ceux que les routes montent réellement (App.tsx) ; l'API est
+interceptée par le harnais strict (tout appel inconnu = 501 et échec). Les
+réponses « avant » reproduisent ce que la fonction LIVE non corrigée renvoyait à
+l'appelant, les réponses « après » le refus de la fonction corrigée
+(fixture LIVE §2). **Ni la garde SQL, ni la RLS, ni le staging ne sont exercés
+ici** : la preuve SQL est la recette du §6 (CI). Aucune intégration réelle,
+aucun appareil physique.
+
+Exécution du 09/11 : **35/35** (7 cas × iphone, android, ipad-portrait,
+ipad-paysage, ordinateur), aucune erreur de page, aucun appel inconnu ni
+externe. Chaque cas : assertions sur le texte exact, corps des RPC appelées,
+reprise après rechargement, dump ARIA (`test-results/recette-complete/gardes-null/<projet>/`).
+
+| Cas | Rôle | Fonction | Résultat attendu et vérifié |
+|---|---|---|---|
+| Contrat d'une mission réattribuée | soignant | `fn_etablissement_pour_mission` | refus ; « SIRET : — Adresse : — Téléphone : — », ni nom ni SIRET de l'établissement |
+| Présences d'une mission republiée (OUVERTE) | soignant tiers | `fn_presences_detail_mission` | avant : « Distance GPS 37m », « Méthode GPS » de l'ancien soignant ; après : synthèse sans aucune donnée de pointage d'un tiers |
+| Présences de sa mission | soignant assigné | `fn_presences_detail_mission` | accès conservé (« Méthode CODE_ROTATIF ») |
+| Présences de sa mission | établissement propriétaire | `fn_presences_detail_mission` | accès conservé (soignant, « Distance GPS 37m ») |
+| Boost et protection remplacement | établissement propriétaire | `fn_booster_mission`, `fn_activer_garantie_mission` | « Mission boostée — 3 soignants… », « Protection remplacement activée ✓ », état repris après rechargement |
+| DPAE | établissement propriétaire | `fn_generer_donnees_dpae`, `fn_enregistrer_numero_dpae` | données préparées, « DPAE déclarée » + numéro, repris après rechargement |
+| DPAE, membre révoqué en cours de session | ex-membre (JWT établissement encore ouvert) | `fn_generer_donnees_dpae` | avant : données du salarié (date de naissance) affichées ; après : alerte « Non autorisé », aucune donnée, aucun numéro, même refus après rechargement |
+
+Sans surface montée, donc sans recette UI possible (preuve SQL seulement) :
+`QRPointageEtab` et `CodesPointageMission` ne sont importés par aucune route
+(`fn_generer_qr_mission`, `fn_generer_code_secours_mission`,
+`fn_codes_pointage_mission`) ; `fn_valider_alerte_presence`, `fn_deposer_chorus`,
+`fn_generer_facture`, `fn_diffuser_pool_urgence`, `fn_annuler_serie`,
+`fn_assigner_mission_admin`, `fn_definir_retrocession_mission` et
+`fn_regenerer_qr_mission` n'ont aucun appelant web. Montées mais non rejouées
+dans cette recette (appelants légitimes inchangés, refus couverts par la recette
+SQL) : `fn_soignants_urgence` (pool urgence de la fiche mission),
+`fn_rebooker_soignant` (tableau de bord), `fn_declarer_honoraires_retrocession`
+(missions en rétrocession héritées ; la création en rétrocession est verrouillée avant lancement) et
+`fn_creer_reclamation_score` (branche établissement).
