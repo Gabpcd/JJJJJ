@@ -80,4 +80,31 @@ final class JoleneDesignLot2Tests: XCTestCase {
         XCTAssertGreaterThan(taille.height, 0)
         XCTAssertLessThanOrEqual(taille.width, 390)
     }
+
+    // MARK: - NumericCodeField (T4b)
+
+    /// `onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}` (`PointageRotatifSoignant.tsx` l.222) :
+    /// chiffres ASCII seulement (`\D` sans drapeau `u`), tronqués à six ; un collage est filtré, jamais refusé.
+    func testCodeNumeriqueFiltreCommeLeWeb() {
+        XCTAssertEqual(NumericCodeField.longueur, 6)
+        XCTAssertEqual(NumericCodeField.filtrer("123456"), "123456")
+        XCTAssertEqual(NumericCodeField.filtrer("123 456"), "123456", "espaces de l'indication retirés")
+        XCTAssertEqual(NumericCodeField.filtrer("12a3-45b6"), "123456")
+        XCTAssertEqual(NumericCodeField.filtrer("1234567890"), "123456", "tronqué à six, comme `slice(0, 6)`")
+        XCTAssertEqual(NumericCodeField.filtrer("١٢٣٤٥٦"), "", "chiffres non ASCII retirés (`\\D` de JavaScript)")
+        XCTAssertEqual(NumericCodeField.filtrer(""), "")
+        XCTAssertTrue(NumericCodeField.estComplet("654321"))
+        XCTAssertFalse(NumericCodeField.estComplet("65432"))
+        XCTAssertFalse(NumericCodeField.estComplet("65432a"))
+    }
+
+    @MainActor
+    func testCodeNumeriqueSeRendA390Points() {
+        let vue = NumericCodeField(code: .constant("123"), libelle: "Code de pointage à 6 chiffres", placeholder: "123 456",
+                                   identifier: "pointage-code-m-1")
+        let hebergeur = UIHostingController(rootView: vue)
+        let taille = hebergeur.sizeThatFits(in: CGSize(width: 390, height: CGFloat.greatestFiniteMagnitude))
+        XCTAssertGreaterThanOrEqual(taille.height, 48, "cible tactile d'au moins 48 pt, comme JoleneTextField")
+        XCTAssertLessThanOrEqual(taille.width, 390)
+    }
 }

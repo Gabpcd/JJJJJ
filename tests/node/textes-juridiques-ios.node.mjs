@@ -111,6 +111,7 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
   const fichiers = new Set(constantes.map(c => c.source.fichier));
   assert.deepEqual([...fichiers].sort(), [
     'src/components/AccesEtablissement.tsx', // T9a : erreur de chargement de la liste des contrats
+    'src/components/BandeauHorsLigne.tsx', // T4b : bandeau hors ligne de la page Présences
     'src/components/BandeauSansGPS.tsx',
     'src/components/CertificatSignature.tsx',
     'src/components/ConsentementGPS.tsx',
@@ -119,6 +120,8 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
     'src/components/SignerContratOtp.tsx',
     // T4a : motifs du bloc de pointage, titres « Mes documents » et « Mes contrats » (section « Mon espace »).
     'src/components/pointage/BlocPointageMission.tsx',
+    // T4b : zone de pointage (état, consigne, saisie, QR, action, segments, retours).
+    'src/components/pointage/PointageRotatifSoignant.tsx',
     'src/components/profil-soignant/SectionPreferences.tsx',
     'src/pages/CertificatSignaturePage.tsx',
     'src/pages/ContratMission.tsx',

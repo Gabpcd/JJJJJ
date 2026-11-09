@@ -29,7 +29,8 @@ final class DemoContratsTests: JoleneUITestCase {
         signInDemo()
         openContrats()
         let liste = element("contrats-liste")
-        for id in ["demo-contrat-001", "demo-contrat-002", "demo-contrat-003"] {
+        // Quatre contrats depuis T4b : `demo-contrat-pointage-c` (« Voir le contrat » de la mission c des présences).
+        for id in ["demo-contrat-001", "demo-contrat-002", "demo-contrat-003", "demo-contrat-pointage-c"] {
             require("La carte \(id) est affichée") { self.element("contrat-carte-\(id)").exists }
         }
         record("\(proofPrefix)-contrats-liste")
@@ -37,18 +38,18 @@ final class DemoContratsTests: JoleneUITestCase {
         tap("contrats-filtre-SIGNE_COMPLET")
         require("Filtre « Signés » : seul le contrat signé reste") {
             self.element("contrat-carte-demo-contrat-002").exists && !self.element("contrat-carte-demo-contrat-001").exists
-                && !self.element("contrat-carte-demo-contrat-003").exists
+                && !self.element("contrat-carte-demo-contrat-003").exists && !self.element("contrat-carte-demo-contrat-pointage-c").exists
         }
         tap("contrats-filtre-ANNULE")
         require("Filtre « Annulés » : état vide du web") { self.element("contrats-vide").exists }
         XCTAssertFalse(element("contrat-carte-demo-contrat-002").exists)
         tap("contrats-filtre-EN_ATTENTE_SIGNATURES")
-        require("Filtre « En attente » : les deux contrats non signés") {
+        require("Filtre « En attente » : les trois contrats non signés complètement (dont `SIGNE_SOIGNANT`, l.22-27)") {
             self.element("contrat-carte-demo-contrat-001").exists && self.element("contrat-carte-demo-contrat-003").exists
-                && !self.element("contrat-carte-demo-contrat-002").exists
+                && self.element("contrat-carte-demo-contrat-pointage-c").exists && !self.element("contrat-carte-demo-contrat-002").exists
         }
         tap("contrats-filtre-Tous")
-        require("Filtre « Tous » : trois contrats") { self.element("contrat-carte-demo-contrat-002").exists }
+        require("Filtre « Tous » : quatre contrats") { self.element("contrat-carte-demo-contrat-002").exists }
 
         openCarte("demo-contrat-001", in: liste)
         let ecran = element("contrat-screen")
