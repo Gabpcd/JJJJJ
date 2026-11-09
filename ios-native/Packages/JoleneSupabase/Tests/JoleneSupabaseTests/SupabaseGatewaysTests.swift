@@ -68,6 +68,10 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(supabase.contains("push"), "lot 3, T4 câble le push")
         XCTAssertFalse(supabase.contains("notifications"), "lot 3, T5 câble le centre de notifications")
         XCTAssertFalse(supabase.contains("profil"), "lot 3, T9 câble le profil")
+        XCTAssertFalse(supabase.contains("avatar") || supabase.contains("geocodage"), "lot 3, T10 câble l'avatar et le géocodage")
+        let gateways = SupabaseGateways.make(client: TestClient.make())
+        XCTAssertTrue(gateways.avatar is EnvoiAvatar, "reçu durable et relecture d'`EnvoiAvatar` sur Supabase Storage")
+        XCTAssertTrue(gateways.geocodage is ApiAdresseGeocodage)
     }
 
     func testClientOptionsUsePkceInjectedStorageAndJoleneHeader() {

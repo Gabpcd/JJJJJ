@@ -75,6 +75,9 @@ final class Lot3PortsTests: XCTestCase {
         await refuse("T9") { _ = try await g.profil.profil(context: c) }
         await refuse("T9") { _ = try await g.profil.modifier(ModificationProfil(bio: "x"), context: c) }
         await refuse("T10") { _ = try await g.avatar.televerser(jpeg: Data([0xFF, 0xD8]), context: c) }
+        await refuse("T10") { _ = try await g.avatar.reconcilier(context: c) }
+        let imageNonCablee = await g.avatar.image(url: URL(string: "https://exemple.invalid/a.jpg")!)
+        XCTAssertNil(imageNonCablee, "avatar non câblé : jamais une image plausible")
         await refuse("T10") { _ = try await g.geocodage.adresse(lat: 45.76, lng: 4.85) }
         await refuse("T11") { _ = try await g.motDePasse.changer(ancien: "a", nouveau: "b", context: c) }
         await refuse("T11") { _ = try await g.exportRGPD.exporter(context: c) }
