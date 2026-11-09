@@ -230,6 +230,9 @@ final class RevenusLectureTests: XCTestCase {
         XCTAssertEqual(page.missions[0].dernierPaiement?.id, "p-a", "la plus récente l'emporte (modifie_le), jamais l'ordre reçu")
         XCTAssertNil(page.missions[1].dernierPaiement)
         XCTAssertEqual(EtatPaiement.classerPaiementSalaire(page.missions[0].dernierPaiement?.salaire).libelle, "Réception confirmée")
+        // Revue B8 n°2 de T12, m2 : la page porte l'index de TOUTES les déclarations relues avec elle (missions hors de la
+        // page comprises), que le modèle applique aux lignes des pages précédentes (`setPaiementsMap` du web, l.140-142).
+        XCTAssertEqual(page.derniersPaiements.mapValues(\.id), ["m-1": "p-a", "autre": "p-c"])
     }
 
     func testPageASuivreSeulementQuandElleEstPleine() {

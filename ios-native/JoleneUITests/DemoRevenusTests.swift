@@ -10,7 +10,8 @@ import XCTest
 ///   états du paiement rapide avec leurs libellés verbatim du web (tutoiement compris, HARD STOP n°4), les missions
 ///   terminées avec le montant de `montantFinanceAfficheMission` (net estimé « ~ », honoraires, brut indicatif, témoin
 ///   Rist à 280 €) et l'état de la dernière déclaration, notes « net estimé » verbatim ;
-/// - le litige du paiement rapide ouvre le détail natif de la mission, empilé sur l'onglet Revenus ;
+/// - le litige du paiement rapide ouvre la page web de la mission (bloc litige du web, absent du détail natif ; revue B8
+///   n°2 de T12, M1), présentée par le double démo du présentateur `.safari` ;
 /// - « Factures », « Paie » et une ligne de mission (présences, lot 2) sont des renvois web canoniques (D4), présentés
 ///   par le double démo du présentateur `.safari` (aucune requête réseau) ; la ligne s'ouvre aussi par un vrai bouton
 ///   nommé comme le `aria-label` du web (accessibilité, revue B8 de T12, m5) ;
@@ -88,25 +89,28 @@ final class DemoRevenusTests: JoleneUITestCase {
         record("\(proofPrefix)-revenus-bas")
     }
 
-    func testLigneEnLitigeOuvreLeDetailDeLaMission() throws {
+    /// Revue B8 n°2 de T12, M1 : « Paiement en litige · voir le litige de la mission » mène, comme le `Link` du web
+    /// (`PaiementsEscrowAVenir.tsx` l.152-155), à la page de la mission, qui affiche le litige (`DetailMissionSoignant.tsx`
+    /// l.1241-1271). Le détail natif ne porte pas ce bloc : la ligne présente la page web canonique de la mission par le
+    /// présentateur `.safari` (double démo), jamais le détail natif empilé, qui serait une impasse.
+    func testLigneEnLitigeOuvreLaPageWebDeLaMission() throws {
         launchDemo()
         connexionDemo()
         let ecran = ouvrirRevenus()
-        let litige = element("revenus-escrow-demo-assignee-002")
+        let litige = app.buttons["revenus-escrow-demo-assignee-002"]
         scrollTo(litige, in: ecran)
-        require("La ligne du litige est atteignable") { self.visible(litige) }
+        require("La ligne du litige est un bouton atteignable") { self.visible(litige) && litige.isEnabled }
         litige.tap()
-        let titre = element("mission-detail-title")
-        require("Le détail natif de la mission est empilé sur Revenus", timeout: 30) {
-            self.containerVisible(self.element("mission-detail")) && self.visible(titre)
-        }
-        XCTAssertEqual(titre.label, "Démonstration · Mission assignée 2")
-        XCTAssertFalse(element("renvoi-web-demo").exists, "écran natif livré : jamais un renvoi web")
+        liensRenvoiWebAffiche("https://jolene.app/soignant/missions/demo-assignee-002")
+        XCTAssertFalse(element("mission-detail").exists, "détail natif sans bloc litige : jamais empilé à la place de la page web")
         record("\(proofPrefix)-revenus-litige")
-        let retour = app.navigationBars.buttons.firstMatch
-        require("Le bouton retour est disponible") { self.visible(retour) }
-        retour.tap()
-        require("Retour à la racine de l'onglet Revenus") { self.containerVisible(self.element("revenus-screen")) }
+        liensFermerRenvoiWeb()
+        require("L'onglet Revenus est intact, à sa racine") {
+            self.containerVisible(self.element("revenus-screen")) && !self.element("mission-detail").exists
+        }
+        // Les autres paiements rapides ne mènent nulle part (web : seul le litige est un lien, l.152-156).
+        XCTAssertTrue(element("revenus-escrow-demo-escrow-001").exists, "paiement retardé : ligne rendue")
+        XCTAssertFalse(app.buttons["revenus-escrow-demo-escrow-001"].exists, "paiement retardé : ligne non cliquable")
     }
 
     func testFacturesEtPaieSontDesRenvoisWeb() throws {

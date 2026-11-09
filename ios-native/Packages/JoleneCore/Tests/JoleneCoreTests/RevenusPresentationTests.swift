@@ -14,6 +14,7 @@ final class RevenusPresentationTests: XCTestCase {
     private static let escrow = "src/components/gains/PaiementsEscrowAVenir.tsx"
     private static let stripe = "src/pages/PageStripeConnect.tsx"
     private static let noteNetEstime = "src/components/NoteNetEstime.tsx"
+    private static let detailMission = "src/pages/DetailMissionSoignant.tsx"
 
     // MARK: - Verbatim (HARD STOP n°4)
 
@@ -128,7 +129,11 @@ final class RevenusPresentationTests: XCTestCase {
             XCTAssertEqual(affichee.detail, detail, etat)
             XCTAssertEqual(affichee.ton, ton, etat)
             XCTAssertEqual(affichee.montant, "240,00\u{00A0}€", "honoraires_cents / 100, jamais recalculé (règle #11)")
-            XCTAssertEqual(affichee.ouvreMission, etat == "LITIGE", "seul le litige mène au détail de la mission (web l.152-155)")
+            // Revue B8 n°2 de T12, M1 : seul le litige mène à la mission, sur sa page web (bloc litige du web, absent du
+            // détail natif) ; aucun autre état n'est cliquable (web l.152-156).
+            XCTAssertEqual(affichee.renvoiLitige,
+                           etat == "LITIGE" ? .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/missions/m-LITIGE"))) : nil,
+                           etat)
         }
         XCTAssertNil(RevenusPresentation.ligneEscrow(ligne("INCONNU")), "état hors des sept : ligne non affichée (web l.134-135)")
     }
@@ -273,6 +278,49 @@ final class RevenusPresentationTests: XCTestCase {
                        .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/presences/mission/m-1"))),
                        "détail des présences (lot 2) : `navigate('/soignant/presences/mission/${m.id}')`, l.705")
         XCTAssertNil(RevenusPresentation.renvoiWeb("/soignant/mes-gains"), "l'aperçu est natif : jamais un renvoi")
+    }
+
+    /// Revue B8 n°2 de T12, M1 : « Paiement en litige · voir le litige de la mission » mène, sur le web, à la page de la
+    /// mission (`Link` vers `/soignant/missions/${l.mission_id}`, `PaiementsEscrowAVenir.tsx` l.152-155), qui lit le
+    /// litige (`fn_litige_pour_mission`, `DetailMissionSoignant.tsx` l.447) et affiche « Litige en cours sur cette
+    /// mission » avec « Voir le litige » (l.1257-1271). Le détail natif de la mission (lot 0/1) ne porte pas ce bloc :
+    /// la ligne ouvre donc la page web de la mission par le présentateur `.safari`, jamais le détail natif, qui
+    /// réduirait en silence le litige à la mission. Construit hors `LinkRouter`, comme le renvoi du type d'exercice du
+    /// profil (T9) : la route `/soignant/missions/:id` est native, mais son bloc litige ne l'est pas.
+    func testLitigeOuvreLaPageWebDeLaMissionTantQueLeDetailNatifNePortePasLeBloc() throws {
+        XCTAssertEqual(RevenusPresentation.lienLitige(missionId: "m-1"), "/soignant/missions/m-1")
+        XCTAssertEqual(RevenusPresentation.renvoiLitige(missionId: "m-1"),
+                       .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/missions/m-1"))))
+        XCTAssertEqual(DestinationLien(link: RevenusPresentation.lienLitige(missionId: "m-1"))?.destination,
+                       .missionDetail(id: "m-1"),
+                       "la route est native (détail sans bloc litige) : le renvoi est construit hors `LinkRouter`, délibérément")
+        // Un identifiant serveur est un segment de chemin : jamais une autre route (« / », « ? », « # », « .. »).
+        XCTAssertEqual(RevenusPresentation.lienLitige(missionId: "a/../b?x#y"), "/soignant/missions/a%2F..%2Fb%3Fx%23y")
+        XCTAssertEqual(RevenusPresentation.renvoiLitige(missionId: "a/../b?x#y"),
+                       .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/missions/a%2F..%2Fb%3Fx%23y"))))
+        XCTAssertNil(RevenusPresentation.renvoiLitige(missionId: ""), "identifiant vide : aucun renvoi (ligne non cliquable)")
+
+        // Ligne affichée : le litige seul porte le renvoi ; la cible de l'espace est un renvoi web, présentable seulement
+        // avec le présentateur `.safari` (jamais un bouton sans effet).
+        let litige = try XCTUnwrap(RevenusPresentation.ligneEscrow(PaiementRapide(missionId: "m-1", honorairesCents: 24000, etat: "LITIGE")))
+        let route = try XCTUnwrap(litige.renvoiLitige)
+        XCTAssertTrue(CibleNotification.web(route).estPresentable(renvoiWebDisponible: true))
+        XCTAssertFalse(CibleNotification.web(route).estPresentable(renvoiWebDisponible: false))
+        XCTAssertNil(RevenusPresentation.ligneEscrow(PaiementRapide(missionId: "m-1", honorairesCents: 24000, etat: "RETARDE"))?.renvoiLitige)
+    }
+
+    /// Sources web du renvoi du litige (revue B8 n°2 de T12, M1), épinglées à leur ligne : si le web change la destination
+    /// du lien ou retire le bloc litige de la page de la mission, ce test rougit et le natif suit.
+    func testSourcesWebDuRenvoiDuLitigeASaLigne() throws {
+        let escrow = try CompteVerbatimTests.lignes(Self.escrow)
+        XCTAssertTrue(escrow[152].contains("if (l.etat === 'LITIGE') {"), "\(Self.escrow) l.153")
+        XCTAssertTrue(escrow[153].contains("<Link to={`/soignant/missions/${l.mission_id}`}"), "\(Self.escrow) l.154")
+        let detail = try CompteVerbatimTests.lignes(Self.detailMission)
+        XCTAssertTrue(detail[446].contains("supabase.rpc('fn_litige_pour_mission'"), "\(Self.detailMission) l.447")
+        XCTAssertTrue(detail[1256].contains("'Litige en cours sur cette mission'"), "\(Self.detailMission) l.1257")
+        XCTAssertTrue(detail[1268].contains("navigate(`/soignant/litiges?litige=${litigeMission.litige_id}`)"),
+                      "\(Self.detailMission) l.1269")
+        XCTAssertTrue(detail[1270].contains("'Voir le litige'"), "\(Self.detailMission) l.1271")
     }
 
     func testMontantDesTotauxFormatesCommeLeWeb() {

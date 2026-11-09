@@ -8,8 +8,8 @@ private let utilisateurRevenus = AuthenticatedUser(id: "u-1", email: "u-1@exampl
 
 /// Modèle de l'onglet Revenus (lot 3, T12, B9 ; lecture seule) : trois sections lues pour l'epoch de la session,
 /// chacune avec son état (totaux serveur, paiements rapides, missions terminées paginées par 50), audit
-/// `DONNEES_PERSO_CONSULTATION` (`page: mes_gains`) une seule fois par ouverture, après une lecture réussie, jamais
-/// bloquant ; échec des missions → « Impossible de charger tous les revenus » + message, liste gardée, « Réessayer »
+/// `DONNEES_PERSO_CONSULTATION` (`page: mes_gains`) une seule fois par session (epoch : le modèle vit autant que
+/// l'onglet, toujours monté), après une lecture réussie, jamais bloquant ; échec des missions → « Impossible de charger tous les revenus » + message, liste gardée, « Réessayer »
 /// relit la page demandée en dernier (web `reloadKey`) ; session expirée → « Vérifier ma session » ; réponse d'un epoch
 /// périmé ignorée. Aucun montant calculé : le modèle ne fait que publier les valeurs relues.
 @MainActor
@@ -131,7 +131,8 @@ final class RevenusModelTests: XCTestCase {
     private static let rapides = [PaiementRapide(missionId: "m-r", honorairesCents: 24000, etat: "RESERVE")]
 
     private static func page(_ ids: [String], page: Int = 0, aSuivre: Bool = false) -> PageMissionsTerminees {
-        PageMissionsTerminees(missions: ids.map { MissionTerminee(id: $0, typeContratApplique: "SALARIE") }, page: page, aSuivre: aSuivre)
+        PageMissionsTerminees(missions: ids.map { MissionTerminee(id: $0, typeContratApplique: "SALARIE") }, page: page, aSuivre: aSuivre,
+                              derniersPaiements: [:])
     }
 
     private func pret(_ port: ScriptedRevenus, journal: JournalAudit = JournalAudit(),
@@ -176,7 +177,7 @@ final class RevenusModelTests: XCTestCase {
         XCTAssertEqual(model.missions.map(\.id), ["m-1"])
         await model.auditEnCours?.value
         let apres = await journal.ecritures
-        XCTAssertEqual(apres.count, 1, "une seule consultation journalisée par ouverture de l'écran")
+        XCTAssertEqual(apres.count, 1, "une seule consultation journalisée par session (epoch), pas à chaque lecture")
         XCTAssertEqual(port.pages, [0, 0])
     }
 
@@ -256,7 +257,7 @@ final class RevenusModelTests: XCTestCase {
         let pleine = Self.page((0..<50).map { "m-\($0)" }, aSuivre: true)
         let suite = PageMissionsTerminees(missions: [MissionTerminee(id: "m-49", intitule: "relue", typeContratApplique: "SALARIE"),
                                                      MissionTerminee(id: "m-50", typeContratApplique: "SALARIE")],
-                                          page: 1, aSuivre: false)
+                                          page: 1, aSuivre: false, derniersPaiements: [:])
         let port = ScriptedRevenus(totaux: [.success(nil)], rapides: [.success([])],
                                    missions: [.success(pleine), .failure(JoleneError(.network, "Connexion impossible.")), .success(suite)])
         let (controller, snapshot) = try await pret(port)
@@ -462,7 +463,7 @@ final class RevenusModelTests: XCTestCase {
         await model.auditEnCours?.value
         let ecritures = await journal.ecritures
         XCTAssertEqual(ecritures, ["DONNEES_PERSO_CONSULTATION soignant u-1 [\"page\": \"mes_gains\"]"],
-                       "l'audit de cette ouverture n'est jamais perdu par l'annulation de la vue")
+                       "l'audit de cette session n'est jamais perdu par l'annulation de la vue")
     }
 
     /// m3 : après l'échec d'une page suivante, « Charger plus » est masqué (« Réessayer » est proposé) et, s'il est
@@ -487,5 +488,81 @@ final class RevenusModelTests: XCTestCase {
         XCTAssertNil(model.erreur)
         XCTAssertEqual(model.missions.count, 100)
         XCTAssertTrue(model.afficheChargerPlus)
+    }
+
+    // MARK: - Revue B8 n°2 de T12
+
+    /// m2 : chaque lecture d'une page relit TOUTES les déclarations du soignant (`paiements_soignant` sans filtre de
+    /// mission, `MesGains.tsx` l.102-107) et le web remplace la carte entière (`setPaiementsMap`, l.140-142) : après
+    /// « Charger plus », les lignes des pages précédentes prennent l'état de la dernière lecture, jamais celui de leur
+    /// propre lecture. Exemple de la revue : une déclaration confirmée entre la page 0 et la page 1.
+    func testChargerPlusRelitLEtatDesLignesDesPagesPrecedentes() async throws {
+        let declare = PaiementSoignantLu(id: "p-0", missionId: "m-0", statut: "DECLARE", montantNet: .nombre(162.4),
+                                         confirmeParSoignant: false, modifieLe: "2026-10-01T08:00:00+00:00")
+        let confirme = PaiementSoignantLu(id: "p-0", missionId: "m-0", statut: "CONFIRME", montantNet: .nombre(162.4),
+                                          confirmeParSoignant: true, modifieLe: "2026-10-02T08:00:00+00:00")
+        let retiree = PaiementSoignantLu(id: "p-1", missionId: "m-1", statut: "DECLARE", montantNet: .nombre(80),
+                                         modifieLe: "2026-10-01T08:00:00+00:00")
+        let salariees = { (ids: Range<Int>) in ids.map { MissionTerminee(id: "m-\($0)", typeContratApplique: "SALARIE") } }
+        let premiere = RevenusAssemblage.page(salariees(0..<50), paiements: [declare, retiree], etablissements: [:], page: 0)
+        let suite = RevenusAssemblage.page(salariees(50..<51), paiements: [confirme], etablissements: [:], page: 1)
+        let port = ScriptedRevenus(totaux: [.success(nil)], rapides: [.success([])], missions: [.success(premiere), .success(suite)])
+        let (controller, snapshot) = try await pret(port)
+        let model = RevenusModel(controller: controller, snapshot: snapshot)
+        await model.charger()
+        XCTAssertEqual(model.lignes[0].etat.texte, "Réception à confirmer")
+        XCTAssertEqual(model.lignes[1].etat.texte, "Réception à confirmer")
+
+        await model.chargerPlus()
+        XCTAssertEqual(port.pages, [0, 1])
+        XCTAssertEqual(model.missions.count, 51)
+        XCTAssertEqual(model.missions[0].dernierPaiement, confirme)
+        XCTAssertEqual(model.lignes[0].etat.texte, "Réception confirmée",
+                       "déclaration confirmée entre les deux pages : état de la dernière lecture, comme le web")
+        XCTAssertNil(model.missions[1].dernierPaiement, "déclaration absente de la dernière lecture : carte du web remplacée")
+        XCTAssertEqual(model.lignes[1].etat.texte, "Aucun versement déclaré")
+        XCTAssertNil(model.missions[50].dernierPaiement)
+    }
+
+    /// m3 : la trace `DONNEES_PERSO_CONSULTATION` est écrite une fois par SESSION (epoch), pas une fois par ouverture : le
+    /// modèle vit autant que l'onglet, toujours monté (`StateObject` de `RevenusScreen` dans `MainTabView`). Une relecture
+    /// au-delà de 60 s, un jeton de péremption (assimilés à un montage web pour les données, revue B8 de T12, m1),
+    /// « Charger plus » et « Réessayer » ne la réécrivent pas, alors que le web l'écrit à chaque chargement réussi
+    /// (montage, page, `reloadKey`, l.147-153) : trace moins fréquente que le web, écart consigné (`DECISIONS_LOT3.md`,
+    /// section T12, revue B8 n°2) ; plan v2 : « audit consultation une fois ». Une nouvelle session (nouvel epoch, nouveau
+    /// modèle) l'écrit de nouveau.
+    func testAuditUneSeuleFoisParSessionMemeApresRelecturesEtPages() async throws {
+        let horloge = HorlogeReglable(DemoWorld.fixedNow)
+        let pleine = Self.page((0..<50).map { "m-\($0)" }, aSuivre: true)
+        let port = ScriptedRevenus(totaux: Array(repeating: .success(nil), count: 4), rapides: Array(repeating: .success([]), count: 4),
+                                   missions: [.success(pleine), .success(pleine), .success(pleine),
+                                              .success(Self.page(["m-50"], page: 1))])
+        let journal = JournalAudit()
+        let (controller, snapshot) = try await pret(port, journal: journal, horloge: horloge)
+        let model = RevenusModel(controller: controller, snapshot: snapshot)
+
+        await model.chargerSiNecessaire(peremption: 0)
+        await model.auditEnCours?.value
+        await model.chargerSiNecessaire(peremption: 1) // lien universel ou tap : relecture immédiate
+        await model.auditEnCours?.value
+        horloge.avancer(RevenusModel.delaiRelecture + 1)
+        await model.chargerSiNecessaire(peremption: 1) // retour sur l'onglet au-delà de 60 s
+        await model.auditEnCours?.value
+        await model.chargerPlus()
+        await model.auditEnCours?.value
+        XCTAssertEqual(port.pages, [0, 0, 0, 1], "trois lectures de la page 0 et une page suivante, toutes réussies")
+        let ecritures = await journal.ecritures
+        XCTAssertEqual(ecritures, ["DONNEES_PERSO_CONSULTATION soignant u-1 [\"page\": \"mes_gains\"]"],
+                       "une seule trace par session (epoch), quel que soit le nombre de lectures")
+
+        // Nouvelle session : nouveau modèle, nouvelle trace.
+        let autre = ScriptedRevenus(totaux: [.success(nil)], rapides: [.success([])], missions: [.success(Self.page(["m-1"]))])
+        let journal2 = JournalAudit()
+        let (controller2, snapshot2) = try await pret(autre, journal: journal2)
+        let nouvelle = RevenusModel(controller: controller2, snapshot: snapshot2)
+        await nouvelle.chargerSiNecessaire()
+        await nouvelle.auditEnCours?.value
+        let ecritures2 = await journal2.ecritures
+        XCTAssertEqual(ecritures2.count, 1)
     }
 }
