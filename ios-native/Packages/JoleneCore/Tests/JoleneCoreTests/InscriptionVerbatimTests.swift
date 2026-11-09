@@ -137,6 +137,20 @@ final class InscriptionVerbatimTests: XCTestCase {
         XCTAssertEqual(verifiees, 44, "toutes les annotations sont relues (42 + 2)")
     }
 
+    /// L3-TJ, décision TJ1 (`DECISIONS_LOT3.md`, « Décisions déléguées du 8 novembre 2026 ») : la phrase de
+    /// consentement, ses deux liens et le message générique d'un refus captcha sont tranchés par délégation, tels
+    /// quels ; la décision cite la phrase exacte affichée, ses pages et le message (aucune autre formulation).
+    func testConsentementEtRefusCaptchaTranchesParDelegation() throws {
+        let (puce, sousSection) = try DecisionsLot3Document.puceDeleguee(
+            "- **Phrase de consentement** (T7), validée verbatim")
+        XCTAssertTrue(sousSection.contains("### TJ1 — "), "décision TJ1 (textes de T7)")
+        XCTAssertTrue(puce.contains("« \(T.cguPhrase) »"), "phrase de consentement citée telle qu'affichée")
+        XCTAssertTrue(puce.contains("`/cgu`") && puce.contains("`/confidentialite`"), "pages des deux liens citées")
+        let (captcha, _) = try DecisionsLot3Document.puceDeleguee("- **Refus captcha** (T7), message générique validé")
+        XCTAssertTrue(captcha.contains("« \(T.erreurInattendue) »"), "message générique du web cité")
+        XCTAssertTrue(sousSection.contains("`p_cgu`"), "consentement transmis par `p_cgu` instruit")
+    }
+
     func testAucunTexteNouveauNiTutoiementNiMentionJuridiqueReformulee() {
         let tous = Self.attendus.map { $0.0 } + [T.cguPhrase]
         for texte in tous {

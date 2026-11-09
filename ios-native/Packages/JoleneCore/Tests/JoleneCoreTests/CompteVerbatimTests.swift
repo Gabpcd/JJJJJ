@@ -3,8 +3,8 @@ import XCTest
 
 /// Textes du hub « Mon compte » livrés par le lot 3, T11 (HARD STOP n°4) : mot de passe, export RGPD, thème,
 /// « Aide & légal ». Chaque texte affiché repris du web figure tel quel à sa ligne source ; les textes RGPD de
-/// l'export restent en tutoiement (wording RGPD non revalidé par Gabrielle, comme la suppression de compte du
-/// lot 1) ; les textes sans équivalent web (non juridiques) sont listés dans `DECISIONS_LOT3.md` pour relecture.
+/// l'export restent en tutoiement (le natif suit le web mot pour mot) ; textes RGPD et textes sans équivalent web
+/// (non juridiques) tranchés par délégation (L3-TJ, décision TJ2 de `DECISIONS_LOT3.md`).
 final class CompteVerbatimTests: XCTestCase {
     private typealias M = MotDePasse.Textes
     private typealias E = ExportRGPD.Textes
@@ -75,10 +75,16 @@ final class CompteVerbatimTests: XCTestCase {
         XCTAssertEqual(FormatExportRGPD.csv.libelle, "CSV")
     }
 
-    func testTextesRGPDDeLExportRestentEnTutoiementVerbatim() {
-        // HARD STOP n°4 : texte RGPD du web, non reformulé (vouvoiement à valider par Gabrielle, §6.7).
+    func testTextesRGPDDeLExportRestentEnTutoiementVerbatim() throws {
+        // HARD STOP n°4 : texte RGPD du web, non reformulé, tutoiement compris (décision TJ2 de L3-TJ, par délégation :
+        // le natif suit le web mot pour mot ; un vouvoiement ou une correction passe d'abord par le web, puis par la
+        // garde de ce fichier).
         XCTAssertEqual(E.description, "Télécharge l'intégralité de tes données personnelles dans le format de ton choix.")
         XCTAssertEqual(E.titre, "Mes données (RGPD)")
+        let (puce, _) = try DecisionsLot3Document.puceDeleguee("- **Textes RGPD de l'export** (T11), validés verbatim")
+        for texte in [E.titre, E.description] {
+            XCTAssertTrue(puce.contains("« \(texte) »"), "décision TJ2 : « \(texte) » validé verbatim")
+        }
     }
 
     /// Corps de `fn_rgpd_exporter_rate_limited` dans le dump, localisé par son en-tête (revue B8, m5) : un
@@ -119,19 +125,20 @@ final class CompteVerbatimTests: XCTestCase {
     }
 
     func testTextesSansEquivalentWebListesPourRelecture() throws {
-        // Textes natifs non juridiques (D13, D16) : aucune source web, listés dans `DECISIONS_LOT3.md`.
+        // Textes natifs non juridiques (D13, D16) : aucune source web. Tranchés par délégation (L3-TJ, décision TJ2 de
+        // `DECISIONS_LOT3.md`, « Décisions déléguées du 8 novembre 2026 ») : chacun est listé dans la puce de T11, dans
+        // une sous-section qui porte la ligne de délégation, et n'est plus « à relire par Gabrielle ».
         let nouveaux = [M.reauthentificationRequise, M.confirmationIndisponible, ChoixTheme.titreGroupe]
             + ChoixTheme.allCases.map(\.libelle)
         XCTAssertEqual(ChoixTheme.allCases.map(\.libelle), ["Système", "Clair", "Sombre"])
         XCTAssertEqual(ChoixTheme.titreGroupe, "Thème")
-        let decisions = try Self.source("docs/mobile-swift/DECISIONS_LOT3.md")
-        let entete = "- **T11 — textes sans équivalent web** (non juridiques, à relire par Gabrielle)"
-        let debut = try XCTUnwrap(decisions.range(of: entete), "puce des textes de T11 dans DECISIONS_LOT3.md")
-        let suite = decisions[debut.upperBound...]
-        let puce = suite.range(of: "\n- ").map { suite[..<$0.lowerBound] } ?? suite
+        let (puce, sousSection) = try DecisionsLot3Document.puceDeleguee(
+            "- **T11 — textes sans équivalent web** (non juridiques), validés par délégation")
+        XCTAssertTrue(sousSection.contains("### TJ2 — "), "décision TJ2 (textes de T11)")
         for texte in nouveaux {
             XCTAssertTrue(puce.contains("« \(texte) »"), "DECISIONS_LOT3.md liste « \(texte) »")
         }
+        try DecisionsLot3Document.assertHardStopSansRelectureEnAttente()
         let web = try [Self.mdp, Self.hub].map(Self.source).joined()
         for texte in [M.reauthentificationRequise, M.confirmationIndisponible] {
             XCTAssertFalse(web.contains(texte), "aucune source web : « \(texte) » n'est pas présenté comme verbatim")

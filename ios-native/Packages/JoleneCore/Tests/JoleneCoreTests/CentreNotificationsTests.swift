@@ -82,9 +82,9 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(CentreNotificationsModel.limite, 200, ".limit(200), l.58")
     }
 
-    /// Indication vocale de « Voir » (`accueil-notifications-action`) : **sans source web** (non juridique), en
-    /// attente de relecture par Gabrielle (`DECISIONS_LOT3.md`, section T5) ; épinglée ici pour qu'aucune
-    /// reformulation ne passe inaperçue (revue L3-T5, m11).
+    /// Indication vocale de « Voir » (`accueil-notifications-action`) : **sans source web** (non juridique), tranchée
+    /// par délégation (L3-TJ, décision TJ5 de `DECISIONS_LOT3.md`) ; épinglée ici pour qu'aucune reformulation ne
+    /// passe inaperçue (revue L3-T5, m11).
     func testIndicationVocaleSansSourceWebEpinglee() {
         XCTAssertEqual(CentreNotificationsTextes.indicationOuvrirCentre, "Ouvre le centre de notifications")
     }
