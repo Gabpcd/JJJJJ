@@ -12,6 +12,24 @@ import JoleneDesign
 /// `FiltresSheet`, état vide avec l'action secondaire du web (`missions-empty-action`) ET
 /// « Actualiser » (`missions-refresh`, toujours présent), tirer pour actualiser sur l'état vide
 /// comme sur la liste (`usePullToRefresh(recharger)` couvre toute la page web).
+///
+/// Feuille de filtres : présentée par `.sheet(item:)` depuis `ExplorerFeuilleFiltres` (JoleneCore),
+/// une présentation neuve à chaque appui sur « Filtres ». « Afficher les missions » ne fait
+/// qu'enregistrer les critères ; ils sont appliqués dans `onDismiss`, une fois la feuille fermée,
+/// pour que la liste et le badge ne soient pas reconstruits pendant la transition de fermeture
+/// (feuille qui ne se rouvrait plus, run CI 42526135547). « Fermer » n'applique rien.
+///
+/// Ce correctif repose sur deux hypothèses SwiftUI, ni documentées ni prouvées par un test
+/// (revue B8, m3). Seules les passes vertes de
+/// `DemoExplorerTests.testFiltresSeRouvrentApresChaqueApplication` sur les 3 formats les
+/// corroborent :
+/// 1. `onDismiss` s'exécute après la fin de la transition de fermeture, et non au moment où la
+///    liaison repasse à `nil`. Sinon, l'application aurait de nouveau lieu pendant la transition,
+///    comme avant le correctif ;
+/// 2. une `Ouverture` d'identité neuve relance la présentation, même si UIKit a refusé la
+///    précédente et laissé la liaison non nulle sans feuille. Le prochain appui sur « Filtres »
+///    répare alors l'état. Le test unitaire `ExplorerFeuilleFiltresTests` prouve seulement que
+///    l'identité change, pas que SwiftUI représente la feuille.
 struct MissionRoute: Hashable {
     let id: String
 }
@@ -19,7 +37,7 @@ struct MissionRoute: Hashable {
 struct MissionsListScreen: View {
     @StateObject private var model: MissionsListModel
     @ObservedObject private var session: SessionStore
-    @State private var filtresOuverts = false
+    @State private var feuilleFiltres = ExplorerFeuilleFiltres()
     private let controller: SessionController
     private let snapshot: SessionSnapshot
 
@@ -44,10 +62,12 @@ struct MissionsListScreen: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) { boutonFiltres }
         }
-        .sheet(isPresented: $filtresOuverts) {
-            FiltresSheet(filtres: model.filtres, profile: model.profile) { nouveaux in
-                Task { await model.appliquer(nouveaux) }
-            }
+        .sheet(item: $feuilleFiltres.ouverture, onDismiss: {
+            // Après la transition de fermeture : rien n'est relu tant que la feuille se ferme.
+            guard let nouveaux = feuilleFiltres.cloturer() else { return }
+            Task { await model.appliquer(nouveaux) }
+        }) { ouverture in
+            FiltresSheet(filtres: ouverture.filtres, profile: model.profile) { feuilleFiltres.enregistrer($0) }
         }
         .navigationDestination(for: MissionRoute.self) { route in
             MissionDetailScreen(route: route, initial: model.mission(id: route.id), session: session, snapshot: snapshot)
@@ -72,7 +92,7 @@ struct MissionsListScreen: View {
     private var boutonFiltres: some View {
         let actifs = model.filtres.nombreFiltresActifs
         return Button {
-            filtresOuverts = true
+            feuilleFiltres.ouvrir(avec: model.filtres)
         } label: {
             HStack(spacing: JoleneSpacing.xs) {
                 Image(systemName: "slider.horizontal.3")
