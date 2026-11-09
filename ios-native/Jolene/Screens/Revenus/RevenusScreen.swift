@@ -14,18 +14,18 @@ import JoleneDesign
 /// Les règles (états, montants, epoch, audit, pagination) sont dans JoleneCore et testées là ; la vue n'ajoute aucune
 /// logique ni aucun calcul de montant.
 ///
-/// Navigation : le litige d'un paiement rapide empile le détail natif de la mission sur la pile de l'onglet
-/// (`MissionRoute`, comme le `Link` du web l.152-155) ; une ligne de mission ouvre ses présences
-/// (`/soignant/presences/mission/:id`, lot 2 : renvoi web aujourd'hui) et l'état vide ouvre Explorer, par la cible de
-/// l'espace (`CibleNotification`, `MainTabView.presenter`). Un renvoi web n'est proposé qu'avec le présentateur
-/// `.safari` du coordinateur des liens (jamais `openURL`, jamais un bouton sans effet).
+/// Navigation, par la cible de l'espace (`CibleNotification`, `MainTabView.presenter`) : le litige d'un paiement rapide
+/// ouvre la page web de la mission (`/soignant/missions/:id`, comme le `Link` du web l.152-155 ; revue B8 n°2 de T12,
+/// M1 : le détail natif ne porte pas le bloc litige du web, l'empiler serait une impasse), une ligne de mission ouvre
+/// ses présences (`/soignant/presences/mission/:id`, lot 2 : renvoi web aujourd'hui) et l'état vide ouvre Explorer. Un
+/// renvoi web n'est proposé qu'avec le présentateur `.safari` du coordinateur des liens (jamais `openURL`, jamais un
+/// bouton sans effet).
 ///
 /// Fraîcheur (revue B8 de T12, m1) : relecture à l'apparition et au retour au premier plan des sections lues il y a
 /// plus de 60 s, et immédiate quand `peremption` avance (lien universel ou tap qui présente l'onglet, `MainTabView`).
 struct RevenusScreen: View {
     @StateObject private var model: RevenusModel
     @ObservedObject private var session: SessionStore
-    private let snapshot: SessionSnapshot
     private let peremption: Int
     private let ouvrir: (CibleNotification) -> Void
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
@@ -36,7 +36,6 @@ struct RevenusScreen: View {
     init(session: SessionStore, snapshot: SessionSnapshot, peremption: Int = 0,
          ouvrir: @escaping (CibleNotification) -> Void) {
         self.session = session
-        self.snapshot = snapshot
         self.peremption = peremption
         self.ouvrir = ouvrir
         _model = StateObject(wrappedValue: RevenusModel(controller: session.controller, snapshot: snapshot))
@@ -58,9 +57,6 @@ struct RevenusScreen: View {
         .accessibilityIdentifier("revenus-screen")
         .background(JoleneColor.lavender.ignoresSafeArea())
         .navigationTitle(RevenusTextes.titre)
-        .navigationDestination(for: MissionRoute.self) { route in
-            MissionDetailScreen(route: route, initial: nil, session: session, snapshot: snapshot)
-        }
         // Premier affichage, relance après une tâche annulée, relecture au-delà de 60 s ou dès que le jeton avance.
         .task(id: peremption) { await model.chargerSiNecessaire(peremption: peremption) }
         .onAppear { affiche = true }
@@ -183,8 +179,10 @@ struct RevenusScreen: View {
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityIdentifier(identifiant)
                 ForEach(lignes) { ligne in
-                    if ligne.ouvreMission {
-                        NavigationLink(value: MissionRoute(id: ligne.missionId)) {
+                    // Revue B8 n°2 de T12, M1 : le litige ouvre la page web de la mission (bloc litige du web, absent du
+                    // détail natif), par le présentateur `.safari` seulement (jamais un bouton sans effet).
+                    if let route = ligne.renvoiLitige, presentateurRenvoiWeb != nil {
+                        Button { ouvrir(.web(route)) } label: {
                             RevenusLigneEscrow(ligne: ligne, cliquable: true)
                         }
                         .buttonStyle(.plain)

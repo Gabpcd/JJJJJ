@@ -261,9 +261,15 @@ public struct PageMissionsTerminees: Equatable, Sendable {
     public var missions: [MissionTerminee]
     public var page: Int
     public var aSuivre: Bool
+    /// Dernière déclaration de chaque mission, indexée sur TOUTES les déclarations du soignant relues avec cette page
+    /// (`paiements_soignant` sans filtre de mission, `MesGains.tsx` l.102-107), missions hors de la page comprises : le
+    /// modèle l'applique à toutes les lignes affichées, pages précédentes comprises, comme le web remplace sa carte
+    /// entière à chaque chargement (`setPaiementsMap`, l.140-142 ; revue B8 n°2 de T12, m2). Une mission absente de
+    /// l'index n'a plus de déclaration.
+    public var derniersPaiements: [String: PaiementSoignantLu]
 
-    public init(missions: [MissionTerminee], page: Int, aSuivre: Bool) {
-        self.missions = missions; self.page = page; self.aSuivre = aSuivre
+    public init(missions: [MissionTerminee], page: Int, aSuivre: Bool, derniersPaiements: [String: PaiementSoignantLu]) {
+        self.missions = missions; self.page = page; self.aSuivre = aSuivre; self.derniersPaiements = derniersPaiements
     }
 }
 

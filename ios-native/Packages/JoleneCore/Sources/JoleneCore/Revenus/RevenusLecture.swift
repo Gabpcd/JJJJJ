@@ -239,8 +239,9 @@ public enum RevenusAssemblage {
             complete.dernierPaiement = derniers[mission.id]
             return complete
         }
-        // `setHasMore(pageMissions.length === PAGE_SIZE)`.
-        return PageMissionsTerminees(missions: assemblees, page: page, aSuivre: missions.count == taillePage)
+        // `setHasMore(pageMissions.length === PAGE_SIZE)` ; index complet des déclarations relues (revue B8 n°2, m2).
+        return PageMissionsTerminees(missions: assemblees, page: page, aSuivre: missions.count == taillePage,
+                                     derniersPaiements: derniers)
     }
 }
 

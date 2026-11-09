@@ -49,7 +49,9 @@ struct MainTabView: View {
     @State private var cheminExplorer = NavigationPath()
     /// Pile de l'onglet Profil (intégration du lot 3) : préférences de notifications et édition du profil.
     @State private var cheminProfil = NavigationPath()
-    /// Pile de l'onglet Revenus (lot 3, T12) : détail d'une mission depuis un paiement rapide en litige.
+    /// Pile de l'onglet Revenus (lot 3, T12), ramenée à sa racine par un lien ou un tap. Rien n'y est empilé depuis la
+    /// revue B8 n°2 de T12 (M1 : le paiement rapide en litige ouvre la page web de la mission) ; elle reste le point
+    /// d'extension des sections de T13, T14a et T14b.
     @State private var cheminRevenus = NavigationPath()
     /// Présentations de l'onglet Revenus par un lien ou un tap (jeton de péremption de `RevenusModel`, revue B8 de T12,
     /// m1) : le web relit `/soignant/mes-gains` à chaque navigation, l'onglet natif relit alors ses sections.
@@ -98,8 +100,8 @@ struct MainTabView: View {
             .tag(Tab.missions)
             .accessibilityIdentifier("tab-missions")
 
-            // Lot 3, T12 : onglet Revenus natif (remplace le placeholder du lot 0) ; sa pile porte le détail d'une mission
-            // ouvert depuis un paiement rapide en litige, et revient à sa racine sur un lien ou un tap (`presenter`).
+            // Lot 3, T12 : onglet Revenus natif (remplace le placeholder du lot 0) ; ses renvois web (litige, factures,
+            // paie, présences) passent par `presenter`, et sa pile revient à sa racine sur un lien ou un tap.
             NavigationStack(path: $cheminRevenus) {
                 RevenusScreen(session: session, snapshot: snapshot, peremption: presentationsRevenus) { cible in
                     presenter(cible, depuisCentre: false)

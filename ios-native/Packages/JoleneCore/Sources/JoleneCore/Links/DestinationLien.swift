@@ -80,7 +80,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .serieDetail:
             return false                                 // renvoi web assumé (décision 11 du lot 1) ; natif au lot 4
         case .revenus(section: .apercu):
-            return true                                  // onglet Revenus : placeholder jusqu'à L3-T12
+            return true                                  // T12 — RevenusScreen (onglet Revenus)
         case .monCompte:
             return true                                  // hub `ProfileScreen` (lot 1 T8 ; complété par L3-T11)
         case .notifications:

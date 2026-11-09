@@ -10,11 +10,16 @@ import Combine
 ///   `SessionController.resolutionTimeout`, avec son état : l'échec de l'une n'efface jamais les autres (le web : trois
 ///   composants séparés, `PaiementsEscrowAVenir` et le bandeau d'erreur de l'aperçu).
 /// - Missions : pages de 50 (`PAGE_SIZE`) ; page 0 → liste remplacée, page suivante → fusion par identifiant (ligne
-///   relue remplacée à sa place, nouvelles à la suite : `Map` du web l.126-131) ; un échec garde la liste et affiche
-///   l'erreur du web, « Réessayer » relit la page demandée en dernier (`reloadKey`) ; jamais l'état vide sur une erreur.
-/// - Audit `DONNEES_PERSO_CONSULTATION` (`page: mes_gains`, l.147-153) best-effort, une seule fois par ouverture de
-///   l'écran, après la première lecture réussie des missions ; jamais bloquant : lancé après la publication dans une
-///   tâche non structurée (fire-and-forget du web), que l'annulation de la vue n'interrompt pas (revue B8 de T12, m2).
+///   relue remplacée à sa place, nouvelles à la suite : `Map` du web l.126-131) ; à chaque lecture, l'état de toutes
+///   les lignes affichées (pages précédentes comprises) suit les déclarations relues avec la page (`setPaiementsMap`
+///   du web, l.140-142 ; revue B8 n°2 de T12, m2) ; un échec garde la liste et affiche l'erreur du web, « Réessayer »
+///   relit la page demandée en dernier (`reloadKey`) ; jamais l'état vide sur une erreur.
+/// - Audit `DONNEES_PERSO_CONSULTATION` (`page: mes_gains`, l.147-153) best-effort, une seule fois par session (epoch :
+///   le modèle vit autant que l'onglet, toujours monté par `MainTabView`), après la première lecture réussie des
+///   missions ; jamais bloquant : lancé après la publication dans une tâche non structurée (fire-and-forget du web),
+///   que l'annulation de la vue n'interrompt pas (revue B8 de T12, m2). Écart consigné (revue B8 n°2 de T12, m3) : le
+///   web l'écrit à chaque chargement réussi (montage, page, `reloadKey`) ; ni « Charger plus », ni « Réessayer », ni
+///   une relecture au-delà de 60 s ou par jeton (assimilées à un montage web pour les données) ne la réécrivent ici.
 /// - Fraîcheur (revue B8 de T12, m1) : le web relit l'aperçu à chaque montage de `/soignant/mes-gains` ; l'onglet
 ///   natif, toujours monté, relit à l'apparition chaque section lue il y a plus de `delaiRelecture` (60 s, comme
 ///   l'Accueil), ou toutes dès que le jeton de péremption avance (lien universel ou tap qui présente l'onglet) ; un
@@ -60,6 +65,7 @@ public final class RevenusModel: ObservableObject {
     private var generationMissions = 0
     private var generationTotaux = 0
     private var generationRapides = 0
+    /// Trace de consultation déjà lancée : une seule par session (epoch), le modèle vivant autant que l'onglet.
     private var auditTente = false
     /// Écriture d'audit en vol (tâche non structurée ; lue par les tests pour en attendre l'issue).
     private(set) var auditEnCours: Task<Void, Never>?
@@ -217,7 +223,8 @@ public final class RevenusModel: ObservableObject {
                 try await port.missionsTerminees(context: context, page: page)
             }
             guard await memeEpoch(), generationMissions == courant else { return }
-            missions = page == 0 ? lue.missions : Self.fusionner(missions, lue.missions)
+            // Revue B8 n°2 de T12, m2 : l'état de TOUTES les lignes affichées suit les déclarations de cette lecture.
+            missions = Self.appliquer(lue.derniersPaiements, a: page == 0 ? lue.missions : Self.fusionner(missions, lue.missions))
             aSuivre = lue.aSuivre
             missionsChargees = true
             if page == 0 { missionsLuesLe = gateways.clock.now() }
@@ -248,6 +255,18 @@ public final class RevenusModel: ObservableObject {
             }
         }
         return resultat
+    }
+
+    /// Dernière déclaration de chaque ligne affichée, prise dans l'index de la dernière lecture (toutes les déclarations
+    /// du soignant, `PageMissionsTerminees.derniersPaiements`) : le web remplace sa carte entière à chaque chargement
+    /// (`setPaiementsMap`, l.140-142), si bien que les lignes des pages précédentes prennent l'état le plus récent
+    /// (revue B8 n°2 de T12, m2) ; une mission absente de l'index n'a plus de déclaration.
+    static func appliquer(_ derniers: [String: PaiementSoignantLu], a missions: [MissionTerminee]) -> [MissionTerminee] {
+        missions.map { mission in
+            var relue = mission
+            relue.dernierPaiement = derniers[mission.id]
+            return relue
+        }
     }
 
     /// Revue B8 de T12, m2 : tâche non structurée, lancée après la publication — elle n'hérite pas de l'annulation de la

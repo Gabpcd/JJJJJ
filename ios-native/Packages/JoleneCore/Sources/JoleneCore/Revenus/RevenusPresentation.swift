@@ -129,8 +129,9 @@ public struct LigneEscrowAffichee: Equatable, Sendable, Identifiable {
     public var libelle: String
     public var detail: String
     public var montant: String
-    /// Litige : la ligne mène au détail de la mission (web l.152-155, `Link` vers `/soignant/missions/:id`).
-    public var ouvreMission: Bool { etat == .litige }
+    /// Litige : la ligne ouvre la page web de la mission (`RevenusPresentation.renvoiLitige`), comme le `Link` du web
+    /// vers `/soignant/missions/:id` (l.152-155) ; nil pour tout autre état (ligne non cliquable, web l.156).
+    public var renvoiLitige: JoleneRoute? { etat == .litige ? RevenusPresentation.renvoiLitige(missionId: missionId) : nil }
     public var ton: TonRevenus { etat.ton }
 
     public var id: String { missionId }
@@ -186,6 +187,31 @@ public enum RevenusPresentation {
     /// Détail des présences d'une mission (`navigate(`/soignant/presences/mission/${m.id}`)`, l.705) : écran du lot 2,
     /// renvoi web tant qu'il n'est pas livré.
     public static func lienPresences(missionId: String) -> String { "/soignant/presences/mission/\(missionId)" }
+
+    /// Page de la mission d'un paiement rapide en litige (`Link to={`/soignant/missions/${l.mission_id}`}`,
+    /// `PaiementsEscrowAVenir.tsx` l.152-155) ; l'identifiant serveur est encodé comme un segment de chemin (jamais
+    /// une autre route : « / », « ? », « # » encodés).
+    public static func lienLitige(missionId: String) -> String {
+        var segment = CharacterSet.urlPathAllowed
+        segment.remove(charactersIn: "/")
+        return "/soignant/missions/\(missionId.addingPercentEncoding(withAllowedCharacters: segment) ?? "")"
+    }
+
+    /// Renvoi web du litige d'un paiement rapide (revue B8 n°2 de T12, M1) : la page web de la mission, servie par
+    /// Safari. Sur le web, cette page lit le litige (`fn_litige_pour_mission`, `DetailMissionSoignant.tsx` l.447) et
+    /// affiche « Litige en cours sur cette mission » avec « Voir le litige » (l.1241-1271, vers
+    /// `/soignant/litiges?litige=…`) ; le détail natif de la mission (lot 0/1) ne porte pas ce bloc et `/soignant/litiges`
+    /// est un renvoi web jusqu'au lot 4 : empiler le détail natif réduirait en silence le litige à la mission (même
+    /// principe que `CibleNotification` : une section n'est jamais réduite à l'écran parent). Construit hors
+    /// `LinkRouter`, comme `ProfilEdition.renvoiTypeExercice` (T9) : `/soignant/missions/:id` est une route native,
+    /// son bloc litige ne l'est pas. La tranche qui porte le bloc litige dans le détail natif (lot 4, avec
+    /// `/soignant/litiges`) remplace ce renvoi par le détail natif et ses tests (`RevenusPresentationTests`,
+    /// `DemoRevenusTests.testLigneEnLitigeOuvreLaPageWebDeLaMission`). nil pour un identifiant vide.
+    public static func renvoiLitige(missionId: String) -> JoleneRoute? {
+        guard !missionId.isEmpty, let lien = JoleneLink.normalize(lienLitige(missionId: missionId)),
+              let url = JoleneLink.canonicalURL(link: lien) else { return nil }
+        return .safari(url)
+    }
 
     /// Route d'un renvoi web (résolue par `LinkRouter` puis `DestinationLien`, jamais une URL écrite en dur) ; nil si le
     /// lien n'est pas un lien Jolene ou si son écran natif est livré.
