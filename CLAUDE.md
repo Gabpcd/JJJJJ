@@ -362,6 +362,16 @@ live joignent encore sur `id` seul hors boucle 5 min
 `fn_activer_crons_edge_critiques`) : à borner, pas de nouveau lecteur sur ce
 modèle. Détail : `docs/incidents/2026-11-02-cron-controle-edge-cpu.md`.
 
+**Pattern backend (incident 09/11/2026, séquence pg_net)** : les identifiants
+pg_net (`net.http_post` → `net.http_request_queue_id_seq`) ne sont **pas uniques
+dans le temps**. La séquence est UNLOGGED et repart de 1 après tout redémarrage
+non propre de Postgres. Toute table qui garde des `request_id` au-delà du TTL
+avec une clé primaire ou une contrainte d'unicité doit passer par
+`private.fn_resynchroniser_sequence_pg_net()` avant `net.http_post` (comme
+`fn_appeler_edge_critique`, migration `20261109102500`), sinon les crons
+échouent en `23505` sans laisser de trace au journal. Une table sans contrainte
+qui joint sur ces identifiants doit en plus borner ses jointures dans le temps. Détail : `docs/incidents/2026-11-09-sequence-pg-net-journal-crons.md`.
+
 **Pattern régime/contrat (Lot 14, gardé par `test:guards` 7)** : sur toute ligne financière/facturation, le régime affiché vient de `missions.type_contrat_applique` (figé à l'assignation) — **jamais** de `soignants.type_exercice` (profil) : un libéral peut faire une mission CDD, afficher le profil crée des chips contradictoires.
 
 **Patterns escrow (3 bugs recette, gardés par `test:guards` 4-6)** :

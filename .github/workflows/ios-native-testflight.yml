@@ -1,0 +1,245 @@
+name: iOS Swift — TestFlight interne
+
+# Livraison TestFlight de l'app Swift (ios-native/), testeurs internes uniquement.
+# Jamais de soumission à la revue Apple, jamais de testeurs externes, jamais de mise en vente.
+# La coquille Capacitor (ios/, 1.0.x) reste livrée par mobile-delivery.yml, inchangé.
+# Mode d'emploi, numérotation et gardes : docs/mobile-swift/TESTFLIGHT.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: 'Numéro de build (facultatif). Vide : max(dernier build App Store Connect, 24) + 1.'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+# Un seul envoi à la fois ; un second déclenchement attend la fin du premier.
+concurrency:
+  group: ios-native-testflight
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  # Toolchain identique à ios-swift-ci.yml, sans repli silencieux.
+  JOLENE_XCODE_APP: /Applications/Xcode_26.4.1.app
+  JOLENE_XCODE_VERSION_ATTENDUE: 'Xcode 26.4.1'
+  JOLENE_XCODE_BUILD_ATTENDU: '17E202'
+  JOLENE_SIGNING_IDENTITY: 'Apple Distribution: Jolene App (GDU5AA28M9)'
+  JOLENE_PROFILE_NAME: 'Jolene App Store Distribution'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  preparer:
+    name: Gardes du dépôt et numéro de build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      build_number: ${{ steps.numero.outputs.build_number }}
+    steps:
+      - name: Refuser toute exécution hors d'un déclenchement manuel sur main
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] || [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::La livraison TestFlight ne part que d'un déclenchement manuel sur main (reçu : $GITHUB_EVENT_NAME sur $GITHUB_REF). Voir docs/mobile-swift/TESTFLIGHT.md."
+            exit 1
+          fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Gardes du dépôt (production, chiffrement, confidentialité, icône, entitlements)
+        run: node scripts/mobile/ios-native-testflight.mjs depot
+      - name: Numéro de build (App Store Connect, lecture seule)
+        id: numero
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+          JOLENE_BUILD_INPUT: ${{ inputs.build_number }}
+        run: node scripts/mobile/ios-native-testflight.mjs build-number
+
+  envoyer:
+    name: Archive signée et envoi TestFlight
+    needs: preparer
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    timeout-minutes: 75
+    env:
+      BUILD_NUMBER: ${{ needs.preparer.outputs.build_number }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Sélectionner Xcode 26.4.1 sans repli
+        run: |
+          [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Numéro de build absent ou invalide."; exit 1; }
+          sudo xcode-select -s "$JOLENE_XCODE_APP/Contents/Developer"
+          version="$(xcodebuild -version)"
+          echo "$version"
+          [ "$(echo "$version" | sed -n 1p)" = "$JOLENE_XCODE_VERSION_ATTENDUE" ] || { echo "::error::Xcode attendu : $JOLENE_XCODE_VERSION_ATTENDUE"; exit 1; }
+          echo "$version" | grep -q "$JOLENE_XCODE_BUILD_ATTENDU" || { echo "::error::Build Xcode attendu : $JOLENE_XCODE_BUILD_ATTENDU"; exit 1; }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - name: Restaurer le cache des paquets SPM (alimenté par ios-swift-ci.yml)
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ runner.temp }}/spm-cloned
+          key: spm-xcodebuild-${{ runner.os }}-xcode26.4.1-${{ hashFiles('ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'ios-native/Packages/*/Package.swift') }}
+          restore-keys: |
+            spm-xcodebuild-${{ runner.os }}-xcode26.4.1-
+      - name: Trousseau temporaire et certificat de distribution
+        env:
+          IOS_DISTRIBUTION_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+        run: |
+          # Décode le .p12 et le profil dans $RUNNER_TEMP/jolene-signing (0600) et vérifie les six secrets.
+          node scripts/mobile/prepare-ci-signing.mjs ios
+          signing="$RUNNER_TEMP/jolene-signing"
+          keychain="$signing/testflight.keychain-db"
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          security create-keychain -p "$password" "$keychain"
+          # Exporté tout de suite : le nettoyage final supprime le trousseau même si la suite échoue.
+          echo "JOLENE_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$signing/distribution.p12" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain" > /dev/null
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain"
+          security find-identity -v -p codesigning "$keychain" | grep -qF "\"$JOLENE_SIGNING_IDENTITY\"" \
+            || { echo "::error::[signature] Le .p12 ne contient pas l'identité « $JOLENE_SIGNING_IDENTITY » (voir docs/mobile-swift/TESTFLIGHT.md)."; exit 1; }
+          sha1="$(security find-certificate -c "$JOLENE_SIGNING_IDENTITY" -Z "$keychain" | awk '/SHA-1 hash:/ { print $3; exit }')"
+          [[ "$sha1" =~ ^[0-9A-F]{40}$ ]] \
+            || { echo "::error::[profil] Empreinte SHA-1 du certificat du .p12 illisible : le contrôle certificat/profil est impossible (voir docs/mobile-swift/TESTFLIGHT.md)."; exit 1; }
+          echo "IDENTITY_SHA1=$sha1" >> "$GITHUB_ENV"
+      - name: Garde du profil (App Store, app.jolene, entitlements, certificat)
+        id: profil
+        run: node scripts/mobile/ios-native-testflight.mjs profile "$RUNNER_TEMP/jolene-signing/distribution.mobileprovision"
+      - name: Installer le profil pour xcodebuild
+        env:
+          PROFILE_UUID: ${{ steps.profil.outputs.uuid }}
+        run: |
+          [[ "$PROFILE_UUID" =~ ^[0-9A-Fa-f-]{36}$ ]] || { echo "::error::UUID du profil illisible."; exit 1; }
+          for dir in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" "$HOME/Library/MobileDevice/Provisioning Profiles"; do
+            mkdir -p "$dir"
+            cp "$RUNNER_TEMP/jolene-signing/distribution.mobileprovision" "$dir/$PROFILE_UUID.mobileprovision"
+          done
+      - name: Garde des réglages Release résolus
+        run: |
+          xcodebuild -showBuildSettings -json \
+            -project ios-native/Jolene.xcodeproj -scheme Jolene -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" -onlyUsePackageVersionsFromResolvedFile \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            JOLENE_CODE_SIGN_IDENTITY="$JOLENE_SIGNING_IDENTITY" JOLENE_PROVISIONING_PROFILE="$JOLENE_PROFILE_NAME" \
+            2> "$RUNNER_TEMP/show-build-settings.log" > "$RUNNER_TEMP/build-settings.json" \
+            || { tail -n 40 "$RUNNER_TEMP/show-build-settings.log"; exit 1; }
+          node scripts/mobile/ios-native-testflight.mjs settings "$RUNNER_TEMP/build-settings.json" --build "$BUILD_NUMBER"
+      - name: Archive Release signée
+        run: |
+          mkdir -p "$RUNNER_TEMP/logs"
+          xcodebuild archive \
+            -project ios-native/Jolene.xcodeproj -scheme Jolene -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Jolene.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" -onlyUsePackageVersionsFromResolvedFile \
+            -skipPackagePluginValidation \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            JOLENE_CODE_SIGN_IDENTITY="$JOLENE_SIGNING_IDENTITY" JOLENE_PROVISIONING_PROFILE="$JOLENE_PROFILE_NAME" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $JOLENE_KEYCHAIN" \
+            > "$RUNNER_TEMP/logs/archive.log" 2>&1 \
+            || { grep -E "error: " "$RUNNER_TEMP/logs/archive.log" | tail -n 40; tail -n 40 "$RUNNER_TEMP/logs/archive.log"; echo "::error::xcodebuild archive a échoué (journal archive.log dans l'artefact)."; exit 1; }
+          grep -q "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/logs/archive.log" || { echo "::error::ARCHIVE SUCCEEDED absent du journal."; exit 1; }
+      - name: Export app-store-connect (IPA locale, pas encore envoyée)
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Jolene.xcarchive" \
+            -exportPath "$RUNNER_TEMP/ios-export" \
+            -exportOptionsPlist ios/ExportOptions-AppStore.plist \
+            > "$RUNNER_TEMP/logs/export.log" 2>&1 \
+            || { tail -n 40 "$RUNNER_TEMP/logs/export.log"; echo "::error::xcodebuild -exportArchive a échoué."; exit 1; }
+          ipa="$(find "$RUNNER_TEMP/ios-export" -maxdepth 1 -name '*.ipa' -print)"
+          [ "$(echo "$ipa" | grep -c .)" = 1 ] || { echo "::error::Une seule IPA attendue dans l'export."; exit 1; }
+          echo "IOS_NATIVE_IPA_PATH=$ipa" >> "$GITHUB_ENV"
+      - name: Gardes du binaire exporté (Info.plist, confidentialité, icône, signature)
+        env:
+          PROFILE_UUID: ${{ steps.profil.outputs.uuid }}
+        run: |
+          rm -rf "$RUNNER_TEMP/ipa" && mkdir -p "$RUNNER_TEMP/ipa"
+          unzip -q "$IOS_NATIVE_IPA_PATH" -d "$RUNNER_TEMP/ipa"
+          app="$RUNNER_TEMP/ipa/Payload/Jolene.app"
+          [ -d "$app" ] || { echo "::error::Payload/Jolene.app absent de l'IPA."; exit 1; }
+          node scripts/mobile/ios-native-testflight.mjs bundle "$app" --build "$BUILD_NUMBER"
+          node scripts/mobile/ios-native-testflight.mjs signature "$app" --profile-uuid "$PROFILE_UUID"
+      - name: Relire App Store Connect juste avant l'envoi
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+        run: node scripts/mobile/ios-native-testflight.mjs verify-free "$BUILD_NUMBER"
+      - name: Envoi TestFlight (interne, sans soumission)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+        run: bundle exec fastlane ios testflight_native
+      - name: Conserver l'IPA et les journaux
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-native-testflight-${{ needs.preparer.outputs.build_number }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/logs/*.log
+            ${{ runner.temp }}/ios-export/*.ipa
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Supprimer le trousseau et le matériel de signature
+        if: always()
+        run: |
+          [ -n "${JOLENE_KEYCHAIN:-}" ] && security delete-keychain "$JOLENE_KEYCHAIN" || true
+          security list-keychains -d user -s "$HOME/Library/Keychains/login.keychain-db" || true
+          rm -rf "$RUNNER_TEMP/jolene-signing" "$RUNNER_TEMP/ipa" "$HOME/.appstoreconnect/private_keys"
+          rm -f "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/"*.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/"*.mobileprovision
+
+  traitement:
+    name: Traitement App Store Connect
+    needs: [preparer, envoyer]
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Attendre l'état VALID du build envoyé
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+          BUILD_NUMBER: ${{ needs.preparer.outputs.build_number }}
+        run: node scripts/mobile/ios-native-testflight.mjs processing "$BUILD_NUMBER"
