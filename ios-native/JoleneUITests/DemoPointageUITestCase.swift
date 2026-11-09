@@ -89,11 +89,15 @@ class DemoPointageUITestCase: JoleneUITestCase {
         scrollTo(champ, in: ecran)
         focus(champ, in: ecran)
         // Un code refusé reste dans le champ (comme le web) : effacé avant la nouvelle saisie. Le texte est centré : un
-        // toucher au bord de fin place le curseur après le dernier chiffre, puis autant d'effacements que de chiffres
-        // (au plus trois passes, bornées).
+        // toucher entre le dernier chiffre et le bord de fin place le curseur après le dernier chiffre, puis autant
+        // d'effacements que de chiffres (au plus trois passes, bornées). Le toucher est à 85 % de la largeur, pas au
+        // bord : l'élément `pointage-code-<m>` inclut le rembourrage de `NumericCodeField` (12 pt de chaque côté), et
+        // 97 % tombait dans ce rembourrage sur iPhone (254 pt sur 262), hors du champ de texte : le curseur n'était pas
+        // placé et les effacements restaient sans effet (run 42559541711, iPhone). Six chiffres à chasse fixe occupent
+        // bien moins de 70 % du champ sur chaque format : 85 % est après le dernier chiffre et dans le champ de texte.
         var passes = 0
         while let present = valeur("pointage-code-\(mission)"), !present.isEmpty, passes < 3 {
-            champ.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
+            champ.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
             champ.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: present.count))
             passes += 1
         }

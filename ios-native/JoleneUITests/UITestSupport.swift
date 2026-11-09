@@ -413,7 +413,14 @@ class JoleneUITestCase: XCTestCase {
             if target.exists && !target.frame.isEmpty {
                 let frame = target.frame
                 let viewport = container.frame
-                if frame.minY < viewport.minY { forward = false } else if frame.maxY > viewport.maxY { forward = true }
+                if frame.minY < viewport.minY { forward = false } else if frame.maxY > viewport.maxY { forward = true } else {
+                    // Dans le cadre du conteneur mais pas atteignable : masqué par ce qui le recouvre, la barre de
+                    // navigation en haut (le défilement passe sous elle) ou le clavier en bas. On le ramène vers le
+                    // centre : vers le bas s'il est dans la moitié haute, vers le haut sinon. Sans cela, une cible
+                    // sous la barre était poussée plus haut à chaque glissement jusqu'à la fin du contenu (run
+                    // 42559541711, iPad paysage, `DemoPointageTests.testHorsLigneDesactiveLePointageSansAucunEnvoi`).
+                    forward = frame.midY > viewport.midY
+                }
                 distance = min(0.55, max(0.08, (viewport.height - frame.height) * 0.4 / viewport.height))
             }
             drag(container, fromY: 0.5 + (forward ? distance : -distance) / 2,

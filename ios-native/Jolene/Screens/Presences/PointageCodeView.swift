@@ -197,9 +197,14 @@ struct PointageCodeView: View {
             Spacer(minLength: JoleneSpacing.sm)
             if etat.segmentOuvert == true, let segment = PointageRules.segmentEnCours(etat),
                let enService = L.enService(depuis: segment.debut) {
+                // Un seul élément d'accessibilité, au libellé du texte : posé sur le `Label`, l'identifiant serait recopié
+                // sur l'icône (« Horloge ») et sur le texte, et `pointage-en-service-<m>` désignerait deux éléments
+                // (run CI 42559541711, iPad portrait et paysage) ; l'icône est décorative.
                 Label(enService, systemImage: "clock")
                     .font(JoleneFont.caption.weight(.semibold))
                     .foregroundStyle(JoleneColor.cyan700)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(enService)
                     .accessibilityIdentifier("pointage-en-service-\(missionId)")
             }
         }
