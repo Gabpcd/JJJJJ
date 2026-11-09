@@ -762,8 +762,8 @@ jobs:
             tests/security/stripe-disponibilite-connect.test.sql
             tests/security/connect-onboarding-payout-acl.test.sql
             tests/security/dpae-contrats-cddu-vacation.test.sql
-            tests/non-regression/sql/contestation-paiement-soignant.test.sql
             tests/security/agents-croissance-brouillons.test.sql
+            tests/non-regression/sql/contestation-paiement-soignant.test.sql
           )
           # Sans migration, ne pas exiger des fonctions main absentes du
           # staging : cette voie prouve seulement les trois bancs F1 LIVE.
