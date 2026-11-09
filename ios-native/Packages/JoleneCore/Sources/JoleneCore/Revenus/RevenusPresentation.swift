@@ -4,8 +4,9 @@ import Foundation
 // forme de l'aperçu `MesGainsApercuContent` (`src/pages/MesGains.tsx`, route `/soignant/mes-gains`, onglet par défaut),
 // du bloc « Paiement rapide » (`src/components/gains/PaiementsEscrowAVenir.tsx`, monté par l'aperçu l.427) et des
 // totaux serveur (`src/pages/PageStripeConnect.tsx` l.392-417). Libellés escrow et notes « net estimé » verbatim web
-// (tutoiement compris, décision du 09/11/2026) ; textes non juridiques au vouvoiement (décision 9 du lot 1), adaptations
-// et textes sans équivalent web listés dans `DECISIONS_LOT3.md` (section T12). Montants : valeurs serveur formatées
+// (tutoiement compris, en application de la règle 2 de LOTS_2_5_DECISIONS et de la décision 9 du lot 1 : seuls les
+// textes non juridiques passent au vouvoiement) ; adaptations au vouvoiement et textes sans équivalent web listés dans
+// `DECISIONS_LOT3.md` (section T12). Montants : valeurs serveur formatées
 // comme `Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' })` (`MissionPresentation.euros`).
 
 // MARK: - Textes
@@ -96,7 +97,7 @@ public enum TonRevenus: Equatable, Sendable { case info, succes, alerte, neutre,
 
 // MARK: - Paiement rapide
 
-/// Les sept états de `fn_mes_paiements_escrow` (`public.sql` l.42272-42283), configuration `CONFIG` du web
+/// Les sept états de `fn_mes_paiements_escrow` (`public.sql` l.42269-42279), configuration `CONFIG` du web
 /// (`PaiementsEscrowAVenir.tsx` l.42-80).
 public enum EtatEscrow: String, CaseIterable, Sendable {
     case reserve = "RESERVE"
@@ -291,14 +292,14 @@ public enum RevenusPresentation {
         }
     }
 
-    /// Note de bas de page (l.663-667) : `salMissions` et `libMissions` filtrent `type_contrat_applique` seul (l.249-250).
+    /// Note de bas de page (l.663-667) : `salMissions` et `libMissions` filtrent `type_contrat_applique` seul (l.243-244).
     public static func noteBasDePage(_ missions: [MissionTerminee]) -> String {
         let salariee = missions.contains { $0.typeContratApplique == "SALARIE" }
         let liberale = missions.contains { $0.typeContratApplique == "LIBERAL" }
         return (salariee ? RevenusTextes.noteSalariee : "") + (liberale ? RevenusTextes.noteLiberale : "") + RevenusTextes.noteCommune
     }
 
-    /// `NoteNetEstime` accompagne une mission salariée (`salMissions.length > 0`, l.632-633).
+    /// `NoteNetEstime` accompagne une mission salariée (`salMissions.length > 0`, l.564-565).
     public static func afficheNoteNetEstime(_ missions: [MissionTerminee]) -> Bool {
         missions.contains { $0.typeContratApplique == "SALARIE" }
     }

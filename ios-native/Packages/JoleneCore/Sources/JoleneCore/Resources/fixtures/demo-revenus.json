@@ -2,7 +2,7 @@
   "fixed_now": "2026-11-02T00:00:00.000Z",
   "exercice": {
     "type_exercice": "MIXTE",
-    "statut_liberal": null
+    "est_compte_test": false
   },
   "totaux": {
     "mois_en_cours": 195,

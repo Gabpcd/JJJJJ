@@ -14,8 +14,10 @@ import Supabase
 ///   les déclarations `paiements_soignant` du soignant (colonnes et ordre de l.102-107 ; RLS `pol_paie_soig_select`),
 ///   requises comme dans le `Promise.all` du web ; noms d'établissement par `fn_etablissements_safe` seul (lot 0), dont
 ///   l'échec laisse les noms absents (`enrichirEtablissements` du web), une session expirée étant relevée.
-/// - Totaux : `soignants(type_exercice, statut_liberal)` (l.855) puis `fn_mes_revenus_connect()` seulement pour un
-///   exercice libéral (`PageStripeConnect.tsx` l.104) ; trois nombres finis exigés, sinon « indisponible ».
+/// - Totaux : `soignants(type_exercice, est_compte_test)` (colonnes de `PageStripeConnect.tsx` l.95) puis
+///   `fn_mes_revenus_connect()` seulement pour `LIBERAL` ou `MIXTE` hors compte de test, et cartes seulement si
+///   `stripe_connect_actif` est vrai : conditions d'AFFICHAGE du web (l.178, l.300, l.302, l.367 ; revue B8 de T12, M1),
+///   la condition de l.106 n'étant que celle du chargement ; trois nombres finis exigés, sinon « indisponible ».
 /// - Paiements rapides : tableau de `fn_mes_paiements_escrow()`, ordre serveur ; autre corps → contrat.
 /// Aucune écriture. Rien n'est journalisé (ni montant, ni identifiant).
 public struct SupabaseRevenusGateway: RevenusPort {
@@ -25,8 +27,9 @@ public struct SupabaseRevenusGateway: RevenusPort {
     public static let missionsSelect = "id, intitule, debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id, service, type_contrat_applique, type_contrat_recherche, presences(valide_par_etablissement, valide_auto_72h_le, valide_le)"
     /// `MesGains.tsx` l.102, mot pour mot.
     public static let paiementsSelect = "id, mission_id, facture_honoraire_id, statut, montant_net, confirme_par_soignant, conteste, montant_du_reference, source_montant_du, methode, reference_virement, date_paiement, modifie_le, cree_le"
-    /// `MesGains.tsx` l.855, mot pour mot.
-    public static let exerciceSelect = "type_exercice, statut_liberal"
+    /// Sous-ensemble des colonnes de `PageStripeConnect.tsx` l.95 (`prenom, nom, type_exercice, statut_liberal,
+    /// est_compte_test`) : ni nom ni prénom (inutiles ici), ni `statut_liberal` (ignoré par l'affichage, l.178).
+    public static let exerciceSelect = "type_exercice, est_compte_test"
     public static let statutTerminee = "TERMINEE"
 
     private let client: SupabaseClient
@@ -52,7 +55,7 @@ public struct SupabaseRevenusGateway: RevenusPort {
         } catch {
             throw Self.indisponible(error)
         }
-        // « Ne jamais déduire le mode d'exercice d'une lecture en panne » (web l.92) : sans ligne, section en erreur.
+        // « Ne jamais déduire le mode d'exercice d'une lecture en panne » (web l.93) : sans ligne, section en erreur.
         guard let exercice else { throw JoleneError(.unknown, RevenusTextes.totauxIndisponibles) }
         guard exercice.afficheTotaux else { return nil }
         let corps: ValeurJSON
@@ -61,8 +64,7 @@ public struct SupabaseRevenusGateway: RevenusPort {
         } catch {
             throw Self.indisponible(error)
         }
-        guard let totaux = TotauxRevenus.lire(corps) else { throw JoleneError(.unknown, RevenusTextes.totauxIndisponibles) }
-        return totaux
+        return try TotauxRevenus.visibles(corps)
     }
 
     // MARK: - Paiements rapides

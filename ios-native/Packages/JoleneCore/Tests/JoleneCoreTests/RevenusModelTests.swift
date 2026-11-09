@@ -166,12 +166,15 @@ final class RevenusModelTests: XCTestCase {
         XCTAssertNil(model.erreur)
         XCTAssertFalse(model.afficheVide)
         XCTAssertEqual(model.lignes.map(\.id), ["m-1", "m-2"])
+        // L'audit part hors de la lecture (revue B8 de T12, m2) : son issue est attendue avant le constat.
+        await model.auditEnCours?.value
         let premieres = await journal.ecritures
         XCTAssertEqual(premieres, ["DONNEES_PERSO_CONSULTATION soignant u-1 [\"page\": \"mes_gains\"]"],
                        "audit du web (MesGains.tsx l.147-153), sur l'utilisateur de la session")
 
         await model.charger() // tirer pour actualiser : page 0 relue, liste remplacée
         XCTAssertEqual(model.missions.map(\.id), ["m-1"])
+        await model.auditEnCours?.value
         let apres = await journal.ecritures
         XCTAssertEqual(apres.count, 1, "une seule consultation journalisée par ouverture de l'écran")
         XCTAssertEqual(port.pages, [0, 0])
@@ -201,12 +204,14 @@ final class RevenusModelTests: XCTestCase {
         XCTAssertFalse(model.missionsChargees)
         XCTAssertFalse(model.afficheVide, "jamais l'état vide sur une erreur (web l.802)")
         XCTAssertEqual(model.totaux, .pret(Self.totaux), "sections indépendantes : les totaux restent affichés")
+        XCTAssertNil(model.auditEnCours, "aucun audit lancé sans lecture réussie")
         let avant = await journal.ecritures
         XCTAssertTrue(avant.isEmpty, "aucune consultation journalisée sans lecture réussie")
 
         await model.reessayer()
         XCTAssertNil(model.erreur)
         XCTAssertEqual(model.missions.map(\.id), ["m-1"])
+        await model.auditEnCours?.value
         let apres = await journal.ecritures
         XCTAssertEqual(apres.count, 1)
         XCTAssertEqual(port.pages, [0, 0])
@@ -230,6 +235,7 @@ final class RevenusModelTests: XCTestCase {
         await model.charger()
         XCTAssertEqual(model.missions.map(\.id), ["m-1"])
         XCTAssertNil(model.erreur)
+        await model.auditEnCours?.value
         let ecritures = await journal.ecritures
         XCTAssertEqual(ecritures.count, 1)
     }

@@ -369,15 +369,15 @@ export function buildDemoExportRgpd(now = new Date(FIXED_NOW)) {
 const timestamptz = (date) => date.toISOString().replace('.000Z', '+00:00');
 
 /**
- * Lot 3, T12 : revenus du profil fictif. `exercice` = ligne `soignants(type_exercice, statut_liberal)` lue avant les
- * totaux (`MesGains.tsx` l.855 ; profil MIXTE, totaux affichés comme `PageStripeConnect.tsx` l.104) ; `totaux` =
- * réponse de `fn_mes_revenus_connect()` (`supabase/schema/public.sql` l.42396 : euros, drapeau Connect). Sommes
- * serveur fictives, jamais recalculées par l'app.
+ * Lot 3, T12 : revenus du profil fictif. `exercice` = ligne `soignants(type_exercice, est_compte_test)` lue avant les
+ * totaux (colonnes de `PageStripeConnect.tsx` l.95 ; profil MIXTE hors compte de test : cartes rendues comme l.178,
+ * l.300 et l.367, revue B8 de T12, M1) ; `totaux` = réponse de `fn_mes_revenus_connect()` (`supabase/schema/public.sql`
+ * l.42396 : euros, drapeau Connect vrai = compte Connect complet). Sommes serveur fictives, jamais recalculées par l'app.
  */
 export function buildDemoRevenus() {
   return {
     fixed_now: FIXED_NOW,
-    exercice: { type_exercice: DEMO_PROFILE.profile.type_exercice, statut_liberal: null },
+    exercice: { type_exercice: DEMO_PROFILE.profile.type_exercice, est_compte_test: false },
     totaux: { mois_en_cours: 195, total: 1425.6, en_attente: 780, stripe_connect_actif: true },
   };
 }

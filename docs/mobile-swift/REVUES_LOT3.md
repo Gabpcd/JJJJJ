@@ -1721,3 +1721,30 @@ Revenus en lecture, **B9** (paiements, escrow) : PR préparée, jamais mergée s
   exporteurs golden et démo sans diff non voulu ; `check-rpc-contracts.mjs` à jour ; `node --test` des gardes RPC et du
   plan de livraison : 137 réussis. XCUITest `DemoRevenusTests` (7 tests, trois formats) compilés, **jamais lancés** :
   la preuve est la CI (éclat `lot3-revenus`, `xcresult` relu, `skipped = 0`).
+
+### Corrections de la revue fraîche B8 n°1 (auteur, branche `lot3/l3-t12-v2`, 09/11/2026)
+
+Détail et sources : `DECISIONS_LOT3.md`, section « T12 — corrections de la revue fraîche B8 ». Tests d'abord (commit
+séparé), puis correction ; aucun test sauté, désactivé ni affaibli.
+
+- **M1** (défaut du code ; test `("SALARIE", "ACTIF", true)` faux, corrigé) : totaux affichés seulement là où le web
+  rend ses cartes — `LIBERAL`/`MIXTE` (l.178, l.300), hors compte de test (l.302, l.367), `stripe_connect_actif` vrai
+  (`statut === 'COMPLET'`, l.367) ; lecture `soignants(type_exercice, est_compte_test)` ; résidus non juridiques
+  consignés (écart 10). Lecture seule sur la production : `fn_soignant_stripe_connect_actif` live identique au dump,
+  `est_compte_test` lisible par `authenticated`.
+- **m1** péremption 60 s à l'apparition et au premier plan + jeton sur `presenter(.revenus)` ; **m2** audit en tâche non
+  structurée (test rouge vérifié sur l'ancien code : spinner retenu, audit « annulé ») ; **m3** « Charger plus » masqué
+  sur erreur, page en échec relue ; **m4** `require` avant lecture des cartes ; **m5** bouton « Voir mission … » dans
+  la ligne (`revenus-mission-ouvrir-<id>`) ; **m6** `SuiviVersementsConnect` consigné (T14a) ; **m7** sources corrigées.
+- **Tests existants adaptés (sans affaiblissement)** : trois tests de `RevenusModelTests` lisaient le journal d'audit
+  aussitôt après `charger()`, ce que seule l'attente bloquante (le défaut m2) permettait ; ils attendent désormais
+  l'issue de l'écriture (`auditEnCours`) avant la même assertion.
+- **Fichiers partagés touchés** : `MainTabView.swift` (jeton `presentationsRevenus`, commentaire de pile corrigé),
+  `Lot3Ports.swift` (commentaire), `export-demo-fixtures.mjs` + `demo-revenus.json` (`est_compte_test: false`),
+  `CONTRATS_RPC_SOIGNANT.md`, `PARITE_SOIGNANT.md`.
+- **Vérifications de l'auteur** (Xcode 16.4 local) : `swift build --build-tests` puis `swift test` avec
+  `-strict-concurrency=complete` : JoleneCore 864 tests, JoleneSupabase 324 tests, 0 échec, 0 ignoré, 0 avertissement ;
+  `xcodebuild build-for-testing` → `TEST BUILD SUCCEEDED`, 0 avertissement dans nos sources (aucun fichier ajouté ni
+  retiré : pas de `xcodegen`) ; exporteurs démo et golden et `check-rpc-contracts.mjs --check` sans diff ; `node --test`
+  des gardes RPC et du plan de livraison : 137 réussis. XCUITest `DemoRevenusTests` (7 tests, trois formats) compilés,
+  **jamais lancés** : la preuve reste la CI (éclat `lot3-revenus`).

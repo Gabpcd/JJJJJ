@@ -13,14 +13,19 @@ import Combine
 ///   relue remplacée à sa place, nouvelles à la suite : `Map` du web l.126-131) ; un échec garde la liste et affiche
 ///   l'erreur du web, « Réessayer » relit la page demandée en dernier (`reloadKey`) ; jamais l'état vide sur une erreur.
 /// - Audit `DONNEES_PERSO_CONSULTATION` (`page: mes_gains`, l.147-153) best-effort, une seule fois par ouverture de
-///   l'écran, après la première lecture réussie des missions ; jamais bloquant.
+///   l'écran, après la première lecture réussie des missions ; jamais bloquant : lancé après la publication dans une
+///   tâche non structurée (fire-and-forget du web), que l'annulation de la vue n'interrompt pas (revue B8 de T12, m2).
+/// - Fraîcheur (revue B8 de T12, m1) : le web relit l'aperçu à chaque montage de `/soignant/mes-gains` ; l'onglet
+///   natif, toujours monté, relit à l'apparition chaque section lue il y a plus de `delaiRelecture` (60 s, comme
+///   l'Accueil), ou toutes dès que le jeton de péremption avance (lien universel ou tap qui présente l'onglet) ; un
+///   échec attend toujours « Réessayer ».
 /// - Une réponse d'un epoch périmé ou d'une lecture dépassée n'est jamais publiée ; l'annulation n'est jamais une
 ///   erreur ; `.unauthorized` → « Vérifier ma session ».
 @MainActor
 public final class RevenusModel: ObservableObject {
     public enum Totaux: Equatable, Sendable {
         case chargement
-        /// Profil sans exercice libéral : section absente (`PageStripeConnect.tsx` l.104).
+        /// Section absente là où le web ne rend pas les cartes (`PageStripeConnect.tsx` l.178, l.300, l.302, l.367).
         case masques
         case pret(TotauxRevenus)
         case echec(String)
@@ -34,6 +39,8 @@ public final class RevenusModel: ObservableObject {
 
     public static let detailsAudit = ["page": "mes_gains"]
     public static let typeRessourceAudit = "soignant"
+    /// Au-delà, une nouvelle apparition de l'onglet relit la section (même borne que l'Accueil).
+    public static let delaiRelecture: TimeInterval = AccueilModel.delaiRelecture
 
     @Published public private(set) var totaux: Totaux = .chargement
     @Published public private(set) var paiementsRapides: PaiementsRapides = .chargement
@@ -54,6 +61,14 @@ public final class RevenusModel: ObservableObject {
     private var generationTotaux = 0
     private var generationRapides = 0
     private var auditTente = false
+    /// Écriture d'audit en vol (tâche non structurée ; lue par les tests pour en attendre l'issue).
+    private(set) var auditEnCours: Task<Void, Never>?
+    /// Instants (horloge des gateways) de la dernière lecture réussie de chaque section ; nil = à relire.
+    private var totauxLusLe: Date?
+    private var rapidesLusLe: Date?
+    private var missionsLuesLe: Date?
+    /// Dernier jeton de péremption reçu (`chargerSiNecessaire(peremption:)`).
+    private var peremptionVue = 0
 
     public init(controller: SessionController, snapshot: SessionSnapshot) {
         self.controller = controller
@@ -76,15 +91,44 @@ public final class RevenusModel: ObservableObject {
 
     public var noteBasDePage: String { RevenusPresentation.noteBasDePage(missions) }
 
+    /// « Charger plus de missions » : seulement si le serveur a annoncé une suite et sans bandeau d'erreur (« Réessayer »
+    /// relit alors la page en échec ; revue B8 de T12, m3 : le web l.797-798 l'affiche à côté et saute la page).
+    public var afficheChargerPlus: Bool { aSuivre && erreur == nil }
+
     // MARK: - Lecture
 
-    /// Apparition de l'onglet : lit chaque section jamais lue (premier affichage, ou relance après une tâche annulée par
-    /// un changement d'onglet, qui laisse la section en chargement) ; un écran lu n'est jamais relu automatiquement et un
-    /// échec attend « Réessayer » (jamais de boucle à l'apparition). Tirer pour actualiser relit tout (`charger`).
-    public func chargerSiNecessaire() async {
-        let totauxALire = totaux == .chargement
-        let rapidesALire = paiementsRapides == .chargement
-        let missionsALire = !missionsChargees && erreur == nil
+    /// Apparition de l'onglet (première fois, retour sur l'onglet, retour au premier plan) : lit chaque section jamais
+    /// lue (premier affichage, ou relance après une tâche annulée par un changement d'onglet, qui laisse la section à
+    /// lire) ou lue il y a plus de `delaiRelecture` ; un jeton de `peremption` nouveau (lien universel ou tap qui
+    /// présente l'onglet) rend toutes les sections périmées jusqu'à leur prochaine lecture réussie. Un échec attend
+    /// « Réessayer » (jamais de boucle à l'apparition). Les missions périmées sont relues depuis la page 0, comme un
+    /// montage du web. Tirer pour actualiser relit tout (`charger`).
+    public func chargerSiNecessaire(peremption: Int? = nil) async {
+        if let peremption, peremption != peremptionVue {
+            peremptionVue = peremption
+            totauxLusLe = nil
+            rapidesLusLe = nil
+            missionsLuesLe = nil
+        }
+        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
+        let maintenant = gateways.clock.now()
+        func perime(_ luLe: Date?) -> Bool {
+            guard let luLe else { return true }
+            return maintenant.timeIntervalSince(luLe) > Self.delaiRelecture
+        }
+        let totauxALire: Bool
+        switch totaux {
+        case .chargement: totauxALire = true
+        case .echec: totauxALire = false
+        case .masques, .pret: totauxALire = perime(totauxLusLe)
+        }
+        let rapidesALire: Bool
+        switch paiementsRapides {
+        case .chargement: rapidesALire = true
+        case .echec: rapidesALire = false
+        case .pret: rapidesALire = perime(rapidesLusLe)
+        }
+        let missionsALire = erreur == nil && (!missionsChargees || perime(missionsLuesLe))
         guard totauxALire || rapidesALire || missionsALire else { return }
         await withTaskGroup(of: Void.self) { groupe in
             if totauxALire { groupe.addTask { await self.rechargerTotaux() } }
@@ -101,10 +145,11 @@ public final class RevenusModel: ObservableObject {
         _ = await (lectureTotaux, lectureRapides, lectureMissions)
     }
 
-    /// « Charger plus de missions » : page suivante, seulement si le serveur en a annoncé une.
+    /// « Charger plus de missions » : page suivante, seulement si le serveur en a annoncé une. Après un échec (bouton
+    /// masqué, `afficheChargerPlus`), la page en échec est relue, jamais la suivante : aucune page n'est sautée (m3).
     public func chargerPlus() async {
         guard aSuivre, !chargementMissions else { return }
-        await lireMissions(page: pageDemandee + 1)
+        await lireMissions(page: erreur == nil ? pageDemandee + 1 : pageDemandee)
     }
 
     /// « Réessayer » du bandeau d'erreur : la page demandée en dernier.
@@ -131,6 +176,7 @@ public final class RevenusModel: ObservableObject {
             let lus = try await bounded(timeout: controller.resolutionTimeout) { try await port.totaux(context: context) }
             guard await memeEpoch(), generationTotaux == courant else { return }
             totaux = lus.map(Totaux.pret) ?? .masques
+            totauxLusLe = gateways.clock.now()
         } catch {
             guard await memeEpoch(), generationTotaux == courant, let message = message(error, defaut: RevenusTextes.totauxIndisponibles) else { return }
             totaux = .echec(message)
@@ -148,6 +194,7 @@ public final class RevenusModel: ObservableObject {
             let lus = try await bounded(timeout: controller.resolutionTimeout) { try await port.paiementsRapides(context: context) }
             guard await memeEpoch(), generationRapides == courant else { return }
             paiementsRapides = .pret(lus)
+            rapidesLusLe = gateways.clock.now()
         } catch {
             guard await memeEpoch(), generationRapides == courant, let message = message(error, defaut: RevenusTextes.escrowErreurDefaut) else { return }
             paiementsRapides = .echec(message)
@@ -173,6 +220,7 @@ public final class RevenusModel: ObservableObject {
             missions = page == 0 ? lue.missions : Self.fusionner(missions, lue.missions)
             aSuivre = lue.aSuivre
             missionsChargees = true
+            if page == 0 { missionsLuesLe = gateways.clock.now() }
             erreur = nil
             sessionExpiree = false
         } catch {
@@ -182,7 +230,8 @@ public final class RevenusModel: ObservableObject {
             erreur = message
             return
         }
-        await auditerConsultation(gateways)
+        // Publié : l'audit part hors de la lecture, qui se termine aussitôt (`defer` ci-dessus).
+        auditerConsultation(gateways)
     }
 
     /// Fusion par identifiant du web (`new Map(prev…)` puis `set`) : ordre de première apparition, valeur la plus récente.
@@ -201,15 +250,23 @@ public final class RevenusModel: ObservableObject {
         return resultat
     }
 
-    private func auditerConsultation(_ gateways: Gateways) async {
+    /// Revue B8 de T12, m2 : tâche non structurée, lancée après la publication — elle n'hérite pas de l'annulation de la
+    /// tâche de la vue (changement d'onglet) et personne ne l'attend (« Charger plus », « Réessayer » et tirer pour
+    /// actualiser restent libres), comme le `.then(undefined, …)` du web. Bornée au délai de la session ; son échec
+    /// est silencieux (`handleErrorSilent` du web). `auditTente` est posé au lancement : l'écriture, désormais jamais
+    /// interrompue par la vue, rend toujours une issue.
+    private func auditerConsultation(_ gateways: Gateways) {
         guard !auditTente else { return }
         auditTente = true
         let audit = gateways.audit
         let context = snapshot.context
         let userId = snapshot.user.id
-        _ = try? await bounded(timeout: controller.resolutionTimeout) {
-            try await audit.ecrire(action: .donneesPersoConsultation, typeRessource: Self.typeRessourceAudit,
-                                   idRessource: userId, details: Self.detailsAudit, context: context)
+        let delai = controller.resolutionTimeout
+        auditEnCours = Task {
+            _ = try? await bounded(timeout: delai) {
+                try await audit.ecrire(action: .donneesPersoConsultation, typeRessource: Self.typeRessourceAudit,
+                                       idRessource: userId, details: Self.detailsAudit, context: context)
+            }
         }
     }
 

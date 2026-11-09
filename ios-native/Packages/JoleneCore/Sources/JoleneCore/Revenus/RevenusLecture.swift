@@ -23,33 +23,55 @@ extension TotauxRevenus {
         if case .booleen(let valeur)? = objet["stripe_connect_actif"] { actif = valeur }
         return TotauxRevenus(moisEnCours: mois, total: total, enAttente: attente, stripeConnectActif: actif)
     }
+
+    /// Totaux à afficher, comme les cartes du web (`PageStripeConnect.tsx` l.367-417, revue B8 de T12, M1) : rendues
+    /// seulement si `statut === 'COMPLET'` (l.367). Le natif ne lit pas l'edge `stripe-connect-status` (T14a) : il prend
+    /// `stripe_connect_actif` de la même réponse (`fn_soignant_stripe_connect_actif` : ligne `stripe_connect_onboarding`
+    /// COMPLET avec `onboarding_complete`, `charges_enabled` et `payouts_enabled`, celle que l'edge relit et réécrit).
+    /// - `stripe_connect_actif = false` → `nil` (section absente), même sans les trois nombres : le web ne rend ni les
+    ///   cartes ni « Tes revenus sont temporairement indisponibles » hors COMPLET ;
+    /// - trois nombres finis absents → « indisponible » (l.387-391, `erreurRevenus` dans la branche COMPLET) ;
+    /// - drapeau absent ou non booléen → `nil` : statut inconnu, aucune carte (le web les masque sur `erreurStatut`).
+    public static func visibles(_ corps: ValeurJSON) throws -> TotauxRevenus? {
+        if case .objet(let objet) = corps, case .booleen(false)? = objet["stripe_connect_actif"] { return nil }
+        guard let totaux = lire(corps) else { throw JoleneError(.unknown, RevenusTextes.totauxIndisponibles) }
+        return totaux.stripeConnectActif == true ? totaux : nil
+    }
 }
 
-/// Exercice du soignant lu avant les totaux (`soignants.type_exercice, statut_liberal`, `MesGains.tsx` l.855). Sert
-/// uniquement à décider si la section des totaux existe, comme `PageStripeConnect.tsx` l.104 ; jamais à afficher le
+/// Exercice du soignant lu avant les totaux (`soignants.type_exercice, est_compte_test`, sous-ensemble des colonnes de
+/// `PageStripeConnect.tsx` l.95). Sert uniquement à décider si la section des totaux existe ; jamais à afficher le
 /// régime d'une ligne financière (règle Lot 14 de `CLAUDE.md` : `missions.type_contrat_applique`).
+///
+/// Revue B8 de T12, M1 : la condition de l.106 (`… || sg.statut_liberal === 'ACTIF'`) n'est que celle du CHARGEMENT ;
+/// les cartes ne sont RENDUES que pour `isLiberal` (l.178, appliqué l.300 ; `statut_liberal` n'y entre pas) hors
+/// compte de test (`!estCompteTest`, l.302 et l.367). `statut_liberal` n'est donc pas lu : un salarié
+/// `statut_liberal = ACTIF` verrait sinon ses réceptions de salaire (`paiements_soignant` CONFIRME hors Connect,
+/// additionnés par `fn_mes_revenus_connect`) présentées comme « Total réglé ».
 public struct ExerciceRevenus: Equatable, Sendable, Decodable {
     public var typeExercice: String?
-    public var statutLiberal: String?
+    /// `soignants.est_compte_test` (boolean NOT NULL) ; absent vaut faux, comme `!!sg.est_compte_test` (l.103).
+    public var estCompteTest: Bool?
 
-    public init(typeExercice: String?, statutLiberal: String?) {
-        self.typeExercice = typeExercice; self.statutLiberal = statutLiberal
+    public init(typeExercice: String?, estCompteTest: Bool?) {
+        self.typeExercice = typeExercice; self.estCompteTest = estCompteTest
     }
 
-    /// `sg.type_exercice === 'LIBERAL' || sg.type_exercice === 'MIXTE' || sg.statut_liberal === 'ACTIF'`.
-    public var afficheTotaux: Bool {
-        typeExercice == "LIBERAL" || typeExercice == "MIXTE" || statutLiberal == "ACTIF"
-    }
+    /// `isLiberal` du web : `typeExercice === 'LIBERAL' || typeExercice === 'MIXTE'` (l.178).
+    public var estLiberal: Bool { typeExercice == "LIBERAL" || typeExercice == "MIXTE" }
+
+    /// Totaux lus (et la RPC appelée) seulement pour un libéral hors compte de test (l.300, l.302, l.367).
+    public var afficheTotaux: Bool { estLiberal && estCompteTest != true }
 
     enum CodingKeys: String, CodingKey {
         case typeExercice = "type_exercice"
-        case statutLiberal = "statut_liberal"
+        case estCompteTest = "est_compte_test"
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         typeExercice = c.texteBrut(.typeExercice)
-        statutLiberal = c.texteBrut(.statutLiberal)
+        estCompteTest = c.booleenBrut(.estCompteTest)
     }
 }
 
@@ -124,7 +146,7 @@ extension MissionTerminee {
                                tauxHoraireBase: tauxHoraireBase, netEstime: netEstime, netAPayer: netAPayer, totalBrut: totalBrut)
     }
 
-    /// `regimeMission` du web (`MesGains.tsx` l.55-58) : `type_contrat_applique ?? type_contrat_recherche`, seulement
+    /// `regimeMission` du web (`MesGains.tsx` l.56-59) : `type_contrat_applique ?? type_contrat_recherche`, seulement
     /// `SALARIE` ou `LIBERAL`. Jamais `soignants.type_exercice` (règle Lot 14 de `CLAUDE.md`, garde `test:guards` 7).
     public var regime: String? {
         let regime = typeContratApplique ?? typeContratRecherche

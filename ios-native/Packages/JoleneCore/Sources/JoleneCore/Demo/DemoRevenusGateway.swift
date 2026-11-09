@@ -1,7 +1,7 @@
 import Foundation
 
 extension DemoFixtures {
-    /// `demo-revenus.json` : exercice du profil fictif (`soignants.type_exercice, statut_liberal`) et réponse de
+    /// `demo-revenus.json` : exercice du profil fictif (`soignants.type_exercice, est_compte_test`) et réponse de
     /// `fn_mes_revenus_connect()` (lot 3, T12).
     public struct RevenusFile: Decodable, Sendable {
         public var fixedNow: String
@@ -34,7 +34,7 @@ extension DemoFixtures {
 
 /// `RevenusPort` du monde démo (lot 3, T12), sans réseau : fixtures exportées par `scripts/mobile/export-demo-fixtures.mjs`
 /// lues par les MÊMES décodeurs que le monde Supabase (`TotauxRevenus.lire`, `PaiementRapide.lireListe`,
-/// `RevenusAssemblage`), même visibilité des totaux (`ExerciceRevenus.afficheTotaux`), même tri (`debut_le`
+/// `RevenusAssemblage`), même visibilité des totaux (`ExerciceRevenus.afficheTotaux`, `TotauxRevenus.visibles`), même tri (`debut_le`
 /// décroissant) et mêmes pages de 50. Noms d'établissement : `demo-etablissements.json` (rôle de
 /// `fn_etablissements_safe`). Refuse tout contexte qui n'est pas celui du profil fictif (`.demoOnly`).
 public struct DemoRevenusGateway: RevenusPort {
@@ -44,10 +44,7 @@ public struct DemoRevenusGateway: RevenusPort {
         try Self.verifier(context)
         let fichier = try DemoFixtures.loadRevenus()
         guard fichier.exercice.afficheTotaux else { return nil }
-        guard let totaux = TotauxRevenus.lire(fichier.totaux) else {
-            throw JoleneError(.unknown, RevenusTextes.totauxIndisponibles)
-        }
-        return totaux
+        return try TotauxRevenus.visibles(fichier.totaux)
     }
 
     public func paiementsRapides(context: MissionReadContext) async throws -> [PaiementRapide] {

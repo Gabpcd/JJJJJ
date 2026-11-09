@@ -51,6 +51,9 @@ struct MainTabView: View {
     @State private var cheminProfil = NavigationPath()
     /// Pile de l'onglet Revenus (lot 3, T12) : détail d'une mission depuis un paiement rapide en litige.
     @State private var cheminRevenus = NavigationPath()
+    /// Présentations de l'onglet Revenus par un lien ou un tap (jeton de péremption de `RevenusModel`, revue B8 de T12,
+    /// m1) : le web relit `/soignant/mes-gains` à chaque navigation, l'onglet natif relit alors ses sections.
+    @State private var presentationsRevenus = 0
     /// Notifications lues dans le centre (jeton de péremption du compteur de l'Accueil).
     @State private var lecturesCentre = 0
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
@@ -98,7 +101,7 @@ struct MainTabView: View {
             // Lot 3, T12 : onglet Revenus natif (remplace le placeholder du lot 0) ; sa pile porte le détail d'une mission
             // ouvert depuis un paiement rapide en litige, et revient à sa racine sur un lien ou un tap (`presenter`).
             NavigationStack(path: $cheminRevenus) {
-                RevenusScreen(session: session, snapshot: snapshot) { cible in
+                RevenusScreen(session: session, snapshot: snapshot, peremption: presentationsRevenus) { cible in
                     presenter(cible, depuisCentre: false)
                 }
             }
@@ -169,16 +172,19 @@ struct MainTabView: View {
             selection = .accueil
             cheminAccueil = NavigationPath()
         case .explorer:
-            // Revue B8 de T3b, m5 : un détail empilé sur Explorer est retiré (Mes missions et Revenus n'ont pas de pile).
+            // Revue B8 de T3b, m5 : un détail empilé sur Explorer est retiré (Mes missions n'a pas de pile ; celle de
+            // Revenus, lot 3, T12, est vidée de même ci-dessous).
             selection = .explorer
             cheminExplorer = NavigationPath()
         case .missions:
             selection = .missions
         case .revenus:
             // Seule la racine (`.apercu`) est présentable avant T13 (garde de `estPresentable`) ; lot 3, T12 : la pile de
-            // l'onglet revient à sa racine (revue B8 de T3b, m5), comme Explorer.
+            // l'onglet revient à sa racine (revue B8 de T3b, m5), comme Explorer, et ses sections sont relues (jeton de
+            // péremption, revue B8 de T12, m1).
             selection = .revenus
             cheminRevenus = NavigationPath()
+            presentationsRevenus += 1
         case .monCompte:
             selection = .profil
             cheminProfil = NavigationPath()

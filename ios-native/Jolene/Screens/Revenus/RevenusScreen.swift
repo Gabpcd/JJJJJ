@@ -7,7 +7,8 @@ import JoleneDesign
 /// placeholder du lot 0 (`placeholder-revenus` → `revenus-screen`, identifiants des XCUITest migrés, règle 8).
 ///
 /// Sections, dans l'ordre : en-tête ; renvois web « Factures » et « Paie » (onglets du web, D4 : lot 4) ; totaux serveur
-/// (`fn_mes_revenus_connect`, profil libéral ou mixte seulement, comme `PageStripeConnect.tsx` l.104) ; « Paiement
+/// (`fn_mes_revenus_connect`, seulement là où le web rend ses cartes : profil libéral ou mixte, hors compte de test,
+/// compte Connect complet, `PageStripeConnect.tsx` l.178, l.300, l.302, l.367) ; « Paiement
 /// rapide » (`fn_mes_paiements_escrow`, sept états, libellés verbatim) ; missions terminées (montant de
 /// `montantFinanceAfficheMission`, état de la dernière déclaration), pages de 50, notes « net estimé » verbatim.
 /// Les règles (états, montants, epoch, audit, pagination) sont dans JoleneCore et testées là ; la vue n'ajoute aucune
@@ -18,16 +19,25 @@ import JoleneDesign
 /// (`/soignant/presences/mission/:id`, lot 2 : renvoi web aujourd'hui) et l'état vide ouvre Explorer, par la cible de
 /// l'espace (`CibleNotification`, `MainTabView.presenter`). Un renvoi web n'est proposé qu'avec le présentateur
 /// `.safari` du coordinateur des liens (jamais `openURL`, jamais un bouton sans effet).
+///
+/// Fraîcheur (revue B8 de T12, m1) : relecture à l'apparition et au retour au premier plan des sections lues il y a
+/// plus de 60 s, et immédiate quand `peremption` avance (lien universel ou tap qui présente l'onglet, `MainTabView`).
 struct RevenusScreen: View {
     @StateObject private var model: RevenusModel
     @ObservedObject private var session: SessionStore
     private let snapshot: SessionSnapshot
+    private let peremption: Int
     private let ouvrir: (CibleNotification) -> Void
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
+    @Environment(\.scenePhase) private var scenePhase
+    /// Onglet affiché : le retour au premier plan ne relit que l'onglet visible.
+    @State private var affiche = false
 
-    init(session: SessionStore, snapshot: SessionSnapshot, ouvrir: @escaping (CibleNotification) -> Void) {
+    init(session: SessionStore, snapshot: SessionSnapshot, peremption: Int = 0,
+         ouvrir: @escaping (CibleNotification) -> Void) {
         self.session = session
         self.snapshot = snapshot
+        self.peremption = peremption
         self.ouvrir = ouvrir
         _model = StateObject(wrappedValue: RevenusModel(controller: session.controller, snapshot: snapshot))
     }
@@ -51,7 +61,14 @@ struct RevenusScreen: View {
         .navigationDestination(for: MissionRoute.self) { route in
             MissionDetailScreen(route: route, initial: nil, session: session, snapshot: snapshot)
         }
-        .task { await model.chargerSiNecessaire() }
+        // Premier affichage, relance après une tâche annulée, relecture au-delà de 60 s ou dès que le jeton avance.
+        .task(id: peremption) { await model.chargerSiNecessaire(peremption: peremption) }
+        .onAppear { affiche = true }
+        .onDisappear { affiche = false }
+        .onChange(of: scenePhase) { phase in
+            guard phase == .active, affiche else { return }
+            Task { await model.chargerSiNecessaire(peremption: peremption) }
+        }
     }
 
     // MARK: - En-tête et renvois web
@@ -195,7 +212,8 @@ struct RevenusScreen: View {
                 ForEach(model.lignes) { ligne in
                     RevenusLigneMission(ligne: ligne, ouvrir: actionPresences(ligne.id))
                 }
-                if model.aSuivre {
+                // Masqué tant que le bandeau d'erreur propose « Réessayer » (revue B8 de T12, m3 : jamais une page sautée).
+                if model.afficheChargerPlus {
                     JoleneButton(model.chargementMissions ? RevenusTextes.chargementSuite : RevenusTextes.chargerPlus,
                                  style: .secondary, isLoading: model.chargementMissions) {
                         Task { await model.chargerPlus() }
@@ -358,7 +376,10 @@ struct RevenusLigneEscrow: View {
 
 /// Ligne d'une mission terminée (`MesGains.tsx` l.698-786) : pavé de date, `AmountRow` (intitulé, établissement,
 /// montant serveur, nature verbatim, brut), horaires, état de la dernière déclaration. Le contenu reste lisible élément
-/// par élément (`contain`) ; l'ouverture des présences est le tap de la ligne et l'action vocale « Voir mission … ».
+/// par élément (`contain`, identifiants internes inchangés). L'ouverture des présences : tap de la ligne, et (revue B8
+/// de T12, m5) un vrai bouton dans la ligne, chevron nommé comme le `aria-label` du web (`Voir mission …`, l.703 ; le
+/// web : `role="button"`, `tabIndex`, Entrée/Espace, l.701-706), atteignable par VoiceOver, le Contrôle vocal et le
+/// clavier — un conteneur `contain` ne reçoit pas le focus et une action nommée qu'il porterait resterait inatteignable.
 struct RevenusLigneMission: View {
     let ligne: LigneMissionAffichee
     let ouvrir: (() -> Void)?
@@ -378,8 +399,23 @@ struct RevenusLigneMission: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("revenus-mission-horaires-\(ligne.id)")
             }
-            StatusPill(ligne.etat.texte, tone: RevenusTon.pastille(ligne.etat.ton), size: .sm,
-                       identifier: "revenus-mission-etat-\(ligne.id)")
+            HStack(alignment: .center, spacing: JoleneSpacing.sm) {
+                StatusPill(ligne.etat.texte, tone: RevenusTon.pastille(ligne.etat.ton), size: .sm,
+                           identifier: "revenus-mission-etat-\(ligne.id)")
+                Spacer(minLength: JoleneSpacing.sm)
+                if let ouvrir {
+                    Button(action: ouvrir) {
+                        Image(systemName: "chevron.right")
+                            .font(JoleneFont.callout.weight(.semibold))
+                            .foregroundStyle(JoleneColor.rose800)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(ligne.actionAccessible)
+                    .accessibilityIdentifier("revenus-mission-ouvrir-\(ligne.id)")
+                }
+            }
         }
         .padding(JoleneSpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -390,9 +426,7 @@ struct RevenusLigneMission: View {
         .accessibilityIdentifier("revenus-mission-\(ligne.id)")
 
         if let ouvrir {
-            contenu
-                .onTapGesture { ouvrir() }
-                .accessibilityAction(named: Text(ligne.actionAccessible)) { ouvrir() }
+            contenu.onTapGesture { ouvrir() }
         } else {
             contenu
         }
