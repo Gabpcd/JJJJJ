@@ -231,10 +231,10 @@ jobs:
   ui:
     name: UI — ${{ matrix.format }}
     runs-on: macos-26
-    # Quatre éclats de tests bornés à 30 min chacun (DECISIONS_LOT3, intégration de T3b, T7 et T11 ; règle de
+    # Cinq éclats de tests bornés à 30 min chacun (DECISIONS_LOT3, intégration de T3b, T7 et T11, puis T8 ; règle de
     # DECISIONS_LOT2 décision 22) : le plafond du job reste au-dessus de leur somme et du build, pour que le délai
     # d'un éclat tombe avant celui du job.
-    timeout-minutes: 140
+    timeout-minutes: 170
     strategy:
       fail-fast: false
       matrix:
@@ -319,7 +319,8 @@ jobs:
       # JoleneDesignTests et les XCUITest des lots 0 et 1 ; « lot3-compte » : liens universels, inscription, hub
       # Compte ; « lot3-push » : taps push ; « lot3-notifications » : centre, préférences, profil ; chacun nommé par
       # -only-testing. Une classe XCUITest nouvelle tourne dans l'éclat socle tant qu'elle n'est pas rangée dans un
-      # éclat de lot. Le résumé exige les quatre éclats verts.
+      # éclat de lot. L3-T8 : « lot3-inscription » (complétion du profil), nouvel éclat plutôt que « lot3-compte »,
+      # déjà à 19,1 min sur ipad-landscape au run 42549855710 (seuil de 20 min). Le résumé exige les cinq éclats verts.
       - name: test-without-building — éclat socle (JoleneCoreTests, JoleneDesignTests, XCUITest lots 0 et 1) (${{ matrix.format }})
         id: tests
         # Délai propre à l'étape : un simulateur ou un runner xctest bloqué est interrompu ici,
@@ -353,6 +354,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoNotificationsTests \
             -skip-testing:JoleneUITests/DemoPreferencesTests \
             -skip-testing:JoleneUITests/DemoProfilTests \
+            -skip-testing:JoleneUITests/DemoCompletionInscriptionTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -469,6 +471,39 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-notifications.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot3-notifications) : code $code"
+      - name: test-without-building — éclat lot3-inscription (XCUITest complétion du profil) (${{ matrix.format }})
+        id: tests_lot3_inscription
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+        run: |
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-inscription.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoCompletionInscriptionTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot3-inscription.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-inscription.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot3-inscription) : code $code"
       - name: Résumé xcresult (assertions, pas de succès fabriqué)
         if: always() && steps.build.outcome == 'success'
         env:
@@ -476,9 +511,10 @@ jobs:
           CODE_LOT3_COMPTE: ${{ steps.tests_lot3_compte.outputs.code }}
           CODE_LOT3_PUSH: ${{ steps.tests_lot3_push.outputs.code }}
           CODE_LOT3_NOTIFICATIONS: ${{ steps.tests_lot3_notifications.outputs.code }}
+          CODE_LOT3_INSCRIPTION: ${{ steps.tests_lot3_inscription.outputs.code }}
         run: |
           mkdir -p "$JOLENE_UI_OUTPUT/attachments"
-          for eclat in socle lot3-compte lot3-push lot3-notifications; do
+          for eclat in socle lot3-compte lot3-push lot3-notifications lot3-inscription; do
             xcresult="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$eclat.xcresult"
             [ -d "$xcresult" ] || { echo "::error::Bundle xcresult absent pour l'éclat $eclat : aucun test n'a produit de résultat."; exit 1; }
             xcrun xcresulttool get test-results summary --path "$xcresult" > "$JOLENE_UI_OUTPUT/xctest-summary-$eclat.json"
@@ -497,6 +533,7 @@ jobs:
               { nom: "lot3-compte", code: process.env.CODE_LOT3_COMPTE, classes: ["DemoLiensLot3Tests", "DemoInscriptionTests", "DemoCompteLot3Tests"] },
               { nom: "lot3-push", code: process.env.CODE_LOT3_PUSH, classes: ["DemoPushTests"] },
               { nom: "lot3-notifications", code: process.env.CODE_LOT3_NOTIFICATIONS, classes: ["DemoNotificationsTests", "DemoPreferencesTests", "DemoProfilTests"] },
+              { nom: "lot3-inscription", code: process.env.CODE_LOT3_INSCRIPTION, classes: ["DemoCompletionInscriptionTests"] },
             ];
             let total = 0, passed = 0, failed = 0, skipped = 0, log = "";
             const lignes = [`### UI — ${process.env.JOLENE_UI_FORMAT}`, ""];
@@ -627,6 +664,7 @@ jobs:
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-compte.xcresult
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-push.xcresult
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-notifications.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-inscription.xcresult
             ios-native/test-results/${{ matrix.format }}/
           retention-days: 7
           if-no-files-found: warn

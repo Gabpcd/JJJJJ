@@ -407,9 +407,11 @@ final class InscriptionModelsTests: XCTestCase {
         XCTAssertTrue(boite.recevoir(try XCTUnwrap(DestinationLien(link: "/inscription/reprendre"))))
         XCTAssertEqual(boite.inscription?.page, .reprendre)
 
-        // Page non livrée (T8) : renvoi web, non consommée ; route de l'espace : non consommée.
+        // T8 : la complétion est consommée comme la reprise ; route de l'espace : non consommée.
         boite.retirerInscription()
-        XCTAssertFalse(boite.recevoir(try XCTUnwrap(DestinationLien(link: "/inscription/completer"))))
+        XCTAssertTrue(boite.recevoir(try XCTUnwrap(DestinationLien(link: "/inscription/completer?ref=ABCD-12"))))
+        XCTAssertEqual(boite.inscription, EtapeInscription(page: .completer, query: "ref=ABCD-12"))
+        boite.retirerInscription()
         XCTAssertFalse(boite.recevoir(try XCTUnwrap(DestinationLien(link: "/soignant/missions"))))
         XCTAssertNil(boite.inscription)
         XCTAssertNil(boite.confirmation)

@@ -184,14 +184,20 @@ final class AppContainer: ObservableObject {
     /// `JOLENE_FORCE_OUBLI_POINTAGE=1` sert le tableau de bord démo avec un oubli de pointage
     /// (`DemoDashboardGateway(missionsOubliees:)`, `DemoAccueilTests.testOubliDePointageOuvreLesPresencesSurLeWeb`) ;
     /// lot 3, T7 : `-JOLENE_DEMO_INSCRIPTION_REFUS <code>` (`RefusInscriptionDemo`, blueprint §2.7) rejoue un refus
-    /// d'inscription (`DemoInscriptionTests`) ; lot 3, T11 : `JOLENE_FORCE_EXPORT_ECHEC=1` fait refuser l'export RGPD
+    /// d'inscription (`DemoInscriptionTests`), y compris ceux de la complétion (T8, `DemoCompletionInscriptionTests`) ;
+    /// lot 3, T8 : `JOLENE_DEMO_BROUILLON=<variante>` (`VarianteBrouillonDemo`) simule un brouillon serveur au démarrage
+    /// du parcours ; lot 3, T11 : `JOLENE_FORCE_EXPORT_ECHEC=1` fait refuser l'export RGPD
     /// avec le message serveur verbatim (`DemoCompteLot3Tests.testExportRefuseParLeServeurAfficheLeMessageSansFeuille`).
     /// Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
         var gateways = DemoWorld.gateways()
-        if let refus = RefusInscriptionDemo(arguments: arguments), let auth = gateways.auth as? DemoAuthGateway {
-            gateways.inscription = DemoInscriptionGateway(auth: auth, refus: refus) // lot 3, T7
+        let refusInscription = RefusInscriptionDemo(arguments: arguments)
+        let brouillonInscription = processEnvironment[VarianteBrouillonDemo.variableEnvironnement]
+            .flatMap(VarianteBrouillonDemo.init(rawValue:))
+        if refusInscription != nil || brouillonInscription != nil, let auth = gateways.auth as? DemoAuthGateway {
+            gateways.inscription = DemoInscriptionGateway(auth: auth, refus: refusInscription,
+                                                          brouillon: brouillonInscription) // lot 3, T7 ; T8
         }
         if processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] == "1" {
             gateways.dashboard = DemoDashboardEchecGateway()

@@ -940,6 +940,233 @@ texte. Correctif d'intégration (tests d'abord), chaque test changé étant faux
   geste vise désormais le voile au-dessus du bord haut de la feuille, puis, si elle est encore là, la glisse vers le
   bas ; l'assertion de fermeture et les suivantes sont inchangées.
 
+## T8 — complétion du profil et `register-soignant` (branche `lot3/l3-t8-v2`, 09/11/2026)
+
+- **Livré.** Cœur (`JoleneCore/Inscription/`) : `CompletionProfil.swift` (`CompletionTextes` verbatim, `CompletionRules` :
+  garde du formulaire web l.214-233 et l.354-357, téléphone l.228, RPPS par profession, borne du sélecteur de date
+  l.554, phrase du type unique l.68, modes après le référentiel l.191-199, brouillon et corps de `register-soignant` en
+  liste blanche) et `CompletionProfilModel.swift` (référentiel, brouillon, finalisation relue). Monde démo :
+  `DemoInscriptionGateway` (brouillon fusionné, référentiel `demo-types-exercice.json` exporté depuis le seed
+  `20260714084802_synchroniser_regles_profil_exercice.sql`, `register-soignant` simulée avec ses contrôles et messages
+  verbatim, bascule vers `demo-soignant`), refus `UNDERAGE`, `RPPS_ALREADY_REGISTERED`, `ACCOUNT_FINALIZATION_PENDING`,
+  `TYPES_EXERCICE_INDISPONIBLE` (`-JOLENE_DEMO_INSCRIPTION_REFUS`), variante DEBUG `JOLENE_DEMO_BROUILLON=complet`
+  (brouillon serveur repris, sans piloter le sélecteur de date). Gateway `SupabaseInscriptionGateway` :
+  `fn_enregistrer_parcours_inscription` (22023, P0002 restitués), `fn_types_exercice_autorises` (tableau de chaînes, sinon
+  indisponible), `register-soignant` par `EdgeResponse` puis `refreshSession()`. Écran `CompletionProfilScreen` monté par
+  `OnboardingRootView` à la place de l'écran bloquant provisoire (`onboarding-completion` → `completion-screen`,
+  règle 8) ; `RootView` affiche à la connexion le message d'une déconnexion locale.
+- **Consignes de l'intégration appliquées.** `InscriptionPort.completionLivree` vaut `true` dans les deux mondes (défaut du
+  protocole ; le stub non câblé reste à `false`) : « Réessayer la vérification » de l'édition du profil devient effectif.
+  Après `register-soignant` 200 puis `refreshSession()`, le rôle est relu (`fn_get_my_role`) puis l'identité est rouverte
+  par `SessionStore.ouvrirIdentiteInscription()` (navigateur intégré vidé, puis `start()` ; `.ready` relu = preuve),
+  consigne de T3b « même appel avant d'ouvrir l'identité ». `DestinationLien.ecranNatifLivre(.inscription(.completer))`
+  vaut `true` ; la complétion est consommée hors de l'espace comme la reprise (`BoiteLiensInscription`,
+  `AiguillageLiens.Action.inscription`) ; exclusion nommée `inscriptionCompleter` ajoutée à
+  `CentreNotificationsTests.sansCibleDansLEspace` (même justification que T7 : une identité qui a un espace prêt n'a pas
+  d'inscription à compléter ; aucune notification du dump ne vise `/inscription/*`). `fn_enregistrer_parcours_inscription`
+  et `fn_types_exercice_autorises` passent en `consommee` (définitions live relues en lecture seule le 09/11/2026,
+  identiques au dump ; edge `register-soignant` déployée, version 876, identique au dépôt).
+- **Liste de contrôle T8 de T9.** 1 : `typesExercice` câblé dans les deux mondes ; 3 : assertion « référentiel non câblé »
+  de `DemoProfilTests` remplacée par les modes autorisés (`testTypeDExerciceEnRenvoiEtModesAutorisesParLeReferentiel`) ;
+  4 : inchangé (`feat/ios-lot3` n'atteint pas `main` avant les go de T7/T8). **Écart au point 2** : le cas
+  `ProfilEditionModel.Modes.nonCable` est conservé, car le stub `UnwiredInscriptionPort` existe toujours (doubles de test,
+  monde incomplet) et ne doit jamais offrir un « Réessayer » sans effet ; il n'est plus atteint dans les deux mondes.
+- **Écarts assumés (non juridiques).**
+  - Profession **figée** du parcours (le web la laisse modifiable dans la complétion) : blueprint §3 T8, principe « État
+    dérivé » ; une profession hors catalogue (contrat rompu : `fn_demarrer_inscription` l'exige) bloque l'écran avec le
+    texte web « Votre espace est momentanément indisponible. Réessayez. ».
+  - Pas d'aperçu du marché (`ApercuMarche`), pas de vérification RPPS en temps réel (D11 : `register-soignant` seul, refus
+    verbatim), pas de bandeau Pro Santé Connect (D8), pas de champ rayon (correction 21 ; le rayon d'un brouillon web est
+    retransmis, sinon le serveur applique ses 30 km).
+  - Le message « Vérification des modes d'exercice autorisés… » d'`ExerciceTypeSection` (l.88-90) n'est pas répété : le
+    même message de `ChoixModesExercice` (l.41) est affiché juste au-dessus.
+  - « Enregistrer et continuer plus tard » relit le parcours (le web navigue vers `/inscription/reprendre`, même effet).
+  - `?ref=` d'un lien `/inscription/completer` n'est pas capté (le web le range en `sessionStorage` pour l'assistant de
+    profil) : parrainage non porté au lot 3.
+  - Corps de `register-soignant` sans `navigateur` ni `attribution` (aucune chaîne d'agent inventée) : `navigateur_acteur`
+    des audits `INSCRIPTION` et `RGPD_CONSENTEMENT_DONNE` vaut `null` ; la preuve du consentement reste
+    `parcours_inscription.consentement_cgu_le` (l.376-387).
+  - Échec de `refreshSession()` après un 200 : déconnexion locale et message web « Votre profil est enregistré.
+    Reconnectez-vous pour ouvrir votre espace. » (`inscriptionProgressive.ts` l.236 ; le web reste sur la page) ; issue
+    inconnue (délai, réseau, réponse illisible) : relecture du rôle, l'espace s'ouvre si le profil existe, sinon texte
+    réseau du web ou « Votre saisie est conservée. Réessayez. » (l.224), jamais de renvoi.
+  - Délai de la finalisation : deux fois `resolutionTimeout` (brouillon, edge qui peut interroger l'Annuaire Santé jusqu'à
+    10 s, `refreshSession`) ; un dépassement n'est jamais un échec supposé.
+- **CI.** Nouvelle classe `DemoCompletionInscriptionTests` (6 XCUITest × 3 formats) dans un **nouvel éclat**
+  « lot3-inscription » : « lot3-compte » était à 19,1 min sur ipad-landscape au run 42549855710 (seuil de 20 min) ; job
+  porté à 170 min (cinq éclats de 30 min et le build) ; le résumé exige les cinq éclats verts. Compilé, non lancé
+  localement.
+- **HARD STOP n°4.** Aucun texte nouveau : textes web verbatim d'`InscriptionSoignant.tsx` (mode parcours),
+  `DeclarationEtudiant.tsx` l.105, `inscriptionProgressive.ts` l.177, l.224, l.236, `ChoixModesExercice.tsx`, messages
+  serveur verbatim (`register-soignant`, `fn_enregistrer_parcours_inscription`), épinglés par `CompletionVerbatimTests`
+  (46 annotations) et `InscriptionVerbatimTests` (52). Décisions juridiques prises par délégation : section suivante.
+- **B9.** Inscription (consentement relayé par l'audit `RGPD_CONSENTEMENT_DONNE` côté serveur) : branche poussée, jamais
+  mergée sans le go de Gabrielle (D18).
+
+### T8 — corrections de la revue fraîche B8 (09/11/2026)
+
+Tests d'abord (commit de tests rouge à la compilation : API absente), puis correction. Tests changés parce qu'ils
+épinglaient le défaut relevé, jamais affaiblis : `SupabaseInscriptionGatewayTests` (409 `ACCOUNT_ALREADY_REGISTERED`,
+503, 500 et 502 illisible tenus pour des refus certains ; corps 2xx `[]` refus certain), `OnboardingResolutionTests` et
+`CompletionProfilModelTests` (réponse « salarié(e) » ni restaurée ni enregistrée), `InscriptionVerbatimTests`
+(53 annotations : + le message serveur du 409 rejoué en démo).
+
+- **B1 — brouillon étudiant (option a de la revue : verrou, aucun texte nouveau).** `estEtudiant` (et la réponse
+  « salarié(e) ») sont lus dans `parcours_inscription.donnees` en booléens seuls, comme `restaurerFormulaire`
+  (`inscriptionProgressive.ts` l.126-149). Un brouillon `estEtudiant: true` n'est **jamais** finalisé en natif :
+  `CompletionProfilModel.parcoursEtudiant` (parcours lu à l'ouverture) masque le formulaire et « Enregistrer mon
+  profil », et l'écran ne propose que le bouton existant « 🎓 Je suis étudiant(e) en santé » (complétion web,
+  `/inscription/completer`) ; sans présentateur `.safari`, le texte web « Votre espace est momentanément indisponible.
+  Réessayez. ». Défense en profondeur : `finaliser` des deux gateways relit le brouillon fusionné par le serveur et rend
+  `ResultatFinalisation.parcoursEtudiant` **sans appeler** `register-soignant` (déclaration faite sur le web pendant que
+  l'écran natif restait ouvert) ; le modèle bascule alors l'écran. Le natif n'écrit jamais `estEtudiant` ni
+  `scolarite*` (le serveur les conserve : `donnees || p_donnees`). Motif du choix (a) plutôt que (b) : D11 et T8-J5
+  renvoient le parcours étudiant au web ; transmettre `est_etudiant: true` sans afficher ni permettre de modifier la
+  déclaration (formation, année, conditions de `DeclarationEtudiant.tsx`) ferait du natif une déclaration silencieuse ;
+  le verrou rend le chemin cassé impossible (`CLAUDE.md`, « un gap connu reste verrouillé »). Conséquence évitée :
+  `register-soignant` écrivait `est_etudiant = false` (index.ts l.309) — l'établissement ne voyait plus le cadre
+  étudiant ni la confirmation `CADRE_ETUDIANT_AS_CONFIRME` (`ListeCandidatures.tsx` l.287), et
+  `dec_verifier_profession_etudiant` (`public.sql` l.4518) ne s'appliquait plus. Tests : `OnboardingResolutionTests`,
+  `CompletionProfilRulesTests` (règle, clés du brouillon et du corps), `CompletionProfilModelTests` (verrou initial et
+  bascule serveur), `SupabaseInscriptionGatewayTests` (aucune requête vers l'edge, `"true"` et `false` ne sont pas des
+  déclarations), `DemoInscriptionGatewayTests` et XCUITest `testBrouillonEtudiantNeProposeQueLaCompletionWebPuisRelitAuRetour`
+  (variante démo `JOLENE_DEMO_BROUILLON=etudiant`).
+- **M1 — issues inconnues relues.** `CompletionRules.issueIndeterminee(statut:code:)` : tout statut ≥ 500 (passerelle,
+  délai de l'edge, `catch` final l.404-407 qui peut suivre l'INSERT), une réponse 2xx illisible, et les 409
+  `ACCOUNT_ALREADY_REGISTERED`, `ACCOUNT_REGISTRATION_IN_PROGRESS` (index.ts l.205-212) et `USER_ALREADY_REGISTERED`
+  (contrainte de `soignants` hors RPPS, clé primaire comprise, l.329-332) rendent `ResultatFinalisation.indeterminee`
+  (le 503 `ACCOUNT_FINALIZATION_PENDING` garde la déconnexion locale). Le modèle relit alors le rôle
+  (`fn_get_my_role` ne rend `SOIGNANT` qu'avec une ligne `soignants`, `public.sql` l.38295-38301) : profil relu →
+  `ouvrirIdentiteInscription`, sinon message serveur verbatim en repli (« Votre saisie est conservée. Réessayez. » pour
+  un corps illisible). Extension assumée au-delà de « ≥ 500 sans code » : un 5xx codé (`INTERNAL_ERROR`, erreurs du
+  runtime) n'exclut pas davantage un profil créé, et la relecture n'ouvre jamais un espace sans ligne `soignants`.
+  **Retour du renvoi web étudiant** : `PresentationsRacine.fermetures` (compteur des renvois affichés puis fermés,
+  injecté par `PointDEntreeLiens` dans l'environnement `fermeturesRenvoiWeb`) ; l'écran qui a ouvert la complétion web
+  relit le rôle au retour (`relireApresRenvoiWeb`) — profil créé sur le web → espace ouvert ; sinon, pour un parcours
+  étudiant, relecture du parcours (le brouillon a pu changer sur le web), aucun message. Tests : `CompletionProfilRulesTests`,
+  `SupabaseInscriptionGatewayTests`, `CompletionProfilModelTests`, `PresentationsRacineTests`, `DemoInscriptionGatewayTests`
+  et XCUITest `testCompteDejaFinaliseOuvreLEspaceApresRelectureDuRole` (refus démo `ACCOUNT_ALREADY_REGISTERED`).
+- **m1** : Bearer de `register-soignant` pris de `client.auth.session` (rafraîchie si expirée, comme
+  `SupabaseAccountGateway`), session absente → « Reconnectez-vous pour reprendre votre inscription. ». Comportement
+  observable inchangé tant que le brouillon (PostgREST) précède l'edge : le test épingle le Bearer frais, il n'était pas
+  rouge avant la correction.
+- **m2** : une lecture du référentiel annulée (`.task` coupé) remet `modes` à `.inactif` si elle est la plus récente ;
+  le `.task` suivant la relance (test rouge avant : l'écran restait sur « Vérification… »).
+- **m3 — consigné, non porté (écart de parité non juridique).** Après la complétion, le web ouvre
+  `/soignant/missions/<missionChoisie>` quand le brouillon en contient une (UUID, `InscriptionSoignant.tsx`
+  l.369-370 ; posée par l'exploration avant inscription, `explorationInscription.ts` l.32), sinon
+  `/soignant/recherche-missions` ; le natif ouvre l'espace par défaut (Accueil). Motif : le natif n'a pas
+  d'exploration avant le profil complet (D9), `missionChoisie` ne vient donc que d'une exploration web ; la porter
+  exige une entrée du coordinateur de liens depuis l'onboarding (intention mémorisée avant `.ready`), hors de cette
+  correction. À reprendre avec l'exploration (lot 4) ; la mission reste accessible depuis l'espace.
+- **m4** : la réponse « salarié(e) » est enregistrée dans le brouillon (`estSalarieEtablissement`, liste blanche
+  serveur) et restaurée comme le web (`donneesFormulaire` l.152-167, `restaurerFormulaire` l.135-138), jamais
+  transmise à `register-soignant` ; T8-J2 corrigée en conséquence.
+- **m5** : profil créé (200) mais rôle relu sans espace → même issue que l'échec de `refreshSession` : message web
+  « Votre profil est enregistré. Reconnectez-vous pour ouvrir votre espace. » annoncé à la connexion, puis déconnexion
+  locale. Documentation de `Issue.espaceOuvert` corrigée : ce n'est pas la preuve de l'espace, l'interface suit l'état
+  de session (`.ready` relu).
+- **m6** : l'epoch n'est capturé que si l'identité active est celle du parcours (`SessionController.epoch(identite:)`,
+  accesseur en lecture seule, aucun effet sur l'état ni sur l'epoch) ; sinon aucun envoi.
+- **m7** : `DemoCompletionInscriptionTests` relit la sentinelle « 0 requête » du hub dès que l'espace est ouvert
+  (complétion nominale et 409 démo) ; elle n'est exposée que par le hub Profil. Huit XCUITest × trois formats, compilés,
+  jamais lancés localement : **le run CI vert de l'éclat « lot3-inscription » reste un préalable au merge**.
+- **m8** : `CompletionRules.dateMaximale` calcule la borne dans le calendrier UTC du sélecteur (défaut et appel de
+  l'écran) ; test du 28 février 2026 à 23:30 UTC (borne 28/02/2008, celle de Paris serait le 29).
+- Aucun texte nouveau, aucun texte juridique : textes existants (bouton étudiant, `espaceIndisponible`) et message
+  serveur verbatim du 409 (`register-soignant/index.ts` l.208, rejoué par la démo). Aucune RPC nouvelle, aucune
+  écriture serveur ; B9 inchangé (go de Gabrielle).
+
+## Décisions déléguées du 8 novembre 2026
+
+Gabrielle a délégué toutes les décisions, juridiques comprises, le 8 novembre 2026 (« arrête de me demander et prends
+les décisions, avance seul ») ; les HARD STOP n°4 ne bloquent plus l'implémentation, les PR B9 restent préparées sans
+merge. Chaque décision ci-dessous indique ses sources primaires (vérifiables dans le dépôt) et leur force : **JUGÉ**
+(jurisprudence), **doctrine** (ministérielle) ou **choix de conformité Jolene**. Aucune ne s'appuie sur un arrêt, une
+délibération ou un texte que l'auteur n'a pas pu relire.
+
+### T8-J1 — Modes d'exercice de la complétion quand le référentiel est inconnu
+
+- **Question** : blueprint v2 (§2.4, §3 T8) : « `LIBERAL` retiré tant que non confirmé (l.192-199) » ; le web actuel ne
+  retire le libéral que si le référentiel est **connu** et ne le propose pas, le **conserve** pendant le chargement ou
+  une indisponibilité (sans permettre de l'ajouter) et l'écrit : « Vos choix sont conservés ; l’ajout du libéral
+  nécessite une vérification. ».
+- **Sources** : `src/pages/InscriptionSoignant.tsx` l.187-199 (code du retrait) ; `src/components/ChoixModesExercice.tsx`
+  l.12 (« Préférences de recherche uniquement : ne modifie pas le statut d’exercice déclaré »), l.15-16, l.29, l.43 ;
+  `supabase/schema/public.sql`, `dec_verifier_type_exercice_profession` (le serveur contrôle `soignants.type_exercice`
+  contre `regles_exercice_profession`, pas `types_contrat_acceptes`) ; `supabase/migrations/20260714084802_synchroniser_regles_profil_exercice.sql`
+  (en-tête : « La décision d'une mission reste exclusivement fondée sur missions.profession_requise via
+  fn_mode_exercice ») ; `supabase/functions/register-soignant/index.ts` l.296-298.
+- **Force** : choix de conformité Jolene (ni JUGÉ ni doctrine) : la matrice des modes est une table paramétrée
+  (`CLAUDE.md`, HARD STOP n°4 : « zéro règle juridique en dur »).
+- **Décision** : le natif suit le web actuel (décision du 9 novembre : le natif suit le web mot pour mot ; même
+  comportement que l'édition du profil, T9) : libéral retiré quand le référentiel connu ne le propose pas, conservé tant
+  qu'il est inconnu, jamais ajoutable sans confirmation (option masquée). Motif : les modes cochés sont une préférence de
+  recherche, pas le statut d'exercice déclaré, et chaque mission applique sa propre règle (`fn_mode_exercice`) ; retirer
+  un choix conservé contredirait le texte verbatim affiché. Le blueprint décrivait le web de façon inexacte ; écart
+  consigné ici et testé (`CompletionProfilRulesTests.testModesApresLeReferentiel`,
+  `CompletionProfilModelTests.testReferentielIndisponibleConserveLesChoixSansAjoutDuLiberalPuisReessai`).
+- Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+
+### T8-J2 — Avertissement d'exclusivité et question « salarié(e) »
+
+- **Question** : afficher à la complétion la question « Êtes-vous actuellement salarié(e) d'un établissement de
+  santé ? » et l'avertissement « Vérifiez que votre contrat de travail n'inclut pas de clause d'exclusivité. ».
+- **Sources** : `src/pages/InscriptionSoignant.tsx` l.75-86 (texte), l.134 (état du formulaire) ;
+  `src/lib/inscriptionProgressive.ts` l.152-167 (`donneesFormulaire` : la réponse est enregistrée dans le brouillon),
+  l.135-138 (`restaurerFormulaire` : restaurée), l.179-192 (non transmise à `register-soignant`, correction 21) ;
+  liste blanche serveur `public.sql` l.32487.
+- **Force** : choix de conformité Jolene (information de l'utilisateur, aucune règle ni aucun texte de loi cité).
+- **Décision** : affichage verbatim du web ; réponse enregistrée dans le brouillon et restaurée comme le web, jamais
+  transmise à `register-soignant` ; aucun ajout ni aucune reformulation (pas de citation d'article, pas de conséquence
+  juridique annoncée). (Corrigé le 09/11/2026, revue B8 de T8, m4 : la première rédaction disait la réponse « ni
+  enregistrée dans le brouillon », ce qui décrivait le web de façon inexacte.)
+- Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+
+### T8-J3 — Libellés des modes et phrase du type d'exercice unique
+
+- **Question** : afficher « Salarié (CDD compris) », « Libéral », « Modes d’exercice recherchés » et, pour une profession à
+  type unique (ex. aide-soignant, salarié uniquement d'après le seed), « En tant que <profession>, votre type d'exercice
+  est automatiquement défini comme salarié. ».
+- **Sources** : `src/components/ChoixModesExercice.tsx` l.20-27 ; `src/pages/InscriptionSoignant.tsx` l.62-71 ;
+  `src/hooks/useTypesExerciceAutorises.ts` l.57 (`uniqueType`) ; seed `20260714084802` (types par profession).
+- **Force** : choix de conformité Jolene (table paramétrée `regles_exercice_profession`).
+- **Décision** : textes verbatim, assemblés comme le JSX ; le type affiché vient exclusivement de
+  `fn_types_exercice_autorises` (aucune règle en dur), jamais d'un défaut de l'app.
+- Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+
+### T8-J4 — Âge minimum et RPPS à l'inscription
+
+- **Question** : gardes locales de l'âge (18 ans) et de l'obligation du RPPS avant l'envoi.
+- **Sources** : `supabase/functions/register-soignant/index.ts` l.243-254 (`UNDERAGE`, contrôle serveur, message
+  verbatim), l.255-271 (`PROFESSIONS_RPPS_REQUIS`) ; `src/lib/constantes.ts` l.55, l.61 ; `src/pages/InscriptionSoignant.tsx`
+  l.201-233, l.554 ; `CLAUDE.md`, « Pièges vérification documents » (AS/AES : CNI et diplôme, ni RPPS ni RCP, ni KBIS
+  ni casier).
+- **Force** : règles serveur existantes, reprises sans changement (aucune règle nouvelle).
+- **Décision** : le natif reprend la garde du formulaire web (18 × 365,25 jours, borne du sélecteur, RPPS obligatoire pour
+  médecin, chirurgien-dentiste, sage-femme et pharmacien, optionnel pour les autres professions à RPPS et pour l'AS,
+  masqué pour AES et auxiliaire de puériculture avec le texte web « Aucun RPPS n'est demandé pour ce profil. Votre
+  diplôme et votre carte d'identité restent vérifiés avant toute mission. ») ; le serveur reste seul juge (`UNDERAGE`,
+  `RPPS_*` affichés verbatim). Aucun document n'est demandé à la complétion (comme le web : les documents se déposent
+  ensuite, lot 2).
+- Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+
+### T8-J5 — Parcours étudiant
+
+- **Question** : porter la déclaration « étudiant(e) en santé » (pré-éligibilité à un emploi temporaire) ou la renvoyer au
+  web.
+- **Sources** : `src/components/inscription/DeclarationEtudiant.tsx` l.5-40, l.105-108 (conditions réglementaires par
+  formation, mention d'un arrêté que l'auteur n'a pas relu dans sa version officielle) ; D11 (`DECISIONS_LOT3.md`).
+- **Force** : choix de conformité Jolene.
+- **Décision** : renvoi web (bouton « 🎓 Je suis étudiant(e) en santé », verbatim l.105, vers `/inscription/completer`
+  par le présentateur `.safari`) ; aucune condition ni aucune référence réglementaire n'est affichée en natif.
+  (Complété le 09/11/2026, revue B8 de T8, B1) Un brouillon déjà déclaré étudiant sur le web (`estEtudiant: true`) n'est
+  jamais finalisé en natif : seul ce renvoi est proposé, `register-soignant` n'est pas appelée (elle écrirait
+  `est_etudiant = false`, index.ts l.309) ; le rôle est relu au retour. Option retenue : verrou plutôt que transmission
+  de `est_etudiant` / `etudiant_details` sans affichage ni modification possible de la déclaration (détail dans la
+  section « T8 — corrections de la revue fraîche B8 »). Force : choix de conformité Jolene (D11).
+- Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -950,7 +1177,8 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   et garde `check-rpc-contracts-lot3.node.mjs` mises au contrat d'après B3 ; T13 (B9) reste à livrer.
 - **T7** — compte rapide et confirmation (consentement CGU transmis par `fn_demarrer_inscription p_cgu`) ; branche
   `lot3/l3-t7-v2` poussée (section T7 ci-dessus), préalable captcha `PORTE_LOT0.md` 3.1 / 3.2 non mesuré.
-- **T8** — complétion et `register-soignant` (inscription, audit `RGPD_CONSENTEMENT_DONNE` côté serveur).
+- **T8** — complétion et `register-soignant` (inscription, audit `RGPD_CONSENTEMENT_DONNE` côté serveur) ; branche
+  `lot3/l3-t8-v2` poussée (section T8 ci-dessus), décisions juridiques déléguées T8-J1 à T8-J5.
 - **T12** — revenus en lecture (paiements, escrow).
 - **T13** — paiements déclarés (confirmation ; contestation après B3).
 - **T14a** — Stripe Connect.
@@ -1031,6 +1259,9 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 - **§6.5 Sentry** : créer le projet `jolene-ios` (org `jolene-z6`), fournir le DSN, lire l'événement de crash de test ;
   jeton dSYM local si la symbolication est voulue.
 - **§6.6 Go B9** : B3, T7, T8, T12, T13, T14a, T14b, dispatch de T16, et les signalements de la section B9.
+  (T8, 09/11/2026) Go de merge de `lot3/l3-t8-v2` ; la preuve STAGING de la complétion (ligne `soignants` relue après
+  `register-soignant`, compte jetable nettoyé) reste au dispatch de T16 ; recette sur appareil de la complétion
+  (sélecteur de date, clavier, VoiceOver) dans `RECETTE_DEVICE_LOT3.md`.
 - **§6.7 Textes (HARD STOP)** : validation des textes listés dans la section HARD STOP, relecture des sept messages
   IBAN et du message de verrou de contestation.
 - **§6.8 Stripe TEST sur appareil** : parcourir l'onboarding hébergé avec les valeurs de test publiées par Stripe

@@ -30,6 +30,27 @@ final class PresentationsRacineTests: XCTestCase {
         XCTAssertFalse(etat.disparition(renvoi.id), "une seule fois")
     }
 
+    /// Revue B8 de T8, M1 : chaque fermeture d'un renvoi effectivement affiché est comptée (`fermetures`), pour qu'un
+    /// écran qui l'a ouvert (complétion web d'un étudiant) relise le rôle au retour ; une feuille jamais affichée, ou une
+    /// disparition répétée, ne compte pas.
+    func testChaqueFermetureDUnRenvoiAfficheEstComptee() throws {
+        var etat = PresentationsRacine()
+        XCTAssertEqual(etat.fermetures, 0)
+        etat.demanderRenvoi(.safari(litiges))
+        let premier = try XCTUnwrap(etat.renvoi)
+        etat.fermerRenvoi()
+        XCTAssertFalse(etat.disparition(premier.id), "feuille jamais affichée")
+        XCTAssertEqual(etat.fermetures, 0)
+        etat.demanderRenvoi(.safari(litiges))
+        let second = try XCTUnwrap(etat.renvoi)
+        _ = etat.apparition(second.id)
+        etat.fermerRenvoi()
+        XCTAssertTrue(etat.disparition(second.id))
+        XCTAssertEqual(etat.fermetures, 1)
+        XCTAssertFalse(etat.disparition(second.id))
+        XCTAssertEqual(etat.fermetures, 1, "une seule fois par renvoi affiché")
+    }
+
     func testRouteNativeNeDemandeAucunRenvoi() {
         var etat = PresentationsRacine()
         etat.demanderRenvoi(.accueil)

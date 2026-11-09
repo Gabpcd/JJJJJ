@@ -25,7 +25,7 @@ import XCTest
 ///   profil web ouvrent le hub natif, qui porte l'export RGPD ;
 /// - (intégration de T7) `/inscription/soignant?profession=IDE` ouvre le compte rapide natif hors session, profession
 ///   pré-remplie ; `/inscription/confirmer?token_hash=demo&type=signup` confirme le compte démo et ouvre l'aiguillage
-///   d'onboarding (complétion en attente de T8), sans espace ni renvoi web ;
+///   d'onboarding puis la complétion du profil (T8), sans espace ni renvoi web ;
 /// - aucune requête réseau (`network-sentinel`).
 /// Les règles (classement de chaque route, option B du reset, dernier lien gagnant, lien contre tap, epoch, renvoi
 /// jamais rejoué comme lien universel) sont prouvées au niveau 1 (`DeepLinkIntentTests`). Le lien universel réel
@@ -246,18 +246,20 @@ final class DemoLiensLot3Tests: JoleneUITestCase {
 
     /// `/inscription/confirmer?token_hash=demo&type=signup` reçu au lancement (lien de l'e-mail de confirmation) : la
     /// confirmation native vérifie le lien (monde démo), ouvre l'identité du nouveau compte, puis l'aiguillage
-    /// d'onboarding mène à la complétion en attente (T8) ; jamais l'espace soignant sans profil (D9), jamais un renvoi
-    /// web.
+    /// d'onboarding mène à la complétion du profil (T8, `completion-screen`, règle 8) ; jamais l'espace soignant sans
+    /// profil (D9), jamais un renvoi web.
     func testLienDeConfirmationOuvreLAiguillageDOnboarding() throws {
         launchDemo(extraArguments: ["-JOLENE_OPEN_URL", "https://jolene.app/inscription/confirmer?token_hash=demo&type=signup"])
-        let completion = element("onboarding-completion")
-        require("Le lien confirmé ouvre l'aiguillage, puis la complétion en attente", timeout: 30) {
+        let completion = element("completion-screen")
+        require("Le lien confirmé ouvre l'aiguillage, puis la complétion du profil", timeout: 30) {
             self.containerVisible(completion)
         }
         XCTAssertFalse(element("confirmation-inscription-erreur").exists, "lien démo accepté")
         XCTAssertFalse(element("renvoi-web-demo").exists, "écran natif livré (T7) : jamais un renvoi web")
         XCTAssertFalse(tabBarExists, "jamais l'espace soignant sans profil (D9)")
         record("\(proofPrefix)-liens-confirmation-onboarding")
+        let deconnexion = element("logout-button")
+        scrollTo(deconnexion, in: completion)
         tap("logout-button")
         require("La déconnexion ramène à la connexion", timeout: 15) { self.visible(self.element("login-scroll")) }
     }

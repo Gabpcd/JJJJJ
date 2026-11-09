@@ -8,9 +8,11 @@ import Combine
 /// présente :
 /// - `/inscription/confirmer` → écran de confirmation (une demande par lien reçu, au-dessus de tout état) ;
 /// - `/inscription/soignant` et `/inscription/reprendre` → « Créer un compte » (profession du lien pré-remplie)
-///   ou aiguillage d'onboarding, selon la session.
-/// Seule la **destination** est lue (`DestinationLien.destination`) : une page dont l'écran n'est pas livré
-/// (`/inscription/completer` avant T8) reste un renvoi web et n'est pas consommée ici. Rien n'est journalisé :
+///   ou aiguillage d'onboarding, selon la session ;
+/// - `/inscription/completer` (T8) → comme la reprise : connexion hors session, aiguillage d'onboarding (complétion
+///   du profil) avec une identité.
+/// Seule la **destination** est lue (`DestinationLien.destination`) : une page dont l'écran n'est pas livré reste un
+/// renvoi web et n'est pas consommée ici. Rien n'est journalisé :
 /// les identifiants du lien (`token_hash`, `code`, jetons) ne sont portés que par `AuthCallbackCredentials`,
 /// dont la description est masquée.
 @MainActor

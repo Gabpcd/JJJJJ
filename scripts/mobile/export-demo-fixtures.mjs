@@ -365,6 +365,28 @@ export function buildDemoExportRgpd(now = new Date(FIXED_NOW)) {
   });
 }
 
+/**
+ * Lot 3, T8 : référentiel des modes d'exercice du PROFIL (`regles_exercice_profession`), réponse de
+ * `fn_types_exercice_autorises(p_profession)` pour chaque profession, lu dans le seed versionné
+ * `REGLES_EXERCICE_SEED` (17 valeurs de l'enum `type_profession`) : source unique, aucune règle recopiée à la main
+ * (HARD STOP n°4). Une profession absente rend le défaut serveur `SALARIE, LIBERAL, MIXTE` (`COALESCE`, public.sql).
+ * Lu par `DemoInscriptionGateway.typesExercice` et par les XCUITest (`DemoCompletionInscriptionTests`).
+ */
+export const REGLES_EXERCICE_SEED = 'supabase/migrations/20260714084802_synchroniser_regles_profil_exercice.sql';
+
+export function buildDemoTypesExercice() {
+  const sql = readFileSync(join(ROOT, REGLES_EXERCICE_SEED), 'utf8');
+  const insert = sql.slice(sql.indexOf('INSERT INTO public.regles_exercice_profession'), sql.indexOf('ON CONFLICT (profession)'));
+  const types = {};
+  for (const m of insert.matchAll(/\(\s*'([A-Z_]+)',\s*ARRAY\[([^\]]*)\]::text\[\]/g)) {
+    types[m[1]] = [...m[2].matchAll(/'([A-Z_]+)'/g)].map(t => t[1]);
+  }
+  if (Object.keys(types).length !== 17) {
+    throw new Error(`${REGLES_EXERCICE_SEED} : 17 professions attendues, ${Object.keys(types).length} lues`);
+  }
+  return { fixed_now: FIXED_NOW, source: REGLES_EXERCICE_SEED, types_exercice: types };
+}
+
 export function buildFixtures() {
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
@@ -375,6 +397,7 @@ export function buildFixtures() {
     'demo-preferences.json': buildDemoPreferences(), // lot 3, T6
     'demo-profil-complet.json': buildDemoProfilComplet(),
     'demo-export-rgpd.json': buildDemoExportRgpd(), // lot 3, T11
+    'demo-types-exercice.json': buildDemoTypesExercice(), // lot 3, T8
   };
 }
 

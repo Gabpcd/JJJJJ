@@ -233,6 +233,8 @@ struct PointDEntreeLiens: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.presentateurRenvoiWeb, coordinateur)
+            // Lot 3, T8 (revue B8, M1) : retour d'un renvoi, relu par l'écran qui l'a ouvert.
+            .environment(\.fermeturesRenvoiWeb, coordinateur.presentations.fermetures)
             .onAppear { coordinateur.racineVisible() }
             .onOpenURL { url in coordinateur.recevoir(url: url) }
             .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activite in

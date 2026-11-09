@@ -99,8 +99,8 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_obtenir_mes_preferences_notifications` | consommée lot 3 (T6) | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_modifier_preferences_notifications` | consommée lot 3 (T6) | 3 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_demarrer_inscription` | consommée lot 3 (T7) | 3 (T7) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
-| `fn_enregistrer_parcours_inscription` | à venir | 3 (T8, B9) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
-| `fn_types_exercice_autorises` | à venir | 3 (T8, T9) | PUBLIC_VOLONTAIRE | anon, authenticated, service_role | déclarée |
+| `fn_enregistrer_parcours_inscription` | consommée lot 3 (T8) | 3 (T8) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (T0 du lot 3) | authenticated, service_role | absente |
+| `fn_types_exercice_autorises` | consommée lot 3 (T8) | 3 (T8) | PUBLIC_VOLONTAIRE | anon, authenticated, service_role | déclarée |
 | `fn_modifier_mon_profil` | consommée lot 3 (T9) | 3 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_rgpd_exporter_rate_limited` | consommée lot 3 (T11) | 3 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_confirmer_paiement_soignant` | à venir | 3 (T13, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -988,7 +988,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_demarrer_inscription"("p_type_compte" "t
 
 ## fn_enregistrer_parcours_inscription
 
-- **Statut natif** : à venir (lot 3, T8) — **B9** (inscription, D18).
+- **Statut natif** : consommée (lot 3, T8) par `JoleneSupabase/Inscription/SupabaseInscriptionGateway.swift`, appelée par
+  `JoleneCore/Inscription/CompletionProfilModel.swift` (« Enregistrer et continuer plus tard », puis avant
+  `register-soignant` comme `finaliserProfil` l.178) — **B9** (inscription, D18). Définition live relue en lecture seule
+  le 09/11/2026 (`pg_get_functiondef`) : corps identique au dump, `SECURITY DEFINER`, EXECUTE `authenticated` (pas
+  `anon`). Clés envoyées : `CompletionRules.clesBrouillon` ; 22023 et P0002 restitués par `exceptionsMetier`, message
+  serveur verbatim (`RefusInscription`) ; ligne relue en liste blanche, propriétaire vérifié.
 - **Usage prévu** : Brouillon **serveur** de la complétion (`/inscription/completer`), enregistré à chaque étape
   (jamais de brouillon local, `LOT3_PLAN.md` §2.6) ; l'app n'envoie que des clés de la liste blanche (web
   `inscriptionProgressive.ts` l.117-124), jamais mot de passe, email, jeton ni coordonnées (`lat`, `lng` sont aussi
@@ -1016,13 +1021,19 @@ CREATE OR REPLACE FUNCTION "public"."fn_enregistrer_parcours_inscription"("p_don
   `scolariteAnnee`, `siret`, `finess`, `type`, `rue`, `ville`, `codePostal`, `departement`, `emailContact`,
   `telephoneContact`, `numeroLicence`, `missionProfession`, `missionVille`, `missionDate`, `missionDebut`,
   `missionFin`, `missionChoisie`, `brouillonMission`, `missionFormulaire`. Clés soignant envoyées par le natif :
-  `prenom`, `nom`, `telephone`, `dateNaissance`, `typesContrat`, `rpps`, `rayon` ; `estSalarieEtablissement` n'est
-  qu'un affichage côté web, jamais transmis à `register-soignant` (correction 21).
+  `prenom`, `nom`, `telephone`, `dateNaissance`, `typesContrat`, `rpps`, `rayon`, `estSalarieEtablissement` (réponse
+  « salarié(e) » enregistrée et restaurée comme le web, jamais transmise à `register-soignant`, correction 21 ; revue B8
+  de T8, m4). `estEtudiant`, `scolariteFormation`, `scolariteAnnee` : lues seulement, jamais écrites par le natif ; un
+  brouillon `estEtudiant: true` n'est jamais finalisé en natif (D11, revue B8 de T8, B1).
 - **Preuve STAGING** : brouillon relu dans `parcours_inscription.donnees` pendant la complétion (T16).
 
 ## fn_types_exercice_autorises
 
-- **Statut natif** : à venir (lot 3, T8 ; réutilisée par T9).
+- **Statut natif** : consommée (lot 3, T8) par `JoleneSupabase/Inscription/SupabaseInscriptionGateway.swift`, appelée par
+  `JoleneCore/Inscription/CompletionProfilModel.swift` et par l'édition du profil (`ProfilEditionModel`, T9 : « Réessayer
+  la vérification » effectif depuis T8). Définition live relue en lecture seule le 09/11/2026 : corps identique au dump,
+  EXECUTE `authenticated` et `anon`. Réponse : tableau de chaînes, sinon nil (indisponible, jamais supposé) ; référentiel
+  démo `demo-types-exercice.json` lu dans le seed `20260714084802_synchroniser_regles_profil_exercice.sql`.
 - **Usage prévu** : Contrats proposés à la complétion selon la profession du parcours (lecture seule de
   `parcours.donnees.profession`), depuis la **table paramétrée** `regles_exercice_profession` (zéro règle en dur) ;
   web `src/hooks/useTypesExerciceAutorises.ts` l.30, `InscriptionSoignant.tsx` l.92-97 et l.192-199.
@@ -1355,7 +1366,17 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_paiements_escrow"() RETURNS "jsonb"
 
 ## Edge `register-soignant` (finalisation de l'inscription, lot 3)
 
-- **Statut natif** : à venir (lot 3, T8) — **B9** (inscription, consentement relayé, D18). Pas une RPC :
+- **Statut natif** : consommée (lot 3, T8) par `JoleneSupabase/Inscription/SupabaseInscriptionGateway.swift`
+  (`finaliser` : brouillon, puis l'edge, puis `refreshSession()`) — **B9** (inscription, consentement relayé, D18).
+  Version déployée relue en lecture seule le 09/11/2026 (`get_edge_function`, version 876, `verify_jwt = false`) :
+  `index.ts`, `_shared/errors.ts` et `_shared/attribution.ts` identiques au dépôt. Corps envoyé : `CompletionRules.corpsFinalisation`
+  (ni `lat`/`lng`, ni `est_etudiant`/`etudiant_details`, ni `navigateur`, ni `attribution`) ; 200 exige `success` ou `ok`
+  vrai et un `soignant_id` (sinon erreur de contrat, jamais un succès) ; 503 `ACCOUNT_FINALIZATION_PENDING` et échec du
+  `refreshSession()` → déconnexion locale et message ; 401 → session expirée ; (revue B8 de T8) brouillon relu déclaré
+  étudiant → aucun appel de l'edge (D11, verrou, B1) ; issue inconnue — tout statut ≥ 500, 2xx illisible, 409
+  `ACCOUNT_ALREADY_REGISTERED` / `ACCOUNT_REGISTRATION_IN_PROGRESS` / `USER_ALREADY_REGISTERED`
+  (`CompletionRules.issueIndeterminee`) → rôle relu, `message` verbatim en repli (M1) ; Bearer d'une session valide
+  (`auth.session`, m1) ; autres refus → `message` verbatim. Pas une RPC :
   `supabase/functions/register-soignant/index.ts`, appelée par `client.functions.invoke("register-soignant")`
   comme le web (`src/lib/inscriptionProgressive.ts` l.169-238).
 - **Transport** : `POST`, corps JSON `{prenom, nom, telephone, dateNaissance, profession, typesContrat, rpps, rayon,

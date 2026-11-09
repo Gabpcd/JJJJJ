@@ -80,6 +80,15 @@ public actor SessionController {
         return publication
     }
 
+    /// Lot 3, T8 (revue B8, m6) : epoch courant si l'identité active est `userId` (sans casse), nil sinon — lus ensemble,
+    /// sans suspension. Un écran attaché à un utilisateur (complétion du profil, `ParcoursInscription.userId`) ne
+    /// capture son epoch qu'ainsi : jamais les données d'un compte envoyées avec la session d'un autre. Lecture seule,
+    /// aucun effet sur l'état ni sur l'epoch.
+    public func epoch(identite userId: String) -> Int? {
+        guard let activeUserId, activeUserId.lowercased() == userId.lowercased() else { return nil }
+        return currentEpoch
+    }
+
     /// Ports utilisables pour un epoch donné, ou nil si cet epoch est périmé.
     /// Un appelant qui obtient nil abandonne son travail : son identité a changé.
     public func gateways(for epoch: Int) -> Gateways? {

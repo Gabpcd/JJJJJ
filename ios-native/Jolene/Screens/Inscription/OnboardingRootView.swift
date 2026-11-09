@@ -5,18 +5,20 @@ import JoleneDesign
 /// Aiguillage d'onboarding (lot 3, T7) d'une identité sans espace soignant (`OnboardingResolution.concerne`) : port
 /// de `src/pages/ParcoursInscription.tsx`. Pas d'exploration des missions avant le profil complet (D9) : chaque
 /// état offre « Se déconnecter » (`logout-button`, attente visible de la désactivation push, consigne de T4).
-/// - parcours soignant → complétion : **point d'extension de T8** (`CompletionProfilScreen`, `register-soignant`) ;
-///   d'ici là, l'écran bloquant et le message existants du lot 0 pour un profil incomplet ;
+/// - parcours soignant → complétion du profil (T8, `CompletionProfilScreen`, `register-soignant`), recréée à chaque
+///   relecture du parcours (`modifie_le`) : la saisie repart du brouillon serveur, comme la reprise du web ;
 /// - établissement → renvoi web (message existant du lot 0) ;
 /// - ni parcours ni intention → « Choisissez votre espace… » ; « Je suis soignant » ouvre le compte rapide en mode
 ///   session ouverte (profession et consentement → `fn_demarrer_inscription`) ; « Je représente un établissement »
 ///   n'existe qu'avec le présentateur `.safari` du coordinateur des liens, L3-T3b (jamais un bouton sans effet) ;
 /// - échec → texte web l.80 et « Réessayer ».
 ///
-/// Identifiants : `onboarding-chargement`, `onboarding-completion`, `onboarding-etablissement`, `onboarding-screen`,
+/// Identifiants : `onboarding-chargement`, `completion-screen` (T8), `onboarding-etablissement`, `onboarding-screen`,
 /// `onboarding-soignant`, `onboarding-etablissement-web`, `onboarding-erreur`, `onboarding-reessayer`, `logout-button`.
 struct OnboardingRootView: View {
     @ObservedObject var session: SessionStore
+    /// T8 : message à afficher sur l'écran de connexion après la déconnexion locale d'une finalisation en attente.
+    let annoncerDeconnexion: (String) -> Void
     @StateObject private var model: OnboardingModel
     @State private var formulaireSoignant = false
     @Environment(\.presentateurRenvoiWeb) private var presentateur
@@ -24,8 +26,9 @@ struct OnboardingRootView: View {
     /// Inscription établissement, servie par le web (§1.2).
     private static let inscriptionEtablissement = URL(string: "https://jolene.app/inscription/etablissement")!
 
-    init(session: SessionStore) {
+    init(session: SessionStore, annoncerDeconnexion: @escaping (String) -> Void = { _ in }) {
         self.session = session
+        self.annoncerDeconnexion = annoncerDeconnexion
         _model = StateObject(wrappedValue: OnboardingModel(controller: session.controller))
     }
 
@@ -47,9 +50,10 @@ struct OnboardingRootView: View {
                     .tint(JoleneColor.rose700)
                     .accessibilityIdentifier("onboarding-chargement")
             }
-        case .completerSoignant:
-            // Point d'extension T8 : complétion du profil puis `register-soignant`.
-            ecranBloquant(acces: .unsupportedRole(SessionState.profilIncompletCode), identifiant: "onboarding-completion")
+        case .completerSoignant(let parcours):
+            CompletionProfilScreen(session: session, parcours: parcours, annoncerDeconnexion: annoncerDeconnexion,
+                                   recharger: { Task { await model.charger() } }, seDeconnecter: seDeconnecter)
+                .id("\(parcours.userId)|\(parcours.modifieLe ?? "")")
         case .espaceEtablissement:
             ecranBloquant(acces: .unsupportedRole(nil), identifiant: "onboarding-etablissement")
         case .choixEspace(let email):

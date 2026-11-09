@@ -129,9 +129,9 @@ public enum CibleNotification: Equatable, Sendable {
         case .connexion, .resetPassword, .confirmerInscription:
             self = .aucune
         case .inscription:
-            // T7 : pages d'inscription consommées hors de l'espace prêt (écran de connexion, aiguillage d'onboarding,
-            // `BoiteLiensInscription`), comme la connexion ; une page non livrée (`completer` avant T8) est déjà un
-            // `.safari` (`destination`) et n'arrive pas ici.
+            // T7, T8 : pages d'inscription (`soignant`, `reprendre`, `completer`) consommées hors de l'espace prêt
+            // (écran de connexion, aiguillage d'onboarding, `BoiteLiensInscription`), comme la connexion ; une page
+            // non livrée serait déjà un `.safari` (`destination`) et n'arriverait pas ici.
             self = .aucune
         case .serieDetail, .stripeConnect:
             // Atteint seulement quand la ligne de `ecranNatifLivre` de l'écran est passée à `true` sans que sa

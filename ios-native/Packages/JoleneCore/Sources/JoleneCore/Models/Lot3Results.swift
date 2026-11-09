@@ -101,11 +101,20 @@ public struct FormulaireInscription: Equatable, Sendable {
     public var typesContrat: [String]
     public var rpps: String?
     public var rayon: Int?
+    /// Réponse « Êtes-vous actuellement salarié(e) d'un établissement de santé ? » (revue B8 de T8, m4) : enregistrée
+    /// dans le brouillon et restaurée comme le web (`donneesFormulaire` l.152-167, `restaurerFormulaire` l.135-138),
+    /// jamais transmise à `register-soignant` (correction 21).
+    public var estSalarieEtablissement: Bool?
+    /// Déclaration étudiant du web (`estEtudiant`, `DeclarationEtudiant.tsx`) lue dans le brouillon serveur, jamais
+    /// écrite par le natif : un brouillon étudiant ne se finalise que sur le web (D11, verrou ; revue B8 de T8, B1).
+    public var estEtudiant: Bool?
 
     public init(prenom: String? = nil, nom: String? = nil, telephone: String? = nil, dateNaissance: String? = nil,
-                profession: String? = nil, typesContrat: [String] = [], rpps: String? = nil, rayon: Int? = nil) {
+                profession: String? = nil, typesContrat: [String] = [], rpps: String? = nil, rayon: Int? = nil,
+                estSalarieEtablissement: Bool? = nil, estEtudiant: Bool? = nil) {
         self.prenom = prenom; self.nom = nom; self.telephone = telephone; self.dateNaissance = dateNaissance
         self.profession = profession; self.typesContrat = typesContrat; self.rpps = rpps; self.rayon = rayon
+        self.estSalarieEtablissement = estSalarieEtablissement; self.estEtudiant = estEtudiant
     }
 }
 
@@ -142,10 +151,17 @@ public struct ContexteOnboarding: Equatable, Sendable {
 public enum ResultatFinalisation: Equatable, Sendable {
     /// HTTP 200 `{ok:true, success:true, soignant_id}` : `refreshSession()` puis `SessionStore.start()`.
     case finalisee(soignantId: String)
-    /// Refus serveur, `message` verbatim (`code` machine de `_shared/errors.ts`).
+    /// Refus serveur certain, `message` verbatim (`code` machine de `_shared/errors.ts`).
     case refusee(code: String?, message: String)
     /// 503 `ACCOUNT_FINALIZATION_PENDING` : déconnexion locale puis message serveur verbatim.
     case finalisationEnAttente(message: String)
+    /// Issue inconnue (`CompletionRules.issueIndeterminee` : 5xx, 2xx illisible, 409 d'un profil possible) : le profil a
+    /// pu être créé ; le rôle est relu et `message` (verbatim serveur, sinon repli du web) n'est affiché que sans espace
+    /// (revue B8 de T8, M1 ; PRINCIPES §5).
+    case indeterminee(message: String)
+    /// Brouillon relu par le serveur déclaré étudiant (`estEtudiant: true`) : `register-soignant` n'est pas appelée,
+    /// seule la complétion web est proposée (D11, verrou ; revue B8 de T8, B1).
+    case parcoursEtudiant
 }
 
 // MARK: - Profil (T9, T10)

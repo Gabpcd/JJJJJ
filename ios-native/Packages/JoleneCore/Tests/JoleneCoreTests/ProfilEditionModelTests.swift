@@ -418,19 +418,20 @@ final class ProfilEditionModelTests: XCTestCase {
                        "salarié toujours proposé, libéral conservé parce qu'il est coché")
         XCTAssertFalse(nonCable.model.choixModes.liberalNonPropose, "aucun verdict sans référentiel")
 
-        // Intégration du lot 3 (T7 × T9 ; CI 42541548740, `DemoProfilTests` sur iphone) : T7 câble `inscription`, mais
-        // la complétion (brouillon, modes d'exercice, finalisation) reste refusée jusqu'à T8 dans les deux mondes. Le
-        // port n'est plus un `UnwiredPort` : sans `completionLivree`, son refus donnait l'état « indisponible » AVEC
-        // « Réessayer la vérification », un bouton qui échouerait toujours. Même état que le port non câblé.
+        // Intégration du lot 3 (T7 × T9) puis T8 : T7 câblait `inscription` en refusant la complétion (état non câblé,
+        // sans « Réessayer la vérification »). T8 livre `typesExercice` dans les deux mondes (`completionLivree` vrai) :
+        // le référentiel du monde démo (seed `regles_exercice_profession`) sert l'édition du profil, et « Réessayer la
+        // vérification » redevient effectif quand le référentiel est indisponible. Seul le stub non câblé reste verrouillé.
         XCTAssertFalse(UnwiredInscriptionPort().completionLivree)
         let demo = DemoWorld.gateways().inscription
         XCTAssertFalse(demo is UnwiredPort, "T7 : inscription câblée en démo")
-        XCTAssertFalse(demo.completionLivree, "complétion livrée par T8 seulement")
-        let completionAVenir = try await scenario(inscription: demo)
-        await completionAVenir.model.charger()
-        XCTAssertEqual(completionAVenir.model.modes, .nonCable)
-        XCTAssertTrue(completionAVenir.model.choixModes.indisponible)
-        XCTAssertFalse(completionAVenir.model.reessaiModesPossible, "jamais un « Réessayer la vérification » sans effet")
+        XCTAssertTrue(demo.completionLivree, "T8 : complétion livrée")
+        let referentielDemo = try await scenario(inscription: demo)
+        await referentielDemo.model.charger()
+        XCTAssertEqual(referentielDemo.model.modes, .disponibles(["SALARIE", "LIBERAL", "MIXTE"]), "IDE : seed du référentiel")
+        XCTAssertFalse(referentielDemo.model.choixModes.indisponible)
+        XCTAssertFalse(referentielDemo.model.choixModes.liberalNonPropose)
+        XCTAssertFalse(referentielDemo.model.reessaiModesPossible)
         XCTAssertTrue(FakeTypesExercice(types: .success(["CDD"])).completionLivree,
                       "un port qui sert le référentiel le déclare livré (défaut du protocole)")
     }
