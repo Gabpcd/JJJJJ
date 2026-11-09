@@ -1129,8 +1129,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_rgpd_exporter_rate_limited"() RETURNS "j
   (principe « Publication différée » de `CLAUDE.md`). **Écart confirmé sur la définition live** (lecture seule
   `pg_get_functiondef`, 08/11/2026, T11 : corps identique au dump). L'écran natif n'affiche rien du contenu : il
   transmet le fichier du serveur à la feuille de partage, comme le web ; la fuite passe donc par le fichier, sur les
-  deux surfaces. PR backend séparée à décider par Gabrielle (droit d'accès RGPD contre double-aveugle), voir
-  `DECISIONS_LOT3.md`.
+  deux surfaces. **Tranché par délégation** (L3-TJ, décision TJ4 de `DECISIONS_LOT3.md`, « Décisions déléguées du
+  8 novembre 2026 » ; RGPD art. 12, § 3, art. 15, § 4 et considérant 63) : les notes reçues non publiées sont
+  **différées jusqu'à leur publication** (au plus un mois), leur existence restant confirmée sans contenu ; PR backend
+  B9 à préparer hors lot (nouvelle clé `notations_recues_en_attente_de_publication`, 33 clés ; contrat natif inchangé
+  jusqu'à son merge).
 - **Preuve STAGING** : export non vide (T16).
 
 ## fn_confirmer_paiement_soignant

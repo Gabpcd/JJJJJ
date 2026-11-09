@@ -53,8 +53,8 @@ public enum CentreNotificationsTextes {
     public static let nonLue = "Non lue"
 
     /// Indication vocale de « Voir » sur le compteur de l'Accueil (`accueil-notifications-action`). **Sans source
-    /// web** (le web n'a pas d'indication) et non juridique : en attente de relecture par Gabrielle
-    /// (`DECISIONS_LOT3.md`, section T5), épinglée par `CentreNotificationsTests`.
+    /// web** (le web n'a pas d'indication) et non juridique : tranchée par délégation (L3-TJ, TJ5 de
+    /// `DECISIONS_LOT3.md`), épinglée par `CentreNotificationsTests`.
     public static let indicationOuvrirCentre = "Ouvre le centre de notifications"
 }
 

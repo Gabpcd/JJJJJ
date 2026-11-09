@@ -163,8 +163,8 @@ public enum ExportRGPD {
         return signe + texte.prefix(1) + "." + texte.dropFirst() + suffixe
     }
 
-    /// Textes de la section. Ceux du web sont repris **mot pour mot, en tutoiement** (HARD STOP n°4 : wording
-    /// RGPD non revalidé par Gabrielle, comme la suppression de compte du lot 1) ; gardés par `CompteVerbatimTests`.
+    /// Textes de la section. Ceux du web sont repris **mot pour mot, en tutoiement** (HARD STOP n°4 : le natif suit
+    /// le web ; validés par délégation, L3-TJ, décision TJ2 de `DECISIONS_LOT3.md`) ; gardés par `CompteVerbatimTests`.
     public enum Textes {
         // source: src/components/profil-soignant/SectionConfidentialite.tsx:111
         public static let titre = "Mes données (RGPD)"

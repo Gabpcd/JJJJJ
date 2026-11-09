@@ -1,11 +1,12 @@
-import SafariServices
 import SwiftUI
 import JoleneCore
 import JoleneDesign
 
 /// « Créer un compte » soignant (lot 3, T7) : port de `src/pages/InscriptionRapide.tsx` (soignant). Textes
 /// verbatim (`InscriptionTextes`, HARD STOP n°4) ; la phrase de consentement porte les liens `/cgu` et
-/// `/confidentialite`, ouverts dans `SFSafariViewController` (pages hors AASA : jamais renvoyées dans l'app).
+/// `/confidentialite`, ouverts par une feuille locale (`PageWebLocale`) : `SFSafariViewController` en staging et
+/// production (pages hors AASA : jamais renvoyées dans l'app), double démo sans réseau en démo, comme les pages
+/// légales du hub (L3-TJ, décision TJ3).
 ///
 /// Deux modes (`InscriptionRapideModel.Mode`) : depuis la connexion (adresse, mot de passe, profession,
 /// consentement → `signUp`) ; depuis l'aiguillage d'onboarding (« Je suis soignant », session déjà ouverte :
@@ -101,7 +102,7 @@ struct InscriptionRapideScreen: View {
             return .handled
         })
         .sheet(item: $pageJuridique) { page in
-            PageWebSafari(url: page.url).ignoresSafeArea()
+            PageWebLocale(url: page.url) { pageJuridique = nil }
         }
         .onChange(of: model.champAFocaliser) { champ in
             guard let champ else { return }
@@ -219,15 +220,4 @@ struct InscriptionRapideScreen: View {
 private struct PageJuridique: Identifiable {
     let url: URL
     var id: String { url.absoluteString }
-}
-
-/// `SFSafariViewController` : la page s'ouvre dans l'app, sans lien universel ni session partagée.
-private struct PageWebSafari: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        SFSafariViewController(url: url)
-    }
-
-    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
 }

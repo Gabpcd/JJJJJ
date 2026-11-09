@@ -233,6 +233,7 @@ struct PointDEntreeLiens: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.presentateurRenvoiWeb, coordinateur)
+            .environment(\.presentationPageWeb, coordinateur.estDemo ? .doubleDemo : .safari) // L3-TJ (TJ3)
             .onAppear { coordinateur.racineVisible() }
             .onOpenURL { url in coordinateur.recevoir(url: url) }
             .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activite in
@@ -277,6 +278,27 @@ struct PointDEntreeLiens: ViewModifier {
                                 fermer: { coordinateur.fermerRenvoiWeb() })
         } else {
             RenvoiWebSafari(url: renvoi.url) { coordinateur.fermerRenvoiWeb() }
+                .ignoresSafeArea()
+        }
+    }
+}
+
+/// Page web d'une **feuille locale** (L3-TJ, décision TJ3) : contenu identique au renvoi web du coordinateur —
+/// `SFSafariViewController` (« Fermer » de Safari → `fermer`) en staging et production, double démo sans réseau
+/// (`renvoi-web-demo`, `renvoi-web-url`, `renvoi-web-fermer`) en démo, selon `presentationPageWeb` posé à la racine.
+/// Réservée aux écrans eux-mêmes présentés en feuille (pages `/cgu` et `/confidentialite` du consentement à
+/// l'inscription, T7) ; partout ailleurs, une page web passe par le présentateur `.safari` du coordinateur.
+struct PageWebLocale: View {
+    let url: URL
+    let fermer: () -> Void
+    @Environment(\.presentationPageWeb) private var presentation
+
+    var body: some View {
+        switch presentation {
+        case .doubleDemo:
+            RenvoiWebDemoScreen(url: url, lienSuivant: nil, remettreLienSuivant: {}, fermer: fermer)
+        case .safari:
+            RenvoiWebSafari(url: url, fermer: fermer)
                 .ignoresSafeArea()
         }
     }

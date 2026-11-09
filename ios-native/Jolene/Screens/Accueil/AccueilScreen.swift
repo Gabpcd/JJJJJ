@@ -300,7 +300,7 @@ struct AccueilScreen: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(CentreNotificationsTextes.voir)
-            // Indication sans source web, épinglée et en attente de relecture par Gabrielle (revue L3-T5, m11).
+            // Indication sans source web, épinglée, tranchée par délégation (L3-TJ, TJ5 ; revue L3-T5, m11).
             .accessibilityHint(CentreNotificationsTextes.indicationOuvrirCentre)
             .accessibilityIdentifier("accueil-notifications-action")
         }
