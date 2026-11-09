@@ -1101,3 +1101,510 @@ Déclenchée par `gh workflow run ios-swift-ci.yml --ref feat/ios-lot2` (Xcode 2
   249 s, 299 s, 223 s.
 - Ce que la CI ne prouve pas : la recette appareil (T12), les écrans STAGING (T11) et la validation des textes par
   Gabrielle (TL, P9). Les points HARD STOP de T4a, T7 et T9a restent dans « En attente de Gabrielle ».
+
+## L2-T4b
+
+### Revue fraîche B8 — L2-T4b (n°3)
+
+**Verdict : CLÔTURABLE.** Aucun bloquant, aucun majeur ; 7 mineurs et 1 remarque de forme.
+
+Périmètre lu : `git diff origin/feat/ios-lot2...origin/lot2/l2-t4b-v2`, soit 13 commits et 60 fichiers, de `855753a3` à `3775f75c`. J'ai relu en particulier le delta de la revue n°2 (`885fa96e..3775f75c`). En complément :
+- sources web relues sur la branche : ConsentementGPS, PresencesSoignant, PointageRotatifSoignant, BandeauHorsLigne, BandeauSansGPS, SectionPreferences, ProfilSoignant, platform.ts ;
+- dump `public.sql` relu ;
+- MCP Supabase en lecture seule, deux requêtes `SELECT` en production : `pg_get_functiondef` et un balayage de `pg_proc`.
+
+#### Vérifié et conforme
+
+##### Corrections de la revue n°2
+- **MJ1 (course entre XCUITest et feuille du scanner)** : en DEBUG, `DemoQRScannerView` ne lit plus rien seul ; la lecture part de `pointage-scanner-demo-lire`. `ouvrirScanner` attend un état stable (feuille ouverte et bouton présent). Les trois scénarios QR sont sans course. Les étapes communes sont dans `DemoPointageUITestCase`, classe sans test.
+- **m1 (Profil)** : `LigneProfil.sessionAVerifier` l'emporte sur tout autre état ; `verifierSession`, puis `reprendreApresSession`, sans rejeu ; pas de doublon du message.
+- **m2 (simulation d'interface)** : scénarios démo réalistes. `ExpirationSessionDemo` est partagée avec `DemoAuthGateway.restoreSession`. Le 401 arrive après application du scan, ce qui prouve qu'il n'y a pas de renvoi. `SessionController.start()` garde l'epoch pour la même identité : la reprise est cohérente.
+- **m3 (coupe-circuit)** : `ios_natif_presences_actif` est lu, fail-open. La surcharge `-JOLENE_FLAG_` n'existe qu'en DEBUG.
+- **m6 (CI)** : build borné à 25 min ; cinq éclats de 30 min ; plafond du job à 195 min. Chaque nouvelle classe figure dans les `-skip-testing` du socle et dans les `classes` du résumé.
+- **m7** : la garde d'environnement passe avant la construction de l'appareil.
+- **m8 et m9** : traités.
+
+##### Correction et concurrence
+- **Envoi unique** : `enCours` et `preparation` sont posés avant tout `await`, et le code en attente est pris et vidé de façon synchrone. Le Toggle passe par un `Task`, mais la garde `!enCours` laisse un seul `fn_consentir_gps`.
+- **Valeur relue** : elle fait foi partout (`enregistrer`, puis relecture par la gateway).
+- **Changement d'identité ou de vue** : `estCourant` est vérifié après la RPC et l'audit, et `nil` est rendu sans demander l'autorisation iOS. `PointageModel` reste protégé par `actif` et par la génération.
+- **Aucune hypothèse locale** :
+  - en cas d'échec, rien n'est envoyé et la feuille revient au pointage suivant ;
+  - un consentement illisible donne un pointage sans position ;
+  - la précision réduite n'envoie aucune coordonnée.
+- **Session expirée** : `AffichageZonePointage` donne la priorité au bloc « Session à vérifier ». `verifierSession` relit sans renvoyer le code (tests Core et XCUITest).
+- **Swift 6** : les objets observés sont `@MainActor`. `DiffusionDernierEtat` diffuse sous verrou et appelle `finish()` hors du verrou, ce qui évite un interblocage. `DemandesPosition` ne reprend sa suite qu'une seule fois. Aucune `CLLocation` ne traverse la frontière d'isolement.
+- **Démo** : `NWPathMonitor`, `CLLocationManager` et le trousseau ne sont pas créés en démo. `DemoNoNetworkTests` reste valable : JoleneCore n'importe pas `Network`.
+
+##### Serveur (définition live, 09/11)
+- `fn_scanner_code_pointage` contient bien le verrou `FOR UPDATE`, l'anti-rejeu de 2 min (dump l.55710-55713) et la boucle `sp.code_saisi = v_new_code` (l.55885). Ne pas mettre de file hors ligne est donc justifié (décision 2).
+- La seule fonction qui met à jour `scans_pointage` est `fn_supprimer_mon_compte`, et aucun cron ne la purge : le constat de D-T4b-0 et D-T4b-3 est confirmé.
+
+##### Juridique (délégation du 08/11)
+- **Textes verbatim** : les textes TL (feuille, bandeau, retours, Profil) sont repris mot pour mot ; les XCUITest les affirment au caractère près.
+- **Sources RGPD** : exactes, à la réserve de m2 sur la glose de l'art. 7 §1.
+  - art. 4 point 11, art. 6 §1 a), art. 7 §1 et §3, art. 13 §1 c), §2 a) et c), art. 5 §1 e) ;
+  - considérants 32 et 42 ;
+  - CJUE, 1er octobre 2019, *Planet49*, C-673/17 (JUGÉ).
+- La ligne « Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026 » figure sous D-T4b-0, D-T4b-1 (et son amendement), D-T4b-2 et D-T4b-3.
+- **Lignes web citées** : exactes (ConsentementGPS l.18, 25-64, 38, 50 ; PresencesSoignant l.67-76, 87-95, 306-313, 509 ; ProfilSoignant l.194 ; SectionPreferences l.128-168 ; BandeauHorsLigne l.71-81), sauf `pointerDepart` (m1).
+- **Textes opérationnels** : inventoriés et vouvoyés, sans marque juridique.
+
+##### Tests
+- Les tests Core sont substantiels : double toucher, epoch quitté pendant la RPC puis pendant l'audit, diffusion concurrente répétée 200 fois, scénarios de bout en bout dans le monde démo.
+- Les XCUITest couvrent les trois formats via la matrice, sans aucun `XCTSkip` ni attente par délai fixe.
+- Les affirmations de compte passent par `compteursRelus`, qui exige une lecture postérieure à l'action.
+- Les tests migrés (DemoPresencesTests, DemoContratsTests) ne sont pas affaiblis.
+
+##### Sécurité et données
+- Aucune coordonnée, aucun code, aucun payload QR n'est journalisé ; `FixPosition` masque sa description et sa réflexion.
+- Aucun littéral de type secret : seuls le mot de passe démo (motif existant) et un `hash_document` SHA-256 de même nature que T8.
+- Aucun fichier hors périmètre.
+
+#### Mineurs (ne bloquent pas la clôture)
+1. **m1** — Source inexacte : `pointerDepart` (l.386) n'ouvre pas la feuille. À corriger dans ConsentementGpsModel.swift l.11-13, DECISIONS_LOT2 (amendements) et PARITE (d).
+2. **m2** — D-T4b-3 : écrire que la purge B9 (ou une correction du texte web) bloque toute diffusion de T4b à de vrais utilisateurs. Le natif est le seul parcours qui sollicite activement ce consentement, sur une durée « 1 an » que la production ne respecte pas pour `scans_pointage`. Corriger aussi la glose de l'art. 7 §1.
+3. **m3** — Aperçu caméra non orienté sur iPad en paysage (QRScannerView.swift l.84-87 et l.130-135) : RotationCoordinator, et vérification en recette T12.
+4. **m4** — Références périmées : PointageRules.swift l.14 (l.55649 → l.55698) et Lot1Results.swift l.175 (l.70243 → l.70290).
+5. **m5** — Message 401 affiché deux fois en tête de la page Présences (PresencesScreen.swift l.159-163) : filtrer comme `retourLigneProfil`.
+6. **m6** — `LocationService.demanderAutorisation` sans borne (l.36-42) : la feuille de consentement peut rester bloquée si CoreLocation ne rappelle jamais.
+7. **m7** — `tapDansProfil("profil-presences")` après un défilement vers le bas (DemoPointageTests l.291) : défiler vers le haut.
+8. **Remarque de forme** — le pbxproj retire un groupe `Resources` vide (sans effet).
+
+#### Reste à prouver (hors verdict de code)
+- Premier run `ios-swift-ci.yml` vert sur les trois formats, avec la durée de chaque éclat : `DemoPointageTests` (10 tests) et `DemoPointageEtatsTests` (4 tests) n'ont été que compilés.
+- Recette appareil T12 et revue P9 de Gabrielle sur iPhone.
+- PR B9 de purge (D-T4b-3), PR web pour NULL coché (ProfilSoignant.tsx l.194), drapeau `ios_natif_contrats_actif` confié à T10.
+
+### Intégration sur `feat/ios-lot2` (intégrateur, 2026-11-09)
+
+- Ordre de la vague 4, sur la branche d'intégration `int-lot2-v4` créée depuis `origin/feat/ios-lot2` (`855753a3`) :
+  `origin/main` (`f9a8c236`, #1122 et #1115, sans conflit, commit `58769fdb`), puis `origin/fix/ios-tests-instables`
+  (#1125, deux derniers commits `a0c61c0b` et `454c88ec`, commit `2ff5c7fd` : seul le pbxproj était en conflit,
+  `RequireWait.swift` gardé avec les fichiers du lot 2), puis T4b.
+- `git merge --no-ff origin/lot2/l2-t4b-v2` (`3775f75c`), commit de fusion `580ea910`. Un seul conflit, le pbxproj,
+  résolu par `xcodegen generate` : `RequireWait.swift` de #1125 et les fichiers de T4b. Le groupe vide `Jolene/Resources`
+  disparaît, comme sur la branche de T4b (remarque de forme de la revue) : il n'est plus réinséré, `xcodegen` fait foi et
+  le dossier n'existe pas. `ios-swift-ci.yml` a fusionné seul : éclats par domaine de T4b et relevé des attentes bloquées
+  de #1125 (voir le correctif `bff6be3c` ci-dessous).
+- T4b est intégrée **avant** T5a, comme le demande le mineur 8 de la revue de T5a.
+- Mineurs m1 à m7 non traités par l'intégrateur : aucun ne casse une vérification. Ils restent à la tranche du pointage
+  suivante (m3 et m6 relèvent aussi de la recette appareil T12).
+
+## L2-T5a
+
+### Revue fraîche B8 — L2-T5a (n°2)
+
+**Verdict : CLÔTURABLE** : aucun bloquant, aucun majeur, 9 mineurs.
+
+J'ai relu en entier `git diff origin/feat/ios-lot2...origin/lot2/l2-t5a-v2` (54 fichiers, 6 commits jusqu'à `b56902d3`). Rien n'a été modifié, compilé ni testé. En production (projet `flripxtsyegjshnhzjkz`), je n'ai fait que des `SELECT` de catalogue (`pg_get_functiondef`).
+
+#### Ce qui a été vérifié et tient
+
+- **Correction et concurrence**
+  - `NotationModel` :
+    - un seul envoi à la fois : la garde `peutEnvoyer` est synchrone sur le MainActor ;
+    - pendant l'envoi, la saisie et « Plus tard » sont bloqués, et la feuille ne se ferme pas par glissement ;
+    - si l'epoch change pendant la relecture de `fin_le` ou pendant l'envoi, rien n'est publié ;
+    - si la tâche est annulée, rien n'est mémorisé ;
+    - « déjà notée » est silencieux, un refus serveur est affiché tel quel, une erreur de transport affiche un texte inventorié ;
+    - une fermeture décidée par le modèle n'efface plus le remerciement.
+  - `DetailPresencesModel` :
+    - la lecture la plus récente gagne (compteur de génération) ;
+    - une annulation n'est jamais affichée comme une erreur ;
+    - `.introuvable` et la carte masquée sur `{error}` fonctionnent ;
+    - la relance n'envoie qu'une demande à la fois, avec le message serveur tel quel.
+- **Gateway Supabase**
+  - Les sept clés exactes sont envoyées, avec `p_commentaire: null`, en un seul POST.
+  - `P0001` est déclarée. Messages et contrat relus en live : « Mission déjà notée pour ce sens », « La notation n’a pas pu être enregistrée. Veuillez réessayer. », « Non authentifié ».
+  - `ficheDetail` lit des projections imposées : ni `select=*`, ni coordonnées, ni code. `ResumePresencesServeur` n'a pas de champ `heures_reelles`.
+- **Parité avec `DetailPresencesMission.tsx` l.193-703**
+  - En-tête, progression, synthèse (retard, départ anticipé, pauses, distance, déficit à 90 %, bilans), segments par jour, statuts de validation, contrôles et `presenceEnAttente` : relus ligne à ligne, conformes.
+  - Écarts consignés : taux horaire de l'en-tête et récapitulatif financier non portés, « Planning indisponible » remplacé par l'écran d'erreur, ligne « ⏱ » omise si la durée est nulle.
+- **Parité avec `WidgetAllerPointer` et `missionProchaine`** (DashboardSoignant l.282-320) : conforme, sauf le rafraîchissement (m2).
+- **Juridique délégué** — sources primaires vérifiées :
+  - PageCGU l.48, l.50, l.109 et l.115 : texte exact ;
+  - `dec_definir_type_paiement` l.1537-1564 et l.1550-1555, relu en live (`BULLETIN_PAIE`/`DIRECT`) ;
+  - `fn_valider_presences_72h_auto` : paramètre `delai_autovalidation_presence_h`, s'applique à toutes les présences, exclusions conformes à ce qui est écrit ;
+  - `fn_etablissements_safe` l.35093 et l.35116-35120, `pol_mission_select` l.79410 ;
+  - lecteurs de `heures_ajustees_litige` : l.13334-13338, l.14074-14079 et l.14702-14706.
+  - La force de chaque source est indiquée, la déduction sur la phrase « salarié » est explicitée, et la ligne « Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026 » est présente.
+  - Les textes de relance sont affichés tels que le web les écrit, tutoiement compris. Aucun texte juridique n'est reformulé.
+- **Notes jamais lues**
+  - La garde Node `lecture-notes-ios` est solide : découpage lexical, exclusion unique et comptée, test de mutation permanent, lancée par `validate-pr`.
+  - Aucune requête du diff ne vise `notations_missions`.
+- **Données sensibles** : aucun log, aucun littéral ressemblant à un secret, aucune coordonnée GPS ni aucun code lu.
+- **Correction de M3** : le récapitulatif financier est une route forcée web, l'identifiant est restreint à `[A-Za-z0-9-]`, et un test prouve que ce renvoi ne dépend pas de `LinkRouter`.
+- **XCUITest**
+  - Attentes par `require` (sondage), jamais par délai fixe.
+  - La sentinelle « 0 requête » est relue à la fin des deux parcours.
+  - La classe est ajoutée à l'éclat `lot2`, contrôlé par la gate pour chaque format.
+- **Régressions** : identifiants migrés (`accueil-oubli-pointage-action` retiré, `accueil-oubli-depart` et `accueil-pointer` affirmés absents en démo normale) ; `portsEnAttenteLot2` vaut `["contestation"]` ; retrait sans effet du groupe vide `Resources` du `pbxproj`.
+
+#### Mineurs (détail dans `mineurs`)
+
+1. **Hors périmètre, à remonter en B9.** `fn_presences_detail_mission` (live) : avec `mon_etablissement_id()` NULL, la garde d'accès vaut NULL et laisse passer. Tout soignant connecté peut lire les données de présence de n'importe quelle mission dont il connaît l'id. À consigner, puis PR serveur séparée.
+2. **Widget « Aller pointer » figé.** Aucune minuterie, alors que le web recalcule toutes les 30 s ; le texte de l'écart est inexact.
+3. **Relecture en échec.** Elle remplace le détail affiché par l'écran d'erreur, ce qui contredit le choix fait en T4a.
+4. **Lignes de `public.sql` périmées** (décalage d'environ 43) dans quatre commentaires de gateway et de démo.
+5. **`@StateObject` de la notation lié à l'identité de la vue**, pas à `missionId` : ajouter `.id(missionId)` ou une consigne à T4b.
+6. **Titre de navigation** « Synthèse des présences » au lieu du titre de la page web.
+7. **Retours silencieux** de `proposer()` et `envoyer()` quand il n'y a pas de gateways (cosmétique).
+8. **Ordre d'intégration** : intégrer T4b avant T5a, sinon « Pointer mon départ maintenant » mène à une page où le départ ne peut pas être pointé.
+9. **Mentions périmées** dans la documentation et un commentaire (`PresentateurRenvoiWeb.swift` l.18, `LOT1_PLAN.md` l.306, `DECISIONS_LOT2.md` l.756).
+
+#### Reste à acquérir avant « livré » (déjà consigné)
+
+- `DemoPresenceDetailTests` est compilé mais pas lancé : l'éclat `lot2` doit passer au vert sur iPhone, iPad portrait et iPad paysage.
+- P10 « notation » attend la ligne `.notationAuDepart` de T4b, la fixture `fin_le` ≤ 00h30 UTC et le XCUITest sur les trois formats.
+- Revue de l'écran sur iPhone par Gabrielle (P9).
+
+### Intégration sur `feat/ios-lot2` (intégrateur, 2026-11-09)
+
+- `git merge --no-ff origin/lot2/l2-t5a-v2` (`b56902d3`) après T4b (mineur 8), commit de fusion `dd42b263`. Sept conflits,
+  tous résolus en gardant les deux tranches :
+  - `ios-swift-ci.yml` : l'éclat « lot2 » de T5a n'existe plus (découpage par domaine de T4b) ; `DemoPresenceDetailTests`
+    rejoint l'éclat de son domaine, « presences » (`DemoPresencesTests`, `DemoPointageEtatsTests`,
+    `DemoPresenceDetailTests` : 4 + 4 + 4 tests), est exclue du socle et exigée par le résumé (règle de T4b : « une nouvelle
+    classe démo du lot 2 rejoint l'éclat de son domaine ») ;
+  - `AppContainer.swift` : scénarios de pointage de T4b (`DemoPointageGateway.Scenario`) puis scénario `accueil-pointage`
+    de T5a, dans le même bloc DEBUG ;
+  - `DemoPresencesTests.swift` : en-tête des deux tranches (« Voir le contrat » natif depuis T4b, « Détail » natif depuis
+    T5a ; seul « Voir ou signaler un litige » reste un gap verrouillé). Le corps du test a fusionné seul : l'assertion
+    positive de T5a sur `presence-historique-detail-…` et les assertions de T4b sur la zone de pointage et « Voir le
+    contrat » sont toutes gardées ;
+  - `tests/node/textes-juridiques-ios.node.mjs` : `BandeauHorsLigne.tsx` (T4b) et `BandeauOubliDepart.tsx` (T5a) dans la
+    liste des fichiers web épinglés, qui n'est que complétée ;
+  - `DECISIONS_LOT2.md` : lignes d'amendement des deux tranches, section « Textes opérationnels hors web (T5a) » et une
+    seule section « Décisions déléguées du 8 novembre 2026 » (T5a l'avait recréée après « Actions manuelles ») ;
+  - `PARITE_SOIGNANT.md` : ligne Présences de T4b, écarts (3) et (5) de T4a mis à jour pour T5a ; la ligne du détail cite
+    l'éclat « presences » ;
+  - `project.pbxproj` : `xcodegen generate`.
+- **Conflit sémantique révélé par la compilation** (correctif `bff6be3c`) : `DemoPointageGateway.ficheDetail` (T5a)
+  appelait `verifier(context)` sans `await`, alors que T4b a rendu `verifier` asynchrone (session démo expirée). Erreur de
+  compilation de JoleneCore sur le résultat fusionné, corrigée par `try await verifier(context)` ; le comportement est
+  celui des autres lectures de la gateway démo.
+- **Consigne restée ouverte : la notation au départ final.** `.notationAuDepart` (point d'extension de T5a) n'est posé
+  nulle part : T4b a été développée sans `NotationSheet.swift`. La brancher est une fonctionnalité avec ses propres tests
+  (ligne dans `PointageCodeView`, mission démo à `fin_le` ≤ 00h30 UTC, XCUITest sur trois formats) : elle n'est pas
+  ajoutée par l'intégrateur et reste consignée dans `DECISIONS_LOT2.md` (« État après l'intégration du 9 novembre
+  2026 »). P10 « notation » n'est pas livrée.
+- Mineurs : m8 appliqué (ordre d'intégration) ; m1 (garde NULL de `fn_presences_detail_mission`) est déjà couvert par le
+  renvoi B9 « Gardes NULL des fonctions `SECURITY DEFINER` » de `DECISIONS_LOT2.md`, qui cite cette fonction ; m2 à m7
+  et m9 ne cassent aucune vérification et ne sont pas traités.
+
+## L2-T9b
+
+### Revue fraîche B8 — L2-T9b (n°2)
+
+**Verdict : CLÔTURABLE.** Aucun bloquant, aucun majeur, 5 mineurs.
+
+**Périmètre relu** : `git diff origin/feat/ios-lot2...origin/lot2/l2-t9b-v2` en entier.
+- Base `855753a3`, commits `dd977dcc` → `44fda8db`, 24 fichiers.
+- Confronté au web : `SignerContratOtp.tsx` l.1-355 ; `ContratMission.tsx` l.280-330 et l.700-840.
+- Confronté au blueprint v2 (§3 T9b), à `LOTS_2_5_DECISIONS.md` et à `DECISIONS_LOT2.md`.
+- Lecture seule, aucun build ni test lancé.
+- MCP Supabase, lecture seule en production : les longueurs live de `fn_envoyer_otp_signature(uuid)` (8 349) et de `fn_signer_contrat_otp(uuid,text,text,text)` (7 364) correspondent à celles consignées. La branche `otp_envoye_a < now() - interval '10 minutes'` → `statut_signature = 'expire'` + `OTP_EXPIRE` est confirmée, ainsi que `x-forwarded-for`, `JOLENE_OTP` et les 5 tentatives.
+
+#### Corrections de la revue n°1 : vérifiées
+- **M1, éclat CI « contrats »**
+  - Il porte `DemoContratsTests` et `DemoSignatureContratTests` en `-only-testing`.
+  - Les deux classes sont retirées de « lot2 », exclues du socle et exigées par le résumé.
+  - L'éclat est relié à `CODE_CONTRATS`, à la boucle xcresult et à l'artefact. Il est borné à 30 min, tourne avec `if: always() && …` et le plafond du job est de 105 min.
+  - La garde `tests/node/ios-swift-ci-eclats.node.mjs` est cohérente et tourne dans le job Cœur ; elle est ajoutée aux filtres de chemins.
+- **m1, relecture après `.signee`**
+  - La relecture est relancée une fois, puis « Réessayer » est proposé ; l'écran n'est jamais démonté et le code n'est jamais renvoyé.
+  - `.unauthorized` → `sessionExpired` ; une annulation ne publie rien.
+  - `charger()` remet à zéro `sessionExpired` et `erreurRelecture`.
+  - Les tests couvrent ces chemins.
+- **m2** : admission ouverte jusqu'à `canSend ? expiresAt : otpExpiresAt`, conforme aux l.310-312. Comme `otpExpiresAt` est borné par la capacité, cela équivaut au web.
+- **m3** : l'ordre des conditions du `guard` est correct, et `demanderEnvoi`/`demanderSignature` sont synchrones sur le MainActor. Un double appui donne une seule requête (test `async let`).
+- **m4** : corrigé dans la source et dans DECISIONS ; il reste un commentaire de test (mineur 4).
+- **m5, m6** : appliqués ; une glose subsiste sur eIDAS 25 §2 (mineur 5).
+- **m7** : placeholder « 123456 » (l.316), gardé par TL.
+- **m8** : `annonceALApparition` ajouté.
+- **m9** : le test se termine par `goBack` ×2 puis `assertNoNetworkRequest`.
+- **m10, m11** : consignés.
+
+#### Points contrôlés sans défaut
+- **Parité web**
+  - Conditions `disabled` respectées : l.284, 317, 335 et 344.
+  - Tentatives affichées seulement sous 5 (l.322).
+  - Alerte bloquante qui masque le retour (l.250-264).
+  - Indisponibilité réservée à `CONTRAT_INACTIF`, `CONTRAT_DEJA_COMPLET` et `DEJA_SIGNE` (l.223-235).
+  - Minuteur dérivé de l'échéance, « Expiré », « Recevoir un nouveau code ».
+  - « numéro masqué » quand le numéro manque.
+  - `actionsSuspendues` (l.265 et l.271).
+- **Écarts au web** : tous consignés dans les Amendements (confirmation persistante, `OTP_EXPIRE` local, scénario `compte-test`, case de consentement en bouton, champ du code).
+- **Aucun succès supposé**
+  - La gateway relit la preuve, puis le modèle relit le contrat et le certificat avant de publier.
+  - Après un échec de transport, un délai épuisé ou un refus de fermeture, l'état est relu, sans second envoi.
+- **Concurrence et identité**
+  - L'epoch est vérifié avant et après chaque requête OTP.
+  - Une réponse caduque est ignorée grâce au jeton et à la clé de session.
+  - L'opération en cours désactive les boutons (anti double envoi).
+- **Données sensibles**
+  - Le code est masqué dans `description`, `debugDescription` et `Mirror` (session, demande, nature), et effacé après la signature.
+  - Le champ n'a ni correction automatique ni vérification orthographique.
+  - Aucun journal.
+  - Aucun littéral ressemblant à un secret ; seuls figurent les identifiants démo déjà existants.
+- **Juridique**
+  - Tous les textes affichés sont verbatim (TL).
+  - La décision déléguée est consignée avec la ligne « Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026 ».
+  - Les références fichier:ligne du web ont été vérifiées : l.216, 230, 242-245, 265, 276, 288, 316, 319, 348 ; ContratMission l.721/724/729/740/741/743/749-750/836 ; CertificatSignaturePage l.214.
+  - C. civ. 1366, 1367 al.1-2 et 1174 al.1, le décret 2017-1416 (présomption réservée à la signature qualifiée, abrogation du décret 2001-272) et eIDAS 25 §1 et 26 sont cités exactement.
+  - CPC 287 dernier alinéa, rédaction du décret 2017-892, et C. civ. 1353 al.1 sont conformes à ma connaissance des textes ; un contrôle Légifrance reste conseillé.
+- **XCUITest**
+  - Les 3 cas tournent sur les 3 formats via la matrice.
+  - Les attentes se font par `require` (sondage), sans délai fixe.
+  - Le minuteur est déterministe (horloge démo fixée).
+  - La sentinelle « 0 requête » est contrôlée dans les 3 cas.
+- **Régressions** : la migration d'identifiants est documentée ; `OTPField` garde les défauts du lot 0.
+
+#### Mineurs
+1. `ContratModel.actualiser()` : une lecture ancienne en échec peut reposer `erreurRelecture` après une lecture plus récente réussie. Le bouton reste actif pendant la lecture. Correction : jeton de demande, plus bouton désactivé avec chargement.
+2. `DemoContratsTests.swift:107` et `:161` : les assertions négatives sur `contrat-zone-signature` ne reposent sur aucune preuve positive de cet identifiant. Correction : assertion positive dans le cas « en attente », et négatifs complétés par `contrat-signature-otp` / `contrat-otp-envoyer`.
+3. `relireAdmission`, `try?` (l.392) : un jeton refusé en STAGING bascule en renvoi web sans « Session à vérifier ». Correction : poser `sessionExpired` sur `.unauthorized`.
+4. `SessionSignatureOtpTests.swift:226` : le commentaire cite encore la « décision 25 ».
+5. `DECISIONS_LOT2.md:862` et `:851-852` : glose « seule » sur eIDAS 25 §2 (considérant 49) et exemple L.1242-12 imprécis (requalification, pas nullité).
+
+#### Conditions de merge (hors constats)
+- **CI** : l'éclat « contrats » doit être vert sur iphone, ipad-portrait et ipad-landscape, avec la classe `DemoSignatureContratTests` démarrée et `skipped = 0`. Les 3 XCUITest et la migration de `DemoContratsTests` n'ont jamais été exécutés. L'intégrateur reporte la durée des trois éclats par format (décision 22).
+- **File de merge** : `AppContainer.swift` et `ios-swift-ci.yml` sont sériels avec T4b ; garder les deux blocs, la garde Node tranche la cohérence.
+- **« Livré » au sens de CLAUDE.md** : restent P9, la revue de l'écran sur iPhone par Gabrielle (T12), et P5, la signature STAGING réelle. Le go juridique est donné par délégation et consigné.
+
+### Intégration sur `feat/ios-lot2` (intégrateur, 2026-11-09)
+
+- `git merge --no-ff origin/lot2/l2-t9b-v2` (`44fda8db`) après T4b et T5a, commit de fusion `3b76275e`. Quatre conflits,
+  résolus en gardant les deux côtés :
+  - `ios-swift-ci.yml` : la structure en éclats par domaine de T4b est gardée, et T9b y est reportée :
+    `DemoSignatureContratTests` dans l'éclat « contrats » (`-only-testing`), exclue du socle, exigée par le résumé ; étape
+    « Éclats des tests UI cohérents » dans le job Cœur ; garde ajoutée aux deux filtres de chemins. Le plafond du job reste
+    à 195 min, au-dessus du minimum de la garde (5 × 30 + 15 = 165 min) ;
+  - `AppContainer.swift` : scénarios démo de T4b, T5a puis T9b (`ScenarioDemoContrats`, `otp-expire`, `compte-test`),
+    comme le demande la condition « File de merge » ;
+  - `JoleneDesignLot2Tests.swift` : tests `NumericCodeField` (T4b) puis `AnnonceALApparition` (T9b) ;
+  - `DECISIONS_LOT2.md` : décision 22 (paragraphes de T4b et de T9b, plus une note d'intégration), applications de T5a et
+    de T9b, sections des textes opérationnels de T5a et de T9b, sous-section T9b des décisions déléguées.
+- **La garde Node `tests/node/ios-swift-ci-eclats.node.mjs` rougissait sur le résultat fusionné : c'était le test qui
+  était faux pour la structure fusionnée, pas le code.** Rejouée telle quelle, elle échouait sur deux points. D'abord,
+  « éclat « lot2 » absent » : son premier test cherchait encore l'éclat « lot2 », que T4b a découpé. Ensuite,
+  « DemoPointageTests n existe pas » : `classesUi()` ne reconnaissait que les sous-classes directes de `JoleneUITestCase`,
+  alors que `DemoPointageTests` et `DemoPointageEtatsTests` héritent de `DemoPointageUITestCase`. La garde n'est pas
+  affaiblie :
+  - elle exige toujours exactement les deux classes des contrats dans « contrats », et désormais leur absence de **tous**
+    les autres éclats ;
+  - elle suit l'héritage jusqu'à `JoleneUITestCase` ;
+  - un test est ajouté : `DemoPointageTests`, `DemoPointageEtatsTests` et `DemoPresenceDetailTests` reconnues et rangées
+    chacune dans un seul éclat de domaine, la classe de base sans test exclue.
+
+  5 tests sur 5 passent.
+- Défaut d'intégration corrigé dans le même correctif `bff6be3c` : le nom de l'étape de l'éclat « contrats », complété à
+  la fusion par « : lecture et signature », rendait le workflow invalide en YAML (« Nested mappings are not allowed in
+  compact mappings », relevé par l'analyse `yaml` du fichier avant le push). Il devient « (XCUITest Contrats, lecture et
+  signature) ».
+- Mineurs 1 à 5 non traités : aucun ne casse une vérification.
+
+## L2-TJ
+
+### Revue fraîche B8 — L2-TJ (n°1)
+
+**Verdict : CLÔTURABLE** — aucun constat bloquant ni majeur, 11 constats mineurs.
+
+Diff relu en entier : `git diff origin/feat/ios-lot2...origin/lot2/l2-tj-v2`, 41 fichiers. Lecture seule : aucun build, aucun test, aucun appel au MCP Supabase. Le dump `supabase/schema/public.sql` de la branche a été relu.
+
+#### Périmètre
+- Le merge `89447a41` ne touche que 20 fichiers web (SEO #1115 et mention #1122). Chacun est **identique octet pour octet** à `origin/main` (`f9a8c236`). La tranche n'a rédigé aucun fichier web.
+- Les commits propres à la tranche touchent 21 fichiers, tous annoncés par l'auteur.
+- Aucun littéral ressemblant à un secret. Aucune donnée sensible : pas de code de pointage, d'OTP, de coordonnées GPS ni d'octets de fichier dans un log.
+
+#### (a) Mention du pied de page CDDU / VACATION
+- `ContratRules.mentionPiedDePage` lit `TextesWeb.Contrat.typesMentionSalariee`, qui contient {CDD, SALARIE, CDDU, VACATION}.
+- C'est exactement la constante `TYPES_CONTRAT_MENTION_SALARIEE` de `ContratMission.tsx` l.65 (vérifié), comparée sans transformation (équivalent de `Array.includes`).
+- Le cadre employeur reste réservé au CDD (l.540-542). Les lignes 837-840 et 836-842 sont exactes.
+- Aucune autre liste « salarié » ne décide de la mention côté natif (vérifié par `git grep`).
+- L'extension de la garde (`const NOM = [...]`, `deballer` tolère l'absence d'initialiseur) est correcte. Les mutations (retrait, ajout, oubli côté Swift) sont testées.
+- La règle juridique elle-même est celle de Gabrielle (#1122) ; D6 la reprend correctement.
+
+#### (b) Bandeau RCP et textes d'accès (T7)
+- **Textes repris mot pour mot**, lignes vérifiées dans `DocumentsSoignant.tsx` : l.623, 624, 634, 867-868 et 882-883 (espaces JSX réduites à une).
+- **Règle** : c'est celle de T6 (`alerteRcp`) : libéral ou mixte seulement, date passée quel que soit le statut, sinon RCP absente ou non vérifiée.
+- **Ordre** : expirations → RCP → incohérence, comme le web.
+- **Couleurs** : rouge (destructive) pour une RCP expirée, ambre pour une RCP manquante.
+- **Accessibilité** : icône masquée, conteneur `.contain`.
+- **Scénario démo** `rcp-expiree` : DEBUG, sans réseau, ne modifie que la date de la RCP. Un test unitaire garantit que rien d'autre ne change.
+- **XCUITest** : le dossier chargé est attendu par `require` avant toute assertion d'absence ; `scrollTo` est borné ; aucune attente par délai fixe ; la classe tourne dans l'éclat lot2 sur les 3 formats.
+- **Tests modifiés** : ils suivent #1122 et D4, aucun n'est affaibli.
+- **Non-régression** : DemoNoNetworkTests, sentinelle réseau et identifiants existants sont intacts.
+
+#### Décisions déléguées D1 à D12
+Chaque point porte la ligne de délégation. Sources primaires vérifiées, toutes conformes aux fichier:ligne cités :
+- **Fonctions SQL** : `fn_documents_ok_pour_mission` l.31652-31730 et ses appels l.5178, 32857, 36806, 49361 ; `dec_verifier_docs_avant_debut` l.3903-3926 ; `fn_admin_moderer_document` l.11260-11284 ; licence ≤ 13 mois l.52125-52150 ; `fn_fenetre_contestation_ouverte` l.36627 (défaut 48 l.36649-36657) ; `fn_litiges_escalader_auto` l.40761-40884 ; `fn_valider_presences_72h_auto` l.65474 ; cron 72 h l.53042-53045 ; RIB l.25619.
+- **Textes web** : CGU l.48, 97-104, 109, 115, 182 ; `PanneauContestation` l.43-46, 347, 354, 394 ; certificat l.172 et 214 ; semence 48 h l.158.
+- **Textes de loi**, cohérents : CSP L.1142-2, L.1142-25, L.4131-2, L.3111-4 ; C. civ. 1104, 1110, 1190, 1366, 1367, 2254 ; C. trav. L.1242-12, L.1242-2 3°, L.3245-1 ; RGPD art. 6, 7, 13 ; eIDAS art. 25.
+- **Jurisprudence** : Cass. crim. 7 mars 2012, n° 11-82.153, F-P+B. Son attendu (« seules les déclarations établies en faveur d'un tiers bénéficiaire… ») est confirmé par [Dalloz actualité](https://www.dalloz-actualite.fr/document/crim-7-mars-2012-f-pb-n-11-82153).
+- **Juridique et serveur** : aucun texte reformulé ni inventé, aucune écriture serveur, Q9 seulement préparée comme PR B9.
+
+Les constats mineurs portent surtout sur des sources incomplètes (D3, D4, D12), des renvois périmés (S1, l.36600, commentaires +5 lignes), le tutoiement et le vouvoiement côte à côte sur le scénario RCP expirée, et un ancien test Node devenu sans objet.
+
+#### Conditions avant « livré » (ce ne sont pas des défauts)
+- Les 2 XCUITest sont seulement compilés : il faut un run CI vert de l'éclat lot2 sur iphone, ipad-portrait et ipad-landscape, captures comprises.
+- P9 (revue sur iPhone par Gabrielle) reste ouvert.
+- Les PR web HARD STOP et la PR B9 Q9 restent à ouvrir.
+
+### Intégration sur `feat/ios-lot2` (intégrateur, 2026-11-09)
+
+- `git merge --no-ff origin/lot2/l2-tj-v2` (`2cdfda3e`) en dernier, commit de fusion `7660c483`. La reprise de `main` de la
+  tranche (`89447a41`) était déjà sur la branche d'intégration : elle n'apporte rien de plus. Deux conflits, résolus en
+  gardant les deux côtés :
+  - `TextesWeb.swift` : commentaires de `relanceTitre` et `relanceExplication`, qui renvoient maintenant à D2 de TJ et à la
+    décision « Relance de l'établissement » de T5a. Les valeurs sont identiques des deux côtés, et la ligne `// source:`
+    reste juste au-dessus de chaque constante ;
+  - `DECISIONS_LOT2.md` : une seule section « Décisions déléguées du 8 novembre 2026 ». Elle reprend l'introduction de TJ,
+    complétée d'une phrase sur les sous-sections des tranches, puis D1 à D12 et les sous-sections T4b (D-T4b-0 à
+    D-T4b-3), T5a et T9b, chacune avec sa ligne de délégation. « En attente de Gabrielle » prend la forme réduite de TJ
+    (présence physique et B9). Le point P9 y gagne la signature réelle STAGING de T9b (P5), qui exige le téléphone de
+    Gabrielle. Les points HARD STOP de T4b, T7, T9a, T9b, T5b et Q9 sont tranchés par D1 à D12, D-T4b-0 à D-T4b-3 et la
+    décision T9b.
+- Les XCUITest de TJ (`DemoDocumentsTests`, bandeau RCP et textes d'accès) tournent désormais dans l'éclat « documents »,
+  qui a remplacé l'éclat « lot2 » depuis T4b.
+- Garde textes-juridiques-ios après la fusion, verte : 122 textes HARD STOP et 273 libellés identiques au web, 38 zones de
+  rendu retrouvées. La mention CDDU/VACATION (#1122) de `ContratMission.tsx` est suivie par
+  `TextesWeb.Contrat.typesMentionSalariee`.
+- Mineurs non traités : aucun ne casse une vérification.
+
+## Vérifications après les fusions de T4b, T5a, T9b et TJ (intégrateur, 2026-11-09)
+
+Exécutées en local sur la branche d'intégration `int-lot2-v4`, poussée vers `feat/ios-lot2` à `bff6be3c` puis, après les
+correctifs révélés par la recette CI, à `ba41296b`, `1ec8d4a3` et `eaf8caf0` (Node 24.14 ;
+Swift 6.1.2 de Xcode 16.4 sur le poste, la CI utilisant Xcode 26.4.1). Rien n'a été écrit en production ni sur STAGING,
+aucun MCP Supabase n'a été interrogé, Playwright n'a pas été lancé. Seul `ios-swift-ci.yml` a été déclenché, par
+`workflow_dispatch` (section suivante).
+
+- Exporteurs, sans diff : `export-golden-vectors.mjs` (2 793 vecteurs), `export-demo-fixtures.mjs` (10 fichiers, dont
+  `demo-contrat-pointage-c.html` de T4b), `check-rpc-contracts.mjs` (33 RPC, aucune dérive ; `--update` ne change rien).
+  Les RPC câblées par les tranches sont déjà `consommee` : `fn_consentir_gps`, `fn_creer_notation_mission` (T5a),
+  `fn_envoyer_otp_signature`, `fn_signer_contrat_otp`.
+- Garde textes-juridiques-ios (`check-textes-juridiques-ios.mjs`) : verte, 122 textes HARD STOP, 273 libellés identiques
+  au web, 38 zones de rendu retrouvées.
+- `node --test` :
+  - gardes touchées (`check-rpc-contracts`, `textes-juridiques-ios`, `lecture-notes-ios`, `mobile-delivery-plan`,
+    `ios-swift-ci-eclats`) : 168 tests, 0 échec ;
+  - suite entière `tests/node/*.node.mjs` : 1 875 tests, 0 échec, 0 ignoré ;
+  - `ios-swift-ci-eclats` : 5 tests après son adaptation (section L2-T9b). Sa version d'origine échouait sur 2 tests sur 4
+    contre le workflow fusionné.
+- `JoleneCore` : `swift build --build-tests -Xswiftc -strict-concurrency=complete` rouge sur le résultat fusionné
+  (`DemoPointageGateway.swift:229`, `verifier` asynchrone de T4b appelé sans `await` par T5a), vert après le correctif
+  `bff6be3c`, sans avertissement (build propre, `.build` supprimé avant) ; `swift test` : 936 tests XCTest, 0 échec.
+- `JoleneSupabase` : même build, sans avertissement ; `swift test` : 284 tests XCTest, 0 échec.
+- App : `xcodebuild build-for-testing` (schéma `Jolene`, Debug, `generic/platform=iOS Simulator`, `-derivedDataPath` dans
+  le worktree, sans signature ni index) : `TEST BUILD SUCCEEDED`. Toutes les cibles sont compilées (Jolene,
+  JoleneCoreTests, JoleneSupabaseTests, JoleneDesignTests, JoleneUITests), dont les tests de #1125 (`RequireWait`) et les
+  XCUITest de T4b, T5a, T9b et TJ. Aucun avertissement dans nos sources ; seuls restent ceux
+  d'`appintentsmetadataprocessor`.
+- `xcodegen generate` à chaque fusion : le pbxproj suit `project.yml`, sans le groupe vide `Jolene/Resources`.
+- Workflows : `ios-swift-ci.yml` et `validate-pr.yml` relus par l'analyseur `yaml` avant le push. Le premier était
+  invalide après la fusion de T9b, à cause du nom d'étape de l'éclat « contrats » ; c'est corrigé dans `bff6be3c`.
+- Correctif d'intégration `bff6be3c`, outre les deux points ci-dessus : le relevé « Attentes bloquées absorbées » de #1125
+  lit le `manifest.json` de **chaque** éclat (`attachments/<éclat>/`). Il ne lisait que `attachments/manifest.json`, qui
+  n'existe pas quand les tests UI tournent en éclats : il aurait toujours conclu « NON relevées ». Il a été essayé en local
+  sur des pièces jointes synthétiques : un blocage relevé dans « pointage », « contrats » signalé sans manifeste, puis
+  aucun dossier. Il reste `continue-on-error`.
+- Littéraux : aucun nouveau littéral de type secret dans les fichiers écrits par l'intégrateur. Le seul hexadécimal de
+  64 caractères apporté par les fusions est le `hash_document` SHA-256 de `demo-contrat-pointage-c` dans
+  `demo-contrats.json`, fixture produite par l'exporteur et de même nature que ceux de T8 (relevé par la revue de T4b).
+- Après chacun des correctifs `ba41296b`, `1ec8d4a3` et `eaf8caf0` (app et XCUITest seulement), `xcodebuild
+  build-for-testing` a été relancé : `TEST BUILD SUCCEEDED`, sans avertissement dans nos sources ; la garde
+  `ios-swift-ci-eclats` reste verte (5 tests sur 5), et la suite Node entière aussi (1 875 tests). JoleneCore et
+  JoleneSupabase ne sont pas touchés par ces correctifs.
+- Nettoyage : chaque `.build`, chaque `DerivedData` du worktree et chaque artefact CI téléchargé (extrait dans le
+  worktree pour lire les xcresult) ont été supprimés après usage. Le lien `node_modules` est retiré à la fin.
+
+## Recette CI `ios-swift-ci.yml` après les fusions de T4b, T5a, T9b et TJ (intégrateur, 2026-11-09)
+
+Déclenchée par `gh workflow run ios-swift-ci.yml --ref feat/ios-lot2` (Xcode 26.4.1, iOS 26.2, iPhone 17 et iPad (A16)).
+Cinq éclats par format : socle, presences, pointage, documents, contrats. Le résumé exige, pour chaque éclat, un code 0,
+`Passed`, au moins un test, `failed = 0`, `skipped = 0` et chacune de ses classes démarrée. Les tests de T4b, T5a et T9b
+tournent ici pour la première fois. Deux essais de correction au plus. Le run 42567602201 a été annulé par l'intégrateur
+une dizaine de minutes après son lancement, avant toute exécution des éclats du lot 2 : il ne comportait pas encore le
+correctif de défilement. Il n'a rien testé et n'est donc pas compté comme un essai.
+
+| Run | Commit | Cœur | Packages | UI iphone | UI ipad-portrait | UI ipad-landscape |
+|---|---|---|---|---|---|---|
+| [42559541711](https://github.com/Gabpcd/JJJJJ/actions/runs/42559541711) (recette) | `bff6be3c` | vert | vert | rouge : 1 028 / 3 / 0 / 1 031 | rouge : 1 030 / 1 / 0 / 1 031 | rouge : 1 028 / 3 / 0 / 1 031 |
+| [42567602201](https://github.com/Gabpcd/JJJJJ/actions/runs/42567602201) | `ba41296b` | vert | vert | annulé | annulé | annulé |
+| [42568134868](https://github.com/Gabpcd/JJJJJ/actions/runs/42568134868), tentative 1 (essai 1) | `1ec8d4a3` | **vert** | **vert** : JoleneCoreTests 936, JoleneSupabaseTests 284, 0 avertissement | rouge : simulateur bloqué, sans xcresult pour pointage, documents et contrats | **vert** : 1 031 / 0 / 0 / 1 031, 95 captures portrait | **vert** : 1 031 / 0 / 0 / 1 031, 95 captures paysage |
+| [42568134868](https://github.com/Gabpcd/JJJJJ/actions/runs/42568134868), tentative 2 (essai 2, job iPhone seul, sans changement) | `1ec8d4a3` | — | — | rouge : 1 030 / 1 / 0 / 1 031, 94 captures portrait | — | — |
+
+Notation : réussis / échoués / ignorés / total, éclats additionnés.
+
+### Échecs du run de recette 42559541711, causes et correctifs
+
+Chaque échec a été lu dans le journal du job et dans l'xcresult (arbre d'accessibilité de l'échec, activités, et images
+extraites de l'enregistrement d'écran pour le partage).
+
+- **`DemoPointageTests.swift:67`** (iPad portrait et paysage), « En service depuis l'ouverture » : **défaut du code**.
+  L'identifiant `pointage-en-service-<m>` était posé sur un `Label` ; SwiftUI le recopiait sur l'icône (« Horloge ») et
+  sur le texte, si bien que deux éléments le portaient. Correction dans `ba41296b` (`PointageCodeView`) : un seul
+  élément d'accessibilité, au libellé du texte. Aucun autre identifiant en double dans les instantanés.
+- **`DemoPointageUITestCase.swift:100`** (iPhone), « Le champ est vide avant la saisie » : **test faux**. Le toucher à
+  97 % de la largeur tombait dans le rembourrage de `NumericCodeField` (12 pt), hors du champ de texte (254 pt sur 262) ;
+  les effacements restaient sans effet. Correction dans `ba41296b` : toucher à 85 %, après le dernier chiffre, dans le
+  champ.
+- **`testHorsLigneDesactiveLePointageSansAucunEnvoi`** (iPad paysage) et
+  **`DemoContratsTests.testContratSigneCertificatEtPartageDuFichierOriginal`** (iPad paysage, « La feuille de partage du
+  système est présentée ») : **test faux**, même cause. `scrollTo` prenait pour zone visible le cadre du `ScrollView`, qui
+  passe sous la barre de navigation translucide d'iOS 26. Le bouton restait sous la barre : dans le premier test, la page
+  était poussée jusqu'à la fin du contenu ; dans le second, le toucher atteignait la barre, qui ramenait le défilement en
+  haut (images de l'enregistrement d'écran), et aucune feuille de partage n'était présentée. Corrections :
+  - `ba41296b` : une cible masquée est ramenée vers le centre ;
+  - `1ec8d4a3` : `basDesBarresDeNavigation` et `visibleSousLesBarres` exigent que la cible soit sous les barres ;
+    l'assertion finale de `scrollTo` devient plus stricte, jamais plus lâche.
+- **`DemoConsultationTests.swift:106`** (iPhone, socle), « observateur ou thread principal bloqué 47,2 s » au-delà du budget
+  de 15 s de #1125, puis **`DemoExplorerTests.testCarteEnLectureSeuleDansLeDetailSansRequete`** (iPhone, socle, champ de
+  connexion non atteint juste après) : blocage du runner, pas un échec de code. Aucune ligne de ces tests du lot 1 n'est
+  touchée par les fusions, et les deux sont verts au run 42568134868 sur les trois formats.
+
+### Échecs du run 42568134868 (iPhone)
+
+- **Tentative 1** : simulateur bloqué, ce n'est pas un échec d'assertion. Dans l'éclat « pointage », 8 tests sur 10 passent,
+  dont les trois corrigés. Pendant `testRefusDeLaCameraRendLaSaisieManuelle`, la boucle d'événements de l'app cesse de
+  répondre (« App event loop idle notification not received »), puis « Timed out while evaluating UI query ». Le test
+  suivant ne peut plus lancer l'app (« Failed to get launch progress »). Les éclats « documents » et « contrats » restent
+  bloqués sur l'installation de `JoleneUITests-Runner.app` (journal de session) et sont coupés à 30 min sans avoir
+  démarré un seul test. Le même test passe sur iPhone au run 42559541711 et à la tentative 2. Le job iPhone est relancé
+  seul, sans changement (`gh run rerun --failed`).
+- **Tentative 2** : 1 030 réussis sur 1 031. Seul échoue `DemoSignatureContratTests.testCodeExpireProposeUnNouveauCode`,
+  sur « Le contrôle contrat-otp-envoyer est atteignable » : **test faux** (T9b). Le test amenait la case de consentement à
+  l'écran, puis touchait « Recevoir le code SMS pour signer » sans l'y amener ; sur iPhone, le bouton était sous le bord de
+  l'écran et sous la barre d'onglets (y = 839,7 pour 874 pt). Le correctif de défilement n'y est pour rien : la case est
+  dans la moitié basse, et le sens choisi est celui d'avant. Le test passait sur iPhone au run 42559541711, parce que la
+  position atteinte après les glissements varie. Correction dans `eaf8caf0`, comme dans
+  `testSignatureOtpCodeFauxPuisCodeAccepteRelu` : le bouton est amené à l'écran avant d'être touché. Ce correctif est
+  compilé (`TEST BUILD SUCCEEDED`) mais **pas exécuté en CI** : les deux essais sont épuisés.
+
+### Ce qui est acquis, ce qui reste
+
+- **Acquis sur iPad portrait et iPad paysage** (run 42568134868, `1ec8d4a3`) : 1 031 tests, 0 échec, 0 ignoré. Toutes
+  les classes ont démarré : `DemoPointageTests` (10), `DemoPointageEtatsTests` (4), `DemoPresenceDetailTests` (4),
+  `DemoSignatureContratTests` (3), ainsi que les XCUITest de TJ dans `DemoDocumentsTests`.
+- **iPhone** (tentative 2) : socle, presences, pointage et documents verts (994, 12, 10 et 9 tests) ; contrats à 5 sur 6.
+  `DemoPointageTests`, `DemoPointageEtatsTests` et `DemoPresenceDetailTests` sont donc verts sur les trois formats.
+- **Reste à prouver** : un run vert de l'éclat « contrats » sur iPhone avec `eaf8caf0`. Une seule relance du job iPhone
+  suffit (`gh run rerun` sur un nouveau run de `feat/ios-lot2`).
+- Durées des éclats au run 42568134868 (minutes ; socle, presences, pointage, documents, contrats) :
+  - ipad-portrait : 12,5, 14,2, 14,9, 9,8, 10,1 (build-for-testing : 2,8) ;
+  - ipad-landscape : 12,8, 13,4, 15,4, 8,6, 13,7 (build : 2,6) ;
+  - iphone, tentative 2 : 16,0, 16,9, **21,9**, 12,7, 17,2 (build : 5,5).
+
+  Au run 42559541711, l'éclat « pointage » mesurait 18,2 min sur iPhone et 19,1 min en paysage. Il dépasse le seuil de
+  20 min de la décision 22 sur iPhone à la tentative 2, dont le runner relevait 33 attentes bloquées absorbées. À séparer
+  si la mesure se confirme au prochain run (consigne de la décision 22).
+- Le relevé « Attentes bloquées absorbées » de #1125, adapté aux éclats dans `bff6be3c`, fonctionne :
+  - iPad paysage : 1 attente ;
+  - iPad portrait : 9 attentes ;
+  - iPhone : 16 attentes au run 42559541711, 33 à la tentative 2.
+
+  Toutes sont relevées par éclat, en annotation et dans le résumé.
+- Ce que la CI ne prouve pas : la recette appareil (T12), les écrans STAGING (T11), la revue P9 sur iPhone par Gabrielle
+  et la notation au départ final (`.notationAuDepart`, non branchée).
