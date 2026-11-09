@@ -73,4 +73,43 @@ final class PasDeDefilementTests: XCTestCase {
                        "aucune barre atteignable (écran recouvert par une feuille) : rien à dégager")
         XCTAssertFalse(PasDeDefilement.recouvertParUneBarre(CGRect(x: 300, y: 104, width: 580, height: 41), barres: [.zero]))
     }
+
+    // MARK: Abscisse du glissement
+
+    /// Run 42593592247, UI — ipad-landscape (`DemoProfilTests.testPrenomVideRefuseAvecLeMessageServeur`) : les vingt
+    /// glissements de `scrollTo` partaient de (590 ; 564,4), sur le curseur `profil-rayon` (262…918 × 538…569) ; le
+    /// curseur captait le geste (« Rayon : 50 km », le milieu de sa piste) et la page ne défilait pas.
+    func testDepartSurUnCurseurDecaleLeGlissementSurLeBordGauche() {
+        let viewport = CGRect(x: 0, y: 0, width: 1180, height: 820)
+        let curseur = CGRect(x: 262, y: 538, width: 656, height: 31)
+        XCTAssertEqual(PasDeDefilement.abscisseDeGlissement(viewport: viewport, departY: 564.4, obstacles: [curseur]),
+                       118, accuracy: 0.001)
+    }
+
+    func testDepartLibreGardeLeMilieu() {
+        let viewport = CGRect(x: 0, y: 0, width: 1180, height: 820)
+        XCTAssertEqual(PasDeDefilement.abscisseDeGlissement(viewport: viewport, departY: 564.4, obstacles: []), 590)
+        // Curseur loin du point de départ (au-dessus de sa zone tactile élargie) : le milieu reste libre.
+        let curseur = CGRect(x: 262, y: 321, width: 656, height: 31)
+        XCTAssertEqual(PasDeDefilement.abscisseDeGlissement(viewport: viewport, departY: 564.4, obstacles: [curseur]), 590)
+    }
+
+    func testZoneTactileDuCurseurPlusHauteQueSonCadre() {
+        // Un `UISlider` répond au-delà de ses 31 pt de cadre : 6 pt au-dessus du cadre, le départ est encore capté.
+        let viewport = CGRect(x: 0, y: 0, width: 1180, height: 820)
+        let curseur = CGRect(x: 262, y: 538, width: 656, height: 31)
+        XCTAssertEqual(PasDeDefilement.abscisseDeGlissement(viewport: viewport, departY: 532, obstacles: [curseur]),
+                       118, accuracy: 0.001)
+    }
+
+    func testBordGaucheAussiOccupePasseAuBordDroitPuisAuMilieu() {
+        let viewport = CGRect(x: 0, y: 0, width: 402, height: 874)
+        let centre = CGRect(x: 48, y: 400, width: 306, height: 31)
+        let gauche = CGRect(x: 0, y: 400, width: 60, height: 31)
+        XCTAssertEqual(PasDeDefilement.abscisseDeGlissement(viewport: viewport, departY: 415, obstacles: [centre, gauche]),
+                       361.8, accuracy: 0.001)
+        let toute = CGRect(x: 0, y: 400, width: 402, height: 31)
+        XCTAssertEqual(PasDeDefilement.abscisseDeGlissement(viewport: viewport, departY: 415, obstacles: [toute]), 201,
+                       "aucun couloir libre : le milieu, comme avant")
+    }
 }
