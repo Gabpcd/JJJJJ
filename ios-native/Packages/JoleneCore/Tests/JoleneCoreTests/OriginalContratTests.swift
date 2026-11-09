@@ -47,7 +47,7 @@ final class OriginalContratTests: XCTestCase {
 
     func testFixtureDemoEmpreinteEgaleACelleDeLExporteur() throws {
         let fichier = try DemoFixtures.loadContrats()
-        XCTAssertEqual(fichier.originaux.count, 2)
+        XCTAssertEqual(fichier.originaux.count, 3, "demo-contrat-001, demo-contrat-002 et, depuis T4b, demo-contrat-pointage-c")
         for reference in fichier.originaux {
             let ligne = try XCTUnwrap(fichier.contrats.first { $0.id == reference.contratId })
             let octets = try DemoFixtures.originalDemo(fichier: reference.fichier)

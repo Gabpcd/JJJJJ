@@ -111,7 +111,8 @@ final class Lot1PortsTests: XCTestCase {
 
     func testActionsDuLot1() {
         XCTAssertEqual(ActionPlanning.allCases.map(\.rawValue), ["POSTULER", "ACCEPTER", "PROPOSITION"])
-        XCTAssertEqual(AuditAction.allCases.map(\.rawValue), ["MISSION_ASSIGNATION"])
+        // L'action du lot 1 ouvre la liste ; celle du lot 2 : `Lot2PortsTests.testActionDAuditDuLot2ApresCelleDuLot1`.
+        XCTAssertEqual(Array(AuditAction.allCases.map(\.rawValue).prefix(1)), ["MISSION_ASSIGNATION"])
         XCTAssertEqual(MissionsPage.taille, 50)
     }
 

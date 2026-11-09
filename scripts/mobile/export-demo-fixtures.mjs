@@ -295,9 +295,11 @@ export function buildDemoPresences(now = new Date(FIXED_NOW)) {
     methode_pointage_arrivee: 'CODE', methode_pointage_depart: 'CODE', missions: embed(m, avecStatut),
   });
   const [h1, h2] = missionsHistorique;
-  const contrat = (missionId, statut) => ({
+  // Lot 2 T4b : le contrat de la mission c, signé par le soignant seul, est aussi un contrat de `demo-contrats.json`
+  // (« Voir le contrat » natif) ; créé 20 h avant l'horloge pour que son délai de 72 h ne soit pas échu.
+  const contrat = (missionId, statut, creeLe = heures(-72)) => ({
     id: `demo-contrat-pointage-${missionId.slice('demo-presence-'.length)}`, mission_id: missionId, statut,
-    cree_le: iso(heures(-72)),
+    cree_le: iso(creeLe),
   });
   return {
     fixed_now: now.toISOString(),
@@ -312,7 +314,7 @@ export function buildDemoPresences(now = new Date(FIXED_NOW)) {
     creneaux,
     contrats: [
       contrat('demo-presence-a', 'SIGNE_COMPLET'), contrat('demo-presence-b', 'SIGNE_COMPLET'),
-      contrat('demo-presence-c', 'SIGNE_SOIGNANT'), contrat('demo-presence-d', 'SIGNE_COMPLET'),
+      contrat('demo-presence-c', 'SIGNE_SOIGNANT', heures(-20)), contrat('demo-presence-d', 'SIGNE_COMPLET'),
       contrat('demo-presence-e', 'SIGNE_COMPLET'),
     ],
     codes_affiches: { 'demo-presence-a': '123456', 'demo-presence-b': '654321' },
@@ -486,8 +488,12 @@ export function rendreOriginalDemo({ numero, mission, etablissement, prepareLe }
  * certificat (projection `SignatureCertificat.colonnes`) ; `demo-contrat-003` CDD sans original (aucune
  * action soignant, décision 19). Lignes à la projection `ContratDetail.selection`, contexte de mission à
  * celle de `MissionContrat.selection`. Le second original sert au partage d'un contrat signé (T9a).
+ * Lot 2 T4b : `demo-contrat-pointage-c`, contrat de la mission c de `demo-presences.json` (« Voir le contrat » du bloc
+ * de pointage), dérivé de cette fixture (identifiant, mission, statut `SIGNE_SOIGNANT`, `cree_le`) : CDD avec original,
+ * signé par le soignant seul (une ligne de certificat), en attente de l'établissement.
  */
-export function buildDemoContrats(moteur, now = new Date(FIXED_NOW), dashboard = buildDemoDashboard(now)) {
+export function buildDemoContrats(moteur, now = new Date(FIXED_NOW), dashboard = buildDemoDashboard(now),
+  presences = buildDemoPresences(now)) {
   const etab = id => DEMO_ETABLISSEMENTS.find(e => e.id === id);
   const iso = ms => new Date(ms).toISOString();
   const heure = 3_600_000;
@@ -502,11 +508,15 @@ export function buildDemoContrats(moteur, now = new Date(FIXED_NOW), dashboard =
       debut_le: instantDemo(now, 12, 7).toISOString(), fin_le: iso(instantDemo(now, 12, 7).getTime() + 8 * heure), duree_heures: 8,
       taux_horaire_base: 27 },
   ];
+  const missionC = presences.missions.find(m => m.id === 'demo-presence-c');
+  const contratC = presences.contrats.find(c => c.mission_id === missionC.id);
+  missions.push({ id: missionC.id, intitule: missionC.intitule, service: missionC.service, debut_le: missionC.debut_le,
+    fin_le: missionC.fin_le, duree_heures: missionC.duree_heures, taux_horaire_base: 26 });
   const ligne = (champs) => ({
     id: champs.id, mission_id: champs.mission.id, soignant_id: DEMO_PROFILE.user_id, etablissement_id: champs.etablissement,
     numero_contrat: champs.numero, type_contrat: 'CDD', statut: champs.statut, mode_signature: 'JOLENE_OTP',
     contenu_html: champs.original?.html ?? null, hash_document: champs.original?.empreinte ?? null,
-    storage_path: champs.original ? `${champs.id}/original-${champs.id.slice(-3)}.html` : null,
+    storage_path: champs.original ? `${champs.id}/${champs.fichierStorage ?? `original-${champs.id.slice(-3)}`}.html` : null,
     contenu_html_rendu_le: champs.original ? champs.renduLe : null,
     signature_soignant: champs.signeLe != null, signature_soignant_le: champs.signeLe ?? null,
     signature_etablissement: champs.signeEtabLe != null, signature_etablissement_le: champs.signeEtabLe ?? null,
@@ -520,6 +530,11 @@ export function buildDemoContrats(moteur, now = new Date(FIXED_NOW), dashboard =
   const signeEtab2 = iso(now.getTime() - 95 * heure);
   const signeSoignant2 = iso(now.getTime() - 94 * heure);
   const original2 = rendreOriginalDemo({ numero: 'DEMO-0002', mission: missions[1], etablissement: etab('demo-etab-1'), prepareLe: renduLe2 }, moteur);
+  const creeLeC = new Date(contratC.cree_le).getTime();
+  const renduLeC = iso(creeLeC + 5 * 60_000);
+  const signeSoignantC = iso(creeLeC + 60 * 60_000);
+  const originalC = rendreOriginalDemo({ numero: 'DEMO-0004', mission: missions[3], etablissement: etab(missionC.etablissement_id),
+    prepareLe: renduLeC }, moteur);
   const contrats = [
     ligne({ id: 'demo-contrat-001', mission: missions[0], etablissement: 'demo-etab-1', numero: 'DEMO-0001',
       statut: 'EN_ATTENTE_SIGNATURES', original: original1, renduLe: renduLe1, creeLe: creeLe1 }),
@@ -527,10 +542,13 @@ export function buildDemoContrats(moteur, now = new Date(FIXED_NOW), dashboard =
       statut: 'SIGNE_COMPLET', original: original2, renduLe: renduLe2, creeLe: creeLe2, signeLe: signeSoignant2, signeEtabLe: signeEtab2 }),
     ligne({ id: 'demo-contrat-003', mission: missions[2], etablissement: 'demo-etab-2', numero: 'DEMO-0003',
       statut: 'EN_ATTENTE_SIGNATURES', original: null, creeLe: iso(now.getTime() - 2 * heure) }),
+    ligne({ id: contratC.id, mission: missions[3], etablissement: missionC.etablissement_id, numero: 'DEMO-0004',
+      statut: contratC.statut, original: originalC, renduLe: renduLeC, creeLe: contratC.cree_le, signeLe: signeSoignantC,
+      fichierStorage: 'original-pointage-c' }),
   ];
-  const signature = (id, role, userId, signeA) => ({
-    id, contrat_id: 'demo-contrat-002', signataire_user_id: userId, signataire_role: role, signe_a: signeA,
-    ip_signature: null, user_agent: null, hash_document: original2.empreinte, otp_valide_a: signeA,
+  const signature = (id, role, userId, signeA, contratId = 'demo-contrat-002', empreinte = original2.empreinte) => ({
+    id, contrat_id: contratId, signataire_user_id: userId, signataire_role: role, signe_a: signeA,
+    ip_signature: null, user_agent: null, hash_document: empreinte, otp_valide_a: signeA,
     psc_session_active: false, rpps_verifie: false, traits_identite_verifies: false, statut_signature: 'signe', cree_le: signeA,
   });
   return {
@@ -541,13 +559,17 @@ export function buildDemoContrats(moteur, now = new Date(FIXED_NOW), dashboard =
       originaux: [
         { contrat_id: 'demo-contrat-001', storage_path: contrats[0].storage_path, fichier: 'demo-contrat-001.html' },
         { contrat_id: 'demo-contrat-002', storage_path: contrats[1].storage_path, fichier: 'demo-contrat-002.html' },
+        { contrat_id: contratC.id, storage_path: contrats[3].storage_path, fichier: `${contratC.id}.html` },
       ],
       signatures: [
         signature('demo-signature-002-etab', 'etablissement', 'demo-etab-1', signeEtab2),
         signature('demo-signature-002-soignant', 'soignant', DEMO_PROFILE.user_id, signeSoignant2),
+        signature('demo-signature-pointage-c-soignant', 'soignant', DEMO_PROFILE.user_id, signeSoignantC, contratC.id,
+          originalC.empreinte),
       ],
     },
-    fichiers: { 'demo-contrat-001.html': original1.html, 'demo-contrat-002.html': original2.html },
+    fichiers: { 'demo-contrat-001.html': original1.html, 'demo-contrat-002.html': original2.html,
+      [`${contratC.id}.html`]: originalC.html },
   };
 }
 

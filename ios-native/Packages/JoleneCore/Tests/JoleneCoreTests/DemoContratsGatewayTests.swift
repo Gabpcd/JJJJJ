@@ -8,10 +8,12 @@ import XCTest
 final class DemoContratsGatewayTests: XCTestCase {
     private let contexte = DemoWorld.context
 
-    func testListeDesTroisContratsDemo() async throws {
+    /// Quatre contrats depuis T4b : `demo-contrat-pointage-c` (mission c des présences démo) rejoint les trois de T8.
+    func testListeDesQuatreContratsDemo() async throws {
         let liste = try await DemoContratsGateway().contrats(context: contexte)
-        XCTAssertEqual(liste.map(\.id), ["demo-contrat-003", "demo-contrat-001", "demo-contrat-002"], "cree_le décroissant (l.71)")
-        XCTAssertEqual(liste.map(\.statut), ["EN_ATTENTE_SIGNATURES", "EN_ATTENTE_SIGNATURES", "SIGNE_COMPLET"])
+        XCTAssertEqual(liste.map(\.id), ["demo-contrat-003", "demo-contrat-001", "demo-contrat-pointage-c", "demo-contrat-002"],
+                       "cree_le décroissant (l.71)")
+        XCTAssertEqual(liste.map(\.statut), ["EN_ATTENTE_SIGNATURES", "EN_ATTENTE_SIGNATURES", "SIGNE_SOIGNANT", "SIGNE_COMPLET"])
         XCTAssertEqual(liste.first { $0.id == "demo-contrat-001" }?.mission?.intitule, "Démonstration · Mission assignée 1")
         XCTAssertTrue(liste.allSatisfy { $0.soignantId == contexte.userId })
     }
@@ -44,6 +46,35 @@ final class DemoContratsGatewayTests: XCTestCase {
         defer { FichierContratTemporaire.effacer(fichier) }
         XCTAssertEqual(fichier.lastPathComponent, "Contrat-DEMO-0002.html")
         XCTAssertEqual(VerificationOriginal.empreinte(try String(contentsOf: fichier, encoding: .utf8)), detail.hashDocument)
+    }
+
+    /// Lot 2 T4b : contrat de la mission c de `demo-presences.json` (motif CONTRAT du bloc de pointage), ouvert par
+    /// « Voir le contrat » : même identifiant, même mission, même statut et même `cree_le` dans les deux fixtures (dérivées
+    /// d'une seule source par l'exporteur) ; signé par le soignant seul, original contrôlé, une ligne de certificat.
+    func testContratDuPointageDeLaMissionC() async throws {
+        let presences = try DemoPointageGateway.Fixture.charger()
+        let reference = try XCTUnwrap(presences.contrats.first { $0.missionId == "demo-presence-c" })
+        let gateway = DemoContratsGateway()
+        let detail = try await gateway.contrat(id: reference.id, context: contexte)
+        XCTAssertEqual(detail.id, "demo-contrat-pointage-c")
+        XCTAssertEqual(detail.missionId, reference.missionId)
+        XCTAssertEqual(detail.statut, reference.statut)
+        XCTAssertEqual(detail.creeLe, reference.creeLe)
+        XCTAssertEqual(detail.statut, "SIGNE_SOIGNANT")
+        XCTAssertEqual(detail.mission?.intitule, "Démonstration · Contrat à signer")
+        XCTAssertEqual(detail.etablissementNom, "Cabinet fictif du Parc")
+        XCTAssertEqual(detail.signatureSoignant, true)
+        XCTAssertEqual(detail.signatureEtablissement, false)
+        XCTAssertFalse(ContratRules.zoneSignatureVisible(detail), "déjà signé par le soignant : aucune signature proposée")
+        XCTAssertEqual(ContratRules.bandeaux(detail), [], "signé par moi : pas de « l'autre partie a déjà signé »")
+        XCTAssertEqual(CompteARebours72h.etat(creeLe: detail.creeLe, maintenant: DemoWorld.fixedNow).restantSecondes, 52 * 3600,
+                       "créé 20 h avant l'horloge : délai de 72 h non échu")
+        let original = try await gateway.original(contrat: detail, context: contexte)
+        XCTAssertEqual(original.empreinte, detail.hashDocument)
+        XCTAssertEqual(original.numeroContrat, "DEMO-0004")
+        let certificat = try await gateway.certificat(contratId: detail.id, context: contexte)
+        XCTAssertEqual(certificat.map(\.signataireRole), ["soignant"])
+        XCTAssertTrue(certificat.allSatisfy { $0.hashDocument == detail.hashDocument && $0.statutSignature == "signe" })
     }
 
     func testCddSansOriginal() async throws {
