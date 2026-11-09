@@ -120,6 +120,13 @@
     19,7 min ; ipad-portrait 10,7 puis 11,2 min ; ipad-landscape 13,1 puis **20,7 min**. L'éclat « lot2 » dépasse donc
     déjà le seuil en paysage. **Consigne à T4b** : séparer « lot2 » par domaine (Présences / Documents / Contrats)
     avant d'y ajouter `DemoPointageTests`.
+    **Appliquée par T4b (9 novembre 2026)** : quatre éclats successifs bornés à 30 min, « socle », « presences »
+    (`DemoPresencesTests`, `DemoPointageTests`), « documents » (`DemoDocumentsTests`), « contrats » (`DemoContratsTests`),
+    lancés chacun même si un précédent échoue ; plafond du job à 135 min (4 × 30 min + build). Le résumé exige chaque
+    éclat vert, au moins un test par éclat et chaque classe démarrée ; il a été rejoué en local sur des résultats
+    synthétiques (vert, puis rouge sur une classe jamais démarrée, un éclat vide, un code non nul). Une nouvelle classe
+    démo du lot 2 rejoint l'éclat de son domaine et les `-skip-testing` du socle ; un éclat qui dépasse à son tour 20 min
+    se scinde par classe. Durées à mesurer au premier run CI de la branche d'intégration.
 23. **Journal de reçus : celui du lot 1 T7 est réutilisé** ; si T1 du lot 2 démarrait avant son intégration, T1
     livrerait le journal générique et T7 le consommerait sans changer son API. Ordonnancement retenu : T1 attendait
     l'intégration de T7 et démarrait dans la vague 1 du lot 2, pas dans la vague 0.
@@ -447,6 +454,55 @@
   reçu illisible n'est pas prévue au lot 2 : si la recette appareil (T12) rencontre ce cas, elle se décide alors,
   avec son texte (même règle que l'identifiant terminal, consigne T4b).
 - **T4b** : la surcharge `P0002` affiche exactement la forme de la décision 6 (apostrophe ’).
+- **T4b — application (L2-T4b, 9 novembre 2026)** :
+  - Core : `Pointage/ConsentementGpsModel.swift` (lecture, réponse à la feuille, bascule du Profil ; `decision` :
+    `.recueillir` pour NULL, `.localiser`, `.sansGps` pour un refus ou un consentement illisible ; `LocalisationPointage` :
+    autorisation iOS demandée si elle n'est pas déterminée, refus → `.refusee`, précision réduite → `.precisionReduite`,
+    sinon une position bornée à 15 s), `Pointage/SaisiePointage.swift` (`SessionScanQR`, `EtatReseauModel`,
+    `PointageRules.rechargerPresencesApres`), `Demo/DemoPointageScenarios.swift` (arguments DEBUG), `LibellesWeb.Pointage`
+    (23 libellés verbatim) et `LibellesPresences.Pointage` (surcharge vouvoyée, textes opérationnels, assemblages) ;
+    `AuditAction.rgpdConsentementDonne` ; `PresencesRenvois.presences`. Aucun texte dans les modèles.
+  - Écrans : `Screens/Presences/PointageCodeView.swift` (zone et `FabriqueZonePointageNative`), `ConsentementGpsSheet`,
+    `BandeauSansGpsView`, `HorsLigneBandeau`, `ScannerQRSheet`, `ServicesPointage` (consentement, réseau et relecture des
+    présences posés par `PresencesScreen`, transmis par `ZonePointageContexte`, qui gagne aussi `horloge`) ;
+    `Screens/Profil/ConsentementGpsRow.swift` (ligne de « Mon espace ») ; `Composition/Device/` (`LocationService`,
+    `NetworkMonitor`, `QRScannerView`, `DemoQRScannerView`, `AppareilEnvironnement`) ; `AppContainer` porte `appareil`,
+    `scannerQR` et `fabriqueZonePointage`, injectés au-dessus des onglets par `MainTabView` ;
+    `AppContainer.recusJustificatifs` devient `appareil.recus` (consigne T7). L'encart provisoire de T4a et
+    `LibellesPresences.Provisoire` sont retirés ; les XCUITest de T4a migrent (règle 8).
+  - Revue fraîche de T4a, **m1 traité** : après `.enregistre` ou `.enregistreSurAutreMission`, la zone vide le champ et
+    relit l'instantané des présences (`ServicesPointage.recharger`, web l.145-149) ; jamais après un refus ni pendant
+    une vérification (`PointageSaisieTests.testPresencesReluesApresUnScanEnregistre`). **m9 non traité** (XCUITest
+    d'erreur et de reprise des présences) : il exige un scénario d'échec DEBUG de `presences(context:)`, laissé à T5a ou
+    T10 avec leurs propres surcharges.
+  - « Voir le contrat » (`pointage-voir-contrat-<mission>`) ouvre `ContratsDestination.contrat` sur le contrat retenu
+    par `choisirContratPointage` : `demo-contrat-pointage-c` est ajouté à `demo-contrats.json` par l'exporteur, dérivé de
+    `demo-presences.json` (même identifiant, mission, statut `SIGNE_SOIGNANT` et `cree_le`, désormais 20 h avant
+    l'horloge pour que le délai de 72 h ne soit pas échu), avec un original rendu par le moteur serveur (`DEMO-0004`) et
+    une ligne de certificat (soignant).
+  - Hors ligne (consigne de la tranche : « file locale chiffrée par le système, rejouée sans double envoi, idempotence
+    côté serveur vérifiée sur la définition live ») : appliquée dans le cadre de la décision 2, qui prime. La « file
+    locale » est le journal des reçus (`ReceiptJournal<RecuScan>`, élément Keychain `app.jolene.receipts`,
+    `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` : chiffré par la protection des données d'iOS, non synchronisé) ;
+    « rejouée » s'entend de la **réconciliation par relecture** de `scans_pointage`, jamais d'un renvoi du code. Définition
+    live de `fn_scanner_code_pointage` relue en production le 9 novembre 2026 (lecture seule, `pg_get_functiondef`),
+    identique au dump : verrou `FOR UPDATE` sur la mission trouvée par le code ; code renouvelé à chaque scan validé,
+    jamais un code déjà consommé par la mission (boucle sur `sp.code_saisi = v_new_code`, `public.sql` l.55885) ; refus
+    `23514` dans les 2 min qui suivent un scan ; horodatage `now()` du serveur. Un même code ne peut donc jamais être
+    appliqué deux fois (`P0002` ou `23514`), et un code mis en file serait horodaté au rejeu : aucune file n'est ajoutée.
+    Aucune clé d'idempotence côté serveur n'existe (limite M-A de T3, inchangée).
+  - Identifiants ajoutés : `pointage-zone-<m>`, `pointage-code-<m>`, `pointage-qr-<m>`, `pointage-submit-<m>`,
+    `pointage-message-<m>` (+ `-detail-<m>`), `pointage-renvoi-web-<m>`, `pointage-qr-message-<m>`, `pointage-position-<m>`,
+    `pointage-en-service-<m>`, `pointage-segment-<m>-<n>`, `pointage-chargement-<m>`, `pointage-etat-indisponible-<m>`,
+    `pointage-reessayer-<m>`, `pointage-statut-indisponible-<m>`, `pointage-scanner`, `pointage-scanner-message`,
+    `pointage-scanner-fermer`, `gps-consent-sheet`, `gps-consent-accepter`, `gps-consent-refuser`, `gps-consent-retour`,
+    `bandeau-sans-gps`, `hors-ligne-bandeau`, `profil-gps-consentement`, `profil-gps-explication`, `profil-gps-retour` ;
+    DEBUG : `pointage-demo-scans` (« N scan · M avec position », preuve « une seule fois » et « aucune coordonnée »).
+  - **T5a** : `PointageModel.notationAProposer` n'est pas encore affiché : T5a monte `NotationSheet` dans
+    `PointageCodeView` (fichier de T4b, ajout localisé) et relit la fin prévue avant de proposer la note (consigne T5a
+    ci-dessous) ; `ZonePointageContexte` porte désormais `horloge` et `services`, à transmettre si T5a construit d'autres
+    blocs. **T10** : le bouton `pointage-renvoi-web-<m>` (suivi non vérifiable) n'apparaît qu'avec le présentateur des
+    renvois web ; T10 l'affirme alors présent.
 - **T4b** (revue fraîche de T1) : une `JoleneError(.environment)` de `KeychainTerminalIdentity` s'affiche telle
   quelle dans le bloc de pointage, bouton désactivé. `messageVerrouille` et `messageIndisponible` : nouvel essai à
   la tentative suivante (aucun échec mémorisé). `messageIllisible` (valeur stockée hors format) : **voie de
@@ -682,6 +738,13 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | `CertificatView` (« `contrat-certificat` ; export PDF → renvoi web ») | certificat dans la page du contrat | certificat résumé dans la page du contrat (l.656-663) et page `/contrat/:id/certificat` native (`CertificatScreen` : empreinte complète et explication, mention de la page), ouverte depuis la page du contrat par `contrat-certificat-ouvrir` (libellé `TextesWeb.Certificat.titrePage`) — la page web du contrat n'a pas ce lien ; T10 y route le lien | T9a : la page fait partie du périmètre §1.1 « Certificat et partage » ; sans ce lien, elle ne serait atteignable que par T10 |
 | Filtre « Tous » (`ListeContrats.tsx` l.121 : `f === 'Tous' ? 'Tous'`) | libellé gardé comme constante | libellé = `FiltreContrat.tous.rawValue` (zone de rendu l.121) | la ligne porte deux « Tous » (valeur comparée et texte) : une constante annotée l.121 ne survivait pas à la mutation de la garde TL |
 | Revue fraîche de T8, mineurs 1 et 4 (préalables à T9a) | — | `certificat()` compare l'identifiant sans la casse (`meme`), test ; message du téléchargement repris de `LibellesWeb.Contrat.aucunTelechargeable` (`ContratMission.tsx` l.428, gardé par TL), textes du pilote de T8 inventoriés mot pour mot (`ContratModelsTests`, `SupabaseContratsGatewayTests`) | T9a |
+| §3 T4b identifiants (`pointage-segment-<index>`, `pointage-en-service`) | sans mission | `pointage-segment-<mission>-<n>`, `pointage-en-service-<mission>` ; + identifiants de « T4b — application » | T4b : plusieurs blocs de pointage par écran (missions a et b dans Aujourd'hui) |
+| §3 T4b `ConsentementGpsSheet` ; `ConsentementGPS.tsx` l.18 (`onOpenChange` → refus) | fermer la feuille = refuser | choix explicite exigé (`interactiveDismissDisabled`) ; aucun choix enregistré sans un bouton | décision déléguée D-T4b-2 |
+| `ProfilSoignant.tsx` l.194 (`consentement_gps !== false` → interrupteur coché) | NULL affiché comme un consentement donné | NULL affiché éteint, avec l'explication du retrait (`TextesWeb.ProfilConsentementGps.explicationRetiree`) | décision déléguée D-T4b-1 |
+| `PresencesSoignant.tsx` l.67-74, l.87-94 (audit `p_details: { type: 'gps', consentement: true }`) | booléen JSON | chaîne `"true"` / `"false"` (`AuditPort.ecrire` : `[String: String]`, lot 1) | aucun lecteur serveur du détail ; `->>'consentement'` rend le même texte |
+| §3 T4b XCUITest `scan-incertain` (« Vérification du pointage… » puis « Pointage enregistré ») | état transitoire observé | état final et un seul scan affirmés (`pointage-demo-scans`), un seul segment ; « Vérification… » prouvé par `PointageModelTests` et `LibellesPresencesTests` | la démo réconcilie dans la même boucle (horloge fixe) : l'état transitoire ne dure que quelques millisecondes, aucune attente fixe permise (règle des XCUITest) |
+| §2.2 `DemoQRScannerView` | détections démo | deux détections du payload 0,6 s après l'ouverture de la feuille (délai de l'app démo, pas du test) | une fermeture pendant l'animation d'ouverture serait ignorée par SwiftUI |
+| §3 T4b `PresencesScreen` | — | `.scrollDismissesKeyboard(.immediately)` | le pavé numérique n'a pas de touche Entrée : un défilement le ferme et découvre le bouton de pointage |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 
@@ -729,10 +792,32 @@ vérifier » et « Vérifier ma session » sont ceux de l'Accueil du lot 1 (`Acc
 | Constante | Texte | Source | Test |
 |---|---|---|---|
 | `LibellesPresences.EspaceSoignant.titreSection` | « Mon espace » | décision 24 du lot 2 (section du Profil ; aucune page web ne regroupe ces trois écrans) | `LibellesPresencesTests.testTextesOperationnelsInventories` |
-| `LibellesPresences.Provisoire.etat` | « Disponible au lot 2 » | provisoire (forme de l'onglet provisoire du lot 0), retiré par T4b, T7 et T9a | idem |
-| `LibellesPresences.Provisoire.pointage` | « Le pointage dans l'application arrive avec la suite du lot 2. » | provisoire, retiré par T4b | idem |
+| `LibellesPresences.Provisoire.etat` | « Disponible au lot 2 » | provisoire (forme de l'onglet provisoire du lot 0), **retiré par T4b** (9 novembre 2026 : plus aucun écran provisoire du lot 2) | — |
+| `LibellesPresences.Provisoire.pointage` | « Le pointage dans l'application arrive avec la suite du lot 2. » | provisoire, **retiré par T4b** (zone de pointage livrée, assertions migrées) | — |
 | `LibellesPresences.Provisoire.documents` | « Vos justificatifs arrivent dans l'application avec la suite du lot 2. » | provisoire, **retiré à l'intégration de T7** (8 novembre 2026 : constante et assertions supprimées, « Mes documents » ouvre `MesDocumentsScreen`) | — |
 | `LibellesPresences.Provisoire.contrats` | « Vos contrats arrivent dans l'application avec la suite du lot 2. » | provisoire, **retiré à l'intégration de T9a** (8 novembre 2026 : constante et assertions supprimées, « Mes contrats » ouvre `ContratsDestination.liste`) | — |
+
+## Textes opérationnels hors web (T4b)
+
+Non juridiques (aucune marque de `MARQUES_JURIDIQUES`), vouvoyés, dans `Libelles/LibellesPresences.swift`
+(`DOSSIERS_LOT2`) ; gardés mot pour mot par `LibellesPresencesTests.testTextesOperationnelsDuPointageInventories`.
+Les libellés repris tels quels de `PointageRotatifSoignant.tsx` et `BandeauHorsLigne.tsx` sont dans
+`LibellesWeb.Pointage` (garde Node au caractère près) ; la surcharge du code inconnu (l.136) est vouvoyée, seule la
+personne change (décision 6, `testSurchargeDuCodeInconnuVouvoyeeDontSeuleLaPersonneChange`). Consentement, bandeau sans
+GPS et retours : `TextesWeb` (HARD STOP n°4).
+
+| Constante | Texte | Source | Test |
+|---|---|---|---|
+| `LibellesPresences.Pointage.verification` | « Vérification du pointage… » | nouveau (T4b) : `PointageModel.Issue.verification`, libellé du blueprint (§3 T4b) | idem |
+| `LibellesPresences.Pointage.nonRecu` | « Le pointage n'a pas été reçu. Saisissez le code actuellement affiché par l'établissement. » | nouveau (T4b) : `.nonRecu`, le code a pu tourner (§2.5) | idem |
+| `LibellesPresences.Pointage.horsLigne` | « Pointage impossible sans connexion. » | blueprint §2.5 (« Pointage impossible sans connexion ») : `.horsLigne`, aucun appel | idem |
+| `LibellesPresences.Pointage.autreMission` | « Ce code était celui d'une autre de vos missions : le pointage y a été enregistré. » | nouveau (T4b) : `.enregistreSurAutreMission` (consigne T4b : précision sur la mission pointée) | idem |
+| `LibellesPresences.Pointage.positionApproximative` | « Position approximative : le pointage a été envoyé sans position. Pour la joindre, activez « Position exacte » pour Jolene dans les réglages de localisation de l'appareil. » | décision 5 (encart « Position exacte ») | idem, `testEncartDePositionApproximative` |
+| `LibellesPresences.Pointage.fermer` | « Fermer » | nouveau (T4b) : fermeture de la feuille du scanner (le dialogue web se ferme par sa croix) | idem |
+| `LibellesPresences.Pointage.voirSurJolene` | « Voir sur jolene.app » | lot 1 (`AccueilScreen.swift`), repris par T7 : renvoi web d'un suivi non vérifiable | idem |
+
+DEBUG seulement (absents en Release, jamais vus par un utilisateur) : « Pointages enregistrés (démo) » et « N scan · M avec
+position » (`pointage-demo-scans`, preuve des XCUITest, sur le modèle de `documents-demo-envois`).
 
 ## Textes opérationnels hors web (T8)
 
@@ -771,13 +856,51 @@ Rendez-vous sur jolene.app. » (`MobileAccess.unsupportedRole`, lot 0 : onglets 
 vérifier » / « Vérifier ma session » (`MissionsListScreen.swift` l.107-108, lot 1) et
 `SessionController.sessionExpiredMessage`.
 
+## Décisions déléguées du 8 novembre 2026
+
+Mandat : « arrête de me demander et prends les décisions, avance seul » (Gabrielle, 8 novembre 2026). Chaque décision
+cite ses sources primaires et la force de chacune (**JUGÉ** : jurisprudence ; **doctrine** ; **choix de conformité
+Jolene**). Aucun texte n'est reformulé : le natif suit le web mot pour mot, tutoiement compris (décision de la vague 4) ;
+un changement de wording part d'abord sur le web.
+
+- **D-T4b-0 — Textes de TL affichés par T4b validés pour l'affichage natif.** Feuille de consentement
+  (`TextesWeb.ConsentementGps`, `ConsentementGPS.tsx` l.25-64), bandeau (`TextesWeb.BandeauSansGps`, `BandeauSansGPS.tsx`
+  l.9), retours (`TextesWeb.Presences`, `PresencesSoignant.tsx` l.76, l.95) et Profil (`TextesWeb.ProfilConsentementGps`,
+  `SectionPreferences.tsx` l.129-161), verbatim et gardés par `textes-juridiques-ios`. Sources : Règlement (UE) 2016/679
+  (RGPD) art. 6, paragraphe 1, a) (base légale : consentement), art. 7, paragraphe 3 (retrait à tout moment, aussi simple
+  que le consentement : le Profil natif porte désormais le retrait promis par la base légale, correction 15), art. 13,
+  paragraphe 2, c) (information sur le droit de retrait, donnée par la phrase de base légale) — textes de loi. Force :
+  choix de conformité Jolene (aucune jurisprudence citée). **Constat remonté** (texte inchangé) : la phrase « Données
+  conservées 1 an puis supprimées » (l.38) n'est tenue par le serveur que pour `presences` (coordonnées effacées après
+  90 jours : cron `anonymiser-gps` → `fn_anonymiser_gps_anciennes`, `public.sql` l.18506 ; `fn_purger_gps_ancien`
+  l.51387) ; `scans_pointage.latitude`, `longitude`, `precision_gps_m` et `ip_address` n'ont aucune purge datée au dump
+  (seulement à la suppression du compte, l.60178-60181). Proposition : PR backend séparée (B9, suppression de données
+  prod) qui efface ces colonnes de `scans_pointage` au plus tard un an après `scanne_le`, sinon correction du texte sur le
+  web d'abord ; ni l'une ni l'autre n'est faite par le chantier iOS. Décision prise par Claude sur délégation explicite
+  de Gabrielle du 08/11/2026.
+- **D-T4b-1 — Consentement jamais donné (NULL) affiché éteint dans le Profil.** Le web coche l'interrupteur quand la
+  valeur est NULL (`ProfilSoignant.tsx` l.194, `!== false`). Sources : RGPD art. 4, point 11 (consentement : manifestation
+  de volonté libre, spécifique, éclairée et univoque, par une déclaration ou un acte positif clair), art. 7, paragraphe 1
+  (le responsable doit pouvoir démontrer le consentement) — textes de loi ; considérant 32 (le silence, les cases cochées
+  par défaut ou l'inactivité ne valent pas consentement) — texte du règlement. Force : choix de conformité Jolene appuyé
+  sur le texte. Effet : interrupteur éteint et explication du retrait (`explicationRetiree`, texte du web, aucun texte
+  nouveau) ; l'activer appelle `fn_consentir_gps(true)` comme le web. Décision prise par Claude sur délégation explicite
+  de Gabrielle du 08/11/2026.
+- **D-T4b-2 — La feuille de consentement exige un choix explicite.** Le dialogue web enregistre un refus quand on le
+  ferme (`ConsentementGPS.tsx` l.18, `onOpenChange` → `onRefuser`) ; le natif ne se ferme que par « Je refuse » ou
+  « Autoriser la localisation ». Sources : RGPD art. 4, point 11 et art. 7, paragraphe 1 (le choix enregistré doit être
+  celui exprimé par la personne) — textes de loi. Force : choix de conformité Jolene. Un refus n'est jamais pénalisant (le
+  pointage part sans position) ; aucun texte nouveau. Décision prise par Claude sur délégation explicite de Gabrielle du
+  08/11/2026.
+
 ## En attente de Gabrielle
 
 Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranche indiquée.
 
 ### HARD STOP n°4 (juridique exposé à l'utilisateur)
 
-- **TL** : validation écrite des textes juridiques et de consentement listés avec leur source dans la PR TL
+- **TL** (T4b : validation des textes affichés par T4b prise par délégation, D-T4b-0 ; reste la revue sur iPhone, P9) :
+  validation écrite des textes juridiques et de consentement listés avec leur source dans la PR TL
   (consentement GPS et retrait, attestation santé avec la mention de l'art. 441-7 du Code pénal, bandeaux et mentions
   du contrat, art. 1366-1367 du Code civil, art. L.1242-12 du Code du travail, `MESSAGES_ERREUR`, compte à rebours
   72 h, certificat) avant que T4b, T7, T9a et T9b soient déclarées livrées, ainsi que T4a pour le bandeau du filtre
