@@ -43,11 +43,13 @@ final class TextesWebTests: XCTestCase {
         }
     }
 
-    /// Le web tutoie dans huit textes, tous HARD STOP : les reprendre au vouvoiement serait une
-    /// reformulation (HARD STOP n°4). Ils restent verbatim, en attente de la décision de Gabrielle ;
-    /// tout autre tutoiement (dans l'un ou l'autre fichier) fait échouer ce test, et une exception
-    /// qui ne tutoie plus aussi.
-    func testVouvoiementSaufTextesDuWebEnAttenteDeGabrielle() {
+    /// Le web tutoie dans treize textes, tous HARD STOP : les reprendre au vouvoiement serait une
+    /// reformulation (HARD STOP n°4). Décision déléguée du 8 novembre 2026 (DECISIONS_LOT2, « Décisions
+    /// déléguées du 8 novembre 2026 ») : le natif les affiche verbatim, tutoiement compris ; le passage
+    /// au vouvoiement se fera d'abord sur le web, puis le natif suivra par la garde. Tout autre
+    /// tutoiement (dans l'un ou l'autre fichier) fait échouer ce test, et une exception qui ne tutoie
+    /// plus aussi.
+    func testVouvoiementSaufTextesTutoyesDuWebRepris() {
         let exceptions: Set<String> = [
             "TextesWeb.BandeauSansGps.texte",
             "TextesWeb.Presences.pointageSansGpsActive",
@@ -57,6 +59,12 @@ final class TextesWebTests: XCTestCase {
             "TextesWeb.ProfilConsentementGps.explicationActive",
             "TextesWeb.ProfilConsentementGps.explicationRetiree",
             "TextesWeb.ProfilConsentementGps.retire",
+            // L2-TJ : bandeau RCP et textes d'accès des documents complémentaires (`DocumentsSoignant.tsx`).
+            "TextesWeb.Justificatifs.rcpExpiree",
+            "TextesWeb.Justificatifs.rcpExpireeRestriction",
+            "TextesWeb.Justificatifs.rcpObligatoire",
+            "TextesWeb.Justificatifs.accesScolarite",
+            "TextesWeb.Justificatifs.accesLicence",
         ]
         let marques: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
         for entree in Self.tousLesTextes {
@@ -144,15 +152,31 @@ final class TextesWebTests: XCTestCase {
                        "Document officiel figé le 02/11/2026 à 10:00")
     }
 
+    /// L2-TJ : bandeau RCP (`DocumentsSoignant.tsx` l.623, l.624, l.634) et textes d'accès des documents
+    /// complémentaires (l.867-868, l.882-883), affichés verbatim par `JustificatifsView` (décision déléguée du
+    /// 8 novembre 2026). Égalité au caractère près avec le web : garde Node ; ici, le texte exact montré.
+    func testTextesRcpEtAccesDesJustificatifs() {
+        let j = TextesWeb.Justificatifs.self
+        XCTAssertEqual(j.rcpExpiree, "Ton assurance RCP est expirée. Pense à la renouveler.")
+        XCTAssertEqual(j.rcpExpireeRestriction, "Tu ne peux pas postuler aux missions libérales tant que ta RCP n'est pas à jour.")
+        XCTAssertEqual(j.rcpObligatoire, "L'assurance RCP est obligatoire pour l'exercice libéral et mixte. Téléverse ton attestation RCP.")
+        XCTAssertEqual(j.accesScolarite, "L'analyse prépare ton dossier, puis l'équipe Jolene contrôle les crédits, stages, unités d'enseignement et attestations exigés avant d'ouvrir une pré-éligibilité.")
+        XCTAssertEqual(j.accesLicence, "Interne ? Téléverse ta licence de remplacement délivrée par le Conseil de l'Ordre : elle est contrôlée avant tout accès aux remplacements de médecin.")
+        for cle in ["rcpExpiree", "rcpExpireeRestriction", "rcpObligatoire", "accesScolarite", "accesLicence"] {
+            XCTAssertTrue(catalogue.contains { $0.cle == "Justificatifs." + cle }, cle)
+        }
+    }
+
     func testAttestationSigneeLeCommeLeRenduWeb() {
         XCTAssertEqual(TextesWeb.AttestationSante.signeeLe(dateFormatee: "2 novembre 2026"),
                        "✅ Attestation signée le 2 novembre 2026")
     }
 
-    /// Q9 (LOT2_PLAN §7, DECISIONS_LOT2, en attente de Gabrielle) : aucun texte de délai de
-    /// contestation n'est repris (le web annonce 72 h, le serveur lit
-    /// `parametres_litiges.delai_contestation_pointage_h`, 48 h par défaut), ni dans le groupe
-    /// Contestation ni ailleurs, dans l'un ou l'autre fichier.
+    /// Q9 (LOT2_PLAN §7 ; décision déléguée du 8 novembre 2026, DECISIONS_LOT2) : aucun texte de
+    /// délai de contestation n'est repris par le natif (le web annonce 72 h, le serveur lit
+    /// `parametres_litiges.delai_contestation_pointage_h`, 48 h par défaut ; la fenêtre est décidée
+    /// par `fn_fenetre_contestation_ouverte`), ni dans le groupe Contestation ni ailleurs, dans
+    /// l'un ou l'autre fichier.
     func testAucunTexteDeDelaiDeContestation() {
         let contestation = Self.tousLesTextes.filter { $0.cle.contains(".Contestation.") }
         XCTAssertFalse(contestation.isEmpty)

@@ -16,6 +16,7 @@ final class DemoSourcesDocumentTests: XCTestCase {
         XCTAssertEqual(SourceDocumentDemo(arguments: ["-JOLENE_DEMO_SOURCE_DOC"]), .png, "valeur absente")
         XCTAssertEqual(SourceDocumentDemo(arguments: ["-JOLENE_DEMO_SOURCE_DOC", "inconnue"]), .png)
         XCTAssertEqual(ScenarioDocumentsDemo(arguments: ["-JOLENE_DEMO_SCENARIO", "upload-incertain"]), .uploadIncertain)
+        XCTAssertEqual(ScenarioDocumentsDemo(arguments: ["-JOLENE_DEMO_SCENARIO", "rcp-expiree"]), .rcpExpiree)
         XCTAssertEqual(ScenarioDocumentsDemo(arguments: ["-JOLENE_DEMO_SCENARIO", "otp-expire"]), .normal, "scénario d'un autre domaine")
         XCTAssertEqual(ScenarioDocumentsDemo(arguments: []), .normal)
     }
