@@ -107,8 +107,8 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_contester_paiement_soignant` | à venir | 3 (T13, B3 mergée #1118, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_consulter_mon_iban` | à venir | 3 (T14b, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_enregistrer_mon_iban` | à venir | 3 (T14b, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mes_revenus_connect` | à venir | 3 (T12, T14a, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mes_paiements_escrow` | à venir | 3 (T12, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_mes_revenus_connect` | consommée lot 3 (T12) | 3 (T12) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mes_paiements_escrow` | consommée lot 3 (T12) | 3 (T12) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 
 Quatre RPC sont absentes de `types.ts` (`fn_confirmer_action_planning_v1`, `fn_param_bool`,
 `fn_etat_pointage_mission`, `fn_remplacer_document_soignant`) : leur contrat est tenu par `public.sql` seul
@@ -1261,9 +1261,17 @@ CREATE OR REPLACE FUNCTION "public"."fn_enregistrer_mon_iban"("p_iban" "text", "
 
 ## fn_mes_revenus_connect
 
-- **Statut natif** : à venir (lot 3, T12 ; T14a pour l'écran Stripe Connect) — **B9** (paiements, D18).
-- **Usage prévu** : Totaux serveur de l'onglet Revenus et de l'écran Stripe Connect (web `PageStripeConnect.tsx`
-  l.70-82), affichés tels quels, jamais recalculés (D4) ; aucun KPI calculé côté client.
+- **Statut natif** : consommée (lot 3, T12) par `JoleneSupabase/Revenus/SupabaseRevenusGateway.swift` (`totaux`),
+  appelée par le modèle de l'onglet Revenus (`JoleneCore/Revenus/RevenusModel.swift`) ; T14a la réutilisera pour l'écran
+  Stripe Connect — **B9** (paiements, D18 : PR préparée, jamais mergée sans le go de Gabrielle). Définition live relue
+  en lecture seule le 09/11/2026 (`pg_get_functiondef`) : identique au dump ; GRANT EXECUTE `authenticated` vérifié.
+- **Usage** : totaux serveur de l'onglet Revenus (« Ce mois », « Total réglé », « Autres paiements en attente » et la
+  note du web, `PageStripeConnect.tsx` l.392-417), affichés tels quels, jamais recalculés (D4) ; aucun KPI calculé côté
+  client. Comme le web (l.95-108), la RPC n'est appelée qu'après `soignants(type_exercice, statut_liberal)` et
+  seulement pour `LIBERAL`, `MIXTE` ou `statut_liberal = ACTIF` (section absente sinon : `paiements_soignant`
+  `CONFIRME` d'un salarié y serait compté comme « réglé ») ; sans ligne `soignants`, section en erreur (« ne jamais
+  déduire le mode d'exercice d'une lecture en panne », l.92). Corps sans les trois nombres finis →
+  « Vos revenus sont temporairement indisponibles. » (adapté de l.389) et « Réessayer ».
 - **Signature SQL** (`supabase/schema/public.sql` l.42347) :
 
 ```sql
@@ -1284,10 +1292,16 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_revenus_connect"("p_mois_debut" "dat
 
 ## fn_mes_paiements_escrow
 
-- **Statut natif** : à venir (lot 3, T12) — **B9** (paiements/escrow, D18).
-- **Usage prévu** : « Paiements rapides » de l'onglet Revenus, libellés verbatim web (`PaiementsEscrowAVenir.tsx`
-  l.44-80, invariant « jamais garanti ») ; `etablissement_nom` est fourni par la RPC pour les missions du soignant
-  (JOIN sans filtre de cohorte, l.42205), sans passer par `fn_etablissements_safe`.
+- **Statut natif** : consommée (lot 3, T12) par `JoleneSupabase/Revenus/SupabaseRevenusGateway.swift`
+  (`paiementsRapides`), appelée par le modèle de l'onglet Revenus (`JoleneCore/Revenus/RevenusModel.swift`) — **B9**
+  (paiements/escrow, D18 : PR préparée, jamais mergée sans le go de Gabrielle). Définition live relue en lecture seule
+  le 09/11/2026 : identique au dump ; GRANT EXECUTE `authenticated` vérifié.
+- **Usage** : bloc « Paiement rapide » de l'onglet Revenus, libellés verbatim web (`PaiementsEscrowAVenir.tsx`
+  l.44-80, tutoiement compris, invariant « jamais garanti ») ; groupes « À venir », « Récemment versé » (trois au plus),
+  « Annulés » ; état hors des sept : ligne non affichée ; section absente sans ligne (I5) ; le litige mène au détail
+  natif de la mission. `etablissement_nom` est fourni par la RPC pour les missions du soignant (JOIN sans filtre de
+  cohorte, l.42205), sans passer par `fn_etablissements_safe`. Tout corps autre qu'un tableau → refus de contrat
+  (jamais une liste vide plausible).
 - **Signature SQL** (`supabase/schema/public.sql` l.42184) :
 
 ```sql

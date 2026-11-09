@@ -1695,3 +1695,29 @@ Non bloquants, à traiter en suivi ou avant le merge.
   `SFSafariViewController`, feuille de partage.
 - Mineurs ouverts : T3b m1-m3 ; T7 m1, m3-m10 (m2 réduit) ; T11 m1-m4. Arbitrage `notations_recues` de l'export
   RGPD (« En attente de Gabrielle »).
+
+## L3-T12
+
+### Consignes de l'auteur pour l'intégration (branche `lot3/l3-t12-v2`, 09/11/2026)
+
+Revenus en lecture, **B9** (paiements, escrow) : PR préparée, jamais mergée sans le go explicite de Gabrielle. Base
+`origin/feat/ios-lot3` (`01473089`). Décisions, écarts et textes : `DECISIONS_LOT3.md`, section T12.
+
+- **Fichiers partagés touchés (ajouts localisés)** : `Ports/Lot3Ports.swift` (`RevenusPort.totaux` rend
+  `TotauxRevenus?`, stub aligné), `Models/Lot3Results.swift` (`MissionTerminee` : durée, taux, service, statut, nom
+  d'établissement, dernière déclaration), `Demo/DemoWorld.swift` et `SupabaseGateways.swift` (une ligne chacun),
+  `AppContainer.swift` (variante `JOLENE_FORCE_REVENUS_ECHEC`), `MainTabView.swift` (onglet Revenus, pile
+  `cheminRevenus`, cas `.revenus` de `presenter`), `DemoWorldTests.portsEnAttenteLot3` (« revenus » retiré),
+  `DestinationLienTests` (libellé seul), `check-rpc-contracts.mjs` + `rpc-contracts.json` + `CONTRATS_RPC_SOIGNANT.md`
+  + `check-rpc-contracts-lot3.node.mjs` (deux RPC consommées), `export-demo-fixtures.mjs` (trois fixtures),
+  `PARITE_SOIGNANT.md`, `ios-swift-ci.yml` (cinquième éclat).
+- **Au conflit avec T13** (paiements déclarés, même onglet) : garder les deux côtés dans `MainTabView` ; T13 ajoute sa
+  section dans `RevenusScreen` (au-dessus des paiements rapides, ordre du web l.384-386), rend
+  `.revenus(section: .paiementsAConfirmer)` présentable et range `DemoPaiementsTests` dans l'éclat `lot3-revenus`.
+- **Au conflit avec le lot 2** (`ios-swift-ci.yml`) : garder les éclats des deux lots, unir les `-skip-testing` du socle.
+- **Vérifications de l'auteur** (Xcode 16.4 local) : `swift build --build-tests` puis `swift test` avec
+  `-strict-concurrency=complete` : JoleneCore 858 tests, JoleneSupabase 323 tests, 0 échec, 0 ignoré, 0 avertissement ;
+  `xcodegen generate` ; `xcodebuild build-for-testing` → `TEST BUILD SUCCEEDED`, 0 avertissement dans nos sources ;
+  exporteurs golden et démo sans diff non voulu ; `check-rpc-contracts.mjs` à jour ; `node --test` des gardes RPC et du
+  plan de livraison : 137 réussis. XCUITest `DemoRevenusTests` (7 tests, trois formats) compilés, **jamais lancés** :
+  la preuve est la CI (éclat `lot3-revenus`, `xcresult` relu, `skipped = 0`).

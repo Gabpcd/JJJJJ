@@ -940,6 +940,91 @@ texte. Correctif d'intégration (tests d'abord), chaque test changé étant faux
   geste vise désormais le voile au-dessus du bord haut de la feuille, puis, si elle est encore là, la glisse vers le
   bas ; l'assertion de fermeture et les suivantes sont inchangées.
 
+## T12 — revenus en lecture (branche `lot3/l3-t12-v2`, 09/11/2026 ; B9, jamais mergée sans go)
+
+- **Livré.** Onglet Revenus natif (`Jolene/Screens/Revenus/RevenusScreen.swift`), à la place du placeholder du lot 0,
+  port de l'aperçu réellement monté par `/soignant/mes-gains` (`MesGainsApercuContent`, onglet par défaut de
+  `MesGains.tsx`) restreint à D4 :
+  - totaux serveur `fn_mes_revenus_connect` (« Ce mois », « Total réglé », « Autres paiements en attente » et leur note,
+    `PageStripeConnect.tsx` l.392-417), lus comme le web seulement pour `LIBERAL`, `MIXTE` ou `statut_liberal = ACTIF`
+    (l.104), trois nombres finis exigés ;
+  - bloc « Paiement rapide » `fn_mes_paiements_escrow` (sept états, groupes « À venir », « Récemment versé » (trois au
+    plus), « Annulés », section absente sans ligne, litige → détail natif de la mission empilé sur l'onglet) ;
+  - missions TERMINEE paginées par 50 avec **exactement** les colonnes de `MesGains.tsx` l.95 (D5, test-garde contre la
+    source web), montant de `montantFinanceAfficheMission` (golden T2, correction Rist inactive : témoin démo 280 €),
+    régime de la mission (`type_contrat_applique ?? type_contrat_recherche`, jamais `soignants.type_exercice`), état
+    de la dernière déclaration (`indexerDernierPaiementParMission` + `classerPaiementSalaire`, golden T2), noms
+    d'établissement par `fn_etablissements_safe` seul ; notes « net estimé » verbatim ;
+  - renvois web « Factures » et « Paie » (D4), présences d'une mission (`/soignant/presences/mission/:id`, lot 2) ;
+    audit `DONNEES_PERSO_CONSULTATION` (`page: mes_gains`) une fois par ouverture ; état d'erreur et reprise de la page
+    demandée en dernier ; « Vérifier ma session » ; pile `cheminRevenus` vidée par un lien ou un tap (revue B8 de T3b,
+    m5).
+  - Cœur : `Revenus/RevenusLecture.swift` (décodeurs partagés démo/Supabase, `ExerciceRevenus`, `PaiementSoignantLu`,
+    `RevenusAssemblage`), `Revenus/RevenusPresentation.swift` (textes sourcés, sept états, lignes), `Revenus/RevenusModel.swift`
+    (trois sections indépendantes, epoch, pagination, audit) ; démo `Demo/DemoRevenusGateway.swift` (fixtures
+    `demo-revenus.json`, `demo-escrow.json`, `demo-missions-terminees.json`, variante `JOLENE_FORCE_REVENUS_ECHEC=1`) ;
+    Supabase `Revenus/SupabaseRevenusGateway.swift`. `RevenusPort.totaux` rend désormais `TotauxRevenus?` (nil =
+    section sans objet), `MissionTerminee` porte durée, taux, service, statut, nom d'établissement et dernière déclaration.
+  - RPC passées en `consommee` (lot 3, T12) : `fn_mes_revenus_connect`, `fn_mes_paiements_escrow` (`check-rpc-contracts.mjs`,
+    `rpc-contracts.json`, fiches de `CONTRATS_RPC_SOIGNANT.md`, garde `check-rpc-contracts-lot3.node.mjs`). Définitions
+    live relues en lecture seule le 09/11/2026 (`pg_get_functiondef`) : identiques au dump ; GRANT EXECUTE `authenticated`,
+    RLS `pol_paie_soig_select` et `pol_pres_select`, droits de colonne `authenticated` sur `missions`,
+    `paiements_soignant` et `soignants` vérifiés. Aucun constat serveur.
+- **Routes et coordinateur (consigne de T3a/T3b).** `.revenus(section: .apercu)` était déjà à `true` (placeholder) ; T12
+  remplace l'écran, la ligne de `ecranNatifLivre` ne change pas (libellé de `DestinationLienTests` mis à jour). Les
+  sections `factures`, `bulletins`, `avances` restent des renvois web (D4) et `paiements` reste à T13 : aucune autre
+  route n'est livrée par T12, donc aucune nouvelle cible (`CibleNotification.revenus` présentable pour `.apercu`
+  seulement, inchangé).
+- **Écart au blueprint (§3 T12) : tap `FACTURE_EMISE`.** Le blueprint attend `revenus-screen` ; or `FACTURE_EMISE` mène à
+  `/soignant/mes-gains?tab=factures` (`pushNative.ts` l.291-293), section en renvoi web assumé (D4, déjà prouvé par
+  `PushTapIntentTests` et `DestinationLienTests`). Ouvrir l'onglet natif à la place de la section réduirait en silence
+  la section à l'onglet (`CibleNotification`, « jamais réduite en silence »). Le cas reporté de T5 est prouvé tel que
+  le produit le fait : `DemoRevenusTests.testTapPushFactureEmiseOuvreLesFacturesSurLeWeb` (renvoi web de la page
+  canonique des factures).
+- **Écarts au web (non juridiques, consignés).**
+  1. Pas de filtre de période (« Ce mois » par défaut sur le web) : la liste native équivaut à « Tous les mois » — le
+     filtre exige les créneaux et `construireExportPaiePeriode` (non portés) ; KPI d'estimation, pipeline des honoraires
+     (dont `repartirPaiementConfirme`, mineur 3 de la revue de T2), honoraires facturés, graphique, rappels fiscaux,
+     CSV, attestation, recherche et « Déclarations de salaire par mission » non portés (D4 : aucun KPI calculé côté
+     client ; l'état par mission couvre le suivi des déclarations).
+  2. État d'une mission libérale : le web le déduit des factures d'honoraires (`resumerFacturesMission`, lot 4) ; le
+     natif n'en déduit rien et affiche « Paiement suivi dans Factures » (texte nouveau), plutôt qu'un état de paiement
+     qui pourrait contredire les factures ; « Facturé sur la mission : … TTC » non porté pour la même raison.
+  3. « Voir le détail de l'estimation salariale » (`ModalCotisations`, l.738-744 ; note de la revue de T1b) non porté :
+     le montant net estimé reste affiché, sans le détail des cotisations (lot 4).
+  4. « Avance de trésorerie » absente : le web ne l'affiche que si `affacturage_actif` (`fn_param_bool`, défaut `false`,
+     affacturage non ouvert en production) ; lire ce drapeau consommerait `fn_param_bool` (lot 1, L1-T9 absent). Le lien
+     `?tab=avances` reste un renvoi web. Le sous-titre suit la variante sans avance.
+  5. « Factures » et « Paie » sont toujours proposés : la visibilité des onglets du web dépend de pièces que le natif ne
+     lit pas (`fn_mes_factures_honoraires`, `fn_mes_bulletins_paie`, copies) ; la page web décide (elle retombe sur
+     l'aperçu si l'onglet est masqué pour le profil).
+  6. Le jour `jj/mm` du paiement rapide est à l'heure de Paris (le web : heure locale de l'appareil, identique en France) ;
+     les textes du web tronqués (`truncate`) passent à la ligne en natif ; les notes de bas de page ne sont affichées
+     qu'avec au moins une mission.
+  7. Drapeau `ios_natif_revenus_actif` toujours non consommé (aucun écran ne lit encore `EcranNatif` : point de fusion
+     de `origin/lot1/t9` inchangé).
+  8. Carte des gains de l'Accueil (écart (5) de `PARITE_SOIGNANT.md`) toujours non cliquable : `AccueilScreen` n'est pas
+     dans le périmètre de T12 ; à brancher sur `.revenus` par la tranche qui reprend l'Accueil.
+- **Mineurs des revues antérieures adressés aux consommateurs.** T1b n°2 (`AmountRow`, disposition `ViewThatFits`) et
+  n°3 (lecture XCUITest) : non modifiés (JoleneDesign hors périmètre) ; les XCUITest lisent le libellé vocalisé de
+  `AmountRow` (`revenus-mission-montant-<id>`) et l'état par `StatusPill` (`revenus-mission-etat-<id>`), identifiants
+  distincts. T2 n°3 : sans objet (aucun montant restant calculé).
+- **Textes (HARD STOP n°4, délégué).** Repris verbatim avec leur source (`// source: fichier:ligne`, garde
+  `RevenusPresentationTests.testChaqueTexteRepriseDuWebEstVerbatimASaLigne`) : libellés et aides des sept états du
+  paiement rapide (tutoiement compris : « le montant de ta confirmation, mis de côté », « l'établissement valide tes
+  heures (automatique sous 72 h) », « ton virement est en route », « contacte le support si besoin »), notes « net
+  estimé » (`NoteNetEstime.tsx`, l.664-666), libellés de montant, totaux et leur note. La garde
+  `check-textes-juridiques-ios` (L2-TL) n'est pas sur la base du lot 3 : épinglage par les tests Swift, comme T5 et T11.
+  Aucune décision juridique n'a été nécessaire (aucun texte juridique nouveau ni reformulé ; aucune règle de mode
+  d'exercice : la visibilité des totaux reprend la condition du web). Wording escrow : aucun « garanti », aucun
+  « stationne » (test).
+- **CI UI : cinquième éclat `lot3-revenus`** (`DemoRevenusTests`, domaine de T12, T13, T14a, T14b), « lot3-notifications »
+  atteignant déjà 15 min sur iphone ; socle `-skip-testing:JoleneUITests/DemoRevenusTests`, résumé à cinq éclats, job
+  porté à 175 min. Point de fusion avec le lot 2 : garder les éclats des deux lots, unir les `-skip-testing` du socle.
+- **Migrations d'identifiants XCUITest (règle 8)** : `DemoConsultationTests.assertFiveTabs` (`placeholder-revenus` →
+  `revenus-screen`, absence du placeholder affirmée) ; `DemoLiensLot3Tests.testSectionFacturesDeRevenusEnRenvoiWeb`
+  (absence de `revenus-screen` pour la section factures).
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -951,7 +1036,8 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 - **T7** — compte rapide et confirmation (consentement CGU transmis par `fn_demarrer_inscription p_cgu`) ; branche
   `lot3/l3-t7-v2` poussée (section T7 ci-dessus), préalable captcha `PORTE_LOT0.md` 3.1 / 3.2 non mesuré.
 - **T8** — complétion et `register-soignant` (inscription, audit `RGPD_CONSENTEMENT_DONNE` côté serveur).
-- **T12** — revenus en lecture (paiements, escrow).
+- **T12** — revenus en lecture (paiements, escrow) ; branche `lot3/l3-t12-v2` poussée (section T12 ci-dessus), lecture
+  seule, aucune action de paiement.
 - **T13** — paiements déclarés (confirmation ; contestation après B3).
 - **T14a** — Stripe Connect.
 - **T14b** — IBAN (données bancaires).
@@ -996,6 +1082,16 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   (`PasswordCriteriaList`, le web n'a que la coche) ; « Ouvre le centre de notifications » (indication de « Voir »
   sur le compteur de l'Accueil, L3-T5, `CentreNotificationsTextes.indicationOuvrirCentre`). Le texte affiché reste
   verbatim web.
+- **T12 — textes adaptés ou sans équivalent web** (non juridiques, à relire par Gabrielle ; constantes
+  `RevenusTextes`, épinglées par `RevenusPresentationTests.testTextesAdaptesOuSansEquivalentWeb`), un texte par ligne :
+  - sous-titre, adapté au vouvoiement de `MesGains.tsx` l.918 : « Vos gains, factures et documents de paie au même endroit »
+  - état vide, adapté de l.804 : « Vos gains apparaîtront ici après votre première mission terminée. »
+  - totaux indisponibles, adapté de `PageStripeConnect.tsx` l.389 : « Vos revenus sont temporairement indisponibles. »
+  - en-tête de la liste (sans équivalent) : « Missions terminées »
+  - état d'une mission libérale (sans équivalent) : « Paiement suivi dans Factures »
+
+  Restent verbatim web, tutoiement compris (HARD STOP, décision du 09/11/2026) : libellés et aides des sept états du
+  paiement rapide et notes « net estimé » (section T12 ci-dessus).
 - **T11 — textes sans équivalent web** (non juridiques, à relire par Gabrielle), un texte par ligne :
   - refus verrouillé de la réauthentification (`MotDePasse.Textes.reauthentificationRequise`) :
     « Ce changement exige une nouvelle vérification de votre identité. Utilisez « Mot de passe oublié ? » pour choisir un nouveau mot de passe. »
