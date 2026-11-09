@@ -349,6 +349,9 @@ final class SupabaseInscriptionGatewayTests: XCTestCase {
     func testCompletionRefuseeJusquATrancheT8() async {
         let attendu = UnwiredPorts.erreur(port: "complétion de l'inscription", tranche: "T8", lot: 3)
         let g = gateway()
+        // Intégration du lot 3 (T7 × T9) : complétion déclarée non livrée (édition du profil sans « Réessayer la
+        // vérification » des modes) ; T8 passe ce drapeau à `true` avec ses appels.
+        XCTAssertFalse(g.completionLivree)
         let operations: [() async throws -> Void] = [
             { _ = try await g.enregistrerBrouillon(FormulaireInscription(prenom: "Léa")) },
             { _ = try await g.typesExercice(profession: "IDE") },

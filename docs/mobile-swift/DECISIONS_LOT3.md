@@ -914,16 +914,26 @@ texte. Correctif d'intégration (tests d'abord), chaque test changé étant faux
   juridiques, sans texte nouveau.
 - Aucun texte nouveau, aucun texte juridique, aucune RPC, aucune écriture serveur. B9 inchangé : T7 reste soumise au
   go de Gabrielle et au préalable captcha (section T7).
-- **Durée de la CI UI : trois éclats (même règle que DECISIONS_LOT2, décision 22).** Au run 42536888984 (première
+- **Durée de la CI UI : quatre éclats (même règle que DECISIONS_LOT2, décision 22).** Au run 42536888984 (première
   recette de la base fusionnée), l'étape unique `test-without-building` a dépassé ses 30 min sur iphone et
-  ipad-portrait après 35 des 58 XCUITest, tous réussis sur ipad-portrait. `ios-swift-ci.yml` exécute désormais, dans
-  chaque job de format, trois éclats successifs bornés à 30 min chacun (job à 110 min) : « socle »
-  (JoleneCoreTests, JoleneDesignTests, XCUITest des lots 0 et 1, et toute classe nouvelle non rangée),
-  « lot3-compte » (`DemoLiensLot3Tests`, `DemoInscriptionTests`, `DemoCompteLot3Tests`) et « lot3-notifications »
-  (`DemoPushTests`, `DemoNotificationsTests`, `DemoPreferencesTests`, `DemoProfilTests`). Le résumé exige chaque éclat
-  vert, chaque classe de lot démarrée, 0 échec, `skipped = 0`, `passed = total`, ≥ 100 tests, orientation des
-  captures. Aucun test retiré. **Point de fusion avec le lot 2** (éclats « socle » + « lot2 », même structure) : garder
-  les éclats des deux lots et unir les `-skip-testing` de l'éclat socle.
+  ipad-portrait après 35 des 58 XCUITest, tous réussis sur ipad-portrait ; au run 42541548740 (trois éclats), l'éclat
+  push + centre + préférences + profil prenait 27,5 min sur iphone (push 11 min, profil 7, préférences 5,
+  centre 3). `ios-swift-ci.yml` exécute désormais, dans chaque job de format, quatre éclats successifs bornés à 30 min
+  chacun (job à 140 min) : « socle » (JoleneCoreTests, JoleneDesignTests, XCUITest des lots 0 et 1, et toute classe
+  nouvelle non rangée), « lot3-compte » (`DemoLiensLot3Tests`, `DemoInscriptionTests`, `DemoCompteLot3Tests`),
+  « lot3-push » (`DemoPushTests`) et « lot3-notifications » (`DemoNotificationsTests`, `DemoPreferencesTests`,
+  `DemoProfilTests`). Le résumé exige chaque éclat vert, chaque classe de lot démarrée, 0 échec, `skipped = 0`,
+  `passed = total`, ≥ 100 tests, orientation des captures. Aucun test retiré. **Point de fusion avec le lot 2**
+  (éclats « socle » + « lot2 », même structure) : garder les éclats des deux lots et unir les `-skip-testing` de
+  l'éclat socle.
+- **Run 42541548740, UI — iphone : `DemoProfilTests.testTypeDExerciceEnRenvoiEtModesSansReferentiel` rouge (défaut
+  du code, T7 × T9).** L'édition du profil (T9) tenait les modes d'exercice pour « non câblés » seulement si le port
+  `inscription` était un `UnwiredPort` ; T7 le câble (`DemoInscriptionGateway`, `SupabaseInscriptionGateway`) tout en
+  refusant la complétion jusqu'à T8 : le refus donnait l'état « indisponible » avec « Réessayer la vérification »,
+  bouton qui échouerait toujours. `InscriptionPort.completionLivree` (défaut `true`, `false` pour le stub et pour les
+  deux gateways de T7 ; **T8 le passe à `true`** avec ses trois appels) ; `ProfilEditionModel.verifierModes` rend
+  `.nonCable` sans appel. Tests : `ProfilEditionModelTests`, `DemoInscriptionGatewayTests`,
+  `SupabaseInscriptionGatewayTests` (verrou T8).
 - **Même run, UI — iphone** : `DemoCompteLot3Tests.testExportJSONFeuilleFermeeSansPartageAucunSucces` (T11, jamais
   exécuté avant) échouait : la feuille de partage iPhone (iOS 26.2) n'a pas de bouton « Close » / « Fermer », et le
   tap visait le coin bas gauche du voile (`PopoverDismissRegion`), sous la feuille. Défaut du test, pas du code : le

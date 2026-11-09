@@ -134,6 +134,9 @@ final class DemoInscriptionGatewayTests: XCTestCase {
         let (_, gateway) = monde()
         let attendu = UnwiredPorts.erreur(port: "complétion de l'inscription", tranche: "T8", lot: 3)
         XCTAssertTrue(attendu.message.contains("T8 du lot 3"))
+        // Intégration du lot 3 (T7 × T9) : la complétion se déclare non livrée, l'édition du profil n'offre donc pas
+        // « Réessayer la vérification » des modes d'exercice ; T8 passe ce drapeau à `true` avec ses appels.
+        XCTAssertFalse(gateway.completionLivree)
         let operations: [() async throws -> Void] = [
             { _ = try await gateway.enregistrerBrouillon(FormulaireInscription(prenom: "Léa")) },
             { _ = try await gateway.typesExercice(profession: "IDE") },

@@ -417,6 +417,22 @@ final class ProfilEditionModelTests: XCTestCase {
         XCTAssertEqual(nonCable.model.choixModes.options.map(\.mode), [.salarie, .liberal],
                        "salarié toujours proposé, libéral conservé parce qu'il est coché")
         XCTAssertFalse(nonCable.model.choixModes.liberalNonPropose, "aucun verdict sans référentiel")
+
+        // Intégration du lot 3 (T7 × T9 ; CI 42541548740, `DemoProfilTests` sur iphone) : T7 câble `inscription`, mais
+        // la complétion (brouillon, modes d'exercice, finalisation) reste refusée jusqu'à T8 dans les deux mondes. Le
+        // port n'est plus un `UnwiredPort` : sans `completionLivree`, son refus donnait l'état « indisponible » AVEC
+        // « Réessayer la vérification », un bouton qui échouerait toujours. Même état que le port non câblé.
+        XCTAssertFalse(UnwiredInscriptionPort().completionLivree)
+        let demo = DemoWorld.gateways().inscription
+        XCTAssertFalse(demo is UnwiredPort, "T7 : inscription câblée en démo")
+        XCTAssertFalse(demo.completionLivree, "complétion livrée par T8 seulement")
+        let completionAVenir = try await scenario(inscription: demo)
+        await completionAVenir.model.charger()
+        XCTAssertEqual(completionAVenir.model.modes, .nonCable)
+        XCTAssertTrue(completionAVenir.model.choixModes.indisponible)
+        XCTAssertFalse(completionAVenir.model.reessaiModesPossible, "jamais un « Réessayer la vérification » sans effet")
+        XCTAssertTrue(FakeTypesExercice(types: .success(["CDD"])).completionLivree,
+                      "un port qui sert le référentiel le déclare livré (défaut du protocole)")
     }
 
     func testSansProfessionAucuneVerificationDesModes() async throws {

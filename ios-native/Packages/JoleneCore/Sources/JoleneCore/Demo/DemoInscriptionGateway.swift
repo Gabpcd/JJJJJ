@@ -160,6 +160,8 @@ public struct DemoInscriptionGateway: InscriptionPort {
     public func enregistrerBrouillon(_ brouillon: FormulaireInscription) async throws -> ParcoursInscription { throw completion }
     public func typesExercice(profession: String) async throws -> [String]? { throw completion }
     public func finaliser(_ formulaire: FormulaireInscription) async throws -> ResultatFinalisation { throw completion }
+    /// T8 passe à `true` avec les trois appels ci-dessus (intégration du lot 3, T7 × T9).
+    public var completionLivree: Bool { false }
 
     /// La démo ne sert que son nouveau compte : tout autre identifiant est refusé (`.demoOnly`).
     private func verifierNouveauCompte(_ userId: String?) async throws {

@@ -51,6 +51,17 @@ public protocol InscriptionPort: Sendable {
     /// Contrats autorisés pour la profession (`fn_types_exercice_autorises`, table paramétrée) ; nil = référentiel indisponible.
     func typesExercice(profession: String) async throws -> [String]?
     func finaliser(_ formulaire: FormulaireInscription) async throws -> ResultatFinalisation
+    /// Vrai quand la complétion (brouillon, modes d'exercice, finalisation) est livrée (T8). Faux tant que ces trois
+    /// appels refusent explicitement (verrou du gap T8, `DemoInscriptionGateway`, `SupabaseInscriptionGateway`, stub
+    /// non câblé) : l'édition du profil (T9) tient alors les modes d'exercice pour non câblés, sans « Réessayer la
+    /// vérification » (jamais un bouton sans effet ; intégration du lot 3, T7 × T9).
+    var completionLivree: Bool { get }
+}
+
+extension InscriptionPort {
+    /// Par défaut, un port qui sert ses appels déclare la complétion livrée ; seuls les ports dont la complétion
+    /// refuse encore (T7 avant T8) le contredisent.
+    public var completionLivree: Bool { true }
 }
 
 /// Profil soignant (`fn_mon_profil_soignant_complet` en liste blanche, `fn_modifier_mon_profil`) — tranche T9.
@@ -182,6 +193,7 @@ public struct UnwiredNotificationPreferencesPort: NotificationPreferencesPort, U
 
 public struct UnwiredInscriptionPort: InscriptionPort, UnwiredPort {
     public init() {}
+    public var completionLivree: Bool { false }
     private var compte: JoleneError { Lot3.erreur("inscription", "T7") }
     private var completion: JoleneError { Lot3.erreur("complétion de l'inscription", "T8") }
     public func creerCompte(email: String, motDePasse: String, intention: IntentionInscription) async throws -> ResultatCompte {

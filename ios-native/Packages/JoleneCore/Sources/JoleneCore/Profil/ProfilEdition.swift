@@ -189,7 +189,8 @@ public struct RefusEnregistrementProfil: Error, Equatable, Sendable, LocalizedEr
 ///   revalidation ;
 /// - modes d'exercice autorisés : `gateways.inscription.typesExercice` (`fn_types_exercice_autorises`,
 ///   câblé par T8, point d'extension) ; erreur ou réponse absente → état « indisponible » du web ; port
-///   encore non câblé → même état, sans « Réessayer la vérification » (jamais un bouton sans effet).
+///   encore non câblé, ou câblé par T7 sans la complétion de T8 (`completionLivree` faux) → même état, sans
+///   « Réessayer la vérification » (jamais un bouton sans effet).
 @MainActor
 public final class ProfilEditionModel: ObservableObject {
     public enum Etat: Equatable, Sendable {
@@ -309,7 +310,8 @@ public final class ProfilEditionModel: ObservableObject {
         }
         guard let gateways = await session.controller.gateways(for: snapshot.epoch) else { return }
         let port = gateways.inscription
-        guard !(port is UnwiredPort) else {
+        // Port non câblé, ou câblé par T7 sans la complétion de T8 (intégration du lot 3) : le refus serait permanent.
+        guard !(port is UnwiredPort), port.completionLivree else {
             modes = .nonCable
             return
         }
