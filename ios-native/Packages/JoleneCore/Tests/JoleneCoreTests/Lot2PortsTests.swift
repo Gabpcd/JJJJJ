@@ -104,6 +104,15 @@ final class Lot2PortsTests: XCTestCase {
                        "pour le lot 1, même texte que la surcharge historique")
     }
 
+    // MARK: - Audit (T4b)
+
+    func testActionDAuditDuLot2ApresCelleDuLot1() {
+        // Consentement GPS du premier pointage (décision 4) : action du CHECK `journaux_audit_action_check` (l.70290) ;
+        // jamais `GPS_CONSENTEMENT_*` (retrait depuis le Profil), absentes du CHECK (correction 15).
+        XCTAssertEqual(AuditAction.allCases.map(\.rawValue), ["MISSION_ASSIGNATION", "RGPD_CONSENTEMENT_DONNE"])
+        XCTAssertFalse(AuditAction.allCases.contains { $0.rawValue.hasPrefix("GPS_CONSENTEMENT") })
+    }
+
     // MARK: - Drapeaux d'écran (D-FLAGS)
 
     func testClesDesEcransDuLot2ApresCellesDuLot1() async {

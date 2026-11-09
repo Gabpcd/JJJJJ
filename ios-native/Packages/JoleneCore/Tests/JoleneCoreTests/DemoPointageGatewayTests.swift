@@ -162,6 +162,85 @@ final class DemoPointageGatewayTests: XCTestCase {
         XCTAssertEqual(preuves.count, 1, "un seul segment créé")
     }
 
+    // MARK: - Seconde revue fraîche de T4b (m2) : scénarios DEBUG de reprise
+
+    private func attendre401(_ libelle: String, _ appel: () async throws -> Void, file: StaticString = #filePath, line: UInt = #line) async {
+        do {
+            try await appel()
+            XCTFail("\(libelle) : 401 attendu", file: file, line: line)
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur, JoleneError(.unauthorized, SessionController.sessionExpiredMessage), libelle, file: file, line: line)
+        } catch {
+            XCTFail("\(libelle) : \(error)", file: file, line: line)
+        }
+    }
+
+    func testSessionExpireeAuScanAppliqueePuisToutAppelEn401JusquALaRevalidation() async throws {
+        let expiration = ExpirationSessionDemo()
+        let gateway = DemoPointageGateway(scenario: .sessionExpireeScan, expiration: expiration)
+        let started = try await recu(gateway, mission: "demo-presence-a")
+        await attendre401("scan") { _ = try await gateway.scanner(code: "123456", metadonnees: self.metadonnees(), recu: started,
+                                                                   context: self.context) }
+        let recues = await gateway.metadonneesRecues
+        XCTAssertEqual(recues.count, 1, "le scan est appliqué une fois avant le 401 (réponse perdue : rien n'est affirmé)")
+        let expiree = await expiration.expiree
+        XCTAssertTrue(expiree)
+        await attendre401("état") { _ = try await gateway.etat(missionId: "demo-presence-a", context: self.context) }
+        await attendre401("réconciliation") { _ = try await gateway.reconcilier(recu: started, context: self.context) }
+        await attendre401("consentement") { _ = try await gateway.consentementGps(context: self.context) }
+        await attendre401("présences") { _ = try await gateway.presences(context: self.context) }
+
+        await expiration.revalider()
+        let verdict = try await gateway.reconcilier(recu: started, context: context)
+        XCTAssertEqual(verdict, .enregistre(typeScan: .ouverture, numeroScan: 1), "après la revalidation, la relecture retrouve le scan")
+        let preuves = try await gateway.preuvesScan(missionId: "demo-presence-a", context: context)
+        XCTAssertEqual(preuves.count, 1, "un seul segment créé")
+        let suivant = try await recu(gateway, mission: "demo-presence-b")
+        let issue = try await gateway.scanner(code: "654321", metadonnees: metadonnees(), recu: suivant, context: context)
+        XCTAssertEqual(issue, .enregistre(typeScan: .fermeture, numeroScan: 2), "scénario à usage unique : le scan suivant est normal")
+    }
+
+    func testSessionExpireeALaLectureDuConsentementJusquALaRevalidation() async throws {
+        let expiration = ExpirationSessionDemo()
+        let gateway = DemoPointageGateway(scenario: .sessionExpireeConsentement, expiration: expiration)
+        await attendre401("première lecture du consentement") { _ = try await gateway.consentementGps(context: self.context) }
+        await attendre401("lecture avant la revalidation") { _ = try await gateway.consentementGps(context: self.context) }
+        await expiration.revalider()
+        let relu = try await gateway.consentementGps(context: context)
+        XCTAssertNil(relu, "consentement NULL de la fixture, inchangé")
+        let recues = await gateway.metadonneesRecues
+        XCTAssertTrue(recues.isEmpty)
+    }
+
+    func testPremierEnregistrementDuConsentementEnEchecPuisLeSuivantAboutit() async throws {
+        let gateway = DemoPointageGateway(scenario: .consentementEchec)
+        do {
+            _ = try await gateway.enregistrerConsentementGps(true, context: context)
+            XCTFail("premier fn_consentir_gps en échec attendu")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur, JoleneError(.network, SessionController.timeoutMessage), "délai dépassé, comme une panne du service")
+        }
+        let apresEchec = try await gateway.consentementGps(context: context)
+        XCTAssertNil(apresEchec, "un échec n'écrit rien")
+        let relu = try await gateway.enregistrerConsentementGps(true, context: context)
+        XCTAssertEqual(relu, true, "le suivant aboutit")
+    }
+
+    func testAuthDemoRevalideLaSessionSeulementQuandElleEstOuverte() async throws {
+        let expiration = ExpirationSessionDemo()
+        let auth = DemoAuthGateway(expiration: expiration)
+        await expiration.expirer()
+        let avant = try await auth.restoreSession()
+        XCTAssertNil(avant)
+        let toujours = await expiration.expiree
+        XCTAssertTrue(toujours, "aucune session ouverte : rien à revalider")
+        _ = try await auth.signIn(email: DemoWorld.user.email ?? "demonstration@example.invalid", password: "demonstration")
+        let restaure = try await auth.restoreSession()
+        XCTAssertEqual(restaure, DemoWorld.user)
+        let apres = await expiration.expiree
+        XCTAssertFalse(apres, "« Vérifier ma session » (restauration) revalide la session démo")
+    }
+
     func testConsentementDetailEtRelance() async throws {
         let gateway = DemoPointageGateway()
         let initial = try await gateway.consentementGps(context: context)

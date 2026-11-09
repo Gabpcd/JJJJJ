@@ -206,6 +206,18 @@ public final class PointageModel: ObservableObject {
         await reconcilier()
     }
 
+    /// « Vérifier ma session » du bloc de session expirée (revue fraîche de T4b, M1 ; règle de
+    /// `PresencesModel.verifierSession`) : revalide la session (lot 1 ; une session révoquée ramène à la connexion, nouvel
+    /// epoch, et la zone est reconstruite), puis, si elle reste celle de ce bloc, relit le consentement de la page s'il avait
+    /// expiré (et lève son retour d'échec, `ConsentementGpsModel.reprendreApresSession`), l'état, et réconcilie le reçu
+    /// gardé (`charger`) — jamais un renvoi du code.
+    public func verifierSession(_ session: SessionStore, consentement: ConsentementGpsModel? = nil) async {
+        await session.start()
+        guard session.state.snapshot?.epoch == snapshot.epoch else { return }
+        if let consentement { await consentement.reprendreApresSession() }
+        await charger()
+    }
+
     /// Tic du suivi (15 s) : relecture, sauf pendant un envoi.
     public func rafraichir() async {
         guard !envoiEnCours else { return }

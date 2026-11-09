@@ -52,8 +52,7 @@ final class LibellesPresencesTests: XCTestCase {
         let tous = [LibellesPresences.Liste.sousTitre, LibellesPresences.Liste.erreurTitre,
                     LibellesPresences.Liste.videAVenirDescription, LibellesPresences.Liste.videActivesDescription,
                     LibellesPresences.Liste.videAujourdhuiDescription, LibellesPresences.Liste.videHistoriqueDescription,
-                    LibellesPresences.Bloc.aucunHoraire, LibellesPresences.EspaceSoignant.titreSection,
-                    LibellesPresences.Provisoire.etat, LibellesPresences.Provisoire.pointage]
+                    LibellesPresences.Bloc.aucunHoraire, LibellesPresences.EspaceSoignant.titreSection]
         let tutoiement: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
         for texte in tous {
             XCTAssertFalse(texte.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -167,9 +166,128 @@ final class LibellesPresencesTests: XCTestCase {
 
     // MARK: - Textes opérationnels
 
+    /// Textes provisoires de T4a (`LibellesPresences.Provisoire`) retirés par T4b, qui livre la zone de pointage : seule
+    /// la section « Mon espace » garde un texte opérationnel de T4a.
     func testTextesOperationnelsInventories() {
         XCTAssertEqual(LibellesPresences.EspaceSoignant.titreSection, "Mon espace", "décision 24 du lot 2")
-        XCTAssertEqual(LibellesPresences.Provisoire.etat, "Disponible au lot 2")
-        XCTAssertEqual(LibellesPresences.Provisoire.pointage, "Le pointage dans l'application arrive avec la suite du lot 2.")
+        // Seconde revue fraîche de T4b (m3) : coupe-circuit `ios_natif_presences_actif`, texte du lot 0 repris tel quel.
+        XCTAssertEqual(LibellesPresences.Liste.ecranNonDisponible,
+                       "Cet espace n'est pas encore disponible dans l'application. Rendez-vous sur jolene.app.")
+        XCTAssertEqual(LibellesPresences.Liste.ecranNonDisponible, LibellesJustificatifs.espaceNonDisponible,
+                       "même texte que le coupe-circuit des documents (T7)")
+    }
+
+    // MARK: - Zone de pointage (T4b)
+
+    /// Surcharge du web pour le code inconnu (`PointageRotatifSoignant.tsx` l.136), vouvoyée (décision 6) : seule la
+    /// personne du verbe change, apostrophe typographique du web comprise.
+    func testSurchargeDuCodeInconnuVouvoyeeDontSeuleLaPersonneChange() throws {
+        let web = try source("src/components/pointage/PointageRotatifSoignant.tsx")
+        let tutoye = "Code de pointage invalide ou expiré. Demande le code actuel à l’établissement."
+        XCTAssertTrue(web.contains("'" + tutoye + "'"), "source web changée : \(tutoye)")
+        XCTAssertEqual(LibellesPresences.Pointage.codeInvalide, tutoye.replacingOccurrences(of: "Demande ", with: "Demandez "))
+        XCTAssertEqual(LibellesPresences.Pointage.codeInvalide,
+                       "Code de pointage invalide ou expiré. Demandez le code actuel à l’établissement.", "forme exacte de la décision 6")
+        XCTAssertTrue(web.contains("error.message === '" + PointageRules.messageServeurCodeInvalide + "'"),
+                      "le web ne surcharge que ce message serveur (l.135)")
+    }
+
+    func testTextesOperationnelsDuPointageInventories() {
+        let p = LibellesPresences.Pointage.self
+        XCTAssertEqual(p.verification, "Vérification du pointage…")
+        XCTAssertEqual(p.nonRecu, "Le pointage n'a pas été reçu. Saisissez le code actuellement affiché par l'établissement.")
+        XCTAssertEqual(p.horsLigne, "Pointage impossible sans connexion.")
+        XCTAssertEqual(p.autreMission, "Ce code était celui d'une autre de vos missions : le pointage y a été enregistré.")
+        XCTAssertEqual(p.positionApproximative,
+                       "Position approximative : le pointage a été envoyé sans position. Pour la joindre, activez « Position exacte » pour Jolene dans les réglages de localisation de l'appareil.")
+        XCTAssertEqual(p.fermer, "Fermer")
+        XCTAssertEqual(p.voirSurJolene, "Voir sur jolene.app", "texte du lot 1 (`AccueilScreen.swift`), repris par T7")
+        // Revue fraîche de T4b, M1 : bloc de reconnexion du lot 1 (`MissionsListScreen.swift`, `PresencesScreen`), repris tel quel.
+        XCTAssertEqual(p.sessionAVerifier, "Session à vérifier")
+        XCTAssertEqual(p.verifierMaSession, "Vérifier ma session")
+        XCTAssertEqual(p.sessionAVerifier, LibellesJustificatifs.sessionAVerifier, "même texte que T7")
+        XCTAssertEqual(p.verifierMaSession, LibellesJustificatifs.verifierMaSession)
+        XCTAssertEqual(p.messageSessionExpiree, SessionController.sessionExpiredMessage)
+        let tutoiement: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
+        for texte in [p.codeInvalide, p.verification, p.nonRecu, p.horsLigne, p.autreMission, p.positionApproximative, p.fermer,
+                      p.voirSurJolene, p.sessionAVerifier, p.verifierMaSession, p.messageSessionExpiree] {
+            let mots = texte.lowercased().components(separatedBy: CharacterSet.letters.inverted).filter { !$0.isEmpty }
+            XCTAssertFalse(mots.contains { tutoiement.contains($0) }, "tutoiement dans « \(texte) »")
+            for marque in ["consentement", "RGPD", "géolocalisation", "72", "Code civil", "litige"] {
+                XCTAssertFalse(texte.contains(marque), "« \(texte) » : marque « \(marque) » hors TextesWeb")
+            }
+        }
+    }
+
+    func testMessageDeChaqueIssueDuPointage() {
+        let p = LibellesPresences.Pointage.self
+        XCTAssertEqual(p.message(.enregistre(.ouverture)), .init(texte: "Pointage enregistré — segment ouvert", ton: .succes))
+        XCTAssertEqual(p.message(.enregistre(.fermeture)), .init(texte: "Pointage enregistré — segment fermé", ton: .succes))
+        XCTAssertEqual(p.message(.enregistre(nil)), .init(texte: "Pointage enregistré — segment fermé", ton: .succes),
+                       "`type === 'OUVERTURE' ? … : …` du web (l.164)")
+        XCTAssertEqual(p.message(.enregistreSurAutreMission(.ouverture, missionId: "m-2")),
+                       .init(texte: "Pointage enregistré — segment ouvert", ton: .succes,
+                             detail: "Ce code était celui d'une autre de vos missions : le pointage y a été enregistré."))
+        XCTAssertEqual(p.message(.refuse(message: PointageRules.messageServeurCodeInvalide, codeInvalide: true)),
+                       .init(texte: "Code de pointage invalide ou expiré. Demandez le code actuel à l’établissement.", ton: .erreur))
+        XCTAssertEqual(p.message(.refuse(message: "Scan déjà pris en compte. Prochain scan possible dans 87 secondes.", codeInvalide: false)),
+                       .init(texte: "Scan déjà pris en compte. Prochain scan possible dans 87 secondes.", ton: .erreur),
+                       "message serveur verbatim (décision 6)")
+        XCTAssertEqual(p.message(.horsLigne), .init(texte: "Pointage impossible sans connexion.", ton: .attention))
+        XCTAssertEqual(p.message(.verification), .init(texte: "Vérification du pointage…", ton: .info))
+        XCTAssertEqual(p.message(.nonRecu), .init(texte: p.nonRecu, ton: .attention))
+        XCTAssertEqual(p.message(.recuEnCours), .init(texte: RecuScan.messageRecuEnCours, ton: .attention))
+        XCTAssertEqual(p.message(.suiviIllisible), .init(texte: RecuScan.messageIllisible, ton: .erreur, renvoiWeb: true),
+                       "renvoi web `/soignant/presences` (consigne T3)")
+        XCTAssertEqual(p.message(.erreur("Le trousseau de cet appareil est verrouillé.")),
+                       .init(texte: "Le trousseau de cet appareil est verrouillé.", ton: .erreur))
+        XCTAssertEqual(PresencesRenvois.presences?.externalURL?.absoluteString, "https://jolene.app/soignant/presences")
+    }
+
+    func testLibellesDuBlocDeSaisieCommeLeWeb() throws {
+        let p = LibellesPresences.Pointage.self
+        XCTAssertEqual(p.action(.departOuPause), "Pointer mon départ / pause")
+        XCTAssertEqual(p.action(.arriveeOuReprise), "Pointer mon arrivée / ma reprise")
+        XCTAssertEqual(p.action(.arrivee), "Pointer mon arrivée")
+        XCTAssertEqual(p.consigne(segmentOuvert: true),
+                       "Saisissez le code affiché par l'établissement pour pointer votre départ ou une pause.")
+        XCTAssertEqual(p.consigne(segmentOuvert: false), "Saisissez le code affiché par l'établissement pour pointer.")
+        XCTAssertEqual(p.enService(depuis: "2026-11-01T22:00:00Z"), "En service depuis 23h00", "`formatParis(…, \"HH'h'mm\")` (l.204)")
+        XCTAssertNil(p.enService(depuis: "illisible"))
+    }
+
+    func testSegmentsDuBlocDeSaisie() {
+        let p = LibellesPresences.Pointage.self
+        let ouvert = SegmentPointage(id: "s-1", debut: "2026-11-01T22:00:00Z", fin: nil)
+        let ferme = SegmentPointage(id: "s-2", debut: "2026-11-02T08:00:00Z", fin: "2026-11-02T12:30:00Z")
+        XCTAssertEqual(p.segment(numero: 1, ouvert, plusieursJours: false), .init(titre: "Segment 1", horaire: "23h00 → en cours"))
+        XCTAssertEqual(p.segment(numero: 2, ferme, plusieursJours: false), .init(titre: "Segment 2", horaire: "09h00 → 13h30"))
+        XCTAssertEqual(p.segment(numero: 1, ouvert, plusieursJours: true), .init(titre: "Segment 1", horaire: "1 nov. · 23h00 → en cours"),
+                       "plusieurs jours : `d MMM · HH'h'mm` pour le début, heure seule pour la fin (l.263-267)")
+        XCTAssertEqual(p.segment(numero: 2, ferme, plusieursJours: true), .init(titre: "Segment 2", horaire: "2 nov. · 09h00 → 13h30"))
+        XCTAssertNil(p.segment(numero: 3, SegmentPointage(id: "s-3", debut: "illisible", fin: nil), plusieursJours: false))
+    }
+
+    func testRetourDuConsentementLuDansTextesWeb() {
+        let p = LibellesPresences.Pointage.self
+        XCTAssertEqual(p.retourConsentement(.enregistre), TextesWeb.Presences.consentementGpsEnregistre)
+        XCTAssertEqual(p.retourConsentement(.sansGps), TextesWeb.Presences.pointageSansGpsActive)
+        XCTAssertEqual(p.retourConsentement(.bascule(actif: true)), TextesWeb.ProfilConsentementGps.active)
+        XCTAssertEqual(p.retourConsentement(.bascule(actif: false)), TextesWeb.ProfilConsentementGps.retire)
+        XCTAssertEqual(p.retourConsentement(.echec("Réseau indisponible.")), "Réseau indisponible.")
+        XCTAssertEqual(p.tonConsentement(.enregistre), .succes)
+        XCTAssertEqual(p.tonConsentement(.sansGps), .info, "notification `info` du web (l.95)")
+        XCTAssertEqual(p.tonConsentement(.bascule(actif: true)), .succes)
+        XCTAssertEqual(p.tonConsentement(.bascule(actif: false)), .info, "`checked ? 'succes' : 'info'` (SectionPreferences l.159)")
+        XCTAssertEqual(p.tonConsentement(.echec("x")), .erreur)
+    }
+
+    func testEncartDePositionApproximative() {
+        let p = LibellesPresences.Pointage.self
+        XCTAssertEqual(p.encartPosition(.precisionReduite), p.positionApproximative, "décision 5 : encart « Position exacte »")
+        XCTAssertNil(p.encartPosition(.disponible(latitude: 1, longitude: 2, precisionM: 3)))
+        XCTAssertNil(p.encartPosition(.refusee))
+        XCTAssertNil(p.encartPosition(.indisponible))
+        XCTAssertNil(p.encartPosition(nil))
     }
 }

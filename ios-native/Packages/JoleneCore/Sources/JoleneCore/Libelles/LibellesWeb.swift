@@ -200,6 +200,83 @@ public enum LibellesWeb {
         public static let tousTermines = "Tous les créneaux planifiés sont terminés."
     }
 
+    /// Zone de pointage d'une mission (`PointageRotatifSoignant.tsx` l.64-283, lot 2 T4b) : état, consigne, saisie des six
+    /// chiffres, QR, bouton d'action, segments, retours ; bandeau hors ligne (`BandeauHorsLigne.tsx` l.71). Surcharge
+    /// vouvoyée du code inconnu (l.136, décision 6), textes opérationnels et assemblages : `LibellesPresences.Pointage`.
+    /// Consentement et pointage sans GPS : `TextesWeb` (HARD STOP n°4).
+    public enum Pointage {
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:77
+        public static let chargement = "Chargement du pointage…"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:84
+        public static let indisponibleTitre = "Pointage momentanément indisponible"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:89
+        public static let reessayer = "Réessayer"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:97
+        public static let statutIndisponible = "Le pointage n'est pas disponible pour le statut actuel de cette mission."
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:107
+        public static let pointerDepartOuPause = "Pointer mon départ / pause"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:108
+        public static let pointerArriveeOuReprise = "Pointer mon arrivée / ma reprise"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:108
+        public static let pointerArrivee = "Pointer mon arrivée"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:164
+        public static let enregistreOuvert = "Pointage enregistré — segment ouvert"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:164
+        public static let enregistreFerme = "Pointage enregistré — segment fermé"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:188
+        public static let qrNonReconnu = "QR non reconnu. Saisissez le code à 6 chiffres."
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:192
+        public static let scanImpossible = "Scan impossible. Saisissez le code manuellement."
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:201
+        public static let titre = "Pointage"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:204
+        public static let enServiceDepuis = "En service depuis"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:211
+        public static let consigneDepart = "Saisissez le code affiché par l'établissement pour pointer votre départ ou une pause."
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:212
+        public static let consigne = "Saisissez le code affiché par l'établissement pour pointer."
+
+        /// Libellé vocalisé du champ (`aria-label`).
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:220
+        public static let champCode = "Code de pointage à 6 chiffres"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:223
+        public static let placeholderCode = "123 456"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:227
+        public static let qr = "QR"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:233
+        public static let scannerTitre = "Scanner le QR de pointage"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:235
+        public static let scannerDescription = "Placez le QR de l’établissement dans le cadre. Vous pouvez aussi fermer le scanner et saisir le code à 6 chiffres."
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:261
+        public static let segment = "Segment"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:267
+        public static let enCours = "→ en cours"
+
+        /// Bandeau global du web quand la connexion manque.
+        // source: src/components/BandeauHorsLigne.tsx:71
+        public static let horsLigne = "Pas de connexion internet"
+    }
+
     /// Ligne « Mes documents » de la section « Mon espace » du Profil (décision 24 du lot 2), titre de la page web.
     /// « Mes présences » : `ListePresences.titre` ; « Mes contrats » : `Contrats.titre` (T9a, même ligne l.101 de
     /// `ListeContrats.tsx` : une occurrence web ne garde qu'une constante, d'où le retrait du doublon de T4a à
@@ -731,6 +808,29 @@ public enum LibellesWeb {
         .init(cle: "BlocPointage.minutesAvant", texte: BlocPointage.minutesAvant),
         .init(cle: "BlocPointage.prochainCreneau", texte: BlocPointage.prochainCreneau),
         .init(cle: "BlocPointage.tousTermines", texte: BlocPointage.tousTermines),
+        .init(cle: "Pointage.chargement", texte: Pointage.chargement),
+        .init(cle: "Pointage.indisponibleTitre", texte: Pointage.indisponibleTitre),
+        .init(cle: "Pointage.reessayer", texte: Pointage.reessayer),
+        .init(cle: "Pointage.statutIndisponible", texte: Pointage.statutIndisponible),
+        .init(cle: "Pointage.pointerDepartOuPause", texte: Pointage.pointerDepartOuPause),
+        .init(cle: "Pointage.pointerArriveeOuReprise", texte: Pointage.pointerArriveeOuReprise),
+        .init(cle: "Pointage.pointerArrivee", texte: Pointage.pointerArrivee),
+        .init(cle: "Pointage.enregistreOuvert", texte: Pointage.enregistreOuvert),
+        .init(cle: "Pointage.enregistreFerme", texte: Pointage.enregistreFerme),
+        .init(cle: "Pointage.qrNonReconnu", texte: Pointage.qrNonReconnu),
+        .init(cle: "Pointage.scanImpossible", texte: Pointage.scanImpossible),
+        .init(cle: "Pointage.titre", texte: Pointage.titre),
+        .init(cle: "Pointage.enServiceDepuis", texte: Pointage.enServiceDepuis),
+        .init(cle: "Pointage.consigneDepart", texte: Pointage.consigneDepart),
+        .init(cle: "Pointage.consigne", texte: Pointage.consigne),
+        .init(cle: "Pointage.champCode", texte: Pointage.champCode),
+        .init(cle: "Pointage.placeholderCode", texte: Pointage.placeholderCode),
+        .init(cle: "Pointage.qr", texte: Pointage.qr),
+        .init(cle: "Pointage.scannerTitre", texte: Pointage.scannerTitre),
+        .init(cle: "Pointage.scannerDescription", texte: Pointage.scannerDescription),
+        .init(cle: "Pointage.segment", texte: Pointage.segment),
+        .init(cle: "Pointage.enCours", texte: Pointage.enCours),
+        .init(cle: "Pointage.horsLigne", texte: Pointage.horsLigne),
         .init(cle: "EspaceSoignant.mesDocuments", texte: EspaceSoignant.mesDocuments),
         .init(cle: "Contestation.titre", texte: Contestation.titre),
         .init(cle: "Contestation.contester", texte: Contestation.contester),

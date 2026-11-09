@@ -6,10 +6,11 @@ import XCTest
 /// et `LibellesPresencesTests` (JoleneCore) affirment sur le monde démo : un écart entre l'écran et le cœur fait
 /// échouer l'un des deux.
 ///
-/// Gaps verrouillés (aucun bouton sans effet) : la saisie du code, le QR, le consentement GPS et le hors ligne sont la
-/// tranche T4b (zone `pointage-zone-provisoire-<mission>` d'ici là, migrée par T4b) ; « Voir le contrat » (T9a, sinon
-/// renvoi web), « Détail » (T5a) et « Voir ou signaler un litige » (lot 4) ne sont rendus qu'avec le présentateur de
-/// renvois web, que T10 injecte : leur absence est affirmée ici, T10 la remplace par leur présence.
+/// Migré par T4b : la zone de pointage (`pointage-code-<mission>`, `pointage-submit-<mission>`, parcours complet dans
+/// `DemoPointageTests`) remplace l'encart provisoire `pointage-zone-provisoire-<mission>` ; « Voir le contrat » ouvre le
+/// contrat natif (`demo-contrat-pointage-c`, ajouté aux fixtures démo par T4b). Gaps verrouillés (aucun bouton sans
+/// effet) : « Détail » (T5a) et « Voir ou signaler un litige » (lot 4) ne sont rendus qu'avec le présentateur de renvois
+/// web, que T10 injecte : leur absence est affirmée ici, T10 la remplace par leur présence.
 final class DemoPresencesTests: JoleneUITestCase {
     /// Libellés exacts des onglets (`PresencesSoignant.tsx` l.520-523).
     private static let onglets: [(identifiant: String, libelle: String)] = [
@@ -29,7 +30,10 @@ final class DemoPresencesTests: JoleneUITestCase {
         // Mission a : dans la fenêtre de 15 min, contrat signé → zone de pointage (T4b), aucun motif.
         verifier("pointage-bloc-demo-presence-a", dans: ecran,
                  contient: ["Démonstration · Pointage du jour", "Établissement fictif République"])
-        XCTAssertTrue(element("pointage-zone-provisoire-demo-presence-a").exists, "zone de pointage : point d'extension de T4b")
+        require("Zone de pointage de T4b : saisie du code et bouton d'action", timeout: 30) {
+            self.element("pointage-code-demo-presence-a").exists && self.element("pointage-submit-demo-presence-a").exists
+        }
+        XCTAssertFalse(element("pointage-zone-provisoire-demo-presence-a").exists, "encart provisoire de T4a retiré par T4b")
         XCTAssertFalse(element("pointage-indisponible-demo-presence-a").exists)
         // Mission b : segment ouvert → pointable aussi.
         verifier("pointage-bloc-demo-presence-b", dans: ecran, contient: ["Démonstration · Mission en cours"])
@@ -37,9 +41,24 @@ final class DemoPresencesTests: JoleneUITestCase {
         // Mission c : contrat signé par le soignant seulement → motif CONTRAT, textes du web tels quels.
         verifier("pointage-indisponible-demo-presence-c", dans: ecran,
                  contient: ["Contrat non signé", "Le contrat doit être signé par les deux parties avant le premier pointage."])
-        XCTAssertFalse(element("pointage-voir-contrat-demo-presence-c").exists,
-                       "« Voir le contrat » sans contrat natif (T9a) ni présentateur web (T10) : jamais un bouton sans effet")
+        XCTAssertFalse(element("pointage-code-demo-presence-c").exists, "motif CONTRAT : aucune zone de pointage")
         record("\(proofPrefix)-presences-aujourdhui")
+        // « Voir le contrat » (l.90-99) : contrat natif retenu par `choisirContratPointage` (T4b, au lieu du renvoi web).
+        let voirContrat = element("pointage-voir-contrat-demo-presence-c")
+        require("« Voir le contrat » est proposé pour la mission c") { voirContrat.exists }
+        scrollTo(voirContrat, in: ecran)
+        XCTAssertEqual(voirContrat.label, "Voir le contrat", "libellé du web")
+        tap("pointage-voir-contrat-demo-presence-c")
+        require("Le contrat natif de la mission c est affiché", timeout: 30) {
+            self.containerVisible(self.element("contrat-screen")) && self.element("contrat-titre").exists
+        }
+        XCTAssertEqual(element("contrat-titre").label, "Contrat DEMO-0004")
+        XCTAssertEqual(element("contrat-signatures-soignant").label, "Soignant(e) : ✅ Signé le 01/11/2026 à 06:00",
+                       "signé par le soignant seul (`SIGNE_SOIGNANT`), une heure après sa création")
+        XCTAssertEqual(element("contrat-signatures-etablissement").label, "Établissement : ⏳ En attente")
+        record("\(proofPrefix)-presences-voir-contrat")
+        revenir()
+        require("La page Présences est de retour") { self.containerVisible(ecran) }
 
         // Présences validées récemment (7 jours) : la présence validée hier à 15h00 (Paris).
         verifier("presence-validee-demo-presence-h1-presence", dans: ecran,

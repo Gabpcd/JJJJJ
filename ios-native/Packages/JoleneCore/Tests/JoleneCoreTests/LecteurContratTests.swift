@@ -36,7 +36,7 @@ final class LecteurContratTests: XCTestCase {
     }
 
     func testOriginauxDeDemonstrationIsolesUneFois() throws {
-        for fichier in ["demo-contrat-001.html", "demo-contrat-002.html"] {
+        for fichier in ["demo-contrat-001.html", "demo-contrat-002.html", "demo-contrat-pointage-c.html"] {
             let html = String(decoding: try DemoFixtures.originalDemo(fichier: fichier), as: UTF8.self)
             let isole = LecteurContrat.documentIsole(html)
             XCTAssertEqual(isole.components(separatedBy: "Content-Security-Policy").count, 2, fichier)

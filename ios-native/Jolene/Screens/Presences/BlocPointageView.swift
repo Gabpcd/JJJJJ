@@ -3,29 +3,29 @@ import JoleneCore
 import JoleneDesign
 
 /// Point d'extension « zone de pointage » (blueprint lot 2 §3 T4b) : saisie des six chiffres, QR, consentement GPS,
-/// position, hors ligne. T4b le câble en injectant sa fabrique dans l'environnement
-/// (`.environment(\.fabriqueZonePointage, …)`) au-dessus des onglets, avec l'`Appareil` réel ou démo d'`AppContainer`.
-/// La vue rendue possède le `PointageModel` de la mission (`@StateObject`, cycle de vie de la consigne T4b de
-/// `DECISIONS_LOT2.md` : `.task { await model.charger(); await model.suivre() }`, `desactiver()` à la disparition,
-/// `reconcilier()` au retour au premier plan) et traduit chaque `PointageModel.Issue` en libellé web.
+/// position, hors ligne. Câblé par T4b (`FabriqueZonePointageNative`, `PointageCodeView.swift`), injecté dans
+/// l'environnement (`.environment(\.fabriqueZonePointage, …)`) au-dessus des onglets par `MainTabView`, avec l'`Appareil`
+/// réel ou démo d'`AppContainer`. La vue rendue possède le `PointageModel` de la mission (`@StateObject`, cycle de vie de
+/// la consigne T4b de `DECISIONS_LOT2.md`) et traduit chaque `PointageModel.Issue` en libellé web.
 ///
-/// Tant qu'aucune fabrique n'est injectée, un bloc pointable n'affiche qu'un encart provisoire
-/// (`pointage-zone-provisoire-<mission>`, `LibellesPresences.Provisoire.pointage`) : jamais un bouton sans effet
-/// (CLAUDE.md, « un gap connu reste verrouillé »). Verrou du gap : `DemoPresencesTests` affirme aujourd'hui cet encart ;
-/// T4b le remplace par sa zone et migre ces assertions vers ses identifiants (`pointage-code-<mission>`…).
+/// Sans fabrique ni services de la page (`ServicesPointage`), un bloc pointable n'affiche aucune zone : jamais un bouton
+/// sans effet (CLAUDE.md, « un gap connu reste verrouillé ») ; l'encart provisoire de T4a est retiré.
 @MainActor
 protocol FabriqueZonePointage: AnyObject, Sendable {
     func zone(pour contexte: ZonePointageContexte) -> AnyView
 }
 
 /// Ce que la zone reçoit du bloc : la mission (identifiant et fin prévue, pour `PointageModel` et la notation), l'action
-/// que la fenêtre ouvre, et la session de l'écran.
+/// que la fenêtre ouvre, la session de l'écran ; T4b : l'horloge des blocs (libellé de l'action, décision 25 ; fixée en
+/// démo) et les services de la page (`ServicesPointage` : consentement, réseau, relecture des présences, m1).
 struct ZonePointageContexte {
     let missionId: String
     let finLe: String
     let action: EtatDisponibilitePointage.Action?
     let session: SessionStore
     let snapshot: SessionSnapshot
+    let horloge: any ClockPort
+    let services: ServicesPointage?
 }
 
 private struct FabriqueZonePointageKey: EnvironmentKey {
@@ -46,16 +46,17 @@ extension EnvironmentValues {
 /// (l.38-42, décision 25 ; horloge fixée en démo). Textes : `LibellesWeb.BlocPointage`, `LibellesPresences.Bloc`.
 ///
 /// La carte n'ouvre pas le détail de la mission (le web navigue vers `/soignant/missions/:id`, l.57) : les points
-/// d'entrée entre présences et détail de mission sont la tranche T5a. « Voir le contrat » ouvre le contrat natif à
-/// T9a ; d'ici là, le renvoi web `/contrat/:id`, rendu seulement avec le présentateur de T10.
+/// d'entrée entre présences et détail de mission sont la tranche T5a. « Voir le contrat » ouvre le contrat natif
+/// (`ContratsDestination.contrat`, T9a ; bascule par T4b, le contrat démo de la mission c étant désormais dans
+/// `demo-contrats.json`).
 struct BlocPointageView: View {
     let mission: MissionPresenceEnrichie<MissionPresenceLue, EtablissementSummary>
     let contrat: ContratPointage?
     let horloge: any ClockPort
     let session: SessionStore
     let snapshot: SessionSnapshot
-    @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
     @Environment(\.fabriqueZonePointage) private var fabriqueZonePointage
+    @Environment(\.servicesPointage) private var servicesPointage
 
     private var missionId: String { mission.mission.id }
 
@@ -95,10 +96,8 @@ struct BlocPointageView: View {
     private func zone(_ action: EtatDisponibilitePointage.Action?) -> some View {
         if let fabriqueZonePointage {
             fabriqueZonePointage.zone(pour: ZonePointageContexte(missionId: missionId, finLe: mission.mission.finLe, action: action,
-                                                                session: session, snapshot: snapshot))
-        } else {
-            InlineNotice(LibellesPresences.Provisoire.pointage, title: LibellesPresences.Provisoire.etat, tone: .info,
-                         identifier: "pointage-zone-provisoire-\(missionId)")
+                                                                session: session, snapshot: snapshot, horloge: horloge,
+                                                                services: servicesPointage))
         }
     }
 
@@ -131,14 +130,25 @@ struct BlocPointageView: View {
         .accessibilityIdentifier("pointage-indisponible-\(missionId)")
     }
 
-    /// « Voir le contrat » (l.90-99) : seulement quand un contrat est retenu et qu'un renvoi peut être présenté.
+    /// « Voir le contrat » (l.90-99) : seulement quand un contrat est retenu par `choisirContratPointage` ; ouvre le contrat
+    /// natif (`navigate(`/contrat/${contrat.id}`)` du web, l.95).
     @ViewBuilder
     private func voirLeContrat(_ affichage: BlocPointageAffichage) -> some View {
-        if case let .contratNonSigne(contratId?, _) = affichage, let presentateurRenvoiWeb,
-           let route = PresencesRenvois.contrat(id: contratId) {
-            JoleneButton(LibellesWeb.BlocPointage.voirLeContrat, style: .secondary) { presentateurRenvoiWeb.presenter(route) }
-                .accessibilityIdentifier("pointage-voir-contrat-\(missionId)")
-                .padding(.top, JoleneSpacing.xs)
+        if case let .contratNonSigne(contratId?, _) = affichage {
+            NavigationLink {
+                ContratsDestination.contrat(session: session, snapshot: snapshot, contratId: contratId)
+            } label: {
+                Text(LibellesWeb.BlocPointage.voirLeContrat)
+                    .font(JoleneFont.button)
+                    .foregroundStyle(JoleneColor.rose700)
+                    .padding(.horizontal, JoleneSpacing.md)
+                    .frame(minHeight: 44)
+                    .overlay(RoundedRectangle(cornerRadius: JoleneRadius.field).strokeBorder(JoleneColor.rose700, lineWidth: 1))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("pointage-voir-contrat-\(missionId)")
+            .padding(.top, JoleneSpacing.xs)
         }
     }
 
