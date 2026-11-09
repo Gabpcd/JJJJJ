@@ -11,7 +11,8 @@ import SwiftUI
 /// (VoiceOver lirait « tilde », « astérisque »), note de bas de page (texte fourni par l'écran) lue en indice
 /// avec la même règle (`spokenText` : marques « * » de tête et de fin retirées, « ~ » lu « environ »). Seule
 /// la vocalisation change : le texte affiché reste verbatim. Textes vocalisés sans équivalent web
-/// (« environ », « Montant indisponible ») consignés dans `DECISIONS_LOT3.md` (HARD STOP n°4, §6.7).
+/// (« environ », « Montant indisponible ») tranchés par délégation dans `DECISIONS_LOT3.md` (« Décisions déléguées
+/// du 8 novembre 2026 », TJ5).
 /// Le montant n'est jamais tronqué : en ligne quand tout tient (`ViewThatFits`), sinon (et toujours aux
 /// tailles d'accessibilité) en colonne. Posée sur une carte ou un écran (texte secondaire `bubblegum`).
 public struct AmountRow: View {

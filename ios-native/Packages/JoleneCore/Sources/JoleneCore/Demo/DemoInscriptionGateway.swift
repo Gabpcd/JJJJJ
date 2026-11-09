@@ -22,7 +22,9 @@ public enum RefusInscriptionDemo: String, CaseIterable, Sendable {
 /// Comptes créés pendant un lancement démo (mémoire vive, jamais persistés), partagés entre
 /// `DemoInscriptionGateway` (création, confirmation, parcours) et `DemoAuthGateway` (connexion par mot de passe).
 actor DemoComptesInscription {
-    private var compte: (email: String, intention: IntentionInscription)?
+    /// Compte créé ou confirmé pendant ce lancement ; `intention` nil : compte confirmé sans intention d'inscription
+    /// (`DemoInscriptionGateway.tokenHashSansIntention`).
+    private var compte: (email: String, intention: IntentionInscription?)?
     private var parcours: ParcoursInscription?
 
     func creer(email: String, intention: IntentionInscription) {
@@ -45,7 +47,17 @@ actor DemoComptesInscription {
         return DemoInscriptionGateway.utilisateur(email: compte?.email ?? DemoInscriptionGateway.emailParDefaut)
     }
 
-    func intention() -> IntentionInscription? { compte?.intention }
+    /// Lien de confirmation démo « sans intention » : compte par défaut confirmé **sans** `inscription_progressive`
+    /// valide ni parcours (compte créé hors de l'inscription progressive). L'aiguillage propose alors « Choisissez votre
+    /// espace… » (`OnboardingResolution.Etape.choixEspace`), puis « Je suis soignant » en session ouverte (revue
+    /// fraîche B8 de L3-TJ : cas de la décision TJ3 couvert par `DemoInscriptionTests`).
+    func utilisateurConfirmeSansIntention() -> AuthenticatedUser {
+        compte = (DemoInscriptionGateway.emailParDefaut, nil)
+        parcours = nil
+        return DemoInscriptionGateway.utilisateur(email: DemoInscriptionGateway.emailParDefaut)
+    }
+
+    func intention() -> IntentionInscription? { compte?.intention ?? nil }
 
     func parcoursCourant() -> ParcoursInscription? { parcours }
 
@@ -64,7 +76,8 @@ actor DemoComptesInscription {
 /// Inscription du monde démo (lot 3, T7 ; blueprint §2.7), sans réseau : « Créer un compte » envoie un lien de
 /// confirmation fictif ; `token_hash=demo` (`-JOLENE_OPEN_URL https://jolene.app/inscription/confirmer?token_hash=demo&type=signup`,
 /// coordinateur de L1-T10) ou « J’ai confirmé mon email » ouvrent l'identité `demo-nouveau-soignant`, sans profil
-/// soignant (aiguillage d'onboarding). Les refus du serveur sont rejoués avec ses messages verbatim ; l'adresse du
+/// soignant (aiguillage d'onboarding) ; `token_hash=demo-sans-intention` ouvre la même identité sans intention
+/// d'inscription (« Choisissez votre espace… »). Les refus du serveur sont rejoués avec ses messages verbatim ; l'adresse du
 /// compte démo existant (`demonstration@example.invalid`) est un compte existant. La complétion et
 /// `register-soignant` (brouillon, modes d'exercice, finalisation) sont livrés par T8 : ces méthodes refusent
 /// explicitement (`.contract`, « …livré par la tranche T8 du lot 3 »), comme le stub non câblé.
@@ -72,6 +85,9 @@ public struct DemoInscriptionGateway: InscriptionPort {
     public static let nouveauSoignantId = "demo-nouveau-soignant"
     /// `token_hash` du lien de confirmation démo.
     public static let tokenHashDemo = "demo"
+    /// `token_hash` du lien de confirmation démo d'un compte sans intention d'inscription ni parcours (revue fraîche B8
+    /// de L3-TJ) : aiguillage « Choisissez votre espace… », formulaire « Je suis soignant » en session ouverte.
+    public static let tokenHashSansIntention = "demo-sans-intention"
     static let emailParDefaut = "nouveau-soignant@example.invalid"
     /// Horloge du monde démo (`fixed_now` des fixtures).
     static let horodatage = "2026-11-02T00:00:00+00:00"
@@ -121,11 +137,13 @@ public struct DemoInscriptionGateway: InscriptionPort {
     }
 
     public func confirmer(_ credentials: AuthCallbackCredentials) async throws -> ResultatConfirmation {
-        guard case let .tokenHash(tokenHash, otpType) = credentials, tokenHash == Self.tokenHashDemo,
+        guard case let .tokenHash(tokenHash, otpType) = credentials,
+              tokenHash == Self.tokenHashDemo || tokenHash == Self.tokenHashSansIntention,
               otpType == "signup" || otpType == "email" else {
             return .lienRefuse(message: InscriptionTextes.lienNonValide)
         }
-        let user = await comptes.utilisateurConfirme()
+        let user = tokenHash == Self.tokenHashSansIntention
+            ? await comptes.utilisateurConfirmeSansIntention() : await comptes.utilisateurConfirme()
         await session.set(user)
         // Relecture après mutation : aucune session supposée.
         guard await session.current() == user else { return .lienRefuse(message: InscriptionTextes.lienNonValide) }

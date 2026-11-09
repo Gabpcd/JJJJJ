@@ -1134,6 +1134,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_rgpd_exporter_rate_limited"() RETURNS "j
   **différées jusqu'à leur publication** (au plus un mois), leur existence restant confirmée sans contenu ; PR backend
   B9 à préparer hors lot (nouvelle clé `notations_recues_en_attente_de_publication`, 33 clés ; contrat natif inchangé
   jusqu'à son merge).
+- **Second lecteur à visibilité conditionnelle** (revue fraîche B8 de L3-TJ, confirmé sur la définition live en lecture
+  seule le 09/11/2026) : la clé `evaluations_recues` (l.55334) lit la table legacy `evaluations` sans filtre
+  `visible`, alors que la RLS `pol_eval_select` (l.79230) n'ouvre au soignant noté que `visible = true` ; table vide en
+  production selon la revue (défaut latent). Instruit par la même PR backend que `notations_recues` (TJ4, observation
+  hors arbitrage : une seule règle pour les deux lecteurs).
 - **Preuve STAGING** : export non vide (T16).
 
 ## fn_confirmer_paiement_soignant
@@ -1256,8 +1261,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_enregistrer_mon_iban"("p_iban" "text", "
   `IDENTITE_COURANTE_REQUISE` (l.39461 : pièce d'identité `VERIFIE` sans `coherence_nom` ou noms discordants),
   `RIB_NON_CONCORDANT` (l.39477 : `resultat_ia.verdict_serveur`, `iban_valide`, `iban_last4`,
   `iban_preuve_hash_v1 = sha256(iban || ':' || doc_id)`, `coherence_nom`, noms extraits). Sept codes sur neuf
-  arrivent **sans** `error` : messages natifs nouveaux (non juridiques, à relire, §6.7 du blueprint), jamais
-  « IBAN enregistré ». Succès `{success:true, iban_last4, titulaire, source_document_id}` (l.39511-39516) ; audit
+  arrivent **sans** `error` : messages fixés par la règle TJ6 de `DECISIONS_LOT3.md`
+  (« Décisions déléguées du 8 novembre 2026 ») — texte existant quand il y en a un (parcours de session du lot 1, message générique web,
+  « IBAN invalide », et pour `RIB_COURANT_REQUIS` / `RIB_NON_CONCORDANT` le texte serveur de `RIB_VERIFIE_REQUIS`),
+  deux textes natifs nouveaux pour `IDENTITE_VERIFIEE_REQUISE` et `IDENTITE_COURANTE_REQUISE` seulement, chacun
+  épinglé par un test ; jamais « IBAN enregistré ». Succès `{success:true, iban_last4, titulaire, source_document_id}` (l.39511-39516) ; audit
   `IBAN_RENSEIGNE` / `IBAN_MODIFIE` écrit par le serveur. L'IBAN n'est ni journalisé ni persisté côté app.
 - **Preuve STAGING** : `iban_last4` relu sur la fixture D5 (RIB et pièce d'identité `VERIFIE` seedés avec toutes les
   conditions ci-dessus) (T16).

@@ -70,7 +70,8 @@ public struct PasswordCriteriaList: View {
     /// `<identifier>-critere-<cle>`. L'écran du mot de passe (T11) passe `compte-mdp`, ce qui donne les ids
     /// `compte-mdp-critere-<cle>` du blueprint (§3 T11) et `compte-mdp-force`.
     /// Libellé vocalisé d'un critère : « <libellé web>, critère rempli / non rempli » — texte d'accessibilité sans
-    /// équivalent web (le web n'a que la coche), consigné dans `DECISIONS_LOT3.md` (HARD STOP n°4, §6.7).
+    /// équivalent web (le web n'a que la coche), tranché par délégation dans `DECISIONS_LOT3.md` (« Décisions
+    /// déléguées du 8 novembre 2026 », TJ5).
     nonisolated public static func strengthIdentifier(_ identifier: String) -> String { "\(identifier)-force" }
     nonisolated public static func criterionIdentifier(_ identifier: String, criterionID: String) -> String {
         "\(identifier)-critere-\(criterionID)"

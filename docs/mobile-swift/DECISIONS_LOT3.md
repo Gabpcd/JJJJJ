@@ -856,7 +856,8 @@ absente de toutes les branches : point d'entrée unique des liens universels et 
   l'édition native. Le hub porte désormais l'export et la suppression : recommandation pour T3b, router ce `?tab=`
   vers `.monCompte` (fichiers de T3, non modifiés ici).
 - **HARD STOP n°4.** Textes repris du web à leur ligne (`CompteVerbatimTests`), textes RGPD de l'export en tutoiement
-  verbatim, aucun texte juridique nouveau. Refus serveur de l'export localisés dans le corps de
+  verbatim (depuis L3-TJ, TJ2 : titre seul, la description web inexacte n'est plus portée), aucun texte juridique
+  nouveau. Refus serveur de l'export localisés dans le corps de
   `fn_rgpd_exporter_rate_limited` (en-tête de la fonction dans le dump), ligne du dump seulement indicative : un
   `schema-snapshot` ne fait plus rougir JoleneCore (revue B8, m5). Textes RGPD et textes natifs sans équivalent web :
   tranchés par délégation (L3-TJ, TJ2). **B9** : non (D18).
@@ -897,7 +898,8 @@ texte. Correctif d'intégration (tests d'abord), chaque test changé étant faux
     présenter par-dessus (une seule feuille par niveau, limite connue de T3b). Cette feuille disparaît avec son hôte à
     toute fin d'identité, et le magasin effacé est le même (`SFSafariViewController.DataStore.default`). En démo, ces
     deux liens ouvraient la page réelle : repris par L3-TJ (TJ3), la feuille locale montre désormais le double démo du
-    coordinateur (`PageWebLocale`), XCUITest `DemoInscriptionTests.testLienCGUDuConsentementOuvreLeDoubleDemoSansReseau`.
+    coordinateur (`PageWebLocale`), XCUITest `DemoInscriptionTests.testLienCGUDuConsentementOuvreLeDoubleDemoSansReseau`
+    et, depuis la revue fraîche B8 de L3-TJ, `…DepuisLAiguillageSessionOuverte…` (formulaire en feuille de l'aiguillage).
 - **`?tab=confidentialite` → hub (T11 × T3b, consigne de T3b et recommandation de T11).** La ligne de `LinkRouter`
   passe de `.safari(canonique)` à `.monCompte` dès que le port `exportRGPD` est câblé (garde
   `LinksRouterTests.testOngletConfidentialiteSuitLExportRGPDDuHub`, rouge à la fusion) ; cas déplacés dans
@@ -931,7 +933,10 @@ texte. Correctif d'intégration (tests d'abord), chaque test changé étant faux
   `DemoProfilTests`). Le résumé exige chaque éclat vert, chaque classe de lot démarrée, 0 échec, `skipped = 0`,
   `passed = total`, ≥ 100 tests, orientation des captures. Aucun test retiré. **Point de fusion avec le lot 2**
   (éclats « socle » + « lot2 », même structure) : garder les éclats des deux lots et unir les `-skip-testing` de
-  l'éclat socle.
+  l'éclat socle. (L3-TJ, revue fraîche B8, mineur 4) Cinquième éclat « lot3-inscription » (`DemoInscriptionTests`,
+  sorti de « lot3-compte », 19,1 min sur ipad-landscape au run 42549855710 avant les deux XCUITest d'inscription de
+  L3-TJ) ; job à 170 min ; structure gardée par `check-rpc-contracts-lot3.node.mjs` (chaque classe dans un seul
+  éclat, sautée par le socle, attendue par le résumé, xcresult conservé).
 - **Run 42541548740, UI — iphone : `DemoProfilTests.testTypeDExerciceEnRenvoiEtModesSansReferentiel` rouge (défaut
   du code, T7 × T9).** L'édition du profil (T9) tenait les modes d'exercice pour « non câblés » seulement si le port
   `inscription` était un `UnwiredPort` ; T7 le câble (`DemoInscriptionGateway`, `SupabaseInscriptionGateway`) tout en
@@ -980,7 +985,8 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   leurs sources sous « Décisions déléguées du 8 novembre 2026 » ; la règle verbatim ne change pas (le natif suit le
   web mot pour mot, tutoiement compris).
 - Tranchés par délégation (L3-TJ, 9 novembre 2026) : CGU et confidentialité de l'inscription, consentement transmis
-  par `p_cgu` et refus captcha (TJ1) ; textes RGPD de l'export et textes natifs de T11 (TJ2) ; pages `/cgu` et
+  par `p_cgu` et refus captcha (TJ1) ; titre RGPD de l'export (description du web inexacte, non portée, critère de
+  TJ8) et textes natifs de T11 (TJ2) ; pages `/cgu` et
   `/confidentialite` en démo (TJ3) ; export RGPD et notes reçues non publiées (TJ4) ; textes natifs sans équivalent
   web de T1b, T4, T5 et T9 (TJ5).
 - À trancher par leur tranche, selon les règles TJ6 à TJ8 : avertissement d'exclusivité et libellés de mode
@@ -1067,29 +1073,47 @@ Règles appliquées à chaque point (mêmes règles que la section de même titr
 
 ### TJ2 — T11 : textes RGPD de l'export, refus de réauthentification, « non confirmé », thème
 
-- **Textes RGPD de l'export** (T11), validés verbatim : « Mes données (RGPD) »
-  (`src/components/profil-soignant/SectionConfidentialite.tsx` l.111) et
-  « Télécharge l'intégralité de tes données personnelles dans le format de ton choix. » (l.114), tutoiement du web
-  compris, gardés par `CompteVerbatimTests` ; boutons « Exporter JSON » et « Exporter CSV » (l.123, l.131) et succès
-  « Données exportées en JSON. » (gabarit l.73), non juridiques, repris tels quels.
+- **Textes RGPD de l'export** (T11) : titre validé verbatim, description du web **non portée** (critère de TJ8).
+  - « Mes données (RGPD) » (`src/components/profil-soignant/SectionConfidentialite.tsx` l.111), validé verbatim et
+    gardé par `CompteVerbatimTests` ; boutons « Exporter JSON » et « Exporter CSV » (l.123, l.131) et succès
+    « Données exportées en JSON. » (gabarit l.73), non juridiques, repris tels quels.
+  - « Télécharge l'intégralité de tes données personnelles dans le format de ton choix. » (l.114) : inexacte (ci-dessous),
+    **non portée**.
   - Sources : RGPD art. 15, § 3 (copie des données « faisant l'objet d'un traitement ») et art. 20, § 1 (données
     reçues « dans un format structuré, couramment utilisé et lisible par machine » : JSON et CSV conviennent) ;
     politique de confidentialité de production (`PageConfidentialite.tsx` l.196, l.200, l.208-209).
   - « l'intégralité » est inexact au sens strict : l'export omet par construction le numéro de sécurité sociale
     (`public.sql` l.55321), les données de connexion que la politique déclare (§ 2.5, `PageConfidentialite.tsx`
-    l.57-58) et, depuis TJ4, le contenu des notes reçues non encore publiées. RGPD art. 5, § 1, a) (données traitées
-    « de manière licite, loyale et transparente ») et art. 12, § 1 (information « d'une façon concise, transparente,
-    compréhensible »).
-  - **Décision** : affichage natif verbatim maintenu (le natif suit le web) ; **PR web HARD STOP à préparer hors
-    lot** : ne plus promettre « l'intégralité » dans l'export libre-service et renvoyer vers la demande formelle de la
-    politique (`support@jolene.app`, réponse sous un mois) pour le reste ; à merger avec ou après la PR backend de TJ4.
-    Aucun texte de remplacement n'est écrit ici ; le natif suivra par `CompteVerbatimTests`.
+    l.57-58) et, après la PR backend de TJ4, le contenu des notes reçues non encore publiées. RGPD art. 5, § 1, a)
+    (données traitées « de manière licite, loyale et transparente ») et art. 12, § 1 (information « d'une façon
+    concise, transparente, compréhensible »).
+  - **Décision** (corrigée par la revue fraîche B8 de L3-TJ, majeur 2 : la première version maintenait l'affichage
+    natif de ce texte, à l'opposé du critère de TJ8 pour le même cas) : un seul critère pour un texte juridique du web
+    inexact, le **critère de TJ8** — la description n'est plus affichée en natif tant que la PR web ne l'a pas
+    corrigée ; le titre et les boutons sont conservés. Ne pas porter un texte n'est pas le reformuler : aucun texte de
+    remplacement n'est écrit. Mise en œuvre : `ExportRGPD.Textes.description` et l'identifiant `compte-export-info`
+    retirés (`CompteSections.swift`) ; `CompteVerbatimTests` épingle le titre, l'absence de la description dans les
+    sources de l'app et un témoin de l.114 (il rougit quand la PR web corrige la ligne : le nouveau texte est alors
+    instruit puis porté verbatim, tutoiement compris) ; `DemoCompteLot3Tests` exige l'absence à l'écran (trois
+    formats). **PR web HARD STOP à préparer hors lot** : ne plus promettre « l'intégralité » dans l'export
+    libre-service et renvoyer vers la demande formelle de la politique (`support@jolene.app`, réponse sous un mois)
+    pour le reste ; à merger avec ou après la PR backend de TJ4.
 - **T11 — textes sans équivalent web** (non juridiques), validés par délégation, un texte par ligne :
   - « Ce changement exige une nouvelle vérification de votre identité. Utilisez « Mot de passe oublié ? » pour choisir un nouveau mot de passe. »
-    — exact : GoTrue exige alors une réauthentification (`reauthentication_needed`), sans flux OTP au lot 3 (D13) ;
-    « Mot de passe oublié ? » est le libellé de la connexion web (`src/pages/PageConnexion.tsx` l.345). Condition : la
-    connexion native porte ce même libellé (reset natif ou renvoi web, reste de L1-T10 sans tranche, signalé par T3b)
-    avant TestFlight externe ; d'ici là, le cas reste presque inaccessible (session de vérification neuve).
+    — exact sur le fond : GoTrue exige alors une réauthentification (`reauthentication_needed`), sans flux OTP au
+    lot 3 (D13) ; « Mot de passe oublié ? » est le libellé de la connexion web (`src/pages/PageConnexion.tsx` l.345).
+    Mais c'est un **renvoi sans effet** dans l'app (revue fraîche B8 de L3-TJ, mineur 2) : la connexion native n'a
+    aucun contrôle de ce nom (aucun `login-forgot` dans `ios-native/Jolene` ; reset natif ou renvoi web, reste de
+    L1-T10 sans tranche, signalé par T3b). **Accepté jusqu'à L1-T10**, pour trois motifs : (1) le cas est presque
+    inaccessible : la vérification de l'ancien mot de passe ouvre une session neuve, et GoTrue n'exige le nonce que
+    pour une session de plus de 24 h (section T11) ; (2) le refus est verrouillé et n'annonce rien de faux : le mot de
+    passe reste inchangé, aucune action n'est perdue ni supposée ; (3) le libellé nomme le seul chemin qui existe
+    aujourd'hui pour choisir un nouveau mot de passe sans réauthentification (connexion web) : un texte de
+    remplacement n'offrirait aucune action de plus. Différence avec le message de verrou de T13 écarté par TJ7 :
+    celui-là répondait à un état disparu (B3 mergé) et renvoyait vers « Contacter Jolene », modale sans équivalent
+    natif, sur un parcours courant ; celui-ci répond à un refus réel du serveur, rare. **Préalable du §6.10**
+    (TestFlight externe ; verrou « un gap connu reste verrouillé », gardé par `CompteVerbatimTests` et la garde Node
+    du lot 3 tant que `login-forgot` manque) : la connexion native porte « Mot de passe oublié ? ».
   - « Le changement de votre mot de passe n'a pas pu être confirmé. Vérifiez votre connexion puis réessayez. »
     — exact : issue inconnue après un délai ou une coupure (PRINCIPES §3-§4), jamais un succès.
   - « Thème », « Système », « Clair », « Sombre » (D16) — termes de réglage d'iOS, sans portée juridique.
@@ -1114,7 +1138,17 @@ Règles appliquées à chaque point (mêmes règles que la section de même titr
   `DeepLinkCoordinator.estDemo` (`PresentateurRenvoiWeb.swift`), consommée par `InscriptionRapideScreen` ; l'ancienne
   `PageWebSafari` privée est retirée. Preuve niveau 2 (trois formats, compilée, non lancée localement) :
   `DemoInscriptionTests.testLienCGUDuConsentementOuvreLeDoubleDemoSansReseau` (lien « CGU » → double sur
-  `https://jolene.app/cgu` → « Fermer » → formulaire rendu tel quel, consentement non coché).
+  `https://jolene.app/cgu` → « Fermer » → formulaire rendu tel quel, consentement non coché), hors session ; et,
+  ajouté après la revue fraîche B8 de L3-TJ (mineur 4), le cas qui motive cette décision :
+  `DemoInscriptionTests.testLienCGUDepuisLAiguillageSessionOuverteOuvreLeDoubleDemoSansReseau` (session ouverte,
+  formulaire « Je suis soignant » présenté en feuille par `OnboardingRootView`, page « CGU » en feuille dans cette
+  feuille). Ce cas devient atteignable en démo par un second lien de confirmation démo,
+  `token_hash=demo-sans-intention` (`DemoInscriptionGateway.tokenHashSansIntention`, compte confirmé sans intention
+  d'inscription ni parcours → « Choisissez votre espace… » ; `DemoInscriptionGatewayTests`). Les deux XCUITest
+  tournent dans l'éclat « lot3-inscription » de `ios-swift-ci.yml`, créé par cette correction (« lot3-compte » durait
+  19,1 min sur ipad-landscape au run 42549855710, seuil de 20 min, décision 22 de `DECISIONS_LOT2.md`).
+  **Condition de clôture** : CI UI verte sur les trois formats (iphone, ipad-portrait, ipad-landscape), cinq éclats
+  verts, ces deux XCUITest démarrés — à constater par l'intégrateur (`workflow_dispatch` de `ios-swift-ci.yml`).
 - décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
 
 ### TJ4 — Export RGPD : notes reçues non publiées (double-aveugle D8)
@@ -1154,9 +1188,9 @@ Règles appliquées à chaque point (mêmes règles que la section de même titr
     63) : la note est publiée au plus huit jours après sa création, bien avant le mois de l'art. 12, § 3.
 - **Décision** : **différer jusqu'à publication**, à deux conditions :
   1. l'export confirme l'existence de chaque note reçue non publiée, **sans son contenu** (mission, sens, date de
-     création, date à partir de laquelle la publication automatique s'applique) — art. 15, § 1 et considérant 63 ; la
-     date permet un nouvel export une fois la note publiée, et une demande formelle (`support@jolene.app`) reste servie
-     sous un mois, note publiée comprise ;
+     création, date **au plus tôt** de la publication automatique) — art. 15, § 1 et considérant 63 ; la date permet
+     un nouvel export une fois la note publiée, et une demande formelle (`support@jolene.app`) reste servie sous un
+     mois, note publiée comprise ;
   2. le report ne dépasse jamais un mois : une note non publiée créée depuis plus d'un mois est exportée en entier,
      quelle que soit la valeur de `notation_publication_jours` (verrou « un gap connu reste verrouillé » : un paramètre
      relevé au-delà d'un mois ne peut pas allonger le report au-delà du délai de l'art. 12, § 3).
@@ -1172,10 +1206,17 @@ Règles appliquées à chaque point (mêmes règles que la section de même titr
     FROM notations_missions WHERE note_id = v_uid AND masque = false
       AND (publie_le IS NOT NULL OR cree_le <= NOW() - interval '1 month')),
   'notations_recues_en_attente_de_publication', (SELECT COALESCE(jsonb_agg(jsonb_build_object('mission_id',mission_id,'sens',sens,'cree_le',cree_le,
-      'publication_automatique_le', cree_le + make_interval(days => public.fn_param_num('notation_publication_jours', 7)::int)) ORDER BY cree_le DESC), '[]'::jsonb)
+      'publication_automatique_au_plus_tot_le', cree_le + make_interval(days => public.fn_param_num('notation_publication_jours', 7)::int)) ORDER BY cree_le DESC), '[]'::jsonb)
     FROM notations_missions WHERE note_id = v_uid AND masque = false
       AND publie_le IS NULL AND cree_le > NOW() - interval '1 month'),
   ```
+
+  `publication_automatique_au_plus_tot_le` est une date **au plus tôt** (revue fraîche B8 de L3-TJ, mineur 5 ; la
+  première version nommait la clé `publication_automatique_le`) : `fn_publier_notations_echues` ne publie que si
+  `cree_le + N jours < NOW()` (`public.sql` l.51292, définition live relue en lecture seule le 9 novembre 2026), au
+  premier passage du cron quotidien `jolene_publier_notations_j7` (05:30 UTC) qui suit cette date, soit jusqu'à 24 h
+  plus tard : le soignant qui réexporte à cette date peut encore trouver la note en attente. La PR backend garde ce
+  nom de clé et le documente dans la fiche `fn_rgpd_exporter_rate_limited`.
 
   Tests de la PR : test SQL de régression transactionnel (une note reçue non publiée → présente dans
   `notations_recues_en_attente_de_publication` sans critère ni commentaire, absente de `notations_recues` ; après la note
@@ -1184,10 +1225,17 @@ Règles appliquées à chaque point (mêmes règles que la section de même titr
   (l.348-350) et `demo-export-rgpd.json` (33 clés), fiche `fn_rgpd_exporter_rate_limited` de
   `CONTRATS_RPC_SOIGNANT.md` ; `ExportRGPDTests` inchangés (aplatissement générique). Audit des quatre étages
   (`CLAUDE.md`) : `fn_exporter_rgpd_etablissement` (`public.sql` l.36254) ne lit pas `notations_missions` (vérifié dans
-  le dump) ; aucun autre lecteur d'export à corriger.
+  le dump). **Second lecteur à visibilité conditionnelle** (omis par la première version de cet audit, revue fraîche
+  B8 de L3-TJ, mineur 1) : la clé `evaluations_recues` du même export (`public.sql` l.55334) lit la table legacy
+  `evaluations` sans filtre `visible`, alors que la RLS `pol_eval_select` (l.79230) n'ouvre au soignant noté que
+  `visible = true` ; confirmé sur la définition live (lecture seule, `pg_get_functiondef` et `pg_policy`, 9 novembre
+  2026). Table vide en production selon la revue : défaut **latent**, instruit par la même PR (observation
+  ci-dessous), avec un test-garde qui énumère les lecteurs d'export (principe « Publication différée » de `CLAUDE.md`).
 - **Observation hors arbitrage** (à instruire dans la même PR, non tranchée ici) : les notes masquées par la
   modération (`masque = true`) sont absentes de l'export depuis l'origine ; elles restent des données du soignant
-  (art. 15, § 1) : la PR backend instruit leur sort (contenu masqué, existence confirmée).
+  (art. 15, § 1). À l'inverse, `evaluations_recues` exporte les évaluations legacy non visibles (`visible = false`)
+  que la RLS cache au soignant noté. La PR backend instruit les deux lecteurs ensemble, avec une seule règle (contenu
+  masqué ou non, existence confirmée), jamais deux règles divergentes pour une même visibilité.
 - **Natif** : aucun changement (l'écran transmet le fichier du serveur sans en rien afficher) ; il suit le contrat par
   `export-demo-fixtures.mjs`.
 - décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
@@ -1222,15 +1270,28 @@ Règles appliquées à chaque point (mêmes règles que la section de même titr
   2. aucun texte nouveau quand un texte existe : `NON_AUTHENTIFIE` → parcours de session du lot 1 (« Session à
      vérifier », « Vérifier ma session ») ; `PROFIL_INTROUVABLE` → erreur de contrat, message générique web
      « Une erreur est survenue. Veuillez réessayer. » (`src/lib/erreurs.ts` l.532) ; `IBAN_INVALIDE` → « IBAN
-     invalide » (`src/components/profil-soignant/SectionPaiements.tsx` l.339) ; `RIB_COURANT_REQUIS` et
-     `RIB_NON_CONCORDANT` → titre « RIB vérifié requis » (l.306) et texte de l.308, au vouvoiement (texte non
-     juridique, décision 9 du lot 1), avec l'action « Téléverser mon RIB » (l.316 : documents du lot 2 ou renvoi web) ;
+     invalide » (`src/components/profil-soignant/SectionPaiements.tsx` l.339) ;
+     `RIB_COURANT_REQUIS` et `RIB_NON_CONCORDANT` → texte serveur verbatim du refus voisin `RIB_VERIFIE_REQUIS`,
+     « Téléversez puis faites vérifier le RIB correspondant. » (`public.sql` l.32351, déjà au vouvoiement), sous le
+     titre « RIB vérifié requis » (l.306), avec l'action « Téléverser mon RIB » (l.316 : documents du lot 2 ou renvoi
+     web) ; exact dans les deux cas : RIB vérifié retiré entre la lecture et la liaison (`RIB_COURANT_REQUIS`,
+     l.39482), RIB vérifié qui ne porte pas cet IBAN ou dont les noms ne concordent pas (`RIB_NON_CONCORDANT`,
+     l.39526) ;
   3. textes nouveaux pour `IDENTITE_VERIFIEE_REQUISE` et `IDENTITE_COURANTE_REQUISE` seulement : vouvoiement, une phrase
      qui dit la seule condition vérifiée par le serveur (identité vérifiée et cohérente ; pièce d'identité vérifiée
      dont les noms concordent) et l'action disponible dans l'app ou sur le web, jamais une règle que le serveur
      n'applique pas, jamais un chiffre de l'IBAN, jamais « IBAN enregistré » ;
   4. chaque message est une constante épinglée par un test (code → message) et listée dans la section de T14b de ce
      mémo, avec sa ligne de délégation : aucune relecture de Gabrielle n'est plus requise.
+- **Texte de l.308 non retenu pour un refus** (revue fraîche B8 de L3-TJ, majeur 1 : la première version de la règle 2
+  le donnait à `RIB_COURANT_REQUIS` et `RIB_NON_CONCORDANT`) : « L'ancien IBAN est conservé dans ton historique, mais
+  aucun nouveau versement ne peut l'utiliser sans un RIB courant vérifié… » décrit l'état web
+  `iban_renseigne && !iban_verifie` (`SectionPaiements.tsx` l.302), pas un refus. Après un refus, il serait faux dans
+  les deux cas courants : premier IBAN (il n'y a pas d'« ancien IBAN ») ; IBAN déjà vérifié (chaque refus de
+  `fn_lier_iban_verifie_document`, `RIB_NON_CONCORDANT` l.39526 compris, sort avant l'UPDATE de l.39533 : l'IBAN en
+  place reste valable et sert toujours aux versements). Le reprendre contredirait la règle 3 et TJ8. Si T14b affiche
+  l'état `iban_renseigne && !iban_verifie`, elle instruit ce texte pour cet état, contre `fn_consulter_mon_iban`, avant
+  de le porter.
 - **Texte web à ne pas porter** : « Ton IBAN est utilisé pour le versement de tes primes de parrainage. Il n'est jamais
   partagé avec l'établissement. » (`SectionPaiements.tsx` l.280). Information sur les destinataires (RGPD art. 13, § 1),
   inexacte : l'IBAN enregistré est celui du RIB vérifié (`fn_lier_iban_verifie_document`, l.39533-39534 :
@@ -1264,8 +1325,15 @@ Règles appliquées à chaque point (mêmes règles que la section de même titr
   sa section de ce mémo, avec ses sources (fichier:ligne, texte de loi relu, force de la source) et la ligne de
   délégation, comme T4b, T5a et T9b au lot 2 ; aucun texte n'attend plus la relecture de Gabrielle.
 - Texte juridique : verbatim web, tutoiement compris, gardé au caractère près ; texte non juridique : vouvoiement.
-  Un texte juridique du web **inexact** au regard du serveur ou des textes n'est pas porté (comme l.280 de
-  `SectionPaiements.tsx`, TJ6) : PR web HARD STOP à préparer, jamais une reformulation native.
+- **Critère unique pour un texte juridique du web inexact** (précisé après la revue fraîche B8 de L3-TJ, majeur 2) :
+  un texte juridique du web **inexact** au regard du serveur ou des textes n'est **pas porté** — ni affiché, ni
+  reformulé : ne pas porter un texte n'est pas le reformuler. L'écran garde ses titres et ses actions ; une PR web
+  HARD STOP est à préparer, et le natif portera verbatim le texte corrigé, par sa garde (témoin de la ligne web qui
+  rougit quand elle change). Aucune exception selon la nature de l'inexactitude : séparer une exhaustivité exagérée
+  d'une affirmation fausse exigerait une doctrine que ce mémo ne peut pas sourcer, et RGPD art. 5, § 1, a) et
+  art. 12, § 1 s'appliquent aux deux. Appliqué à l.280 de `SectionPaiements.tsx` (destinataires de l'IBAN, TJ6) comme
+  à la description de l'export (« l'intégralité », TJ2) ; les tranches T8, T12, T13, T14a et T14b l'appliquent tel
+  quel.
 - Points à instruire, déjà repérés :
   - T8 : avertissement d'exclusivité (`src/pages/InscriptionSoignant.tsx` l.77, l.84) et libellés des modes
     d'exercice (`src/components/ChoixModesExercice.tsx`, lignes du blueprint §3 T8) : aucune règle de mode d'exercice
@@ -1308,7 +1376,10 @@ Règles appliquées à chaque point (mêmes règles que la section de même titr
 - **§6.9 Boîte mail** : une adresse contrôlée par Gabrielle pour l'inscription STAGING depuis Mail (Universal Link
   réel).
 - **§6.10 TestFlight externe** : groupe de soignants pilotes, informations de test, Beta App Review ; décision
-  explicite, le build parlant à la production.
+  explicite, le build parlant à la production. **Préalable** (verrou « un gap connu reste verrouillé », TJ2) : la
+  connexion native porte « Mot de passe oublié ? » (`login-forgot` : reset natif ou renvoi web, reste de L1-T10) ;
+  sans lui, le refus de réauthentification de T11 renvoie vers un contrôle absent de l'app. Gardé par
+  `CompteVerbatimTests` et la garde Node du lot 3 tant que `login-forgot` manque à `LoginScreen.swift`.
 - **§6.11 Captcha** : mesurer `PORTE_LOT0.md` 3.1 et 3.2 avant d'ouvrir T7 ; en cas de refus captcha, D25 s'applique.
   (T7, 08/11/2026) Toujours « non mesurées » : T7 est livrée en natif sous réserve de ces mesures, à faire avant son
   merge ; un refus captcha mesuré impose D25 (renvoi web de « Créer un compte »).
@@ -1316,7 +1387,7 @@ Règles appliquées à chaque point (mêmes règles que la section de même titr
   `ResetPasswordScreen`, quarantaine de la session de recovery, « Mot de passe oublié ? ») n'a de tranche ni au lot 1
   (mergé sans T10) ni au lot 3 ; en attendant, le lien `token_hash` ouvre la page web et `?code=` est refusé
   (option B). À planifier (préalable inchangé : modèle d'e-mail « Reset Password » au format `token_hash`, §6.6 du
-  lot 1). Condition de TJ2 : la connexion native porte « Mot de passe oublié ? » avant TestFlight externe.
+  lot 1). Préalable du §6.10 (TJ2) : la connexion native porte « Mot de passe oublié ? » avant TestFlight externe.
 - **Export RGPD et notes reçues non publiées** (signalé par la T0, confirmé live par T11) : tranché par délégation
   (L3-TJ, TJ4) ; seul le go B9 au merge de la PR backend reste à Gabrielle (§6.6).
 

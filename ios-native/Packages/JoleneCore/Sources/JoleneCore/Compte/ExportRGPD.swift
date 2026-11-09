@@ -163,13 +163,13 @@ public enum ExportRGPD {
         return signe + texte.prefix(1) + "." + texte.dropFirst() + suffixe
     }
 
-    /// Textes de la section. Ceux du web sont repris **mot pour mot, en tutoiement** (HARD STOP n°4 : le natif suit
-    /// le web ; validés par délégation, L3-TJ, décision TJ2 de `DECISIONS_LOT3.md`) ; gardés par `CompteVerbatimTests`.
+    /// Textes de la section. Ceux du web sont repris **mot pour mot** (HARD STOP n°4 : le natif suit le web ; validés
+    /// par délégation, L3-TJ, décision TJ2 de `DECISIONS_LOT3.md`) ; gardés par `CompteVerbatimTests`. La description
+    /// web de l'export (l.114, exhaustivité promise à tort) est inexacte : elle n'est pas portée (critère de TJ8),
+    /// jamais reformulée ; le natif portera verbatim le texte corrigé par la PR web.
     public enum Textes {
         // source: src/components/profil-soignant/SectionConfidentialite.tsx:111
         public static let titre = "Mes données (RGPD)"
-        // source: src/components/profil-soignant/SectionConfidentialite.tsx:114
-        public static let description = "Télécharge l'intégralité de tes données personnelles dans le format de ton choix."
         // source: src/components/profil-soignant/SectionConfidentialite.tsx:123
         public static let exporterJSON = "Exporter JSON"
         // source: src/components/profil-soignant/SectionConfidentialite.tsx:131
