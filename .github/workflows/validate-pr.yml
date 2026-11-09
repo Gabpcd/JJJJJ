@@ -73,6 +73,9 @@ jobs:
       - name: Gardes du déploiement generate-invoice staging sans réseau ni secrets
         run: node --test tests/node/refresh-generate-invoice-staging.node.mjs tests/node/align-staging-107.node.mjs
 
+      - name: Allocateur de capacité SMS de signature STAGING sans réseau ni secret
+        run: node --test tests/node/allouer-capacite-sms-signature-staging.node.mjs
+
       - name: Tester la préparation Connect staging fermée sans réseau
         run: node --test tests/node/connect-staging-closed.node.mjs tests/node/connect-staging-admission.node.mjs tests/node/connect-staging-standard-v2.node.mjs tests/node/connect-staging-catalogue.node.mjs tests/node/connect-staging-installed.node.mjs tests/node/connect-test-fixture.node.mjs tests/node/connect-test-fixture-ci.node.mjs tests/node/auth-test-frontend-ci.node.mjs
 
@@ -114,6 +117,15 @@ jobs:
 
       - name: Vérifier les empreintes inventaire explicites
         run: node --test tests/node/security-definer-inventory.node.mjs tests/node/litige-resolveur-garde.node.mjs
+
+      - name: Visibilité établissement (B5b) — corps LIVE, empreintes et diff sans réseau
+        run: node --test tests/node/visibilite-etablissement-permission.node.mjs
+
+      - name: Contestation de paiement (B3) — migration et instantané sans réseau
+        run: node --test tests/node/contestation-paiement-soignant.node.mjs
+
+      - name: DPAE CDDU et VACATION (B9) — migration, instantané et bancs sans réseau
+        run: node --test tests/node/dpae-contrats-cddu-vacation.node.mjs
 
       - name: Isolation du draft contrat SQL sans réseau
         run: node --test tests/node/contrat-v11-sql-proof.node.mjs
@@ -678,7 +690,7 @@ jobs:
           fi
           # Les sept sources ont déjà été exécutées, puis comparées aux 90
           # statements du registre et au catalogue revu après installation V2.
-          # Les bancs PG17 rejouent leurs sources ; les 63 suites ci-dessous
+          # Les bancs PG17 rejouent leurs sources ; les 65 suites ci-dessous
           # restent exécutées sur staging, sous SAVEPOINT/ROLLBACK.
           if [ "${PAIEMENTS_INSTALLATION_MODE:-}" = 'installed' ]; then
             test "$CONNECT_INSTALLATION_MODE" != 'installed'
@@ -749,6 +761,8 @@ jobs:
             tests/security/avoirs-imputation-staging.test.sql
             tests/security/stripe-disponibilite-connect.test.sql
             tests/security/connect-onboarding-payout-acl.test.sql
+            tests/security/dpae-contrats-cddu-vacation.test.sql
+            tests/non-regression/sql/contestation-paiement-soignant.test.sql
           )
           # Sans migration, ne pas exiger des fonctions main absentes du
           # staging : cette voie prouve seulement les trois bancs F1 LIVE.
@@ -978,11 +992,71 @@ jobs:
         run: |
           createdb pointage_rotation
           psql -X -v ON_ERROR_STOP=1 -d pointage_rotation -f tests/security/pointage-rotation-isolated.test.sql
+      - name: Visibilité établissement (B5b) — réponses par rôle et refus du rejeu PostgreSQL 17 isolé
+        env:
+          PGOPTIONS: '-c jolene.isolated_sql_test=on'
+        run: |
+          createdb visibilite_etab_permission
+          psql -X -v ON_ERROR_STOP=1 -d visibilite_etab_permission -f tests/security/visibilite-etablissement-permission-isolated.test.sql
+          # Le rejeu DOIT échouer au préflight, après une première application réussie.
+          createdb visibilite_etab_rejeu
+          sortie="$RUNNER_TEMP/visibilite-rejeu.out"
+          erreurs="$RUNNER_TEMP/visibilite-rejeu.err"
+          if psql -X -v ON_ERROR_STOP=1 -d visibilite_etab_rejeu -f tests/security/visibilite-etablissement-permission-rejeu.test.sql > "$sortie" 2> "$erreurs"; then
+            cat "$sortie" "$erreurs"
+            echo "::error::Le rejeu de la migration B5b a été accepté."
+            exit 1
+          fi
+          cat "$sortie" "$erreurs"
+          grep -Fq 'VISIBILITE_ETAB_PREMIERE_APPLICATION_OK' "$sortie"
+          grep -Fq 'VISIBILITE_ETAB_PREFLIGHT_SOURCE_DRIFT: fn_etat_pointage_mission(uuid)' "$erreurs"
+          if grep -Fq 'VISIBILITE_ETAB_REJEU_ACCEPTE' "$sortie"; then
+            echo "::error::Le rejeu de la migration B5b a dépassé le préflight."
+            exit 1
+          fi
+
       - name: Pointage — scanner et fin rétroactive sans code suivant PostgreSQL 17 isolé
         run: |
           createdb scanner_sans_code_suivant
           JOLENE_SCANNER_WITNESS=LOCAL_EPHEMERE PGDATABASE=scanner_sans_code_suivant \
             python3 scripts/ci/scanner-code-sans-code-suivant-pg17.py
+
+      - name: DPAE CDDU et VACATION (B9) — réponses avant/après, rejeu et corps dérivé refusés PostgreSQL 17 isolé
+        env:
+          PGOPTIONS: '-c jolene.isolated_sql_test=on'
+        run: |
+          createdb dpae_salarie
+          psql -X -v ON_ERROR_STOP=1 -d dpae_salarie -f tests/security/dpae-contrats-cddu-vacation-isolated.test.sql
+          # Chaque scénario DOIT échouer sur la garde attendue, après préparation.
+          for scenario in rejeu rejeu_sans_helper corps_derive; do
+            case "$scenario" in
+              rejeu)
+                pret='DPAE_SALARIE_REJEU_PRET'
+                attendu='DPAE_SALARIE_PREFLIGHT_HELPER_DEJA_PRESENT' ;;
+              rejeu_sans_helper)
+                pret='DPAE_SALARIE_REJEU_SANS_HELPER_PRET'
+                attendu='DPAE_SALARIE_PREFLIGHT_SOURCE_DRIFT: fn_mes_dpae()' ;;
+              corps_derive)
+                pret='DPAE_SALARIE_CORPS_DERIVE_PRET'
+                attendu='DPAE_SALARIE_POSTFLIGHT_CORPS_OU_ATTRIBUTS: fn_rappel_dpae_quotidien()' ;;
+            esac
+            base="dpae_salarie_${scenario}"
+            createdb "$base"
+            sortie="$RUNNER_TEMP/${base}.out"
+            erreurs="$RUNNER_TEMP/${base}.err"
+            if psql -X -v ON_ERROR_STOP=1 -v scenario="$scenario" -d "$base" -f tests/security/dpae-contrats-cddu-vacation-rejeu.test.sql > "$sortie" 2> "$erreurs"; then
+              cat "$sortie" "$erreurs"
+              echo "::error::Scénario $scenario : la migration DPAE a été acceptée."
+              exit 1
+            fi
+            cat "$sortie" "$erreurs"
+            grep -Fq "$pret" "$sortie"
+            grep -Fq "$attendu" "$erreurs"
+            if grep -Fq 'DPAE_SALARIE_MIGRATION_ACCEPTEE' "$sortie"; then
+              echo "::error::Scénario $scenario : la migration DPAE a dépassé sa garde."
+              exit 1
+            fi
+          done
 
       - name: Avoirs — exclusion des impayés PostgreSQL 17 isolé
         env:

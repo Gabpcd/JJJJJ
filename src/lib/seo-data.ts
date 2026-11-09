@@ -1,5 +1,3 @@
-import { PROFESSIONS } from '@/lib/constantes';
-
 export interface VilleSEO {
   slug: string;
   nom: string;
@@ -124,7 +122,7 @@ export const PROFESSIONS_SEO: ProfessionSEO[] = [
     valeur: 'IDE',
     label: "Infirmier(ère) Diplômé(e) d'État (IDE)",
     slug: 'infirmier-ide',
-    description: "L'infirmier(ère) diplômé(e) d'État réalise des soins techniques et relationnels auprès des patients. Profession la plus demandée en intérim de santé.",
+    description: "L'infirmier(ère) diplômé(e) d'État réalise des soins techniques et relationnels auprès des patients.",
     salaire_moyen: '25-35\u20AC/h',
   },
   {
@@ -152,7 +150,7 @@ export const PROFESSIONS_SEO: ProfessionSEO[] = [
     valeur: 'IADE',
     label: 'Infirmier(ère) Anesthésiste (IADE)',
     slug: 'infirmier-anesthesiste',
-    description: "L'IADE pratique l'anesthésie sous la responsabilité du médecin anesthésiste-réanimateur. Spécialisation très recherchée en intérim.",
+    description: "L'IADE pratique l'anesthésie sous la responsabilité du médecin anesthésiste-réanimateur.",
     salaire_moyen: '32-48\u20AC/h',
   },
   {

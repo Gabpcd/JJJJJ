@@ -1322,7 +1322,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 )
               )}
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
-                <AffichageCodeRotatifEtab missionId={m.id} />
+                <AffichageCodeRotatifEtab missionId={m.id} etablissementId={m.etablissement_id} />
               )}
               {isAdmin && (
                 <button
