@@ -1,6 +1,7 @@
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import ContratMission, { TYPES_CONTRAT_MENTION_SALARIEE } from './ContratMission';
+import ContratMission from './ContratMission';
+import { TYPES_CONTRAT_SALARIES } from '@/lib/typesContrat';
 
 // Mention du pied de page selon le type de contrat (décision de Gabrielle du 08/11/2026,
 // HARD STOP n°4) : CDD, SALARIE, CDDU et VACATION sont des contrats salariés.
@@ -37,10 +38,10 @@ async function afficher(type: string) {
 }
 
 it('CDDU et VACATION sont des types salariés, comme CDD et SALARIE', () => {
-  expect([...TYPES_CONTRAT_MENTION_SALARIEE].sort()).toEqual(['CDD', 'CDDU', 'SALARIE', 'VACATION']);
+  expect([...TYPES_CONTRAT_SALARIES].sort()).toEqual(['CDD', 'CDDU', 'SALARIE', 'VACATION']);
 });
 
-it.each(['CDD', 'CDDU', 'VACATION'])('un contrat %s porte la mention salariée, jamais la mention libérale', async type => {
+it.each(['CDD', 'SALARIE', 'CDDU', 'VACATION'])('un contrat %s porte la mention salariée, jamais la mention libérale', async type => {
   await afficher(type);
   expect(screen.getByText(content => content.includes(MENTION_SALARIEE))).toBeInTheDocument();
   expect(screen.queryByText(content => content.includes(MENTION_LIBERALE))).not.toBeInTheDocument();
