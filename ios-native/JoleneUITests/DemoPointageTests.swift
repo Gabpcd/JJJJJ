@@ -333,11 +333,16 @@ final class DemoPointageTests: JoleneUITestCase {
         require("Le champ du code de \(mission) est rendu", timeout: 30) { champ.exists }
         scrollTo(champ, in: ecran)
         focus(champ, in: ecran)
-        // Un code refusé reste dans le champ (comme le web) : effacé avant la nouvelle saisie.
-        if let present = valeur("pointage-code-\(mission)"), !present.isEmpty {
+        // Un code refusé reste dans le champ (comme le web) : effacé avant la nouvelle saisie. Le texte est centré : un
+        // toucher au bord de fin place le curseur après le dernier chiffre, puis autant d'effacements que de chiffres
+        // (au plus trois passes, bornées).
+        var passes = 0
+        while let present = valeur("pointage-code-\(mission)"), !present.isEmpty, passes < 3 {
+            champ.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
             champ.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: present.count))
-            require("Le champ est vidé") { self.valeur("pointage-code-\(mission)") == "" }
+            passes += 1
         }
+        require("Le champ est vide avant la saisie") { self.valeur("pointage-code-\(mission)") == "" }
         champ.typeText(code)
         require("Le code saisi est dans le champ") { (champ.value as? String) == code }
     }
