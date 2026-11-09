@@ -140,7 +140,7 @@ public enum MotDePasse {
     public static let identitePartie = JoleneError(.cancelled, "Chargement annulé.")
 
     /// Textes de l'écran. Repris mot pour mot du web (gardés par `CompteVerbatimTests`), sauf les deux
-    /// textes natifs sans équivalent web listés dans `DECISIONS_LOT3.md` (à relire par Gabrielle).
+    /// textes natifs sans équivalent web, tranchés par délégation (L3-TJ, décision TJ2 de `DECISIONS_LOT3.md`).
     public enum Textes {
         // source: src/pages/MonCompteSoignant.tsx:206
         public static let titre = "Changer mon mot de passe"
@@ -171,7 +171,7 @@ public enum MotDePasse {
         /// Natif, sans équivalent web (D13) : le serveur exige une réauthentification (« secure password
         /// change », nonce) ; aucun flux OTP au lot 3, renvoi vers « Mot de passe oublié ? ». Ce lien de l'écran de
         /// connexion (`login-forgot`) arrive avec L1-T10, et ne s'atteint qu'après une déconnexion : dépendance
-        /// consignée dans les manques de T11 (`DECISIONS_LOT3.md`), texte à relire par Gabrielle.
+        /// consignée dans les manques de T11 (`DECISIONS_LOT3.md`) ; texte tranché par délégation (L3-TJ, TJ2).
         public static let reauthentificationRequise =
             "Ce changement exige une nouvelle vérification de votre identité. Utilisez « Mot de passe oublié ? » pour choisir un nouveau mot de passe."
         /// Natif, sans équivalent web : délai dépassé ou coupure pendant le changement, le serveur a pu

@@ -75,10 +75,10 @@ public enum ProfilEdition {
         public static let rayonMaximum = "100 km"
         /// `SectionProfilPrincipal.tsx` l.897.
         public static let typeExercice = "Type d'exercice"
-        /// Sans équivalent web (non juridique, à relire par Gabrielle, `DECISIONS_LOT3.md`) : renvoi
+        /// Sans équivalent web (non juridique, tranché par délégation : L3-TJ, TJ5 de `DECISIONS_LOT3.md`) : renvoi
         /// libellé du type d'exercice et de l'attestation de cumul, servis par la page web (HARD STOP n°4).
         public static let typeExerciceWeb = "Le type d'exercice se modifie sur jolene.app."
-        /// Sans équivalent web (non juridique, à relire par Gabrielle) : repli d'un refus d'enregistrement
+        /// Sans équivalent web (non juridique, tranché par délégation, TJ5) : repli d'un refus d'enregistrement
         /// sans message serveur (le web passe par `extraireMessageErreur`, non porté) ; message de
         /// `SupabaseProfilGateway` et du modèle.
         public static let enregistrementEchec = "Votre profil n'a pas pu être enregistré. Réessayez."
@@ -94,7 +94,7 @@ public enum ProfilEdition {
         public static let sessionAVerifier = "Session à vérifier"
         public static let verifierSession = "Vérifier ma session"
         /// Libellé natif du renvoi web des notifications de l'Accueil au lot 1, retiré de l'Accueil par L3-T5 (centre
-        /// natif) : sans équivalent web, listé parmi les textes à relire par Gabrielle (`DECISIONS_LOT3.md`).
+        /// natif) : sans équivalent web, tranché par délégation (L3-TJ, TJ5 de `DECISIONS_LOT3.md`).
         public static let voirSurLeWeb = "Voir sur jolene.app"
         /// `ProfilSoignant.tsx` l.499.
         public static let enregistrer = "Enregistrer les modifications"

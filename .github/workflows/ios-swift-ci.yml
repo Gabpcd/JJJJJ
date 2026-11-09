@@ -231,8 +231,8 @@ jobs:
   ui:
     name: UI — ${{ matrix.format }}
     runs-on: macos-26
-    # Sept éclats de tests bornés à 30 min chacun (DECISIONS_LOT3, intégration de T3b, T7 et T11, puis T8, T10 et
-    # T12 ; règle de DECISIONS_LOT2 décision 22) : le plafond du job reste au-dessus de leur somme et du build
+    # Sept éclats de tests bornés à 30 min chacun (DECISIONS_LOT3, intégration de T3b, T7 et T11, puis T8, T10, T12
+    # et L3-TJ ; règle de DECISIONS_LOT2 décision 22) : le plafond du job reste au-dessus de leur somme et du build
     # (7 × 30 + 20), pour que le délai d'un éclat tombe avant celui du job.
     timeout-minutes: 230
     strategy:
@@ -312,19 +312,19 @@ jobs:
           echo "duree_build_s=$duree" >> "$GITHUB_OUTPUT"
           echo "Durée build-for-testing : ${duree}s (mesure pour la porte go/no-go, docs/mobile-swift/PORTE_LOT0.md)"
           grep -q "TEST BUILD SUCCEEDED" "$JOLENE_UI_OUTPUT/build-for-testing.log" || { echo "::error::build-for-testing a échoué (code $code). Voir build-for-testing.log dans l'artefact."; exit 1; }
-      # Quatre éclats successifs (DECISIONS_LOT3, intégration de T3b, T7 et T11 ; même règle que DECISIONS_LOT2
-      # décision 22 : découpage par domaine dès qu'un format dépasse 20 min). L'étape unique dépassait ses 30 min sur
-      # iphone et ipad-portrait au run 42536888984 (35 XCUITest sur 58 exécutés) ; au run 42541548740, l'éclat
-      # push + centre + préférences + profil prenait 27,5 min sur iphone. Éclat « socle » : JoleneCoreTests,
-      # JoleneDesignTests et les XCUITest des lots 0 et 1 ; « lot3-compte » : liens universels, inscription, hub
-      # Compte ; « lot3-push » : taps push ; « lot3-notifications » : centre, préférences, profil ; chacun nommé par
-      # -only-testing. Une classe XCUITest nouvelle tourne dans l'éclat socle tant qu'elle n'est pas rangée dans un
-      # éclat de lot. L3-T8 : « lot3-inscription » (complétion du profil), nouvel éclat plutôt que « lot3-compte »,
-      # déjà à 19,1 min sur ipad-landscape au run 42549855710 (seuil de 20 min). L3-T10 : « lot3-profil-photo » (photo
-      # et position du profil, `DemoPhotoPositionTests`) — rangée à part, l'éclat « lot3-notifications » (15 min sur
-      # iphone au run 42541548740) aurait dépassé 20 min. L3-T12 : « lot3-revenus » (onglet Revenus, `DemoRevenusTests`),
-      # domaine des tranches T12, T13, T14a et T14b, éclat séparé parce que « lot3-notifications » atteint déjà 15 min
-      # sur iphone. Le résumé exige les sept éclats verts.
+      # Sept éclats successifs (DECISIONS_LOT3, intégration de T3b, T7 et T11, puis T8, T10, T12 et L3-TJ ; même règle
+      # que DECISIONS_LOT2 décision 22 : découpage par domaine dès qu'un format dépasse 20 min). L'étape unique
+      # dépassait ses 30 min sur iphone et ipad-portrait au run 42536888984 (35 XCUITest sur 58 exécutés) ; au run
+      # 42541548740, l'éclat push + centre + préférences + profil prenait 27,5 min sur iphone ; au run 42549855710,
+      # « lot3-compte » prenait 19,1 min sur ipad-landscape (seuil de 20 min). Éclat « socle » : JoleneCoreTests,
+      # JoleneDesignTests et les XCUITest des lots 0 et 1 ; « lot3-compte » : liens universels, hub Compte ; « lot3-push » :
+      # taps push ; « lot3-notifications » : centre, préférences, profil ; « lot3-inscription » : compte rapide (L3-T7,
+      # dont les deux XCUITest de L3-TJ, sorti de « lot3-compte ») et complétion du profil (L3-T8) ; « lot3-profil-photo »
+      # (L3-T10) : photo et position du profil, rangée à part parce que « lot3-notifications » (15 min sur iphone au run
+      # 42541548740) aurait dépassé 20 min ; « lot3-revenus » (L3-T12) : onglet Revenus, domaine des tranches T12, T13,
+      # T14a et T14b. Chacun nommé par -only-testing (garde tests/node/check-rpc-contracts-lot3.node.mjs). Une classe
+      # XCUITest nouvelle tourne dans l'éclat socle tant qu'elle n'est pas rangée dans un éclat de lot. Le résumé exige
+      # les sept éclats verts.
       - name: test-without-building — éclat socle (JoleneCoreTests, JoleneDesignTests, XCUITest lots 0 et 1) (${{ matrix.format }})
         id: tests
         # Délai propre à l'étape : un simulateur ou un runner xctest bloqué est interrompu ici,
@@ -373,7 +373,7 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-socle.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat socle) : code $code"
-      - name: test-without-building — éclat lot3-compte (XCUITest liens, inscription, hub Compte) (${{ matrix.format }})
+      - name: test-without-building — éclat lot3-compte (XCUITest liens, hub Compte) (${{ matrix.format }})
         id: tests_lot3_compte
         # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
         if: always() && steps.build.outcome == 'success'
@@ -395,7 +395,6 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/derived" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoLiensLot3Tests \
-            -only-testing:JoleneUITests/DemoInscriptionTests \
             -only-testing:JoleneUITests/DemoCompteLot3Tests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
@@ -477,7 +476,7 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-notifications.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot3-notifications) : code $code"
-      - name: test-without-building — éclat lot3-inscription (XCUITest complétion du profil) (${{ matrix.format }})
+      - name: test-without-building — éclat lot3-inscription (XCUITest inscription et complétion du profil) (${{ matrix.format }})
         id: tests_lot3_inscription
         if: always() && steps.build.outcome == 'success'
         timeout-minutes: 30
@@ -497,6 +496,7 @@ jobs:
             -destination "platform=iOS Simulator,id=$UDID" \
             -derivedDataPath "$RUNNER_TEMP/derived" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoInscriptionTests \
             -only-testing:JoleneUITests/DemoCompletionInscriptionTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
@@ -604,10 +604,10 @@ jobs:
             // toutes avoir démarré (un -only-testing mal nommé n exécute rien).
             const eclats = [
               { nom: "socle", code: process.env.CODE_SOCLE, classes: [] },
-              { nom: "lot3-compte", code: process.env.CODE_LOT3_COMPTE, classes: ["DemoLiensLot3Tests", "DemoInscriptionTests", "DemoCompteLot3Tests"] },
+              { nom: "lot3-compte", code: process.env.CODE_LOT3_COMPTE, classes: ["DemoLiensLot3Tests", "DemoCompteLot3Tests"] },
               { nom: "lot3-push", code: process.env.CODE_LOT3_PUSH, classes: ["DemoPushTests"] },
               { nom: "lot3-notifications", code: process.env.CODE_LOT3_NOTIFICATIONS, classes: ["DemoNotificationsTests", "DemoPreferencesTests", "DemoProfilTests"] },
-              { nom: "lot3-inscription", code: process.env.CODE_LOT3_INSCRIPTION, classes: ["DemoCompletionInscriptionTests"] },
+              { nom: "lot3-inscription", code: process.env.CODE_LOT3_INSCRIPTION, classes: ["DemoInscriptionTests", "DemoCompletionInscriptionTests"] },
               { nom: "lot3-profil-photo", code: process.env.CODE_LOT3_PROFIL_PHOTO, classes: ["DemoPhotoPositionTests"] },
               { nom: "lot3-revenus", code: process.env.CODE_LOT3_REVENUS, classes: ["DemoRevenusTests"] },
             ];

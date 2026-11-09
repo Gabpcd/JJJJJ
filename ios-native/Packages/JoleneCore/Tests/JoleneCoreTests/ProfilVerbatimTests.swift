@@ -5,7 +5,7 @@ import XCTest
 /// mot du web, à sa ligne source ; les textes tutoyés du web (non juridiques) passent au vouvoiement
 /// (décision 9 du lot 1) et leur forme web reste à sa ligne. Type d'exercice et attestation de cumul
 /// (art. L1222-5, correction 8) : aucun de leurs textes n'est porté ; le seul texte natif sans équivalent
-/// web est le libellé du renvoi, listé dans `DECISIONS_LOT3.md` parmi les textes à relire par Gabrielle.
+/// web est le libellé du renvoi, tranché par délégation (L3-TJ, décision TJ5 de `DECISIONS_LOT3.md`).
 final class ProfilVerbatimTests: XCTestCase {
     private typealias T = ProfilEdition.Textes
     private typealias M = ChoixModesExercice.Textes
@@ -146,20 +146,20 @@ final class ProfilVerbatimTests: XCTestCase {
 
     func testLibelleDuRenvoiDuTypeDExerciceEpingleSansSourceWeb() throws {
         // Texte natif non juridique, sans équivalent web (le web affiche la section elle-même) : listé parmi les
-        // textes à relire par Gabrielle (`DECISIONS_LOT3.md`, HARD STOP n°4).
+        // textes natifs tranchés par délégation (L3-TJ, décision TJ5 de `DECISIONS_LOT3.md`, « Décisions déléguées du
+        // 8 novembre 2026 »), plus « à relire par Gabrielle » dans la section HARD STOP n°4.
         XCTAssertEqual(T.typeExerciceWeb, "Le type d'exercice se modifie sur jolene.app.")
-        let decisions = try Self.sourceDepot("docs/mobile-swift/DECISIONS_LOT3.md")
-        let entete = "- Textes **sans équivalent web** (non juridiques, à relire par Gabrielle)"
-        let debut = try XCTUnwrap(decisions.range(of: entete), "puce des textes sans équivalent web de DECISIONS_LOT3.md")
-        let suite = decisions[debut.upperBound...]
-        let puce = suite.range(of: "\n- ").map { suite[..<$0.lowerBound] } ?? suite
+        let (puce, sousSection) = try DecisionsLot3Document.puceDeleguee(
+            "- Textes **sans équivalent web** (non juridiques), validés par délégation")
+        XCTAssertTrue(sousSection.contains("### TJ5 — "), "décision TJ5 (textes natifs sans équivalent web)")
+        try DecisionsLot3Document.assertHardStopSansRelectureEnAttente()
         XCTAssertTrue(puce.contains("« \(T.typeExerciceWeb) »"), "DECISIONS_LOT3.md liste le libellé du renvoi")
         XCTAssertTrue(puce.contains("« \(T.enregistrementEchec) »"), "DECISIONS_LOT3.md liste le message de repli")
         let web = try Self.sourceDepot(Self.principal)
         XCTAssertFalse(web.contains(T.typeExerciceWeb), "aucune source web : le libellé n'est pas présenté comme verbatim")
         // « Voir sur jolene.app » : libellé natif du renvoi web des notifications de l'Accueil au lot 1. Intégration du
         // lot 3 : L3-T5 remplace ce renvoi par le centre natif (`AccueilScreen.swift` ne le porte plus), le libellé n'est
-        // donc plus partagé avec l'Accueil ; il est listé avec les textes natifs à relire par Gabrielle.
+        // donc plus partagé avec l'Accueil ; il est listé avec les textes natifs tranchés par délégation (TJ5).
         XCTAssertEqual(T.voirSurLeWeb, "Voir sur jolene.app")
         XCTAssertTrue(puce.contains("« \(T.voirSurLeWeb) »"), "DECISIONS_LOT3.md liste le libellé du bouton de renvoi")
         XCTAssertFalse(web.contains(T.voirSurLeWeb), "aucune source web : le libellé n'est pas présenté comme verbatim")

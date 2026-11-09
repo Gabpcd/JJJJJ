@@ -51,18 +51,18 @@ final class EtatNotificationsAppareilTests: XCTestCase {
 
     func testLibelleOuvrirLesReglagesEpingleSansSourceWeb() throws {
         // Action native sans équivalent web (le web n'ouvre pas les réglages système), non juridique : nommée
-        // au §1.1 du blueprint, listée parmi les textes à relire par Gabrielle (`DECISIONS_LOT3.md`, HARD STOP).
+        // au §1.1 du blueprint, tranchée par délégation (L3-TJ, décision TJ5 de `DECISIONS_LOT3.md`, « Décisions
+        // déléguées du 8 novembre 2026 ») et plus « à relire par Gabrielle » dans la section HARD STOP.
         XCTAssertEqual(E.ouvrirReglages, "Ouvrir les réglages")
         let blueprint = try Self.sourceDepot("docs/mobile-swift/LOT3_PLAN.md")
         XCTAssertTrue(blueprint.contains("« \(E.ouvrirReglages) »"), "LOT3_PLAN.md §1.1 nomme le libellé")
-        // Le libellé figure dans la puce « Textes **sans équivalent web** (non juridiques, à relire par Gabrielle) ».
-        let decisions = try Self.sourceDepot("docs/mobile-swift/DECISIONS_LOT3.md")
-        let entete = "- Textes **sans équivalent web** (non juridiques, à relire par Gabrielle)"
-        let debut = try XCTUnwrap(decisions.range(of: entete), "puce des textes sans équivalent web de DECISIONS_LOT3.md")
-        let suite = decisions[debut.upperBound...]
-        let puce = suite.range(of: "\n- ").map { suite[..<$0.lowerBound] } ?? suite
+        // Le libellé figure dans la puce « Textes **sans équivalent web** (non juridiques), validés par délégation ».
+        let (puce, sousSection) = try DecisionsLot3Document.puceDeleguee(
+            "- Textes **sans équivalent web** (non juridiques), validés par délégation")
+        XCTAssertTrue(sousSection.contains("### TJ5 — "), "décision TJ5 (textes natifs sans équivalent web)")
         XCTAssertTrue(puce.contains("« \(E.ouvrirReglages) »"),
                       "DECISIONS_LOT3.md liste « Ouvrir les réglages » parmi les textes sans équivalent web")
+        try DecisionsLot3Document.assertHardStopSansRelectureEnAttente()
         let web = try Self.sourceDepot("src/pages/PageParametresNotifications.tsx")
         XCTAssertFalse(web.contains(E.ouvrirReglages), "aucune source web : le libellé n'est pas présenté comme verbatim")
     }

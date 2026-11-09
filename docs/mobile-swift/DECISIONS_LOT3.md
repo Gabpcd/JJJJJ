@@ -5,7 +5,10 @@
 > principale : **toutes les recommandations fermes du §7 du blueprint `docs/mobile-swift/LOT3_PLAN.md` sont
 > adoptées telles quelles**. Ce mémo fait foi pour le lot 3. Le plan `docs/PLAN_APP_NATIVE_SWIFT.md` n'est pas réécrit :
 > ses critères de sortie amendés sont consignés ci-dessous. Les décisions juridiques, les réglages hors dépôt et
-> les go B9 restent à Gabrielle (« En attente de Gabrielle »).
+> les go B9 restent à Gabrielle (« En attente de Gabrielle »). **Mise à jour du 9 novembre 2026** : Gabrielle a
+> délégué toutes les décisions, juridiques comprises, le 8 novembre 2026 ; les points juridiques et les textes du lot 3
+> qui ne dépendent d'aucune tranche hors vague sont tranchés sous « Décisions déléguées du 8 novembre 2026 » (tranche
+> L3-TJ) ; restent en attente les go B9 au merge et ce qui exige la présence ou les comptes de Gabrielle.
 
 Numérotation : `N.` reprend la question N du §7 du blueprint, citée `DN`. Chaque décision nomme la ou les
 tranches qui la mettent en œuvre (§3 du blueprint).
@@ -282,10 +285,10 @@ tranches qui la mettent en œuvre (§3 du blueprint).
   au compteur `notifs_non_lues` de `demo-dashboard.json` (« 2 notifications non lues » de l'Accueil démo).
 - **Garde des textes** : `scripts/mobile/check-textes-juridiques-ios.mjs` (L2-TL) n'est pas sur la base du lot 3 ;
   les textes de T5 portent leur `// source: fichier:ligne` et sont épinglés par les tests Swift. Aucun texte
-  juridique. Textes sans équivalent web (non juridiques, à relire par Gabrielle) : l'indication vocale
+  juridique. Texte sans équivalent web (non juridique), tranché par délégation (L3-TJ, TJ5) : l'indication vocale
   « Ouvre le centre de notifications » (`accueil-notifications-action`, constante
-  `CentreNotificationsTextes.indicationOuvrirCentre` épinglée par `CentreNotificationsTests`, gardée en attendant
-  sa relecture, comme les indications du lot 1) ; le libellé DEBUG `push-tap-cible` n'est jamais affiché.
+  `CentreNotificationsTextes.indicationOuvrirCentre` épinglée par `CentreNotificationsTests`) ; le libellé DEBUG
+  `push-tap-cible` n'est jamais affiché.
 
 ## Points de fusion inter-lots des liens (branches du lot 1 non intégrées)
 
@@ -726,9 +729,9 @@ absente de toutes les branches : point d'entrée unique des liens universels et 
   La phrase de consentement est l'assemblage exact du JSX l.264-284 (« J’accepte les CGU et la politique de
   confidentialité. »), ses liens ouvrent `/cgu` et `/confidentialite` dans `SFSafariViewController`. Garde locale
   `InscriptionVerbatimTests` (chaque annotation `// source:` relue contre son fichier, en attendant
-  `check-textes-juridiques-ios.mjs` de L2-TL, absent de la base du lot 3). **À relire par Gabrielle** : la phrase de
-  consentement et ses deux liens ; le choix du message générique (au lieu du texte captcha du web, « Rafraîchissez
-  la page… ») pour un refus captcha.
+  `check-textes-juridiques-ios.mjs` de L2-TL, absent de la base du lot 3). **Tranchés par délégation** (L3-TJ,
+  TJ1) : la phrase de consentement et ses deux liens, le consentement transmis par `p_cgu`, et le choix du message
+  générique (au lieu du texte captcha du web, « Rafraîchissez la page… ») pour un refus captcha.
 - **B9.** Go humain requis (D18) : consentement CGU transmis par `p_cgu` à `fn_demarrer_inscription`.
 
 ## T11 — hub Compte : mot de passe, thème, export RGPD (branche `lot3/l3-t11-v2`, 08/11/2026)
@@ -828,7 +831,8 @@ absente de toutes les branches : point d'entrée unique des liens universels et 
   - Variante de recette DEBUG `JOLENE_FORCE_EXPORT_ECHEC=1` : refus serveur verbatim en démo.
 - **Signalement `notations_recues` (confirmé live).** L'écran n'expose rien du contenu : il transmet à la feuille de
   partage le fichier du serveur, comme le web. Les notes reçues non publiées passent donc par le fichier, sur les
-  deux surfaces. Ce point est serveur et n'est pas corrigé ici (voir « En attente de Gabrielle »).
+  deux surfaces. Ce point est serveur et n'est pas corrigé ici ; tranché par délégation (L3-TJ, TJ4 : notes
+  différées jusqu'à leur publication, PR backend B9 à préparer hors lot).
 - **Manques et points d'extension (aucune entrée sans écran ni présentateur : jamais un lien sans effet).**
   - « Aide & légal » n'est monté qu'avec le présentateur `.safari` de L1-T10 (absent de la base).
     `DemoCompteLot3Tests` affirme son absence ; T10 remplace cette assertion par l'ouverture Safari.
@@ -840,8 +844,9 @@ absente de toutes les branches : point d'entrée unique des liens universels et 
   - Centre de notifications : pas d'entrée au hub (le web n'en a pas, il s'ouvre depuis l'Accueil).
   - Renvoi « Mot de passe oublié ? » du refus verrouillé (revue B8, m6) : ce lien de l'écran de connexion
     (`login-forgot`) n'existe pas sur `LoginScreen.swift` dans cette base ; il arrive avec L1-T10, et ne s'atteint
-    qu'après une déconnexion. Dépendance à L1-T10 ; le texte (`MotDePasse.Textes.reauthentificationRequise`) reste à
-    relire par Gabrielle (section HARD STOP). Le cas est presque inaccessible (session de vérification neuve).
+    qu'après une déconnexion. Dépendance à L1-T10 ; le texte (`MotDePasse.Textes.reauthentificationRequise`) est
+    tranché par délégation (L3-TJ, TJ2, avec la condition de ce libellé sur la connexion native avant TestFlight
+    externe). Le cas est presque inaccessible (session de vérification neuve).
 - **Écarts au blueprint v2 §3 T11, à acter par l'intégrateur (revue B8, m9).**
   - Pas d'entrée `.notifications` (centre) au hub : le hub web n'en a pas, le centre s'ouvre depuis l'Accueil (T5).
   - Pas d'entrées Paiements / Stripe ni Coordonnées bancaires, même en renvoi Safari : reprises T14a et T14b.
@@ -851,10 +856,11 @@ absente de toutes les branches : point d'entrée unique des liens universels et 
   l'édition native. Le hub porte désormais l'export et la suppression : recommandation pour T3b, router ce `?tab=`
   vers `.monCompte` (fichiers de T3, non modifiés ici).
 - **HARD STOP n°4.** Textes repris du web à leur ligne (`CompteVerbatimTests`), textes RGPD de l'export en tutoiement
-  verbatim, aucun texte juridique nouveau. Refus serveur de l'export localisés dans le corps de
+  verbatim (depuis L3-TJ, TJ2 : titre seul, la description web inexacte n'est plus portée), aucun texte juridique
+  nouveau. Refus serveur de l'export localisés dans le corps de
   `fn_rgpd_exporter_rate_limited` (en-tête de la fonction dans le dump), ligne du dump seulement indicative : un
-  `schema-snapshot` ne fait plus rougir JoleneCore (revue B8, m5). Textes natifs sans équivalent web : puce « T11 — textes sans équivalent
-  web » de la section HARD STOP ci-dessous. **B9** : non (D18).
+  `schema-snapshot` ne fait plus rougir JoleneCore (revue B8, m5). Textes RGPD et textes natifs sans équivalent web :
+  tranchés par délégation (L3-TJ, TJ2). **B9** : non (D18).
 
 ## Intégration de T3b, T7 et T11 sur `feat/ios-lot3` (vague 3, 09/11/2026)
 
@@ -891,7 +897,9 @@ texte. Correctif d'intégration (tests d'abord), chaque test changé étant faux
     formulaire est lui-même une feuille dans l'aiguillage d'onboarding (« Je suis soignant ») et la racine ne peut pas
     présenter par-dessus (une seule feuille par niveau, limite connue de T3b). Cette feuille disparaît avec son hôte à
     toute fin d'identité, et le magasin effacé est le même (`SFSafariViewController.DataStore.default`). En démo, ces
-    deux liens ouvriraient la page réelle : aucun XCUITest ne les touche ; à reprendre si une recette démo les exerce.
+    deux liens ouvraient la page réelle : repris par L3-TJ (TJ3), la feuille locale montre désormais le double démo du
+    coordinateur (`PageWebLocale`), XCUITest `DemoInscriptionTests.testLienCGUDuConsentementOuvreLeDoubleDemoSansReseau`
+    et, depuis la revue fraîche B8 de L3-TJ, `…DepuisLAiguillageSessionOuverte…` (formulaire en feuille de l'aiguillage).
 - **`?tab=confidentialite` → hub (T11 × T3b, consigne de T3b et recommandation de T11).** La ligne de `LinkRouter`
   passe de `.safari(canonique)` à `.monCompte` dès que le port `exportRGPD` est câblé (garde
   `LinksRouterTests.testOngletConfidentialiteSuitLExportRGPDDuHub`, rouge à la fusion) ; cas déplacés dans
@@ -925,7 +933,10 @@ texte. Correctif d'intégration (tests d'abord), chaque test changé étant faux
   `DemoProfilTests`). Le résumé exige chaque éclat vert, chaque classe de lot démarrée, 0 échec, `skipped = 0`,
   `passed = total`, ≥ 100 tests, orientation des captures. Aucun test retiré. **Point de fusion avec le lot 2**
   (éclats « socle » + « lot2 », même structure) : garder les éclats des deux lots et unir les `-skip-testing` de
-  l'éclat socle.
+  l'éclat socle. (L3-TJ, revue fraîche B8, mineur 4) Cinquième éclat « lot3-inscription » (`DemoInscriptionTests`,
+  sorti de « lot3-compte », 19,1 min sur ipad-landscape au run 42549855710 avant les deux XCUITest d'inscription de
+  L3-TJ) ; job à 170 min ; structure gardée par `check-rpc-contracts-lot3.node.mjs` (chaque classe dans un seul
+  éclat, sautée par le socle, attendue par le résumé, xcresult conservé).
 - **Run 42541548740, UI — iphone : `DemoProfilTests.testTypeDExerciceEnRenvoiEtModesSansReferentiel` rouge (défaut
   du code, T7 × T9).** L'édition du profil (T9) tenait les modes d'exercice pour « non câblés » seulement si le port
   `inscription` était un `UnwiredPort` ; T7 le câble (`DemoInscriptionGateway`, `SupabaseInscriptionGateway`) tout en
@@ -1533,44 +1544,38 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 - **Signalements sans correction au lot 3** (chacun B9 si une PR est ouverte) : RLS `pol_paie_soig_update`, qui
   permet au soignant un UPDATE direct de `paiements_soignant` (borné par `trg_protect_paiement_soignant` mais
   contournant les effets de la RPC — le natif n'écrit que par RPC) ; faux succès IBAN du web
-  (`SectionPaiements.tsx` l.259-262, D20) ; export RGPD qui inclut les notes reçues non publiées (voir « En attente
-  de Gabrielle »).
+  (`SectionPaiements.tsx` l.259-262, D20) ; export RGPD qui inclut les notes reçues non publiées (tranché par
+  délégation, L3-TJ TJ4 : PR backend B9 à préparer hors lot, go au merge).
+- **PR web HARD STOP à préparer hors lot** (TJ1, TJ2, TJ6 ; le natif suivra par ses gardes) : phrase de consentement
+  (CGU acceptées, politique de confidentialité portée à la connaissance), « l'intégralité » de l'export, l.280 de
+  `SectionPaiements.tsx` (destinataires de l'IBAN).
 
 ## HARD STOP n°4 — textes affichés
 
 - Le natif n'affiche que des textes **verbatim** du web ou du serveur, chacun relié à sa source (fichier:ligne) et
   gardé par un test ; aucun texte juridique nouveau ni reformulé, aucun changement de délai ou de règle juridique
-  côté serveur.
-- Restent verbatim web tant que Gabrielle ne les a pas validés : CGU et confidentialité de l'inscription,
-  avertissement d'exclusivité, libellés de mode d'exercice, libellés escrow et note « net estimé », textes Stripe,
-  textes RGPD de l'export, textes de la contestation de paiement.
+  côté serveur. Depuis la délégation du 8 novembre 2026, les décisions juridiques sont instruites et tranchées avec
+  leurs sources sous « Décisions déléguées du 8 novembre 2026 » ; la règle verbatim ne change pas (le natif suit le
+  web mot pour mot, tutoiement compris).
+- Tranchés par délégation (L3-TJ, 9 novembre 2026) : CGU et confidentialité de l'inscription, consentement transmis
+  par `p_cgu` et refus captcha (TJ1) ; titre RGPD de l'export (description du web inexacte, non portée, critère de
+  TJ8) et textes natifs de T11 (TJ2) ; pages `/cgu` et
+  `/confidentialite` en démo (TJ3) ; export RGPD et notes reçues non publiées (TJ4) ; textes natifs sans équivalent
+  web de T1b, T4, T5 et T9 (TJ5).
+- Tranchés par leur tranche selon TJ8 (intégration du lot 3, 9 novembre 2026) : avertissement d'exclusivité et libellés
+  de mode d'exercice (T8, T8-J2 et T8-J3), libellés escrow et note « net estimé » (T12, « T12 — textes de l'onglet
+  Revenus »). À trancher par leur tranche, selon les règles TJ6 à TJ8 : textes de la contestation de paiement (T13,
+  TJ7 : verrou caduc depuis B3), textes Stripe (T14a), messages des sept `error_code` IBAN qui arrivent sans `error`
+  (T14b, TJ6).
 - Non portés, renvoi web libellé : type d'exercice et attestation de cumul d'activité (art. L1222-5,
   `ProfilSoignant.tsx` l.252-256, l.274-278, correction 8).
-- Textes **sans équivalent web** (non juridiques, à relire par Gabrielle) : messages natifs des sept `error_code`
-  IBAN qui arrivent sans `error` (T14b) ; message du verrou de contestation (T13) ; libellé d'action
-  « Ouvrir les réglages » de la carte « Autorisation du téléphone » (T4 : le web n'ouvre pas les réglages système ;
-  nommé au §1.1 du blueprint, constante `EtatNotificationsAppareil.ouvrirReglages` épinglée par
-  `EtatNotificationsAppareilTests`) ; (T9) libellé du renvoi web du type d'exercice
-  « Le type d'exercice se modifie sur jolene.app. » (encart `profil-exercice-web` sous le titre web « Type
-  d'exercice » : le web affiche la section elle-même, que le natif ne porte pas, correction 8) et message de repli
-  d'un enregistrement refusé sans message serveur « Votre profil n'a pas pu être enregistré. Réessayez. » (le web
-  passe par `extraireMessageErreur`), constantes `ProfilEdition.Textes.typeExerciceWeb` et `.enregistrementEchec`
-  épinglées par `ProfilVerbatimTests` ; (intégration du lot 3, T5 × T9) libellé « Voir sur jolene.app » du bouton
-  `profil-exercice-web-action` (affiché seulement avec le présentateur `.safari` de L1-T10) : repris du renvoi web
-  des notifications de l'Accueil au lot 1, que T5 remplace par le centre natif, il n'existe plus que dans l'édition
-  du profil (constante `ProfilEdition.Textes.voirSurLeWeb`, épinglée par `ProfilVerbatimTests`).
 - (T9, revue B8) Refus d'enregistrement du profil : textes web verbatim d'`extraireMessageErreur`
   (`src/lib/erreurs.ts` l.510, l.511, l.514) pour 23505 et 23514, message serveur verbatim pour `{error}` et P0001
   (`dec_verifier_age_minimum`, `public.sql` l.3893), épinglés par `ProfilVerbatimTests` ; libellés natifs du lot 1
   « Session à vérifier » / « Vérifier ma session » réutilisés tels quels. Aucun texte nouveau, aucun texte juridique.
-- Textes d'accessibilité **sans équivalent web** (vocalisés seulement, jamais affichés ; non juridiques, à relire
-  par Gabrielle, L3-T1b) : « environ » (lecture de « ~ » devant un montant et dans une note, `AmountRow`) ;
-  « Montant indisponible » (lecture du tiret « — », `AmountRow`) ; « critère rempli » / « critère non rempli »
-  (`PasswordCriteriaList`, le web n'a que la coche) ; « Ouvre le centre de notifications » (indication de « Voir »
-  sur le compteur de l'Accueil, L3-T5, `CentreNotificationsTextes.indicationOuvrirCentre`). Le texte affiché reste
-  verbatim web.
-- **T12 — textes adaptés ou sans équivalent web** (non juridiques, à relire par Gabrielle ; constantes
-  `RevenusTextes`, épinglées par `RevenusPresentationTests.testTextesAdaptesOuSansEquivalentWeb`), un texte par ligne :
+- **T12 — textes adaptés ou sans équivalent web** (non juridiques, tranchés par délégation : « Décisions déléguées
+  du 8 novembre 2026 », « T12 — textes de l'onglet Revenus » ; constantes `RevenusTextes`, épinglées par
+  `RevenusPresentationTests.testTextesAdaptesOuSansEquivalentWeb`), un texte par ligne :
   - sous-titre, adapté au vouvoiement de `MesGains.tsx` l.918 : « Vos gains, factures et documents de paie au même endroit »
   - état vide, adapté de l.804 : « Vos gains apparaîtront ici après votre première mission terminée. »
   - totaux indisponibles, adapté de `PageStripeConnect.tsx` l.389 : « Vos revenus sont temporairement indisponibles. »
@@ -1579,21 +1584,13 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 
   Restent verbatim web, tutoiement compris (HARD STOP ; application de la règle 2 de `LOTS_2_5_DECISIONS` et de la
   décision 9 du lot 1, qui ne fait passer au vouvoiement que les textes non juridiques — pas une décision nouvelle) :
-  libellés et aides des sept états du paiement rapide et notes « net estimé » (section T12 ci-dessus).
+  libellés et aides des sept états du paiement rapide et notes « net estimé » (section T12 ci-dessus ; instruits selon
+  TJ8 sous « T12 — textes de l'onglet Revenus »).
   (Revue B8, m5) Libellé vocalisé du bouton de ligne `revenus-mission-ouvrir-<id>` : « Voir mission … », `aria-label`
   du web repris tel quel (`RevenusTextes.voirMission`, `MesGains.tsx` l.703) ; aucun texte affiché nouveau.
-- **T11 — textes sans équivalent web** (non juridiques, à relire par Gabrielle), un texte par ligne :
-  - refus verrouillé de la réauthentification (`MotDePasse.Textes.reauthentificationRequise`) :
-    « Ce changement exige une nouvelle vérification de votre identité. Utilisez « Mot de passe oublié ? » pour choisir un nouveau mot de passe. »
-  - issue inconnue du changement (`MotDePasse.Textes.confirmationIndisponible`) :
-    « Le changement de votre mot de passe n'a pas pu être confirmé. Vérifiez votre connexion puis réessayez. »
-  - libellés du thème (D16 ; le web n'a que « Passer en thème clair / sombre ») : « Thème », « Système », « Clair », « Sombre ».
-
-  Constantes épinglées par `CompteVerbatimTests`. Textes RGPD de l'export (« Mes données (RGPD) », « Télécharge
-  l'intégralité de tes données personnelles dans le format de ton choix. ») : verbatim web en tutoiement, à valider
-  avant tout vouvoiement (§6.7).
 - Seuls les textes non juridiques passent du tutoiement web au vouvoiement (décision 9 du lot 1).
-- **T10 — textes sans équivalent web** (non juridiques, à relire par Gabrielle) : « Choisir dans la photothèque »,
+- **T10 — textes sans équivalent web** (non juridiques, tranchés par délégation : « Décisions déléguées du
+  8 novembre 2026 », « T10 — textes natifs sans équivalent web de la photo de profil ») : « Choisir dans la photothèque »,
   « Prendre une photo » (choix de la source de la photo de profil, `AvatarProfil.Textes`) ; « Annuler » repris de
   `ConfirmationSheet.swift` l.34 ; libellé DEBUG démo `profil-avatar-etat` (« photo » / « initiales », jamais en
   Release). Textes web verbatim ou vouvoyés : section T10, épinglés par `AvatarLocalisationVerbatimTests`.
@@ -1604,13 +1601,351 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 
 ## Décisions déléguées du 8 novembre 2026
 
-Gabrielle a délégué le 08/11/2026 toutes les décisions, juridiques comprises (« arrête de me demander et prends les
-décisions, avance seul ») ; les HARD STOP n°4 ne bloquent plus l'implémentation, les PR B9 restent préparées sans
-merge. Chaque décision est instruite sur des sources primaires vérifiables (dans le dépôt ou dans le texte officiel),
-en distinguant **JUGÉ** (jurisprudence), **doctrine** (ministérielle) et **choix de conformité Jolene** ; aucune ne
-s'appuie sur un arrêt, une délibération ou un texte que l'auteur n'a pas pu relire. (Intégration du lot 3, 09/11/2026 :
-section unique ; les décisions de T8 (T8-J1 à T8-J5), écrites dans la section T8 sur sa branche, et celles de T10 y
-sont regroupées sans changement de texte.)
+Mandat : le 8 novembre 2026, Gabrielle a délégué toutes les décisions, juridiques comprises
+(« arrête de me demander et prends les décisions, avance seul »). Les points juridiques et les textes du lot 3 jusqu'ici
+« En attente de Gabrielle » (section HARD STOP, §6.7, signalement de l'export RGPD) qui ne dépendent d'aucune tranche
+hors vague sont instruits et tranchés ci-dessous par la tranche L3-TJ (branche `lot3/l3-tj-v2`, 9 novembre 2026, TJ1 à
+TJ5) ; pour les tranches à venir (T8, T12, T13, T14a, T14b), TJ6 à TJ8 fixent la règle qu'elles appliquent. Restent
+hors de cette délégation : le go explicite au merge des PR B9 (règle 3 de `LOTS_2_5_DECISIONS`) et ce qui exige la
+présence ou les comptes de Gabrielle (appareil, boîte mail, Dashboard, secrets, Apple, Stripe, Sentry), toujours sous
+« En attente de Gabrielle ».
+
+Règles appliquées à chaque point (mêmes règles que la section de même titre de `DECISIONS_LOT2.md`) :
+- **le natif suit le web mot pour mot** (décision du 9 novembre 2026) : tout texte juridique ou de consentement est
+  repris verbatim du web ou du serveur, tutoiement compris, avec sa source (fichier:ligne), et gardé au caractère près.
+  Au lot 3, les gardes sont locales (`InscriptionVerbatimTests`, `CompteVerbatimTests`, `ProfilVerbatimTests`) : la
+  garde `tests/node/textes-juridiques-ios.node.mjs` de L2-TL vit sur `feat/ios-lot2` ; à la fusion des deux lots, les
+  textes du lot 3 y sont ajoutés. Le passage des textes juridiques au vouvoiement se fera d'abord sur le web (PR HARD
+  STOP), puis le natif suivra par la garde. Aucun wording juridique n'est inventé par le natif ;
+- **force des sources** : TEXTE (loi, règlement : source primaire), JUGÉ (jurisprudence publiée), doctrine (autorité
+  administrative, Apple), choix de conformité Jolene (CGU et politique de confidentialité de production dans `src/`,
+  règle serveur relue dans `supabase/schema/public.sql`). Textes relus le 9 novembre 2026 : règlement (UE) 2016/679
+  (RGPD) en version française sur EUR-Lex, Code civil art. 1119 sur Légifrance. Aucun arrêt ni avis d'autorité n'est
+  cité : aucun n'a pu être relu ici ;
+- aucune écriture en production ni sur STAGING ; une seule lecture de définition live (`pg_get_functiondef`, TJ4). Les
+  corrections hors natif sont consignées comme PR à préparer, hors lot 3.
+
+(Intégration du lot 3, 9 novembre 2026.) Les décisions déléguées des tranches T8 (T8-J1 à T8-J5, écrites dans la
+section T8 sur sa branche, comme le prévoit TJ8) et T10 sont regroupées ici, après TJ1 à TJ8, sans changement de
+fond ; deux décisions s'y ajoutent à l'intégration : les textes non juridiques de la photo de profil (T10) et
+l'instruction, selon TJ8, des textes de l'onglet Revenus (T12, écrite avant TJ8). Une seule section, une ligne de
+délégation par décision (garde `tests/node/check-rpc-contracts-lot3.node.mjs`).
+
+### TJ1 — T7 : consentement transmis par `p_cgu`, phrase de consentement et ses liens, refus captcha
+
+- **Phrase de consentement** (T7), validée verbatim : « J’accepte les CGU et la politique de confidentialité. »
+  (`src/pages/InscriptionRapide.tsx` l.264-284, fragments l.265, l.272, l.274, l.281, l.283), liens `/cgu` (l.267) et
+  `/confidentialite` (l.276) ouverts dans l'app avant l'acceptation ; refus local « Acceptez les conditions pour créer
+  votre compte. » (l.68). Relue le 9 novembre 2026 contre le JSX : identique, aucun tutoiement à reprendre ; gardée par
+  `InscriptionVerbatimTests` (`testPhraseDeConsentementAssembleeCommeLeJSX`).
+- **Consentement transmis par `p_cgu`** (faits, sources primaires du dépôt) :
+  - le natif n'envoie `p_cgu` que depuis la case cochée par l'utilisateur, jamais en dur
+    (`InscriptionRules.intention(profession:cgu:)`, `SupabaseInscriptionGateway` : `"p_cgu": .bool(intention.cgu)`) ;
+    case non cochée → refus local, aucun appel ; même chaîne que le web (`src/lib/inscriptionProgressive.ts` l.33-34,
+    l.50-51) ;
+  - serveur : `fn_demarrer_inscription` refuse `p_cgu IS NOT TRUE` (22023, `public.sql` l.30161-30163) avant toute
+    réservation ; `parcours_inscription.consentement_cgu_le` vaut `now()` à l'insertion (l.71018) ;
+    `register-soignant` n'écrit l'audit `RGPD_CONSENTEMENT_DONNE` (`cgu: true, confidentialite: true`,
+    `consentement_cgu_le`) que si cette date existe (`supabase/functions/register-soignant/index.ts` l.216-226,
+    l.376-387) : la preuve d'acceptation est la même pour une inscription native et une inscription web ;
+  - bases juridiques publiées : la création du compte repose sur l'exécution du contrat (`PageConfidentialite.tsx`
+    l.62, « article 6.1.b du RGPD »), non sur le consentement.
+- **Droit** :
+  - TEXTE — Code civil, art. 1119, al. 1 : « Les conditions générales invoquées par une partie n'ont effet à l'égard de
+    l'autre » que si elles ont été portées à sa connaissance et acceptées. Case non pré-cochée, acceptation positive,
+    pages lisibles avant l'acceptation : conditions remplies, sur les deux surfaces ;
+  - TEXTE — RGPD, art. 13, § 1 (information de la personne lors de la collecte) et art. 7, § 2 (un consentement donné
+    dans une déclaration écrite qui concerne d'autres questions doit s'en distinguer clairement) : la politique de
+    confidentialité est une **information**, et la case ne fonde aucun traitement sur le consentement (art. 6, § 1, b)
+    pour le compte). « J’accepte … la politique de confidentialité » vaut prise de connaissance, non consentement au
+    sens de l'art. 7 ; le nom d'audit `RGPD_CONSENTEMENT_DONNE` est un choix de nommage Jolene, sans effet pour
+    l'utilisateur. Aucun consentement RGPD n'est recueilli ni requis par ce formulaire.
+- **Décision** : phrase, liens et chaîne `p_cgu` validés tels quels pour le natif. Observation non bloquante, pour une
+  **PR web HARD STOP à préparer hors lot** : distinguer dans la phrase l'acceptation des CGU (contrat) de la prise de
+  connaissance de la politique de confidentialité (information), puis le natif suivra par la garde ; aucun texte de
+  remplacement n'est écrit ici. Le go B9 du merge de T7 reste à Gabrielle (D18), avec le préalable captcha (§6.11).
+- **Refus captcha** (T7), message générique validé :
+  « Une erreur inattendue est survenue. Réessayez ou contactez le support. » (`src/lib/erreurs.ts` l.178), suivi du
+  renvoi « Créer un compte soignant » vers `/inscription/soignant` (D25, présentateur `.safari`). Non juridique (ni
+  règle, ni loi, ni portée contractuelle) : le texte web propre au captcha (« Rafraîchissez la page et réessayez. »,
+  l.132-137) n'a pas d'objet dans l'app. Validé.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### TJ2 — T11 : textes RGPD de l'export, refus de réauthentification, « non confirmé », thème
+
+- **Textes RGPD de l'export** (T11) : titre validé verbatim, description du web **non portée** (critère de TJ8).
+  - « Mes données (RGPD) » (`src/components/profil-soignant/SectionConfidentialite.tsx` l.111), validé verbatim et
+    gardé par `CompteVerbatimTests` ; boutons « Exporter JSON » et « Exporter CSV » (l.123, l.131) et succès
+    « Données exportées en JSON. » (gabarit l.73), non juridiques, repris tels quels.
+  - « Télécharge l'intégralité de tes données personnelles dans le format de ton choix. » (l.114) : inexacte (ci-dessous),
+    **non portée**.
+  - Sources : RGPD art. 15, § 3 (copie des données « faisant l'objet d'un traitement ») et art. 20, § 1 (données
+    reçues « dans un format structuré, couramment utilisé et lisible par machine » : JSON et CSV conviennent) ;
+    politique de confidentialité de production (`PageConfidentialite.tsx` l.196, l.200, l.208-209).
+  - « l'intégralité » est inexact au sens strict : l'export omet par construction le numéro de sécurité sociale
+    (`public.sql` l.55321), les données de connexion que la politique déclare (§ 2.5, `PageConfidentialite.tsx`
+    l.57-58) et, après la PR backend de TJ4, le contenu des notes reçues non encore publiées. RGPD art. 5, § 1, a)
+    (données traitées « de manière licite, loyale et transparente ») et art. 12, § 1 (information « d'une façon
+    concise, transparente, compréhensible »).
+  - **Décision** (corrigée par la revue fraîche B8 de L3-TJ, majeur 2 : la première version maintenait l'affichage
+    natif de ce texte, à l'opposé du critère de TJ8 pour le même cas) : un seul critère pour un texte juridique du web
+    inexact, le **critère de TJ8** — la description n'est plus affichée en natif tant que la PR web ne l'a pas
+    corrigée ; le titre et les boutons sont conservés. Ne pas porter un texte n'est pas le reformuler : aucun texte de
+    remplacement n'est écrit. Mise en œuvre : `ExportRGPD.Textes.description` et l'identifiant `compte-export-info`
+    retirés (`CompteSections.swift`) ; `CompteVerbatimTests` épingle le titre, l'absence de la description dans les
+    sources de l'app et un témoin de l.114 (il rougit quand la PR web corrige la ligne : le nouveau texte est alors
+    instruit puis porté verbatim, tutoiement compris) ; `DemoCompteLot3Tests` exige l'absence à l'écran (trois
+    formats). **PR web HARD STOP à préparer hors lot** : ne plus promettre « l'intégralité » dans l'export
+    libre-service et renvoyer vers la demande formelle de la politique (`support@jolene.app`, réponse sous un mois)
+    pour le reste ; à merger avec ou après la PR backend de TJ4.
+- **T11 — textes sans équivalent web** (non juridiques), validés par délégation, un texte par ligne :
+  - « Ce changement exige une nouvelle vérification de votre identité. Utilisez « Mot de passe oublié ? » pour choisir un nouveau mot de passe. »
+    — exact sur le fond : GoTrue exige alors une réauthentification (`reauthentication_needed`), sans flux OTP au
+    lot 3 (D13) ; « Mot de passe oublié ? » est le libellé de la connexion web (`src/pages/PageConnexion.tsx` l.345).
+    Mais c'est un **renvoi sans effet** dans l'app (revue fraîche B8 de L3-TJ, mineur 2) : la connexion native n'a
+    aucun contrôle de ce nom (aucun `login-forgot` dans `ios-native/Jolene` ; reset natif ou renvoi web, reste de
+    L1-T10 sans tranche, signalé par T3b). **Accepté jusqu'à L1-T10**, pour trois motifs : (1) le cas est presque
+    inaccessible : la vérification de l'ancien mot de passe ouvre une session neuve, et GoTrue n'exige le nonce que
+    pour une session de plus de 24 h (section T11) ; (2) le refus est verrouillé et n'annonce rien de faux : le mot de
+    passe reste inchangé, aucune action n'est perdue ni supposée ; (3) le libellé nomme le seul chemin qui existe
+    aujourd'hui pour choisir un nouveau mot de passe sans réauthentification (connexion web) : un texte de
+    remplacement n'offrirait aucune action de plus. Différence avec le message de verrou de T13 écarté par TJ7 :
+    celui-là répondait à un état disparu (B3 mergé) et renvoyait vers « Contacter Jolene », modale sans équivalent
+    natif, sur un parcours courant ; celui-ci répond à un refus réel du serveur, rare. **Préalable du §6.10**
+    (TestFlight externe ; verrou « un gap connu reste verrouillé », gardé par `CompteVerbatimTests` et la garde Node
+    du lot 3 tant que `login-forgot` manque) : la connexion native porte « Mot de passe oublié ? ».
+  - « Le changement de votre mot de passe n'a pas pu être confirmé. Vérifiez votre connexion puis réessayez. »
+    — exact : issue inconnue après un délai ou une coupure (PRINCIPES §3-§4), jamais un succès.
+  - « Thème », « Système », « Clair », « Sombre » (D16) — termes de réglage d'iOS, sans portée juridique.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### TJ3 — Pages `/cgu` et `/confidentialite` de l'inscription en démo (feuille locale)
+
+- **Constat** (intégration de T3b, T7 et T11) : la phrase de consentement ouvre ses pages par une feuille locale du
+  formulaire (le formulaire est lui-même une feuille dans l'aiguillage d'onboarding, la racine ne peut pas présenter
+  par-dessus) ; cette feuille chargeait la vraie page dans `SFSafariViewController` **en démo aussi**, alors que tout
+  renvoi web de la démo (pages légales du hub comprises) passe par le double sans réseau du coordinateur.
+- **Sources** : choix de conformité Jolene — mode démo sans aucune requête réseau (`DECISIONS_LOT0.md`, mode démo ;
+  PRINCIPES §7, niveau 2) ; le mode démo n'existe qu'en DEBUG (`JoleneEnvironment.load`, surcharges ignorées en
+  Release) : un build de production ouvre toujours la vraie page, lisible avant l'acceptation (Code civil art. 1119,
+  TJ1). Rien de juridique ne change pour un utilisateur réel.
+- **Décision et mise en œuvre** (simple, appliquée par cette tranche) : en démo, la feuille locale montre le même double
+  que le coordinateur (`renvoi-web-demo`, URL canonique `renvoi-web-url`, « Fermer » `renvoi-web-fermer`) ; en staging
+  et production, toujours `SFSafariViewController`, désormais configuré comme le renvoi du coordinateur (lecteur
+  désactivé, bouton « Fermer », fin relayée par son délégué). Vue `PageWebLocale`
+  (`Jolene/Composition/DeepLinkCoordinator.swift`),
+  valeur d'environnement `presentationPageWeb` posée à la racine par `PointDEntreeLiens` depuis
+  `DeepLinkCoordinator.estDemo` (`PresentateurRenvoiWeb.swift`), consommée par `InscriptionRapideScreen` ; l'ancienne
+  `PageWebSafari` privée est retirée. Preuve niveau 2 (trois formats, compilée, non lancée localement) :
+  `DemoInscriptionTests.testLienCGUDuConsentementOuvreLeDoubleDemoSansReseau` (lien « CGU » → double sur
+  `https://jolene.app/cgu` → « Fermer » → formulaire rendu tel quel, consentement non coché), hors session ; et,
+  ajouté après la revue fraîche B8 de L3-TJ (mineur 4), le cas qui motive cette décision :
+  `DemoInscriptionTests.testLienCGUDepuisLAiguillageSessionOuverteOuvreLeDoubleDemoSansReseau` (session ouverte,
+  formulaire « Je suis soignant » présenté en feuille par `OnboardingRootView`, page « CGU » en feuille dans cette
+  feuille). Ce cas devient atteignable en démo par un second lien de confirmation démo,
+  `token_hash=demo-sans-intention` (`DemoInscriptionGateway.tokenHashSansIntention`, compte confirmé sans intention
+  d'inscription ni parcours → « Choisissez votre espace… » ; `DemoInscriptionGatewayTests`). Les deux XCUITest
+  tournent dans l'éclat « lot3-inscription » de `ios-swift-ci.yml`, créé par cette correction (« lot3-compte » durait
+  19,1 min sur ipad-landscape au run 42549855710, seuil de 20 min, décision 22 de `DECISIONS_LOT2.md`).
+  **Condition de clôture** : CI UI verte sur les trois formats (iphone, ipad-portrait, ipad-landscape), cinq éclats
+  verts, ces deux XCUITest démarrés — à constater par l'intégrateur (`workflow_dispatch` de `ios-swift-ci.yml`).
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### TJ4 — Export RGPD : notes reçues non publiées (double-aveugle D8)
+
+- **Constat** (définition live relue en lecture seule le 9 novembre 2026 par `pg_get_functiondef`, comme T0 et T11 :
+  clé `notations_recues` toujours filtrée `note_id = v_uid AND masque = false`, sans `publie_le`, corps identique au
+  dump `public.sql` l.55349) : `fn_rgpd_exporter_donnees_soignant` (l.55300-55364), appelée par
+  `fn_rgpd_exporter_rate_limited` (l.55388) — export du hub natif (T11) comme de `SectionConfidentialite.tsx` —, met
+  dans le fichier les critères et le commentaire d'une note reçue **avant sa publication**.
+- **Double-aveugle D8** (choix de conformité Jolene,
+  `supabase/migrations/20260709230000_lot15_d8_double_aveugle_score_etab.sql` l.1-17 ; motif écrit : sans
+  publication différée, « représailles possibles », l.5-6) : une note part non publiée
+  (`publie_le` NULL) ; publication simultanée des deux notes dès que les deux sens existent (`fn_creer_notation_mission`,
+  `public.sql` l.27445-27455), sinon par `fn_publier_notations_echues` (l.51281-51296) après `notation_publication_jours`
+  jours (défaut 7, migration l.24 ; cron quotidien `jolene_publier_notations_j7` à 05:30 UTC, l.398-399), soit au plus
+  huit jours. Source unique de visibilité : vue `evaluations_publiees` (l.69564-69584, `publie_le IS NOT NULL AND masque =
+  false`) et RLS `pol_notations_select` (l.79426) ; le soignant ne lit pas cette note par l'API, seul l'export la livre
+  (principe « Publication différée » de `CLAUDE.md`).
+- **Droit** (TEXTE, RGPD relu sur EUR-Lex le 9 novembre 2026) :
+  - art. 4, 1) et art. 15, § 1 et § 3 : une note reçue sur sa prestation est une information se rapportant au soignant ;
+    il a droit à la confirmation de son traitement et à une copie des données « faisant l'objet d'un traitement » ;
+  - art. 15, § 4 : le droit d'obtenir une copie « ne porte pas atteinte aux droits et libertés d'autrui » ; considérant
+    63 : ces considérations « ne devraient pas aboutir à refuser toute communication d'informations à la personne
+    concernée » ;
+  - art. 12, § 3 et considérant 59 : réponse « dans un délai d'un mois à compter de la réception de la demande »,
+    prolongeable de deux mois ;
+  - art. 23, § 1 : une limitation de la portée des droits (point i) : protection des droits et libertés d'autrui) exige
+    une mesure **législative** de l'Union ou d'un État membre ; base non mobilisable par Jolene seule, et non invoquée :
+    la décision ne limite pas le droit d'accès, elle fixe le moment de la communication, dans le délai de l'art. 12 ;
+  - politique de confidentialité de production : droit d'accès et copie (`PageConfidentialite.tsx` l.196), portabilité
+    JSON ou CSV (l.200), demande à `support@jolene.app` et réponse sous un mois (l.208-209) : le canal formel du droit
+    d'accès reste ouvert et complet.
+- **Arbitrage** :
+  - « exporter les notes non publiées » rend le double-aveugle inopérant pour qui exporte : la note de l'autre partie,
+    lue avant de noter soi-même, rouvre les représailles que D8 interdit, et contredit la source unique de visibilité ;
+  - « les différer jusqu'à publication » protège l'autre partie (art. 15, § 4) sans refuser l'information (considérant
+    63) : la note est publiée au plus huit jours après sa création, bien avant le mois de l'art. 12, § 3.
+- **Décision** : **différer jusqu'à publication**, à deux conditions :
+  1. l'export confirme l'existence de chaque note reçue non publiée, **sans son contenu** (mission, sens, date de
+     création, date **au plus tôt** de la publication automatique) — art. 15, § 1 et considérant 63 ; la date permet
+     un nouvel export une fois la note publiée, et une demande formelle (`support@jolene.app`) reste servie sous un
+     mois, note publiée comprise ;
+  2. le report ne dépasse jamais un mois : une note non publiée créée depuis plus d'un mois est exportée en entier,
+     quelle que soit la valeur de `notation_publication_jours` (verrou « un gap connu reste verrouillé » : un paramètre
+     relevé au-delà d'un mois ne peut pas allonger le report au-delà du délai de l'art. 12, § 3).
+- **PR backend à préparer hors lot** (rien n'est écrit par cette tranche, règle 3 ; catégorie **B9** : redéfinition
+  d'une fonction `SECURITY DEFINER` et texte RGPD → go explicite de Gabrielle au merge) :
+  `supabase/migrations/<horodatage du jour>_export_rgpd_notes_publiees.sql`, `CREATE OR REPLACE FUNCTION
+  public.fn_rgpd_exporter_donnees_soignant` **depuis la définition live** (`scripts/dump-live-def.sh fonction
+  fn_rgpd_exporter_donnees_soignant`, garde-fou 9.0 n°2), ACL conservées ; seules modifications, dans le
+  `jsonb_build_object` (clé `notations_recues` remplacée, clé suivante ajoutée, version d'audit `p_details` relevée) :
+
+  ```sql
+  'notations_recues', (SELECT COALESCE(jsonb_agg(jsonb_build_object('mission_id',mission_id,'sens',sens,'critere_1',critere_1,'critere_2',critere_2,'critere_3',critere_3,'critere_4',critere_4,'commentaire',commentaire,'cree_le',cree_le) ORDER BY cree_le DESC), '[]'::jsonb)
+    FROM notations_missions WHERE note_id = v_uid AND masque = false
+      AND (publie_le IS NOT NULL OR cree_le <= NOW() - interval '1 month')),
+  'notations_recues_en_attente_de_publication', (SELECT COALESCE(jsonb_agg(jsonb_build_object('mission_id',mission_id,'sens',sens,'cree_le',cree_le,
+      'publication_automatique_au_plus_tot_le', cree_le + make_interval(days => public.fn_param_num('notation_publication_jours', 7)::int)) ORDER BY cree_le DESC), '[]'::jsonb)
+    FROM notations_missions WHERE note_id = v_uid AND masque = false
+      AND publie_le IS NULL AND cree_le > NOW() - interval '1 month'),
+  ```
+
+  `publication_automatique_au_plus_tot_le` est une date **au plus tôt** (revue fraîche B8 de L3-TJ, mineur 5 ; la
+  première version nommait la clé `publication_automatique_le`) : `fn_publier_notations_echues` ne publie que si
+  `cree_le + N jours < NOW()` (`public.sql` l.51292, définition live relue en lecture seule le 9 novembre 2026), au
+  premier passage du cron quotidien `jolene_publier_notations_j7` (05:30 UTC) qui suit cette date, soit jusqu'à 24 h
+  plus tard : le soignant qui réexporte à cette date peut encore trouver la note en attente. La PR backend garde ce
+  nom de clé et le documente dans la fiche `fn_rgpd_exporter_rate_limited`.
+
+  Tests de la PR : test SQL de régression transactionnel (une note reçue non publiée → présente dans
+  `notations_recues_en_attente_de_publication` sans critère ni commentaire, absente de `notations_recues` ; après la note
+  réciproque → dans `notations_recues` ; une note non publiée de plus d'un mois → dans `notations_recues`),
+  `test:regression` et `guards` (B7) ; contrat : liste des clés de `scripts/mobile/export-demo-fixtures.mjs`
+  (l.348-350) et `demo-export-rgpd.json` (33 clés), fiche `fn_rgpd_exporter_rate_limited` de
+  `CONTRATS_RPC_SOIGNANT.md` ; `ExportRGPDTests` inchangés (aplatissement générique). Audit des quatre étages
+  (`CLAUDE.md`) : `fn_exporter_rgpd_etablissement` (`public.sql` l.36254) ne lit pas `notations_missions` (vérifié dans
+  le dump). **Second lecteur à visibilité conditionnelle** (omis par la première version de cet audit, revue fraîche
+  B8 de L3-TJ, mineur 1) : la clé `evaluations_recues` du même export (`public.sql` l.55334) lit la table legacy
+  `evaluations` sans filtre `visible`, alors que la RLS `pol_eval_select` (l.79230) n'ouvre au soignant noté que
+  `visible = true` ; confirmé sur la définition live (lecture seule, `pg_get_functiondef` et `pg_policy`, 9 novembre
+  2026). Table vide en production selon la revue : défaut **latent**, instruit par la même PR (observation
+  ci-dessous), avec un test-garde qui énumère les lecteurs d'export (principe « Publication différée » de `CLAUDE.md`).
+- **Observation hors arbitrage** (à instruire dans la même PR, non tranchée ici) : les notes masquées par la
+  modération (`masque = true`) sont absentes de l'export depuis l'origine ; elles restent des données du soignant
+  (art. 15, § 1). À l'inverse, `evaluations_recues` exporte les évaluations legacy non visibles (`visible = false`)
+  que la RLS cache au soignant noté. La PR backend instruit les deux lecteurs ensemble, avec une seule règle (contenu
+  masqué ou non, existence confirmée), jamais deux règles divergentes pour une même visibilité.
+- **Natif** : aucun changement (l'écran transmet le fichier du serveur sans en rien afficher) ; il suit le contrat par
+  `export-demo-fixtures.mjs`.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### TJ5 — Textes natifs sans équivalent web des tranches T1b, T4, T5 et T9 (non juridiques)
+
+- **Critère** (`CLAUDE.md`, HARD STOP n°4) : aucun de ces textes ne restreint un mode d'exercice, ne cite une loi ni
+  n'a de portée contractuelle ; chacun décrit exactement l'action ou l'état de l'écran, au vouvoiement (décision 9 du
+  lot 1), et reste épinglé par son test.
+- Textes **sans équivalent web** (non juridiques), validés par délégation : « Ouvrir les réglages » (T4, carte
+  « Autorisation du téléphone », nommé au §1.1 du blueprint, `EtatNotificationsAppareil.ouvrirReglages`,
+  `EtatNotificationsAppareilTests`) ; « Le type d'exercice se modifie sur jolene.app. » et
+  « Votre profil n'a pas pu être enregistré. Réessayez. » (T9, `ProfilEdition.Textes.typeExerciceWeb` et
+  `.enregistrementEchec`) ; « Voir sur jolene.app » (bouton `profil-exercice-web-action`,
+  `ProfilEdition.Textes.voirSurLeWeb`), épinglés par `ProfilVerbatimTests`.
+- Textes d'accessibilité **sans équivalent web** (vocalisés seulement, jamais affichés), validés par délégation :
+  « environ » et « Montant indisponible » (`AmountRow`, L3-T1b), « critère rempli » et « critère non rempli »
+  (`PasswordCriteriaList`, L3-T1b), « Ouvre le centre de notifications » (indication de « Voir » sur le compteur de
+  l'Accueil, L3-T5, `CentreNotificationsTextes.indicationOuvrirCentre`, `CentreNotificationsTests`).
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### TJ6 — Règle pour T14b : messages des sept `error_code` IBAN qui arrivent sans `error`
+
+- **Faits** (`public.sql`, dump du 01/11/2026) : `fn_enregistrer_mon_iban` (l.32300-32357) rend `NON_AUTHENTIFIE`
+  (l.32313) et `PROFIL_INTROUVABLE` (l.32319) sans `error`, puis `TITULAIRE_NON_CONCORDANT` et `RIB_VERIFIE_REQUIS`
+  avec un `error` serveur (l.32333-32337, l.32348-32352) ; `fn_lier_iban_verifie_document` (l.39451-39569) rend sans
+  `error` `IBAN_INVALIDE` (l.39470), `RIB_COURANT_REQUIS` (l.39482), `IDENTITE_VERIFIEE_REQUISE` (l.39492),
+  `IDENTITE_COURANTE_REQUISE` (l.39510) et `RIB_NON_CONCORDANT` (l.39526).
+- **Règle** (non juridique : aucun de ces refus n'énonce une règle de droit ; ce sont des conditions techniques du
+  serveur) :
+  1. un `error` serveur présent est affiché verbatim, toujours ;
+  2. aucun texte nouveau quand un texte existe : `NON_AUTHENTIFIE` → parcours de session du lot 1 (« Session à
+     vérifier », « Vérifier ma session ») ; `PROFIL_INTROUVABLE` → erreur de contrat, message générique web
+     « Une erreur est survenue. Veuillez réessayer. » (`src/lib/erreurs.ts` l.532) ; `IBAN_INVALIDE` → « IBAN
+     invalide » (`src/components/profil-soignant/SectionPaiements.tsx` l.339) ;
+     `RIB_COURANT_REQUIS` et `RIB_NON_CONCORDANT` → texte serveur verbatim du refus voisin `RIB_VERIFIE_REQUIS`,
+     « Téléversez puis faites vérifier le RIB correspondant. » (`public.sql` l.32351, déjà au vouvoiement), sous le
+     titre « RIB vérifié requis » (l.306), avec l'action « Téléverser mon RIB » (l.316 : documents du lot 2 ou renvoi
+     web) ; exact dans les deux cas : RIB vérifié retiré entre la lecture et la liaison (`RIB_COURANT_REQUIS`,
+     l.39482), RIB vérifié qui ne porte pas cet IBAN ou dont les noms ne concordent pas (`RIB_NON_CONCORDANT`,
+     l.39526) ;
+  3. textes nouveaux pour `IDENTITE_VERIFIEE_REQUISE` et `IDENTITE_COURANTE_REQUISE` seulement : vouvoiement, une phrase
+     qui dit la seule condition vérifiée par le serveur (identité vérifiée et cohérente ; pièce d'identité vérifiée
+     dont les noms concordent) et l'action disponible dans l'app ou sur le web, jamais une règle que le serveur
+     n'applique pas, jamais un chiffre de l'IBAN, jamais « IBAN enregistré » ;
+  4. chaque message est une constante épinglée par un test (code → message) et listée dans la section de T14b de ce
+     mémo, avec sa ligne de délégation : aucune relecture de Gabrielle n'est plus requise.
+- **Texte de l.308 non retenu pour un refus** (revue fraîche B8 de L3-TJ, majeur 1 : la première version de la règle 2
+  le donnait à `RIB_COURANT_REQUIS` et `RIB_NON_CONCORDANT`) : « L'ancien IBAN est conservé dans ton historique, mais
+  aucun nouveau versement ne peut l'utiliser sans un RIB courant vérifié… » décrit l'état web
+  `iban_renseigne && !iban_verifie` (`SectionPaiements.tsx` l.302), pas un refus. Après un refus, il serait faux dans
+  les deux cas courants : premier IBAN (il n'y a pas d'« ancien IBAN ») ; IBAN déjà vérifié (chaque refus de
+  `fn_lier_iban_verifie_document`, `RIB_NON_CONCORDANT` l.39526 compris, sort avant l'UPDATE de l.39533 : l'IBAN en
+  place reste valable et sert toujours aux versements). Le reprendre contredirait la règle 3 et TJ8. Si T14b affiche
+  l'état `iban_renseigne && !iban_verifie`, elle instruit ce texte pour cet état, contre `fn_consulter_mon_iban`, avant
+  de le porter.
+- **Texte web à ne pas porter** : « Ton IBAN est utilisé pour le versement de tes primes de parrainage. Il n'est jamais
+  partagé avec l'établissement. » (`SectionPaiements.tsx` l.280). Information sur les destinataires (RGPD art. 13, § 1),
+  inexacte : l'IBAN enregistré est celui du RIB vérifié (`fn_lier_iban_verifie_document`, l.39533-39534 :
+  `SET iban_virement = v_iban`), et ce RIB est remis à l'établissement de la mission quand un partage est actif
+  (`fn_consulter_rib_soignant_internal_20260801`, l.25619-25686, table `partages_rib`). T14b ne l'affiche pas ; **PR web
+  HARD STOP à préparer hors lot** pour le corriger, le natif suivra par la garde.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### TJ7 — Règle pour T13 : contestation d'un paiement déclaré
+
+- **Le verrou est caduc** : B3 est sur `main` (#1118) et dans `feat/ios-lot3` ; la fiche
+  `fn_contester_paiement_soignant` de `CONTRATS_RPC_SOIGNANT.md` décrit le contrat d'après B3 (huit `error_code`,
+  idempotence, `LITIGE_DEJA_OUVERT`). Le message de verrou proposé par le blueprint (« La contestation d'un paiement est
+  momentanément indisponible. Contactez Jolene depuis Mon compte › Contacter Jolene. ») **n'est pas retenu** : il ne
+  répond plus à rien et renvoie vers « Contacter Jolene », modale web sans équivalent natif (jamais un renvoi sans
+  effet).
+- **Règle** : T13 relit d'abord la définition live de `fn_contester_paiement_soignant` (lecture seule) ; conforme à la
+  fiche, « Contester » est ouvert dans sa PR (B9, go au merge) ; refus serveur `error` verbatim ; libellés web
+  verbatim (`src/components/BandeauPaiementDeclare.tsx` : « Motif de contestation : » l.51, « Envoyer la contestation »
+  l.62, « Annuler » l.64, « Confirmer la réception » l.397, « Contester » l.407) ; l'indication tutoyée « Décris pourquoi
+  tu contestes ce paiement... » (l.55, non juridique) passe au vouvoiement (décision 9 du lot 1) ; le motif de repli du
+  web `'Contesté par le soignant'` (l.61, l.190) n'est jamais envoyé (bouton inactif sans motif, refus serveur
+  `MOTIF_INVALIDE`) ; « Paiement confirmé » ou « Contestation envoyée » seulement après relecture du statut. Le natif
+  n'ajoute aucun texte sur la portée juridique d'une confirmation ou d'une contestation (ni renonciation, ni délai).
+  Si la définition live diffère de la fiche, T13 garde « Contester » fermé sans texte nouveau et consigne l'écart.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### TJ8 — Règle pour les tranches hors vague (T8, T12, T13, T14a, T14b) : textes juridiques
+
+- Chaque tranche instruit et tranche elle-même ses textes juridiques, par la même délégation, dans une sous-section de
+  sa section de ce mémo, avec ses sources (fichier:ligne, texte de loi relu, force de la source) et la ligne de
+  délégation, comme T4b, T5a et T9b au lot 2 ; aucun texte n'attend plus la relecture de Gabrielle.
+- Texte juridique : verbatim web, tutoiement compris, gardé au caractère près ; texte non juridique : vouvoiement.
+- **Critère unique pour un texte juridique du web inexact** (précisé après la revue fraîche B8 de L3-TJ, majeur 2) :
+  un texte juridique du web **inexact** au regard du serveur ou des textes n'est **pas porté** — ni affiché, ni
+  reformulé : ne pas porter un texte n'est pas le reformuler. L'écran garde ses titres et ses actions ; une PR web
+  HARD STOP est à préparer, et le natif portera verbatim le texte corrigé, par sa garde (témoin de la ligne web qui
+  rougit quand elle change). Aucune exception selon la nature de l'inexactitude : séparer une exhaustivité exagérée
+  d'une affirmation fausse exigerait une doctrine que ce mémo ne peut pas sourcer, et RGPD art. 5, § 1, a) et
+  art. 12, § 1 s'appliquent aux deux. Appliqué à l.280 de `SectionPaiements.tsx` (destinataires de l'IBAN, TJ6) comme
+  à la description de l'export (« l'intégralité », TJ2) ; les tranches T8, T12, T13, T14a et T14b l'appliquent tel
+  quel.
+- Points à instruire, déjà repérés :
+  - T8 : avertissement d'exclusivité (`src/pages/InscriptionSoignant.tsx` l.77, l.84) et libellés des modes
+    d'exercice (`src/components/ChoixModesExercice.tsx`, lignes du blueprint §3 T8) : aucune règle de mode d'exercice
+    en dur, matrice profession × mode lue au serveur (`fn_types_exercice_autorises`) ;
+  - T12 : libellés escrow (`src/components/gains/PaiementsEscrowAVenir.tsx` l.44-80, invariant « jamais garanti ») et
+    note « net estimé » (`src/lib/missionFinanceDisplay.ts`), relus contre le glossaire escrow de `CLAUDE.md`
+    (honoraires figés à la confirmation, plancher ; « ne STATIONNENT jamais », jamais « ne transitent jamais ») ;
+  - T14a : textes Stripe (`src/pages/PageStripeConnect.tsx` l.300-520, dont « Aucun frais pour le soignant » l.335, et
+    `SectionPaiements.tsx` l.16-139), relus contre la définition live d'`escrow-debit-echeance` (commission en
+    `application_fee_amount`, `docs/flux-monetaire-escrow.md`) ;
+  - T13 et T14b : TJ7 et TJ6.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
 
 ### T8-J1 — Modes d'exercice de la complétion quand le référentiel est inconnu
 
@@ -1633,7 +1968,7 @@ sont regroupées sans changement de texte.)
   un choix conservé contredirait le texte verbatim affiché. Le blueprint décrivait le web de façon inexacte ; écart
   consigné ici et testé (`CompletionProfilRulesTests.testModesApresLeReferentiel`,
   `CompletionProfilModelTests.testReferentielIndisponibleConserveLesChoixSansAjoutDuLiberalPuisReessai`).
-- Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
 
 ### T8-J2 — Avertissement d'exclusivité et question « salarié(e) »
 
@@ -1648,7 +1983,7 @@ sont regroupées sans changement de texte.)
   transmise à `register-soignant` ; aucun ajout ni aucune reformulation (pas de citation d'article, pas de conséquence
   juridique annoncée). (Corrigé le 09/11/2026, revue B8 de T8, m4 : la première rédaction disait la réponse « ni
   enregistrée dans le brouillon », ce qui décrivait le web de façon inexacte.)
-- Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
 
 ### T8-J3 — Libellés des modes et phrase du type d'exercice unique
 
@@ -1660,7 +1995,7 @@ sont regroupées sans changement de texte.)
 - **Force** : choix de conformité Jolene (table paramétrée `regles_exercice_profession`).
 - **Décision** : textes verbatim, assemblés comme le JSX ; le type affiché vient exclusivement de
   `fn_types_exercice_autorises` (aucune règle en dur), jamais d'un défaut de l'app.
-- Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
 
 ### T8-J4 — Âge minimum et RPPS à l'inscription
 
@@ -1676,7 +2011,7 @@ sont regroupées sans changement de texte.)
   diplôme et votre carte d'identité restent vérifiés avant toute mission. ») ; le serveur reste seul juge (`UNDERAGE`,
   `RPPS_*` affichés verbatim). Aucun document n'est demandé à la complétion (comme le web : les documents se déposent
   ensuite, lot 2).
-- Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
 
 ### T8-J5 — Parcours étudiant
 
@@ -1692,7 +2027,7 @@ sont regroupées sans changement de texte.)
   `est_etudiant = false`, index.ts l.309) ; le rôle est relu au retour. Option retenue : verrou plutôt que transmission
   de `est_etudiant` / `etudiant_details` sans affichage ni modification possible de la déclaration (détail dans la
   section « T8 — corrections de la revue fraîche B8 »). Force : choix de conformité Jolene (D11).
-- Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
 
 ### T10 — coordonnées du profil transmises au géocodage inverse (`api-adresse.data.gouv.fr`)
 
@@ -1761,6 +2096,51 @@ sont regroupées sans changement de texte.)
   dit la même règle (garde `FusionLocalisationLot2Tests.testPrecisionReduiteTrancheeAvantLaFusion`).
 - décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
 
+### T10 — textes natifs sans équivalent web de la photo de profil (non juridiques)
+
+- **Critère** (celui de TJ5 ; `CLAUDE.md`, HARD STOP n°4) : aucun de ces textes ne restreint un mode d'exercice, ne
+  cite une loi ni n'a de portée contractuelle ; chacun décrit exactement l'action de l'écran, au vouvoiement (décision
+  9 du lot 1), et reste épinglé par son test.
+- Textes **sans équivalent web** (le web n'ouvre qu'un sélecteur de fichier, `AvatarUpload.tsx`), validés par
+  délégation : « Choisir dans la photothèque » et « Prendre une photo » (choix de la source de la photo de profil,
+  `AvatarProfil.Textes`, épinglés par `AvatarLocalisationVerbatimTests.testTextesSansEquivalentWebListesPourRelecture`) ;
+  « Annuler » repris tel quel de `ConfirmationSheet.swift` l.34 (L1-T1b, texte existant). Le libellé DEBUG démo
+  `profil-avatar-etat` (« photo » / « initiales ») n'existe jamais en Release : ce n'est pas un texte affiché.
+- Les textes web de T10 (messages d'`AvatarUpload.tsx`, de `documentUpload.ts` l.174 et de `SectionProfilPrincipal.tsx`)
+  restent verbatim ou vouvoyés comme le dit la section T10 (aucun n'est juridique).
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### T12 — textes de l'onglet Revenus : libellés escrow, note « net estimé », textes adaptés
+
+Instruction faite à l'intégration du lot 3 (09/11/2026) : T12 a été écrite avant TJ8, qui lui demande d'instruire
+ses libellés escrow et la note « net estimé » contre le glossaire escrow de `CLAUDE.md`.
+
+- **Libellés et aides des sept états** (`src/components/gains/PaiementsEscrowAVenir.tsx` l.50-80, verbatim, tutoiement
+  compris, épinglés par `RevenusPresentationTests.testChaqueTexteRepriseDuWebEstVerbatimASaLigne`) :
+  - « Réservé » — « le montant de ta confirmation, mis de côté » : exact (`CLAUDE.md`, règle #11 : `honoraires_cents`
+    figé à la confirmation, jamais recalculé ; séquestre libéré à la validation des présences). Ni « garanti » ni
+    « stationne » (invariant épinglé par `RevenusPresentationTests`) ;
+  - « En attente de validation des heures » — « l'établissement valide tes heures (automatique sous 72 h) » : exact
+    au regard des CGU de production (`src/pages/PageCGU.tsx` l.115 : « En l'absence de contestation, les présences
+    peuvent être validées automatiquement après 72 heures ») et du serveur (`fn_valider_presences_72h_auto`,
+    `supabase/schema/public.sql` l.65474-65500 : validation automatique au seuil `delai_autovalidation_presence_h`,
+    72 h par défaut, hors litige et alertes de fraude). L'état n'est rendu que hors litige (`LITIGE` est un autre
+    état, l.67-70) ; « sous 72 h » donne le seuil du mécanisme contractuel, sans promettre une date de versement
+    (le délai d'instruction du versement, 24 à 72 h, est un autre délai de la même ligne des CGU) ;
+  - « Versement en cours », « Paiement retardé » (« nouvelle tentative le … » / « nous relançons le règlement »),
+    « Paiement en litige » (« voir le litige de la mission »), « Versé le … », « Paiement annulé » (« contacte le
+    support si besoin ») : description de l'état et de la date rendus par `fn_mes_paiements_escrow`
+    (`public.sql` l.42233), exacts par construction ; aucune portée contractuelle propre.
+  - Conclusion : aucun texte inexact au sens du critère de TJ8 ; verbatim maintenu.
+- **Note « net estimé »** (`src/components/NoteNetEstime.tsx` l.13-16, verbatim) : estimation non contractuelle,
+  exacte (le net du bulletin est établi par l'employeur, `CLAUDE.md`, Sprint 15 : l'établissement est seul
+  responsable de la DPAE, Jolene n'est pas employeur) ; maintenue.
+- **Textes adaptés ou sans équivalent web** (section HARD STOP, puce T12) : non juridiques (critère de TJ5), vouvoyés,
+  épinglés par `RevenusPresentationTests.testTextesAdaptesOuSansEquivalentWeb` ; validés par délégation.
+- Force des sources : choix de conformité Jolene (CGU de production et glossaire escrow de `CLAUDE.md`), règle serveur
+  relue dans le dump. Aucun arrêt ni avis cité.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
 ## Prérequis bloquants de soumission (lot 6)
 
 À lever avant toute soumission à Apple (TestFlight externe, qui passe la Beta App Review, comme App Store) ; ils ne
@@ -1793,12 +2173,16 @@ bloquent ni les merges du lot 3 ni la recette interne (build Debug installé par
   `token_hash` vérifié dans l'app »).
 - **§6.5 Sentry** : créer le projet `jolene-ios` (org `jolene-z6`), fournir le DSN, lire l'événement de crash de test ;
   jeton dSYM local si la symbolication est voulue.
-- **§6.6 Go B9** : B3, T7, T8, T12, T13, T14a, T14b, dispatch de T16, et les signalements de la section B9.
+- **§6.6 Go B9** : B3, T7, T8, T12, T13, T14a, T14b, dispatch de T16, la PR backend de l'export RGPD (TJ4), et les
+  signalements de la section B9 ; go au merge seulement, les décisions juridiques étant prises par délégation.
   (T8, 09/11/2026) Go de merge de `lot3/l3-t8-v2` ; la preuve STAGING de la complétion (ligne `soignants` relue après
   `register-soignant`, compte jetable nettoyé) reste au dispatch de T16 ; recette sur appareil de la complétion
   (sélecteur de date, clavier, VoiceOver) dans `RECETTE_DEVICE_LOT3.md`.
-- **§6.7 Textes (HARD STOP)** : validation des textes listés dans la section HARD STOP, relecture des sept messages
-  IBAN et du message de verrou de contestation.
+- **§6.7 Textes (HARD STOP)** : tranchés par délégation le 9 novembre 2026 (« Décisions déléguées du 8 novembre
+  2026 », TJ1 à TJ5 ; règles TJ6 à TJ8 pour les textes des tranches à venir, dont les sept messages IBAN et la
+  contestation) ; textes des tranches T8, T10 et T12 tranchés de même (T8-J1 à T8-J5, « T10 — textes natifs… »,
+  « T12 — textes de l'onglet Revenus »). Reste la revue des écrans sur iPhone, qui exige la présence de Gabrielle
+  (§6.2, `RECETTE_DEVICE_LOT3.md`).
 - **§6.8 Stripe TEST sur appareil** : parcourir l'onboarding hébergé avec les valeurs de test publiées par Stripe
   (saisie par Gabrielle), constater le retour et le statut relu.
 - **§6.9 Boîte mail** : une adresse contrôlée par Gabrielle pour l'inscription STAGING depuis Mail (Universal Link
@@ -1806,6 +2190,10 @@ bloquent ni les merges du lot 3 ni la recette interne (build Debug installé par
 - **§6.10 TestFlight externe** : groupe de soignants pilotes, informations de test, Beta App Review ; décision
   explicite, le build parlant à la production. Préalable bloquant : section « Prérequis bloquants de soumission
   (lot 6) » (chaîne `NSCameraUsageDescription`, revue B8 de T10, m3).
+  **Préalable** (verrou « un gap connu reste verrouillé », TJ2) : la connexion native porte « Mot de passe oublié ? »
+  (`login-forgot` : reset natif ou renvoi web, reste de L1-T10) ;
+  sans lui, le refus de réauthentification de T11 renvoie vers un contrôle absent de l'app. Gardé par
+  `CompteVerbatimTests` et la garde Node du lot 3 tant que `login-forgot` manque à `LoginScreen.swift`.
 - **T10 (appareil, §6.2)** : photo HEIC prise avec l'appareil photo et photo choisie dans la photothèque (feuilles
   système réelles), photo iCloud non téléchargée en mode Avion, appareil photo en plein écran sur iPad, autorisation
   de position réelle (accordée, refusée, précision réduite) et géocodage réel sur iPhone — `RECETTE_DEVICE_LOT3.md`
@@ -1817,19 +2205,14 @@ bloquent ni les merges du lot 3 ni la recette interne (build Debug installé par
   `ResetPasswordScreen`, quarantaine de la session de recovery, « Mot de passe oublié ? ») n'a de tranche ni au lot 1
   (mergé sans T10) ni au lot 3 ; en attendant, le lien `token_hash` ouvre la page web et `?code=` est refusé
   (option B). À planifier (préalable inchangé : modèle d'e-mail « Reset Password » au format `token_hash`, §6.6 du
-  lot 1).
-- **Signalé par la T0 (hors §6)** : `fn_rgpd_exporter_donnees_soignant` (`public.sql` l.55300, dump du 01/11/2026) lit
-  `notations_missions` avec `masque = false` **sans** `publie_le IS NOT NULL` : l'export RGPD contient les notes
-  reçues non publiées (double-aveugle D8), contrairement à la vue canonique `evaluations_publiees` et au principe
-  « Publication différée » de `CLAUDE.md`. À confirmer sur la définition live, puis à arbitrer (droit d'accès RGPD
-  contre double-aveugle) avant toute PR backend ; aucune correction au lot 3, le natif ne fait que transmettre le
-  fichier par la feuille de partage. **Confirmé sur la définition live** par T11 (lecture seule
-  `pg_get_functiondef`, 08/11/2026) : l'écran natif n'affiche rien du contenu, le fichier transmis à la feuille de
-  partage contient ces notes, comme sur le web.
+  lot 1). Préalable du §6.10 (TJ2) : la connexion native porte « Mot de passe oublié ? » avant TestFlight externe.
+- **Export RGPD et notes reçues non publiées** (signalé par la T0, confirmé live par T11) : tranché par délégation
+  (L3-TJ, TJ4) ; seul le go B9 au merge de la PR backend reste à Gabrielle (§6.6).
 
 ## Ce qui n'est pas une décision de ce mémo
 
-- Aucun texte juridique, aucune règle de mode d'exercice, aucun délai serveur n'est décidé ici (HARD STOP n°4).
+- Aucune règle de mode d'exercice ni aucun délai serveur n'est décidé ici ; les textes juridiques sont tranchés par
+  délégation (« Décisions déléguées du 8 novembre 2026 »), toujours verbatim du web ou du serveur (HARD STOP n°4).
 - Les réglages hors dépôt (Dashboard Auth, secrets APNs et Stripe, projet Sentry, appareil) et les go B9 sont à
   Gabrielle ; ce mémo ne les présume pas acquis.
 - Le plan `docs/PLAN_APP_NATIVE_SWIFT.md` et le blueprint versionné ne sont pas modifiés par ces décisions.

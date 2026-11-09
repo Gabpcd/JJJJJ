@@ -10,7 +10,8 @@ import XCTest
 ///   formulaire vidé ;
 /// - thème Système / Clair / Sombre (`compte-theme-*`, D16) : le segment choisi est sélectionné et appliqué à
 ///   la racine (libellé DEBUG `compte-theme-effectif`, schéma de couleurs lu dans l'environnement SwiftUI) ;
-/// - export RGPD : texte RGPD verbatim web (tutoiement, HARD STOP n°4) ; « Exporter JSON » écrit le fichier du
+/// - export RGPD : titre verbatim web, description web inexacte (« l'intégralité ») non portée (L3-TJ, décision TJ2 :
+///   critère de TJ8, ni affichée ni reformulée) ; « Exporter JSON » écrit le fichier du
 ///   jour et l'ouvre dans la feuille de partage réelle (`UIActivityViewController` présentée par UIKit ; libellé
 ///   DEBUG `compte-export-pret` posé dans la feuille : `mes-donnees-jolene-2026-11-02.json`) ; revue B8 (M1),
 ///   une seule fin, `completionWithItemsHandler` : (a) feuille fermée sans partage (bouton de fermeture, ou hors du
@@ -39,7 +40,8 @@ final class DemoCompteLot3Tests: JoleneUITestCase {
     static let succes = "Mot de passe modifié avec succès."
     static let nonCorrespondance = "Les mots de passe ne correspondent pas."
     static let correspondance = "Mots de passe identiques."
-    static let descriptionExport = "Télécharge l'intégralité de tes données personnelles dans le format de ton choix."
+    /// Mot de la description web inexacte de l'export (`SectionConfidentialite.tsx` l.114), jamais affichée (TJ2).
+    static let promesseExportInexacte = "intégralité"
     static let refusLimite = "Trop d'exports en peu de temps. Réessayez dans quelques minutes."
     static let fichierDuJour = "mes-donnees-jolene-2026-11-02.json"
     static let exportJSONReussi = "Données exportées en JSON."
@@ -153,7 +155,9 @@ final class DemoCompteLot3Tests: JoleneUITestCase {
         compteSeConnecter()
         compteOuvrirProfil()
         let json = compteAmenerExport()
-        XCTAssertEqual(element("compte-export-info").label, Self.descriptionExport, "texte RGPD verbatim web (tutoiement)")
+        // L3-TJ (TJ2, critère de TJ8) : la section est rendue (boutons actifs) sans la description web inexacte.
+        XCTAssertFalse(element("compte-export-info").exists, "description web inexacte non portée (TJ2)")
+        XCTAssertFalse(textContaining(Self.promesseExportInexacte).exists, "aucun texte ne promet « l'intégralité » des données")
         XCTAssertEqual(element("compte-export-residus").label, "0", "aucun fichier d'export avant la demande")
         let pret = compteOuvrirFeuille()
         XCTAssertFalse(element("compte-export-erreur").exists)

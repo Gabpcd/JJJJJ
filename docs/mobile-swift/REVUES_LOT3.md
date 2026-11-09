@@ -1820,3 +1820,62 @@ Détail et sources : `DECISIONS_LOT3.md`, section « T12 — corrections de la r
   sans diff ; `node --test` des gardes RPC (base et lot 3) et du plan de livraison : 137 réussis. XCUITest
   `DemoRevenusTests` (7 tests, trois formats) compilés, **jamais lancés** : la preuve reste la CI (éclat
   `lot3-revenus`).
+
+## L3-TJ
+
+### Corrections de l'auteur (revue fraîche B8 n°1, 09/11/2026, tests d'abord)
+
+Branche `lot3/l3-tj-v2`. Revue : aucun bloquant, deux majeurs, cinq mineurs. Chaque test ajouté était rouge avant la
+correction, pour un défaut du document ou du code (aucun test faux, aucun test affaibli) ; décisions reprises sous
+« Décisions déléguées du 8 novembre 2026 » de `DECISIONS_LOT3.md`, avec la ligne de délégation.
+
+- **Majeur 1 — TJ6, règle 2.** `RIB_COURANT_REQUIS` et `RIB_NON_CONCORDANT` reprennent le texte serveur verbatim du
+  refus voisin `RIB_VERIFIE_REQUIS`, « Téléversez puis faites vérifier le RIB correspondant. » (`public.sql`
+  l.32351), sous le titre « RIB vérifié requis » (l.306) avec « Téléverser mon RIB » (l.316). Le texte de l.308
+  (état `iban_renseigne && !iban_verifie`, l.302) n'est plus donné à un refus : chaque refus de
+  `fn_lier_iban_verifie_document` sort avant l'UPDATE (l.39526 avant l.39533). Garde Node : règle 2 citée, l.308
+  absente de la règle, témoins SQL (ordre refus / UPDATE) et web (l.302, l.306, l.308, l.316).
+- **Majeur 2 — TJ2 contre TJ8.** Option (a) : le critère de TJ8 s'applique à T11 ; la description de l'export
+  (`SectionConfidentialite.tsx` l.114, « l'intégralité ») n'est plus affichée en natif (titre et boutons
+  conservés ; `ExportRGPD.Textes.description` et `compte-export-info` retirés). TJ8 énonce le critère unique, sans
+  exception de gravité (aucune doctrine sourçable pour en séparer deux), et le rattache à TJ2 et TJ6. Gardes :
+  `CompteVerbatimTests.testTitreRGPDVerbatimEtDescriptionInexacteNonPortee` (titre, absence dans les sources de
+  l'app, témoin de l.114 qui rougira à la PR web), `DemoCompteLot3Tests` (absence à l'écran, trois formats),
+  garde Node (TJ2, TJ8, témoins Swift et web).
+- **Mineur 1 — TJ4, audit des lecteurs.** L'affirmation « aucun autre lecteur d'export à corriger » est retirée :
+  `evaluations_recues` (l.55334) lit `evaluations` sans filtre `visible`, contre `pol_eval_select` (l.79230). Relu sur
+  la définition live (lecture seule : `pg_get_functiondef`, `pg_policy`, 09/11/2026). Ajouté à l'observation hors
+  arbitrage (une seule règle pour les deux lecteurs) et à la fiche `fn_rgpd_exporter_rate_limited`.
+- **Mineur 2 — TJ2, « Mot de passe oublié ? ».** Qualifié de renvoi sans effet accepté jusqu'à L1-T10, avec trois
+  motifs et la différence avec TJ7 ; préalable inscrit au §6.10 (TestFlight externe), verrou gardé par
+  `CompteVerbatimTests` et la garde Node tant que `login-forgot` manque à `LoginScreen.swift`.
+- **Mineur 3 — renvois périmés.** Fiche `fn_enregistrer_mon_iban` de `CONTRATS_RPC_SOIGNANT.md` : règle TJ6 au lieu
+  de « à relire, §6.7 » ; `AmountRow.swift` et `PasswordCriteriaList.swift` : renvoi à TJ5. Gardés par la garde Node.
+- **Mineur 4 — session ouverte et durée de l'éclat.** Nouvel XCUITest
+  `DemoInscriptionTests.testLienCGUDepuisLAiguillageSessionOuverteOuvreLeDoubleDemoSansReseau` (trois formats,
+  compilé, non lancé) : lien de confirmation démo `token_hash=demo-sans-intention`
+  (`DemoInscriptionGateway.tokenHashSansIntention`, `DemoInscriptionGatewayTests`) → « Choisissez votre espace… » →
+  « Je suis soignant » en feuille → « CGU » → double démo → « Fermer ». `DemoInscriptionTests` sort de « lot3-compte »
+  (19,1 min sur ipad-landscape avant les deux XCUITest de L3-TJ) vers un éclat « lot3-inscription » ; job UI à
+  170 min ; structure des éclats gardée par la garde Node.
+- **Mineur 5 — TJ4, date de publication.** Clé proposée renommée `publication_automatique_au_plus_tot_le` et
+  documentée (premier passage du cron 05:30 UTC après `cree_le + N jours`, jusqu'à 24 h plus tard, l.51292 relue live).
+
+#### Vérifications locales
+
+- `swift build --build-tests -Xswiftc -strict-concurrency=complete` (build propre) puis `swift test` : JoleneCore
+  812 tests, 0 échec ; JoleneSupabase 309 tests, 0 échec ; 0 avertissement dans nos sources. JoleneDesign n'a qu'un
+  commentaire modifié : compilé et testé par `xcodebuild` (cible macOS non prise en charge par `swift build`).
+- `xcodebuild build-for-testing` (schéma Jolene, simulateur générique) : **TEST BUILD SUCCEEDED**, cibles de tests
+  UI comprises, 0 avertissement dans nos sources. Aucun fichier d'app ajouté ni retiré (pas de `xcodegen`).
+- `node --test tests/node/check-rpc-contracts-lot3.node.mjs tests/node/check-rpc-contracts.node.mjs` : 62/62 ;
+  `export-golden-vectors.mjs`, `export-demo-fixtures.mjs`, `check-rpc-contracts.mjs` : aucun diff. La garde
+  `textes-juridiques-ios` vit sur `feat/ios-lot2` (absente de cette base) : textes du lot 3 à y ajouter à la fusion.
+- Aucun simulateur lancé, aucune écriture serveur, aucun dispatch.
+
+#### Conditions avant de clore
+
+- **CI UI verte sur les trois formats** (`ios-swift-ci.yml`, `workflow_dispatch` par l'intégrateur) : cinq éclats
+  verts, `DemoInscriptionTests` (7 XCUITest, dont les deux de L3-TJ) et `DemoCompteLot3Tests` démarrés, 0 échec,
+  `skipped = 0`. Si « lot3-compte » ou « lot3-inscription » dépasse encore 20 min sur un format, découper à nouveau
+  (décision 22).

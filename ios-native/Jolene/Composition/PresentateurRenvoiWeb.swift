@@ -47,3 +47,25 @@ extension EnvironmentValues {
         set { self[FermeturesRenvoiWebKey.self] = newValue }
     }
 }
+
+/// Contenu d'une page web présentée par une **feuille locale** (`PageWebLocale`), quand l'écran est lui-même
+/// présenté en feuille et que la racine ne peut pas présenter par-dessus (une seule feuille par niveau, limite connue
+/// de T3b) : même choix que le renvoi web du coordinateur — `SFSafariViewController` en staging et production, double
+/// démo sans réseau en démo (L3-TJ, décision TJ3 de `DECISIONS_LOT3.md`). Injecté à la racine par `PointDEntreeLiens`
+/// depuis `DeepLinkCoordinator.estDemo` ; défaut `.safari` hors de la fenêtre.
+enum PresentationPageWeb: Sendable {
+    case safari
+    case doubleDemo
+}
+
+private struct PresentationPageWebKey: EnvironmentKey {
+    static let defaultValue: PresentationPageWeb = .safari
+}
+
+extension EnvironmentValues {
+    /// Présentation des pages web des feuilles locales (`PageWebLocale`), posée à la racine par le coordinateur des liens.
+    var presentationPageWeb: PresentationPageWeb {
+        get { self[PresentationPageWebKey.self] }
+        set { self[PresentationPageWebKey.self] = newValue }
+    }
+}

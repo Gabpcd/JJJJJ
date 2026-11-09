@@ -365,6 +365,8 @@ test('CONTRATS : fn_rgpd_exporter_rate_limited — refus en valeur JSON réelle'
   ficheContient(fiche, 'fn_rgpd_exporter_rate_limited', ['30', 'RGPD_EXPORT_DONNEES'], 'élément');
   // T11 : corps rendu octet pour octet (ordre des clés du jsonb jusqu'au fichier), signalement `publie_le` confirmé live.
   ficheContient(fiche, 'fn_rgpd_exporter_rate_limited', ['octet pour octet', 'publie_le IS NOT NULL', 'confirmé sur la définition live'], 'élément T11');
+  // Revue fraîche B8 de L3-TJ (mineur 1) : second lecteur à visibilité conditionnelle, instruit par la même PR backend.
+  ficheContient(fiche, 'fn_rgpd_exporter_rate_limited', ['`evaluations_recues`', '`pol_eval_select`', 'visible'], 'élément TJ4');
 });
 
 test('CONTRATS : paiements déclarés — refus de la confirmation, contestation corrigée par B3 (#1118)', () => {
@@ -414,6 +416,9 @@ test('CONTRATS : IBAN — neuf error_code (dont sept sans error), deux messages 
   assert.equal(messages.length, 2, 'témoin : deux error_code seulement portent un `error`');
   for (const m of messages) assert.ok(fiche.includes(m), `message serveur absent : ${m}`);
   ficheContient(fiche, 'fn_enregistrer_mon_iban', ['`success == true`', 'SectionPaiements.tsx', 'iban_preuve_hash_v1', 'source_document_id'], 'élément');
+  // Revue fraîche B8 de L3-TJ (mineur 3) : les messages des sept codes suivent TJ6, plus « à relire, §6.7 du blueprint ».
+  assert.ok(!fiche.includes('à relire') && !fiche.includes('§6.7'), 'fiche IBAN : renvoi périmé (messages tranchés par TJ6)');
+  ficheContient(fiche, 'fn_enregistrer_mon_iban', ['TJ6', 'Décisions déléguées du 8 novembre 2026'], 'renvoi');
   const consulter = sqlBody('fn_consulter_mon_iban');
   const ficheConsulter = section(CONTRATS, 'fn_consulter_mon_iban');
   for (const cle of ['iban_renseigne', 'iban_verifie', 'verification_requise', 'iban_last4', 'iban_titulaire']) {
@@ -630,6 +635,189 @@ test('DECISIONS_LOT3.md : §7 tranché (25 décisions adoptées), critères amen
   const attente = section(doc, 'En attente de Gabrielle');
   for (let i = 1; i <= 11; i++) assert.ok(attente.includes(`§6.${i}`), `attente : §6.${i} absent`);
   ficheContient(attente, 'attente', ['GDU5AA28M9', 'APNS_ENVIRONMENT', 'jolene-ios', 'token_hash={{ .TokenHash }}&type=signup', 'TestFlight'], 'élément');
+});
+
+test('DECISIONS_LOT3.md : décisions déléguées du 8 novembre 2026 (L3-TJ) — TJ1 à TJ8, sources, ligne de délégation, plus rien à relire', () => {
+  const doc = read(DECISIONS_PATH);
+  const titre = '\n## Décisions déléguées du 8 novembre 2026';
+  assert.ok(doc.indexOf('\n## HARD STOP n°4') < doc.indexOf(titre), 'décisions déléguées après la section HARD STOP');
+  assert.ok(doc.indexOf(titre) < doc.indexOf('\n## En attente de Gabrielle'), 'décisions déléguées avant « En attente »');
+  const deleguees = section(doc, 'Décisions déléguées du 8 novembre 2026');
+  ficheContient(deleguees, 'décisions déléguées', [
+    '« arrête de me demander et prends les décisions, avance seul »', 'L3-TJ', '`lot3/l3-tj-v2`', 'tutoiement compris',
+    'TEXTE', 'JUGÉ', 'choix de conformité Jolene', 'EUR-Lex', 'Légifrance', 'go explicite au merge des PR B9',
+  ], 'élément');
+  const ligne = 'décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026';
+  const sousSections = deleguees.split('\n### ').slice(1);
+  assert.deepEqual(sousSections.map(t => t.slice(0, t.indexOf(' — '))), ['TJ1', 'TJ2', 'TJ3', 'TJ4', 'TJ5', 'TJ6', 'TJ7', 'TJ8']);
+  for (const sous of sousSections) assert.ok(sous.includes(`- ${ligne}`), `${sous.slice(0, 3)} : ligne de délégation absente`);
+  const [tj1, tj2, tj3, tj4, tj5, tj6, tj7, tj8] = sousSections;
+
+  // TJ1 (T7) : consentement p_cgu instruit sur le code natif, le serveur et l'edge ; art. 1119 et RGPD.
+  ficheContient(tj1, 'TJ1', ['`p_cgu`', 'l.30161-30163', 'consentement_cgu_le', 'RGPD_CONSENTEMENT_DONNE', 'art. 1119',
+    'art. 7, § 2', 'art. 13, § 1', 'InscriptionRapide.tsx', 'l.267', 'l.276', 'src/lib/erreurs.ts', 'l.178'], 'élément');
+  assert.ok(SCHEMA.includes("OR p_cgu IS NOT TRUE OR (p_type_compte = 'ETABLISSEMENT' AND p_cgv IS NOT TRUE) THEN"),
+    'témoin SQL : fn_demarrer_inscription ne refuse plus p_cgu faux — relire TJ1');
+  const register = read('supabase/functions/register-soignant/index.ts');
+  assert.ok(register.includes("const consentementInscriptionAtteste = !!parcours?.consentement_cgu_le;")
+    && register.includes("action: 'RGPD_CONSENTEMENT_DONNE'"), 'témoin edge : preuve du consentement de register-soignant — relire TJ1');
+  // TJ2 (T11) : textes RGPD et natifs, « l'intégralité » instruite, PR web consignée.
+  ficheContient(tj2, 'TJ2', ['SectionConfidentialite.tsx', 'l.114', "l'intégralité", 'art. 20, § 1', 'art. 12, § 1',
+    'PR web HARD STOP', 'PageConnexion.tsx', 'l.345'], 'élément');
+  // Revue fraîche B8 de L3-TJ (majeur 2) : un seul critère pour un texte juridique inexact du web, celui de TJ8 — la
+  // description de l'export n'est plus portée (titre et boutons conservés), jamais « maintenue » ni reformulée.
+  ficheContient(tj2, 'TJ2', ['**non portée**', 'critère de TJ8', '`compte-export-info`', '`CompteVerbatimTests`',
+    '`DemoCompteLot3Tests`'], 'élément');
+  assert.ok(!tj2.includes('affichage natif verbatim maintenu'), 'TJ2 : la description inexacte n est plus maintenue en natif (critère de TJ8)');
+  ficheContient(tj8, 'TJ8', ['TJ2', 'TJ6', 'ne pas porter un texte n\'est pas le reformuler'], 'élément');
+  const confidentialite = read('src/components/profil-soignant/SectionConfidentialite.tsx').split('\n');
+  assert.ok(confidentialite[114 - 1].includes("Télécharge l'intégralité de tes données personnelles dans le format de ton choix."),
+    'témoin web : l.114 de SectionConfidentialite.tsx a changé (PR web de TJ2 ?) — instruire le nouveau texte et le porter verbatim');
+  const exportSwift = read('ios-native/Packages/JoleneCore/Sources/JoleneCore/Compte/ExportRGPD.swift');
+  const sectionsCompte = read('ios-native/Jolene/Screens/Compte/CompteSections.swift');
+  assert.ok(!exportSwift.includes("l'intégralité") && !exportSwift.includes('SectionConfidentialite.tsx:114'),
+    'témoin Swift : la description inexacte de l export (l.114) n est pas portée (TJ2, critère de TJ8)');
+  assert.ok(!sectionsCompte.includes('Textes.description') && !sectionsCompte.includes('"compte-export-info"'),
+    'témoin Swift : la section export n affiche plus de description (TJ2)');
+  // Revue fraîche B8 de L3-TJ (mineur 2) : « Mot de passe oublié ? » est un renvoi sans effet tant que la connexion
+  // native n'a pas ce contrôle (L1-T10) ; accepté avec ses motifs, préalable inscrit au §6.10 (TestFlight externe).
+  ficheContient(tj2, 'TJ2', ['renvoi sans effet', 'L1-T10', '`login-forgot`', '§6.10', 'TJ7'], 'élément');
+  assert.ok(!/pour choisir un nouveau mot de passe\. »\s*\n\s*— exact :/.test(tj2), 'TJ2 : le renvoi vers « Mot de passe oublié ? » n est pas « exact »');
+  // TJ3 : double démo de la feuille locale, appliqué dans le code.
+  ficheContient(tj3, 'TJ3', ['`PageWebLocale`', '`presentationPageWeb`', 'testLienCGUDuConsentementOuvreLeDoubleDemoSansReseau'], 'élément');
+  const ecran = read('ios-native/Jolene/Screens/Inscription/InscriptionRapideScreen.swift');
+  assert.ok(ecran.includes('PageWebLocale(url: page.url)') && !ecran.includes('SFSafariViewController(url:'),
+    'témoin Swift : la feuille locale de l inscription passe par PageWebLocale');
+  // TJ4 : export RGPD — sources primaires, arbitrage, PR backend B9 consignée (aucun fichier sous supabase/ écrit).
+  ficheContient(tj4, 'TJ4', ['pg_get_functiondef', 'l.55349', '`evaluations_publiees`', '`pol_notations_select`',
+    'notation_publication_jours', 'art. 15, § 4', 'considérant 63', 'art. 12, § 3', 'art. 23, § 1', 'PageConfidentialite.tsx',
+    "différer jusqu'à publication", 'B9', 'dump-live-def.sh', 'notations_recues_en_attente_de_publication',
+    "interval '1 month'", 'fn_exporter_rgpd_etablissement'], 'élément');
+  const exportSoignant = sqlBody('fn_rgpd_exporter_donnees_soignant');
+  assert.ok(exportSoignant.includes('FROM notations_missions WHERE note_id = v_uid AND masque = false)'),
+    'témoin SQL : le filtre de notations_recues a changé (PR backend de TJ4 mergée ?) — mettre TJ4 et la fiche à jour');
+  assert.ok(!sqlBody('fn_exporter_rgpd_etablissement').includes('notations_missions'), 'témoin SQL : export établissement');
+  assert.match(SCHEMA, /WHERE \(\("publie_le" IS NOT NULL\) AND \("masque" = false\)\);/, 'témoin SQL : vue evaluations_publiees');
+  // Revue fraîche B8 de L3-TJ (mineur 1) : second lecteur d'export à visibilité conditionnelle — `evaluations_recues`
+  // lit la table legacy `evaluations` sans filtre `visible`, que la RLS `pol_eval_select` exige pour le soignant noté.
+  assert.ok(exportSoignant.includes('FROM evaluations WHERE evalue_id = v_uid)'),
+    'témoin SQL : evaluations_recues a changé (PR backend de TJ4 ?) — mettre TJ4 et la fiche à jour');
+  assert.ok(SCHEMA.includes('CREATE POLICY "pol_eval_select" ON "public"."evaluations"')
+    && SCHEMA.includes('(("evalue_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("visible" = true))'), 'témoin RLS : pol_eval_select');
+  ficheContient(tj4, 'TJ4', ['`evaluations_recues`', '`pol_eval_select`', '`visible = true`', 'l.55334', 'l.79230',
+    'latent'], 'élément');
+  assert.ok(!tj4.includes("aucun autre lecteur d'export à corriger"), 'TJ4 : l audit des lecteurs d export omettait evaluations_recues');
+  // Revue fraîche B8 de L3-TJ (mineur 5) : date « au plus tôt » — la publication attend le premier passage du cron.
+  assert.ok(sqlBody('fn_publier_notations_echues').includes('AND cree_le + make_interval(days => v_jours::int) < NOW();'),
+    'témoin SQL : condition de publication du cron');
+  ficheContient(tj4, 'TJ4', ["'publication_automatique_au_plus_tot_le'", '05:30 UTC', 'premier passage', '24 h'], 'élément');
+  assert.ok(!tj4.includes("'publication_automatique_le'"), 'TJ4 : la clé dit « au plus tôt »');
+  // TJ5 : textes natifs non juridiques (T1b, T4, T5, T9).
+  ficheContient(tj5, 'TJ5', ['« Ouvrir les réglages »', '« Le type d\'exercice se modifie sur jolene.app. »',
+    '« Votre profil n\'a pas pu être enregistré. Réessayez. »', '« Voir sur jolene.app »', '« environ »',
+    '« Montant indisponible »', '« critère rempli »', '« critère non rempli »', '« Ouvre le centre de notifications »'], 'texte');
+  // Revue fraîche B8 de L3-TJ (mineur 3) : les commentaires des composants renvoient à TJ5, plus au §6.7.
+  for (const composant of ['AmountRow', 'PasswordCriteriaList']) {
+    const source = read(`ios-native/Packages/JoleneDesign/Sources/JoleneDesign/Components/${composant}.swift`);
+    assert.ok(!source.includes('§6.7') && source.includes('TJ5'), `${composant}.swift : renvoi périmé au §6.7 (textes sous TJ5)`);
+  }
+  // TJ6 (T14b) : les sept codes sans `error` lus dans le dump, chacun cité ; l.280 instruite.
+  const codesSansError = ['NON_AUTHENTIFIE', 'PROFIL_INTROUVABLE', 'IBAN_INVALIDE', 'RIB_COURANT_REQUIS',
+    'IDENTITE_VERIFIEE_REQUISE', 'IDENTITE_COURANTE_REQUISE', 'RIB_NON_CONCORDANT'];
+  const enregistrerIban = sqlBody('fn_enregistrer_mon_iban');
+  const lierIban = sqlBody('fn_lier_iban_verifie_document');
+  const iban = [...sqlErrorCodes(enregistrerIban), ...sqlErrorCodes(lierIban)];
+  assert.deepEqual(iban.filter(c => !['TITULAIRE_NON_CONCORDANT', 'RIB_VERIFIE_REQUIS'].includes(c)), codesSansError);
+  ficheContient(tj6, 'TJ6', codesSansError.map(c => `\`${c}\``), 'error_code');
+  ficheContient(tj6, 'TJ6', ['SectionPaiements.tsx', 'l.280', 'fn_consulter_rib_soignant_internal_20260801', 'partages_rib'], 'élément');
+  const paiements = read('src/components/profil-soignant/SectionPaiements.tsx').split('\n');
+  assert.ok(paiements[280 - 1].includes("Il n'est jamais partagé avec l'établissement."), 'témoin web : l.280 de SectionPaiements.tsx');
+  // Revue fraîche B8 de L3-TJ (majeur 1) : `RIB_COURANT_REQUIS` et `RIB_NON_CONCORDANT` reprennent le texte serveur du
+  // refus voisin `RIB_VERIFIE_REQUIS`, exact dans les deux cas ; jamais le texte de l.308, qui décrit l'état
+  // `iban_renseigne && !iban_verifie` (« l'ancien IBAN… ») : un refus sort avant l'UPDATE, l'IBAN en place reste.
+  const texteRibVerifieRequis = 'Téléversez puis faites vérifier le RIB correspondant.';
+  assert.ok(sqlErrors(enregistrerIban).includes(texteRibVerifieRequis), 'témoin SQL : texte serveur de RIB_VERIFIE_REQUIS');
+  const miseAJour = lierIban.indexOf('SET iban_virement = v_iban');
+  assert.ok(miseAJour > 0, 'témoin SQL : UPDATE de l IBAN dans fn_lier_iban_verifie_document');
+  for (const code of ['IBAN_INVALIDE', 'RIB_COURANT_REQUIS', 'IDENTITE_VERIFIEE_REQUISE', 'IDENTITE_COURANTE_REQUISE', 'RIB_NON_CONCORDANT']) {
+    const refus = lierIban.indexOf(`'error_code', '${code}'`);
+    assert.ok(refus > 0 && refus < miseAJour, `témoin SQL : ${code} sort avant l UPDATE de l IBAN`);
+  }
+  assert.ok(paiements[302 - 1].includes('current?.iban_renseigne && !current.iban_verifie'), 'témoin web : état du texte de l.308');
+  assert.ok(paiements[306 - 1].includes('RIB vérifié requis'), 'témoin web : titre l.306');
+  assert.ok(paiements[308 - 1].includes("L'ancien IBAN est conservé dans ton historique"), 'témoin web : texte l.308');
+  assert.ok(paiements[316 - 1].includes('Téléverser mon RIB'), 'témoin web : action l.316');
+  const regle2 = tj6.slice(tj6.indexOf('\n  2. '), tj6.indexOf('\n  3. '));
+  assert.ok(regle2.length > 0, 'TJ6 : règle 2 introuvable');
+  ficheContient(regle2, 'TJ6 règle 2', ['`RIB_COURANT_REQUIS` et `RIB_NON_CONCORDANT`', `« ${texteRibVerifieRequis} »`,
+    '`RIB_VERIFIE_REQUIS`', 'l.32351', '« RIB vérifié requis » (l.306)', '« Téléverser mon RIB » (l.316'], 'élément');
+  assert.ok(!regle2.includes('l.308') && !regle2.includes("L'ancien IBAN"), 'TJ6 règle 2 : le texte de l.308 ne sert aucun refus');
+  ficheContient(tj6, 'TJ6', ['l.308', '`iban_renseigne && !iban_verifie`', 'l.302', 'l.39526', 'l.39533'], 'élément');
+  // TJ7 (T13) : verrou caduc depuis B3, libellés web à leur ligne.
+  ficheContient(tj7, 'TJ7', ['#1118', "n'est pas retenu", 'BandeauPaiementDeclare.tsx', 'MOTIF_INVALIDE'], 'élément');
+  const bandeau = read('src/components/BandeauPaiementDeclare.tsx').split('\n');
+  for (const [texte, l] of [['Motif de contestation :', 51], ['Envoyer la contestation', 62], ['Confirmer la réception', 397], ['Contester', 407]]) {
+    assert.ok(bandeau[l - 1].includes(texte), `témoin web : « ${texte} » l.${l} de BandeauPaiementDeclare.tsx`);
+  }
+  // TJ8 : règle des tranches à venir.
+  ficheContient(tj8, 'TJ8', ['T8', 'T12', 'T13', 'T14a', 'T14b', 'fn_types_exercice_autorises', 'escrow-debit-echeance'], 'élément');
+
+  // Plus aucun texte « à relire par Gabrielle » ; §6.7 renvoie aux décisions déléguées ; le signalement de la T0 est tranché.
+  assert.ok(!/[àÀ] relire par Gabrielle/.test(doc), 'DECISIONS_LOT3.md : un texte reste « à relire par Gabrielle »');
+  const attente = section(doc, 'En attente de Gabrielle');
+  const p67 = attente.slice(attente.indexOf('§6.7'), attente.indexOf('§6.8'));
+  ficheContient(p67, '§6.7', ['tranchés par délégation', 'Décisions déléguées du 8 novembre', 'TJ6 à TJ8', '§6.2'], 'élément');
+  assert.ok(!attente.includes('relecture des sept messages'), '§6.7 : la relecture des messages IBAN est tranchée (TJ6)');
+  ficheContient(attente, 'attente', ['TJ4', 'go B9'], 'élément');
+  // Verrou « un gap connu reste verrouillé » (revue fraîche B8 de L3-TJ, mineur 2) : tant que la connexion native n'a pas
+  // « Mot de passe oublié ? » (`login-forgot`, L1-T10), le préalable figure au §6.10 (TestFlight externe).
+  const connexion = read('ios-native/Jolene/Screens/LoginScreen.swift');
+  if (!connexion.includes('"login-forgot"')) {
+    const p610 = attente.slice(attente.indexOf('§6.10'), attente.indexOf('§6.11'));
+    ficheContient(p610, '§6.10', ['Préalable', '« Mot de passe oublié ? »', '`login-forgot`', 'L1-T10', 'TJ2',
+      'un gap connu reste verrouillé'], 'élément');
+  }
+});
+
+test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul éclat, sautée par le socle, attendue par le résumé', () => {
+  // Revue fraîche B8 de L3-TJ (mineur 4) : `DemoInscriptionTests` sort de « lot3-compte » (19,1 min sur ipad-landscape
+  // au run 42549855710, avant les deux XCUITest de L3-TJ ; seuil de 20 min, décision 22 de DECISIONS_LOT2).
+  const wf = read('.github/workflows/ios-swift-ci.yml');
+  const eclats = new Map([
+    ['lot3-compte', ['DemoLiensLot3Tests', 'DemoCompteLot3Tests']],
+    ['lot3-inscription', ['DemoInscriptionTests']],
+    ['lot3-push', ['DemoPushTests']],
+    ['lot3-notifications', ['DemoNotificationsTests', 'DemoPreferencesTests', 'DemoProfilTests']],
+  ]);
+  const etapes = wf.split('\n      - name: ').slice(1);
+  const etape = nom => etapes.find(e => e.startsWith(`test-without-building — éclat ${nom} `));
+  const socle = etape('socle');
+  assert.ok(socle, 'éclat socle absent');
+  const toutes = [...eclats.values()].flat();
+  for (const classe of toutes) {
+    assert.ok(socle.includes(`-skip-testing:JoleneUITests/${classe} \\`), `éclat socle : ${classe} non sauté`);
+  }
+  for (const [nom, classes] of eclats) {
+    const bloc = etape(nom);
+    assert.ok(bloc, `éclat ${nom} absent`);
+    assert.ok(bloc.includes('timeout-minutes: 30'), `éclat ${nom} : délai propre de 30 min`);
+    const seules = [...bloc.matchAll(/-only-testing:JoleneUITests\/(\w+) \\/g)].map(m => m[1]);
+    assert.deepEqual(seules, classes, `éclat ${nom} : classes -only-testing`);
+    assert.ok(bloc.includes(`resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-${nom}.xcresult"`), `éclat ${nom} : xcresult`);
+    assert.ok(bloc.includes(`test-without-building-${nom}.log`), `éclat ${nom} : journal`);
+    assert.ok(wf.includes(`{ nom: "${nom}", code: process.env.CODE_${nom.replace(/-/g, '_').toUpperCase()}, classes: ${JSON.stringify(classes).replace(/,/g, ', ')} }`),
+      `résumé : éclat ${nom} et ses classes attendus`);
+    assert.ok(wf.includes(`\${{ runner.temp }}/ui-\${{ matrix.format }}-${nom}.xcresult`), `artefact : xcresult de ${nom} conservé`);
+  }
+  const boucle = wf.match(/for eclat in ([a-z0-9 -]+); do/);
+  assert.ok(boucle, 'boucle des xcresult absente');
+  assert.deepEqual(boucle[1].split(' '), ['socle', ...eclats.keys()], 'boucle des xcresult : tous les éclats');
+  for (const classe of toutes) {
+    assert.equal(wf.split(`-only-testing:JoleneUITests/${classe} \\`).length - 1, 1, `${classe} : un seul éclat`);
+  }
+  // Plafond du job au-dessus de la somme des éclats (5 × 30 min) et du build.
+  const plafond = Number(wf.match(/\n {2}ui:\n[\s\S]*?\n {4}timeout-minutes: (\d+)/)[1]);
+  assert.ok(plafond >= 30 * (eclats.size + 1) + 20, `plafond du job UI trop bas : ${plafond} min`);
 });
 
 test('PARITE_SOIGNANT.md : lignes du lot 3 (profil, revenus, notifications, Stripe, préférences, alias)', () => {

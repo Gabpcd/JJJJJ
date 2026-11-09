@@ -54,8 +54,8 @@ public enum EtatNotificationsAppareil {
     public static let activerSurAppareil = "Activer sur cet appareil"
     /// Libellé du bouton qui ouvre la page Notifications de l'app dans Réglages
     /// (`UIApplication.openNotificationSettingsURLString`). **Sans source web** (le web n'ouvre pas les
-    /// réglages système) : nommé au §1.1 du blueprint, action non juridique, à relire par Gabrielle
-    /// (`DECISIONS_LOT3.md`, HARD STOP n°4) ; épinglé par `EtatNotificationsAppareilTests`.
+    /// réglages système) : nommé au §1.1 du blueprint, action non juridique, tranchée par délégation
+    /// (L3-TJ, TJ5 de `DECISIONS_LOT3.md`) ; épinglé par `EtatNotificationsAppareilTests`.
     public static let ouvrirReglages = "Ouvrir les réglages"
 
     /// Message de la carte, nil quand elle ne doit rien affirmer (aucune carte).

@@ -52,10 +52,11 @@ private struct SchemaEffectifDebug: View {
 #endif
 
 /// Section « Mes données (RGPD) » (port de `SectionConfidentialite.tsx` l.109-134, rangée dans le hub : écart de
-/// placement assumé, le web la monte dans l'onglet confidentialité du profil) : texte RGPD verbatim (tutoiement,
-/// HARD STOP n°4), « Exporter JSON » / « Exporter CSV » (« Export… » pendant l'export, les deux désactivés),
-/// refus serveur verbatim, succès après un partage abouti. La feuille de partage est présentée par
-/// `ProfileScreen` (`FeuillePartageExport`, hub à l'écran seulement). Identifiants : `compte-export-info`,
+/// placement assumé, le web la monte dans l'onglet confidentialité du profil) : titre RGPD verbatim (HARD STOP n°4) ;
+/// la description web (l.114, exhaustivité promise à tort) est inexacte et n'est pas portée (L3-TJ, décision TJ2,
+/// critère de TJ8 : ni affichée ni reformulée) ; « Exporter JSON » / « Exporter CSV » (« Export… » pendant l'export,
+/// les deux désactivés), refus serveur verbatim, succès après un partage abouti. La feuille de partage est présentée
+/// par `ProfileScreen` (`FeuillePartageExport`, hub à l'écran seulement). Identifiants :
 /// `compte-export-json`, `compte-export-csv`, `compte-export-succes`, `compte-export-erreur`,
 /// `compte-export-session-verifier` ; DEBUG et démo : `compte-export-residus` (nombre de dossiers d'export
 /// présents dans le dossier temporaire, « 0 » une fois la feuille fermée : preuve XCUITest de la suppression).
@@ -67,11 +68,6 @@ struct ExportRGPDSection: View {
 
     var body: some View {
         Section(Textes.titre) {
-            Text(Textes.description)
-                .font(JoleneFont.callout)
-                .foregroundStyle(JoleneColor.midnight)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("compte-export-info")
             VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
                 ForEach(FormatExportRGPD.allCases, id: \.self) { format in
                     JoleneButton(model.enCours == nil ? Textes.bouton(format) : Textes.enCours, style: .secondary,
