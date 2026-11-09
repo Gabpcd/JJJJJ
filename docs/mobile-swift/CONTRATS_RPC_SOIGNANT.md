@@ -1056,11 +1056,14 @@ CREATE OR REPLACE FUNCTION "public"."fn_types_exercice_autorises"("p_profession"
 ## fn_modifier_mon_profil
 
 - **Statut natif** : consommée (lot 3, T9) par `JoleneSupabase/Profil/SupabaseProfilGateway.swift`, appelée par
-  `JoleneCore/Profil/ProfilEdition.swift` (`ProfilEditionModel`) ; T10 y ajoutera `p_avatar_url` (l'adresse reste
-  hors du natif tant que la localisation n'est pas livrée). Définition live relue en lecture seule le 08/11/2026 :
+  `JoleneCore/Profil/ProfilEdition.swift` (`ProfilEditionModel`) ; T10 y ajoute `p_avatar_url` (seul paramètre de
+  `EnvoiAvatar`, `JoleneCore/Profil/EnvoiAvatar.swift`, après le dépôt Storage, puis relecture de `avatar_url`) et la
+  position `p_adresse_lat` / `p_adresse_lng` (« Utiliser ma position actuelle », toujours en paire, envoyée avec
+  « Enregistrer les modifications ») ; `p_adresse_rue`, `p_adresse_ville`, `p_adresse_code_postal` restent jamais
+  envoyés. Définition live relue en lecture seule le 08/11/2026 :
   corps identique au dump, `SECURITY DEFINER`, `search_path=pg_catalog, public`, EXECUTE `authenticated`.
 - **Usage prévu** : Édition du profil natif (identité, téléphone, date de naissance, RPPS non vérifié, rayon, ville
-  de recherche, taux minimum, contrats acceptés, bio, années d'expérience ; avatar et adresse en T10) puis relecture
+  de recherche, taux minimum, contrats acceptés, bio, années d'expérience ; avatar et position en T10) puis relecture
   `fn_mon_profil_soignant_complet`. **Jamais** envoyés par le natif : `p_type_exercice`, `p_attestation_cumul_activite`,
   `p_est_cumul_activite`, `p_est_salarie_etablissement` (règle L1222-5 exposée → HARD STOP n°4, correction 8),
   `p_consentement_gps` (lot 2), `p_disponible_urgence`, `p_urgence_rayon_km`, `p_ville_urgence` (lot 4),

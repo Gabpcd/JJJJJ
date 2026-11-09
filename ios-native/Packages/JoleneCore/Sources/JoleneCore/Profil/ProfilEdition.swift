@@ -190,7 +190,14 @@ public struct RefusEnregistrementProfil: Error, Equatable, Sendable, LocalizedEr
 /// - modes d'exercice autorisés : `gateways.inscription.typesExercice` (`fn_types_exercice_autorises`,
 ///   câblé par T8, point d'extension) ; erreur ou réponse absente → état « indisponible » du web ; port
 ///   encore non câblé, ou câblé par T7 sans la complétion de T8 (`completionLivree` faux) → même état, sans
-///   « Réessayer la vérification » (jamais un bouton sans effet).
+///   « Réessayer la vérification » (jamais un bouton sans effet) ;
+/// - (T10) « Utiliser ma position actuelle » (`localiser`) : seulement si un `LocalisationPort` est injecté (sinon le
+///   bouton n'existe pas) ; une position obtenue remplit la position du formulaire et, si le géocodage inverse
+///   (`gateways.geocodage`, best-effort, borné) trouve une ville, la ville de recherche ; rien n'est écrit au serveur
+///   avant « Enregistrer les modifications » (comme le web) ; refus ou indisponibilité → message du web, formulaire
+///   inchangé. Localisation et enregistrement se verrouillent mutuellement (revue B8 de T10, m5 : une position
+///   obtenue pendant un enregistrement serait écrasée par le profil relu) ; l'avis de la localisation a son propre
+///   jeton d'annonce VoiceOver, `annoncesLocalisation` (m4).
 @MainActor
 public final class ProfilEditionModel: ObservableObject {
     public enum Etat: Equatable, Sendable {
@@ -221,19 +228,33 @@ public final class ProfilEditionModel: ObservableObject {
     @Published public private(set) var erreur: String?
     @Published public private(set) var sessionExpiree = false
     @Published public private(set) var modes: Modes = .inactif
-    /// Jeton d'annonce VoiceOver des encarts (`InlineNotice.announcementID`).
+    /// Jeton d'annonce VoiceOver des encarts de l'enregistrement (`InlineNotice.announcementID`).
     @Published public private(set) var annonces = 0
+    /// T10 : localisation en cours (« Récupération en cours… ») et son avis.
+    @Published public private(set) var localisationEnCours = false
+    @Published public private(set) var avisLocalisation: ProfilLocalisation.Avis?
+    /// T10, revue B8 m4 : jeton d'annonce VoiceOver de l'avis de la localisation, distinct de `annonces` (sinon
+    /// « Enregistrer » réannonçait l'avis encore affiché, et inversement).
+    @Published public private(set) var annoncesLocalisation = 0
 
     private let session: SessionStore
     private let snapshot: SessionSnapshot
+    private let localisation: LocalisationPort?
     private var generation = 0
     private var auditTente = false
 
-    public init(session: SessionStore, snapshot: SessionSnapshot) {
+    public init(session: SessionStore, snapshot: SessionSnapshot, localisation: LocalisationPort? = nil) {
         self.session = session
         self.snapshot = snapshot
+        self.localisation = localisation
         self.formulaire = FormulaireProfil(profil: ProfilComplet(id: snapshot.user.id, prenom: "", nom: ""))
     }
+
+    /// « Utiliser ma position actuelle » n'est proposé qu'avec un port de localisation (jamais un bouton sans effet).
+    public var localisationProposee: Bool { localisation != nil }
+
+    /// « Utiliser ma position actuelle » actif : profil lu, aucune localisation ni aucun enregistrement en cours (m5).
+    public var peutLocaliser: Bool { localisationProposee && profil != nil && !localisationEnCours && !enregistrementEnCours }
 
     public var profil: ProfilComplet? {
         if case let .pret(profil) = etat { return profil }
@@ -246,7 +267,8 @@ public final class ProfilEditionModel: ObservableObject {
         return ModificationProfil.depuis(initial: initial, saisi: formulaire, profil: profil)
     }
 
-    public var peutEnregistrer: Bool { !enregistrementEnCours && !modification.estVide }
+    /// Inactif pendant un enregistrement ou une localisation (m5), ou sans rien à transmettre.
+    public var peutEnregistrer: Bool { !enregistrementEnCours && !localisationEnCours && !modification.estVide }
 
     public var choixModes: ChoixModesExercice {
         let types: [String]?
@@ -328,10 +350,45 @@ public final class ProfilEditionModel: ObservableObject {
         }
     }
 
+    // MARK: - Localisation (T10)
+
+    /// Position unique (autorisation demandée sur ce seul appui si elle ne l'a jamais été), puis géocodage inverse
+    /// best-effort. Une seule demande à la fois, jamais pendant un enregistrement (m5) ; rien n'est publié pour une
+    /// identité périmée.
+    public func localiser() async {
+        guard let localisation, peutLocaliser else { return }
+        localisationEnCours = true
+        defer { localisationEnCours = false }
+        avisLocalisation = nil
+        let position = await localisation.localiser(delai: LocalisationPolicy.delaiProfil)
+        guard await memeEpoch() else { return }
+        guard case let .disponible(latitude, longitude) = position, latitude.isFinite, longitude.isFinite else {
+            avisLocalisation = .erreur(ProfilLocalisation.Textes.refusee)
+            annoncesLocalisation += 1
+            return
+        }
+        formulaire.adresseLat = latitude
+        formulaire.adresseLng = longitude
+        var adresse: AdresseGeocodee?
+        if let gateways = await session.controller.gateways(for: snapshot.epoch) {
+            let geocodage = gateways.geocodage
+            adresse = (try? await bounded(timeout: session.controller.resolutionTimeout) {
+                try await geocodage.adresse(lat: latitude, lng: longitude)
+            }) ?? nil
+        }
+        guard await memeEpoch() else { return }
+        if let ville = adresse?.ville?.trimmingCharacters(in: .whitespacesAndNewlines), !ville.isEmpty {
+            formulaire.villeRecherche = ville
+        }
+        avisLocalisation = ProfilLocalisation.avis(adresse: adresse)
+        annoncesLocalisation += 1
+    }
+
     // MARK: - Enregistrement
 
     public func enregistrer() async {
-        guard !enregistrementEnCours else { return }
+        // Jamais pendant une localisation (m5) : la position attendue serait écrasée par le profil relu.
+        guard !enregistrementEnCours, !localisationEnCours else { return }
         let aEnvoyer = modification
         guard !aEnvoyer.estVide else { return }
         enregistrementEnCours = true

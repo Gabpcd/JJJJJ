@@ -64,8 +64,10 @@ public enum SupabaseGateways {
         gateways.preferences = SupabasePreferencesGateway(client: client)  // T6
         gateways.inscription = SupabaseInscriptionGateway(client: client) // T7 (complétion refusée jusqu'à T8)
         gateways.profil = SupabaseProfilGateway(client: client)            // T9
-        gateways.avatar = UnwiredAvatarStoragePort()                       // T10
-        gateways.geocodage = UnwiredGeocodagePort()                        // T10
+        // T10 : reçu Keychain provisoire (`KeychainRecusAvatar`) jusqu'à la fusion avec le journal du lot 2.
+        gateways.avatar = EnvoiAvatar(stockage: SupabaseAvatarStorage(client: client), profil: SupabaseProfilGateway(client: client),
+                                      recus: KeychainRecusAvatar(), horloge: gateways.clock)
+        gateways.geocodage = ApiAdresseGeocodage()                         // T10
         gateways.motDePasse = SupabaseMotDePasseGateway(client: client)    // T11
         gateways.exportRGPD = SupabaseExportGateway(client: client)        // T11
         gateways.revenus = UnwiredRevenusPort()                            // T12

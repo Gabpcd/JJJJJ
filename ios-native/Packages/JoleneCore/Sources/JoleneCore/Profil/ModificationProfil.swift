@@ -5,7 +5,9 @@ import Foundation
 /// modifié, et n'offre pas « effacer » (un champ vidé reste à sa valeur relue, §2.4). Déplacé de
 /// `Models/Lot3Results.swift` par T9, comme prévu par T1.
 ///
-/// Paramètres envoyés : ceux de T9 (`LOT3_PLAN.md` §3 T9) et `p_avatar_url` (T10). Jamais
+/// Paramètres envoyés : ceux de T9 (`LOT3_PLAN.md` §3 T9), `p_avatar_url` et la position `p_adresse_lat` /
+/// `p_adresse_lng` (T10, « Utiliser ma position actuelle », toujours envoyées ensemble). Jamais `p_adresse_rue`,
+/// `p_adresse_ville`, `p_adresse_code_postal` (le web les envoie à `null`, sans effet sous `COALESCE`), jamais
 /// `p_type_exercice`, `p_attestation_cumul_activite`, `p_est_cumul_activite`,
 /// `p_est_salarie_etablissement` (L1222-5, HARD STOP n°4, correction 8), `p_consentement_gps` (lot 2),
 /// `p_disponible_urgence`, `p_urgence_rayon_km`, `p_ville_urgence` (lot 4), `p_specialites`,
@@ -24,15 +26,19 @@ public struct ModificationProfil: Equatable, Sendable {
     public var bio: String?
     public var anneesExperience: Int?
     public var avatarUrl: String?
+    /// Position du profil (T10) : jamais affichée ni journalisée (description masquée ci-dessous).
+    public var adresseLat: Double?
+    public var adresseLng: Double?
 
     public init(prenom: String? = nil, nom: String? = nil, telephone: String? = nil, dateNaissance: String? = nil,
                 numeroRpps: String? = nil, rayonDeplacementKm: Int? = nil, villeRecherche: String? = nil,
                 tauxHoraireMinimum: Double? = nil, typesContratAcceptes: [String]? = nil, bio: String? = nil,
-                anneesExperience: Int? = nil, avatarUrl: String? = nil) {
+                anneesExperience: Int? = nil, avatarUrl: String? = nil, adresseLat: Double? = nil, adresseLng: Double? = nil) {
         self.prenom = prenom; self.nom = nom; self.telephone = telephone; self.dateNaissance = dateNaissance
         self.numeroRpps = numeroRpps; self.rayonDeplacementKm = rayonDeplacementKm; self.villeRecherche = villeRecherche
         self.tauxHoraireMinimum = tauxHoraireMinimum; self.typesContratAcceptes = typesContratAcceptes; self.bio = bio
         self.anneesExperience = anneesExperience; self.avatarUrl = avatarUrl
+        self.adresseLat = adresseLat; self.adresseLng = adresseLng
     }
 
     /// Aucun champ à transmettre : l'écran n'appelle pas la RPC.
@@ -49,14 +55,14 @@ public struct ModificationProfil: Equatable, Sendable {
 
     /// Paramètres que le natif peut envoyer, dans l'ordre de la signature SQL.
     public static let parametresAutorises: [String] = [
-        "p_prenom", "p_nom", "p_telephone", "p_date_naissance", "p_rayon_deplacement_km", "p_numero_rpps",
-        "p_avatar_url", "p_types_contrat", "p_bio", "p_annees_experience", "p_taux_horaire_minimum",
-        "p_ville_recherche",
+        "p_prenom", "p_nom", "p_telephone", "p_date_naissance", "p_adresse_lat", "p_adresse_lng",
+        "p_rayon_deplacement_km", "p_numero_rpps", "p_avatar_url", "p_types_contrat", "p_bio", "p_annees_experience",
+        "p_taux_horaire_minimum", "p_ville_recherche",
     ]
 
     /// Paramètres de la signature que le natif n'envoie jamais (garde des tests).
     public static let parametresInterdits: [String] = [
-        "p_adresse_rue", "p_adresse_ville", "p_adresse_code_postal", "p_adresse_lat", "p_adresse_lng",
+        "p_adresse_rue", "p_adresse_ville", "p_adresse_code_postal",
         "p_numero_adeli", "p_specialites", "p_type_exercice", "p_ville_urgence", "p_disponible_urgence",
         "p_urgence_rayon_km", "p_attestation_cumul_activite", "p_est_cumul_activite", "p_est_salarie_etablissement",
         "p_consentement_gps", "p_types_contrat_acceptes", "p_profession",
@@ -69,6 +75,10 @@ public struct ModificationProfil: Equatable, Sendable {
         if let nom { sortie["p_nom"] = .texte(nom) }
         if let telephone { sortie["p_telephone"] = .texte(telephone) }
         if let dateNaissance { sortie["p_date_naissance"] = .texte(dateNaissance) }
+        if let adresseLat, let adresseLng {
+            sortie["p_adresse_lat"] = .reel(adresseLat)
+            sortie["p_adresse_lng"] = .reel(adresseLng)
+        }
         if let rayonDeplacementKm { sortie["p_rayon_deplacement_km"] = .entier(rayonDeplacementKm) }
         if let numeroRpps { sortie["p_numero_rpps"] = .texte(numeroRpps) }
         if let avatarUrl { sortie["p_avatar_url"] = .texte(avatarUrl) }
@@ -116,6 +126,12 @@ public struct ModificationProfil: Equatable, Sendable {
         if saisi.anneesExperience != initial.anneesExperience {
             modification.anneesExperience = FormulaireProfil.borner(saisi.anneesExperience, FormulaireProfil.bornesExperience)
         }
+        // Position (T10) : posée seulement par « Utiliser ma position actuelle », envoyée en paire, jamais effacée.
+        if let lat = saisi.adresseLat, let lng = saisi.adresseLng, lat.isFinite, lng.isFinite,
+           lat != initial.adresseLat || lng != initial.adresseLng {
+            modification.adresseLat = lat
+            modification.adresseLng = lng
+        }
         return modification
     }
 
@@ -141,6 +157,9 @@ public struct FormulaireProfil: Equatable, Sendable {
     public var typesContrat: [String]
     public var bio: String
     public var anneesExperience: Int
+    /// Position du profil (T10) : relue, ou posée par « Utiliser ma position actuelle » ; jamais saisie à la main.
+    public var adresseLat: Double?
+    public var adresseLng: Double?
 
     /// `setRayon(data.rayon_deplacement_km ?? 30)`.
     public static let rayonParDefaut = 30
@@ -163,7 +182,12 @@ public struct FormulaireProfil: Equatable, Sendable {
         typesContrat = profil.typesContratAcceptes
         bio = profil.bio ?? ""
         anneesExperience = profil.anneesExperience ?? 0
+        adresseLat = profil.adresseLat
+        adresseLng = profil.adresseLng
     }
+
+    /// Position présente (web : `lat && lng`, « Position enregistrée — … », l.874).
+    public var positionRenseignee: Bool { adresseLat != nil && adresseLng != nil }
 
     /// Taux défini (`tauxHoraireMinimum ?` du web : 0 et nil valent « Non défini »).
     public var tauxDefini: Bool { (tauxHoraireMinimum ?? 0) > 0 }
@@ -183,4 +207,24 @@ public struct FormulaireProfil: Equatable, Sendable {
 
 private extension String {
     var nettoye: String { trimmingCharacters(in: .whitespacesAndNewlines) }
+}
+
+/// Descriptions MASQUÉES (§2.6, PRINCIPES §7) : la position (T10) n'est restituée par aucune interpolation dans un
+/// journal ou un message d'assertion, seulement sa présence.
+extension ModificationProfil: CustomStringConvertible, CustomDebugStringConvertible {
+    public var description: String {
+        let noms = parametres.keys.sorted().filter { $0 != "p_adresse_lat" && $0 != "p_adresse_lng" }
+        let position = adresseLat != nil || adresseLng != nil ? "position masquée" : "sans position"
+        return "ModificationProfil(valeurs masquées, \(noms.joined(separator: ", ")), \(position))"
+    }
+
+    public var debugDescription: String { description }
+}
+
+extension FormulaireProfil: CustomStringConvertible, CustomDebugStringConvertible {
+    public var description: String {
+        "FormulaireProfil(valeurs masquées, \(positionRenseignee ? "position masquée" : "sans position"))"
+    }
+
+    public var debugDescription: String { description }
 }

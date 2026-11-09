@@ -26,6 +26,12 @@ import JoleneSupabase
 /// `SFSafariViewController` effacé à chaque fin d'identité, aucun effacement en démo) ; DEBUG, démo :
 /// `-JOLENE_OPEN_URL_SUIVANT <url>` (lien remis pendant un renvoi affiché, m1) et `JOLENE_FORCE_OUBLI_POINTAGE=1`
 /// (Accueil avec un oubli de pointage, m4).
+///
+/// Lot 3, T10 : localisation ponctuelle du profil (`localisationProfil`) — démo : `DemoLocalisationProfil` (DEBUG :
+/// `-JOLENE_DEMO_LOCALISATION accordee|refusee|indisponible`) ; staging/production : `LocalisationProfilProvisoire`,
+/// implémentation isolée remplacée à la fusion par un adaptateur sur `LocationService` du lot 2 (une seule source de
+/// position dans l'app). DEBUG, démo : `-JOLENE_DEMO_AVATAR refus` (stockage en refus), `-JOLENE_DEMO_AVATAR illisible`
+/// (photo choisie illisible, revue B8 M1) et `-JOLENE_DEMO_GEOCODAGE echec`.
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -53,6 +59,12 @@ final class AppContainer: ObservableObject {
     /// Lot 3, T11 : thème de l'app (D16), appliqué à la racine (`ThemeRacine`) ; par appareil (`UserDefaults`,
     /// clé `jolene.theme`) en staging et production, mémoire vive en démo (chaque lancement démo part de Système).
     let theme: PreferenceThemeModel
+    /// Lot 3, T10 : position du profil (« Utiliser ma position actuelle ») ; nil si l'environnement est refusé.
+    let localisationProfil: LocalisationPort?
+    /// Lot 3, T10 (revue B8, M1) : issue des sources de la photo en démo, sans feuille système (photo de démonstration,
+    /// ou lecture impossible avec `-JOLENE_DEMO_AVATAR illisible`, DEBUG) ; nil en staging et en production (feuilles
+    /// système réelles).
+    let selectionAvatarDemo: SelectionPhotoAvatar?
     #if DEBUG
     let networkSentinel: NetworkSentinel.Monitor?
     #endif
@@ -92,6 +104,8 @@ final class AppContainer: ObservableObject {
                                         effaceur: environment.mode == .demo ? nil : EffaceurDonneesSafari())
         self.liens = liens
         theme = PreferenceThemeModel(stockage: environment.mode == .demo ? MemoireStockageAppareil() : UserDefaultsStockageAppareil())
+        selectionAvatarDemo = environment.mode == .demo
+            ? DemoFixtures.selectionAvatarDemo(scenario: Self.scenarioAvatarDemo(arguments: arguments)) : nil
         // Lot 3, T11 (revue B8, m8) : un fichier d'export RGPD laissé par un arrêt brutal (feuille de partage jamais
         // fermée) est retiré dès le lancement, sans attendre le prochain hub ni la prochaine connexion.
         DossierExportTemporaire.systeme.purgerResidus()
@@ -105,6 +119,7 @@ final class AppContainer: ObservableObject {
             session = nil
             push = nil
             pushPermission = nil
+            localisationProfil = nil
             environmentError = error
             return
         }
@@ -131,6 +146,7 @@ final class AppContainer: ObservableObject {
                                               registrar: DemoPushRegistrar(), memoire: MemoirePushTokenStore())
             push = coordinator
             pushPermission = permission
+            localisationProfil = DemoLocalisationProfil(scenario: Self.scenarioLocalisationDemo(arguments: arguments))
             session = SessionStore(controller: controller, push: coordinator, finIdentiteWeb: liens)
             environmentError = nil
             prePrompt = Self.contextePrePrompt(mode: .demo, arguments: arguments)
@@ -151,6 +167,7 @@ final class AppContainer: ObservableObject {
                                                   registrar: registrar, memoire: KeychainPushTokenStore())
                 push = coordinator
                 pushPermission = permission
+                localisationProfil = LocalisationProfilProvisoire()
                 let store = SessionStore(controller: controller, push: coordinator, finIdentiteWeb: liens)
                 // Session effacée côté SDK (révocation, déconnexion globale, refresh refusé) :
                 // l'écran bascule sans action de l'utilisateur.
@@ -163,12 +180,14 @@ final class AppContainer: ObservableObject {
                 session = nil
                 push = nil
                 pushPermission = nil
+                localisationProfil = nil
                 environmentError = error
             } catch {
                 clock = SystemClock()
                 session = nil
                 push = nil
                 pushPermission = nil
+                localisationProfil = nil
                 environmentError = JoleneError(.environment, "Configuration de l'application invalide.")
             }
         }
@@ -209,6 +228,13 @@ final class AppContainer: ObservableObject {
         }
         if let variante = processEnvironment[VarianteProfilDemo.variableEnvironnement].flatMap(VarianteProfilDemo.init(rawValue:)) {
             gateways.profil = DemoProfilGateway(variante: variante) // lot 3, T9
+            gateways.avatar = DemoWorld.avatar(profil: gateways.profil) // lot 3, T10 : même ligne que la variante
+        }
+        if let scenario = ScenarioAvatarDemo(arguments: arguments) {
+            gateways.avatar = DemoWorld.avatar(profil: gateways.profil, scenario: scenario) // lot 3, T10
+        }
+        if DemoGeocodage.enEchec(arguments: arguments) {
+            gateways.geocodage = DemoGeocodage(enEchec: true) // lot 3, T10
         }
         if processEnvironment["JOLENE_FORCE_EXPORT_ECHEC"] == "1" {
             gateways.exportRGPD = DemoExportRGPDGateway(refus: ExportRGPD.refusLimiteServeur) // lot 3, T11
@@ -216,6 +242,26 @@ final class AppContainer: ObservableObject {
         return gateways
         #else
         return DemoWorld.gateways()
+        #endif
+    }
+
+    /// Lot 3, T10 (revue B8, M1) : scénario de l'avatar démo. DEBUG seulement : `-JOLENE_DEMO_AVATAR` ; sinon (et
+    /// toujours en Release) aucun.
+    private static func scenarioAvatarDemo(arguments: [String]) -> ScenarioAvatarDemo? {
+        #if DEBUG
+        return ScenarioAvatarDemo(arguments: arguments)
+        #else
+        return nil
+        #endif
+    }
+
+    /// Lot 3, T10 : scénario de la localisation démo. DEBUG seulement : `-JOLENE_DEMO_LOCALISATION` ; sinon (et toujours
+    /// en Release) position accordée.
+    private static func scenarioLocalisationDemo(arguments: [String]) -> ScenarioLocalisationDemo {
+        #if DEBUG
+        return ScenarioLocalisationDemo(arguments: arguments) ?? .accordee
+        #else
+        return .accordee
         #endif
     }
 
