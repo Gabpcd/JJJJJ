@@ -38,6 +38,11 @@ public protocol PointagePort: Sendable {
     /// Seconde moitié : relectures d'un HTTP 200 rendu par `envoyerScan` (`.accepte`) → `.enregistre`,
     /// `.enregistreSurAutreMission` ou `.accepteSansPreuve`, jamais `.incertain`.
     func relireScanAccepte(_ scan: ScanEnregistre?, recu: RecuScan, context: MissionReadContext) async throws -> IssueScan
+    /// Fiche du détail des présences (tranche T5a, `DetailPresencesMission.tsx` l.130-139) : la mission (projection
+    /// `MissionPresenceLue.colonnes`, nil si elle n'est pas lisible → « Mission introuvable ») et la première présence
+    /// par arrivée (projection `PresenceControlee.colonnes`, jamais `select=*`), support de la validation et des contrôles
+    /// du pointage. Ajout de T5a (amendement du §2.3) ; défaut « non câblé » ci-dessous.
+    func ficheDetail(missionId: String, context: MissionReadContext) async throws -> FicheDetailPresences
 }
 
 /// Issue de la seule requête `fn_scanner_code_pointage`, avant les relectures (seconde revue fraîche de T3, mi-1).
@@ -64,6 +69,12 @@ public extension PointagePort {
     func relireScanAccepte(_ scan: ScanEnregistre?, recu: RecuScan, context: MissionReadContext) async throws -> IssueScan {
         throw UnwiredPorts.erreur(port: "pointage", tranche: "T3", lot: 2)
     }
+
+    /// Défaut des conformances antérieures à T5a (stub, doubles de test) : refus « non câblé », jamais une fiche vide
+    /// (qui afficherait « Mission introuvable » à tort).
+    func ficheDetail(missionId: String, context: MissionReadContext) async throws -> FicheDetailPresences {
+        throw UnwiredPorts.erreur(port: "pointage", tranche: "T5a", lot: 2)
+    }
 }
 
 /// Litige depuis une présence (`litiges`, `fn_fenetre_contestation_ouverte`, `fn_ouvrir_litige_rate_limited`
@@ -79,6 +90,17 @@ public protocol ContestationPort: Sendable {
 /// globale répliquée sur les quatre critères (`CriteresNotation.repliques(note:)`).
 public protocol NotationPort: Sendable {
     func noter(missionId: String, note: Int, criteres: CriteresNotation?, context: MissionReadContext) async throws -> IssueNotation
+    /// `missions.fin_le` relu juste avant de proposer la note (`PointageRotatifSoignant.tsx` l.156 ; revue fraîche de
+    /// L2-T3, m6) ; nil si la mission n'est pas lisible. Aucune lecture de `notations_missions` (filtre centralisé
+    /// `evaluations_publiees`, CLAUDE.md « Publication différée ») ; défaut « non câblé » ci-dessous.
+    func finPrevue(missionId: String, context: MissionReadContext) async throws -> String?
+}
+
+public extension NotationPort {
+    /// Défaut des conformances antérieures (doubles de test) : refus « non câblé » ; le modèle ne propose alors rien.
+    func finPrevue(missionId: String, context: MissionReadContext) async throws -> String? {
+        throw UnwiredPorts.erreur(port: "notation", tranche: "T5a", lot: 2)
+    }
 }
 
 /// Justificatifs (`documents_requis_par_profession`, `documents_soignants`, bucket `jolene-documents`,

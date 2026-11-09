@@ -118,6 +118,8 @@ export const DOSSIERS_LOT2 = [
   'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Keychain/KeychainReceiptStore.swift',
   // T4a : textes vouvoyés, assemblages et textes opérationnels de la page Présences (hors LibellesWeb.swift).
   'ios-native/Packages/JoleneCore/Sources/JoleneCore/Libelles/LibellesPresences.swift',
+  // T5a : textes vouvoyés, formats et textes opérationnels du détail des présences, de la notation et des points d'entrée.
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Libelles/LibellesDetailPresences.swift',
 ];
 
 /**

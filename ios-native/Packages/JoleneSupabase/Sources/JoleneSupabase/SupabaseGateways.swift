@@ -61,7 +61,7 @@ public enum SupabaseGateways {
     static func câblerLot2(_ gateways: inout Gateways, client: SupabaseClient, clock: any ClockPort = SystemClock()) {
         gateways.pointage = SupabasePointageGateway(client: client, clock: gateways.clock) // T3
         gateways.contestation = UnwiredContestationPort()          // T5b
-        gateways.notation = UnwiredNotationPort()                  // T5a
+        gateways.notation = SupabaseNotationGateway(client: client) // T5a
         gateways.documents = SupabaseDocumentsGateway(client: client, clock: clock) // T6
         gateways.contrats = SupabaseContratsGateway(client: client, clock: gateways.clock) // T8
     }

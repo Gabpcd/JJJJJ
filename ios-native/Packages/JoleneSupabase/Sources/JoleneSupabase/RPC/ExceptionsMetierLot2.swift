@@ -19,4 +19,9 @@ public enum ExceptionsMetierLot2 {
     /// `fn_verifier_coherence_documents` (l.65833, l.65839 : « Accès refusé », compte inactif) : lecture
     /// best-effort, aucune bannière, jamais « Votre session a expiré ». Par `RPCResponse.appeler`.
     public static let verifierCoherenceDocuments: Set<String> = ["42501"]
+
+    /// `fn_creer_notation_mission` (`public.sql` l.27425, l.27439 : P0001 « La notation n’a pas pu être enregistrée.
+    /// Veuillez réessayer. », audit refusé, transaction annulée) : refus verbatim, jamais « Une erreur est survenue ».
+    /// Revue fraîche de T1, mineur 5 ; tranche T5a. Par `RPCResponse.appeler`.
+    public static let creerNotationMission: Set<String> = ["P0001"]
 }

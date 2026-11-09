@@ -91,7 +91,7 @@ export const RPC_SUIVIES = [
   { name: 'fn_presences_detail_mission', statut: 'consommee', lot: 2 }, // T3 : SupabasePointageGateway
   { name: 'fn_fenetre_contestation_ouverte', statut: 'a_venir', lot: 2 },
   { name: 'fn_ouvrir_litige_rate_limited', statut: 'a_venir', lot: 2 },
-  { name: 'fn_creer_notation_mission', statut: 'a_venir', lot: 2 },
+  { name: 'fn_creer_notation_mission', statut: 'consommee', lot: 2 }, // T5a : SupabaseNotationGateway
   { name: 'fn_demander_revue_document', statut: 'consommee', lot: 2 }, // T6 : SupabaseDocumentsGateway
   { name: 'fn_verifier_coherence_documents', statut: 'consommee', lot: 2 }, // T6 : SupabaseDocumentsGateway
   { name: 'fn_signer_attestation_sante', statut: 'consommee', lot: 2 }, // T6 : SupabaseDocumentsGateway
