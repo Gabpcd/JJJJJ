@@ -210,6 +210,8 @@ const COMPLEMENTS = [
   'LibellesWeb.SignatureOtp.champCodeAccessibilite', 'LibellesWeb.SignatureOtp.renvoiNonAutoriseRecette',
   'LibellesWeb.SignatureOtp.plafondSmsAtteint', 'LibellesWeb.SignatureOtp.recevoirNouveauCode',
   'LibellesWeb.SignatureOtp.renvoyerCode',
+  // SignerContratOtp.tsx l.316 : texte indicatif du champ du code (revue fraîche de T9b, m7).
+  'LibellesWeb.SignatureOtp.champCodeIndication',
   // SignerContratOtp.tsx : consentement requis, bouton « Signer », confirmation (l.197, l.214) (HARD STOP).
   'TextesWeb.SignatureOtp.consentementRequis', 'TextesWeb.SignatureOtp.signer',
   'TextesWeb.SignatureOtp.contratSigneMessage', 'TextesWeb.SignatureOtp.missionConfirmee', 'TextesWeb.SignatureOtp.contratSigne',

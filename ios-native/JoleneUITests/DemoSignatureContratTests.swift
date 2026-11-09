@@ -30,6 +30,8 @@ final class DemoSignatureContratTests: JoleneUITestCase {
     /// `TextesWeb.SignatureOtp.contratSigne` (l.214) et `signeAvecSucces` (l.216).
     static let contratSigne = "Contrat signé ✅"
     static let signeAvecSucces = "Signé avec succès. Horodatage, IP et hash du document conservés (art. 1366-1367 Code civil)."
+    /// `LibellesWeb.SignatureOtp.champCodeIndication` (`placeholder`, l.316).
+    static let indicationCode = "123456"
     /// `MobileAccess.unsupportedRole` (lot 0), repris pour le renvoi web d'un compte TEST.
     static let espaceNonDisponible = "Cet espace n'est pas encore disponible dans l'application. Rendez-vous sur jolene.app."
 
@@ -69,6 +71,7 @@ final class DemoSignatureContratTests: JoleneUITestCase {
         let signer = element("contrat-signer")
         XCTAssertEqual(signer.label, "Signer")
         XCTAssertFalse(signer.isEnabled, "code incomplet : « Signer » désactivé (l.344)")
+        XCTAssertEqual(element("contract-otp").placeholderValue, Self.indicationCode, "texte indicatif du web (l.316)")
         record("\(proofPrefix)-signature-code-envoye")
 
         // Code faux : refus du serveur démo et tentatives restantes.
@@ -147,6 +150,12 @@ final class DemoSignatureContratTests: JoleneUITestCase {
         XCTAssertEqual(element("contrat-otp-renvoyer").label, "Renvoyer le code")
         XCTAssertTrue(element("contract-otp").isEnabled)
         record("\(proofPrefix)-signature-nouveau-code")
+
+        // Revue fraîche de T9b (m9) : le scénario `otp-expire` est lui aussi prouvé sans réseau.
+        goBack()
+        require("La liste des contrats est de retour") { self.containerVisible(self.element("contrats-liste")) }
+        goBack()
+        assertNoNetworkRequest()
     }
 
     func testCompteTestSansAdmissionRenvoieVersLeWeb() throws {
@@ -191,7 +200,7 @@ final class DemoSignatureContratTests: JoleneUITestCase {
         champ.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
         require("Le champ garde le focus clavier") { self.hasKeyboardFocus(champ) }
         champ.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 6))
-        // Champ vide : XCUITest rend alors le texte indicatif (« 6 chiffres ») comme valeur.
+        // Champ vide : XCUITest rend alors le texte indicatif (« 123456 », l.316) comme valeur.
         require("Le champ du code est vide") {
             let valeur = (champ.value as? String) ?? ""
             return valeur.isEmpty || valeur == champ.placeholderValue

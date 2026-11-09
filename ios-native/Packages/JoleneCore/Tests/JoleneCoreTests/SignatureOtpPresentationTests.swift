@@ -29,9 +29,9 @@ final class SignatureOtpPresentationTests: XCTestCase {
     }
 
     private func presentation(_ s: SessionSignatureOtp, maintenant: Date? = nil, nouvelEnvoiAutorise: Bool = true,
-                              actionsSuspendues: Bool = false) -> SignatureOtpPresentation {
+                              actionsSuspendues: Bool = false, erreurRelecture: String? = nil) -> SignatureOtpPresentation {
         SignatureOtpPresentation(session: s, maintenant: maintenant ?? t0, nouvelEnvoiAutorise: nouvelEnvoiAutorise,
-                                 actionsSuspendues: actionsSuspendues)
+                                 actionsSuspendues: actionsSuspendues, erreurRelecture: erreurRelecture)
     }
 
     private func formulaire(_ p: SignatureOtpPresentation, file: StaticString = #filePath, line: UInt = #line)
@@ -220,14 +220,31 @@ final class SignatureOtpPresentationTests: XCTestCase {
         let demande = try XCTUnwrap(s.demanderSignature(maintenant: t0))
         s.terminerSignature(.signee(contratComplet: false), demande: demande)
         XCTAssertEqual(presentation(s).mode, .signee(confirmation: "Contrat signé ✅",
-                                                     mention: "Signé avec succès. Horodatage, IP et hash du document conservés (art. 1366-1367 Code civil)."),
+                                                     mention: "Signé avec succès. Horodatage, IP et hash du document conservés (art. 1366-1367 Code civil).",
+                                                     actualisation: nil),
                        "l.214-217")
         var complet = try codeEnvoye()
         complet.saisir("000000")
         let autre = try XCTUnwrap(complet.demanderSignature(maintenant: t0))
         complet.terminerSignature(.signee(contratComplet: true), demande: autre)
-        guard case .signee(let confirmation, _) = presentation(complet).mode else { return XCTFail("signé attendu") }
+        guard case .signee(let confirmation, _, _) = presentation(complet).mode else { return XCTFail("signé attendu") }
         XCTAssertEqual(confirmation, "Contrat signé ✅ — Mission confirmée par les 2 parties.", "l.197")
+    }
+
+    /// Revue fraîche de T9b (m1) : relecture du contrat en échec après une signature confirmée → actualisation proposée sous
+    /// la confirmation (texte du pilote, `MessagesContrats.indisponible`) ; jamais dans le formulaire.
+    func testRelectureEnEchecProposeeSeulementApresLaSignature() throws {
+        var s = try codeEnvoye()
+        s.saisir("000000")
+        let demande = try XCTUnwrap(s.demanderSignature(maintenant: t0))
+        s.terminerSignature(.signee(contratComplet: false), demande: demande)
+        guard case .signee(_, _, let actualisation) = presentation(s, erreurRelecture: MessagesContrats.indisponible).mode else {
+            return XCTFail("signé attendu")
+        }
+        XCTAssertEqual(actualisation, "Les contrats ne peuvent pas être chargés. Réessayez.")
+        let formulaire = try formulaire(presentation(try codeEnvoye(), erreurRelecture: MessagesContrats.indisponible))
+        XCTAssertNil(formulaire.alerte)
+        XCTAssertEqual(formulaire.retour, .succes("Code envoyé au +**********00. Valide 10 min."), "formulaire inchangé")
     }
 
     func testAucunePresentationNExposeLeCodeSaisi() throws {

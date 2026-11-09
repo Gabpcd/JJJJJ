@@ -42,6 +42,8 @@ final class ContratModelTests: XCTestCase {
         private var certificatErreur: Error?
         private var issueListe: Result<[ContratResume], Error> = .success([])
         private var issueFichier: Result<URL, Error> = .failure(nonScripte)
+        /// Échecs de `contrat(id:context:)` par rang d'appel (1 = premier chargement) : la file `details` n'avance pas.
+        private var echecsContrat: [Int: Error] = [:]
         private var attenteEnvoi: Duration = .zero
         private var attenteSignature: Duration = .zero
         private var attenteAdmission: Duration = .zero
@@ -65,6 +67,7 @@ final class ContratModelTests: XCTestCase {
         func poser(certificat: [SignatureCertificat], erreur: Error? = nil) { avec { certificatLignes = certificat; certificatErreur = erreur } }
         func poser(liste: Result<[ContratResume], Error>) { avec { issueListe = liste } }
         func poser(fichier: Result<URL, Error>) { avec { issueFichier = fichier } }
+        func poser(echecContrat rang: Int, erreur: Error) { avec { echecsContrat[rang] = erreur } }
 
         func contrats(context: MissionReadContext) async throws -> [ContratResume] {
             try avec { journal.append("contrats"); return try issueListe.get() }
@@ -72,6 +75,7 @@ final class ContratModelTests: XCTestCase {
         func contrat(id: String, context: MissionReadContext) async throws -> ContratDetail {
             try avec {
                 journal.append("contrat")
+                if let erreur = echecsContrat[journal.filter { $0 == "contrat" }.count] { throw erreur }
                 guard !details.isEmpty else { throw nonScripte }
                 return details.count > 1 ? details.removeFirst() : details[0]
             }
@@ -418,6 +422,46 @@ final class ContratModelTests: XCTestCase {
         guard case .renvoiWeb? = model.zoneSignature(maintenant: apres) else { return XCTFail("renvoi web attendu") }
     }
 
+    /// Revue fraîche de T9b (m2) : le web ferme l'OTP à `admittedUntil = canSend ? expiresAt : otpExpiresAt`, et aussi quand
+    /// cette valeur est nulle (`ContratMission.tsx` l.311-312) ; sans envoi possible, l'échéance est celle du code, pas
+    /// celle de la capacité.
+    func testAdmissionSansEnvoiFermeeALEcheanceDuCode() async throws {
+        let port = PortScripte()
+        port.poser(details: [detail(test: true)])
+        port.poser(original: .success(originalA))
+        port.poser(admission: AdmissionSignatureRecette(expireLe: Self.maintenant.addingTimeInterval(1_800), peutEnvoyer: false,
+                                                              peutValider: true, otpExpireLe: Self.maintenant.addingTimeInterval(300)))
+        let model = try await modele(port)
+        await model.charger()
+        XCTAssertEqual(model.disponibiliteSignature(maintenant: Self.maintenant.addingTimeInterval(299)), .possible)
+        let apresCode = Self.maintenant.addingTimeInterval(300)
+        XCTAssertEqual(model.disponibiliteSignature(maintenant: apresCode), .renvoiWeb,
+                       "sans envoi possible, fermée à l'échéance du code (l.311), pas à la fin de la capacité")
+        XCTAssertFalse(model.nouvelEnvoiAutorise(maintenant: Self.maintenant))
+        guard case .renvoiWeb? = model.zoneSignature(maintenant: apresCode) else { return XCTFail("renvoi web attendu") }
+
+        let sansCode = PortScripte()
+        sansCode.poser(details: [detail(test: true)])
+        sansCode.poser(original: .success(originalA))
+        sansCode.poser(admission: AdmissionSignatureRecette(expireLe: Self.maintenant.addingTimeInterval(1_800), peutEnvoyer: false,
+                                                                  peutValider: false, otpExpireLe: nil))
+        let ferme = try await modele(sansCode)
+        await ferme.charger()
+        XCTAssertEqual(ferme.disponibiliteSignature(maintenant: Self.maintenant), .renvoiWeb, "échéance nulle : fermée (l.312)")
+        XCTAssertFalse(ferme.nouvelEnvoiAutorise(maintenant: Self.maintenant))
+
+        let envoi = PortScripte()
+        envoi.poser(details: [detail(test: true)])
+        envoi.poser(original: .success(originalA))
+        envoi.poser(admission: AdmissionSignatureRecette(expireLe: Self.maintenant.addingTimeInterval(1_800), peutEnvoyer: true,
+                                                               peutValider: true, otpExpireLe: Self.maintenant.addingTimeInterval(300)))
+        let ouvert = try await modele(envoi)
+        await ouvert.charger()
+        XCTAssertEqual(ouvert.disponibiliteSignature(maintenant: apresCode), .possible,
+                       "envoi possible : ouverte jusqu'à la fin de la capacité (l.311)")
+        XCTAssertEqual(ouvert.disponibiliteSignature(maintenant: Self.maintenant.addingTimeInterval(1_800)), .renvoiWeb)
+    }
+
     func testSignatureAnnonceeSeulementApresLaRelectureDuContratEtDuCertificat() async throws {
         let port = PortScripte()
         let model = try await codeEnvoye(port, details: [detail(), detail(soignant: true, statut: "SIGNE_SOIGNANT")])
@@ -436,7 +480,8 @@ final class ContratModelTests: XCTestCase {
         XCTAssertEqual(premierSigne.2, 1, "le certificat relu aussi")
         XCTAssertEqual(model.session.code, "", "code effacé après usage")
         guard case .otp(let presentation)? = model.zoneSignature(maintenant: Self.maintenant),
-              case .signee(let confirmation, _) = presentation.mode else { return XCTFail("confirmation attendue") }
+              case .signee(let confirmation, _, let actualisation) = presentation.mode else { return XCTFail("confirmation attendue") }
+        XCTAssertNil(actualisation, "contrat et certificat relus : aucune actualisation proposée")
         XCTAssertEqual(confirmation, "Contrat signé ✅")
         XCTAssertTrue(ContratRules.dejaSigneParMoi(try XCTUnwrap(model.contrat)), "« déjà signé » relu du serveur")
         let appels = port.appels
@@ -530,6 +575,118 @@ final class ContratModelTests: XCTestCase {
         XCTAssertTrue(model.sessionExpired)
         let lectures = port.compte("contrat")
         XCTAssertEqual(lectures, 1, "aucune relecture avec une session expirée")
+    }
+
+    // Revue fraîche de T9b (m1) : signature confirmée par la gateway (`.signee`, preuve relue), puis relecture du contrat
+    // par le modèle en échec. Le succès n'est jamais retiré ni renvoyé ; l'écran ne se contredit pas en silence.
+
+    func testSigneePuisRelectureEnEchecLaRelanceUneFois() async throws {
+        let port = PortScripte()
+        let model = try await codeEnvoye(port, details: [detail(), detail(soignant: true, statut: "SIGNE_SOIGNANT")])
+        port.poser(signature: .success(.signee(contratComplet: false)))
+        port.poser(certificat: [signatureSoignant()])
+        port.poser(echecContrat: 2, erreur: JoleneError(.network, "Connexion impossible."))
+        model.saisirCode("000000")
+        await model.signer()
+        XCTAssertEqual(model.session.etape, .signe)
+        XCTAssertEqual(model.contrat?.signatureSoignant, true, "seconde relecture publiée")
+        XCTAssertEqual(model.signatures.count, 1)
+        XCTAssertNil(model.erreurRelecture)
+        let appels = port.appels
+        XCTAssertEqual(appels, ["contrat", "original", "envoyerOtp", "signer:000000", "contrat", "contrat", "certificat"],
+                       "une seule relance de la relecture, jamais un second envoi du code")
+        guard case .otp(let p)? = model.zoneSignature(maintenant: Self.maintenant),
+              case .signee(_, _, let actualisation) = p.mode else { return XCTFail("confirmation attendue") }
+        XCTAssertNil(actualisation)
+    }
+
+    func testSigneePuisRelecturesEnEchecProposeLActualisation() async throws {
+        let port = PortScripte()
+        let model = try await codeEnvoye(port, details: [detail(), detail(soignant: true, statut: "SIGNE_SOIGNANT")])
+        port.poser(signature: .success(.signee(contratComplet: false)))
+        port.poser(certificat: [signatureSoignant()])
+        port.poser(echecContrat: 2, erreur: JoleneError(.network, "Connexion impossible."))
+        port.poser(echecContrat: 3, erreur: JoleneError(.network, SessionController.timeoutMessage))
+        model.saisirCode("000000")
+        await model.signer()
+        XCTAssertEqual(model.session.etape, .signe, "signature confirmée par la gateway (preuve relue) : ni retirée ni renvoyée")
+        XCTAssertEqual(model.contrat?.signatureSoignant, false, "contrat non relu : l'écran le dit")
+        XCTAssertEqual(model.erreurRelecture, MessagesContrats.indisponible)
+        XCTAssertFalse(model.sessionExpired)
+        guard case .otp(let p)? = model.zoneSignature(maintenant: Self.maintenant),
+              case .signee(let confirmation, _, let actualisation) = p.mode else { return XCTFail("confirmation attendue") }
+        XCTAssertEqual(confirmation, "Contrat signé ✅")
+        XCTAssertEqual(actualisation, MessagesContrats.indisponible, "actualisation proposée sous la confirmation")
+
+        await model.actualiser()
+        XCTAssertEqual(model.contrat?.signatureSoignant, true)
+        XCTAssertEqual(model.signatures.count, 1)
+        XCTAssertNil(model.erreurRelecture)
+        XCTAssertTrue(ContratRules.dejaSigneParMoi(try XCTUnwrap(model.contrat)), "« déjà signé » relu du serveur")
+        guard case .otp(let apres)? = model.zoneSignature(maintenant: Self.maintenant),
+              case .signee(_, _, nil) = apres.mode else { return XCTFail("confirmation sans actualisation attendue") }
+        let signatures = port.appels.filter { $0.hasPrefix("signer") }
+        XCTAssertEqual(signatures, ["signer:000000"], "l'actualisation ne relit que le contrat et le certificat")
+    }
+
+    func testActualisationEnEchecGardeLaConfirmationEtLaProposition() async throws {
+        let port = PortScripte()
+        let model = try await codeEnvoye(port, details: [detail(), detail(soignant: true, statut: "SIGNE_SOIGNANT")])
+        port.poser(signature: .success(.signee(contratComplet: false)))
+        for rang in 2...4 { port.poser(echecContrat: rang, erreur: JoleneError(.network, "Connexion impossible.")) }
+        model.saisirCode("000000")
+        await model.signer()
+        await model.actualiser()
+        XCTAssertEqual(model.etat, .charge, "jamais de démontage de l'écran sur une actualisation")
+        XCTAssertEqual(model.session.etape, .signe)
+        XCTAssertEqual(model.erreurRelecture, MessagesContrats.indisponible)
+        let lectures = port.compte("contrat")
+        XCTAssertEqual(lectures, 4, "une lecture par actualisation demandée, aucune relance automatique en plus")
+    }
+
+    func testSigneePuisSessionExpireeALaRelecture() async throws {
+        let port = PortScripte()
+        let model = try await codeEnvoye(port, details: [detail(), detail(soignant: true, statut: "SIGNE_SOIGNANT")])
+        port.poser(signature: .success(.signee(contratComplet: false)))
+        port.poser(certificat: [signatureSoignant()])
+        port.poser(echecContrat: 2, erreur: JoleneError(.unauthorized, SessionController.sessionExpiredMessage))
+        model.saisirCode("000000")
+        await model.signer()
+        XCTAssertEqual(model.session.etape, .signe)
+        XCTAssertTrue(model.sessionExpired, "jeton refusé à la relecture : session à vérifier")
+        XCTAssertNil(model.erreurRelecture, "une session expirée n'est pas une lecture à réessayer")
+        let lectures = port.compte("contrat")
+        XCTAssertEqual(lectures, 2, "aucune relance avec une session expirée")
+
+        await model.charger()
+        XCTAssertFalse(model.sessionExpired, "session vérifiée puis contrat relu : plus de session à vérifier")
+        XCTAssertEqual(model.contrat?.signatureSoignant, true)
+        XCTAssertEqual(model.session.etape, .signe, "même révision : confirmation gardée")
+    }
+
+    func testSigneePuisCertificatRefuseParLeJetonExpireLaSession() async throws {
+        let port = PortScripte()
+        let model = try await codeEnvoye(port, details: [detail(), detail(soignant: true, statut: "SIGNE_SOIGNANT")])
+        port.poser(signature: .success(.signee(contratComplet: false)))
+        port.poser(certificat: [], erreur: JoleneError(.unauthorized, SessionController.sessionExpiredMessage))
+        model.saisirCode("000000")
+        await model.signer()
+        XCTAssertTrue(model.sessionExpired)
+        XCTAssertNil(model.erreurCertificat, "jeton refusé : session à vérifier, pas une erreur du certificat")
+    }
+
+    func testSigneePuisRelectureAnnuleeNePublieAucuneErreur() async throws {
+        let port = PortScripte()
+        let model = try await codeEnvoye(port, details: [detail(), detail(soignant: true, statut: "SIGNE_SOIGNANT")])
+        port.poser(signature: .success(.signee(contratComplet: false)))
+        port.poser(certificat: [], erreur: CancellationError())
+        model.saisirCode("000000")
+        await model.signer()
+        XCTAssertEqual(model.session.etape, .signe)
+        XCTAssertNil(model.erreurCertificat, "annulation : jamais une erreur vide")
+        XCTAssertNil(model.erreurRelecture)
+        XCTAssertFalse(model.sessionExpired)
+        XCTAssertEqual(model.contrat?.signatureSoignant, false, "annulation : aucune relecture partielle publiée")
     }
 
     func testDoubleTapSurSignerUneSeuleRequete() async throws {
