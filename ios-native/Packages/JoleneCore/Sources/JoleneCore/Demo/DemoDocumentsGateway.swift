@@ -28,6 +28,12 @@ public enum ScenarioDocumentsDemo: String, CaseIterable, Sendable {
     /// Réponse perdue APRÈS application (upload, enregistrement et vérification faits) : l'envoi rend `.incertain`,
     /// la réconciliation relit la ligne, sans second envoi.
     case uploadIncertain = "upload-incertain"
+    /// L2-TJ : la RCP vérifiée de la fixture porte une date passée (`rcpExpireeLe`), pour le bandeau RCP du web
+    /// (`DocumentsSoignant.tsx` l.620-627) ; rien d'autre ne change.
+    case rcpExpiree = "rcp-expiree"
+
+    /// Date de fin de la RCP du scénario `rcp-expiree`, antérieure à l'horloge démo (2 novembre 2026).
+    static let rcpExpireeLe = "2026-10-20"
 }
 
 /// Justificatifs du monde démo (lot 2 T6) : état en mémoire (perdu au relancement), aucun réseau, horloge fixée, aucun
@@ -176,8 +182,12 @@ public actor DemoDocumentsGateway: DocumentsPort {
         }
         if let etat { return etat }
         let fichier = try DemoFixtures.loadDocuments()
+        var documents = fichier.documents
+        if scenario == .rcpExpiree, let index = documents.firstIndex(where: { $0.typeDocument == "RCP_ASSURANCE" }) {
+            documents[index].valideJusqua = ScenarioDocumentsDemo.rcpExpireeLe
+        }
         let neuf = EtatDemo(profil: fichier.profil, attestation: fichier.attestationSanteSigneeLe, exigences: fichier.exigences,
-                            documents: fichier.documents)
+                            documents: documents)
         etat = neuf
         return neuf
     }

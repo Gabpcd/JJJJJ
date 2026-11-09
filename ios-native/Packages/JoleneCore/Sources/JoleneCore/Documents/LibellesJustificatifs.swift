@@ -4,8 +4,9 @@ import Foundation
 /// du web à la ligne annoncée, repris tel quel ou vouvoyé quand le web tutoie (décision 9 du lot 1, même règle que
 /// `MessagesDocuments` : seule la personne change, verbe, pronom et possessif). Garde : `LibellesJustificatifsTests`
 /// relit les sources web ligne à ligne. Les textes juridiques de la page (attestation sur l'honneur) restent dans
-/// `Legal/TextesWeb.swift` (HARD STOP n°4) ; ceux que le natif n'affiche pas encore (bandeau RCP, textes d'accès des
-/// documents complémentaires, encart RIB) sont « En attente de Gabrielle » (`docs/mobile-swift/DECISIONS_LOT2.md`).
+/// `Legal/TextesWeb.swift` (HARD STOP n°4), comme le bandeau RCP et les textes d'accès des documents complémentaires
+/// (`TextesWeb.Justificatifs`, décision déléguée du 8 novembre 2026, `docs/mobile-swift/DECISIONS_LOT2.md`) ; l'encart RIB
+/// n'est pas porté au lot 2 (renvois vers des écrans du lot 3).
 /// Les rares textes sans équivalent web (`textesOperationnels`) y sont inventoriés mot pour mot.
 public enum LibellesJustificatifs {
     // MARK: - Mes documents (`src/pages/MesDocuments.tsx`)

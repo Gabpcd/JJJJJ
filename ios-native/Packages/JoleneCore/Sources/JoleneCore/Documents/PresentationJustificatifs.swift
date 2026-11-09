@@ -97,12 +97,29 @@ public struct BandeauProfil: Equatable, Sendable {
     }
 }
 
+/// Bandeau RCP de l'exercice libéral ou mixte (`DocumentsSoignant.tsx` l.611-640), textes verbatim de
+/// `TextesWeb.Justificatifs` (HARD STOP n°4 tranché par délégation le 8 novembre 2026, tranche L2-TJ) : RCP expirée → deux
+/// lignes (l.623-624, encre `destructive`) ; RCP absente ou non vérifiée → une ligne (l.634, ton ambre).
+public struct BandeauRcp: Equatable, Sendable {
+    public var alerte: AlerteRcp
+    /// Lignes dans l'ordre du web ; la première est en gras pour une RCP expirée (`font-medium`, l.623).
+    public var textes: [String]
+
+    public init(alerte: AlerteRcp, textes: [String]) {
+        self.alerte = alerte; self.textes = textes
+    }
+
+    /// `text-destructive` (expirée) ou `text-amber-700` (manquante).
+    public var ton: TonJustificatif { alerte == .expiree ? .erreur : .attention }
+}
+
 /// Carte de la section « Étudiant / interne en santé » (l.852-903).
 public struct CarteComplementaire: Equatable, Sendable, Identifiable {
     public var id: String { typeDocument }
     public var typeDocument: String
     public var titre: String
-    /// Texte explicatif ; nil quand il énonce une condition d'accès à un exercice (en attente de Gabrielle, HARD STOP n°4).
+    /// Texte explicatif du web : condition d'accès verbatim (`TextesWeb.Justificatifs`, HARD STOP n°4 tranché par délégation
+    /// le 8 novembre 2026) pour la scolarité et la licence, libellé vouvoyé pour la qualification.
     public var description: String?
     public var statut: String?
     public var bouton: String
@@ -177,6 +194,21 @@ public enum PresentationJustificatifs {
             message = alertes.isEmpty ? nil : alertes.joined(separator: ". ") + "."
         }
         return message.map { L.incoherencePrefixe + " " + $0 + " " + L.incoherenceFin }
+    }
+
+    /// Bandeau RCP (l.611-640), après les expirations proches et avant l'incohérence, comme le web. Règle de T6
+    /// (`DossierDocuments.alerteRcp` : libéral ou mixte seulement, date passée quel que soit le statut, sinon RCP absente ou
+    /// non vérifiée) ; textes verbatim, tutoiement du web compris (décision déléguée du 8 novembre 2026, DECISIONS_LOT2).
+    public static func bandeauRcp(_ dossier: DossierDocuments, maintenant: Date) -> BandeauRcp? {
+        switch dossier.alerteRcp(maintenant: maintenant) {
+        case .expiree?:
+            return BandeauRcp(alerte: .expiree, textes: [TextesWeb.Justificatifs.rcpExpiree,
+                                                        TextesWeb.Justificatifs.rcpExpireeRestriction])
+        case .manquante?:
+            return BandeauRcp(alerte: .manquante, textes: [TextesWeb.Justificatifs.rcpObligatoire])
+        case nil:
+            return nil
+        }
     }
 
     // MARK: - Cartes
@@ -266,8 +298,8 @@ public enum PresentationJustificatifs {
     // MARK: - Documents complémentaires
 
     /// Cartes « Étudiant / interne en santé » visibles (`ComplementairesVisibles`, ordre du web). Les textes qui énoncent une
-    /// condition d'accès (pré-éligibilité étudiante, remplacements de médecin : l.866-869, l.882-884) ne sont pas affichés
-    /// (HARD STOP n°4, « En attente de Gabrielle ») ; titres, statut et bouton le sont.
+    /// condition d'accès (pré-éligibilité étudiante l.867-868, remplacements de médecin l.882-883) sont affichés verbatim
+    /// (`TextesWeb.Justificatifs`, HARD STOP n°4 tranché par délégation le 8 novembre 2026, tranche L2-TJ).
     public static func complementaires(_ dossier: DossierDocuments) -> [CarteComplementaire] {
         guard let profil = dossier.profil else { return [] }
         let visibles = ComplementairesVisibles(profil: profil)
@@ -277,12 +309,14 @@ public enum PresentationJustificatifs {
         }
         if visibles.scolarite {
             let document = dossier.document(pour: "ATTESTATION_SCOLARITE")
-            cartes.append(CarteComplementaire(typeDocument: "ATTESTATION_SCOLARITE", titre: L.titreScolarite, description: nil,
+            cartes.append(CarteComplementaire(typeDocument: "ATTESTATION_SCOLARITE", titre: L.titreScolarite,
+                                              description: TextesWeb.Justificatifs.accesScolarite,
                                               statut: libelleStatut(document), bouton: document == nil ? L.plusTeleverser : L.remplacer))
         }
         if visibles.licence {
             let document = dossier.document(pour: "LICENCE_REMPLACEMENT")
-            cartes.append(CarteComplementaire(typeDocument: "LICENCE_REMPLACEMENT", titre: L.titreLicence, description: nil,
+            cartes.append(CarteComplementaire(typeDocument: "LICENCE_REMPLACEMENT", titre: L.titreLicence,
+                                              description: TextesWeb.Justificatifs.accesLicence,
                                               statut: libelleStatut(document), bouton: document == nil ? L.plusTeleverser : L.remplacer))
         }
         if visibles.qualification {

@@ -259,7 +259,7 @@ final class PresentationJustificatifsTests: XCTestCase {
     func testBandeauRcpCommeLeWeb() throws {
         let regles = [regle("RCP_ASSURANCE")]
         func rcp(_ statut: String?, jusqua: String?) -> DocumentSoignant {
-            DocumentSoignant(id: "rcp", typeDocument: "RCP_ASSURANCE", statutVerification: statut, valideJusqua: jusqua)
+            DocumentSoignant(id: "rcp", typeDocument: "RCP_ASSURANCE", valideJusqua: jusqua, statutVerification: statut)
         }
         let expire = P.bandeauRcp(dossier([rcp("VERIFIE", jusqua: "2026-10-20")], regles: regles, exercice: "LIBERAL"),
                                   maintenant: maintenant)
