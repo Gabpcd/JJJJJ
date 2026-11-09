@@ -1763,7 +1763,7 @@ BEGIN
       'numero_contrat', NEW.numero_contrat,
       'type_contrat', NEW.type_contrat,
       'mode_signature', NEW.mode_signature,
-      'dpae_requise', (NEW.type_contrat IN ('CDD', 'CDD'))
+      'dpae_requise', public.fn_type_contrat_salarie(NEW.type_contrat)
     )
   );
 
@@ -17642,7 +17642,7 @@ BEGIN
       modifie_le = NOW()
     WHERE id = v_contrat.id;
 
-    IF v_contrat.type_contrat IN ('CDD', 'CDD', 'SALARIE')
+    IF public.fn_type_contrat_salarie(v_contrat.type_contrat)
        AND v_contrat.statut = 'SIGNE_COMPLET' THEN
       INSERT INTO public.externalisation_actions (type_action, payload, source, source_id)
       VALUES ('DPAE_ANNULATION',
@@ -41682,7 +41682,7 @@ BEGIN
   JOIN public.missions m ON m.id = cm.mission_id
   JOIN public.etablissements e ON e.id = m.etablissement_id
   WHERE cm.soignant_id = v_uid
-    AND cm.type_contrat IN ('CDD', 'CDD', 'SALARIE')
+    AND public.fn_type_contrat_salarie(cm.type_contrat)
     AND cm.statut IN ('SIGNE_COMPLET', 'SIGNE_PARTIEL');
 
   RETURN jsonb_build_object('success', true, 'dpae', v_dpae);
@@ -47522,7 +47522,7 @@ BEGIN
     v_methode := 'GPS';
   END IF;
 
-  IF v_contrat.type_contrat IN ('CDD', 'CDD', 'SALARIE')
+  IF public.fn_type_contrat_salarie(v_contrat.type_contrat)
      AND COALESCE(v_contrat.dpae_numero, '') = '' THEN
     v_warnings := v_warnings || jsonb_build_object(
       'code', 'DPAE_NON_REGULARISEE',
@@ -51591,7 +51591,7 @@ BEGIN
   FOR v_contrat IN
     SELECT cm.id, cm.numero_contrat, cm.etablissement_id
     FROM public.contrats_mission cm
-    WHERE cm.statut = 'SIGNE_COMPLET' AND cm.type_contrat IN ('CDD', 'CDD', 'SALARIE')
+    WHERE cm.statut = 'SIGNE_COMPLET' AND public.fn_type_contrat_salarie(cm.type_contrat)
       AND COALESCE(cm.dpae_effectuee, false) = false
       AND cm.signature_soignant_le > NOW() - INTERVAL '7 days'
       AND cm.signature_soignant_le < NOW() - INTERVAL '1 day'
@@ -64360,6 +64360,21 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_tripwire_alerte"("p_sujet" "text", "p_corps" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_type_contrat_salarie"("p_type_contrat" "text") RETURNS boolean
+    LANGUAGE "sql" IMMUTABLE PARALLEL SAFE
+    SET "search_path" TO ''
+    AS $$
+  SELECT p_type_contrat = ANY (ARRAY['CDD', 'SALARIE', 'CDDU', 'VACATION']::text[]);
+$$;
+
+
+ALTER FUNCTION "public"."fn_type_contrat_salarie"("p_type_contrat" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_type_contrat_salarie"("p_type_contrat" "text") IS 'Source unique SQL des types de contrat salariés soumis à la DPAE (C. trav. L.1221-10) : CDD, SALARIE, CDDU (L.1242-2 3°, D.1242-1), VACATION. Miroir de TYPES_CONTRAT_SALARIES côté web. REMPLACEMENT_LIBERAL et LIBERAL exclus ; NULL renvoie NULL.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_type_document_preuve_compatible"("p_type_requis" "public"."type_document", "p_type_fourni" "public"."type_document") RETURNS boolean
@@ -85463,6 +85478,12 @@ GRANT ALL ON FUNCTION "public"."fn_trigger_regen_pdf_immediate"("p_facture_id" "
 
 REVOKE ALL ON FUNCTION "public"."fn_tripwire_alerte"("p_sujet" "text", "p_corps" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_tripwire_alerte"("p_sujet" "text", "p_corps" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_type_contrat_salarie"("p_type_contrat" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_type_contrat_salarie"("p_type_contrat" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_type_contrat_salarie"("p_type_contrat" "text") TO "authenticated";
 
 
 

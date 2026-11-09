@@ -47,6 +47,10 @@ targets:
     platform: iOS
     sources:
       - path: JoleneUITests
+      # Décompte de `require`, fonction pure partagée avec JoleneCoreTests qui la teste
+      # sur horloge simulée (RequireWaitTests) : un seul fichier, compilé dans les deux cibles.
+      - path: Packages/JoleneCore/Tests/JoleneCoreTests/PartageUITests/RequireWait.swift
+        group: JoleneUITests
     dependencies:
       - target: Jolene
     settings:

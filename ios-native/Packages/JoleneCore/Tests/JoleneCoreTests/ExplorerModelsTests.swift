@@ -16,6 +16,7 @@ final class ExplorerModelsTests: XCTestCase {
         private var recus: [MissionFilters] = []
         private var appelsDetail = 0
         private var annules = 0
+        private var observateurAnnulations: (@Sendable () -> Void)?
 
         init(_ reponses: [Reponse]) { self.reponses = reponses }
 
@@ -24,6 +25,13 @@ final class ExplorerModelsTests: XCTestCase {
         /// Attentes muettes (`.silence`) interrompues par une annulation avant leur terme.
         var annulations: Int { lock.lock(); defer { lock.unlock() }; return annules }
 
+        /// Appelé à chaque annulation comptée, depuis la tâche du port qui l'observe. À poser avant
+        /// la première requête : une annulation antérieure n'est pas rejouée.
+        func surAnnulation(_ observateur: @escaping @Sendable () -> Void) {
+            lock.lock(); defer { lock.unlock() }
+            observateurAnnulations = observateur
+        }
+
         private func suivante(_ filtres: MissionFilters?) -> Reponse {
             lock.lock(); defer { lock.unlock() }
             if let filtres { recus.append(filtres) } else { appelsDetail += 1 }
@@ -31,8 +39,11 @@ final class ExplorerModelsTests: XCTestCase {
         }
 
         private func compterAnnulation() {
-            lock.lock(); defer { lock.unlock() }
+            lock.lock()
             annules += 1
+            let observateur = observateurAnnulations
+            lock.unlock()
+            observateur?()
         }
 
         /// Attente muette de 30 s : seule une annulation l'interrompt, et elle est comptée.
@@ -104,6 +115,25 @@ final class ExplorerModelsTests: XCTestCase {
         let state = await controller.start()
         let snapshot = try XCTUnwrap(state.snapshot, "session prête attendue, obtenu \(state)")
         return (controller, snapshot)
+    }
+
+    /// Attente des annulations vues par le port. `bounded` annule la requête perdante sans
+    /// l'attendre (Bounded.swift) : le modèle rend la main dès l'annulation demandée, et le port
+    /// ne l'observe qu'ensuite, quand la tâche de sa requête reprend (`Task.sleep` interrompu)
+    /// sur le pool coopératif. Sur simulateur iOS lent, cette reprise peut suivre le retour du
+    /// modèle : compter les annulations sans les attendre échouait (« 0 ≠ 2 », run 42489265587).
+    /// L'attente se termine sur l'événement (chaque annulation comptée la remplit) ; le `timeout`
+    /// de `fulfillment` ne borne que l'échec. Elle ne dit pas qui a annulé : le délai de 15 s de
+    /// `bounded` annule lui aussi la requête (sa tâche `timer` termine le flux, `onTermination`
+    /// annule le travail) et passe donc par `compterAnnulation`. Ce chemin est exclu par le
+    /// `XCTAssertLessThan(Date().timeIntervalSince(debut), 5)` qui suit chaque attente : une
+    /// annulation par le délai ne survient que 15 s après le lancement de la requête.
+    private func attenteAnnulations(_ port: PortExplorer, nombre: Int, _ description: String) -> XCTestExpectation {
+        let attente = expectation(description: description)
+        attente.expectedFulfillmentCount = nombre
+        attente.assertForOverFulfill = true
+        port.surAnnulation { attente.fulfill() }
+        return attente
     }
 
     // MARK: Filtres
@@ -306,6 +336,7 @@ final class ExplorerModelsTests: XCTestCase {
 
     func testUneLectureSupplanteeEstAnnuleeSansAttendreLeDelai() async throws {
         let port = PortExplorer([.missions([mission("init")]), .silence, .silence, .missions([mission("derniere")])])
+        let supplantees = attenteAnnulations(port, nombre: 2, "chaque lecture supplantée est interrompue côté port (requête annulée)")
         let (controller, snapshot) = try await pret(port)
         let model = MissionsListModel(controller: controller, snapshot: snapshot)
         await model.load()
@@ -318,6 +349,7 @@ final class ExplorerModelsTests: XCTestCase {
         await model.basculer(ExplorerFiltres.chipsRapides[2])
         await premiere.value
         await seconde.value
+        await fulfillment(of: [supplantees], timeout: 5)
         XCTAssertLessThan(Date().timeIntervalSince(debut), 5,
                           "les lectures supplantées sont annulées, pas laissées courir jusqu'au délai de 15 s")
         XCTAssertEqual(port.annulations, 2, "chaque lecture supplantée est interrompue côté port (requête annulée)")
@@ -330,6 +362,7 @@ final class ExplorerModelsTests: XCTestCase {
 
     func testUnRafraichissementSupplanteParUnFiltreEstAnnule() async throws {
         let port = PortExplorer([.missions([mission("a")]), .silence, .missions([mission("b")])])
+        let supplantee = attenteAnnulations(port, nombre: 1, "le rafraîchissement supplanté est interrompu côté port")
         let (controller, snapshot) = try await pret(port)
         let model = MissionsListModel(controller: controller, snapshot: snapshot)
         await model.load()
@@ -338,6 +371,7 @@ final class ExplorerModelsTests: XCTestCase {
         while port.filtresRecus.count < 2 { await Task.yield() }
         await model.appliquer(model.filtres.basculantUrgentes())
         await rafraichissement.value
+        await fulfillment(of: [supplantee], timeout: 5)
         XCTAssertLessThan(Date().timeIntervalSince(debut), 5)
         XCTAssertEqual(port.annulations, 1)
         XCTAssertEqual(model.missions.map(\.id), ["b"])
@@ -385,6 +419,7 @@ final class ExplorerModelsTests: XCTestCase {
 
     func testAnnulationDeLAppelantNEstPasUnDelaiDepasse() async throws {
         let port = PortExplorer([.silence])
+        let annulee = attenteAnnulations(port, nombre: 1, "la requête en vol est annulée côté port")
         let (controller, snapshot) = try await pret(port)
         let model = MissionsListModel(controller: controller, snapshot: snapshot)
         let tache = Task { await model.load() }
@@ -392,6 +427,7 @@ final class ExplorerModelsTests: XCTestCase {
         let debut = Date()
         tache.cancel()
         await tache.value
+        await fulfillment(of: [annulee], timeout: 5)
         XCTAssertLessThan(Date().timeIntervalSince(debut), 5, "l'annulation de la vue interrompt la lecture sans attendre le délai")
         XCTAssertEqual(port.annulations, 1, "la requête en vol est annulée côté port")
         XCTAssertEqual(model.state, .loading, "vue disparue : ni erreur ni message de délai, `.task` relancera")

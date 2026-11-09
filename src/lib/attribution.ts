@@ -21,6 +21,8 @@ export interface Attribution {
   utm_term?: string;
   referrer?: string;
   ref_code?: string;
+  /** Page d'arrivée du premier contact significatif (ex. /emploi-soignant/paris/aide-soignant). */
+  landing_path?: string;
   captured_at?: string;
 }
 
@@ -78,6 +80,7 @@ export function captureAttribution(): void {
       ...utm,
       ref_code: ref,
       referrer: referrerExterne,
+      landing_path: window.location.pathname.slice(0, 200),
       captured_at: new Date().toISOString(),
     };
     localStorage.setItem(KEY, JSON.stringify(data));
