@@ -127,6 +127,13 @@
     synthétiques (vert, puis rouge sur une classe jamais démarrée, un éclat vide, un code non nul). Une nouvelle classe
     démo du lot 2 rejoint l'éclat de son domaine et les `-skip-testing` du socle ; un éclat qui dépasse à son tour 20 min
     se scinde par classe. Durées à mesurer au premier run CI de la branche d'intégration.
+    **Seconde revue fraîche de T4b (9 novembre 2026, m6 et ajout de `DemoPointageEtatsTests`)** : cinq éclats,
+    « socle », « presences » (`DemoPresencesTests`, `DemoPointageEtatsTests`), « pointage » (`DemoPointageTests`, dix
+    tests, seul pour que « presences » reste sous 20 min), « documents », « contrats » ; build-for-testing borné à
+    25 min ; plafond du job à 195 min (25 + 5 × 30 + 20 min de marge pour la préparation, le résumé et l'artefact) : le
+    délai d'un éclat ou du build tombe toujours avant celui du job, et le résumé comme les xcresult sont conservés quand
+    un éclat bloque. Résumé rejoué en local sur des résultats synthétiques (vert ; refusé pour une classe jamais
+    démarrée, `DemoPointageTests` ou `DemoPointageEtatsTests`, et pour un code d'éclat absent).
 23. **Journal de reçus : celui du lot 1 T7 est réutilisé** ; si T1 du lot 2 démarrait avant son intégration, T1
     livrerait le journal générique et T7 le consommerait sans changer son API. Ordonnancement retenu : T1 attendait
     l'intégration de T7 et démarrait dans la vague 1 du lot 2, pas dans la vague 0.
@@ -161,6 +168,27 @@
 - **Client** : la tranche T1 du lot 2 étend `EcranNatif` (lot 1, `JoleneCore/Ports/Lot1Ports.swift`) avec ces trois
   écrans ; lecture par `fn_param_bool` après `.ready` et à la reprise, **fail-open** comme au lot 1 (toute erreur ou
   clé absente → écran natif actif) ; `false` → renvoi web de l'écran concerné.
+- **Application (seconde revue fraîche de T4b, m3, 9 novembre 2026)** :
+  - `ios_natif_documents_actif` : lu par `MesDocumentsScreen` à l'apparition (T7) ;
+  - `ios_natif_presences_actif` : lu par `PresencesScreen` à l'apparition (T4b), comme les documents ; à faux, la page
+    entière (onglets, blocs, zones de pointage) devient un renvoi web `/soignant/presences`
+    (`presences-desactive-renvoi`, texte du lot 0 `LibellesPresences.Liste.ecranNonDisponible` ; bouton
+    `presences-desactive-web` seulement avec le présentateur des renvois web de T10, aucun bouton sans effet). La ligne
+    du consentement GPS du Profil reste native : le texte de consentement promet le retrait « depuis votre profil »
+    (correction 15), un coupe-circuit du pointage ne doit pas retirer ce chemin. XCUITest
+    `DemoPointageEtatsTests.testDrapeauPresencesDesactiveRenvoieLaPageAuWebSansZoneDePointage` (trois formats) ;
+  - `ios_natif_contrats_actif` : **à la charge de T10** (liens du lot 2, qui route `/contrat/{id}` et
+    `/contrat/{id}/certificat` et injecte le présentateur des renvois web) : `ContratsDestination` (liste, contrat,
+    certificat), seul point de construction des écrans de contrat (Mon espace, onglet Contrats de Mes documents, « Voir
+    le contrat » de la zone de pointage, liens), lit le drapeau ; à faux, renvoi web `/contrat/<id>` ou
+    `/soignant/mes-documents?tab=contrats`. T9b, s'il la précède, peut le poser lui-même (même point unique) ; d'ici là
+    « Voir le contrat » ouvre le contrat natif sans lire son drapeau (gap consigné ; le lecteur est en lecture seule et
+    la signature, T9b, n'est pas encore livrée) ;
+  - points d'entrée de T5a (widget « Aller pointer » de l'Accueil, boutons du détail de mission) : ils mènent à
+    `PresencesScreen`, qui lit le drapeau ; un écran de T5a qui monterait une zone de pointage hors de `PresencesScreen`
+    (détail des présences) lit `ios_natif_presences_actif` de la même façon ;
+  - surcharge DEBUG du monde démo : `-JOLENE_FLAG_<cle> true|false` (`DemoFlagsGateway.surcharges(arguments:)`, lue par
+    `AppContainer.demoGateways` ; jamais compilée en Release).
 
 ## Scission T2 / T2b
 
@@ -546,6 +574,57 @@
       refus, erreur transitoire, expiration au délai de 15 s, nouvelle demande, reprise unique de la suite.
       `LocationService` ne garde que la traduction CoreLocation et le pilotage du gestionnaire. Tests :
       `DemandePositionTests` (10 tests). `FixPosition` masque ses coordonnées dans `description` et sa réflexion.
+  - **Seconde revue fraîche de L2-T4b (9 novembre 2026)**, réponse au majeur MJ1 et aux mineurs m1 à m9 (tests d'abord,
+    commit rouge puis vert) :
+    - MJ1, XCUITest du QR en course avec la feuille démo qui se fermait seule : en DEBUG, `DemoQRScannerView` ne lit
+      plus rien d'elle-même ; la lecture part au toucher de `pointage-scanner-demo-lire` (texte DEBUG « Simuler la
+      lecture du QR (démo) »), et la feuille `pointage-scanner` reste présentée jusque-là dans les trois scénarios de
+      `-JOLENE_DEMO_QR`. `ouvrirScanner` attend donc un état stable (feuille ouverte et bouton présent), puis
+      `lireQRDemo()` touche ; `illisible` garde la feuille ouverte après la lecture, `123456` et `refus` la ferment. En
+      Release (monde démo sans tests), lecture une fois la présentation terminée, comme avant. Étapes des XCUITest
+      extraites dans `JoleneUITests/DemoPointageUITestCase.swift` (classe sans test, héritée par `DemoPointageTests` et
+      `DemoPointageEtatsTests`) ;
+    - m1, session expirée dans le Profil : `ConsentementGpsModel.LigneProfil.sessionAVerifier` l'emporte dès que
+      `sessionExpired` (401 à la lecture ou à la bascule) ; la ligne montre « Session à vérifier »,
+      `SessionController.sessionExpiredMessage` et « Vérifier ma session » (textes du lot 1, `LibellesPresences.Pointage`) ;
+      `verifierSession(_:)` : `SessionStore.start()`, puis, pour le même epoch, `reprendreApresSession()` (relecture,
+      retour d'échec levé, jamais un rejeu de la bascule). `retourLigneProfil` masque le retour pendant ce bloc (pas de
+      doublon du message). La zone de pointage passe par le même `reprendreApresSession()`
+      (`PointageModel.verifierSession`) : un échec d'enregistrement du consentement dû au 401 n'y reste pas affiché après
+      la revalidation. Tests : `ConsentementGpsModelTests.testLigneDuProfilSessionExpiree…` (lecture, bascule),
+      `testVerifierSessionDuProfil…` (session valide, autre identité) ;
+    - m2, recette d'interface de M1 et m4 : scénarios DEBUG `-JOLENE_DEMO_SCENARIO session-expiree-scan` (premier scan
+      appliqué puis 401 ; tout appel du pointage en 401 jusqu'à « Vérifier ma session »), `session-expiree-consentement`
+      (première lecture du consentement en 401, idem) et `consentement-echec` (premier `fn_consentir_gps` en échec,
+      `SessionController.timeoutMessage`, rien n'est écrit ; le suivant aboutit). La session « serveur » expirée est
+      `ExpirationSessionDemo`, partagée par `DemoPointageGateway` et `DemoAuthGateway(expiration:)`, dont
+      `restoreSession()` (appelée par `SessionController.start()`) la revalide quand une session est ouverte ;
+      `DemoPointageGateway.Scenario.installer(dans:)` pose les deux (`AppContainer`, DEBUG). Le scan du scénario 401 est
+      appliqué avant la réponse, pour prouver que la reprise réconcilie par relecture sans renvoyer le code (un renvoi
+      donnerait deux scans ou l'anti-rejeu). XCUITest `DemoPointageEtatsTests` (trois formats) : zone « Session à
+      vérifier » puis réconciliation, un seul scan ; échec du consentement affiché dans la zone et en tête de page, aucun
+      scan, feuille revenue au pointage suivant puis un scan ; ligne du Profil « Session à vérifier » puis interrupteur
+      relu. Unitaires : `DemoPointageGatewayTests` (scénarios, auth liée), `PointageSaisieTests.testScenario…` (bout en
+      bout dans le monde démo : `SessionStore`, `PointageModel`, `ConsentementGpsModel`) ;
+    - m3, coupe-circuit : « D-FLAGS — Application » ci-dessus (`ios_natif_presences_actif` lu par `PresencesScreen`,
+      `ios_natif_contrats_actif` confié à T10) ;
+    - m4 et m5 : écarts consignés au tableau des écarts T4b (`PARITE_SOIGNANT.md`, (d) et (e)) et aux amendements
+      ci-dessous ; la mention « parité `PresencesSoignant.tsx` l.310-311 » de `ConsentementGpsModel.swift` est corrigée
+      (ce n'est pas une parité : `pointerArrivee`, l.306-313, et `pointerDepart`, l.386, sont morts) et la doc de
+      `ConsentementGpsSheet` le dit ;
+    - m6 : décision 22 (build borné à 25 min, plafond du job à 195 min, éclat « pointage ») ;
+    - m7 : `AppContainer` évalue la garde d'environnement avant de construire l'appareil ; un mode refusé reçoit
+      `Appareil.demo()` (aucun `LocationService`, `NetworkMonitor` ni `KeychainReceiptStore` créé), le commentaire dit
+      désormais vrai. Un échec de `SupabaseGateways.make` (client) garde l'appareil réel, inutilisé (aucune session) ;
+    - m8 : toutes les affirmations de compte qui suivent un succès (« un seul scan » du QR et de la réconciliation
+      compris) passent par `compteursRelus(dans:)` : une lecture postérieure à l'action est exigée, un second envoi
+      postérieur au succès s'y verrait ;
+    - m9 : références de `fn_supprimer_mon_compte` harmonisées (UPDATE de `scans_pointage`, `public.sql`
+      l.60179-60182) dans D-T4b-0, D-T4b-3 et l'entrée B9. Le commentaire « l.55662-55664 » de
+      `RPCResponseExceptionsMetierTests.swift` (l.84, paquet JoleneSupabase, non touché ici) reste à la prochaine tranche
+      qui touche ce paquet, comme convenu ;
+    - identifiants ajoutés : `pointage-scanner-demo-lire` (DEBUG), `profil-gps-session-expired`,
+      `profil-gps-session-check`, `presences-desactive-renvoi`, `presences-desactive-web`.
   - **T5a** : `PointageModel.notationAProposer` n'est pas encore affiché : T5a monte `NotationSheet` dans
     `PointageCodeView` (fichier de T4b, ajout localisé) et relit la fin prévue avant de proposer la note (consigne T5a
     ci-dessous) ; `ZonePointageContexte` porte désormais `horloge` et `services`, à transmettre si T5a construit d'autres
@@ -791,7 +870,9 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | `ProfilSoignant.tsx` l.194 (`consentement_gps !== false` → interrupteur coché) | NULL affiché comme un consentement donné | NULL affiché éteint, avec l'explication du retrait (`TextesWeb.ProfilConsentementGps.explicationRetiree`) | décision déléguée D-T4b-1 |
 | `PresencesSoignant.tsx` l.67-74, l.87-94 (audit `p_details: { type: 'gps', consentement: true }`) | booléen JSON | chaîne `"true"` / `"false"` (`AuditPort.ecrire` : `[String: String]`, lot 1) | aucun lecteur serveur du détail ; `->>'consentement'` rend le même texte |
 | §3 T4b XCUITest `scan-incertain` (« Vérification du pointage… » puis « Pointage enregistré ») | état transitoire observé | état final et un seul scan affirmés (`pointage-demo-scans`), un seul segment ; « Vérification… » prouvé par `PointageModelTests` et `LibellesPresencesTests` | la démo réconcilie dans la même boucle (horloge fixe) : l'état transitoire ne dure que quelques millisecondes, aucune attente fixe permise (règle des XCUITest) |
-| §2.2 `DemoQRScannerView` | détections démo | deux détections du payload 0,6 s après l'ouverture de la feuille (délai de l'app démo, pas du test) | une fermeture pendant l'animation d'ouverture serait ignorée par SwiftUI |
+| §2.2 `DemoQRScannerView` | détections démo | DEBUG : détections rendues au toucher de `pointage-scanner-demo-lire`, la feuille reste présentée jusque-là (seconde revue fraîche de T4b, MJ1) ; Release : deux détections du payload 0,6 s après l'ouverture de la feuille | une lecture automatique fermait la feuille quelques centaines de millisecondes après son apparition : les XCUITest qui l'attendaient étaient en course ; une fermeture pendant l'animation d'ouverture serait ignorée par SwiftUI (d'où le délai en Release) |
+| `PointageRotatifSoignant.tsx` l.123 (`consentementGPS === true`, sinon GPS omis) ; `PresencesSoignant.tsx` l.306-313, l.386 (`pointerArrivee`, `pointerDepart`, seuls à ouvrir `ConsentementGPS`, jamais appelés) | le web vivant ne recueille jamais le consentement : un soignant à NULL pointe sans GPS | feuille de consentement verbatim au premier pointage d'un soignant à NULL, puis autorisation iOS (décision 4) | écart assumé (seconde revue fraîche de T4b, m4) : choix de conformité déjà tranché par la décision 4 (aucune position sans consentement relu vrai, comme le web) ; le natif propose le choix que le web vivant ne propose plus. Tableau des écarts T4b, (d) |
+| `BandeauHorsLigne.tsx` l.72-81 (bouton « Réessayer », `aria-label` « Réessayer la connexion ») | relance manuelle de la vérification de connexion | aucun bouton : `HorsLigneBandeau` suit `NWPathMonitor` (`NetworkMonitor`), qui met l'état à jour seul | écart assumé (seconde revue fraîche de T4b, m5) : la vérification web interroge le réseau à la demande ; iOS notifie chaque changement de chemin, un bouton n'aurait aucun effet propre. Tableau des écarts T4b, (e) |
 | §3 T4b `PresencesScreen` | — | `.scrollDismissesKeyboard(.immediately)` | le pavé numérique n'a pas de touche Entrée : un défilement le ferme et découvre le bouton de pointage |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
@@ -866,6 +947,11 @@ GPS et retours : `TextesWeb` (HARD STOP n°4).
 | `LibellesPresences.Pointage.sessionAVerifier` | « Session à vérifier » | lot 1 (`MissionsListScreen.swift` l.107, `PresencesScreen`), repris tel quel (comme `LibellesJustificatifs.sessionAVerifier`, T7) : bloc de session expirée de la zone (revue fraîche de T4b, M1) | idem |
 | `LibellesPresences.Pointage.verifierMaSession` | « Vérifier ma session » | lot 1 (`MissionsListScreen.swift` l.108), repris tel quel : action du bloc (M1) | idem |
 | `LibellesPresences.Pointage.messageSessionExpiree` | « Votre session a expiré. Reconnectez-vous. » | `SessionController.sessionExpiredMessage` (lot 0), repris tel quel (M1) | idem |
+| `LibellesPresences.Liste.ecranNonDisponible` | « Cet espace n'est pas encore disponible dans l'application. Rendez-vous sur jolene.app. » | lot 0 (`MobileAccess.unsupportedRole`), repris tel quel comme `LibellesJustificatifs.espaceNonDisponible` (T7) : coupe-circuit `ios_natif_presences_actif` (seconde revue fraîche de T4b, m3) | `testTextesOperationnelsInventories` |
+
+Repris d'écrans déjà livrés, sans texte nouveau (seconde revue fraîche de T4b, m1) : le bloc « Session à vérifier » de la
+ligne du consentement du Profil reprend `LibellesPresences.Pointage.sessionAVerifier`, `messageSessionExpiree` et
+`verifierMaSession` (même bloc que la zone, M1) ; le renvoi du coupe-circuit reprend `LibellesPresences.Pointage.voirSurJolene`.
 
 Repris d'écrans déjà livrés, sans texte nouveau (revue fraîche de T4b, M3) : « Réessayer » de la ligne du consentement
 du Profil (`LibellesWeb.Pointage.reessayer`, même texte que le bouton web de `ProfilSoignant.tsx` l.412) ; l'indicateur
@@ -873,7 +959,8 @@ de chargement de cette ligne reprend son libellé (`TextesWeb.ProfilConsentement
 
 DEBUG seulement (absents en Release, jamais vus par un utilisateur) : « Pointages enregistrés (démo) » et « N scan · M avec
 position » (`pointage-demo-scans`, preuve des XCUITest, sur le modèle de `documents-demo-envois`), et le bouton
-`pointage-demo-relire` (libellé vocalisé « Relire les compteurs (démo) » ; revue fraîche de T4b, m3).
+`pointage-demo-relire` (libellé vocalisé « Relire les compteurs (démo) » ; revue fraîche de T4b, m3), et le bouton
+« Simuler la lecture du QR (démo) » du scanner démo (`pointage-scanner-demo-lire`, seconde revue fraîche de T4b, MJ1).
 
 ## Textes opérationnels hors web (T8)
 
@@ -930,7 +1017,7 @@ un changement de wording part d'abord sur le web.
   conservées 1 an puis supprimées » (l.38) n'est tenue par le serveur que pour `presences` (coordonnées effacées après
   90 jours : cron `anonymiser-gps` → `fn_anonymiser_gps_anciennes`, `public.sql` l.18506 ; `fn_purger_gps_ancien`
   l.51387) ; `scans_pointage.latitude`, `longitude`, `precision_gps_m` et `ip_address` n'ont aucune purge datée au dump
-  (seulement à la suppression du compte, l.60178-60181). Proposition : PR backend séparée (B9, suppression de données
+  (seulement à la suppression du compte, l.60179-60182). Proposition : PR backend séparée (B9, suppression de données
   prod) qui efface ces colonnes de `scans_pointage` au plus tard un an après `scanne_le`, sinon correction du texte sur le
   web d'abord ; ni l'une ni l'autre n'est faite par le chantier iOS. Décision prise par Claude sur délégation explicite
   de Gabrielle du 08/11/2026.
@@ -977,7 +1064,7 @@ un changement de wording part d'abord sur le web.
   - `fn_anonymiser_gps_anciennes` (l.18506-18520, cron `anonymiser-gps`) et `fn_purger_gps_ancien` (l.51387) n'effacent
     que les coordonnées de `presences`, après 90 jours ;
   - `scans_pointage.latitude`, `longitude`, `precision_gps_m` et `ip_address` ne sont effacées qu'à la suppression du
-    compte (`fn_supprimer_mon_compte`, l.60179-60181), jamais à une date ;
+    compte (`fn_supprimer_mon_compte`, l.60179-60182), jamais à une date ;
   - or la feuille de consentement promet « Données conservées 1 an puis supprimées » (`src/components/ConsentementGPS.tsx`
     l.38).
 
@@ -1068,7 +1155,7 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
 - **Purge datée des positions de `scans_pointage`** (constat de D-T4b-0, décision D-T4b-3 ; revue fraîche de T4b, m6) :
   - écart : la feuille de consentement promet « Données conservées 1 an puis supprimées »
     (`src/components/ConsentementGPS.tsx` l.38) ; or `scans_pointage.latitude`, `longitude`, `precision_gps_m` et
-    `ip_address` ne sont effacées qu'à la suppression du compte (`fn_supprimer_mon_compte`, `public.sql` l.60179-60181) ;
+    `ip_address` ne sont effacées qu'à la suppression du compte (`fn_supprimer_mon_compte`, `public.sql` l.60179-60182) ;
     les purges datées (`fn_anonymiser_gps_anciennes` l.18506, `fn_purger_gps_ancien` l.51387) ne visent que `presences` ;
   - PR backend proposée (non préparée par le chantier iOS) : `fix/purge-positions-scans-pointage`, avec :
     - une migration qui crée `fn_purger_positions_scans_pointage()` (`SECURITY DEFINER`, `search_path` fixé, `REVOKE` de
