@@ -72,3 +72,47 @@ describe('DPAEStatus — parcours réellement exposé à l’établissement', ()
     expect(screen.getByText(/traçabilité interne/i)).toBeInTheDocument();
   });
 });
+
+// CDDU et VACATION sont des contrats salariés : DPAE obligatoire (C. trav.
+// art. L.1221-10 ; CDD d'usage = CDD, art. L.1242-2 3° et D.1242-1).
+// Le remplacement libéral (relation B2B) n'en a pas. Décision du 08/11/2026.
+// Midi heure locale : le 24 septembre quel que soit le fuseau d'exécution.
+const MIDI_LOCAL_24_SEPTEMBRE = new Date(2026, 8, 24, 12, 0, 0).toISOString();
+
+describe('DPAE selon le type de contrat', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it.each(['CDD', 'SALARIE', 'CDDU', 'VACATION'])('DPAEStatus propose la préparation DPAE pour un contrat %s', type => {
+    render(<DPAEStatus contratId="contrat-1" typeContrat={type} />);
+    expect(screen.getByText('DPAE obligatoire — Mission salariée')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Préparer les données DPAE' })).toBeInTheDocument();
+  });
+
+  it.each(['CDDU', 'VACATION'])('DPAEStatus affiche « DPAE déclarée » pour un contrat %s déjà déclaré', type => {
+    render(<DPAEStatus contratId="contrat-1" typeContrat={type} dpaeNumero="2026ABC123" />);
+    expect(screen.getByText('DPAE déclarée')).toBeInTheDocument();
+    expect(screen.getByText('2026ABC123')).toBeInTheDocument();
+  });
+
+  it.each(['REMPLACEMENT_LIBERAL', 'LIBERAL', null, undefined])('DPAEStatus ne rend rien pour %s', type => {
+    const { container } = render(<DPAEStatus contratId="contrat-1" typeContrat={type} />);
+    expect(container).toBeEmptyDOMElement();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each(['CDD', 'SALARIE', 'CDDU', 'VACATION'])('BandeauRappelDPAE rappelle la DPAE pour un contrat %s', type => {
+    render(<BandeauRappelDPAE typeContrat={type} dpaeEffectuee={false} />);
+    expect(screen.getByText(/^⚠️ Rappel légal : effectuez la Déclaration Préalable à l'Embauche \(DPAE\)/)).toBeInTheDocument();
+    expect(screen.getByText('La DPAE est obligatoire pour ce contrat salarié. Pour une mission libérale directe, elle n\'est pas requise.')).toBeInTheDocument();
+  });
+
+  it.each(['CDDU', 'VACATION'])('BandeauRappelDPAE confirme la DPAE effectuée pour un contrat %s', type => {
+    render(<BandeauRappelDPAE typeContrat={type} dpaeEffectuee dpaeEffectueeLe={MIDI_LOCAL_24_SEPTEMBRE} />);
+    expect(screen.getByText('✅ DPAE déclarée comme effectuée par l\'établissement le 24 septembre 2026')).toBeInTheDocument();
+  });
+
+  it.each(['REMPLACEMENT_LIBERAL', 'LIBERAL', undefined])('BandeauRappelDPAE ne rend rien pour %s', type => {
+    const { container } = render(<BandeauRappelDPAE typeContrat={type} dpaeEffectuee={false} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});
