@@ -29,7 +29,9 @@ import JoleneDesign
 ///   (`demandeTraitee`, revue B8 de T3b, m7) ; il remplace `push-tap-cible`. Explorer, l'Accueil et le Profil
 ///   reviennent à leur racine (piles par chemin ; revue B8 de T3b, m5) ;
 /// - une notification lue dans le centre périme le compteur de l'Accueil (`lecturesCentre`, jeton de péremption
-///   d'`AccueilModel`, revue L3-T5 m1).
+///   d'`AccueilModel`, revue L3-T5 m1) ;
+/// - (lot 3, T12) onglet Revenus natif (`RevenusScreen`, pile `cheminRevenus`), à la place du placeholder du lot 0 ;
+///   ses renvois web et l'état vide passent par `presenter` (cible de l'espace), la surcouche du pré-prompt est gardée.
 struct MainTabView: View {
     /// Onglets de l'espace : enum dédié de JoleneCore (revue L3-T5, m9), jamais les drapeaux `EcranNatif`.
     typealias Tab = OngletEspace
@@ -47,6 +49,8 @@ struct MainTabView: View {
     @State private var cheminExplorer = NavigationPath()
     /// Pile de l'onglet Profil (intégration du lot 3) : préférences de notifications et édition du profil.
     @State private var cheminProfil = NavigationPath()
+    /// Pile de l'onglet Revenus (lot 3, T12) : détail d'une mission depuis un paiement rapide en litige.
+    @State private var cheminRevenus = NavigationPath()
     /// Notifications lues dans le centre (jeton de péremption du compteur de l'Accueil).
     @State private var lecturesCentre = 0
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
@@ -91,9 +95,12 @@ struct MainTabView: View {
             .tag(Tab.missions)
             .accessibilityIdentifier("tab-missions")
 
-            NavigationStack {
-                PlaceholderScreen(titre: "Revenus", identifier: "placeholder-revenus",
-                                  description: "Vos gains, factures et bulletins arrivent au lot 1.")
+            // Lot 3, T12 : onglet Revenus natif (remplace le placeholder du lot 0) ; sa pile porte le détail d'une mission
+            // ouvert depuis un paiement rapide en litige, et revient à sa racine sur un lien ou un tap (`presenter`).
+            NavigationStack(path: $cheminRevenus) {
+                RevenusScreen(session: session, snapshot: snapshot) { cible in
+                    presenter(cible, depuisCentre: false)
+                }
             }
             .tabItem { Label("Revenus", systemImage: "banknote") }
             .tag(Tab.revenus)
@@ -168,8 +175,10 @@ struct MainTabView: View {
         case .missions:
             selection = .missions
         case .revenus:
-            // Seule la racine (`.apercu`) est présentable avant T12/T13 (garde de `estPresentable`).
+            // Seule la racine (`.apercu`) est présentable avant T13 (garde de `estPresentable`) ; lot 3, T12 : la pile de
+            // l'onglet revient à sa racine (revue B8 de T3b, m5), comme Explorer.
             selection = .revenus
+            cheminRevenus = NavigationPath()
         case .monCompte:
             selection = .profil
             cheminProfil = NavigationPath()

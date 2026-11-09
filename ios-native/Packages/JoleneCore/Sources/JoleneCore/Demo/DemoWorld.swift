@@ -68,7 +68,7 @@ public enum DemoWorld {
         gateways.geocodage = UnwiredGeocodagePort()                        // T10
         gateways.motDePasse = DemoMotDePasseGateway()                      // T11
         gateways.exportRGPD = DemoExportRGPDGateway()                      // T11
-        gateways.revenus = UnwiredRevenusPort()                            // T12
+        gateways.revenus = DemoRevenusGateway()                            // T12
         gateways.paiements = UnwiredPaiementsDeclaresPort()                // T13
         gateways.iban = UnwiredIbanPort()                                  // T14b
         gateways.stripeConnect = UnwiredStripeConnectPort()                // T14a

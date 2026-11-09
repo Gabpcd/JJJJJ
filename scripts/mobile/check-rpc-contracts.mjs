@@ -97,8 +97,8 @@ export const RPC_SUIVIES = [
   { name: 'fn_contester_paiement_soignant', statut: 'a_venir', lot: 3 },
   { name: 'fn_consulter_mon_iban', statut: 'a_venir', lot: 3 },
   { name: 'fn_enregistrer_mon_iban', statut: 'a_venir', lot: 3 },
-  { name: 'fn_mes_revenus_connect', statut: 'a_venir', lot: 3 },
-  { name: 'fn_mes_paiements_escrow', statut: 'a_venir', lot: 3 },
+  { name: 'fn_mes_revenus_connect', statut: 'consommee', lot: 3 }, // L3-T12 : SupabaseRevenusGateway
+  { name: 'fn_mes_paiements_escrow', statut: 'consommee', lot: 3 }, // L3-T12 : SupabaseRevenusGateway
 ];
 
 /**

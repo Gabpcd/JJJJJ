@@ -219,8 +219,10 @@ public struct PaiementRapide: Equatable, Sendable, Identifiable {
     }
 }
 
-/// Mission TERMINEE de l'onglet Revenus, colonnes de `MesGains.tsx` l.95 (sans colonnes Rist, D5).
-/// Montant affiché = règle web portée en T12 sur ces valeurs serveur, jamais recalculé.
+/// Mission TERMINEE de l'onglet Revenus, colonnes de `MesGains.tsx` l.95 (sans colonnes Rist, D5), complétée à
+/// l'assemblage (`RevenusAssemblage`, T12) par le nom d'établissement (`fn_etablissements_safe` seul) et la dernière
+/// déclaration de paiement de la mission (`paiements_soignant`, l.102). Montant affiché = règle web portée
+/// (`MontantMission`, golden T2) sur ces valeurs serveur, jamais recalculé ; régime = contrat de LA mission.
 public struct MissionTerminee: Equatable, Sendable, Identifiable {
     public var id: String
     public var intitule: String?
@@ -232,14 +234,26 @@ public struct MissionTerminee: Equatable, Sendable, Identifiable {
     public var netAPayer: Double?
     public var netEstime: Double?
     public var totalBrut: Double?
+    public var dureeHeures: Double?
+    public var tauxHoraireBase: Double?
+    public var service: String?
+    public var statut: String?
+    /// Nom relu par `fn_etablissements_safe` (lot 0) ; nil si la lecture n'a pas abouti (le web affiche « — »).
+    public var etablissementNom: String?
+    /// Dernière déclaration de la mission (`EtatPaiement.indexerDernierPaiementParMission`), nil si aucune.
+    public var dernierPaiement: PaiementSoignantLu?
 
     public init(id: String, intitule: String? = nil, debutLe: String? = nil, finLe: String? = nil,
                 etablissementId: String? = nil, typeContratApplique: String? = nil, typeContratRecherche: String? = nil,
-                netAPayer: Double? = nil, netEstime: Double? = nil, totalBrut: Double? = nil) {
+                netAPayer: Double? = nil, netEstime: Double? = nil, totalBrut: Double? = nil, dureeHeures: Double? = nil,
+                tauxHoraireBase: Double? = nil, service: String? = nil, statut: String? = nil, etablissementNom: String? = nil,
+                dernierPaiement: PaiementSoignantLu? = nil) {
         self.id = id; self.intitule = intitule; self.debutLe = debutLe; self.finLe = finLe
         self.etablissementId = etablissementId; self.typeContratApplique = typeContratApplique
         self.typeContratRecherche = typeContratRecherche; self.netAPayer = netAPayer; self.netEstime = netEstime
-        self.totalBrut = totalBrut
+        self.totalBrut = totalBrut; self.dureeHeures = dureeHeures; self.tauxHoraireBase = tauxHoraireBase
+        self.service = service; self.statut = statut; self.etablissementNom = etablissementNom
+        self.dernierPaiement = dernierPaiement
     }
 }
 

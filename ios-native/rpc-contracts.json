@@ -1107,7 +1107,7 @@
     },
     {
       "name": "fn_mes_revenus_connect",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "{ p_mois_debut?: string }",
@@ -1136,7 +1136,7 @@
     },
     {
       "name": "fn_mes_paiements_escrow",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": null,
       "sql": [

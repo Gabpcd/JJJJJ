@@ -278,6 +278,33 @@ final class RevenusModelTests: XCTestCase {
         XCTAssertFalse(model.missionsChargees)
     }
 
+    /// Une lecture annulée (changement d'onglet pendant le chargement) n'est jamais une erreur et laisse la section à lire :
+    /// l'apparition suivante la relit, sans relire ce qui a abouti ; un échec, lui, attend « Réessayer ».
+    func testApparitionApresUneLectureAnnuleeRelitSeulementCeQuiReste() async throws {
+        let port = ScriptedRevenus(totaux: [.success(Self.totaux)], rapides: [.failure(CancellationError()), .success(Self.rapides)],
+                                   missions: [.failure(CancellationError()), .success(Self.page(["m-1"]))])
+        let (controller, snapshot) = try await pret(port)
+        let model = RevenusModel(controller: controller, snapshot: snapshot)
+        await model.chargerSiNecessaire()
+        XCTAssertEqual(model.totaux, .pret(Self.totaux))
+        XCTAssertEqual(model.paiementsRapides, .chargement, "annulation : jamais un échec affiché")
+        XCTAssertNil(model.erreur)
+        XCTAssertFalse(model.missionsChargees)
+
+        await model.chargerSiNecessaire()
+        XCTAssertEqual(model.paiementsRapides, .pret(Self.rapides))
+        XCTAssertEqual(model.missions.map(\.id), ["m-1"])
+        XCTAssertEqual(port.pages, [0, 0])
+
+        let echec = ScriptedRevenus(totaux: [.success(nil)], rapides: [.success([])],
+                                    missions: [.failure(JoleneError(.network, "Connexion impossible."))])
+        let (controller2, snapshot2) = try await pret(echec)
+        let enEchec = RevenusModel(controller: controller2, snapshot: snapshot2)
+        await enEchec.chargerSiNecessaire()
+        await enEchec.chargerSiNecessaire()
+        XCTAssertEqual(echec.pages, [0], "un échec attend « Réessayer » : aucune relecture à l'apparition")
+    }
+
     func testChargerSiNecessaireNeRelitPasUnEcranCharge() async throws {
         let port = ScriptedRevenus(totaux: [.success(nil)], rapides: [.success([])], missions: [.success(Self.page(["m-1"]))])
         let (controller, snapshot) = try await pret(port)

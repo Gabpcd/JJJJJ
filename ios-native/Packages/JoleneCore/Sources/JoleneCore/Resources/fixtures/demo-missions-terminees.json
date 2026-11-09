@@ -1,0 +1,195 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "missions": [
+    {
+      "id": "demo-terminee-001",
+      "intitule": "Démonstration · Mission terminée 1",
+      "debut_le": "2026-11-01T07:00:00+00:00",
+      "fin_le": "2026-11-01T15:00:00+00:00",
+      "duree_heures": 8,
+      "nb_creneaux": 1,
+      "taux_horaire_base": 26,
+      "taux_rist_plafonne": null,
+      "rist_plafond_applique": false,
+      "net_a_payer": 224.6,
+      "net_estime": 162.4,
+      "total_brut": 208,
+      "statut": "TERMINEE",
+      "etablissement_id": "demo-etab-1",
+      "service": "Médecine polyvalente",
+      "type_contrat_applique": "SALARIE",
+      "type_contrat_recherche": "SALARIE",
+      "soignant_assigne_id": "demo-soignant",
+      "profession_requise": "IDE",
+      "presences": [
+        {
+          "valide_par_etablissement": true,
+          "valide_auto_72h_le": null,
+          "valide_le": "2026-11-01T16:00:00+00:00"
+        }
+      ]
+    },
+    {
+      "id": "demo-terminee-002",
+      "intitule": "Démonstration · Mission terminée 2",
+      "debut_le": "2026-10-20T07:00:00+00:00",
+      "fin_le": "2026-10-20T15:00:00+00:00",
+      "duree_heures": 8,
+      "nb_creneaux": 1,
+      "taux_horaire_base": 32,
+      "taux_rist_plafonne": null,
+      "rist_plafond_applique": false,
+      "net_a_payer": 256,
+      "net_estime": null,
+      "total_brut": 256,
+      "statut": "TERMINEE",
+      "etablissement_id": "demo-etab-3",
+      "service": "Soins à domicile",
+      "type_contrat_applique": "LIBERAL",
+      "type_contrat_recherche": "LIBERAL",
+      "soignant_assigne_id": "demo-soignant",
+      "profession_requise": "IDE",
+      "presences": [
+        {
+          "valide_par_etablissement": true,
+          "valide_auto_72h_le": null,
+          "valide_le": "2026-10-20T16:00:00+00:00"
+        }
+      ]
+    },
+    {
+      "id": "demo-terminee-003",
+      "intitule": "Démonstration · Mission terminée 3",
+      "debut_le": "2026-10-12T07:00:00+00:00",
+      "fin_le": "2026-10-12T15:00:00+00:00",
+      "duree_heures": 8,
+      "nb_creneaux": 1,
+      "taux_horaire_base": 30,
+      "taux_rist_plafonne": null,
+      "rist_plafond_applique": false,
+      "net_a_payer": null,
+      "net_estime": null,
+      "total_brut": 240,
+      "statut": "TERMINEE",
+      "etablissement_id": "demo-etab-2",
+      "service": "Gériatrie",
+      "type_contrat_applique": null,
+      "type_contrat_recherche": null,
+      "soignant_assigne_id": "demo-soignant",
+      "profession_requise": "IDE",
+      "presences": [
+        {
+          "valide_par_etablissement": true,
+          "valide_auto_72h_le": null,
+          "valide_le": "2026-10-12T16:00:00+00:00"
+        }
+      ]
+    },
+    {
+      "id": "demo-terminee-004",
+      "intitule": "Démonstration · Mission terminée 4",
+      "debut_le": "2026-10-05T07:00:00+00:00",
+      "fin_le": "2026-10-05T15:00:00+00:00",
+      "duree_heures": 8,
+      "nb_creneaux": 1,
+      "taux_horaire_base": 27,
+      "taux_rist_plafonne": null,
+      "rist_plafond_applique": false,
+      "net_a_payer": 233.2,
+      "net_estime": 170.5,
+      "total_brut": 216,
+      "statut": "TERMINEE",
+      "etablissement_id": "demo-etab-1",
+      "service": "Médecine polyvalente",
+      "type_contrat_applique": "SALARIE",
+      "type_contrat_recherche": "SALARIE",
+      "soignant_assigne_id": "demo-soignant",
+      "profession_requise": "IDE",
+      "presences": [
+        {
+          "valide_par_etablissement": true,
+          "valide_auto_72h_le": null,
+          "valide_le": "2026-10-05T16:00:00+00:00"
+        }
+      ]
+    },
+    {
+      "id": "demo-terminee-005",
+      "intitule": "Démonstration · Mission terminée 5",
+      "debut_le": "2026-09-28T07:00:00+00:00",
+      "fin_le": "2026-09-28T15:00:00+00:00",
+      "duree_heures": 8,
+      "nb_creneaux": 1,
+      "taux_horaire_base": 40,
+      "taux_rist_plafonne": 35,
+      "rist_plafond_applique": true,
+      "net_a_payer": 280,
+      "net_estime": null,
+      "total_brut": 280,
+      "statut": "TERMINEE",
+      "etablissement_id": "demo-etab-3",
+      "service": "Soins à domicile",
+      "type_contrat_applique": "LIBERAL",
+      "type_contrat_recherche": "LIBERAL",
+      "soignant_assigne_id": "demo-soignant",
+      "profession_requise": "IDE",
+      "presences": [
+        {
+          "valide_par_etablissement": true,
+          "valide_auto_72h_le": null,
+          "valide_le": "2026-09-28T16:00:00+00:00"
+        }
+      ]
+    }
+  ],
+  "paiements": [
+    {
+      "id": "demo-paiement-001",
+      "mission_id": "demo-terminee-001",
+      "facture_honoraire_id": null,
+      "statut": "DECLARE",
+      "montant_net": 162.4,
+      "confirme_par_soignant": false,
+      "conteste": false,
+      "montant_du_reference": null,
+      "source_montant_du": null,
+      "methode": "VIREMENT",
+      "reference_virement": null,
+      "date_paiement": "2026-11-01",
+      "modifie_le": "2026-11-01T18:00:00+00:00",
+      "cree_le": "2026-11-01T18:00:00+00:00"
+    },
+    {
+      "id": "demo-paiement-002",
+      "mission_id": "demo-terminee-004",
+      "facture_honoraire_id": null,
+      "statut": "CONTESTE",
+      "montant_net": 160,
+      "confirme_par_soignant": false,
+      "conteste": true,
+      "montant_du_reference": null,
+      "source_montant_du": null,
+      "methode": "VIREMENT",
+      "reference_virement": null,
+      "date_paiement": "2026-10-08",
+      "modifie_le": "2026-10-08T09:00:00+00:00",
+      "cree_le": "2026-10-08T09:00:00+00:00"
+    },
+    {
+      "id": "demo-paiement-003",
+      "mission_id": "demo-terminee-004",
+      "facture_honoraire_id": null,
+      "statut": "CONFIRME",
+      "montant_net": 170.5,
+      "confirme_par_soignant": true,
+      "conteste": false,
+      "montant_du_reference": null,
+      "source_montant_du": null,
+      "methode": "VIREMENT",
+      "reference_virement": null,
+      "date_paiement": "2026-10-12",
+      "modifie_le": "2026-10-12T09:00:00+00:00",
+      "cree_le": "2026-10-12T09:00:00+00:00"
+    }
+  ]
+}

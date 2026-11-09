@@ -100,7 +100,8 @@ final class DemoRevenusGatewayTests: XCTestCase {
         XCTAssertEqual(page.missions.count, 5)
         let totaux = try await gateway.totaux(context: context)
         XCTAssertNotNil(totaux)
-        XCTAssertEqual(try await gateway.paiementsRapides(context: context).count, 7)
+        let rapides = try await gateway.paiementsRapides(context: context)
+        XCTAssertEqual(rapides.count, 7)
     }
 
     func testMondeDemoCableLesRevenus() {

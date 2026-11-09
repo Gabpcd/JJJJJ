@@ -185,7 +185,9 @@ final class AppContainer: ObservableObject {
     /// (`DemoDashboardGateway(missionsOubliees:)`, `DemoAccueilTests.testOubliDePointageOuvreLesPresencesSurLeWeb`) ;
     /// lot 3, T7 : `-JOLENE_DEMO_INSCRIPTION_REFUS <code>` (`RefusInscriptionDemo`, blueprint §2.7) rejoue un refus
     /// d'inscription (`DemoInscriptionTests`) ; lot 3, T11 : `JOLENE_FORCE_EXPORT_ECHEC=1` fait refuser l'export RGPD
-    /// avec le message serveur verbatim (`DemoCompteLot3Tests.testExportRefuseParLeServeurAfficheLeMessageSansFeuille`).
+    /// avec le message serveur verbatim (`DemoCompteLot3Tests.testExportRefuseParLeServeurAfficheLeMessageSansFeuille`) ;
+    /// lot 3, T12 : `JOLENE_FORCE_REVENUS_ECHEC=1` fait échouer la première lecture des missions terminées
+    /// (`DemoRevenusEchecGateway`, `DemoRevenusTests.testErreurPuisReprise`).
     /// Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
@@ -206,6 +208,9 @@ final class AppContainer: ObservableObject {
         }
         if processEnvironment["JOLENE_FORCE_EXPORT_ECHEC"] == "1" {
             gateways.exportRGPD = DemoExportRGPDGateway(refus: ExportRGPD.refusLimiteServeur) // lot 3, T11
+        }
+        if processEnvironment[DemoRevenusEchecGateway.variableEnvironnement] == "1" {
+            gateways.revenus = DemoRevenusEchecGateway() // lot 3, T12 (`DemoRevenusTests.testErreurPuisReprise`)
         }
         return gateways
         #else
