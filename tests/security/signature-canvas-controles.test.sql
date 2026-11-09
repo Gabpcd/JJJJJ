@@ -108,6 +108,12 @@ BEGIN
     ('public.fn_trg_recalculer_preuves_etudiant_document()','c078f7408c883a9e414078c717f84b4f')
   ) x(signature,expected_md5) LOOP
     SELECT p.prosrc INTO corps FROM pg_proc p WHERE p.oid=to_regprocedure(pin.signature);
+    -- Successeur 20261108223500 (DPAE CDDU/VACATION) : seule l'expression
+    -- dpae_requise de ce trigger change ; ramenée à l'ancienne liste, le corps
+    -- doit rester exactement celui épinglé (aucune autre dérive admise).
+    IF pin.signature='public.dec_email_contrat_signe_complet()' THEN
+      corps:=replace(corps,'public.fn_type_contrat_salarie(NEW.type_contrat)','(NEW.type_contrat IN (''CDD'', ''CDD''))');
+    END IF;
     IF corps IS NULL OR md5(corps) IS DISTINCT FROM pin.expected_md5 THEN
       RAISE EXCEPTION 'CANVAS_TEST_DEPENDENCY_CHANGED: %',pin.signature;
     END IF;
