@@ -15,7 +15,11 @@ final class DemoRevenusGatewayTests: XCTestCase {
         XCTAssertEqual(try DemoFixtures.loadMissionsTerminees().fixedNow, iso)
     }
 
+    /// Profil fictif MIXTE, hors compte de test, compte Connect complet : mêmes règles de visibilité que le monde
+    /// Supabase (`ExerciceRevenus.afficheTotaux`, `TotauxRevenus.visibles` ; revue B8 de T12, M1).
     func testTotauxDuProfilMixte() async throws {
+        let fichier = try DemoFixtures.loadRevenus()
+        XCTAssertEqual(fichier.exercice, ExerciceRevenus(typeExercice: "MIXTE", estCompteTest: false))
         let totaux = try await DemoRevenusGateway().totaux(context: context)
         XCTAssertEqual(totaux, TotauxRevenus(moisEnCours: 195, total: 1425.6, enAttente: 780, stripeConnectActif: true))
     }

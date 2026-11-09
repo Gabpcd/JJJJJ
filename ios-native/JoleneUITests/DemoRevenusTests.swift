@@ -12,7 +12,8 @@ import XCTest
 ///   Rist à 280 €) et l'état de la dernière déclaration, notes « net estimé » verbatim ;
 /// - le litige du paiement rapide ouvre le détail natif de la mission, empilé sur l'onglet Revenus ;
 /// - « Factures », « Paie » et une ligne de mission (présences, lot 2) sont des renvois web canoniques (D4), présentés
-///   par le double démo du présentateur `.safari` (aucune requête réseau) ;
+///   par le double démo du présentateur `.safari` (aucune requête réseau) ; la ligne s'ouvre aussi par un vrai bouton
+///   nommé comme le `aria-label` du web (accessibilité, revue B8 de T12, m5) ;
 /// - état d'erreur puis reprise (`JOLENE_FORCE_REVENUS_ECHEC=1`) ;
 /// - lien universel `/soignant/mes-gains` (aperçu natif) et tap push `FACTURE_EMISE` (section factures : renvoi web, D4 ;
 ///   cas reporté de T5).
@@ -30,7 +31,11 @@ final class DemoRevenusTests: JoleneUITestCase {
         XCTAssertTrue(app.navigationBars["Revenus"].exists, "titre du web (`usePageTitle('Revenus')`)")
         XCTAssertEqual(element("revenus-sous-titre").label, "Vos gains, factures et documents de paie au même endroit")
 
-        // Totaux serveur (`fn_mes_revenus_connect`), jamais recalculés.
+        // Totaux serveur (`fn_mes_revenus_connect`), jamais recalculés. Les trois sections sont lues en parallèle et
+        // `ouvrirRevenus` n'attend que les missions : les cartes sont attendues avant toute lecture (revue B8 de T12, m4).
+        require("Les totaux serveur et leur note sont rendus", timeout: 30) {
+            ["revenus-kpi-mois", "revenus-kpi-total", "revenus-kpi-attente", "revenus-kpi-note"].allSatisfy { self.element($0).exists }
+        }
         XCTAssertEqual(element("revenus-kpi-mois").label, "Ce mois, 195,00\(Self.espace)€")
         XCTAssertEqual(element("revenus-kpi-total").label, "Total réglé, 1\u{202F}425,60\(Self.espace)€")
         XCTAssertEqual(element("revenus-kpi-attente").label, "Autres paiements en attente, 780,00\(Self.espace)€")
@@ -122,6 +127,9 @@ final class DemoRevenusTests: JoleneUITestCase {
         liensRenvoiWebAffiche("https://jolene.app/soignant/mes-gains?tab=bulletins")
         liensFermerRenvoiWeb()
         require("L'onglet Revenus est intact après les renvois") { self.containerVisible(self.element("revenus-screen")) }
+        // Documentation seulement (revue B8 de T12, m7) : `revenus-avances-web` n'est codé nulle part, cette assertion
+        // passe à coup sûr. Elle rappelle l'écart 4 de la section T12 (`DECISIONS_LOT3.md`) : avance de trésorerie
+        // absente, drapeau `affacturage_actif` non lu (défaut false, web l.848, l.897).
         XCTAssertFalse(element("revenus-avances-web").exists, "avance de trésorerie : drapeau affacturage_actif non lu, défaut false (web l.848, l.897)")
     }
 
@@ -137,6 +145,17 @@ final class DemoRevenusTests: JoleneUITestCase {
         record("\(proofPrefix)-revenus-presences")
         liensFermerRenvoiWeb()
         require("L'onglet Revenus est intact") { self.containerVisible(self.element("revenus-screen")) }
+
+        // Revue B8 de T12, m5 : action atteignable par VoiceOver, le Contrôle vocal et le clavier — un vrai bouton, nommé
+        // comme le `aria-label` du web (`Voir mission ${m.intitule || ''}`, MesGains.tsx l.703), dans la ligne.
+        let bouton = app.buttons["revenus-mission-ouvrir-demo-terminee-002"]
+        scrollTo(bouton, in: ecran)
+        require("Le bouton d'ouverture de la mission est atteignable") { self.visible(bouton) && bouton.isEnabled }
+        XCTAssertEqual(bouton.label, "Voir mission Démonstration · Mission terminée 2")
+        bouton.tap()
+        liensRenvoiWebAffiche("https://jolene.app/soignant/presences/mission/demo-terminee-002")
+        liensFermerRenvoiWeb()
+        require("L'onglet Revenus est intact après le bouton") { self.containerVisible(self.element("revenus-screen")) }
     }
 
     func testErreurPuisReprise() throws {
@@ -147,7 +166,8 @@ final class DemoRevenusTests: JoleneUITestCase {
         require("L'erreur de chargement est affichée", timeout: 30) { erreur.exists }
         XCTAssertTrue(erreur.label.contains("Impossible de charger tous les revenus"), erreur.label)
         XCTAssertFalse(element("revenus-empty").exists, "jamais l'état vide sur une erreur")
-        XCTAssertTrue(element("revenus-kpi-mois").exists, "sections indépendantes : les totaux restent lus")
+        // Revue B8 de T12, m4 : l'échec des missions peut précéder la lecture des totaux (sections parallèles).
+        require("Sections indépendantes : les totaux restent lus", timeout: 30) { self.element("revenus-kpi-mois").exists }
         record("\(proofPrefix)-revenus-erreur")
         tap("revenus-retry")
         require("Les missions sont relues après « Réessayer »", timeout: 30) {

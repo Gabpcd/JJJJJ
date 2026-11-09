@@ -38,21 +38,71 @@ final class RevenusLectureTests: XCTestCase {
         }
     }
 
-    // MARK: - Exercice (visibilité des totaux)
+    // MARK: - Exercice et compte Connect (visibilité des totaux)
 
-    /// `PageStripeConnect.tsx` l.104 : les totaux ne sont lus que pour `LIBERAL`, `MIXTE` ou `statut_liberal = ACTIF`.
-    /// C'est la visibilité d'une section, jamais le régime d'une ligne financière (règle Lot 14 : celui-ci vient de
-    /// `missions.type_contrat_applique`).
-    func testExerciceAfficheLesTotauxCommeLaPageStripeConnect() throws {
-        let cas: [(String?, String?, Bool)] = [
-            ("LIBERAL", nil, true), ("MIXTE", nil, true), ("SALARIE", nil, false), (nil, nil, false),
-            ("SALARIE", "ACTIF", true), (nil, "ACTIF", true), ("SALARIE", "INACTIF", false), ("liberal", nil, false),
+    /// Revue B8 de T12, M1 : les cartes du web ne sont **rendues** que pour `isLiberal` (`PageStripeConnect.tsx` l.178,
+    /// `typeExercice === 'LIBERAL' || typeExercice === 'MIXTE'`, appliqué l.300 ; `statut_liberal` n'y entre pas) hors
+    /// compte de test (`!estCompteTest`, l.302 et l.367). La condition de l.106 (`… || sg.statut_liberal === 'ACTIF'`)
+    /// n'est que celle du CHARGEMENT : un salarié `statut_liberal = ACTIF` ne voit jamais les totaux (ses réceptions de
+    /// salaire `paiements_soignant` CONFIRME y seraient comptées comme « Total réglé »). C'est la visibilité d'une
+    /// section, jamais le régime d'une ligne financière (règle Lot 14 : `missions.type_contrat_applique`).
+    func testExerciceAfficheLesTotauxCommeLesCartesDeLaPageStripeConnect() throws {
+        let cas: [(String?, Bool?, Bool)] = [
+            ("LIBERAL", nil, true), ("MIXTE", nil, true), ("LIBERAL", false, true), ("MIXTE", false, true),
+            ("SALARIE", nil, false), ("SALARIE", false, false), (nil, nil, false), ("liberal", false, false),
+            ("LIBERAL", true, false), ("MIXTE", true, false), ("SALARIE", true, false),
         ]
-        for (type, statut, attendu) in cas {
-            XCTAssertEqual(ExerciceRevenus(typeExercice: type, statutLiberal: statut).afficheTotaux, attendu, "\(String(describing: type)) \(String(describing: statut))")
+        for (type, test, attendu) in cas {
+            XCTAssertEqual(ExerciceRevenus(typeExercice: type, estCompteTest: test).afficheTotaux, attendu,
+                           "\(String(describing: type)) compte test \(String(describing: test))")
         }
-        let lu = try decoder(ExerciceRevenus.self, #"{"type_exercice":"MIXTE","statut_liberal":null}"#)
-        XCTAssertEqual(lu, ExerciceRevenus(typeExercice: "MIXTE", statutLiberal: nil))
+        let lu = try decoder(ExerciceRevenus.self, #"{"type_exercice":"MIXTE","est_compte_test":false}"#)
+        XCTAssertEqual(lu, ExerciceRevenus(typeExercice: "MIXTE", estCompteTest: false))
+        // Le cas de la revue : salarié avec `statut_liberal = ACTIF` (clé ignorée), jamais de totaux.
+        let salarieActif = try decoder(ExerciceRevenus.self, #"{"type_exercice":"SALARIE","statut_liberal":"ACTIF","est_compte_test":false}"#)
+        XCTAssertFalse(salarieActif.afficheTotaux, "SALARIE + statut_liberal ACTIF : chargé par le web (l.106), jamais affiché (l.178, l.300)")
+        let test = try decoder(ExerciceRevenus.self, #"{"type_exercice":"LIBERAL","est_compte_test":true}"#)
+        XCTAssertFalse(test.afficheTotaux, "compte de test : carte « Stripe désactivé », jamais les totaux (l.302, l.367)")
+    }
+
+    /// `statut === 'COMPLET'` (l.367) : seul un compte Connect complet voit les cartes. Le natif ne lit pas l'edge
+    /// `stripe-connect-status` (T14a) : il prend `stripe_connect_actif` de la même réponse
+    /// (`fn_soignant_stripe_connect_actif` : `stripe_connect_onboarding` COMPLET + `onboarding_complete`, `charges_enabled`,
+    /// `payouts_enabled`, la ligne que l'edge relit et réécrit). `false` → section absente même sans les trois nombres ;
+    /// drapeau absent ou non booléen → statut inconnu, section absente (le web masque les cartes sur `erreurStatut`) ;
+    /// `true` sans les trois nombres finis → « indisponible » (l.387-391, `erreurRevenus` dans la branche COMPLET).
+    func testTotauxVisiblesSeulementPourUnCompteConnectComplet() throws {
+        let complet = try TotauxRevenus.visibles(try json(#"{"mois_en_cours":195,"total":1425.6,"en_attente":0,"stripe_connect_actif":true}"#))
+        XCTAssertEqual(complet, TotauxRevenus(moisEnCours: 195, total: 1425.6, enAttente: 0, stripeConnectActif: true))
+        for corps in [
+            #"{"mois_en_cours":195,"total":1425.6,"en_attente":0,"stripe_connect_actif":false}"#,
+            #"{"mois_en_cours":"x","stripe_connect_actif":false}"#,
+            #"{"mois_en_cours":195,"total":1425.6,"en_attente":0}"#,
+            #"{"mois_en_cours":195,"total":1425.6,"en_attente":0,"stripe_connect_actif":null}"#,
+            #"{"mois_en_cours":195,"total":1425.6,"en_attente":0,"stripe_connect_actif":"true"}"#,
+        ] {
+            XCTAssertNil(try TotauxRevenus.visibles(try json(corps)), "compte Connect non complet ou inconnu : aucune carte (\(corps))")
+        }
+        for corps in [#"{"mois_en_cours":1,"total":"2","en_attente":3,"stripe_connect_actif":true}"#,
+                      #"{"error":"Non authentifié"}"#, "null", "[]"] {
+            XCTAssertThrowsError(try TotauxRevenus.visibles(try json(corps)), corps) { erreur in
+                XCTAssertEqual((erreur as? JoleneError)?.kind, .unknown, corps)
+                XCTAssertEqual((erreur as? JoleneError)?.message, RevenusTextes.totauxIndisponibles, corps)
+            }
+        }
+    }
+
+    /// Test-garde des sources web citées (M1) : si la condition d'affichage change sur le web, ce test rougit.
+    func testConditionsDuWebCiteesASaLigne() throws {
+        let stripe = try CompteVerbatimTests.lignes("src/pages/PageStripeConnect.tsx")
+        XCTAssertTrue(stripe[94].contains(".select('prenom, nom, type_exercice, statut_liberal, est_compte_test')"), "l.95")
+        XCTAssertTrue(stripe[105].contains("if (sg.type_exercice === 'LIBERAL' || sg.type_exercice === 'MIXTE' || sg.statut_liberal === 'ACTIF') {"),
+                      "l.106 : condition de chargement seulement")
+        XCTAssertTrue(stripe[177].contains("const isLiberal = typeExercice === 'LIBERAL' || typeExercice === 'MIXTE';"), "l.178")
+        XCTAssertTrue(stripe[299].contains("{isLiberal && ("), "l.300")
+        XCTAssertTrue(stripe[366].contains("{!estCompteTest && !erreurStatut && statut === 'COMPLET' && ("), "l.367")
+        XCTAssertTrue(stripe[391].contains("{revenus && ("), "l.392")
+        XCTAssertTrue(stripe[92].contains("Ne jamais déduire le mode d'exercice d'une lecture en panne."), "l.93")
     }
 
     // MARK: - Paiements rapides (`fn_mes_paiements_escrow`)
@@ -129,7 +179,7 @@ final class RevenusLectureTests: XCTestCase {
         XCTAssertEqual(MontantMission.montantAffiche(mission.finance)?.montant, 280, "jamais 320 (correction inactive)")
     }
 
-    /// `regimeMission` du web (l.55-58) : `type_contrat_applique ?? type_contrat_recherche`, seulement SALARIE ou LIBERAL.
+    /// `regimeMission` du web (l.56-59) : `type_contrat_applique ?? type_contrat_recherche`, seulement SALARIE ou LIBERAL.
     /// Jamais `soignants.type_exercice` (règle Lot 14, `test:guards` 7).
     func testRegimeDeLaMissionVientDuContratDeLaMission() {
         let cas: [(String?, String?, String?)] = [

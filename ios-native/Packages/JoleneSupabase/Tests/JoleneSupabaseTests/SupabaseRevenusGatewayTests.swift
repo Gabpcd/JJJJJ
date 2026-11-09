@@ -10,8 +10,10 @@ import XCTest
 /// - missions TERMINEE du soignant avec **exactement** les colonnes de `MesGains.tsx` l.95 (aucune colonne Rist, D5 —
 ///   test-garde contre la source web), `debut_le` décroissant, pages de 50 ; dernière déclaration lue avec les colonnes
 ///   et l'ordre de l.102-107 ; noms d'établissement par `fn_etablissements_safe` seul (repli : nom absent) ;
-/// - totaux : `soignants(type_exercice, statut_liberal)` d'abord ; RPC appelée seulement pour un exercice libéral
-///   (`PageStripeConnect.tsx` l.104) ; trois nombres finis exigés, sinon section en erreur ;
+/// - totaux : `soignants(type_exercice, est_compte_test)` d'abord (colonnes de `PageStripeConnect.tsx` l.95) ; RPC
+///   appelée seulement pour `LIBERAL` ou `MIXTE` hors compte de test (cartes du web : l.178, l.300, l.302, l.367 ; la
+///   condition de l.106 n'est que celle du chargement) ; cartes seulement si `stripe_connect_actif` est vrai
+///   (`statut === 'COMPLET'`, l.367) ; trois nombres finis exigés, sinon section en erreur ;
 /// - paiements rapides : tableau de la RPC, ordre serveur ; autre corps → contrat.
 /// Aucune écriture : seulement des GET et des RPC de lecture.
 final class SupabaseRevenusGatewayTests: XCTestCase {
@@ -96,8 +98,16 @@ final class SupabaseRevenusGatewayTests: XCTestCase {
         let lignes = try source("src/pages/MesGains.tsx")
         XCTAssertTrue(lignes[94].contains(".select('\(SupabaseRevenusGateway.missionsSelect)')"), "MesGains.tsx l.95")
         XCTAssertTrue(lignes[101].contains(".select('\(SupabaseRevenusGateway.paiementsSelect)')"), "MesGains.tsx l.102")
-        XCTAssertTrue(lignes[854].contains(".select('\(SupabaseRevenusGateway.exerciceSelect)')"), "MesGains.tsx l.855")
         XCTAssertTrue(lignes[71].contains("PAGE_SIZE = \(RevenusAssemblage.taillePage)"), "MesGains.tsx l.72")
+        // Revue B8 de T12, M1 : l'exercice est lu comme `PageStripeConnect.tsx` l.95 (sous-ensemble : ni nom ni prénom,
+        // `statut_liberal` inutile à l'affichage, l.178), jamais comme les onglets de `MesGains.tsx` l.855.
+        let stripe = try source("src/pages/PageStripeConnect.tsx")
+        let web = "prenom, nom, type_exercice, statut_liberal, est_compte_test"
+        XCTAssertTrue(stripe[94].contains(".select('\(web)')"), "PageStripeConnect.tsx l.95")
+        let colonnesWeb = Set(web.components(separatedBy: ", "))
+        let colonnes = SupabaseRevenusGateway.exerciceSelect.components(separatedBy: ", ")
+        XCTAssertEqual(colonnes, ["type_exercice", "est_compte_test"])
+        XCTAssertTrue(Set(colonnes).isSubset(of: colonnesWeb))
     }
 
     func testDerniereDeclarationColonnesEtOrdreDuWeb() async throws {
@@ -188,13 +198,13 @@ final class SupabaseRevenusGatewayTests: XCTestCase {
         registry.add("GET", soignantsChemin, respond: .json(status, corps))
     }
 
-    func testTotauxLusPourUnExerciceLiberal() async throws {
-        stubExercice(#"{"type_exercice":"MIXTE","statut_liberal":null}"#)
+    func testTotauxLusPourUnExerciceLiberalAvecUnCompteConnectComplet() async throws {
+        stubExercice(#"{"type_exercice":"MIXTE","est_compte_test":false}"#)
         registry.add("POST", totauxChemin, respond: .json(200, #"{"mois_en_cours":195,"total":1425.6,"en_attente":780,"stripe_connect_actif":true}"#))
         let totaux = try await gateway().totaux(context: TestClient.context)
         XCTAssertEqual(totaux, TotauxRevenus(moisEnCours: 195, total: 1425.6, enAttente: 780, stripeConnectActif: true))
         let lecture = try XCTUnwrap(registry.requests(to: soignantsChemin).first)
-        XCTAssertEqual(lecture.query("select"), "type_exercice,statut_liberal")
+        XCTAssertEqual(lecture.query("select"), "type_exercice,est_compte_test")
         XCTAssertEqual(lecture.query("id"), "eq.\(TestClient.userId)")
         let rpc = try XCTUnwrap(registry.requests(to: totauxChemin).first)
         XCTAssertEqual(rpc.method, "POST")
@@ -203,23 +213,43 @@ final class SupabaseRevenusGatewayTests: XCTestCase {
         }
     }
 
-    /// `PageStripeConnect.tsx` l.104 : salarié pur → aucune lecture des totaux (ni RPC, ni section).
-    func testTotauxMasquesSansExerciceLiberalSansAppelRPC() async throws {
-        stubExercice(#"{"type_exercice":"SALARIE","statut_liberal":null}"#)
-        let totaux = try await gateway().totaux(context: TestClient.context)
-        XCTAssertNil(totaux)
-        XCTAssertTrue(registry.requests(to: totauxChemin).isEmpty)
-        registry.reset()
-        stubExercice(#"{"type_exercice":"SALARIE","statut_liberal":"ACTIF"}"#)
-        registry.add("POST", totauxChemin, respond: .json(200, #"{"mois_en_cours":0,"total":0,"en_attente":0}"#))
-        let actif = try await gateway().totaux(context: TestClient.context)
-        XCTAssertEqual(actif, TotauxRevenus(moisEnCours: 0, total: 0, enAttente: 0))
+    /// Revue B8 de T12, M1 : les cartes du web exigent `isLiberal` (`PageStripeConnect.tsx` l.178, appliqué l.300 ;
+    /// `statut_liberal` ignoré) hors compte de test (l.302, l.367) → salarié (même `statut_liberal = ACTIF`) ou compte
+    /// de test : section absente, sans appel de la RPC.
+    func testTotauxMasquesSansExerciceLiberalOuPourUnCompteDeTestSansAppelRPC() async throws {
+        for exercice in [#"{"type_exercice":"SALARIE","est_compte_test":false}"#,
+                         #"{"type_exercice":"SALARIE","statut_liberal":"ACTIF","est_compte_test":false}"#,
+                         #"{"type_exercice":"LIBERAL","est_compte_test":true}"#,
+                         #"{"type_exercice":"MIXTE","est_compte_test":true}"#,
+                         #"{"type_exercice":null,"est_compte_test":false}"#] {
+            registry.reset()
+            stubExercice(exercice)
+            registry.add("POST", totauxChemin, respond: .json(200, #"{"mois_en_cours":1,"total":2,"en_attente":3,"stripe_connect_actif":true}"#))
+            let totaux = try await gateway().totaux(context: TestClient.context)
+            XCTAssertNil(totaux, exercice)
+            XCTAssertTrue(registry.requests(to: totauxChemin).isEmpty, "aucune lecture des totaux : \(exercice)")
+        }
+    }
+
+    /// M1 : `statut === 'COMPLET'` (l.367) — le drapeau `stripe_connect_actif` de la même réponse
+    /// (`fn_soignant_stripe_connect_actif`) : faux ou inconnu → section absente, jamais des totaux affichés.
+    func testTotauxMasquesSansCompteConnectComplet() async throws {
+        for rpc in [#"{"mois_en_cours":195,"total":1425.6,"en_attente":780,"stripe_connect_actif":false}"#,
+                    #"{"mois_en_cours":195,"total":1425.6,"en_attente":780}"#,
+                    #"{"mois_en_cours":"x","stripe_connect_actif":false}"#] {
+            registry.reset()
+            stubExercice(#"{"type_exercice":"LIBERAL","est_compte_test":false}"#)
+            registry.add("POST", totauxChemin, respond: .json(200, rpc))
+            let totaux = try await gateway().totaux(context: TestClient.context)
+            XCTAssertNil(totaux, rpc)
+            XCTAssertEqual(registry.requests(to: totauxChemin).count, 1)
+        }
     }
 
     func testTotauxIncompletsOuProfilIntrouvableSontIndisponibles() async {
         for (exercice, statut, rpc) in [
-            (#"{"type_exercice":"LIBERAL","statut_liberal":null}"#, 200, #"{"mois_en_cours":1,"total":"2","en_attente":3}"#),
-            (#"{"type_exercice":"LIBERAL","statut_liberal":null}"#, 200, #"{"error":"Non authentifié"}"#),
+            (#"{"type_exercice":"LIBERAL","est_compte_test":false}"#, 200, #"{"mois_en_cours":1,"total":"2","en_attente":3,"stripe_connect_actif":true}"#),
+            (#"{"type_exercice":"LIBERAL","est_compte_test":false}"#, 200, #"{"error":"Non authentifié"}"#),
             (#"{"code":"PGRST116","details":"The result contains 0 rows","hint":null,"message":"no rows"}"#, 406, "{}"),
         ] {
             registry.reset()

@@ -31,6 +31,12 @@ final class RevenusPresentationTests: XCTestCase {
             ("select('id, intitule, debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id, service, type_contrat_applique, type_contrat_recherche, presences(valide_par_etablissement, valide_auto_72h_le, valide_le)')", gains, 95),
             ("p_action: 'DONNEES_PERSO_CONSULTATION'", gains, 149), ("p_type_ressource: 'soignant'", gains, 150),
             ("p_details: { page: 'mes_gains' }", gains, 151), ("const PAGE_SIZE = 50;", gains, 72),
+            // Règles citées par `RevenusPresentation` et `MissionTerminee.regime` (revue B8 de T12, m7).
+            ("const regime = mission.type_contrat_applique ?? mission.type_contrat_recherche;", gains, 57),
+            ("missions.filter(m => m.type_contrat_applique === 'LIBERAL')", gains, 243),
+            ("missions.filter(m => m.type_contrat_applique === 'SALARIE')", gains, 244),
+            (") : salMissions.length > 0 ? (", gains, 564), ("<NoteNetEstime className=\"mb-6\" />", gains, 565),
+            ("<SuiviVersementsConnect />", gains, 428), ("disabled={loading} onClick={() => setPage(p => p + 1)}", gains, 798),
             (T.kpiMois, stripe, 397), (T.kpiTotal, stripe, 404), (T.kpiAttente, stripe, 411), (T.noteTotaux, stripe, 417),
             (T.paiementRapide, escrow, 163), (T.aVenir, escrow, 168), (T.recemmentVerse, escrow, 175), (T.annules, escrow, 181),
             (T.escrowIndisponible, escrow, 117), (T.escrowErreurDefaut, escrow, 103), (T.reessayer, escrow, 120),
@@ -61,7 +67,7 @@ final class RevenusPresentationTests: XCTestCase {
     }
 
     /// Libellés escrow : HARD STOP n°4 (`DECISIONS_LOT3.md`, « Restent verbatim web ») — tutoiement du web conservé,
-    /// mot pour mot (décision du 09/11/2026 : le natif suit le web ; aucun « garanti »).
+    /// mot pour mot (règle 2 de LOTS_2_5_DECISIONS et décision 9 du lot 1 : seuls les textes non juridiques passent au vouvoiement ; aucun « garanti »).
     func testLibellesEscrowVerbatimEnTutoiementSansGarantie() {
         let libelles = EtatEscrow.allCases.flatMap { etat -> [String] in
             let avecDate = RevenusPresentation.ligneEscrow(PaiementRapide(missionId: "m", honorairesCents: 1, etat: etat.rawValue,
@@ -251,7 +257,7 @@ final class RevenusPresentationTests: XCTestCase {
         let recherche = mission("r", applique: nil, recherche: "SALARIE")
         XCTAssertEqual(RevenusPresentation.noteBasDePage([salariee, liberale]), T.noteSalariee + T.noteLiberale + T.noteCommune)
         XCTAssertEqual(RevenusPresentation.noteBasDePage([liberale]), T.noteLiberale + T.noteCommune)
-        XCTAssertEqual(RevenusPresentation.noteBasDePage([recherche]), T.noteCommune, "salMissions filtre `type_contrat_applique` seul (l.249)")
+        XCTAssertEqual(RevenusPresentation.noteBasDePage([recherche]), T.noteCommune, "salMissions filtre `type_contrat_applique` seul (l.244)")
         XCTAssertTrue(RevenusPresentation.afficheNoteNetEstime([salariee]))
         XCTAssertFalse(RevenusPresentation.afficheNoteNetEstime([liberale, recherche]))
     }
