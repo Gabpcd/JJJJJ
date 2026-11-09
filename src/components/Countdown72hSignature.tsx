@@ -68,7 +68,8 @@ export function Countdown72hSignature({ contratCreeLe, onExpire }: Props) {
         {couleur === 'destructive'
           ? 'Signature urgente — moins de 24h restantes !'
           : 'Signature à finaliser sous'}
-        <span className="ml-1 tabular-nums font-mono">
+        {' '}
+        <span className="tabular-nums font-mono">
           {heures}h {minutes.toString().padStart(2, '0')}m {secondes.toString().padStart(2, '0')}s
         </span>
       </p>

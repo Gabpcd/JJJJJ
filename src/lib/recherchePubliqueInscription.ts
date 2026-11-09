@@ -10,11 +10,19 @@ export function lireCriteresInscription(params: URLSearchParams) {
   };
 }
 
-export function lienInscriptionRecherche(criteres: CriteresRecherchePublique, campagne?: string) {
+export interface UtmInscription { source: string; medium: string; campaign: string; content?: string }
+
+/** `campagne` (chaîne) = UTM landing historique ; un objet UtmInscription pose les 4 UTM explicitement. */
+export function lienInscriptionRecherche(criteres: CriteresRecherchePublique, campagne?: string | UtmInscription) {
   const params = new URLSearchParams();
   if (criteres.profession) params.set('profession', criteres.profession);
   if (criteres.ville?.trim()) params.set('ville', criteres.ville.trim());
-  if (campagne) {
+  if (typeof campagne === 'object' && campagne) {
+    params.set('utm_source', campagne.source);
+    params.set('utm_medium', campagne.medium);
+    params.set('utm_campaign', campagne.campaign);
+    if (campagne.content) params.set('utm_content', campagne.content);
+  } else if (typeof campagne === 'string' && campagne) {
     params.set('utm_source', 'seo');
     params.set('utm_medium', 'landing');
     params.set('utm_campaign', campagne);
