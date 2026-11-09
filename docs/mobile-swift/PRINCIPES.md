@@ -55,7 +55,8 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   `AppContainer` ; la localisation est le `LocationPort` du lot 2, sans variante. Seule exception, provisoire et
   consignée (`DECISIONS_LOT3.md`, section T10) : tant que le lot 2 n'est pas fusionné, la position du profil passe par
   le port minimal `LocalisationPort` et une implémentation isolée (`LocalisationProfilProvisoire`), supprimée à la
-  fusion au profit d'un adaptateur sur `Appareil.localisation`.
+  fusion au profit d'un adaptateur sur `Appareil.localisation` (décision « T10 — localisation du profil livrée sans le
+  port du lot 2 », garde `FusionLocalisationLot2Tests`, rouge tant que les deux coexistent).
 
 ## 3. Aucun succès fabriqué
 
