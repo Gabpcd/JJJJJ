@@ -223,6 +223,23 @@ public actor DemoPointageGateway: PointagePort {
         return .envoyee(message: Self.messageRelanceEnvoyee)
     }
 
+    /// Fiche du détail (T5a) : mission du pointage (statut courant du monde) ou de l'historique ; première présence par
+    /// arrivée parmi les présences de la fixture (aucune mesure GPS en démo : contrôles sans distance ni précision).
+    public func ficheDetail(missionId: String, context: MissionReadContext) async throws -> FicheDetailPresences {
+        try verifier(context)
+        let m = try charger()
+        var mission = (m.fixture.missions + m.fixture.missionsHistorique).first { $0.id == missionId }
+        if let statut = m.statuts[missionId] { mission?.statut = statut }
+        var vues = Set<String>()
+        let presences = (m.fixture.historique + m.fixture.presencesValidees)
+            .filter { $0.missionId == missionId && vues.insert($0.id).inserted }
+        let premiere = triStableCroissant(presences) { DisponibilitePointage.temps($0.pointageArriveeLe) }.first
+        return FicheDetailPresences(mission: mission, presence: premiere.map {
+            PresenceControlee(id: $0.id, pointageArriveeLe: $0.pointageArriveeLe, valideParEtablissement: $0.valideParEtablissement,
+                              valideLe: $0.valideLe)
+        })
+    }
+
     // MARK: - Monde
 
     private func verifier(_ context: MissionReadContext) async throws {

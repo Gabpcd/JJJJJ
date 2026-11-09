@@ -22,11 +22,15 @@ struct MissionsListScreen: View {
     @State private var filtresOuverts = false
     private let controller: SessionController
     private let snapshot: SessionSnapshot
+    /// Lot 2 T5a (revue fraîche, m6) : changement d'onglet transmis au détail d'une mission, pour que « Présences et
+    /// pointage » y soit proposé depuis Explorer comme depuis l'Accueil (`DetailMissionSoignant.tsx` l.1477-1484).
+    private let ouvrirOnglet: ((MainTabView.Tab) -> Void)?
 
-    init(session: SessionStore, snapshot: SessionSnapshot) {
+    init(session: SessionStore, snapshot: SessionSnapshot, ouvrirOnglet: ((MainTabView.Tab) -> Void)? = nil) {
         self.session = session
         self.controller = session.controller
         self.snapshot = snapshot
+        self.ouvrirOnglet = ouvrirOnglet
         _model = StateObject(wrappedValue: MissionsListModel(controller: session.controller, snapshot: snapshot))
     }
 
@@ -50,7 +54,8 @@ struct MissionsListScreen: View {
             }
         }
         .navigationDestination(for: MissionRoute.self) { route in
-            MissionDetailScreen(route: route, initial: model.mission(id: route.id), session: session, snapshot: snapshot)
+            MissionDetailScreen(route: route, initial: model.mission(id: route.id), session: session, snapshot: snapshot,
+                                ouvrirOnglet: ouvrirOnglet)
         }
         // Une tâche annulée (changement d'onglet, retour) laisse l'état à .loading : relance ici.
         .task { if case .loading = model.state { await model.load() } }

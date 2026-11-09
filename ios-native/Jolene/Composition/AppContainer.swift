@@ -140,6 +140,11 @@ final class AppContainer: ObservableObject {
         // seconde revue fraîche (m2) : `session-expiree-scan`, `session-expiree-consentement` (pointage et authentification
         // démo liés : « Vérifier ma session » revalide), `consentement-echec`.
         DemoPointageGateway.Scenario(arguments: arguments).installer(dans: &gateways)
+        // Lot 2 T5a : `-JOLENE_DEMO_SCENARIO accueil-pointage` → mission du jour à pointer et départ oublié sur l'Accueil
+        // (widget « Aller pointer », bandeau d'oubli de départ ; `DemoPresenceDetailTests`).
+        if ScenarioAccueilDemo(arguments: arguments) == .pointage, processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] != "1" {
+            gateways.dashboard = DemoDashboardGateway(scenario: .pointage)
+        }
         return gateways
         #else
         return DemoWorld.gateways()

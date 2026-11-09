@@ -13,6 +13,8 @@ struct RootView: View {
     var body: some View {
         aiguillage
             .environment(\.carteTuiles, CarteTuiles.pour(modeDemo: container.isDemo))
+            // Lot 2 T5a : mémoire « note déjà proposée » (en mémoire en démo, `UserDefaults` sinon).
+            .environment(\.memoireNotation, container.memoireNotation)
     }
 
     @ViewBuilder private var aiguillage: some View {

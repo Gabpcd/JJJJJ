@@ -165,9 +165,12 @@ public extension InstantanePresences {
     }
 }
 
-/// Renvois web de la page Présences tant que leurs écrans natifs ne sont pas livrés : contrat (T9a), litiges (lot 4),
-/// détail des présences d'une mission (T5a). Routes résolues par `LinkRouter` (`AccueilPresentation.renvoiWeb`),
-/// jamais une URL écrite en dur ; présentées seulement par le présentateur `.safari` injecté par T10.
+/// Renvois web de la page Présences tant que leurs écrans natifs ne sont pas livrés : contrat (T9a), litiges (lot 4).
+/// Routes résolues par `LinkRouter` (`AccueilPresentation.renvoiWeb`, nil dès que la route devient native), jamais une
+/// URL écrite en dur ; présentées seulement par le présentateur `.safari` injecté par T10.
+///
+/// Exception documentée : le récapitulatif financier du détail des présences (`recapitulatifFinancier`) est une route
+/// FORCÉE web, indépendante du routage natif (même motif que `ContratPresentation.renvoiSignature`).
 public enum PresencesRenvois {
     /// `navigate(`/contrat/${contrat.id}`)` (`BlocPointageMission.tsx` l.95).
     public static func contrat(id: String) -> JoleneRoute? {
@@ -186,8 +189,25 @@ public enum PresencesRenvois {
         AccueilPresentation.renvoiWeb("/soignant/litiges")
     }
 
-    /// `navigate(`/soignant/presences/mission/${p.mission_id}`)` (l.685, l.696).
-    public static func detail(missionId: String) -> JoleneRoute? {
-        AccueilPresentation.renvoiWeb("/soignant/presences/mission/" + missionId)
+    /// Récapitulatif financier d'une mission (`DetailPresencesMission.tsx` l.705-800 : taux, bruts, IFM/ICP calculés
+    /// côté client, non portés : décision 11 de `DECISIONS_LOT2.md`, LOT2_PLAN §1.2) : page web de la mission,
+    /// `https://jolene.app/soignant/presences/mission/<id>`. Route FORCÉE web : construite par
+    /// `JoleneLink.canonicalURL`, jamais par `LinkRouter`, pour survivre au routage natif de
+    /// `/soignant/presences/mission/:id` vers `DetailPresencesScreen` (T10) — `AccueilPresentation.renvoiWeb` rendrait
+    /// alors nil et le renvoi disparaîtrait sans bruit (revue fraîche de T5a, M3). Ouverte par le présentateur `.safari`
+    /// (SFSafariViewController), jamais par `openURL` : la page web s'affiche dans l'app sans retour par lien universel.
+    /// Lot 3 : remplacée par le lien Revenus natif (décision 11). nil si l'identifiant n'est pas un segment sûr.
+    public static func recapitulatifFinancier(missionId: String) -> JoleneRoute? {
+        renvoiWebForce("/soignant/presences/mission/", identifiant: missionId)
+    }
+
+    /// `.safari` sur `préfixe + identifiant`, sans passer par `LinkRouter`. L'identifiant est un segment sûr
+    /// (`[A-Za-z0-9-]`, comme `ContratPresentation.renvoi`) : aucun séparateur, requête, fragment, encodage ni
+    /// traversée ne peut détourner le chemin.
+    static func renvoiWebForce(_ prefixe: String, identifiant: String) -> JoleneRoute? {
+        guard !identifiant.isEmpty, identifiant.unicodeScalars.allSatisfy({
+            ("a"..."z").contains($0) || ("A"..."Z").contains($0) || ("0"..."9").contains($0) || $0 == "-"
+        }), let url = JoleneLink.canonicalURL(link: prefixe + identifiant) else { return nil }
+        return .safari(url)
     }
 }

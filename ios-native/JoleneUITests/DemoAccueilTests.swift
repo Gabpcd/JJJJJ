@@ -72,14 +72,16 @@ final class DemoAccueilTests: JoleneUITestCase {
         // `accueil-calendrier-issue` après un tap (LOT1_PLAN.md §3 T5, verrou de clôture T12).
         XCTAssertFalse(dansEcran("accueil-calendrier-demo-assignee-001", ecran).exists,
                        "bouton calendrier sans implémentation injectée : jamais un bouton sans effet (T5 le câble)")
-        // Renvois web (pointage, notifications) : le compteur reste affiché, mais aucun bouton tant que
+        // Renvoi web (notifications) : le compteur reste affiché, mais aucun bouton tant que
         // T10 n'injecte pas le présentateur `.safari` (`SFSafariViewController`) : un `openURL` d'un
-        // chemin `/soignant/*` reviendrait dans l'app par lien universel, sans effet. T10 remplace ces
-        // assertions par la présence du bouton et la présentation du renvoi (LOT1_PLAN.md §3 T10, verrou T12 n°2).
+        // chemin `/soignant/*` reviendrait dans l'app par lien universel, sans effet. T10 remplace cette
+        // assertion par la présence du bouton et la présentation du renvoi (LOT1_PLAN.md §3 T10, verrou T12 n°2).
+        // Pointage (lot 2 T5a) : natif ; bandeau et widget n'apparaissent qu'avec le scénario `accueil-pointage`.
         XCTAssertFalse(dansEcran("accueil-notifications-action", ecran).exists,
                        "bouton « Voir sur jolene.app » sans présentateur injecté : jamais un bouton sans effet (T10 le câble)")
-        XCTAssertFalse(dansEcran("accueil-oubli-pointage-action", ecran).exists,
-                       "bouton « Vérifier mes présences » sans présentateur injecté (T10 le câble)")
+        XCTAssertFalse(dansEcran("accueil-oubli-depart", ecran).exists,
+                       "aucun départ oublié dans la démo : pas de « Pointer mon départ maintenant » (lot 2 T5a, `DemoPresenceDetailTests`)")
+        XCTAssertFalse(dansEcran("accueil-pointer", ecran).exists, "aucune mission à pointer dans l'heure dans la démo")
         record("\(proofPrefix)-accueil-bas")
 
         ouvrirProchaineMissionPuisRevenir(ecran)

@@ -783,7 +783,7 @@
     },
     {
       "name": "fn_creer_notation_mission",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": {
         "args": "{ p_commentaire?: string; p_critere_1: number; p_critere_2: number; p_critere_3: number; p_critere_4: number; p_mission_id: string; p_sens: string }",

@@ -167,7 +167,30 @@ final class PresencesAffichageTests: XCTestCase {
         XCTAssertEqual(contrat.externalURL?.absoluteString, "https://jolene.app/contrat/c-1")
         XCTAssertFalse(contrat.isNative, "contrat natif à T9a : renvoi web d'ici là")
         XCTAssertEqual(PresencesRenvois.litiges?.externalURL?.absoluteString, "https://jolene.app/soignant/litiges")
-        XCTAssertEqual(PresencesRenvois.detail(missionId: "m-1")?.externalURL?.absoluteString,
-                       "https://jolene.app/soignant/presences/mission/m-1")
+    }
+
+    /// Récapitulatif financier du détail des présences (décision 11 : non porté, renvoi web jusqu'au lot 3) : route
+    /// FORCÉE web, construite sans `LinkRouter`, pour survivre au routage natif de `/soignant/presences/mission/:id`
+    /// (T10). Revue fraîche de T5a, M3 : `AccueilPresentation.renvoiWeb` rendait nil dès que la route devenait native.
+    func testRecapitulatifFinancierResteUnRenvoiWebQuandLeDetailDevientNatif() throws {
+        let recapitulatif = try XCTUnwrap(PresencesRenvois.recapitulatifFinancier(missionId: "m-1"))
+        XCTAssertEqual(recapitulatif, .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/presences/mission/m-1"))))
+        XCTAssertFalse(recapitulatif.isNative)
+        XCTAssertEqual(PresencesRenvois.recapitulatifFinancier(missionId: "demo-presence-a")?.externalURL?.absoluteString,
+                       "https://jolene.app/soignant/presences/mission/demo-presence-a")
+
+        // Indépendance du routage natif : sur un chemin que `LinkRouter` rend DÉJÀ natif (détail d'une mission), la route
+        // forcée reste un renvoi web. Quand T10 routera `/soignant/presences/mission/:id` vers `DetailPresencesScreen`, le
+        // renvoi du récapitulatif ne disparaîtra donc pas (là où `AccueilPresentation.renvoiWeb` rendrait nil).
+        XCTAssertEqual(LinkRouter.resolve(link: "/soignant/missions/m-1"), .missionDetail(id: "m-1"))
+        XCTAssertNil(AccueilPresentation.renvoiWeb("/soignant/missions/m-1"), "le renvoi résolu par le routeur disparaît")
+        let force = try XCTUnwrap(PresencesRenvois.renvoiWebForce("/soignant/missions/", identifiant: "m-1"))
+        XCTAssertEqual(force.externalURL?.absoluteString, "https://jolene.app/soignant/missions/m-1")
+        XCTAssertFalse(force.isNative)
+
+        // Identifiant hors segment sûr (vide, séparateurs, requête, fragment, traversée, encodage) : aucun renvoi.
+        for invalide in ["", "a/b", "a?tab=x", "a#b", "..", "m 1", "m%2F1", "é"] {
+            XCTAssertNil(PresencesRenvois.recapitulatifFinancier(missionId: invalide), "« \(invalide) » accepté")
+        }
     }
 }

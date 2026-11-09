@@ -159,13 +159,14 @@ public enum TextesWeb {
         // source: src/pages/PresencesSoignant.tsx:658 [juridique]
         public static let bandeauAValider = "⏳ Présences en attente de validation par l'établissement (validation automatique sous 72 h). La validation des heures est distincte du versement. En salarié, le salaire est versé par l'établissement employeur. En libéral, le paiement suit les modalités de la mission."
 
-        /// Tutoiement du web conservé verbatim : le passage au vouvoiement serait une reformulation
-        /// (HARD STOP n°4), en attente de la décision de Gabrielle.
+        /// Affiché tel quel, tutoiement compris, par le détail des présences (T5a) : décision déléguée « Relance de
+        /// l'établissement » (`docs/mobile-swift/DECISIONS_LOT2.md`, « Décisions déléguées du 8 novembre 2026 », T5a,
+        /// l.1001) ; le vouvoiement des textes juridiques partira du web (décision de la vague 4).
         // source: src/pages/DetailPresencesMission.tsx:697 [libellé]
         public static let relanceTitre = "⏳ Tes présences attendent la validation de l'établissement"
 
-        /// Tutoiement du web conservé verbatim : le passage au vouvoiement serait une reformulation
-        /// (HARD STOP n°4), en attente de la décision de Gabrielle.
+        /// Affiché tel quel, tutoiement compris : même décision déléguée (l.1001), qui source chaque
+        /// phrase (CGU de production, `src/pages/PageCGU.tsx` l.48, l.109, l.115 ; `dec_definir_type_paiement`).
         // source: src/pages/DetailPresencesMission.tsx:698 [juridique]
         public static let relanceExplication = "La validation des heures (automatique sous 72 h) est distincte du versement. En salarié, le salaire est versé par l'établissement employeur. En libéral, le paiement suit les modalités de la mission. Tu peux envoyer un rappel."
     }

@@ -414,7 +414,7 @@
   - **T5a** : points d'entrée vers le détail — les cartes des blocs, des missions à venir et des lignes d'historique ne
     sont pas cliquables (le web ouvre `/soignant/missions/:id` et `/soignant/presences/mission/:id`) ; « Détail »
     (`presence-historique-detail-<ligne>`) est aujourd'hui un renvoi web (`PresencesRenvois.detail`), rendu seulement
-    avec le présentateur de T10 : T5a le remplace par `DetailPresencesScreen`. Les missions de `demo-presences.json`
+    avec le présentateur de T10 : T5a le remplace par `DetailPresencesScreen` (fait : renvoi et `PresencesRenvois.detail` retirés). Les missions de `demo-presences.json`
     n'existent pas dans `DemoMissionsGateway` : ouvrir `MissionDetailScreen` depuis un bloc afficherait « Mission
     indisponible » en démo ;
   - **T5b** : le panneau de contestation se monte dans `PresenceValideeRow` (sous la date) et dans
@@ -802,6 +802,74 @@
   - **T9b** : remplace `zoneSignature` de `ContratScreen` par `SignatureOtpView` quand `ContratModel.signature == .possible`,
     garde le renvoi web pour `.renvoiWeb` (décision 18) et les messages de préparation (`ContratPresentation.messagePreparation`) ;
     l'assertion « aucune signature native » (`contract-otp` absent) de `DemoContratsTests` bascule avec elle.
+- **T5a — application (L2-T5a, 9 novembre 2026)** :
+  - Core : `Pointage/PresentationDetailPresences.swift` (port des dérivations et du rendu soignant de
+    `DetailPresencesMission.tsx` l.193-703 : en-tête, synthèse, créneaux EFFECTIF par jour, contrôles, `presenceEnAttente` ;
+    EFFECTIF fermés seule source du temps travaillé, `heures_reelles` jamais lue), `DetailPresencesModel.swift`
+    (`detail` et `ficheDetail` en parallèle, `.introuvable`, carte masquée sur `{error}`, relance verbatim, un envoi à la
+    fois), `NotationModel.swift` (+ `MemoireNotation` : `UserDefaults` clé `jolene.notation.checkout.<userId>.<missionId>`,
+    en mémoire en démo), `PointsEntreePresences.swift` (détail de mission, widget « Aller pointer »),
+    `FicheDetailPresences.swift` (`PresenceControlee`, projection imposée) ; textes : fragments verbatim dans `LibellesWeb`
+    (`DetailPresences`, `Notation`, `AllerPointer`, `OubliDepart`, `DetailMission`, garde Node au caractère près),
+    vouvoyés et formats dans `Libelles/LibellesDetailPresences.swift` (ajouté à `DOSSIERS_LOT2`) ; démo : `DemoNotationGateway`,
+    `DemoPointageGateway.ficheDetail`, scénario `accueil-pointage` de `DemoDashboardGateway` (`-JOLENE_DEMO_SCENARIO`, DEBUG).
+  - Supabase : `SupabaseNotationGateway` (sept clés exactes, `P0001` déclarée, « déjà notée » → `.dejaNotee`, `finPrevue` par
+    `missions?select=fin_le`), `SupabasePointageGateway.ficheDetail` (missions et présences par projections imposées,
+    `order=pointage_arrivee_le.asc.nullslast`, `limit=1`) ; `notation` câblé dans les deux mondes (`portsEnAttenteLot2 =
+    ["contestation"]`) ; `fn_creer_notation_mission` consommée.
+  - Écrans : `Screens/Presences/DetailPresencesScreen.swift` (ids `presence-detail-screen`, `presence-detail-entete`,
+    `presence-detail-synthese`, `presence-detail-segment-<n>`, `presence-detail-controles`, `presence-relance`,
+    `presence-relancer`, `presence-relance-retour`, `presence-revenus-web`), `NotationSheet.swift` (`notation-sheet`,
+    `notation-etoile-<1-5>`, `notation-detail`, `notation-critere-<1-4>-<1-5>`, `notation-envoyer`, `notation-plus-tard`,
+    `notation-erreur`, `notation-remerciement`) ; « Détail » de l'historique ouvre le détail natif (renvoi web retiré,
+    `DemoPresencesTests` migré) ; détail d'une mission : `mission-presences`, `mission-heures` ; Accueil : `accueil-pointer`
+    (+ `accueil-pointer-action`) et `accueil-oubli-depart` (le renvoi web `accueil-oubli-pointage-action` est retiré,
+    `DemoAccueilTests` migré) ; XCUITest `DemoPresenceDetailTests` (éclat `lot2` d'`ios-swift-ci.yml`).
+  - **T4b** : la zone de pointage (`FabriqueZonePointage`) attache la notation par UNE ligne,
+    `.notationAuDepart(pointage: model, contexte: contexte)` (`NotationSheet.swift`), sur la vue qui possède le
+    `PointageModel` : la feuille s'ouvre quand `notationAProposer` passe à vrai, après relecture de `fin_le` par
+    `NotationModel.proposer()` (consigne T5a ci-dessus, m6). Le parcours XCUITest « départ final → feuille → 4 étoiles →
+    envoyée » arrive avec cette zone ; dans `demo-presences.json`, la mission b finit à 06h00 UTC (fin − 30 min non
+    atteinte à l'horloge démo) : T4b ajoute une mission EN_COURS dont `fin_le` ≤ 00h30 UTC, ou déclare l'écart.
+    **P10 « notation » n'est pas livrée par T5a** (revue fraîche n°1 de T5a, m1) : elle ne l'est qu'avec la ligne
+    `.notationAuDepart` de T4b, la fixture `fin_le` ≤ 00h30 UTC et ce XCUITest sur les trois formats. Le XCUITest de T4b
+    affirme aussi le remerciement éphémère (`notation-remerciement` présent après l'envoi, absent après
+    `NotationModel.dureeRemerciementSecondes`, 5 s comme les toasts du web, `src/App.tsx` l.536, attendu par
+    `require`, jamais par un délai fixe) et le glissement vers le bas de la feuille (vaut « Plus tard », m4).
+  - **T5b** : le panneau de contestation d'une présence validée se monte dans `DetailPresencesScreen` sous les contrôles
+    (point d'extension commenté) ; la présence lue est `FicheDetailPresences.presence` (`valide_le`, `id`), relue par
+    `DetailPresencesModel.charger()` ; aucun texte de délai (Q9).
+  - **T10** : `/soignant/presences/mission/:id` → `DetailPresencesScreen(missionId:session:snapshot:)` ; le présentateur
+    `.safari` fait apparaître `presence-revenus-web` (récapitulatif financier, `PresencesRenvois.recapitulatifFinancier`) :
+    T10 remplace l'absence affirmée par `DemoPresenceDetailTests` par sa présence et la présentation de
+    `https://jolene.app/soignant/presences/mission/<id>`. Ce renvoi est une route **forcée web** (exception documentée,
+    décision « Récapitulatif financier : route forcée web » ci-dessous) : il ne passe pas par `LinkRouter` et ne
+    disparaît donc pas quand T10 rend la route native (correction de la revue fraîche n°1 de T5a, M3 : l'ancien
+    `PresencesRenvois.detail`, résolu par `AccueilPresentation.renvoiWeb`, aurait rendu nil). Ne jamais le réécrire avec
+    `AccueilPresentation.renvoiWeb` : `PresencesAffichageTests.testRecapitulatifFinancierResteUnRenvoiWebQuandLeDetailDevientNatif`
+    rougit.
+  - **Lot 3** : le lien Revenus natif remplace ce renvoi (décision 11).
+  - **Intégrateur** : `LibellesDetailPresencesTests` relit `src/components/NotationRapide.tsx` et
+    `src/components/pointage/PointageRotatifSoignant.tsx`, et la garde Node relit aussi `WidgetAllerPointer.tsx`,
+    `BandeauOubliDepart.tsx` et `DetailMissionSoignant.tsx` : leur ajout aux filtres `paths` d'`ios-swift-ci.yml` est à
+    décider avec ceux de T4a (fichier partagé). Revue fraîche n°1 de T5a : (m2) les XCUITest de T5a sont compilés, pas
+    exécutés par la tranche (`DemoPresenceDetailTests`, assertions migrées de `DemoAccueilTests` et `DemoPresencesTests`) :
+    l'éclat `lot2` d'`ios-swift-ci.yml` doit être vert sur iPhone, iPad portrait et iPad paysage avant l'intégration ;
+    (m10) `project.pbxproj` de T5a retire le groupe vide `Resources` de la cible Jolene : effet de la régénération
+    xcodegen, sans conséquence, bruit de fusion attendu ; (M1) `tests/node/lecture-notes-ios.node.mjs` entre dans l'étape
+    « Garde de livraison mobile » de `validate-pr.yml` (fichier partagé).
+  - **Corrections de la revue fraîche n°1 de T5a** (9 novembre 2026) : M1 garde des lectures de notes (décision
+    ci-dessous) ; M2 et m9 sources des décisions déléguées corrigées ; M3 récapitulatif financier en route forcée web ;
+    m3 sentinelle « 0 requête » relue à la fin du parcours détail + relance et du parcours Accueil `accueil-pointage` ;
+    m4 remerciement éphémère (`NotationModel.oublierRemerciement` après `dureeRemerciementSecondes`) et fermeture de la
+    feuille par l'utilisateur seulement (`NotationModel.fermetureParLUtilisateur` : une fermeture programmatique n'efface
+    plus le remerciement) ; m5 proposition liée à la vue (`.task(id: pointage.notationAProposer)`, une tâche annulée ne
+    marque rien) ; m6 « Présences et pointage » proposé depuis Explorer (`MissionsListScreen(…, ouvrirOnglet:)`), écart
+    `estAssigne` consigné ci-dessous ; m7 tests de concurrence (double tap sur « Envoyer ma note », réponse ou relecture
+    de `fin_le` tardive après changement d'epoch, epoch qui change pendant les lectures et pendant la relance du détail,
+    lecture la plus récente gagnante) ; m8 commentaires de `TextesWeb.Presences.relanceTitre` / `relanceExplication`
+    renvoyés à la décision déléguée ; m11 textes de session expirée repris du lot 1 sans chaîne en dur et repli lisible
+    (`LibellesDetailPresences.Echec`).
 
 ## Amendements du blueprint (`LOT2_PLAN.md`)
 
@@ -874,6 +942,11 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | `PointageRotatifSoignant.tsx` l.123 (`consentementGPS === true`, sinon GPS omis) ; `PresencesSoignant.tsx` l.306-313, l.386 (`pointerArrivee`, `pointerDepart`, seuls à ouvrir `ConsentementGPS`, jamais appelés) | le web vivant ne recueille jamais le consentement : un soignant à NULL pointe sans GPS | feuille de consentement verbatim au premier pointage d'un soignant à NULL, puis autorisation iOS (décision 4) | écart assumé (seconde revue fraîche de T4b, m4) : choix de conformité déjà tranché par la décision 4 (aucune position sans consentement relu vrai, comme le web) ; le natif propose le choix que le web vivant ne propose plus. Tableau des écarts T4b, (d) |
 | `BandeauHorsLigne.tsx` l.72-81 (bouton « Réessayer », `aria-label` « Réessayer la connexion ») | relance manuelle de la vérification de connexion | aucun bouton : `HorsLigneBandeau` suit `NWPathMonitor` (`NetworkMonitor`), qui met l'état à jour seul | écart assumé (seconde revue fraîche de T4b, m5) : la vérification web interroge le réseau à la demande ; iOS notifie chaque changement de chemin, un bouton n'aurait aucun effet propre. Tableau des écarts T4b, (e) |
 | §3 T4b `PresencesScreen` | — | `.scrollDismissesKeyboard(.immediately)` | le pavé numérique n'a pas de touche Entrée : un défilement le ferme et découvre le bouton de pointage |
+| §2.3 `PointagePort` (`detail` seul pour le détail) | créneaux et synthèse serveur | + `ficheDetail(missionId:context:)` → `FicheDetailPresences` (mission en projection `MissionPresenceLue.colonnes`, première présence par arrivée en projection `PresenceControlee.colonnes`), défaut « non câblé » en extension (T5a) | la synthèse, la validation, la relance et les contrôles du web lisent `missions` et `presences[0]` (`DetailPresencesMission.tsx` l.130-139), absents de `DetailPresences` ; `select('*')` du web remplacé par une projection (aucune coordonnée, aucun code) |
+| §2.3 `NotationPort` (`noter` seul) | écriture seule | + `finPrevue(missionId:context:)` (`missions?select=fin_le`), défaut « non câblé » en extension (T5a) | relecture de `fin_le` avant la proposition (`PointageRotatifSoignant.tsx` l.156 ; revue fraîche de L2-T3, m6) ; toujours aucune lecture de note |
+| §3 T5a « Fichiers » (`NotationSheet.swift` monté par le départ final) ; XCUITest « départ final de la mission b → feuille de notation » | feuille ouverte par la zone de pointage | point d'extension `notationAuDepart(pointage:contexte:)` livré, branché par T4b dans sa zone (consigne T5a) ; parcours XCUITest reporté à cette zone | la zone qui possède le `PointageModel` est la tranche T4b, en parallèle ; la mission b de la démo finit à 06h00 UTC (fin − 30 min non atteinte) |
+| §3 T5a « Fichiers » (`MissionDetailScreen` bloc ASSIGNEE du lot 1 T3, `AccueilScreen` + `missionsOublieesCount`) | points d'entrée dans les écrans du lot 1 | boutons ajoutés au détail de mission du lot 0/1 (seul écran de détail présent) ; « Présences et pointage » rendu quand l'écran sait changer d'onglet (depuis l'Accueil) ; bandeau d'oubli du lot 1 gardé, son renvoi web remplacé par « Pointer mon départ maintenant » natif ; widget « Aller pointer » sur le planning vérifié de l'Accueil (`PlanningAccueil.planifie`, prochain créneau de l'assemblage) | lot 1 T3/T6b/T6c n'a pas livré d'autre détail de mission ; le web relit le planning à chaque rendu, le natif au chargement de l'Accueil (60 s) |
+| §3 T5a XCUITest « Accueil › Aller pointer » | données démo de l'Accueil | scénario DEBUG `-JOLENE_DEMO_SCENARIO accueil-pointage` (`DemoDashboardGateway(scenario: .pointage)`) : mission du jour de `demo-presences.json` en tête et `missions_oubliees_count = 1` | la démo normale n'a ni mission à pointer dans l'heure ni départ oublié ; `DemoAccueilTests` reste inchangé |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 
@@ -999,12 +1072,34 @@ Rendez-vous sur jolene.app. » (`MobileAccess.unsupportedRole`, lot 0 : onglets 
 vérifier » / « Vérifier ma session » (`MissionsListScreen.swift` l.107-108, lot 1) et
 `SessionController.sessionExpiredMessage`.
 
+## Textes opérationnels hors web (T5a)
+
+Non juridiques (aucune marque de `MARQUES_JURIDIQUES`), vouvoyés ; `Libelles/LibellesDetailPresences.swift` est dans
+`DOSSIERS_LOT2`. Les fragments repris tels quels du web sont dans `LibellesWeb` (`DetailPresences`, `Notation`,
+`AllerPointer`, `OubliDepart`, `DetailMission`), gardés au caractère près par la garde Node. Textes que le web tutoie,
+vouvoyés (seule la personne change) : description de la feuille de notation (`PointageRotatifSoignant.tsx` l.280) et
+remerciement (`NotationRapide.tsx` l.162), relus par `LibellesDetailPresencesTests`. Textes de relance : `TextesWeb.Presences`
+(TL, verbatim tutoyé, décision de la vague 4).
+
+| Constante | Texte | Source | Test |
+|---|---|---|---|
+| `LibellesDetailPresences.Notation.erreurEnregistrement` | « La note n'a pas pu être enregistrée. Réessayez. » | web `NotationRapide.tsx` l.55, première phrase ; la seconde (« tu pourras noter depuis la mission ») promettrait une notation depuis le détail d'une mission, absente de l'application ; la feuille reste ouverte et « Envoyer ma note » réessaie | `LibellesDetailPresencesTests.testTextesOperationnelsInventories`, `NotationModelTests` |
+| `LibellesDetailPresences.voirSurLeWeb` | « Voir sur jolene.app » | repris du lot 1 (`AccueilScreen`) : renvoi web du récapitulatif financier | idem |
+| `LibellesDetailPresences.Echec.chargementImpossible` | « Le détail de vos présences n'a pas pu être chargé. Vérifiez votre connexion puis réessayez. » | repli quand l'erreur de lecture ne porte aucun message lisible (revue fraîche de T5a, m11 : l'écran affichait un message vide), sur le modèle du lot 1 (`MissionDetailModel.genericFailureMessage`, « La mission n'a pas pu être chargée. Vérifiez votre connexion puis réessayez. ») | `LibellesDetailPresencesTests.testTextesOperationnelsInventories` |
+
+Repris d'écrans natifs déjà livrés, sans texte nouveau : « Session à vérifier » / « Vérifier ma session » (lot 1, via
+`LibellesDetailPresences.Echec`, plus de chaîne en dur dans `DetailPresencesScreen`), `SessionController.sessionExpiredMessage`
+(lot 0, repli de la session expirée sans message) et `LibellesPresences.Liste.erreurTitre` (« Impossible de charger vos
+présences », T4a) pour l'échec de lecture du détail.
+
 ## Décisions déléguées du 8 novembre 2026
 
 Mandat : « arrête de me demander et prends les décisions, avance seul » (Gabrielle, 8 novembre 2026). Chaque décision
 cite ses sources primaires et la force de chacune (**JUGÉ** : jurisprudence ; **doctrine** ; **choix de conformité
 Jolene**). Aucun texte n'est reformulé : le natif suit le web mot pour mot, tutoiement compris (décision de la vague 4) ;
 un changement de wording part d'abord sur le web.
+
+### T4b — consentement GPS et conservation des positions de pointage (L2-T4b, 8 et 9 novembre 2026)
 
 - **D-T4b-0 — Textes de TL affichés par T4b validés pour l'affichage natif.** Feuille de consentement
   (`TextesWeb.ConsentementGps`, `ConsentementGPS.tsx` l.25-64), bandeau (`TextesWeb.BandeauSansGps`, `BandeauSansGPS.tsx`
@@ -1083,6 +1178,104 @@ un changement de wording part d'abord sur le web.
   qu'avec le go de Gabrielle (« En attente de Gabrielle », B9 ci-dessous). Le natif affiche le texte du web inchangé. Le
   web ne change pas tant que la purge n'est pas mergée. Décision prise par Claude sur délégation explicite de Gabrielle du
   08/11/2026.
+
+### T5a — détail des présences, notation rapide, points d'entrée (L2-T5a, 9 novembre 2026)
+
+- **Relance de l'établissement : textes verbatim tutoyés, affichés.** `TextesWeb.Presences.relanceTitre` et
+  `relanceExplication` (`DetailPresencesMission.tsx` l.697-698, gardés par TL) sont affichés tels quels, tutoiement compris
+  (décision de la vague 4 : le natif suit le web mot pour mot ; le vouvoiement des textes juridiques partira du web).
+  Sources, phrase par phrase (sources corrigées après la revue fraîche n°1 de T5a, M2 ; aucune n'est JUGÉE ni une
+  doctrine ministérielle : toutes sont des **choix de conformité Jolene**, CGU de production `src/pages/PageCGU.tsx` et
+  implémentation serveur relue en production, en lecture seule, le 9 novembre 2026) :
+  1. « La validation des heures (automatique sous 72 h) » — CGU §4.6, l.115 : « En l'absence de contestation, les
+     présences peuvent être validées automatiquement après 72 heures » ; serveur : `fn_valider_presences_72h_auto`
+     (définition live : `delai_autovalidation_presence_h`, défaut 72 ; présences en litige, en alerte de téléportation ou
+     de fraude exclues). Valeur de production du paramètre : 72, relue en lecture seule par la revue fraîche n°1 de T5a
+     (lecture de données, que la règle de lecture seule de la tranche n'autorise pas : non relue par la tranche).
+  2. « est distincte du versement » — CGU §4.6, l.115 : « Après la fin prévue de la mission et la validation des
+     présences, Jolene donne normalement l'instruction de versement des honoraires sous 24 à 72 heures. Ce délai concerne
+     l'instruction donnée au prestataire de paiement et non l'arrivée bancaire effective. » La validation est un acte, le
+     versement un second acte, postérieur et distinct (instruction de versement, puis arrivée bancaire) ; en salarié, le
+     versement ne relève pas de Jolene (point 3).
+  3. « En salarié, le salaire est versé par l'établissement employeur » — CGU art. 2, l.48 (« L'Éditeur n'est en aucun
+     cas employeur, co-employeur ou mandataire social des Soignants »), l.50 (« Le contrat de travail ou de prestation est
+     conclu directement entre l'Établissement et le Soignant ») et CGU §4.5, l.109 (« L'Établissement, en sa qualité
+     d'employeur légal du Soignant ») ; serveur : `dec_definir_type_paiement` (`supabase/schema/public.sql` l.1537-1564,
+     définition live identique relue le 9 novembre 2026) fixe pour une mission salariée `type_paiement_soignant =
+     'BULLETIN_PAIE'` et `mode_paiement_soignant = 'DIRECT'` (l.1554-1555), sans flux de paiement Jolene. **Déduction
+     explicitée** : aucune clause ne dit littéralement « le salaire est versé par » ; la CGU fait de l'Établissement
+     l'employeur légal (l.109), signataire direct du contrat de travail (l.50), et exclut Jolene de toute qualité
+     d'employeur (l.48) ; le salaire, contrepartie du contrat de travail, est donc versé par l'Établissement, ce que le
+     serveur confirme (bulletin de paie, paiement direct). Aucun article du Code du travail n'est cité : la phrase repose
+     sur ces clauses de production, non sur une source législative relue par la tranche.
+  4. « En libéral, le paiement suit les modalités de la mission » — CGU §4.6, l.115 (« Pour une mission affichée comme
+     éligible au paiement rapide, le paiement est préparé via Stripe Connect avant son exécution » ; « l'instruction de
+     versement des honoraires ») : la modalité de paiement est un attribut de la mission affichée ; serveur :
+     `dec_definir_type_paiement` fixe pour une mission libérale `NOTE_HONORAIRES` et `STRIPE_CONNECT` (l.1550-1552), à
+     l'assignation, mission par mission ; l'éligibilité au paiement rapide est exposée par `fn_etablissements_safe`
+     (`paiement_rapide`, l.35093, l.35116-35120). Phrase couverte.
+  5. « Tu peux envoyer un rappel. » — texte d'action (bouton « Relancer l'établissement », `fn_relancer_validation_presence`),
+     sans portée juridique.
+  Écart relevé, sans effet sur le natif (règle du verbatim) : le web écrit « sous 72 h » là où la CGU dit « après
+  72 heures » ; correction à porter d'abord sur le web (PR HARD STOP séparée, hors chantier iOS), puis reprise par la garde.
+- **Libellés du détail classés hors HARD STOP.** « Heures retenues après litige » (l.399), « ✅ Relevé clôturé après
+  arbitrage » (l.639) et « Mission clôturée avant la fin du planning initial. Les créneaux futurs ne sont plus à effectuer ;
+  les heures retenues après arbitrage déterminent la régularisation financière. » (l.449) décrivent un état et un calcul
+  déjà décidés (heures arbitrées par l'admin, `presences.heures_ajustees_litige`) ; ils ne citent aucun texte, n'ouvrent
+  aucun droit, ne fixent ni délai ni obligation (critères de CLAUDE.md, HARD STOP n°4) : choix de conformité Jolene, rangés
+  dans `LibellesWeb.DetailPresences`, verbatim et gardés par la garde Node. Source primaire de « déterminent la
+  régularisation financière » (revue fraîche n°1 de T5a, m9) : les lecteurs **live** de la colonne, relus en production
+  en lecture seule le 9 novembre 2026, et non le commentaire de colonne (`public.sql` l.71273, « FIX 5 consommation, à
+  venir », périmé) : `fn_admin_resoudre_litige(uuid, text, text, numeric, numeric, text)` (dump l.13003 ; heures de
+  référence `COALESCE(heures_ajustees_litige, heures_reelles)`, l.13334-13338, qui fondent l'ajustement de la facture),
+  `fn_admin_resoudre_litige_complement_honoraires` (l.13939 ; `COALESCE(…, heures_ajustees_litige, heures_reelles)`,
+  l.14074-14079 et l.14114-14122, base du complément d'honoraires) et `fn_admin_resoudre_litige_salarie` (l.14475 ;
+  l.14702-14706, heures avant régularisation salariale). La surcharge à cinq arguments de `fn_admin_resoudre_litige` ne
+  lit pas la colonne. Le récapitulatif financier (l.705-800, montants calculés côté client) reste non porté (décision 11) :
+  titre seul et renvoi web.
+- **Récapitulatif financier : route forcée web** (revue fraîche n°1 de T5a, M3). `presence-revenus-web` ouvre
+  `PresencesRenvois.recapitulatifFinancier(missionId:)`, `.safari(https://jolene.app/soignant/presences/mission/<id>)`
+  construite par `JoleneLink.canonicalURL` sans `LinkRouter` (identifiant `[A-Za-z0-9-]` seulement), exception documentée
+  comme `ContratPresentation.renvoiSignature` : quand T10 rend la route native, le renvoi reste (là où
+  `AccueilPresentation.renvoiWeb` rendait nil, sans test rouge). Cible de la décision 11 respectée : renvoi web jusqu'au
+  lot 3, lien Revenus natif ensuite. Choix produit, sans portée juridique.
+- **Notation : garde des lectures de notes** (revue fraîche n°1 de T5a, M1 ; LOT2_PLAN §5 ; CLAUDE.md « Publication
+  différée », un test-garde par surface). `tests/node/lecture-notes-ios.node.mjs`, lancée par l'étape « Garde de
+  livraison mobile » de `validate-pr.yml` : tout fichier `.swift` de `ios-native/` (sources, tests, tests UI) est découpé
+  (commentaires `//`, `///`, `/* */` imbriqués **ignorés** ; chaînes simples, multilignes, brutes et interpolations
+  conservées ; découpage impossible → rouge) ; rougit sur `notations_missions`, `evaluations_publiees` et
+  `from("notations…")` hors commentaire. Exclusion unique, listée, commentée et comptée (exactement un usage, sous
+  `/Tests/`) : l'assertion négative `!$0.path.contains("notations_missions")` de `SupabaseNotationGatewayTests`. Les
+  mentions de `Lot2Ports.swift`, `NotationModel.swift`, `SupabaseNotationGateway.swift`, `NotationSheet.swift` et de l'en-tête
+  de `SupabaseNotationGatewayTests.swift` sont des commentaires. **Mutation prouvée** le 9 novembre 2026 : ajout à
+  `SupabaseNotationGateway.swift` d'une extension `lireNotes` qui appelle `client.from("notations_missions")` → garde
+  rouge (deux fautes à la ligne 76 : `from("notations…")` et `notations_missions`), retour à l'original → verte ; la
+  même mutation est rejouée en permanence par le test « mutation » de la garde.
+- **Points d'entrée : `estAssigne` garanti par le serveur** (revue fraîche n°1 de T5a, m6). Le web n'affiche
+  « Présences et pointage » et « Voir mes heures pointées et mes pauses » que sous `estAssigne &&`
+  (`DetailMissionSoignant.tsx` l.1406, `soignant_assigne_id === user.id` l.633). Le natif ne relit pas
+  `soignant_assigne_id` (projection `MissionQuery.missionSelect` du lot 0, « à l'identique » du pilote, inchangée) :
+  l'espace natif ne s'ouvre qu'à un compte SOIGNANT (`MobileAccess.validate`, `Models/Account.swift` l.35-38) et la RLS
+  `pol_mission_select` (`public.sql` l.79410, définition live identique relue le 9 novembre 2026) ne lui laisse lire une
+  mission non OUVERTE que si `soignant_assigne_id = auth.uid()`. Écart consigné, sans effet ; le bouton est désormais
+  proposé depuis Explorer aussi (`MissionsListScreen(…, ouvrirOnglet:)`). Choix technique, sans portée juridique.
+- **Notation : aucune lecture de note (publication différée = filtre centralisé).** Le natif n'appelle que
+  `fn_creer_notation_mission` (écriture) et ne lit jamais `notations_missions` ; aucune note, publiée ou non, n'est affichée
+  (le bouton web « Notation envoyée », `BoutonNoterMission.tsx` l.32-61, qui lit `notations_missions` en direct, n'est pas
+  porté). Définitions live relues en lecture seule le 9 novembre 2026 (`pg_get_functiondef`, `pg_policy`, projet
+  `flripxtsyegjshnhzjkz`) : `fn_creer_notation_mission` rend `{success, id, tardive}` sans aucune note et publie seule les deux
+  sens (`publie_le`) ; « Mission déjà notée pour ce sens » ne révèle que la note de l'appelant ; `fn_presences_detail_mission`
+  et `fn_relancer_validation_presence` ne lisent pas `notations_missions` ; `pol_notations_select` filtre les notes REÇUES par
+  `publie_le IS NOT NULL AND masque = false` et laisse l'auteur lire sa propre note (non affichée par le natif). Aucune source
+  lue par T5a ne contourne le filtre de `evaluations_publiees` : aucun constat serveur à remonter.
+- **Notation : mémoire locale « une fois par mission et par utilisateur ».** `UserDefaults` (`jolene.notation.checkout.<userId>.
+  <missionId>`), posée avant l'ouverture, jamais effacée, comme le `localStorage` du web (`PointageRotatifSoignant.tsx`
+  l.154-161) ; « Plus tard » ne la retire pas. Choix produit (aucune portée juridique).
+- **Notation : texte d'échec.** La promesse du web « tu pourras noter depuis la mission » (`NotationRapide.tsx` l.55) n'a pas
+  de chemin dans l'application : texte opérationnel inventorié « La note n'a pas pu être enregistrée. Réessayez. » (non
+  juridique, « Textes opérationnels hors web (T5a) »).
+
+Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
 
 ## En attente de Gabrielle
 

@@ -7,18 +7,18 @@ import JoleneDesign
 /// epoch, délai) et les textes sont testés dans JoleneCore (`AccueilModelTests`,
 /// `AccueilAssemblageTests`) ; la vue n'ajoute aucune logique ni aucun calcul de montant.
 ///
-/// Sections, dans l'ordre du web : en-tête (salutation, accroche), oubli de pointage (renvoi
-/// web : pointage au lot 2), mes prochaines missions (+ calendrier, point d'extension T5),
+/// Sections, dans l'ordre du web : en-tête (salutation, accroche), oubli de pointage (lot 2 T5a :
+/// « Pointer mon départ maintenant » ouvre la page Présences native), widget « Aller pointer »
+/// (lot 2 T5a, `PointsEntreePresences.allerPointer`), mes prochaines missions (+ calendrier, point d'extension T5),
 /// missions pour vous, missions proposées, gains du mois, notifications non lues.
 /// Exclus (HARD STOP n°4) : `BandeauAlerte48h` et l'encart « cumul d'activité ».
 ///
-/// Renvois web (pointage, notifications) : routes `.safari` résolues par `LinkRouter`
+/// Renvoi web (notifications) : routes `.safari` résolues par `LinkRouter`
 /// (`AccueilPresentation.renvoiWeb`), jamais une URL écrite en dur, présentées seulement par le
 /// présentateur injecté par T10 (`PresentateurRenvoiWeb`, `SFSafariViewController`), jamais par
 /// `openURL` (chemins AASA : retour silencieux dans l'app). Sans présentateur, le compteur reste
 /// affiché et aucun bouton n'est rendu (gap verrouillé, `DemoAccueilTests`).
 struct AccueilScreen: View {
-    static let renvoiPresences = AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences)
     static let renvoiNotifications = AccueilPresentation.renvoiWeb(AccueilPresentation.lienNotifications)
 
     @StateObject private var model: AccueilModel
@@ -65,7 +65,8 @@ struct AccueilScreen: View {
         .background(JoleneColor.lavender.ignoresSafeArea())
         .navigationTitle("Accueil")
         .navigationDestination(for: MissionRoute.self) { route in
-            MissionDetailScreen(route: route, initial: model.mission(id: route.id), session: session, snapshot: snapshot)
+            MissionDetailScreen(route: route, initial: model.mission(id: route.id), session: session, snapshot: snapshot,
+                                ouvrirOnglet: ouvrirOnglet)
         }
         // Premier affichage, relance après une tâche annulée, relecture au-delà de 60 s.
         .task { await model.loadIfStale() }
@@ -92,6 +93,9 @@ struct AccueilScreen: View {
         entete(tableau)
         if let texte = AccueilPresentation.texteOubliPointage(tableau.missionsOublieesCount) {
             oubliPointage(texte)
+        }
+        if let widget = PointsEntreePresences.allerPointer(tableau.prochaines, maintenant: model.horloge.now()) {
+            allerPointer(widget)
         }
         if !tableau.prochaines.isEmpty {
             prochaines(tableau.prochaines)
@@ -127,11 +131,58 @@ struct AccueilScreen: View {
     private func oubliPointage(_ texte: String) -> some View {
         VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
             InlineNotice(texte, title: "Oubli de pointage ?", tone: .warning, identifier: "accueil-oubli-pointage")
-            if let presentateurRenvoiWeb, let route = Self.renvoiPresences {
-                JoleneButton("Vérifier mes présences sur jolene.app", style: .secondary) { presentateurRenvoiWeb.presenter(route) }
-                    .accessibilityIdentifier("accueil-oubli-pointage-action")
+            // `onPointer` du web (`DashboardSoignant.tsx` l.493) : page Présences, onglet dérivé.
+            NavigationLink {
+                PresencesScreen(session: session, snapshot: snapshot, ouvrirOnglet: ouvrirOnglet)
+            } label: {
+                Label(LibellesWeb.OubliDepart.pointerMonDepart, systemImage: "flag")
+                    .font(JoleneFont.button)
+                    .foregroundStyle(JoleneColor.rose700)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .overlay(Capsule().strokeBorder(JoleneColor.rose700, lineWidth: 1))
+                    .contentShape(Capsule())
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("accueil-oubli-depart")
         }
+    }
+
+    /// Widget « Aller pointer » (`WidgetAllerPointer.tsx` l.28-52, lot 2 T5a) : titre, mission, horaire, puis la page
+    /// Présences sur l'onglet du web (`?tab=aujourdhui` ou `?tab=encours`, l.47).
+    private func allerPointer(_ widget: PointsEntreePresences.AllerPointer) -> some View {
+        VStack(alignment: .leading, spacing: JoleneSpacing.xs) {
+            Label(widget.titre, systemImage: "clock")
+                .font(JoleneFont.callout.weight(.semibold))
+                .foregroundStyle(JoleneColor.rose800)
+            Text(widget.mission)
+                .font(JoleneFont.callout.weight(.semibold))
+                .foregroundStyle(JoleneColor.midnight)
+                .fixedSize(horizontal: false, vertical: true)
+            if let horaire = widget.horaire {
+                Text(horaire).font(JoleneFont.caption).foregroundStyle(JoleneColor.bubblegum)
+            }
+            NavigationLink {
+                PresencesScreen(session: session, snapshot: snapshot, parametreOnglet: widget.onglet.rawValue, ouvrirOnglet: ouvrirOnglet)
+            } label: {
+                Label(widget.bouton, systemImage: "mappin")
+                    .font(JoleneFont.button)
+                    .foregroundStyle(JoleneColor.onGradient)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(JoleneColor.heroGradient)
+                    .clipShape(Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, JoleneSpacing.xs)
+            .accessibilityIdentifier("accueil-pointer-action")
+        }
+        .padding(JoleneSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(JoleneColor.rose100)
+        .overlay(RoundedRectangle(cornerRadius: JoleneRadius.card).strokeBorder(JoleneColor.rose700, lineWidth: 2))
+        .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.card))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("accueil-pointer")
     }
 
     private func prochaines(_ missions: [AccueilMission]) -> some View {

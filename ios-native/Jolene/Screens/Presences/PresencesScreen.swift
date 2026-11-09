@@ -279,7 +279,7 @@ struct PresencesScreen: View {
                        actionIdentifier: "presences-empty-historique-action") { ouvrirOnglet(.explorer) }
         } else if let instantane = model.instantane {
             ForEach(lignes) { ligne in
-                PresenceHistoriqueRow(ligne: ligne, mission: instantane.mission(de: ligne))
+                PresenceHistoriqueRow(ligne: ligne, mission: instantane.mission(de: ligne), session: session, snapshot: snapshot)
             }
         }
     }

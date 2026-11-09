@@ -38,6 +38,8 @@ public enum PointageQuery {
     public static let contratsSelect = "id,mission_id,statut,cree_le"
     public static let consentementSelect = "consentement_gps"
     public static var preuvesSelect: String { PreuveScan.selection }
+    /// Première présence du détail (T5a) : validation, heures retenues après litige, contrôles du pointage.
+    public static var presenceControleeSelect: String { PresenceControlee.selection }
 
     /// Messages d'échec de lecture (non juridiques). L'état reprend le texte du web (`PointageRotatifSoignant.tsx` l.86).
     public static let fallbackPresences = "Impossible de charger vos présences. Réessayez."

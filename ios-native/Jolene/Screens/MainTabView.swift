@@ -29,7 +29,7 @@ struct MainTabView: View {
             .accessibilityIdentifier("tab-accueil")
 
             NavigationStack {
-                MissionsListScreen(session: session, snapshot: snapshot)
+                MissionsListScreen(session: session, snapshot: snapshot) { selection = $0 }
             }
             .tabItem { Label("Explorer", systemImage: "magnifyingglass") }
             .tag(Tab.explorer)

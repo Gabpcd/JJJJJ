@@ -311,6 +311,28 @@ public struct SupabasePointageGateway: PointagePort {
         return PointageQuery.decoder(ResumePresencesServeur.self, reponse)
     }
 
+    /// Fiche du détail (T5a, `DetailPresencesMission.tsx` l.130-139) : la mission (projection `PointageQuery.missionsSelect`,
+    /// aucune colonne de code ni de montant) et la première présence par arrivée (projection
+    /// `PointageQuery.presenceControleeSelect`, jamais `select=*` : ni coordonnées ni codes), lues en parallèle ; la RLS
+    /// reste seule juge. Aucune ligne de mission → `mission` nil (« Mission introuvable »).
+    public func ficheDetail(missionId: String, context: MissionReadContext) async throws -> FicheDetailPresences {
+        try MissionQuery.validate(context: context)
+        async let missions: [MissionPresenceLue] = lire(fallback: PointageQuery.fallbackDetail) {
+            try await client.from("missions").select(PointageQuery.missionsSelect)
+                .eq("id", value: missionId)
+                .limit(1)
+                .execute().value
+        }
+        async let presences: [PresenceControlee] = lire(fallback: PointageQuery.fallbackDetail) {
+            try await client.from("presences").select(PointageQuery.presenceControleeSelect)
+                .eq("mission_id", value: missionId)
+                .order("pointage_arrivee_le", ascending: true)
+                .limit(1)
+                .execute().value
+        }
+        return try await FicheDetailPresences(mission: missions.first, presence: presences.first)
+    }
+
     public func relancerValidation(missionId: String, context: MissionReadContext) async throws -> IssueRelance {
         try MissionQuery.validate(context: context)
         let reponse = try await RPCResponse.appeler(client, PointageQuery.rpcRelance, params: ["p_mission_id": .string(missionId)],

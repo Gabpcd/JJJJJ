@@ -8,9 +8,9 @@ import XCTest
 ///
 /// Migré par T4b : la zone de pointage (`pointage-code-<mission>`, `pointage-submit-<mission>`, parcours complet dans
 /// `DemoPointageTests`) remplace l'encart provisoire `pointage-zone-provisoire-<mission>` ; « Voir le contrat » ouvre le
-/// contrat natif (`demo-contrat-pointage-c`, ajouté aux fixtures démo par T4b). Gaps verrouillés (aucun bouton sans
-/// effet) : « Détail » (T5a) et « Voir ou signaler un litige » (lot 4) ne sont rendus qu'avec le présentateur de renvois
-/// web, que T10 injecte : leur absence est affirmée ici, T10 la remplace par leur présence.
+/// contrat natif (`demo-contrat-pointage-c`, ajouté aux fixtures démo par T4b). « Détail » ouvre le détail natif (T5a).
+/// Gap verrouillé (aucun bouton sans effet) : « Voir ou signaler un litige » (lot 4) n'est rendu qu'avec le présentateur
+/// de renvois web, que T10 injecte : son absence est affirmée ici, T10 la remplace par sa présence.
 final class DemoPresencesTests: JoleneUITestCase {
     /// Libellés exacts des onglets (`PresencesSoignant.tsx` l.520-523).
     private static let onglets: [(identifiant: String, libelle: String)] = [
@@ -108,8 +108,8 @@ final class DemoPresencesTests: JoleneUITestCase {
         ])
         XCTAssertFalse(element("presence-historique-litige-effectifs-mission-demo-presence-h3").exists,
                        "« Voir ou signaler un litige » sans présentateur web (T10) : jamais un bouton sans effet")
-        XCTAssertFalse(element("presence-historique-detail-demo-presence-h1-presence").exists,
-                       "« Détail » sans détail natif (T5a) ni présentateur web (T10)")
+        XCTAssertTrue(element("presence-historique-detail-demo-presence-h1-presence").exists,
+                      "« Détail » ouvre le détail natif des présences (T5a, `DemoPresenceDetailTests`)")
         record("\(proofPrefix)-presences-historique")
 
         // Retour au Profil : aucune requête réseau en démonstration.

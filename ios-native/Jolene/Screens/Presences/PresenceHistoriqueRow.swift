@@ -8,14 +8,17 @@ import JoleneDesign
 /// signaler un litige ». Textes : `LibellesWeb.LignePresence`, `LibellesPresences.Ligne`.
 ///
 /// Écarts consignés : le code de pointage de la présence (« Code : … », l.722-726) n'est pas affiché (aucune colonne
-/// `code_*` n'est lue, gap B1-ter) ; « Détail » (l.695-698) et la ligne elle-même ouvrent le détail natif à T5a, d'ici
-/// là le renvoi web `/soignant/presences/mission/:id` ; « Voir ou signaler un litige » renvoie vers `/soignant/litiges`
-/// (lot 4). Ces renvois ne sont rendus qu'avec le présentateur injecté par T10 : jamais un bouton sans effet.
+/// `code_*` n'est lue, gap B1-ter) ; « Détail » (l.695-698) ouvre le détail natif des présences (T5a,
+/// `DetailPresencesScreen`) ; la ligne elle-même reste non cliquable (le panneau de contestation de T5b s'y monte) ;
+/// « Voir ou signaler un litige » renvoie vers `/soignant/litiges` (lot 4), rendu seulement avec le présentateur
+/// injecté par T10 : jamais un bouton sans effet.
 /// Point d'extension T5b : le panneau de contestation d'une présence non validée (l.728-738) se monte sous la grille,
 /// après le go HARD STOP n°4 de Gabrielle (Q9).
 struct PresenceHistoriqueRow: View {
     let ligne: LigneHistoriquePresence
     let mission: MissionDeLigne
+    let session: SessionStore
+    let snapshot: SessionSnapshot
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
 
     var body: some View {
@@ -117,10 +120,11 @@ struct PresenceHistoriqueRow: View {
         .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.field))
     }
 
+    /// « Détail » (l.695-698) : détail natif des présences de la mission (T5a), qui remplace le renvoi web.
     @ViewBuilder private var detail: some View {
-        if let presentateurRenvoiWeb, let missionId = ligne.missionId, let route = PresencesRenvois.detail(missionId: missionId) {
-            Button {
-                presentateurRenvoiWeb.presenter(route)
+        if let missionId = ligne.missionId {
+            NavigationLink {
+                DetailPresencesScreen(missionId: missionId, session: session, snapshot: snapshot)
             } label: {
                 HStack(spacing: JoleneSpacing.xs) {
                     Image(systemName: "eye")

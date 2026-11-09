@@ -95,7 +95,7 @@ production. Les RPC du système de pointage ① (`RPC_POINTAGE_SYSTEME_1`) et `f
 | `fn_presences_detail_mission` | consommée lot 2 (T3) | 2 (T3, T5a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_fenetre_contestation_ouverte` | à venir | 2 (T5b) | hors manifeste (SECURITY INVOKER) | authenticated, service_role | déclarée |
 | `fn_ouvrir_litige_rate_limited` | à venir | 2 (T5b, surcharge `(uuid, type_litige, text)`) | RPC_UTILISATEUR_AUTH_INTERNE (deux surcharges sur trois) | authenticated, service_role | absente |
-| `fn_creer_notation_mission` | à venir | 2 (T5a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_creer_notation_mission` | consommée lot 2 (T5a) | 2 (T5a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_demander_revue_document` | consommée lot 2 (T6) | 2 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | absente |
 | `fn_verifier_coherence_documents` | consommée lot 2 (T6) | 2 (T6) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_signer_attestation_sante` | consommée lot 2 (T6 gateway, T7 écran) | 2 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -785,7 +785,11 @@ récemment. Réessayez plus tard. » (l.46687) ; `p_facture_id` NULL → délég
 
 ## fn_creer_notation_mission
 
-- **Statut natif** : à venir (lot 2, T5a ; décision 10).
+- **Statut natif** : consommée (lot 2, T5a ; décision 10) — `SupabaseNotationGateway.noter`, sept clés exactes,
+  `p_commentaire: null`, une seule requête POST ; exception `P0001` déclarée (`ExceptionsMetierLot2.creerNotationMission`,
+  message verbatim) ; « déjà notée » → `.dejaNotee`. Définition live relue en lecture seule le 9 novembre 2026
+  (`pg_get_functiondef`, projet `flripxtsyegjshnhzjkz`) : réponse `{success, id, tardive}` sans aucune note, publication
+  double-aveugle (`publie_le`) faite côté serveur sans rien renvoyer au client.
 - **Usage prévu** : notation rapide proposée une fois par mission au départ final (FERMETURE quand
   `now ≥ fin_le − 30 min`, `PointageRotatifSoignant.tsx` l.152-163), `p_sens = 'SOIGNANT_VERS_ETAB'`, note globale
   répliquée sur les quatre critères (`NotationRapide.tsx` l.47-53), commentaire optionnel ou NULL. **Écriture

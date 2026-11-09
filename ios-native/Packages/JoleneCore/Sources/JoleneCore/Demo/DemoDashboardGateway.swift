@@ -27,9 +27,11 @@ extension DemoFixtures {
 /// id, gains relus). Refuse tout contexte qui n'est pas celui du profil fictif.
 public struct DemoDashboardGateway: DashboardPort {
     private let clock: any ClockPort
+    private let scenario: ScenarioAccueilDemo
 
-    public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow)) {
+    public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow), scenario: ScenarioAccueilDemo = .normal) {
         self.clock = clock
+        self.scenario = scenario
     }
 
     /// `delaiEcran` sans objet : fixtures embarquées, aucune lecture à sous-budgéter.
@@ -43,11 +45,52 @@ public struct DemoDashboardGateway: DashboardPort {
         let etablissements = try DemoFixtures.loadEtablissements().etablissements
         let demandes = Set(AccueilAssemblage.identifiantsMissions(fichier.dashboard, email: context.email))
         let relues = (fichier.missionsAssignees + ouvertes).filter { demandes.contains($0.record.id) }
-        return try AccueilAssemblage.snapshot(
+        let parId = Dictionary(etablissements.map { ($0.id, $0) }, uniquingKeysWith: { premier, _ in premier })
+        var snapshot = try AccueilAssemblage.snapshot(
             corps: fichier.dashboard, context: context, maintenant: clock.now(),
             lecture: LectureMissionsAccueil(records: relues.map(\.record), creneaux: relues.flatMap(\.creneaux)),
-            etablissements: Dictionary(etablissements.map { ($0.id, $0) }, uniquingKeysWith: { premier, _ in premier }),
+            etablissements: parId,
             gains: fichier.gainsMissions)
+        if scenario == .pointage {
+            try Self.ajouterPointageDuJour(&snapshot, etablissements: parId, maintenant: clock.now())
+        }
+        return snapshot
+    }
+
+    /// Scénario `accueil-pointage` (lot 2, T5a) : la mission du jour de `demo-presences.json` (`demo-presence-a`, créneau
+    /// de 01h05 à 09h05 à Paris, pointable dès 00h50) en tête des prochaines missions, et un départ oublié
+    /// (`missions_oubliees_count = 1`) : recette du widget « Aller pointer » et du bandeau d'oubli de départ.
+    static func ajouterPointageDuJour(_ snapshot: inout DashboardSnapshot, etablissements: [String: EtablissementSummary],
+                                      maintenant: Date) throws {
+        let presences = try DemoPointageGateway.Fixture.charger()
+        guard let mission = presences.missions.first(where: { $0.id == Self.missionPointageDuJour }) else { return }
+        let creneaux = presences.creneaux.filter { $0.missionId == mission.id }
+        let prochain = DisponibilitePointage.prochainCreneauPointage(creneaux, maintenant: maintenant)
+        let etablissement = mission.etablissementId.flatMap { etablissements[$0] }
+        let ligne = DashboardMissionLigne(id: mission.id, intitule: mission.intitule ?? mission.id, service: mission.service,
+                                          debutLe: mission.debutLe, finLe: mission.finLe, statut: mission.statut, estUrgente: false,
+                                          tauxHoraireBase: nil, etablissementId: mission.etablissementId, etabNom: etablissement?.nom)
+        let nombre = DisponibilitePointage.creneauxPrevisionnels(creneaux).count
+        snapshot.prochaines.insert(AccueilMission(ligne: ligne, etablissementNom: AccueilAssemblage.nom(etablissement: etablissement, repli: nil),
+                                                  etablissementVille: etablissement?.adresseVille,
+                                                  planning: .planifie(prochain: prochain, rang: prochain == nil ? nil : 1, nombre: nombre),
+                                                  mission: nil), at: 0)
+        snapshot.missionsOublieesCount = 1
+    }
+
+    /// Mission du jour du scénario `accueil-pointage`.
+    public static let missionPointageDuJour = "demo-presence-a"
+}
+
+/// Scénarios de l'Accueil démo (`-JOLENE_DEMO_SCENARIO`, DEBUG, lu par `AppContainer`) ; une valeur d'un autre domaine
+/// (`upload-incertain`, `scan-incertain`, `otp-expire`) : `.normal`.
+public enum ScenarioAccueilDemo: String, CaseIterable, Sendable {
+    case normal
+    /// Mission du jour à pointer et départ oublié (lot 2, T5a).
+    case pointage = "accueil-pointage"
+
+    public init(arguments: [String]) {
+        self = ArgumentsDemo.valeur(ScenarioDocumentsDemo.argument, dans: arguments).flatMap(Self.init(rawValue:)) ?? .normal
     }
 }
 

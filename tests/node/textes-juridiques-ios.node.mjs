@@ -112,20 +112,25 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
   assert.deepEqual([...fichiers].sort(), [
     'src/components/AccesEtablissement.tsx', // T9a : erreur de chargement de la liste des contrats
     'src/components/BandeauHorsLigne.tsx', // T4b : bandeau hors ligne de la page Présences
+    'src/components/BandeauOubliDepart.tsx', // T5a : action du bandeau d'oubli de départ (Accueil)
     'src/components/BandeauSansGPS.tsx',
     'src/components/CertificatSignature.tsx',
     'src/components/ConsentementGPS.tsx',
     'src/components/Countdown72hSignature.tsx',
+    'src/components/NotationRapide.tsx', // T5a : feuille de notation rapide
     'src/components/PanneauContestation.tsx',
     'src/components/SignerContratOtp.tsx',
+    'src/components/WidgetAllerPointer.tsx', // T5a : widget « Aller pointer » (Accueil)
     // T4a : motifs du bloc de pointage, titres « Mes documents » et « Mes contrats » (section « Mon espace »).
     'src/components/pointage/BlocPointageMission.tsx',
-    // T4b : zone de pointage (état, consigne, saisie, QR, action, segments, retours).
+    // T4b : zone de pointage (état, consigne, saisie, QR, action, segments, retours) ; T5a : titre de la feuille de
+    // notation.
     'src/components/pointage/PointageRotatifSoignant.tsx',
     'src/components/profil-soignant/SectionPreferences.tsx',
     'src/pages/CertificatSignaturePage.tsx',
     'src/pages/ContratMission.tsx',
-    'src/pages/DetailPresencesMission.tsx',
+    'src/pages/DetailMissionSoignant.tsx', // T5a : points d'entrée du détail d'une mission
+    'src/pages/DetailPresencesMission.tsx', // TL (relance) et T5a (détail des présences)
     'src/pages/DocumentsSoignant.tsx',
     'src/pages/ListeContrats.tsx', // T4a (titre « Mes contrats ») et T9a (liste des contrats)
     'src/pages/MesDocuments.tsx',
@@ -661,6 +666,8 @@ test('TL : aucun texte juridique écrit en dur dans les fichiers Swift du lot 2 
     'ios-native/Jolene/Composition/Media/ShareSheet.swift',
     // T4a : libellés vouvoyés et assemblages de la page Présences, hors LibellesWeb.swift.
     'ios-native/Packages/JoleneCore/Sources/JoleneCore/Libelles/LibellesPresences.swift',
+    // T5a : détail des présences, notation, points d'entrée, hors LibellesWeb.swift.
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Libelles/LibellesDetailPresences.swift',
   ]) {
     assert.ok(DOSSIERS_LOT2.some(d => chemin === d || chemin.startsWith(`${d}/`)), `${chemin} hors de DOSSIERS_LOT2`);
   }

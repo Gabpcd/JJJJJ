@@ -66,6 +66,7 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(supabase.contains("compte"), "T8 câble la suppression de compte")
         XCTAssertFalse(supabase.contains("pointage"), "lot 2 T3 câble le pointage")
         XCTAssertFalse(supabase.contains("contrats"), "lot 2, T8 câble les contrats")
+        XCTAssertFalse(supabase.contains("notation"), "lot 2, T5a câble la notation")
     }
 
     /// Lot 2 (T1) : `câblerLot2(_:client:)` est le seul point d'assignation des cinq ports du lot 2 du
@@ -84,10 +85,11 @@ final class SupabaseGatewaysTests: XCTestCase {
         SupabaseGateways.câblerLot2(&gateways, client: TestClient.make())
         XCTAssertTrue(gateways.pointage is SupabasePointageGateway, "T3 câble le pointage")
         XCTAssertTrue(gateways.contestation is UnwiredContestationPort, "T5b")
-        XCTAssertTrue(gateways.notation is UnwiredNotationPort, "T5a")
+        XCTAssertTrue(gateways.notation is SupabaseNotationGateway, "T5a câble la notation")
         XCTAssertTrue(gateways.documents is SupabaseDocumentsGateway, "T6 câble les justificatifs")
         XCTAssertTrue(gateways.contrats is SupabaseContratsGateway, "T8 câble les contrats")
-        XCTAssertEqual(Array(gateways.unwiredPorts.suffix(2)), ["contestation", "notation"])
+        XCTAssertEqual(Array(gateways.unwiredPorts.suffix(1)), ["contestation"])
+        XCTAssertFalse(gateways.unwiredPorts.contains("notation"))
         XCTAssertFalse(gateways.unwiredPorts.contains("pointage"))
         XCTAssertFalse(gateways.unwiredPorts.contains("documents"))
         XCTAssertFalse(gateways.unwiredPorts.contains("contrats"))

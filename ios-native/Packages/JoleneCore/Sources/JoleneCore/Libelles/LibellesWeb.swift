@@ -749,6 +749,367 @@ public enum LibellesWeb {
         }
     }
 
+    /// Détail des présences d'une mission (`DetailPresencesMission.tsx`, lot 2 T5a) : en-tête, synthèse, créneaux
+    /// travaillés par jour, contrôles du pointage. Fragments des gabarits et du JSX, assemblés comme le rendu React par
+    /// `LibellesDetailPresences` (hors de ce fichier). Relance : `Presences` (bouton) et `TextesWeb.Presences` (titre,
+    /// explication). Récapitulatif financier non porté (montants calculés côté client, LOT2_PLAN §1.2) : titre seul,
+    /// avec le renvoi web.
+    public enum DetailPresences {
+        // source: src/pages/DetailPresencesMission.tsx:187
+        public static let introuvableTitre = "Mission introuvable"
+
+        // source: src/pages/DetailPresencesMission.tsx:188
+        public static let introuvableMessage = "Cette mission n’existe pas ou n’est plus accessible."
+
+        // source: src/pages/DetailPresencesMission.tsx:77
+        public static let flechePlage = "→"
+
+        // source: src/pages/DetailPresencesMission.tsx:89
+        public static let datesPlanifiees = "dates planifiées ·"
+
+        // source: src/pages/DetailPresencesMission.tsx:89
+        public static let flecheDates = "→"
+
+        // source: src/pages/DetailPresencesMission.tsx:298
+        public static let pictoPeriode = "📅"
+
+        // source: src/pages/DetailPresencesMission.tsx:300
+        public static let flechePeriode = "→"
+
+        // source: src/pages/DetailPresencesMission.tsx:303
+        public static let pictoHeures = "⏱"
+
+        // source: src/pages/DetailPresencesMission.tsx:304
+        public static let heuresSur = "h sur"
+
+        // source: src/pages/DetailPresencesMission.tsx:304
+        public static let creneau = "créneau"
+
+        // source: src/pages/DetailPresencesMission.tsx:304
+        public static let creneauPluriel = "x"
+
+        // source: src/pages/DetailPresencesMission.tsx:305
+        public static let heuresPrevues = "h prévues"
+
+        // source: src/pages/DetailPresencesMission.tsx:317
+        public static let clotureePrefixe = "Mission clôturée ·"
+
+        // source: src/pages/DetailPresencesMission.tsx:317
+        public static let clotureeBarre = "/"
+
+        // source: src/pages/DetailPresencesMission.tsx:317
+        public static let clotureeEchusPluriel = "créneaux initialement prévus étaient échus"
+
+        // source: src/pages/DetailPresencesMission.tsx:317
+        public static let clotureeEchuSingulier = "créneau initialement prévu était échu"
+
+        // source: src/pages/DetailPresencesMission.tsx:319
+        public static let progression = "Progression :"
+
+        // source: src/pages/DetailPresencesMission.tsx:319
+        public static let progressionBarre = "/"
+
+        // source: src/pages/DetailPresencesMission.tsx:319
+        public static let creneauxEchus = "créneaux échus"
+
+        // source: src/pages/DetailPresencesMission.tsx:319
+        public static let creneauEchu = "créneau échu"
+
+        // source: src/pages/DetailPresencesMission.tsx:321
+        public static let prochain = "· prochain :"
+
+        // source: src/pages/DetailPresencesMission.tsx:322
+        public static let planningTermine = "· planning terminé"
+
+        // source: src/pages/DetailPresencesMission.tsx:327
+        public static let planningIndisponible = "Planning détaillé indisponible."
+
+        // source: src/pages/DetailPresencesMission.tsx:327
+        public static let planningAConfirmer = "Planning détaillé à confirmer."
+
+        // source: src/pages/DetailPresencesMission.tsx:384
+        public static let syntheseTitre = "Synthèse des présences"
+
+        // source: src/pages/DetailPresencesMission.tsx:388
+        public static let heuresPlanifiees = "Heures planifiées"
+
+        // source: src/pages/DetailPresencesMission.tsx:389
+        public static let uniteHeures = "h"
+
+        // source: src/pages/DetailPresencesMission.tsx:392
+        public static let heuresReelles = "Heures réelles"
+
+        // source: src/pages/DetailPresencesMission.tsx:399
+        public static let heuresRetenues = "Heures retenues après litige"
+
+        // source: src/pages/DetailPresencesMission.tsx:405
+        public static let retard = "Retard"
+
+        // source: src/pages/DetailPresencesMission.tsx:406
+        public static let plus = "+"
+
+        // source: src/pages/DetailPresencesMission.tsx:406
+        public static let uniteMinutes = "min"
+
+        // source: src/pages/DetailPresencesMission.tsx:411
+        public static let departAnticipe = "Départ anticipé"
+
+        // source: src/pages/DetailPresencesMission.tsx:412
+        public static let moins = "-"
+
+        // source: src/pages/DetailPresencesMission.tsx:417
+        public static let pauses = "Pauses / interruptions"
+
+        // source: src/pages/DetailPresencesMission.tsx:423
+        public static let distance = "Distance GPS"
+
+        // source: src/pages/DetailPresencesMission.tsx:425
+        public static let uniteMetres = "m"
+
+        // source: src/pages/DetailPresencesMission.tsx:431
+        public static let methode = "Méthode"
+
+        // source: src/pages/DetailPresencesMission.tsx:440
+        public static let bilanPointageEnCours = "Bilan définitif après la fermeture du pointage en cours."
+
+        // source: src/pages/DetailPresencesMission.tsx:442
+        public static let bilanApresDernierCreneau = "Bilan définitif après le dernier créneau, le"
+
+        // source: src/pages/DetailPresencesMission.tsx:442
+        public static let bilanAucunDeficit = ". Aucun déficit n’est signalé avant cette échéance."
+
+        // source: src/pages/DetailPresencesMission.tsx:443
+        public static let bilanIndisponible = "Bilan définitif indisponible tant que le planning détaillé n’est pas confirmé."
+
+        // source: src/pages/DetailPresencesMission.tsx:449
+        public static let clotureAvantFin = "Mission clôturée avant la fin du planning initial. Les créneaux futurs ne sont plus à effectuer ; les heures retenues après arbitrage déterminent la régularisation financière."
+
+        // source: src/pages/DetailPresencesMission.tsx:456
+        public static let alerteTeleportation = "🚨 Alerte téléportation détectée"
+
+        // source: src/pages/DetailPresencesMission.tsx:457
+        public static let alerteDeficit = "⚠️ Heures réelles inférieures à 90% du planifié"
+
+        // source: src/pages/DetailPresencesMission.tsx:500
+        public static let segmentsTitre = "Détail des créneaux travaillés ("
+
+        // source: src/pages/DetailPresencesMission.tsx:500
+        public static let segmentMot = "segment"
+
+        // source: src/pages/DetailPresencesMission.tsx:500
+        public static let segmentPluriel = "s"
+
+        // source: src/pages/DetailPresencesMission.tsx:500
+        public static let parentheseFermante = ")"
+
+        // source: src/pages/DetailPresencesMission.tsx:506
+        public static let aucunSegment = "Aucun créneau de travail effectif enregistré pour cette mission."
+
+        // source: src/pages/DetailPresencesMission.tsx:513
+        public static let pictoJour = "📅"
+
+        // source: src/pages/DetailPresencesMission.tsx:513
+        public static let dateInconnue = "Date inconnue"
+
+        // source: src/pages/DetailPresencesMission.tsx:559
+        public static let segmentTravaille = "Segment travaillé"
+
+        // source: src/pages/DetailPresencesMission.tsx:559
+        public static let segmentBarre = "/"
+
+        // source: src/pages/DetailPresencesMission.tsx:560
+        public static let reprise = "· reprise après interruption"
+
+        // source: src/pages/DetailPresencesMission.tsx:561
+        public static let creneauPlanifieSuffixe = "· créneau planifié"
+
+        // source: src/pages/DetailPresencesMission.tsx:561
+        public static let creneauPlanifieSuffixeBarre = "/"
+
+        // source: src/pages/DetailPresencesMission.tsx:565
+        public static let creneauPlanifie = "Créneau planifié"
+
+        // source: src/pages/DetailPresencesMission.tsx:565
+        public static let creneauPlanifieBarre = "/"
+
+        // source: src/pages/DetailPresencesMission.tsx:571
+        public static let interruption = "Pause / interruption depuis le segment précédent :"
+
+        // source: src/pages/DetailPresencesMission.tsx:578
+        public static let horairePrevu = "Horaire prévu"
+
+        // source: src/pages/DetailPresencesMission.tsx:581
+        public static let retardSegment = "Retard : +"
+
+        // source: src/pages/DetailPresencesMission.tsx:582
+        public static let departAnticipeSegment = "Départ anticipé : -"
+
+        // source: src/pages/DetailPresencesMission.tsx:585
+        public static let bilanApresEcheance = "Bilan après l’échéance de"
+
+        // source: src/pages/DetailPresencesMission.tsx:595
+        public static let aucunCreneauCeJour = "Aucun créneau planifié ne correspond à ce jour."
+
+        // source: src/pages/DetailPresencesMission.tsx:603
+        public static let arrivee = "▶ Arrivée"
+
+        // source: src/pages/DetailPresencesMission.tsx:614
+        public static let depart = "■ Départ"
+
+        // source: src/pages/DetailPresencesMission.tsx:621
+        public static let departNonPointe = "⏳ En cours — départ non pointé"
+
+        // source: src/pages/DetailPresencesMission.tsx:627
+        public static let duree = "Durée :"
+
+        // source: src/pages/DetailPresencesMission.tsx:627
+        public static let dureeHeures = "h"
+
+        // source: src/pages/DetailPresencesMission.tsx:635
+        public static let valide = "✅ Validé"
+
+        // source: src/pages/DetailPresencesMission.tsx:635
+        public static let valideLe = "le"
+
+        // source: src/pages/DetailPresencesMission.tsx:639
+        public static let releveClotureApresArbitrage = "✅ Relevé clôturé après arbitrage"
+
+        // source: src/pages/DetailPresencesMission.tsx:639
+        public static let releveCloture = "✅ Relevé clôturé"
+
+        // source: src/pages/DetailPresencesMission.tsx:642
+        public static let enAttenteValidation = "⏳ En attente de validation"
+
+        // source: src/pages/DetailPresencesMission.tsx:644
+        public static let pointageEnCours = "Pointage en cours"
+
+        // source: src/pages/DetailPresencesMission.tsx:646
+        public static let missionEnCours = "Mission en cours"
+
+        // source: src/pages/DetailPresencesMission.tsx:663
+        public static let controlesTitre = "Contrôles du pointage"
+
+        // source: src/pages/DetailPresencesMission.tsx:668
+        public static let premiereArrivee = "Première arrivée :"
+
+        // source: src/pages/DetailPresencesMission.tsx:675
+        public static let precisionArrivee = "Précision première arrivée :"
+
+        // source: src/pages/DetailPresencesMission.tsx:681
+        public static let precisionDepart = "Précision dernier départ :"
+
+        // source: src/pages/DetailPresencesMission.tsx:688
+        public static let alerteTeleportationControle = "Alerte téléportation détectée"
+
+        // source: src/pages/DetailPresencesMission.tsx:707
+        public static let recapitulatifFinancier = "💶 Récapitulatif financier"
+    }
+
+    /// Notation rapide au départ final (`SheetNotationRapide`, `NotationRapide.tsx` l.143-216, montée par
+    /// `PointageRotatifSoignant.tsx` l.274-281 ; lot 2 T5a). Description et remerciement que le web tutoie :
+    /// `LibellesDetailPresences.Notation` (vouvoyés).
+    public enum Notation {
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:279
+        public static let titre = "Mission terminée 🎉 Comment ça s'est passé ?"
+
+        /// `CRITERES_LABELS.SOIGNANT_VERS_ETAB` (l.31), dans l'ordre des critères 1 à 4.
+        // source: src/components/NotationRapide.tsx:31
+        public static let critereAccueil = "Accueil"
+
+        // source: src/components/NotationRapide.tsx:31
+        public static let critereEncadrement = "Encadrement"
+
+        // source: src/components/NotationRapide.tsx:31
+        public static let critereConsignes = "Clarté des consignes"
+
+        // source: src/components/NotationRapide.tsx:31
+        public static let critereAdministratif = "Paiement / administratif"
+
+        /// `aria-label` du groupe d'étoiles par défaut (l.78).
+        // source: src/components/NotationRapide.tsx:78
+        public static let groupeNote = "Note"
+
+        // source: src/components/NotationRapide.tsx:88
+        public static let etoile = "étoile"
+
+        // source: src/components/NotationRapide.tsx:88
+        public static let etoilePluriel = "s"
+
+        // source: src/components/NotationRapide.tsx:196
+        public static let masquerDetail = "Masquer le détail"
+
+        // source: src/components/NotationRapide.tsx:196
+        public static let detailler = "Détailler ma note (optionnel)"
+
+        // source: src/components/NotationRapide.tsx:205
+        public static let envoyer = "Envoyer ma note"
+
+        // source: src/components/NotationRapide.tsx:208
+        public static let plusTard = "Plus tard"
+    }
+
+    /// Widget « Aller pointer » de l'Accueil (`WidgetAllerPointer.tsx` l.28-52, lot 2 T5a). Assemblage :
+    /// `LibellesDetailPresences.AllerPointer`.
+    public enum AllerPointer {
+        // source: src/components/WidgetAllerPointer.tsx:33
+        public static let creneauActuel = "Créneau de travail actuel"
+
+        // source: src/components/WidgetAllerPointer.tsx:35
+        public static let missionActiveProchain = "Mission active · prochain créneau"
+
+        // source: src/components/WidgetAllerPointer.tsx:35
+        public static let missionActivePlanning = "Mission active · planning à confirmer"
+
+        // source: src/components/WidgetAllerPointer.tsx:36
+        public static let missionDans = "Mission dans"
+
+        // source: src/components/WidgetAllerPointer.tsx:36
+        public static let minutes = "min"
+
+        // source: src/components/WidgetAllerPointer.tsx:36
+        public static let maintenant = "maintenant"
+
+        // source: src/components/WidgetAllerPointer.tsx:38
+        public static let tiret = "—"
+
+        // source: src/components/WidgetAllerPointer.tsx:41
+        public static let point = "·"
+
+        // source: src/components/WidgetAllerPointer.tsx:41
+        public static let flecheProchain = "→"
+
+        // source: src/components/WidgetAllerPointer.tsx:43
+        public static let flecheMemeJour = "→"
+
+        // source: src/components/WidgetAllerPointer.tsx:44
+        public static let flecheJours = "→"
+
+        // source: src/components/WidgetAllerPointer.tsx:50
+        public static let allerPointer = "Aller pointer"
+
+        // source: src/components/WidgetAllerPointer.tsx:50
+        public static let voirHoraires = "Voir horaires et présences"
+
+        // source: src/components/WidgetAllerPointer.tsx:50
+        public static let flecheBouton = "→"
+    }
+
+    /// Action du bandeau d'oubli de départ de l'Accueil (`BandeauOubliDepart.tsx` l.32-37, lot 2 T5a) : ouvre la page
+    /// Présences native (`navigate('/soignant/presences')`, `DashboardSoignant.tsx` l.493).
+    public enum OubliDepart {
+        // source: src/components/BandeauOubliDepart.tsx:36
+        public static let pointerMonDepart = "Pointer mon départ maintenant"
+    }
+
+    /// Points d'entrée du détail d'une mission vers les présences (`DetailMissionSoignant.tsx` l.1477-1494, lot 2 T5a).
+    public enum DetailMission {
+        // source: src/pages/DetailMissionSoignant.tsx:1483
+        public static let presencesEtPointage = "🕐 Présences et pointage"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1492
+        public static let heuresPointees = "🕐 Voir mes heures pointées et mes pauses"
+    }
+
     /// `String(valeur).padStart(2, '0')` du web (minuteurs ; valeur positive ou nulle).
     static func deuxChiffres(_ valeur: Int) -> String {
         valeur < 10 ? String(0) + String(valeur) : String(valeur)
@@ -916,5 +1277,117 @@ public enum LibellesWeb {
         .init(cle: "Certificat.contratPrefixe", texte: Certificat.contratPrefixe),
         .init(cle: "Certificat.formatDateHeure", texte: Certificat.formatDateHeure),
         .init(cle: "Certificat.telechargerPdf", texte: Certificat.telechargerPdf),
+        .init(cle: "DetailPresences.introuvableTitre", texte: DetailPresences.introuvableTitre),
+        .init(cle: "DetailPresences.introuvableMessage", texte: DetailPresences.introuvableMessage),
+        .init(cle: "DetailPresences.flechePlage", texte: DetailPresences.flechePlage),
+        .init(cle: "DetailPresences.datesPlanifiees", texte: DetailPresences.datesPlanifiees),
+        .init(cle: "DetailPresences.flecheDates", texte: DetailPresences.flecheDates),
+        .init(cle: "DetailPresences.pictoPeriode", texte: DetailPresences.pictoPeriode),
+        .init(cle: "DetailPresences.flechePeriode", texte: DetailPresences.flechePeriode),
+        .init(cle: "DetailPresences.pictoHeures", texte: DetailPresences.pictoHeures),
+        .init(cle: "DetailPresences.heuresSur", texte: DetailPresences.heuresSur),
+        .init(cle: "DetailPresences.creneau", texte: DetailPresences.creneau),
+        .init(cle: "DetailPresences.creneauPluriel", texte: DetailPresences.creneauPluriel),
+        .init(cle: "DetailPresences.heuresPrevues", texte: DetailPresences.heuresPrevues),
+        .init(cle: "DetailPresences.clotureePrefixe", texte: DetailPresences.clotureePrefixe),
+        .init(cle: "DetailPresences.clotureeBarre", texte: DetailPresences.clotureeBarre),
+        .init(cle: "DetailPresences.clotureeEchusPluriel", texte: DetailPresences.clotureeEchusPluriel),
+        .init(cle: "DetailPresences.clotureeEchuSingulier", texte: DetailPresences.clotureeEchuSingulier),
+        .init(cle: "DetailPresences.progression", texte: DetailPresences.progression),
+        .init(cle: "DetailPresences.progressionBarre", texte: DetailPresences.progressionBarre),
+        .init(cle: "DetailPresences.creneauxEchus", texte: DetailPresences.creneauxEchus),
+        .init(cle: "DetailPresences.creneauEchu", texte: DetailPresences.creneauEchu),
+        .init(cle: "DetailPresences.prochain", texte: DetailPresences.prochain),
+        .init(cle: "DetailPresences.planningTermine", texte: DetailPresences.planningTermine),
+        .init(cle: "DetailPresences.planningIndisponible", texte: DetailPresences.planningIndisponible),
+        .init(cle: "DetailPresences.planningAConfirmer", texte: DetailPresences.planningAConfirmer),
+        .init(cle: "DetailPresences.syntheseTitre", texte: DetailPresences.syntheseTitre),
+        .init(cle: "DetailPresences.heuresPlanifiees", texte: DetailPresences.heuresPlanifiees),
+        .init(cle: "DetailPresences.uniteHeures", texte: DetailPresences.uniteHeures),
+        .init(cle: "DetailPresences.heuresReelles", texte: DetailPresences.heuresReelles),
+        .init(cle: "DetailPresences.heuresRetenues", texte: DetailPresences.heuresRetenues),
+        .init(cle: "DetailPresences.retard", texte: DetailPresences.retard),
+        .init(cle: "DetailPresences.plus", texte: DetailPresences.plus),
+        .init(cle: "DetailPresences.uniteMinutes", texte: DetailPresences.uniteMinutes),
+        .init(cle: "DetailPresences.departAnticipe", texte: DetailPresences.departAnticipe),
+        .init(cle: "DetailPresences.moins", texte: DetailPresences.moins),
+        .init(cle: "DetailPresences.pauses", texte: DetailPresences.pauses),
+        .init(cle: "DetailPresences.distance", texte: DetailPresences.distance),
+        .init(cle: "DetailPresences.uniteMetres", texte: DetailPresences.uniteMetres),
+        .init(cle: "DetailPresences.methode", texte: DetailPresences.methode),
+        .init(cle: "DetailPresences.bilanPointageEnCours", texte: DetailPresences.bilanPointageEnCours),
+        .init(cle: "DetailPresences.bilanApresDernierCreneau", texte: DetailPresences.bilanApresDernierCreneau),
+        .init(cle: "DetailPresences.bilanAucunDeficit", texte: DetailPresences.bilanAucunDeficit),
+        .init(cle: "DetailPresences.bilanIndisponible", texte: DetailPresences.bilanIndisponible),
+        .init(cle: "DetailPresences.clotureAvantFin", texte: DetailPresences.clotureAvantFin),
+        .init(cle: "DetailPresences.alerteTeleportation", texte: DetailPresences.alerteTeleportation),
+        .init(cle: "DetailPresences.alerteDeficit", texte: DetailPresences.alerteDeficit),
+        .init(cle: "DetailPresences.segmentsTitre", texte: DetailPresences.segmentsTitre),
+        .init(cle: "DetailPresences.segmentMot", texte: DetailPresences.segmentMot),
+        .init(cle: "DetailPresences.segmentPluriel", texte: DetailPresences.segmentPluriel),
+        .init(cle: "DetailPresences.parentheseFermante", texte: DetailPresences.parentheseFermante),
+        .init(cle: "DetailPresences.aucunSegment", texte: DetailPresences.aucunSegment),
+        .init(cle: "DetailPresences.pictoJour", texte: DetailPresences.pictoJour),
+        .init(cle: "DetailPresences.dateInconnue", texte: DetailPresences.dateInconnue),
+        .init(cle: "DetailPresences.segmentTravaille", texte: DetailPresences.segmentTravaille),
+        .init(cle: "DetailPresences.segmentBarre", texte: DetailPresences.segmentBarre),
+        .init(cle: "DetailPresences.reprise", texte: DetailPresences.reprise),
+        .init(cle: "DetailPresences.creneauPlanifieSuffixe", texte: DetailPresences.creneauPlanifieSuffixe),
+        .init(cle: "DetailPresences.creneauPlanifieSuffixeBarre", texte: DetailPresences.creneauPlanifieSuffixeBarre),
+        .init(cle: "DetailPresences.creneauPlanifie", texte: DetailPresences.creneauPlanifie),
+        .init(cle: "DetailPresences.creneauPlanifieBarre", texte: DetailPresences.creneauPlanifieBarre),
+        .init(cle: "DetailPresences.interruption", texte: DetailPresences.interruption),
+        .init(cle: "DetailPresences.horairePrevu", texte: DetailPresences.horairePrevu),
+        .init(cle: "DetailPresences.retardSegment", texte: DetailPresences.retardSegment),
+        .init(cle: "DetailPresences.departAnticipeSegment", texte: DetailPresences.departAnticipeSegment),
+        .init(cle: "DetailPresences.bilanApresEcheance", texte: DetailPresences.bilanApresEcheance),
+        .init(cle: "DetailPresences.aucunCreneauCeJour", texte: DetailPresences.aucunCreneauCeJour),
+        .init(cle: "DetailPresences.arrivee", texte: DetailPresences.arrivee),
+        .init(cle: "DetailPresences.depart", texte: DetailPresences.depart),
+        .init(cle: "DetailPresences.departNonPointe", texte: DetailPresences.departNonPointe),
+        .init(cle: "DetailPresences.duree", texte: DetailPresences.duree),
+        .init(cle: "DetailPresences.dureeHeures", texte: DetailPresences.dureeHeures),
+        .init(cle: "DetailPresences.valide", texte: DetailPresences.valide),
+        .init(cle: "DetailPresences.valideLe", texte: DetailPresences.valideLe),
+        .init(cle: "DetailPresences.releveClotureApresArbitrage", texte: DetailPresences.releveClotureApresArbitrage),
+        .init(cle: "DetailPresences.releveCloture", texte: DetailPresences.releveCloture),
+        .init(cle: "DetailPresences.enAttenteValidation", texte: DetailPresences.enAttenteValidation),
+        .init(cle: "DetailPresences.pointageEnCours", texte: DetailPresences.pointageEnCours),
+        .init(cle: "DetailPresences.missionEnCours", texte: DetailPresences.missionEnCours),
+        .init(cle: "DetailPresences.controlesTitre", texte: DetailPresences.controlesTitre),
+        .init(cle: "DetailPresences.premiereArrivee", texte: DetailPresences.premiereArrivee),
+        .init(cle: "DetailPresences.precisionArrivee", texte: DetailPresences.precisionArrivee),
+        .init(cle: "DetailPresences.precisionDepart", texte: DetailPresences.precisionDepart),
+        .init(cle: "DetailPresences.alerteTeleportationControle", texte: DetailPresences.alerteTeleportationControle),
+        .init(cle: "DetailPresences.recapitulatifFinancier", texte: DetailPresences.recapitulatifFinancier),
+        .init(cle: "Notation.titre", texte: Notation.titre),
+        .init(cle: "Notation.critereAccueil", texte: Notation.critereAccueil),
+        .init(cle: "Notation.critereEncadrement", texte: Notation.critereEncadrement),
+        .init(cle: "Notation.critereConsignes", texte: Notation.critereConsignes),
+        .init(cle: "Notation.critereAdministratif", texte: Notation.critereAdministratif),
+        .init(cle: "Notation.groupeNote", texte: Notation.groupeNote),
+        .init(cle: "Notation.etoile", texte: Notation.etoile),
+        .init(cle: "Notation.etoilePluriel", texte: Notation.etoilePluriel),
+        .init(cle: "Notation.masquerDetail", texte: Notation.masquerDetail),
+        .init(cle: "Notation.detailler", texte: Notation.detailler),
+        .init(cle: "Notation.envoyer", texte: Notation.envoyer),
+        .init(cle: "Notation.plusTard", texte: Notation.plusTard),
+        .init(cle: "AllerPointer.creneauActuel", texte: AllerPointer.creneauActuel),
+        .init(cle: "AllerPointer.missionActiveProchain", texte: AllerPointer.missionActiveProchain),
+        .init(cle: "AllerPointer.missionActivePlanning", texte: AllerPointer.missionActivePlanning),
+        .init(cle: "AllerPointer.missionDans", texte: AllerPointer.missionDans),
+        .init(cle: "AllerPointer.minutes", texte: AllerPointer.minutes),
+        .init(cle: "AllerPointer.maintenant", texte: AllerPointer.maintenant),
+        .init(cle: "AllerPointer.tiret", texte: AllerPointer.tiret),
+        .init(cle: "AllerPointer.point", texte: AllerPointer.point),
+        .init(cle: "AllerPointer.flecheProchain", texte: AllerPointer.flecheProchain),
+        .init(cle: "AllerPointer.flecheMemeJour", texte: AllerPointer.flecheMemeJour),
+        .init(cle: "AllerPointer.flecheJours", texte: AllerPointer.flecheJours),
+        .init(cle: "AllerPointer.allerPointer", texte: AllerPointer.allerPointer),
+        .init(cle: "AllerPointer.voirHoraires", texte: AllerPointer.voirHoraires),
+        .init(cle: "AllerPointer.flecheBouton", texte: AllerPointer.flecheBouton),
+        .init(cle: "OubliDepart.pointerMonDepart", texte: OubliDepart.pointerMonDepart),
+        .init(cle: "DetailMission.presencesEtPointage", texte: DetailMission.presencesEtPointage),
+        .init(cle: "DetailMission.heuresPointees", texte: DetailMission.heuresPointees),
     ]
 }
