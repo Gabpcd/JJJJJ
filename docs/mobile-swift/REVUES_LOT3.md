@@ -571,6 +571,94 @@ XCUITest), puis code.
 - **Projet** : aucun fichier ajouté ni retiré dans l'app ou les XCUITest (nouveaux fichiers dans le paquet JoleneCore
   seulement) : `project.pbxproj` inchangé, `xcodegen generate` sans objet.
 
+### Revue fraîche B8 — L3-T3b (n°2)
+
+**Verdict : CLÔTURABLE.** Aucun bloquant, aucun majeur, six mineurs.
+
+La CI trois formats reste la condition de merge. Les XCUITest n'ont jamais tourné : `xcresult` relu, `DemoLiensLot3Tests` 8 tests, `DemoAccueilTests` 3 tests, 0 échec, `skipped = 0`.
+
+#### Périmètre relu
+- J'ai relu en entier `git diff origin/feat/ios-lot3...origin/lot3/l3-t3b-v2` : 6 commits, 38 fichiers, +2624/−180.
+- La base est la pointe `14fe31fa`.
+- Le diff de `project.pbxproj` se limite à `DeepLinkCoordinator.swift` et `DemoLiensLot3Tests.swift`.
+- J'ai aussi lu le cadre : LOT3_PLAN.md (§2.5, §3 T3 et T5, §4), LOTS_2_5_DECISIONS.md, DECISIONS_LOT3.md (T3a et T3b), la décision 7 et T10 de LOT1_PLAN.md, et CLAUDE.md.
+- Lecture seule : aucun build, aucun test, aucun appel MCP.
+
+#### Vérifié sans constat
+- **M1 (revue n°1).** `FinIdentiteWebPort` est appelé une fois par fin d'identité :
+  - `signOut`, après la révocation ;
+  - `signOutLocally` ;
+  - absence de session confirmée après un espace prêt ou bloqué.
+
+  Il n'est jamais appelé sur une fin transitoire. Il l'est en plus avant chaque `signIn`. Les cas suivants ne donnent qu'un seul appel : double tap, `.signedOut` du SDK émis pendant la déconnexion, même absence revue deux fois (`SessionStoreFinIdentiteWebTests`, 13 tests). La déconnexion SDK est `scope: .global`. `clearWebsiteData` existe bien en iOS 16.0 (en-tête SDK relu). La cible app est en Swift 5 avec `SWIFT_STRICT_CONCURRENCY = complete` : pas de piège d'isolation dynamique sur le gestionnaire de fin.
+- **m1 / m7.** `PresentationsRacine` pose l'anti-boucle et `deeplink-route` à l'apparition effective. Il les lève par numéro d'item. Le refus est présenté après `onDismiss`. Chaque refus a son item, et l'hôte de l'alerte est recréé par `.id`. Tests au niveau 1 et au niveau 2 (bouton DEBUG démo `-JOLENE_OPEN_URL_SUIVANT`, limité à la démo et à DEBUG).
+- **Option B.** Elle est lue sur la route, dans `DeepLinkIntent` comme dans `CibleNotification` (m2). Elle n'est jamais mémorisée ni servie par Safari, que le lien vienne d'un lien universel, d'un tap ou du centre. Le texte vient mot pour mot de la décision 7 du lot 1 ; « Fermer » est repris de `FiltresSheet`.
+- **Aiguillage.** Un lien de l'espace reçu avant `.ready` est mémorisé (le dernier gagne), puis rejoué une seule fois pour l'epoch de l'espace. Entre un lien et un tap en attente, le plus récent gagne et l'autre sert de repli, y compris quand le tap est écarté par l'epoch. La règle d'epoch de `BoiteTapsPush` est inchangée. Avec `.id(epoch)`, l'ancien espace ne ferme pas le nouveau. Une demande d'un autre epoch n'est jamais exécutée.
+- **m3.** `?tab=confidentialite` reste un renvoi web, avec une garde liée au port `exportRGPD` (le nom est bien présent dans `unwiredPorts`).
+- **m4.** Variante démo `JOLENE_FORCE_OUBLI_POINTAGE`, en DEBUG seulement.
+- **m5.** Les liens d'Explorer sont par valeur (`MissionRoute`), donc la pile par chemin est efficace.
+- **Tests.**
+  - Aucun test supprimé ni sauté. Les migrations d'identifiants (règle 8) rendent les assertions plus fortes : la présence du bouton et de la page remplace l'absence.
+  - Plus aucune référence à `push-tap-cible` dans les tests.
+  - `requireAbsence` est une absence bornée sur condition, pas un délai fixe nu.
+  - Tous les tests héritent de `JoleneUITestCase`, donc des trois formats.
+- **Sécurité.**
+  - Aucun journal, `print` ni `sleep` ajouté, aucun littéral qui ressemble à un secret.
+  - `deeplink-route` n'existe qu'en DEBUG et en démo.
+  - Les descriptions de `DeepLinkIntent` et `Action` sont masquées, `dump` compris.
+  - La démo n'ouvre aucun `SFSafariViewController` et n'efface rien : la sentinelle réseau n'est pas touchée.
+- **HARD STOP n°4 / B9.** Aucun texte juridique, aucune RPC, aucune donnée de production.
+
+#### Mineurs
+1. **Reste de M1 au lancement à froid** (`SessionStore.swift:204-210`, `FinIdentiteWeb.swift:11-13`, `DECISIONS_LOT3.md:598`).
+   - Les docs disent qu'une « identité close hors de l'app » est couverte par l'effacement fait avant `signIn`.
+   - Or un renvoi présenté sur l'écran de connexion avant toute connexion (écart n°1) ouvre un magasin jamais effacé.
+   - Cas concernés : session révoquée pendant que l'app est fermée, restauration refusée au lancement, app tuée avant la fin de `clearWebsiteData`.
+   - Correction : effacer sans fermer, avec le renvoi de lancement différé, quand la perte d'une session stockée est confirmée. À défaut, corriger les docs et ajouter le cas à §6 bis de `RECETTE_DEVICE_LOT3.md`.
+2. **Effacement lancé en même temps que la fermeture de la feuille** (`DeepLinkCoordinator.swift:164-169`).
+   - La page encore vivante peut réécrire son `localStorage`.
+   - Correction : quand un renvoi est affiché, lancer l'effacement à `renvoiDisparu`/`renvoiCongedie`.
+3. **Effacement « fail-closed » non consigné et silencieux** (`PresentationsRacine.swift:56-59`).
+   - Si Apple n'appelle jamais le gestionnaire de fin, aucun renvoi ne s'ouvre plus jusqu'à la fin du processus, et les boutons restent sans effet.
+   - Correction : le consigner dans `DECISIONS_LOT3.md` et `RECETTE_DEVICE_LOT3.md`, et si possible ajouter un garde-fou borné qui rend l'échec visible ou journalisé.
+4. **Consigne manquante pour les ouvertures d'identité hors `signIn`** (`DECISIONS_LOT3.md:572-576`).
+   - Sont concernés : T7 (`.sessionOuverte`, confirmation), T8 (`refreshSession`) et le reset natif.
+   - Correction : chacun appelle le port avant d'ouvrir l'identité. Mieux : un verrou dans `SessionStore` au premier `.ready` d'un nouvel userId, avec son test.
+5. **Deux cas XCUITest consignés manquent** (`DECISIONS_LOT3.md:143-150`).
+   - `/inscription/soignant` : renvoi présenté aussitôt, sans session.
+   - `/soignant/mon-compte` : hub natif.
+   - Correction : les ajouter à `DemoLiensLot3Tests` dans les trois formats, ou consigner leur remplacement.
+6. **Docs restées sur l'état d'avant la revue n°1.**
+   - `PARITE_SOIGNANT.md:43`, écart (9) : la ligne dit encore « non exercé en démo » et cite le verrou T12 n°2 comme ouvert, alors que m4 l'a levé.
+   - `REVUES_LOT3.md:527` et `:536` : « `?tab=confidentialite` → hub », contredit par la correction m3.
+
+#### Condition de merge (inchangée)
+1. CI trois formats verte, `xcresult` relu avec 0 échec et `skipped = 0`.
+2. Mineurs traités ou consignés.
+3. Merge sériel par la file de la session principale.
+
+Hors B9 : pas de go Gabrielle requis. Les deux textes non juridiques sont à relire comme l'auteur l'indique.
+
+### Intégration sur `feat/ios-lot3` (intégrateur, 2026-11-09, vague 3)
+
+- `git merge --no-ff origin/lot3/l3-t3b-v2` (`992d768b`) → `b668686a`, après `origin/main` (`546c1036`) et
+  `origin/fix/ios-tests-instables` (`575e7e48`), sans conflit. Vérifications et recette CI : section « Intégration de
+  T3b, T7 et T11 (vague 3) » en fin de fichier.
+- Suite des mineurs de la revue n°2 :
+  - **m4 traité en partie** par le correctif d'intégration `db90d362` (T7) : `SessionStore.ouvrirIdentiteInscription()`
+    appelle le port avant la relecture d'une identité ouverte hors de `signIn` (compte créé avec session, lien de
+    confirmation), test `SessionStoreFinIdentiteWebTests.testOuvertureDIdentiteParLInscriptionEstPrecedeeDUnAppel`.
+    Restent `refreshSession` de T8 et le reset natif (consigne de `DECISIONS_LOT3.md`, section d'intégration) ; le
+    verrou « premier `.ready` d'un nouvel userId » n'est pas posé.
+  - **m5 traité** : `DemoLiensLot3Tests.testLienMonCompteOuvreLeHubNatif` ; `/inscription/soignant` est natif depuis T7
+    (`testLienInscriptionSoignantOuvreLeCompteRapideProfessionPreRemplie`, à la place du renvoi web consigné).
+  - **m6 traité** : `PARITE_SOIGNANT.md`, écart (9) mis à jour (variante démo, verrou T12 n°2 levé). Les lignes 527 et
+    536 de ce fichier (« `?tab=confidentialite` → hub ») redeviennent exactes avec l'intégration de T11 (la ligne de
+    `LinkRouter` mène au hub depuis `db90d362`) : laissées telles quelles.
+  - **m1, m2, m3 consignés, ouverts** (navigateur intégré : renvoi de lancement sur un magasin jamais effacé,
+    effacement concomitant à la fermeture, effacement sans fin) : à traiter par T3b ou en recette appareil
+    (`RECETTE_DEVICE_LOT3.md`), sans effet sur la démo.
+
 ## L3-T4
 
 ### Consignes de l'auteur pour l'intégration (corrections de la revue B8)
@@ -1335,3 +1423,275 @@ Seul nettoyage côté Claude : mes propres extractions de revue dans le scratchp
 - **Non exécuté** : aucun test sur simulateur (consigne). Les XCUITest de T5, T6 et T9, et les trois ajoutés à
   l'intégration, sont compilés mais n'ont jamais tourné : **condition de merge maintenue**, CI trois formats verte
   relue dans le `xcresult` (0 échec, `skipped = 0`, `passed = total`). Mineurs 1 et 3 à 10 ouverts.
+
+## L3-T7
+
+### Revue fraîche B8 — L3-T7 (n°1)
+
+**Verdict : CLÔTURABLE.** Aucun bloquant, aucun majeur, 10 mineurs. Le merge reste soumis aux conditions ci-dessous : B9, HARD STOP n°4 et préalable captcha.
+
+Périmètre : diff complet `origin/feat/ios-lot3...origin/lot3/l3-t7-v2` (6 commits, 34 fichiers). Revue en lecture seule : aucun build ni test lancé. MCP Supabase interrogé en lecture seule sur la prod : un seul SELECT sur `fn_demarrer_inscription` et sur la politique `parcours_inscription_proprietaire`.
+
+#### Ce qui tient
+- **signUp** : adresse normalisée (trim + minuscules), intention `{type,profession,nom,cgu,cgv}` dans `user_metadata.inscription_progressive`, `redirect_to` vers `https://jolene.app/inscription/confirmer`, sans jeton captcha.
+  - Compte existant détecté comme le web : message GoTrue ou `identities` vide.
+  - Session déjà ouverte pour la même adresse : pas de second `signUp`.
+  - Traduction des refus dans le même ordre que `mapperErreurInscription`. Les tests utilisent le format d'erreur GoTrue de l'API 2024-01-01.
+- **fn_demarrer_inscription** :
+  - Les `exceptionsMetier` 22023 et 23505 sont lues avant `SupabaseErrorMapping`. 42501 donne une session expirée, PGRST202 une erreur de contrat.
+  - La ligne rendue est relue en liste blanche et son propriétaire est vérifié, si bien qu'aucun succès n'est supposé.
+  - Le corps `{error}` en HTTP 200 est impossible d'après la définition ; s'il arrivait, il serait traité comme une erreur de contrat.
+  - Vérification prod : ON CONFLICT présent, 23505 présente, GRANT `authenticated` présent et absent pour `anon`, politique identique au dump.
+- **Confirmation** : trois formats acceptés ; `recovery` refusé sans appel réseau ; l'échange n'est tenté qu'une fois par lien.
+- **Modèles** :
+  - Contrôle d'epoch à chaque étape ; une annulation n'est jamais une erreur.
+  - Un seul envoi à la fois, aucun renvoi automatique.
+  - Une réponse tardive pour une identité partie est ignorée ; l'état est relu quand l'epoch change.
+- **Textes** : chacun a été recoupé avec `InscriptionRapide.tsx`, `ParcoursInscription.tsx`, `ConfirmationInscription.tsx`, `erreurs.ts` et `PageConnexion.tsx` l.334. La phrase de consentement est exacte, avec ses liens `/cgu` et `/confidentialite`. Les seuls autres libellés sont repris du lot 0. Aucun texte inventé.
+- **Données sensibles** : aucun journal ; mot de passe effacé à la disparition de l'écran ; aucun littéral ressemblant à un secret.
+- **Démo** : `DemoNoNetworkTests` reste respecté (Foundation et Combine uniquement).
+- **Non-régression** : identifiants `access-blocked`, `logout-button` et `session-loading` intacts. `SessionController` et `MobileAccess` sont inchangés. Seuls INCONNU et PROFIL_INCOMPLET sont aiguillés vers l'onboarding. Aucune notification serveur ne pointe vers `/inscription/*`.
+- **XCUITest** :
+  - formats iPhone, iPad portrait et iPad paysage via `JoleneUITestCase` ;
+  - attentes par condition (`require`), jamais par délai fixe ;
+  - défilement (`scrollTo`) avant chaque tap.
+
+#### Mineurs (détail dans `mineurs`)
+| # | Constat |
+|---|---|
+| m1 | « J’ai confirmé » et « Se connecter et continuer » passent par `SessionStore.signIn` : un email non confirmé donne un message trompeur, et l'intention du formulaire est perdue. L'écart est consigné ; à corriger ou à faire valider. |
+| m2 | `inscription` n'est pas remis à nil quand la session quitte `.signedOut` autrement que par `suivre`. |
+| m3 | « Se connecter » sur un lien refusé ferme seulement la feuille. |
+| m4 | Double appui sur le chemin `.connexion` : deux `signIn`. |
+| m5 | `onChange` peut lancer un second chargement en vol, donc un second `fn_demarrer_inscription` (idempotent). |
+| m6 | `XCTSkip` dans la garde verbatim. |
+| m7 | Erreurs de champ non annoncées à VoiceOver. |
+| m8 | `Issue.connexion` affiche le mot de passe dans sa description. |
+| m9 | 22023 affichée mot pour mot alors que le web affiche le message générique ; écart non consigné. |
+| m10 | Délai dépassé sur `confirmer` traité comme un refus sans relecture de la session. |
+
+#### Conditions de merge (hors code)
+1. **Préalable captcha.** `PORTE_LOT0.md` 3.1 (STAGING) et 3.2 (prod, faite à la main par Gabrielle) doivent être mesurées et consignées. Le blueprint en fait un préalable de T7. En cas de refus captcha, D25 s'applique avant le merge : « Créer un compte » devient un renvoi web.
+2. **B9 et HARD STOP n°4.** Il faut le go explicite de Gabrielle sur le consentement transmis par `p_cgu`, sur la phrase de consentement et ses deux liens, et sur le choix du message générique en cas de refus captcha.
+3. **CI trois formats.** La CI doit être verte, xcresult relu : `DemoInscriptionTests` (5 tests × 3 formats), 0 échec, `skipped = 0`. Ces tests n'ont jamais tourné. La recette frontend sur appareil reste à faire.
+4. **Dépendance L1-T10 / T3b.** Les liens `/inscription/*` restent inertes à l'exécution tant que le coordinateur de liens n'est pas là. L'XCUITest « lien démo → onboarding » arrivera avec lui. Livraison partielle consignée.
+
+### Intégration sur `feat/ios-lot3` (intégrateur, 2026-11-09, vague 3)
+
+- `git merge --no-ff origin/lot3/l3-t7-v2` (`c7d4eef0`) → `1f38ef92`, après T3b. Conflits résolus en gardant les deux
+  côtés : `AppContainer.demoGateways` (signature `arguments:` de T7, surcharges DEBUG de T3b, T6 et T9),
+  `CentreNotifications.swift` (documentation de `.aucune`), `CentreNotificationsTests.sansCibleDansLEspace` (connexion
+  de T3b, confirmation et pages d'inscription de T7 ; le reset, renvoi web depuis T3b, n'y est plus),
+  `DECISIONS_LOT3.md` (« En attente de Gabrielle » : note captcha de T7 et signalement du reset de T3b),
+  `project.pbxproj` (régénéré par `xcodegen generate`).
+- **Condition 4 levée par l'intégration** (correctif `db90d362`, `DECISIONS_LOT3.md`, section « Intégration de T3b, T7
+  et T11 ») : confirmation et pages `soignant` / `reprendre` présentées hors de l'espace par le coordinateur de T3b
+  (`AiguillageLiens.Action.inscription` → `BoiteLiensInscription` → `RootView`), ligne `.confirmerInscription`
+  rétablie à `true` ; XCUITest « lien démo → onboarding »
+  (`DemoLiensLot3Tests.testLienDeConfirmationOuvreLAiguillageDOnboarding`) et lien `/inscription/soignant?profession=IDE`
+  (`testLienInscriptionSoignantOuvreLeCompteRapideProfessionPreRemplie`) ajoutés. Migration (règle 8) :
+  `DemoInscriptionTests.testRefusCaptchaAfficheLeMessageGeneriqueEtLeRenvoiWeb` (le présentateur existe : renvoi D25
+  présent, page `/inscription/soignant` ouverte sur le double démo).
+- Revue n°2 de T3b, m4, pour T7 : `SessionStore.ouvrirIdentiteInscription()` (navigateur intégré vidé avant la
+  relecture d'une identité ouverte par `signUp` avec session ou par le lien de confirmation).
+- **Mineur m2 réduit** : un lien d'inscription reçu pendant la restauration n'est plus écarté (il attend l'issue de la
+  session) ; la remise à nil de `inscription` hors `suivre` reste ouverte. Les autres mineurs (m1, m3 à m10) restent
+  ouverts pour l'auteur ; m6 suit le motif des autres gardes verbatim de la base (`XCTSkip` seulement si le fichier
+  web est absent ; aucun test ignoré dans les runs locaux ni en CI).
+- **Toujours requis avant tout merge sur `main`** : conditions 1 et 2 (préalable captcha `PORTE_LOT0.md` 3.1 / 3.2, go
+  B9 et HARD STOP de Gabrielle) et la recette sur appareil. Condition 3 : section « Intégration de T3b, T7 et T11
+  (vague 3) » ci-dessous.
+
+## L3-T11
+
+### Revue fraîche B8 — L3-T11 (n°2)
+
+**Verdict : CLÔTURABLE.** Aucun bloquant, aucun majeur, 4 mineurs.
+
+**Condition de merge (rappel de l'auteur, à respecter)** : `ios-swift-ci.yml` vert sur les trois formats, avec relecture du xcresult. Suites concernées : `DemoCompteLot3Tests`, ainsi que `DemoCompteTests`, `DemoPushTests`, `DemoPreferencesTests` et `DemoProfilTests`, dont la liste du hub s'est allongée. Exigence : skipped = 0. Les XCUITest n'ont jamais été exécutés : le niveau 2 n'est pas prouvé.
+
+#### Périmètre relu
+- Diff complet `origin/feat/ios-lot3...origin/lot3/l3-t11-v2` : 5 commits, 41 fichiers, environ 4 700 lignes.
+- Sources web citées, lues sur la branche : `ChangementMotDePasse.tsx` l.26-110, `SectionConfidentialite.tsx` l.30-78, `MonCompteSoignant.tsx` l.36-60, l.108-140, l.170-215, `erreurs.ts` l.183-198 et l.418-532.
+- Base relue : `SessionStore`, `SessionController`, `bounded`, `MainTabView`, `RootView` (`.id(epoch)`), `SegmentedChoice`, `PasswordCriteriaList`, `JoleneTextField`, `UITestSupport`, `DemoNoNetworkTests`, `NetworkSentinel`.
+- supabase-swift 2.55.5 vérifié dans le cache SPM : `RetryRequestInterceptor` rejoue les POST et les PUT ; aucun logger n'est configuré, donc aucun mot de passe n'apparaît dans les journaux du SDK.
+- MCP Supabase, lecture seule :
+  - `pg_get_functiondef(fn_rgpd_exporter_rate_limited)` est identique au contrat : « Non authentifié », puis 30 exports par heure, puis l'apostrophe réelle.
+  - `has_function_privilege('authenticated', …, 'EXECUTE')` vaut true.
+  - La fuite de `notations_recues` est confirmée sur la définition live : filtre `masque = false` sans `publie_le IS NOT NULL`.
+
+#### Corrections de la revue n°1 : traitées
+- **M1** : une seule fin, par `completionWithItemsHandler` ; la `.sheet` est retirée ; présentation par UIKit, en popover centré sur iPad. La logique du modèle est saine : fin idempotente, fin tardive sans effet, fermeture forcée en fin de session. Il n'y a pas de cycle de rétention : contrôleur → handler → feuille, et la feuille ne tient le contrôleur qu'en `weak`.
+- **m1** :
+  - `same_password` avec un nouveau distinct de l'ancien vérifié (octets UTF-8, 72 premiers) donne `.modifie`. Le raisonnement est juste : GoTrue ne répond `same_password` que si le nouveau correspond au hachage courant, alors que l'ancien vient d'y correspondre.
+  - Un 5xx ou un 408 sur le PUT donne une issue inconnue ; un 5xx sur la vérification reste le refus générique du web.
+  - Les tests épinglent le rejeu du SDK (2 envois, corps identique).
+- **m2** : la garde d'identité est consultée une fois, entre `signIn` et `update`. `signOut(scope: .local)` ne part que si le jeton de la vérification est encore celui du SDK. La course résiduelle est consignée.
+- **m3, m4, m5, m7, m8** : traités. Points vérifiés :
+  - la feuille n'est présentée que hub à l'écran ;
+  - le CSV est doublé scalaire par scalaire et les clés sont comparées octet pour octet ;
+  - les refus serveur sont localisés dans le corps de la fonction ;
+  - « Réglages » n'a qu'une source ;
+  - la purge a lieu au lancement, à la création du hub et en fin de session.
+- La suppression de `PreferencesTextes.sectionHub` est sans conflit : `lot3/l3-t3b-v2` et `lot3/l3-t7-v2` le citent, mais sans toucher ces fichiers.
+- **m6, m9** : consignés dans DECISIONS_LOT3.md. Les écarts au blueprint v2 restent à acter par l'intégrateur :
+  - pas d'entrée `.notifications` ;
+  - pas d'entrées Paiements ni Coordonnées bancaires ;
+  - « Aide & légal » masqué sans L1-T10 ;
+  - bloc du lot 0 en tête du hub.
+
+#### Points contrôlés sans défaut
+- **Concurrence et identité** :
+  - chaque réponse est relue contre l'epoch ; l'état de session est publié après l'avancée de l'epoch, donc `verifierIdentite` voit bien le changement ;
+  - `bounded` annule le travail perdant ;
+  - double appui bloqué (`enCours`, `peutExporter`) ;
+  - aucune réponse tardive publiée pour une identité partie ;
+  - `.session(même id)` émis par `signIn` et `update` n'avance pas l'epoch (test présent).
+- **Décodage** :
+  - `{error}` « vrai » en HTTP 200 (ToBoolean du JavaScript) donne un refus verbatim et aucun fichier ;
+  - « Non authentifié » donne une session expirée ;
+  - un corps non objet est un refus de contrat ;
+  - les erreurs PostgREST et de transport passent par `SupabaseErrorMapping` avant l'analyse du corps ;
+  - le corps est lu en `Data`, octet pour octet.
+- **JSONOrdonne et nombres** : l'ordre `OrdinaryOwnPropertyKeys`, la règle des doublons, l'analyse stricte, `QuoteJSONString` et `Number::toString` (seuils 1e21 et 1e-7, -0) sont exacts. Les attendus viennent du code web exécuté sous Node.
+- **Fichier** :
+  - écrit avec `NSFileProtectionComplete` et `withoutOverwriting` ;
+  - dossier propre à chaque export ;
+  - suppression limitée à la racine et au préfixe ;
+  - nom de fichier à la date UTC, comme `toISOString`.
+- **Parité mot de passe** :
+  - `calculerForce` porté avec les unités UTF-16 et les plages ASCII ;
+  - égalité `===` sans normalisation ;
+  - `invalid_credentials` donne « Ancien mot de passe incorrect. » ;
+  - table `traductions` puis repli `weak_password`, conformes à `extraireMessageErreur` ;
+  - aucune branche `CODES_CONNUS` atteignable (codes en majuscules) ;
+  - audit best-effort après l'annonce.
+- **Thème** : jetons de couleur dynamiques, donc lisibles en mode sombre. Mémoire vive en démo, sans pollution d'un test à l'autre ; UserDefaults par appareil ailleurs, hors purge de compte.
+- **HARD STOP n°4** :
+  - aucun texte juridique nouveau ni reformulé ;
+  - textes RGPD de l'export en tutoiement verbatim ;
+  - textes natifs non juridiques listés pour Gabrielle : réauthentification, « non confirmé », Thème, Système, Clair, Sombre.
+- **Données sensibles et secrets** :
+  - aucun mot de passe, aucun contenu d'export et aucun jeton dans les journaux ou les messages ;
+  - les doubles de test ne comptent que des longueurs ;
+  - aucun littéral ressemblant à un secret : les mots de passe de test sont assemblés par `joined()` ou suivent un motif déjà présent dans la base (`motdepasse-test`).
+- **Régressions** :
+  - aucun identifiant du lot 0, de T6, de T8 ou de T9 déplacé ;
+  - `DemoNoNetworkTests` reste satisfait (lecture de fixture par URL de fichier) ;
+  - la sentinelle est relue en fin de chaque XCUITest ;
+  - `openDeletion` (6 glissements au plus) et `scrollTo` (20 au plus) sont suffisants pour la liste allongée, sous réserve de la CI ;
+  - `MainTabView` et les fichiers de T3 ne sont pas modifiés.
+- **XCUITest** :
+  - aucune attente à délai fixe ;
+  - même code pour les trois formats ;
+  - iPad couvert : popover fermé par `PopoverDismissRegion` ;
+  - contrôles système en anglais ou en français.
+
+#### Mineurs
+Non bloquants, à traiter en suivi ou avant le merge.
+- **m1** : `assumeIsolated` dans le handler de fin de la feuille de partage plante si l'appel arrive hors du fil principal. Passer par un saut gardé vers le fil principal (CompteSections.swift l.154).
+- **m2** : un refus de présentation de la feuille laisse les boutons d'export inactifs pour tout l'epoch, sans aucune fin (CompteSections.swift l.146-166 et l.189).
+- **m3** : le retrait de `MotDePasseScreen` ne dépend que du `deinit` d'un `@StateObject`, dont SwiftUI ne garantit pas le moment (cible iOS 16). Ajouter l'`onAppear` du hub comme signal de retrait définitif.
+- **m4** : après une demande terminée écran dépilé et en erreur, les mots de passe saisis restent dans le modèle du hub et réapparaissent à la réouverture. Les vider en gardant seulement l'issue.
+
+#### Hors périmètre, à suivre
+- Fuite `notations_recues` (double-aveugle D8) : confirmée en live. Elle passe par le fichier exporté, sur le web comme en natif. C'est un arbitrage juridique pour Gabrielle (droit d'accès RGPD contre double-aveugle) : déjà inscrit dans « En attente de Gabrielle », à trancher avant le lancement national.
+- B9 : non concerné (D18).
+
+### Intégration sur `feat/ios-lot3` (intégrateur, 2026-11-09, vague 3)
+
+- `git merge --no-ff origin/lot3/l3-t11-v2` (`62fbe95d`) → `5299c708`, après T3b et T7. Conflits résolus en gardant les
+  deux côtés : `AppContainer` (`liensInscription` de T7 et `theme` de T11 ; coordinateur de T3b, puis thème et purge
+  des résidus d'export ; `demoGateways(arguments:…)` avec la surcharge `JOLENE_FORCE_EXPORT_ECHEC`), `JoleneApp`
+  (`PointDEntreeLiens` puis `ThemeRacine`, qui règle aussi le style des fenêtres, donc des feuilles de la racine),
+  `DemoWorldTests.portsEnAttenteLot3` (`inscription`, `motDePasse` et `exportRGPD` câblés),
+  `check-rpc-contracts-lot3.node.mjs` (RPC consommées de T7 et T11), `project.pbxproj` (régénéré).
+- Correctif `db90d362` (`DECISIONS_LOT3.md`, section « Intégration de T3b, T7 et T11 ») : `?tab=confidentialite` → hub
+  (garde de T3b rouge à la fusion) ; « Aide & légal » monté avec le présentateur de T3b, `DemoCompteLot3Tests` migré
+  (règle 8 : `testAideEtLegalOuvreLesPagesPubliquesParLeRenvoiWeb`, quatre pages sur le double démo) ; écarts m9 au
+  blueprint actés.
+- Mineurs m1 à m4 ouverts (suivi de l'auteur). Recette CI : section suivante.
+
+## Intégration de T3b, T7 et T11 (vague 3, 09/11/2026) — vérifications et recette CI
+
+### Fusions et correctifs
+
+- Base `origin/feat/ios-lot3` (`14fe31fa`), branche d'intégration `int-lot3-v3`, fusions `--no-ff` dans l'ordre :
+  `origin/main` (`b2e75eb6`, #1120 et #1122, hors `ios-native/`) → `546c1036` ; `origin/fix/ios-tests-instables`
+  (`be551b66`) → `575e7e48` ; `lot3/l3-t3b-v2` (`992d768b`) → `b668686a`, sans conflit ; `lot3/l3-t7-v2` (`c7d4eef0`)
+  → `1f38ef92` ; `lot3/l3-t11-v2` (`62fbe95d`) → `5299c708`. Conflits et résolutions : sections L3-T7 et L3-T11
+  ci-dessus.
+- Correctifs d'intégration (tests d'abord ; détail dans `DECISIONS_LOT3.md`, section « Intégration de T3b, T7 et
+  T11 ») :
+  - `db90d362` : liens d'inscription présentés hors de l'espace (`AiguillageLiens.Action.inscription`), ligne
+    `.confirmerInscription` rétablie, lien de lancement gardé jusqu'à l'issue de la session,
+    `SessionStore.ouvrirIdentiteInscription()` (revue n°2 de T3b, m4), `?tab=confidentialite` → hub, « Aide & légal »
+    monté ; XCUITest migrés (règle 8) et quatre liens universels ajoutés. Défauts révélés par les gardes à la fusion :
+    `testToutLienHorsEspaceAppartientALaListeNommee`, `testToutEcranNatifLivreAUneCibleNativePresentable`,
+    `testOngletConfidentialiteSuitLExportRGPDDuHub`, `InscriptionModelsTests.testLiensDInscriptionConsommesHorsDeLEspace`
+    (défauts du code fusionné) ; `testRoutesSansEcranOuExternesSontDesRenvoisWebCanoniques` (cas devenus faux pour la
+    base fusionnée, déplacés vers les tests des routes natives, jamais retirés).
+  - `d37e03de` : CI UI en éclats ; `DemoCompteLot3Tests` : fermeture de la feuille de partage sur iPhone (défaut du
+    test : geste sous la feuille ; assertion inchangée).
+  - `beed5fb0` : `InscriptionPort.completionLivree` (défaut du code T7 × T9 : « Réessayer la vérification » sans
+    effet dans l'édition du profil, `DemoProfilTests` rouge) ; éclat `lot3-push` séparé, job à 140 min.
+
+### Vérifications locales (pointe `beed5fb0`, Xcode 16.4, Swift 6.1.2)
+
+- `swift build --build-tests -Xswiftc -strict-concurrency=complete` puis `swift test` : **JoleneCore 810 tests,
+  0 échec, 0 ignoré**, 0 avertissement (construction complète) ; **JoleneSupabase 309 tests, 0 échec**, 0
+  avertissement hors `.build/checkouts/` (« CoreData: error: Failed to create NSXPCConnection » : bruit du bac à sable,
+  sans échec). `.build` supprimé après chaque package.
+- `xcodegen generate` : aucun diff après la régénération des fusions ; `xcodebuild build-for-testing` (Debug,
+  `generic/platform=iOS Simulator`, `-derivedDataPath` dans le worktree, sans signature) : **TEST BUILD SUCCEEDED**,
+  cibles de tests UI comprises, 0 avertissement de nos sources (seules les notes d'`appintentsmetadataprocessor`).
+  DerivedData supprimé.
+- Exporteurs sans diff : `export-golden-vectors.mjs` (4 306 vecteurs), `export-demo-fixtures.mjs`,
+  `check-rpc-contracts.mjs --update` puis contrôle (41 RPC, aucune dérive ; `fn_demarrer_inscription` (T7) et
+  `fn_rgpd_exporter_rate_limited` (T11) en `consommee`). `node --test` : `check-rpc-contracts.node.mjs` et
+  `check-rpc-contracts-lot3.node.mjs` **60 tests**, `mobile-delivery-plan.node.mjs` **77 tests**,
+  `allouer-capacite-sms-signature-staging.node.mjs` (apporté par `main`) **31 tests** : 0 échec, 0 ignoré. La garde
+  `check-textes-juridiques-ios.mjs` (L2-TL) n'est pas sur la base du lot 3 : gardes verbatim locales
+  (`InscriptionVerbatimTests`, `CompteVerbatimTests`, `ProfilVerbatimTests`) vertes.
+- Aucun simulateur lancé localement.
+
+### Recette d'interface (`ios-swift-ci.yml`, `workflow_dispatch` sur `feat/ios-lot3`)
+
+- Run [42536888984](https://github.com/Gabpcd/JJJJJ/actions/runs/42536888984) (`db90d362`) : Cœur et Packages verts ;
+  **UI iphone et ipad-portrait : étape unique de tests interrompue à 30 min** (ipad-portrait : 35 XCUITest sur 58
+  exécutés, tous réussis) ; iphone : `DemoCompteLot3Tests.testExportJSONFeuilleFermeeSansPartageAucunSucces` rouge
+  (feuille de partage iPhone jamais fermée par le geste du test). Run annulé avant la fin d'ipad-landscape (même
+  délai attendu). Essai 1 : `d37e03de`.
+- Run [42541548740](https://github.com/Gabpcd/JJJJJ/actions/runs/42541548740) (`d37e03de`, trois éclats) : iphone et
+  ipad-portrait **934 réussis, 1 échoué** (`DemoProfilTests.testTypeDExerciceEnRenvoiEtModesSansReferentiel`, défaut du
+  code T7 × T9) ; ipad-landscape : éclat push + centre + préférences + profil interrompu à 30 min. Essai 2 :
+  `beed5fb0`.
+- Run [42549855710](https://github.com/Gabpcd/JJJJJ/actions/runs/42549855710) (`beed5fb0`) : **vert, 5 jobs sur 5**.
+  - Cœur — golden et contrats : succès. Packages — swift test macOS : succès (JoleneCore 810, JoleneSupabase 309).
+  - **UI — iphone** : Passed, **935 réussis, 0 échoué, 0 ignoré** (socle 888, lot3-compte 23, lot3-push 15,
+    lot3-notifications 9), 98 captures en portrait ; éclats 16,1 / 16,1 / 14,4 / 19,1 min.
+  - **UI — ipad-portrait** : Passed, **935 réussis, 0 échoué, 0 ignoré**, 98 captures en portrait ; éclats 11,7 /
+    12,7 / 9,3 / 11,7 min.
+  - **UI — ipad-landscape** : Passed, **935 réussis, 0 échoué, 0 ignoré**, 98 captures en paysage ; éclats 13,9 /
+    19,1 / 11,4 / 15,6 min.
+  - Toutes les classes des éclats de lot ont démarré ; les XCUITest de T3b (`DemoLiensLot3Tests` 12), T7
+    (`DemoInscriptionTests` 5), T11 (`DemoCompteLot3Tests` 6), T5/T6/T9 (`DemoPushTests` 15, `DemoNotificationsTests` 2,
+    `DemoPreferencesTests` 2, `DemoProfilTests` 5) et des lots 0-1 ont tourné sur les trois formats : **condition « CI
+    trois formats » des trois revues remplie** (xcresult relu par le résumé : 0 échec, `skipped = 0`,
+    `passed = total`).
+
+### Ce qui reste avant tout merge sur `main`
+
+- **T7 (B9, HARD STOP n°4)** : go explicite de Gabrielle sur le consentement transmis par `p_cgu`, la phrase de
+  consentement et ses deux liens (`/cgu`, `/confidentialite`), et le message générique d'un refus captcha ; préalable
+  captcha `PORTE_LOT0.md` 3.1 (STAGING) et 3.2 (production, à la main) mesuré et consigné (D25 sinon).
+- **Textes à faire relire par Gabrielle** (aucun nouveau texte apporté par l'intégration) : T7 — phrase de
+  consentement et choix du message générique captcha ; T11 — « Ce changement exige une nouvelle vérification de votre
+  identité. Utilisez « Mot de passe oublié ? » pour choisir un nouveau mot de passe. », « Le changement de votre mot de
+  passe n'a pas pu être confirmé. Vérifiez votre connexion puis réessayez. », « Thème », « Système », « Clair »,
+  « Sombre », textes RGPD de l'export en tutoiement ; T3b — refus du reset (décision 7 du lot 1, déjà décidé) et
+  « Fermer » (repris).
+- Recette sur appareil (`RECETTE_DEVICE_LOT3.md`) : liens universels réels, effacement du magasin
+  `SFSafariViewController`, feuille de partage.
+- Mineurs ouverts : T3b m1-m3 ; T7 m1, m3-m10 (m2 réduit) ; T11 m1-m4. Arbitrage `notations_recues` de l'export
+  RGPD (« En attente de Gabrielle »).
