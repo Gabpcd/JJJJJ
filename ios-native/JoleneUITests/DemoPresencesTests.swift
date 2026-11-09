@@ -8,8 +8,8 @@ import XCTest
 ///
 /// Gaps verrouillés (aucun bouton sans effet) : la saisie du code, le QR, le consentement GPS et le hors ligne sont la
 /// tranche T4b (zone `pointage-zone-provisoire-<mission>` d'ici là, migrée par T4b) ; « Voir le contrat » (T9a, sinon
-/// renvoi web), « Détail » (T5a) et « Voir ou signaler un litige » (lot 4) ne sont rendus qu'avec le présentateur de
-/// renvois web, que T10 injecte : leur absence est affirmée ici, T10 la remplace par leur présence.
+/// renvoi web) et « Voir ou signaler un litige » (lot 4) ne sont rendus qu'avec le présentateur de renvois web, que T10
+/// injecte : leur absence est affirmée ici, T10 la remplace par leur présence. « Détail » ouvre le détail natif (T5a).
 final class DemoPresencesTests: JoleneUITestCase {
     /// Libellés exacts des onglets (`PresencesSoignant.tsx` l.520-523).
     private static let onglets: [(identifiant: String, libelle: String)] = [
@@ -89,8 +89,8 @@ final class DemoPresencesTests: JoleneUITestCase {
         ])
         XCTAssertFalse(element("presence-historique-litige-effectifs-mission-demo-presence-h3").exists,
                        "« Voir ou signaler un litige » sans présentateur web (T10) : jamais un bouton sans effet")
-        XCTAssertFalse(element("presence-historique-detail-demo-presence-h1-presence").exists,
-                       "« Détail » sans détail natif (T5a) ni présentateur web (T10)")
+        XCTAssertTrue(element("presence-historique-detail-demo-presence-h1-presence").exists,
+                      "« Détail » ouvre le détail natif des présences (T5a, `DemoPresenceDetailTests`)")
         record("\(proofPrefix)-presences-historique")
 
         // Retour au Profil : aucune requête réseau en démonstration.

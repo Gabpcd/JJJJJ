@@ -118,6 +118,11 @@ final class AppContainer: ObservableObject {
         if scenarioDocuments != .normal {
             gateways.documents = DemoDocumentsGateway(scenario: scenarioDocuments)
         }
+        // Lot 2 T5a : `-JOLENE_DEMO_SCENARIO accueil-pointage` → mission du jour à pointer et départ oublié sur l'Accueil
+        // (widget « Aller pointer », bandeau d'oubli de départ ; `DemoPresenceDetailTests`).
+        if ScenarioAccueilDemo(arguments: arguments) == .pointage, processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] != "1" {
+            gateways.dashboard = DemoDashboardGateway(scenario: .pointage)
+        }
         #endif
         return gateways
     }
