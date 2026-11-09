@@ -173,6 +173,9 @@ final class DemoRevenusTests: JoleneUITestCase {
         // Revue B8 de T12, m4 : l'échec des missions peut précéder la lecture des totaux (sections parallèles).
         require("Sections indépendantes : les totaux restent lus", timeout: 30) { self.element("revenus-kpi-mois").exists }
         record("\(proofPrefix)-revenus-erreur")
+        // Intégration du lot 3 (run 42579729412, ipad-landscape) : sous les totaux et le paiement rapide,
+        // « Réessayer » est hors écran en paysage (y = 1061,5 pour 820 pt) ; défilement borné avant le tap.
+        scrollTo(element("revenus-retry"), in: element("revenus-screen"))
         tap("revenus-retry")
         require("Les missions sont relues après « Réessayer »", timeout: 30) {
             self.element("revenus-mission-demo-terminee-001").exists && !self.element("revenus-error").exists

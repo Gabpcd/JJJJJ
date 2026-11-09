@@ -1553,6 +1553,26 @@ sans changer aucune règle ni aucun texte affiché :
   `ECLATS` du relevé.
 - `project.pbxproj` régénéré par `xcodegen generate` après chaque fusion. Aucune RPC nouvelle (contrats : 41 RPC,
   aucune dérive), aucune écriture serveur ; B9 inchangé (T8 et T12 restent soumises au go de Gabrielle).
+- **Recette CI, run 42579729412 (`85ea5968`) : ipad-portrait vert (1 147 tests), trois défauts de TEST révélés**
+  (aucun défaut du code de l'app ; correctif tests d'abord, aucun test affaibli) :
+  - `DemoPreferencesTests.testPreferencesDemoModifieesEnregistreesPuisRelues` (ipad-landscape ; vert mais 308 s
+    au run 42549855710, 442 s sur iphone ici) : `scrollTo` reprenait la direction de recherche quand la cible
+    revenait dans le cadre du conteneur sans être atteignable — `prefs-canal-sms` remonté à y = 109,5…153,5, sous la
+    barre de navigation translucide (32…140), puis renvoyé à y = −167,5 : vingt glissements en alternance (relevés
+    dans les « Synthesized Event » du xcresult). Règle extraite en fonction pure partagée
+    (`PartageUITests/PasDeDefilement.swift`, testée par `PasDeDefilementTests`) : cible dans le cadre → pas court
+    vers le centre, jamais la direction de recherche ;
+  - `DemoProfilTests.testEditionDeLaVilleDeRechercheEnregistreeRelueEtRetrouvee` (ipad-landscape ; défaut révélé par
+    T10, qui ajoute la photo et la position au-dessus du champ) : `profil-ville-recherche` à y = 104…145 sous la
+    barre de navigation, atteignable par une bande de 4 pt, touché deux fois sans focus. `focus` redescend désormais
+    un champ recouvert par une barre de navigation ATTEIGNABLE (celle de l'écran au premier plan) avant de le
+    toucher, comme il remontait déjà un champ recouvert par le clavier ;
+  - `DemoRevenusTests.testErreurPuisReprise` (T12, jamais lancé avant ; iphone et ipad-landscape) : « Réessayer »
+    sous la ligne de flottaison (y = 1 061,5 pour 820 pt) touché sans défilement ; `scrollTo` avant le tap.
+  - Même run, iphone : la même attente de `DemoProfilTests` (ville) a aussi échoué sur un blocage unique de 20,9 s
+    (budget de blocage de 15 s, #1125), condition vraie à la dernière évaluation ; runner surchargé (44 attentes
+    bloquées absorbées sur ce job, tests 2 à 4 fois plus lents qu'ipad-portrait). Aucun changement : le budget
+    n'est pas relevé ; la recette suivante tranche.
 
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 

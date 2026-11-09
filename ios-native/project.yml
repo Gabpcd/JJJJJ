@@ -51,6 +51,10 @@ targets:
       # sur horloge simulée (RequireWaitTests) : un seul fichier, compilé dans les deux cibles.
       - path: Packages/JoleneCore/Tests/JoleneCoreTests/PartageUITests/RequireWait.swift
         group: JoleneUITests
+      # Pas du défilement borné de `scrollTo` et dégagement sous la barre de navigation (focus),
+      # fonctions pures testées par PasDeDefilementTests (intégration du lot 3, run 42579729412).
+      - path: Packages/JoleneCore/Tests/JoleneCoreTests/PartageUITests/PasDeDefilement.swift
+        group: JoleneUITests
     dependencies:
       - target: Jolene
     settings:

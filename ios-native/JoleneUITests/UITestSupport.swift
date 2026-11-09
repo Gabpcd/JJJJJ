@@ -116,6 +116,14 @@ class JoleneUITestCase: XCTestCase {
         return keyboard.exists && element.frame.maxY > keyboard.frame.minY
     }
 
+    /// Élément recouvert, même en partie, par une barre de navigation ATTEIGNABLE : celle de l'écran
+    /// au premier plan ; la barre d'un écran recouvert par une feuille ne l'est pas et n'est pas
+    /// comptée (`PasDeDefilement.recouvertParUneBarre`).
+    func coveredByNavigationBar(_ element: XCUIElement) -> Bool {
+        let barres = app.navigationBars.allElementsBoundByIndex.filter { $0.exists && $0.isHittable }.map(\.frame)
+        return PasDeDefilement.recouvertParUneBarre(element.frame, barres: barres)
+    }
+
     /// Part maximale du délai de `require` décomptée pour UNE évaluation de la condition. Une
     /// évaluation (quelques requêtes d'accessibilité) dure normalement bien moins de 5 s. Au-delà,
     /// quelque chose est bloqué sans que le runner puisse dire quoi : l'observateur (runner saturé)
@@ -301,11 +309,21 @@ class JoleneUITestCase: XCTestCase {
     /// Délais et budget de blocage par défaut de `require` : le premier champ interrogé à froid
     /// (`login-email`, premier test du processus) relève du budget à froid de `require`
     /// (`coldStallBudget`), pas d'un délai propre à `focus`.
+    /// Un champ recouvert par la barre de navigation translucide de l'écran (iPad paysage, run
+    /// 42579729412 : `profil-ville-recherche` à y = 104…145 sous la barre 32…140, touché sur la bande
+    /// visible de 4 pt, puis sous la barre, sans jamais recevoir le focus) est d'abord redescendu
+    /// sous la barre, par glissements bornés.
     func focus(_ field: XCUIElement, in container: XCUIElement) {
         require("Le champ à saisir est affiché") { self.containerVisible(field) }
         var attempts = 0
-        while coveredByKeyboard(field) && attempts < 10 {
-            drag(container, fromY: 0.6, toY: 0.3)
+        while attempts < 10 {
+            if coveredByKeyboard(field) {
+                drag(container, fromY: 0.6, toY: 0.3)
+            } else if coveredByNavigationBar(field) {
+                drag(container, fromY: 0.4, toY: 0.6)
+            } else {
+                break
+            }
             attempts += 1
         }
         require("Le champ à saisir est atteignable hors clavier") { self.visible(field) && !self.coveredByKeyboard(field) }
@@ -418,16 +436,13 @@ class JoleneUITestCase: XCTestCase {
         require("Le conteneur de défilement attendu est visible") { self.containerVisible(container) }
         var scrolls = 0
         while !fullyVisible(target, inside: container) && scrolls < 20 {
-            var forward = downward
-            var distance: CGFloat = 0.55
-            if target.exists && !target.frame.isEmpty {
-                let frame = target.frame
-                let viewport = container.frame
-                if frame.minY < viewport.minY { forward = false } else if frame.maxY > viewport.maxY { forward = true }
-                distance = min(0.55, max(0.08, (viewport.height - frame.height) * 0.4 / viewport.height))
-            }
-            drag(container, fromY: 0.5 + (forward ? distance : -distance) / 2,
-                 toY: 0.5 - (forward ? distance : -distance) / 2)
+            // Direction et amplitude : `PasDeDefilement` (testé par `PasDeDefilementTests`). Une cible
+            // déjà dans le cadre du conteneur revient vers le centre d'un pas court, jamais dans la
+            // direction de recherche `downward` (run 42579729412 : vingt glissements en alternance).
+            let pas = PasDeDefilement.suivant(cible: target.exists ? target.frame : nil, conteneur: container.frame,
+                                              versLaSuiteParDefaut: downward)
+            let distance = pas.versLaSuite ? pas.amplitude : -pas.amplitude
+            drag(container, fromY: 0.5 + distance / 2, toY: 0.5 - distance / 2)
             scrolls += 1
         }
         require("Le contrôle demandé est entièrement visible après un défilement borné") {
