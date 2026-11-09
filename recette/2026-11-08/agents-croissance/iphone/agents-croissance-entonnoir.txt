@@ -1,0 +1,47 @@
+- main:
+  - text: Acquisition
+  - heading "Agents de croissance" [level=1]
+  - text: "Les agents préparent chaque jour des emails et des posts. Rien ne part sans vous : vous relisez, validez, envoyez depuis votre Gmail ou publiez, puis vous le notez ici."
+  - button "Préparer maintenant":
+    - img
+    - text: Préparer maintenant
+  - paragraph: Aucun envoi automatique. Chaque email reste un brouillon jusqu’à votre validation, et les contacts en opposition (STOP) sont exclus avant la rédaction puis vérifiés de nouveau à la validation.
+  - tablist "Vues des agents de croissance":
+    - tab "À valider"
+    - tab "Entonnoir" [selected]
+    - tab "Agents"
+  - tabpanel "Entonnoir":
+    - button "7 jours" [pressed]
+    - button "30 jours"
+    - button "90 jours"
+    - text: "Cohorte réelle uniquement : les comptes de test sont exclus. Soignants inscrits (période)"
+    - paragraph: "0"
+    - text: 2 au total Établissements inscrits (période)
+    - paragraph: "0"
+    - text: 0 au total Missions publiées (période)
+    - paragraph: "0"
+    - text: 0 pourvue(s) Emails de prospection (période)
+    - paragraph: "0"
+    - text: 23 brouillon(s) en attente
+    - heading "Soignants (cumul)" [level=3]
+    - list "Soignants (cumul)":
+      - listitem: Inscrits 2
+      - listitem: Au moins un document 150 %
+      - listitem: Documents validés 1100 %
+      - listitem: Ont candidaté 00 %
+      - listitem: Ont réalisé une mission 0
+    - paragraph:
+      - text: "Goulot actuel :"
+      - strong: Ont candidaté
+    - heading "Établissements (cumul)" [level=3]
+    - list "Établissements (cumul)":
+      - listitem: Prospects avec email 30 633
+      - listitem: Contactés 00 %
+      - listitem: Inscrits 0
+      - listitem: Peuvent publier 0
+      - listitem: Ont publié 0
+    - paragraph:
+      - text: "Goulot actuel :"
+      - strong: Contactés
+    - heading "Rapports hebdomadaires" [level=3]
+    - paragraph: Le premier rapport sera figé lundi matin pour la semaine écoulée.
