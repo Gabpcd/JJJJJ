@@ -220,6 +220,68 @@ final class SessionSignatureOtpTests: XCTestCase {
         XCTAssertFalse(s.operationEnCours)
     }
 
+    // MARK: - T9b
+
+    /// Refus serveur `OTP_EXPIRE` (`fn_signer_contrat_otp` live : `otp_envoye_a < now() - 10 min`, preuve passée à
+    /// `expire`) : le serveur fait foi (décision 25), le code est expiré ici aussi — minuteur « Expiré », champ et
+    /// « Signer » désactivés, « Recevoir un nouveau code » proposé (l.305, l.317, l.339, l.344).
+    func testRefusOtpExpireExpireLeCodeLocalement() throws {
+        var s = try codeEnvoye()
+        s.saisir("000000")
+        let demande = try XCTUnwrap(s.demanderSignature(maintenant: t0))
+        s.terminerSignature(.refuse(code: "OTP_EXPIRE", message: TextesWeb.SignatureOtp.otpExpire, tentativesRestantes: nil),
+                            demande: demande)
+        XCTAssertEqual(s.retour, .erreur("Le code SMS a expiré (10 min). Demandez un nouveau code."), "MESSAGES_ERREUR l.39")
+        XCTAssertNil(s.erreurBloquante, "non bloquant (l.115-119) : un nouveau code reste possible")
+        XCTAssertEqual(s.etape, .otpEnvoye)
+        XCTAssertTrue(s.otpExpire(maintenant: t0), "échéance du serveur dépassée, même si l'horloge locale ne l'est pas")
+        XCTAssertEqual(s.secondesRestantes(maintenant: t0), 0)
+        XCTAssertFalse(s.peutSigner(maintenant: t0))
+        XCTAssertTrue(s.peutEnvoyer(), "« Recevoir un nouveau code »")
+        let renvoi = try XCTUnwrap(s.demanderEnvoi())
+        s.terminerEnvoi(envoye, demande: renvoi, maintenant: t0.addingTimeInterval(5))
+        XCTAssertFalse(s.otpExpire(maintenant: t0.addingTimeInterval(5)), "nouveau code : nouvelle échéance de 10 min")
+        XCTAssertEqual(s.secondesRestantes(maintenant: t0.addingTimeInterval(5)), 600)
+    }
+
+    func testAutresRefusNExpirentPasLeCode() throws {
+        var s = try codeEnvoye()
+        s.saisir("111111")
+        let demande = try XCTUnwrap(s.demanderSignature(maintenant: t0))
+        s.terminerSignature(.refuse(code: "OTP_INCORRECT", message: TextesWeb.SignatureOtp.otpIncorrect, tentativesRestantes: 4),
+                            demande: demande)
+        XCTAssertFalse(s.otpExpire(maintenant: t0))
+        XCTAssertEqual(s.secondesRestantes(maintenant: t0), 600)
+    }
+
+    /// Le code saisi ne survit pas à la signature (mémoire seulement, jamais au-delà de son usage).
+    func testSignatureEffaceLeCodeSaisi() throws {
+        var s = try codeEnvoye()
+        s.saisir("000000")
+        let demande = try XCTUnwrap(s.demanderSignature(maintenant: t0))
+        s.terminerSignature(.signee(contratComplet: false), demande: demande)
+        XCTAssertEqual(s.etape, .signe)
+        XCTAssertEqual(s.code, "")
+    }
+
+    /// Aucun journal ni message d'assertion ne montre le code : description, description de débogage et réflexion
+    /// de la session et de la demande le masquent.
+    func testLeCodeNApparaitDansAucuneDescription() throws {
+        var s = try codeEnvoye()
+        s.saisir("482913")
+        let demande = try XCTUnwrap(s.demanderSignature(maintenant: t0))
+        var dumpSession = ""
+        dump(s, to: &dumpSession)
+        var dumpDemande = ""
+        dump(demande, to: &dumpDemande)
+        for texte in [String(describing: s), String(reflecting: s), dumpSession,
+                      String(describing: demande), String(reflecting: demande), dumpDemande,
+                      String(describing: demande.nature), String(reflecting: demande.nature)] {
+            XCTAssertFalse(texte.contains("482913"), "code exposé : \(texte.count) caractères")
+        }
+        XCTAssertEqual(demande.nature, .signature(code: "482913"), "la valeur reste transmise au port")
+    }
+
     // MARK: - Reprise d'un code relu (recette STAGING)
 
     func testRepriseDUnCodeEncoreValideRelu() {

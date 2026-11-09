@@ -107,4 +107,26 @@ final class JoleneDesignLot2Tests: XCTestCase {
         XCTAssertGreaterThanOrEqual(taille.height, 48, "cible tactile d'au moins 48 pt, comme JoleneTextField")
         XCTAssertLessThanOrEqual(taille.width, 390)
     }
+
+    // MARK: - Annonce à l'apparition (T9b, revue fraîche m8)
+
+    func testAnnonceALApparitionSuitLaRegleDesEncarts() {
+        // `role="status"` du web (confirmation de signature, relecture de l'admission) : annoncé une fois par clé.
+        XCTAssertNil(AnnonceALApparition.cle(nil), "rien à annoncer")
+        XCTAssertNil(AnnonceALApparition.cle(""), "jamais une annonce vide")
+        let cle = AnnonceALApparition.cle("Vérification de la signature en cours…")
+        XCTAssertEqual(cle, InlineNotice.AnnouncementKey(text: "Vérification de la signature en cours…", id: 0))
+        XCTAssertTrue(InlineNotice.shouldAnnounce(cle, lastAnnounced: nil))
+        XCTAssertFalse(InlineNotice.shouldAnnounce(cle, lastAnnounced: cle), "déjà annoncée par cette vue")
+        XCTAssertTrue(InlineNotice.shouldAnnounce(AnnonceALApparition.cle("Vérification de la signature en cours…", jeton: 1),
+                                                  lastAnnounced: cle), "nouveau jeton : réannoncée")
+    }
+
+    @MainActor
+    func testAnnonceALApparitionNeChangePasLaMiseEnPage() {
+        let sans = UIHostingController(rootView: Text("Contrat signé ✅"))
+        let avec = UIHostingController(rootView: Text("Contrat signé ✅").annonceALApparition("Succès : Contrat signé ✅"))
+        let limite = CGSize(width: 390, height: CGFloat.greatestFiniteMagnitude)
+        XCTAssertEqual(avec.sizeThatFits(in: limite), sans.sizeThatFits(in: limite))
+    }
 }

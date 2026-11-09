@@ -48,6 +48,7 @@ on:
       - 'supabase/schema/public.sql'
       - 'supabase/SECURITY_DEFINER_MANIFEST.json'
       - '.github/workflows/ios-swift-ci.yml'
+      - 'tests/node/ios-swift-ci-eclats.node.mjs'
   push:
     branches: [main]
     paths:
@@ -88,6 +89,7 @@ on:
       - 'supabase/schema/public.sql'
       - 'supabase/SECURITY_DEFINER_MANIFEST.json'
       - '.github/workflows/ios-swift-ci.yml'
+      - 'tests/node/ios-swift-ci-eclats.node.mjs'
   workflow_dispatch:
 
 permissions:
@@ -148,6 +150,8 @@ jobs:
           fi
       - name: Contrats RPC sans dérive (types.ts, public.sql, manifeste)
         run: node scripts/mobile/check-rpc-contracts.mjs
+      - name: Éclats des tests UI cohérents (DECISIONS_LOT2 décision 22)
+        run: node --test tests/node/ios-swift-ci-eclats.node.mjs
 
   packages:
     name: Packages — swift test macOS
@@ -257,7 +261,8 @@ jobs:
     # 22, découpage par domaine de T4b, éclat « pointage » de la seconde revue fraîche de T4b, m6) :
     # 25 + 5 × 30 = 175 min, plus une marge de 20 min pour la préparation (checkout, simulateur, cache),
     # le résumé et le dépôt de l'artefact. Le délai d'un éclat ou du build tombe donc toujours avant
-    # celui du job : le résumé et les xcresult sont conservés justement quand un éclat bloque.
+    # celui du job : le résumé et les xcresult sont conservés justement quand un éclat bloque
+    # (garde : tests/node/ios-swift-ci-eclats.node.mjs, plafond ≥ somme des éclats + 15 min).
     timeout-minutes: 195
     strategy:
       fail-fast: false
@@ -349,9 +354,10 @@ jobs:
       # du lot 2, chaque classe nommée par -only-testing : « presences » (DemoPresencesTests,
       # DemoPointageEtatsTests, DemoPresenceDetailTests de T5a, rangée dans son domaine à l'intégration
       # du 9 novembre 2026), « pointage » (DemoPointageTests), « documents » (DemoDocumentsTests),
-      # « contrats » (DemoContratsTests). Les classes STAGING à venir (lot 2 T11) s'ajoutent aux
-      # -skip-testing de l'éclat socle ; une nouvelle classe démo du lot 2 rejoint l'éclat de son
-      # domaine, et ses -skip-testing du socle. Le résumé exige tous les éclats verts.
+      # « contrats » (DemoContratsTests, lecture T9a ; DemoSignatureContratTests, signature T9b). Les
+      # classes STAGING à venir (lot 2 T11) s'ajoutent aux -skip-testing de l'éclat socle ; une nouvelle
+      # classe démo du lot 2 rejoint l'éclat de son domaine, et ses -skip-testing du socle. Le résumé
+      # exige tous les éclats verts (garde : tests/node/ios-swift-ci-eclats.node.mjs).
       - name: test-without-building — éclat socle (JoleneCoreTests, JoleneDesignTests, XCUITest lots 0 et 1) (${{ matrix.format }})
         id: tests
         # Délai propre à l'étape : un simulateur ou un runner xctest bloqué est interrompu ici,
@@ -384,6 +390,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoPresenceDetailTests \
             -skip-testing:JoleneUITests/DemoDocumentsTests \
             -skip-testing:JoleneUITests/DemoContratsTests \
+            -skip-testing:JoleneUITests/DemoSignatureContratTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -500,7 +507,7 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-documents.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat documents) : code $code"
-      - name: test-without-building — éclat contrats (XCUITest Contrats) (${{ matrix.format }})
+      - name: test-without-building — éclat contrats (XCUITest Contrats : lecture et signature) (${{ matrix.format }})
         id: tests_contrats
         # Lancé même si un éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
         if: always() && steps.build.outcome == 'success'
@@ -522,6 +529,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/derived" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoContratsTests \
+            -only-testing:JoleneUITests/DemoSignatureContratTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -563,7 +571,7 @@ jobs:
               { nom: "presences", code: process.env.CODE_PRESENCES, classes: ["DemoPresencesTests", "DemoPointageEtatsTests", "DemoPresenceDetailTests"] },
               { nom: "pointage", code: process.env.CODE_POINTAGE, classes: ["DemoPointageTests"] },
               { nom: "documents", code: process.env.CODE_DOCUMENTS, classes: ["DemoDocumentsTests"] },
-              { nom: "contrats", code: process.env.CODE_CONTRATS, classes: ["DemoContratsTests"] },
+              { nom: "contrats", code: process.env.CODE_CONTRATS, classes: ["DemoContratsTests", "DemoSignatureContratTests"] },
             ];
             let total = 0, passed = 0, failed = 0, skipped = 0, log = "";
             const lignes = [`### UI — ${process.env.JOLENE_UI_FORMAT}`, ""];

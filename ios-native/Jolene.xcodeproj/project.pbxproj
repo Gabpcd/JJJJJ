@@ -19,6 +19,7 @@
 		2A94C1A0F00563A7348B0C89 /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BA24C6A7F18C51C527F02B8 /* PlaceholderScreen.swift */; };
 		2B73E55E9216D48F441587F3 /* DemoPointageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19D81B7401EDB83F0DF34E07 /* DemoPointageTests.swift */; };
 		2E1E6FD113EBB416CEBC2582 /* DemoAccueilTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2706B588474C6FFEBB240600 /* DemoAccueilTests.swift */; };
+		30D7D9C0C1AAB3F339472622 /* DemoSignatureContratTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5BB49CC7ACE637676B78FAA /* DemoSignatureContratTests.swift */; };
 		343FDABE16FFD739ACFBF788 /* DemoMediaPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C732AB7A4929D74679DEEA /* DemoMediaPicker.swift */; };
 		35B21204F757910A731C8D4B /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57522BC17747DB1695651ECD /* MainTabView.swift */; };
 		40A4FBAC77F9A66CC400B21C /* DemoPointageUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBF18123CB11BB80E8541D97 /* DemoPointageUITestCase.swift */; };
@@ -73,6 +74,7 @@
 		D30E0483E34614D542AA0B1B /* DemoPresencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5BA9A6A615BF5E995AB8630 /* DemoPresencesTests.swift */; };
 		D3C7C3722CF27996A3A3CA9F /* JoleneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C216B466C241777BFC4541 /* JoleneApp.swift */; };
 		D6660F00D0873D85C55297FB /* PresenceAVenirRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 798D89ACB654F41113D150AC /* PresenceAVenirRow.swift */; };
+		D8724D42840055518E70154B /* SignatureOtpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEF552A184B3EC99792D30F7 /* SignatureOtpView.swift */; };
 		DD5D9790C224E0A18AFCB9DC /* NetworkSentinel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */; };
 		E07C1696049562DF1960083E /* CameraCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D459BCCD9C6F8AA51AF0C4 /* CameraCaptureView.swift */; };
 		E3B89FFC731CC81ED9841E69 /* JustificatifsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C069379F42D5DFB47D39A4B5 /* JustificatifsView.swift */; };
@@ -168,9 +170,11 @@
 		E1E527A9BA6B3A31C47A4F66 /* RequireWait.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RequireWait.swift; path = ../Packages/JoleneCore/Tests/JoleneCoreTests/PartageUITests/RequireWait.swift; sourceTree = "<group>"; };
 		E6AC2802597477BC2199B8E9 /* DemoPresenceDetailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPresenceDetailTests.swift; sourceTree = "<group>"; };
 		E98C75CA1BDE25BD8822BDE0 /* ProfileScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileScreen.swift; sourceTree = "<group>"; };
+		EEF552A184B3EC99792D30F7 /* SignatureOtpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignatureOtpView.swift; sourceTree = "<group>"; };
 		F01E2478001F6F24CF2412D0 /* ContratsDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContratsDestination.swift; sourceTree = "<group>"; };
 		F1C732AB7A4929D74679DEEA /* DemoMediaPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoMediaPicker.swift; sourceTree = "<group>"; };
 		F3E8673ADB03568DA5632CFC /* MissionMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionMapView.swift; sourceTree = "<group>"; };
+		F5BB49CC7ACE637676B78FAA /* DemoSignatureContratTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoSignatureContratTests.swift; sourceTree = "<group>"; };
 		F60887A94696AA6108F556C2 /* AccueilScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccueilScreen.swift; sourceTree = "<group>"; };
 		FA46CD23822CE21E1F5A286D /* EspaceSoignantSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EspaceSoignantSection.swift; sourceTree = "<group>"; };
 		FBACE81D4C09BE21265458D7 /* PresenceHistoriqueRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceHistoriqueRow.swift; sourceTree = "<group>"; };
@@ -348,6 +352,7 @@
 				846454508F8184B326E2928F /* ContratScreen.swift */,
 				F01E2478001F6F24CF2412D0 /* ContratsDestination.swift */,
 				C0E6A36259D6A1E27D25A43B /* ContratsListeView.swift */,
+				EEF552A184B3EC99792D30F7 /* SignatureOtpView.swift */,
 			);
 			path = Contrats;
 			sourceTree = "<group>";
@@ -400,6 +405,7 @@
 				FBF18123CB11BB80E8541D97 /* DemoPointageUITestCase.swift */,
 				E6AC2802597477BC2199B8E9 /* DemoPresenceDetailTests.swift */,
 				B5BA9A6A615BF5E995AB8630 /* DemoPresencesTests.swift */,
+				F5BB49CC7ACE637676B78FAA /* DemoSignatureContratTests.swift */,
 				CA8934442A0F8427B109291C /* EnvironmentGuardTests.swift */,
 				E1E527A9BA6B3A31C47A4F66 /* RequireWait.swift */,
 				6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */,
@@ -567,6 +573,7 @@
 				500CEC9A4702D20CC64834A1 /* ScannerQRSheet.swift in Sources */,
 				C5DFE9293CFDE17D0BDE2708 /* ServicesPointage.swift in Sources */,
 				F76422A8F858F85FC8AF2063 /* ShareSheet.swift in Sources */,
+				D8724D42840055518E70154B /* SignatureOtpView.swift in Sources */,
 				634E2F09A431203F99161794 /* SuppressionCompteScreen.swift in Sources */,
 				7F8EA7B0286941AA785F1B95 /* TeleversementSheet.swift in Sources */,
 			);
@@ -587,6 +594,7 @@
 				40A4FBAC77F9A66CC400B21C /* DemoPointageUITestCase.swift in Sources */,
 				1D38CB54985593DFB2AC0729 /* DemoPresenceDetailTests.swift in Sources */,
 				D30E0483E34614D542AA0B1B /* DemoPresencesTests.swift in Sources */,
+				30D7D9C0C1AAB3F339472622 /* DemoSignatureContratTests.swift in Sources */,
 				8FF2D016E024DEC2B0131A7E /* EnvironmentGuardTests.swift in Sources */,
 				532D43C9A52E76371B8A4F41 /* RequireWait.swift in Sources */,
 				5E0893D0CB68B03799F6D7D9 /* StagingConnexionTests.swift in Sources */,

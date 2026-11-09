@@ -125,7 +125,8 @@ final class AppContainer: ObservableObject {
     /// (`DemoAccueilTests.testAccueilErreurPuisReprise`) ; lot 2 T7 : `-JOLENE_DEMO_SCENARIO upload-incertain`
     /// pose `DemoDocumentsGateway(scenario: .uploadIncertain)` (réponse perdue après application, `DemoDocumentsTests`) ;
     /// lot 2 T4b (seconde revue fraîche, m3) : `-JOLENE_FLAG_<cle> true|false` surcharge un drapeau d'écran
-    /// (`DemoFlagsGateway.surcharges`, coupe-circuit D-FLAGS). Jamais compilé en Release.
+    /// (`DemoFlagsGateway.surcharges`, coupe-circuit D-FLAGS) ; lot 2 T9b : `otp-expire` et `compte-test` posent
+    /// `DemoContratsGateway(scenario:)`. Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
         var gateways = DemoWorld.gateways(drapeaux: DemoFlagsGateway.surcharges(arguments: arguments))
@@ -144,6 +145,12 @@ final class AppContainer: ObservableObject {
         // (widget « Aller pointer », bandeau d'oubli de départ ; `DemoPresenceDetailTests`).
         if ScenarioAccueilDemo(arguments: arguments) == .pointage, processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] != "1" {
             gateways.dashboard = DemoDashboardGateway(scenario: .pointage)
+        }
+        // Lot 2 T9b : `-JOLENE_DEMO_SCENARIO otp-expire` (tout code refusé `OTP_EXPIRE`) ou `compte-test` (compte TEST
+        // sans admission : renvoi web de la signature), `DemoSignatureContratTests`.
+        let scenarioContrats = ScenarioDemoContrats(arguments: arguments)
+        if scenarioContrats != .nominal {
+            gateways.contrats = DemoContratsGateway(scenario: scenarioContrats)
         }
         return gateways
         #else

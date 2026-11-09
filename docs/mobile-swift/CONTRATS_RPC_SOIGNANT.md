@@ -87,8 +87,8 @@ production. Les RPC du système de pointage ① (`RPC_POINTAGE_SYSTEME_1`) et `f
 | `fn_confirmer_presence_mission` | à venir | 1 (T6c) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_scanner_code_pointage` | consommée lot 2 (T3) | 2 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_etat_pointage_mission` | consommée lot 2 (T3) | 2 (T3) | MIXTE_TENANT_ADMIN | authenticated, service_role | absente |
-| `fn_envoyer_otp_signature` | consommée lot 2 (T8) | 2 (T8 gateway, T9b écran) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_signer_contrat_otp` | consommée lot 2 (T8) | 2 (T8 gateway, T9b écran) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_envoyer_otp_signature` | consommée lot 2 (T8) | 2 (T8 gateway, T9b écran `SignatureOtpView`) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_signer_contrat_otp` | consommée lot 2 (T8) | 2 (T8 gateway, T9b écran `SignatureOtpView`) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_remplacer_document_soignant` | consommée lot 2 (T6) | 2 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_consentir_gps` | consommée lot 2 (T3) | 2 (T3, T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_relancer_validation_presence` | consommée lot 2 (T3) | 2 (T3, T5a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
@@ -493,7 +493,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_etat_pointage_mission"("p_mission_id" "u
 ## fn_envoyer_otp_signature
 
 - **Statut natif** : consommée (lot 2, T8) par `JoleneSupabase/Contrats/SupabaseContratsGateway.swift`
-  (`ContratsPort.envoyerOtp`), session `JoleneCore/Contrats/SessionSignatureOtp.swift` ; écran T9b (HARD STOP) ;
+  (`ContratsPort.envoyerOtp`), session `JoleneCore/Contrats/SessionSignatureOtp.swift` ; écran T9b
+  (`Jolene/Screens/Contrats/SignatureOtpView.swift`, go juridique par délégation, `DECISIONS_LOT2.md` › Décisions
+  déléguées ; définition live relue le 9 novembre 2026, sans dérive) ;
   décisions 18 et 20. Appel `POST /rest/v1/rpc/fn_envoyer_otp_signature`, corps `{"p_contrat_id"}` seul, une
   requête (`RPCResponse.appelerMutation`, jamais rejouée), session du compte affiché exigée ; **avant** l'appel,
   relecture `contrats_mission?select=id,hash_document&id=eq.<id>` : si l'empreinte affichée n'est plus celle du
@@ -545,8 +547,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_envoyer_otp_signature"("p_contrat_id" "u
 
 ## fn_signer_contrat_otp
 
-- **Statut natif** : consommée (lot 2, T8) par `SupabaseContratsGateway.signer` ; écran T9b (HARD STOP n°4 de
-  l'écran de signature). Corps exact `{"p_contrat_id", "p_otp_code", "p_hash_document", "p_signature_image": null}` ;
+- **Statut natif** : consommée (lot 2, T8) par `SupabaseContratsGateway.signer` ; écran T9b `SignatureOtpView`
+  (HARD STOP n°4 de l'écran de signature : go par délégation du 8 novembre 2026, définition live relue le
+  9 novembre 2026, sans dérive) ; confirmation publiée sur la relecture de la gateway ci-dessous, avec le contrat et le certificat relus ensuite par le modèle (relecture du contrat en échec relancée une fois, puis actualisation proposée ; jeton refusé → session à vérifier ; revue fraîche de T9b, m1). Corps exact `{"p_contrat_id", "p_otp_code", "p_hash_document", "p_signature_image": null}` ;
   code hors `^[0-9]{6}$` ou empreinte hors format : refus local, aucune requête ; exception déclarée `23514`
   (`RPCResponse.appelerMutation(…, exceptionsMetier: ["23514"])`) restituée verbatim ; succès annoncé seulement
   après relecture du contrat (`signature_soignant`, même `hash_document`) et de la ligne `signatures_contrats` du
@@ -895,7 +898,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_signer_attestation_sante"() RETURNS "jso
 - **Usage prévu** : admettre un compte TEST à l'OTP réel sur STAGING (capacité S1). Appelée **uniquement** si
   l'environnement est STAGING et l'URL Supabase `https://mejpriaetwgtcstbgfid.supabase.co` (garde du web
   `src/lib/signatureSmsStagingAdmission.ts` l.1, l.6) ; en production elle n'existe pas (`PGRST202`) et n'est
-  jamais appelée. Sans admission, un compte TEST est renvoyé vers le web pour signer (décision 18).
+  jamais appelée. Sans admission, un compte TEST est renvoyé vers le web pour signer (décision 18). Admission ouverte
+  jusqu'à `can_send ? expires_at : otp_expires_at`, close sur une échéance nulle ou passée (`ContratMission.tsx`
+  l.311-312, `ContratModel.admissionOuverte` ; revue fraîche de T9b, m2).
 - **Signature SQL** (supplément, `CREATE FUNCTION public.fn_admission_otp_signature_recette(p_contrat_id uuid)`) :
   `RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=''`.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC,anon,service_role` puis `GRANT EXECUTE … TO authenticated` (l.141-142).

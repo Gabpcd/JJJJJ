@@ -150,6 +150,26 @@ final class DemoContratsGatewayTests: XCTestCase {
         XCTAssertEqual(ScenarioDemoContrats(argument: "autre"), .nominal)
     }
 
+    /// Lot 2, T9b : `-JOLENE_DEMO_SCENARIO compte-test` présente le soignant démo comme un compte TEST (sans admission
+    /// de recette, comme en production) pour exercer le renvoi web de la signature (décision 18) ; tout autre argument
+    /// (celui d'un autre domaine compris) garde le scénario nominal.
+    func testScenarioCompteTestEtArgumentsDeLancement() async throws {
+        let test = DemoContratsGateway(scenario: .compteTest)
+        let lu = try await test.contrat(id: "demo-contrat-001", context: contexte)
+        XCTAssertTrue(lu.estCompteTest)
+        let admission = try await test.admissionRecette(contratId: lu.id, context: contexte)
+        XCTAssertNil(admission, "aucune admission de recette en démo")
+        let nominal = try await DemoContratsGateway().contrat(id: "demo-contrat-001", context: contexte)
+        XCTAssertFalse(nominal.estCompteTest)
+        XCTAssertEqual(ScenarioDemoContrats(argument: "compte-test"), .compteTest)
+        XCTAssertEqual(ScenarioDemoContrats.argument, "-JOLENE_DEMO_SCENARIO")
+        XCTAssertEqual(ScenarioDemoContrats(arguments: ["app", "-JOLENE_DEMO_SCENARIO", "otp-expire"]), .otpExpire)
+        XCTAssertEqual(ScenarioDemoContrats(arguments: ["-JOLENE_DEMO_SCENARIO", "compte-test"]), .compteTest)
+        XCTAssertEqual(ScenarioDemoContrats(arguments: ["-JOLENE_DEMO_SCENARIO", "upload-incertain"]), .nominal)
+        XCTAssertEqual(ScenarioDemoContrats(arguments: ["-JOLENE_DEMO_SCENARIO"]), .nominal)
+        XCTAssertEqual(ScenarioDemoContrats(arguments: []), .nominal)
+    }
+
     func testContratSigneRefuseLEnvoiEtContratInconnu() async throws {
         let gateway = DemoContratsGateway()
         let signe = try await gateway.contrat(id: "demo-contrat-002", context: contexte)

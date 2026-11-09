@@ -134,6 +134,28 @@
     délai d'un éclat ou du build tombe toujours avant celui du job, et le résumé comme les xcresult sont conservés quand
     un éclat bloque. Résumé rejoué en local sur des résultats synthétiques (vert ; refusé pour une classe jamais
     démarrée, `DemoPointageTests` ou `DemoPointageEtatsTests`, et pour un code d'éclat absent).
+    **Appliquée à T9b (revue fraîche de L2-T9b, M1, 9 novembre 2026).** `DemoSignatureContratTests` (connexion,
+    navigation et saisie du code au simulateur, trois formats) n'entre pas dans « lot2 », qui dépassait déjà 20 min :
+    l'éclat **« contrats »** est ouvert (`-only-testing` `DemoContratsTests` et `DemoSignatureContratTests`, retirées de
+    « lot2 », exclues du socle par `-skip-testing`, classes exigées par le résumé) ; « lot2 » garde `DemoPresencesTests`
+    et `DemoDocumentsTests`. Les trois éclats sont bornés à 30 min chacun, lancés même si un éclat précédent échoue, et
+    le plafond du job passe de 75 à 105 min (somme des éclats + 15 min de build). Garde :
+    `tests/node/ios-swift-ci-eclats.node.mjs`, exécutée par le job « Cœur » de `ios-swift-ci.yml` (et dans ses filtres de
+    chemins) : chaque éclat déclaré par son étape, le résumé (`eclats`, code de sortie relié à son étape), la boucle
+    xcresult et l'artefact ; chaque XCUITest démo dans un seul éclat ; le socle n'exclut que les classes STAGING et
+    celles des autres éclats ; plafond du job ≥ somme des éclats + 15 min. Mesures : aucune exécution dans la tranche
+    (aucun dispatch hors intégrateur) ; l'intégrateur reporte ici les durées des trois éclats par format au premier run
+    vert. **Consigne à T4b** : `DemoPointageTests` rejoint « lot2 » si cet éclat reste sous 20 min mesurées par format,
+    sinon « lot2 » est séparé en « presences » et « documents » ; la garde vérifie la cohérence du découpage retenu.
+    **Intégration du 9 novembre 2026 (T4b, T5a, T9b sur `feat/ios-lot2`).** Le découpage par domaine de T4b est retenu
+    et complété : « presences » reçoit `DemoPresenceDetailTests` (T5a, domaine Présences : 4 + 4 + 4 tests), « contrats »
+    reçoit `DemoSignatureContratTests` (T9b : 3 + 3 tests), chacune exclue du socle et exigée par le résumé. Le plafond
+    reste à 195 min, au-dessus du minimum de la garde (5 × 30 + 15 = 165 min). La garde
+    `tests/node/ios-swift-ci-eclats.node.mjs` de T9b, qui cherchait encore un éclat « lot2 » et ne reconnaissait que les
+    sous-classes directes de `JoleneUITestCase`, rougissait sur le résultat fusionné ; elle exige désormais que les deux
+    classes des contrats ne tournent dans aucun autre éclat, et reconnaît les classes qui héritent de `JoleneUITestCase` par
+    `DemoPointageUITestCase` (test supplémentaire : `DemoPointageTests`, `DemoPointageEtatsTests` et
+    `DemoPresenceDetailTests` dans un seul éclat de domaine). Durées par format : section « Recette CI » de `REVUES_LOT2.md`.
 23. **Journal de reçus : celui du lot 1 T7 est réutilisé** ; si T1 du lot 2 démarrait avant son intégration, T1
     livrerait le journal générique et T7 le consommerait sans changer son API. Ordonnancement retenu : T1 attendait
     l'intégration de T7 et démarrait dans la vague 1 du lot 2, pas dans la vague 0.
@@ -870,6 +892,31 @@
     lecture la plus récente gagnante) ; m8 commentaires de `TextesWeb.Presences.relanceTitre` / `relanceExplication`
     renvoyés à la décision déléguée ; m11 textes de session expirée repris du lot 1 sans chaîne en dur et repli lisible
     (`LibellesDetailPresences.Echec`).
+- **T9b — application (L2-T9b, 9 novembre 2026)** : la zone « Votre signature » est
+  `ContratModel.zoneSignature(maintenant:)` (`nil` quand le web la masque, l.709, sauf juste après une signature de la
+  session ; `.renvoiWeb` pour un compte TEST sans admission non échue ; sinon `.otp(SignatureOtpPresentation)`), rendue
+  par `Jolene/Screens/Contrats/SignatureOtpView.swift` dans un `TimelineView` d'une seconde (minuteur, horloge des
+  gateways). `SignatureOtpPresentation` (`JoleneCore/Contrats/`) traduit la session de T8 en formulaire, confirmation ou
+  indisponibilité, avec les conditions `disabled` du web ; « Signature non disponible pour le moment » n'y sert plus qu'aux
+  erreurs bloquantes `CONTRAT_INACTIF`, `CONTRAT_DEJA_COMPLET`, `DEJA_SIGNE` (l.222-236). Le renvoi web d'un compte TEST
+  affiche le texte du lot 0 (`MobileAccess.unsupportedRole`) et « ✍️ Signer le contrat » seulement avec le présentateur
+  `.safari` (lot 1 T10, absent : gap verrouillé par `DemoSignatureContratTests`). Identifiants migrés (règle 8) :
+  `contrat-renvoi-web-indisponible` disparaît, la zone est `contrat-zone-signature` (assertions de `DemoContratsTests`
+  sur les contrats signé et CDD), le renvoi web garde `contrat-renvoi-web` (+ `-message`, `-action`). Revue fraîche de T8 :
+  mineur 2 (relecture du modèle après un échec de transport, un délai épuisé et les refus qui ferment la signature, chaque
+  lecture sous son propre délai), mineur 8 (capacité de recette échue localement → renvoi web ; `actionsSuspendues`
+  pendant la relecture de l'admission, « Vérification de la signature en cours… », l.265) et mineur 9 (epoch vérifié
+  avant chaque requête OTP) appliqués ; le point « `reprendre` avec une échéance passée » est sans objet :
+  `AdmissionRecette.interpreter` refuse une échéance passée (`otp_expires_at` futur exigé), la session ne reçoit donc
+  qu'une échéance future ou `nil` (fermeture, comme `fermer()` du web l.287-292).
+- **T9b — revue fraîche (9 novembre 2026)** : M1 (éclat « contrats », décision 22) et les mineurs m1 à m10 appliqués
+  (« Amendements du blueprint », « Textes opérationnels hors web (T9b) », décision déléguée T9b) ; m3 : `actionsSuspendues`
+  est lu après la suspension `await controller.epoch` dans les gardes d'`envoyerCode()` et de `signer()`. **File de merge
+  (m11)** : `Jolene/Composition/AppContainer.swift` est sériel (blueprint §4, vague 3 : T4b, T7) ; T9b y ajoute le bloc
+  du scénario démo des contrats (`ScenarioDemoContrats`, `otp-expire`, `compte-test`) et T4b y posera le sien
+  (`DemoPointageGateway.Scenario`, `scan-incertain`) : conflit attendu au rebase, garder les deux blocs (règle par
+  défaut). Même règle pour `.github/workflows/ios-swift-ci.yml` (éclats de T4b et de T9b) : la garde
+  `tests/node/ios-swift-ci-eclats.node.mjs` dit si la fusion est cohérente.
 
 ## Amendements du blueprint (`LOT2_PLAN.md`)
 
@@ -947,6 +994,14 @@ Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
 | §3 T5a « Fichiers » (`NotationSheet.swift` monté par le départ final) ; XCUITest « départ final de la mission b → feuille de notation » | feuille ouverte par la zone de pointage | point d'extension `notationAuDepart(pointage:contexte:)` livré, branché par T4b dans sa zone (consigne T5a) ; parcours XCUITest reporté à cette zone | la zone qui possède le `PointageModel` est la tranche T4b, en parallèle ; la mission b de la démo finit à 06h00 UTC (fin − 30 min non atteinte) |
 | §3 T5a « Fichiers » (`MissionDetailScreen` bloc ASSIGNEE du lot 1 T3, `AccueilScreen` + `missionsOublieesCount`) | points d'entrée dans les écrans du lot 1 | boutons ajoutés au détail de mission du lot 0/1 (seul écran de détail présent) ; « Présences et pointage » rendu quand l'écran sait changer d'onglet (depuis l'Accueil) ; bandeau d'oubli du lot 1 gardé, son renvoi web remplacé par « Pointer mon départ maintenant » natif ; widget « Aller pointer » sur le planning vérifié de l'Accueil (`PlanningAccueil.planifie`, prochain créneau de l'assemblage) | lot 1 T3/T6b/T6c n'a pas livré d'autre détail de mission ; le web relit le planning à chaque rendu, le natif au chargement de l'Accueil (60 s) |
 | §3 T5a XCUITest « Accueil › Aller pointer » | données démo de l'Accueil | scénario DEBUG `-JOLENE_DEMO_SCENARIO accueil-pointage` (`DemoDashboardGateway(scenario: .pointage)`) : mission du jour de `demo-presences.json` en tête et `missions_oubliees_count = 1` | la démo normale n'a ni mission à pointer dans l'heure ni départ oublié ; `DemoAccueilTests` reste inchangé |
+| §3 T9b « Fichiers » (`JoleneUITests/DemoSignatureTests.swift`) | `DemoSignatureTests` | `DemoSignatureContratTests` (3 cas), dans l'éclat « contrats » de `ios-swift-ci.yml` avec `DemoContratsTests` (`-only-testing`, `-skip-testing` du socle, classes exigées par le résumé ; décision 22, application à T9b) ; `SignatureOtpPresentation` (Core) en plus de `SignatureOtpView` | T9b : nom fixé par la consigne de la tranche ; la présentation pure porte les règles d'affichage testées par `swift test` (la vue n'en a aucune) ; éclat : revue fraîche de T9b (M1), « lot2 » dépassait déjà 20 min |
+| §3 T9b XCUITest « `otp-expire` → « Recevoir un nouveau code » (l.339) » | libellé atteint quand le minuteur local tombe à zéro (l.109, l.339) | un refus serveur `OTP_EXPIRE` expire aussi le code localement (`SessionSignatureOtp.terminerSignature` : échéance passée) : « Expiré », champ et « Signer » désactivés, « Recevoir un nouveau code » | T9b : définition live de `fn_signer_contrat_otp` relue le 9 novembre 2026 (`otp_envoye_a < now() - 10 min` → preuve passée à `expire`, refus `OTP_EXPIRE`) : ce code ne peut plus servir, quel que soit le minuteur local ; écart au web assumé par cet amendement (la décision 25 ne porte que sur l'horloge de la fenêtre de pointage ; référence corrigée par la revue fraîche de T9b, m4) ; le web garderait « Renvoyer le code » et un champ actif tant que son minuteur tourne ; l'horloge démo fixée n'atteint jamais zéro |
+| §3 T9b XCUITest « compte TEST sans admission → renvoi web » | — | scénario démo `-JOLENE_DEMO_SCENARIO compte-test` (`ScenarioDemoContrats.compteTest`, `soignants.est_compte_test` vrai, aucune admission comme en production) posé par `AppContainer` (DEBUG), comme `otp-expire` | T9b : le monde démo n'avait aucun compte TEST |
+| Confirmation de signature (`SignerContratOtp.tsx` l.194-199, l.209-221 ; `ContratMission.tsx` l.767-775, l.819-823) | « Contrat signé ✅ » publié dès la réponse, puis remplacé par « ✅ Vous avez déjà signé ce contrat » au rechargement du contrat | confirmation publiée sur la relecture de la gateway (contrat `signature_soignant` et ligne `signatures_contrats` `signe` de l'appelant, même empreinte), avec le contrat et le certificat relus ensuite par le modèle ; relecture du contrat en échec relancée une fois, puis « Les contrats ne peuvent pas être chargés. Réessayez. » et « Réessayer » (`ContratModel.actualiser()`, `contrat-relecture-erreur`, `contrat-relecture-reessayer`) sous la confirmation ; jeton refusé pendant une relecture → `sessionExpired` et bandeau « Session à vérifier » (`contrat-session-bandeau`) ; annulation → rien publié ; confirmation gardée tant que l'écran reste ouvert, au-dessus de « déjà signé » (relu) | T9b : jamais de succès sans relecture ; la confirmation porte la mention l.216 (décision déléguée du 8 novembre 2026, ci-dessous) ; revue fraîche de T9b (m1) : une relecture du modèle en échec laissait « Soignant(e) : ⏳ En attente » sous « Contrat signé ✅ », sans rien dire ; le succès, prouvé par la gateway, n'est ni retiré ni renvoyé |
+| Case de consentement (l.267-278) | `<input type="checkbox">` | bouton qui bascule le consentement, état exposé par le trait d'accessibilité `isSelected`, cible de 44 pt | T9b : pas de case native sur iOS ; un `Toggle` ne bascule pas au toucher du libellé |
+| Champ du code (l.309-320) | `aria-label` « Code SMS à 6 chiffres », désactivé une fois expiré | `OTPField` du lot 0 : libellé d'accessibilité du web (`LibellesWeb.SignatureOtp.champCodeAccessibilite`, nouveau paramètre, défaut du lot 0 inchangé) et texte indicatif du web « 123456 » (l.316, `LibellesWeb.SignatureOtp.champCodeIndication`, paramètre `placeholder`, défaut du lot 0 « 6 chiffres » inchangé ; revue fraîche de T9b, m7), désactivé par l'environnement SwiftUI ; le défilement de la page ferme le clavier numérique (`scrollDismissesKeyboard(.immediately)`) | T9b : un `UITextField` enveloppé ignore `.disabled` ; le clavier numérique n'a pas de touche de validation |
+| `ContratModel.signature` (T8) pour un compte TEST sans original contrôlé | `.indisponible` | `.renvoiWeb` (admission absente ou close, original contrôlé ou non) ; admission ouverte jusqu'à `canSend ? expiresAt : otpExpiresAt`, close sur une échéance nulle ou passée (`ContratMission.tsx` l.311-312) | T9b : le web bascule tout compte TEST sans admission sur un autre mode (l.256-266, l.722-726) ; jamais d'OTP sans admission (décision 18) ; échéance : revue fraîche de T9b (m2), la fin de la capacité gardait un formulaire sans envoi possible au-delà de l'échéance du code |
+| Annonces `role="status"` (`SignerContratOtp.tsx` l.211 confirmation, l.265 « Vérification de la signature en cours… ») | lues par les lecteurs d'écran à leur apparition | `contrat-signe` et `contrat-otp-suspendu` annoncés à VoiceOver à leur apparition (`annonceALApparition`, JoleneDesign : même règle qu'`InlineNotice(announcesOnAppear:)`, une fois par texte) | revue fraîche de T9b (m8) : VoiceOver n'annonce pas seul un contenu apparu après une action |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 
@@ -1091,6 +1146,20 @@ Repris d'écrans natifs déjà livrés, sans texte nouveau : « Session à véri
 `LibellesDetailPresences.Echec`, plus de chaîne en dur dans `DetailPresencesScreen`), `SessionController.sessionExpiredMessage`
 (lot 0, repli de la session expirée sans message) et `LibellesPresences.Liste.erreurTitre` (« Impossible de charger vos
 présences », T4a) pour l'échec de lecture du détail.
+
+## Textes opérationnels hors web (T9b)
+
+Aucun texte nouveau ; tous sont repris tels quels d'écrans ou de modules déjà livrés :
+
+| Texte | Source | Où (T9b) | Test |
+|---|---|---|---|
+| « Cet espace n'est pas encore disponible dans l'application. Rendez-vous sur jolene.app. » | lot 0, `MobileAccess.unsupportedRole` (via `ZoneSignature.messageRenvoiWeb`), comme les onglets DPAE de T7 | renvoi web d'un compte TEST sans admission ; « ✍️ Signer le contrat » (`LibellesWeb.Contrats.signerLeContrat`, `ListeContrats.tsx` l.223) seulement avec le présentateur `.safari` | `ContratModelTests.testZoneDeSignatureSelonLeContratEtLeCompte`, `DemoSignatureContratTests.testCompteTestSansAdmissionRenvoieVersLeWeb` |
+| « Les contrats ne peuvent pas être chargés. Réessayez. » et « Réessayer » | T8, `MessagesContrats.indisponible` (pilote `supabaseGateway.ts` l.21, inventorié ci-dessus) ; `LibellesWeb.Contrats.reessayer` (`AccesEtablissement.tsx` l.84, gardé par TL ; déjà le bouton de `contrat-erreur`) | sous la confirmation, quand le contrat n'a pas pu être relu après une signature confirmée (revue fraîche de T9b, m1) | `ContratModelTests.testSigneePuisRelecturesEnEchecProposeLActualisation`, `SignatureOtpPresentationTests.testRelectureEnEchecProposeeSeulementApresLaSignature` |
+| « Session à vérifier », « Vérifier ma session », « Votre session a expiré. Reconnectez-vous. » | lot 1, `MissionsListScreen.swift` l.107-108 et `SessionController.sessionExpiredMessage` (déjà sur l'écran de session à vérifier de `ContratScreen`, T9a) | bandeau `contrat-session-bandeau` quand un jeton est refusé, contrat affiché (m1) | `ContratModelTests.testSigneePuisSessionExpireeALaRelecture` |
+
+Le texte indicatif « 6 chiffres » du champ OTP du lot 0 n'apparaît plus sur l'écran de signature : le champ y porte celui
+du web, « 123456 » (`SignerContratOtp.tsx` l.316, `LibellesWeb.SignatureOtp.champCodeIndication`, gardé par TL ; revue
+fraîche de T9b, m7) ; le défaut du lot 0 reste celui d'`OTPField` (`OTPField.indicationParDefaut`), sans autre écran.
 
 ## Décisions déléguées du 8 novembre 2026
 
@@ -1277,6 +1346,97 @@ un changement de wording part d'abord sur le web.
 
 Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
 
+### T9b — signature OTP des contrats dans l'app (go juridique, HARD STOP n°4)
+
+- **Question** : l'écran natif de signature (`Jolene/Screens/Contrats/SignatureOtpView.swift`) peut-il être livré avec
+  les textes du web qui citent le Code civil (« preuve juridique art. 1366 Code civil », « art. 1366-1367 Code civil »),
+  et le procédé natif donne-t-il à la signature la même valeur que la signature web ?
+- **Sources primaires** :
+  - Code civil, art. 1366 (l'écrit électronique a la même force probante que l'écrit papier si son auteur peut être
+    dûment identifié et s'il est établi et conservé dans des conditions qui en garantissent l'intégrité), art. 1367
+    (la signature identifie son auteur et manifeste son consentement ; électronique, elle consiste en l'usage d'un
+    procédé fiable d'identification garantissant son lien avec l'acte ; la fiabilité n'est **présumée** que dans les
+    conditions fixées par décret) et art. 1174 al. 1 (un écrit exigé pour la validité d'un acte, tel le contrat écrit
+    de l'art. L.1242-12 du Code du travail, peut être établi et conservé sous forme électronique dans les conditions
+    des art. 1366 et 1367) ;
+  - décret n° 2017-1416 du 28 septembre 2017 : la présomption de fiabilité est réservée à la signature électronique
+    **qualifiée** (règlement eIDAS) ; il abroge le décret n° 2001-272, qui définissait l'ancienne « signature
+    électronique sécurisée » ;
+  - Code civil, art. 1353 al. 1 (celui qui réclame l'exécution d'une obligation doit la prouver) ; Code de procédure
+    civile, art. 287, dernier alinéa (si la dénégation ou le refus de reconnaissance porte sur un écrit ou une signature
+    électroniques, le juge vérifie si les conditions des art. 1366 et 1367 du Code civil sont satisfaites) ;
+  - règlement (UE) n° 910/2014 (eIDAS), art. 25 §1 (l'effet juridique et la recevabilité d'une signature électronique
+    en justice ne peuvent être refusés au seul motif de sa forme électronique ou de ce qu'elle n'est pas qualifiée) et
+    §2 (seule la signature qualifiée équivaut à la signature manuscrite) ; art. 26 (signature avancée : liée au
+    signataire de manière univoque, l'identifie, créée par des moyens sous son contrôle exclusif, liée aux données
+    signées de sorte que toute modification ultérieure soit détectable) ;
+  - web : `src/components/SignerContratOtp.tsx` (l.30-49 `MESSAGES_ERREUR`, l.115-120 codes bloquants, l.127-207
+    envoi et signature, l.209-354 rendu : l.216, l.230, l.242-245, l.265, l.276, l.288, l.296-339, l.348) et
+    `src/pages/ContratMission.tsx` l.708-817 (zone « Votre signature »), l.831-837 (pied de page : « Signature
+    électronique simple. ») ;
+  - serveur, définitions **live** relues en lecture seule en production le 9 novembre 2026 (`pg_get_functiondef`,
+    projet `flripxtsyegjshnhzjkz`) : `fn_envoyer_otp_signature(uuid)` (8 349 caractères) — contrat verrouillé, refus
+    `CONTRAT_INACTIF` / `CONTRAT_DEJA_COMPLET` / `DEJA_SIGNE`, limite par IP, téléphone du profil, 3 SMS par 24 h, code de
+    six chiffres conservé **haché** avec le contrat et l'utilisateur, SMS « valide 10 min », numéro masqué renvoyé ;
+    `fn_signer_contrat_otp(uuid, text, text, text)` (7 364 caractères), fonction de vérification — compte actif, 5
+    tentatives, 10 min (preuve passée à `expire` au-delà), code comparé à son empreinte, document : SHA-256 UTF-8 de
+    `contenu_html` égal à `hash_document` **et** à `p_hash_document`, `storage_path` et date de rendu présents, aucune
+    variable `{{…}}`, aucune signature antérieure sur une autre empreinte, puis `signe_a`, `otp_valide_a`, adresse IP
+    (`x-forwarded-for`) et navigateur conservés dans `signatures_contrats`, `mode_signature = 'JOLENE_OTP'`. Ces deux
+    définitions sont celles décrites par `CONTRATS_RPC_SOIGNANT.md` et `LOT2_PLAN.md` §2.4 (aucune dérive constatée).
+- **JUGÉ / doctrine / choix Jolene** : aucune jurisprudence n'est invoquée (rien n'est JUGÉ ici) et aucune doctrine
+  ministérielle n'a été retenue ; la décision repose sur les textes ci-dessus et sur des choix de conformité Jolene.
+- **Analyse** :
+  1. Qualification : OTP SMS envoyé au téléphone du profil d'un compte authentifié, lié à l'empreinte SHA-256 du document
+     figé, horodaté par le serveur, avec IP et navigateur. C'est une signature électronique **non qualifiée** (le web la
+     dit « simple », l.831-837) : son effet juridique et sa recevabilité en justice ne peuvent être refusés au seul motif
+     de sa forme électronique ou de ce qu'elle n'est pas qualifiée (eIDAS art. 25 §1), mais sa fiabilité n'est pas
+     présumée (art. 1367 al. 2 ; décret 2017-1416). En cas de contestation, la charge de la preuve pèse sur la partie qui
+     se prévaut de l'acte signé, l'établissement ou le soignant (art. 1353 al. 1) ; le juge vérifie alors les conditions
+     des art. 1366 et 1367 (CPC art. 287, dernier alinéa) ; Jolene fournit le dossier de preuve qu'elle conserve
+     (horodatage, IP, navigateur, empreinte, OTP validé, certificat). Aucun texte natif ne revendique une qualification
+     supérieure (ni « qualifiée » ni « avancée »). (Formulation précisée par la revue fraîche de T9b, m5 : la précédente
+     faisait peser la preuve sur Jolene et glosait l'art. 25 §1 par « opposable ».)
+  2. Même valeur probante que le web : le natif appelle les mêmes fonctions serveur, avec le même code, la même
+     empreinte et `p_signature_image` nul ; c'est le serveur qui contrôle l'intégrité et conserve la preuve. Le natif
+     ajoute des garanties : l'original affiché est contrôlé par triple empreinte (texte haché = `hash_document` = octets
+     Storage) et rendu octet pour octet (décision 17, plus strict que la vue filtrée du web : art. 1366, intégrité) ;
+     l'empreinte est relue avant tout SMS ; le consentement et le code sont remis à zéro à chaque changement de révision ;
+     une signature n'est annoncée qu'après relecture serveur du contrat et de sa preuve par la gateway (`signature_soignant`
+     et ligne `signatures_contrats` `signe` de l'appelant sur la même empreinte) ; si le modèle ne peut ensuite relire le
+     contrat pour l'écran, il le relance une fois puis propose l'actualisation, sans jamais retirer ni renvoyer la
+     signature (revue fraîche de T9b, m1).
+  3. Consentement (art. 1367 al. 1) : case explicite au texte du web (l.276), décochée à chaque révision, puis geste
+     distinct « Signer » (l.348).
+  4. Textes : tous verbatim du web, vouvoyés comme sur le web, gardés par TL (`TextesWeb.SignatureOtp`,
+     `LibellesWeb.SignatureOtp`) ; liste affichée : titre l.242, explication l.244-245, consentement l.276, « Recevoir le
+     code SMS pour signer » l.288, « Code envoyé au … » l.151 et l.296, envois restants l.297-300, minuteur et « Expiré »
+     l.305, tentatives l.326-327, « Renvoyer le code » / « Recevoir un nouveau code » l.339, infobulles l.336, « Signer »
+     l.348, « Vérification de la signature en cours… » l.265, `MESSAGES_ERREUR` l.31-43 (et l.167, l.171), « Contrat
+     signé ✅ » et « — Mission confirmée par les 2 parties. » l.197/l.214, mention l.216, « Signature non disponible pour
+     le moment » l.230 (erreurs bloquantes seulement), texte indicatif « 123456 » l.316 et libellé vocalisé du champ
+     « Code SMS à 6 chiffres » l.319.
+     **Non repris** (décision 18 : OTP seul, pas de sélecteur de mode ; revue fraîche de T9b, m6) : `ContratMission.tsx`
+     l.721 « Choisissez votre mode de signature : », l.740 « 📱 Signature électronique OTP SMS » et son badge
+     « RECOMMANDÉE » (l.741), l.743 « Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code
+     civil. », l.724 (compte de démonstration : signature manuscrite), l.729 « Recette TEST : SMS de signature autorisé
+     uniquement pour ce contrat. », l.749-750 (signature manuscrite). Aucun n'est affiché par le natif ; la référence aux
+     art. 1366-1367 reste portée par l'explication l.244-245 et la mention l.216, verbatim.
+  5. Mention l.216 (« Signé avec succès. Horodatage, IP et hash du document conservés (art. 1366-1367 Code civil). »)
+     gardée affichée après la relecture, là où le web la remplace au rechargement : exacte, puisque la relecture de la
+     gateway prouve `statut_signature = 'signe'` sur la même empreinte et que la fonction live conserve horodatage, IP et
+     empreinte ;
+     limite consignée : l'IP vient de l'en-tête `x-forwarded-for` posé par la passerelle Supabase (nulle sans lui).
+  6. Point relevé, non bloquant : le titre web « Signature électronique sécurisée » (l.242, et `CertificatSignaturePage.tsx`
+     l.214) reprend le nom de la catégorie du décret n° 2001-272 abrogé, qui emportait la présomption de fiabilité ;
+     la même page dit « Signature électronique simple. » (l.831-837), ce qui écarte toute confusion sur la portée. Le natif
+     le reprend verbatim (décision de la vague 4 : le natif suit le web mot pour mot) ; recommandation pour une PR web
+     HARD STOP séparée : retirer « sécurisée » ou l'expliciter, puis reprise verbatim par la garde.
+- **Décision** : go juridique de T9b accordé. La signature OTP native est livrée avec les seuls textes verbatim ci-dessus,
+  sans aucun wording nouveau, sur les fonctions serveur relues ; le mode démo simule la signature sans réseau
+  (sentinelle « 0 requête ») sur des contrats fictifs ; un compte TEST sans admission de recette est renvoyé vers le web
+  (décision 18). Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+
 ## En attente de Gabrielle
 
 Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranche indiquée.
@@ -1300,7 +1460,9 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
   « pré-éligibilité » étudiante) et l.882-884 (licence « contrôlée avant tout accès aux remplacements de médecin ») ;
   encart RIB l.830-843 (relation d'employeur, renvoi vers les versements du lot 3). Point d'extension :
   `PresentationJustificatifs.complementaires` (`description` nil) et `DossierDocuments.alerteRcp` (T6), non affichée.
-- **T9b** (écran de signature OTP) : go explicite avant merge (captures xcresult des trois formats, liste des textes).
+- **T9b** (écran de signature OTP) : go juridique donné par délégation le 9 novembre 2026 (« Décisions déléguées du
+  8 novembre 2026 » ci-dessus). Reste à Gabrielle, en personne : la revue de l'écran sur iPhone (P9, T12) et la signature
+  réelle STAGING (P5 : son téléphone, capacité S1, compte Twilio de recette).
 - **T9a** (lecture des contrats, aucun texte nouveau) : les textes HARD STOP affichés par T9a sont ceux de TL
   (`TextesWeb.Contrat` : bandeaux, CDD à préparer, document figé et empreinte, document d'origine indisponible, « déjà
   signé », pied de page ; `TextesWeb.CompteARebours` ; `TextesWeb.Certificat` : certificat, mentions des art. 1366-1367
@@ -1320,7 +1482,8 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
     (`CONTRAT_INACTIF`, `CONTRAT_DEJA_COMPLET`, `DEJA_SIGNE`, l.222-236, suivie du message serveur) ; l'écran natif
     l'affiche seul, sans bouton, tant que lot 1 T10 n'injecte pas le présentateur `.safari`, et n'annonce jamais la
     signature sur jolene.app. Aucun texte nouveau n'a été écrit. (Description corrigée à l'intégration du
-    8 novembre 2026, revue fraîche de T9a, m1.)
+    8 novembre 2026, revue fraîche de T9a, m1.) **Résolu par T9b (9 novembre 2026)** : le titre n'est plus affiché que
+    dans son contexte web (erreur bloquante du serveur, suivie de son message) ; la zone est la signature OTP native.
   - **lien vers la page du certificat** (revue fraîche de T9a, m2) : `contrat-certificat-ouvrir` porte
     `TextesWeb.Certificat.titrePage` (texte HARD STOP, `CertificatSignaturePage.tsx`) dans un contexte que la page web du
     contrat n'a pas (la page web n'a pas ce lien). Rien n'est changé côté natif sans sa décision.

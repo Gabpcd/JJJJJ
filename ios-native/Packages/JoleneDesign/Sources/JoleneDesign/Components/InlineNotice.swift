@@ -154,3 +154,41 @@ public struct InlineNotice: View {
         }
     }
 }
+
+/// Annonce VoiceOver d'un état qui apparaît après une action sans être un encart (`role="status"` du web : confirmation de
+/// signature, relecture en cours ; lot 2, T9b, revue fraîche m8). Même règle qu'`InlineNotice(announcesOnAppear: true)` :
+/// une clé (texte + jeton) annoncée une fois par vue, après `InlineNotice.announcementDelayNanoseconds`, annulée si la vue
+/// disparaît avant ; `nil` ou un texte vide n'annoncent rien.
+public struct AnnonceALApparition: ViewModifier {
+    /// Clé d'annonce, `nil` sans texte (aucune annonce).
+    nonisolated public static func cle(_ texte: String?, jeton: Int = 0) -> InlineNotice.AnnouncementKey? {
+        guard let texte, !texte.isEmpty else { return nil }
+        return InlineNotice.AnnouncementKey(text: texte, id: jeton)
+    }
+
+    private let cle: InlineNotice.AnnouncementKey?
+    @State private var derniere: InlineNotice.AnnouncementKey?
+
+    public init(_ texte: String?, jeton: Int = 0) {
+        self.cle = Self.cle(texte, jeton: jeton)
+    }
+
+    public func body(content: Content) -> some View {
+        content.task(id: cle) {
+            guard InlineNotice.shouldAnnounce(cle, lastAnnounced: derniere), let cle else { return }
+            try? await Task.sleep(nanoseconds: InlineNotice.announcementDelayNanoseconds)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                UIAccessibility.post(notification: .announcement, argument: cle.text)
+                derniere = cle
+            }
+        }
+    }
+}
+
+public extension View {
+    /// Annonce `texte` à VoiceOver à l'apparition de la vue (voir `AnnonceALApparition`).
+    func annonceALApparition(_ texte: String?, jeton: Int = 0) -> some View {
+        modifier(AnnonceALApparition(texte, jeton: jeton))
+    }
+}

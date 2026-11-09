@@ -401,6 +401,10 @@ public enum LibellesWeb {
         // source: src/components/SignerContratOtp.tsx:319
         public static let champCodeAccessibilite = "Code SMS à 6 chiffres"
 
+        /// Texte indicatif du champ du code (`placeholder`), à la place de celui du lot 0 (revue fraîche de T9b, m7).
+        // source: src/components/SignerContratOtp.tsx:316
+        public static let champCodeIndication = "123456"
+
         /// Infobulles du bouton de renvoi désactivé (l.336) : voir `infobulleRenvoi(nouvelEnvoiAutorise:smsRestants:)`.
         // source: src/components/SignerContratOtp.tsx:336
         public static let renvoiNonAutoriseRecette = "Aucun nouvel envoi autorisé pour cette recette"
@@ -1225,6 +1229,7 @@ public enum LibellesWeb {
         .init(cle: "SignatureOtp.minuteurSeparateur", texte: SignatureOtp.minuteurSeparateur),
         .init(cle: "SignatureOtp.minuteurExpire", texte: SignatureOtp.minuteurExpire),
         .init(cle: "SignatureOtp.champCodeAccessibilite", texte: SignatureOtp.champCodeAccessibilite),
+        .init(cle: "SignatureOtp.champCodeIndication", texte: SignatureOtp.champCodeIndication),
         .init(cle: "SignatureOtp.renvoiNonAutoriseRecette", texte: SignatureOtp.renvoiNonAutoriseRecette),
         .init(cle: "SignatureOtp.plafondSmsAtteint", texte: SignatureOtp.plafondSmsAtteint),
         .init(cle: "SignatureOtp.recevoirNouveauCode", texte: SignatureOtp.recevoirNouveauCode),
