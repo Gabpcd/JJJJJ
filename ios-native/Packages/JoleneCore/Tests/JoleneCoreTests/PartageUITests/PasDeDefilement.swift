@@ -42,4 +42,21 @@ struct PasDeDefilement: Sendable, Equatable {
     static func recouvertParUneBarre(_ champ: CGRect, barres: [CGRect]) -> Bool {
         barres.contains { !$0.isEmpty && $0.intersects(champ) }
     }
+
+    /// Part de la largeur du viewport entre son bord et le couloir latéral d'un glissement.
+    static let margeLaterale: CGFloat = 0.1
+    /// Débord vertical de la zone tactile d'un curseur au-delà de son cadre (31 pt pour 44 pt tactiles).
+    static let debordTactile: CGFloat = 8
+
+    /// Abscisse du point de départ d'un glissement vertical à `departY` : le milieu du viewport, sauf si
+    /// ce point tombe sur un obstacle (curseur, dont la zone tactile déborde de `debordTactile`), qui
+    /// capterait le geste et changerait sa valeur sans faire défiler la page (run 42593592247,
+    /// ipad-landscape : `profil-rayon` passé à 50 km, vingt glissements sans effet) ; alors le couloir
+    /// gauche (`margeLaterale`), puis le couloir droit ; le milieu si aucun n'est libre.
+    static func abscisseDeGlissement(viewport: CGRect, departY: CGFloat, obstacles: [CGRect]) -> CGFloat {
+        let couloirs = [viewport.midX, viewport.minX + viewport.width * margeLaterale,
+                        viewport.maxX - viewport.width * margeLaterale]
+        let zones = obstacles.filter { !$0.isEmpty }.map { $0.insetBy(dx: 0, dy: -debordTactile) }
+        return couloirs.first { x in !zones.contains { $0.contains(CGPoint(x: x, y: departY)) } } ?? viewport.midX
+    }
 }

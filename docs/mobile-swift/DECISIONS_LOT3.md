@@ -1573,6 +1573,14 @@ sans changer aucune règle ni aucun texte affiché :
     (budget de blocage de 15 s, #1125), condition vraie à la dernière évaluation ; runner surchargé (44 attentes
     bloquées absorbées sur ce job, tests 2 à 4 fois plus lents qu'ipad-portrait). Aucun changement : le budget
     n'est pas relevé ; la recette suivante tranche.
+- **Recette CI, run 42593592247 (`4aaa18a1`) : iphone vert (1 154 tests, dont la même attente de la ville), les
+  trois défauts ci-dessus corrigés ; ipad-landscape, un quatrième défaut de TEST** :
+  `DemoProfilTests.testPrenomVideRefuseAvecLeMessageServeur` — les vingt glissements de `scrollTo` vers
+  « Enregistrer les modifications » partaient de (590 ; 564,4), sur le curseur `profil-rayon` (262…918 × 538…569) :
+  le curseur captait le geste (sa valeur passait à 50 km, le milieu de la piste) et la page ne défilait pas. Le
+  point de départ d'un glissement ne tombe plus jamais sur un curseur (zone tactile comprise) : couloir gauche,
+  sinon droit (`PasDeDefilement.abscisseDeGlissement`, testée). Défaut latent de `drag`, révélé par la position du
+  curseur après l'ajout de la photo et de la position (T10).
 
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 

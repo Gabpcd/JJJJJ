@@ -397,7 +397,11 @@ class JoleneUITestCase: XCTestCase {
         XCTAssertFalse(viewport.isNull || viewport.isEmpty, "Un défilement exige un viewport visible hors clavier")
         guard !viewport.isNull && !viewport.isEmpty else { return }
         let origin = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
-        let x = viewport.midX - app.frame.minX
+        // Jamais un départ sur un curseur, qui capterait le geste (`PasDeDefilement.abscisseDeGlissement`,
+        // run 42593592247) : le milieu du viewport, sinon un couloir latéral.
+        let curseurs = app.sliders.allElementsBoundByIndex.filter { $0.exists }.map { $0.frame }
+        let x = PasDeDefilement.abscisseDeGlissement(viewport: viewport, departY: viewport.minY + viewport.height * fromY,
+                                                     obstacles: curseurs) - app.frame.minX
         let top = viewport.minY - app.frame.minY
         let start = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * fromY))
         let end = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * toY))
