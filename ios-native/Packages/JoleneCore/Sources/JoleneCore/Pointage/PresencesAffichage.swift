@@ -174,6 +174,13 @@ public enum PresencesRenvois {
         AccueilPresentation.renvoiWeb("/contrat/" + id)
     }
 
+    /// Page web des présences : voie de récupération d'un suivi de pointage non vérifiable (journal illisible, HTTP 200
+    /// sans preuve, identifiant terminal illisible ; consignes T3 et T4b de `DECISIONS_LOT2.md`), le pointage web
+    /// n'utilisant ni ce journal ni cet identifiant.
+    public static var presences: JoleneRoute? {
+        AccueilPresentation.renvoiWeb("/soignant/presences")
+    }
+
     /// `navigate('/soignant/litiges')` (`PresencesSoignant.tsx` l.752).
     public static var litiges: JoleneRoute? {
         AccueilPresentation.renvoiWeb("/soignant/litiges")

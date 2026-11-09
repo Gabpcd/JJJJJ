@@ -169,12 +169,151 @@ public enum LibellesPresences {
         public static let titreSection = "Mon espace"
     }
 
-    /// Textes provisoires, inventoriés : retirés par la tranche qui livre l'écran (T4b pointage ; T7 justificatifs et
-    /// T9a contrats, retirés à leur intégration), qui migre aussi les identifiants des XCUITest. Même forme que l'onglet
-    /// provisoire du lot 0.
-    public enum Provisoire {
-        public static let etat = "Disponible au lot 2"
-        public static let pointage = "Le pointage dans l'application arrive avec la suite du lot 2."
+    /// Zone de pointage d'une mission (lot 2, T4b ; `PointageRotatifSoignant.tsx`). Libellés repris tels quels :
+    /// `LibellesWeb.Pointage` ; ici la surcharge vouvoyée du code inconnu (décision 6), les textes opérationnels
+    /// inventoriés dans `docs/mobile-swift/DECISIONS_LOT2.md` (« Textes opérationnels hors web (T4b) ») et les
+    /// assemblages (issues du modèle, segments, « En service depuis »). Les textes de consentement viennent de `TextesWeb`
+    /// (HARD STOP n°4), par `retourConsentement(_:)`. Les textes provisoires de T4a (`Provisoire`) sont retirés.
+    public enum Pointage {
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:136 (vouvoyé : « Demande », décision 6)
+        public static let codeInvalide = "Code de pointage invalide ou expiré. Demandez le code actuel à l’établissement."
+
+        /// Texte opérationnel (`PointageModel.Issue.verification` : réponse perdue, réconciliation par relecture en cours).
+        public static let verification = "Vérification du pointage…"
+
+        /// Texte opérationnel (`.nonRecu` : relecture prouvant l'absence du scan ; le code a pu tourner).
+        public static let nonRecu = "Le pointage n'a pas été reçu. Saisissez le code actuellement affiché par l'établissement."
+
+        /// Texte opérationnel (`.horsLigne` : aucun appel, reçu `not_sent`, décision 2 ; blueprint §2.5).
+        public static let horsLigne = "Pointage impossible sans connexion."
+
+        /// Texte opérationnel (`.enregistreSurAutreMission` : le code saisi désignait une autre mission, revue de T3 M-A).
+        public static let autreMission = "Ce code était celui d'une autre de vos missions : le pointage y a été enregistré."
+
+        /// Texte opérationnel (décision 5 : précision réduite, aucune coordonnée envoyée, encart « Position exacte »).
+        public static let positionApproximative = "Position approximative : le pointage a été envoyé sans position. Pour la joindre, activez « Position exacte » pour Jolene dans les réglages de localisation de l'appareil."
+
+        /// Texte opérationnel : fermeture de la feuille du scanner de QR (le dialogue web se ferme par sa croix).
+        public static let fermer = "Fermer"
+
+        /// Renvoi web d'un suivi non vérifiable (`PresencesRenvois.presences`), texte du lot 1 (`AccueilScreen.swift`).
+        public static let voirSurJolene = "Voir sur jolene.app"
+
+        /// Ton d'un retour, porté par l'icône de l'encart (jamais par la couleur seule).
+        public enum Ton: Equatable, Sendable {
+            case succes, info, attention, erreur
+        }
+
+        /// Retour affiché sous le bouton d'action.
+        public struct Message: Equatable, Sendable {
+            public let texte: String
+            public let ton: Ton
+            /// Précision opérationnelle (scan enregistré sur une autre mission).
+            public let detail: String?
+            /// Bouton de renvoi web `/soignant/presences` (suivi non vérifiable, consigne T3).
+            public let renvoiWeb: Bool
+
+            public init(texte: String, ton: Ton, detail: String? = nil, renvoiWeb: Bool = false) {
+                self.texte = texte; self.ton = ton; self.detail = detail; self.renvoiWeb = renvoiWeb
+            }
+        }
+
+        /// Texte de chaque issue du modèle (consigne T4b de `DECISIONS_LOT2.md`) : succès du web (l.164), refus serveur
+        /// verbatim sauf la surcharge du code inconnu, textes des reçus (`RecuScan`), textes opérationnels ci-dessus.
+        public static func message(_ issue: PointageModel.Issue) -> Message {
+            let web = LibellesWeb.Pointage.self
+            switch issue {
+            case let .enregistre(type):
+                return Message(texte: type == .ouverture ? web.enregistreOuvert : web.enregistreFerme, ton: .succes)
+            case let .enregistreSurAutreMission(type, _):
+                return Message(texte: type == .ouverture ? web.enregistreOuvert : web.enregistreFerme, ton: .succes,
+                               detail: autreMission)
+            case let .refuse(message, codeInvalide):
+                return Message(texte: codeInvalide ? self.codeInvalide : message, ton: .erreur)
+            case .horsLigne:
+                return Message(texte: horsLigne, ton: .attention)
+            case .verification:
+                return Message(texte: verification, ton: .info)
+            case .nonRecu:
+                return Message(texte: nonRecu, ton: .attention)
+            case .recuEnCours:
+                return Message(texte: RecuScan.messageRecuEnCours, ton: .attention)
+            case .suiviIllisible:
+                return Message(texte: RecuScan.messageIllisible, ton: .erreur, renvoiWeb: true)
+            case let .erreur(message):
+                return Message(texte: message, ton: .erreur)
+            }
+        }
+
+        /// Libellé du bouton (l.106-108).
+        public static func action(_ action: PointageRules.ActionAffichee) -> String {
+            let web = LibellesWeb.Pointage.self
+            switch action {
+            case .departOuPause: return web.pointerDepartOuPause
+            case .arriveeOuReprise: return web.pointerArriveeOuReprise
+            case .arrivee: return web.pointerArrivee
+            }
+        }
+
+        /// Consigne sous le titre (l.210-212).
+        public static func consigne(segmentOuvert: Bool) -> String {
+            segmentOuvert ? LibellesWeb.Pointage.consigneDepart : LibellesWeb.Pointage.consigne
+        }
+
+        /// « En service depuis 23h00 » (l.204) ; nil si le début du segment est illisible.
+        public static func enService(depuis debut: String) -> String? {
+            lire(debut).map { LibellesWeb.Pointage.enServiceDepuis + " " + DateHeureParis.format($0, "HH'h'mm") }
+        }
+
+        /// Ligne d'un segment (l.259-269).
+        public struct LigneSegment: Equatable, Sendable {
+            public let titre: String
+            public let horaire: String
+
+            public init(titre: String, horaire: String) { self.titre = titre; self.horaire = horaire }
+        }
+
+        /// « Segment n » puis le début (`d MMM · HH'h'mm` sur plusieurs jours, sinon `HH'h'mm`) et « → fin » ou
+        /// « → en cours » ; nil si une borne est illisible (le web lèverait).
+        public static func segment(numero: Int, _ segment: SegmentPointage, plusieursJours: Bool) -> LigneSegment? {
+            let web = LibellesWeb.Pointage.self
+            guard let debut = lire(segment.debut) else { return nil }
+            var horaire = DateHeureParis.format(debut, plusieursJours ? "d MMM · HH'h'mm" : "HH'h'mm") + " "
+            if let finTexte = segment.fin, !finTexte.isEmpty {
+                guard let fin = lire(finTexte) else { return nil }
+                horaire += LibellesWeb.ListePresences.fleche + " " + DateHeureParis.format(fin, "HH'h'mm")
+            } else {
+                horaire += web.enCours
+            }
+            return LigneSegment(titre: web.segment + " " + String(numero), horaire: horaire)
+        }
+
+        /// Retour de la feuille de consentement et de l'interrupteur du Profil : textes de `TextesWeb` (HARD STOP n°4),
+        /// ou message levé par le port.
+        public static func retourConsentement(_ retour: ConsentementGpsModel.Retour) -> String {
+            switch retour {
+            case .enregistre: return TextesWeb.Presences.consentementGpsEnregistre
+            case .sansGps: return TextesWeb.Presences.pointageSansGpsActive
+            case let .bascule(actif): return TextesWeb.ProfilConsentementGps.retourBascule(consentementActif: actif)
+            case let .echec(message): return message
+            }
+        }
+
+        /// Ton du retour : notifications du web (`succes` / `info`, `PresencesSoignant.tsx` l.76, l.95 ;
+        /// `SectionPreferences.tsx` l.159), erreur pour un échec.
+        public static func tonConsentement(_ retour: ConsentementGpsModel.Retour) -> Ton {
+            switch retour {
+            case .enregistre: return .succes
+            case .sansGps: return .info
+            case let .bascule(actif): return actif ? .succes : .info
+            case .echec: return .erreur
+            }
+        }
+
+        /// Encart après un pointage dont la position n'a pas pu être jointe faute de précision (décision 5).
+        public static func encartPosition(_ observation: ObservationGps?) -> String? {
+            observation == .precisionReduite ? positionApproximative : nil
+        }
     }
 
     /// `String(n)` de JavaScript pour une durée : entier sans décimale, sinon l'écriture la plus courte qui relit la
