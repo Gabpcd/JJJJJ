@@ -549,6 +549,74 @@ jobs:
           DUREE: ${{ steps.build.outputs.duree_build_s }}
         run: |
           echo "- durée build-for-testing : ${DUREE}s" >> "$GITHUB_STEP_SUMMARY"
+      - name: Attentes bloquées absorbées (relevé, n’échoue pas le job)
+        if: always() && steps.build.outcome == 'success'
+        # `require` (ios-native/JoleneUITests/UITestSupport.swift) joint `<préfixe>-attente-bloquee-
+        # <fichier>-<ligne>.txt` à chaque attente qui a mesuré du temps non décompté, réussie ou non.
+        # Un dépassement du budget de blocage fait déjà échouer le test ; les blocages ABSORBÉS sous
+        # le budget, eux, ne doivent pas passer inaperçus dans un job vert : ils sont relevés depuis
+        # le manifest.json de `xcresulttool export attachments` (étape « Résumé xcresult »), en
+        # section du résumé et en annotation sur la ligne de l’appelant (GitHub n’affiche que les
+        # 10 premières annotations d’une étape ; le tableau du résumé les liste toutes). Relevé
+        # d’information seulement : il ne décide jamais du statut du job (continue-on-error).
+        continue-on-error: true
+        run: |
+          # shellcheck disable=SC2016
+          node --input-type=module -e '
+            import { readFileSync, existsSync, appendFileSync } from "node:fs";
+            import { join } from "node:path";
+            const format = process.env.JOLENE_UI_FORMAT;
+            const attachments = join(process.env.JOLENE_UI_OUTPUT, "attachments");
+            const manifeste = join(attachments, "manifest.json");
+            // Échappements des commandes de workflow GitHub (message, puis propriétés) et des cellules Markdown.
+            const esc = v => String(v).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+            const prop = v => esc(v).replace(/:/g, "%3A").replace(/,/g, "%2C");
+            const cell = v => String(v).replace(/\|/g, "\\|").replace(/\s+/g, " ");
+            const lignes = ["", `#### Attentes bloquées absorbées — ${format}`, ""];
+            let tests = null;
+            try { tests = JSON.parse(readFileSync(manifeste, "utf8")); } catch { tests = null; }
+            if (!Array.isArray(tests)) {
+              lignes.push(`- ${existsSync(manifeste) ? "manifest.json illisible" : "aucun manifest.json exporté"} : attentes bloquées NON relevées par ce run`);
+              console.log(`::warning::Attentes bloquées non relevées (${format}) : manifest.json des pièces jointes absent ou illisible.`);
+            } else {
+              const bloquees = [];
+              for (const t of tests) for (const a of t.attachments ?? []) {
+                const nom = a.suggestedHumanReadableName ?? "";
+                if (!nom.includes("-attente-bloquee-")) continue;
+                let texte = "";
+                try { texte = readFileSync(join(attachments, a.exportedFileName ?? ""), "utf8"); } catch { texte = ""; }
+                const champ = libelle => texte.match(new RegExp(`^${libelle} : (.+)$`, "m"))?.[1].trim();
+                // Appelant : ligne « Appelant : Fichier.swift:N » du rapport, à défaut le nom de la pièce
+                // jointe (`<préfixe>-attente-bloquee-<Fichier>-<N>_<rang>_<UUID>.txt` une fois exportée).
+                const parRapport = (champ("Appelant") ?? "").match(/^(.+\.swift):(\d+)$/);
+                const parNom = nom.match(/-attente-bloquee-(.+)-(\d+)(?:_\d+_[0-9A-Fa-f-]+)?\.txt$/);
+                bloquees.push({
+                  test: t.testIdentifier ?? "?",
+                  fichier: parRapport?.[1] ?? (parNom ? `${parNom[1]}.swift` : null),
+                  ligne: parRapport?.[2] ?? parNom?.[2] ?? null,
+                  attente: champ("Attente") ?? "?",
+                  nonDecompte: (champ("Temps non décompté") ?? "").match(/^\d+(?:[,.]\d+)? s/)?.[0] ?? "?",
+                  budget: champ("Budget de blocage") ?? "?",
+                  issue: champ("Issue") ?? "?",
+                });
+              }
+              if (!bloquees.length) {
+                lignes.push("- aucune : aucun `require` n’a mesuré de temps non décompté");
+              } else {
+                lignes.push(`${bloquees.length} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app). Relevé d’information : le job n’échoue pas pour cela.`, "",
+                  "| Test | Appelant | Attente | Non décompté | Budget de blocage | Issue |", "| --- | --- | --- | --- | --- | --- |");
+                for (const b of bloquees) {
+                  const appelant = b.fichier ? `${b.fichier}:${b.ligne}` : "?";
+                  lignes.push(`| ${cell(b.test)} | \`${cell(appelant)}\` | ${cell(b.attente)} | ${cell(b.nonDecompte)} | ${cell(b.budget)} | ${cell(b.issue)} |`);
+                  const message = `Attente bloquée absorbée (${format}) : « ${b.attente} », ${b.nonDecompte} non décomptées (budget de blocage ${b.budget}), ${b.issue} — ${b.test}`;
+                  const cible = b.fichier && b.ligne ? ` file=${prop(`ios-native/JoleneUITests/${b.fichier}`)},line=${prop(b.ligne)}` : "";
+                  console.log(`::warning${cible}::${esc(message)}`);
+                }
+              }
+            }
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, lignes.join("\n") + "\n");
+            console.log(lignes.join("\n"));
+          '
       - name: Conserver xcresult, captures et journaux
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

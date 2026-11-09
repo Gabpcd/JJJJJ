@@ -24,6 +24,7 @@
 		496EB218D427D36B5164DC14 /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B12ED2CF03F5935EB224B9A /* AppContainer.swift */; };
 		4BB07F8A188E0551BB6B7248 /* AjoutCalendrierMission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92467ECFCEBFFC4A3024CA6F /* AjoutCalendrierMission.swift */; };
 		4CB0366CDA13BFA04A0DB949 /* DemoProfilTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D65489D1594FDE00944062B4 /* DemoProfilTests.swift */; };
+		532D43C9A52E76371B8A4F41 /* RequireWait.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E527A9BA6B3A31C47A4F66 /* RequireWait.swift */; };
 		55081F4F43971CF1AF949846 /* ResumePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F564268833C084BE055A9D3 /* ResumePolicy.swift */; };
 		5E0893D0CB68B03799F6D7D9 /* StagingConnexionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */; };
 		634E2F09A431203F99161794 /* SuppressionCompteScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D38838D39EB705DD25FE585 /* SuppressionCompteScreen.swift */; };
@@ -130,6 +131,7 @@
 		D05CBBCD86659DF4895A2323 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		D53B5D8BDE7DBB54BF682E49 /* DemoPushTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPushTests.swift; sourceTree = "<group>"; };
 		D65489D1594FDE00944062B4 /* DemoProfilTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoProfilTests.swift; sourceTree = "<group>"; };
+		E1E527A9BA6B3A31C47A4F66 /* RequireWait.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RequireWait.swift; path = ../Packages/JoleneCore/Tests/JoleneCoreTests/PartageUITests/RequireWait.swift; sourceTree = "<group>"; };
 		E98C75CA1BDE25BD8822BDE0 /* ProfileScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileScreen.swift; sourceTree = "<group>"; };
 		F3280662B63B64903F06565E /* MotDePasseScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotDePasseScreen.swift; sourceTree = "<group>"; };
 		F3E8673ADB03568DA5632CFC /* MissionMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionMapView.swift; sourceTree = "<group>"; };
@@ -329,6 +331,7 @@
 				D65489D1594FDE00944062B4 /* DemoProfilTests.swift */,
 				D53B5D8BDE7DBB54BF682E49 /* DemoPushTests.swift */,
 				CA8934442A0F8427B109291C /* EnvironmentGuardTests.swift */,
+				E1E527A9BA6B3A31C47A4F66 /* RequireWait.swift */,
 				6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */,
 				23E960FB56B5063137621FDF /* UITestSupport.swift */,
 			);
@@ -497,6 +500,7 @@
 				4CB0366CDA13BFA04A0DB949 /* DemoProfilTests.swift in Sources */,
 				E8D148067CBC8F1EEAB9AFCD /* DemoPushTests.swift in Sources */,
 				8FF2D016E024DEC2B0131A7E /* EnvironmentGuardTests.swift in Sources */,
+				532D43C9A52E76371B8A4F41 /* RequireWait.swift in Sources */,
 				5E0893D0CB68B03799F6D7D9 /* StagingConnexionTests.swift in Sources */,
 				C4E13AFC9C0C982BCDCF06D0 /* UITestSupport.swift in Sources */,
 			);
