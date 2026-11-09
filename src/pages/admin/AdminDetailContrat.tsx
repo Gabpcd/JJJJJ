@@ -8,6 +8,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { CardY2K } from '@/components/y2k/CardY2K';
+import { estContratSalarie } from '@/lib/typesContrat';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -238,9 +239,9 @@ export default function AdminDetailContrat() {
         )}
       </CardY2K>
 
-      {/* DPAE */}
-      {(contrat.type_contrat === 'CDD' || contrat.type_contrat === 'SALARIE') && (
-        <CardY2K hoverLift={false} className="mb-6">
+      {/* DPAE — contrats salariés (CDD, CDDU, VACATION), source unique @/lib/typesContrat */}
+      {estContratSalarie(contrat.type_contrat) && (
+        <CardY2K hoverLift={false} className="mb-6" data-testid="carte-dpae-admin">
           <h2 className="text-sm font-bold text-foreground mb-2">DPAE</h2>
           {contrat.dpae_effectuee && contrat.dpae_numero ? (
             <div className="text-xs space-y-1">

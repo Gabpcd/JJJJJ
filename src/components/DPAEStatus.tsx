@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FileText, Copy, ExternalLink, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
+import { estContratSalarie } from '@/lib/typesContrat';
 
 interface Props {
   contratId: string;
@@ -14,15 +15,16 @@ interface Props {
 /**
  * Composant DPAE (PR 6 Sprint 1).
  *
- * Affiche pour les contrats CDD :
+ * Affiche pour les contrats salariés (CDD, CDDU, VACATION, SALARIE — source
+ * unique `estContratSalarie`) :
  *   - Si pas encore transmise : bouton "Préparer les données DPAE" qui appelle
  *     fn_generer_donnees_dpae et affiche les données à reporter sur
  *     net-entreprises.fr.
  *   - Après soumission URSSAF : champ pour saisir le n° DPAE retourné,
  *     enregistré via fn_enregistrer_numero_dpae.
  *
- * Pour les contrats LIBERAL : le composant ne s'affiche pas (DPAE non
- * requise — relation B2B).
+ * Pour les contrats libéraux (REMPLACEMENT_LIBERAL, LIBERAL) : le composant ne
+ * s'affiche pas (DPAE non requise — relation B2B).
  */
 export function DPAEStatus({ contratId, typeContrat, dpaeNumero, cadreDeclareParEmployeur = false }: Props) {
   const { afficherNotification } = useNotification();
@@ -31,8 +33,10 @@ export function DPAEStatus({ contratId, typeContrat, dpaeNumero, cadreDeclarePar
   const [numeroSaisi, setNumeroSaisi] = useState(dpaeNumero || '');
   const [saved, setSaved] = useState(!!dpaeNumero);
 
-  // Ne pas afficher pour les contrats libéraux (DPAE non requise)
-  const requiresDpae = typeContrat && ['CDD', 'SALARIE'].includes(typeContrat);
+  // Ne pas afficher pour les contrats libéraux (DPAE non requise). Les RPC
+  // fn_generer_donnees_dpae et fn_enregistrer_numero_dpae ne filtrent pas le
+  // type de contrat : elles acceptent CDDU et VACATION.
+  const requiresDpae = estContratSalarie(typeContrat);
 
   // Si déjà saisi à l'initial, considérer comme saved
   useEffect(() => {
@@ -97,7 +101,7 @@ export function DPAEStatus({ contratId, typeContrat, dpaeNumero, cadreDeclarePar
 
   if (saved) {
     return (
-      <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 p-4 flex items-start gap-3">
+      <div data-testid="dpae-statut" data-etat="declaree" className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 p-4 flex items-start gap-3">
         <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
         <div>
           <p className="font-semibold text-emerald-900 dark:text-emerald-200">DPAE déclarée</p>
@@ -110,7 +114,7 @@ export function DPAEStatus({ contratId, typeContrat, dpaeNumero, cadreDeclarePar
   }
 
   return (
-    <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 p-4 space-y-3">
+    <div data-testid="dpae-statut" data-etat="a-declarer" className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 p-4 space-y-3">
       <div className="flex items-start gap-2">
         <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
         <div className="flex-1">

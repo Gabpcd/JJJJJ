@@ -22,6 +22,7 @@ import SignatureCanvas from '@/components/SignatureCanvas';
 import { SignerContratOtp } from '@/components/SignerContratOtp';
 import { CertificatSignature } from '@/components/CertificatSignature';
 import { DPAEStatus } from '@/components/DPAEStatus';
+import { estContratSalarie } from '@/lib/typesContrat';
 import { sanitizeHTML } from '@/lib/sanitize';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { logger } from '@/lib/logger';
@@ -58,11 +59,6 @@ function formatContractBirthDate(value?: string | null): string {
 function replaceTemplateVariables(template: string, values: Record<string, string>): string {
   return template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, rawKey) => values[rawKey.trim()] ?? '');
 }
-
-// Types de contrat dont le pied de page porte la mention « Contrat salarié écrit ».
-// CDDU et VACATION sont des contrats salariés : décision de Gabrielle du 08/11/2026
-// (HARD STOP n°4), ils ne reçoivent plus la mention de prestation libérale.
-export const TYPES_CONTRAT_MENTION_SALARIEE = ['CDD', 'SALARIE', 'CDDU', 'VACATION'];
 
 function cddSansOriginal(contrat: any): boolean {
   return contrat?.type_contrat === 'CDD' && !contratPossedeSignature(contrat)
@@ -643,10 +639,11 @@ export default function ContratMission() {
           )}
         </div>
 
-        {/* DPAE : l'employeur peut la préparer dès la création du CDD. */}
+        {/* DPAE : l'employeur peut la préparer dès la création d'un contrat salarié
+            (CDD, CDDU, VACATION — source unique @/lib/typesContrat). */}
         {(role === 'ADMIN_ETABLISSEMENT' || role === 'ADMIN_PLATEFORME' || role === 'ADMIN_GROUPE') &&
          !['ANNULE', 'EXPIRE', 'REFUSE'].includes(contrat.statut) &&
-         contrat.type_contrat && ['CDD', 'SALARIE'].includes(contrat.type_contrat) && (
+         estContratSalarie(contrat.type_contrat) && (
           <div className="mb-4">
             <DPAEStatus
               contratId={contrat.id}
@@ -835,7 +832,7 @@ export default function ContratMission() {
 
         <p className="text-[10px] text-muted-foreground/60 italic text-center mt-4">
           {texteEmployeur ? 'Contrat salarié préparé selon le cadre déclaré par l’employeur. '
-            : TYPES_CONTRAT_MENTION_SALARIEE.includes(contrat.type_contrat || '')
+            : estContratSalarie(contrat.type_contrat)
             ? 'Contrat salarié écrit — art. L.1242-12 du Code du travail. '
             : 'Contrat de prestation entre l’établissement et le professionnel libéral. '}
           Signature électronique simple. {!texteEmployeur && 'Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires.'}
