@@ -9,7 +9,7 @@
 // Contexte : docs/GARDES_NULL_SECURITY_DEFINER.md.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { test } from 'node:test';
 
 const read = path => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
@@ -25,17 +25,53 @@ const LIVE = 'tests/security/fixtures/gardes-null-security-definer-live.sql';
 const DERNIERE_VERSION_DISTANTE = '20261102210943';
 const MIGRATION_1124 = '20261108223500';
 // Fichiers de ce lot : aucune chaîne hexadécimale ≥ 32 (GitGuardian, empreintes calculées).
+// Seconde migration du lot : verrou du gap « double facturation » (M2 de la revue
+// B8 ; décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026).
+const MIGRATION_VERROU = '20261109020404_verrou_double_facturation_generer_facture.sql';
+// Bancs PostgreSQL 17 isolés (job paiements-concurrence de validate-pr).
+const BANC = 'tests/security/fixtures/gardes-null-security-definer-banc.sql';
+const BANC_B5B = 'tests/security/fixtures/visibilite-etablissement-permission-banc.sql';
+const ISOLE = 'tests/security/gardes-null-security-definer-isolated.test.sql';
+const REJEU = 'tests/security/gardes-null-security-definer-rejeu.test.sql';
 const FICHIERS_DU_LOT = [
-  `supabase/migrations/${MIGRATION}`, LIVE, SQL_SUITE, DOC,
-  'tests/node/gardes-null-security-definer.node.mjs',
+  `supabase/migrations/${MIGRATION}`, `supabase/migrations/${MIGRATION_VERROU}`, LIVE, BANC, ISOLE, REJEU,
+  SQL_SUITE, DOC, 'tests/node/gardes-null-security-definer.node.mjs',
   'e2e/recette-complete-gardes-null.spec.ts', 'e2e/helpers/recette-complete-gardes-null.ts',
 ];
+const FICHIERS_SQL_DU_LOT = FICHIERS_DU_LOT.filter(chemin => chemin.endsWith('.sql'));
 // Littéral SQL tel que la migration et la recette l'écrivent.
 const litteralSql = v => /[\n\\]/.test(v)
   ? `E'${v.replace(/\\/g, '\\\\').replace(/'/g, "''").replace(/\n/g, '\\n')}'`
   : `'${v.replace(/'/g, "''")}'`;
 
 // ── Analyse ────────────────────────────────────────────────────────────────
+
+// PL/pgSQL : un CASE au niveau 0 d'une condition IF/ELSIF voit son THEN clore la
+// condition (erreur de syntaxe à la compilation du bloc). Renvoie chaque
+// condition fautive, hors littéraux et commentaires.
+export function casesNonParentheses(sql) {
+  const fautes = [];
+  const code = sql.replace(/--[^\n]*/g, '');
+  let dansIf = false, profondeur = 0, caseNu = false, debut = 0;
+  for (const m of code.matchAll(/'(?:[^']|'')*'|\(|\)|\b(?:ELSIF|IF|THEN|CASE)\b/gi)) {
+    const jeton = m[0].toUpperCase();
+    if (jeton.startsWith("'")) continue;
+    if (!dansIf) {
+      if ((jeton === 'IF' || jeton === 'ELSIF') && !/END\s*$/i.test(code.slice(Math.max(0, m.index - 8), m.index))) {
+        dansIf = true; profondeur = 0; caseNu = false; debut = m.index;
+      }
+      continue;
+    }
+    if (jeton === '(') profondeur += 1;
+    else if (jeton === ')') profondeur -= 1;
+    else if (jeton === 'CASE' && profondeur === 0) caseNu = true;
+    else if (jeton === 'THEN' && profondeur === 0) {
+      if (caseNu) fautes.push(code.slice(debut, m.index + 4));
+      dansIf = false;
+    }
+  }
+  return fautes;
+}
 
 export function functions(sql) {
   const out = [];
@@ -528,4 +564,137 @@ test('recette SQL sous ROLLBACK branchée dans validate-pr, documentation et ord
     assert.ok(doc.includes(branche) && doc.includes(version), `${branche} (${version}) absente de l’ordre de merge de ${DOC}`);
     assert.ok(migration.includes(branche) && migration.includes(version), `${branche} (${version}) absente de l’en-tête de la migration`);
   }
+});
+
+test('PL/pgSQL : aucun CASE nu dans une condition IF des fichiers SQL du lot (le THEN du CASE clôturerait le IF)', () => {
+  assert.deepEqual(casesNonParentheses("BEGIN IF x IS DISTINCT FROM CASE a WHEN 1 THEN 2 END THEN NULL; END IF; END;").length, 1);
+  assert.deepEqual(casesNonParentheses("BEGIN IF x IS DISTINCT FROM (CASE a WHEN 1 THEN 2 END) THEN NULL; END IF; v := CASE WHEN b THEN 1 END; END;"), []);
+  for (const chemin of FICHIERS_SQL_DU_LOT) {
+    assert.deepEqual(casesNonParentheses(read(chemin)), [], chemin);
+  }
+});
+
+test('verrou double facturation : seconde migration distincte, REVOKE exact, gardes calculées, dump aligné', () => {
+  const sql = read(`supabase/migrations/${MIGRATION_VERROU}`);
+  const verrous = migrationsDuDepot().filter(name => name.endsWith('_verrou_double_facturation_generer_facture.sql'));
+  assert.deepEqual(verrous, [MIGRATION_VERROU]);
+  assert.ok(MIGRATION_VERROU.slice(0, 14) > MIGRATION.slice(0, 14), 'le verrou suit la migration des gardes NULL');
+  assert.ok(sql.replace(/\n-- /g, ' ').includes('Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026'));
+  const squelette = sql.replace(/--[^\n]*/g, '');
+  assert.doesNotMatch(sql, /^[ \t]*(?:BEGIN|COMMIT|ROLLBACK);[ \t]*$/m);
+  assert.doesNotMatch(squelette, /\bGRANT\b|CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION|\bDROP\b|\bTRUNCATE\b|DELETE\s+FROM|INSERT\s+INTO/i);
+  assert.deepEqual([...squelette.matchAll(/^REVOKE[^;]*;/gm)].map(m => m[0]),
+    ['REVOKE EXECUTE ON FUNCTION public.fn_generer_facture(uuid) FROM PUBLIC, anon, authenticated;']);
+  assert.deepEqual([...squelette.matchAll(/UPDATE\s+([\w.]+)/gi)].map(m => m[1]), ['private.security_definer_inventory']);
+  assert.ok(squelette.indexOf('$verrou_facture_avant$;') < squelette.indexOf('REVOKE EXECUTE'));
+  assert.ok(squelette.indexOf('REVOKE EXECUTE') < squelette.indexOf('DO $verrou_facture_apres$'));
+  for (const garde of ['VERROU_FACTURE_PREFLIGHT_SOURCE_DRIFT', 'VERROU_FACTURE_PREFLIGHT_ACL_DRIFT',
+    'VERROU_FACTURE_PREFLIGHT_INVENTAIRE_DRIFT', 'VERROU_FACTURE_PREFLIGHT_APPELANT_INTERNE',
+    'VERROU_FACTURE_PREFLIGHT_APPELANT_CRON', 'VERROU_FACTURE_POSTFLIGHT_CORPS', 'VERROU_FACTURE_POSTFLIGHT_ACL',
+    'VERROU_FACTURE_POSTFLIGHT_INVENTAIRE']) assert.ok(squelette.includes(garde), garde);
+  // Le préflight exige le corps corrigé par la première migration (ordre des deux migrations).
+  const facture = CORRECTIFS.find(c => c.name === 'fn_generer_facture');
+  assert.ok(squelette.includes(`'${facture.correctif.trim()}'`), 'garde NULL-safe exigée par le préflight');
+  assert.match(squelette, /SET categorie = 'SERVICE_ONLY_REVOQUE'/);
+  assert.match(squelette, /AND i\.definition_md5 = pg_catalog\.md5\(pr\.prosrc\);/);
+  // Dump : plus de GRANT à authenticated, service_role conservé, commentaire identique.
+  const dump = read('supabase/schema/public.sql');
+  const sig = '"public"."fn_generer_facture"("p_mission_id" "uuid")';
+  assert.ok(!dump.includes(`GRANT ALL ON FUNCTION ${sig} TO "authenticated";`));
+  assert.ok(!dump.includes(`GRANT ALL ON FUNCTION ${sig} TO "anon";`));
+  assert.ok(dump.includes(`REVOKE ALL ON FUNCTION ${sig} FROM PUBLIC;`));
+  assert.ok(dump.includes(`GRANT ALL ON FUNCTION ${sig} TO "service_role";`));
+  const commentaire = /COMMENT ON FUNCTION public\.fn_generer_facture\(uuid\) IS ('[^']*');/.exec(sql)?.[1];
+  assert.ok(commentaire && dump.includes(`COMMENT ON FUNCTION ${sig} IS ${commentaire};`), 'commentaire du dump aligné');
+});
+
+test('verrou double facturation : aucun appelant client (web, edge, iOS, mobile, scripts)', () => {
+  const racine = new URL('../../', import.meta.url);
+  const appel = /(?:rpc\(\s*['"`]|\.rpc\(\s*['"`])fn_generer_facture['"`]|['"`]fn_generer_facture['"`]/;
+  const ignores = new Set(['src/integrations/supabase/types.ts']);
+  const trouves = [];
+  const parcourir = rel => {
+    const abs = new URL(rel, racine);
+    if (!existsSync(abs)) return;
+    for (const nom of readdirSync(abs)) {
+      if (nom === 'node_modules' || nom.startsWith('.')) continue;
+      const chemin = `${rel}${nom}`;
+      const st = statSync(new URL(chemin, racine));
+      if (st.isDirectory()) parcourir(`${chemin}/`);
+      else if (/\.(?:ts|tsx|js|mjs|cjs|swift|py|sql)$/.test(nom) && !ignores.has(chemin)
+        && !/\.test\.|\.spec\./.test(nom) && appel.test(read(chemin))) trouves.push(chemin);
+    }
+  };
+  for (const dossier of ['src/', 'supabase/functions/', 'ios-native/', 'mobile-native/', 'scripts/']) parcourir(dossier);
+  assert.deepEqual(trouves, [], 'un appelant client de fn_generer_facture recevrait 42501 : retirer l’appel ou rouvrir la décision (DOC §5)');
+});
+
+test('bancs PostgreSQL 17 isolés : vraies migrations, variantes à demi corrigées, rejeu et corps dérivé, câblage CI', () => {
+  assert.ok(existsSync(new URL(`../../${BANC_B5B}`, import.meta.url)), 'banc B5b réutilisé introuvable');
+  const banc = read(BANC);
+  const isole = read(ISOLE);
+  const rejeu = read(REJEU);
+  assert.match(banc, /^\\ir gardes-null-security-definer-live\.sql$/m);
+  assert.equal([...read(LIVE).matchAll(/\$function\$;\n/g)].length, 20, 'fixture LIVE exécutable (20 définitions terminées)');
+  for (const fichier of [isole, rejeu]) {
+    assert.match(fichier, /^\\ir fixtures\/visibilite-etablissement-permission-banc\.sql$/m);
+    assert.match(fichier, /^\\ir fixtures\/gardes-null-security-definer-banc\.sql$/m);
+    assert.match(fichier, /GARDES_NULL_REQUIRES_EMPTY_ISOLATED_PG17/);
+    assert.match(fichier, /^ROLLBACK;\s*$/m);
+  }
+  for (const m of [MIGRATION, MIGRATION_VERROU]) {
+    assert.ok(isole.includes(`\\ir ../../supabase/migrations/${m}`), `${m} non exécutée par le banc isolé`);
+    assert.ok(rejeu.includes(`\\ir ../../supabase/migrations/${m}`), `${m} non rejouée par le banc rejeu`);
+  }
+  for (const marqueur of ['$demi1$', '$demi2$', 'GARDES_NULL_VARIANTES_DEMI_CORRIGEES_NON_DISCRIMINANTES',
+    'GARDES_NULL_VERROU_FACTURE_APPEL_ACCEPTE', 'GARDES_NULL_ISOLE_OK']) assert.ok(isole.includes(marqueur), marqueur);
+  const workflow = read('.github/workflows/validate-pr.yml');
+  const etape = /- name: Gardes NULL \(B9\) — [^\n]*PostgreSQL 17 isolé\n([\s\S]*?)\n\n/.exec(workflow)?.[1] ?? '';
+  assert.match(etape, /PGOPTIONS: '-c jolene\.isolated_sql_test=on'/);
+  assert.match(etape, /createdb gardes_null_isole/);
+  assert.ok(etape.includes(`-f ${ISOLE}`) && etape.includes(`-f ${REJEU}`));
+  assert.match(etape, /grep -Fq 'GARDES_NULL_ISOLE_OK'/);
+  for (const [scenario, attendu] of [
+    ['rejeu', 'GARDES_NULL_PREFLIGHT_SOURCE_DRIFT: fn_valider_alerte_presence(uuid)'],
+    ['corps_derive', 'GARDES_NULL_POSTFLIGHT_CORPS_OU_ATTRIBUTS: fn_annuler_serie(uuid)'],
+    ['rejeu_verrou', 'VERROU_FACTURE_PREFLIGHT_ACL_DRIFT: fn_generer_facture(uuid)'],
+  ]) {
+    assert.ok(etape.includes(`${scenario})`) && etape.includes(attendu), `${scenario} : ${attendu}`);
+    assert.ok(rejeu.includes(`'${scenario}'`), `${scenario} absent du banc rejeu`);
+  }
+  // Les messages attendus sont ceux que lèvent réellement les migrations.
+  assert.ok(read(`supabase/migrations/${MIGRATION}`).includes("'GARDES_NULL_PREFLIGHT_SOURCE_DRIFT: %'"));
+  assert.ok(read(`supabase/migrations/${MIGRATION}`).includes("'GARDES_NULL_POSTFLIGHT_CORPS_OU_ATTRIBUTS: %'"));
+  assert.ok(read(`supabase/migrations/${MIGRATION_VERROU}`).includes("'VERROU_FACTURE_PREFLIGHT_ACL_DRIFT: fn_generer_facture(uuid)'"));
+});
+
+test('recette SQL : second prédicat de fn_presences_detail_mission, contexte système, réponses positives et verrou facture', () => {
+  const sql = read(SQL_SUITE);
+  // M1 : mission sans soignant assigné, refus S, T, R, B, SYS ; A et ADM passent.
+  assert.match(sql, /\(24, format\('SELECT to_jsonb\(public\.fn_presences_detail_mission\(%L::uuid\)\)', m_ouv\),\n\s+jsonb_build_object\('error', 'Accès refusé'\), ARRAY\['S','T','R','B','SYS'\], ARRAY\['A','ADM'\],/);
+  // m1 : l'admin plateforme est refusé dans la branche établissement de la réclamation.
+  assert.match(sql, /ARRAY\['S','T','R','B','ADM'\], ARRAY\['A'\],/);
+  // m2 : contexte système refusé sur les quinze fonctions sans garde auth.uid() IS NULL.
+  const lignes = [...sql.matchAll(/\((\d+), format\('SELECT [^\n]*?public\.(\w+)\(/g)].map(m => ({ ordre: +m[1], fonction: m[2] }));
+  const blocs = sql.split(/\n      \((?=\d+, format\()/).slice(1);
+  const sysRefuse = new Set();
+  for (const bloc of blocs) {
+    const fonction = /public\.(\w+)\(/.exec(bloc)?.[1];
+    const refuses = /ARRAY\[([^\]]*)\], ARRAY\[/.exec(bloc)?.[1] ?? '';
+    if (refuses.includes("'SYS'")) sysRefuse.add(fonction);
+  }
+  const quinze = ['fn_valider_alerte_presence', 'fn_codes_pointage_mission', 'fn_soignants_urgence', 'fn_rebooker_soignant',
+    'fn_booster_mission', 'fn_presences_detail_mission', 'fn_activer_garantie_mission', 'fn_deposer_chorus', 'fn_generer_facture',
+    'fn_diffuser_pool_urgence', 'fn_etablissement_pour_mission', 'fn_annuler_serie', 'fn_assigner_mission_admin',
+    'fn_declarer_honoraires_retrocession', 'fn_definir_retrocession_mission'];
+  assert.ok(lignes.length >= 24);
+  assert.deepEqual([...sysRefuse].sort(), [...quinze].sort());
+  // m3 : plus d'« exception quelconque = passage » ; une réponse positive par cas.
+  assert.match(sql, /num_nonnulls\(attendu, contient, etat_attendu, reference\) <> 1/);
+  assert.doesNotMatch(sql, /une exception levée après coup/);
+  assert.match(sql, /IF n_refus <> 103 OR n_passe <> 52/);
+  // M2 : appel authenticated et anon refusés en 42501.
+  assert.match(sql, /EXECUTE format\('SET LOCAL ROLE %I', v_role\);/);
+  assert.match(sql, /EXCEPTION WHEN insufficient_privilege THEN v_refus := true;/);
+  assert.match(sql, /IF n_verrou <> 4 THEN/);
 });

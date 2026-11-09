@@ -6,14 +6,30 @@
 -- Matrice : soignant assigné (S), soignant tiers (T), membre révoqué de
 -- l'établissement A (R) — tous trois sans établissement actif, donc
 -- mon_etablissement_id() NULL — RH d'un autre établissement (B), propriétaire
--- de A (A) et administrateur plateforme (ADM).
+-- de A (A), administrateur plateforme (ADM) et contexte système (SYS :
+-- auth.uid() NULL, rôle service_role des claims, comme le banc de cette suite).
 --   * refus : réponse de refus exacte, puis aucun effet (missions, présence,
 --     contrat, événement de score, codes, QR, file escrow, factures,
 --     réclamations, notifications identiques à l'instantané) ;
---   * appelant légitime : la garde laisse passer. Chaque cas est annulé par
---     une sentinelle. Toutes ces gardes refusent par RETURN et seules des
---     lectures de fixtures les précèdent : une exception levée après coup
---     (contrôle métier, conformité) prouve donc aussi le passage de la garde.
+--   * appelant légitime : réponse POSITIVE attendue, fixée par cas et annulée
+--     par une sentinelle. Une seule forme par cas : réponse exacte
+--     (attendu), objet contenu (contient), contrôle métier exact levé APRÈS
+--     la garde (SQLSTATE et message, lus dans le code LIVE), ou réponse égale
+--     à celle de la suite métier appelée directement dans le même contexte
+--     (référence). Toute autre réponse ou exception fait échouer la suite.
+-- SYS : refusé par les 15 fonctions sans garde auth.uid() IS NULL préalable
+-- (docs/GARDES_NULL_SECURITY_DEFINER.md §2) ; la fiche d'un établissement
+-- ayant une mission OUVERTE lui reste visible, comme à tout compte.
+-- fn_presences_detail_mission : sur la mission assignée (cas 11) ET sur la
+-- mission sans soignant assigné (cas 24) ; le cas 24 exerce la seconde
+-- comparaison (soignant_assigne_id = auth.uid()) et refuse S, T, R, B, SYS.
+-- fn_creer_reclamation_score, branche établissement : l'admin plateforme est
+-- refusé (cas 21) ; une réclamation de score se dépose depuis un
+-- établissement (décision prise par Claude sur délégation explicite de
+-- Gabrielle du 08/11/2026).
+-- Verrou double facturation (migration 20261109020404) : fn_generer_facture
+-- n'est plus exécutable par authenticated ni anon (42501), service_role garde
+-- EXECUTE.
 -- fn_soignants_urgence et fn_diffuser_pool_urgence : un soignant fixture (U),
 -- disponible en urgence, éligible et de la même cohorte test que A, rend le
 -- pool non vide (précondition vérifiée) ; les autres soignants éligibles sont
@@ -25,6 +41,23 @@
 -- (fix/visibilite-etablissement-par-permission) porte sa garde et sa recette.
 \set ON_ERROR_STOP on
 BEGIN;
+
+-- Identité JWT d'un acteur ; NULL = contexte système (service_role sans sub).
+CREATE FUNCTION pg_temp.gn_identite(p_uid uuid) RETURNS void
+LANGUAGE plpgsql AS $gn_identite$
+BEGIN
+  IF p_uid IS NULL THEN
+    PERFORM set_config('request.jwt.claim.sub', '', true);
+    PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+    PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  ELSE
+    PERFORM set_config('request.jwt.claim.sub', p_uid::text, true);
+    PERFORM set_config('request.jwt.claim.role', '', true);
+    PERFORM set_config('request.jwt.claims',
+      jsonb_build_object('sub', p_uid, 'role', 'authenticated', 'aal', 'aal1')::text, true);
+  END IF;
+END
+$gn_identite$;
 
 DO $gardes_null$
 DECLARE
@@ -54,8 +87,16 @@ DECLARE
   v_etat text;
   v_msg text;
   r jsonb;
+  r_ref jsonb;
+  etat_ref text;
+  msg_ref text;
+  v_ok boolean;
+  v_refus boolean;
+  v_role text;
+  v_codes jsonb;
   n_refus integer := 0;
   n_passe integer := 0;
+  n_verrou integer := 0;
 BEGIN
   -- Les 20 corps corrigés sont en place (garde corrigée présente une fois, garde
   -- LIVE absente), l'inventaire suit le corps (empreinte calculée, aucune en
@@ -132,7 +173,9 @@ BEGIN
         AND pg_catalog.strpos(p.prosrc, v.ancienne_garde) = 0
         AND i.definition_md5 = pg_catalog.md5(p.prosrc)
         AND NOT pg_catalog.has_function_privilege('anon', p.oid, 'EXECUTE')
+        -- Verrou double facturation (20261109020404) : seule exception.
         AND pg_catalog.has_function_privilege('authenticated', p.oid, 'EXECUTE')
+            = (v.signature <> 'fn_generer_facture(uuid)')
         AND pg_catalog.has_function_privilege('service_role', p.oid, 'EXECUTE')) <> 20 THEN
     RAISE EXCEPTION 'GARDES_NULL : corps, inventaire ou ACL non conformes à la migration';
   END IF;
@@ -267,88 +310,136 @@ BEGIN
     PERFORM set_config('request.jwt.claim.role', '', true);
     PERFORM set_config('request.jwt.claims', '{}', true);
 
+    -- Réponse positive d'un passant : exactement une des quatre formes.
     CREATE TEMP TABLE gardes_null_cas (
       ordre integer PRIMARY KEY,
       appel text NOT NULL,
       refus jsonb NOT NULL,
       refuses text[] NOT NULL,
       passants text[] NOT NULL,
-      attendu jsonb
+      attendu jsonb,
+      contient jsonb,
+      etat_attendu text,
+      messages_attendus text[],
+      reference text
     ) ON COMMIT DROP;
+    v_codes := (SELECT jsonb_build_object('code_arrivee', m.code_arrivee, 'code_depart', m.code_depart)
+                  FROM public.missions m WHERE m.id = m_ouv);
+    IF v_codes->>'code_arrivee' IS NULL OR v_codes->>'code_depart' IS NULL THEN
+      RAISE EXCEPTION 'GARDES_NULL fixture : codes statiques de m_ouv non posés à l''insertion (%)', v_codes;
+    END IF;
+    -- (ordre, appel, refus, refusés, passants, attendu, contient, état, messages, référence)
     INSERT INTO gardes_null_cas VALUES
       (1, format('SELECT to_jsonb(public.fn_valider_alerte_presence(%L::uuid))', p_pres),
-       jsonb_build_object('error', 'Accès refusé'), ARRAY['S','T','R','B'], ARRAY['A','ADM'], NULL),
+       jsonb_build_object('error', 'Accès refusé'), ARRAY['S','T','R','B','SYS'], ARRAY['A','ADM'],
+       -- Après la garde, l'UPDATE de la présence atteint trg_bloquer_validation_presence_avant_fin_planning
+       -- (mission à venir) : contrôle métier exact, jamais atteint par un refus.
+       NULL, NULL, 'P0001', ARRAY['La présence ne peut être validée avant la fin du dernier créneau planifié.',
+                                 'Le planning détaillé doit être terminé avant validation de la présence.'], NULL),
       (2, format('SELECT to_jsonb(public.fn_codes_pointage_mission(%L::uuid))', m_ouv),
-       jsonb_build_object('error', 'Accès interdit'), ARRAY['S','T','R','B'], ARRAY['A','ADM'], NULL),
+       jsonb_build_object('error', 'Accès interdit'), ARRAY['S','T','R','B','SYS'], ARRAY['A','ADM'],
+       v_codes, NULL, NULL, NULL, NULL),
       (3, format('SELECT to_jsonb(public.fn_generer_code_secours_mission(%L::uuid, %L))', m_ouv, 'UNIVERSEL'),
-       jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE'), ARRAY['S','T','R','B'], ARRAY['A','ADM'], NULL),
+       jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE'), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
+       -- Après la garde, l'INSERT atteint trg_01_exiger_conformite_code_secours_mission (mission OUVERTE).
+       NULL, NULL, '23514', ARRAY['Le code de pointage ne peut être généré qu''après affectation.'], NULL),
       (4, format('SELECT to_jsonb(public.fn_generer_qr_mission(%L::uuid, %L))', m_term, 'UNIVERSEL'),
        jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE'), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
-       jsonb_build_object('success', false, 'error_code', 'MISSION_INACTIVE')),
+       jsonb_build_object('success', false, 'error_code', 'MISSION_INACTIVE'), NULL, NULL, NULL, NULL),
       (5, format('SELECT to_jsonb(public.fn_regenerer_qr_mission(%L::uuid, %L))', m_term, 'UNIVERSEL'),
        jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE'), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
-       jsonb_build_object('success', false, 'error_code', 'MISSION_INACTIVE')),
+       jsonb_build_object('success', false, 'error_code', 'MISSION_INACTIVE'), NULL, NULL, NULL, NULL),
       (6, format('SELECT jsonb_build_object(''lignes'', count(*), ''u'', count(*) FILTER (WHERE soignant_id = %L::uuid AND telephone = %L)) FROM public.fn_soignants_urgence(%L::uuid)', u_u, tel_u, m_ouv),
-       jsonb_build_object('lignes', 0, 'u', 0), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
-       jsonb_build_object('lignes', 1, 'u', 1)),
+       jsonb_build_object('lignes', 0, 'u', 0), ARRAY['S','T','R','B','SYS'], ARRAY['A','ADM'],
+       jsonb_build_object('lignes', 1, 'u', 1), NULL, NULL, NULL, NULL),
       (7, format('SELECT to_jsonb(public.fn_generer_donnees_dpae(%L::uuid))', c_contrat),
-       jsonb_build_object('success', false, 'error', 'Non autorisé'), ARRAY['S','T','R','B'], ARRAY['A','ADM'], NULL),
+       jsonb_build_object('success', false, 'error', 'Non autorisé'), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
+       NULL, jsonb_build_object('success', true, 'contrat_id', c_contrat, 'type_contrat', 'CDD'), NULL, NULL, NULL),
       (8, format('SELECT to_jsonb(public.fn_enregistrer_numero_dpae(%L::uuid, %L))', c_contrat, 'GNULL2026A1'),
-       jsonb_build_object('success', false, 'error', 'Non autorisé'), ARRAY['S','T','R','B'], ARRAY['A','ADM'], NULL),
+       jsonb_build_object('success', false, 'error', 'Non autorisé'), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
+       jsonb_build_object('success', true, 'dpae_numero', 'GNULL2026A1'), NULL, NULL, NULL, NULL),
       (9, format('SELECT to_jsonb(public.fn_rebooker_soignant(%L::uuid, %L::uuid, now() - interval ''1 day'', now()))', u_s, m_ouv),
-       jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
-       jsonb_build_object('error', 'Dates invalides (le début doit être dans le futur).')),
+       jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R','B','SYS'], ARRAY['A','ADM'],
+       jsonb_build_object('error', 'Dates invalides (le début doit être dans le futur).'), NULL, NULL, NULL, NULL),
       (10, format('SELECT to_jsonb(public.fn_booster_mission(%L::uuid))', m_term),
-       jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
-       jsonb_build_object('error', 'Seule une mission ouverte peut être boostée.')),
+       jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R','B','SYS'], ARRAY['A','ADM'],
+       jsonb_build_object('error', 'Seule une mission ouverte peut être boostée.'), NULL, NULL, NULL, NULL),
       (11, format('SELECT to_jsonb(public.fn_presences_detail_mission(%L::uuid))', m_term),
-       jsonb_build_object('error', 'Accès refusé'), ARRAY['T','R','B'], ARRAY['S','A','ADM'], NULL),
+       jsonb_build_object('error', 'Accès refusé'), ARRAY['T','R','B','SYS'], ARRAY['S','A','ADM'],
+       NULL, jsonb_build_object('pointage_effectue', true, 'valide', false, 'alerte_teleportation', false), NULL, NULL, NULL),
       (12, format('SELECT to_jsonb(public.fn_activer_garantie_mission(%L::uuid, true))', m_term),
-       jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
-       jsonb_build_object('error', 'La garantie ne peut être modifiée que sur une mission ouverte ou assignée.')),
+       jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R','B','SYS'], ARRAY['A','ADM'],
+       jsonb_build_object('error', 'La garantie ne peut être modifiée que sur une mission ouverte ou assignée.'), NULL, NULL, NULL, NULL),
       (13, format('SELECT to_jsonb(public.fn_generer_facture(%L::uuid))', m_ouv),
-       '{"error":"Accès refusé"}'::jsonb, ARRAY['S','T','R','B'], ARRAY['A','ADM'],
-       '{"error":"La mission doit être TERMINEE"}'::jsonb),
+       '{"error":"Accès refusé"}'::jsonb, ARRAY['S','T','R','B','SYS'], ARRAY['A','ADM'],
+       '{"error":"La mission doit être TERMINEE"}'::jsonb, NULL, NULL, NULL, NULL),
       (14, format('SELECT to_jsonb(public.fn_diffuser_pool_urgence(%L::uuid))', m_ouv),
-       to_jsonb(0), ARRAY['S','T','R','B'], ARRAY['A','ADM'], to_jsonb(1)),
+       to_jsonb(0), ARRAY['S','T','R','B','SYS'], ARRAY['A','ADM'], to_jsonb(1), NULL, NULL, NULL, NULL),
       (15, format('SELECT to_jsonb(public.fn_deposer_chorus(%L::uuid, %L))', f_fact, 'CHORUS-GARDES-NULL'),
-       '{"error":"Accès refusé"}'::jsonb, ARRAY['S','T','R','B'], ARRAY['A','ADM'], NULL),
+       '{"error":"Accès refusé"}'::jsonb, ARRAY['S','T','R','B','SYS'], ARRAY['A','ADM'],
+       '{"success":true}'::jsonb, NULL, NULL, NULL, NULL),
       (16, format('SELECT to_jsonb(public.fn_etablissement_pour_mission(%L::uuid))', e_b),
-       jsonb_build_object('error', 'Accès refusé'), ARRAY['S','T','R','A'], ARRAY['B','ADM'], NULL),
-      -- Une mission OUVERTE rend la fiche de A visible à tout compte : inchangé.
+       jsonb_build_object('error', 'Accès refusé'), ARRAY['S','T','R','A','SYS'], ARRAY['B','ADM'],
+       NULL, jsonb_build_object('id', e_b, 'nom', 'Fixture gardes NULL B'), NULL, NULL, NULL),
+      -- Une mission OUVERTE rend la fiche de A visible à tout compte, contexte système compris : inchangé.
       (17, format('SELECT to_jsonb(public.fn_etablissement_pour_mission(%L::uuid))', e_a),
-       jsonb_build_object('error', 'Accès refusé'), ARRAY[]::text[], ARRAY['S','T','R','B','A','ADM'], NULL),
+       jsonb_build_object('error', 'Accès refusé'), ARRAY[]::text[], ARRAY['S','T','R','B','A','ADM','SYS'],
+       NULL, jsonb_build_object('id', e_a, 'nom', 'Fixture gardes NULL A'), NULL, NULL, NULL),
       (18, format('SELECT to_jsonb(public.fn_annuler_serie(%L::uuid))', serie),
-       '{"error":"Accès refusé"}'::jsonb, ARRAY['S','T','R'], ARRAY['A','B','ADM'],
-       jsonb_build_object('success', true, 'missions_annulees', 0)),
+       '{"error":"Accès refusé"}'::jsonb, ARRAY['S','T','R','SYS'], ARRAY['A','B','ADM'],
+       jsonb_build_object('success', true, 'missions_annulees', 0), NULL, NULL, NULL, NULL),
+      -- Après ses deux gardes, la RPC renvoie fn_finaliser_attribution_mission telle quelle :
+      -- la réponse doit être exactement celle de cet appel direct, dans le même contexte annulé.
       (19, format('SELECT to_jsonb(public.fn_assigner_mission_admin(%L::uuid, %L::uuid, NULL))', m_ouv, u_t),
-       jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R'], ARRAY['A','ADM'], NULL),
+       jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R','SYS'], ARRAY['A','ADM'],
+       NULL, NULL, NULL, NULL,
+       format('SELECT to_jsonb(public.fn_finaliser_attribution_mission(%L::uuid, %L::uuid, NULL))', m_ouv, u_t)),
       (20, format('SELECT to_jsonb(public.fn_assigner_mission_admin(%L::uuid, %L::uuid, NULL))', m_ouv, u_t),
-       jsonb_build_object('error', 'Cette mission n''appartient pas à votre établissement'), ARRAY['B'], ARRAY[]::text[], NULL),
+       jsonb_build_object('error', 'Cette mission n''appartient pas à votre établissement'), ARRAY['B'], ARRAY[]::text[],
+       NULL, NULL, NULL, NULL, NULL),
+      -- Branche établissement : l'admin plateforme est refusé (aucun est_admin() dans cette garde) ;
+      -- une réclamation de score se dépose depuis un établissement (décision déléguée du 08/11/2026).
       (21, format('SELECT to_jsonb(public.fn_creer_reclamation_score(%L::uuid, %L, %L, %L))', evt, 'ETAB', 'AUTRE',
                   'Réclamation de fixture pour la garde NULL, jamais persistée.'),
        jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE',
                           'error', 'Vous n''êtes pas concerné par cet événement'),
-       ARRAY['S','T','R','B'], ARRAY['A'], NULL),
+       ARRAY['S','T','R','B','ADM'], ARRAY['A'],
+       NULL, jsonb_build_object('success', true, 'statut', 'PENDING'), NULL, NULL, NULL),
       (22, format('SELECT to_jsonb(public.fn_declarer_honoraires_retrocession(%L::uuid, 100, %L))', m_term, 'justificatif-fixture'),
-       jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
-       jsonb_build_object('error', 'Cette mission n''est pas en rétrocession.')),
+       jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R','B','SYS'], ARRAY['A','ADM'],
+       jsonb_build_object('error', 'Cette mission n''est pas en rétrocession.'), NULL, NULL, NULL, NULL),
       (23, format('SELECT to_jsonb(public.fn_definir_retrocession_mission(%L::uuid, 50))', m_term),
-       jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R','B'], ARRAY['A','ADM'],
-       jsonb_build_object('error', 'Modifiable uniquement sur une mission ouverte.'));
+       jsonb_build_object('error', 'Non autorisé'), ARRAY['S','T','R','B','SYS'], ARRAY['A','ADM'],
+       jsonb_build_object('error', 'Modifiable uniquement sur une mission ouverte.'), NULL, NULL, NULL, NULL),
+      -- Mission sans soignant assigné : soignant_assigne_id = auth.uid() vaut NULL pour tout
+      -- appelant. Seule la seconde comparaison sous COALESCE refuse S, T, R et SYS ; B
+      -- (autre établissement) fuyait aussi. Rouge sur un corps à demi corrigé.
+      (24, format('SELECT to_jsonb(public.fn_presences_detail_mission(%L::uuid))', m_ouv),
+       jsonb_build_object('error', 'Accès refusé'), ARRAY['S','T','R','B','SYS'], ARRAY['A','ADM'],
+       NULL, jsonb_build_object('pointage_effectue', false), NULL, NULL, NULL);
+    IF EXISTS (SELECT FROM gardes_null_cas
+                WHERE cardinality(passants) > 0
+                  AND num_nonnulls(attendu, contient, etat_attendu, reference) <> 1)
+       OR EXISTS (SELECT FROM gardes_null_cas
+                   WHERE (etat_attendu IS NULL) <> (messages_attendus IS NULL)) THEN
+      RAISE EXCEPTION 'GARDES_NULL : chaque cas à passants exige une seule réponse positive';
+    END IF;
 
-    -- Chaque rôle est bien celui annoncé : S, T et R n'ont aucun établissement.
-    FOREACH v_acteur IN ARRAY ARRAY['S','T','R','B','A','ADM'] LOOP
-      v_uid := CASE v_acteur WHEN 'S' THEN u_s WHEN 'T' THEN u_t WHEN 'R' THEN u_r
-                             WHEN 'B' THEN u_b WHEN 'A' THEN u_a ELSE u_adm END;
-      PERFORM set_config('request.jwt.claim.sub', v_uid::text, true);
-      PERFORM set_config('request.jwt.claims',
-        jsonb_build_object('sub', v_uid, 'role', 'authenticated', 'aal', 'aal1')::text, true);
+    -- Chaque rôle est bien celui annoncé : S, T, R et SYS n'ont aucun établissement,
+    -- SYS n'a aucune identité (auth.uid() NULL) et n'est pas admin.
+    FOREACH v_acteur IN ARRAY ARRAY['S','T','R','B','A','ADM','SYS'] LOOP
+        v_uid := CASE v_acteur WHEN 'S' THEN u_s WHEN 'T' THEN u_t WHEN 'R' THEN u_r
+                               WHEN 'B' THEN u_b WHEN 'A' THEN u_a WHEN 'ADM' THEN u_adm
+                               WHEN 'SYS' THEN NULL END;
+        IF v_uid IS NULL AND v_acteur <> 'SYS' THEN RAISE EXCEPTION 'GARDES_NULL acteur inconnu : %', v_acteur; END IF;
+      PERFORM pg_temp.gn_identite(v_uid);
+      -- CASE parenthésé : sans parenthèses, son THEN clôturerait la condition IF.
       IF public.mon_etablissement_id() IS DISTINCT FROM
-           CASE v_acteur WHEN 'A' THEN e_a WHEN 'B' THEN e_b END
-         OR public.est_admin() IS DISTINCT FROM (v_acteur = 'ADM') THEN
-        RAISE EXCEPTION 'GARDES_NULL fixture : contexte % inattendu (etab %, admin %)',
-          v_acteur, public.mon_etablissement_id(), public.est_admin();
+           (CASE v_acteur WHEN 'A' THEN e_a WHEN 'B' THEN e_b END)
+         OR public.est_admin() IS DISTINCT FROM (v_acteur = 'ADM')
+         OR auth.uid() IS DISTINCT FROM v_uid THEN
+        RAISE EXCEPTION 'GARDES_NULL fixture : contexte % inattendu (etab %, admin %, uid %)',
+          v_acteur, public.mon_etablissement_id(), public.est_admin(), auth.uid();
       END IF;
     END LOOP;
 
@@ -380,10 +471,10 @@ BEGIN
     FOR c IN SELECT * FROM gardes_null_cas ORDER BY ordre LOOP
       FOREACH v_acteur IN ARRAY c.refuses LOOP
         v_uid := CASE v_acteur WHEN 'S' THEN u_s WHEN 'T' THEN u_t WHEN 'R' THEN u_r
-                               WHEN 'B' THEN u_b WHEN 'A' THEN u_a ELSE u_adm END;
-        PERFORM set_config('request.jwt.claim.sub', v_uid::text, true);
-        PERFORM set_config('request.jwt.claims',
-          jsonb_build_object('sub', v_uid, 'role', 'authenticated', 'aal', 'aal1')::text, true);
+                               WHEN 'B' THEN u_b WHEN 'A' THEN u_a WHEN 'ADM' THEN u_adm
+                               WHEN 'SYS' THEN NULL END;
+        IF v_uid IS NULL AND v_acteur <> 'SYS' THEN RAISE EXCEPTION 'GARDES_NULL acteur inconnu : %', v_acteur; END IF;
+        PERFORM pg_temp.gn_identite(v_uid);
         EXECUTE c.appel INTO r;
         IF r IS DISTINCT FROM c.refus THEN
           RAISE EXCEPTION 'GARDES_NULL refus manquant — cas %, acteur % : % (attendu %)',
@@ -394,6 +485,7 @@ BEGIN
     END LOOP;
 
     PERFORM set_config('request.jwt.claim.sub', '', true);
+    PERFORM set_config('request.jwt.claim.role', '', true);
     PERFORM set_config('request.jwt.claims', '{}', true);
     v_apres := jsonb_build_object(
       'm_term', (SELECT to_jsonb(m) FROM public.missions m WHERE m.id = m_term),
@@ -417,18 +509,36 @@ BEGIN
       RAISE EXCEPTION 'GARDES_NULL : un refus a produit un effet. Avant % / après %', v_avant, v_apres;
     END IF;
 
-    -- Appelants légitimes : la garde laisse passer (cas annulés un à un).
+    -- Appelants légitimes : la garde laisse passer, et la réponse est la réponse
+    -- positive attendue du cas (cas annulés un à un).
     FOR c IN SELECT * FROM gardes_null_cas ORDER BY ordre LOOP
       FOREACH v_acteur IN ARRAY c.passants LOOP
         v_uid := CASE v_acteur WHEN 'S' THEN u_s WHEN 'T' THEN u_t WHEN 'R' THEN u_r
-                               WHEN 'B' THEN u_b WHEN 'A' THEN u_a ELSE u_adm END;
+                               WHEN 'B' THEN u_b WHEN 'A' THEN u_a WHEN 'ADM' THEN u_adm
+                               WHEN 'SYS' THEN NULL END;
+        IF v_uid IS NULL AND v_acteur <> 'SYS' THEN RAISE EXCEPTION 'GARDES_NULL acteur inconnu : %', v_acteur; END IF;
+        r_ref := NULL;
+        etat_ref := NULL;
+        msg_ref := NULL;
+        IF c.reference IS NOT NULL THEN
+          BEGIN
+            PERFORM pg_temp.gn_identite(v_uid);
+            EXECUTE c.reference INTO r_ref;
+            RAISE EXCEPTION USING ERRCODE = 'JGN02', MESSAGE = 'fin de la référence';
+          EXCEPTION
+            WHEN SQLSTATE 'JGN02' THEN NULL;
+            WHEN OTHERS THEN
+              GET STACKED DIAGNOSTICS etat_ref = RETURNED_SQLSTATE, msg_ref = MESSAGE_TEXT;
+          END;
+          IF etat_ref IS NULL AND r_ref IS NOT DISTINCT FROM c.refus THEN
+            RAISE EXCEPTION 'GARDES_NULL référence indiscernable du refus — cas %, acteur %', c.ordre, v_acteur;
+          END IF;
+        END IF;
         r := NULL;
         v_etat := NULL;
         v_msg := NULL;
         BEGIN
-          PERFORM set_config('request.jwt.claim.sub', v_uid::text, true);
-          PERFORM set_config('request.jwt.claims',
-            jsonb_build_object('sub', v_uid, 'role', 'authenticated', 'aal', 'aal1')::text, true);
+          PERFORM pg_temp.gn_identite(v_uid);
           EXECUTE c.appel INTO r;
           RAISE EXCEPTION USING ERRCODE = 'JGN02', MESSAGE = 'fin du cas légitime';
         EXCEPTION
@@ -436,12 +546,18 @@ BEGIN
           WHEN OTHERS THEN
             GET STACKED DIAGNOSTICS v_etat = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT;
         END;
-        IF v_etat IS NULL AND r IS NOT DISTINCT FROM c.refus THEN
-          RAISE EXCEPTION 'GARDES_NULL appelant légitime refusé — cas %, acteur % : %', c.ordre, v_acteur, r;
-        END IF;
-        IF c.attendu IS NOT NULL AND (v_etat IS NOT NULL OR r IS DISTINCT FROM c.attendu) THEN
-          RAISE EXCEPTION 'GARDES_NULL suite métier inattendue — cas %, acteur % : % [% %] (attendu %)',
-            c.ordre, v_acteur, r, v_etat, v_msg, c.attendu;
+        v_ok := CASE
+          WHEN c.attendu IS NOT NULL THEN v_etat IS NULL AND r IS NOT DISTINCT FROM c.attendu
+          WHEN c.contient IS NOT NULL THEN v_etat IS NULL AND r IS DISTINCT FROM c.refus
+                                           AND COALESCE(r @> c.contient, false)
+          WHEN c.etat_attendu IS NOT NULL THEN v_etat IS NOT DISTINCT FROM c.etat_attendu
+                                               AND v_msg = ANY (c.messages_attendus)
+          ELSE ROW(r, v_etat, v_msg) IS NOT DISTINCT FROM ROW(r_ref, etat_ref, msg_ref)
+        END;
+        IF v_ok IS NOT TRUE THEN
+          RAISE EXCEPTION 'GARDES_NULL appelant légitime : réponse inattendue — cas %, acteur % : % [% %] (attendu % ; contient % ; état % % ; référence % [% %])',
+            c.ordre, v_acteur, r, v_etat, v_msg, c.attendu, c.contient, c.etat_attendu,
+            c.messages_attendus, r_ref, etat_ref, msg_ref;
         END IF;
         RAISE NOTICE 'GARDES_NULL légitime cas % acteur % : % %', c.ordre, v_acteur,
           COALESCE(left(r::text, 120), ''), COALESCE(v_etat || ' ' || left(v_msg, 120), '');
@@ -449,10 +565,46 @@ BEGIN
       END LOOP;
     END LOOP;
 
-    IF n_refus <> 82 OR n_passe <> 49
+    IF n_refus <> 103 OR n_passe <> 52
        OR n_refus <> (SELECT sum(cardinality(refuses)) FROM gardes_null_cas)
        OR n_passe <> (SELECT sum(cardinality(passants)) FROM gardes_null_cas) THEN
       RAISE EXCEPTION 'GARDES_NULL matrice incomplète : % refus, % passages', n_refus, n_passe;
+    END IF;
+
+    -- Verrou double facturation (migration 20261109020404) : fn_generer_facture
+    -- n'est plus exécutable par authenticated ni anon (42501) ; service_role
+    -- garde EXECUTE (aucun appelant interne, cron ni client en production).
+    IF pg_catalog.has_function_privilege('authenticated', 'public.fn_generer_facture(uuid)', 'EXECUTE')
+       OR pg_catalog.has_function_privilege('anon', 'public.fn_generer_facture(uuid)', 'EXECUTE')
+       OR NOT pg_catalog.has_function_privilege('service_role', 'public.fn_generer_facture(uuid)', 'EXECUTE')
+       OR (SELECT i.categorie FROM private.security_definer_inventory i
+            WHERE i.signature = 'fn_generer_facture(uuid)') IS DISTINCT FROM 'SERVICE_ONLY_REVOQUE' THEN
+      RAISE EXCEPTION 'GARDES_NULL verrou facture : ACL ou inventaire non conformes';
+    END IF;
+    FOREACH v_acteur IN ARRAY ARRAY['A','ADM','S','anon'] LOOP
+      v_uid := CASE v_acteur WHEN 'A' THEN u_a WHEN 'ADM' THEN u_adm WHEN 'S' THEN u_s END;
+      v_role := CASE WHEN v_acteur = 'anon' THEN 'anon' ELSE 'authenticated' END;
+      IF v_role = 'anon' THEN
+        PERFORM set_config('request.jwt.claim.sub', '', true);
+        PERFORM set_config('request.jwt.claim.role', 'anon', true);
+        PERFORM set_config('request.jwt.claims', '{"role":"anon"}', true);
+      ELSE
+        PERFORM pg_temp.gn_identite(v_uid);
+      END IF;
+      v_refus := false;
+      EXECUTE format('SET LOCAL ROLE %I', v_role);
+      BEGIN
+        PERFORM public.fn_generer_facture(m_ouv);
+      EXCEPTION WHEN insufficient_privilege THEN v_refus := true;
+      END;
+      EXECUTE 'RESET ROLE';
+      IF NOT v_refus THEN
+        RAISE EXCEPTION 'GARDES_NULL verrou facture : appel % (%) accepté', v_role, v_acteur;
+      END IF;
+      n_verrou := n_verrou + 1;
+    END LOOP;
+    IF n_verrou <> 4 THEN
+      RAISE EXCEPTION 'GARDES_NULL verrou facture incomplet : % refus', n_verrou;
     END IF;
 
     RAISE EXCEPTION USING ERRCODE = 'JGN01', MESSAGE = 'GARDES_NULL_FIXTURES_ROLLBACK';

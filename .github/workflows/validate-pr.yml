@@ -1015,6 +1015,44 @@ jobs:
             exit 1
           fi
 
+      - name: Gardes NULL (B9) — réponses par rôle, variantes à demi corrigées, verrou facture, rejeu et corps dérivé refusés PostgreSQL 17 isolé
+        env:
+          PGOPTIONS: '-c jolene.isolated_sql_test=on'
+        run: |
+          createdb gardes_null_isole
+          psql -X -v ON_ERROR_STOP=1 -d gardes_null_isole -f tests/security/gardes-null-security-definer-isolated.test.sql | tee "$RUNNER_TEMP/gardes-null-isole.out"
+          grep -Fq 'GARDES_NULL_ISOLE_OK' "$RUNNER_TEMP/gardes-null-isole.out"
+          # Chaque scénario DOIT échouer sur la garde attendue, après préparation.
+          for scenario in rejeu corps_derive rejeu_verrou; do
+            case "$scenario" in
+              rejeu)
+                pret='GARDES_NULL_REJEU_PRET'
+                attendu='GARDES_NULL_PREFLIGHT_SOURCE_DRIFT: fn_valider_alerte_presence(uuid)' ;;
+              corps_derive)
+                pret='GARDES_NULL_CORPS_DERIVE_PRET'
+                attendu='GARDES_NULL_POSTFLIGHT_CORPS_OU_ATTRIBUTS: fn_annuler_serie(uuid)' ;;
+              rejeu_verrou)
+                pret='GARDES_NULL_REJEU_VERROU_PRET'
+                attendu='VERROU_FACTURE_PREFLIGHT_ACL_DRIFT: fn_generer_facture(uuid)' ;;
+            esac
+            base="gardes_null_${scenario}"
+            createdb "$base"
+            sortie="$RUNNER_TEMP/${base}.out"
+            erreurs="$RUNNER_TEMP/${base}.err"
+            if psql -X -v ON_ERROR_STOP=1 -v scenario="$scenario" -d "$base" -f tests/security/gardes-null-security-definer-rejeu.test.sql > "$sortie" 2> "$erreurs"; then
+              cat "$sortie" "$erreurs"
+              echo "::error::Scénario $scenario : la migration gardes NULL a été acceptée."
+              exit 1
+            fi
+            cat "$sortie" "$erreurs"
+            grep -Fq "$pret" "$sortie"
+            grep -Fq "$attendu" "$erreurs"
+            if grep -Fq 'GARDES_NULL_MIGRATION_ACCEPTEE' "$sortie"; then
+              echo "::error::Scénario $scenario : la migration gardes NULL a dépassé sa garde."
+              exit 1
+            fi
+          done
+
       - name: Pointage — scanner et fin rétroactive sans code suivant PostgreSQL 17 isolé
         run: |
           createdb scanner_sans_code_suivant

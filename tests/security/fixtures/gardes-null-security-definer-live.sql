@@ -1,12 +1,14 @@
 -- Corps LIVE (production, lecture seule) des 20 fonctions SECURITY DEFINER du
 -- lot « gardes NULL », AVANT la migration
 -- supabase/migrations/20261109010957_gardes_null_security_definer.sql.
--- Chaque bloc est le texte exact de pg_get_functiondef(oid) relu le 09/11/2026 :
--- md5(pg_get_functiondef) et md5(prosrc) identiques en production (empreintes
--- non recopiées ici : elles sont recalculées par le test). Aucune donnée, aucun
--- GRANT ; ce fichier n'est exécuté par aucun banc.
+-- Chaque bloc est le texte exact de pg_get_functiondef(oid) relu le 09/11/2026,
+-- suivi d'un « ; » : md5(pg_get_functiondef) et md5(prosrc) identiques en
+-- production (empreintes non recopiées ici : elles sont recalculées par le
+-- test). Aucune donnée, aucun GRANT (posés par le banc).
 -- Usage : tests/node/gardes-null-security-definer.node.mjs vérifie que chaque
--- corps de la migration n'en diffère que par la garde corrigée.
+-- corps de la migration n'en diffère que par la garde corrigée ; le banc
+-- PostgreSQL 17 isolé (tests/security/fixtures/gardes-null-security-definer-banc.sql)
+-- crée ces 20 fonctions puis exécute la vraie migration.
 -- Regénération : SELECT pg_get_functiondef(to_regprocedure('public.' || signature))
 -- en lecture seule, dans l'ordre ci-dessous.
 
@@ -38,7 +40,7 @@ BEGIN
     
     RETURN jsonb_build_object('success', TRUE, 'message', 'Présence validée');
 END;
-$function$
+$function$;
 
 -- 2/20 fn_codes_pointage_mission(uuid)
 CREATE OR REPLACE FUNCTION public.fn_codes_pointage_mission(p_mission_id uuid)
@@ -75,7 +77,7 @@ BEGIN
     'code_depart', v_mission.code_depart
   );
 END;
-$function$
+$function$;
 
 -- 3/20 fn_generer_code_secours_mission(uuid,text)
 CREATE OR REPLACE FUNCTION public.fn_generer_code_secours_mission(p_mission_id uuid, p_type text DEFAULT 'UNIVERSEL'::text)
@@ -144,7 +146,7 @@ BEGIN
     'expire_le', v_expire_le
   );
 END;
-$function$
+$function$;
 
 -- 4/20 fn_generer_qr_mission(uuid,text)
 CREATE OR REPLACE FUNCTION public.fn_generer_qr_mission(p_mission_id uuid, p_type text DEFAULT 'UNIVERSEL'::text)
@@ -218,7 +220,7 @@ BEGIN
     'expire_le', v_expire_le
   );
 END;
-$function$
+$function$;
 
 -- 5/20 fn_soignants_urgence(uuid)
 CREATE OR REPLACE FUNCTION public.fn_soignants_urgence(p_mission_id uuid)
@@ -268,7 +270,7 @@ BEGIN
     )
   ORDER BY s.score_fiabilite DESC NULLS LAST, distance_km NULLS LAST;
 END;
-$function$
+$function$;
 
 -- 6/20 fn_generer_donnees_dpae(uuid)
 CREATE OR REPLACE FUNCTION public.fn_generer_donnees_dpae(p_contrat_id uuid)
@@ -358,7 +360,7 @@ BEGIN
 
   RETURN v_payload;
 END;
-$function$
+$function$;
 
 -- 7/20 fn_enregistrer_numero_dpae(uuid,text)
 CREATE OR REPLACE FUNCTION public.fn_enregistrer_numero_dpae(p_contrat_id uuid, p_dpae_numero text)
@@ -463,7 +465,7 @@ BEGIN
 
   RETURN jsonb_build_object('success', true, 'dpae_numero', v_numero_trim);
 END;
-$function$
+$function$;
 
 -- 8/20 fn_rebooker_soignant(uuid,uuid,timestamp with time zone,timestamp with time zone)
 CREATE OR REPLACE FUNCTION public.fn_rebooker_soignant(p_soignant_id uuid, p_mission_modele_id uuid, p_debut timestamp with time zone, p_fin timestamp with time zone)
@@ -530,7 +532,7 @@ BEGIN
   );
   RETURN jsonb_build_object('success', true, 'mission_id', v_new_id);
 END;
-$function$
+$function$;
 
 -- 9/20 fn_booster_mission(uuid)
 CREATE OR REPLACE FUNCTION public.fn_booster_mission(p_mission_id uuid)
@@ -597,7 +599,7 @@ BEGIN
     'success', true, 'soignants_notifies', v_nb, 'prix_ht', COALESCE(v_prix, 0)
   );
 END;
-$function$
+$function$;
 
 -- 10/20 fn_presences_detail_mission(uuid)
 CREATE OR REPLACE FUNCTION public.fn_presences_detail_mission(p_mission_id uuid)
@@ -654,7 +656,7 @@ BEGIN
         'valide', v_presence.valide_par_etablissement
     );
 END;
-$function$
+$function$;
 
 -- 11/20 fn_activer_garantie_mission(uuid,boolean)
 CREATE OR REPLACE FUNCTION public.fn_activer_garantie_mission(p_mission_id uuid, p_actif boolean)
@@ -676,7 +678,7 @@ BEGIN
   UPDATE missions SET garantie_remplacement = p_actif, modifie_le = NOW() WHERE id = p_mission_id;
   RETURN jsonb_build_object('success', TRUE, 'garantie', p_actif);
 END;
-$function$
+$function$;
 
 -- 12/20 fn_deposer_chorus(uuid,text)
 CREATE OR REPLACE FUNCTION public.fn_deposer_chorus(p_facture_id uuid, p_chorus_id text DEFAULT NULL::text)
@@ -705,7 +707,7 @@ BEGIN
 
     RETURN '{"success":true}'::JSONB;
 END;
-$function$
+$function$;
 
 -- 13/20 fn_generer_facture(uuid)
 CREATE OR REPLACE FUNCTION public.fn_generer_facture(p_mission_id uuid)
@@ -759,7 +761,7 @@ BEGIN
 
     RETURN jsonb_build_object('success', true, 'facture_id', v_facture_id, 'numero', v_numero);
 END;
-$function$
+$function$;
 
 -- 14/20 fn_diffuser_pool_urgence(uuid)
 CREATE OR REPLACE FUNCTION public.fn_diffuser_pool_urgence(p_mission_id uuid)
@@ -788,7 +790,7 @@ BEGIN
 
   RETURN private.fn_diffuser_pool_urgence_interne(p_mission_id);
 END;
-$function$
+$function$;
 
 -- 15/20 fn_etablissement_pour_mission(uuid)
 CREATE OR REPLACE FUNCTION public.fn_etablissement_pour_mission(p_etablissement_id uuid)
@@ -820,7 +822,7 @@ BEGIN
 
     RETURN COALESCE(v_result, jsonb_build_object('error', 'Établissement introuvable'));
 END;
-$function$
+$function$;
 
 -- 16/20 fn_annuler_serie(uuid)
 CREATE OR REPLACE FUNCTION public.fn_annuler_serie(p_serie_id uuid)
@@ -846,7 +848,7 @@ BEGIN
     GET DIAGNOSTICS v_count = ROW_COUNT;
     RETURN jsonb_build_object('success', true, 'missions_annulees', v_count);
 END;
-$function$
+$function$;
 
 -- 17/20 fn_assigner_mission_admin(uuid,uuid,text)
 CREATE OR REPLACE FUNCTION public.fn_assigner_mission_admin(p_mission_id uuid, p_soignant_id uuid, p_choix_contrat text DEFAULT NULL::text)
@@ -871,7 +873,7 @@ BEGIN
 
   RETURN public.fn_finaliser_attribution_mission(p_mission_id, p_soignant_id, p_choix_contrat);
 END;
-$function$
+$function$;
 
 -- 18/20 fn_creer_reclamation_score(uuid,text,text,text,text)
 CREATE OR REPLACE FUNCTION public.fn_creer_reclamation_score(p_evenement_id uuid, p_evenement_type text, p_motif_categorie text, p_texte_libre text, p_justificatif_storage_path text DEFAULT NULL::text)
@@ -997,7 +999,7 @@ BEGIN
 
   RETURN jsonb_build_object('success', true, 'reclamation_id', v_reclamation_id, 'statut', 'PENDING');
 END;
-$function$
+$function$;
 
 -- 19/20 fn_declarer_honoraires_retrocession(uuid,numeric,text)
 CREATE OR REPLACE FUNCTION public.fn_declarer_honoraires_retrocession(p_mission_id uuid, p_montant_honoraires numeric, p_justificatif_cle text DEFAULT NULL::text)
@@ -1058,7 +1060,7 @@ BEGIN
   RETURN jsonb_build_object('success', TRUE, 'montant_retrocede', v_retrocede,
     'commission_ttc', ROUND(v_com_ht * 1.20, 2), 'en_attente_confirmation', TRUE);
 END;
-$function$
+$function$;
 
 -- 20/20 fn_definir_retrocession_mission(uuid,numeric)
 CREATE OR REPLACE FUNCTION public.fn_definir_retrocession_mission(p_mission_id uuid, p_pct numeric)
@@ -1085,4 +1087,4 @@ BEGIN
    WHERE id = p_mission_id;
   RETURN jsonb_build_object('success', TRUE, 'retrocession_pct', p_pct);
 END;
-$function$
+$function$;
