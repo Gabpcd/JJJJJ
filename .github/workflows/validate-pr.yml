@@ -124,6 +124,9 @@ jobs:
       - name: Contestation de paiement (B3) — migration et instantané sans réseau
         run: node --test tests/node/contestation-paiement-soignant.node.mjs
 
+      - name: DPAE CDDU et VACATION (B9) — migration, instantané et bancs sans réseau
+        run: node --test tests/node/dpae-contrats-cddu-vacation.node.mjs
+
       - name: Isolation du draft contrat SQL sans réseau
         run: node --test tests/node/contrat-v11-sql-proof.node.mjs
 
@@ -687,7 +690,7 @@ jobs:
           fi
           # Les sept sources ont déjà été exécutées, puis comparées aux 90
           # statements du registre et au catalogue revu après installation V2.
-          # Les bancs PG17 rejouent leurs sources ; les 65 suites ci-dessous
+          # Les bancs PG17 rejouent leurs sources ; les 66 suites ci-dessous
           # restent exécutées sur staging, sous SAVEPOINT/ROLLBACK.
           if [ "${PAIEMENTS_INSTALLATION_MODE:-}" = 'installed' ]; then
             test "$CONNECT_INSTALLATION_MODE" != 'installed'
@@ -758,6 +761,7 @@ jobs:
             tests/security/avoirs-imputation-staging.test.sql
             tests/security/stripe-disponibilite-connect.test.sql
             tests/security/connect-onboarding-payout-acl.test.sql
+            tests/security/dpae-contrats-cddu-vacation.test.sql
             tests/non-regression/sql/contestation-paiement-soignant.test.sql
             tests/security/agents-croissance-brouillons.test.sql
           )
@@ -1017,6 +1021,43 @@ jobs:
           createdb scanner_sans_code_suivant
           JOLENE_SCANNER_WITNESS=LOCAL_EPHEMERE PGDATABASE=scanner_sans_code_suivant \
             python3 scripts/ci/scanner-code-sans-code-suivant-pg17.py
+
+      - name: DPAE CDDU et VACATION (B9) — réponses avant/après, rejeu et corps dérivé refusés PostgreSQL 17 isolé
+        env:
+          PGOPTIONS: '-c jolene.isolated_sql_test=on'
+        run: |
+          createdb dpae_salarie
+          psql -X -v ON_ERROR_STOP=1 -d dpae_salarie -f tests/security/dpae-contrats-cddu-vacation-isolated.test.sql
+          # Chaque scénario DOIT échouer sur la garde attendue, après préparation.
+          for scenario in rejeu rejeu_sans_helper corps_derive; do
+            case "$scenario" in
+              rejeu)
+                pret='DPAE_SALARIE_REJEU_PRET'
+                attendu='DPAE_SALARIE_PREFLIGHT_HELPER_DEJA_PRESENT' ;;
+              rejeu_sans_helper)
+                pret='DPAE_SALARIE_REJEU_SANS_HELPER_PRET'
+                attendu='DPAE_SALARIE_PREFLIGHT_SOURCE_DRIFT: fn_mes_dpae()' ;;
+              corps_derive)
+                pret='DPAE_SALARIE_CORPS_DERIVE_PRET'
+                attendu='DPAE_SALARIE_POSTFLIGHT_CORPS_OU_ATTRIBUTS: fn_rappel_dpae_quotidien()' ;;
+            esac
+            base="dpae_salarie_${scenario}"
+            createdb "$base"
+            sortie="$RUNNER_TEMP/${base}.out"
+            erreurs="$RUNNER_TEMP/${base}.err"
+            if psql -X -v ON_ERROR_STOP=1 -v scenario="$scenario" -d "$base" -f tests/security/dpae-contrats-cddu-vacation-rejeu.test.sql > "$sortie" 2> "$erreurs"; then
+              cat "$sortie" "$erreurs"
+              echo "::error::Scénario $scenario : la migration DPAE a été acceptée."
+              exit 1
+            fi
+            cat "$sortie" "$erreurs"
+            grep -Fq "$pret" "$sortie"
+            grep -Fq "$attendu" "$erreurs"
+            if grep -Fq 'DPAE_SALARIE_MIGRATION_ACCEPTEE' "$sortie"; then
+              echo "::error::Scénario $scenario : la migration DPAE a dépassé sa garde."
+              exit 1
+            fi
+          done
 
       - name: Avoirs — exclusion des impayés PostgreSQL 17 isolé
         env:

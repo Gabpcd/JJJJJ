@@ -4,12 +4,15 @@ import XCTest
 /// `mobile-native/ios-ui-tests/NativePilotUITests/NativePilotTests.swift`
 /// (`element`, `visible`, `fullyVisible`, `require`, `scrollTo`, `record`, `attachText`),
 /// avec un `tap()` natif pour toute activation (jamais `press(forDuration:)` comme tap) et
-/// l'orientation lue dans `JOLENE_UI_ORIENTATION` (portrait | landscape). Le seul glissement
-/// est `drag(_:fromY:toY:)` (défilement borné de `scrollTo`), qui emploie
-/// `press(forDuration:thenDragTo:)` entre deux coordonnées calculées hors clavier : c'est
-/// l'unique API XCUITest de glissement à point de départ contrôlé, et elle n'active rien.
-/// Aucune attente arbitraire : toutes passent par `require` (prédicat borné). La preuve est
-/// l'assertion ; les captures (`record`) ne sont que des artefacts pour l'humain.
+/// l'orientation lue dans `JOLENE_UI_ORIENTATION` (portrait | landscape). Les seuls glissements
+/// sont `drag(_:fromY:toY:)` (défilement borné de `scrollTo`) et `dragSliderPastMinimum(_:)`
+/// (curseur amené à sa borne basse), qui emploient `press(forDuration:thenDragTo:…)` entre deux
+/// coordonnées calculées : c'est l'unique API XCUITest de glissement à point de départ contrôlé,
+/// et elle n'active rien. Aucune attente arbitraire : toutes passent par `require` (prédicat
+/// borné, délai fonctionnel et budget de blocage distincts). `require` ne borne que l'évaluation
+/// de conditions : les actions (`tap`, `typeText`, glissements) n'y passent pas et restent
+/// soumises aux seuls délais propres à XCTest. La preuve est l'assertion ; les captures
+/// (`record`) ne sont que des artefacts pour l'humain.
 @MainActor
 class JoleneUITestCase: XCTestCase {
     // Lus depuis les crochets XCTest (nonisolés) qui tournent sur le thread principal ;
@@ -34,8 +37,10 @@ class JoleneUITestCase: XCTestCase {
         proofPrefix = "\(isPad ? "ipad" : "iphone")-\(landscape ? "paysage" : "portrait")"
     }
 
-    /// Sur échec : capture, dump d'accessibilité et état du processus, sans envoyer `self` au main actor.
+    /// Fin du budget de blocage à froid (`coldStallBudget`), quelle que soit l'issue du test ; puis,
+    /// sur échec : capture, dump d'accessibilité et état du processus, sans envoyer `self` au main actor.
     override func tearDownWithError() throws {
+        MainActor.assumeIsolated { JoleneUITestCase.coldStart = false }
         guard (testRun?.totalFailureCount ?? 0) > 0 else { return }
         let prefix = proofPrefix
         let application = app
@@ -111,10 +116,163 @@ class JoleneUITestCase: XCTestCase {
         return keyboard.exists && element.frame.maxY > keyboard.frame.minY
     }
 
-    func require(_ description: String, timeout: TimeInterval = 15, condition: @escaping () -> Bool) {
-        let predicate = NSPredicate { _, _ in condition() }
-        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed, description)
+    /// Part maximale du délai de `require` décomptée pour UNE évaluation de la condition. Une
+    /// évaluation (quelques requêtes d'accessibilité) dure normalement bien moins de 5 s. Au-delà,
+    /// quelque chose est bloqué sans que le runner puisse dire quoi : l'observateur (runner saturé)
+    /// ou l'app, dont le serveur d'accessibilité répond sur le thread principal, si bien qu'un gel de
+    /// l'app allonge l'évaluation exactement comme un runner saturé. Run 42489677193, UI — iphone :
+    /// une seule requête « Find the "chip-weekend" Button » a duré 12,5 s (t = 70,4 → 82,9 s), la
+    /// capture d'échec 9,5 s et le relancement suivant 10,7 s au lieu de 1,8 s ; le délai de 15 s
+    /// d'alors (`XCTNSPredicateExpectation`) a expiré après UNE évaluation, sans qu'aucune n'ait
+    /// observé l'app après le blocage, alors que l'arbre d'accessibilité de fin montrait la chip en
+    /// place (402 × 874, cadre {122.7, 124, 104, 44}).
+    static let maximumChargedEvaluation: TimeInterval = 5
+    /// Intervalle entre deux évaluations, celui de `XCTNSPredicateExpectation`.
+    static let evaluationInterval: TimeInterval = 1
+    /// Délai fonctionnel par défaut de `require` : temps décompté accordé à la condition.
+    static let defaultTimeout: TimeInterval = 15
+    /// Budget de blocage par défaut de `require` : temps non décompté toléré sur un appel, quel que
+    /// soit son délai fonctionnel. L'incident ci-dessus (7,5 s non décomptées) reste dessous.
+    static let defaultStallBudget: TimeInterval = 15
+    /// Budget de blocage « à froid », réservé au PREMIER test du processus de test : premier
+    /// lancement de l'app sur un simulateur fraîchement démarré, systèmes de saisie et
+    /// d'accessibilité à froid. Constats CI : sur six runs (42489677193 à 42523240142, 18 jobs UI),
+    /// les requêtes de plus de 5 s du premier test portent sur le champ `login-email` (6,1 à
+    /// 10,7 s), et le pire cas est une évaluation de 34,4 s, dont une requête de 31 s que XCTest a
+    /// lui-même relancée (« Find the "login-email" TextField (retry 1) », run 42523240142,
+    /// ipad-landscape : 29,4 s non décomptées, au-delà de 15 s) ; sur la tête be551b66, l'attente
+    /// « La session démo est prête » (DemoAccueilTests) a bloqué à froid sur 3 des 9 jobs UI
+    /// (évaluations de 5,8 à 6,5 s). 60 s couvrent ce pire cas observé (34,4 s) avec une marge. Le budget ne vaut
+    /// que pour ce test : `coldStart` tombe dans son `tearDown`, et chaque `require` qui l'emploie
+    /// le trace (activité XCTest « Budget de blocage à froid … »). Les tests suivants, y compris
+    /// leurs `focus` et leurs attentes de session, gardent `defaultStallBudget`.
+    static let coldStallBudget: TimeInterval = 60
+    /// Vrai jusqu'au `tearDown` du premier test du processus de test (les tests s'y suivent en
+    /// série, `-parallel-testing-enabled NO`), quelle que soit son issue.
+    private static var coldStart = true
+
+    /// Attente bornée d'un état de l'app : la condition est évaluée environ chaque seconde jusqu'à
+    /// être vraie. Deux bornes distinctes, mesurées sur l'horloge monotone
+    /// (`ProcessInfo.systemUptime`) :
+    /// - délai fonctionnel `timeout` : temps DÉCOMPTÉ (chaque évaluation pour sa durée mesurée,
+    ///   plafonnée à `maximumChargedEvaluation` ; chaque intervalle pour sa durée mesurée) au terme
+    ///   duquel une condition encore fausse fait échouer l'attente. Sans blocage, l'attente équivaut
+    ///   à `XCTNSPredicateExpectation` sur `timeout` ;
+    /// - budget de blocage `stallBudget` (`defaultStallBudget`, 15 s, indépendant de `timeout`) :
+    ///   temps NON décompté toléré sur l'appel, c'est-à-dire l'excédent des évaluations bloquées
+    ///   au-delà du plafond, blocage de l'observateur OU du thread principal de l'app,
+    ///   indiscernables côté runner. Au-delà du budget, l'attente échoue aussitôt (« observateur ou
+    ///   thread principal de l'app bloqué … »), même si la condition est vraie. Dans le premier test
+    ///   du processus seulement, le budget est porté à `coldStallBudget` (60 s), et chaque appel
+    ///   concerné le trace par une activité XCTest.
+    /// Un appel dure donc au plus environ `timeout` + budget de blocage, plus la durée de
+    /// l'évaluation qui franchit l'une des deux bornes. Évaluation de grâce : si l'évaluation qui
+    /// épuise le délai était bloquée, une seule évaluation de plus est accordée, sous le même
+    /// budget, pour que l'état soit constaté après le blocage. Règles exactes et tests :
+    /// `RequireWait` (fichier partagé avec JoleneCoreTests, `RequireWaitTests`).
+    ///
+    /// Tout temps non décompté est tracé, attente réussie comprise : activité XCTest et pièce jointe
+    /// texte `<proofPrefix>-attente-bloquee-<fichier>-<ligne>.txt` (chaque évaluation bloquée, sa
+    /// durée mesurée, le budget appliqué), que le résumé CI (`ios-swift-ci.yml`) relève dans sa
+    /// section « Attentes bloquées absorbées », avec une annotation par appelant.
+    ///
+    /// Une évaluation qui ne rend jamais la main n'est pas interrompue par `require`, qui ne mesure
+    /// qu'à son retour : les délais propres à XCTest pour les requêtes d'accessibilité passent
+    /// avant (XCTest relance puis abandonne lui-même une requête sans réponse, avec son propre
+    /// échec) ; à défaut, seul `executionTimeAllowance` borne le test, et seulement si xcodebuild
+    /// tourne avec `-test-timeouts-enabled YES` (cas de la CI). Quand XCTest interrompt ainsi le
+    /// test, la trace du temps non décompté de cet appel est perdue : elle n'est écrite qu'au
+    /// retour de la boucle. Tout autre échec est rapporté à la ligne de l'appelant.
+    func require(_ description: String, timeout: TimeInterval = JoleneUITestCase.defaultTimeout,
+                 stallBudget: TimeInterval = JoleneUITestCase.defaultStallBudget,
+                 file: StaticString = #filePath, line: UInt = #line, condition: () -> Bool) {
+        let s = Self.seconds
+        let cold = Self.coldStart && Self.coldStallBudget > stallBudget
+        let budget = cold ? Self.coldStallBudget : stallBudget
+        if cold {
+            XCTContext.runActivity(named: "Budget de blocage à froid \(s(budget)) au lieu de \(s(stallBudget)) "
+                                   + "(premier test du processus) : « \(description) »") { _ in }
+        }
+        let wait = RequireWait.run(
+            timeout: timeout, stallBudget: budget, maximumCharged: Self.maximumChargedEvaluation,
+            interval: Self.evaluationInterval,
+            now: { ProcessInfo.processInfo.systemUptime },
+            evaluate: condition,
+            pause: { self.pauseBetweenEvaluations($0) })
+        if wait.needsTrace {
+            traceUncharged(wait, description: description, cold: cold, normalBudget: stallBudget, file: file, line: line)
+        }
+        let budgetLabel = "budget de blocage \(s(budget))\(cold ? " à froid" : "")"
+        switch wait.outcome {
+        case .satisfied:
+            break
+        case .stallBudgetExceeded:
+            let detail = "\(wait.stalls.count) évaluation(s) bloquée(s) sur \(wait.evaluations), la plus longue "
+                + "\(s(wait.longestStall)) ; condition \(wait.lastEvaluation ? "vraie" : "fausse") à la dernière"
+            XCTFail("\(description) — observateur ou thread principal de l'app bloqué \(s(wait.uncharged)) non décomptées "
+                    + "(\(budgetLabel)) : \(detail)", file: file, line: line)
+        case .conditionFalse:
+            let stall = wait.needsTrace ? ", plus \(s(wait.uncharged)) de blocage non décomptées (\(budgetLabel))" : ""
+            let grace = wait.graceGranted ? ", évaluation de grâce comprise" : ""
+            XCTFail("\(description) — condition fausse à chacune des \(wait.evaluations) évaluations sur \(s(timeout)) "
+                    + "décomptées\(stall)\(grace)", file: file, line: line)
+        }
+    }
+
+    /// Consigne le temps non décompté d'un `require`, que l'attente réussisse ou non : activité
+    /// XCTest (journal du xcresult) et pièce jointe texte conservée, nommée avec `proofPrefix`. Le
+    /// résumé CI lit les lignes « Appelant », « Issue », « Temps non décompté » et « Budget de
+    /// blocage » : en changer le libellé, c'est changer `ios-swift-ci.yml`.
+    private func traceUncharged(_ wait: RequireWait, description: String, cold: Bool, normalBudget: TimeInterval,
+                                file: StaticString, line: UInt) {
+        let s = Self.seconds
+        let fileName = (String(describing: file) as NSString).lastPathComponent
+        let outcome: String
+        switch wait.outcome {
+        case .satisfied: outcome = "condition vraie"
+        case .conditionFalse: outcome = "échec, condition fausse au terme du délai"
+        case .stallBudgetExceeded: outcome = "échec, budget de blocage dépassé"
+        }
+        let budget = cold
+            ? "\(s(wait.stallBudget)) à froid — premier test du processus, budget normal \(s(normalBudget))"
+            : s(wait.stallBudget)
+        let stalls = wait.stalls.map { stall in
+            "  évaluation n° \(stall.index) (début à +\(s(stall.start))) : \(s(stall.duration)) mesurées, "
+                + "\(s(wait.maximumCharged)) décomptées, \(s(stall.duration - wait.maximumCharged)) non décomptées"
+        }
+        let report = [
+            "Attente : \(description)",
+            "Appelant : \(fileName):\(line)",
+            "Issue : \(outcome)",
+            "Délai fonctionnel : \(s(wait.timeout)) ; décompté : \(s(wait.charged + wait.pauses)) "
+                + "(évaluations \(s(wait.charged)), intervalles mesurés \(s(wait.pauses)))",
+            "Temps non décompté : \(s(wait.uncharged))",
+            "Budget de blocage : \(budget)",
+            "Évaluations : \(wait.evaluations), dont \(wait.stalls.count) bloquée(s) au-delà de \(s(wait.maximumCharged)) :",
+        ] + stalls + [
+            "Évaluation de grâce après blocage : \(wait.graceGranted ? "accordée" : "non")",
+            "Origine : observateur (runner) ou thread principal de l'app, indiscernables côté runner.",
+        ]
+        let attachment = XCTAttachment(string: report.joined(separator: "\n"))
+        attachment.name = "\(proofPrefix)-attente-bloquee-\((fileName as NSString).deletingPathExtension)-\(line).txt"
+        attachment.lifetime = .keepAlways
+        let activity = "Attente « \(description) » : \(s(wait.uncharged)) non décomptées "
+            + "(budget de blocage \(s(wait.stallBudget))\(cold ? " à froid" : "")), \(outcome)"
+        XCTContext.runActivity(named: activity) { $0.add(attachment) }
+    }
+
+    /// Durée en secondes au format français (« 12,5 s »).
+    private nonisolated static func seconds(_ value: TimeInterval) -> String {
+        String(format: "%.1f s", locale: Locale(identifier: "fr_FR"), value)
+    }
+
+    /// Laisse tourner la boucle principale entre deux évaluations (XCTest y traite ses
+    /// événements), comme `XCTNSPredicateExpectation` entre deux sondages. Un `XCTWaiter` sans
+    /// délégué n'enregistre aucun échec : l'attente inversée se termine au bout de `duration`.
+    private func pauseBetweenEvaluations(_ duration: TimeInterval) {
+        let pause = XCTestExpectation(description: "Intervalle entre deux évaluations")
+        pause.isInverted = true
+        _ = XCTWaiter().wait(for: [pause], timeout: duration)
     }
 
     // MARK: Actions
@@ -130,6 +288,9 @@ class JoleneUITestCase: XCTestCase {
     /// (iPad paysage : le clavier ouvert pour l'email couvre la moitié basse) est d'abord remonté
     /// dans la zone visible hors clavier, puis touché ; le focus est ensuite exigé, car
     /// `typeText` sans focus échoue (« Neither element nor any descendant has keyboard focus »).
+    /// Délais et budget de blocage par défaut de `require` : le premier champ interrogé à froid
+    /// (`login-email`, premier test du processus) relève du budget à froid de `require`
+    /// (`coldStallBudget`), pas d'un délai propre à `focus`.
     func focus(_ field: XCUIElement, in container: XCUIElement) {
         require("Le champ à saisir est affiché") { self.containerVisible(field) }
         var attempts = 0
@@ -197,8 +358,8 @@ class JoleneUITestCase: XCTestCase {
         return buttons[label]
     }
 
-    /// Glissement entre deux coordonnées du viewport visible (hors clavier). Seul emploi de
-    /// `press(forDuration:thenDragTo:)` du socle : un glissement, pas une activation.
+    /// Glissement entre deux coordonnées du viewport visible (hors clavier) : un glissement, pas une
+    /// activation. L'un des deux glissements du socle, avec `dragSliderPastMinimum(_:)`.
     func drag(_ container: XCUIElement, fromY: CGFloat, toY: CGFloat) {
         var viewport = container.frame.intersection(app.frame)
         if app.keyboards.firstMatch.exists {
@@ -213,6 +374,34 @@ class JoleneUITestCase: XCTestCase {
         let start = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * fromY))
         let end = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * toY))
         start.press(forDuration: 0.05, thenDragTo: end)
+    }
+
+    /// Amène un curseur (`Slider`) à sa borne basse par un glissement qui part du pouce et finit
+    /// AU-DELÀ de l'extrémité gauche de la piste : le contrôle borne lui-même la valeur, quel que
+    /// soit l'écart du geste synthétisé. `adjust(toNormalizedSliderPosition: 0)`
+    /// vise l'extrémité elle-même, à quelques points près : run 42489677193, UI — ipad-landscape,
+    /// son geste (« press, hold, drag, and hold ») part de x = 575,96 et finit à x = 323,25, soit
+    /// 7,25 pt dans une piste qui commence à x = 316 et dont le premier pas (5 → 10 km, 19 pas sur
+    /// 548 pt) s'arrondit dès 14,4 pt ; le curseur est resté à « Rayon : 10 km » pendant les 15 s
+    /// d'attente. La valeur atteinte reste prouvée par l'appelant (libellé ou valeur affichés).
+    func dragSliderPastMinimum(_ slider: XCUIElement) {
+        require("Le curseur est atteignable") { self.visible(slider) && slider.isEnabled }
+        let frame = slider.frame
+        let position = min(1, max(0, slider.normalizedSliderPosition))
+        // Centre du pouce : la piste utile est réduite d'une demi-largeur de pouce à chaque bout,
+        // et le pouce d'un `UISlider` est à peu près aussi large que le contrôle est haut.
+        let halfThumb = min(frame.height, frame.width) / 2
+        let thumbX = frame.minX + halfThumb + position * (frame.width - 2 * halfThumb)
+        // Fin du geste : une cible tactile (44 pt) à gauche de la piste, dans la fenêtre.
+        let overshoot: CGFloat = 44
+        let endX = max(app.frame.minX + 1, frame.minX - overshoot)
+        let origin = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+        let y = frame.midY - app.frame.minY
+        let start = origin.withOffset(CGVector(dx: thumbX - app.frame.minX, dy: y))
+        let end = origin.withOffset(CGVector(dx: endX - app.frame.minX, dy: y))
+        // Pression tenue 0,25 s comme `adjust` (au-delà du délai de contenu d'un défilement), puis
+        // maintien au point d'arrivée pour que la dernière position soit livrée avant le relâché.
+        start.press(forDuration: 0.25, thenDragTo: end, withVelocity: .default, thenHoldForDuration: 0.25)
     }
 
     func scrollTo(_ target: XCUIElement, in container: XCUIElement, downward: Bool = true) {
