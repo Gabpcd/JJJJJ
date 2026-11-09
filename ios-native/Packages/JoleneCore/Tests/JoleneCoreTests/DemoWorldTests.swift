@@ -192,4 +192,84 @@ final class DemoWorldTests: XCTestCase {
         let neuf = try await DemoWorld.gateways().auth.restoreSession()
         XCTAssertNil(neuf)
     }
+
+    // MARK: - Lot 1 (T1)
+
+    /// Ports du lot 1 que leur tranche n'a pas encore câblés : SOURCE UNIQUE de la liste. Chaque
+    /// PR qui câble un port le câble dans les deux mondes et le retire d'ici. Le monde Supabase
+    /// n'a pas de liste propre : `SupabaseGatewaysTests.testAucunPortNonCable` compare
+    /// `SupabaseGateways.make(client:).unwiredPorts` à `DemoWorld.gateways().unwiredPorts`, si
+    /// bien qu'un port câblé dans un seul monde rougit l'un des deux tests. Critère de sortie de
+    /// T12 (blueprint §2.2) : liste vide, `unwiredPorts.isEmpty` dans les deux mondes.
+    static let portsEnAttenteLot1 = ["candidature", "presence", "favoris", "mesMissions",
+                                     "recovery", "justificatifs"]
+
+    func testAucunPortNonCable() {
+        let gateways = DemoWorld.gateways()
+        XCTAssertEqual(gateways.unwiredPorts, Self.portsEnAttenteLot1,
+                       "tout port livré doit être câblé dans DemoWorld.gateways() dans la même PR")
+        XCTAssertTrue(gateways.audit is DemoAuditGateway)
+        XCTAssertTrue(gateways.flags is DemoFlagsGateway)
+        XCTAssertTrue(gateways.dashboard is DemoDashboardGateway, "T3 câble le tableau de bord")
+        XCTAssertTrue(gateways.compte is DemoAccountGateway, "T8 câble la suppression de compte")
+        XCTAssertEqual(DemoWorld.gateways(drapeaux: [:]).unwiredPorts, Self.portsEnAttenteLot1)
+        XCTAssertEqual(gateways.clock.now(), DemoWorld.fixedNow)
+    }
+
+    func testAuditDemoJournaliseEnMemoireSansReseau() async throws {
+        let gateways = DemoWorld.gateways()
+        let audit = try XCTUnwrap(gateways.audit as? DemoAuditGateway)
+        let connexion = try await audit.connexion()
+        let activite = try await audit.activite()
+        let ecriture = try await audit.ecrire(action: .missionAssignation, typeRessource: "mission",
+                                              idRessource: "demo-mission-001", details: ["intitule": "Démonstration"],
+                                              context: DemoWorld.context)
+        let deconnexion = try await audit.deconnexion()
+        XCTAssertEqual([connexion, activite, ecriture, deconnexion], [.enregistre, .enregistre, .enregistre, .enregistre])
+        let journal = await audit.journal()
+        XCTAssertEqual(journal, ["CONNEXION", "ACTIVITE", "MISSION_ASSIGNATION mission demo-mission-001", "DECONNEXION"])
+        let autreMonde = await (DemoWorld.gateways().audit as? DemoAuditGateway)?.journal()
+        XCTAssertEqual(autreMonde, [], "chaque jeu de ports démo repart d'un journal vierge")
+    }
+
+    func testAuditDemoRefuseUnAutreUtilisateurEtUneRessourceVide() async {
+        let audit = DemoAuditGateway()
+        do {
+            _ = try await audit.ecrire(action: .missionAssignation, typeRessource: "mission", idRessource: "demo-mission-001",
+                                       details: [:], context: autreContexte())
+            XCTFail("la démo n'écrit pour aucun autre utilisateur")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error.kind, .demoOnly)
+            XCTAssertEqual(error.message, DemoWorld.messageDemoSeulement)
+        } catch {
+            XCTFail("type d'erreur inattendu : \(error)")
+        }
+        do {
+            _ = try await audit.ecrire(action: .missionAssignation, typeRessource: "mission", idRessource: " ",
+                                       details: [:], context: DemoWorld.context)
+            XCTFail("une ressource vide n'est jamais auditée")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error.kind, .contract)
+        } catch {
+            XCTFail("type d'erreur inattendu : \(error)")
+        }
+        let journal = await audit.journal()
+        XCTAssertEqual(journal, [], "aucun refus n'est journalisé")
+    }
+
+    func testDrapeauxDemoFailOpenEtSurchargesExplicites() async {
+        let parDefaut = DemoWorld.gateways().flags
+        for ecran in EcranNatif.allCases {
+            let actif = await parDefaut.ecranActif(ecran)
+            XCTAssertTrue(actif, "\(ecran.cle) : défaut fail-open en démo")
+        }
+        let defautExplicite = await parDefaut.ecranActif(cle: "cle_inconnue", defaut: false)
+        XCTAssertFalse(defautExplicite, "sans surcharge, le défaut demandé est rendu")
+
+        let surcharge = DemoWorld.gateways(drapeaux: [EcranNatif.missions.cle: false]).flags
+        let missions = await surcharge.ecranActif(.missions)
+        let accueil = await surcharge.ecranActif(.accueil)
+        XCTAssertFalse(missions, "surcharge de lancement (-JOLENE_FLAG_…, T9) honorée")
+        XCTAssertTrue(accueil)
+    }
 }

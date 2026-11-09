@@ -131,3 +131,19 @@ public struct SupabaseAuthGateway: AuthPort {
         )
     }
 }
+
+// MARK: - Purge locale (lot 1, T8)
+
+extension SupabaseAuthGateway: LocalSignOutPort {
+    /// Purge locale après la suppression du compte : `signOut(scope: .local)`, comme le web
+    /// (`SectionConfidentialite.tsx` l.96). supabase-swift 2.55.5 retire la session du stockage
+    /// (Keychain) et émet `.signedOut` AVANT l'appel `/logout?scope=local` (AuthClient l.1100-1113) ;
+    /// cet appel, sans objet (l'edge a déjà révoqué les sessions), est toléré en échec.
+    public func signOutLocally() async {
+        do {
+            try await client.auth.signOut(scope: .local)
+        } catch {
+            // Session locale déjà retirée par le SDK : un refus ou une coupure du serveur est sans effet.
+        }
+    }
+}
