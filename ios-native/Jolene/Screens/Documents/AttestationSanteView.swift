@@ -14,7 +14,7 @@ struct RetourAction: Equatable {
 
 /// Attestation de santé sur l'honneur (lot 2 T7, décision 15), port de `AttestationSante` (`DocumentsSoignant.tsx`
 /// l.27-135). HARD STOP n°4 : tous les textes viennent de `TextesWeb.AttestationSante` (TL, verbatim, tutoiement du web
-/// conservé en attente de Gabrielle) ; badge, état d'envoi : `LibellesWeb.AttestationSante`. Signature par
+/// conservé, décision déléguée du 8 novembre 2026) ; badge, état d'envoi : `LibellesWeb.AttestationSante`. Signature par
 /// `DocumentsModel.signerAttestation()` (valeur serveur relue, jamais une seconde fois : web `canSign = … && !signedAt`).
 ///
 /// Identifiants : `attestation-vaccins`, `attestation-medecine`, `attestation-signer`, `attestation-signee`,

@@ -288,7 +288,7 @@ public enum LibellesWeb {
 
     /// Panneau de contestation (`PanneauContestation.tsx`) : en-tête (l.262) et formulaire
     /// d'ouverture (l.361-392). Libellés de statut : `TextesWeb.Contestation`. Aucun texte de délai
-    /// (Q9, en attente de Gabrielle).
+    /// (Q9, tranchée par délégation le 8 novembre 2026 : la fenêtre est décidée par le serveur).
     public enum Contestation {
         // source: src/components/PanneauContestation.tsx:262
         public static let titre = "Contestation"
@@ -627,72 +627,72 @@ public enum LibellesWeb {
         }
 
         /// En-tête (l.591) : voir `titre(numero:)`.
-        // source: src/pages/ContratMission.tsx:591
+        // source: src/pages/ContratMission.tsx:596
         public static let titrePrefixe = "Contrat"
 
         /// Statut de l'en-tête (l.592-597) : voir `statut(_:)`.
-        // source: src/pages/ContratMission.tsx:593
+        // source: src/pages/ContratMission.tsx:598
         public static let statutPrefixe = "Statut :"
 
-        // source: src/pages/ContratMission.tsx:594
+        // source: src/pages/ContratMission.tsx:599
         public static let statutSigne = "✅ Signé"
 
-        // source: src/pages/ContratMission.tsx:595
+        // source: src/pages/ContratMission.tsx:600
         public static let statutAnnule = "❌ Annulé"
 
-        // source: src/pages/ContratMission.tsx:596
+        // source: src/pages/ContratMission.tsx:601
         public static let statutEnAttente = "⏳ En attente de signatures"
 
         /// Contrat absent ou illisible (l.530).
-        // source: src/pages/ContratMission.tsx:530
+        // source: src/pages/ContratMission.tsx:535
         public static let introuvable = "Contrat introuvable"
 
-        // source: src/pages/ContratMission.tsx:611
+        // source: src/pages/ContratMission.tsx:616
         public static let telecharger = "Télécharger le contrat"
 
-        // source: src/pages/ContratMission.tsx:614
+        // source: src/pages/ContratMission.tsx:619
         public static let imprimer = "Imprimer"
 
         /// Aucun original contrôlé à partager (l.427-429).
-        // source: src/pages/ContratMission.tsx:428
+        // source: src/pages/ContratMission.tsx:433
         public static let aucunTelechargeable = "Aucun contrat téléchargeable pour le moment."
 
         /// Masque date-fns des dates du contrat (l.623, l.679, l.698), appliqué en heure de Paris.
-        // source: src/pages/ContratMission.tsx:623
+        // source: src/pages/ContratMission.tsx:628
         public static let formatDateHeure = "dd/MM/yyyy 'à' HH:mm"
 
         /// Section Signatures (l.666-706) : voir `ligneSignature(_:signee:dateFormatee:)`.
-        // source: src/pages/ContratMission.tsx:667
+        // source: src/pages/ContratMission.tsx:672
         public static let signaturesTitre = "Signatures"
 
-        // source: src/pages/ContratMission.tsx:678
+        // source: src/pages/ContratMission.tsx:683
         public static let partieEtablissement = "Établissement :"
 
-        // source: src/pages/ContratMission.tsx:697
+        // source: src/pages/ContratMission.tsx:702
         public static let partieSoignant = "Soignant(e) :"
 
-        // source: src/pages/ContratMission.tsx:679
+        // source: src/pages/ContratMission.tsx:684
         public static let signatureSignee = "✅ Signé"
 
-        // source: src/pages/ContratMission.tsx:679
+        // source: src/pages/ContratMission.tsx:684
         public static let signatureLe = "le"
 
-        // source: src/pages/ContratMission.tsx:680
+        // source: src/pages/ContratMission.tsx:685
         public static let signatureEnAttente = "⏳ En attente"
 
         /// Zone de signature (l.711) ; T9a : renvoi web jusqu'à T9b.
-        // source: src/pages/ContratMission.tsx:711
+        // source: src/pages/ContratMission.tsx:716
         public static let votreSignature = "Votre signature"
 
         /// Rendu serveur refusé (l.372-377) : voir `renduRefuse(messageServeur:)`.
-        // source: src/pages/ContratMission.tsx:377
+        // source: src/pages/ContratMission.tsx:382
         public static let renduImpossible = "Le document contractuel final n’a pas pu être préparé."
 
-        // source: src/pages/ContratMission.tsx:377
+        // source: src/pages/ContratMission.tsx:382
         public static let reessayerAvantDeSigner = "Réessayez avant de signer."
 
         /// Document final encore incomplet après le rendu (l.387-388).
-        // source: src/pages/ContratMission.tsx:388
+        // source: src/pages/ContratMission.tsx:393
         public static let renduIncomplet = "Le document contractuel final est encore incomplet. Réessayez avant de signer."
 
         /// En-tête « Contrat <numéro> » (l.591), sans repli : un numéro NULL laisse « Contrat ».

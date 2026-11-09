@@ -1223,6 +1223,25 @@ test('DECISIONS_LOT2.md : vingt-cinq décisions dans l ordre, D-FLAGS, scission 
   for (const point of ['HARD STOP n°4', 'B9', 'TL', 'T5b', 'T9b', 'delai_contestation_pointage_h', 'B1', 'S1', 'T11', 'fn_presences_detail_mission']) {
     assert.ok(attente.includes(point), `En attente de Gabrielle : ${point} absent`);
   }
+  // L2-TJ : depuis la délégation du 8 novembre 2026, les HARD STOP n°4 du lot 2 sont tranchés (D1 à D12), chacun avec
+  // ses sources et la ligne de délégation ; « En attente de Gabrielle » ne garde que la présence physique (P9) et B9.
+  const deleguees = aplati(section(decisions, 'Décisions déléguées du 8 novembre 2026'));
+  const LIGNE_DELEGATION = 'décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026';
+  for (let i = 1; i <= 12; i++) {
+    const debut = deleguees.indexOf(`### D${i} — `);
+    assert.ok(debut >= 0, `décision déléguée D${i} absente`);
+    const suivante = deleguees.indexOf(`### D${i + 1} — `);
+    const corps = deleguees.slice(debut, suivante < 0 ? undefined : suivante);
+    assert.ok(corps.includes(LIGNE_DELEGATION), `D${i} : ligne « ${LIGNE_DELEGATION} » absente`);
+  }
+  for (const source of ['art. 441-7', '11-82.153', 'art. 1366', 'art. 1367', 'L.1242-12', 'L.1142-2', 'L.4131-2',
+    'art. 1190', 'L.3245-1', 'RGPD', 'TYPES_CONTRAT_MENTION_SALARIEE', '#1122', 'fn_documents_ok_pour_mission',
+    'fn_fenetre_contestation_ouverte', 'delai_contestation_pointage_h', 'ON CONFLICT (cle) DO UPDATE', 'PageCGU.tsx']) {
+    assert.ok(deleguees.includes(source), `Décisions déléguées : source ${source} absente`);
+  }
+  const hardStopAttente = aplati(sousSection(attente, 'HARD STOP n°4 — revue sur appareil (présence physique)'));
+  assert.ok(hardStopAttente.includes('P9') && !/\*\*T5b\*\*|\*\*T9b\*\*|\*\*TL\*\*|Décision Q9/.test(hardStopAttente),
+    'En attente de Gabrielle : seuls les points qui exigent sa présence physique restent sous HARD STOP n°4');
   assert.ok(decisions.includes('LOT2_PLAN.md') && decisions.includes('LOTS_2_5_DECISIONS'), 'renvois au blueprint et au mandat absents');
 });
 

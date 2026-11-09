@@ -23,7 +23,8 @@
  *   - `// source-objet: <fichier>:<ligne> <NOM>` avant un `[String: String]` : l'objet littéral
  *     `NOM` du web (même jeu de clés, chaque clé reliée à la constante du même texte) ;
  *     `<NOM>.<champ>` pour un objet d'objets (`STATUT_CONFIG.label` : le champ `label` de chaque clé) ;
- *   - `// source-ensemble: <fichier>:<début>-<fin>` avant un `Set<String>` : `new Set([...])`.
+ *   - `// source-ensemble: <fichier>:<début>-<fin>` avant un `Set<String>` : `new Set([...])`, ou liste de chaînes
+ *     nommée `const NOM = ['A', 'B']` (lue par `.includes`, L2-TJ).
  * `catalogue` doit lister toutes les constantes du fichier (les tests Swift le parcourent). Tout
  * autre littéral de chaîne est refusé (sauf `" "` et `""`, séparateurs des assemblages), de même que
  * tout littéral multi-ligne (triple guillemet).
@@ -34,7 +35,7 @@
  * disparue ou ambiguë : erreur qui nomme la fonction Swift à relire ; zone décalée : avertissement.
  * Les `rendus` du même fichier (exemples assertés par les tests Swift) sont montrés à Gabrielle.
  *
- * Verrou Q9 (LOT2_PLAN §7 Q9, DECISIONS_LOT2, en attente de Gabrielle) : aucune constante ne reprend
+ * Verrou Q9 (LOT2_PLAN §7 Q9 ; DECISIONS_LOT2, décision déléguée du 8 novembre 2026) : aucune constante ne reprend
  * un texte de délai de contestation du panneau (`ANCRES_Q9`, localisées par leur texte), ni ne
  * l'annonce dans leur bloc JSX, ni n'associe contestation ou litige et délai (`DELAI_CONTESTATION`).
  *
@@ -139,10 +140,12 @@ export const MARQUES_JURIDIQUES = [
 ];
 
 /**
- * Verrou Q9 (LOT2_PLAN v2 §1.2, correction 14, §7 Q9 ; DECISIONS_LOT2 « En attente de
- * Gabrielle ») : les textes de délai du panneau de contestation contredisent le serveur
- * (`delai_contestation_pointage_h`, 48 h par défaut ; escalade vers `EN_MEDIATION`) et ne sont pas
- * affichés tant que Q9 n'est pas tranchée. Chaque ancre est retrouvée par son texte (où qu'il soit
+ * Verrou Q9 (LOT2_PLAN v2 §1.2, correction 14, §7 Q9 ; DECISIONS_LOT2 « Décisions déléguées du
+ * 8 novembre 2026 », Q9) : les textes de délai du panneau de contestation contredisent le serveur
+ * (`delai_contestation_pointage_h`, 48 h par défaut ; escalade vers `EN_MEDIATION`). Q9 est tranchée
+ * par délégation : le natif n'affiche aucun texte de délai (la fenêtre est décidée par
+ * `fn_fenetre_contestation_ouverte`), y compris après l'alignement du paramètre serveur sur 72 h,
+ * tant que le web n'a pas corrigé ces textes. Chaque ancre est retrouvée par son texte (où qu'il soit
  * dans le fichier) ; aucune constante ne pointe dans son bloc JSX ni n'en reprend un texte. Une ancre
  * disparue fait rougir la garde : le web a changé, Q9 est à relire.
  */
@@ -161,8 +164,8 @@ export const DELAI_CONTESTATION = {
   delai: /\d+\s?(?:h|heures?|jours?)\b|délai/i,
 };
 
-const MESSAGE_Q9 = 'texte de délai de contestation interdit tant que Q9 n’est pas tranchée par Gabrielle '
-  + '(LOT2_PLAN §7 Q9, DECISIONS_LOT2 « En attente de Gabrielle »)';
+const MESSAGE_Q9 = 'texte de délai de contestation interdit côté natif (LOT2_PLAN §7 Q9 ; DECISIONS_LOT2, '
+  + '« Décisions déléguées du 8 novembre 2026 », Q9 : la fenêtre est décidée par le serveur)';
 
 /**
  * Chaînes d'autorisation iOS d'`Info.plist`, verrouillées sur la liste et les textes actuels (lot 0) :
@@ -516,7 +519,7 @@ function analyserWeb(fichier, texte) {
   return { unites, sf };
 }
 
-/** Objets littéraux `const NOM = { CLE: 'texte', … }` et `new Set([...])` d'un fichier TSX. */
+/** Objets littéraux `const NOM = { CLE: 'texte', … }`, `new Set([...])` et `const NOM = ['…']` d'un fichier TSX. */
 function structuresWeb(sf) {
   const objets = [];
   const ensembles = [];
@@ -558,6 +561,16 @@ function structuresWeb(sf) {
       const elements = noeud.arguments[0].elements
         .filter(e => ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)).map(e => e.text);
       ensembles.push({ debut: ligne(noeud.getStart(sf)), fin: ligne(noeud.end - 1), elements });
+    }
+    // L2-TJ : liste de chaînes nommée (`const NOM = ['A', 'B'];`, `as const` admis), lue par `.includes` sur le web
+    // (`TYPES_CONTRAT_MENTION_SALARIEE`, ContratMission.tsx, #1122). Seuls les tableaux faits uniquement de chaînes
+    // littérales comptent : un élément calculé rend la liste illisible pour la garde, donc absente.
+    if (ts.isVariableDeclaration(noeud) && ts.isIdentifier(noeud.name)) {
+      const init = deballer(noeud.initializer);
+      if (init && ts.isArrayLiteralExpression(init) && init.elements.length
+        && init.elements.every(e => ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e))) {
+        ensembles.push({ debut: ligne(init.getStart(sf)), fin: ligne(init.end - 1), elements: init.elements.map(e => e.text) });
+      }
     }
     ts.forEachChild(noeud, visiter);
   };
@@ -883,15 +896,15 @@ export function verifierTextes({ swiftSource, libellesSource, zonesRendu, lireWe
       if (memes.length === 1) {
         cible = memes[0];
         e.position = { debut: cible.debut, fin: cible.fin };
-        avertissements.push(`${e.nomComplet} : new Set([...]) retrouvé ${lignesDe(cible)} de ${e.source.fichier} `
+        avertissements.push(`${e.nomComplet} : ensemble web retrouvé ${lignesDe(cible)} de ${e.source.fichier} `
           + `(annoncé ${lignesDe(e.source)}) : toléré ; \`${COMMANDE} --corriger-lignes\``);
       } else if (memes.length > 1) {
-        erreurs.push(`${e.nomComplet} : new Set([...]) présent plusieurs fois dans ${e.source.fichier}`);
+        erreurs.push(`${e.nomComplet} : ensemble web présent plusieurs fois dans ${e.source.fichier}`);
         continue;
       }
     }
     if (!cible) {
-      erreurs.push(`${e.nomComplet} : new Set([...]) introuvable ${lignesDe(e.source)} de ${e.source.fichier}`);
+      erreurs.push(`${e.nomComplet} : ensemble web (new Set([...]) ou const … = [...]) introuvable ${lignesDe(e.source)} de ${e.source.fichier}`);
       continue;
     }
     const webSet = new Set(cible.elements);

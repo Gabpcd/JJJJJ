@@ -4,7 +4,9 @@ import Foundation
 // docs/mobile-swift/LOT2_PLAN.md §3 « TL », critère P9 ; décisions docs/mobile-swift/DECISIONS_LOT2.md ;
 // ces deux documents sont livrés par la tranche T0, intégrée avant TL).
 //
-// Ce fichier ne porte QUE des textes soumis à la validation de Gabrielle : les textes listés par le
+// Ce fichier ne porte QUE des textes soumis au HARD STOP n°4 (validation : décisions déléguées du
+// 8 novembre 2026, docs/mobile-swift/DECISIONS_LOT2.md, tranche L2-TJ, par délégation explicite de
+// Gabrielle) : les textes listés par le
 // blueprint v2 (§3 TL) et ceux qui citent un texte de loi, énoncent un droit, une obligation, un
 // délai, un effet contractuel ou une preuve, ou formulent un consentement, une attestation, une
 // acceptation ou une signature (y compris le bouton qui accomplit l'acte), plus les fragments de
@@ -94,8 +96,8 @@ public enum TextesWeb {
 
     /// Bandeau du pointage sans localisation (`BandeauSansGPS.tsx` l.4-13), après un refus.
     public enum BandeauSansGps {
-        /// Tutoiement du web conservé verbatim : le passage au vouvoiement serait une reformulation
-        /// (HARD STOP n°4), en attente de la décision de Gabrielle.
+        /// Tutoiement du web conservé verbatim (décision déléguée du 8 novembre 2026, DECISIONS_LOT2) :
+        /// le vouvoiement passera d'abord par le web, puis le natif suivra par la garde.
         // source: src/components/BandeauSansGPS.tsx:9 [consentement]
         public static let texte = "Pointage sans localisation activé. Lorsque tu pointeras, l'établissement validera manuellement ta présence."
     }
@@ -115,21 +117,21 @@ public enum TextesWeb {
         // source: src/components/profil-soignant/SectionPreferences.tsx:140 [consentement]
         public static let libelleAccessibilite = "Autoriser la géolocalisation lors des pointages"
 
-        /// Tutoiement du web conservé verbatim : le passage au vouvoiement serait une reformulation
-        /// (HARD STOP n°4), en attente de la décision de Gabrielle.
+        /// Tutoiement du web conservé verbatim (décision déléguée du 8 novembre 2026, DECISIONS_LOT2) :
+        /// le vouvoiement passera d'abord par le web, puis le natif suivra par la garde.
         // source: src/components/profil-soignant/SectionPreferences.tsx:135 [consentement]
         public static let explicationActive = "Ta position sera capturée uniquement au moment de l'arrivée et du départ."
 
-        /// Tutoiement du web conservé verbatim : le passage au vouvoiement serait une reformulation
-        /// (HARD STOP n°4), en attente de la décision de Gabrielle.
+        /// Tutoiement du web conservé verbatim (décision déléguée du 8 novembre 2026, DECISIONS_LOT2) :
+        /// le vouvoiement passera d'abord par le web, puis le natif suivra par la garde.
         // source: src/components/profil-soignant/SectionPreferences.tsx:136 [consentement]
         public static let explicationRetiree = "Sans GPS, tes pointages seront validés manuellement par l'établissement — rien à faire de ton côté."
 
         // source: src/components/profil-soignant/SectionPreferences.tsx:161 [consentement]
         public static let active = "Consentement GPS activé."
 
-        /// Tutoiement du web conservé verbatim : le passage au vouvoiement serait une reformulation
-        /// (HARD STOP n°4), en attente de la décision de Gabrielle.
+        /// Tutoiement du web conservé verbatim (décision déléguée du 8 novembre 2026, DECISIONS_LOT2) :
+        /// le vouvoiement passera d'abord par le web, puis le natif suivra par la garde.
         // source: src/components/profil-soignant/SectionPreferences.tsx:161 [consentement]
         public static let retire = "Consentement GPS retiré — tes pointages seront validés manuellement par l'établissement."
 
@@ -151,22 +153,23 @@ public enum TextesWeb {
         // source: src/pages/PresencesSoignant.tsx:76 [consentement]
         public static let consentementGpsEnregistre = "Consentement GPS enregistré."
 
-        /// Tutoiement du web conservé verbatim : le passage au vouvoiement serait une reformulation
-        /// (HARD STOP n°4), en attente de la décision de Gabrielle.
+        /// Tutoiement du web conservé verbatim (décision déléguée du 8 novembre 2026, DECISIONS_LOT2) :
+        /// le vouvoiement passera d'abord par le web, puis le natif suivra par la garde.
         // source: src/pages/PresencesSoignant.tsx:95 [consentement]
         public static let pointageSansGpsActive = "Pointage sans GPS activé — ton pointage sera validé manuellement par l'établissement, rien à faire de ton côté."
 
         // source: src/pages/PresencesSoignant.tsx:658 [juridique]
         public static let bandeauAValider = "⏳ Présences en attente de validation par l'établissement (validation automatique sous 72 h). La validation des heures est distincte du versement. En salarié, le salaire est versé par l'établissement employeur. En libéral, le paiement suit les modalités de la mission."
 
-        /// Affiché tel quel, tutoiement compris, par le détail des présences (T5a) : décision déléguée « Relance de
-        /// l'établissement » (`docs/mobile-swift/DECISIONS_LOT2.md`, « Décisions déléguées du 8 novembre 2026 », T5a,
-        /// l.1001) ; le vouvoiement des textes juridiques partira du web (décision de la vague 4).
+        /// Affiché tel quel, tutoiement compris, par le détail des présences (T5a) : décisions déléguées du 8 novembre 2026
+        /// (`docs/mobile-swift/DECISIONS_LOT2.md`, « Décisions déléguées du 8 novembre 2026 » : D2 de L2-TJ et « Relance de
+        /// l'établissement » de T5a) ; le vouvoiement des textes juridiques passera d'abord par le web, puis le natif suivra
+        /// par la garde (décision de la vague 4).
         // source: src/pages/DetailPresencesMission.tsx:697 [libellé]
         public static let relanceTitre = "⏳ Tes présences attendent la validation de l'établissement"
 
-        /// Affiché tel quel, tutoiement compris : même décision déléguée (l.1001), qui source chaque
-        /// phrase (CGU de production, `src/pages/PageCGU.tsx` l.48, l.109, l.115 ; `dec_definir_type_paiement`).
+        /// Affiché tel quel, tutoiement compris : mêmes décisions déléguées, qui sourcent chaque phrase (CGU de production,
+        /// `src/pages/PageCGU.tsx` l.48, l.109, l.115 ; `dec_definir_type_paiement`).
         // source: src/pages/DetailPresencesMission.tsx:698 [juridique]
         public static let relanceExplication = "La validation des heures (automatique sous 72 h) est distincte du versement. En salarié, le salaire est versé par l'établissement employeur. En libéral, le paiement suit les modalités de la mission. Tu peux envoyer un rappel."
     }
@@ -174,8 +177,8 @@ public enum TextesWeb {
     /// Contestation d'une présence validée (`PanneauContestation.tsx`) : libellés de statut
     /// (`STATUT_CONFIG` l.48-62), listés par le blueprint. Titre et formulaire : `LibellesWeb.Contestation`.
     ///
-    /// Aucun texte de délai tant que Q9 n'est pas tranchée par Gabrielle (LOT2_PLAN v2 §1.2,
-    /// correction 14, §7 Q9 ; DECISIONS_LOT2 « En attente de Gabrielle ») : les textes de délai du
+    /// Aucun texte de délai (LOT2_PLAN v2 §1.2, correction 14, §7 Q9 ; Q9 tranchée par délégation,
+    /// DECISIONS_LOT2 « Décisions déléguées du 8 novembre 2026 ») : les textes de délai du
     /// panneau (« 72h pour répondre », « l'admin plateforme tranchera », « Vous avez 72 h après la
     /// validation pour contester… ») contredisent le serveur (`parametres_litiges.delai_contestation_pointage_h`,
     /// 48 h par défaut ; escalade vers `EN_MEDIATION`). Ils ne sont pas repris : la garde Node les
@@ -270,8 +273,8 @@ public enum TextesWeb {
         // source: src/pages/DocumentsSoignant.tsx:127 [consentement]
         public static let signer = "✅ Signer mon attestation"
 
-        /// Tutoiement du web conservé verbatim : le passage au vouvoiement serait une reformulation
-        /// (HARD STOP n°4), en attente de la décision de Gabrielle.
+        /// Tutoiement du web conservé verbatim (décision déléguée du 8 novembre 2026, DECISIONS_LOT2) :
+        /// le vouvoiement passera d'abord par le web, puis le natif suivra par la garde.
         // source: src/pages/DocumentsSoignant.tsx:132 [juridique]
         public static let documentsOriginaux = "Les documents originaux (carnet de vaccination, attestation de médecine du travail) sont vérifiés par l'établissement lors de ta première mission. Jolene enregistre uniquement ta déclaration et sa date de signature, avec un accès restreint."
 
@@ -284,71 +287,105 @@ public enum TextesWeb {
         }
     }
 
+    /// Justificatifs (`DocumentsSoignant.tsx`) : bandeau RCP de l'exercice libéral ou mixte (l.611-640 ; obligation
+    /// d'assurance des professionnels de santé libéraux, art. L.1142-2 du Code de la santé publique, et restriction de
+    /// candidature appliquée par le serveur, `fn_documents_ok_pour_mission`) et textes d'accès des documents
+    /// complémentaires (l.867-868 : pré-éligibilité étudiante ; l.882-883 : licence de remplacement, art. L.4131-2 du
+    /// même code). Affichés par `JustificatifsView` via `PresentationJustificatifs` (tranche L2-TJ, décision déléguée du
+    /// 8 novembre 2026, DECISIONS_LOT2). Tutoiement du web conservé verbatim : le vouvoiement passera d'abord par le web.
+    public enum Justificatifs {
+        // source: src/pages/DocumentsSoignant.tsx:623 [juridique]
+        public static let rcpExpiree = "Ton assurance RCP est expirée. Pense à la renouveler."
+
+        // source: src/pages/DocumentsSoignant.tsx:624 [juridique]
+        public static let rcpExpireeRestriction = "Tu ne peux pas postuler aux missions libérales tant que ta RCP n'est pas à jour."
+
+        // source: src/pages/DocumentsSoignant.tsx:634 [juridique]
+        public static let rcpObligatoire = "L'assurance RCP est obligatoire pour l'exercice libéral et mixte. Téléverse ton attestation RCP."
+
+        // source: src/pages/DocumentsSoignant.tsx:867-868 [juridique]
+        public static let accesScolarite = "L'analyse prépare ton dossier, puis l'équipe Jolene contrôle les crédits, stages, unités d'enseignement et attestations exigés avant d'ouvrir une pré-éligibilité."
+
+        // source: src/pages/DocumentsSoignant.tsx:882-883 [juridique]
+        public static let accesLicence = "Interne ? Téléverse ta licence de remplacement délivrée par le Conseil de l'Ordre : elle est contrôlée avant tout accès aux remplacements de médecin."
+    }
+
     /// Lecture d'un contrat (`ContratMission.tsx` l.552-837) : bandeaux de statut, CDD à préparer,
     /// document figé et empreinte, contenu indisponible, mode OTP, pied de page juridique.
     public enum Contrat {
-        // source: src/pages/ContratMission.tsx:554 [juridique]
+        // source: src/pages/ContratMission.tsx:559 [juridique]
         public static let annule = "❌ Ce contrat a été annulé suite à l'annulation de la mission."
 
-        // source: src/pages/ContratMission.tsx:559 [juridique]
+        // source: src/pages/ContratMission.tsx:564 [juridique]
         public static let expire = "⏰ Contrat expiré — non signé dans les 72h. La mission a été annulée."
 
-        // source: src/pages/ContratMission.tsx:564 [juridique]
+        // source: src/pages/ContratMission.tsx:569 [juridique]
         public static let refuse = "❌ Ce contrat a été refusé par l'une des parties."
 
-        // source: src/pages/ContratMission.tsx:571 [juridique]
+        // source: src/pages/ContratMission.tsx:576 [juridique]
         public static let autrePartieASigne = "⏳ L'autre partie a déjà signé"
 
-        // source: src/pages/ContratMission.tsx:573 [juridique]
+        // source: src/pages/ContratMission.tsx:578 [juridique]
         public static let autrePartieASigneDetail = "Vous pouvez signer maintenant. Le contrat devient complet dès que les deux signatures sont enregistrées, quel que soit leur ordre."
 
         /// CDD sans original préparé par l'employeur (LOT2_PLAN §7 Q19) : aucune action soignant.
-        // source: src/pages/ContratMission.tsx:603 [juridique]
+        // source: src/pages/ContratMission.tsx:608 [juridique]
         public static let cddAPreparer = "Le contrat doit être préparé et confirmé par un représentant autorisé de l’employeur avant les signatures."
 
         /// Suivi de la date `dd/MM/yyyy 'à' HH:mm` : voir `documentOfficielFige(dateFormatee:empreinte:)`.
-        // source: src/pages/ContratMission.tsx:623 [fragment]
+        // source: src/pages/ContratMission.tsx:628 [fragment]
         public static let documentFigeLe = "Document officiel figé le"
 
-        // source: src/pages/ContratMission.tsx:624 [fragment]
+        // source: src/pages/ContratMission.tsx:629 [fragment]
         public static let empreinteLibelle = "— empreinte"
 
-        // source: src/pages/ContratMission.tsx:624 [fragment]
+        // source: src/pages/ContratMission.tsx:629 [fragment]
         public static let empreinteEllipse = "…"
 
-        // source: src/pages/ContratMission.tsx:636 [juridique]
+        // source: src/pages/ContratMission.tsx:641 [juridique]
         public static let originalIndisponible = "Le document signé d’origine est indisponible. Aucune reconstitution automatique n’est effectuée."
 
-        // source: src/pages/ContratMission.tsx:637 [libellé]
+        // source: src/pages/ContratMission.tsx:642 [libellé]
         public static let contenuPasDisponible = "Le contenu du contrat n'est pas encore disponible."
 
-        // source: src/pages/ContratMission.tsx:740 [juridique]
+        // source: src/pages/ContratMission.tsx:745 [juridique]
         public static let otpLibelle = "📱 Signature électronique OTP SMS"
 
-        // source: src/pages/ContratMission.tsx:743 [juridique]
+        // source: src/pages/ContratMission.tsx:748 [juridique]
         public static let otpDescription = "Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code civil."
 
-        // source: src/pages/ContratMission.tsx:822 [juridique]
+        // source: src/pages/ContratMission.tsx:827 [juridique]
         public static let dejaSigne = "✅ Vous avez déjà signé ce contrat"
 
-        // source: src/pages/ContratMission.tsx:832 [fragment]
+        // source: src/pages/ContratMission.tsx:837 [fragment]
         public static let mentionCadreEmployeur = "Contrat salarié préparé selon le cadre déclaré par l’employeur."
 
-        // source: src/pages/ContratMission.tsx:834 [fragment]
+        // source: src/pages/ContratMission.tsx:839 [fragment]
         public static let mentionSalarieEcrit = "Contrat salarié écrit — art. L.1242-12 du Code du travail."
 
-        // source: src/pages/ContratMission.tsx:835 [fragment]
+        // source: src/pages/ContratMission.tsx:840 [fragment]
         public static let mentionPrestationLiberale = "Contrat de prestation entre l’établissement et le professionnel libéral."
 
-        // source: src/pages/ContratMission.tsx:836 [fragment]
+        // source: src/pages/ContratMission.tsx:841 [fragment]
         public static let signatureElectroniqueSimple = "Signature électronique simple."
 
-        // source: src/pages/ContratMission.tsx:836 [fragment]
+        // source: src/pages/ContratMission.tsx:841 [fragment]
         public static let regularisationMontants = "Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires."
 
-        /// Mention du pied de page (l.832-835), choisie comme le web : `cadreEmployeur` quand
-        /// `texteEmployeur` est vrai (CDD au cadre déclaré par l'employeur, l.535-537), sinon
-        /// `salarieEcrit` pour `type_contrat` CDD ou SALARIE (l.833), sinon `prestationLiberale`.
+        /// Types de contrat qui reçoivent la mention « Contrat salarié écrit » (`TYPES_CONTRAT_MENTION_SALARIEE`,
+        /// #1122 : CDDU et VACATION sont des contrats salariés, mention validée par Gabrielle le 08/11/2026, HARD
+        /// STOP n°4). Comparaison exacte (`Array.includes`), lue par `ContratRules.mentionPiedDePage`.
+        // source-ensemble: src/pages/ContratMission.tsx:65
+        public static let typesMentionSalariee: Set<String> = [
+            "CDD",
+            "SALARIE",
+            "CDDU",
+            "VACATION",
+        ]
+
+        /// Mention du pied de page (l.837-840), choisie comme le web : `cadreEmployeur` quand
+        /// `texteEmployeur` est vrai (CDD au cadre déclaré par l'employeur, l.540-542), sinon
+        /// `salarieEcrit` pour un `type_contrat` de `typesMentionSalariee` (l.838), sinon `prestationLiberale`.
         public enum MentionPiedDePage: Sendable, CaseIterable {
             case cadreEmployeur
             case salarieEcrit
@@ -363,9 +400,9 @@ public enum TextesWeb {
             }
         }
 
-        /// Pied de page rendu par le web (l.831-837) : mention, « Signature électronique simple. »,
+        /// Pied de page rendu par le web (l.836-842) : mention, « Signature électronique simple. »,
         /// puis la régularisation des montants, sauf pour un contrat au cadre déclaré par l'employeur
-        /// (`{!texteEmployeur && …}`, l.836).
+        /// (`{!texteEmployeur && …}`, l.841).
         public static func piedDePage(_ mention: MentionPiedDePage) -> String {
             let base = mention.texte + " " + signatureElectroniqueSimple
             return mention == .cadreEmployeur ? base : base + " " + regularisationMontants
@@ -696,6 +733,11 @@ public enum TextesWeb {
         .init(cle: "AttestationSante.signer", texte: AttestationSante.signer),
         .init(cle: "AttestationSante.documentsOriginaux", texte: AttestationSante.documentsOriginaux),
         .init(cle: "AttestationSante.succes", texte: AttestationSante.succes),
+        .init(cle: "Justificatifs.rcpExpiree", texte: Justificatifs.rcpExpiree),
+        .init(cle: "Justificatifs.rcpExpireeRestriction", texte: Justificatifs.rcpExpireeRestriction),
+        .init(cle: "Justificatifs.rcpObligatoire", texte: Justificatifs.rcpObligatoire),
+        .init(cle: "Justificatifs.accesScolarite", texte: Justificatifs.accesScolarite),
+        .init(cle: "Justificatifs.accesLicence", texte: Justificatifs.accesLicence),
         .init(cle: "Contrat.annule", texte: Contrat.annule),
         .init(cle: "Contrat.expire", texte: Contrat.expire),
         .init(cle: "Contrat.refuse", texte: Contrat.refuse),

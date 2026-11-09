@@ -533,6 +533,67 @@ test('TL : MESSAGES_ERREUR, les codes bloquants et les libellés de statut sont 
   ]);
 });
 
+// L2-TJ (#1122, mention validée par Gabrielle le 08/11/2026) : la liste des types de contrat qui reçoivent « Contrat
+// salarié écrit — art. L.1242-12 du Code du travail. » est l'ensemble `TYPES_CONTRAT_MENTION_SALARIEE` du web
+// (`const … = [...]`, l.65 de ContratMission.tsx), repris type pour type par `TextesWeb.Contrat.typesMentionSalariee`.
+test('TJ : les types à mention salariée suivent TYPES_CONTRAT_MENTION_SALARIEE du web, type par type', () => {
+  const contrat = 'src/pages/ContratMission.tsx';
+  const ensemble = resultat.ensembles.find(e => e.source?.fichier === contrat);
+  assert.ok(ensemble, 'ensemble des types à mention salariée absent de TextesWeb.swift');
+  assert.equal(ensemble.nomComplet, 'TextesWeb.Contrat.typesMentionSalariee');
+  assert.deepEqual([...ensemble.elements].sort(), ['CDD', 'CDDU', 'SALARIE', 'VACATION']);
+  const web = read(contrat);
+  const declaration = "export const TYPES_CONTRAT_MENTION_SALARIEE = ['CDD', 'SALARIE', 'CDDU', 'VACATION'];";
+  assert.ok(web.includes(declaration), 'déclaration web introuvable : relire la mention du pied de page');
+  assert.equal(web.split('\n')[ensemble.source.debut - 1].trim(), declaration, 'annotation hors de la déclaration web');
+  // Un type retiré du web fait rougir la garde.
+  const sansVacation = web.replace(declaration, "export const TYPES_CONTRAT_MENTION_SALARIEE = ['CDD', 'SALARIE', 'CDDU'];");
+  let r = verifier({ lireWeb: lireAvec(contrat, sansVacation) });
+  assert.ok(r.erreurs.some(e => e.includes('typesMentionSalariee') && e.includes('VACATION')), JSON.stringify(r.erreurs));
+  // Un type ajouté au web aussi.
+  const avecInterim = web.replace(declaration, "export const TYPES_CONTRAT_MENTION_SALARIEE = ['CDD', 'SALARIE', 'CDDU', 'VACATION', 'INTERIM'];");
+  r = verifier({ lireWeb: lireAvec(contrat, avecInterim) });
+  assert.ok(r.erreurs.some(e => e.includes('typesMentionSalariee') && e.includes('INTERIM')), JSON.stringify(r.erreurs));
+  // Un type oublié côté Swift.
+  const oubli = swift.replace(/^\s*"CDDU",\n/m, '');
+  assert.notEqual(oubli, swift);
+  r = verifier({ swiftSource: oubli });
+  assert.ok(r.erreurs.some(e => e.includes('typesMentionSalariee') && e.includes('CDDU')), JSON.stringify(r.erreurs));
+  // L'ancienne règle (CDD et SALARIE seuls) ne passe plus : la zone du pied de page lit la constante.
+  const zone = zonesRendu.zones.find(z => (z.fonctions ?? []).includes('TextesWeb.Contrat.piedDePage'));
+  assert.ok(zone.code.some(l => l.includes('TYPES_CONTRAT_MENTION_SALARIEE.includes(contrat.type_contrat')), JSON.stringify(zone.code));
+  assert.ok(!zone.code.some(l => l.includes("['CDD', 'SALARIE']")), 'zone du pied de page restée sur l’ancienne règle');
+});
+
+// L2-TJ (décisions déléguées du 8 novembre 2026, DECISIONS_LOT2) : bandeau RCP et textes d'accès des documents
+// complémentaires de `DocumentsSoignant.tsx`, affichés verbatim (tutoiement du web compris), nature juridique.
+test('TJ : bandeau RCP et textes d’accès des justificatifs repris verbatim, nature juridique', () => {
+  const attendus = [
+    ['TextesWeb.Justificatifs.rcpExpiree', 623, 623],
+    ['TextesWeb.Justificatifs.rcpExpireeRestriction', 624, 624],
+    ['TextesWeb.Justificatifs.rcpObligatoire', 634, 634],
+    ['TextesWeb.Justificatifs.accesScolarite', 867, 868],
+    ['TextesWeb.Justificatifs.accesLicence', 882, 883],
+  ];
+  const documents = read('src/pages/DocumentsSoignant.tsx').split('\n');
+  for (const [nom, debut, fin] of attendus) {
+    const c = parNom.get(nom);
+    assert.ok(c, `${nom} absente de TextesWeb.swift`);
+    assert.equal(c.source.fichier, 'src/pages/DocumentsSoignant.tsx', nom);
+    assert.equal(c.nature, 'juridique', nom);
+    // Le texte commence à la ligne annoncée par l'annotation réalignée (aucune ligne figée ici).
+    assert.ok(documents[c.source.debut - 1].includes(c.valeur.split(' ').slice(0, 3).join(' ')), `${nom} : ligne ${c.source.debut}`);
+    assert.equal(c.source.fin - c.source.debut, fin - debut, `${nom} : nombre de lignes`);
+  }
+  // Une lettre changée côté web rougit (garde au caractère près).
+  const fichier = 'src/pages/DocumentsSoignant.tsx';
+  const web = read(fichier);
+  const altere = web.replace("Tu ne peux pas postuler aux missions libérales", "Tu ne peux pas candidater aux missions libérales");
+  assert.notEqual(altere, web);
+  const r = verifier({ lireWeb: lireAvec(fichier, altere) });
+  assert.ok(r.erreurs.some(e => e.includes('TextesWeb.Justificatifs.rcpExpireeRestriction')), JSON.stringify(r.erreurs));
+});
+
 test('TL : la garde rougit sur toute constante altérée d’un caractère (mutation rejouée sur chaque constante)', () => {
   let rejouees = 0;
   for (const constante of constantes) {

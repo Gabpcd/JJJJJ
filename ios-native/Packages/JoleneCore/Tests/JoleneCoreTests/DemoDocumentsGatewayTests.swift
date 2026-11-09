@@ -104,6 +104,30 @@ final class DemoDocumentsGatewayTests: XCTestCase {
         XCTAssertEqual(ScenarioDocumentsDemo(rawValue: "upload-incertain"), .uploadIncertain)
     }
 
+    /// L2-TJ : `-JOLENE_DEMO_SCENARIO rcp-expiree` (DEBUG, XCUITest du bandeau RCP) : la RCP vérifiée de la fixture
+    /// porte une date passée (20 octobre 2026) ; rien d'autre ne change, aucun réseau.
+    func testScenarioRcpExpireeMontreLeBandeauRcp() async throws {
+        XCTAssertEqual(ScenarioDocumentsDemo(rawValue: "rcp-expiree"), .rcpExpiree)
+        let maintenant = DemoWorld.fixedNow
+        let d = try await DemoDocumentsGateway(scenario: .rcpExpiree).dossier(context: c)
+        let rcp = try XCTUnwrap(d.document(pour: "RCP_ASSURANCE"))
+        XCTAssertEqual(rcp.statutVerification, "VERIFIE")
+        XCTAssertEqual(rcp.valideJusqua, "2026-10-20")
+        XCTAssertEqual(d.alerteRcp(maintenant: maintenant), .expiree)
+        XCTAssertEqual(PresentationJustificatifs.bandeauRcp(d, maintenant: maintenant)?.alerte, .expiree)
+        XCTAssertEqual(d.expirantBientot(maintenant: maintenant), [], "plus d'expiration proche : la RCP est expirée")
+        let normal = try await DemoDocumentsGateway().dossier(context: c)
+        XCTAssertNil(normal.alerteRcp(maintenant: maintenant), "scénario normal : RCP vérifiée et valide")
+        XCTAssertEqual(d.documents.map(\.id), normal.documents.map(\.id), "mêmes pièces")
+        XCTAssertEqual(d.documents.filter { $0.typeDocument != "RCP_ASSURANCE" },
+                       normal.documents.filter { $0.typeDocument != "RCP_ASSURANCE" })
+        // Un envoi reste possible et suit la règle habituelle (aucune autre différence de comportement).
+        let gateway = DemoDocumentsGateway(scenario: .rcpExpiree)
+        let recu = try await gateway.preparerEnvoi(type: "RCP_ASSURANCE", fichier: fichierPdf, libelle: nil, context: c).demarrer()
+        let issue = try await gateway.envoyer(recu: recu, octets: pdf, context: c)
+        guard case .verificationDemandee = issue else { return XCTFail("envoi ordinaire : \(issue)") }
+    }
+
     func testReconciliationSansObjetNiLigneEtRecuPrepare() async throws {
         let gateway = DemoDocumentsGateway()
         let recu = try await gateway.preparerEnvoi(type: "DIPLOME", fichier: fichierPdf, libelle: nil, context: c)

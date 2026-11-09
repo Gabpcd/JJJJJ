@@ -127,11 +127,31 @@ final class ContratRulesTests: XCTestCase {
                        .cadreEmployeur, "guillemets simples acceptés (l.536-537)")
         XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(html: #"<section data-jolene-cdd="employeur-v1" data-cadre="PRIVE_TERME_PRECIS">"#)),
                        .salarieEcrit)
-        XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: "CDDU", html: employeur)), .prestationLiberale,
-                       "texteEmployeur exige un CDD ; CDDU n'est ni CDD ni SALARIE (l.833)")
+        XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: "CDDU", html: employeur)), .salarieEcrit,
+                       "texteEmployeur exige un CDD ; un CDDU au cadre employeur reçoit la mention salariée (#1122)")
         XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: "SALARIE")), .salarieEcrit)
         XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: "REMPLACEMENT_LIBERAL")), .prestationLiberale)
         XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: nil)), .prestationLiberale)
+    }
+
+    /// L2-TJ : `TYPES_CONTRAT_MENTION_SALARIEE` du web (`ContratMission.tsx` l.65, #1122, mention validée par Gabrielle
+    /// le 08/11/2026) : CDD, SALARIE, CDDU et VACATION reçoivent « Contrat salarié écrit — art. L.1242-12 du Code du
+    /// travail. » ; tout autre type (ou un type absent) la mention de prestation libérale. Comparaison exacte, comme
+    /// `Array.includes` du web (casse comprise).
+    func testMentionSalarieePourCdduEtVacationCommeLeWeb() {
+        for type in ["CDD", "SALARIE", "CDDU", "VACATION"] {
+            XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: type)), .salarieEcrit, type)
+        }
+        for type in ["LIBERAL", "REMPLACEMENT_LIBERAL", "cddu", "Vacation", "VACATIONS", "", "INTERIM"] {
+            XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: type)), .prestationLiberale, type)
+        }
+        XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: nil)), .prestationLiberale)
+        XCTAssertEqual(TextesWeb.Contrat.typesMentionSalariee, ["CDD", "SALARIE", "CDDU", "VACATION"])
+        XCTAssertEqual(TextesWeb.Contrat.piedDePage(ContratRules.mentionPiedDePage(contrat(type: "VACATION"))),
+                       "Contrat salarié écrit — art. L.1242-12 du Code du travail. Signature électronique simple. Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires.")
+        let employeur = #"<section data-jolene-cdd="employeur-v1" data-cadre="TEXTE_EMPLOYEUR">"#
+        XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: "VACATION", html: employeur)), .salarieEcrit,
+                       "le cadre employeur reste réservé au CDD (l.535-537)")
     }
 
     // MARK: - Signatures et zone de signature

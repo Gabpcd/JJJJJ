@@ -707,7 +707,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_presences_detail_mission"("p_mission_id"
   `valide_le` non nul et aucun litige existant (parité `PanneauContestation.tsx` l.103-108). Erreur → bouton
   masqué (fail-closed). Aucune constante de délai dans le Swift : le web garde `DELAI_CONTESTATION_MS` = 72 h
   (`PanneauContestation.tsx` l.46), le serveur lit `parametres_litiges.delai_contestation_pointage_h`, défaut 48 h
-  (l.36600) — divergence remontée à Gabrielle (HARD STOP n°4), aucun texte de délai affiché avant sa décision.
+  (l.36600) — divergence tranchée par délégation le 8 novembre 2026 (HARD STOP n°4, `DECISIONS_LOT2.md` D12) : valeur
+  cible 72 h par une PR de paramétrage B9 hors lot (le défaut 48 h du code ne change pas), aucun texte de délai
+  affiché par le natif.
 - **Signature SQL** (`supabase/schema/public.sql` l.36578) :
 
 ```sql

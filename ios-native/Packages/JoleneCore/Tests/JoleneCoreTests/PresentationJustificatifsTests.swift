@@ -209,13 +209,18 @@ final class PresentationJustificatifsTests: XCTestCase {
 
     // MARK: - Documents complémentaires
 
-    func testDocumentsComplementairesSansTexteDAcces() throws {
+    /// L2-TJ (décision déléguée du 8 novembre 2026) : les textes d'accès du web (pré-éligibilité étudiante l.867-868,
+    /// licence de remplacement l.882-883) sont affichés verbatim, tutoiement compris (`TextesWeb.Justificatifs`).
+    func testDocumentsComplementairesAvecTextesDAccesDuWeb() throws {
         let complementaires = P.complementaires(try demo())
         XCTAssertEqual(complementaires.map(\.typeDocument), ["ATTESTATION_SCOLARITE", "LICENCE_REMPLACEMENT"])
         XCTAssertEqual(complementaires.map(\.titre), ["🎓 Attestation de scolarité / passage en année supérieure",
                                                        "🩺 Licence de remplacement (interne en médecine)"])
-        XCTAssertEqual(complementaires.map(\.description), [nil, nil],
-                       "textes d'accès (pré-éligibilité, remplacements) en attente de Gabrielle (HARD STOP n°4)")
+        XCTAssertEqual(complementaires.map(\.description), [
+            "L'analyse prépare ton dossier, puis l'équipe Jolene contrôle les crédits, stages, unités d'enseignement et attestations exigés avant d'ouvrir une pré-éligibilité.",
+            "Interne ? Téléverse ta licence de remplacement délivrée par le Conseil de l'Ordre : elle est contrôlée avant tout accès aux remplacements de médecin.",
+        ], "textes d'accès verbatim (HARD STOP n°4, décision déléguée du 08/11/2026)")
+        XCTAssertEqual(complementaires.map(\.description), [TextesWeb.Justificatifs.accesScolarite, TextesWeb.Justificatifs.accesLicence])
         XCTAssertEqual(complementaires.map(\.bouton), ["+ Téléverser", "+ Téléverser"])
         XCTAssertEqual(complementaires.map(\.statut), [nil, nil])
 
@@ -244,6 +249,38 @@ final class PresentationJustificatifsTests: XCTestCase {
             profil: SoignantExigencesDocuments(profession: "MEDECIN", typeExercice: "LIBERAL", rppsVerifie: true, adeliVerifie: false),
             regles: [], documents: [], attestationSanteSigneeLe: nil)
         XCTAssertEqual(P.complementaires(sansOrdre).last?.bouton, "+ Ajouter l’attestation")
+    }
+
+    // MARK: - Bandeau RCP (L2-TJ)
+
+    /// Bandeau RCP de `DocumentsSoignant.tsx` l.611-640 (décision déléguée du 8 novembre 2026) : en libéral ou mixte
+    /// seulement ; RCP dont la date est passée (quel que soit le statut) → les deux lignes l.623-624 ; RCP absente ou non
+    /// vérifiée → l.634 ; RCP vérifiée et valide → rien. Textes verbatim de `TextesWeb.Justificatifs`.
+    func testBandeauRcpCommeLeWeb() throws {
+        let regles = [regle("RCP_ASSURANCE")]
+        func rcp(_ statut: String?, jusqua: String?) -> DocumentSoignant {
+            DocumentSoignant(id: "rcp", typeDocument: "RCP_ASSURANCE", valideJusqua: jusqua, statutVerification: statut)
+        }
+        let expire = P.bandeauRcp(dossier([rcp("VERIFIE", jusqua: "2026-10-20")], regles: regles, exercice: "LIBERAL"),
+                                  maintenant: maintenant)
+        XCTAssertEqual(expire, BandeauRcp(alerte: .expiree,
+                                          textes: ["Ton assurance RCP est expirée. Pense à la renouveler.",
+                                                   "Tu ne peux pas postuler aux missions libérales tant que ta RCP n'est pas à jour."]))
+        XCTAssertEqual(expire?.ton, .erreur)
+        XCTAssertEqual(P.bandeauRcp(dossier([rcp("EN_ATTENTE", jusqua: "2026-10-20")], regles: regles, exercice: "MIXTE"),
+                                    maintenant: maintenant)?.alerte, .expiree, "date passée, quel que soit le statut (l.616)")
+        let manquante = P.bandeauRcp(dossier([], regles: regles, exercice: "MIXTE"), maintenant: maintenant)
+        XCTAssertEqual(manquante, BandeauRcp(alerte: .manquante,
+                                             textes: ["L'assurance RCP est obligatoire pour l'exercice libéral et mixte. Téléverse ton attestation RCP."]))
+        XCTAssertEqual(manquante?.ton, .attention)
+        XCTAssertEqual(P.bandeauRcp(dossier([rcp("EN_ATTENTE", jusqua: "2027-01-01")], regles: regles, exercice: "LIBERAL"),
+                                    maintenant: maintenant)?.alerte, .manquante, "RCP non vérifiée (l.617)")
+        XCTAssertNil(P.bandeauRcp(dossier([rcp("VERIFIE", jusqua: "2027-01-01")], regles: regles, exercice: "LIBERAL"),
+                                  maintenant: maintenant), "RCP vérifiée et valide")
+        XCTAssertNil(P.bandeauRcp(dossier([], regles: regles, exercice: "SALARIE"), maintenant: maintenant),
+                     "RCP exigée en libéral et en mixte seulement (l.612-613)")
+        XCTAssertNil(P.bandeauRcp(try demo(), maintenant: maintenant), "démo : RCP vérifiée, valide jusqu'au 14 novembre")
+        XCTAssertNil(P.bandeauRcp(DossierDocuments(), maintenant: maintenant), "sans profil : aucun bandeau")
     }
 
     // MARK: - Attestation, fichier choisi

@@ -175,6 +175,53 @@ final class DemoDocumentsTests: JoleneUITestCase {
         record("\(proofPrefix)-attestation-signee")
     }
 
+    /// L2-TJ (décisions déléguées du 8 novembre 2026, `DECISIONS_LOT2.md`) : textes d'accès des documents complémentaires
+    /// (`DocumentsSoignant.tsx` l.867-868 et l.882-883) affichés verbatim, tutoiement du web compris (HARD STOP n°4,
+    /// `TextesWeb.Justificatifs`) ; en démo, la RCP est vérifiée et valide : aucun bandeau RCP (l.611-640).
+    func testDocumentsComplementairesAffichentLesTextesDAccesDuWeb() throws {
+        launchDemo()
+        signInDemo()
+        ouvrirMesDocuments()
+
+        XCTAssertFalse(element("documents-rcp").exists, "RCP vérifiée et valide : aucun bandeau RCP")
+        let liste = element("documents-justificatifs")
+        let scolarite = element("document-description-ATTESTATION_SCOLARITE")
+        scrollTo(scolarite, in: liste)
+        XCTAssertEqual(scolarite.label, "L'analyse prépare ton dossier, puis l'équipe Jolene contrôle les crédits, stages, unités d'enseignement et attestations exigés avant d'ouvrir une pré-éligibilité.")
+        let licence = element("document-description-LICENCE_REMPLACEMENT")
+        if !visible(licence) { scrollTo(licence, in: liste) }
+        XCTAssertEqual(licence.label, "Interne ? Téléverse ta licence de remplacement délivrée par le Conseil de l'Ordre : elle est contrôlée avant tout accès aux remplacements de médecin.")
+        XCTAssertEqual(element("document-televerser-LICENCE_REMPLACEMENT").label, "+ Téléverser", "titre, texte et bouton du web")
+        let carte = element("document-exigence-LICENCE_REMPLACEMENT").frame
+        XCTAssertTrue(carte.minX >= app.frame.minX - 1 && carte.maxX <= app.frame.maxX + 1, "aucun débordement horizontal")
+        record("\(proofPrefix)-justificatifs-acces")
+    }
+
+    /// L2-TJ : `-JOLENE_DEMO_SCENARIO rcp-expiree` (RCP vérifiée dont la date est passée) → bandeau RCP du web, deux
+    /// lignes verbatim (`DocumentsSoignant.tsx` l.623-624, HARD STOP n°4 tranché par délégation), avant l'incohérence.
+    func testRcpExpireeAfficheLeBandeauDuWeb() throws {
+        launchDemo(extraArguments: ["-JOLENE_DEMO_SCENARIO", "rcp-expiree"])
+        signInDemo()
+        ouvrirMesDocuments()
+
+        let liste = element("documents-justificatifs")
+        let expiree = element("documents-rcp-expiree")
+        require("Le bandeau RCP expirée est affiché") { expiree.exists }
+        if !visible(expiree) { scrollTo(expiree, in: liste) }
+        XCTAssertEqual(expiree.label, "Ton assurance RCP est expirée. Pense à la renouveler.")
+        XCTAssertEqual(element("documents-rcp-restriction").label,
+                       "Tu ne peux pas postuler aux missions libérales tant que ta RCP n'est pas à jour.")
+        XCTAssertFalse(element("documents-rcp-obligatoire").exists, "RCP présente : pas le texte de la RCP manquante")
+        XCTAssertFalse(element("document-expire-bientot-demo-doc-rcp").exists, "plus d'expiration proche : la RCP est expirée")
+        let bandeau = element("documents-rcp").frame
+        XCTAssertTrue(bandeau.minX >= app.frame.minX - 1 && bandeau.maxX <= app.frame.maxX + 1, "aucun débordement horizontal")
+        let coherence = element("documents-coherence")
+        if !visible(coherence) { scrollTo(coherence, in: liste) }
+        XCTAssertTrue(coherence.exists, "l'incohérence locale « RCP expirée » suit le bandeau, comme le web (l.643)")
+        XCTAssertLessThan(element("documents-rcp").frame.minY, coherence.frame.minY, "ordre du web : bandeau RCP puis incohérence")
+        record("\(proofPrefix)-justificatifs-rcp-expiree")
+    }
+
     /// Contrats : liste native de T9a depuis l'intégration (migré du renvoi web de T7) ; DPAE : renvoi web (décision 16).
     func testOngletContratsNatifEtDpaeEnRenvoiWeb() throws {
         launchDemo()

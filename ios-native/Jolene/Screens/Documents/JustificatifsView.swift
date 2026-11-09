@@ -13,15 +13,18 @@ import JoleneDesign
 /// oubliée ; la célébration du dossier complet est oubliée après 2,5 s (l.268-269).
 ///
 /// Non portés (`DECISIONS_LOT2.md`, « T7 — application ») : suppression d'un justificatif (§1.2), boutons vers le profil
-/// web, bandeau RCP et textes d'accès des documents complémentaires (HARD STOP n°4, en attente de Gabrielle), encart RIB.
+/// web, encart RIB (renvois vers des écrans du lot 3). Bandeau RCP et textes d'accès des documents complémentaires :
+/// affichés verbatim (`TextesWeb.Justificatifs`), HARD STOP n°4 tranché par délégation le 8 novembre 2026 (L2-TJ).
 ///
 /// Identifiants : `documents-justificatifs`, `documents-loading`, `documents-erreur`, `documents-reessayer`,
 /// `documents-dossier-a-preparer`, `documents-profil-incomplet`, `documents-entete-titre`, `documents-prochaine-etape`,
-/// `documents-progression`, `document-expire-bientot-<id>`, `document-mettre-a-jour-<TYPE>`, `documents-coherence`,
+/// `documents-progression`, `document-expire-bientot-<id>`, `document-mettre-a-jour-<TYPE>`, `documents-rcp`,
+/// `documents-rcp-expiree`, `documents-rcp-restriction`, `documents-rcp-obligatoire`, `documents-coherence`,
 /// `documents-envoi-issue`, `documents-suivi-web`, `documents-session-expired`, `documents-session-check`, cartes
 /// `document-exigence-<TYPE>`, `document-statut-<TYPE>`, `document-message-<TYPE>`, `document-fichier-<TYPE>`,
 /// `document-televerser-<TYPE>`, `document-voir-<id>`, `document-reverifier-<id>`, `document-revue-<id>`,
-/// `document-verification-<id>`, `document-retour-<id>` ; DEBUG : `documents-demo-envois`.
+/// `document-verification-<id>`, `document-retour-<id>`, `document-description-<TYPE>` (documents complémentaires) ;
+/// DEBUG : `documents-demo-envois`.
 struct JustificatifsView: View {
     private typealias L = LibellesJustificatifs
     private typealias P = PresentationJustificatifs
@@ -143,6 +146,7 @@ struct JustificatifsView: View {
             ForEach(P.expirations(dossier, maintenant: maintenant)) { expiration in
                 expirationProche(expiration)
             }
+            if let rcp = P.bandeauRcp(dossier, maintenant: maintenant) { bandeauRcp(rcp) }
             if let incoherence = P.incoherence(dossier, coherence: model.coherence, maintenant: maintenant) {
                 InlineNotice(incoherence, tone: .warning, identifier: "documents-coherence")
             }
@@ -263,6 +267,45 @@ struct JustificatifsView: View {
         .background(JoleneColor.rose100)
         .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.field))
         .accessibilityElement(children: .contain)
+    }
+
+    /// Bandeau RCP du web (l.611-640) : icône d'alerte, lignes verbatim (`TextesWeb.Justificatifs`, tutoiement du web
+    /// compris), première ligne en gras pour une RCP expirée. Aucun bouton (le web n'en a pas) ; l'envoi passe par la carte
+    /// de l'exigence. Ton porté par l'icône et le texte, jamais par la couleur seule.
+    private func bandeauRcp(_ bandeau: BandeauRcp) -> some View {
+        let expiree = bandeau.alerte == .expiree
+        // Expirée : `text-destructive` (encre rose-800 sur rose-100) ; manquante : ambre (`text-amber-700`, icône
+        // butter-800 et texte midnight sur butter-100, contrastes des tons de `InlineNotice`).
+        let encre = expiree ? JoleneColor.rose800 : JoleneColor.midnight
+        return HStack(alignment: .top, spacing: JoleneSpacing.sm) {
+            Image(systemName: "exclamationmark.circle")
+                .font(JoleneFont.callout)
+                .foregroundStyle(expiree ? JoleneColor.rose800 : JoleneColor.butter800)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: JoleneSpacing.xs) {
+                ForEach(Array(bandeau.textes.enumerated()), id: \.offset) { index, texte in
+                    Text(texte)
+                        .font(index == 0 && expiree ? JoleneFont.caption.weight(.semibold) : JoleneFont.caption)
+                        .foregroundStyle(encre)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier(Self.identifiantRcp(bandeau.alerte, ligne: index))
+                }
+            }
+        }
+        .padding(JoleneSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(expiree ? JoleneColor.rose100 : JoleneColor.butter100)
+        .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.field))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("documents-rcp")
+    }
+
+    /// `documents-rcp-expiree` puis `documents-rcp-restriction` (l.623-624) ; `documents-rcp-obligatoire` (l.634).
+    private static func identifiantRcp(_ alerte: AlerteRcp, ligne: Int) -> String {
+        switch alerte {
+        case .expiree: return ligne == 0 ? "documents-rcp-expiree" : "documents-rcp-restriction"
+        case .manquante: return "documents-rcp-obligatoire"
+        }
     }
 
     // MARK: - Cartes
@@ -391,6 +434,7 @@ struct JustificatifsView: View {
                         if let description = carte.description {
                             Text(description).font(JoleneFont.caption).foregroundStyle(JoleneColor.bubblegum)
                                 .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("document-description-\(carte.typeDocument)")
                         }
                         if let statut = carte.statut {
                             Text(statut)
