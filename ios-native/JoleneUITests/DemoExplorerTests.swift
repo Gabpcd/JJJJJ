@@ -21,8 +21,11 @@ final class DemoExplorerTests: JoleneUITestCase {
         /// Rayon minimum + Libéral : 0 ; « Élargir le rayon (+20 km) » → 25 km, 10 missions libérales.
         static let liberalApresElargissement = 10
         static let premierEtablissement = "Établissement fictif République · 75011 Paris"
-        /// Cycles « ouvrir, changer, Afficher les missions, rouvrir » du test de réouverture.
-        static let cyclesReouverture = 10
+        /// Cycles « ouvrir, changer, Afficher les missions, rouvrir » du test de réouverture : 4, soit
+        /// 4 réouvertures après application par format (Tous ⇄ CDD dans les deux sens). Revue B8
+        /// (M1) : 10 cycles menaient l'étape `test-without-building` à 27 min 52 pour un délai de
+        /// 30 min ; le délai de l'étape n'est pas relevé.
+        static let cyclesReouverture = 4
     }
 
     func testChipsRapidesFiltrentLaListe() throws {
@@ -132,9 +135,10 @@ final class DemoExplorerTests: JoleneUITestCase {
 
     /// Réouverture après application (run 42526135547, iPad portrait) : la feuille ne se rouvrait
     /// parfois plus après « Afficher les missions », les critères étant appliqués pendant sa
-    /// transition de fermeture. Dix cycles « ouvrir, changer le contrat, Afficher les missions,
-    /// rouvrir » : chaque réouverture affiche la feuille, partie des critères appliqués, et chaque
-    /// application met à jour le compteur de la liste (lu dans son en-tête) et le badge du bouton.
+    /// transition de fermeture. `Attendus.cyclesReouverture` cycles « ouvrir, changer le contrat,
+    /// Afficher les missions, rouvrir » : chaque réouverture affiche la feuille, partie des
+    /// critères appliqués, et chaque application met à jour le compteur de la liste (lu dans son
+    /// en-tête) et le badge du bouton.
     func testFiltresSeRouvrentApresChaqueApplication() throws {
         ouvrirExplorer()
         var cdd = false

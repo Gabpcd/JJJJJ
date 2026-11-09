@@ -75,13 +75,24 @@ final class ExplorerFeuilleFiltresTests: XCTestCase {
         XCTAssertEqual(feuille.cloturer(), initiaux)
     }
 
-    func testUneOuvertureEffaceUnEnregistrementEnSuspens() {
+    /// Revue B8 (m1) : un appui sur « Filtres » arrivé après « Afficher les missions » mais avant
+    /// `onDismiss` ne perd pas le choix validé. La nouvelle présentation part des critères
+    /// enregistrés (l'utilisateur les revoit et les revalide), jamais des anciens critères
+    /// appliqués ; la clôture de la présentation précédente n'applique rien, pour qu'il n'existe
+    /// qu'un chemin d'application : la validation suivante.
+    func testUneOuvertureAvantLaClotureRepartDuChoixValide() throws {
         var feuille = ExplorerFeuilleFiltres()
         feuille.ouvrir(avec: initiaux)
         feuille.enregistrer(cdd)
+        feuille.ouverture = nil  // `dismiss()` de la feuille
+        // Appui sur « Filtres » avant `onDismiss` : les critères appliqués sont encore les initiaux.
         feuille.ouvrir(avec: initiaux)
+        XCTAssertEqual(try XCTUnwrap(feuille.ouverture).filtres, cdd, "le choix validé n'est jamais perdu de vue")
         XCTAssertNil(feuille.enAttente)
+        XCTAssertNil(feuille.cloturer(), "la clôture de la présentation précédente n'applique rien")
+        // Revalidation dans la nouvelle présentation : appliquée à sa fermeture.
+        feuille.enregistrer(cdd)
         feuille.ouverture = nil
-        XCTAssertNil(feuille.cloturer(), "un enregistrement d'une présentation précédente n'est jamais appliqué")
+        XCTAssertEqual(feuille.cloturer(), cdd)
     }
 }
