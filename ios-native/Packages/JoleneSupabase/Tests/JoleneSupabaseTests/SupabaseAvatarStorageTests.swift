@@ -108,6 +108,27 @@ final class SupabaseAvatarStorageTests: XCTestCase {
         XCTAssertNil(nonHttps)
     }
 
+    /// Revue B8 de T10, m11 : l'URL signée (jeton de 5 ans) et les octets de l'image ne sont conservés dans AUCUN cache
+    /// HTTP ni magasin de cookies partagé : session par défaut éphémère, sans cache ni cookie ni identifiants, requête
+    /// qui ignore tout cache local (même avec une session injectée).
+    func testLectureDeLImageSansCacheNiCookie() async throws {
+        let configuration = SupabaseAvatarStorage.sessionParDefaut.configuration
+        XCTAssertNil(configuration.urlCache, "aucun cache HTTP (ni disque ni mémoire)")
+        XCTAssertEqual(configuration.requestCachePolicy, .reloadIgnoringLocalCacheData)
+        XCTAssertNil(configuration.httpCookieStorage, "aucun magasin de cookies")
+        XCTAssertEqual(configuration.httpCookieAcceptPolicy, .never)
+        XCTAssertFalse(configuration.httpShouldSetCookies)
+        XCTAssertNil(configuration.urlCredentialStorage, "aucun identifiant mémorisé")
+        XCTAssertTrue(SupabaseAvatarStorage.sessionParDefaut === SupabaseAvatarStorage.sessionParDefaut,
+                      "une seule session pour l'app, jamais une session par appel")
+
+        let chemin = "/storage/v1/object/sign/jolene-documents/\(self.chemin)"
+        registry.add("GET", chemin, respond: StubResponse(status: 200, headers: ["Content-Type": "image/jpeg"], body: jpeg, failure: nil))
+        _ = await stockage().image(url: URL(string: urlSignee)!)
+        let requete = try XCTUnwrap(registry.requests(to: chemin).first)
+        XCTAssertEqual(requete.cachePolicy, .reloadIgnoringLocalCacheData, "requête sans cache local")
+    }
+
     // MARK: - Enchaînement réel (`EnvoiAvatar` + Supabase)
 
     private func envoi(recus: RecusAvatarEnMemoire) -> EnvoiAvatar {

@@ -68,6 +68,19 @@ final class DemoAvatarLocalisationTests: XCTestCase {
         XCTAssertEqual(Array(jpeg.prefix(2)), [0xFF, 0xD8])
     }
 
+    /// Revue B8 de T10, M1 : en démo, la source rend la photo de démonstration, ou `.illisible` avec
+    /// `-JOLENE_DEMO_AVATAR illisible` (lecture impossible simulée) ; jamais une annulation silencieuse.
+    func testSelectionDemoPhotoOuLectureImpossible() throws {
+        XCTAssertEqual(DemoFixtures.selectionAvatarDemo(scenario: nil), .octets(try DemoFixtures.avatarDemo()))
+        XCTAssertEqual(DemoFixtures.selectionAvatarDemo(scenario: .refus), .octets(try DemoFixtures.avatarDemo()),
+                       "refus du stockage : la photo est lue, c'est le dépôt qui est refusé")
+        XCTAssertEqual(DemoFixtures.selectionAvatarDemo(scenario: .illisible), .illisible)
+        XCTAssertEqual(ScenarioAvatarDemo(arguments: ["-JOLENE_DEMO_AVATAR", "illisible"]), .illisible)
+        XCTAssertFalse(String(describing: SelectionPhotoAvatar.octets(Data([0xFF, 0xD8]))).contains("255"),
+                       "description sans les octets")
+        XCTAssertEqual(String(describing: SelectionPhotoAvatar.octets(Data([0xFF, 0xD8]))), "SelectionPhotoAvatar.octets(2 octets)")
+    }
+
     func testAvatarDemoDeposeEnMemoireReluParLeProfilEtLuSansReseau() async throws {
         let gateways = DemoWorld.gateways()
         XCTAssertTrue(gateways.avatar is EnvoiAvatar)

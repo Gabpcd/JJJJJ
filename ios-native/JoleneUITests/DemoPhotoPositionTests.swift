@@ -10,6 +10,8 @@ import XCTest
 ///   l'encart « Photo mise à jour ! » (`AvatarUpload.tsx` l.164, verbatim), et la photo relue est retrouvée à la
 ///   réouverture de l'écran (lecture par le port, sans réseau) ;
 /// - un refus du stockage (`-JOLENE_DEMO_AVATAR refus`) affiche le message du web (l.166) et laisse les initiales ;
+/// - une photo choisie mais illisible (`-JOLENE_DEMO_AVATAR illisible`, revue B8 M1) affiche le message du web
+///   (`documentUpload.ts` l.174), rien n'est envoyé ;
 /// - la position renseigne la ville (« Lyon ») et le libellé de l'adresse trouvée, n'écrit rien avant
 ///   « Enregistrer », puis est enregistrée et relue à la réouverture (ville « Lyon », « Position enregistrée — … ») ;
 /// - localisation refusée (`-JOLENE_DEMO_LOCALISATION refusee`) : message du web vouvoyé, rien à enregistrer ;
@@ -25,6 +27,7 @@ import XCTest
 final class DemoPhotoPositionTests: JoleneUITestCase {
     static let photoMiseAJour = "Photo mise à jour !"
     static let echecEnvoi = "Une erreur est survenue lors de l'upload. Veuillez réessayer."
+    static let fichierIllisible = "Impossible de lire le fichier sélectionné."
     static let adresseDemo = "Place Bellecour 69002 Lyon"
     static let positionRecuperee = "Position récupérée."
     static let localisationRefusee = "Localisation refusée ou indisponible. Vous pouvez saisir votre adresse manuellement."
@@ -84,6 +87,31 @@ final class DemoPhotoPositionTests: JoleneUITestCase {
         XCTAssertTrue(avis.label.hasSuffix(Self.echecEnvoi), "texte verbatim web : \(avis.label)")
         XCTAssertEqual(element("profil-avatar-etat").label, "initiales", "aucune photo liée après le refus")
         record("\(proofPrefix)-photo-refusee")
+    }
+
+    /// Revue B8 de T10, M1 : une photo choisie mais illisible (photo iCloud indisponible hors ligne, simulée par
+    /// `-JOLENE_DEMO_AVATAR illisible`) n'est plus confondue avec une annulation : message du web
+    /// (`documentUpload.ts` l.174), aucune photo envoyée, choix refermé, bouton de nouveau actif.
+    func testPhotoIllisibleAfficheLeMessageDuWebSansEnvoi() throws {
+        launchDemo(extraArguments: ["-JOLENE_DEMO_AVATAR", "illisible"])
+        signInDemo()
+        ouvrirProfil()
+        let ecran = element("profil-screen")
+        let changer = element("profil-avatar-changer")
+        scrollTo(changer, in: ecran, downward: false)
+        tap("profil-avatar-changer")
+        let phototheque = element("profil-avatar-phototheque")
+        require("Le choix de la source est affiché") { self.visible(phototheque) }
+        tap("profil-avatar-phototheque")
+        let avis = element("profil-avatar-avis")
+        require("La lecture impossible est annoncée", timeout: 30) { avis.exists }
+        XCTAssertTrue(avis.label.hasSuffix(Self.fichierIllisible), "texte verbatim web : \(avis.label)")
+        XCTAssertEqual(element("profil-avatar-etat").label, "initiales", "aucune photo envoyée")
+        XCTAssertFalse(element("profil-avatar-phototheque").exists, "le choix est refermé")
+        require("« Changer ma photo de profil » est de nouveau actif") { changer.isEnabled }
+        record("\(proofPrefix)-photo-illisible")
+        retour()
+        sentinelleSansRequete()
     }
 
     func testPositionRenseigneLaVilleEnregistreeEtRelue() throws {

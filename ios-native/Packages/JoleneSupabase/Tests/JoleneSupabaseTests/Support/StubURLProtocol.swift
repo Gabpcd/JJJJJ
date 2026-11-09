@@ -8,9 +8,12 @@ struct RecordedRequest: Sendable {
     let queryItems: [URLQueryItem]
     let headers: [String: String]
     let body: Data?
+    /// Politique de cache de la requête (L3-T10, revue B8 m11 : lecture de l'avatar sans cache local).
+    let cachePolicy: URLRequest.CachePolicy
 
     init(_ request: URLRequest) {
         method = request.httpMethod ?? "GET"
+        cachePolicy = request.cachePolicy
         url = request.url ?? URL(string: "about:blank")!
         path = url.path
         queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
