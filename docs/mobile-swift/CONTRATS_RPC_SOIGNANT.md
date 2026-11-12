@@ -2211,8 +2211,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_generer_code_secours_mission"("p_mission
 
 - **Toujours appelables** (revue fraîche de T0) : « mortes » côté web, les neuf RPC sont toujours GRANT
   `authenticated` en production (`public.sql` l.81953, l.83013, l.83079, l.83997, l.84003, l.84009, l.84015,
-  l.85495, l.85523) : PostgREST les sert à tout compte connecté. Au moins trois gardes (≥ 3) d'accès en logique
-  ternaire (`mon_etablissement_id()` NULL pour un soignant) permettent à un soignant de pointer à distance :
+  l.85495, l.85523) : PostgREST les sert à tout compte connecté. **Corrigées par #1126** (`e7dcbf51`, 9 novembre
+  2026) : les trois gardes d'accès en logique ternaire relevées par T0 (`mon_etablissement_id()` NULL pour un
+  soignant) sont NULL-safe (`COALESCE(… = mon_etablissement_id(), false)`), un soignant ne les franchit plus. Avant
+  #1126, elles lui permettaient de pointer à distance :
   1. `fn_codes_pointage_mission` (l.23799) lui rend `code_arrivee` et `code_depart`, que `fn_pointer_arrivee` et
      `fn_pointer_depart` acceptent sans GPS avec `perimetre_gps_valide = true` (l.47449-47455, l.47577-47582) ;
   2. `fn_generer_qr_mission` (l.38006) laisse le soignant assigné générer son propre jeton, que `fn_valider_scan_qr`
@@ -2223,8 +2225,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_generer_code_secours_mission"("p_mission
      position dans la RPC (coordonnées facultatives, enregistrées telles quelles ; sans coordonnées,
      `dec_antifraude_presence` ne recalcule rien, l.646), et inscrit la présence `CODE_SECOURS` (l.65067-65072,
      l.65085-65091).
-  Constat B9 de `DECISIONS_LOT2.md` (« En attente de Gabrielle »), à confirmer sur la définition live par une PR
-  backend séparée ; proposition : `REVOKE EXECUTE … FROM authenticated` sur les neuf RPC (générateur du code de
+  Constat B9 de `DECISIONS_LOT2.md` (« En attente de Gabrielle ») : la voie des gardes est faite par #1126 ; reste
+  ouverte, par une PR backend séparée, la proposition : `REVOKE EXECUTE … FROM authenticated` sur les neuf RPC (générateur du code de
   secours compris) après vérification de `SyncHorsLigne`, ou gardes `IS DISTINCT FROM` sur
   `fn_codes_pointage_mission`, `fn_generer_qr_mission` et `fn_generer_code_secours_mission`, avec un rejet
   explicite. Le natif n'en dépend pas.

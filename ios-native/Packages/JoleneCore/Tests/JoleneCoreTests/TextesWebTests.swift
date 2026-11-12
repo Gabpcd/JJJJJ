@@ -226,7 +226,7 @@ final class TextesWebTests: XCTestCase {
         XCTAssertNil(otp.tentativesRestantes(n: 6))
     }
 
-    /// Compte à rebours (`Countdown72hSignature.tsx` l.38-75) : expiré à zéro, alerte urgente sous
+    /// Compte à rebours (`Countdown72hSignature.tsx` l.38-76) : expiré à zéro, alerte urgente sous
     /// 24 h (couleur `destructive`), sinon « Signature à finaliser sous », suivi de la durée.
     func testCompteAReboursCommeLeRenduWeb() {
         let rebours = TextesWeb.CompteARebours.self

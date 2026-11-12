@@ -118,8 +118,8 @@ public enum ContratRules {
             && contientAttribut("data-cadre", valeur: "TEXTE_EMPLOYEUR", dans: html)
     }
 
-    /// Mention du pied de page (l.837-840), texte dans `TextesWeb.Contrat.piedDePage(_:)` : la liste des types salariés
-    /// est `TextesWeb.Contrat.typesMentionSalariee` (`TYPES_CONTRAT_MENTION_SALARIEE`, #1122 : CDD, SALARIE, CDDU,
+    /// Mention du pied de page (l.834-837), texte dans `TextesWeb.Contrat.piedDePage(_:)` : la liste des types salariés
+    /// est `TextesWeb.Contrat.typesMentionSalariee` (`TYPES_CONTRAT_SALARIES` / `estContratSalarie` de `src/lib/typesContrat.ts` depuis #1123, #1122 : CDD, SALARIE, CDDU,
     /// VACATION), gardée type par type contre le web par la garde TL ; aucune liste locale.
     public static func mentionPiedDePage(_ contrat: ContratDetail) -> TextesWeb.Contrat.MentionPiedDePage {
         if texteEmployeur(contrat) { return .cadreEmployeur }

@@ -1321,26 +1321,28 @@ test('B9 RLS/auth : constats de T0 (système ① appelable, gardes ternaires, fn
   for (const name of POINTAGE_SYSTEME_1) {
     assert.ok(grantAuthenticated(name), `${name} : plus de GRANT authenticated au dump (REVOKE appliqué ?) : fiche ① « Toujours appelables » et constat B9 à ${BASCULE_MAIN}`);
   }
-  // Chaîne 1, « code sans GPS » : garde ternaire de fn_codes_pointage_mission (mon_etablissement_id() NULL pour un
-  // soignant), codes rendus et créés ; fn_pointer_arrivee accepte le code avec perimetre_gps_valide = true ;
-  // dec_antifraude_presence ne recalcule rien sans coordonnées.
+  // Chaîne 1, « code sans GPS » : la garde ternaire de fn_codes_pointage_mission (mon_etablissement_id() NULL pour un
+  // soignant) est NULL-safe depuis #1126 (e7dcbf51) : un soignant n'obtient plus les codes. En aval, inchangé :
+  // fn_pointer_arrivee accepte le code avec perimetre_gps_valide = true ; dec_antifraude_presence ne recalcule rien
+  // sans coordonnées. Une garde redevenue nue rouvre la chaîne 1 du constat B9.
   const codes = corpsSql(schema, enteteFn('fn_codes_pointage_mission'));
-  assert.ok(codes.includes('IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN'), `fn_codes_pointage_mission : garde corrigée, chaîne 1 du constat B9 à ${BASCULE_MAIN}`);
+  assert.ok(codes.includes('IF NOT est_admin() AND NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) THEN'),
+    'fn_codes_pointage_mission : garde NULL-safe de #1126 absente — chaîne 1 du constat B9 à rouvrir');
   assert.ok(codes.includes("'code_arrivee', v_mission.code_arrivee") && codes.includes("'code_depart', v_mission.code_depart") && codes.includes('UPDATE missions SET'));
   assert.match(corpsSql(schema, enteteFn('fn_pointer_arrivee')), /IF p_code_arrivee IS NOT NULL THEN[\s\S]*?v_methode := 'CODE';\s*v_perimetre_ok := true;/);
   assert.ok(corpsSql(schema, enteteFn('dec_antifraude_presence')).includes('IF NEW.pointage_arrivee_le IS NOT NULL AND NEW.arrivee_lat IS NOT NULL THEN'));
-  // Chaîne 2, « jeton auto-généré » : garde ternaire de fn_generer_qr_mission, puis fn_valider_scan_qr (soignant
-  // assigné, GPS non bloquant).
-  assert.ok(corpsSql(schema, enteteFn('fn_generer_qr_mission')).includes('IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN'),
-    `fn_generer_qr_mission : garde corrigée, chaîne 2 du constat B9 à ${BASCULE_MAIN}`);
+  // Chaîne 2, « jeton auto-généré » : garde de fn_generer_qr_mission NULL-safe depuis #1126 ; en aval,
+  // fn_valider_scan_qr (soignant assigné, GPS non bloquant) inchangée.
+  assert.ok(corpsSql(schema, enteteFn('fn_generer_qr_mission')).includes('IF NOT (est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false)) THEN'),
+    'fn_generer_qr_mission : garde NULL-safe de #1126 absente — chaîne 2 du constat B9 à rouvrir');
   const scan = corpsSql(schema, enteteFn('fn_valider_scan_qr'));
   assert.ok(scan.includes('soignant_assigne_id IS DISTINCT FROM v_uid') && scan.includes('QR = source de vérité'));
-  // Chaîne 3, « code de secours auto-généré » : même garde ternaire dans fn_generer_code_secours_mission, qui rend le
-  // code en clair ; fn_valider_code_secours ne vérifie que l'affectation (aucun contrôle GPS) et insère la présence
-  // CODE_SECOURS.
+  // Chaîne 3, « code de secours auto-généré » : garde de fn_generer_code_secours_mission NULL-safe depuis #1126 ; la
+  // RPC rend toujours le code en clair à l'établissement, et fn_valider_code_secours ne vérifie que l'affectation
+  // (aucun contrôle GPS) puis insère la présence CODE_SECOURS.
   const secours = corpsSql(schema, enteteFn('fn_generer_code_secours_mission'));
-  assert.ok(secours.includes('IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN'),
-    `fn_generer_code_secours_mission : garde corrigée, chaîne 3 du constat B9 à ${BASCULE_MAIN}`);
+  assert.ok(secours.includes('IF NOT (est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false)) THEN'),
+    'fn_generer_code_secours_mission : garde NULL-safe de #1126 absente — chaîne 3 du constat B9 à rouvrir');
   assert.ok(secours.includes("'code', v_code") && secours.includes('Retourne le code EN CLAIR'), 'fn_generer_code_secours_mission : code plus rendu en clair');
   const validation = corpsSql(schema, enteteFn('fn_valider_code_secours'));
   assert.ok(validation.includes('IF v_mission IS NULL OR v_mission.soignant_assigne_id != v_uid THEN'));
@@ -1394,7 +1396,7 @@ test('B9 RLS/auth : constats de T0 (système ① appelable, gardes ternaires, fn
   const fiche1 = sectionContrats('Interdit côté natif : système de pointage ①');
   // Décompte d'audit en plancher documenté (≥ 3) : l'audit des gardes NULL, traité à part, peut en relever davantage.
   for (const temoin of ['toujours GRANT `authenticated` en production', 'PostgREST', 'pointer à distance', 'B9', 'REVOKE EXECUTE',
-    'Au moins trois gardes', '(≥ 3)', 'fn_generer_code_secours_mission', 'l.37478', 'l.83013', '`CODE_SECOURS`']) {
+    'Corrigées par #1126', 'NULL-safe', 'fn_generer_code_secours_mission', 'l.37478', 'l.83013', '`CODE_SECOURS`']) {
     assert.ok(fiche1.includes(temoin), `fiche système ① : ${temoin} absent`);
   }
   assert.ok(!/Deux gardes|huit RPC|\(huit,/.test(fiche1), 'fiche système ① : décompte périmé (trois gardes, neuf RPC)');
@@ -1408,25 +1410,44 @@ test('B9 RLS/auth : constats de T0 (système ① appelable, gardes ternaires, fn
 // ou `<>` à mon_etablissement_id() est nue (ni IS DISTINCT FROM, ni IS NULL) : NULL pour tout compte sans
 // établissement, la garde laisse passer. Méthode reproductible (gardesNuesEtablissement) : conditions `IF`/`ELSIF …
 // THEN` du corps, moins deux exclusions motivées ; plus l'affectation de v_is_etab de fn_etat_pointage_mission.
-const GARDES_NUES_ETAB = [
-  ['fn_activer_garantie_mission', 'IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN'],
-  ['fn_booster_mission', 'IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN'],
-  ['fn_codes_pointage_mission', 'IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN'],
-  ['fn_creer_reclamation_score', "IF p_evenement_type = 'ETAB' AND v_proprio_id != mon_etablissement_id() THEN"],
-  ['fn_declarer_honoraires_retrocession', 'IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN'],
-  ['fn_definir_retrocession_mission', 'IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN'],
-  ['fn_deposer_chorus', 'IF v_facture.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN'],
-  ['fn_diffuser_pool_urgence', 'OR v_etablissement_id = public.mon_etablissement_id()\n  ) THEN'],
-  ['fn_enregistrer_numero_dpae', 'IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN'],
-  ['fn_etablissement_pour_mission', ') AND mon_etablissement_id() != p_etablissement_id AND NOT est_admin() THEN'],
-  ['fn_etat_pointage_mission', 'v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id();'],
-  ['fn_generer_code_secours_mission', 'IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN'],
-  ['fn_generer_donnees_dpae', 'IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN'],
-  ['fn_generer_facture', 'IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN'],
-  ['fn_generer_qr_mission', 'IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN'],
-  ['fn_presences_detail_mission', 'IF v_mission.etablissement_id != mon_etablissement_id() AND NOT est_admin()'],
-  ['fn_rebooker_soignant', 'IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN'],
-  ['fn_soignants_urgence', 'IF NOT (public.est_admin() OR v_mission.etablissement_id = public.mon_etablissement_id()) THEN'],
+// [RPC, garde nue relevée par T0 sur le dump #1097, forme NULL-safe posée par #1126 (e7dcbf51, 9 novembre 2026) ;
+// null : affectation de v_is_etab de fn_etat_pointage_mission, lecture et non garde, inchangée].
+const GARDES_ETAB_T0 = [
+  ['fn_activer_garantie_mission', 'IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
+    'IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'],
+  ['fn_booster_mission', 'IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN',
+    'IF NOT COALESCE(v_m.etablissement_id = public.mon_etablissement_id(), false) AND NOT public.est_admin() THEN'],
+  ['fn_codes_pointage_mission', 'IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN',
+    'IF NOT est_admin() AND NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) THEN'],
+  ['fn_creer_reclamation_score', "IF p_evenement_type = 'ETAB' AND v_proprio_id != mon_etablissement_id() THEN",
+    "IF p_evenement_type = 'ETAB' AND NOT COALESCE(v_proprio_id = mon_etablissement_id(), false) THEN"],
+  ['fn_declarer_honoraires_retrocession', 'IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
+    'IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'],
+  ['fn_definir_retrocession_mission', 'IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
+    'IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'],
+  ['fn_deposer_chorus', 'IF v_facture.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN',
+    'IF NOT COALESCE(v_facture.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN'],
+  ['fn_diffuser_pool_urgence', 'OR v_etablissement_id = public.mon_etablissement_id()\n  ) THEN',
+    'OR COALESCE(v_etablissement_id = public.mon_etablissement_id(), false)'],
+  ['fn_enregistrer_numero_dpae', 'IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN',
+    'IF NOT (est_admin() OR COALESCE(v_etab_id = mon_etablissement_id(), false)) THEN'],
+  ['fn_etablissement_pour_mission', ') AND mon_etablissement_id() != p_etablissement_id AND NOT est_admin() THEN',
+    ') AND NOT COALESCE(mon_etablissement_id() = p_etablissement_id, false) AND NOT est_admin() THEN'],
+  ['fn_etat_pointage_mission', 'v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id();', null],
+  ['fn_generer_code_secours_mission', 'IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN',
+    'IF NOT (est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false)) THEN'],
+  ['fn_generer_donnees_dpae', 'IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN',
+    'IF NOT (est_admin() OR COALESCE(v_etab_id = mon_etablissement_id(), false)) THEN'],
+  ['fn_generer_facture', 'IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN',
+    'IF NOT est_admin() AND NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) THEN'],
+  ['fn_generer_qr_mission', 'IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN',
+    'IF NOT (est_admin() OR COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false)) THEN'],
+  ['fn_presences_detail_mission', 'IF v_mission.etablissement_id != mon_etablissement_id() AND NOT est_admin()',
+    'IF NOT COALESCE(v_mission.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin()'],
+  ['fn_rebooker_soignant', 'IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN',
+    'IF NOT COALESCE(v_m.etablissement_id = public.mon_etablissement_id(), false) AND NOT public.est_admin() THEN'],
+  ['fn_soignants_urgence', 'IF NOT (public.est_admin() OR v_mission.etablissement_id = public.mon_etablissement_id()) THEN',
+    'IF NOT (public.est_admin() OR COALESCE(v_mission.etablissement_id = public.mon_etablissement_id(), false)) THEN'],
 ];
 // Relevées par la méthode mais sûres : la comparaison nue est neutralisée par le reste de la condition.
 // Clé : nom de la RPC ; valeur : [début exact de l'en-tête de la surcharge concernée, témoin de la neutralisation].
@@ -1450,16 +1471,20 @@ function gardesNuesEtablissement(schema) {
     if (!auth.has(name)) continue;
     const fin = bloc.indexOf('\nALTER FUNCTION ');
     for (const [, condition] of (fin < 0 ? bloc : bloc.slice(0, fin)).matchAll(/(?<!END )\b(?:IF|ELSIF)\b([\s\S]*?)\bTHEN\b/g)) {
-      if (nue.test(condition) && !/mon_etablissement_id\(\)\s+IS\s+NULL/.test(condition)) out.add(name);
+      // Une comparaison sous `COALESCE(…, false)` (forme posée par #1126) n'est pas nue : NULL donne false.
+      const sansNullSafe = condition.replace(/COALESCE\((?:[^()]|\(\))*?mon_etablissement_id\(\)(?:[^()]|\(\))*?,\s*false\s*\)/g, 'NULLSAFE');
+      if (nue.test(sansNullSafe) && !/mon_etablissement_id\(\)\s+IS\s+NULL/.test(sansNullSafe)) out.add(name);
     }
   }
   return [...out].sort();
 }
-// Clôture de T0 : le décompte d'audit n'est plus une égalité stricte mais un plancher documenté (≥), annoncé par le
-// renvoi « Gardes NULL » de DECISIONS_LOT2.md › En attente de Gabrielle › B9. L'audit des gardes NULL du 3 novembre
-// 2026 (annexe AUDIT_GARDES_NULL_2026-11-03.md, PR B9 dédiée) en relève davantage : un décompte plus élevé au dump ne
-// fait pas rougir T0 ; une garde de la liste corrigée (ou un plancher non atteint) la fait basculer (BASCULE_MAIN).
-const PLANCHER_GARDES_NUES = 18; // relevé du dump #1097 : 17 conditions `IF`/`ELSIF` + l'affectation de v_is_etab
+// Bascule du 12 novembre 2026 (merge du lot 3, qui amène #1126 e7dcbf51 dans feat/ios-lot2) : les gardes relevées par
+// T0 sont NULL-safe ; la garde exige leur forme corrigée et aucune garde nue au dump hors exclusions motivées. Le relevé
+// de T0 (18 RPC) reste la mesure de complétude de l'annexe AUDIT_GARDES_NULL_2026-11-03.md (renvoi « Gardes NULL » de
+// DECISIONS_LOT2.md › En attente de Gabrielle › B9).
+// EXECUTE retiré à authenticated par #1126 (verrou double facturation, docs/GARDES_NULL_SECURITY_DEFINER.md §5).
+const REVOQUEES_1126 = new Set(['fn_generer_facture']);
+const RELEVE_T0_GARDES_NUES = 18; // relevé du dump #1097 : 17 conditions `IF`/`ELSIF` + l'affectation de v_is_etab
 const ANNEXE_AUDIT_GARDES_NULL = 'docs/mobile-swift/AUDIT_GARDES_NULL_2026-11-03.md';
 /** Fonctions qui ont une entrée (verdict) dans l'annexe : lignes `- <nom>[ / <nom> | , <nom> | + <nom>] — <verdict>`. */
 function fonctionsAuditees(annexe) {
@@ -1469,29 +1494,40 @@ function fonctionsAuditees(annexe) {
   }
   return out;
 }
-test('B9 RLS/auth : gardes nues à mon_etablissement_id() des RPC authenticated — plancher documenté, renvoi à l audit', () => {
+test('B9 RLS/auth : gardes à mon_etablissement_id() relevées par T0 — NULL-safe depuis #1126, aucune garde nue au dump', () => {
   const schema = read(SOURCES.schema);
-  for (const [name, garde] of GARDES_NUES_ETAB) {
-    assert.ok(corpsSql(schema, enteteFn(name)).includes(garde), `${name} : garde nue corrigée (« ${garde} ») : GARDES_NUES_ETAB et plancher à ${BASCULE_MAIN}`);
-    assert.ok(new RegExp(`\\nGRANT ALL ON FUNCTION "public"\\."${name}"\\([^\\n]*\\) TO "authenticated";\\n`).test(schema), `${name} : plus de GRANT authenticated`);
+  for (const [name, nue, corrigee] of GARDES_ETAB_T0) {
+    const corps = corpsSql(schema, enteteFn(name));
+    if (corrigee === null) {
+      // Affectation de v_is_etab (lecture, pas une garde) : inchangée par #1126, fiche fn_etat_pointage_mission.
+      assert.ok(corps.includes(nue), `${name} : affectation de v_is_etab changée — fiche fn_etat_pointage_mission à revoir`);
+    } else {
+      assert.ok(corps.includes(corrigee) && !corps.includes(nue),
+        `${name} : garde NULL-safe de #1126 absente (« ${corrigee} ») — constat B9 « Gardes NULL » à rouvrir`);
+    }
+    const grant = role => new RegExp(`\\nGRANT ALL ON FUNCTION "public"\\."${name}"\\([^\\n]*\\) TO "${role}";\\n`).test(schema);
+    if (REVOQUEES_1126.has(name)) {
+      // Verrou double facturation (#1126, migration 20261109020404) : service_role seul.
+      assert.ok(!grant('authenticated') && grant('service_role'), `${name} : de nouveau GRANT authenticated (verrou de #1126 levé ?)`);
+    } else {
+      assert.ok(grant('authenticated'), `${name} : plus de GRANT authenticated`);
+    }
   }
   for (const [name, [entete, temoin]] of Object.entries(GARDES_NUES_EXCLUES)) {
     assert.ok(corpsSql(schema, entete).includes(temoin), `${name} : exclusion à revoir (témoin « ${temoin} » absent)`);
   }
-  // Plancher (≥), pas égalité : chaque garde relevée par T0 l'est encore par la méthode, et le total atteint le plancher.
+  // Après #1126 : aucune garde nue au dump hors exclusions motivées (une nouvelle RPC qui compare nûment rougit ici).
   const trouvees = gardesNuesEtablissement(schema).filter(n => !(n in GARDES_NUES_EXCLUES));
-  const attendu = GARDES_NUES_ETAB.map(([n]) => n).filter(n => n !== 'fn_etat_pointage_mission');
-  assert.deepEqual(attendu.filter(n => !trouvees.includes(n)), [],
-    `gardes nues à mon_etablissement_id() : une garde relevée par T0 n est plus nue — GARDES_NUES_ETAB et plancher (${BASCULE_MAIN})`);
-  assert.ok(GARDES_NUES_ETAB.length >= PLANCHER_GARDES_NUES, `GARDES_NUES_ETAB sous le plancher documenté (≥ ${PLANCHER_GARDES_NUES})`);
-  assert.ok(new Set([...trouvees, 'fn_etat_pointage_mission']).size >= PLANCHER_GARDES_NUES,
-    `gardes nues au dump sous le plancher documenté (≥ ${PLANCHER_GARDES_NUES} RPC) : ${BASCULE_MAIN}`);
+  assert.deepEqual(trouvees, [], 'garde nue à mon_etablissement_id() au dump : la rendre NULL-safe (COALESCE(…, false) ou IS DISTINCT FROM)');
+  assert.equal(GARDES_ETAB_T0.length, RELEVE_T0_GARDES_NUES, `relevé de T0 : ${RELEVE_T0_GARDES_NUES} RPC`);
   // Renvoi unique et daté de DECISIONS_LOT2.md › En attente de Gabrielle › B9.
   const b9 = aplati(sousSection(section(read('docs/mobile-swift/DECISIONS_LOT2.md'), 'En attente de Gabrielle'),
     'B9 (PR préparées et poussées, jamais mergées sans go)'));
   const renvoi = b9.slice(b9.indexOf('**Gardes NULL'), b9.indexOf('**Remontée**'));
   assert.ok(renvoi.length > 0, 'renvoi « Gardes NULL » absent');
-  assert.ok(renvoi.includes(`≥ ${PLANCHER_GARDES_NUES} RPC`), `renvoi « Gardes NULL » : plancher ≥ ${PLANCHER_GARDES_NUES} RPC non documenté`);
+  for (const temoin of ['#1126', 'NULL-safe', 'aucune garde nue', `${RELEVE_T0_GARDES_NUES} RPC`]) {
+    assert.ok(renvoi.includes(temoin), `renvoi « Gardes NULL » : bascule de #1126 non consignée (${temoin} absent)`);
+  }
   assert.ok(!renvoi.includes('18 fois'), 'renvoi « Gardes NULL » : ancien décompte non reproductible');
   assert.ok(renvoi.includes('`gardesNuesEtablissement`') && renvoi.includes('tests/node/check-rpc-contracts.node.mjs'),
     'renvoi « Gardes NULL » : méthode reproductible non référencée');
@@ -1499,10 +1535,10 @@ test('B9 RLS/auth : gardes nues à mon_etablissement_id() des RPC authenticated 
   const annexe = read(ANNEXE_AUDIT_GARDES_NULL);
   assert.ok(annexe.includes('3 novembre 2026') && annexe.includes('`fix/gardes-null-security-definer`'), 'annexe : date ou PR B9 absente');
   const auditees = fonctionsAuditees(annexe);
-  for (const name of [...GARDES_NUES_ETAB.map(([n]) => n), ...Object.keys(GARDES_NUES_EXCLUES), 'fn_declarer_fin_retroactive']) {
+  for (const name of [...GARDES_ETAB_T0.map(([n]) => n), ...Object.keys(GARDES_NUES_EXCLUES), 'fn_declarer_fin_retroactive']) {
     assert.ok(auditees.has(name), `annexe ${ANNEXE_AUDIT_GARDES_NULL} : aucun verdict pour ${name}`);
   }
-  assert.ok(auditees.size >= PLANCHER_GARDES_NUES, `annexe : ${auditees.size} fonctions auditées, plancher ${PLANCHER_GARDES_NUES}`);
+  assert.ok(auditees.size >= RELEVE_T0_GARDES_NUES, `annexe : ${auditees.size} fonctions auditées, plancher ${RELEVE_T0_GARDES_NUES}`);
 });
 
 // Revue fraîche de T0 : check-rpc-contracts.mjs lit le supplément STAGING (statut `staging_seulement`) ; tant que

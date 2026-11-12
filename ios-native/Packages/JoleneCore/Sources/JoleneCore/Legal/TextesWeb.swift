@@ -313,69 +313,70 @@ public enum TextesWeb {
     /// Lecture d'un contrat (`ContratMission.tsx` l.552-837) : bandeaux de statut, CDD à préparer,
     /// document figé et empreinte, contenu indisponible, mode OTP, pied de page juridique.
     public enum Contrat {
-        // source: src/pages/ContratMission.tsx:559 [juridique]
+        // source: src/pages/ContratMission.tsx:555 [juridique]
         public static let annule = "❌ Ce contrat a été annulé suite à l'annulation de la mission."
 
-        // source: src/pages/ContratMission.tsx:564 [juridique]
+        // source: src/pages/ContratMission.tsx:560 [juridique]
         public static let expire = "⏰ Contrat expiré — non signé dans les 72h. La mission a été annulée."
 
-        // source: src/pages/ContratMission.tsx:569 [juridique]
+        // source: src/pages/ContratMission.tsx:565 [juridique]
         public static let refuse = "❌ Ce contrat a été refusé par l'une des parties."
 
-        // source: src/pages/ContratMission.tsx:576 [juridique]
+        // source: src/pages/ContratMission.tsx:572 [juridique]
         public static let autrePartieASigne = "⏳ L'autre partie a déjà signé"
 
-        // source: src/pages/ContratMission.tsx:578 [juridique]
+        // source: src/pages/ContratMission.tsx:574 [juridique]
         public static let autrePartieASigneDetail = "Vous pouvez signer maintenant. Le contrat devient complet dès que les deux signatures sont enregistrées, quel que soit leur ordre."
 
         /// CDD sans original préparé par l'employeur (LOT2_PLAN §7 Q19) : aucune action soignant.
-        // source: src/pages/ContratMission.tsx:608 [juridique]
+        // source: src/pages/ContratMission.tsx:604 [juridique]
         public static let cddAPreparer = "Le contrat doit être préparé et confirmé par un représentant autorisé de l’employeur avant les signatures."
 
         /// Suivi de la date `dd/MM/yyyy 'à' HH:mm` : voir `documentOfficielFige(dateFormatee:empreinte:)`.
-        // source: src/pages/ContratMission.tsx:628 [fragment]
+        // source: src/pages/ContratMission.tsx:624 [fragment]
         public static let documentFigeLe = "Document officiel figé le"
 
-        // source: src/pages/ContratMission.tsx:629 [fragment]
+        // source: src/pages/ContratMission.tsx:625 [fragment]
         public static let empreinteLibelle = "— empreinte"
 
-        // source: src/pages/ContratMission.tsx:629 [fragment]
+        // source: src/pages/ContratMission.tsx:625 [fragment]
         public static let empreinteEllipse = "…"
 
-        // source: src/pages/ContratMission.tsx:641 [juridique]
+        // source: src/pages/ContratMission.tsx:637 [juridique]
         public static let originalIndisponible = "Le document signé d’origine est indisponible. Aucune reconstitution automatique n’est effectuée."
 
-        // source: src/pages/ContratMission.tsx:642 [libellé]
+        // source: src/pages/ContratMission.tsx:638 [libellé]
         public static let contenuPasDisponible = "Le contenu du contrat n'est pas encore disponible."
 
-        // source: src/pages/ContratMission.tsx:745 [juridique]
+        // source: src/pages/ContratMission.tsx:742 [juridique]
         public static let otpLibelle = "📱 Signature électronique OTP SMS"
 
-        // source: src/pages/ContratMission.tsx:748 [juridique]
+        // source: src/pages/ContratMission.tsx:745 [juridique]
         public static let otpDescription = "Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code civil."
 
-        // source: src/pages/ContratMission.tsx:827 [juridique]
+        // source: src/pages/ContratMission.tsx:824 [juridique]
         public static let dejaSigne = "✅ Vous avez déjà signé ce contrat"
 
-        // source: src/pages/ContratMission.tsx:837 [fragment]
+        // source: src/pages/ContratMission.tsx:834 [fragment]
         public static let mentionCadreEmployeur = "Contrat salarié préparé selon le cadre déclaré par l’employeur."
 
-        // source: src/pages/ContratMission.tsx:839 [fragment]
+        // source: src/pages/ContratMission.tsx:836 [fragment]
         public static let mentionSalarieEcrit = "Contrat salarié écrit — art. L.1242-12 du Code du travail."
 
-        // source: src/pages/ContratMission.tsx:840 [fragment]
+        // source: src/pages/ContratMission.tsx:837 [fragment]
         public static let mentionPrestationLiberale = "Contrat de prestation entre l’établissement et le professionnel libéral."
 
-        // source: src/pages/ContratMission.tsx:841 [fragment]
+        // source: src/pages/ContratMission.tsx:838 [fragment]
         public static let signatureElectroniqueSimple = "Signature électronique simple."
 
-        // source: src/pages/ContratMission.tsx:841 [fragment]
+        // source: src/pages/ContratMission.tsx:838 [fragment]
         public static let regularisationMontants = "Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires."
 
-        /// Types de contrat qui reçoivent la mention « Contrat salarié écrit » (`TYPES_CONTRAT_MENTION_SALARIEE`,
+        /// Types de contrat qui reçoivent la mention « Contrat salarié écrit » (`TYPES_CONTRAT_SALARIES` de
+        /// `src/lib/typesContrat.ts`, lu par `estContratSalarie` depuis #1123 ; auparavant `TYPES_CONTRAT_MENTION_SALARIEE`,
         /// #1122 : CDDU et VACATION sont des contrats salariés, mention validée par Gabrielle le 08/11/2026, HARD
         /// STOP n°4). Comparaison exacte (`Array.includes`), lue par `ContratRules.mentionPiedDePage`.
-        // source-ensemble: src/pages/ContratMission.tsx:65
+        // source-ensemble: src/lib/typesContrat.ts:25
         public static let typesMentionSalariee: Set<String> = [
             "CDD",
             "SALARIE",
@@ -383,9 +384,9 @@ public enum TextesWeb {
             "VACATION",
         ]
 
-        /// Mention du pied de page (l.837-840), choisie comme le web : `cadreEmployeur` quand
+        /// Mention du pied de page (l.834-837), choisie comme le web : `cadreEmployeur` quand
         /// `texteEmployeur` est vrai (CDD au cadre déclaré par l'employeur, l.540-542), sinon
-        /// `salarieEcrit` pour un `type_contrat` de `typesMentionSalariee` (l.838), sinon `prestationLiberale`.
+        /// `salarieEcrit` pour un `type_contrat` de `typesMentionSalariee` (l.835, `estContratSalarie`), sinon `prestationLiberale`.
         public enum MentionPiedDePage: Sendable, CaseIterable {
             case cadreEmployeur
             case salarieEcrit
@@ -400,9 +401,9 @@ public enum TextesWeb {
             }
         }
 
-        /// Pied de page rendu par le web (l.836-842) : mention, « Signature électronique simple. »,
+        /// Pied de page rendu par le web (l.833-839) : mention, « Signature électronique simple. »,
         /// puis la régularisation des montants, sauf pour un contrat au cadre déclaré par l'employeur
-        /// (`{!texteEmployeur && …}`, l.841).
+        /// (`{!texteEmployeur && …}`, l.838).
         public static func piedDePage(_ mention: MentionPiedDePage) -> String {
             let base = mention.texte + " " + signatureElectroniqueSimple
             return mention == .cadreEmployeur ? base : base + " " + regularisationMontants
@@ -588,9 +589,9 @@ public enum TextesWeb {
         // source: src/components/Countdown72hSignature.tsx:70 [fragment]
         public static let aFinaliserSous = "Signature à finaliser sous"
 
-        /// Texte du compte à rebours (l.38-75) : expiré à zéro ; sinon l'alerte urgente sous 24 h
+        /// Texte du compte à rebours (l.38-76) : expiré à zéro ; sinon l'alerte urgente sous 24 h
         /// (couleur `destructive`, l.53-56) ou « Signature à finaliser sous », suivi de la durée
-        /// restante (l.71-73).
+        /// restante (l.71-74 : `{' '}` puis la durée).
         public static func texte(restantSecondes: Int) -> String {
             guard restantSecondes > 0 else { return expire }
             let duree = LibellesWeb.CompteARebours.duree(restantSecondes: restantSecondes)

@@ -134,7 +134,7 @@ final class ContratRulesTests: XCTestCase {
         XCTAssertEqual(ContratRules.mentionPiedDePage(contrat(type: nil)), .prestationLiberale)
     }
 
-    /// L2-TJ : `TYPES_CONTRAT_MENTION_SALARIEE` du web (`ContratMission.tsx` l.65, #1122, mention validée par Gabrielle
+    /// L2-TJ : `TYPES_CONTRAT_SALARIES` du web (`src/lib/typesContrat.ts` l.25, ex-`TYPES_CONTRAT_MENTION_SALARIEE` de `ContratMission.tsx`, #1122, mention validée par Gabrielle
     /// le 08/11/2026) : CDD, SALARIE, CDDU et VACATION reçoivent « Contrat salarié écrit — art. L.1242-12 du Code du
     /// travail. » ; tout autre type (ou un type absent) la mention de prestation libérale. Comparaison exacte, comme
     /// `Array.includes` du web (casse comprise).

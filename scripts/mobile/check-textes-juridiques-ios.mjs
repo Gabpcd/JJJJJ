@@ -526,7 +526,12 @@ function structuresWeb(sf) {
   const ligne = pos => sf.getLineAndCharacterOfPosition(pos).line + 1;
   const deballer = e => {
     let x = e;
-    while (x && (ts.isAsExpression(x) || ts.isSatisfiesExpression?.(x) || ts.isParenthesizedExpression(x))) x = x.expression;
+    for (;;) {
+      if (x && (ts.isAsExpression(x) || ts.isSatisfiesExpression?.(x) || ts.isParenthesizedExpression(x))) x = x.expression;
+      // `Object.freeze([...] as const)` (`TYPES_CONTRAT_SALARIES`, src/lib/typesContrat.ts, #1123) : la liste gelée.
+      else if (x && ts.isCallExpression(x) && x.arguments.length === 1 && x.expression.getText(sf) === 'Object.freeze') x = x.arguments[0];
+      else break;
+    }
     return x;
   };
   const visiter = noeud => {
@@ -563,7 +568,7 @@ function structuresWeb(sf) {
       ensembles.push({ debut: ligne(noeud.getStart(sf)), fin: ligne(noeud.end - 1), elements });
     }
     // L2-TJ : liste de chaînes nommée (`const NOM = ['A', 'B'];`, `as const` admis), lue par `.includes` sur le web
-    // (`TYPES_CONTRAT_MENTION_SALARIEE`, ContratMission.tsx, #1122). Seuls les tableaux faits uniquement de chaînes
+    // (`TYPES_CONTRAT_SALARIES`, src/lib/typesContrat.ts, gelée par `Object.freeze`, lue par `estContratSalarie` ; #1122, #1123). Seuls les tableaux faits uniquement de chaînes
     // littérales comptent : un élément calculé rend la liste illisible pour la garde, donc absente.
     if (ts.isVariableDeclaration(noeud) && ts.isIdentifier(noeud.name)) {
       const init = deballer(noeud.initializer);

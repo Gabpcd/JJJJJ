@@ -459,19 +459,19 @@ public enum LibellesWeb {
         }
     }
 
-    /// Durée restante du compte à rebours de signature (`Countdown72hSignature.tsx` l.49-51, l.72).
+    /// Durée restante du compte à rebours de signature (`Countdown72hSignature.tsx` l.49-51, l.73).
     /// Textes du compte à rebours : `TextesWeb.CompteARebours`.
     public enum CompteARebours {
-        // source: src/components/Countdown72hSignature.tsx:72
+        // source: src/components/Countdown72hSignature.tsx:73
         public static let uniteHeures = "h"
 
-        // source: src/components/Countdown72hSignature.tsx:72
+        // source: src/components/Countdown72hSignature.tsx:73
         public static let uniteMinutes = "m"
 
-        // source: src/components/Countdown72hSignature.tsx:72
+        // source: src/components/Countdown72hSignature.tsx:73
         public static let uniteSecondes = "s"
 
-        /// Durée restante « <h>h <mm>m <ss>s » (l.49-51, l.72), minutes et secondes sur deux chiffres.
+        /// Durée restante « <h>h <mm>m <ss>s » (l.49-51, l.73), minutes et secondes sur deux chiffres.
         public static func duree(restantSecondes: Int) -> String {
             let heures = restantSecondes / 3600
             let minutes = (restantSecondes % 3600) / 60
@@ -627,72 +627,72 @@ public enum LibellesWeb {
         }
 
         /// En-tête (l.591) : voir `titre(numero:)`.
-        // source: src/pages/ContratMission.tsx:596
+        // source: src/pages/ContratMission.tsx:592
         public static let titrePrefixe = "Contrat"
 
         /// Statut de l'en-tête (l.592-597) : voir `statut(_:)`.
-        // source: src/pages/ContratMission.tsx:598
+        // source: src/pages/ContratMission.tsx:594
         public static let statutPrefixe = "Statut :"
 
-        // source: src/pages/ContratMission.tsx:599
+        // source: src/pages/ContratMission.tsx:595
         public static let statutSigne = "✅ Signé"
 
-        // source: src/pages/ContratMission.tsx:600
+        // source: src/pages/ContratMission.tsx:596
         public static let statutAnnule = "❌ Annulé"
 
-        // source: src/pages/ContratMission.tsx:601
+        // source: src/pages/ContratMission.tsx:597
         public static let statutEnAttente = "⏳ En attente de signatures"
 
         /// Contrat absent ou illisible (l.530).
-        // source: src/pages/ContratMission.tsx:535
+        // source: src/pages/ContratMission.tsx:531
         public static let introuvable = "Contrat introuvable"
 
-        // source: src/pages/ContratMission.tsx:616
+        // source: src/pages/ContratMission.tsx:612
         public static let telecharger = "Télécharger le contrat"
 
-        // source: src/pages/ContratMission.tsx:619
+        // source: src/pages/ContratMission.tsx:615
         public static let imprimer = "Imprimer"
 
         /// Aucun original contrôlé à partager (l.427-429).
-        // source: src/pages/ContratMission.tsx:433
+        // source: src/pages/ContratMission.tsx:429
         public static let aucunTelechargeable = "Aucun contrat téléchargeable pour le moment."
 
         /// Masque date-fns des dates du contrat (l.623, l.679, l.698), appliqué en heure de Paris.
-        // source: src/pages/ContratMission.tsx:628
+        // source: src/pages/ContratMission.tsx:624
         public static let formatDateHeure = "dd/MM/yyyy 'à' HH:mm"
 
         /// Section Signatures (l.666-706) : voir `ligneSignature(_:signee:dateFormatee:)`.
-        // source: src/pages/ContratMission.tsx:672
+        // source: src/pages/ContratMission.tsx:669
         public static let signaturesTitre = "Signatures"
 
-        // source: src/pages/ContratMission.tsx:683
+        // source: src/pages/ContratMission.tsx:680
         public static let partieEtablissement = "Établissement :"
 
-        // source: src/pages/ContratMission.tsx:702
+        // source: src/pages/ContratMission.tsx:699
         public static let partieSoignant = "Soignant(e) :"
 
-        // source: src/pages/ContratMission.tsx:684
+        // source: src/pages/ContratMission.tsx:681
         public static let signatureSignee = "✅ Signé"
 
-        // source: src/pages/ContratMission.tsx:684
+        // source: src/pages/ContratMission.tsx:681
         public static let signatureLe = "le"
 
-        // source: src/pages/ContratMission.tsx:685
+        // source: src/pages/ContratMission.tsx:682
         public static let signatureEnAttente = "⏳ En attente"
 
         /// Zone de signature (l.711) ; T9a : renvoi web jusqu'à T9b.
-        // source: src/pages/ContratMission.tsx:716
+        // source: src/pages/ContratMission.tsx:713
         public static let votreSignature = "Votre signature"
 
         /// Rendu serveur refusé (l.372-377) : voir `renduRefuse(messageServeur:)`.
-        // source: src/pages/ContratMission.tsx:382
+        // source: src/pages/ContratMission.tsx:378
         public static let renduImpossible = "Le document contractuel final n’a pas pu être préparé."
 
-        // source: src/pages/ContratMission.tsx:382
+        // source: src/pages/ContratMission.tsx:378
         public static let reessayerAvantDeSigner = "Réessayez avant de signer."
 
         /// Document final encore incomplet après le rendu (l.387-388).
-        // source: src/pages/ContratMission.tsx:393
+        // source: src/pages/ContratMission.tsx:389
         public static let renduIncomplet = "Le document contractuel final est encore incomplet. Réessayez avant de signer."
 
         /// En-tête « Contrat <numéro> » (l.591), sans repli : un numéro NULL laisse « Contrat ».

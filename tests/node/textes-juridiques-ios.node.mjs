@@ -229,7 +229,7 @@ const COMPLEMENTS = [
   // PanneauContestation.tsx : en-tête l.262, formulaire l.366, l.376, l.387 (« Envoi… » et envoi), l.390.
   'LibellesWeb.Contestation.titre', 'LibellesWeb.Contestation.contester', 'LibellesWeb.Contestation.placeholderSoignant',
   'LibellesWeb.Contestation.envoi', 'LibellesWeb.Contestation.envoyer', 'LibellesWeb.Contestation.annuler',
-  // Countdown72hSignature.tsx l.72 : unités de la durée.
+  // Countdown72hSignature.tsx l.73 : unités de la durée.
   'LibellesWeb.CompteARebours.uniteHeures', 'LibellesWeb.CompteARebours.uniteMinutes', 'LibellesWeb.CompteARebours.uniteSecondes',
   // SectionPreferences.tsx l.140 : libellé d'accessibilité de l'interrupteur (formule du consentement).
   'TextesWeb.ProfilConsentementGps.libelleAccessibilite',
@@ -534,24 +534,25 @@ test('TL : MESSAGES_ERREUR, les codes bloquants et les libellés de statut sont 
 });
 
 // L2-TJ (#1122, mention validée par Gabrielle le 08/11/2026) : la liste des types de contrat qui reçoivent « Contrat
-// salarié écrit — art. L.1242-12 du Code du travail. » est l'ensemble `TYPES_CONTRAT_MENTION_SALARIEE` du web
-// (`const … = [...]`, l.65 de ContratMission.tsx), repris type pour type par `TextesWeb.Contrat.typesMentionSalariee`.
-test('TJ : les types à mention salariée suivent TYPES_CONTRAT_MENTION_SALARIEE du web, type par type', () => {
-  const contrat = 'src/pages/ContratMission.tsx';
+// salarié écrit — art. L.1242-12 du Code du travail. » est l'ensemble `TYPES_CONTRAT_SALARIES` du web
+// (`Object.freeze([...] as const)`, l.25 de src/lib/typesContrat.ts, source unique depuis #1123, lue par
+// `estContratSalarie`), repris type pour type par `TextesWeb.Contrat.typesMentionSalariee`.
+test('TJ : les types à mention salariée suivent TYPES_CONTRAT_SALARIES du web, type par type', () => {
+  const contrat = 'src/lib/typesContrat.ts';
   const ensemble = resultat.ensembles.find(e => e.source?.fichier === contrat);
   assert.ok(ensemble, 'ensemble des types à mention salariée absent de TextesWeb.swift');
   assert.equal(ensemble.nomComplet, 'TextesWeb.Contrat.typesMentionSalariee');
   assert.deepEqual([...ensemble.elements].sort(), ['CDD', 'CDDU', 'SALARIE', 'VACATION']);
   const web = read(contrat);
-  const declaration = "export const TYPES_CONTRAT_MENTION_SALARIEE = ['CDD', 'SALARIE', 'CDDU', 'VACATION'];";
+  const declaration = "export const TYPES_CONTRAT_SALARIES = Object.freeze(['CDD', 'SALARIE', 'CDDU', 'VACATION'] as const);";
   assert.ok(web.includes(declaration), 'déclaration web introuvable : relire la mention du pied de page');
   assert.equal(web.split('\n')[ensemble.source.debut - 1].trim(), declaration, 'annotation hors de la déclaration web');
   // Un type retiré du web fait rougir la garde.
-  const sansVacation = web.replace(declaration, "export const TYPES_CONTRAT_MENTION_SALARIEE = ['CDD', 'SALARIE', 'CDDU'];");
+  const sansVacation = web.replace(declaration, "export const TYPES_CONTRAT_SALARIES = Object.freeze(['CDD', 'SALARIE', 'CDDU'] as const);");
   let r = verifier({ lireWeb: lireAvec(contrat, sansVacation) });
   assert.ok(r.erreurs.some(e => e.includes('typesMentionSalariee') && e.includes('VACATION')), JSON.stringify(r.erreurs));
   // Un type ajouté au web aussi.
-  const avecInterim = web.replace(declaration, "export const TYPES_CONTRAT_MENTION_SALARIEE = ['CDD', 'SALARIE', 'CDDU', 'VACATION', 'INTERIM'];");
+  const avecInterim = web.replace(declaration, "export const TYPES_CONTRAT_SALARIES = Object.freeze(['CDD', 'SALARIE', 'CDDU', 'VACATION', 'INTERIM'] as const);");
   r = verifier({ lireWeb: lireAvec(contrat, avecInterim) });
   assert.ok(r.erreurs.some(e => e.includes('typesMentionSalariee') && e.includes('INTERIM')), JSON.stringify(r.erreurs));
   // Un type oublié côté Swift.
@@ -559,9 +560,9 @@ test('TJ : les types à mention salariée suivent TYPES_CONTRAT_MENTION_SALARIEE
   assert.notEqual(oubli, swift);
   r = verifier({ swiftSource: oubli });
   assert.ok(r.erreurs.some(e => e.includes('typesMentionSalariee') && e.includes('CDDU')), JSON.stringify(r.erreurs));
-  // L'ancienne règle (CDD et SALARIE seuls) ne passe plus : la zone du pied de page lit la constante.
+  // L'ancienne règle (CDD et SALARIE seuls) ne passe plus : la zone du pied de page lit la source unique.
   const zone = zonesRendu.zones.find(z => (z.fonctions ?? []).includes('TextesWeb.Contrat.piedDePage'));
-  assert.ok(zone.code.some(l => l.includes('TYPES_CONTRAT_MENTION_SALARIEE.includes(contrat.type_contrat')), JSON.stringify(zone.code));
+  assert.ok(zone.code.some(l => l.includes('estContratSalarie(contrat.type_contrat)')), JSON.stringify(zone.code));
   assert.ok(!zone.code.some(l => l.includes("['CDD', 'SALARIE']")), 'zone du pied de page restée sur l’ancienne règle');
 });
 

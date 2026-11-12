@@ -247,7 +247,8 @@
     dans `feat/ios-lot2` à l'intégration de T3, T6 et T8) : la garde exige l'absence de `nouveau_code` et de
     `nouveau_hmac` dans le dump ; les fiches `fn_scanner_code_pointage` et `fn_etat_pointage_mission` citent les
     numéros de ligne du dump re-baseliné.
-  - **PR backend B9 des constats ci-dessous** : `REVOKE` des neuf RPC ① ou correction des gardes ternaires
+  - **PR backend B9 des constats ci-dessous** (gardes ternaires **basculées le 12 novembre 2026**, #1126 amené par le
+    merge du lot 3 ; le `REVOKE` reste ouvert) : `REVOKE` des neuf RPC ① ou correction des gardes ternaires
     (`IS DISTINCT FROM`, `COALESCE`) de `fn_codes_pointage_mission`, `fn_generer_qr_mission`,
     `fn_generer_code_secours_mission`, `fn_presences_detail_mission`, `fn_etat_pointage_mission` et des autres RPC
     du « Motif à auditer » ; `REVOKE` de `fn_creer_notification` ou contrôle de son destinataire. Gardes « B9
@@ -1757,11 +1758,14 @@ n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranc
   chaînes de pointage à distance du système ①, « Motif à auditer ») sont remplacées par l'audit des gardes NULL du
   3 novembre 2026, relu en lecture seule sur la définition live de chaque fonction en production : rapport en annexe,
   `docs/mobile-swift/AUDIT_GARDES_NULL_2026-11-03.md` (verdict, gravité et correction proposée par fonction).
-  Corrections : PR B9 dédiée `fix/gardes-null-security-definer`, hors lot 2. Garde de T0 : plancher documenté,
-  **≥ 18 RPC** `GRANT … TO authenticated` dont une condition compare nûment à `mon_etablissement_id()` au dump
-  (méthode `gardesNuesEtablissement` de `tests/node/check-rpc-contracts.node.mjs`, plus l'affectation de `v_is_etab`
-  de `fn_etat_pointage_mission`) ; un décompte plus élevé ne la fait pas rougir, la correction d'une garde relevée par
-  T0 la fait basculer (« Ordonnancement et branches »). Le natif n'appelle `fn_etat_pointage_mission` et
+  Corrections : PR B9 dédiée `fix/gardes-null-security-definer`, hors lot 2, mergée par #1126 (`e7dcbf51`, 9 novembre
+  2026). **Basculé le 12 novembre 2026** (merge du lot 3, qui amène #1126 dans `feat/ios-lot2`, « Ordonnancement et
+  branches ») : les gardes des 18 RPC relevées par T0 sont NULL-safe (`COALESCE(… = mon_etablissement_id(), false)`),
+  sauf l'affectation de `v_is_etab` de `fn_etat_pointage_mission` (lecture, pas une garde : fiche
+  `fn_etat_pointage_mission`) ; la garde de T0 exige leur forme corrigée et **aucune garde nue** au dump (méthode
+  `gardesNuesEtablissement` de `tests/node/check-rpc-contracts.node.mjs`, qui ignore les comparaisons sous
+  `COALESCE(…, false)`, moins les deux exclusions motivées). Le `REVOKE EXECUTE` des neuf RPC ① reste une proposition
+  ouverte. Le natif n'appelle `fn_etat_pointage_mission` et
   `fn_presences_detail_mission` que pour ses missions et n'en dépend pas.
 - **Remontée** : ces constats sont à remonter à Gabrielle par la session principale, hors branche, sans attendre la PR
   de `feat/ios-lot2` (aucune PR n'est ouverte sur cette branche avant la fin du lot 1).

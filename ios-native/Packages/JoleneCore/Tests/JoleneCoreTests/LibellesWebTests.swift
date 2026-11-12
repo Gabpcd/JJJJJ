@@ -55,7 +55,7 @@ final class LibellesWebTests: XCTestCase {
         XCTAssertNil(otp.infobulleRenvoi(nouvelEnvoiAutorise: true, smsRestants: nil))
     }
 
-    /// Durée restante du compte à rebours (`Countdown72hSignature.tsx` l.49-51, l.72).
+    /// Durée restante du compte à rebours (`Countdown72hSignature.tsx` l.49-51, l.73).
     func testDureeDuCompteAReboursCommeLeRenduWeb() {
         let rebours = LibellesWeb.CompteARebours.self
         XCTAssertEqual(rebours.duree(restantSecondes: 62 * 3600), "62h 00m 00s")

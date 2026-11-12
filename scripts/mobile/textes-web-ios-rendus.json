@@ -82,7 +82,7 @@
       "fonctions": [
         "TextesWeb.Contrat.documentOfficielFige"
       ],
-      "source": "src/pages/ContratMission.tsx:625-630",
+      "source": "src/pages/ContratMission.tsx:621-626",
       "code": [
         "{contrat.contenu_html_rendu_le && (",
         "<p className=\"text-[10px] text-muted-foreground mb-2 italic flex items-center gap-1\">",
@@ -97,11 +97,11 @@
         "TextesWeb.Contrat.piedDePage",
         "TextesWeb.Contrat.MentionPiedDePage.texte"
       ],
-      "source": "src/pages/ContratMission.tsx:836-842",
+      "source": "src/pages/ContratMission.tsx:833-839",
       "code": [
         "<p className=\"text-[10px] text-muted-foreground/60 italic text-center mt-4\">",
         "{texteEmployeur ? 'Contrat salarié préparé selon le cadre déclaré par l’employeur. '",
-        ": TYPES_CONTRAT_MENTION_SALARIEE.includes(contrat.type_contrat || '')",
+        ": estContratSalarie(contrat.type_contrat)",
         "? 'Contrat salarié écrit — art. L.1242-12 du Code du travail. '",
         ": 'Contrat de prestation entre l’établissement et le professionnel libéral. '}",
         "Signature électronique simple. {!texteEmployeur && 'Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires.'}",
@@ -199,13 +199,14 @@
         "LibellesWeb.CompteARebours.duree",
         "LibellesWeb.deuxChiffres"
       ],
-      "source": "src/components/Countdown72hSignature.tsx:67-73",
+      "source": "src/components/Countdown72hSignature.tsx:67-74",
       "code": [
         "<p className=\"text-xs font-semibold\">",
         "{couleur === 'destructive'",
         "? 'Signature urgente — moins de 24h restantes !'",
         ": 'Signature à finaliser sous'}",
-        "<span className=\"ml-1 tabular-nums font-mono\">",
+        "{' '}",
+        "<span className=\"tabular-nums font-mono\">",
         "{heures}h {minutes.toString().padStart(2, '0')}m {secondes.toString().padStart(2, '0')}s",
         "</span>"
       ]
@@ -412,7 +413,7 @@
       "fonctions": [
         "LibellesWeb.Contrat.renduRefuse"
       ],
-      "source": "src/pages/ContratMission.tsx:377-382",
+      "source": "src/pages/ContratMission.tsx:373-378",
       "code": [
         "if (error || !(data as any)?.success) {",
         "const motifBrut = typeof (data as any)?.error === 'string'",
@@ -426,7 +427,7 @@
       "fonctions": [
         "LibellesWeb.Contrat.titre"
       ],
-      "source": "src/pages/ContratMission.tsx:596",
+      "source": "src/pages/ContratMission.tsx:592",
       "code": [
         "<h1 className=\"text-xl font-bold text-foreground\">Contrat {contrat.numero_contrat}</h1>"
       ]
@@ -435,7 +436,7 @@
       "fonctions": [
         "LibellesWeb.Contrat.statut"
       ],
-      "source": "src/pages/ContratMission.tsx:598-601",
+      "source": "src/pages/ContratMission.tsx:594-597",
       "code": [
         "Statut : {contrat.statut === 'SIGNE_COMPLET'",
         "? '✅ Signé'",
@@ -447,7 +448,7 @@
       "fonctions": [
         "LibellesWeb.Contrat.ligneSignature"
       ],
-      "source": "src/pages/ContratMission.tsx:683-685",
+      "source": "src/pages/ContratMission.tsx:680-682",
       "code": [
         "Établissement : {(contrat.statut === 'SIGNE_COMPLET' || contrat.signature_etablissement)",
         "? `✅ Signé${contrat.signature_etablissement_le ? ` le ${format(new Date(contrat.signature_etablissement_le), \"dd/MM/yyyy 'à' HH:mm\", { locale: fr })}` : ''}`",
@@ -458,7 +459,7 @@
       "fonctions": [
         "LibellesWeb.Contrat.ligneSignature"
       ],
-      "source": "src/pages/ContratMission.tsx:702-704",
+      "source": "src/pages/ContratMission.tsx:699-701",
       "code": [
         "Soignant(e) : {(contrat.statut === 'SIGNE_COMPLET' || contrat.signature_soignant)",
         "? `✅ Signé${contrat.signature_soignant_le ? ` le ${format(new Date(contrat.signature_soignant_le), \"dd/MM/yyyy 'à' HH:mm\", { locale: fr })}` : ''}`",
