@@ -1763,8 +1763,9 @@ n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranc
   branches ») : les gardes des 18 RPC relevées par T0 sont NULL-safe (`COALESCE(… = mon_etablissement_id(), false)`),
   sauf l'affectation de `v_is_etab` de `fn_etat_pointage_mission` (lecture, pas une garde : fiche
   `fn_etat_pointage_mission`) ; la garde de T0 exige leur forme corrigée et **aucune garde nue** au dump (méthode
-  `gardesNuesEtablissement` de `tests/node/check-rpc-contracts.node.mjs`, qui ignore les comparaisons sous
-  `COALESCE(…, false)`, moins les deux exclusions motivées). Le `REVOKE EXECUTE` des neuf RPC ① reste une proposition
+  `gardesNuesEtablissement` de `tests/node/check-rpc-contracts.node.mjs`, qui ne tient pour sûre qu'une égalité sous
+  `COALESCE(… = …, false)` — `!=` ou `<>` sous `COALESCE` reste nue —, moins les deux exclusions motivées, prises par
+  surcharge ; tests de mutation à l'appui, revue B8 de l'intégration, M1). Le `REVOKE EXECUTE` des neuf RPC ① reste une proposition
   ouverte. Le natif n'appelle `fn_etat_pointage_mission` et
   `fn_presences_detail_mission` que pour ses missions et n'en dépend pas.
 - **Remontée** : ces constats sont à remonter à Gabrielle par la session principale, hors branche, sans attendre la PR

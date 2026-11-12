@@ -110,6 +110,18 @@
     },
     {
       "fonctions": [
+        "TextesWeb.Contrat.piedDePage",
+        "TextesWeb.Contrat.MentionPiedDePage.texte"
+      ],
+      "source": "src/lib/typesContrat.ts:29-31",
+      "code": [
+        "export function estContratSalarie(type: string | null | undefined): type is TypeContratSalarie {",
+        "return !!type && (TYPES_CONTRAT_SALARIES as readonly string[]).includes(type);",
+        "}"
+      ]
+    },
+    {
+      "fonctions": [
         "TextesWeb.SignatureOtp.message"
       ],
       "source": "src/components/SignerContratOtp.tsx:46-49",

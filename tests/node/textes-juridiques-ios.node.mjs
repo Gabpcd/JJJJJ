@@ -560,6 +560,12 @@ test('TJ : les types à mention salariée suivent TYPES_CONTRAT_SALARIES du web,
   assert.notEqual(oubli, swift);
   r = verifier({ swiftSource: oubli });
   assert.ok(r.erreurs.some(e => e.includes('typesMentionSalariee') && e.includes('CDDU')), JSON.stringify(r.erreurs));
+  // Le corps de `estContratSalarie` est une zone de rendu (revue B8 de l'intégration, m4) : une règle changée dans la
+  // fonction, liste intacte, fait aussi rougir la garde.
+  const corps = 'return !!type && (TYPES_CONTRAT_SALARIES as readonly string[]).includes(type);';
+  assert.ok(web.includes(corps), 'corps de estContratSalarie introuvable');
+  r = verifier({ lireWeb: lireAvec(contrat, web.replace(corps, "return !!type && type !== 'VACATION' && (TYPES_CONTRAT_SALARIES as readonly string[]).includes(type);")) });
+  assert.ok(r.erreurs.some(e => e.includes('src/lib/typesContrat.ts') && e.includes('TextesWeb.Contrat.piedDePage')), JSON.stringify(r.erreurs));
   // L'ancienne règle (CDD et SALARIE seuls) ne passe plus : la zone du pied de page lit la source unique.
   const zone = zonesRendu.zones.find(z => (z.fonctions ?? []).includes('TextesWeb.Contrat.piedDePage'));
   assert.ok(zone.code.some(l => l.includes('estContratSalarie(contrat.type_contrat)')), JSON.stringify(zone.code));
