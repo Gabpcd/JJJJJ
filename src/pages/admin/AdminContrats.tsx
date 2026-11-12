@@ -13,6 +13,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { estContratSalarie } from '@/lib/typesContrat';
 
 interface ContratLigne {
   id: string;
@@ -63,10 +64,11 @@ const TYPE_CONTRAT_LABEL: Record<string, string> = {
 const libelleTypeContrat = (t: string) => TYPE_CONTRAT_LABEL[t]
   ?? t?.toLocaleLowerCase('fr-FR').replace(/_/g, ' ').replace(/^./, (lettre) => lettre.toLocaleUpperCase('fr-FR'));
 
-/** Contrat soumis à DPAE (CDD/Salarié), signé, mais sans numéro DPAE enregistré : obligation légale à traiter. */
+/** Contrat salarié soumis à DPAE (CDD, CDDU, VACATION, SALARIE — source unique
+ * `estContratSalarie`), signé, mais sans numéro DPAE enregistré : obligation légale à traiter. */
 const estDpaeManquante = (c: ContratLigne) =>
   c.statut === 'SIGNE_COMPLET' &&
-  (c.type_contrat?.startsWith('CDD') || c.type_contrat === 'SALARIE') &&
+  estContratSalarie(c.type_contrat) &&
   !(c.dpae_effectuee && c.dpae_numero);
 
 const PAR_PAGE = 50;
@@ -113,7 +115,8 @@ export default function AdminContrats() {
   }, [charger]);
 
   // File de travail (Session D) :
-  // À traiter = signatures en attente (plus anciens d'abord), puis CDD/Salarié signés sans numéro DPAE.
+  // À traiter = signatures en attente (plus anciens d'abord), puis contrats salariés
+  // (CDD, CDDU, VACATION, SALARIE) signés sans numéro DPAE.
   // Historique = signés complets (DPAE ok ou non concernés), annulés, expirés — plus récents d'abord.
   const { aTraiter, historique } = useMemo(() => {
     const parAnciennete = (a: ContratLigne, b: ContratLigne) => (a.cree_le || '').localeCompare(b.cree_le || '');
@@ -172,7 +175,7 @@ export default function AdminContrats() {
   const dpaeBadge = (c: ContratLigne) =>
     c.dpae_effectuee && c.dpae_numero ? (
       <span className="text-success text-xs">Validée · {c.dpae_numero.slice(0, 8)}…</span>
-    ) : c.type_contrat?.startsWith('CDD') || c.type_contrat === 'SALARIE' ? (
+    ) : estContratSalarie(c.type_contrat) ? (
       <span className="text-warning text-xs">⏳ À déclarer</span>
     ) : <span className="text-muted-foreground text-xs">Non requise</span>;
 

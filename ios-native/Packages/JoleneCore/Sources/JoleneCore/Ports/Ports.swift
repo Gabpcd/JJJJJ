@@ -97,6 +97,24 @@ public struct Gateways: Sendable {
     public var documents: DocumentsPort = UnwiredDocumentsPort()              // T6
     public var contrats: ContratsPort = UnwiredContratsPort()                 // T8
 
+    // Lot 3 — ajout additif (PRINCIPES §2, blueprint `LOT3_PLAN.md` §2.2) : même règle que le lot 1,
+    // stubs dans `Ports/Lot3Ports.swift` (message : « …livré par la tranche Tn du lot 3 »). Pas de
+    // troisième init : chaque monde assigne ces ports après l'init complet du lot 1, dans sa fonction
+    // `câblerLot3(_:)` (`DemoWorld`, `SupabaseGateways`) ; liste attendue `DemoWorldTests.portsEnAttenteLot3`.
+    public var push: PushRegistrationPort = UnwiredPushRegistrationPort()                      // T4
+    public var notifications: NotificationsCenterPort = UnwiredNotificationsCenterPort()       // T5
+    public var preferences: NotificationPreferencesPort = UnwiredNotificationPreferencesPort() // T6
+    public var inscription: InscriptionPort = UnwiredInscriptionPort()                         // T7, T8
+    public var profil: ProfilPort = UnwiredProfilPort()                                        // T9
+    public var avatar: AvatarStoragePort = UnwiredAvatarStoragePort()                          // T10
+    public var geocodage: GeocodagePort = UnwiredGeocodagePort()                               // T10
+    public var motDePasse: MotDePassePort = UnwiredMotDePassePort()                            // T11
+    public var exportRGPD: ExportRGPDPort = UnwiredExportRGPDPort()                            // T11
+    public var revenus: RevenusPort = UnwiredRevenusPort()                                     // T12
+    public var paiements: PaiementsDeclaresPort = UnwiredPaiementsDeclaresPort()               // T13
+    public var iban: IbanPort = UnwiredIbanPort()                                              // T14b
+    public var stripeConnect: StripeConnectPort = UnwiredStripeConnectPort()                   // T14a
+
     public init(auth: AuthPort, role: RolePort, missions: MissionsPort, clock: ClockPort = SystemClock()) {
         self.auth = auth; self.role = role; self.missions = missions; self.clock = clock
     }
@@ -113,8 +131,8 @@ public struct Gateways: Sendable {
         self.audit = audit; self.flags = flags; self.recovery = recovery; self.justificatifs = justificatifs
     }
 
-    /// Noms des champs du lot 1, puis du lot 2, encore servis par un stub « non câblé », dans
-    /// l'ordre de déclaration. Vide pour un monde complet.
+    /// Noms des champs du lot 1, puis du lot 2, puis du lot 3, encore servis par un stub « non
+    /// câblé », dans l'ordre de déclaration. Vide pour un monde complet.
     public var unwiredPorts: [String] {
         let ports: [(nom: String, port: Any)] = [
             ("dashboard", dashboard), ("candidature", candidature), ("presence", presence),
@@ -123,6 +141,11 @@ public struct Gateways: Sendable {
             // Lot 2
             ("pointage", pointage), ("contestation", contestation), ("notation", notation),
             ("documents", documents), ("contrats", contrats),
+            // Lot 3
+            ("push", push), ("notifications", notifications), ("preferences", preferences),
+            ("inscription", inscription), ("profil", profil), ("avatar", avatar), ("geocodage", geocodage),
+            ("motDePasse", motDePasse), ("exportRGPD", exportRGPD), ("revenus", revenus),
+            ("paiements", paiements), ("iban", iban), ("stripeConnect", stripeConnect),
         ]
         return ports.filter { $0.port is UnwiredPort }.map(\.nom)
     }

@@ -66,7 +66,7 @@
     },
     {
       "name": "fn_mon_profil_soignant_complet",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "never",
@@ -916,7 +916,7 @@
     },
     {
       "name": "fn_upsert_token_push",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "{ p_plateforme?: string; p_token: string }",
@@ -939,6 +939,394 @@
       "manifeste": [
         {
           "signature": "fn_upsert_token_push(text,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_desactiver_mon_token_push",
+      "statut": "consommee",
+      "lot": 3,
+      "types": {
+        "args": "{ p_token: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_desactiver_mon_token_push(\"p_token\" \"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'pg_catalog', 'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_desactiver_mon_token_push(text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_obtenir_mes_preferences_notifications",
+      "statut": "consommee",
+      "lot": 3,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_obtenir_mes_preferences_notifications()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_obtenir_mes_preferences_notifications()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_modifier_preferences_notifications",
+      "statut": "consommee",
+      "lot": 3,
+      "types": {
+        "args": "{ p_canal_email?: boolean; p_canal_in_app?: boolean; p_canal_push?: boolean; p_canal_sms?: boolean; p_par_evenement?: Json }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_modifier_preferences_notifications(\"p_canal_email\" boolean DEFAULT NULL::boolean, \"p_canal_sms\" boolean DEFAULT NULL::boolean, \"p_canal_push\" boolean DEFAULT NULL::boolean, \"p_canal_in_app\" boolean DEFAULT NULL::boolean, \"p_par_evenement\" \"jsonb\" DEFAULT NULL::\"jsonb\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_modifier_preferences_notifications(boolean,boolean,boolean,boolean,jsonb)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_demarrer_inscription",
+      "statut": "consommee",
+      "lot": 3,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_demarrer_inscription(\"p_type_compte\" \"text\", \"p_profession\" \"text\" DEFAULT NULL::\"text\", \"p_nom\" \"text\" DEFAULT NULL::\"text\", \"p_cgu\" boolean DEFAULT false, \"p_cgv\" boolean DEFAULT false)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'pg_catalog', 'public', 'auth'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": null
+    },
+    {
+      "name": "fn_enregistrer_parcours_inscription",
+      "statut": "consommee",
+      "lot": 3,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_enregistrer_parcours_inscription(\"p_donnees\" \"jsonb\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'pg_catalog', 'public', 'auth'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": null
+    },
+    {
+      "name": "fn_types_exercice_autorises",
+      "statut": "consommee",
+      "lot": 3,
+      "types": {
+        "args": "{ p_profession: string }",
+        "returns": "string[]"
+      },
+      "sql": [
+        {
+          "signature": "fn_types_exercice_autorises(\"p_profession\" \"text\")",
+          "returns": "\"text\"[]",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_types_exercice_autorises(text)",
+          "category": "PUBLIC_VOLONTAIRE"
+        }
+      ]
+    },
+    {
+      "name": "fn_modifier_mon_profil",
+      "statut": "consommee",
+      "lot": 3,
+      "types": {
+        "args": "{ p_adresse_code_postal?: string; p_adresse_lat?: number; p_adresse_lng?: number; p_adresse_rue?: string; p_adresse_ville?: string; p_annees_experience?: number; p_attestation_cumul_activite?: boolean; p_avatar_url?: string; p_bio?: string; p_consentement_gps?: boolean; p_date_naissance?: string; p_disponible_urgence?: boolean; p_est_cumul_activite?: boolean; p_est_salarie_etablissement?: boolean; p_nom?: string; p_numero_adeli?: string; p_numero_rpps?: string; p_prenom?: string; p_profession?: string; p_rayon_deplacement_km?: number; p_specialites?: string[]; p_taux_horaire_minimum?: number; p_telephone?: string; p_type_exercice?: string; p_types_contrat?: string[]; p_types_contrat_acceptes?: string; p_urgence_rayon_km?: number; p_ville_recherche?: string; p_ville_urgence?: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_modifier_mon_profil(\"p_prenom\" \"text\" DEFAULT NULL::\"text\", \"p_nom\" \"text\" DEFAULT NULL::\"text\", \"p_telephone\" \"text\" DEFAULT NULL::\"text\", \"p_date_naissance\" \"date\" DEFAULT NULL::\"date\", \"p_adresse_rue\" \"text\" DEFAULT NULL::\"text\", \"p_adresse_ville\" \"text\" DEFAULT NULL::\"text\", \"p_adresse_code_postal\" \"text\" DEFAULT NULL::\"text\", \"p_adresse_lat\" numeric DEFAULT NULL::numeric, \"p_adresse_lng\" numeric DEFAULT NULL::numeric, \"p_rayon_deplacement_km\" integer DEFAULT NULL::integer, \"p_numero_rpps\" \"text\" DEFAULT NULL::\"text\", \"p_numero_adeli\" \"text\" DEFAULT NULL::\"text\", \"p_avatar_url\" \"text\" DEFAULT NULL::\"text\", \"p_types_contrat\" \"text\"[] DEFAULT NULL::\"text\"[], \"p_bio\" \"text\" DEFAULT NULL::\"text\", \"p_annees_experience\" integer DEFAULT NULL::integer, \"p_specialites\" \"text\"[] DEFAULT NULL::\"text\"[], \"p_taux_horaire_minimum\" numeric DEFAULT NULL::numeric, \"p_type_exercice\" \"text\" DEFAULT NULL::\"text\", \"p_ville_recherche\" \"text\" DEFAULT NULL::\"text\", \"p_ville_urgence\" \"text\" DEFAULT NULL::\"text\", \"p_disponible_urgence\" boolean DEFAULT NULL::boolean, \"p_urgence_rayon_km\" integer DEFAULT NULL::integer, \"p_attestation_cumul_activite\" boolean DEFAULT NULL::boolean, \"p_est_cumul_activite\" boolean DEFAULT NULL::boolean, \"p_est_salarie_etablissement\" boolean DEFAULT NULL::boolean, \"p_consentement_gps\" boolean DEFAULT NULL::boolean, \"p_types_contrat_acceptes\" \"text\" DEFAULT NULL::\"text\", \"p_profession\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'pg_catalog', 'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_modifier_mon_profil(text,text,text,date,text,text,text,numeric,numeric,integer,text,text,text,text[],text,integer,text[],numeric,text,text,text,boolean,integer,boolean,boolean,boolean,boolean,text,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_rgpd_exporter_rate_limited",
+      "statut": "consommee",
+      "lot": 3,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_rgpd_exporter_rate_limited()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_rgpd_exporter_rate_limited()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_confirmer_paiement_soignant",
+      "statut": "a_venir",
+      "lot": 3,
+      "types": {
+        "args": "{ p_paiement_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_confirmer_paiement_soignant(\"p_paiement_id\" \"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'pg_temp'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_confirmer_paiement_soignant(uuid)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_contester_paiement_soignant",
+      "statut": "a_venir",
+      "lot": 3,
+      "types": {
+        "args": "{ p_motif: string; p_paiement_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_contester_paiement_soignant(\"p_paiement_id\" \"uuid\", \"p_motif\" \"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_contester_paiement_soignant(uuid,text)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ]
+    },
+    {
+      "name": "fn_consulter_mon_iban",
+      "statut": "a_venir",
+      "lot": 3,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_consulter_mon_iban()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'pg_catalog', 'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_consulter_mon_iban()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_enregistrer_mon_iban",
+      "statut": "a_venir",
+      "lot": 3,
+      "types": {
+        "args": "{ p_iban: string; p_titulaire: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_enregistrer_mon_iban(\"p_iban\" \"text\", \"p_titulaire\" \"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'pg_catalog', 'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_enregistrer_mon_iban(text,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_mes_revenus_connect",
+      "statut": "consommee",
+      "lot": 3,
+      "types": {
+        "args": "{ p_mois_debut?: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_mes_revenus_connect(\"p_mois_debut\" \"date\" DEFAULT NULL::\"date\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_mes_revenus_connect(date)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_mes_paiements_escrow",
+      "statut": "consommee",
+      "lot": 3,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_mes_paiements_escrow()",
+          "returns": "\"jsonb\"",
+          "language": "sql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_mes_paiements_escrow()",
           "category": "RPC_UTILISATEUR_AUTH_INTERNE"
         }
       ]

@@ -46,15 +46,16 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.audit is SupabaseAuditGateway)
         XCTAssertTrue(gateways.flags is SupabaseFlagsGateway)
         XCTAssertTrue(gateways.compte is SupabaseAccountGateway)
+        XCTAssertTrue(gateways.push is SupabasePushGateway, "lot 3, T4 : enregistrement et désactivation du token APNs")
     }
 
     /// Aucune liste propre à ce monde : les ports encore stubs côté Supabase doivent être
     /// exactement ceux du monde démo (`DemoWorld.gateways()`, figés par la source unique
-    /// `DemoWorldTests.portsEnAttenteLot1` et `portsEnAttenteLot2`). Une PR qui câble un port dans
-    /// un seul monde fait diverger les deux ensembles et rougit ce test. T12 (clôture du lot 1)
+    /// `DemoWorldTests.portsEnAttenteLot1`, `portsEnAttenteLot2` et `portsEnAttenteLot3`). Une PR qui câble un port
+    /// dans un seul monde fait diverger les deux ensembles et rougit ce test. T12 (clôture du lot 1)
     /// exige qu'aucun nom du lot 1 ne reste dans `unwiredPorts`
     /// (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`), pas `unwiredPorts.isEmpty` :
-    /// les ports du lot 2 y restent nommés tant que ce lot est ouvert.
+    /// les ports des lots 2 et 3 y restent nommés tant que ces lots sont ouverts.
     func testAucunPortNonCable() {
         let supabase = SupabaseGateways.make(client: TestClient.make()).unwiredPorts
         let demo = DemoWorld.gateways().unwiredPorts
@@ -67,6 +68,13 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(supabase.contains("pointage"), "lot 2 T3 câble le pointage")
         XCTAssertFalse(supabase.contains("contrats"), "lot 2, T8 câble les contrats")
         XCTAssertFalse(supabase.contains("notation"), "lot 2, T5a câble la notation")
+        XCTAssertFalse(supabase.contains("push"), "lot 3, T4 câble le push")
+        XCTAssertFalse(supabase.contains("notifications"), "lot 3, T5 câble le centre de notifications")
+        XCTAssertFalse(supabase.contains("profil"), "lot 3, T9 câble le profil")
+        XCTAssertFalse(supabase.contains("avatar") || supabase.contains("geocodage"), "lot 3, T10 câble l'avatar et le géocodage")
+        let gateways = SupabaseGateways.make(client: TestClient.make())
+        XCTAssertTrue(gateways.avatar is EnvoiAvatar, "reçu durable et relecture d'`EnvoiAvatar` sur Supabase Storage")
+        XCTAssertTrue(gateways.geocodage is ApiAdresseGeocodage)
     }
 
     /// Lot 2 (T1) : `câblerLot2(_:client:)` est le seul point d'assignation des cinq ports du lot 2 du
@@ -88,7 +96,9 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.notation is SupabaseNotationGateway, "T5a câble la notation")
         XCTAssertTrue(gateways.documents is SupabaseDocumentsGateway, "T6 câble les justificatifs")
         XCTAssertTrue(gateways.contrats is SupabaseContratsGateway, "T8 câble les contrats")
-        XCTAssertEqual(Array(gateways.unwiredPorts.suffix(1)), ["contestation"])
+        // Fusion des lots 2 et 3 : le bloc du lot 3 suit celui du lot 2 dans `unwiredPorts` ; seuls les noms du lot 2 comptent.
+        XCTAssertEqual(gateways.unwiredPorts.filter(["pointage", "contestation", "notation", "documents", "contrats"].contains),
+                       ["contestation"])
         XCTAssertFalse(gateways.unwiredPorts.contains("notation"))
         XCTAssertFalse(gateways.unwiredPorts.contains("pointage"))
         XCTAssertFalse(gateways.unwiredPorts.contains("documents"))

@@ -16,7 +16,9 @@ final class Lot2PortsTests: XCTestCase {
 
     func testInitDuLot0LaisseLesPortsDuLot2NonCablesApresCeuxDuLot1() {
         let g = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
-        XCTAssertEqual(g.unwiredPorts, Lot1PortsTests.portsLot1 + Self.portsLot2, "lot 1 puis lot 2, ordre de déclaration")
+        // Fusion des lots 2 et 3 : le bloc du lot 3 (`Lot3PortsTests`) suit celui du lot 2.
+        XCTAssertEqual(g.unwiredPorts, Lot1PortsTests.portsLot1 + Self.portsLot2 + Lot3PortsTests.portsLot3,
+                       "lot 1 puis lot 2 (puis lot 3), ordre de déclaration")
         XCTAssertTrue(g.pointage is UnwiredPointagePort)
         XCTAssertTrue(g.contestation is UnwiredContestationPort)
         XCTAssertTrue(g.notation is UnwiredNotationPort)
@@ -26,14 +28,15 @@ final class Lot2PortsTests: XCTestCase {
 
     func testLeSecondInitDuLot1NeTouchePasAuBlocLot2() {
         let g = Lot1Fakes.gateways(clock: FixedClock(Date(timeIntervalSince1970: 1)))
-        XCTAssertEqual(g.unwiredPorts, Self.portsLot2, "le second init câble tout le lot 1, le lot 2 s'assigne après")
+        XCTAssertEqual(g.unwiredPorts, Self.portsLot2 + Lot3PortsTests.portsLot3,
+                       "le second init câble tout le lot 1, le lot 2 (puis le lot 3) s'assigne après")
     }
 
     func testAssignerUnPortDuLot2LeRetireDeLaListe() {
         var g = Lot1Fakes.gateways(clock: SystemClock())
         g.pointage = FauxPointage()
         g.contrats = FauxContrats()
-        XCTAssertEqual(g.unwiredPorts, Self.portsLot2.filter { $0 != "pointage" && $0 != "contrats" })
+        XCTAssertEqual(g.unwiredPorts, Self.portsLot2.filter { $0 != "pointage" && $0 != "contrats" } + Lot3PortsTests.portsLot3)
         XCTAssertTrue(g.pointage is FauxPointage)
         XCTAssertTrue(g.contrats is FauxContrats)
     }
@@ -111,7 +114,11 @@ final class Lot2PortsTests: XCTestCase {
     func testActionDAuditDuLot2ApresCelleDuLot1() {
         // Consentement GPS du premier pointage (décision 4) : action du CHECK `journaux_audit_action_check` (l.70290) ;
         // jamais `GPS_CONSENTEMENT_*` (retrait depuis le Profil), absentes du CHECK (correction 15).
-        XCTAssertEqual(AuditAction.allCases.map(\.rawValue), ["MISSION_ASSIGNATION", "RGPD_CONSENTEMENT_DONNE"])
+        // Fusion des lots 2 et 3 : les trois actions du lot 3 (`Lot3PortsTests.testActionsAuditDuLot3`) suivent celle du lot 2.
+        XCTAssertEqual(Array(AuditAction.allCases.map(\.rawValue).prefix(2)), ["MISSION_ASSIGNATION", "RGPD_CONSENTEMENT_DONNE"])
+        XCTAssertEqual(AuditAction.allCases.map(\.rawValue), ["MISSION_ASSIGNATION", "RGPD_CONSENTEMENT_DONNE",
+                                                             "DONNEES_PERSO_CONSULTATION", "DONNEES_PERSO_MODIFICATION",
+                                                             "RGPD_EXPORT_DONNEES"])
         XCTAssertFalse(AuditAction.allCases.contains { $0.rawValue.hasPrefix("GPS_CONSENTEMENT") })
     }
 

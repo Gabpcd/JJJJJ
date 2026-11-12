@@ -18,4 +18,12 @@ describe('préférences d’exercice compatibles avec les profils existants', ()
   it('retire toutes les variantes salariées lorsque ce mode est explicitement décoché', () => {
     expect(modifierPreferenceModeExercice(['CDD','VACATION','SALARIE','LIBERAL'], 'SALARIE', false)).toEqual(['LIBERAL']);
   });
+  // CDDU (CDD d'usage) est un contrat salarié (C. trav. art. L.1242-2 3°, D.1242-1) :
+  // un code historique CDDU vaut choix salarié, même source que la DPAE.
+  it('reconnaît un code historique CDDU comme salarié et le retire avec ce mode', () => {
+    expect(modeExerciceSelectionne(['CDDU', 'LIBERAL'], 'SALARIE')).toBe(true);
+    expect(modifierPreferenceModeExercice(['CDDU', 'LIBERAL'], 'SALARIE', true)).toEqual(['CDDU', 'LIBERAL']);
+    expect(modifierPreferenceModeExercice(['CDDU', 'LIBERAL'], 'SALARIE', false)).toEqual(['LIBERAL']);
+    expect(modeExerciceSelectionne(['REMPLACEMENT_LIBERAL'], 'SALARIE')).toBe(false);
+  });
 });

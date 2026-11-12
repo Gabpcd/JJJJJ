@@ -42,6 +42,13 @@ on:
       - 'src/pages/PresencesSoignant.tsx'
       - 'src/components/pointage/BlocPointageMission.tsx'
       - 'src/components/pointage/PointageRotatifSoignant.tsx'
+      # Lot 3, T2 : règles portées en Swift avec vecteurs golden.
+      - 'src/lib/pushNative.ts'
+      - 'src/lib/session-count.ts'
+      - 'src/lib/missionFinanceDisplay.ts'
+      - 'src/lib/paiementSoignantUi.ts'
+      - 'src/lib/valider-profil-soignant.ts'
+      - 'src/lib/preferencesModesExercice.ts'
       - 'src/components/planning/planning-candidat.ts'
       - 'src/components/planning/selection-serie-candidat.ts'
       - 'src/integrations/supabase/types.ts'
@@ -83,6 +90,13 @@ on:
       - 'src/pages/PresencesSoignant.tsx'
       - 'src/components/pointage/BlocPointageMission.tsx'
       - 'src/components/pointage/PointageRotatifSoignant.tsx'
+      # Lot 3, T2 : règles portées en Swift avec vecteurs golden.
+      - 'src/lib/pushNative.ts'
+      - 'src/lib/session-count.ts'
+      - 'src/lib/missionFinanceDisplay.ts'
+      - 'src/lib/paiementSoignantUi.ts'
+      - 'src/lib/valider-profil-soignant.ts'
+      - 'src/lib/preferencesModesExercice.ts'
       - 'src/components/planning/planning-candidat.ts'
       - 'src/components/planning/selection-serie-candidat.ts'
       - 'src/integrations/supabase/types.ts'
@@ -257,13 +271,15 @@ jobs:
   ui:
     name: UI — ${{ matrix.format }}
     runs-on: macos-26
-    # Cinq éclats de tests bornés à 30 min chacun et un build borné à 25 min (DECISIONS_LOT2 décision
-    # 22, découpage par domaine de T4b, éclat « pointage » de la seconde revue fraîche de T4b, m6) :
-    # 25 + 5 × 30 = 175 min, plus une marge de 20 min pour la préparation (checkout, simulateur, cache),
-    # le résumé et le dépôt de l'artefact. Le délai d'un éclat ou du build tombe donc toujours avant
-    # celui du job : le résumé et les xcresult sont conservés justement quand un éclat bloque
-    # (garde : tests/node/ios-swift-ci-eclats.node.mjs, plafond ≥ somme des éclats + 15 min).
-    timeout-minutes: 195
+    # Onze éclats de tests bornés à 30 min chacun et un build borné à 25 min (DECISIONS_LOT2 décision 22 ; DECISIONS_LOT3,
+    # intégration de T3b, T7, T8, T10, T11, T12 et L3-TJ ; fusion des lots 2 et 3 : socle, quatre éclats du lot 2, six du
+    # lot 3). 25 + 11 × 30 = 355 min dépasserait, avec la marge de préparation (checkout, simulateur, cache), le plafond
+    # d'un job GitHub (360 min) : le job est porté à ce plafond. Les deux gardes restent tenues (ios-swift-ci-eclats :
+    # plafond ≥ somme des éclats + 15 min = 345 ; check-rpc-contracts-lot3 : plafond ≥ 30 × 11 + 20 = 350). Durées
+    # mesurées très en dessous de leurs délais (lot 2 seul : environ 1 h 20 ; lot 3 seul : environ 1 h 35, socle compris) :
+    # le délai d'un éclat tombe avant celui du job sauf si presque tous les éclats atteignent leurs 30 min. Au-delà de
+    # onze éclats, scinder le job (un job par lot) plutôt que d'ajouter un éclat.
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
@@ -344,20 +360,30 @@ jobs:
           echo "duree_build_s=$duree" >> "$GITHUB_OUTPUT"
           echo "Durée build-for-testing : ${duree}s (mesure pour la porte go/no-go, docs/mobile-swift/PORTE_LOT0.md)"
           grep -q "TEST BUILD SUCCEEDED" "$JOLENE_UI_OUTPUT/build-for-testing.log" || { echo "::error::build-for-testing a échoué (code $code). Voir build-for-testing.log dans l'artefact."; exit 1; }
-      # Éclats (DECISIONS_LOT2 décision 22 : découpage par domaine dès qu'un format dépasse 20 min ;
-      # une seule étape atteignait 25 à 30 min avec le lot 2, et dépassait ses 30 min sur iphone et
+      # Éclats (DECISIONS_LOT2 décision 22 : découpage par domaine dès qu'un format dépasse 20 min). Fusion des lots 2 et 3 :
+      # socle une seule fois, puis les éclats du lot 2, puis ceux du lot 3 ; chaque classe XCUITest nommée par -only-testing
+      # dans un seul éclat, et sautée par le socle (gardes : tests/node/ios-swift-ci-eclats.node.mjs et
+      # tests/node/check-rpc-contracts-lot3.node.mjs). Une classe XCUITest nouvelle tourne dans l'éclat socle tant qu'elle
+      # n'est pas rangée dans un éclat de lot. Le résumé exige les onze éclats verts.
+      # Lot 2 : une seule étape atteignait 25 à 30 min avec le lot 2, et dépassait ses 30 min sur iphone et
       # ipad-landscape au run 42532108708 ; l'éclat « lot2 » unique atteignait 20,7 min en paysage au
       # run 42536866359, d'où sa séparation par domaine par T4b avant l'ajout de DemoPointageTests ;
       # seconde revue fraîche de T4b : DemoPointageTests seul dans l'éclat « pointage », dix tests, pour
-      # que « presences » reste sous 20 min avec DemoPointageEtatsTests).
-      # Éclat « socle » : JoleneCoreTests, JoleneDesignTests et les XCUITest des lots 0 et 1 ; éclats
-      # du lot 2, chaque classe nommée par -only-testing : « presences » (DemoPresencesTests,
-      # DemoPointageEtatsTests, DemoPresenceDetailTests de T5a, rangée dans son domaine à l'intégration
-      # du 9 novembre 2026), « pointage » (DemoPointageTests), « documents » (DemoDocumentsTests),
-      # « contrats » (DemoContratsTests, lecture T9a ; DemoSignatureContratTests, signature T9b). Les
-      # classes STAGING à venir (lot 2 T11) s'ajoutent aux -skip-testing de l'éclat socle ; une nouvelle
-      # classe démo du lot 2 rejoint l'éclat de son domaine, et ses -skip-testing du socle. Le résumé
-      # exige tous les éclats verts (garde : tests/node/ios-swift-ci-eclats.node.mjs).
+      # que « presences » reste sous 20 min avec DemoPointageEtatsTests. Éclats du lot 2 : « presences »
+      # (DemoPresencesTests, DemoPointageEtatsTests, DemoPresenceDetailTests de T5a, rangée dans son domaine à
+      # l'intégration du 9 novembre 2026), « pointage » (DemoPointageTests), « documents » (DemoDocumentsTests),
+      # « contrats » (DemoContratsTests, lecture T9a ; DemoSignatureContratTests, signature T9b). Les classes STAGING à
+      # venir (lot 2 T11) s'ajoutent aux -skip-testing de l'éclat socle ; une nouvelle classe démo rejoint l'éclat de
+      # son domaine, et ses -skip-testing du socle.
+      # Lot 3 (DECISIONS_LOT3, intégration de T3b, T7 et T11, puis T8, T10, T12 et L3-TJ) : l'étape unique
+      # dépassait ses 30 min sur iphone et ipad-portrait au run 42536888984 (35 XCUITest sur 58 exécutés) ; au run
+      # 42541548740, l'éclat push + centre + préférences + profil prenait 27,5 min sur iphone ; au run 42549855710,
+      # « lot3-compte » prenait 19,1 min sur ipad-landscape (seuil de 20 min). « lot3-compte » : liens universels, hub
+      # Compte ; « lot3-push » : taps push ; « lot3-notifications » : centre, préférences, profil ; « lot3-inscription » :
+      # compte rapide (L3-T7, dont les deux XCUITest de L3-TJ, sorti de « lot3-compte ») et complétion du profil
+      # (L3-T8) ; « lot3-profil-photo » (L3-T10) : photo et position du profil, rangée à part parce que
+      # « lot3-notifications » (15 min sur iphone au run 42541548740) aurait dépassé 20 min ; « lot3-revenus » (L3-T12) :
+      # onglet Revenus, domaine des tranches T12, T13, T14a et T14b.
       - name: test-without-building — éclat socle (JoleneCoreTests, JoleneDesignTests, XCUITest lots 0 et 1) (${{ matrix.format }})
         id: tests
         # Délai propre à l'étape : un simulateur ou un runner xctest bloqué est interrompu ici,
@@ -391,6 +417,16 @@ jobs:
             -skip-testing:JoleneUITests/DemoDocumentsTests \
             -skip-testing:JoleneUITests/DemoContratsTests \
             -skip-testing:JoleneUITests/DemoSignatureContratTests \
+            -skip-testing:JoleneUITests/DemoLiensLot3Tests \
+            -skip-testing:JoleneUITests/DemoInscriptionTests \
+            -skip-testing:JoleneUITests/DemoCompteLot3Tests \
+            -skip-testing:JoleneUITests/DemoPushTests \
+            -skip-testing:JoleneUITests/DemoNotificationsTests \
+            -skip-testing:JoleneUITests/DemoPreferencesTests \
+            -skip-testing:JoleneUITests/DemoProfilTests \
+            -skip-testing:JoleneUITests/DemoCompletionInscriptionTests \
+            -skip-testing:JoleneUITests/DemoPhotoPositionTests \
+            -skip-testing:JoleneUITests/DemoRevenusTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -576,6 +612,209 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-contrats.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat contrats) : code $code"
+      - name: test-without-building — éclat lot3-compte (XCUITest liens, hub Compte) (${{ matrix.format }})
+        id: tests_lot3_compte
+        # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+        run: |
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-compte.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoLiensLot3Tests \
+            -only-testing:JoleneUITests/DemoCompteLot3Tests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot3-compte.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-compte.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot3-compte) : code $code"
+      - name: test-without-building — éclat lot3-push (XCUITest taps push) (${{ matrix.format }})
+        id: tests_lot3_push
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+        run: |
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-push.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoPushTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot3-push.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-push.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot3-push) : code $code"
+      - name: test-without-building — éclat lot3-notifications (XCUITest centre, préférences, profil) (${{ matrix.format }})
+        id: tests_lot3_notifications
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+        run: |
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-notifications.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoNotificationsTests \
+            -only-testing:JoleneUITests/DemoPreferencesTests \
+            -only-testing:JoleneUITests/DemoProfilTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot3-notifications.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-notifications.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot3-notifications) : code $code"
+      - name: test-without-building — éclat lot3-inscription (XCUITest inscription et complétion du profil) (${{ matrix.format }})
+        id: tests_lot3_inscription
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+        run: |
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-inscription.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoInscriptionTests \
+            -only-testing:JoleneUITests/DemoCompletionInscriptionTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot3-inscription.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-inscription.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot3-inscription) : code $code"
+      - name: test-without-building — éclat lot3-profil-photo (XCUITest photo et position du profil) (${{ matrix.format }})
+        id: tests_lot3_profil_photo
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+        run: |
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-profil-photo.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoPhotoPositionTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot3-profil-photo.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-profil-photo.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot3-profil-photo) : code $code"
+      - name: test-without-building — éclat lot3-revenus (XCUITest onglet Revenus) (${{ matrix.format }})
+        id: tests_lot3_revenus
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+        run: |
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-revenus.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoRevenusTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot3-revenus.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-revenus.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot3-revenus) : code $code"
       - name: Résumé xcresult (assertions, pas de succès fabriqué)
         if: always() && steps.build.outcome == 'success'
         env:
@@ -584,9 +823,15 @@ jobs:
           CODE_POINTAGE: ${{ steps.tests_pointage.outputs.code }}
           CODE_DOCUMENTS: ${{ steps.tests_documents.outputs.code }}
           CODE_CONTRATS: ${{ steps.tests_contrats.outputs.code }}
+          CODE_LOT3_COMPTE: ${{ steps.tests_lot3_compte.outputs.code }}
+          CODE_LOT3_PUSH: ${{ steps.tests_lot3_push.outputs.code }}
+          CODE_LOT3_NOTIFICATIONS: ${{ steps.tests_lot3_notifications.outputs.code }}
+          CODE_LOT3_INSCRIPTION: ${{ steps.tests_lot3_inscription.outputs.code }}
+          CODE_LOT3_PROFIL_PHOTO: ${{ steps.tests_lot3_profil_photo.outputs.code }}
+          CODE_LOT3_REVENUS: ${{ steps.tests_lot3_revenus.outputs.code }}
         run: |
           mkdir -p "$JOLENE_UI_OUTPUT/attachments"
-          for eclat in socle presences pointage documents contrats; do
+          for eclat in socle presences pointage documents contrats lot3-compte lot3-push lot3-notifications lot3-inscription lot3-profil-photo lot3-revenus; do
             xcresult="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$eclat.xcresult"
             [ -d "$xcresult" ] || { echo "::error::Bundle xcresult absent pour l'éclat $eclat : aucun test n'a produit de résultat."; exit 1; }
             xcrun xcresulttool get test-results summary --path "$xcresult" > "$JOLENE_UI_OUTPUT/xctest-summary-$eclat.json"
@@ -599,13 +844,19 @@ jobs:
             import { readPngDimensions } from "./mobile-native/scripts/png-dimensions.mjs";
             const out = process.env.JOLENE_UI_OUTPUT;
             // Éclats de la décision 22 : chacun doit être vert et avoir exécuté au moins un test ; les classes
-            // des éclats du lot 2 doivent toutes avoir démarré (un -only-testing mal nommé n exécute rien).
+            // des éclats des lots 2 et 3 doivent toutes avoir démarré (un -only-testing mal nommé n exécute rien).
             const eclats = [
               { nom: "socle", code: process.env.CODE_SOCLE, classes: [] },
               { nom: "presences", code: process.env.CODE_PRESENCES, classes: ["DemoPresencesTests", "DemoPointageEtatsTests", "DemoPresenceDetailTests"] },
               { nom: "pointage", code: process.env.CODE_POINTAGE, classes: ["DemoPointageTests"] },
               { nom: "documents", code: process.env.CODE_DOCUMENTS, classes: ["DemoDocumentsTests"] },
               { nom: "contrats", code: process.env.CODE_CONTRATS, classes: ["DemoContratsTests", "DemoSignatureContratTests"] },
+              { nom: "lot3-compte", code: process.env.CODE_LOT3_COMPTE, classes: ["DemoLiensLot3Tests", "DemoCompteLot3Tests"] },
+              { nom: "lot3-push", code: process.env.CODE_LOT3_PUSH, classes: ["DemoPushTests"] },
+              { nom: "lot3-notifications", code: process.env.CODE_LOT3_NOTIFICATIONS, classes: ["DemoNotificationsTests", "DemoPreferencesTests", "DemoProfilTests"] },
+              { nom: "lot3-inscription", code: process.env.CODE_LOT3_INSCRIPTION, classes: ["DemoInscriptionTests", "DemoCompletionInscriptionTests"] },
+              { nom: "lot3-profil-photo", code: process.env.CODE_LOT3_PROFIL_PHOTO, classes: ["DemoPhotoPositionTests"] },
+              { nom: "lot3-revenus", code: process.env.CODE_LOT3_REVENUS, classes: ["DemoRevenusTests"] },
             ];
             let total = 0, passed = 0, failed = 0, skipped = 0, log = "";
             const lignes = [`### UI — ${process.env.JOLENE_UI_FORMAT}`, ""];
@@ -664,50 +915,47 @@ jobs:
         # <fichier>-<ligne>.txt` à chaque attente qui a mesuré du temps non décompté, réussie ou non.
         # Un dépassement du budget de blocage fait déjà échouer le test ; les blocages ABSORBÉS sous
         # le budget, eux, ne doivent pas passer inaperçus dans un job vert : ils sont relevés depuis
-        # le manifest.json de `xcresulttool export attachments` (étape « Résumé xcresult » : un dossier
-        # par éclat, `attachments/<éclat>/manifest.json`, DECISIONS_LOT2 décision 22), en section du
-        # résumé et en annotation sur la ligne de l’appelant (GitHub n’affiche que les
+        # le manifest.json de `xcresulttool export attachments` (étape « Résumé xcresult »), en
+        # section du résumé et en annotation sur la ligne de l’appelant (GitHub n’affiche que les
         # 10 premières annotations d’une étape ; le tableau du résumé les liste toutes). Relevé
         # d’information seulement : il ne décide jamais du statut du job (continue-on-error).
+        # Intégration du lot 3, puis fusion des lots 2 et 3 : un manifest.json par éclat (`attachments/<éclat>/`, étape
+        # « Résumé xcresult », DECISIONS_LOT2 décision 22) ; la boucle reprend la liste des éclats de cette étape
+        # (variable ECLATS), un éclat sans manifest.json lisible étant signalé, jamais ignoré en silence.
         continue-on-error: true
+        env:
+          ECLATS: socle presences pointage documents contrats lot3-compte lot3-push lot3-notifications lot3-inscription lot3-profil-photo lot3-revenus
         run: |
           # shellcheck disable=SC2016
           node --input-type=module -e '
-            import { readFileSync, existsSync, appendFileSync, readdirSync } from "node:fs";
+            import { readFileSync, existsSync, appendFileSync } from "node:fs";
             import { join } from "node:path";
             const format = process.env.JOLENE_UI_FORMAT;
-            const attachments = join(process.env.JOLENE_UI_OUTPUT, "attachments");
-            // Une exportation par éclat (attachments/<éclat>/manifest.json) : chaque éclat est relevé.
-            let eclats = [];
-            try { eclats = readdirSync(attachments, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name).sort(); } catch { eclats = []; }
-            const releves = [], nonReleves = [];
-            for (const eclat of eclats) {
-              const dossier = join(attachments, eclat);
-              const manifeste = join(dossier, "manifest.json");
-              let tests = null;
-              try { tests = JSON.parse(readFileSync(manifeste, "utf8")); } catch { tests = null; }
-              if (Array.isArray(tests)) releves.push({ eclat, dossier, tests });
-              else nonReleves.push(`${eclat} (${existsSync(manifeste) ? "manifest.json illisible" : "aucun manifest.json exporté"})`);
-            }
+            const racine = join(process.env.JOLENE_UI_OUTPUT, "attachments");
+            const eclats = (process.env.ECLATS ?? "").split(/\s+/).filter(Boolean);
             // Échappements des commandes de workflow GitHub (message, puis propriétés) et des cellules Markdown.
             const esc = v => String(v).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
             const prop = v => esc(v).replace(/:/g, "%3A").replace(/,/g, "%2C");
             const cell = v => String(v).replace(/\|/g, "\\|").replace(/\s+/g, " ");
             const lignes = ["", `#### Attentes bloquées absorbées — ${format}`, ""];
-            if (nonReleves.length) {
-              lignes.push(`- éclats NON relevés : ${nonReleves.join(", ")}`);
-              console.log(`::warning::Attentes bloquées non relevées (${format}) pour : ${nonReleves.join(", ")}.`);
-            }
-            if (!releves.length) {
-              lignes.push("- aucun manifest.json lisible : attentes bloquées NON relevées par ce run");
-              console.log(`::warning::Attentes bloquées non relevées (${format}) : aucun manifest.json de pièces jointes lisible.`);
-            } else {
-              const bloquees = [];
-              for (const { eclat, dossier, tests } of releves) for (const t of tests) for (const a of t.attachments ?? []) {
+            const bloquees = [];
+            let releves = 0;
+            for (const eclat of eclats) {
+              const attachments = join(racine, eclat);
+              const manifeste = join(attachments, "manifest.json");
+              let tests = null;
+              try { tests = JSON.parse(readFileSync(manifeste, "utf8")); } catch { tests = null; }
+              if (!Array.isArray(tests)) {
+                lignes.push(`- éclat ${eclat} : ${existsSync(manifeste) ? "manifest.json illisible" : "aucun manifest.json exporté"} : attentes bloquées NON relevées pour cet éclat`);
+                console.log(`::warning::Attentes bloquées non relevées (${format}, éclat ${eclat}) : manifest.json des pièces jointes absent ou illisible.`);
+                continue;
+              }
+              releves += 1;
+              for (const t of tests) for (const a of t.attachments ?? []) {
                 const nom = a.suggestedHumanReadableName ?? "";
                 if (!nom.includes("-attente-bloquee-")) continue;
                 let texte = "";
-                try { texte = readFileSync(join(dossier, a.exportedFileName ?? ""), "utf8"); } catch { texte = ""; }
+                try { texte = readFileSync(join(attachments, a.exportedFileName ?? ""), "utf8"); } catch { texte = ""; }
                 const champ = libelle => texte.match(new RegExp(`^${libelle} : (.+)$`, "m"))?.[1].trim();
                 // Appelant : ligne « Appelant : Fichier.swift:N » du rapport, à défaut le nom de la pièce
                 // jointe (`<préfixe>-attente-bloquee-<Fichier>-<N>_<rang>_<UUID>.txt` une fois exportée).
@@ -724,18 +972,20 @@ jobs:
                   issue: champ("Issue") ?? "?",
                 });
               }
-              if (!bloquees.length) {
-                lignes.push(`- aucune : aucun \`require\` n’a mesuré de temps non décompté (éclats relevés : ${releves.map(r => r.eclat).join(", ")})`);
-              } else {
-                lignes.push(`${bloquees.length} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app). Relevé d’information : le job n’échoue pas pour cela.`, "",
-                  "| Éclat | Test | Appelant | Attente | Non décompté | Budget de blocage | Issue |", "| --- | --- | --- | --- | --- | --- | --- |");
-                for (const b of bloquees) {
-                  const appelant = b.fichier ? `${b.fichier}:${b.ligne}` : "?";
-                  lignes.push(`| ${cell(b.eclat)} | ${cell(b.test)} | \`${cell(appelant)}\` | ${cell(b.attente)} | ${cell(b.nonDecompte)} | ${cell(b.budget)} | ${cell(b.issue)} |`);
-                  const message = `Attente bloquée absorbée (${format}) : « ${b.attente} », ${b.nonDecompte} non décomptées (budget de blocage ${b.budget}), ${b.issue} — ${b.test} (éclat ${b.eclat})`;
-                  const cible = b.fichier && b.ligne ? ` file=${prop(`ios-native/JoleneUITests/${b.fichier}`)},line=${prop(b.ligne)}` : "";
-                  console.log(`::warning${cible}::${esc(message)}`);
-                }
+            }
+            if (!releves) {
+              lignes.push("- aucun éclat relevé : attentes bloquées NON relevées par ce run");
+            } else if (!bloquees.length) {
+              lignes.push(`- aucune : aucun \`require\` n’a mesuré de temps non décompté (${releves} éclat(s) relevé(s) sur ${eclats.length})`);
+            } else {
+              lignes.push("", `${bloquees.length} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app). Relevé d’information : le job n’échoue pas pour cela.`, "",
+                "| Éclat | Test | Appelant | Attente | Non décompté | Budget de blocage | Issue |", "| --- | --- | --- | --- | --- | --- | --- |");
+              for (const b of bloquees) {
+                const appelant = b.fichier ? `${b.fichier}:${b.ligne}` : "?";
+                lignes.push(`| ${cell(b.eclat)} | ${cell(b.test)} | \`${cell(appelant)}\` | ${cell(b.attente)} | ${cell(b.nonDecompte)} | ${cell(b.budget)} | ${cell(b.issue)} |`);
+                const message = `Attente bloquée absorbée (${format}, éclat ${b.eclat}) : « ${b.attente} », ${b.nonDecompte} non décomptées (budget de blocage ${b.budget}), ${b.issue} — ${b.test}`;
+                const cible = b.fichier && b.ligne ? ` file=${prop(`ios-native/JoleneUITests/${b.fichier}`)},line=${prop(b.ligne)}` : "";
+                console.log(`::warning${cible}::${esc(message)}`);
               }
             }
             appendFileSync(process.env.GITHUB_STEP_SUMMARY, lignes.join("\n") + "\n");
@@ -752,6 +1002,12 @@ jobs:
             ${{ runner.temp }}/ui-${{ matrix.format }}-pointage.xcresult
             ${{ runner.temp }}/ui-${{ matrix.format }}-documents.xcresult
             ${{ runner.temp }}/ui-${{ matrix.format }}-contrats.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-compte.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-push.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-notifications.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-inscription.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-profil-photo.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-revenus.xcresult
             ios-native/test-results/${{ matrix.format }}/
           retention-days: 7
           if-no-files-found: warn

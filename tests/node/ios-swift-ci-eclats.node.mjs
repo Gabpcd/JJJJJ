@@ -56,7 +56,8 @@ function eclatsDesEtapes(liste) {
 
 /** Tableau `eclats` du script de résumé : nom, variable du code de sortie, classes exigées. */
 function eclatsDuResume(job) {
-  return [...job.matchAll(/\{ nom: "([a-z0-9]+)", code: process\.env\.([A-Z0-9_]+), classes: \[([^\]]*)\] \}/g)]
+  // Fusion des lots 2 et 3 : les noms d'éclats du lot 3 portent un tiret (`lot3-compte`) ; la forme reste stricte.
+  return [...job.matchAll(/\{ nom: "([a-z0-9]+(?:-[a-z0-9]+)*)", code: process\.env\.([A-Z0-9_]+), classes: \[([^\]]*)\] \}/g)]
     .map(m => ({ nom: m[1], code: m[2], classes: [...m[3].matchAll(/"([A-Za-z0-9]+)"/g)].map(c => c[1]) }));
 }
 
@@ -123,7 +124,7 @@ test('décision 22 : chaque éclat est déclaré par son étape, le résumé, la
   assert.ok(noms[0] === 'socle' && noms.length >= 3, `éclats lus : ${noms.join(', ')}`);
   assert.equal(new Set(noms).size, noms.length, 'nom d éclat en double');
   assert.deepEqual(parResume.map(e => e.nom), noms, 'tableau `eclats` du résumé ≠ étapes');
-  const boucle = /for eclat in ([a-z0-9 ]+); do/.exec(job)?.[1].trim().split(/\s+/);
+  const boucle = /for eclat in ([a-z0-9 -]+); do/.exec(job)?.[1].trim().split(/\s+/);
   assert.deepEqual(boucle, noms, 'boucle xcresult du résumé ≠ étapes');
   const resume = liste.find(e => e.nom.startsWith('Résumé xcresult'));
   assert.ok(resume, 'étape de résumé absente');

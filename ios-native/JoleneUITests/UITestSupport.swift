@@ -116,6 +116,14 @@ class JoleneUITestCase: XCTestCase {
         return keyboard.exists && element.frame.maxY > keyboard.frame.minY
     }
 
+    /// Élément recouvert, même en partie, par une barre de navigation ATTEIGNABLE : celle de l'écran
+    /// au premier plan ; la barre d'un écran recouvert par une feuille ne l'est pas et n'est pas
+    /// comptée (`PasDeDefilement.recouvertParUneBarre`).
+    func coveredByNavigationBar(_ element: XCUIElement) -> Bool {
+        let barres = app.navigationBars.allElementsBoundByIndex.filter { $0.exists && $0.isHittable }.map(\.frame)
+        return PasDeDefilement.recouvertParUneBarre(element.frame, barres: barres)
+    }
+
     /// Part maximale du délai de `require` décomptée pour UNE évaluation de la condition. Une
     /// évaluation (quelques requêtes d'accessibilité) dure normalement bien moins de 5 s. Au-delà,
     /// quelque chose est bloqué sans que le runner puisse dire quoi : l'observateur (runner saturé)
@@ -275,6 +283,16 @@ class JoleneUITestCase: XCTestCase {
         _ = XCTWaiter().wait(for: [pause], timeout: duration)
     }
 
+    /// Absence prouvée sur une fenêtre bornée (attente inversée, comme le délai du pré-prompt de `DemoPushTests`) :
+    /// échoue dès que `condition` devient vraie pendant `duree`. Une lecture instantanée laisserait passer une
+    /// présentation encore en cours d'animation (revue B8 de T3b, m8). Jamais un délai fixe sans condition.
+    func requireAbsence(_ description: String, pendant duree: TimeInterval = 3, condition: @escaping () -> Bool) {
+        let predicate = NSPredicate { _, _ in condition() }
+        let apparition = XCTNSPredicateExpectation(predicate: predicate, object: nil)
+        apparition.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [apparition], timeout: duree), .completed, description)
+    }
+
     // MARK: Actions
 
     /// Un `tap()` natif, jamais `press(forDuration:)` pour activer : la navigation attendue est vérifiée ensuite.
@@ -291,11 +309,21 @@ class JoleneUITestCase: XCTestCase {
     /// Délais et budget de blocage par défaut de `require` : le premier champ interrogé à froid
     /// (`login-email`, premier test du processus) relève du budget à froid de `require`
     /// (`coldStallBudget`), pas d'un délai propre à `focus`.
+    /// Un champ recouvert par la barre de navigation translucide de l'écran (iPad paysage, run
+    /// 42579729412 : `profil-ville-recherche` à y = 104…145 sous la barre 32…140, touché sur la bande
+    /// visible de 4 pt, puis sous la barre, sans jamais recevoir le focus) est d'abord redescendu
+    /// sous la barre, par glissements bornés.
     func focus(_ field: XCUIElement, in container: XCUIElement) {
         require("Le champ à saisir est affiché") { self.containerVisible(field) }
         var attempts = 0
-        while coveredByKeyboard(field) && attempts < 10 {
-            drag(container, fromY: 0.6, toY: 0.3)
+        while attempts < 10 {
+            if coveredByKeyboard(field) {
+                drag(container, fromY: 0.6, toY: 0.3)
+            } else if coveredByNavigationBar(field) {
+                drag(container, fromY: 0.4, toY: 0.6)
+            } else {
+                break
+            }
             attempts += 1
         }
         require("Le champ à saisir est atteignable hors clavier") { self.visible(field) && !self.coveredByKeyboard(field) }
@@ -369,7 +397,11 @@ class JoleneUITestCase: XCTestCase {
         XCTAssertFalse(viewport.isNull || viewport.isEmpty, "Un défilement exige un viewport visible hors clavier")
         guard !viewport.isNull && !viewport.isEmpty else { return }
         let origin = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
-        let x = viewport.midX - app.frame.minX
+        // Jamais un départ sur un curseur, qui capterait le geste (`PasDeDefilement.abscisseDeGlissement`,
+        // run 42593592247) : le milieu du viewport, sinon un couloir latéral.
+        let curseurs = app.sliders.allElementsBoundByIndex.filter { $0.exists }.map { $0.frame }
+        let x = PasDeDefilement.abscisseDeGlissement(viewport: viewport, departY: viewport.minY + viewport.height * fromY,
+                                                     obstacles: curseurs) - app.frame.minX
         let top = viewport.minY - app.frame.minY
         let start = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * fromY))
         let end = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * toY))
@@ -433,24 +465,21 @@ class JoleneUITestCase: XCTestCase {
         require("Le conteneur de défilement attendu est visible") { self.containerVisible(container) }
         var scrolls = 0
         while !visibleSousLesBarres(target, inside: container) && scrolls < 20 {
-            var forward = downward
-            var distance: CGFloat = 0.55
-            if target.exists && !target.frame.isEmpty {
-                let frame = target.frame
-                let viewport = container.frame
-                let hautVisible = max(viewport.minY, basDesBarresDeNavigation(sur: container) ?? viewport.minY)
-                if frame.minY < hautVisible { forward = false } else if frame.maxY > viewport.maxY { forward = true } else {
-                    // Dans le cadre du conteneur mais pas atteignable : masqué par ce qui le recouvre, la barre de
-                    // navigation en haut (le défilement passe sous elle) ou le clavier en bas. On le ramène vers le
-                    // centre : vers le bas s'il est dans la moitié haute, vers le haut sinon. Sans cela, une cible
-                    // sous la barre était poussée plus haut à chaque glissement jusqu'à la fin du contenu (run
-                    // 42559541711, iPad paysage, `DemoPointageTests.testHorsLigneDesactiveLePointageSansAucunEnvoi`).
-                    forward = frame.midY > viewport.midY
-                }
-                distance = min(0.55, max(0.08, (viewport.height - frame.height) * 0.4 / viewport.height))
+            // Direction et amplitude : `PasDeDefilement` (testé par `PasDeDefilementTests`), calculées sur la partie du
+            // conteneur hors des barres de navigation qui en recouvrent le haut (fusion des lots 2 et 3 : les deux lots
+            // avaient corrigé le même défaut, chacun de son côté). Une cible déjà dans ce cadre revient vers le centre
+            // d'un pas court, jamais dans la direction de recherche `downward` (lot 3, run 42579729412 : vingt
+            // glissements en alternance) ; une cible sous la barre translucide est ramenée vers le bas au lieu d'être
+            // poussée plus haut à chaque glissement (lot 2, run 42559541711, iPad paysage,
+            // `DemoPointageTests.testHorsLigneDesactiveLePointageSansAucunEnvoi`).
+            var cadreUtile = container.frame
+            if let bas = basDesBarresDeNavigation(sur: container), bas > cadreUtile.minY {
+                cadreUtile = CGRect(x: cadreUtile.minX, y: bas, width: cadreUtile.width, height: max(0, cadreUtile.maxY - bas))
             }
-            drag(container, fromY: 0.5 + (forward ? distance : -distance) / 2,
-                 toY: 0.5 - (forward ? distance : -distance) / 2)
+            let pas = PasDeDefilement.suivant(cible: target.exists ? target.frame : nil, conteneur: cadreUtile,
+                                              versLaSuiteParDefaut: downward)
+            let distance = pas.versLaSuite ? pas.amplitude : -pas.amplitude
+            drag(container, fromY: 0.5 + distance / 2, toY: 0.5 - distance / 2)
             scrolls += 1
         }
         require("Le contrôle demandé est entièrement visible après un défilement borné") {

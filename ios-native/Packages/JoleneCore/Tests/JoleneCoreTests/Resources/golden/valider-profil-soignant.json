@@ -1,0 +1,5013 @@
+[
+  {
+    "name": "validerProfilSoignant/accepte-base",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/accepte-profil-rempli",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": "Léa",
+        "nom": "Martin",
+        "email": "lea@example.invalid",
+        "profession": "IDE",
+        "specialites": [
+          "Urgences",
+          "Bloc"
+        ],
+        "heures_cumulees": 120.5,
+        "rpps_verifie": true,
+        "numero_secu": "1",
+        "champ_inconnu": {
+          "a": 1
+        }
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": [
+        "Urgences",
+        "Bloc"
+      ]
+    }
+  },
+  {
+    "name": "validerProfilSoignant/accepte-user-id-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": ""
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/attestation_cumul_activite/faux",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "attestation_cumul_activite": false
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/attestation_cumul_activite/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "attestation_cumul_activite": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/attestation_cumul_activite/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "attestation_cumul_activite": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/attestation_cumul_activite/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "attestation_cumul_activite": "true"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/attestation_cumul_activite/un",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "attestation_cumul_activite": 1
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/attestation_cumul_activite/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "attestation_cumul_activite": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/consentement_gps/faux",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "consentement_gps": false
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/consentement_gps/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "consentement_gps": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/consentement_gps/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "consentement_gps": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/consentement_gps/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "consentement_gps": "true"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/consentement_gps/un",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "consentement_gps": 1
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/consentement_gps/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "consentement_gps": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/disponible_urgence/faux",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "disponible_urgence": false
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/disponible_urgence/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "disponible_urgence": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/disponible_urgence/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "disponible_urgence": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/disponible_urgence/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "disponible_urgence": "true"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/disponible_urgence/un",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "disponible_urgence": 1
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/disponible_urgence/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "disponible_urgence": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/rpps_verifie/faux",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rpps_verifie": false
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/rpps_verifie/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rpps_verifie": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/rpps_verifie/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rpps_verifie": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/rpps_verifie/un",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rpps_verifie": 1
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/rpps_verifie/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rpps_verifie": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/specialite_verifiee/faux",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_verifiee": false
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/specialite_verifiee/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_verifiee": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/specialite_verifiee/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_verifiee": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/specialite_verifiee/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_verifiee": "true"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/specialite_verifiee/un",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_verifiee": 1
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/specialite_verifiee/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_verifiee": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/tous_documents_valides/faux",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "tous_documents_valides": false
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/tous_documents_valides/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "tous_documents_valides": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/tous_documents_valides/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "tous_documents_valides": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/tous_documents_valides/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "tous_documents_valides": "true"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/tous_documents_valides/un",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "tous_documents_valides": 1
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/booleen/tous_documents_valides/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "tous_documents_valides": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/champ-hors-liste-objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "numero_secu": {
+          "a": 1
+        },
+        "specialite": 5
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lat/entier",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lat": 12
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lat/negatif",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lat": -1.5
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lat/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lat": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lat/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lat": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lat/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lat": [
+          1
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lat/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lat": "4"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lat/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lat": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lat/zero",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lat": 0
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lng/entier",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lng": 12
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lng/negatif",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lng": -1.5
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lng/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lng": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lng/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lng": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lng/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lng": [
+          1
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lng/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lng": "4"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lng/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lng": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/adresse_lng/zero",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "adresse_lng": 0
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/annees_experience/entier",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "annees_experience": 12
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/annees_experience/negatif",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "annees_experience": -1.5
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/annees_experience/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "annees_experience": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/annees_experience/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "annees_experience": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/annees_experience/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "annees_experience": [
+          1
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/annees_experience/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "annees_experience": "4"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/annees_experience/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "annees_experience": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/annees_experience/zero",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "annees_experience": 0
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/heures_cumulees/entier",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "heures_cumulees": 12
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/heures_cumulees/negatif",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "heures_cumulees": -1.5
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/heures_cumulees/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "heures_cumulees": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/heures_cumulees/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "heures_cumulees": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/heures_cumulees/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "heures_cumulees": [
+          1
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/heures_cumulees/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "heures_cumulees": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/heures_cumulees/zero",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "heures_cumulees": 0
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/rayon_deplacement_km/entier",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rayon_deplacement_km": 12
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/rayon_deplacement_km/negatif",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rayon_deplacement_km": -1.5
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/rayon_deplacement_km/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rayon_deplacement_km": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/rayon_deplacement_km/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rayon_deplacement_km": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/rayon_deplacement_km/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rayon_deplacement_km": [
+          1
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/rayon_deplacement_km/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rayon_deplacement_km": "4"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/rayon_deplacement_km/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rayon_deplacement_km": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/rayon_deplacement_km/zero",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rayon_deplacement_km": 0
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/taux_horaire_minimum/entier",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "taux_horaire_minimum": 12
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/taux_horaire_minimum/negatif",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "taux_horaire_minimum": -1.5
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/taux_horaire_minimum/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "taux_horaire_minimum": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/taux_horaire_minimum/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "taux_horaire_minimum": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/taux_horaire_minimum/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "taux_horaire_minimum": [
+          1
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/taux_horaire_minimum/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "taux_horaire_minimum": "4"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/taux_horaire_minimum/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "taux_horaire_minimum": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/taux_horaire_minimum/zero",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "taux_horaire_minimum": 0
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/urgence_rayon_km/entier",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "urgence_rayon_km": 12
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/urgence_rayon_km/negatif",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "urgence_rayon_km": -1.5
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/urgence_rayon_km/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "urgence_rayon_km": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/urgence_rayon_km/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "urgence_rayon_km": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/urgence_rayon_km/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "urgence_rayon_km": [
+          1
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/urgence_rayon_km/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "urgence_rayon_km": "4"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/urgence_rayon_km/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "urgence_rayon_km": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/nombre/urgence_rayon_km/zero",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "urgence_rayon_km": 0
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-cle-error-null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "error": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-cle-error-texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "error": "Profil introuvable"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-cle-obligatoire-absente-email",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-cle-obligatoire-absente-nom",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-cle-obligatoire-absente-prenom",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "nom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-cle-obligatoire-absente-profession",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-donnee-nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": 5,
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-donnee-null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": null,
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-donnee-objet-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {},
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-donnee-tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": [
+        {
+          "id": "a",
+          "prenom": null,
+          "nom": null,
+          "email": null,
+          "profession": null
+        }
+      ],
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-donnee-texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": "profil",
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-donnee-vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": true,
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-id-absent",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-id-different",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": "b"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-id-nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": 5,
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": "5"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/refus-id-null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": null,
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/json-echappements",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[\"\\u00e9\\n\\\"x\\\"\\/\\\\\", \"\\ud83d\\ude00\"]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": [
+        "é\n\"x\"/\\",
+        "😀"
+      ]
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/json-espaces",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": " \t\n[ \"a\" , \"b\" ]\r\n"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": [
+        "a",
+        "b"
+      ]
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/json-imbrique",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[[\"a\"]]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/json-mixte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[\"a\",1]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/json-nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[1]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/json-nombre-seul",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "5"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/json-null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[null]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/json-objet-texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "{\"a\":\"b\"}"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/json-tableau-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/json-texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "\"Urgences\""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/json-vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "true"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": 3
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": {
+          "a": "b"
+        }
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-apostrophes",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "['a']"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-blanc",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "   "
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-controle",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[\"a\tb\"]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-deux-tableaux",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[][]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-deux-virgules",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[\"a\",,\"b\"]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-echappement-inconnu",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[\"\\x\"]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-espace-insecable",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": " []"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-non-ferme",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[\"a\""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-reste",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[\"a\"]x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-sans-virgule",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[\"a\" \"b\"]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-texte-nu",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "Urgences"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-unicode-court",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[\"\\u00e\"]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-virgule-debut",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[,\"a\"]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-virgule-finale",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[\"a\",]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/syntaxe-virgule-seule",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[,]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/tableau-imbrique",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": [
+          [
+            "a"
+          ]
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/tableau-mixte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": [
+          "a",
+          1
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/tableau-nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": [
+          1
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/tableau-null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": [
+          null
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/tableau-texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": [
+          ""
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": [
+        ""
+      ]
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/tableau-textes",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": [
+          "Urgences",
+          "Bloc"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": [
+        "Urgences",
+        "Bloc"
+      ]
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/tableau-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": []
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/specialites/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/avatar_url/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "avatar_url": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/avatar_url/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "avatar_url": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/avatar_url/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "avatar_url": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/avatar_url/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "avatar_url": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/avatar_url/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "avatar_url": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/avatar_url/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "avatar_url": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/avatar_url/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "avatar_url": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/bio/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "bio": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/bio/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "bio": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/bio/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "bio": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/bio/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "bio": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/bio/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "bio": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/bio/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "bio": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/bio/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "bio": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/date_naissance/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "date_naissance": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/date_naissance/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "date_naissance": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/date_naissance/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "date_naissance": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/date_naissance/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "date_naissance": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/date_naissance/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "date_naissance": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/date_naissance/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "date_naissance": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/date_naissance/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "date_naissance": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/email/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": 42,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/email/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": {},
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/email/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": [
+          "x"
+        ],
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/email/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": "x",
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/email/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": "",
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/email/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": true,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/nom/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": 42,
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/nom/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": {},
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/nom/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": [
+          "x"
+        ],
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/nom/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": "x",
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/nom/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": "",
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/nom/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": true,
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/numero_rpps/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "numero_rpps": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/numero_rpps/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "numero_rpps": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/numero_rpps/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "numero_rpps": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/numero_rpps/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "numero_rpps": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/numero_rpps/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "numero_rpps": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/numero_rpps/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "numero_rpps": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/numero_rpps/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "numero_rpps": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/prenom/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": 42,
+        "nom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/prenom/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": [
+          "x"
+        ],
+        "nom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/prenom/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": "x",
+        "nom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/prenom/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": "",
+        "nom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/prenom/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": true,
+        "nom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/profession/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/profession/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/profession/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/profession/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/profession/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/profession/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/rpps_verifie_le/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rpps_verifie_le": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/rpps_verifie_le/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rpps_verifie_le": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/rpps_verifie_le/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rpps_verifie_le": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/rpps_verifie_le/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rpps_verifie_le": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/rpps_verifie_le/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rpps_verifie_le": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/rpps_verifie_le/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rpps_verifie_le": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/rpps_verifie_le/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rpps_verifie_le": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale_declaree/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale_declaree": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale_declaree/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale_declaree": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale_declaree/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale_declaree": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale_declaree/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale_declaree": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale_declaree/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale_declaree": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale_declaree/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale_declaree": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_medicale_declaree/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_medicale_declaree": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_source/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_source": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_source/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_source": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_source/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_source": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_source/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_source": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_source/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_source": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_source/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_source": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/specialite_source/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialite_source": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/statut_liberal/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "statut_liberal": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/statut_liberal/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "statut_liberal": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/statut_liberal/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "statut_liberal": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/statut_liberal/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "statut_liberal": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/statut_liberal/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "statut_liberal": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/statut_liberal/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "statut_liberal": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/statut_liberal/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "statut_liberal": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/telephone/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "telephone": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/telephone/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "telephone": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/telephone/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "telephone": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/telephone/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "telephone": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/telephone/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "telephone": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/telephone/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "telephone": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/telephone/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "telephone": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_contrat/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_contrat": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_contrat/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_contrat": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_contrat/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_contrat": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_contrat/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_contrat": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_contrat/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_contrat": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_contrat/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_contrat": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_contrat/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_contrat": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_exercice/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_exercice": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_exercice/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_exercice": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_exercice/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_exercice": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_exercice/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_exercice": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_exercice/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_exercice": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_exercice/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_exercice": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/type_exercice/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "type_exercice": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/types_contrat_acceptes/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "types_contrat_acceptes": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/types_contrat_acceptes/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "types_contrat_acceptes": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/types_contrat_acceptes/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "types_contrat_acceptes": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/types_contrat_acceptes/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "types_contrat_acceptes": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/types_contrat_acceptes/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "types_contrat_acceptes": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/types_contrat_acceptes/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "types_contrat_acceptes": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/types_contrat_acceptes/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "types_contrat_acceptes": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/ville_recherche/nombre",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "ville_recherche": 42
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/ville_recherche/null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "ville_recherche": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/ville_recherche/objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "ville_recherche": {}
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/ville_recherche/tableau",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "ville_recherche": [
+          "x"
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/ville_recherche/texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "ville_recherche": "x"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/ville_recherche/texte-vide",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "ville_recherche": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/texte/ville_recherche/vrai",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "ville_recherche": true
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/vitest-refus-heures-texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "heures_cumulees": "4"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/vitest-refus-prenom-objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": {},
+        "nom": null,
+        "email": null,
+        "profession": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/vitest-refus-rpps-verifie-texte",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "rpps_verifie": "true"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/vitest-refus-specialites-faux",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": false
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/vitest-refus-specialites-json-null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "null"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/vitest-refus-specialites-json-objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "{}"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/vitest-refus-specialites-objet",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": [
+          {}
+        ]
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "erreur": "PROFIL_INVALIDE"
+    }
+  },
+  {
+    "name": "validerProfilSoignant/vitest-specialites-json-historiques",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": "[\"Urgences\"]"
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": [
+        "Urgences"
+      ]
+    }
+  },
+  {
+    "name": "validerProfilSoignant/vitest-specialites-null",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": null
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  },
+  {
+    "name": "validerProfilSoignant/vitest-specialites-vides",
+    "input": {
+      "fonction": "validerProfilSoignant",
+      "data": {
+        "id": "a",
+        "prenom": null,
+        "nom": null,
+        "email": null,
+        "profession": null,
+        "specialites": ""
+      },
+      "userId": "a"
+    },
+    "expected": {
+      "specialites": []
+    }
+  }
+]

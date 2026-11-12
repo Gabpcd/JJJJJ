@@ -25,13 +25,25 @@ extension DemoFixtures {
 /// Tableau de bord démo : fixtures embarquées, aucun réseau, horloge fixée. Assemblé par
 /// `AccueilAssemblage`, comme le monde Supabase (fiches et créneaux relus, établissements par
 /// id, gains relus). Refuse tout contexte qui n'est pas celui du profil fictif.
+///
+/// Variante de recette (lot 3, T3b — revue B8, m4 : verrou T12 n°2 du lot 1) : `missionsOubliees` remplace le
+/// compteur `missions_oubliees_count` de la fixture (0) pour prouver l'encart « Oubli de pointage ? » et son bouton
+/// (natif depuis la fusion avec le lot 2 : page Présences ; ancien renvoi web `/soignant/presences`) ; installée
+/// seulement par la surcharge DEBUG `JOLENE_FORCE_OUBLI_POINTAGE=1` (`AppContainer`), jamais en Release. Scénario
+/// `accueil-pointage` (lot 2, T5a, `scenario`) : voir `ajouterPointageDuJour`.
 public struct DemoDashboardGateway: DashboardPort {
+    /// Variable d'environnement DEBUG de la variante « oubli de pointage » (`AppContainer`, `DemoAccueilTests`).
+    public static let variableOubliPointage = "JOLENE_FORCE_OUBLI_POINTAGE"
+
     private let clock: any ClockPort
     private let scenario: ScenarioAccueilDemo
+    private let missionsOubliees: Int?
 
-    public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow), scenario: ScenarioAccueilDemo = .normal) {
+    public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow), scenario: ScenarioAccueilDemo = .normal,
+                missionsOubliees: Int? = nil) {
         self.clock = clock
         self.scenario = scenario
+        self.missionsOubliees = missionsOubliees
     }
 
     /// `delaiEcran` sans objet : fixtures embarquées, aucune lecture à sous-budgéter.
@@ -46,8 +58,10 @@ public struct DemoDashboardGateway: DashboardPort {
         let demandes = Set(AccueilAssemblage.identifiantsMissions(fichier.dashboard, email: context.email))
         let relues = (fichier.missionsAssignees + ouvertes).filter { demandes.contains($0.record.id) }
         let parId = Dictionary(etablissements.map { ($0.id, $0) }, uniquingKeysWith: { premier, _ in premier })
+        var corps = fichier.dashboard
+        if let missionsOubliees { corps.missionsOublieesCount = missionsOubliees }
         var snapshot = try AccueilAssemblage.snapshot(
-            corps: fichier.dashboard, context: context, maintenant: clock.now(),
+            corps: corps, context: context, maintenant: clock.now(),
             lecture: LectureMissionsAccueil(records: relues.map(\.record), creneaux: relues.flatMap(\.creneaux)),
             etablissements: parId,
             gains: fichier.gainsMissions)

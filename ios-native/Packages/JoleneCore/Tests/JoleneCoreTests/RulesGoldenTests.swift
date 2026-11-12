@@ -99,7 +99,11 @@ enum Golden {
                            "synthese-presence-mission", "presences-soignant-ui", "document-upload", "documents",
                            "contrat-mission-ui", "signature-sms-staging-admission",
                            // Lot 2, T2b : règles extraites par la PR web W1 (#1112).
-                           "documents-requis", "presences-soignant-listes"]
+                           "documents-requis", "presences-soignant-listes",
+                           // Lot 3, T2 : routage push, compteur de sessions, montants et paiements, profil,
+                           // modes d'exercice, listes RPPS.
+                           "push-routing", "session-count", "mission-finance-display", "paiement-soignant-ui",
+                           "valider-profil-soignant", "preferences-modes-exercice", "professions-rpps"]
     static let minimumTotal = 200
 
     struct FichierIntrouvable: Error, CustomStringConvertible {

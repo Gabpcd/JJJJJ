@@ -5,7 +5,7 @@
  * Reproduit à l'identique l'algorithme de `mobile-native/src/data/demoGateway.ts`
  * (30 missions, 3 établissements fictifs, profil DEMO_CONTEXT) avec une horloge
  * fixée, puis écrit les fichiers JSON à clés snake_case (contrat PostgREST),
- * lus par `JoleneCore` (DemoMissionsGateway, DemoDashboardGateway) et par les XCUITest.
+ * lus par `JoleneCore` (DemoMissionsGateway, DemoDashboardGateway, DemoPreferencesGateway) et par les XCUITest.
  *
  * Horloge fixée : 2026-11-02T00:00:00Z. Les missions démarrent donc du
  * 2026-11-03 au 2026-12-02 (07:00 UTC, ou 20:00 UTC une mission sur quatre).
@@ -578,6 +578,257 @@ export async function chargerMoteurContrat() {
   return import(pathToFileURL(join(ROOT, 'supabase', 'functions', '_shared', 'cdd-employeur.ts')).href);
 }
 
+/**
+ * Centre de notifications démo (lot 3, T5) : lignes `notifications` du profil fictif, colonnes lues par
+ * l'app (`id, titre, corps, type, lien, lue, lue_le, cree_le`), types de `notifications_type_check`
+ * (`supabase/schema/public.sql` l.70815). Deux non lues, comme `notifs_non_lues` du tableau de bord démo ;
+ * liens : détail d'une mission ASSIGNEE démo, Mes missions, factures (renvoi web, lot 4), Stripe Connect
+ * (renvoi web jusqu'à T14a), préférences (écran natif depuis T6), litiges (renvoi web), et une ligne sans lien.
+ * Dates : quelques heures à six jours avant l'horloge fixée (après le changement d'heure du 25/10/2026).
+ */
+export function buildDemoNotifications(now = new Date(FIXED_NOW)) {
+  const avant = (heures) => new Date(now.getTime() - heures * 3_600_000).toISOString();
+  const ligne = (rang, type, titre, corps, lien, lue, heures) => ({
+    id: `demo-notification-${String(rang).padStart(3, '0')}`,
+    titre, corps, type, lien,
+    lue,
+    lue_le: lue ? avant(heures - 1) : null,
+    cree_le: avant(heures),
+  });
+  return {
+    fixed_now: now.toISOString(),
+    notifications: [
+      ligne(1, 'RAPPEL_MISSION', 'Démonstration · Rappel de mission',
+        'Votre mission fictive « Démonstration · Mission assignée 1 » approche.', '/soignant/missions/demo-assignee-001', false, 2),
+      ligne(2, 'CANDIDATURE_ACCEPTEE', 'Démonstration · Candidature acceptée',
+        'Une candidature fictive a été retenue. Retrouvez-la dans Mes missions.', '/soignant/missions', false, 5),
+      ligne(3, 'FACTURE_EMISE', 'Démonstration · Facture émise',
+        'Une facture fictive est disponible.', '/soignant/mes-gains?tab=factures', true, 26),
+      ligne(4, 'SYSTEM', 'Démonstration · Paiements',
+        'Configurez vos paiements fictifs.', '/soignant/stripe-connect', true, 48),
+      ligne(5, 'SYSTEM', 'Démonstration · Préférences',
+        'Choisissez les notifications que vous recevez.', '/soignant/parametres/notifications', true, 72),
+      ligne(6, 'LITIGE_OUVERT', 'Démonstration · Litige ouvert',
+        'Un litige fictif a été ouvert sur une mission.', '/soignant/litiges', true, 120),
+      ligne(7, 'MISSION_A_POURVOIR', 'Démonstration · Nouvelle mission',
+        'Une mission fictive correspond à votre profil.', null, true, 144),
+    ],
+  };
+}
+
+/**
+ * Lot 3, T6 : préférences de notifications du profil fictif. `preferences` = corps de
+ * `fn_obtenir_mes_preferences_notifications()` (ligne `preferences_notifications` aux défauts serveur
+ * — e-mail, push, in-app actifs, SMS coupé — et trois exceptions par événement du catalogue soignant) ;
+ * `soignant` = `soignants.select('sms_alertes_actives, type_exercice')`, régime dérivé du profil démo.
+ * Lu par `DemoPreferencesGateway` et par les XCUITest (`DemoPreferencesTests`).
+ */
+export function buildDemoPreferences() {
+  return {
+    fixed_now: FIXED_NOW,
+    preferences: {
+      global: {
+        canal_email: true,
+        canal_sms: false,
+        canal_push: true,
+        canal_in_app: true,
+        cree_le: '2026-10-01T08:00:00+00:00',
+        mis_a_jour_le: '2026-10-01T08:00:00+00:00',
+      },
+      par_evenement: [
+        { type_evenement: 'NOUVELLE_MISSION_MATCHANT_FILTRE', canal: 'EMAIL', actif: false },
+        { type_evenement: 'LITIGE_RESOLU', canal: 'PUSH', actif: false },
+        { type_evenement: 'SERIE_ONBOARDING', canal: 'EMAIL', actif: false },
+      ],
+    },
+    soignant: { sms_alertes_actives: true, type_exercice: DEMO_PROFILE.profile.type_exercice },
+  };
+}
+
+/**
+ * Profil complet démo (lot 3, T9) : réponse de `fn_mon_profil_soignant_complet` (colonnes du dump
+ * `supabase/schema/public.sql` l.44667-44679) pour le profil fictif, RÉDUITE À LA LISTE BLANCHE du
+ * décodeur Swift (`ProfilComplet.clesLues`) : aucune clé sensible (`numero_secu`, `siret_liberal`,
+ * `iban_last4`…), garde `DemoProfilGatewayTests`. Identité alignée sur le tableau de bord démo.
+ */
+export function buildDemoProfilComplet(now = new Date(FIXED_NOW)) {
+  const p = DEMO_PROFILE.profile;
+  return {
+    fixed_now: now.toISOString(),
+    profil: {
+      id: p.id, prenom: 'Camille', nom: 'Démo', email: DEMO_PROFILE.email, telephone: null,
+      date_naissance: '1990-05-14', profession: p.profession, numero_rpps: null, rpps_verifie: false,
+      type_contrat: p.type_contrat, type_exercice: p.type_exercice,
+      adresse_lat: p.adresse_lat, adresse_lng: p.adresse_lng, rayon_deplacement_km: p.rayon_deplacement_km,
+      bio: null, annees_experience: 4, specialites: [], types_contrat_acceptes: p.types_contrat_acceptes,
+      avatar_url: null, taux_horaire_minimum: p.taux_horaire_minimum, ville_recherche: null,
+    },
+  };
+}
+
+/**
+ * Clés d'un objet dans l'ordre de sortie d'un jsonb PostgreSQL (longueur en octets, puis octets), récursivement :
+ * la fixture d'export a l'ordre de la réponse réelle, que l'app conserve jusqu'au fichier exporté.
+ */
+function ordreJsonb(valeur) {
+  if (Array.isArray(valeur)) return valeur.map(ordreJsonb);
+  if (valeur === null || typeof valeur !== 'object') return valeur;
+  const octets = (cle) => Buffer.from(cle, 'utf8');
+  const cles = Object.keys(valeur).sort((a, b) => octets(a).length - octets(b).length || Buffer.compare(octets(a), octets(b)));
+  return Object.fromEntries(cles.map((cle) => [cle, ordreJsonb(valeur[cle])]));
+}
+
+/**
+ * Lot 3, T11 : export RGPD du profil fictif. Réponse de `fn_rgpd_exporter_rate_limited()` (= jsonb de
+ * `fn_rgpd_exporter_donnees_soignant`, `supabase/schema/public.sql` l.55318-55351 : mêmes 32 clés), clés dans
+ * l'ordre d'un jsonb. Profil réduit aux colonnes du profil démo (aucune donnée sensible : le serveur retire
+ * `numero_secu`, la démo n'invente ni IBAN ni SIRET), notifications et préférences des fixtures démo.
+ * Lu octet pour octet par `DemoExportRGPDGateway` et par les XCUITest (`DemoCompteLot3Tests`).
+ */
+export function buildDemoExportRgpd(now = new Date(FIXED_NOW)) {
+  const p = DEMO_PROFILE.profile;
+  const instant = now.toISOString().replace('.000Z', '+00:00');
+  const preferences = buildDemoPreferences().preferences;
+  const vides = [
+    'missions', 'candidatures', 'presences', 'factures_honoraires', 'bulletins_paie', 'cotisations_sociales',
+    'mandats_facturation', 'cessions_creance', 'factor_advances', 'paiements_soignant', 'contrats_mission', 'documents',
+    'evaluations_recues', 'evaluations_donnees', 'messages_chat', 'messages_litige', 'messages_mission', 'partages_rib',
+    'parrainages', 'serie_email_envois', 'filtres_sauvegardes', 'favoris_etablissements', 'prevoyance_liste_attente',
+    'notations_donnees', 'notations_recues', 'scoring_breakdown_historique',
+  ];
+  return ordreJsonb({
+    export_date: instant,
+    utilisateur_id: p.id,
+    profil: {
+      id: p.id, prenom: 'Camille', nom: 'Démo', email: DEMO_PROFILE.email, profession: p.profession,
+      type_contrat: p.type_contrat, type_exercice: p.type_exercice, adresse_lat: p.adresse_lat, adresse_lng: p.adresse_lng,
+      rayon_deplacement_km: p.rayon_deplacement_km, types_contrat_acceptes: p.types_contrat_acceptes,
+      taux_horaire_minimum: p.taux_horaire_minimum, tous_documents_valides: p.tous_documents_valides, ville_recherche: null,
+    },
+    ...Object.fromEntries(vides.map((cle) => [cle, []])),
+    notifications: buildDemoNotifications(now).notifications.map(({ type, titre, corps, lue, cree_le }) => ({ type, titre, corps, lue, cree_le })),
+    preferences_notifications: preferences.global,
+    preferences_notifications_par_evenement: preferences.par_evenement,
+  });
+}
+
+/**
+ * Lot 3, T8 : référentiel des modes d'exercice du PROFIL (`regles_exercice_profession`), réponse de
+ * `fn_types_exercice_autorises(p_profession)` pour chaque profession, lu dans le seed versionné
+ * `REGLES_EXERCICE_SEED` (17 valeurs de l'enum `type_profession`) : source unique, aucune règle recopiée à la main
+ * (HARD STOP n°4). Une profession absente rend le défaut serveur `SALARIE, LIBERAL, MIXTE` (`COALESCE`, public.sql).
+ * Lu par `DemoInscriptionGateway.typesExercice` et par les XCUITest (`DemoCompletionInscriptionTests`).
+ */
+export const REGLES_EXERCICE_SEED = 'supabase/migrations/20260714084802_synchroniser_regles_profil_exercice.sql';
+
+export function buildDemoTypesExercice() {
+  const sql = readFileSync(join(ROOT, REGLES_EXERCICE_SEED), 'utf8');
+  const insert = sql.slice(sql.indexOf('INSERT INTO public.regles_exercice_profession'), sql.indexOf('ON CONFLICT (profession)'));
+  const types = {};
+  for (const m of insert.matchAll(/\(\s*'([A-Z_]+)',\s*ARRAY\[([^\]]*)\]::text\[\]/g)) {
+    types[m[1]] = [...m[2].matchAll(/'([A-Z_]+)'/g)].map(t => t[1]);
+  }
+  if (Object.keys(types).length !== 17) {
+    throw new Error(`${REGLES_EXERCICE_SEED} : 17 professions attendues, ${Object.keys(types).length} lues`);
+  }
+  return { fixed_now: FIXED_NOW, source: REGLES_EXERCICE_SEED, types_exercice: types };
+}
+
+/** Horodatage `timestamptz` tel que PostgREST le sérialise (`+00:00`). */
+const timestamptz = (date) => date.toISOString().replace('.000Z', '+00:00');
+
+/**
+ * Lot 3, T12 : revenus du profil fictif. `exercice` = ligne `soignants(type_exercice, est_compte_test)` lue avant les
+ * totaux (colonnes de `PageStripeConnect.tsx` l.95 ; profil MIXTE hors compte de test : cartes rendues comme l.178,
+ * l.300 et l.367, revue B8 de T12, M1) ; `totaux` = réponse de `fn_mes_revenus_connect()` (`supabase/schema/public.sql`
+ * l.42396 : euros, drapeau Connect vrai = compte Connect complet). Sommes serveur fictives, jamais recalculées par l'app.
+ */
+export function buildDemoRevenus() {
+  return {
+    fixed_now: FIXED_NOW,
+    exercice: { type_exercice: DEMO_PROFILE.profile.type_exercice, est_compte_test: false },
+    totaux: { mois_en_cours: 195, total: 1425.6, en_attente: 780, stripe_connect_actif: true },
+  };
+}
+
+/**
+ * Lot 3, T12 : réponse de `fn_mes_paiements_escrow()` (`public.sql` l.42233) pour le profil fictif — les sept états,
+ * dans l'ordre serveur (rang de l'état, puis `mission_date` décroissante), clés dans l'ordre d'un jsonb. Le litige
+ * porte sur la mission ASSIGNEE démo 2 (détail natif ouvrable) ; `honoraires_cents` = part soignant figée à la
+ * confirmation (règle #11 de CLAUDE.md).
+ */
+export function buildDemoEscrow(now = new Date(FIXED_NOW)) {
+  const nom = (id) => DEMO_ETABLISSEMENTS.find((e) => e.id === id).nom;
+  const jour = (jours, heure) => timestamptz(instantDemo(now, jours, heure));
+  const assignee = buildDemoDashboard(now).missions_assignees.find((m) => m.id === 'demo-assignee-002');
+  const ligne = (missionId, intitule, etab, cents, etat, dateAffichee, missionDate, aLitige = false) => ordreJsonb({
+    mission_id: missionId, mission_intitule: intitule, etablissement_nom: nom(etab), honoraires_cents: cents, etat,
+    date_affichee: dateAffichee, mission_date: missionDate, a_litige: aLitige,
+  });
+  return {
+    fixed_now: now.toISOString(),
+    paiements: [
+      ligne('demo-escrow-001', 'Démonstration · Paiement rapide 1', 'demo-etab-3', 15000, 'RETARDE', jour(2, 8), jour(-5, 7)),
+      ligne('demo-assignee-002', assignee.intitule, assignee.etablissement_id, 24000, 'LITIGE', null,
+        timestamptz(new Date(assignee.debut_le)), true),
+      ligne('demo-escrow-003', 'Démonstration · Paiement rapide 3', 'demo-etab-1', 18000, 'ATTENTE_VALIDATION', null, jour(-1, 7)),
+      ligne('demo-escrow-004', 'Démonstration · Paiement rapide 4', 'demo-etab-3', 21000, 'VERSEMENT_EN_COURS', jour(1, 9), jour(-3, 7)),
+      ligne('demo-escrow-005', 'Démonstration · Paiement rapide 5', 'demo-etab-2', 24000, 'RESERVE', null, jour(5, 7)),
+      ligne('demo-escrow-006', 'Démonstration · Paiement rapide 6', 'demo-etab-3', 19500, 'VERSE', jour(-3, 10), jour(-10, 7)),
+      ligne('demo-escrow-007', 'Démonstration · Paiement rapide 7', 'demo-etab-1', 12000, 'ANNULE', null, jour(-15, 7)),
+    ],
+  };
+}
+
+/**
+ * Lot 3, T12 : missions TERMINEE du profil fictif (lignes `missions` complètes, dont `soignant_assigne_id`,
+ * `profession_requise` et les colonnes Rist que l'app ne lit pas, décision 5) et déclarations `paiements_soignant`
+ * (colonnes de `MesGains.tsx` l.102). Quatre cas du blueprint (§2.7) : salariée (déclaration à confirmer ; mêmes montants
+ * que la carte des gains de l'Accueil démo), libérale, contrat non choisi, plafond Rist historique (montant stocké
+ * 280 €, jamais rétabli à 320 €) ; plus une salariée confirmée après une contestation (dernière déclaration).
+ */
+export function buildDemoMissionsTerminees(now = new Date(FIXED_NOW)) {
+  const mission = (rang, jours, etab, service, applique, recherche, taux, brut, net, netEstime, rist = null) => {
+    const debut = instantDemo(now, jours, 7);
+    const fin = new Date(debut.getTime() + 8 * 3_600_000);
+    return {
+      id: `demo-terminee-${String(rang).padStart(3, '0')}`,
+      intitule: `Démonstration · Mission terminée ${rang}`,
+      debut_le: timestamptz(debut), fin_le: timestamptz(fin), duree_heures: 8, nb_creneaux: 1,
+      taux_horaire_base: taux, taux_rist_plafonne: rist, rist_plafond_applique: rist !== null,
+      net_a_payer: net, net_estime: netEstime, total_brut: brut, statut: 'TERMINEE', etablissement_id: etab, service,
+      type_contrat_applique: applique, type_contrat_recherche: recherche,
+      soignant_assigne_id: DEMO_PROFILE.user_id, profession_requise: DEMO_PROFILE.profile.profession,
+      presences: [{ valide_par_etablissement: true, valide_auto_72h_le: null, valide_le: timestamptz(new Date(fin.getTime() + 3_600_000)) }],
+    };
+  };
+  const paiement = (rang, missionRang, statut, montant, confirme, conteste, jours, heure) => {
+    const instant = timestamptz(instantDemo(now, jours, heure));
+    return {
+      id: `demo-paiement-${String(rang).padStart(3, '0')}`,
+      mission_id: `demo-terminee-${String(missionRang).padStart(3, '0')}`,
+      facture_honoraire_id: null, statut, montant_net: montant, confirme_par_soignant: confirme, conteste,
+      montant_du_reference: null, source_montant_du: null, methode: 'VIREMENT', reference_virement: null,
+      date_paiement: instant.slice(0, 10), modifie_le: instant, cree_le: instant,
+    };
+  };
+  return {
+    fixed_now: now.toISOString(),
+    missions: [
+      mission(1, -1, 'demo-etab-1', 'Médecine polyvalente', 'SALARIE', 'SALARIE', 26, 208, 224.6, 162.4),
+      mission(2, -13, 'demo-etab-3', 'Soins à domicile', 'LIBERAL', 'LIBERAL', 32, 256, 256, null),
+      mission(3, -21, 'demo-etab-2', 'Gériatrie', null, null, 30, 240, null, null),
+      mission(4, -28, 'demo-etab-1', 'Médecine polyvalente', 'SALARIE', 'SALARIE', 27, 216, 233.2, 170.5),
+      mission(5, -35, 'demo-etab-3', 'Soins à domicile', 'LIBERAL', 'LIBERAL', 40, 280, 280, null, 35),
+    ],
+    paiements: [
+      paiement(1, 1, 'DECLARE', 162.4, false, false, -1, 18),
+      paiement(2, 4, 'CONTESTE', 160, false, true, -25, 9),
+      paiement(3, 4, 'CONFIRME', 170.5, true, false, -21, 9),
+    ],
+  };
+}
+
 export async function buildFixtures() {
   const contrats = buildDemoContrats(await chargerMoteurContrat());
   return {
@@ -589,6 +840,14 @@ export async function buildFixtures() {
     'demo-documents.json': buildDemoDocuments(),
     'demo-contrats.json': contrats.json,
     ...Object.fromEntries(Object.entries(contrats.fichiers).map(([nom, texte]) => [nom, { brut: texte }])),
+    'demo-notifications.json': buildDemoNotifications(),
+    'demo-preferences.json': buildDemoPreferences(), // lot 3, T6
+    'demo-profil-complet.json': buildDemoProfilComplet(),
+    'demo-export-rgpd.json': buildDemoExportRgpd(), // lot 3, T11
+    'demo-types-exercice.json': buildDemoTypesExercice(), // lot 3, T8
+    'demo-revenus.json': buildDemoRevenus(), // lot 3, T12
+    'demo-escrow.json': buildDemoEscrow(), // lot 3, T12
+    'demo-missions-terminees.json': buildDemoMissionsTerminees(), // lot 3, T12
   };
 }
 

@@ -166,8 +166,12 @@ final class LibellesJustificatifsTests: XCTestCase {
     /// Textes repris tels quels d'écrans natifs déjà livrés (aucun texte nouveau).
     func testTextesReprisDesLotsPrecedents() throws {
         XCTAssertEqual(L.espaceNonDisponible, MobileAccess.unsupportedRole(nil).message)
-        let accueil = try lignes("ios-native/Jolene/Screens/Accueil/AccueilScreen.swift").joined(separator: "\n")
-        XCTAssertTrue(accueil.contains("Button(\"\(L.voirSurJoleneApp)\")"), "lot 1 : renvoi web de l'Accueil")
+        // « Voir sur jolene.app » : libellé du renvoi web de l'Accueil au lot 1, retiré de l'Accueil à la fusion des lots 2
+        // et 3 (centre de notifications natif, L3-T5) ; le même libellé reste celui d'un écran natif livré (lot 3, T9 :
+        // renvoi web du type d'exercice de « Mon profil »), aucun texte nouveau.
+        XCTAssertEqual(L.voirSurJoleneApp, ProfilEdition.Textes.voirSurLeWeb, "lot 3 : renvoi web de « Mon profil »")
+        let profil = try lignes("ios-native/Jolene/Screens/Profil/ProfilEditionScreen.swift").joined(separator: "\n")
+        XCTAssertTrue(profil.contains("JoleneButton(Textes.voirSurLeWeb"), "lot 3 : bouton du renvoi web de « Mon profil »")
         let missions = try lignes("ios-native/Jolene/Screens/MissionsListScreen.swift").joined(separator: "\n")
         XCTAssertTrue(missions.contains("title: \"\(L.sessionAVerifier)\""))
         XCTAssertTrue(missions.contains("actionTitle: \"\(L.verifierMaSession)\""))

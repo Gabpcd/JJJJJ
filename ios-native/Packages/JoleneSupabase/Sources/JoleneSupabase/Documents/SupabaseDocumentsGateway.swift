@@ -163,7 +163,7 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
         let options = FunctionInvokeOptions(method: .post, body: ["document_id": id])
         do {
             let corps = try await client.functions.invoke(Self.fonctionVerification, options: options) { donnees, _ in donnees }
-            let verdict = RPCResponse(SupabaseAccountGateway.lire(corps)).string("verdict").flatMap(VerdictDocument.init(rawValue:))
+            let verdict = RPCResponse(EdgeResponse.lire(corps)).string("verdict").flatMap(VerdictDocument.init(rawValue:))
             return verdict ?? .enAttente // web : « Vérification en attente… » pour tout autre verdict
         } catch FunctionsError.httpError(let statut, let corps) {
             if statut == 401 { throw Self.sessionExpireeErreur }
@@ -445,7 +445,7 @@ public struct SupabaseDocumentsGateway: DocumentsPort {
     /// Message d'erreur d'une edge function, comme `messageErreurEdgeFn` (`body.error || body.message || body.motif`,
     /// `src/lib/erreurs.ts` l.573-575) ; nil sans texte.
     static func messageEdge(_ corps: Data) -> String? {
-        let reponse = RPCResponse(SupabaseAccountGateway.lire(corps))
+        let reponse = RPCResponse(EdgeResponse.lire(corps))
         for cle in ["error", "message", "motif"] {
             if let texte = reponse.string(cle), !texte.isEmpty { return texte }
         }

@@ -83,6 +83,15 @@ public enum DemoFixtures {
         }
     }
 
+    /// Lot 3, T8 : `demo-types-exercice.json` — réponse de `fn_types_exercice_autorises` par profession, lue dans le
+    /// seed versionné de `regles_exercice_profession` (`scripts/mobile/export-demo-fixtures.mjs`).
+    public struct TypesExerciceFile: Decodable, Equatable, Sendable {
+        public var fixedNow: String
+        public var source: String
+        public var typesExercice: [String: [String]]
+        enum CodingKeys: String, CodingKey { case fixedNow = "fixed_now", source, typesExercice = "types_exercice" }
+    }
+
     public static func loadMissions() throws -> MissionsFile { try load("demo-missions") }
     public static func loadEtablissements() throws -> EtablissementsFile { try load("demo-etablissements") }
     public static func loadProfile() throws -> ProfileFile { try load("demo-profile") }

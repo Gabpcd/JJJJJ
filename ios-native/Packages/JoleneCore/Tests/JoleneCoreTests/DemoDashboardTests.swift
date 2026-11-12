@@ -118,6 +118,28 @@ final class DemoDashboardTests: XCTestCase {
         _ = try await port.dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
     }
 
+    // MARK: - Variante « oubli de pointage » (revue B8 de T3b, m4 : verrou T12 n°2 du lot 1)
+
+    /// Surcharge DEBUG `JOLENE_FORCE_OUBLI_POINTAGE=1` (`AppContainer`) : le même tableau de bord démo, avec une mission
+    /// qui semble attendre un pointage de départ (`missions_oubliees_count` = 1). Tout le reste est inchangé ; l'encart
+    /// porte le texte web, et son bouton natif « Pointer mon départ maintenant » (lot 2 T5a ; il remplace le renvoi
+    /// `/soignant/presences` depuis la fusion des lots 2 et 3) est prouvé par
+    /// `DemoAccueilTests.testOubliDePointageOuvreLesPresencesNatives`.
+    func testVarianteOubliDePointageNeChangeQueLeCompteur() async throws {
+        XCTAssertEqual(DemoDashboardGateway.variableOubliPointage, "JOLENE_FORCE_OUBLI_POINTAGE")
+        let defaut = try await DemoDashboardGateway().dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
+        let variante = try await DemoDashboardGateway(missionsOubliees: 1).dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
+        XCTAssertEqual(defaut.missionsOublieesCount, 0)
+        XCTAssertEqual(variante.missionsOublieesCount, 1)
+        XCTAssertEqual(AccueilPresentation.texteOubliPointage(variante.missionsOublieesCount),
+                       "1 mission semble attendre un pointage de départ. Vérifiez vos présences.")
+        var attendu = defaut
+        attendu.missionsOublieesCount = 1
+        XCTAssertEqual(variante, attendu, "seul le compteur change")
+        XCTAssertEqual(AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences),
+                       .safari(URL(string: "https://jolene.app/soignant/presences")!), "route canonique de la page Présences web (`AccueilPresentation.lienPresences`)")
+    }
+
     func testEchecForceRefuseToutAutreUtilisateur() async {
         var autre = DemoWorld.context
         autre.userId = "user-1"

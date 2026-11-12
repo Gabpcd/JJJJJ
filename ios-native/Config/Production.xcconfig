@@ -4,3 +4,10 @@ JOLENE_ENVIRONMENT = production
 JOLENE_SUPABASE_URL = https:/$()/flripxtsyegjshnhzjkz.supabase.co
 JOLENE_SUPABASE_PUBLISHABLE_KEY = sb_publishable_wrR-KGZqiovTPBym6mjXPw_V8l4ae-C
 APS_ENVIRONMENT = production
+// Signature de distribution (docs/mobile-swift/TESTFLIGHT.md) : vide en local, ce qui laisse
+// possible une archive non signée (CODE_SIGNING_ALLOWED=NO) ; ios-native-testflight.yml injecte
+// JOLENE_CODE_SIGN_IDENTITY et JOLENE_PROVISIONING_PROFILE. Relais volontaire : passé tel quel
+// en ligne de commande, PROVISIONING_PROFILE_SPECIFIER s'appliquerait aussi aux cibles des
+// packages SPM, qui refusent un profil.
+CODE_SIGN_IDENTITY = $(JOLENE_CODE_SIGN_IDENTITY)
+PROVISIONING_PROFILE_SPECIFIER = $(JOLENE_PROVISIONING_PROFILE)

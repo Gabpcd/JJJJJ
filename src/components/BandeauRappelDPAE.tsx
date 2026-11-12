@@ -1,6 +1,7 @@
 import { AlertTriangle, ExternalLink, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { estContratSalarie } from '@/lib/typesContrat';
 
 interface BandeauRappelDPAEProps {
   contratId?: string;
@@ -11,13 +12,13 @@ interface BandeauRappelDPAEProps {
 }
 
 export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat, cadreDeclareParEmployeur = false }: BandeauRappelDPAEProps) {
-  // Le modèle historique utilise tantôt CDD, tantôt SALARIE pour le même
-  // parcours employeur. Les deux doivent donc déclencher le rappel DPAE.
-  if (!typeContrat || !['CDD', 'SALARIE'].includes(typeContrat)) return null;
+  // Tout contrat salarié (CDD, CDDU, VACATION, ou le code historique SALARIE)
+  // déclenche le rappel DPAE : source unique @/lib/typesContrat.
+  if (!estContratSalarie(typeContrat)) return null;
 
   if (dpaeEffectuee) {
     return (
-      <div className="bg-success/10 border border-success/30 rounded-xl p-4 flex items-start gap-3">
+      <div data-testid="rappel-dpae" data-etat="effectuee" className="bg-success/10 border border-success/30 rounded-xl p-4 flex items-start gap-3">
         <CheckCircle className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-semibold text-success">
@@ -32,7 +33,7 @@ export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat,
   }
 
   return (
-    <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 flex items-start gap-3">
+    <div data-testid="rappel-dpae" data-etat="a-effectuer" className="bg-warning/10 border border-warning/30 rounded-xl p-4 flex items-start gap-3">
       <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
       <div className="flex-1">
         <p className="text-sm font-semibold text-warning">

@@ -50,6 +50,9 @@ export const CONTRACTS_PATH = join(ROOT, 'ios-native', 'rpc-contracts.json');
  * d'une fiche dans CONTRATS_RPC_SOIGNANT.md dans la même PR (LOT1_PLAN §4) ; les statuts
  * passent en consommé au fil des PR qui câblent la gateway.
  *
+ * Lot 3 (T0, `docs/mobile-swift/LOT3_PLAN.md` §3) : quatorze RPC ajoutées en `a_venir` lot 3 après
+ * `fn_upsert_token_push`, gardées par `tests/node/check-rpc-contracts-lot3.node.mjs`.
+ *
  * Reclassements (suivies, mais pas au lot 1) : `fn_mon_profil_soignant_complet` passe en lot 3
  * (renvoie `numero_secu`, `siret_liberal`, `iban_last4` ; le soft-gate `peut_candidater` du lot 1
  * lit `soignants` par SELECT direct, LOT1_PLAN §2.6) ; `fn_suggestions_missions_pour_soignant`
@@ -65,7 +68,7 @@ export const CONTRACTS_PATH = join(ROOT, 'ios-native', 'rpc-contracts.json');
 export const RPC_SUIVIES = [
   { name: 'fn_get_my_role', statut: 'lot0', lot: 0 },
   { name: 'fn_etablissements_safe', statut: 'lot0', lot: 0 },
-  { name: 'fn_mon_profil_soignant_complet', statut: 'a_venir', lot: 3 },
+  { name: 'fn_mon_profil_soignant_complet', statut: 'consommee', lot: 3 }, // L3-T9 : SupabaseProfilGateway
   { name: 'fn_dashboard_soignant_complet', statut: 'consommee', lot: 1 }, // T3 : SupabaseDashboardGateway
   { name: 'fn_confirmer_action_planning_v1', statut: 'a_venir', lot: 1 },
   { name: 'fn_suggestions_missions_pour_soignant', statut: 'a_venir', lot: 4 }, // reclassée (revue B8 de T3)
@@ -96,7 +99,23 @@ export const RPC_SUIVIES = [
   { name: 'fn_verifier_coherence_documents', statut: 'consommee', lot: 2 }, // T6 : SupabaseDocumentsGateway
   { name: 'fn_signer_attestation_sante', statut: 'consommee', lot: 2 }, // T6 : SupabaseDocumentsGateway
   { name: 'fn_admission_otp_signature_recette', statut: 'staging_seulement', lot: 2, source: 'scripts/ci/sms-signature-staging.sql' },
-  { name: 'fn_upsert_token_push', statut: 'a_venir', lot: 3 },
+  { name: 'fn_upsert_token_push', statut: 'consommee', lot: 3 }, // L3-T4 : SupabasePushGateway
+  // Lot 3, tranche T0 (`docs/mobile-swift/LOT3_PLAN.md` §3 T0) : push, préférences, inscription, profil,
+  // compte, revenus, paiements déclarés, IBAN — ordre du blueprint, fiches dans CONTRATS_RPC_SOIGNANT.md.
+  { name: 'fn_desactiver_mon_token_push', statut: 'consommee', lot: 3 }, // L3-T4 : SupabasePushGateway
+  { name: 'fn_obtenir_mes_preferences_notifications', statut: 'consommee', lot: 3 }, // L3-T6 : SupabasePreferencesGateway
+  { name: 'fn_modifier_preferences_notifications', statut: 'consommee', lot: 3 }, // L3-T6 : SupabasePreferencesGateway
+  { name: 'fn_demarrer_inscription', statut: 'consommee', lot: 3 }, // L3-T7 : SupabaseInscriptionGateway
+  { name: 'fn_enregistrer_parcours_inscription', statut: 'consommee', lot: 3 }, // L3-T8 : SupabaseInscriptionGateway
+  { name: 'fn_types_exercice_autorises', statut: 'consommee', lot: 3 }, // L3-T8 : SupabaseInscriptionGateway
+  { name: 'fn_modifier_mon_profil', statut: 'consommee', lot: 3 }, // L3-T9 : SupabaseProfilGateway
+  { name: 'fn_rgpd_exporter_rate_limited', statut: 'consommee', lot: 3 }, // L3-T11 : SupabaseExportGateway
+  { name: 'fn_confirmer_paiement_soignant', statut: 'a_venir', lot: 3 },
+  { name: 'fn_contester_paiement_soignant', statut: 'a_venir', lot: 3 },
+  { name: 'fn_consulter_mon_iban', statut: 'a_venir', lot: 3 },
+  { name: 'fn_enregistrer_mon_iban', statut: 'a_venir', lot: 3 },
+  { name: 'fn_mes_revenus_connect', statut: 'consommee', lot: 3 }, // L3-T12 : SupabaseRevenusGateway
+  { name: 'fn_mes_paiements_escrow', statut: 'consommee', lot: 3 }, // L3-T12 : SupabaseRevenusGateway
 ];
 
 /**
@@ -106,8 +125,11 @@ export const RPC_SUIVIES = [
  *   - `fn_creer_notification` (lot 2, décision 9) : le web l'appelle après une contestation de
  *     présence ; le trigger `trg_notifier_creation_litige` notifie déjà l'établissement, et l'appel
  *     client suppose le droit d'écrire une notification arbitraire.
+ *   - `fn_lier_iban_verifie_document` (lot 3, T0) : GRANT au seul `service_role` ; un appel natif serait
+ *     un 42501 et contournerait la garde de `fn_enregistrer_mon_iban` (titulaire, RIB `VERIFIE`), qui
+ *     l'appelle elle-même côté serveur.
  */
-export const RPC_JAMAIS_SUIVIES = ['fn_etablissement_public', 'fn_creer_notification'];
+export const RPC_JAMAIS_SUIVIES = ['fn_etablissement_public', 'fn_creer_notification', 'fn_lier_iban_verifie_document'];
 
 /**
  * Système de pointage ① (lot 2, décision 1) : plus monté côté web depuis la PR #664 (seul
