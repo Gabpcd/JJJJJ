@@ -91,8 +91,17 @@ class JoleneUITestCase: XCTestCase {
         app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", label)).firstMatch
     }
 
+    /// Élément présent, à l'écran et atteignable. `isHittable` n'est demandé qu'APRÈS avoir vérifié qu'une part réelle
+    /// du cadre (au moins 1 pt sur 1 pt) est dans la fenêtre : sur une ligne de liste SwiftUI sortie de l'écran, XCTest
+    /// ÉCHOUE au lieu de répondre faux (« Failed to determine hittability … Activation point invalid and no suggested
+    /// hit points based on element frame », runs 43276693380 et 43296247455, iPad paysage, `DemoPreferencesTests`,
+    /// interrupteur `prefs-sms-alertes` en haut d'un écran défilé vers le bas). Même règle qu'avant, ordre inversé.
     func visible(_ element: XCUIElement) -> Bool {
-        element.exists && element.isHittable && !element.frame.isEmpty && app.frame.intersects(element.frame)
+        guard element.exists else { return false }
+        let cadre = element.frame
+        let part = app.frame.intersection(cadre)
+        guard !cadre.isEmpty, !part.isNull, part.width >= 1, part.height >= 1 else { return false }
+        return element.isHittable
     }
 
     func fullyVisible(_ element: XCUIElement, inside container: XCUIElement) -> Bool {
