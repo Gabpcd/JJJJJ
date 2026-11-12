@@ -72,8 +72,7 @@ final class DemoCompletionInscriptionTests: JoleneUITestCase {
         scrollTo(salarie, in: ecran)
         require("Le référentiel propose le libéral pour IDE") { self.element("completion-mode-liberal").exists }
         XCTAssertFalse(element("completion-modes-indisponible").exists)
-        basculer(salarie)
-        require("Le mode salarié est coché") { (salarie.value as? String) == "1" }
+        cocher(salarie, in: ecran, "Le mode salarié est coché")
 
         let oui = element("completion-salarie-oui")
         scrollTo(oui, in: ecran)
@@ -243,11 +242,28 @@ final class DemoCompletionInscriptionTests: JoleneUITestCase {
         interrupteur.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
     }
 
+    /// Coche un interrupteur et EXIGE l'état coché. Un toucher qui arrive pendant l'élan du glissement de
+    /// `scrollTo` arrête le défilement au lieu d'activer le contrôle (comportement standard d'un défilement
+    /// iOS) : run 42664161349, iPhone et iPad paysage, « Le mode salarié est coché » faux à chacune des 14
+    /// évaluations, sur deux tests différents. Le toucher n'est rejoué que si la valeur relue vaut encore
+    /// « 0 » (jamais un second toucher sur un interrupteur déjà coché), trois fois au plus ; une ligne
+    /// recouverte par la barre de navigation translucide est d'abord redescendue sous la barre.
+    private func cocher(_ interrupteur: XCUIElement, in ecran: XCUIElement, _ description: String) {
+        for _ in 0..<3 where (interrupteur.value as? String) != "1" {
+            if coveredByNavigationBar(interrupteur) { drag(ecran, fromY: 0.4, toY: 0.6) }
+            basculer(interrupteur)
+            // Une attente neuve par essai : XCTest refuse d'attendre deux fois la même.
+            let coche = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in (interrupteur.value as? String) == "1" },
+                                                  object: nil)
+            if XCTWaiter.wait(for: [coche], timeout: 3) == .completed { break }
+        }
+        require(description) { (interrupteur.value as? String) == "1" }
+    }
+
     private func cocherSalarie(_ ecran: XCUIElement) {
         let salarie = element("completion-mode-salarie")
         scrollTo(salarie, in: ecran)
-        basculer(salarie)
-        require("Le mode salarié est coché") { (salarie.value as? String) == "1" }
+        cocher(salarie, in: ecran, "Le mode salarié est coché")
     }
 
     private func envoyer(_ ecran: XCUIElement) {
