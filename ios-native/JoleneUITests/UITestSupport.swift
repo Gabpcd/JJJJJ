@@ -8,7 +8,7 @@ import XCTest
 /// sont `drag(_:fromY:toY:)` (défilement borné de `scrollTo`) et `dragSliderPastMinimum(_:)`
 /// (curseur amené à sa borne basse), qui emploient `press(forDuration:thenDragTo:…)` entre deux
 /// coordonnées calculées : c'est l'unique API XCUITest de glissement à point de départ contrôlé,
-/// et elle n'active rien. Aucune attente arbitraire : toutes passent par `require` (prédicat
+/// et elle n'active rien. Le défilement tient le doigt immobile à l'arrivée : aucun élan après le geste. Aucune attente arbitraire : toutes passent par `require` (prédicat
 /// borné, délai fonctionnel et budget de blocage distincts). `require` ne borne que l'évaluation
 /// de conditions : les actions (`tap`, `typeText`, glissements) n'y passent pas et restent
 /// soumises aux seuls délais propres à XCTest. La preuve est l'assertion ; les captures
@@ -405,7 +405,12 @@ class JoleneUITestCase: XCTestCase {
         let top = viewport.minY - app.frame.minY
         let start = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * fromY))
         let end = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * toY))
-        start.press(forDuration: 0.05, thenDragTo: end)
+        // Doigt tenu immobile 0,3 s à l'arrivée avant le relâché : vitesse de relâché nulle, donc aucun élan. Sans
+        // cette tenue, le défilement continuait sur sa lancée et l'action suivante (toucher, curseur, lecture de
+        // l'atteignabilité) tombait sur une liste en mouvement : le toucher arrêtait le défilement au lieu d'activer
+        // le contrôle (runs 42664161349 et 43276693380 : interrupteur de complétion, « Se connecter » de
+        // l'inscription, curseur du rayon, « Activation point invalid » d'un interrupteur des préférences).
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .default, thenHoldForDuration: 0.3)
     }
 
     /// Amène un curseur (`Slider`) à sa borne basse par un glissement qui part du pouce et finit
@@ -439,7 +444,9 @@ class JoleneUITestCase: XCTestCase {
     func scrollTo(_ target: XCUIElement, in container: XCUIElement, downward: Bool = true) {
         require("Le conteneur de défilement attendu est visible") { self.containerVisible(container) }
         var scrolls = 0
-        while !fullyVisible(target, inside: container) && scrolls < 20 {
+        // 40 pas au plus : sans élan (`drag`), un pas défile au plus 55 % du conteneur ; la boucle s'arrête dès que la
+        // cible est entièrement visible.
+        while !fullyVisible(target, inside: container) && scrolls < 40 {
             // Direction et amplitude : `PasDeDefilement` (testé par `PasDeDefilementTests`). Une cible
             // déjà dans le cadre du conteneur revient vers le centre d'un pas court, jamais dans la
             // direction de recherche `downward` (run 42579729412 : vingt glissements en alternance).
