@@ -159,6 +159,8 @@
     classes des contrats ne tournent dans aucun autre éclat, et reconnaît les classes qui héritent de `JoleneUITestCase` par
     `DemoPointageUITestCase` (test supplémentaire : `DemoPointageTests`, `DemoPointageEtatsTests` et
     `DemoPresenceDetailTests` dans un seul éclat de domaine). Durées par format : section « Recette CI » de `REVUES_LOT2.md`.
+    Fusion du lot 3 (13 novembre 2026) : `DemoPresenceDetailTests` passe de « presences » à « documents » (« presences »
+    atteignait 28,7 min de tests en paysage et dépassait ses 30 min sur les trois formats au run 43349573460).
 23. **Journal de reçus : celui du lot 1 T7 est réutilisé** ; si T1 du lot 2 démarrait avant son intégration, T1
     livrerait le journal générique et T7 le consommerait sans changer son API. Ordonnancement retenu : T1 attendait
     l'intégration de T7 et démarrait dans la vague 1 du lot 2, pas dans la vague 0.

@@ -370,8 +370,9 @@ jobs:
       # run 42536866359, d'où sa séparation par domaine par T4b avant l'ajout de DemoPointageTests ;
       # seconde revue fraîche de T4b : DemoPointageTests seul dans l'éclat « pointage », dix tests, pour
       # que « presences » reste sous 20 min avec DemoPointageEtatsTests. Éclats du lot 2 : « presences »
-      # (DemoPresencesTests, DemoPointageEtatsTests, DemoPresenceDetailTests de T5a, rangée dans son domaine à
-      # l'intégration du 9 novembre 2026), « pointage » (DemoPointageTests), « documents » (DemoDocumentsTests),
+      # (DemoPresencesTests, DemoPointageEtatsTests), « pointage » (DemoPointageTests), « documents »
+      # (DemoDocumentsTests ; DemoPresenceDetailTests de T5a depuis la fusion du lot 3 : « presences » atteignait
+      # 28,7 min de tests en paysage et dépassait ses 30 min sur les trois formats au run 43349573460),
       # « contrats » (DemoContratsTests, lecture T9a ; DemoSignatureContratTests, signature T9b). Les classes STAGING à
       # venir (lot 2 T11) s'ajoutent aux -skip-testing de l'éclat socle ; une nouvelle classe démo rejoint l'éclat de
       # son domaine, et ses -skip-testing du socle.
@@ -439,7 +440,7 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-socle.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat socle) : code $code"
-      - name: test-without-building — éclat presences (XCUITest Présences, états et reprise du pointage, détail des présences) (${{ matrix.format }})
+      - name: test-without-building — éclat presences (XCUITest Présences, états et reprise du pointage) (${{ matrix.format }})
         id: tests_presences
         # Lancé même si un éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
         if: always() && steps.build.outcome == 'success'
@@ -478,7 +479,6 @@ jobs:
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoPresencesTests \
             -only-testing:JoleneUITests/DemoPointageEtatsTests \
-            -only-testing:JoleneUITests/DemoPresenceDetailTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -543,7 +543,7 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-pointage.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat pointage) : code $code"
-      - name: test-without-building — éclat documents (XCUITest Documents) (${{ matrix.format }})
+      - name: test-without-building — éclat documents (XCUITest Documents, détail des présences) (${{ matrix.format }})
         id: tests_documents
         # Lancé même si un éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
         if: always() && steps.build.outcome == 'success'
@@ -565,6 +565,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/derived" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoDocumentsTests \
+            -only-testing:JoleneUITests/DemoPresenceDetailTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -847,9 +848,9 @@ jobs:
             // des éclats des lots 2 et 3 doivent toutes avoir démarré (un -only-testing mal nommé n exécute rien).
             const eclats = [
               { nom: "socle", code: process.env.CODE_SOCLE, classes: [] },
-              { nom: "presences", code: process.env.CODE_PRESENCES, classes: ["DemoPresencesTests", "DemoPointageEtatsTests", "DemoPresenceDetailTests"] },
+              { nom: "presences", code: process.env.CODE_PRESENCES, classes: ["DemoPresencesTests", "DemoPointageEtatsTests"] },
               { nom: "pointage", code: process.env.CODE_POINTAGE, classes: ["DemoPointageTests"] },
-              { nom: "documents", code: process.env.CODE_DOCUMENTS, classes: ["DemoDocumentsTests"] },
+              { nom: "documents", code: process.env.CODE_DOCUMENTS, classes: ["DemoDocumentsTests", "DemoPresenceDetailTests"] },
               { nom: "contrats", code: process.env.CODE_CONTRATS, classes: ["DemoContratsTests", "DemoSignatureContratTests"] },
               { nom: "lot3-compte", code: process.env.CODE_LOT3_COMPTE, classes: ["DemoLiensLot3Tests", "DemoCompteLot3Tests"] },
               { nom: "lot3-push", code: process.env.CODE_LOT3_PUSH, classes: ["DemoPushTests"] },
