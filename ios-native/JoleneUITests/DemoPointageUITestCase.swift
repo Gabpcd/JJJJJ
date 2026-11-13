@@ -157,8 +157,8 @@ class DemoPointageUITestCase: JoleneUITestCase {
     /// reçu ; non reproduit en local ni sur les deux autres formats). Tout toucher reçu par la ligne du Profil laisse une
     /// trace observable : valeur relue changée, interrupteur désactivé (demande en vol ou feuille requise,
     /// `ConsentementGpsRow`), feuille de consentement présentée ou retour (`profil-gps-retour`) changé. Sans aucune de ces
-    /// traces au bout de 3 s, le toucher n'a pas atteint l'app : il est rejoué, trois essais au plus. L'issue attendue reste
-    /// exigée par l'appelant.
+    /// traces au bout de 3 s, le toucher n'a pas atteint l'app : il est rejoué, trois essais au plus, et chaque rejeu est
+    /// joint au relevé des attentes bloquées. L'issue attendue reste exigée par l'appelant.
     func basculer(_ interrupteur: XCUIElement) {
         require("L'interrupteur est actif") { interrupteur.isEnabled && self.visible(interrupteur) }
         let valeurAvant = interrupteur.value as? String
@@ -175,7 +175,12 @@ class DemoPointageUITestCase: JoleneUITestCase {
                     || (retour.exists ? retour.label : nil) != retourAvant
             }, object: nil)
             if XCTWaiter.wait(for: [recu], timeout: 3) == .completed { return }
-            XCTContext.runActivity(named: "Toucher de l'interrupteur sans effet observable (essai \(essai) sur 3)") { _ in }
+            // Trace visible même dans un job vert (revue B8 des commits suivant l'intégration, m2) : pièce jointe au format
+            // du relevé « Attentes bloquées absorbées » d'ios-swift-ci.yml, qui la liste par fichier et ligne. Des rejeux
+            // récurrents signaleraient un défaut « il faut toucher deux fois » à instruire, pas un simple toucher perdu.
+            attachText("Toucher de l'interrupteur \(interrupteur.identifier) sans effet observable en 3 s (essai \(essai) sur 3) : "
+                       + "valeur \(valeurAvant ?? "nil") inchangée, interrupteur actif, aucune feuille ; toucher rejoué.",
+                       name: "\(proofPrefix)-attente-bloquee-DemoPointageUITestCase-\(#line).txt")
         }
     }
 

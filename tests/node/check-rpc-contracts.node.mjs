@@ -1458,15 +1458,17 @@ const GARDES_NUES_EXCLUES = {
     "v_mission.etablissement_id = public.mon_etablissement_id()\n      AND public.fn_a_permission_etablissement(\n        'contrats', v_mission.etablissement_id\n      ) IS TRUE",
   ],
   // Comparaison dans le WHERE d'un NOT EXISTS : NULL ne sélectionne aucune ligne, la garde refuse.
-  fn_soignant_stripe_connect_actif: [enteteFn('fn_soignant_stripe_connect_actif'),
+  fn_soignant_stripe_connect_actif: [`${enteteFn('fn_soignant_stripe_connect_actif')}"p_soignant_id" "uuid")`,
     'AND NOT EXISTS(SELECT 1 FROM missions m WHERE m.soignant_assigne_id = p_soignant_id AND m.etablissement_id = mon_etablissement_id()'],
 };
 /** Surcharges (en-tête complet) des RPC GRANT authenticated dont une condition `IF`/`ELSIF … THEN` compare nûment à
- * mon_etablissement_id(). Seule une ÉGALITÉ sous `COALESCE(…, false)` est sûre (NULL donne false) : `!=` ou `<>` sous
- * COALESCE reste nue, NULL y vaut aussi false et laisse passer `NOT …` (revue B8 de l'intégration, M1). */
+ * mon_etablissement_id(), avec ces conditions. Seule la forme EXACTE `<ident> = mon_etablissement_id()` (ou son
+ * symétrique) sous `COALESCE(…, false)` est sûre (NULL donne false) : `!=`, `<>`, une négation (`NOT … =`) ou un test
+ * (`… IS FALSE`) sous COALESCE restent nus (revues B8 de l'intégration, M1, puis m1 des commits suivants). */
 function gardesNuesEtablissement(schema) {
   const auth = new Set([...schema.matchAll(/\nGRANT ALL ON FUNCTION "public"\."([a-z0-9_]+)"\([^\n]*\) TO "authenticated";\n/g)].map(m => m[1]));
   const nue = /(?:!=|<>|(?<![:<>!])=)\s*(?:public\.)?mon_etablissement_id\(\)|mon_etablissement_id\(\)\s*(?:!=|<>|=(?!>))/;
+  const egalite = /^(?:[a-z_][a-z0-9_]*\.)?[a-z_][a-z0-9_]*\s*=\s*(?:public\.)?mon_etablissement_id\(\)$|^(?:public\.)?mon_etablissement_id\(\)\s*=\s*(?:[a-z_][a-z0-9_]*\.)?[a-z_][a-z0-9_]*$/i;
   const out = new Map();
   for (const bloc of schema.split('\nCREATE OR REPLACE FUNCTION "public"."').slice(1)) {
     const name = bloc.slice(0, bloc.indexOf('"'));
@@ -1474,13 +1476,16 @@ function gardesNuesEtablissement(schema) {
     const entete = `CREATE OR REPLACE FUNCTION "public"."${bloc.slice(0, bloc.indexOf('\n'))}`;
     const fin = bloc.indexOf('\nALTER FUNCTION ');
     for (const [, condition] of (fin < 0 ? bloc : bloc.slice(0, fin)).matchAll(/(?<!END )\b(?:IF|ELSIF)\b([\s\S]*?)\bTHEN\b/g)) {
-      // Une comparaison sous `COALESCE(…, false)` (forme posée par #1126) n'est pas nue : NULL donne false.
+      // Une égalité exacte sous `COALESCE(…, false)` (forme posée par #1126) n'est pas nue : NULL donne false.
       const sansNullSafe = condition.replace(/COALESCE\(((?:[^()]|\(\))*?mon_etablissement_id\(\)(?:[^()]|\(\))*?),\s*false\s*\)/g,
-        (tout, dedans) => (/!=|<>/.test(dedans) ? tout : 'NULLSAFE'));
-      if (nue.test(sansNullSafe) && !/mon_etablissement_id\(\)\s+IS\s+NULL/.test(sansNullSafe)) out.set(entete, name);
+        (tout, dedans) => (egalite.test(dedans.trim()) ? 'NULLSAFE' : tout));
+      if (nue.test(sansNullSafe) && !/mon_etablissement_id\(\)\s+IS\s+NULL/.test(sansNullSafe)) {
+        if (!out.has(entete)) out.set(entete, { name, entete, conditions: [] });
+        out.get(entete).conditions.push(condition);
+      }
     }
   }
-  return [...out].map(([entete, name]) => ({ name, entete })).sort((x, y) => x.entete.localeCompare(y.entete));
+  return [...out.values()].sort((x, y) => x.entete.localeCompare(y.entete));
 }
 // Bascule du 12 novembre 2026 (merge du lot 3, qui amène #1126 e7dcbf51 dans feat/ios-lot2) : les gardes relevées par
 // T0 sont NULL-safe ; la garde exige leur forme corrigée et aucune garde nue au dump hors exclusions motivées. Le relevé
@@ -1520,11 +1525,14 @@ test('B9 RLS/auth : gardes à mon_etablissement_id() relevées par T0 — NULL-s
   for (const [name, [entete, temoin]] of Object.entries(GARDES_NUES_EXCLUES)) {
     assert.ok(corpsSql(schema, entete).includes(temoin), `${name} : exclusion à revoir (témoin « ${temoin} » absent)`);
   }
-  // Après #1126 : aucune garde nue au dump hors exclusions motivées, exclusion par SURCHARGE (en-tête exact) et non par
-  // nom (revue B8 de l'intégration, M1) : une nouvelle RPC, ou une autre surcharge d'une RPC exclue, rougit ici.
-  const nonExclues = sch => gardesNuesEtablissement(sch)
-    .filter(({ name, entete }) => !(name in GARDES_NUES_EXCLUES && entete.startsWith(GARDES_NUES_EXCLUES[name][0])))
-    .map(({ entete }) => entete);
+  // Après #1126 : aucune garde nue au dump hors exclusions motivées. Une exclusion vaut pour UNE surcharge (en-tête
+  // complet, arguments compris) et seulement si CHACUNE de ses conditions nues porte le témoin de la neutralisation
+  // (revues B8 : M1, puis m1) : une nouvelle RPC, une autre surcharge, ou une garde nue ajoutée dans la surcharge exclue
+  // rougit ici.
+  const exclue = ({ name, entete, conditions }) => name in GARDES_NUES_EXCLUES
+    && entete.startsWith(GARDES_NUES_EXCLUES[name][0])
+    && conditions.every(c => c.includes(GARDES_NUES_EXCLUES[name][1]));
+  const nonExclues = sch => gardesNuesEtablissement(sch).filter(g => !exclue(g)).map(({ entete }) => entete);
   assert.deepEqual(nonExclues(schema), [], 'garde nue à mon_etablissement_id() au dump : la rendre NULL-safe (COALESCE(… = …, false) ou IS DISTINCT FROM)');
   // Mutations : `!=` sous COALESCE(…, false) n'est pas sûr ; une autre surcharge d'une RPC exclue n'est pas exclue.
   const egalite = 'IF NOT COALESCE(v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN';
@@ -1538,6 +1546,20 @@ test('B9 RLS/auth : gardes à mon_etablissement_id() relevées par T0 — NULL-s
   const surcharge = schema.replace(`${ouvrir}\n`, `${ouvrir}\n-- mutation\n  IF v_mission.etablissement_id != public.mon_etablissement_id() THEN RAISE EXCEPTION 'x'; END IF;\n`);
   assert.notEqual(surcharge, schema);
   assert.deepEqual(nonExclues(surcharge), [ouvrir], 'garde nue dans une autre surcharge d une RPC exclue non détectée');
+  // Négation ou test booléen sous COALESCE(…, false) : NULL y laisse passer la garde.
+  const negation = schema.replace(egalite, 'IF NOT COALESCE(NOT v_m.etablissement_id = mon_etablissement_id(), false) AND NOT est_admin() THEN');
+  assert.equal(nonExclues(negation).length, 1, 'mutation « NOT … = sous COALESCE(…, false) » non détectée');
+  const estFaux = schema.replace(egalite, 'IF COALESCE((v_m.etablissement_id = mon_etablissement_id()) IS FALSE, false) AND NOT est_admin() THEN');
+  assert.equal(nonExclues(estFaux).length, 1, 'mutation « … IS FALSE sous COALESCE(…, false) » non détectée');
+  // Garde nue AJOUTÉE dans une surcharge exclue : l'exclusion ne la couvre pas (sa condition n'a pas le témoin).
+  for (const name of Object.keys(GARDES_NUES_EXCLUES)) {
+    const debut = schema.indexOf(GARDES_NUES_EXCLUES[name][0]);
+    assert.ok(debut >= 0, `${name} : en-tête de la surcharge exclue introuvable`);
+    const finLigne = schema.indexOf('\n', debut);
+    const entete = schema.slice(debut, finLigne);
+    const ajout = `${schema.slice(0, finLigne)}\n-- mutation\n  IF v_x.etablissement_id != public.mon_etablissement_id() THEN RAISE EXCEPTION 'x'; END IF;${schema.slice(finLigne)}`;
+    assert.deepEqual(nonExclues(ajout), [entete], `${name} : garde nue ajoutée dans la surcharge exclue non détectée`);
+  }
   assert.equal(GARDES_ETAB_T0.length, RELEVE_T0_GARDES_NUES, `relevé de T0 : ${RELEVE_T0_GARDES_NUES} RPC`);
   // Renvoi unique et daté de DECISIONS_LOT2.md › En attente de Gabrielle › B9.
   const b9 = aplati(sousSection(section(read('docs/mobile-swift/DECISIONS_LOT2.md'), 'En attente de Gabrielle'),
