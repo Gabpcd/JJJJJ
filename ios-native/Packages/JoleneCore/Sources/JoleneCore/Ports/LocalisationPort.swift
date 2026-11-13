@@ -1,19 +1,19 @@
 import Foundation
 
-// Localisation ponctuelle du profil (lot 3, T10 ; blueprint `LOT3_PLAN.md` §3 T10, D12, D15). Port MINIMAL et
-// PROVISOIRE : le blueprint v2 réutilise `LocationPort` du lot 2 (`Ports/AppareilPorts.swift`, `Appareil.localisation`,
-// L2-T1 et L2-T4b), qui n'est pas sur la base du lot 3 (`feat/ios-lot2`). Aucun second service de localisation n'est
-// créé : un seul appel, une seule implémentation réelle isolée dans la cible app (`LocalisationProfilProvisoire`,
-// `Jolene/Composition/LocalisationProfilProvisoire.swift`), nommée pour être remplacée à la fusion des lots.
+// Localisation ponctuelle du profil (lot 3, T10 ; blueprint `LOT3_PLAN.md` §3 T10, D12, D15). Port MINIMAL : le
+// blueprint v2 réutilise `LocationPort` du lot 2 (`Ports/AppareilPorts.swift`, `Appareil.localisation`, L2-T1 et
+// L2-T4b), absent de la base du lot 3 quand T10 a été livrée ; T10 l'a donc servi par une implémentation réelle isolée
+// dans la cible app, nommée pour être supprimée à la fusion des lots.
 //
-// Point de fusion (consigné dans `docs/mobile-swift/DECISIONS_LOT3.md`, section T10) : à l'arrivée du lot 2,
-// `LocalisationProfilProvisoire` est supprimée et ce port est servi par un adaptateur de quelques lignes sur
-// `Appareil.localisation` (`autorisation()` → `demanderAutorisation()` si `.nonDeterminee` → `positionUnique(delai:)`,
-// `ObservationGps.disponible` → `.disponible`, `.refusee` → `.refusee`, `.precisionReduite` →
-// `LocalisationPolicy.issuePrecisionReduite` (`.indisponible`), le reste → `.indisponible`). Les noms de ce fichier ne
-// recouvrent aucun type du lot 2 (`LocationPort`, `AutorisationPosition`, `ObservationGps`, `DemoLocationPort`,
-// `LocationPolicy`) : la fusion ne produit aucune double déclaration. Verrou : `FusionLocalisationLot2Tests` échoue dès
-// que le port du lot 2 arrive alors que `LocalisationProfilProvisoire` existe encore (revue B8 de T10, m1).
+// Fusion des lots 2 et 3 (point de fusion consigné dans `docs/mobile-swift/DECISIONS_LOT3.md`, section T10) :
+// l'implémentation isolée est supprimée ; ce port est servi par `LocalisationProfilAppareil` (ci-dessous), adaptateur de
+// quelques lignes sur `Appareil.localisation` (`autorisation()` → `demanderAutorisation()` si `.nonDeterminee`, attente
+// bornée à `LocalisationPolicy.delaiAutorisationProfil` → `positionUnique(delai:)` ; `ObservationGps.disponible` →
+// `.disponible`, `.refusee` → `.refusee`, `.precisionReduite` → `LocalisationPolicy.issuePrecisionReduite`
+// (`.indisponible`), le reste → `.indisponible`). Un seul service de localisation dans l'app : `LocationService` du lot 2.
+// Les noms de ce fichier ne recouvrent aucun type du lot 2 (`LocationPort`, `AutorisationPosition`, `ObservationGps`,
+// `DemoLocationPort`, `LocationPolicy`). Verrou : `FusionLocalisationLot2Tests` (aucune implémentation provisoire ni
+// référence à elle une fois le port du lot 2 présent ; correspondance des issues de l'adaptateur).
 
 /// Issue d'une demande de position unique pour le profil. Seule `.disponible` porte des coordonnées ; elles ne
 /// sont jamais affichées ni journalisées (blueprint §2.6) : la description du cas les masque.
@@ -57,6 +57,86 @@ public enum LocalisationPolicy {
     /// Attente bornée de la réponse à la feuille système d'autorisation (revue B8 de T10, m12) : au-delà, la demande
     /// rend `.indisponible` ; une réponse donnée plus tard vaut pour l'appui suivant.
     public static let delaiAutorisationProfil: TimeInterval = 60
+}
+
+// MARK: - Adaptateur sur le port du lot 2 (fusion des lots 2 et 3)
+
+/// `LocalisationPort` servi par `Appareil.localisation` (`LocationPort` du lot 2 : `LocationService` en staging et en
+/// production). Même comportement que l'implémentation isolée de T10 qu'il remplace : autorisation « Lorsque l'app est
+/// active » demandée sur l'appui seulement si elle ne l'a jamais été, attente de la réponse bornée
+/// (`delaiAutorisation`, revue B8 de T10, m12 : au-delà, `.indisponible`, et une réponse donnée plus tard vaut pour
+/// l'appui suivant), aucune position demandée en précision réduite (m1), une position unique bornée à `delai`. Ne lève
+/// jamais, ne journalise rien.
+public struct LocalisationProfilAppareil: LocalisationPort {
+    private let localisation: LocationPort
+    private let delaiAutorisation: TimeInterval
+
+    public init(localisation: LocationPort, delaiAutorisation: TimeInterval = LocalisationPolicy.delaiAutorisationProfil) {
+        self.localisation = localisation
+        self.delaiAutorisation = delaiAutorisation
+    }
+
+    public func localiser(delai: TimeInterval) async -> PositionPonctuelle {
+        if await localisation.autorisation() == .nonDeterminee {
+            let localisation = self.localisation
+            await AttenteBornee.attendre(delai: delaiAutorisation) { await localisation.demanderAutorisation() }
+        }
+        switch await localisation.autorisation() {
+        case .nonDeterminee: return .indisponible
+        case .refusee: return .refusee
+        case .accordee(precise: false): return LocalisationPolicy.issuePrecisionReduite
+        case .accordee(precise: true): break
+        }
+        return Self.issue(await localisation.positionUnique(delai: delai))
+    }
+
+    /// Correspondance des issues du lot 2 vers celles du profil (`DECISIONS_LOT3.md`, section T10, point 1).
+    public static func issue(_ observation: ObservationGps) -> PositionPonctuelle {
+        switch observation {
+        case let .disponible(latitude, longitude, _): return .disponible(latitude: latitude, longitude: longitude)
+        case .refusee: return .refusee
+        case .precisionReduite: return LocalisationPolicy.issuePrecisionReduite
+        case .indisponible: return .indisponible
+        }
+    }
+}
+
+/// Attente d'une opération bornée à `delai` secondes : rend dès que l'opération finit ou que le délai expire, le
+/// premier des deux l'emportant (reprise unique). L'opération n'est pas annulée : une réponse tardive à la feuille
+/// d'autorisation reste acquise pour la demande suivante.
+enum AttenteBornee {
+    static func attendre(delai: TimeInterval, _ operation: @escaping @Sendable () async -> Void) async {
+        let issue = IssueUnique()
+        await withCheckedContinuation { (suite: CheckedContinuation<Void, Never>) in
+            Task { await issue.poser(suite) }
+            Task {
+                await operation()
+                await issue.conclure()
+            }
+            Task {
+                let secondes = max(0, min(delai.isFinite ? delai : 600, 600))
+                try? await Task.sleep(nanoseconds: UInt64(secondes * 1_000_000_000))
+                await issue.conclure()
+            }
+        }
+    }
+
+    /// Reprise unique d'une suite, quel que soit l'ordre d'arrivée de la suite et des conclusions.
+    private actor IssueUnique {
+        private var suite: CheckedContinuation<Void, Never>?
+        private var conclue = false
+
+        func poser(_ suite: CheckedContinuation<Void, Never>) {
+            if conclue { suite.resume() } else { self.suite = suite }
+        }
+
+        func conclure() {
+            guard !conclue else { return }
+            conclue = true
+            suite?.resume()
+            suite = nil
+        }
+    }
 }
 
 // MARK: - Démo

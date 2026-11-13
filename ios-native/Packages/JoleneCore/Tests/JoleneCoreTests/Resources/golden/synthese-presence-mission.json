@@ -1,0 +1,1984 @@
+[
+  {
+    "name": "construireSynthesePresenceMission/dernier-prevu-par-debut-pas-par-fin",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T20:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "long"
+        },
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "court"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T09:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "e"
+        }
+      ],
+      "maintenant": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T20:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "long"
+        },
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "court"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T09:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "e"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 960,
+      "minutesTravaillees": 180,
+      "dernierPrevisionnelFin": "2026-07-31T10:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/dst-mars-nuit-11h",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-03-29T08:00:00+02:00"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 660,
+      "minutesTravaillees": 660,
+      "dernierPrevisionnelFin": "2026-03-29T06:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/dst-octobre-nuit-13h",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-10-24T20:00:00+02:00",
+          "fin": "2026-10-25T08:00:00+01:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-10-24T20:10:00+02:00",
+          "fin": "2026-10-25T07:50:00+01:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-10-25T08:00:00+01:00"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-10-24T20:00:00+02:00",
+          "fin": "2026-10-25T08:00:00+01:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-10-24T20:10:00+02:00",
+          "fin": "2026-10-25T07:50:00+01:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 780,
+      "minutesTravaillees": 760,
+      "dernierPrevisionnelFin": "2026-10-25T07:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/duree-en-secondes",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T06:00:30.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        },
+        {
+          "debut": "2026-07-31T07:00:00.000Z",
+          "fin": "2026-07-31T07:00:00.250Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T06:00:30.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        },
+        {
+          "debut": "2026-07-31T07:00:00.000Z",
+          "fin": "2026-07-31T07:00:00.250Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 0.5041666666666667,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/effectif-debut-illisible-zero-minute",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "pas une date",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "pas une date",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 0,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/effectif-duree-nulle",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T06:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T06:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 0,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/effectif-fin-avant-debut-zero-minute",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T14:00:00.000Z",
+          "fin": "2026-07-31T06:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T14:00:00.000Z",
+          "fin": "2026-07-31T06:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 0,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/effectif-fin-vide-ouvert",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [],
+      "effectifsOuverts": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 0,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/effectif-ouvert-apres-fin",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        },
+        {
+          "debut": "2026-07-31T14:30:00.000Z",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "ouvert"
+        }
+      ],
+      "maintenant": "2026-07-31T14:00:00.001Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "effectifsOuverts": [
+        {
+          "debut": "2026-07-31T14:30:00.000Z",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "ouvert"
+        }
+      ],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 470,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/effectif-ouvert-avant-fin",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        },
+        {
+          "debut": "2026-07-31T14:30:00.000Z",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "ouvert"
+        }
+      ],
+      "maintenant": "2026-07-31T13:59:59.999Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "effectifsOuverts": [
+        {
+          "debut": "2026-07-31T14:30:00.000Z",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "ouvert"
+        }
+      ],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 470,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": false,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/effectif-ouvert-fin-exacte",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        },
+        {
+          "debut": "2026-07-31T14:30:00.000Z",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "ouvert"
+        }
+      ],
+      "maintenant": "2026-07-31T14:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "effectifsOuverts": [
+        {
+          "debut": "2026-07-31T14:30:00.000Z",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "ouvert"
+        }
+      ],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 470,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/effectif-sans-previsionnel",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 0,
+      "minutesTravaillees": 470,
+      "dernierPrevisionnelFin": null,
+      "planningTermine": false,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/effectifs-desordre",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T11:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "matin"
+        },
+        {
+          "debut": "2026-07-31T15:00:00.000Z",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "soir-ouvert"
+        },
+        {
+          "debut": "2026-07-31T05:00:00.000Z",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "aube-ouvert"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "matin"
+        },
+        {
+          "debut": "2026-07-31T11:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "apres-midi"
+        }
+      ],
+      "effectifsOuverts": [
+        {
+          "debut": "2026-07-31T05:00:00.000Z",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "aube-ouvert"
+        },
+        {
+          "debut": "2026-07-31T15:00:00.000Z",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "soir-ouvert"
+        }
+      ],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 420,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/identifiants-conserves",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "p1",
+          "mission_id": "m1"
+        },
+        {
+          "debut": "2026-07-31T06:02:00.000Z",
+          "fin": "2026-07-31T14:01:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "e1",
+          "mission_id": "m1"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "p1",
+          "mission_id": "m1"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:02:00.000Z",
+          "fin": "2026-07-31T14:01:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "e1",
+          "mission_id": "m1"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 479,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/legacy-sans-offset",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00",
+          "fin": "2026-07-31T16:00:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-07-31T08:05:00",
+          "fin": "2026-07-31T15:45",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-07-31T16:00:00"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T08:00:00",
+          "fin": "2026-07-31T16:00:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T08:05:00",
+          "fin": "2026-07-31T15:45",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 460,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/mission-longue-jours-de-repos",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-08-31T08:00:00+02:00",
+          "fin": "2026-08-31T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:10:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        },
+        {
+          "debut": "2026-08-31T07:55:00+02:00",
+          "fin": "2026-08-31T15:40:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-09-01T00:00:00+02:00"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-08-31T08:00:00+02:00",
+          "fin": "2026-08-31T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:10:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        },
+        {
+          "debut": "2026-08-31T07:55:00+02:00",
+          "fin": "2026-08-31T15:40:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 960,
+      "minutesTravaillees": 955,
+      "dernierPrevisionnelFin": "2026-08-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/pause-effective-ouverte-ignoree",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": null,
+          "est_pause": true,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 470,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/pause-previsionnelle-exclue",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "est_pause": true,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 470,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/postgrest-microsecondes",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00+00:00",
+          "fin": "2026-07-31T14:00:00+00:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.123456+00:00",
+          "fin": "2026-07-31T13:59:59.654321+00:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-07-31T14:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00+00:00",
+          "fin": "2026-07-31T14:00:00+00:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:00:00.123456+00:00",
+          "fin": "2026-07-31T13:59:59.654321+00:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 479.99218333333334,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/previsionnel-et-effectif-apres-fin",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "maintenant": "2026-07-31T14:00:00.001Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 470,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/previsionnel-et-effectif-avant-fin",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "maintenant": "2026-07-31T13:59:59.999Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 470,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": false,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/previsionnel-et-effectif-fin-exacte",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "maintenant": "2026-07-31T14:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 470,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/previsionnel-fin-illisible",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "pas une date",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "illisible"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "pas une date",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "illisible"
+        }
+      ],
+      "effectifsFermes": [],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 0,
+      "minutesTravaillees": 0,
+      "dernierPrevisionnelFin": null,
+      "planningTermine": false,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/previsionnel-fin-vide-ignore",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-08-01T06:00:00.000Z",
+          "fin": "",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 470,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/previsionnel-sans-fin-ignore",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-08-01T06:00:00.000Z",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 470,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/previsionnel-seul-apres-fin",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "maintenant": "2026-07-31T14:00:00.001Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 0,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/previsionnel-seul-avant-fin",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "maintenant": "2026-07-31T13:59:59.999Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 0,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": false,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/previsionnel-seul-fin-exacte",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "maintenant": "2026-07-31T14:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 0,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/previsionnels-desordre",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-08-02T06:00:00.000Z",
+          "fin": "2026-08-02T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "j3"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "j1"
+        },
+        {
+          "debut": "2026-08-01T06:00:00.000Z",
+          "fin": "2026-08-01T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "j2"
+        }
+      ],
+      "maintenant": "2026-08-02T14:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "j1"
+        },
+        {
+          "debut": "2026-08-01T06:00:00.000Z",
+          "fin": "2026-08-01T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "j2"
+        },
+        {
+          "debut": "2026-08-02T06:00:00.000Z",
+          "fin": "2026-08-02T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "j3"
+        }
+      ],
+      "effectifsFermes": [],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 1440,
+      "minutesTravaillees": 0,
+      "dernierPrevisionnelFin": "2026-08-02T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/type-inconnu-ignore",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        },
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T18:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "AUTRE"
+        }
+      ],
+      "maintenant": "2026-08-01T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T14:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL",
+          "id": "prev"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-31T06:05:00.000Z",
+          "fin": "2026-07-31T13:55:00.000Z",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF",
+          "id": "eff"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 480,
+      "minutesTravaillees": 470,
+      "dernierPrevisionnelFin": "2026-07-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/vide",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [],
+      "maintenant": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": {
+      "previsionnels": [],
+      "effectifsFermes": [],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 0,
+      "minutesTravaillees": 0,
+      "dernierPrevisionnelFin": null,
+      "planningTermine": false,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/vitest-apres-dernier-prevu",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-08-31T08:00:00+02:00",
+          "fin": "2026-08-31T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-08-31T16:01:00+02:00"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-08-31T08:00:00+02:00",
+          "fin": "2026-08-31T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 960,
+      "minutesTravaillees": 480,
+      "dernierPrevisionnelFin": "2026-08-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": true
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/vitest-avant-dernier-prevu",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-08-31T08:00:00+02:00",
+          "fin": "2026-08-31T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-07-31T12:00:00+02:00"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-08-31T08:00:00+02:00",
+          "fin": "2026-08-31T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "effectifsOuverts": [],
+      "minutesPlanifiees": 960,
+      "minutesTravaillees": 480,
+      "dernierPrevisionnelFin": "2026-08-31T14:00:00.000Z",
+      "planningTermine": false,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "construireSynthesePresenceMission/vitest-effectifs-fermes-seulement",
+    "input": {
+      "fonction": "construireSynthesePresenceMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-08-31T08:00:00+02:00",
+          "fin": "2026-08-31T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-07-06T08:15:00+02:00",
+          "fin": "2026-07-06T14:15:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        },
+        {
+          "debut": "2026-07-31T08:00:00+02:00",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        },
+        {
+          "debut": "2026-07-06T12:00:00+02:00",
+          "fin": "2026-07-06T12:30:00+02:00",
+          "est_pause": true,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "maintenant": "2026-09-01T08:00:00+02:00"
+    },
+    "expected": {
+      "previsionnels": [
+        {
+          "debut": "2026-07-06T08:00:00+02:00",
+          "fin": "2026-07-06T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "debut": "2026-08-31T08:00:00+02:00",
+          "fin": "2026-08-31T16:00:00+02:00",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ],
+      "effectifsFermes": [
+        {
+          "debut": "2026-07-06T08:15:00+02:00",
+          "fin": "2026-07-06T14:15:00+02:00",
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "effectifsOuverts": [
+        {
+          "debut": "2026-07-31T08:00:00+02:00",
+          "fin": null,
+          "est_pause": false,
+          "type_creneau": "EFFECTIF"
+        }
+      ],
+      "minutesPlanifiees": 960,
+      "minutesTravaillees": 360,
+      "dernierPrevisionnelFin": "2026-08-31T14:00:00.000Z",
+      "planningTermine": true,
+      "validationPossible": false
+    }
+  },
+  {
+    "name": "formatDureeMinutes/decimal-0-4",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 0.4
+    },
+    "expected": "0h00"
+  },
+  {
+    "name": "formatDureeMinutes/decimal-0-5",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 0.5
+    },
+    "expected": "0h01"
+  },
+  {
+    "name": "formatDureeMinutes/decimal-0-6",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 0.6
+    },
+    "expected": "0h01"
+  },
+  {
+    "name": "formatDureeMinutes/decimal-119-6-arrondi-60",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 119.6
+    },
+    "expected": "1h60"
+  },
+  {
+    "name": "formatDureeMinutes/decimal-59-4",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 59.4
+    },
+    "expected": "0h59"
+  },
+  {
+    "name": "formatDureeMinutes/decimal-59-5",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 59.5
+    },
+    "expected": "0h60"
+  },
+  {
+    "name": "formatDureeMinutes/decimal-heures-0-1",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 6
+    },
+    "expected": "0h06"
+  },
+  {
+    "name": "formatDureeMinutes/decimal-heures-7-33",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 439.8
+    },
+    "expected": "7h20"
+  },
+  {
+    "name": "formatDureeMinutes/decimal-negatif-30",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": -30
+    },
+    "expected": "-1h-30"
+  },
+  {
+    "name": "formatDureeMinutes/decimal-secondes-30",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 60.5
+    },
+    "expected": "1h01"
+  },
+  {
+    "name": "formatDureeMinutes/decimal-un-tiers",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 6.666666666666667
+    },
+    "expected": "0h07"
+  },
+  {
+    "name": "formatDureeMinutes/entier-0",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 0
+    },
+    "expected": "0h00"
+  },
+  {
+    "name": "formatDureeMinutes/entier-1",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 1
+    },
+    "expected": "0h01"
+  },
+  {
+    "name": "formatDureeMinutes/entier-10",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 10
+    },
+    "expected": "0h10"
+  },
+  {
+    "name": "formatDureeMinutes/entier-100000",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 100000
+    },
+    "expected": "1666h40"
+  },
+  {
+    "name": "formatDureeMinutes/entier-1439",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 1439
+    },
+    "expected": "23h59"
+  },
+  {
+    "name": "formatDureeMinutes/entier-1440",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 1440
+    },
+    "expected": "24h00"
+  },
+  {
+    "name": "formatDureeMinutes/entier-450",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 450
+    },
+    "expected": "7h30"
+  },
+  {
+    "name": "formatDureeMinutes/entier-480",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 480
+    },
+    "expected": "8h00"
+  },
+  {
+    "name": "formatDureeMinutes/entier-59",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 59
+    },
+    "expected": "0h59"
+  },
+  {
+    "name": "formatDureeMinutes/entier-60",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 60
+    },
+    "expected": "1h00"
+  },
+  {
+    "name": "formatDureeMinutes/entier-600",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 600
+    },
+    "expected": "10h00"
+  },
+  {
+    "name": "formatDureeMinutes/entier-6000",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 6000
+    },
+    "expected": "100h00"
+  },
+  {
+    "name": "formatDureeMinutes/entier-61",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 61
+    },
+    "expected": "1h01"
+  },
+  {
+    "name": "formatDureeMinutes/entier-660",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 660
+    },
+    "expected": "11h00"
+  },
+  {
+    "name": "formatDureeMinutes/entier-780",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 780
+    },
+    "expected": "13h00"
+  },
+  {
+    "name": "formatDureeMinutes/entier-9",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 9
+    },
+    "expected": "0h09"
+  },
+  {
+    "name": "formatDureeMinutes/entier-90",
+    "input": {
+      "fonction": "formatDureeMinutes",
+      "minutes": 90
+    },
+    "expected": "1h30"
+  }
+]

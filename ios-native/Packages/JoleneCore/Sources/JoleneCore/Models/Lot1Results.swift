@@ -175,6 +175,9 @@ public enum RecoveryOutcome: Equatable, Sendable {
 /// `journaux_audit_action_check` (l.70243 du dump) : une action hors CHECK serait avalée.
 public enum AuditAction: String, CaseIterable, Sendable {
     case missionAssignation = "MISSION_ASSIGNATION"
+    /// Lot 2 (T4b, décision 4) : réponse à la feuille de consentement GPS du premier pointage, acceptation comme refus
+    /// (parité `src/pages/PresencesSoignant.tsx` l.67-74, l.87-94 ; valeur du CHECK, `public.sql` l.70290).
+    case rgpdConsentementDonne = "RGPD_CONSENTEMENT_DONNE"
     // Lot 3 (T1, blueprint `LOT3_PLAN.md` §2.1) : consultation et modification du profil (T9, T11,
     // web `ProfilSoignant.tsx` l.157-163) et export RGPD (T11), toutes trois dans le CHECK
     // (`Lot3PortsTests.testChaqueActionAuditFigureDansLaContrainteDuDump`).

@@ -91,6 +91,9 @@ public extension FlagsPort {
 /// Écrans natifs pilotés par un drapeau `parametres_systeme` (décision 15 : onglets du socle).
 public enum EcranNatif: String, CaseIterable, Sendable {
     case accueil, explorer, missions, revenus, profil
+    // Lot 2 (T1, « D-FLAGS » de `docs/mobile-swift/DECISIONS_LOT2.md`) : coupe-circuits des présences
+    // et du pointage, des documents, des contrats (migration `20261102204450_drapeaux_ios_natif_lots_2_4_5.sql`).
+    case presences, documents, contrats
 
     /// Clé `parametres_systeme.cle` (lignes créées par la PR backend B0).
     public var cle: String { "ios_natif_\(rawValue)_actif" }

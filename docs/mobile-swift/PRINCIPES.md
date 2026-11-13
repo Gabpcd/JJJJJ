@@ -42,7 +42,17 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   câble son port dans les deux mondes et le retire de la liste dans la même PR ; elle est
   vide à la clôture du lot : aucun nom du lot 1 dans `unwiredPorts`
   (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`, T12). Pas
-  `unwiredPorts.isEmpty` : cette liste nomme aussi les ports du lot 3 tant que ce lot est ouvert.
+  `unwiredPorts.isEmpty` : cette liste nomme aussi les ports des lots suivants tant qu'ils sont ouverts.
+- Lot 2 (T1, `docs/mobile-swift/LOT2_PLAN.md` §2.2) : cinq champs ajoutés dans un bloc « Lot 2 »
+  du corps de `Gateways` (`pointage`, `contestation`, `notation`, `documents`, `contrats`), même
+  règle (stubs de `Ports/Lot2Ports.swift`, message `UnwiredPorts.erreur(port:tranche:lot:)` partagé
+  avec le lot 3). Pas de troisième init : chaque monde assigne ses ports du lot 2 après l'init
+  complet du lot 1, dans une fonction unique `câblerLot2(_:)` (`DemoWorld`, `SupabaseGateways`) ;
+  liste attendue unique `DemoWorldTests.portsEnAttenteLot2`. Les capacités d'appareil (position,
+  réseau, identifiant terminal, magasin des reçus durables) ne sont pas des gateways : struct `Appareil`
+  (`Ports/AppareilPorts.swift`), injectée par `AppContainer` à côté de `Gateways`, réelle ou démo.
+  Clôture du lot 2 : `unwiredPorts.filter(Lot2PortsTests.portsLot2.contains).isEmpty` (P10 amendé,
+  `docs/mobile-swift/DECISIONS_LOT2.md`).
 - Lot 3 (T1, `docs/mobile-swift/LOT3_PLAN.md` §2.2) : treize champs ajoutés dans un bloc
   « Lot 3 » du corps de `Gateways`, même règle (stubs de `Ports/Lot3Ports.swift`, message
   `UnwiredPorts.erreur(port:tranche:lot:)` qui cite la tranche, le lot et son plan). Pas de
@@ -52,11 +62,12 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   attendue unique `DemoWorldTests.portsEnAttenteLot3`, comparée entre les deux mondes par
   `SupabaseGatewaysTests`. Les capacités système du lot 3 (autorisation et enregistrement
   push, flux hébergé, rapport de crash) sont des ports hors `Gateways`, injectés par
-  `AppContainer` ; la localisation est le `LocationPort` du lot 2, sans variante. Seule exception, provisoire et
-  consignée (`DECISIONS_LOT3.md`, section T10) : tant que le lot 2 n'est pas fusionné, la position du profil passe par
-  le port minimal `LocalisationPort` et une implémentation isolée (`LocalisationProfilProvisoire`), supprimée à la
-  fusion au profit d'un adaptateur sur `Appareil.localisation` (décision « T10 — localisation du profil livrée sans le
-  port du lot 2 », garde `FusionLocalisationLot2Tests`, rouge tant que les deux coexistent).
+  `AppContainer` ; la localisation est le `LocationPort` du lot 2, sans variante. La position du profil garde son
+  port minimal `LocalisationPort` (`DECISIONS_LOT3.md`, section T10, décision « T10 — localisation du profil livrée
+  sans le port du lot 2 ») : depuis la fusion des lots 2 et 3, il est servi par un adaptateur sur
+  `Appareil.localisation` (`LocalisationProfilAppareil`, JoleneCore), et l'implémentation isolée
+  `LocalisationProfilProvisoire` est supprimée (garde `FusionLocalisationLot2Tests`) : un seul service de
+  localisation dans l'app (`LocationService`).
 
 ## 3. Aucun succès fabriqué
 
@@ -76,11 +87,19 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
 
 - Avant tout upload Storage et avant tout scan de pointage, un reçu est écrit en
   Keychain avec les phases `prepared` → `started` → `refused` / `not_sent` / terminé.
+- Journal générique (`JoleneCore/Receipts/ReceiptJournal.swift`, livré par le lot 2 T1, décision 23 de
+  `DECISIONS_LOT2.md`) : une clé par utilisateur et par domaine (`scan`, `document`, `justificatif`),
+  service Keychain `app.jolene.receipts` (`AfterFirstUnlockThisDeviceOnly`, jamais synchronisé, conservé
+  à la déconnexion, relu seulement par le même utilisateur) ; un seul essai en vol par domaine ; relecture
+  après chaque écriture ; tout échec du trousseau ou reçu illisible bloque l'action (fail-closed), sans
+  réparation automatique.
 - Règle : **aucun renvoi automatique**. Après un arrêt forcé ou une coupure, l'app
   réconcilie par relecture serveur (état de la présence, ligne `documents_soignants`)
   et ne rejoue une action que si la relecture prouve qu'elle n'a pas été reçue.
-- La file hors-ligne QR garde la sémantique de `src/lib/qr-offline-queue.ts` : un QR
-  expiré n'est jamais remis en file.
+- Aucun scan n'est mis en file : le code rotatif est horodaté par le serveur ; un scan hors ligne est refusé avant envoi, un scan incertain est réconcilié par relecture de `scans_pointage`.
+  (Amendé le 2026-11-02, décisions 1 et 2 de `docs/mobile-swift/DECISIONS_LOT2.md` : la file
+  `src/lib/qr-offline-queue.ts` n'existe que pour le système de pointage ①, non porté, et rejoue
+  automatiquement ; un code rejoué serait horodaté à l'heure du rejeu.)
 
 ## 5. Session et epoch d'identité
 

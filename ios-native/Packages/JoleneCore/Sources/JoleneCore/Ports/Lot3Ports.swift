@@ -6,9 +6,9 @@ import Foundation
 // qu'après relecture serveur (PRINCIPES §3) ; refus métier = issues de `Models/Lot3Results.swift`,
 // erreurs de transport = `JoleneError`. Les treize ports backend sont des champs du bloc « Lot 3 »
 // de `Gateways` ; les quatre capacités système (fin de fichier) sont injectées par `AppContainer`,
-// avec des doubles en démo et en test. La localisation ponctuelle du profil (T10) a un port minimal et provisoire,
-// `LocalisationPort` (`Ports/LocalisationPort.swift`), remplacé à la fusion par un adaptateur sur `LocationPort` du
-// lot 2 (`Ports/AppareilPorts.swift`, L2-T1, absent de la base du lot 3).
+// avec des doubles en démo et en test. La localisation ponctuelle du profil (T10) a un port minimal,
+// `LocalisationPort` (`Ports/LocalisationPort.swift`), servi depuis la fusion des lots 2 et 3 par un adaptateur sur
+// `LocationPort` du lot 2 (`LocalisationProfilAppareil` ; `Ports/AppareilPorts.swift`, L2-T1).
 
 // MARK: - Ports backend (bloc « Lot 3 » de `Gateways`)
 

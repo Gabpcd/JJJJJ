@@ -1,0 +1,1398 @@
+import Foundation
+
+// Libellés non juridiques des écrans du lot 2 (tranche TL, docs/mobile-swift/LOT2_PLAN.md §3 « TL »),
+// HORS HARD STOP n°4 : boutons de navigation, états d'envoi, erreurs génériques ou réseau, compteurs,
+// minuteurs, en-têtes. Les textes juridiques et de consentement des mêmes composants sont dans
+// `Legal/TextesWeb.swift` (HARD STOP, validation de Gabrielle).
+//
+// Même machinerie que TextesWeb : chaque constante est le texte EXACT que le web affiche à la ligne
+// annoncée (`// source: fichier:ligne`, sans nature : tout ici est libellé), prouvé par la garde
+// tests/node/textes-juridiques-ios.node.mjs. Un texte qui porte une marque juridique (code, RGPD,
+// attestation, consentement, signature électronique, preuve…) est refusé ici et va dans TextesWeb.
+// Chaque fonction d'assemblage est ancrée sur son code web (scripts/mobile/textes-web-ios-rendus.json)
+// et ses rendus sont assertés par LibellesWebTests. Retoucher un libellé ici suit le web, sans PR
+// HARD STOP.
+
+/// Libellés non juridiques des écrans du lot 2. Les écrans les lisent ici, jamais dans un littéral local.
+public enum LibellesWeb {
+    /// Relance de l'établissement depuis le détail des présences (`DetailPresencesMission.tsx`
+    /// l.115-124, l.699-701). Titre et explication : `TextesWeb.Presences`.
+    public enum Presences {
+        // source: src/pages/DetailPresencesMission.tsx:700
+        public static let relancer = "Relancer l'établissement"
+
+        // source: src/pages/DetailPresencesMission.tsx:700
+        public static let relanceEnvoi = "Envoi…"
+
+        // source: src/pages/DetailPresencesMission.tsx:122
+        public static let relanceSucces = "Établissement relancé."
+
+        // source: src/pages/DetailPresencesMission.tsx:123
+        public static let relanceImpossible = "Relance impossible."
+
+        /// Retour de `fn_relancer_validation_presence` (l.121-123) : en succès `message ?? repli`,
+        /// sinon `message ?? error ?? repli` (`??` : seul un message absent est remplacé). Une erreur
+        /// PostgREST (l.120) affiche son message serveur tel quel, hors de cette fonction.
+        public static func messageRelance(succes: Bool, message: String?, erreur: String?) -> String {
+            succes ? (message ?? relanceSucces) : (message ?? erreur ?? relanceImpossible)
+        }
+    }
+
+    /// Page Présences (`PresencesSoignant.tsx` l.464-766, lot 2 T4a) : titre, onglets, états vides, missions à
+    /// venir, présences validées récemment. Textes que le web tutoie (sous-titre, descriptions des états vides,
+    /// titre de l'erreur) et assemblages : `LibellesPresences.Liste`. Bandeau « à valider » : `TextesWeb.Presences`.
+    public enum ListePresences {
+        // source: src/pages/PresencesSoignant.tsx:513
+        public static let titre = "Mes présences"
+
+        // source: src/pages/PresencesSoignant.tsx:472
+        public static let reessayer = "Réessayer"
+
+        // source: src/pages/PresencesSoignant.tsx:520
+        public static let ongletAVenir = "À venir"
+
+        /// Libellé vocalisé du compteur de l'onglet « À venir » (`aria-label`, l.520) : voir
+        /// `LibellesPresences.Liste.badgeAVenir(_:)`.
+        // source: src/pages/PresencesSoignant.tsx:520
+        public static let badgeMission = "mission"
+
+        // source: src/pages/PresencesSoignant.tsx:520
+        public static let badgePluriel = "s"
+
+        // source: src/pages/PresencesSoignant.tsx:520
+        public static let badgeAVenir = "à venir"
+
+        // source: src/pages/PresencesSoignant.tsx:521
+        public static let ongletActives = "Actives"
+
+        // source: src/pages/PresencesSoignant.tsx:522
+        public static let ongletAujourdhui = "Aujourd'hui"
+
+        // source: src/pages/PresencesSoignant.tsx:523
+        public static let ongletHistorique = "Historique"
+
+        /// Repli du nom d'établissement (`nom || 'Établissement'`, l.546, l.690 ; `BlocPointageMission.tsx` l.65).
+        // source: src/pages/PresencesSoignant.tsx:546
+        public static let etablissement = "Établissement"
+
+        // source: src/pages/PresencesSoignant.tsx:546
+        public static let separateurVille = "·"
+
+        // source: src/pages/PresencesSoignant.tsx:549
+        public static let planningAConfirmer = "Planning détaillé à confirmer avec l’établissement"
+
+        /// Horaire d'une mission à venir (l.552-553) : voir `LibellesPresences.Liste.horaire(debut:fin:dureeHeures:)`.
+        // source: src/pages/PresencesSoignant.tsx:552
+        public static let fleche = "→"
+
+        // source: src/pages/PresencesSoignant.tsx:553
+        public static let parentheseDuree = "("
+
+        // source: src/pages/PresencesSoignant.tsx:553
+        public static let uniteDuree = "h)"
+
+        // source: src/pages/PresencesSoignant.tsx:564
+        public static let videAVenirTitre = "Aucune mission à venir"
+
+        // source: src/pages/PresencesSoignant.tsx:566
+        public static let chercherDesMissions = "Chercher des missions"
+
+        // source: src/pages/PresencesSoignant.tsx:587
+        public static let videActivesTitre = "Aucune mission active"
+
+        // source: src/pages/PresencesSoignant.tsx:589
+        public static let trouverUneMission = "Trouver une mission"
+
+        // source: src/pages/PresencesSoignant.tsx:610
+        public static let videAujourdhuiTitre = "Aucune mission aujourd'hui"
+
+        // source: src/pages/PresencesSoignant.tsx:612
+        public static let voirMonPlanning = "Voir mon planning"
+
+        // source: src/pages/PresencesSoignant.tsx:619
+        public static let valideesRecemment = "Présences validées récemment"
+
+        // source: src/pages/PresencesSoignant.tsx:632
+        public static let validee = "Validée"
+
+        // source: src/pages/PresencesSoignant.tsx:764
+        public static let videHistoriqueTitre = "Aucune présence enregistrée"
+    }
+
+    /// Ligne de l'onglet Historique (`PresencesSoignant.tsx` l.486-491, l.684-758) : badges, arrivée, départ,
+    /// heures, méthode, ligne reconstruite depuis les segments EFFECTIF. Assemblages : `LibellesPresences.Ligne`.
+    public enum LignePresence {
+        // source: src/pages/PresencesSoignant.tsx:487
+        public static let aucuneValeur = "—"
+
+        // source: src/pages/PresencesSoignant.tsx:488
+        public static let methodeGps = "📍 GPS"
+
+        // source: src/pages/PresencesSoignant.tsx:489
+        public static let methodeCode = "🔢 Code"
+
+        // source: src/pages/PresencesSoignant.tsx:697
+        public static let detail = "Détail"
+
+        // source: src/pages/PresencesSoignant.tsx:700
+        public static let badgeValidee = "✅ Validée"
+
+        // source: src/pages/PresencesSoignant.tsx:702
+        public static let badgeNonValidee = "⏳ Non validée"
+
+        // source: src/pages/PresencesSoignant.tsx:709
+        public static let arrivee = "Arrivée :"
+
+        // source: src/pages/PresencesSoignant.tsx:714
+        public static let depart = "Départ :"
+
+        // source: src/pages/PresencesSoignant.tsx:719
+        public static let heures = "Heures :"
+
+        // source: src/pages/PresencesSoignant.tsx:720
+        public static let uniteHeures = "h"
+
+        // source: src/pages/PresencesSoignant.tsx:745
+        public static let releveReconstruit = "Relevé reconstruit depuis les segments de pointage. La validation historique n’est pas disponible sur cet ancien dossier."
+
+        // source: src/pages/PresencesSoignant.tsx:755
+        public static let voirOuSignalerLitige = "Voir ou signaler un litige"
+    }
+
+    /// Motifs du bloc de pointage d'une mission (`BlocPointageMission.tsx` l.72-127) quand le pointage n'est pas
+    /// ouvert. Texte que le web tutoie (AUCUN_CRENEAU) et assemblages : `LibellesPresences.Bloc`.
+    public enum BlocPointage {
+        // source: src/components/pointage/BlocPointageMission.tsx:80
+        public static let contratNonSigne = "Contrat non signé"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:82
+        public static let contratDoitEtreSigne = "Le contrat doit être signé par les deux parties avant le premier pointage."
+
+        // source: src/components/pointage/BlocPointageMission.tsx:86
+        public static let prochainCreneauAutreJour = "Aucun créneau à pointer aujourd’hui. Prochain créneau le"
+
+        /// Point final des phrases suivies d'une date ou d'une heure (l.87, l.117, l.119).
+        // source: src/components/pointage/BlocPointageMission.tsx:87
+        public static let point = "."
+
+        // source: src/components/pointage/BlocPointageMission.tsx:97
+        public static let voirLeContrat = "Voir le contrat"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:103
+        public static let aucunCreneauPlanifie = "Aucun créneau planifié"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:112
+        public static let pasEncoreOuvert = "Pointage pas encore ouvert"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:113
+        public static let aucunCreneauAujourdhui = "Aucun créneau à pointer aujourd’hui"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:117
+        public static let ouvrira = "Le pointage ouvrira"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:117
+        public static let minutesAvant = "minutes avant le créneau de"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:119
+        public static let prochainCreneau = "Prochain créneau le"
+
+        // source: src/components/pointage/BlocPointageMission.tsx:120
+        public static let tousTermines = "Tous les créneaux planifiés sont terminés."
+    }
+
+    /// Zone de pointage d'une mission (`PointageRotatifSoignant.tsx` l.64-283, lot 2 T4b) : état, consigne, saisie des six
+    /// chiffres, QR, bouton d'action, segments, retours ; bandeau hors ligne (`BandeauHorsLigne.tsx` l.71). Surcharge
+    /// vouvoyée du code inconnu (l.136, décision 6), textes opérationnels et assemblages : `LibellesPresences.Pointage`.
+    /// Consentement et pointage sans GPS : `TextesWeb` (HARD STOP n°4).
+    public enum Pointage {
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:77
+        public static let chargement = "Chargement du pointage…"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:84
+        public static let indisponibleTitre = "Pointage momentanément indisponible"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:89
+        public static let reessayer = "Réessayer"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:97
+        public static let statutIndisponible = "Le pointage n'est pas disponible pour le statut actuel de cette mission."
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:107
+        public static let pointerDepartOuPause = "Pointer mon départ / pause"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:108
+        public static let pointerArriveeOuReprise = "Pointer mon arrivée / ma reprise"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:108
+        public static let pointerArrivee = "Pointer mon arrivée"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:164
+        public static let enregistreOuvert = "Pointage enregistré — segment ouvert"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:164
+        public static let enregistreFerme = "Pointage enregistré — segment fermé"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:188
+        public static let qrNonReconnu = "QR non reconnu. Saisissez le code à 6 chiffres."
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:192
+        public static let scanImpossible = "Scan impossible. Saisissez le code manuellement."
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:201
+        public static let titre = "Pointage"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:204
+        public static let enServiceDepuis = "En service depuis"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:211
+        public static let consigneDepart = "Saisissez le code affiché par l'établissement pour pointer votre départ ou une pause."
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:212
+        public static let consigne = "Saisissez le code affiché par l'établissement pour pointer."
+
+        /// Libellé vocalisé du champ (`aria-label`).
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:220
+        public static let champCode = "Code de pointage à 6 chiffres"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:223
+        public static let placeholderCode = "123 456"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:227
+        public static let qr = "QR"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:233
+        public static let scannerTitre = "Scanner le QR de pointage"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:235
+        public static let scannerDescription = "Placez le QR de l’établissement dans le cadre. Vous pouvez aussi fermer le scanner et saisir le code à 6 chiffres."
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:261
+        public static let segment = "Segment"
+
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:267
+        public static let enCours = "→ en cours"
+
+        /// Bandeau global du web quand la connexion manque.
+        // source: src/components/BandeauHorsLigne.tsx:71
+        public static let horsLigne = "Pas de connexion internet"
+    }
+
+    /// Ligne « Mes documents » de la section « Mon espace » du Profil (décision 24 du lot 2), titre de la page web.
+    /// « Mes présences » : `ListePresences.titre` ; « Mes contrats » : `Contrats.titre` (T9a, même ligne l.101 de
+    /// `ListeContrats.tsx` : une occurrence web ne garde qu'une constante, d'où le retrait du doublon de T4a à
+    /// l'intégration).
+    public enum EspaceSoignant {
+        // source: src/pages/MesDocuments.tsx:27
+        public static let mesDocuments = "Mes documents"
+    }
+
+    /// Panneau de contestation (`PanneauContestation.tsx`) : en-tête (l.262) et formulaire
+    /// d'ouverture (l.361-392). Libellés de statut : `TextesWeb.Contestation`. Aucun texte de délai
+    /// (Q9, tranchée par délégation le 8 novembre 2026 : la fenêtre est décidée par le serveur).
+    public enum Contestation {
+        // source: src/components/PanneauContestation.tsx:262
+        public static let titre = "Contestation"
+
+        // source: src/components/PanneauContestation.tsx:366
+        public static let contester = "Contester cette présence"
+
+        // source: src/components/PanneauContestation.tsx:376
+        public static let placeholderSoignant = "Les heures validées ne correspondent pas à ma présence réelle…"
+
+        // source: src/components/PanneauContestation.tsx:387
+        public static let envoi = "Envoi…"
+
+        // source: src/components/PanneauContestation.tsx:387
+        public static let envoyer = "Envoyer la contestation"
+
+        // source: src/components/PanneauContestation.tsx:390
+        public static let annuler = "Annuler"
+    }
+
+    /// Attestation de santé (`DocumentsSoignant.tsx`) : badge, état d'envoi, erreur. Textes de
+    /// l'attestation et bouton qui l'accomplit : `TextesWeb.AttestationSante`.
+    public enum AttestationSante {
+        // source: src/pages/DocumentsSoignant.tsx:78
+        public static let signee = "Signée"
+
+        // source: src/pages/DocumentsSoignant.tsx:127
+        public static let signatureEnCours = "Signature en cours…"
+
+        // source: src/pages/DocumentsSoignant.tsx:52
+        public static let erreurSignature = "Erreur lors de la signature. Veuillez réessayer."
+    }
+
+    /// Signature OTP SMS (`SignerContratOtp.tsx`) : erreurs génériques, envoi du code, minuteur,
+    /// SMS restants, renvoi. Textes juridiques, consentement, bouton « Signer », confirmation et
+    /// tentatives : `TextesWeb.SignatureOtp`.
+    public enum SignatureOtp {
+        // source: src/components/SignerContratOtp.tsx:48
+        public static let messageParDefaut = "Une erreur est survenue. Réessayez."
+
+        /// Repli de l'envoi du code quand ni le code ni le serveur ne donnent de message.
+        // source: src/components/SignerContratOtp.tsx:140
+        public static let repliEnvoi = "Erreur envoi OTP"
+
+        /// Repli de la signature quand ni le code ni le serveur ne donnent de message.
+        // source: src/components/SignerContratOtp.tsx:188
+        public static let repliSignature = "Erreur de signature"
+
+        // source: src/components/SignerContratOtp.tsx:167
+        public static let codeSixChiffresRequis = "Code à 6 chiffres requis."
+
+        // source: src/components/SignerContratOtp.tsx:230
+        public static let signatureNonDisponible = "Signature non disponible pour le moment"
+
+        /// Envoi du code accepté (l.149-152) : voir `codeEnvoye(telephoneMasque:minutes:)`.
+        // source: src/components/SignerContratOtp.tsx:151
+        public static let codeEnvoyePrefixe = "Code envoyé au"
+
+        // source: src/components/SignerContratOtp.tsx:151
+        public static let codeEnvoyeValide = ". Valide"
+
+        // source: src/components/SignerContratOtp.tsx:151
+        public static let codeEnvoyeMinutes = "min."
+
+        /// Erreur réseau sans message lisible, à l'envoi du code (l.156) et à la signature (l.202).
+        // source: src/components/SignerContratOtp.tsx:156
+        public static let erreurReseauEnvoi = "Erreur réseau. Réessayez."
+
+        // source: src/components/SignerContratOtp.tsx:202
+        public static let erreurReseauSignature = "Erreur réseau. Réessayez."
+
+        // source: src/components/SignerContratOtp.tsx:265
+        public static let verificationSignatureEnCours = "Vérification de la signature en cours…"
+
+        /// Rappel au-dessus du champ (l.296-300) : voir `codeEnvoyeAu(telephoneMasque:)` et `smsRestants(n:)`.
+        // source: src/components/SignerContratOtp.tsx:296
+        public static let codeEnvoyeAuLibelle = "Code envoyé au"
+
+        // source: src/components/SignerContratOtp.tsx:296
+        public static let numeroMasque = "numéro masqué"
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsParentheseOuvrante = "("
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsDernierEnvoi = "dernier envoi possible"
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsEnvoiMot = "envoi"
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsPlurielEnvoi = "s"
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsRestantMot = "restant"
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsPlurielRestant = "s"
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsParentheseFermante = ")"
+
+        // source: src/components/SignerContratOtp.tsx:110
+        public static let minuteurSeparateur = ":"
+
+        // source: src/components/SignerContratOtp.tsx:305
+        public static let minuteurExpire = "Expiré"
+
+        /// Libellé d'accessibilité du champ du code (`aria-label`).
+        // source: src/components/SignerContratOtp.tsx:319
+        public static let champCodeAccessibilite = "Code SMS à 6 chiffres"
+
+        /// Texte indicatif du champ du code (`placeholder`), à la place de celui du lot 0 (revue fraîche de T9b, m7).
+        // source: src/components/SignerContratOtp.tsx:316
+        public static let champCodeIndication = "123456"
+
+        /// Infobulles du bouton de renvoi désactivé (l.336) : voir `infobulleRenvoi(nouvelEnvoiAutorise:smsRestants:)`.
+        // source: src/components/SignerContratOtp.tsx:336
+        public static let renvoiNonAutoriseRecette = "Aucun nouvel envoi autorisé pour cette recette"
+
+        // source: src/components/SignerContratOtp.tsx:336
+        public static let plafondSmsAtteint = "3 SMS max par 24h atteints"
+
+        // source: src/components/SignerContratOtp.tsx:339
+        public static let recevoirNouveauCode = "Recevoir un nouveau code"
+
+        // source: src/components/SignerContratOtp.tsx:339
+        public static let renvoyerCode = "Renvoyer le code"
+
+        /// « Code envoyé au <numéro>. Valide <n> min. » (l.151), tel que le gabarit du web l'assemble.
+        public static func codeEnvoye(telephoneMasque: String, minutes: Int) -> String {
+            codeEnvoyePrefixe + " " + telephoneMasque + codeEnvoyeValide + " " + String(minutes) + " " + codeEnvoyeMinutes
+        }
+
+        /// « Code envoyé au <numéro> » (l.296), « numéro masqué » si le serveur n'en donne pas.
+        public static func codeEnvoyeAu(telephoneMasque: String?) -> String {
+            let numero = telephoneMasque.flatMap { $0.isEmpty ? nil : $0 } ?? numeroMasque
+            return codeEnvoyeAuLibelle + " " + numero
+        }
+
+        /// SMS encore possibles (l.297-300), affichés quand le serveur donne `sms_restants` :
+        /// « (dernier envoi possible) » à 0 — formulation du web, alors qu'à 0 le bouton de renvoi
+        /// est désactivé (l.335-336) —, sinon « (<n> envoi(s) restant(s)) », pluriel au-delà de 1.
+        public static func smsRestants(n: Int) -> String {
+            let detail = n == 0 ? smsDernierEnvoi
+                : String(n) + " " + smsEnvoiMot + (n > 1 ? smsPlurielEnvoi : "") + " "
+                    + smsRestantMot + (n > 1 ? smsPlurielRestant : "")
+            return smsParentheseOuvrante + detail + smsParentheseFermante
+        }
+
+        /// Minuteur de validité du code (l.109-110, l.305) : « mm:ss », « Expiré » à zéro.
+        public static func minuteur(secondesRestantes: Int) -> String {
+            guard secondesRestantes > 0 else { return minuteurExpire }
+            return LibellesWeb.deuxChiffres(secondesRestantes / 60) + minuteurSeparateur
+                + LibellesWeb.deuxChiffres(secondesRestantes % 60)
+        }
+
+        /// Bouton de renvoi (l.339) : « Recevoir un nouveau code » une fois le code expiré.
+        public static func renvoi(otpExpire: Bool) -> String {
+            otpExpire ? recevoirNouveauCode : renvoyerCode
+        }
+
+        /// Infobulle du bouton de renvoi (l.336) : recette STAGING sans nouvel envoi autorisé, puis
+        /// plafond de SMS atteint (`sms_restants` à 0) ; aucune sinon.
+        public static func infobulleRenvoi(nouvelEnvoiAutorise: Bool, smsRestants: Int?) -> String? {
+            if !nouvelEnvoiAutorise { return renvoiNonAutoriseRecette }
+            return smsRestants == 0 ? plafondSmsAtteint : nil
+        }
+    }
+
+    /// Durée restante du compte à rebours de signature (`Countdown72hSignature.tsx` l.49-51, l.73).
+    /// Textes du compte à rebours : `TextesWeb.CompteARebours`.
+    public enum CompteARebours {
+        // source: src/components/Countdown72hSignature.tsx:73
+        public static let uniteHeures = "h"
+
+        // source: src/components/Countdown72hSignature.tsx:73
+        public static let uniteMinutes = "m"
+
+        // source: src/components/Countdown72hSignature.tsx:73
+        public static let uniteSecondes = "s"
+
+        /// Durée restante « <h>h <mm>m <ss>s » (l.49-51, l.73), minutes et secondes sur deux chiffres.
+        public static func duree(restantSecondes: Int) -> String {
+            let heures = restantSecondes / 3600
+            let minutes = (restantSecondes % 3600) / 60
+            let secondes = restantSecondes % 60
+            return String(heures) + uniteHeures + " " + LibellesWeb.deuxChiffres(minutes) + uniteMinutes + " "
+                + LibellesWeb.deuxChiffres(secondes) + uniteSecondes
+        }
+    }
+
+    /// Liste des contrats du soignant (`ListeContrats.tsx`, T9a) : titre, filtres, pastilles de statut, états
+    /// vides (branche soignant), carte mobile (`renduCarte`), erreur de chargement (`ErreurRubriqueEtablissement`).
+    public enum Contrats {
+        // source: src/pages/ListeContrats.tsx:101
+        public static let titre = "Mes contrats"
+
+        /// Libellés des filtres (l.121) : voir `libelleFiltre(_:)` (« Tous » y est la valeur même du filtre).
+        // source: src/pages/ListeContrats.tsx:121
+        public static let filtreEnAttente = "En attente"
+
+        // source: src/pages/ListeContrats.tsx:121
+        public static let filtreSignes = "Signés"
+
+        // source: src/pages/ListeContrats.tsx:121
+        public static let filtreAnnules = "Annulés"
+
+        /// Pastille de statut (l.161-165) : voir `badge(_:)`.
+        // source: src/pages/ListeContrats.tsx:163
+        public static let badgeSigne = "✅ Signé"
+
+        // source: src/pages/ListeContrats.tsx:163
+        public static let badgeAnnule = "❌ Annulé"
+
+        // source: src/pages/ListeContrats.tsx:163
+        public static let badgeEnAttente = "⏳ En attente"
+
+        /// États vides du soignant (l.126-145) : voir `titreVide(_:)` et `descriptionVide(_:)`.
+        // source: src/pages/ListeContrats.tsx:128
+        public static let videTitre = "Aucun contrat"
+
+        // source: src/pages/ListeContrats.tsx:131
+        public static let videEnAttenteTitre = "Aucun contrat en attente"
+
+        // source: src/pages/ListeContrats.tsx:134
+        public static let videEnAttente = "Aucun contrat en attente de signature pour le moment."
+
+        // source: src/pages/ListeContrats.tsx:138
+        public static let videSignes = "Aucun contrat signé pour le moment."
+
+        // source: src/pages/ListeContrats.tsx:140
+        public static let videAnnules = "Aucun contrat annulé."
+
+        // source: src/pages/ListeContrats.tsx:144
+        public static let videTous = "Vos contrats apparaîtront ici après avoir accepté une mission."
+
+        /// Carte mobile (l.205-226) : voir `numero(_:)`, `mission(intitule:)`, `typeEtDate(type:dateFormatee:)`,
+        /// `action(aSigner:)`.
+        // source: src/pages/ListeContrats.tsx:210
+        public static let sansValeur = "—"
+
+        // source: src/pages/ListeContrats.tsx:214
+        public static let pictoMission = "📋"
+
+        // source: src/pages/ListeContrats.tsx:215
+        public static let creeLe = "· Créé le"
+
+        /// Masque date-fns de la date de création (l.215), appliqué en heure de Paris (`ContratPresentation.date`).
+        // source: src/pages/ListeContrats.tsx:215
+        public static let formatDateCreation = "dd/MM/yyyy"
+
+        /// Appel de la carte : ouvre la page du contrat, ne signe rien (l.216-224).
+        // source: src/pages/ListeContrats.tsx:223
+        public static let signerLeContrat = "✍️ Signer le contrat"
+
+        // source: src/pages/ListeContrats.tsx:223
+        public static let voirLeContrat = "Voir le contrat"
+
+        /// Erreur de chargement (l.96, `ErreurRubriqueEtablissement`).
+        // source: src/pages/ListeContrats.tsx:96
+        public static let indisponiblesTitre = "Contrats indisponibles"
+
+        // source: src/components/AccesEtablissement.tsx:82
+        public static let chargementNAbouti = "Le chargement n'a pas abouti. Réessayez dans un instant."
+
+        // source: src/components/AccesEtablissement.tsx:84
+        public static let reessayer = "Réessayer"
+
+        /// Libellé d'un filtre (l.121) : « Tous », « En attente », « Signés », sinon « Annulés ». Pour « Tous », le web
+        /// affiche la valeur du filtre elle-même (`f === 'Tous' ? 'Tous'`, la zone de rendu le garde) : le libellé est
+        /// `FiltreContrat.tous.rawValue`, déjà égal à `FILTRES_STATUT[0]` (l.20, `ContratRulesTests`).
+        public static func libelleFiltre(_ filtre: FiltreContrat) -> String {
+            switch filtre {
+            case .tous: return filtre.rawValue
+            case .enAttenteSignatures: return filtreEnAttente
+            case .signeComplet: return filtreSignes
+            case .annule: return filtreAnnules
+            }
+        }
+
+        /// Pastille de statut (l.163) : signé, annulé, sinon en attente (`ContratRules.statutAffiche(statut:)`).
+        public static func badge(_ statut: StatutContratAffiche) -> String {
+            switch statut {
+            case .signe: return badgeSigne
+            case .annule: return badgeAnnule
+            case .enAttente: return badgeEnAttente
+            }
+        }
+
+        /// Titre de l'état vide (l.128-131) : « Aucun contrat en attente » pour ce filtre, sinon « Aucun contrat ».
+        public static func titreVide(_ filtre: FiltreContrat) -> String {
+            filtre == .enAttenteSignatures ? videEnAttenteTitre : videTitre
+        }
+
+        /// Description de l'état vide du soignant (l.130-145, branches `isEtab` exclues).
+        public static func descriptionVide(_ filtre: FiltreContrat) -> String {
+            switch filtre {
+            case .enAttenteSignatures: return videEnAttente
+            case .signeComplet: return videSignes
+            case .annule: return videAnnules
+            case .tous: return videTous
+            }
+        }
+
+        /// Numéro de la carte (`c.numero_contrat || '—'`, l.210).
+        public static func numero(_ numero: String?) -> String {
+            numero.flatMap { $0.isEmpty ? nil : $0 } ?? sansValeur
+        }
+
+        /// Mission de la carte (`📋 {intitule || '—'}`, l.214).
+        public static func mission(intitule: String?) -> String {
+            pictoMission + " " + (intitule.flatMap { $0.isEmpty ? nil : $0 } ?? sansValeur)
+        }
+
+        /// Type et date de création (`{c.type_contrat} · Créé le {date}`, l.215) : un type NULL est rendu vide.
+        public static func typeEtDate(type: String?, dateFormatee: String) -> String {
+            (type ?? "") + " " + creeLe + " " + dateFormatee
+        }
+
+        /// Appel de la carte (l.223) : « ✍️ Signer le contrat » quand le soignant n'a pas signé, sinon « Voir le
+        /// contrat ».
+        public static func action(aSigner: Bool) -> String {
+            aSigner ? signerLeContrat : voirLeContrat
+        }
+    }
+
+    /// Page d'un contrat (`ContratMission.tsx`, T9a) : en-tête, boutons, section Signatures, zone « Votre
+    /// signature » et préparation du document final. Bandeaux, document figé, contenu indisponible, mentions et
+    /// pied de page : `TextesWeb.Contrat`.
+    public enum Contrat {
+        /// Partie d'une ligne de la section Signatures (l.669-705).
+        public enum Partie: Sendable, CaseIterable {
+            case etablissement
+            case soignant
+        }
+
+        /// En-tête (l.591) : voir `titre(numero:)`.
+        // source: src/pages/ContratMission.tsx:592
+        public static let titrePrefixe = "Contrat"
+
+        /// Statut de l'en-tête (l.592-597) : voir `statut(_:)`.
+        // source: src/pages/ContratMission.tsx:594
+        public static let statutPrefixe = "Statut :"
+
+        // source: src/pages/ContratMission.tsx:595
+        public static let statutSigne = "✅ Signé"
+
+        // source: src/pages/ContratMission.tsx:596
+        public static let statutAnnule = "❌ Annulé"
+
+        // source: src/pages/ContratMission.tsx:597
+        public static let statutEnAttente = "⏳ En attente de signatures"
+
+        /// Contrat absent ou illisible (l.530).
+        // source: src/pages/ContratMission.tsx:531
+        public static let introuvable = "Contrat introuvable"
+
+        // source: src/pages/ContratMission.tsx:612
+        public static let telecharger = "Télécharger le contrat"
+
+        // source: src/pages/ContratMission.tsx:615
+        public static let imprimer = "Imprimer"
+
+        /// Aucun original contrôlé à partager (l.427-429).
+        // source: src/pages/ContratMission.tsx:429
+        public static let aucunTelechargeable = "Aucun contrat téléchargeable pour le moment."
+
+        /// Masque date-fns des dates du contrat (l.623, l.679, l.698), appliqué en heure de Paris.
+        // source: src/pages/ContratMission.tsx:624
+        public static let formatDateHeure = "dd/MM/yyyy 'à' HH:mm"
+
+        /// Section Signatures (l.666-706) : voir `ligneSignature(_:signee:dateFormatee:)`.
+        // source: src/pages/ContratMission.tsx:669
+        public static let signaturesTitre = "Signatures"
+
+        // source: src/pages/ContratMission.tsx:680
+        public static let partieEtablissement = "Établissement :"
+
+        // source: src/pages/ContratMission.tsx:699
+        public static let partieSoignant = "Soignant(e) :"
+
+        // source: src/pages/ContratMission.tsx:681
+        public static let signatureSignee = "✅ Signé"
+
+        // source: src/pages/ContratMission.tsx:681
+        public static let signatureLe = "le"
+
+        // source: src/pages/ContratMission.tsx:682
+        public static let signatureEnAttente = "⏳ En attente"
+
+        /// Zone de signature (l.711) ; T9a : renvoi web jusqu'à T9b.
+        // source: src/pages/ContratMission.tsx:713
+        public static let votreSignature = "Votre signature"
+
+        /// Rendu serveur refusé (l.372-377) : voir `renduRefuse(messageServeur:)`.
+        // source: src/pages/ContratMission.tsx:378
+        public static let renduImpossible = "Le document contractuel final n’a pas pu être préparé."
+
+        // source: src/pages/ContratMission.tsx:378
+        public static let reessayerAvantDeSigner = "Réessayez avant de signer."
+
+        /// Document final encore incomplet après le rendu (l.387-388).
+        // source: src/pages/ContratMission.tsx:389
+        public static let renduIncomplet = "Le document contractuel final est encore incomplet. Réessayez avant de signer."
+
+        /// En-tête « Contrat <numéro> » (l.591), sans repli : un numéro NULL laisse « Contrat ».
+        public static func titre(numero: String?) -> String {
+            titrePrefixe + " " + (numero ?? "")
+        }
+
+        /// Statut de l'en-tête (l.593-596) : signé, annulé, sinon en attente de signatures.
+        public static func statut(_ statut: StatutContratAffiche) -> String {
+            let valeur: String
+            switch statut {
+            case .signe: valeur = statutSigne
+            case .annule: valeur = statutAnnule
+            case .enAttente: valeur = statutEnAttente
+            }
+            return statutPrefixe + " " + valeur
+        }
+
+        /// Ligne d'une partie (l.677-681, l.696-700) : « ✅ Signé », suivi de « le <date> » quand la date de
+        /// signature est lisible, sinon « ⏳ En attente ».
+        public static func ligneSignature(_ partie: Partie, signee: Bool, dateFormatee: String?) -> String {
+            let libelle: String
+            switch partie {
+            case .etablissement: libelle = partieEtablissement
+            case .soignant: libelle = partieSoignant
+            }
+            guard signee else { return libelle + " " + signatureEnAttente }
+            guard let dateFormatee, !dateFormatee.isEmpty else { return libelle + " " + signatureSignee }
+            return libelle + " " + signatureSignee + " " + signatureLe + " " + dateFormatee
+        }
+
+        /// Rendu serveur refusé (l.373-377) : motif serveur (180 unités UTF-16 au plus) entre les deux phrases ;
+        /// sans motif, les deux phrases seules (même texte que l.394).
+        public static func renduRefuse(messageServeur: String?) -> String {
+            guard let messageServeur, !messageServeur.isEmpty else { return renduImpossible + " " + reessayerAvantDeSigner }
+            let motif = String(decoding: Array(messageServeur.utf16.prefix(180)), as: UTF16.self)
+            return renduImpossible + " " + motif + " " + reessayerAvantDeSigner
+        }
+    }
+
+    /// En-tête de la page `/contrat/:id/certificat` (`CertificatSignaturePage.tsx` l.186). Titre,
+    /// certificat et empreinte : `TextesWeb.Certificat`.
+    public enum Certificat {
+        // source: src/pages/CertificatSignaturePage.tsx:186
+        public static let contratPrefixe = "Contrat"
+
+        /// Masque date-fns de l'heure d'une signature (`CertificatSignature.tsx` l.130), en heure de Paris.
+        // source: src/components/CertificatSignature.tsx:130
+        public static let formatDateHeure = "dd/MM/yyyy 'à' HH:mm:ss"
+
+        /// Export PDF de la page (l.195) : renvoi web, jamais porté (LOT2_PLAN §1.2).
+        // source: src/pages/CertificatSignaturePage.tsx:195
+        public static let telechargerPdf = "Télécharger PDF"
+
+        /// « Contrat <numéro> » (`contrat.numero_contrat || contrat.id`, l.186).
+        public static func contrat(numero: String?, id: String) -> String {
+            contratPrefixe + " " + (numero.flatMap { $0.isEmpty ? nil : $0 } ?? id)
+        }
+    }
+
+    /// Détail des présences d'une mission (`DetailPresencesMission.tsx`, lot 2 T5a) : en-tête, synthèse, créneaux
+    /// travaillés par jour, contrôles du pointage. Fragments des gabarits et du JSX, assemblés comme le rendu React par
+    /// `LibellesDetailPresences` (hors de ce fichier). Relance : `Presences` (bouton) et `TextesWeb.Presences` (titre,
+    /// explication). Récapitulatif financier non porté (montants calculés côté client, LOT2_PLAN §1.2) : titre seul,
+    /// avec le renvoi web.
+    public enum DetailPresences {
+        // source: src/pages/DetailPresencesMission.tsx:187
+        public static let introuvableTitre = "Mission introuvable"
+
+        // source: src/pages/DetailPresencesMission.tsx:188
+        public static let introuvableMessage = "Cette mission n’existe pas ou n’est plus accessible."
+
+        // source: src/pages/DetailPresencesMission.tsx:77
+        public static let flechePlage = "→"
+
+        // source: src/pages/DetailPresencesMission.tsx:89
+        public static let datesPlanifiees = "dates planifiées ·"
+
+        // source: src/pages/DetailPresencesMission.tsx:89
+        public static let flecheDates = "→"
+
+        // source: src/pages/DetailPresencesMission.tsx:298
+        public static let pictoPeriode = "📅"
+
+        // source: src/pages/DetailPresencesMission.tsx:300
+        public static let flechePeriode = "→"
+
+        // source: src/pages/DetailPresencesMission.tsx:303
+        public static let pictoHeures = "⏱"
+
+        // source: src/pages/DetailPresencesMission.tsx:304
+        public static let heuresSur = "h sur"
+
+        // source: src/pages/DetailPresencesMission.tsx:304
+        public static let creneau = "créneau"
+
+        // source: src/pages/DetailPresencesMission.tsx:304
+        public static let creneauPluriel = "x"
+
+        // source: src/pages/DetailPresencesMission.tsx:305
+        public static let heuresPrevues = "h prévues"
+
+        // source: src/pages/DetailPresencesMission.tsx:317
+        public static let clotureePrefixe = "Mission clôturée ·"
+
+        // source: src/pages/DetailPresencesMission.tsx:317
+        public static let clotureeBarre = "/"
+
+        // source: src/pages/DetailPresencesMission.tsx:317
+        public static let clotureeEchusPluriel = "créneaux initialement prévus étaient échus"
+
+        // source: src/pages/DetailPresencesMission.tsx:317
+        public static let clotureeEchuSingulier = "créneau initialement prévu était échu"
+
+        // source: src/pages/DetailPresencesMission.tsx:319
+        public static let progression = "Progression :"
+
+        // source: src/pages/DetailPresencesMission.tsx:319
+        public static let progressionBarre = "/"
+
+        // source: src/pages/DetailPresencesMission.tsx:319
+        public static let creneauxEchus = "créneaux échus"
+
+        // source: src/pages/DetailPresencesMission.tsx:319
+        public static let creneauEchu = "créneau échu"
+
+        // source: src/pages/DetailPresencesMission.tsx:321
+        public static let prochain = "· prochain :"
+
+        // source: src/pages/DetailPresencesMission.tsx:322
+        public static let planningTermine = "· planning terminé"
+
+        // source: src/pages/DetailPresencesMission.tsx:327
+        public static let planningIndisponible = "Planning détaillé indisponible."
+
+        // source: src/pages/DetailPresencesMission.tsx:327
+        public static let planningAConfirmer = "Planning détaillé à confirmer."
+
+        // source: src/pages/DetailPresencesMission.tsx:384
+        public static let syntheseTitre = "Synthèse des présences"
+
+        // source: src/pages/DetailPresencesMission.tsx:388
+        public static let heuresPlanifiees = "Heures planifiées"
+
+        // source: src/pages/DetailPresencesMission.tsx:389
+        public static let uniteHeures = "h"
+
+        // source: src/pages/DetailPresencesMission.tsx:392
+        public static let heuresReelles = "Heures réelles"
+
+        // source: src/pages/DetailPresencesMission.tsx:399
+        public static let heuresRetenues = "Heures retenues après litige"
+
+        // source: src/pages/DetailPresencesMission.tsx:405
+        public static let retard = "Retard"
+
+        // source: src/pages/DetailPresencesMission.tsx:406
+        public static let plus = "+"
+
+        // source: src/pages/DetailPresencesMission.tsx:406
+        public static let uniteMinutes = "min"
+
+        // source: src/pages/DetailPresencesMission.tsx:411
+        public static let departAnticipe = "Départ anticipé"
+
+        // source: src/pages/DetailPresencesMission.tsx:412
+        public static let moins = "-"
+
+        // source: src/pages/DetailPresencesMission.tsx:417
+        public static let pauses = "Pauses / interruptions"
+
+        // source: src/pages/DetailPresencesMission.tsx:423
+        public static let distance = "Distance GPS"
+
+        // source: src/pages/DetailPresencesMission.tsx:425
+        public static let uniteMetres = "m"
+
+        // source: src/pages/DetailPresencesMission.tsx:431
+        public static let methode = "Méthode"
+
+        // source: src/pages/DetailPresencesMission.tsx:440
+        public static let bilanPointageEnCours = "Bilan définitif après la fermeture du pointage en cours."
+
+        // source: src/pages/DetailPresencesMission.tsx:442
+        public static let bilanApresDernierCreneau = "Bilan définitif après le dernier créneau, le"
+
+        // source: src/pages/DetailPresencesMission.tsx:442
+        public static let bilanAucunDeficit = ". Aucun déficit n’est signalé avant cette échéance."
+
+        // source: src/pages/DetailPresencesMission.tsx:443
+        public static let bilanIndisponible = "Bilan définitif indisponible tant que le planning détaillé n’est pas confirmé."
+
+        // source: src/pages/DetailPresencesMission.tsx:449
+        public static let clotureAvantFin = "Mission clôturée avant la fin du planning initial. Les créneaux futurs ne sont plus à effectuer ; les heures retenues après arbitrage déterminent la régularisation financière."
+
+        // source: src/pages/DetailPresencesMission.tsx:456
+        public static let alerteTeleportation = "🚨 Alerte téléportation détectée"
+
+        // source: src/pages/DetailPresencesMission.tsx:457
+        public static let alerteDeficit = "⚠️ Heures réelles inférieures à 90% du planifié"
+
+        // source: src/pages/DetailPresencesMission.tsx:500
+        public static let segmentsTitre = "Détail des créneaux travaillés ("
+
+        // source: src/pages/DetailPresencesMission.tsx:500
+        public static let segmentMot = "segment"
+
+        // source: src/pages/DetailPresencesMission.tsx:500
+        public static let segmentPluriel = "s"
+
+        // source: src/pages/DetailPresencesMission.tsx:500
+        public static let parentheseFermante = ")"
+
+        // source: src/pages/DetailPresencesMission.tsx:506
+        public static let aucunSegment = "Aucun créneau de travail effectif enregistré pour cette mission."
+
+        // source: src/pages/DetailPresencesMission.tsx:513
+        public static let pictoJour = "📅"
+
+        // source: src/pages/DetailPresencesMission.tsx:513
+        public static let dateInconnue = "Date inconnue"
+
+        // source: src/pages/DetailPresencesMission.tsx:559
+        public static let segmentTravaille = "Segment travaillé"
+
+        // source: src/pages/DetailPresencesMission.tsx:559
+        public static let segmentBarre = "/"
+
+        // source: src/pages/DetailPresencesMission.tsx:560
+        public static let reprise = "· reprise après interruption"
+
+        // source: src/pages/DetailPresencesMission.tsx:561
+        public static let creneauPlanifieSuffixe = "· créneau planifié"
+
+        // source: src/pages/DetailPresencesMission.tsx:561
+        public static let creneauPlanifieSuffixeBarre = "/"
+
+        // source: src/pages/DetailPresencesMission.tsx:565
+        public static let creneauPlanifie = "Créneau planifié"
+
+        // source: src/pages/DetailPresencesMission.tsx:565
+        public static let creneauPlanifieBarre = "/"
+
+        // source: src/pages/DetailPresencesMission.tsx:571
+        public static let interruption = "Pause / interruption depuis le segment précédent :"
+
+        // source: src/pages/DetailPresencesMission.tsx:578
+        public static let horairePrevu = "Horaire prévu"
+
+        // source: src/pages/DetailPresencesMission.tsx:581
+        public static let retardSegment = "Retard : +"
+
+        // source: src/pages/DetailPresencesMission.tsx:582
+        public static let departAnticipeSegment = "Départ anticipé : -"
+
+        // source: src/pages/DetailPresencesMission.tsx:585
+        public static let bilanApresEcheance = "Bilan après l’échéance de"
+
+        // source: src/pages/DetailPresencesMission.tsx:595
+        public static let aucunCreneauCeJour = "Aucun créneau planifié ne correspond à ce jour."
+
+        // source: src/pages/DetailPresencesMission.tsx:603
+        public static let arrivee = "▶ Arrivée"
+
+        // source: src/pages/DetailPresencesMission.tsx:614
+        public static let depart = "■ Départ"
+
+        // source: src/pages/DetailPresencesMission.tsx:621
+        public static let departNonPointe = "⏳ En cours — départ non pointé"
+
+        // source: src/pages/DetailPresencesMission.tsx:627
+        public static let duree = "Durée :"
+
+        // source: src/pages/DetailPresencesMission.tsx:627
+        public static let dureeHeures = "h"
+
+        // source: src/pages/DetailPresencesMission.tsx:635
+        public static let valide = "✅ Validé"
+
+        // source: src/pages/DetailPresencesMission.tsx:635
+        public static let valideLe = "le"
+
+        // source: src/pages/DetailPresencesMission.tsx:639
+        public static let releveClotureApresArbitrage = "✅ Relevé clôturé après arbitrage"
+
+        // source: src/pages/DetailPresencesMission.tsx:639
+        public static let releveCloture = "✅ Relevé clôturé"
+
+        // source: src/pages/DetailPresencesMission.tsx:642
+        public static let enAttenteValidation = "⏳ En attente de validation"
+
+        // source: src/pages/DetailPresencesMission.tsx:644
+        public static let pointageEnCours = "Pointage en cours"
+
+        // source: src/pages/DetailPresencesMission.tsx:646
+        public static let missionEnCours = "Mission en cours"
+
+        // source: src/pages/DetailPresencesMission.tsx:663
+        public static let controlesTitre = "Contrôles du pointage"
+
+        // source: src/pages/DetailPresencesMission.tsx:668
+        public static let premiereArrivee = "Première arrivée :"
+
+        // source: src/pages/DetailPresencesMission.tsx:675
+        public static let precisionArrivee = "Précision première arrivée :"
+
+        // source: src/pages/DetailPresencesMission.tsx:681
+        public static let precisionDepart = "Précision dernier départ :"
+
+        // source: src/pages/DetailPresencesMission.tsx:688
+        public static let alerteTeleportationControle = "Alerte téléportation détectée"
+
+        // source: src/pages/DetailPresencesMission.tsx:707
+        public static let recapitulatifFinancier = "💶 Récapitulatif financier"
+    }
+
+    /// Notation rapide au départ final (`SheetNotationRapide`, `NotationRapide.tsx` l.143-216, montée par
+    /// `PointageRotatifSoignant.tsx` l.274-281 ; lot 2 T5a). Description et remerciement que le web tutoie :
+    /// `LibellesDetailPresences.Notation` (vouvoyés).
+    public enum Notation {
+        // source: src/components/pointage/PointageRotatifSoignant.tsx:279
+        public static let titre = "Mission terminée 🎉 Comment ça s'est passé ?"
+
+        /// `CRITERES_LABELS.SOIGNANT_VERS_ETAB` (l.31), dans l'ordre des critères 1 à 4.
+        // source: src/components/NotationRapide.tsx:31
+        public static let critereAccueil = "Accueil"
+
+        // source: src/components/NotationRapide.tsx:31
+        public static let critereEncadrement = "Encadrement"
+
+        // source: src/components/NotationRapide.tsx:31
+        public static let critereConsignes = "Clarté des consignes"
+
+        // source: src/components/NotationRapide.tsx:31
+        public static let critereAdministratif = "Paiement / administratif"
+
+        /// `aria-label` du groupe d'étoiles par défaut (l.78).
+        // source: src/components/NotationRapide.tsx:78
+        public static let groupeNote = "Note"
+
+        // source: src/components/NotationRapide.tsx:88
+        public static let etoile = "étoile"
+
+        // source: src/components/NotationRapide.tsx:88
+        public static let etoilePluriel = "s"
+
+        // source: src/components/NotationRapide.tsx:196
+        public static let masquerDetail = "Masquer le détail"
+
+        // source: src/components/NotationRapide.tsx:196
+        public static let detailler = "Détailler ma note (optionnel)"
+
+        // source: src/components/NotationRapide.tsx:205
+        public static let envoyer = "Envoyer ma note"
+
+        // source: src/components/NotationRapide.tsx:208
+        public static let plusTard = "Plus tard"
+    }
+
+    /// Widget « Aller pointer » de l'Accueil (`WidgetAllerPointer.tsx` l.28-52, lot 2 T5a). Assemblage :
+    /// `LibellesDetailPresences.AllerPointer`.
+    public enum AllerPointer {
+        // source: src/components/WidgetAllerPointer.tsx:33
+        public static let creneauActuel = "Créneau de travail actuel"
+
+        // source: src/components/WidgetAllerPointer.tsx:35
+        public static let missionActiveProchain = "Mission active · prochain créneau"
+
+        // source: src/components/WidgetAllerPointer.tsx:35
+        public static let missionActivePlanning = "Mission active · planning à confirmer"
+
+        // source: src/components/WidgetAllerPointer.tsx:36
+        public static let missionDans = "Mission dans"
+
+        // source: src/components/WidgetAllerPointer.tsx:36
+        public static let minutes = "min"
+
+        // source: src/components/WidgetAllerPointer.tsx:36
+        public static let maintenant = "maintenant"
+
+        // source: src/components/WidgetAllerPointer.tsx:38
+        public static let tiret = "—"
+
+        // source: src/components/WidgetAllerPointer.tsx:41
+        public static let point = "·"
+
+        // source: src/components/WidgetAllerPointer.tsx:41
+        public static let flecheProchain = "→"
+
+        // source: src/components/WidgetAllerPointer.tsx:43
+        public static let flecheMemeJour = "→"
+
+        // source: src/components/WidgetAllerPointer.tsx:44
+        public static let flecheJours = "→"
+
+        // source: src/components/WidgetAllerPointer.tsx:50
+        public static let allerPointer = "Aller pointer"
+
+        // source: src/components/WidgetAllerPointer.tsx:50
+        public static let voirHoraires = "Voir horaires et présences"
+
+        // source: src/components/WidgetAllerPointer.tsx:50
+        public static let flecheBouton = "→"
+    }
+
+    /// Action du bandeau d'oubli de départ de l'Accueil (`BandeauOubliDepart.tsx` l.32-37, lot 2 T5a) : ouvre la page
+    /// Présences native (`navigate('/soignant/presences')`, `DashboardSoignant.tsx` l.493).
+    public enum OubliDepart {
+        // source: src/components/BandeauOubliDepart.tsx:36
+        public static let pointerMonDepart = "Pointer mon départ maintenant"
+    }
+
+    /// Points d'entrée du détail d'une mission vers les présences (`DetailMissionSoignant.tsx` l.1477-1494, lot 2 T5a).
+    public enum DetailMission {
+        // source: src/pages/DetailMissionSoignant.tsx:1483
+        public static let presencesEtPointage = "🕐 Présences et pointage"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1492
+        public static let heuresPointees = "🕐 Voir mes heures pointées et mes pauses"
+    }
+
+    /// `String(valeur).padStart(2, '0')` du web (minuteurs ; valeur positive ou nulle).
+    static func deuxChiffres(_ valeur: Int) -> String {
+        valeur < 10 ? String(0) + String(valeur) : String(valeur)
+    }
+
+    /// Tous les libellés, pour les tests (la garde Node vérifie que la liste est complète et exacte).
+    public static let catalogue: [EntreeTexteWeb] = [
+        .init(cle: "Presences.relancer", texte: Presences.relancer),
+        .init(cle: "Presences.relanceEnvoi", texte: Presences.relanceEnvoi),
+        .init(cle: "Presences.relanceSucces", texte: Presences.relanceSucces),
+        .init(cle: "Presences.relanceImpossible", texte: Presences.relanceImpossible),
+        .init(cle: "ListePresences.titre", texte: ListePresences.titre),
+        .init(cle: "ListePresences.reessayer", texte: ListePresences.reessayer),
+        .init(cle: "ListePresences.ongletAVenir", texte: ListePresences.ongletAVenir),
+        .init(cle: "ListePresences.badgeMission", texte: ListePresences.badgeMission),
+        .init(cle: "ListePresences.badgePluriel", texte: ListePresences.badgePluriel),
+        .init(cle: "ListePresences.badgeAVenir", texte: ListePresences.badgeAVenir),
+        .init(cle: "ListePresences.ongletActives", texte: ListePresences.ongletActives),
+        .init(cle: "ListePresences.ongletAujourdhui", texte: ListePresences.ongletAujourdhui),
+        .init(cle: "ListePresences.ongletHistorique", texte: ListePresences.ongletHistorique),
+        .init(cle: "ListePresences.etablissement", texte: ListePresences.etablissement),
+        .init(cle: "ListePresences.separateurVille", texte: ListePresences.separateurVille),
+        .init(cle: "ListePresences.planningAConfirmer", texte: ListePresences.planningAConfirmer),
+        .init(cle: "ListePresences.fleche", texte: ListePresences.fleche),
+        .init(cle: "ListePresences.parentheseDuree", texte: ListePresences.parentheseDuree),
+        .init(cle: "ListePresences.uniteDuree", texte: ListePresences.uniteDuree),
+        .init(cle: "ListePresences.videAVenirTitre", texte: ListePresences.videAVenirTitre),
+        .init(cle: "ListePresences.chercherDesMissions", texte: ListePresences.chercherDesMissions),
+        .init(cle: "ListePresences.videActivesTitre", texte: ListePresences.videActivesTitre),
+        .init(cle: "ListePresences.trouverUneMission", texte: ListePresences.trouverUneMission),
+        .init(cle: "ListePresences.videAujourdhuiTitre", texte: ListePresences.videAujourdhuiTitre),
+        .init(cle: "ListePresences.voirMonPlanning", texte: ListePresences.voirMonPlanning),
+        .init(cle: "ListePresences.valideesRecemment", texte: ListePresences.valideesRecemment),
+        .init(cle: "ListePresences.validee", texte: ListePresences.validee),
+        .init(cle: "ListePresences.videHistoriqueTitre", texte: ListePresences.videHistoriqueTitre),
+        .init(cle: "LignePresence.aucuneValeur", texte: LignePresence.aucuneValeur),
+        .init(cle: "LignePresence.methodeGps", texte: LignePresence.methodeGps),
+        .init(cle: "LignePresence.methodeCode", texte: LignePresence.methodeCode),
+        .init(cle: "LignePresence.detail", texte: LignePresence.detail),
+        .init(cle: "LignePresence.badgeValidee", texte: LignePresence.badgeValidee),
+        .init(cle: "LignePresence.badgeNonValidee", texte: LignePresence.badgeNonValidee),
+        .init(cle: "LignePresence.arrivee", texte: LignePresence.arrivee),
+        .init(cle: "LignePresence.depart", texte: LignePresence.depart),
+        .init(cle: "LignePresence.heures", texte: LignePresence.heures),
+        .init(cle: "LignePresence.uniteHeures", texte: LignePresence.uniteHeures),
+        .init(cle: "LignePresence.releveReconstruit", texte: LignePresence.releveReconstruit),
+        .init(cle: "LignePresence.voirOuSignalerLitige", texte: LignePresence.voirOuSignalerLitige),
+        .init(cle: "BlocPointage.contratNonSigne", texte: BlocPointage.contratNonSigne),
+        .init(cle: "BlocPointage.contratDoitEtreSigne", texte: BlocPointage.contratDoitEtreSigne),
+        .init(cle: "BlocPointage.prochainCreneauAutreJour", texte: BlocPointage.prochainCreneauAutreJour),
+        .init(cle: "BlocPointage.point", texte: BlocPointage.point),
+        .init(cle: "BlocPointage.voirLeContrat", texte: BlocPointage.voirLeContrat),
+        .init(cle: "BlocPointage.aucunCreneauPlanifie", texte: BlocPointage.aucunCreneauPlanifie),
+        .init(cle: "BlocPointage.pasEncoreOuvert", texte: BlocPointage.pasEncoreOuvert),
+        .init(cle: "BlocPointage.aucunCreneauAujourdhui", texte: BlocPointage.aucunCreneauAujourdhui),
+        .init(cle: "BlocPointage.ouvrira", texte: BlocPointage.ouvrira),
+        .init(cle: "BlocPointage.minutesAvant", texte: BlocPointage.minutesAvant),
+        .init(cle: "BlocPointage.prochainCreneau", texte: BlocPointage.prochainCreneau),
+        .init(cle: "BlocPointage.tousTermines", texte: BlocPointage.tousTermines),
+        .init(cle: "Pointage.chargement", texte: Pointage.chargement),
+        .init(cle: "Pointage.indisponibleTitre", texte: Pointage.indisponibleTitre),
+        .init(cle: "Pointage.reessayer", texte: Pointage.reessayer),
+        .init(cle: "Pointage.statutIndisponible", texte: Pointage.statutIndisponible),
+        .init(cle: "Pointage.pointerDepartOuPause", texte: Pointage.pointerDepartOuPause),
+        .init(cle: "Pointage.pointerArriveeOuReprise", texte: Pointage.pointerArriveeOuReprise),
+        .init(cle: "Pointage.pointerArrivee", texte: Pointage.pointerArrivee),
+        .init(cle: "Pointage.enregistreOuvert", texte: Pointage.enregistreOuvert),
+        .init(cle: "Pointage.enregistreFerme", texte: Pointage.enregistreFerme),
+        .init(cle: "Pointage.qrNonReconnu", texte: Pointage.qrNonReconnu),
+        .init(cle: "Pointage.scanImpossible", texte: Pointage.scanImpossible),
+        .init(cle: "Pointage.titre", texte: Pointage.titre),
+        .init(cle: "Pointage.enServiceDepuis", texte: Pointage.enServiceDepuis),
+        .init(cle: "Pointage.consigneDepart", texte: Pointage.consigneDepart),
+        .init(cle: "Pointage.consigne", texte: Pointage.consigne),
+        .init(cle: "Pointage.champCode", texte: Pointage.champCode),
+        .init(cle: "Pointage.placeholderCode", texte: Pointage.placeholderCode),
+        .init(cle: "Pointage.qr", texte: Pointage.qr),
+        .init(cle: "Pointage.scannerTitre", texte: Pointage.scannerTitre),
+        .init(cle: "Pointage.scannerDescription", texte: Pointage.scannerDescription),
+        .init(cle: "Pointage.segment", texte: Pointage.segment),
+        .init(cle: "Pointage.enCours", texte: Pointage.enCours),
+        .init(cle: "Pointage.horsLigne", texte: Pointage.horsLigne),
+        .init(cle: "EspaceSoignant.mesDocuments", texte: EspaceSoignant.mesDocuments),
+        .init(cle: "Contestation.titre", texte: Contestation.titre),
+        .init(cle: "Contestation.contester", texte: Contestation.contester),
+        .init(cle: "Contestation.placeholderSoignant", texte: Contestation.placeholderSoignant),
+        .init(cle: "Contestation.envoi", texte: Contestation.envoi),
+        .init(cle: "Contestation.envoyer", texte: Contestation.envoyer),
+        .init(cle: "Contestation.annuler", texte: Contestation.annuler),
+        .init(cle: "AttestationSante.signee", texte: AttestationSante.signee),
+        .init(cle: "AttestationSante.signatureEnCours", texte: AttestationSante.signatureEnCours),
+        .init(cle: "AttestationSante.erreurSignature", texte: AttestationSante.erreurSignature),
+        .init(cle: "SignatureOtp.messageParDefaut", texte: SignatureOtp.messageParDefaut),
+        .init(cle: "SignatureOtp.repliEnvoi", texte: SignatureOtp.repliEnvoi),
+        .init(cle: "SignatureOtp.repliSignature", texte: SignatureOtp.repliSignature),
+        .init(cle: "SignatureOtp.codeSixChiffresRequis", texte: SignatureOtp.codeSixChiffresRequis),
+        .init(cle: "SignatureOtp.signatureNonDisponible", texte: SignatureOtp.signatureNonDisponible),
+        .init(cle: "SignatureOtp.codeEnvoyePrefixe", texte: SignatureOtp.codeEnvoyePrefixe),
+        .init(cle: "SignatureOtp.codeEnvoyeValide", texte: SignatureOtp.codeEnvoyeValide),
+        .init(cle: "SignatureOtp.codeEnvoyeMinutes", texte: SignatureOtp.codeEnvoyeMinutes),
+        .init(cle: "SignatureOtp.erreurReseauEnvoi", texte: SignatureOtp.erreurReseauEnvoi),
+        .init(cle: "SignatureOtp.erreurReseauSignature", texte: SignatureOtp.erreurReseauSignature),
+        .init(cle: "SignatureOtp.verificationSignatureEnCours", texte: SignatureOtp.verificationSignatureEnCours),
+        .init(cle: "SignatureOtp.codeEnvoyeAuLibelle", texte: SignatureOtp.codeEnvoyeAuLibelle),
+        .init(cle: "SignatureOtp.numeroMasque", texte: SignatureOtp.numeroMasque),
+        .init(cle: "SignatureOtp.smsParentheseOuvrante", texte: SignatureOtp.smsParentheseOuvrante),
+        .init(cle: "SignatureOtp.smsDernierEnvoi", texte: SignatureOtp.smsDernierEnvoi),
+        .init(cle: "SignatureOtp.smsEnvoiMot", texte: SignatureOtp.smsEnvoiMot),
+        .init(cle: "SignatureOtp.smsPlurielEnvoi", texte: SignatureOtp.smsPlurielEnvoi),
+        .init(cle: "SignatureOtp.smsRestantMot", texte: SignatureOtp.smsRestantMot),
+        .init(cle: "SignatureOtp.smsPlurielRestant", texte: SignatureOtp.smsPlurielRestant),
+        .init(cle: "SignatureOtp.smsParentheseFermante", texte: SignatureOtp.smsParentheseFermante),
+        .init(cle: "SignatureOtp.minuteurSeparateur", texte: SignatureOtp.minuteurSeparateur),
+        .init(cle: "SignatureOtp.minuteurExpire", texte: SignatureOtp.minuteurExpire),
+        .init(cle: "SignatureOtp.champCodeAccessibilite", texte: SignatureOtp.champCodeAccessibilite),
+        .init(cle: "SignatureOtp.champCodeIndication", texte: SignatureOtp.champCodeIndication),
+        .init(cle: "SignatureOtp.renvoiNonAutoriseRecette", texte: SignatureOtp.renvoiNonAutoriseRecette),
+        .init(cle: "SignatureOtp.plafondSmsAtteint", texte: SignatureOtp.plafondSmsAtteint),
+        .init(cle: "SignatureOtp.recevoirNouveauCode", texte: SignatureOtp.recevoirNouveauCode),
+        .init(cle: "SignatureOtp.renvoyerCode", texte: SignatureOtp.renvoyerCode),
+        .init(cle: "CompteARebours.uniteHeures", texte: CompteARebours.uniteHeures),
+        .init(cle: "CompteARebours.uniteMinutes", texte: CompteARebours.uniteMinutes),
+        .init(cle: "CompteARebours.uniteSecondes", texte: CompteARebours.uniteSecondes),
+        .init(cle: "Contrats.titre", texte: Contrats.titre),
+        .init(cle: "Contrats.filtreEnAttente", texte: Contrats.filtreEnAttente),
+        .init(cle: "Contrats.filtreSignes", texte: Contrats.filtreSignes),
+        .init(cle: "Contrats.filtreAnnules", texte: Contrats.filtreAnnules),
+        .init(cle: "Contrats.badgeSigne", texte: Contrats.badgeSigne),
+        .init(cle: "Contrats.badgeAnnule", texte: Contrats.badgeAnnule),
+        .init(cle: "Contrats.badgeEnAttente", texte: Contrats.badgeEnAttente),
+        .init(cle: "Contrats.videTitre", texte: Contrats.videTitre),
+        .init(cle: "Contrats.videEnAttenteTitre", texte: Contrats.videEnAttenteTitre),
+        .init(cle: "Contrats.videEnAttente", texte: Contrats.videEnAttente),
+        .init(cle: "Contrats.videSignes", texte: Contrats.videSignes),
+        .init(cle: "Contrats.videAnnules", texte: Contrats.videAnnules),
+        .init(cle: "Contrats.videTous", texte: Contrats.videTous),
+        .init(cle: "Contrats.sansValeur", texte: Contrats.sansValeur),
+        .init(cle: "Contrats.pictoMission", texte: Contrats.pictoMission),
+        .init(cle: "Contrats.creeLe", texte: Contrats.creeLe),
+        .init(cle: "Contrats.formatDateCreation", texte: Contrats.formatDateCreation),
+        .init(cle: "Contrats.signerLeContrat", texte: Contrats.signerLeContrat),
+        .init(cle: "Contrats.voirLeContrat", texte: Contrats.voirLeContrat),
+        .init(cle: "Contrats.indisponiblesTitre", texte: Contrats.indisponiblesTitre),
+        .init(cle: "Contrats.chargementNAbouti", texte: Contrats.chargementNAbouti),
+        .init(cle: "Contrats.reessayer", texte: Contrats.reessayer),
+        .init(cle: "Contrat.titrePrefixe", texte: Contrat.titrePrefixe),
+        .init(cle: "Contrat.statutPrefixe", texte: Contrat.statutPrefixe),
+        .init(cle: "Contrat.statutSigne", texte: Contrat.statutSigne),
+        .init(cle: "Contrat.statutAnnule", texte: Contrat.statutAnnule),
+        .init(cle: "Contrat.statutEnAttente", texte: Contrat.statutEnAttente),
+        .init(cle: "Contrat.introuvable", texte: Contrat.introuvable),
+        .init(cle: "Contrat.telecharger", texte: Contrat.telecharger),
+        .init(cle: "Contrat.imprimer", texte: Contrat.imprimer),
+        .init(cle: "Contrat.aucunTelechargeable", texte: Contrat.aucunTelechargeable),
+        .init(cle: "Contrat.formatDateHeure", texte: Contrat.formatDateHeure),
+        .init(cle: "Contrat.signaturesTitre", texte: Contrat.signaturesTitre),
+        .init(cle: "Contrat.partieEtablissement", texte: Contrat.partieEtablissement),
+        .init(cle: "Contrat.partieSoignant", texte: Contrat.partieSoignant),
+        .init(cle: "Contrat.signatureSignee", texte: Contrat.signatureSignee),
+        .init(cle: "Contrat.signatureLe", texte: Contrat.signatureLe),
+        .init(cle: "Contrat.signatureEnAttente", texte: Contrat.signatureEnAttente),
+        .init(cle: "Contrat.votreSignature", texte: Contrat.votreSignature),
+        .init(cle: "Contrat.renduImpossible", texte: Contrat.renduImpossible),
+        .init(cle: "Contrat.reessayerAvantDeSigner", texte: Contrat.reessayerAvantDeSigner),
+        .init(cle: "Contrat.renduIncomplet", texte: Contrat.renduIncomplet),
+        .init(cle: "Certificat.contratPrefixe", texte: Certificat.contratPrefixe),
+        .init(cle: "Certificat.formatDateHeure", texte: Certificat.formatDateHeure),
+        .init(cle: "Certificat.telechargerPdf", texte: Certificat.telechargerPdf),
+        .init(cle: "DetailPresences.introuvableTitre", texte: DetailPresences.introuvableTitre),
+        .init(cle: "DetailPresences.introuvableMessage", texte: DetailPresences.introuvableMessage),
+        .init(cle: "DetailPresences.flechePlage", texte: DetailPresences.flechePlage),
+        .init(cle: "DetailPresences.datesPlanifiees", texte: DetailPresences.datesPlanifiees),
+        .init(cle: "DetailPresences.flecheDates", texte: DetailPresences.flecheDates),
+        .init(cle: "DetailPresences.pictoPeriode", texte: DetailPresences.pictoPeriode),
+        .init(cle: "DetailPresences.flechePeriode", texte: DetailPresences.flechePeriode),
+        .init(cle: "DetailPresences.pictoHeures", texte: DetailPresences.pictoHeures),
+        .init(cle: "DetailPresences.heuresSur", texte: DetailPresences.heuresSur),
+        .init(cle: "DetailPresences.creneau", texte: DetailPresences.creneau),
+        .init(cle: "DetailPresences.creneauPluriel", texte: DetailPresences.creneauPluriel),
+        .init(cle: "DetailPresences.heuresPrevues", texte: DetailPresences.heuresPrevues),
+        .init(cle: "DetailPresences.clotureePrefixe", texte: DetailPresences.clotureePrefixe),
+        .init(cle: "DetailPresences.clotureeBarre", texte: DetailPresences.clotureeBarre),
+        .init(cle: "DetailPresences.clotureeEchusPluriel", texte: DetailPresences.clotureeEchusPluriel),
+        .init(cle: "DetailPresences.clotureeEchuSingulier", texte: DetailPresences.clotureeEchuSingulier),
+        .init(cle: "DetailPresences.progression", texte: DetailPresences.progression),
+        .init(cle: "DetailPresences.progressionBarre", texte: DetailPresences.progressionBarre),
+        .init(cle: "DetailPresences.creneauxEchus", texte: DetailPresences.creneauxEchus),
+        .init(cle: "DetailPresences.creneauEchu", texte: DetailPresences.creneauEchu),
+        .init(cle: "DetailPresences.prochain", texte: DetailPresences.prochain),
+        .init(cle: "DetailPresences.planningTermine", texte: DetailPresences.planningTermine),
+        .init(cle: "DetailPresences.planningIndisponible", texte: DetailPresences.planningIndisponible),
+        .init(cle: "DetailPresences.planningAConfirmer", texte: DetailPresences.planningAConfirmer),
+        .init(cle: "DetailPresences.syntheseTitre", texte: DetailPresences.syntheseTitre),
+        .init(cle: "DetailPresences.heuresPlanifiees", texte: DetailPresences.heuresPlanifiees),
+        .init(cle: "DetailPresences.uniteHeures", texte: DetailPresences.uniteHeures),
+        .init(cle: "DetailPresences.heuresReelles", texte: DetailPresences.heuresReelles),
+        .init(cle: "DetailPresences.heuresRetenues", texte: DetailPresences.heuresRetenues),
+        .init(cle: "DetailPresences.retard", texte: DetailPresences.retard),
+        .init(cle: "DetailPresences.plus", texte: DetailPresences.plus),
+        .init(cle: "DetailPresences.uniteMinutes", texte: DetailPresences.uniteMinutes),
+        .init(cle: "DetailPresences.departAnticipe", texte: DetailPresences.departAnticipe),
+        .init(cle: "DetailPresences.moins", texte: DetailPresences.moins),
+        .init(cle: "DetailPresences.pauses", texte: DetailPresences.pauses),
+        .init(cle: "DetailPresences.distance", texte: DetailPresences.distance),
+        .init(cle: "DetailPresences.uniteMetres", texte: DetailPresences.uniteMetres),
+        .init(cle: "DetailPresences.methode", texte: DetailPresences.methode),
+        .init(cle: "DetailPresences.bilanPointageEnCours", texte: DetailPresences.bilanPointageEnCours),
+        .init(cle: "DetailPresences.bilanApresDernierCreneau", texte: DetailPresences.bilanApresDernierCreneau),
+        .init(cle: "DetailPresences.bilanAucunDeficit", texte: DetailPresences.bilanAucunDeficit),
+        .init(cle: "DetailPresences.bilanIndisponible", texte: DetailPresences.bilanIndisponible),
+        .init(cle: "DetailPresences.clotureAvantFin", texte: DetailPresences.clotureAvantFin),
+        .init(cle: "DetailPresences.alerteTeleportation", texte: DetailPresences.alerteTeleportation),
+        .init(cle: "DetailPresences.alerteDeficit", texte: DetailPresences.alerteDeficit),
+        .init(cle: "DetailPresences.segmentsTitre", texte: DetailPresences.segmentsTitre),
+        .init(cle: "DetailPresences.segmentMot", texte: DetailPresences.segmentMot),
+        .init(cle: "DetailPresences.segmentPluriel", texte: DetailPresences.segmentPluriel),
+        .init(cle: "DetailPresences.parentheseFermante", texte: DetailPresences.parentheseFermante),
+        .init(cle: "DetailPresences.aucunSegment", texte: DetailPresences.aucunSegment),
+        .init(cle: "DetailPresences.pictoJour", texte: DetailPresences.pictoJour),
+        .init(cle: "DetailPresences.dateInconnue", texte: DetailPresences.dateInconnue),
+        .init(cle: "DetailPresences.segmentTravaille", texte: DetailPresences.segmentTravaille),
+        .init(cle: "DetailPresences.segmentBarre", texte: DetailPresences.segmentBarre),
+        .init(cle: "DetailPresences.reprise", texte: DetailPresences.reprise),
+        .init(cle: "DetailPresences.creneauPlanifieSuffixe", texte: DetailPresences.creneauPlanifieSuffixe),
+        .init(cle: "DetailPresences.creneauPlanifieSuffixeBarre", texte: DetailPresences.creneauPlanifieSuffixeBarre),
+        .init(cle: "DetailPresences.creneauPlanifie", texte: DetailPresences.creneauPlanifie),
+        .init(cle: "DetailPresences.creneauPlanifieBarre", texte: DetailPresences.creneauPlanifieBarre),
+        .init(cle: "DetailPresences.interruption", texte: DetailPresences.interruption),
+        .init(cle: "DetailPresences.horairePrevu", texte: DetailPresences.horairePrevu),
+        .init(cle: "DetailPresences.retardSegment", texte: DetailPresences.retardSegment),
+        .init(cle: "DetailPresences.departAnticipeSegment", texte: DetailPresences.departAnticipeSegment),
+        .init(cle: "DetailPresences.bilanApresEcheance", texte: DetailPresences.bilanApresEcheance),
+        .init(cle: "DetailPresences.aucunCreneauCeJour", texte: DetailPresences.aucunCreneauCeJour),
+        .init(cle: "DetailPresences.arrivee", texte: DetailPresences.arrivee),
+        .init(cle: "DetailPresences.depart", texte: DetailPresences.depart),
+        .init(cle: "DetailPresences.departNonPointe", texte: DetailPresences.departNonPointe),
+        .init(cle: "DetailPresences.duree", texte: DetailPresences.duree),
+        .init(cle: "DetailPresences.dureeHeures", texte: DetailPresences.dureeHeures),
+        .init(cle: "DetailPresences.valide", texte: DetailPresences.valide),
+        .init(cle: "DetailPresences.valideLe", texte: DetailPresences.valideLe),
+        .init(cle: "DetailPresences.releveClotureApresArbitrage", texte: DetailPresences.releveClotureApresArbitrage),
+        .init(cle: "DetailPresences.releveCloture", texte: DetailPresences.releveCloture),
+        .init(cle: "DetailPresences.enAttenteValidation", texte: DetailPresences.enAttenteValidation),
+        .init(cle: "DetailPresences.pointageEnCours", texte: DetailPresences.pointageEnCours),
+        .init(cle: "DetailPresences.missionEnCours", texte: DetailPresences.missionEnCours),
+        .init(cle: "DetailPresences.controlesTitre", texte: DetailPresences.controlesTitre),
+        .init(cle: "DetailPresences.premiereArrivee", texte: DetailPresences.premiereArrivee),
+        .init(cle: "DetailPresences.precisionArrivee", texte: DetailPresences.precisionArrivee),
+        .init(cle: "DetailPresences.precisionDepart", texte: DetailPresences.precisionDepart),
+        .init(cle: "DetailPresences.alerteTeleportationControle", texte: DetailPresences.alerteTeleportationControle),
+        .init(cle: "DetailPresences.recapitulatifFinancier", texte: DetailPresences.recapitulatifFinancier),
+        .init(cle: "Notation.titre", texte: Notation.titre),
+        .init(cle: "Notation.critereAccueil", texte: Notation.critereAccueil),
+        .init(cle: "Notation.critereEncadrement", texte: Notation.critereEncadrement),
+        .init(cle: "Notation.critereConsignes", texte: Notation.critereConsignes),
+        .init(cle: "Notation.critereAdministratif", texte: Notation.critereAdministratif),
+        .init(cle: "Notation.groupeNote", texte: Notation.groupeNote),
+        .init(cle: "Notation.etoile", texte: Notation.etoile),
+        .init(cle: "Notation.etoilePluriel", texte: Notation.etoilePluriel),
+        .init(cle: "Notation.masquerDetail", texte: Notation.masquerDetail),
+        .init(cle: "Notation.detailler", texte: Notation.detailler),
+        .init(cle: "Notation.envoyer", texte: Notation.envoyer),
+        .init(cle: "Notation.plusTard", texte: Notation.plusTard),
+        .init(cle: "AllerPointer.creneauActuel", texte: AllerPointer.creneauActuel),
+        .init(cle: "AllerPointer.missionActiveProchain", texte: AllerPointer.missionActiveProchain),
+        .init(cle: "AllerPointer.missionActivePlanning", texte: AllerPointer.missionActivePlanning),
+        .init(cle: "AllerPointer.missionDans", texte: AllerPointer.missionDans),
+        .init(cle: "AllerPointer.minutes", texte: AllerPointer.minutes),
+        .init(cle: "AllerPointer.maintenant", texte: AllerPointer.maintenant),
+        .init(cle: "AllerPointer.tiret", texte: AllerPointer.tiret),
+        .init(cle: "AllerPointer.point", texte: AllerPointer.point),
+        .init(cle: "AllerPointer.flecheProchain", texte: AllerPointer.flecheProchain),
+        .init(cle: "AllerPointer.flecheMemeJour", texte: AllerPointer.flecheMemeJour),
+        .init(cle: "AllerPointer.flecheJours", texte: AllerPointer.flecheJours),
+        .init(cle: "AllerPointer.allerPointer", texte: AllerPointer.allerPointer),
+        .init(cle: "AllerPointer.voirHoraires", texte: AllerPointer.voirHoraires),
+        .init(cle: "AllerPointer.flecheBouton", texte: AllerPointer.flecheBouton),
+        .init(cle: "OubliDepart.pointerMonDepart", texte: OubliDepart.pointerMonDepart),
+        .init(cle: "DetailMission.presencesEtPointage", texte: DetailMission.presencesEtPointage),
+        .init(cle: "DetailMission.heuresPointees", texte: DetailMission.heuresPointees),
+    ]
+}

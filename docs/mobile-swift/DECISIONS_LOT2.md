@@ -1,0 +1,1833 @@
+# Décisions du lot 2 — application iOS Swift native
+
+> Tranchées le 2 novembre 2026 sur le mandat de Gabrielle (« finis et prends les décisions seul », « je suis tous
+> tes conseils », consigné dans `LOTS_2_5_DECISIONS.md` de la session principale) pour les vingt-cinq questions du
+> §7 de `docs/mobile-swift/LOT2_PLAN.md` (blueprint du lot 2, v2 du 2026-11-02). Règle générale : **toutes les
+> recommandations fermes du §7 sont adoptées telles quelles**, y compris Q1 (système de pointage ① non porté, garde
+> qui l'interdit côté Swift) et Q2 (aucune file hors ligne pour le code rotatif). Ce mémo fait foi ; le plan
+> `docs/PLAN_APP_NATIVE_SWIFT.md` n'est pas réécrit (l.62, l.180, l.183 et l.186 portent un renvoi ici).
+> Les décisions juridiques que le blueprint renvoie à Gabrielle (HARD STOP n°4) et les PR de catégorie B9 **ne sont
+> pas implémentées** : elles sont listées sous « En attente de Gabrielle ». **Mise à jour du 8 novembre 2026** :
+> Gabrielle a délégué toutes les décisions, juridiques comprises ; les HARD STOP n°4 du lot 2 sont tranchés sous
+> « Décisions déléguées du 8 novembre 2026 » (tranche L2-TJ) ; restent en attente les PR B9 et la présence physique.
+
+## Règles d'application
+
+- **HARD STOP n°4 (juridique exposé)** : le natif n'affiche que des textes **verbatim** du web ou du serveur, chacun
+  relié à sa source (fichier:ligne) et gardé par un test (tranche TL, `JoleneCore/Legal/TextesWeb.swift`). Aucune
+  reformulation, aucun texte juridique nouveau, aucun changement de délai ou de règle juridique côté serveur.
+- **B9** (paiements, migrations destructives, RLS/auth/GRANT/SECURITY DEFINER, légal, données prod) : la PR est
+  préparée et poussée, tests compris, mais jamais mergée sans le go explicite de Gabrielle (B1, S1, dispatch de T11).
+- **Aucune écriture** en production ni sur STAGING par les agents ; lecture seule en production seulement pour
+  relire une définition live dans une PR backend (`pg_get_functiondef`, `list_migrations`).
+- Merges sur `main` sériels, CI verte et revue fraîche B8 clôturable, par la file de merge de la session principale.
+
+## Décisions (§7 du blueprint)
+
+1. **Système de pointage ① : non porté.** `fn_pointer_*`, `fn_valider_scan_qr`, `fn_generer_qr_mission`,
+   `fn_valider_code_secours`, `fn_codes_pointage_mission`, `fn_generer_code_secours_mission` et
+   `qr-offline-queue.ts` ne sont jamais appelés par le Swift : liste `RPC_POINTAGE_SYSTEME_1` (neuf RPC) refusée par
+   `verifierExclusions` et par la garde des littéraux `"fn_…"` (T0). **Amendement** (seconde revue fraîche de T0) :
+   `fn_generer_code_secours_mission`, absente de la liste du blueprint (`LOT2_PLAN.md` §3 T0), y entre ; c'est le
+   générateur du code de secours que consomme `fn_valider_code_secours`, appelé seulement par `QRPointageEtab`
+   (monté par aucun écran) et troisième chaîne de pointage à distance du constat B9 (« En attente de Gabrielle »).
+   Motifs : plus monté côté web depuis la PR #664 ; contrôle « contrat signé » absent de `fn_valider_scan_qr` et
+   de `fn_valider_code_secours` elles-mêmes (`fn_pointer_arrivee` et `fn_scanner_code_pointage` le font), assuré
+   pour elles seulement par le trigger de première arrivée `trg_01_exiger_conformite_premier_pointage`
+   (`fn_exiger_conformite_demarrage_mission`) ; missions multi-jours bloquées. Critères amendés : P2 (QR rotatif
+   décodé, niveau 1, puis scanné sur iPhone, niveau 5) remplace « QR `fn_generer_qr_mission` accepté par
+   `fn_valider_scan_qr` » ; P6 (« aucun scan mis en file ni rejoué ») remplace « QR expiré jamais remis en file ».
+   Une garde Node rougit si le web rappelle le système ① (la décision est alors à revoir). Le commentaire de `Rules/DisponibilitePointage.swift` l.106-107, qui
+   cite encore `fn_pointer_arrivee` / `fn_pointer_depart`, est corrigé par T3 (T0 n'écrit aucune ligne Swift).
+2. **Hors connexion : aucune file pour le code rotatif.** Bouton désactivé et bandeau hors ligne ; reçu `not_sent` ;
+   réponse perdue → réconciliation par relecture de `scans_pointage` (verdict « non reçu » seulement ≥ 8 s après le
+   passage `started`) ; jamais de renvoi automatique. Le pointage « sans téléphone » reste la déclaration de fin
+   rétroactive côté établissement (web). `PRINCIPES.md` §4 est amendé en conséquence.
+3. **QR : `AVCaptureMetadataOutput`**, pas VisionKit ; payload accepté seulement s'il vaut exactement six chiffres
+   après `trim` (plus strict que le web) ; refus caméra → saisie manuelle, toujours disponible.
+4. **Consentement GPS : texte verbatim de `ConsentementGPS.tsx` au premier pointage** quand `consentement_gps IS NULL`,
+   enregistré par `fn_consentir_gps` puis relu, audit `RGPD_CONSENTEMENT_DONNE` (parité web) ; autorisation iOS
+   « Lorsque l'app est active » demandée seulement après « Autoriser » ; un refus ne bloque jamais le pointage.
+   **Retrait et réactivation depuis le Profil natif portés au lot 2** (T4b : le texte promet le retrait « depuis
+   votre profil ») avec les textes de `SectionPreferences.tsx` (tutoyés, verbatim : validés par D1 du 8 novembre 2026) et sans
+   audit `GPS_CONSENTEMENT_*` (absent du CHECK `journaux_audit_action_check`).
+5. **Précision réduite iOS : aucune coordonnée envoyée** quand `accuracyAuthorization == .reducedAccuracy` (scan sans
+   GPS + encart « Position exacte ») ; pas de `requestTemporaryFullAccuracyAuthorization` (nouvelle chaîne
+   `Info.plist`, donc nouveau texte).
+6. **Messages de refus du pointage : messages serveur verbatim** (décision 9 du lot 1) ; une seule surcharge, celle
+   du web pour `P0002` (`src/components/pointage/PointageRotatifSoignant.tsx` l.136 : « Code de pointage invalide ou
+   expiré. Demande le code actuel à l’établissement. »), dont seule la personne du verbe change (vouvoiement) :
+   « Code de pointage invalide ou expiré. Demandez le code actuel à l’établissement. » — forme exacte affichée par
+   T4b, apostrophe typographique ’ du web comprise (le §7 Q6 du blueprint l'écrit avec une apostrophe droite).
+   Garde : `tests/node/check-rpc-contracts.node.mjs` relit la ligne du web et rougit si elle change.
+7. **Identifiant terminal : `TERM_IOS_` + 20 caractères base32 aléatoires**, générés une fois, Keychain
+   `ThisDeviceOnly`, non synchronisé, conservé à la déconnexion ; jamais `identifierForVendor` ni empreinte d'appareil.
+8. **`nouveau_code` : faire B1** (PR backend séparée, B9 → en attente du go) ; d'ici là le décodeur Swift est une liste
+   blanche qui ne lit jamais `nouveau_code` ni `nouveau_hmac` (fiche dédiée de `CONTRATS_RPC_SOIGNANT.md`, garde
+   Node qui bascule avec B1).
+9. **Litige depuis une présence : ouverture portée, fenêtre décidée par le serveur, aucun texte de délai.** Bouton si
+   `valide_le` est non nul, qu'aucun litige n'existe et que `fn_fenetre_contestation_ouverte('DESACCORD_HEURES_POINTAGE',
+   mission)` renvoie vrai (aucune constante 72 h dans le Swift) ; appel de `fn_ouvrir_litige_rate_limited` par trois
+   clés exactes, audit `PRESENCE_CONTESTATION`, **sans** l'appel client `fn_creer_notification` (`RPC_JAMAIS_SUIVIES`) ;
+   réponse et clôture : renvoi web. Les textes de délai du panneau web (l.347, l.354, l.394) ne sont pas affichés.
+   La décision juridique (aligner `delai_contestation_pointage_h` sur 72 h, retirer la phrase d'escalade du web)
+   relève de Gabrielle : **non implémentée**, voir « En attente de Gabrielle ». T5b attend ce go ; le reste du lot
+   n'en dépend pas. **Tranchée le 8 novembre 2026 par délégation** (D12 de « Décisions déléguées du 8 novembre
+   2026 ») : valeur cible 72 h par une PR de paramétrage B9 hors lot, aucun texte de délai côté natif, go de T5b (D11).
+10. **Notation rapide : parité web** (une fois par mission, après une FERMETURE quand `now ≥ fin_le − 30 min`, note
+    globale répliquée sur les quatre critères, détail optionnel, « Plus tard ») ; mémoire locale par utilisateur ;
+    aucune lecture de `notations_missions` ; pas d'invite de parrainage (lot 4).
+11. **Détail des présences : synthèse, segments et relance en natif** (avec `fn_presences_detail_mission` en lecture
+    tolérante) ; **récapitulatif financier non porté** (calculé côté client sur le web) → lien Revenus (renvoi web
+    jusqu'au lot 3).
+12. **Exigences documentaires : faire W1** (extraction web sans changement de comportement) et porter le filtre avec
+    vecteurs golden (T2b) ; candidat à une RPC serveur plus tard.
+13. **Médias** : caméra `UIImagePickerController`, photothèque `PHPickerViewController` (sans permission), Fichiers
+    `UIDocumentPickerViewController` ; HEIC/HEIF → JPEG 0,8, orientation appliquée, métadonnées GPS retirées ;
+    au-delà de 10 Mo, réduction à 4 096 px puis qualité 0,6, sinon refus avec le message du web.
+14. **Reçus d'envoi** : reçu avant Storage avec la clé déterministe ; réconciliation par `s3_cle` (et `exists(path:)`) ;
+    seule `fn_remplacer_document_soignant` (idempotente) peut être rejouée après relecture ; `verify-document` une
+    seule fois par document ; aucun octet de document conservé sur disque.
+15. **Attestation santé : portée verbatim dans l'onglet Justificatifs** (deux cases, `fn_signer_attestation_sante`,
+    relecture), textes en TL.
+16. **DPAE et Conformité : renvoi web au lot 2**, port en lecture au lot 4 avec revue HARD STOP des libellés.
+17. **Lecture du contrat : HTML serveur dans un lecteur `WKWebView` isolé** (sans script, sans réseau, navigation
+    bloquée, data store non persistant) après triple contrôle de l'empreinte ; pas de PDFKit ; partage = fichier HTML
+    original contrôlé ; impression par la feuille système. Ce lecteur ne charge jamais d'URL.
+18. **Mode de signature : OTP SMS seulement** (seul mode lié à l'empreinte) ; signature manuscrite non portée ; compte
+    TEST sans admission de recette → « continuer sur jolene.app » (renvoi web vers `/contrat/:id`).
+19. **CDD sans original : message du web** (« Le contrat doit être préparé et confirmé par un représentant autorisé de
+    l'employeur avant les signatures. », `ContratMission.tsx` l.603), aucune action soignant, aucun `donnees_cdd`
+    envoyé par l'app.
+20. **Preuve OTP STAGING : S1 + numéros de recette** (soignant : Gabrielle ; établissement : second numéro) ;
+    capacité allouée après le rendu du contrat, une par contrat et par séance ; l'XCUITest STAGING prouve l'envoi
+    (`otp_envoye`) ; la signature complète est faite par Gabrielle sur iPhone (T12) sur une fixture « appareil » et
+    une capacité dédiées, puis relue en SQL. Sans S1, P5 reste ouvert et le lot n'est pas livré.
+    `fn_admission_otp_signature_recette` est suivie avec le statut `staging_seulement` (jamais en production).
+21. **Preuve GPS** : « comparée à une présence issue de la coquille » est remplacé par « clés de `p_metadata`
+    identiques à `PointageRotatifSoignant.tsx` l.122-126 (test de forme) + précision relue dans `scans_pointage` et
+    `presences` sur STAGING » ; aucune donnée de production.
+22. **Durée de la CI UI** : matrice actuelle conservée (3 formats, une étape) ; découpage en éclats par domaine
+    (`-only-testing` Présences / Documents / Contrats) dès qu'un format dépasse 20 min mesurées.
+    **Appliquée à l'intégration de T4a, T7 et T9a (9 novembre 2026).** L'étape unique a été mesurée de 25 à 29 min au
+    run 42528556340. Au run 42532108708, elle dépassait ses 30 min sur iphone et ipad-landscape. `ios-swift-ci.yml`
+    exécute désormais deux éclats successifs dans chaque job de format, chacun borné à 30 min :
+    - « socle » : JoleneCoreTests, JoleneDesignTests et XCUITest des lots 0 et 1 ;
+    - « lot2 » : `-only-testing` `DemoPresencesTests`, `DemoDocumentsTests`, `DemoContratsTests`, lancé même si le socle
+      échoue.
+
+    Le résumé exige les deux éclats verts, au moins un test par éclat, les trois classes du lot 2 démarrées, ainsi que
+    le total ≥ 100, `failed = 0` et `skipped = 0` inchangés. Le plafond du job passe de 60 à 75 min. Les classes STAGING
+    de T11 s'ajouteront aux `-skip-testing` de l'éclat socle ; un nouvel éclat sera ouvert si « lot2 » dépasse à son
+    tour 20 min (T4b, T5a, T9b, T10). Mesures du premier run vert (42536866359), socle puis lot2 : iphone 13,3 puis
+    19,7 min ; ipad-portrait 10,7 puis 11,2 min ; ipad-landscape 13,1 puis **20,7 min**. L'éclat « lot2 » dépasse donc
+    déjà le seuil en paysage. **Consigne à T4b** : séparer « lot2 » par domaine (Présences / Documents / Contrats)
+    avant d'y ajouter `DemoPointageTests`.
+    **Appliquée par T4b (9 novembre 2026)** : quatre éclats successifs bornés à 30 min, « socle », « presences »
+    (`DemoPresencesTests`, `DemoPointageTests`), « documents » (`DemoDocumentsTests`), « contrats » (`DemoContratsTests`),
+    lancés chacun même si un précédent échoue ; plafond du job à 135 min (4 × 30 min + build). Le résumé exige chaque
+    éclat vert, au moins un test par éclat et chaque classe démarrée ; il a été rejoué en local sur des résultats
+    synthétiques (vert, puis rouge sur une classe jamais démarrée, un éclat vide, un code non nul). Une nouvelle classe
+    démo du lot 2 rejoint l'éclat de son domaine et les `-skip-testing` du socle ; un éclat qui dépasse à son tour 20 min
+    se scinde par classe. Durées à mesurer au premier run CI de la branche d'intégration.
+    **Seconde revue fraîche de T4b (9 novembre 2026, m6 et ajout de `DemoPointageEtatsTests`)** : cinq éclats,
+    « socle », « presences » (`DemoPresencesTests`, `DemoPointageEtatsTests`), « pointage » (`DemoPointageTests`, dix
+    tests, seul pour que « presences » reste sous 20 min), « documents », « contrats » ; build-for-testing borné à
+    25 min ; plafond du job à 195 min (25 + 5 × 30 + 20 min de marge pour la préparation, le résumé et l'artefact) : le
+    délai d'un éclat ou du build tombe toujours avant celui du job, et le résumé comme les xcresult sont conservés quand
+    un éclat bloque. Résumé rejoué en local sur des résultats synthétiques (vert ; refusé pour une classe jamais
+    démarrée, `DemoPointageTests` ou `DemoPointageEtatsTests`, et pour un code d'éclat absent).
+    **Appliquée à T9b (revue fraîche de L2-T9b, M1, 9 novembre 2026).** `DemoSignatureContratTests` (connexion,
+    navigation et saisie du code au simulateur, trois formats) n'entre pas dans « lot2 », qui dépassait déjà 20 min :
+    l'éclat **« contrats »** est ouvert (`-only-testing` `DemoContratsTests` et `DemoSignatureContratTests`, retirées de
+    « lot2 », exclues du socle par `-skip-testing`, classes exigées par le résumé) ; « lot2 » garde `DemoPresencesTests`
+    et `DemoDocumentsTests`. Les trois éclats sont bornés à 30 min chacun, lancés même si un éclat précédent échoue, et
+    le plafond du job passe de 75 à 105 min (somme des éclats + 15 min de build). Garde :
+    `tests/node/ios-swift-ci-eclats.node.mjs`, exécutée par le job « Cœur » de `ios-swift-ci.yml` (et dans ses filtres de
+    chemins) : chaque éclat déclaré par son étape, le résumé (`eclats`, code de sortie relié à son étape), la boucle
+    xcresult et l'artefact ; chaque XCUITest démo dans un seul éclat ; le socle n'exclut que les classes STAGING et
+    celles des autres éclats ; plafond du job ≥ somme des éclats + 15 min. Mesures : aucune exécution dans la tranche
+    (aucun dispatch hors intégrateur) ; l'intégrateur reporte ici les durées des trois éclats par format au premier run
+    vert. **Consigne à T4b** : `DemoPointageTests` rejoint « lot2 » si cet éclat reste sous 20 min mesurées par format,
+    sinon « lot2 » est séparé en « presences » et « documents » ; la garde vérifie la cohérence du découpage retenu.
+    **Intégration du 9 novembre 2026 (T4b, T5a, T9b sur `feat/ios-lot2`).** Le découpage par domaine de T4b est retenu
+    et complété : « presences » reçoit `DemoPresenceDetailTests` (T5a, domaine Présences : 4 + 4 + 4 tests), « contrats »
+    reçoit `DemoSignatureContratTests` (T9b : 3 + 3 tests), chacune exclue du socle et exigée par le résumé. Le plafond
+    reste à 195 min, au-dessus du minimum de la garde (5 × 30 + 15 = 165 min). La garde
+    `tests/node/ios-swift-ci-eclats.node.mjs` de T9b, qui cherchait encore un éclat « lot2 » et ne reconnaissait que les
+    sous-classes directes de `JoleneUITestCase`, rougissait sur le résultat fusionné ; elle exige désormais que les deux
+    classes des contrats ne tournent dans aucun autre éclat, et reconnaît les classes qui héritent de `JoleneUITestCase` par
+    `DemoPointageUITestCase` (test supplémentaire : `DemoPointageTests`, `DemoPointageEtatsTests` et
+    `DemoPresenceDetailTests` dans un seul éclat de domaine). Durées par format : section « Recette CI » de `REVUES_LOT2.md`.
+    Fusion du lot 3 (13 novembre 2026) : `DemoPresenceDetailTests` passe de « presences » à « documents » (« presences »
+    atteignait 28,7 min de tests en paysage et dépassait ses 30 min sur les trois formats au run 43349573460).
+23. **Journal de reçus : celui du lot 1 T7 est réutilisé** ; si T1 du lot 2 démarrait avant son intégration, T1
+    livrerait le journal générique et T7 le consommerait sans changer son API. Ordonnancement retenu : T1 attendait
+    l'intégration de T7 et démarrait dans la vague 1 du lot 2, pas dans la vague 0.
+    **Application (revue fraîche de L2-T1, 8 novembre 2026)** : T7 n'existe sur aucune branche (`main`,
+    `feat/ios-lot1`, `lot1/*`, `feat/ios-lot2`) et T1 a démarré sans lui : T1 livre donc le repli prévu, sans
+    décision nouvelle. Livré : `JoleneCore/Receipts/ReceiptJournal.swift` (`ReceiptJournal<Recu: RecuDurable>`, une
+    clé `CleRecu` par (utilisateur, domaine) ; lire, écrire, effacer ; écriture refusée, `RecuErreur.recuEnCours`, si
+    un reçu non terminé d'un autre `attemptId` existe ; succession des phases du même essai ; relecture après écriture
+    et après effacement ; tout échec du magasin ou reçu illisible → `RecuErreur.illisible`, sans réparation (recours :
+    renvoi web du domaine, « Consignes aux tranches suivantes ») ;
+    opérations sérialisées par l'acteur global `JournalRecusActeur` ; protocole `ReceiptStorePort` et magasin démo
+    `MagasinRecusEnMemoire`), `RecuDurable.attemptId` et `verifierSuccession(apres:)`, champ `Appareil.recus`
+    (`Appareil.demo` : magasin en mémoire vierge), `JoleneSupabase/Keychain/KeychainReceiptStore.swift` (service
+    `app.jolene.receipts`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, non synchronisé, conservé à la
+    déconnexion) ; tests `ReceiptJournalTests` et `KeychainReceiptStoreTests`. T3 et T6 peuvent démarrer ; reprise
+    par lot 1 T7 : « Consignes aux tranches suivantes ».
+24. **Points d'entrée : pas de sixième onglet** ; section « Mon espace » du Profil (Présences, Documents, Contrats),
+    widget « Aller pointer » et bandeau d'oubli de départ sur l'Accueil, boutons du détail de mission, liens
+    universels.
+25. **Horloge de la fenêtre de pointage : horloge de l'appareil**, comme le web ; le serveur fait foi et son refus
+    s'affiche ; pas d'horloge serveur.
+
+## D-FLAGS — drapeaux d'écran du lot 2
+
+- **Clés** : `ios_natif_presences_actif` (présences et pointage : Profil › Mes présences, widget « Aller pointer »,
+  boutons du détail de mission), `ios_natif_documents_actif` (Mes documents, onglet Justificatifs),
+  `ios_natif_contrats_actif` (liste, lecteur et signature des contrats). Absentes du blueprint, ajoutées pour que le
+  lot 6 dispose d'un coupe-circuit sur le pointage et la signature.
+- **Migration** : une seule migration non-B9 pose tous les drapeaux d'écran des lots 2, 4 et 5 (`INSERT … ON CONFLICT
+  (cle) DO NOTHING`), sur le modèle de B0 `supabase/migrations/20261102150000_drapeaux_ios_natif.sql` ; PR séparée,
+  hors chantier iOS (aucune écriture sous `supabase/` par les tranches iOS). Catégorie `OPERATIONS`, aucun GRANT `anon`.
+- **Client** : la tranche T1 du lot 2 étend `EcranNatif` (lot 1, `JoleneCore/Ports/Lot1Ports.swift`) avec ces trois
+  écrans ; lecture par `fn_param_bool` après `.ready` et à la reprise, **fail-open** comme au lot 1 (toute erreur ou
+  clé absente → écran natif actif) ; `false` → renvoi web de l'écran concerné.
+- **Application (seconde revue fraîche de T4b, m3, 9 novembre 2026)** :
+  - `ios_natif_documents_actif` : lu par `MesDocumentsScreen` à l'apparition (T7) ;
+  - `ios_natif_presences_actif` : lu par `PresencesScreen` à l'apparition (T4b), comme les documents ; à faux, la page
+    entière (onglets, blocs, zones de pointage) devient un renvoi web `/soignant/presences`
+    (`presences-desactive-renvoi`, texte du lot 0 `LibellesPresences.Liste.ecranNonDisponible` ; bouton
+    `presences-desactive-web` seulement avec le présentateur des renvois web, aucun bouton sans effet ; rendu depuis la
+    fusion du lot 3, qui injecte ce présentateur, « Fusion du lot 3 » ci-dessous). La ligne
+    du consentement GPS du Profil reste native : le texte de consentement promet le retrait « depuis votre profil »
+    (correction 15), un coupe-circuit du pointage ne doit pas retirer ce chemin. XCUITest
+    `DemoPointageEtatsTests.testDrapeauPresencesDesactiveRenvoieLaPageAuWebSansZoneDePointage` (trois formats) ;
+  - `ios_natif_contrats_actif` : **à la charge de T10** (liens du lot 2, qui route `/contrat/{id}` et
+    `/contrat/{id}/certificat` et injecte le présentateur des renvois web) : `ContratsDestination` (liste, contrat,
+    certificat), seul point de construction des écrans de contrat (Mon espace, onglet Contrats de Mes documents, « Voir
+    le contrat » de la zone de pointage, liens), lit le drapeau ; à faux, renvoi web `/contrat/<id>` ou
+    `/soignant/mes-documents?tab=contrats`. T9b, s'il la précède, peut le poser lui-même (même point unique) ; d'ici là
+    « Voir le contrat » ouvre le contrat natif sans lire son drapeau (gap consigné ; le lecteur est en lecture seule et
+    la signature, T9b, n'est pas encore livrée) ;
+  - points d'entrée de T5a (widget « Aller pointer » de l'Accueil, boutons du détail de mission) : ils mènent à
+    `PresencesScreen`, qui lit le drapeau ; un écran de T5a qui monterait une zone de pointage hors de `PresencesScreen`
+    (détail des présences) lit `ios_natif_presences_actif` de la même façon ;
+  - surcharge DEBUG du monde démo : `-JOLENE_FLAG_<cle> true|false` (`DemoFlagsGateway.surcharges(arguments:)`, lue par
+    `AppContainer.demoGateways` ; jamais compilée en Release).
+
+## Scission T2 / T2b
+
+- **T2** (vague 0, dès l'intégration de lot 1 T2) livre les vecteurs golden qui ne dépendent pas de W1 :
+  `synthese-presence-mission.ts`, `presencesSoignantUi.ts`, `documentUpload.ts`, `documents.ts`,
+  `contratMissionUi.ts`, `signatureSmsStagingAdmission.ts`, plus les règles natives sans golden (`PayloadQR`,
+  `CompteARebours72h`).
+- **T2b** (après le merge de W1 sur `main`) vectorise les deux règles extraites par W1 : `src/lib/documents-requis.ts`
+  (`filtrerDocumentsRequis`, `documentValidePourExigence`) et `src/lib/presences-soignant-listes.ts`
+  (`construireListesPresences`). **W1** (lot 2) et **W0** (lot 4) forment une seule PR web d'extraction de règles
+  pures, comportement inchangé, tests vitest.
+
+## Ordonnancement et branches
+
+- **T0** (cette tranche) est préalable à toutes les autres. **B1** vise `main` et n'attend pas T0 (amende
+  `LOT2_PLAN.md` §3 B1 « Fichiers » et §4, vague 0), voir « Amendements du blueprint » ; tant que le lot 2 n'est
+  pas sur `main`, la fiche « `nouveau_code` jamais lu » de `CONTRATS_RPC_SOIGNANT.md` et sa garde n'existent que
+  sur `feat/ios-lot2`. Elles basculent donc au **merge de `main` dans `feat/ios-lot2`** qui suit la re-baseline du
+  dump après B1 : la garde rougit à ce merge, et le commit de merge (ou celui qui le suit sur `feat/ios-lot2`) met à
+  jour la fiche et la garde. Si T0 est déjà sur `main` quand B1 arrive, la PR B1 les bascule elle-même.
+- **Bascule des gardes confrontées à `main` (règle générale, B1 en est un cas).** Les gardes de
+  `tests/node/check-rpc-contracts.node.mjs` relisent des sources que des PR de `main` peuvent changer avant que le
+  lot 2 y soit : le dump `supabase/schema/public.sql` (re-baseliné après chaque PR backend) et le web `src/`. Tant
+  que T0 n'est que sur `feat/ios-lot2`, une telle PR ne peut pas mettre à jour ces gardes ni les fiches : elles
+  rougissent au **merge de `main` dans `feat/ios-lot2`** qui l'amène (après la re-baseline du dump pour une PR
+  backend), et ce commit de merge, ou celui qui le suit sur `feat/ios-lot2`, bascule la garde, la fiche de
+  `CONTRATS_RPC_SOIGNANT.md` et le constat de ce mémo. Si T0 est déjà sur `main`, la PR elle-même les bascule.
+  Cas connus :
+  - **B1** (`nouveau_code` retiré) : garde « `nouveau_code` renvoyé tant que B1 n'est pas mergée », fiche
+    « `nouveau_code` jamais lu ». **Basculées le 8 novembre 2026** (B1 mergée sur `main` par #1117, merge de `main`
+    dans `feat/ios-lot2` à l'intégration de T3, T6 et T8) : la garde exige l'absence de `nouveau_code` et de
+    `nouveau_hmac` dans le dump ; les fiches `fn_scanner_code_pointage` et `fn_etat_pointage_mission` citent les
+    numéros de ligne du dump re-baseliné.
+  - **PR backend B9 des constats ci-dessous** (gardes ternaires **basculées le 12 novembre 2026**, #1126 amené par le
+    merge du lot 3 ; le `REVOKE` reste ouvert) : `REVOKE` des neuf RPC ① ou correction des gardes ternaires
+    (`IS DISTINCT FROM`, `COALESCE`) de `fn_codes_pointage_mission`, `fn_generer_qr_mission`,
+    `fn_generer_code_secours_mission`, `fn_presences_detail_mission`, `fn_etat_pointage_mission` et des autres RPC
+    du « Motif à auditer » ; `REVOKE` de `fn_creer_notification` ou contrôle de son destinataire. Gardes « B9
+    RLS/auth » (constats et « Motif à auditer ») et « `fn_etat_pointage_mission` » ; fiches ①, `fn_creer_notification`,
+    `fn_etat_pointage_mission`, `fn_presences_detail_mission` ; sous-section B9 de ce mémo.
+  - **PR web des propositions B9** : retrait de l'appel `fn_creer_notification` de `PanneauContestation.tsx` (garde
+    « `RPC_JAMAIS_SUIVIES` : `fn_creer_notification` », témoin de l'appel web, et gardes qui relisent ce fichier :
+    trois clés de `fn_ouvrir_litige_rate_limited`, constante 72 h ; fiche `fn_creer_notification`) ; retrait de
+    `SyncHorsLigne` / `src/lib/horsLigne.ts` (garde « Web : le système ① reste mort », fiche ①, « Points consignés
+    hors lot 2 »).
+  - **W1** (extraction dans `PresencesSoignant.tsx` et `DocumentsSoignant.tsx`) : garde « Web : le système ① reste
+    mort », qui lit `PresencesSoignant.tsx` (`pointerArrivee`, `pointerDepart`, `stockerPointageHorsLigne`,
+    `<BlocPointageMission`), et numéros de ligne de ces deux fichiers cités par les fiches et par la scission T2/T2b.
+  Les messages d'échec des témoins concernés (constats B9, « Motif à auditer », `est_etab`, appel web de
+  `fn_creer_notification`, rejoueur ①, `nouveau_code`) nomment la fiche ou le constat à basculer et renvoient à ce
+  paragraphe (suffixe `BASCULE_MAIN` de la garde).
+- **T1** (vague 1) livre le journal générique de reçus, lot 1 T7 n'existant sur aucune branche (décision 23,
+  « Application ») ; T3 et T6 en dépendent.
+- **Références du code partagé avec le lot 3** : `RPC/RPCResponse.swift` (commentaire de `executer`, qui cite
+  `RPCResponse+SansCorps`) et `RPC/RPCResponse+ExceptionsMetier.swift` (en-tête, qui cite
+  `docs/mobile-swift/LOT3_PLAN.md`) nomment deux fichiers absents du lot 2. Accepté pour garder ces deux fichiers
+  identiques octet pour octet à ceux du lot 3 (blobs `58a4f9a8` et `ab974ea1` respectivement, identiques sur
+  `lot3/l3-t1` et `feat/ios-lot3`) ; les références se résolvent au merge du lot 3. Le classement des mutations du lot 2
+  (`RPC/RPCResponse+MutationLot2.swift`) vit dans un fichier à part pour ne pas toucher le fichier partagé.
+- Branche d'intégration `feat/ios-lot2`, créée depuis `origin/feat/ios-lot1` ; elle reprend `main` puis `feat/ios-lot1`
+  par merge (jamais de rebase ni de force-push). Aucune PR n'est ouverte sur cette branche avant la fin du lot 1
+  (chaque PR lance la recette Playwright sur la base partagée).
+
+## Consignes aux tranches suivantes
+
+- **T2** (qui modifie les filtres de chemins de `.github/workflows/ios-swift-ci.yml`) : ajouter
+  `scripts/ci/sms-signature-staging.sql` aux deux listes `paths` (`pull_request` et `push`). Depuis T0,
+  `node scripts/mobile/check-rpc-contracts.mjs` (étape « Contrats RPC sans dérive », l.116) lit ce supplément pour
+  `fn_admission_otp_signature_recette` (statut `staging_seulement`). D'ici là, la garde Node de `validate-pr.yml`
+  couvre une modification du supplément ; `tests/node/check-rpc-contracts.node.mjs` exige cette consigne tant que le
+  filtre manque.
+- **T3** : stubs de test et fixtures de démo de `fn_etat_pointage_mission` avec `est_etab: null` (forme réelle de
+  la réponse pour tout soignant, assigné compris : `false OR NULL`, `public.sql` l.35165 et l.35189), jamais
+  `false` ; `est_etab` n'est pas décodé (ou `Bool?` ignoré), comme `code_pointage_actif` (fiche
+  `fn_etat_pointage_mission` de `CONTRATS_RPC_SOIGNANT.md`). La garde rougit si une fixture ou un stub de
+  `ios-native/` ou `scripts/mobile/export-demo-fixtures.mjs` pose `est_etab: false`.
+- **T3** (revue fraîche de T1) :
+  - reçu par `ReceiptJournal<RecuScan>(store: appareil.recus)` : `prepared` écrit AVANT tout appel, `started` juste
+    avant l'unique requête, effacé (`ReceiptJournal.effacer`) après la relecture du succès, du refus ou du verdict
+    « non reçu ». `RecuErreur.recuEnCours` → `RecuScan.messageRecuEnCours` ; `RecuErreur.illisible` → écran bloquant
+    `RecuScan.messageIllisible`, aucun scan, **voie de récupération** = renvoi web `/soignant/presences` par
+    `PresentateurRenvoiWeb` (le pointage web n'utilise pas ce journal), comme l'identifiant terminal (consigne T4b) ;
+    le reçu illisible n'est jamais réécrit ni effacé par l'app (seconde revue fraîche de T1) ;
+  - le scan passe par `RPCResponse.appelerMutation(…, exceptionsMetier: ExceptionsMetierLot2.scannerCodePointage)`,
+    jamais par `appeler` : `JoleneError(.unknown)` d'`appeler` mêle une exception non déclarée (rollback prouvé) et
+    une passerelle 502/504 (incertaine, corps HTML ou `{"message"}` décodé en `PostgrestError(code: nil)` par
+    supabase-swift 2.55.5). `.reponse` → succès relu ou refus restitué ; `.refusDefinitif(code:erreur:)` (rollback
+    prouvé : `code` SQLSTATE, ou code PostgREST de `RPCResponse.codePostgRESTSansTransaction`, amendement de la
+    correction 10) → refus, reçu `refused` si `code` est un SQLSTATE (`RecuScan.sqlstateValide`, même prédicat), sinon
+    effacé (code `PGRST…` émis avant toute transaction ou après son annulation) ; `.incertain` (réseau, passerelle,
+    `PGRST001`, tout autre code) et délai `bounded` → `IssueScan.incertain`, reçu `started` conservé,
+    réconciliation par relecture ;
+  - relecture `scans_pointage?select=<PreuveScan.selection>&mission_id=eq.<mission du reçu>` : la projection porte
+    `mission_id`, que `RecuScan.reconcilier` vérifie aussi (avec `numero_scan > nb_scans_avant`). Le verdict est
+    rendu par `IssueScan(reconciliation:)` : `.recu` → `.enregistre` (reçu effacé) ; `.aRelire` → `.incertain`
+    (reçu `started` gardé, nouvelle relecture) ; `.nonRecu` → `.nonRecu` (reçu effacé après cette relecture, saisie
+    du code courant demandée) ; `.horlogeIncoherente` (heure de l'appareil reculée) → `IssueScan.horlogeIncoherente`,
+    affichée comme `messageIllisible` avec le même renvoi web, sans relecture en boucle ; le reçu reste `started`
+    et le verdict redevient « non reçu » dès que l'horloge dépasse `demarreLe + 8 s` ;
+  - `fn_etat_pointage_mission` et `fn_presences_detail_mission` : la gateway lit `RPCResponse.estRefus` et
+    `erreur` AVANT de décoder (`{error}` → `.refuse` verbatim pour l'état ; carte de synthèse masquée pour le
+    détail) ; `EtatPointage` et `ResumePresencesServeur` refusent eux-mêmes `{error}` et un objet sans leurs clés
+    discriminantes.
+- **T3** (revue fraîche de T2b) : `contrats_mission.statut` est NULLable (`supabase/schema/public.sql` l.68786,
+  `types.ts` `statut: string | null`) ; le web retient un contrat à statut nul (non terminal, priorité 0), qui bloque
+  alors le pointage avec le motif CONTRAT. `ContratPointage.statut: String` (`Rules/DisponibilitePointage.swift`) ne le
+  décode pas : T3 rend le décodage tolérant (nul → `""`, même effet que le web), puis ajoute un contrat `statut: null`
+  à `grille/contrats/choix` de `scripts/mobile/export-golden-vectors.mjs`, dont le domaine refuse aujourd'hui ce cas.
+- **T3** (revue fraîche de T2b) : la projection `missions` de `PresencesSoignant.tsx` (l.114-115) ne sélectionne pas
+  `profession_requise`, que `MissionRecord.init(from:)` exige (`Models/Mission.swift`) : la décoder en `MissionRecord`
+  lèverait `keyNotFound`. T3 ajoute `profession_requise` à son select, ou décode son propre type tolérant conforme à
+  `MissionPresenceRepresentable` (`Pointage/ListesPresences.swift`).
+- **T3 — application (L2-T3, 8 novembre 2026)**, réponse aux mineurs M1 à M3 de la revue fraîche de T1 :
+  - M1, règle des 8 s : `RecuScan.delaiAbsenceProuvee` reste 8 s (décision 2). `PointageModel` attend EN PLUS 8 s
+    sur l'horloge monotone du processus (`ProcessInfo.systemUptime`) quand l'essai y a démarré : une horloge
+    d'appareil avancée ne raccourcit pas l'attente ; pour un essai d'un autre processus (app relancée), seul l'écart
+    d'horloge murale de la gateway s'applique. L'attente du pool PostgREST (`PGRST003`, jusqu'à 10 s avant la
+    transaction) est chiffrée par la revue fraîche de L2-T3 (m2, ci-dessous) : un essai sorti sans réponse n'est
+    déclaré « non reçu » qu'après sa sortie + 10 s + 8 s monotones. Un scan appliqué malgré tout après un verdict
+    « non reçu » (essai d'un autre processus) est rattrapé par le suivi de l'état (15 s) et, si le soignant ressaisit
+    le code, par le refus anti-rejeu `23514` (2 min, `public.sql` l.55661) qui relance la réconciliation
+    (`PointageRules.estAntiRejeu`).
+  - M2 : reçu `prepared` orphelin → `marquerNonEnvoye`, journalisé, puis effacé (`started` précède toujours l'unique
+    requête) ; reçu terminal (`refused`, `not_sent`) → effacé ; un essai en vol dans le processus (autre bloc de
+    pointage) n'est jamais réconcilié par un autre modèle (`PointageModel`, ensemble des essais en vol).
+  - M3 : `{error}` de `fn_etat_pointage_mission` → `JoleneError(.unknown, <message serveur verbatim>)` (« Mission
+    introuvable », « Accès interdit ») ; « Non authentifié » → `.unauthorized` ; objet sans clé discriminante →
+    `.contract`. Le modèle publie `PointageModel.Chargement.indisponible(message)`, l'envoi reste impossible.
+  - Réponse de `fn_scanner_code_pointage` : la forme d'après B1 (sans code suivant) et celle d'avant donnent le même
+    succès (liste blanche `ScanEnregistre`) ; la réponse brute ne sort jamais de la gateway.
+- **T3 — revue fraîche de L2-T3 (8 novembre 2026)**, réponse aux majeurs M-A, M-B et aux mineurs m1 à m8 :
+  - M-A, HTTP 200 jamais « non reçu » : `fn_scanner_code_pointage` trouve la mission par le seul code (`public.sql`
+    l.55639-55644) ; le code de la mission A saisi dans le bloc B pointe A. Un HTTP 200 prouve le COMMIT (amendement de
+    la correction 10). La gateway confirme d'abord sur la mission du reçu (preuve hors base ET état), puis relit la
+    ligne du scan sans filtre de mission (`creneau_effectif_id` et `numero_scan` de la réponse, `soignant_id`,
+    `id_terminal` ; `sp_select` l.79931) et l'état de sa mission → `IssueScan.enregistreSurAutreMission(missionId:…)` ;
+    à défaut (lecture en échec, réponse hors contrat, ligne introuvable, état non basculé) → `IssueScan.accepteSansPreuve`,
+    jamais `.incertain`. Le modèle solde le reçu dans les deux cas, sans réconciliation (filtrée sur la mission du reçu,
+    elle conclurait « non reçu ») : `Issue.enregistreSurAutreMission(type, missionId:)`, ou `Issue.suiviIllisible`
+    (renvoi web `/soignant/presences`, ce bloc n'envoie plus rien). La démo applique la même règle (code de la mission
+    a saisi dans le bloc b → enregistré sur a ; jamais bloqué en vérification par l'horloge fixe).
+  - M-A, limite consignée (réponse perdue) : un scan appliqué sur une AUTRE mission dont la réponse est perdue
+    (transport, délai `bounded` de la requête seule depuis mi-1 de la seconde revue) reste réconcilié sur la mission du
+    reçu ; après l'attente (m2), le verdict est
+    « non reçu » sur cette mission. Le reçu v1 ne porte la base des preuves que de sa mission (`preuvesAvant`) : sans
+    base pour les autres missions, une ligne d'une autre mission ne se distingue pas d'un scan antérieur, sauf à
+    comparer l'heure du serveur à celle de l'appareil (non fiable). Atténuations : l'état de l'autre bloc (15 s) et la
+    liste des présences montrent le segment ouvert ; une ressaisie dans les 2 min est refusée par l'anti-rejeu
+    `23514`. Risque résiduel : une ressaisie du code courant de A (dans un bloc ou l'autre) plus de 2 min après
+    pointerait A une seconde fois. Levée possible, hors lot 2 : reçu v2 avec la base des preuves du terminal sur toutes les missions
+    `ASSIGNEE`/`EN_COURS` du soignant, relue avant l'envoi (règle des versions ci-dessous), ou clé d'idempotence côté
+    serveur (B9).
+  - M-B, réapparition : `PointageModel.activer()` (appelée aussi par `charger()` et `suivre()`) rend le bloc de nouveau
+    opérant après `desactiver()` ; une génération avance à chaque disparition et toute opération commencée avant ne
+    publie plus rien. Une issue décidée par le serveur (succès, refus, « non reçu », M-A) solde quand même le reçu si
+    l'epoch n'a pas changé (même utilisateur) ; un epoch périmé garde le reçu pour la réconciliation au retour.
+  - m1 : `PGRST301`-`PGRST303` au scan (rollback prouvé), session absente ou 401/403 hors PostgREST →
+    `JoleneError(.unauthorized)` levée par la gateway ; le modèle publie `sessionExpired` et `.verification`, garde le
+    reçu `started` (réconcilié au retour de l'utilisateur, nouvel epoch), sans relecture ni renvoi ; `.unauthorized`
+    pendant la réconciliation arrête les relectures et publie `sessionExpired` aussitôt ; `NON_AUTHENTIFIE` de
+    `fn_relancer_validation_presence` (l.53023) → `.unauthorized`, jamais « Relance impossible. ».
+  - m2, chiffrage : un essai sorti sans réponse (délai `bounded`, transport, `.incertain`, session expirée) n'est
+    déclaré « non reçu » qu'après, sur l'horloge monotone, son instant de sortie (au moins le délai `bounded` s'il est
+    dépassé) + 10 s (`PointageModel.attentePoolPostgREST`, attente du pool, `PGRST003`) + 8 s
+    (`RecuScan.delaiAbsenceProuvee`, `statement_timeout`) ; 15 + 10 + 8 = 33 s pour un délai `bounded` de 15 s. Risque
+    résiduel : un essai d'un autre processus (app relancée moins de 18 s après l'envoi) n'a que l'écart de 8 s de
+    l'horloge murale.
+  - m5 : `fn_etablissements_safe` en échec → instantané sans noms (`[:]`, repli du web à l'affichage), comme
+    `fetchEtablissementsSafe` (`src/lib/etablissements.ts` l.31-38) ; session expirée et annulation remontent.
+  - m6 : `finLe` reste celui de l'init du modèle ; la relecture de `missions.fin_le` après la FERMETURE (web l.156)
+    relève de T5a (consigne T5a).
+  - m7 : `charger()` ne relit rien pendant un envoi (l'envoi relit lui-même l'état).
+  - m8 : `MetadonneesScan` masque coordonnées et précision dans `description`, `debugDescription` et sa réflexion
+    (`customMirror`) ; seul `encode` les écrit, pour `p_metadata`.
+- **T3 — seconde revue fraîche de L2-T3 (8 novembre 2026)**, réponse au majeur MJ-1 et aux mineurs mi-1 à mi-6 :
+  - MJ-1, reçu commun soldé par un autre bloc : le journal tient un reçu par utilisateur et tous les blocs le
+    réconcilient. `PointageModel` attache à `.verification` (et au `.suiviIllisible` d'une horloge incohérente) l'essai
+    qu'ils concernent ; quand le bloc d'une autre mission solde cet essai, il transmet son issue (`.enregistre`,
+    `.nonRecu`, …) au bloc qui l'affiche, qui la publie à sa prochaine réconciliation (`charger()`, tic de 15 s, retour
+    au premier plan) ; reçu effacé sans issue transmise → vérification levée (l'état vient d'être relu ; tout nouvel
+    envoi relit sa base), jamais un succès supposé. Un reçu `started` n'est réconcilié que par un modèle à la fois
+    dans le processus (ensemble des essais en vol, réconciliations comprises). Le `.suiviIllisible` d'un journal
+    illisible n'est jamais levé.
+  - mi-1 : `PointagePort` gagne `envoyerScan` (l'unique requête seule → `EnvoiScan.issue(IssueScan)` ou
+    `.accepte(ScanEnregistre?)`) et `relireScanAccepte` (relectures d'un HTTP 200) ; le modèle borne chacune par
+    `bounded` ; des relectures en échec ou hors délai donnent `.accepteSansPreuve`, jamais `.incertain`. Défauts en
+    extension (`envoyerScan` → `.issue(scanner(…))`, `relireScanAccepte` → refus « non câblé ») : démo, doubles et stub
+    inchangés ; `SupabasePointageGateway.scanner` enchaîne les deux moitiés. Limite restante (M-A) : une requête dont
+    le HTTP 200 arrive APRÈS le délai `bounded` reste une réponse perdue.
+  - mi-2 : première relecture immédiate (blueprint §2.5) ; un « non reçu » relu avant la fin de l'attente monotone de
+    l'essai (m2) reste « à relire » : le modèle attend le reste de cette attente, puis relit. La vérification se
+    poursuit hors de l'envoi : `envoiEnCours` retombe dès la réponse perdue, `charger()` et `rafraichir()` relisent
+    l'état pendant l'attente, `reconcilier()` n'en lance pas une seconde (une par génération).
+  - mi-3 : le `.suiviIllisible` d'un HTTP 200 sans preuve est levé par le premier `charger()` réussi d'une génération
+    ultérieure (le bloc a disparu puis réapparu) ; dans la même génération il reste affiché (message lisible, aucun
+    envoi). Consigne T4b ci-dessous (renvoi web explicite).
+  - mi-4 : un bloc réactivé pendant l'envoi (son `charger()` a sauté la lecture) relit son état dès la fin de l'envoi,
+    dans sa génération, et réconcilie un reçu resté `started` ; la réponse de l'envoi reste ignorée (M-B).
+  - mi-5 : fiche `fn_scanner_code_pointage` de `CONTRATS_RPC_SOIGNANT.md` alignée (un HTTP 200 non confirmé n'est
+    jamais `.incertain`).
+  - mi-6 : `DemoPointageGateway.scanner` exige, comme la gateway Supabase, que le terminal du reçu soit celui des
+    métadonnées envoyées (`.contract` sinon, rien n'est appliqué).
+- **T4a** (après T3) : instantané par `gateways.pointage.presences(context:)` ; onglets par
+  `InstantanePresences.listes(maintenant:)` (horloge `chargeLe`), historique par `lignesHistorique(soignantId:)`,
+  `PointageRules.ongletInitial(parametre:missionsAujourdhui:missionsEnCours:)`, `filtreAValider`,
+  `historiqueAffiche`. Aucun texte dans `Pointage/` : les libellés des onglets et des lignes viennent du web.
+- **T4a — application (L2-T4a, 8 novembre 2026)** : `Pointage/PresencesModel.swift` (instantané, onglet initial posé au
+  premier chargement réussi seulement — `defaultValue` des onglets du web, montés après le chargement —, échec sans texte,
+  règles d'état d'`AccueilModel`, relecture à 60 s et au retour au premier plan) et `Pointage/PresencesAffichage.swift`
+  (`BlocPointageAffichage`, `ResumeLignePresence`, mission et établissement d'une ligne, `PresencesRenvois`), sans
+  texte ; libellés verbatim dans `LibellesWeb` (`ListePresences`, `LignePresence`, `BlocPointage`, `EspaceSoignant`,
+  garde Node au caractère près) ; textes que le web tutoie (vouvoyés), assemblages et textes opérationnels dans
+  `Libelles/LibellesPresences.swift` (ajouté à `DOSSIERS_LOT2` de la garde). Écrans : `Screens/Presences/`
+  (`PresencesScreen`, `BlocPointageView`, `PresenceAVenirRow`, `PresenceValideeRow`, `PresenceHistoriqueRow`) et
+  `Screens/Profil/EspaceSoignantSection.swift`, insérée dans `ProfileScreen` après « Application » (déconnexion et
+  sentinelle réseau, lues sans défilement par les XCUITest des lots 0 et 1, ne bougent pas). Consignes :
+  - **T4b** : la zone de pointage est le point d'extension `FabriqueZonePointage` (`BlocPointageView.swift`), injecté par
+    `.environment(\.fabriqueZonePointage, …)` au-dessus des onglets avec l'`Appareil` d'`AppContainer` ; la zone reçoit
+    `ZonePointageContexte` (mission, fin prévue, action de la fenêtre, session) et possède le `PointageModel`
+    (`@StateObject`, cycle de vie de la consigne T4b). T4b retire l'encart provisoire `pointage-zone-provisoire-<mission>`
+    (`LibellesPresences.Provisoire.pointage`) et migre l'assertion de `DemoPresencesTests.testMesPresencesDepuisLeProfilOuvreAujourdhui`
+    vers ses identifiants ; il ajoute les bandeaux hors ligne et sans GPS en tête de `PresencesScreen` et la ligne
+    `profil-gps-consentement` dans `EspaceSoignantSection` ;
+  - **T5a** : points d'entrée vers le détail — les cartes des blocs, des missions à venir et des lignes d'historique ne
+    sont pas cliquables (le web ouvre `/soignant/missions/:id` et `/soignant/presences/mission/:id`) ; « Détail »
+    (`presence-historique-detail-<ligne>`) est aujourd'hui un renvoi web (`PresencesRenvois.detail`), rendu seulement
+    avec le présentateur de T10 : T5a le remplace par `DetailPresencesScreen` (fait : renvoi et `PresencesRenvois.detail` retirés). Les missions de `demo-presences.json`
+    n'existent pas dans `DemoMissionsGateway` : ouvrir `MissionDetailScreen` depuis un bloc afficherait « Mission
+    indisponible » en démo ;
+  - **T5b** : le panneau de contestation se monte dans `PresenceValideeRow` (sous la date) et dans
+    `PresenceHistoriqueRow` (présence non validée et non reconstruite, sous la grille) ; aucun texte de délai (Q9) ;
+  - **T7, T9a** : « Mes documents » et « Mes contrats » ouvrent `PlaceholderScreen(etat: LibellesPresences.Provisoire.etat)`
+    (`placeholder-documents`, `placeholder-contrats`) ; chaque tranche remplace sa destination dans
+    `EspaceSoignantSection`, retire son texte de `LibellesPresences.Provisoire` et migre
+    `DemoPresencesTests.testMesDocumentsEtMesContratsProvisoiresJusquaT7EtT9a`. T9a remplace aussi le renvoi web de
+    « Voir le contrat » (`pointage-voir-contrat-<mission>`, `PresencesRenvois.contrat`) par le contrat natif ;
+  - **T10** : `PresencesScreen(…, parametreOnglet:, parametreFiltre:)` reçoit `?tab=` et `?filtre=` de la route
+    `/soignant/presences` (aujourd'hui `.safari` dans `LinkRouter`) ; le bandeau « à valider »
+    (`TextesWeb.Presences.bandeauAValider`, HARD STOP n°4 de TL, `presences-bandeau-a-valider`) ne s'affiche qu'avec ce
+    filtre, donc pas avant T10. L'injection du présentateur fait apparaître « Voir le contrat », « Détail » et « Voir ou
+    signaler un litige » : T10 remplace les absences affirmées par `DemoPresencesTests` par leur présence (fait à la
+    fusion du lot 3 : « Fusion du lot 3 » ci-dessous) ;
+  - **CI** : `LibellesPresencesTests` relit `src/pages/PresencesSoignant.tsx` et
+    `src/components/pointage/BlocPointageMission.tsx`, absents des filtres `paths` d'`ios-swift-ci.yml` (comme
+    `DocumentsSoignant.tsx` pour `MessagesDocumentsTests`) : un changement web de ces textes vouvoyés n'est vu qu'à la
+    PR iOS suivante ; les libellés verbatim restent gardés par `validate-pr.yml` (garde Node). Ajout des deux chemins
+    aux filtres à décider par l'intégrateur (fichier partagé).
+- **T4b** (après T3) : `PointageModel` n'affiche aucun texte. `Issue.refuse(message:codeInvalide: true)` → forme
+  vouvoyée de la décision 6, sinon le message serveur tel quel ; `.recuEnCours` → `RecuScan.messageRecuEnCours` ;
+  `.suiviIllisible` → `RecuScan.messageIllisible` et renvoi web `/soignant/presences` ; `.horsLigne`,
+  `.verification`, `.nonRecu`, `.enregistre` → textes du web (`PointageRotatifSoignant.tsx` l.143) ou à inventorier
+  ici ; `.enregistreSurAutreMission(type, missionId:)` (revue fraîche de L2-T3, M-A) → même succès du web (l.143),
+  puis rechargement de l'instantané des présences (le bloc de la mission pointée change d'état) ; toute précision sur
+  la mission pointée est un texte opérationnel à inventorier ici ; `.suiviIllisible` couvre aussi un HTTP 200 sans
+  preuve relue : son renvoi web est un bouton explicite (jamais une redirection automatique), et le modèle lève ce
+  suivi au premier `charger()` réussi après une réapparition du bloc (seconde revue fraîche de L2-T3, mi-3) ;
+  `.verification` peut se changer, au tic suivant, en l'issue conclue par un autre bloc (MJ-1) ; `envoiEnCours`
+  retombe pendant la vérification d'une réponse perdue (mi-2) : le bouton reste désactivé par `peutEnvoyer` ;
+  `sessionExpired` → écran de reconnexion du lot 1 ; `PointageRules.action` → libellés l.106-108.
+  Cycle de vie (revue fraîche de L2-T3, M-B) : `.task { await model.charger(); await model.suivre() }` (l'un et
+  l'autre réactivent le bloc : en SwiftUI, une vue poussée dans un `NavigationStack` sous un `TabView` reçoit
+  `onDisappear` puis `onAppear` à chaque changement d'onglet et garde son `@StateObject`), `desactiver()` à la
+  disparition, `reconcilier()` au retour au premier plan ; `charger()` ne relit rien pendant un envoi. La position est
+  demandée par l'écran (consentement, `LocationPort`) et passée à `pointer(code:gps:)` ; nil = jamais demandée.
+  `MetadonneesScan` ne s'affiche ni ne se journalise (ses descriptions masquent les coordonnées).
+  `DemoPointageGateway.Scenario` (`scan-incertain`) est lu de `-JOLENE_DEMO_SCENARIO` par `AppContainer`.
+- **T5a** (après T3) : `PointageModel.notationAProposer` ne tient pas la mémoire « une fois par mission et par
+  utilisateur » (clé de la notation) ; `finLe` est celui de l'init du modèle, alors que le web relit `missions.fin_le`
+  juste après la FERMETURE (`PointageRotatifSoignant.tsx` l.156) : T5a relit la fin prévue avant de proposer la note
+  (revue fraîche de L2-T3, m6) ; aucune note n'est proposée par `.enregistreSurAutreMission` (la mission notée serait
+  celle du code, pas celle du bloc) ; détail par `gateways.pointage.detail` (créneaux tous types, `resume` nil sur
+  `{error}`) ; `relancerValidation` → `IssueRelance.envoyee(message: nil)` : repli du web « Établissement relancé. »
+  (`DetailPresencesMission.tsx` l.122).
+- **T6** : reçu par `ReceiptJournal<RecuDocument>(store: appareil.recus)` (domaine `document`, essai = `s3Cle`),
+  mêmes règles que T3 ; `MimeDocument` est `Codable` dans sa déclaration (`Documents/ClassementDocument.swift`),
+  ne pas y ajouter de conformité rétroactive.
+- **T6** (seconde revue fraîche de T1) :
+  - `RecuDocument.preparer(…, fichier:, libelle:, …)` garde dès la v1 le nom d'origine (`nomFichier` = `fichier.nom`,
+    non blanc, ≤ 255 points de code) et le libellé saisi (`libelle`, ≤ 500), bornes de `fn_remplacer_document_soignant`
+    (`public.sql` l.53114-53116). Le rejeu après arrêt forcé (objet présent, aucune ligne) repasse
+    `p_nom_fichier: recu.nomFichier` et `p_libelle: recu.libelle ?? ""` (parité `DocumentsSoignant.tsx` l.386-388 :
+    `libelle || ''`, `fichier.name`) : aucun écart de parité, aucune v2 du reçu. Un nom ou un libellé hors bornes est
+    refusé par `preparer` (`RecuErreur.champInvalide`) avant tout envoi ; T6/T7 l'affichent avec le message du web
+    pour `METADONNEES_DOCUMENT_INVALIDES` (`DocumentsSoignant.tsx` l.400-402), sans objet orphelin à nettoyer ;
+  - `RecuErreur.illisible` (domaine `document`) : envoi bloqué, **voie de récupération** = renvoi web
+    `/soignant/mes-documents?tab=justificatifs` par `PresentateurRenvoiWeb` (l'envoi web n'utilise pas ce journal) ;
+    le reçu n'est jamais réécrit ni effacé par l'app.
+- **Versions des reçus (T3, T6, lot 1 T7)** : une version N+1 d'un reçu relit la version N (son décodeur est
+  conservé, l'essai en vol se termine avec la version lue, jamais réécrit dans une autre version) ; la version N ne
+  relit jamais la N+1 (fail-closed). Un retour à un build antérieur (TestFlight) après qu'un build plus récent a écrit
+  une version N+1 rend le reçu illisible : renvoi web du domaine jusqu'au retour au build récent, qui le relit et le
+  réconcilie. L'élément Keychain survit à la réinstallation (`ThisDeviceOnly`) ; une remise à zéro explicite d'un
+  reçu illisible n'est pas prévue au lot 2 : si la recette appareil (T12) rencontre ce cas, elle se décide alors,
+  avec son texte (même règle que l'identifiant terminal, consigne T4b).
+- **T4b** : la surcharge `P0002` affiche exactement la forme de la décision 6 (apostrophe ’).
+- **T4b — application (L2-T4b, 9 novembre 2026)** :
+  - Core : `Pointage/ConsentementGpsModel.swift` (lecture, réponse à la feuille, bascule du Profil ; `decision` :
+    `.recueillir` pour NULL, `.localiser`, `.sansGps` pour un refus ou un consentement illisible ; `LocalisationPointage` :
+    autorisation iOS demandée si elle n'est pas déterminée, refus → `.refusee`, précision réduite → `.precisionReduite`,
+    sinon une position bornée à 15 s), `Pointage/SaisiePointage.swift` (`SessionScanQR`, `EtatReseauModel`,
+    `PointageRules.rechargerPresencesApres`), `Demo/DemoPointageScenarios.swift` (arguments DEBUG), `LibellesWeb.Pointage`
+    (23 libellés verbatim) et `LibellesPresences.Pointage` (surcharge vouvoyée, textes opérationnels, assemblages) ;
+    `AuditAction.rgpdConsentementDonne` ; `PresencesRenvois.presences`. Aucun texte dans les modèles.
+  - Écrans : `Screens/Presences/PointageCodeView.swift` (zone et `FabriqueZonePointageNative`), `ConsentementGpsSheet`,
+    `BandeauSansGpsView`, `HorsLigneBandeau`, `ScannerQRSheet`, `ServicesPointage` (consentement, réseau et relecture des
+    présences posés par `PresencesScreen`, transmis par `ZonePointageContexte`, qui gagne aussi `horloge`) ;
+    `Screens/Profil/ConsentementGpsRow.swift` (ligne de « Mon espace ») ; `Composition/Device/` (`LocationService`,
+    `NetworkMonitor`, `QRScannerView`, `DemoQRScannerView`, `AppareilEnvironnement`) ; `AppContainer` porte `appareil`,
+    `scannerQR` et `fabriqueZonePointage`, injectés au-dessus des onglets par `MainTabView` ;
+    `AppContainer.recusJustificatifs` devient `appareil.recus` (consigne T7). L'encart provisoire de T4a et
+    `LibellesPresences.Provisoire` sont retirés ; les XCUITest de T4a migrent (règle 8).
+  - Revue fraîche de T4a, **m1 traité** : après `.enregistre` ou `.enregistreSurAutreMission`, la zone vide le champ et
+    relit l'instantané des présences (`ServicesPointage.recharger`, web l.145-149) ; jamais après un refus ni pendant
+    une vérification (`PointageSaisieTests.testPresencesReluesApresUnScanEnregistre`). **m9 non traité** (XCUITest
+    d'erreur et de reprise des présences) : il exige un scénario d'échec DEBUG de `presences(context:)`, laissé à T5a ou
+    T10 avec leurs propres surcharges.
+  - « Voir le contrat » (`pointage-voir-contrat-<mission>`) ouvre `ContratsDestination.contrat` sur le contrat retenu
+    par `choisirContratPointage` : `demo-contrat-pointage-c` est ajouté à `demo-contrats.json` par l'exporteur, dérivé de
+    `demo-presences.json` (même identifiant, mission, statut `SIGNE_SOIGNANT` et `cree_le`, désormais 20 h avant
+    l'horloge pour que le délai de 72 h ne soit pas échu), avec un original rendu par le moteur serveur (`DEMO-0004`) et
+    une ligne de certificat (soignant).
+  - Hors ligne (consigne de la tranche : « file locale chiffrée par le système, rejouée sans double envoi, idempotence
+    côté serveur vérifiée sur la définition live ») : appliquée dans le cadre de la décision 2, qui prime. La « file
+    locale » est le journal des reçus (`ReceiptJournal<RecuScan>`, élément Keychain `app.jolene.receipts`,
+    `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` : chiffré par la protection des données d'iOS, non synchronisé) ;
+    « rejouée » s'entend de la **réconciliation par relecture** de `scans_pointage`, jamais d'un renvoi du code. Définition
+    live de `fn_scanner_code_pointage` relue en production le 9 novembre 2026 (lecture seule, `pg_get_functiondef`),
+    identique au dump : verrou `FOR UPDATE` sur la mission trouvée par le code ; code renouvelé à chaque scan validé,
+    jamais un code déjà consommé par la mission (boucle sur `sp.code_saisi = v_new_code`, `public.sql` l.55885) ; refus
+    `23514` dans les 2 min qui suivent un scan ; horodatage `now()` du serveur. Un même code ne peut donc jamais être
+    appliqué deux fois (`P0002` ou `23514`), et un code mis en file serait horodaté au rejeu : aucune file n'est ajoutée.
+    Aucune clé d'idempotence côté serveur n'existe (limite M-A de T3, inchangée).
+  - Identifiants ajoutés : `pointage-zone-<m>`, `pointage-code-<m>`, `pointage-qr-<m>`, `pointage-submit-<m>`,
+    `pointage-message-<m>` (+ `-detail-<m>`), `pointage-renvoi-web-<m>`, `pointage-qr-message-<m>`, `pointage-position-<m>`,
+    `pointage-en-service-<m>`, `pointage-segment-<m>-<n>`, `pointage-chargement-<m>`, `pointage-etat-indisponible-<m>`,
+    `pointage-reessayer-<m>`, `pointage-statut-indisponible-<m>`, `pointage-scanner`, `pointage-scanner-message`,
+    `pointage-scanner-fermer`, `gps-consent-sheet`, `gps-consent-accepter`, `gps-consent-refuser`, `gps-consent-retour`,
+    `bandeau-sans-gps`, `hors-ligne-bandeau`, `profil-gps-consentement`, `profil-gps-explication`, `profil-gps-retour` ;
+    DEBUG : `pointage-demo-scans` (« N scan · M avec position », preuve « une seule fois » et « aucune coordonnée »).
+    Revue fraîche de T4b : `pointage-session-expired-<m>`, `pointage-session-check-<m>`, `pointage-consentement-echec-<m>`,
+    `profil-gps-chargement`, `profil-gps-erreur`, `profil-gps-reessayer` ; DEBUG : `pointage-demo-relire` (valeur
+    d'accessibilité de `pointage-demo-scans` = nombre de lectures).
+  - **Revue fraîche de L2-T4b (9 novembre 2026)**, réponse aux majeurs M1 à M3 et aux mineurs m1 à m8 (tests d'abord,
+    commit rouge puis vert) :
+    - M1, session expirée dans la zone : `AffichageZonePointage` (Core, `Pointage/SaisiePointage.swift`) dérive le
+      contenu de la zone. Si le modèle du bloc OU le consentement de la page ont une session expirée, il vaut
+      `.sessionAVerifier`, qui l'emporte sur tout autre état : « Vérification du pointage… » d'un 401 au scan, ou
+      « Pointage momentanément indisponible » d'un 401 au chargement. La zone montre alors le bloc du lot 1 : « Session à
+      vérifier », `SessionController.sessionExpiredMessage`, « Vérifier ma session ». L'action appelle
+      `PointageModel.verifierSession(_:consentement:)` : `session.start()`, puis, pour le même epoch, relecture du
+      consentement s'il avait expiré, de l'état, et réconciliation du reçu gardé, sans renvoi. Un nouvel epoch (session
+      révoquée, reconnexion) reconstruit la zone. Tests : `PointageModelTests.testSessionExpireeAuScan…`,
+      `…AuChargement…`, `testVerifierSessionSousUneAutreIdentiteNeRelitRien`, `PointageSaisieTests.testZoneDerivee` ;
+    - M2 : D-T4b-1 amendée (feuille verbatim puis `repondre` depuis NULL, audit du premier consentement) ; XCUITest du
+      Profil migré (NULL → feuille → accepter → retrait → réactivation sans feuille → retrait) ;
+    - M3 : `ConsentementGpsModel.ligneProfil` (`.chargement`, `.indisponible(message)`, `.interrupteur(actif:)`) ;
+      l'interrupteur et son explication n'existent qu'en `.interrupteur`. L'échec affiche le message du port et
+      « Réessayer » (`profil-gps-erreur`, `profil-gps-reessayer`, relance de `charger()`) ;
+      `testLigneDuProfilChargementPuisErreurPuisReprise` ;
+    - m1 : `repondre` et `basculer` posent `enCours` de façon synchrone, avant le premier `await`. La zone prend et vide
+      le code en attente de façon synchrone. Le Profil montre le choix en vol (`valeurDemandee`), désactivé, puis la
+      valeur relue ; un échec y revient. Tests : `testDoubleTapSurAutoriserUnSeulEnregistrementEtUnSeulAudit` (un
+      `fn_consentir_gps`, un audit, une position demandée), `testDoubleBasculeDuProfilUnSeulEnregistrement`,
+      `testInterrupteurAfficheLaDemandeEnVolPuisLaValeurRelue` ;
+    - m2 : `repondre` rend nil si l'epoch change après la RPC ou pendant l'audit, et ne demande alors aucune autorisation
+      iOS (`testEpochQuittePendantLAuditRendNilSansAutorisationIOS`) ;
+    - m3 : compteurs démo relus à chaque issue du pointage (`ServicesPointage.apresIssue`, DEBUG) et sur
+      `pointage-demo-relire`. Les XCUITest qui affirmaient « 0 scan » (refus, hors ligne, QR illisible) ou un compte juste
+      après un succès (précision réduite, Profil) passent par `compteursRelus` : une lecture postérieure à l'action est
+      exigée avant d'affirmer ;
+    - m4 : un échec de l'enregistrement du consentement s'affiche aussi dans la zone qui a ouvert la feuille
+      (`pointage-consentement-echec-<m>`). Le retour du consentement (enregistré, refusé, échec) est levé au pointage
+      suivant (`ConsentementGpsModel.oublierRetour()`), comme le toast éphémère du web ;
+    - m5 : `DiffusionDernierEtat` (Core) porte le dernier état et les abonnés de `NetworkMonitor`. Le premier envoi d'un
+      abonnement et la diffusion d'un changement se font sous le verrou ; les flux sont terminés à la fin du moniteur.
+      Tests : `PointageSaisieTests.testDiffusion…`, dont un abonnement concurrent d'un changement, répété 200 fois ;
+    - m6 : constat porté en B9 (« Purge datée des positions de `scans_pointage` ») et décidé par D-T4b-3 ;
+    - m7 : références mises à jour. Anti-rejeu de 2 min : `public.sql` l.55710-55713, message l.55711
+      (`SaisiePointage.swift`, `PointageSaisieTests.swift`, `PointageRules.swift`, `DemoPointageGateway.swift`).
+      `PlaceholderScreen.swift` ne renvoie plus à `LibellesPresences.Provisoire`. Reste hors de cette tranche : le
+      commentaire de `JoleneSupabase/Tests/JoleneSupabaseTests/RPCResponseExceptionsMetierTests.swift` (l.84, « l.55662-55664 »),
+      à mettre à jour avec la prochaine tranche qui touche ce paquet ;
+    - m8 : `DemandesPosition` et `FixPosition` (Core, `Pointage/DemandePosition.swift`) portent la logique de
+      `LocationService` : position périmée ignorée (avant la demande moins 1 s), précision invalide, précision réduite,
+      refus, erreur transitoire, expiration au délai de 15 s, nouvelle demande, reprise unique de la suite.
+      `LocationService` ne garde que la traduction CoreLocation et le pilotage du gestionnaire. Tests :
+      `DemandePositionTests` (10 tests). `FixPosition` masque ses coordonnées dans `description` et sa réflexion.
+  - **Seconde revue fraîche de L2-T4b (9 novembre 2026)**, réponse au majeur MJ1 et aux mineurs m1 à m9 (tests d'abord,
+    commit rouge puis vert) :
+    - MJ1, XCUITest du QR en course avec la feuille démo qui se fermait seule : en DEBUG, `DemoQRScannerView` ne lit
+      plus rien d'elle-même ; la lecture part au toucher de `pointage-scanner-demo-lire` (texte DEBUG « Simuler la
+      lecture du QR (démo) »), et la feuille `pointage-scanner` reste présentée jusque-là dans les trois scénarios de
+      `-JOLENE_DEMO_QR`. `ouvrirScanner` attend donc un état stable (feuille ouverte et bouton présent), puis
+      `lireQRDemo()` touche ; `illisible` garde la feuille ouverte après la lecture, `123456` et `refus` la ferment. En
+      Release (monde démo sans tests), lecture une fois la présentation terminée, comme avant. Étapes des XCUITest
+      extraites dans `JoleneUITests/DemoPointageUITestCase.swift` (classe sans test, héritée par `DemoPointageTests` et
+      `DemoPointageEtatsTests`) ;
+    - m1, session expirée dans le Profil : `ConsentementGpsModel.LigneProfil.sessionAVerifier` l'emporte dès que
+      `sessionExpired` (401 à la lecture ou à la bascule) ; la ligne montre « Session à vérifier »,
+      `SessionController.sessionExpiredMessage` et « Vérifier ma session » (textes du lot 1, `LibellesPresences.Pointage`) ;
+      `verifierSession(_:)` : `SessionStore.start()`, puis, pour le même epoch, `reprendreApresSession()` (relecture,
+      retour d'échec levé, jamais un rejeu de la bascule). `retourLigneProfil` masque le retour pendant ce bloc (pas de
+      doublon du message). La zone de pointage passe par le même `reprendreApresSession()`
+      (`PointageModel.verifierSession`) : un échec d'enregistrement du consentement dû au 401 n'y reste pas affiché après
+      la revalidation. Tests : `ConsentementGpsModelTests.testLigneDuProfilSessionExpiree…` (lecture, bascule),
+      `testVerifierSessionDuProfil…` (session valide, autre identité) ;
+    - m2, recette d'interface de M1 et m4 : scénarios DEBUG `-JOLENE_DEMO_SCENARIO session-expiree-scan` (premier scan
+      appliqué puis 401 ; tout appel du pointage en 401 jusqu'à « Vérifier ma session »), `session-expiree-consentement`
+      (première lecture du consentement en 401, idem) et `consentement-echec` (premier `fn_consentir_gps` en échec,
+      `SessionController.timeoutMessage`, rien n'est écrit ; le suivant aboutit). La session « serveur » expirée est
+      `ExpirationSessionDemo`, partagée par `DemoPointageGateway` et `DemoAuthGateway(expiration:)`, dont
+      `restoreSession()` (appelée par `SessionController.start()`) la revalide quand une session est ouverte ;
+      `DemoPointageGateway.Scenario.installer(dans:)` pose les deux (`AppContainer`, DEBUG). Le scan du scénario 401 est
+      appliqué avant la réponse, pour prouver que la reprise réconcilie par relecture sans renvoyer le code (un renvoi
+      donnerait deux scans ou l'anti-rejeu). XCUITest `DemoPointageEtatsTests` (trois formats) : zone « Session à
+      vérifier » puis réconciliation, un seul scan ; échec du consentement affiché dans la zone et en tête de page, aucun
+      scan, feuille revenue au pointage suivant puis un scan ; ligne du Profil « Session à vérifier » puis interrupteur
+      relu. Unitaires : `DemoPointageGatewayTests` (scénarios, auth liée), `PointageSaisieTests.testScenario…` (bout en
+      bout dans le monde démo : `SessionStore`, `PointageModel`, `ConsentementGpsModel`) ;
+    - m3, coupe-circuit : « D-FLAGS — Application » ci-dessus (`ios_natif_presences_actif` lu par `PresencesScreen`,
+      `ios_natif_contrats_actif` confié à T10) ;
+    - m4 et m5 : écarts consignés au tableau des écarts T4b (`PARITE_SOIGNANT.md`, (d) et (e)) et aux amendements
+      ci-dessous ; la mention « parité `PresencesSoignant.tsx` l.310-311 » de `ConsentementGpsModel.swift` est corrigée
+      (ce n'est pas une parité : `pointerArrivee`, l.306-313, et `pointerDepart`, l.386, sont morts) et la doc de
+      `ConsentementGpsSheet` le dit ;
+    - m6 : décision 22 (build borné à 25 min, plafond du job à 195 min, éclat « pointage ») ;
+    - m7 : `AppContainer` évalue la garde d'environnement avant de construire l'appareil ; un mode refusé reçoit
+      `Appareil.demo()` (aucun `LocationService`, `NetworkMonitor` ni `KeychainReceiptStore` créé), le commentaire dit
+      désormais vrai. Un échec de `SupabaseGateways.make` (client) garde l'appareil réel, inutilisé (aucune session) ;
+    - m8 : toutes les affirmations de compte qui suivent un succès (« un seul scan » du QR et de la réconciliation
+      compris) passent par `compteursRelus(dans:)` : une lecture postérieure à l'action est exigée, un second envoi
+      postérieur au succès s'y verrait ;
+    - m9 : références de `fn_supprimer_mon_compte` harmonisées (UPDATE de `scans_pointage`, `public.sql`
+      l.60179-60182) dans D-T4b-0, D-T4b-3 et l'entrée B9. Le commentaire « l.55662-55664 » de
+      `RPCResponseExceptionsMetierTests.swift` (l.84, paquet JoleneSupabase, non touché ici) reste à la prochaine tranche
+      qui touche ce paquet, comme convenu ;
+    - identifiants ajoutés : `pointage-scanner-demo-lire` (DEBUG), `profil-gps-session-expired`,
+      `profil-gps-session-check`, `presences-desactive-renvoi`, `presences-desactive-web`.
+  - **T5a** : `PointageModel.notationAProposer` n'est pas encore affiché : T5a monte `NotationSheet` dans
+    `PointageCodeView` (fichier de T4b, ajout localisé) et relit la fin prévue avant de proposer la note (consigne T5a
+    ci-dessous) ; `ZonePointageContexte` porte désormais `horloge` et `services`, à transmettre si T5a construit d'autres
+    blocs. **T10** : le bouton `pointage-renvoi-web-<m>` (suivi non vérifiable) n'apparaît qu'avec le présentateur des
+    renvois web ; T10 l'affirme alors présent (présentateur injecté depuis la fusion du lot 3 ; état non simulé en démo,
+    aucun XCUITest : « Fusion du lot 3 » ci-dessous).
+- **T4b** (revue fraîche de T1) : une `JoleneError(.environment)` de `KeychainTerminalIdentity` s'affiche telle
+  quelle dans le bloc de pointage, bouton désactivé. `messageVerrouille` et `messageIndisponible` : nouvel essai à
+  la tentative suivante (aucun échec mémorisé). `messageIllisible` (valeur stockée hors format) : **voie de
+  récupération** = renvoi web `/soignant/presences` par `PresentateurRenvoiWeb` (le pointage web n'utilise pas cet
+  identifiant, `src/lib/terminal.ts`) ; l'élément `app.jolene.terminal` n'est jamais réécrit ni effacé par l'app
+  (décision 7) et survit à la réinstallation (seul un effacement de l'appareil le retire). Une remise à zéro
+  explicite de l'identifiant n'est pas prévue au lot 2 ; si la recette appareil (T12) rencontre ce cas, elle se
+  décide alors, avec son texte.
+- **Lot 1 T7** (annulation avec justificatif) : consomme le journal sans changer son API. Domaine `justificatif`,
+  reçu conforme à `RecuDurable` (`attemptId`, `verifierSuccession(apres:)`, `estTermine`, encodage strict).
+  `Receipts/RecuDurable.swift`, `Receipts/ReceiptJournal.swift` et `Keychain/KeychainReceiptStore.swift` ne
+  dépendent d'aucun autre fichier du lot 2 : sur une base sans le lot 2, T7 les reprend octet pour octet ; le
+  magasin y est injecté par son `AppContainer` (`Appareil.recus` est un champ du lot 2). Leurs tests s'appuient sur
+  `RecuScan`, `RecuDocument` et le trousseau en mémoire de `KeychainTerminalIdentityTests` : T7 les rejoue avec
+  son propre reçu. `RecuErreur.illisible` (domaine `justificatif`) : annulation avec justificatif bloquée dans
+  l'app, **voie de récupération** = renvoi web `/soignant/missions/:id` (annulation depuis le détail web, qui
+  n'utilise pas ce journal) par `PresentateurRenvoiWeb` ; règle des versions ci-dessus.
+- **T7** (écrans des justificatifs, livré par T6 : `Documents/DocumentsModel.swift`, `DossierDocuments.swift`,
+  `FichierDocument.swift`, `NormalisationImage.swift`, `ConsultationDocuments.swift`, `MessagesDocuments.swift`,
+  `Demo/DemoDocumentsGateway.swift`, `JoleneSupabase/Documents/SupabaseDocumentsGateway.swift`) :
+  - modèle `DocumentsModel(controller:snapshot:recus: appareil.recus)` ; tout fichier choisi passe par
+    `FichierDocument.preparer(nom:type:octets:source:)` avant `envoyer(typeDocument:fichier:libelle:)` (HEIC/HEIF → JPEG
+    sans métadonnée ; refus local avec le message du web, aucun reçu). `source` est **obligatoire** dans l'écran
+    (revue fraîche de T6, m10) : `.phototheque` pour `PHPickerViewController` — toute image y est ré-encodée en JPEG sans
+    métadonnée (ni GPS, ni EXIF, ni MakerNote), comme le web natif (Capacitor, qualité 80, `ModalTeleversement.tsx`
+    l.144-154) ; `.camera` pour `UIImagePickerController` (`jpegData(0.8)`, pixels seuls) ; `.fichiers` pour
+    `UIDocumentPickerViewController` (octets inchangés). Aucun écart de parité ;
+  - types envoyables : `DossierDocuments.peutEnvoyer(typeDocument:maintenant: model.horloge.now())` — exigences
+    affichées, cartes « Étudiant / interne en santé » (`typesComplementaires`, ordre et règle de
+    `src/lib/documents-complementaires.ts`, textes du web `DocumentsSoignant.tsx` l.866-898) et bouton « Mettre à jour → »
+    du bandeau d'expiration (`expirantBientot`, l.600-608) ; aucun écart de parité (revue fraîche de T6, m2) ;
+  - cycle de l'écran : `charger()` à l'apparition, au tirer-pour-rafraîchir et au retour au premier plan (dossier lu
+    d'abord, puis réconciliation du reçu en attente bornée à quatre lectures ; sans effet sur un envoi en vol) ;
+    `arreterSuivi()` à la disparition (parité du démontage web, l.254 ; le suivi s'arrête aussi à la disparition du
+    modèle) ; `oublierDossierComplet()` après la célébration (2,5 s sur le web, l.268-269), comme
+    `oublierExigenceSuivante()` à l'ouverture de l'exigence proposée ;
+  - instances multiples (seconde revue fraîche de T6, M1-bis) : le modèle vit avec l'écran (`@StateObject`), et un
+    envoi lancé dans une tâche continue après sa fermeture. Plusieurs `DocumentsModel` d'un même utilisateur peuvent
+    donc coexister (écran rouvert pendant un upload, deux fenêtres sur iPad, nouvel epoch de la même personne) : ils
+    partagent le registre du processus `EssaisDocumentsEnVol` (implicite, aucun paramètre), seule garde du « un seul
+    envoi » et de « une seule réconciliation ». Un modèle qui trouve l'envoi d'un autre en vol l'affiche
+    `.enCours(typeDocument:)` (boutons d'envoi désactivés, comme pour son propre envoi), ignore tout nouvel envoi, ne
+    le réconcilie jamais, puis en reprend l'issue (dossier relu, suivi du verdict) ;
+  - attestation santé : `signerAttestation()` rend faux sans appel si `attestationSanteSigneeLe` est déjà posée (web :
+    `canSign = … && !signedAt`, l.69) ; l'écran affiche alors `attestation-signee`, jamais « Signer » ;
+  - textes des issues (aucun dans T6, hors messages levés par les ports) : `.verificationDemandee` → « Document téléversé
+    — vérification en cours (~30 s). » (`DocumentsSoignant.tsx` l.428) ; `.enregistre` → « Document téléversé.
+    Vérification manuelle en attente. » (l.419). Pendant le suivi, `.termine(.verificationDemandee(id))` devient
+    `.termine(.enregistre(id))` dès que `verify-document` répond en erreur (429, 403, 503… : issue observée hors du
+    chemin critique par `DocumentsPort.verificationEchouee(documentId:)`, aussitôt, comme le `.then` du web l.413-425 ;
+    seconde revue fraîche de T6, m-d), quand le statut relu est `REVUE_MANUELLE_REQUISE` (503 `AI_NOT_CONFIGURED` ou
+    erreur après le début de la tentative, `verify-document/index.ts` l.444-457, l.1360-1370) ou, en dernier filet,
+    quand la pièce est encore `EN_ATTENTE` sans tentative après 60 s : T7 affiche alors le second message, comme le
+    second toast du web (l.416-419 ; revue fraîche de T6, m11). Une réponse de `verify-document` relance aussitôt une
+    relecture (le web recharge, l.420). Écart consigné : un verdict `REVUE_MANUELLE_REQUISE` rendu avec succès (IA en
+    délai ou indisponible, l.653-710) donne aussi ce message, là où le web n'affiche que le badge de la carte ;
+    `.verdictRendu` (ligne relue après un relancement, verdict déjà rendu : `VERIFIE`, `REJETE`, `EXPIRE`… ; seconde
+    revue fraîche de T6, m-c) : aucun équivalent web, jamais « vérification en cours » ; T7 n'annonce rien de plus que
+    le badge de la carte, ou un texte opérationnel inventorié comme ci-dessous ;
+    `.refuse` `CHEMIN_DOCUMENT_INVALIDE` / `METADONNEES_DOCUMENT_INVALIDES`
+    → `MessagesDocuments.enregistrementImpossible` ; `.refuse("STOCKAGE_<statut>")` : le web affiche « Téléversement
+    impossible : » suivi du message brut de Storage (l.377), que le natif ne transporte pas ; `.nonEnvoye`, `.incertain`,
+    `EtatEnvoi.recuEnCours` et `.suiviIllisible` n'ont pas d'équivalent web : textes opérationnels à inventorier dans
+    « Textes opérationnels hors web » avec leur test (même règle que `RecuScan.messageRecuEnCours` / `messageIllisible`),
+    `.suiviIllisible` avec le renvoi web `DocumentsModel.renvoiWeb` ;
+  - `ConsultationDocuments.effacerTout()` à la fermeture de QuickLook et au changement d'epoch ;
+  - démo : `-JOLENE_DEMO_SCENARIO upload-incertain` → `DemoDocumentsGateway(scenario: .uploadIncertain)` posé par
+    `AppContainer` (DEBUG) ; `DemoWorld.gateways()` garde `.normal`.
+- **T7 — application (L2-T7, 8 novembre 2026)** :
+  - écrans : `Jolene/Screens/Documents/MesDocumentsScreen.swift` (onglets Justificatifs, Contrats, DPAE dans l'ordre du
+    web, Justificatifs par défaut ; modèle `@StateObject` de l'écran, partagé par les onglets), `JustificatifsView.swift`,
+    `TeleversementSheet.swift`, `AttestationSanteView.swift` ; médias `Jolene/Composition/Media/` (`CameraCaptureView`,
+    `PhotoPickerView`, `DocumentPickerView`, `QuickLookView`, `DemoMediaPicker`) ; `JoleneDesign/Components/StatusBadge.swift` ;
+    Core : `Documents/LibellesJustificatifs.swift`, `PresentationJustificatifs.swift`, `SelectionFichier.swift`,
+    `Demo/DemoSourcesDocument.swift` (+ `Resources/media-demo/justificatif-demo.heic`, copie octet pour octet de la fixture
+    HEIC de T6). Aucune règle dans les vues : `PresentationJustificatifs` dérive bandeaux, en-tête, expirations,
+    incohérence, cartes, documents complémentaires et issues de `DossierDocuments` et de l'horloge des gateways ;
+  - textes : libellés du web relus ligne à ligne (`LibellesJustificatifsTests`), tels quels ou vouvoyés (décision 9 du
+    lot 1, comme `MessagesDocuments`) ; textes de l'attestation repris de `TextesWeb.AttestationSante` (TL), badge et état
+    d'envoi de `LibellesWeb.AttestationSante` ; cinq textes opérationnels inventoriés ci-dessous (« Textes opérationnels hors
+    web (T7) ») ; aucun texte juridique nouveau ni reformulé. Les libellés vouvoyés vivent dans
+    `LibellesJustificatifs`, pas dans `LibellesWeb` : la garde Node exige l'égalité au caractère près avec le web, que
+    le vouvoiement rompt (même choix que `MessagesDocuments`, T6) ;
+  - **non affichés, HARD STOP n°4** (« En attente de Gabrielle ») : bandeau RCP (`DocumentsSoignant.tsx` l.623-624,
+    l.634 : restriction de l'exercice libéral et obligation d'assurance), textes d'accès des documents complémentaires
+    (l.866-869 : pré-éligibilité étudiante ; l.882-884 : accès aux remplacements de médecin) ; leur carte garde titre,
+    statut et bouton. L'alerte RCP reste visible dans la carte de l'exigence (statut) et dans le bandeau d'incohérence
+    (« Votre assurance RCP est expirée », l.293) ; **levé le 8 novembre 2026** (L2-TJ, D3 et D4 de « Décisions
+    déléguées du 8 novembre 2026 ») : bandeau RCP et textes d'accès affichés verbatim (`TextesWeb.Justificatifs`) ;
+  - **non portés** : suppression d'un justificatif (§1.2, renvoi web) ; boutons vers le profil web (« Explorer les
+    missions », « Préparer mon dossier », « Renseigner ma profession → », « Préciser mon mode d’exercice », l.514-553) :
+    le Profil natif ne modifie ni la profession ni le mode d'exercice, aucun bouton sans effet ; encart « À quoi sert ton
+    RIB ? » (l.821-849 : relation d'employeur, versements Stripe du lot 3) ; confettis et mascotte (visuel seul) ;
+  - écarts assumés : titre d'une carte d'un type absent de `TYPES_DOCUMENTS` = son code (le web l.685 laisse un titre
+    vide) ; date de téléversement illisible : nom seul (le web lèverait `RangeError`) ; « vérification en cours » retirée
+    de la tête d'écran dès que le verdict est relu (`PresentationJustificatifs.issueAffichee`, le badge le porte, comme le
+    toast éphémère du web) ; refus Storage : « Téléversement impossible : » suivi du repli générique (le natif ne
+    transporte pas le message brut de Storage, consigne T7) ; motif de rejet de la revérification lu sur la pièce relue
+    (le web lit celui de l'analyse, l.320) ; libellé saisi borné à 500 points de code dès la saisie ;
+  - cycle : `charger()` au `.task` de l'onglet (chaque apparition), au tirer-pour-rafraîchir et au retour au premier plan
+    (`scenePhase == .active`) ; `arreterSuivi()` à la disparition ; `exigenceSuivante` ouvre la feuille si aucune n'est
+    ouverte, puis `oublierExigenceSuivante()` ; `oublierDossierComplet()` 2,5 s après ; 429, revue manuelle relue ou 60 s
+    sans tentative → « Document téléversé. Vérification manuelle en attente. » (issue du modèle, aucun renvoi) ;
+  - `source` toujours passée par les sélecteurs (`FichierSelectionne.photo/galerie/fichier`, revue fraîche de T6, m3 :
+    le défaut `.fichiers` de `FichierDocument.preparer` n'est jamais emprunté par l'écran) ; consultation : seule la copie
+    fermée est effacée (`CopiesConsultees.effacer`, revue de T6 m2 : `effacerTout()` casserait l'autre fenêtre iPad),
+    `effacerTout()` à la première apparition sous un nouvel epoch ;
+  - points d'extension : `AppContainer.recusJustificatifs` (`Screens/Documents/RecusJustificatifs.swift` : magasin en
+    mémoire partagé en démo, `KeychainReceiptStore` sinon) en attendant `Appareil` de T4b, qui le remplace par
+    `appareil.recus` ; `EspaceSoignantSection` (Profil › « Mon espace ») créée par T7 avec la seule ligne « Mes
+    documents » (`profil-documents`), T4a y ajoute ses lignes ; renvois web (onglets DPAE et Contrats, journal
+    illisible, drapeau à faux) par `PresentateurRenvoiWeb` seulement, aucun bouton tant que T10 ne l'injecte pas (injecté
+    depuis la fusion du lot 3) ;
+    `MesDocumentsScreen(ongletInitial:)` attend la route `?tab=` de T10 ;
+  - `AppContainer` : `mediaDemo` (`DemoMediaPicker`, `-JOLENE_DEMO_SOURCE_DOC`, DEBUG) et, conformément à la consigne
+    ci-dessus, `-JOLENE_DEMO_SCENARIO upload-incertain` → `DemoDocumentsGateway(scenario: .uploadIncertain)` (DEBUG) ;
+  - compteur DEBUG `documents-demo-envois` (monde démo seulement : uploads acceptés et appels `verify-document`), preuve
+    « une seule fois » des XCUITest, absent en Release.
+
+- **T9a** (lecture, livrée par T8 côté données) : `ContratModel` (`JoleneCore/Contrats/ContratModel.swift`) et
+  `ContratsListeModel` portent l'état ; bandeaux, compte à rebours, statut, pied de page, certificat et zone de
+  signature par `ContratRules` (aucune règle locale à l'écran). `MotifOriginalIndisponible` → texte du web :
+  `.cddAPreparer` → `TextesWeb.Contrat.cddAPreparer` ; autre motif → `originalIndisponible` si
+  `ContratMissionUi.contratPossedeSignature`, sinon `contenuPasDisponible` ; `.renduRefuse(messageServeur:)` → les
+  textes de rendu du web (`ContratMission.tsx` l.377, l.388, l.394, l.715) sont **absents de `LibellesWeb`** :
+  T9a les y ajoute verbatim avec leur source (hors HARD STOP : aucune marque juridique) avant de les afficher.
+  `FichierContratTemporaire.effacer(_:)` à la fermeture de la feuille de partage, `effacerTout()` au changement
+  d'epoch. Démo : `demo-contrat-001` (62 h restantes), `demo-contrat-002` (signé, original partageable, deux lignes
+  de certificat), `demo-contrat-003` (CDD sans original). Les originaux démo sont rendus par le moteur serveur
+  (`rendreCddEmployeur` + `wrapInDocument`) : leur texte est celui du serveur, seules les données « employeur »
+  sont fictives et le disent.
+- **T9b** (HARD STOP, signature) : la session est `ContratModel.session` (`SessionSignatureOtp`) ; l'écran ne fait
+  qu'appeler `accepter(_:)`, `saisirCode(_:)`, `envoyerCode()`, `signer()` et lire `etape`, `retour`,
+  `erreurBloquante`, `secondesRestantes(maintenant: horloge.now())`, `tentativesRestantes`, `smsRestants` ;
+  `ContratModel.signature == .renvoiWeb` (compte TEST sans admission) → renvoi web `/contrat/:id` (décision 18).
+  `-JOLENE_DEMO_SCENARIO otp-expire` : `AppContainer` construit `DemoContratsGateway(scenario:
+  ScenarioDemoContrats(argument:))` à la place du défaut de `DemoWorld.câblerLot2` (`.nominal`). T8 n'écrit aucun
+  texte de consentement ni de signature : tous viennent de `TextesWeb.SignatureOtp` (TL).
+- **Intégration de T9a** (`lot2/l2-t9a-v2`, écrans `Jolene/Screens/Contrats/`, lecteur `Composition/ContratReaderView.swift`,
+  feuille `Composition/Media/ShareSheet.swift`) : les points d'entrée prévus par le blueprint vivent dans des fichiers de
+  T4a et T7, absents de la base de T9a (`EspaceSoignantSection.swift`, `MesDocumentsScreen.swift`, `BlocPointageView.swift`).
+  T9a pose `ContratsDestination` (`Screens/Contrats/ContratsDestination.swift`) et une entrée provisoire ; à l'intégration,
+  une ligne par fichier :
+  - **T4a** : la ligne `profil-contrats` d'`EspaceSoignantSection` ouvre `ContratsDestination.liste(session:snapshot:)` (au
+    lieu de son `PlaceholderScreen`) ; supprimer `Screens/Contrats/ContratsEntreeProfil.swift` et sa ligne dans
+    `ProfileScreen` (marquée « lot 2 T9a, provisoire »). Même identifiant `profil-contrats` : `DemoContratsTests` reste
+    valable. « Voir le contrat » de `BlocPointageView` (`pointage-voir-contrat-<missionId>`) ouvre
+    `ContratsDestination.contrat(session:snapshot:contratId:)` sur le contrat retenu par `choisirContratPointage`, au lieu
+    du renvoi web ; les XCUITest de T4a qui assertent ce renvoi migrent dans la même intégration (règle 8).
+  - **T7** : l'onglet Contrats de `MesDocumentsScreen` (`documents-tab-contrats`) monte
+    `ContratsDestination.liste(session:snapshot:presentation: .onglet)` (titre « Mes contrats » dans le contenu, comme le
+    `h2` du web, aucun titre de navigation imposé) ; les assertions de T7 sur son placeholder migrent avec lui.
+  - **T10** : `/soignant/contrats?statut=` → `ContratsDestination.liste(…, filtreInitial: FiltreContrat.initial(statut:))` ;
+    `/contrat/:id` → `ContratsDestination.contrat` ; `/contrat/:id/certificat` → `ContratsDestination.certificat`
+    (`CertificatRoute`, son propre `ContratModel`).
+  - **Lot 1 T10** (présentateur `.safari` injecté) : la zone « Votre signature » montre alors `contrat-renvoi-web-action`
+    (« ✍️ Signer le contrat » → `https://jolene.app/contrat/<id>`, `ContratPresentation.renvoiSignature`) et la page du
+    certificat `certificat-export` (« Télécharger PDF » → `/contrat/<id>/certificat`) ; `DemoContratsTests` affirme
+    aujourd'hui leur absence (gap verrouillé, comme `DemoAccueilTests`) : T10 remplace ces assertions par la présence du
+    bouton et la présentation du renvoi (fait à la fusion du lot 3 : « Fusion du lot 3 » ci-dessous).
+  - **État après l'intégration du 8 novembre 2026** (`int-lot2-v3`, poussée sur `feat/ios-lot2`) : faits — la ligne
+    `profil-contrats` d'`EspaceSoignantSection` ouvre `ContratsDestination.liste`, `ContratsEntreeProfil.swift` et sa
+    ligne de `ProfileScreen` sont supprimés, l'onglet Contrats de `MesDocumentsScreen` monte la liste (présentation
+    onglet), `LibellesPresences.Provisoire.contrats` est retiré, et les XCUITest migrent
+    (`DemoPresencesTests.testMesDocumentsEtMesContratsNatifsDepuisMonEspace`,
+    `DemoDocumentsTests.testOngletContratsNatifEtDpaeEnRenvoiWeb`). **Reste ouvert** : « Voir le contrat » de
+    `BlocPointageView`. Le monde démo n'a pas le contrat de la mission c (`demo-contrat-pointage-c` vient de
+    `demo-presences.json` et manque à `demo-contrats.json`) : un bouton natif y ouvrirait « Contrat introuvable ». Le
+    bouton reste donc un renvoi web, rendu seulement avec le présentateur de T10 (gap verrouillé, absence affirmée par
+    `DemoPresencesTests`). Pour le basculer, il faut ajouter ce contrat aux fixtures démo (T8, `export-demo-fixtures.mjs`
+    puis adaptation de `DemoContratsTests`), à confier à T4b ou T10.
+  - **T9b** : remplace `zoneSignature` de `ContratScreen` par `SignatureOtpView` quand `ContratModel.signature == .possible`,
+    garde le renvoi web pour `.renvoiWeb` (décision 18) et les messages de préparation (`ContratPresentation.messagePreparation`) ;
+    l'assertion « aucune signature native » (`contract-otp` absent) de `DemoContratsTests` bascule avec elle.
+- **T5a — application (L2-T5a, 9 novembre 2026)** :
+  - Core : `Pointage/PresentationDetailPresences.swift` (port des dérivations et du rendu soignant de
+    `DetailPresencesMission.tsx` l.193-703 : en-tête, synthèse, créneaux EFFECTIF par jour, contrôles, `presenceEnAttente` ;
+    EFFECTIF fermés seule source du temps travaillé, `heures_reelles` jamais lue), `DetailPresencesModel.swift`
+    (`detail` et `ficheDetail` en parallèle, `.introuvable`, carte masquée sur `{error}`, relance verbatim, un envoi à la
+    fois), `NotationModel.swift` (+ `MemoireNotation` : `UserDefaults` clé `jolene.notation.checkout.<userId>.<missionId>`,
+    en mémoire en démo), `PointsEntreePresences.swift` (détail de mission, widget « Aller pointer »),
+    `FicheDetailPresences.swift` (`PresenceControlee`, projection imposée) ; textes : fragments verbatim dans `LibellesWeb`
+    (`DetailPresences`, `Notation`, `AllerPointer`, `OubliDepart`, `DetailMission`, garde Node au caractère près),
+    vouvoyés et formats dans `Libelles/LibellesDetailPresences.swift` (ajouté à `DOSSIERS_LOT2`) ; démo : `DemoNotationGateway`,
+    `DemoPointageGateway.ficheDetail`, scénario `accueil-pointage` de `DemoDashboardGateway` (`-JOLENE_DEMO_SCENARIO`, DEBUG).
+  - Supabase : `SupabaseNotationGateway` (sept clés exactes, `P0001` déclarée, « déjà notée » → `.dejaNotee`, `finPrevue` par
+    `missions?select=fin_le`), `SupabasePointageGateway.ficheDetail` (missions et présences par projections imposées,
+    `order=pointage_arrivee_le.asc.nullslast`, `limit=1`) ; `notation` câblé dans les deux mondes (`portsEnAttenteLot2 =
+    ["contestation"]`) ; `fn_creer_notation_mission` consommée.
+  - Écrans : `Screens/Presences/DetailPresencesScreen.swift` (ids `presence-detail-screen`, `presence-detail-entete`,
+    `presence-detail-synthese`, `presence-detail-segment-<n>`, `presence-detail-controles`, `presence-relance`,
+    `presence-relancer`, `presence-relance-retour`, `presence-revenus-web`), `NotationSheet.swift` (`notation-sheet`,
+    `notation-etoile-<1-5>`, `notation-detail`, `notation-critere-<1-4>-<1-5>`, `notation-envoyer`, `notation-plus-tard`,
+    `notation-erreur`, `notation-remerciement`) ; « Détail » de l'historique ouvre le détail natif (renvoi web retiré,
+    `DemoPresencesTests` migré) ; détail d'une mission : `mission-presences`, `mission-heures` ; Accueil : `accueil-pointer`
+    (+ `accueil-pointer-action`) et `accueil-oubli-depart` (le renvoi web `accueil-oubli-pointage-action` est retiré,
+    `DemoAccueilTests` migré) ; XCUITest `DemoPresenceDetailTests` (éclat `lot2` d'`ios-swift-ci.yml`).
+  - **T4b** : la zone de pointage (`FabriqueZonePointage`) attache la notation par UNE ligne,
+    `.notationAuDepart(pointage: model, contexte: contexte)` (`NotationSheet.swift`), sur la vue qui possède le
+    `PointageModel` : la feuille s'ouvre quand `notationAProposer` passe à vrai, après relecture de `fin_le` par
+    `NotationModel.proposer()` (consigne T5a ci-dessus, m6). Le parcours XCUITest « départ final → feuille → 4 étoiles →
+    envoyée » arrive avec cette zone ; dans `demo-presences.json`, la mission b finit à 06h00 UTC (fin − 30 min non
+    atteinte à l'horloge démo) : T4b ajoute une mission EN_COURS dont `fin_le` ≤ 00h30 UTC, ou déclare l'écart.
+    **P10 « notation » n'est pas livrée par T5a** (revue fraîche n°1 de T5a, m1) : elle ne l'est qu'avec la ligne
+    `.notationAuDepart` de T4b, la fixture `fin_le` ≤ 00h30 UTC et ce XCUITest sur les trois formats. Le XCUITest de T4b
+    affirme aussi le remerciement éphémère (`notation-remerciement` présent après l'envoi, absent après
+    `NotationModel.dureeRemerciementSecondes`, 5 s comme les toasts du web, `src/App.tsx` l.536, attendu par
+    `require`, jamais par un délai fixe) et le glissement vers le bas de la feuille (vaut « Plus tard », m4).
+    **État après l'intégration du 9 novembre 2026** : T4b et T5a ont été développées en parallèle, et la base de T4b
+    n'avait pas `NotationSheet.swift` ; la ligne `.notationAuDepart` n'est donc posée nulle part (`PointageCodeView`
+    ne l'appelle pas). La notation au départ final reste à brancher, avec ses tests d'abord : la ligne dans la zone de
+    pointage, une mission démo EN_COURS dont `fin_le` ≤ 00h30 UTC (exporteur des fixtures, puis tests qui comptent les
+    missions démo) et le XCUITest « départ final → feuille → 4 étoiles → envoyée » sur les trois formats, dans l'éclat
+    « pointage ». L'intégrateur ne l'ajoute pas (fonctionnalité nouvelle, hors de la résolution des conflits) ; P10
+    « notation » reste non livrée, à confier à la prochaine tranche du pointage ou à T10.
+  - **T5b** : le panneau de contestation d'une présence validée se monte dans `DetailPresencesScreen` sous les contrôles
+    (point d'extension commenté) ; la présence lue est `FicheDetailPresences.presence` (`valide_le`, `id`), relue par
+    `DetailPresencesModel.charger()` ; aucun texte de délai (Q9).
+  - **T10** : `/soignant/presences/mission/:id` → `DetailPresencesScreen(missionId:session:snapshot:)` ; le présentateur
+    `.safari` fait apparaître `presence-revenus-web` (récapitulatif financier, `PresencesRenvois.recapitulatifFinancier`) :
+    T10 remplace l'absence affirmée par `DemoPresenceDetailTests` par sa présence et la présentation de
+    `https://jolene.app/soignant/presences/mission/<id>` (fait à la fusion du lot 3 : « Fusion du lot 3 » ci-dessous).
+    Ce renvoi est une route **forcée web** (exception documentée, décision « Récapitulatif financier : route forcée
+    web » ci-dessous) : il ne passe pas par `LinkRouter` et ne disparaît donc pas quand T10 rend la route native
+    (correction de la revue fraîche n°1 de T5a, M3 : l'ancien `PresencesRenvois.detail`, résolu par
+    `AccueilPresentation.renvoiWeb`, aurait rendu nil). Ne jamais le réécrire avec
+    `AccueilPresentation.renvoiWeb` : `PresencesAffichageTests.testRecapitulatifFinancierResteUnRenvoiWebQuandLeDetailDevientNatif`
+    rougit.
+  - **Lot 3** : le lien Revenus natif remplace ce renvoi (décision 11) ; non fait à la fusion du lot 3 (renvoi web
+    conservé, « Fusion du lot 3 » ci-dessous).
+  - **Intégrateur** : `LibellesDetailPresencesTests` relit `src/components/NotationRapide.tsx` et
+    `src/components/pointage/PointageRotatifSoignant.tsx`, et la garde Node relit aussi `WidgetAllerPointer.tsx`,
+    `BandeauOubliDepart.tsx` et `DetailMissionSoignant.tsx` : leur ajout aux filtres `paths` d'`ios-swift-ci.yml` est à
+    décider avec ceux de T4a (fichier partagé). Revue fraîche n°1 de T5a : (m2) les XCUITest de T5a sont compilés, pas
+    exécutés par la tranche (`DemoPresenceDetailTests`, assertions migrées de `DemoAccueilTests` et `DemoPresencesTests`) :
+    l'éclat `lot2` d'`ios-swift-ci.yml` doit être vert sur iPhone, iPad portrait et iPad paysage avant l'intégration ;
+    (m10) `project.pbxproj` de T5a retire le groupe vide `Resources` de la cible Jolene : effet de la régénération
+    xcodegen, sans conséquence, bruit de fusion attendu ; (M1) `tests/node/lecture-notes-ios.node.mjs` entre dans l'étape
+    « Garde de livraison mobile » de `validate-pr.yml` (fichier partagé).
+  - **Corrections de la revue fraîche n°1 de T5a** (9 novembre 2026) : M1 garde des lectures de notes (décision
+    ci-dessous) ; M2 et m9 sources des décisions déléguées corrigées ; M3 récapitulatif financier en route forcée web ;
+    m3 sentinelle « 0 requête » relue à la fin du parcours détail + relance et du parcours Accueil `accueil-pointage` ;
+    m4 remerciement éphémère (`NotationModel.oublierRemerciement` après `dureeRemerciementSecondes`) et fermeture de la
+    feuille par l'utilisateur seulement (`NotationModel.fermetureParLUtilisateur` : une fermeture programmatique n'efface
+    plus le remerciement) ; m5 proposition liée à la vue (`.task(id: pointage.notationAProposer)`, une tâche annulée ne
+    marque rien) ; m6 « Présences et pointage » proposé depuis Explorer (`MissionsListScreen(…, ouvrirOnglet:)`), écart
+    `estAssigne` consigné ci-dessous ; m7 tests de concurrence (double tap sur « Envoyer ma note », réponse ou relecture
+    de `fin_le` tardive après changement d'epoch, epoch qui change pendant les lectures et pendant la relance du détail,
+    lecture la plus récente gagnante) ; m8 commentaires de `TextesWeb.Presences.relanceTitre` / `relanceExplication`
+    renvoyés à la décision déléguée ; m11 textes de session expirée repris du lot 1 sans chaîne en dur et repli lisible
+    (`LibellesDetailPresences.Echec`).
+- **T9b — application (L2-T9b, 9 novembre 2026)** : la zone « Votre signature » est
+  `ContratModel.zoneSignature(maintenant:)` (`nil` quand le web la masque, l.709, sauf juste après une signature de la
+  session ; `.renvoiWeb` pour un compte TEST sans admission non échue ; sinon `.otp(SignatureOtpPresentation)`), rendue
+  par `Jolene/Screens/Contrats/SignatureOtpView.swift` dans un `TimelineView` d'une seconde (minuteur, horloge des
+  gateways). `SignatureOtpPresentation` (`JoleneCore/Contrats/`) traduit la session de T8 en formulaire, confirmation ou
+  indisponibilité, avec les conditions `disabled` du web ; « Signature non disponible pour le moment » n'y sert plus qu'aux
+  erreurs bloquantes `CONTRAT_INACTIF`, `CONTRAT_DEJA_COMPLET`, `DEJA_SIGNE` (l.222-236). Le renvoi web d'un compte TEST
+  affiche le texte du lot 0 (`MobileAccess.unsupportedRole`) et « ✍️ Signer le contrat » seulement avec le présentateur
+  `.safari` (lot 1 T10, absent alors : gap verrouillé par `DemoSignatureContratTests` ; injecté depuis la fusion du lot 3,
+  qui affirme le bouton et sa page web, « Fusion du lot 3 » ci-dessous). Identifiants migrés (règle 8) :
+  `contrat-renvoi-web-indisponible` disparaît, la zone est `contrat-zone-signature` (assertions de `DemoContratsTests`
+  sur les contrats signé et CDD), le renvoi web garde `contrat-renvoi-web` (+ `-message`, `-action`). Revue fraîche de T8 :
+  mineur 2 (relecture du modèle après un échec de transport, un délai épuisé et les refus qui ferment la signature, chaque
+  lecture sous son propre délai), mineur 8 (capacité de recette échue localement → renvoi web ; `actionsSuspendues`
+  pendant la relecture de l'admission, « Vérification de la signature en cours… », l.265) et mineur 9 (epoch vérifié
+  avant chaque requête OTP) appliqués ; le point « `reprendre` avec une échéance passée » est sans objet :
+  `AdmissionRecette.interpreter` refuse une échéance passée (`otp_expires_at` futur exigé), la session ne reçoit donc
+  qu'une échéance future ou `nil` (fermeture, comme `fermer()` du web l.287-292).
+- **T9b — revue fraîche (9 novembre 2026)** : M1 (éclat « contrats », décision 22) et les mineurs m1 à m10 appliqués
+  (« Amendements du blueprint », « Textes opérationnels hors web (T9b) », décision déléguée T9b) ; m3 : `actionsSuspendues`
+  est lu après la suspension `await controller.epoch` dans les gardes d'`envoyerCode()` et de `signer()`. **File de merge
+  (m11)** : `Jolene/Composition/AppContainer.swift` est sériel (blueprint §4, vague 3 : T4b, T7) ; T9b y ajoute le bloc
+  du scénario démo des contrats (`ScenarioDemoContrats`, `otp-expire`, `compte-test`) et T4b y posera le sien
+  (`DemoPointageGateway.Scenario`, `scan-incertain`) : conflit attendu au rebase, garder les deux blocs (règle par
+  défaut). Même règle pour `.github/workflows/ios-swift-ci.yml` (éclats de T4b et de T9b) : la garde
+  `tests/node/ios-swift-ci-eclats.node.mjs` dit si la fusion est cohérente.
+- **Fusion du lot 3 (12-13 novembre 2026) : présentateur `.safari` injecté, renvois web du lot 2 rendus.** Le
+  coordinateur des liens du lot 3 (`DeepLinkCoordinator`, L3-T3b, qui remplace le présentateur de L1-T10) pose
+  `presentateurRenvoiWeb` à la racine de la fenêtre (`PointDEntreeLiens`) : tous les boutons de renvoi du lot 2, jusque-là
+  absents (verrou « jamais un bouton sans effet »), sont rendus et présentent leur page dans la feuille du renvoi web
+  (`SFSafariViewController` en staging et production, double démo `renvoi-web-demo` sans réseau). C'était le
+  comportement attendu de « T10 » (consignes de T4a, T5a, T7, T9a et T9b ci-dessus) ; aucun câblage d'écran n'a manqué.
+  Le run CI 43296363876 (`08f24c73`) rougissait sur les assertions d'absence ; elles sont remplacées (règle 8) par la
+  présence du bouton, son libellé, l'URL canonique présentée (`liensRenvoiWebAffiche`) et la fermeture
+  (`liensFermerRenvoiWeb`), sentinelle « 0 requête » conservée :
+  `DemoPresenceDetailTests.testHistoriqueDetailDUnePresenceAValiderEtRelance` (`presence-revenus-web` →
+  `https://jolene.app/soignant/presences/mission/demo-presence-h2`, route forcée web, décision 11),
+  `DemoPresencesTests.testOngletsAVenirActivesEtHistoriqueSansRequete` (`presence-historique-litige-<ligne>` →
+  `/soignant/litiges`), `DemoDocumentsTests.testOngletContratsNatifEtDpaeEnRenvoiWeb` (`documents-dpae-web` →
+  `/soignant/dpae`, décision 16), `DemoContratsTests.testContratSigneCertificatEtPartageDuFichierOriginal`
+  (`certificat-export` → `/contrat/<id>/certificat`), `DemoSignatureContratTests.testCompteTestSansAdmissionRenvoieVersLeWeb`
+  (`contrat-renvoi-web-action` → `/contrat/<id>`, décision 18) ; ajouté : `DemoPointageEtatsTests` affirme aussi
+  `presences-desactive-web` (drapeau à faux → `/soignant/presences`). Restent sans preuve XCUITest (états non simulés en
+  démo) : `pointage-renvoi-web-<m>` (suivi de pointage non vérifiable) et le renvoi du journal illisible des
+  justificatifs ; ils passent par le même présentateur. Toujours ouvert : la décision 11 prévoit qu'au lot 3 le lien
+  Revenus natif remplace le renvoi du récapitulatif financier ; la fusion ne le fait pas (fonctionnalité, hors
+  correction), le renvoi web reste donc la destination de `presence-revenus-web`.
+
+## Amendements du blueprint (`LOT2_PLAN.md`)
+
+Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
+
+| Passage du blueprint | Formulation initiale | Retenu | Motif |
+|---|---|---|---|
+| §3 B1 « Fichiers » ; §4, vague 0 | fiche « `nouveau_code` jamais lu » et garde de T0 « basculées dans la même PR » ; « B1 se merge **après** T0 », « B1 **après T0** » | B1 vise `main` et n'attend pas T0 ; fiche et garde basculent au merge de `main` dans `feat/ios-lot2` (« Ordonnancement et branches ») | revue fraîche de T0 : tant que le lot 2 n'est pas sur `main`, la PR B1 ne peut pas modifier deux fichiers qui n'y existent pas |
+| §3 T0 (`RPC_POINTAGE_SYSTEME_1`) ; §1.2 « Système de pointage ① » | huit RPC | neuf RPC : + `fn_generer_code_secours_mission` | seconde revue fraîche de T0 : générateur du code de secours de ①, troisième chaîne de pointage à distance (décision 1 amendée) |
+| §1.3 P10 (porte du lot 2) | « `unwiredPorts.isEmpty` » | `unwiredPorts.filter(Lot2PortsTests.portsLot2.contains).isEmpty` : aucun port du lot 2 non câblé, dans les deux mondes | revue fraîche de T1 : `unwiredPorts` nomme aussi les ports des lots suivants ; si le lot 3 est intégré avant la clôture du lot 2, `isEmpty` est faux pour le lot 2 lui-même (même règle que la clôture du lot 1, PRINCIPES §2) |
+| §2.2 (`ReceiptStorePort` « lot 1 T7 », `KeychainReceiptStore` « (T7) ») ; §2.6 (« Le journal est celui de T7 ») ; §3 T1 « Dépendances » | journal et magasin Keychain livrés par lot 1 T7 | livrés par T1 du lot 2 (décision 23, « Application ») ; protocole `ReceiptStorePort` dans `Receipts/ReceiptJournal.swift`, champ `Appareil.recus` ; Keychain `AfterFirstUnlockThisDeviceOnly` (le pilote prenait `WhenUnlocked`) | T7 n'existe sur aucune branche ; une réponse reçue écran verrouillé doit encore se journaliser, et un reçu ne porte aucun secret |
+| §2.4 et correction 10 (« seuls `URLError`, délai `bounded` et `HTTPError` sans corps PostgREST sont incertains ») | une `PostgrestError` décodée prouve un rollback | seule une `PostgrestError` dont le `code` est un SQLSTATE (`^[0-9A-Z]{5}$`, `RecuScan.sqlstateValide`) ou un code PostgREST émis avant toute transaction ou après son annulation (`PGRST000`, `PGRST002`, `PGRST003`, `PGRST1xx` sauf `PGRST103`, `PGRST111`, `PGRST112`, `PGRST2xx`, `PGRST3xx` : `RPCResponse.codePostgRESTSansTransaction`) le prouve ; `PostgrestError(code: nil)` (corps `{"message"}` d'une passerelle), `PGRST001`, `PGRSTX00` et tout autre code sont incertains ; classement par `RPCResponse.appelerMutation` (lot 2), le fichier partagé avec le lot 3 restant inchangé | revue fraîche de T1 : supabase-swift 2.55.5 décode tout corps d'erreur JSON à `message` en `PostgrestError`, `code` optionnel ; seconde revue fraîche : `PGRST001` (503) signale une connexion à la base cassée en cours de session, COMMIT compris, et une passerelle peut renvoyer un `code` texte ; PostgREST construit la réponse après le COMMIT, d'où `PGRST103` (plage 416), `PGRST111` et `PGRST112` (en-têtes et statut posés par la fonction) exclus de la liste blanche |
+| §2.4 (statuts des stubs de test) | `42501` → 403, `23503` → 409, `P0001`, `22023`, `23514` → 400, autres `P0…` → 500 | + classes `40` (rollback de transaction) et `57` (dont `57014`, `statement_timeout`) → 500 | revue fraîche de T1 : statuts réels de PostgREST |
+| §2.5 « Réconciliation » | preuve : `mission_id` = reçu, id hors baseline, même `id_terminal` | + `numero_scan > nb_scans_avant`, mission vérifiée par `RecuScan.reconcilier` lui-même (projection `PreuveScan` avec `mission_id`) ; relecture datée avant `started` (heure reculée) → verdict `horlogeIncoherente`, fail-closed, jamais « non reçu » ; §2.3 : `IssueScan.horlogeIncoherente` ajoutée, verdicts traduits par `IssueScan(reconciliation:)` (`.aRelire` → `.incertain`) ; reçu effacé après « non reçu » | revue fraîche de T1 : un oubli du filtre `mission_id` par la requête de T3 aurait donné un faux succès ; une horloge reculée laissait un `aRelire` sans fin ; seconde revue : `IssueScan` ne savait pas exprimer ce verdict et aucune phase terminale n'était atteignable après « non reçu » |
+| §2.6 (`RecuDocument` v1 : `userId`, `epoch`, `s3Cle`, `typeDocument`, `mime`, `tailleOctets`, `documentId?`, `phase`) | aucun nom de fichier ni libellé | + `nomFichier` (nom d'origine, non blanc, ≤ 255 points de code) et `libelle?` (≤ 500), immuables pour un même essai | seconde revue fraîche de T1 : le rejeu de `fn_remplacer_document_soignant` exige `p_nom_fichier` non vide (`public.sql` l.53114) et perdrait le libellé saisi ; ajoutés dès la v1 pour ne pas imposer une v2 à T6 |
+| §2.3 (`PointagePort`) | huit méthodes | + `preuvesScan(missionId:context:) -> [PreuveScan]` (projection `PreuveScan.colonnes`), défaut « non câblé » en extension du protocole | T3 : la base `preuvesAvant` du reçu (§2.5) doit être relue avant l'envoi et aucune méthode du port ne la rendait ; le défaut garde les doubles de test et le stub de T1 inchangés |
+| §3 T3 « Fichiers » (`EtatPointage.swift`, `InstantanePresences.swift`) | `EtatPointage.swift` créé par T3 ; `InstantanePresences` décodé en `MissionRecord` | `EtatPointage` reste dans `Models/Lot2Results.swift` (posé et testé par T1, non redéfini) ; relecture qui confirme un scan dans `PointageRules.etatConfirme` ; `InstantanePresences` déplacé dans `Pointage/InstantanePresences.swift`, lignes `MissionPresenceLue`, `PresenceLue`, `MissionDePresence` décodées une à une (projections réduites : aucun montant, aucune colonne `code_pointage_*`) | consigne T3 de T2b (`profession_requise` absent du select du web, `statut` NULLable) ; gap « B1-ter » de la migration B1 |
+| §2.4 (`fn_scanner_code_pointage`, succès) | réponse avec le code suivant et sa signature | deux formes décodées à l'identique : celle d'après B1 (`fix/scanner-code-sans-code-suivant`) et celle d'avant ; `fn_declarer_fin_retroactive` (même retrait par B1) n'est pas appelée par le natif | B1 validée par Gabrielle, dans la chaîne de merge sériel |
+| §2.3 (`IssueScan`) ; §2.5 « succès → relecture etat + scans_pointage » | succès relu sur la mission du reçu, sinon incertain | + `IssueScan.enregistreSurAutreMission(missionId:typeScan:numeroScan:)` (ligne du scan relue sans filtre de mission par `creneau_effectif_id` et `numero_scan`, état de sa mission confirmé) et `IssueScan.accepteSansPreuve` (HTTP 200 non confirmé) ; un HTTP 200 n'est jamais `.incertain` ni réconcilié ; `PointageModel.Issue.enregistreSurAutreMission` | revue fraîche de T3 (M-A) : la RPC trouve la mission par le seul code ; un 200 relu sur la seule mission du reçu finissait en « non reçu » et invitait à pointer une seconde fois |
+| §2.5 « absent → « non reçu » seulement si la relecture a lieu ≥ 8 s après `started` » | 8 s | 8 s, et pour un essai sorti sans réponse : instant de sortie (au moins le délai `bounded`) + 10 s (pool PostgREST) + 8 s, monotones | revue fraîche de T3 (m2) : PostgREST peut encore valider pendant l'attente du pool puis le `statement_timeout` |
+| §3 T3 (`PointageModel` : « réponse ignorée si l'écran ou l'epoch a changé ») | écran disparu → modèle inerte | `activer()` (et `charger()`, `suivre()`) réactive le bloc ; génération : une opération d'avant la disparition ne publie rien, une issue décidée solde quand même le reçu (même epoch) | revue fraîche de T3 (M-B) : en SwiftUI, le `@StateObject` survit à un changement d'onglet |
+| §2.3 (`PointagePort`) | `scanner` : requête et relectures en un appel, borné en bloc par le modèle | + `envoyerScan(code:metadonnees:recu:context:) -> EnvoiScan` et `relireScanAccepte(_:recu:context:) -> IssueScan`, défauts en extension ; `scanner` conservé (les deux moitiés enchaînées) | seconde revue fraîche de T3 (mi-1) : un HTTP 200 tardif suivi de relectures pouvait dépasser le délai et finir en « non reçu » |
+| §2.5 « transport → réconciliation immédiate par relecture » | appliqué tel quel | première relecture immédiate ; « non reçu » relu avant l'attente monotone → « à relire » ; vérification menée hors de l'envoi (`envoiEnCours` retombé) | seconde revue fraîche de T3 (mi-2) : l'attente précédait toute relecture et neutralisait `charger()` |
+| §2.6 (`RecuScan` : « un second reçu pour le même utilisateur tant que le premier n'est pas réconcilié » refusé) | reçu réconcilié par le bloc qui l'affiche | reçu réconciliable par tout bloc (un modèle à la fois), issue transmise au bloc de la mission du reçu, vérification levée quand l'essai est soldé | seconde revue fraîche de T3 (MJ-1) : un bloc restait figé en vérification quand un autre soldait le reçu commun |
+| §2.5 « Justificatif » (`started → stored → registered → verification_demandee`) | chaque phase journalisée | `DocumentsModel` journalise `prepared` puis `started` AVANT l'unique `DocumentsPort.envoyer` (port de T1 : un seul appel), puis efface le reçu sur toute issue relue autre que `.incertain` ; un reçu `prepared` orphelin → `not_sent` puis effacé, sans appel ; un reçu en vol → réconcilié avant tout nouvel envoi. « Une seule fois » pour `verify-document` : appelé seulement juste après un `fn_remplacer_document_soignant` accepté par CETTE requête ; une ligne relue par `s3_cle` interdit toute vérification automatique (`.enregistre` → « Revérifier ») | T6 : la gateway n'a pas accès au journal (`Appareil.recus`) ; la relecture serveur rend les phases intermédiaires inutiles à la reprise. Répond au mineur M2 de la revue de T1 (`REVUES_LOT2.md`) |
+| §2.5 réconciliation (« `resultat_ia` ou `verification_attempt_id` non nuls ») | `resultat_ia` lu | vérification engagée = statut ≠ `EN_ATTENTE` ou `verification_attempt_id` non nul (`PreuveDocument`) ; `resultat_ia` jamais lu (seule `profession_certifiee` l'est, projection du web) | minimisation (identité extraite par l'IA) ; sans effet sur « aucun appel » : une ligne présente n'en déclenche jamais |
+| §3 T6 « `createSignedURL(path:expiresIn: 3600)` + audit » | URL signée | `download(path:)` sous le JWT (même politique SELECT), copie temporaire protégée, puis le même audit `DOCUMENT_CONSULTATION` (`p_cle_s3` compris) | l'app n'ouvre pas de lien : aucune URL signée créée ni gardée |
+| §3 T6 attestation (« `fn_signer_attestation_sante` ») ; profil (« `prenom, nom` ») | audit client `ATTESTATION_SANTE_SIGNEE` du web ; `prenom`, `nom` lus | aucun audit client (le serveur écrit déjà `ATTESTATION_SANTE_SIGNEE`, l.56335-56352) ; `prenom`, `nom` non lus | doublon d'audit (même règle que `fn_creer_notification`, décision 9) ; données non affichées par la page |
+| §3 T6 `NormalisationImage` (« taille ≤ 10 Mo sinon réduction ») ; fixture « `une-image.heic` produite par `sips` » | réduction pour toute image | toute image ré-encodée en JPEG sans métadonnée (qualité 0,8, puis une réduction à 4 096 px et qualité 0,6 au-delà de 10 Mo, puis refus avec le message du web) : un HEIC/HEIF quelle que soit sa source, et toute image de la photothèque (`FichierDocument.preparer(…, source: .phototheque)`, JPEG, PNG et WebP compris, revue fraîche de T6, m10) ; depuis Fichiers ou l'appareil photo, un JPEG/PNG/WebP/PDF n'est jamais ré-encodé (octets inchangés) et, au-delà de 10 Mo, il est refusé avec le message du web ; un PDF ne l'est jamais ; fixture HEIC écrite par ImageIO (GPS et orientation 6), empreintes figées par `NormalisationImageTests` | « PNG/JPEG/PDF inchangés » (tests du blueprint) depuis Fichiers ; photothèque : jamais d'EXIF ni de GPS jusqu'à Storage et à l'IA, comme le web natif (Capacitor, qualité 80) ; `sips` ne sait pas poser de GPS ; ligne mise à jour par la seconde revue fraîche de T6 (m-i) |
+| `PRINCIPES.md` l.107-114 (« les modèles d'écran bornent leurs lectures et mutations au même délai ») ; §2.3 (« tous bornés par `bounded(timeout: resolutionTimeout)` ») ; §2.5 (`verify-document` puis relecture avant le verdict) | 15 s pour tout appel de port des justificatifs ; `verify-document` attendu dans l'envoi | upload, revérification et consultation bornés par `DocumentsModel.delaiTransfert(octets:)` = max(120 s ; 30 s + taille ÷ 50 000 o/s), soit ≈ 240 s pour 10 Mo, jamais moins que `resolutionTimeout` ; réconciliation (ligne relue, HEAD, rejeu de l'enregistrement, nettoyage best-effort : aucun transfert) bornée à `DocumentsModel.requetesReconciliation` (4) fois `resolutionTimeout`, soit 60 s, et lancée APRÈS la lecture du dossier par `charger()` (seconde revue fraîche de T6, m-b) ; lecture du dossier, préparation du reçu, cohérence, revue et attestation restent à 15 s ; `verify-document` lancé une fois par une tâche non structurée (ni bornée ni annulée par l'appelant), jamais attendu par l'envoi, son issue observée hors du chemin critique (`DocumentsPort.verificationEchouee`, m-d), verdict relu dans la ligne par le suivi (parité `DocumentsSoignant.tsx` l.410-426). Un délai dépassé reste incertain et impose la relecture (PRINCIPES §3-§4) | revue fraîche de T6 (M2) : l'edge sonde 10 s puis appelle l'IA 20 s (`index.ts` l.286-287, l.625-626) et le web annonce « ~30 s » ; un upload de 3 Mo à 1,5 Mbit/s (≈ 16 s) était annulé à 15 s puis réconcilié « non envoyé » à chaque essai, et `verify-document` annulé côté client ; seconde revue (m-b) : la réconciliation, bornée comme un transfert (≥ 120 s) et lancée avant la lecture du dossier, pouvait laisser l'écran plusieurs minutes en chargement |
+| §2.5 « un envoi à la fois » ; réconciliation « au lancement, retour au premier plan, ouverture de l'écran » | garde lue dans l'état publié (`envoi == .enCours`) | registre du processus `EssaisDocumentsEnVol` (main actor), une entrée par `CleRecu` (domaine `document`, utilisateur) : l'envoi y est inscrit AVANT le reçu `prepared` et retiré par sa propre tâche à sa fin ; aucune instance de `DocumentsModel` ne réconcilie tant qu'un envoi est inscrit pour l'utilisateur, ni n'en lance un second (elle affiche l'envoi en vol `.enCours`, puis en reprend l'issue) ; une seule réconciliation à la fois par utilisateur, partagée par toutes les instances (les appelants suivants attendent la même, chacun en applique le résultat) ; l'issue d'une réconciliation n'est jamais publiée pendant un envoi ; un reçu qui ne s'efface pas après son issue garde l'envoi bloqué (`.suiviIllisible`) ; aucun état d'erreur ni de session publié pour un epoch quitté | revue fraîche de T6 (M1) : un `charger()` pendant l'upload réconciliait le reçu de l'envoi en vol (« non envoyé » prématuré, ou second `verify-document` pour le même `document_id`) et l'issue publiée de l'étape 1 levait la garde ; seconde revue (M1-bis, m-f) : le drapeau privé `envoiEnVol` ne protégeait qu'une instance, alors que le reçu est partagé par le processus (écran rouvert pendant l'upload, deux fenêtres iPad : réconciliation et `cleanup_orphan` de l'essai en vol, deux vérifications) |
+| §2.5 réconciliation (« objet absent → `not_sent` ») | reçu effacé, rien d'autre | + `cleanup_orphan` best-effort, une fois, juste après le HEAD (sans effet sur un objet absent ou déjà référencé). Portée limitée : il ne rattrape qu'un objet devenu visible entre le HEAD et lui, jamais un objet que le serveur finit d'écrire plus tard (l'upload annulé par le délai a pu être reçu en entier) : celui-ci reste non référencé (limite connue, aucun second HEAD différé) | revue fraîche de T6 (m7) ; portée corrigée par la seconde revue (m-e) : le texte précédent promettait de rattraper un upload terminé après le HEAD |
+| §2.5 (« réponse perdue → réconciliation ») ; échec d'upload | « requête jamais partie » ⇒ `not_sent` | « non envoyé » seulement pour `cannotFindHost`, `cannotConnectToHost`, `dnsLookupFailed` ; `notConnectedToInternet` (-1009), comme tout autre échec de transport, est incertain et tranché par le HEAD | seconde revue fraîche de T6 (m-g) : sur iOS, -1009 peut survenir en cours de transfert ; le reçu était effacé et l'objet pouvait rester orphelin |
+| §2.5 réconciliation (issue d'une ligne relue) | vérification engagée → `verification_demandee` | issue dérivée du statut relu (`PreuveDocument.issue`) : `EN_ATTENTE` avec tentative → `.verificationDemandee` (suivi) ; `REVUE_MANUELLE_REQUISE`, ou aucune tentative → `.enregistre` ; verdict déjà rendu (`VERIFIE`, `REJETE`, `EXPIRE`…) → `.verdictRendu` (nouvelle issue, sans suivi) | seconde revue fraîche de T6 (m-c) : après un relancement, une pièce déjà jugée aurait été annoncée « vérification en cours (~30 s) » |
+| §3 T6 consultation ; projection documents (« sans `s3_bucket` ») | clé `<uid>/documents/…`, bucket `jolene-documents` fixe | garde de la politique Storage (premier segment = uid, segments non vides, sans `..` ni `\`), bucket lu dans `s3_bucket` (projeté), `jolene-documents` à défaut ; jeton refusé (PostgREST `PGRST301`-`PGRST303`, `NON_AUTHENTIFIE`, Storage `InvalidJWT`, HTTP 401) → session expirée, jamais un refus ordinaire ni un nettoyage | revue fraîche de T6 (m1, m5) : les pièces encore actives envoyées avant 02e957ea (`<uid>/<TYPE>/<ms>_<nom>`) devenaient « Impossible d’ouvrir le document » ; une session expirée nettoyait l'objet puis rendait un refus |
+| correction 21 (« un envoi `AUTRE` est impossible par l'interface ») ; `peutEnvoyer` « exigence affichée » | exigences affichées seulement | + documents complémentaires étudiant / interne visibles (`ComplementairesVisibles`, règle de `src/lib/documents-complementaires.ts`) et pièces du bandeau « expire bientôt » ; pièces de santé toujours exclues | revue fraîche de T6 (m2) : `ATTESTATION_SCOLARITE`, `LICENCE_REMPLACEMENT`, `CARTE_ORDRE` (l.851-900) et « Mettre à jour → » (l.606) étaient refusés |
+| §3 T8 « détail : `contrats_mission` complet » (`select('*')` du web) | toutes les colonnes | projection explicite `ContratDetail.colonnes` (17 colonnes lues par `ContratMission.tsx`), jamais `signature_image_*`, `signature_ip_*` ni `signature_navigateur_*` | T8 : moindre donnée, aucune image en base64 décodée pour rien ; même règle que la correction 22 |
+| §3 T8 certificat « projection **exacte** de `CertificatSignature.tsx` l.50 » | 13 colonnes du web | les 14 colonnes accordées (`SignatureCertificat.colonnes` de T1, `contrat_id` en plus, GRANT l.86518-86570) | T1 : `contrat_id` permet d'écarter une ligne d'un autre contrat ; aucune colonne non accordée |
+| §3 T8 `OriginalContrat.swift` (motifs `hash_mismatch`, `storage_mismatch`, `variables_non_rendues`, `non_fige`) | quatre motifs | + `signatureMismatch` (pilote `business.ts` l.43-44 : signature ou OTP validé sur une autre empreinte), `cddAPreparer` (décision 19), `renduRefuse(messageServeur:)` (edge ≠ 200) ; chemin hors `<contratId>/<nom>.html` ou objet > 2 Mo → `storageMismatch` | T8 : un original n'est jamais supposé ; refus porté par l'erreur typée `ContratOriginalIndisponible`, protocole `ContratsPort` inchangé |
+| §3 T8 `envoyerOtp(contratId:, empreinte:, …)` | un appel `fn_envoyer_otp_signature` | relecture `contrats_mission?select=id,hash_document` **avant** l'appel : empreinte différente → refus local `HASH_DOCUMENT_CHANGE` (bloquant), aucun SMS | T8 : un SMS (3 par 24 h) ne doit pas partir pour une révision que la signature refuserait (l.56563) |
+| §2.8 « `demo-contrat-001.html` » | un original démo | + `demo-contrat-002.html` (original du contrat `SIGNE_COMPLET`) | T8 : le partage d'un contrat signé (T9a) exige un original contrôlé |
+| §3 T8 « `ContratModels.swift` » ; `Models/Lot2Results.swift` | types posés par T1 dans `Lot2Results.swift` | `ContratResume`, `ContratDetail`, `OriginalContrat` déplacés dans `Contrats/ContratModels.swift` (champs additifs, inits de T1 conservés) ; issues OTP et `SignatureCertificat` restent dans `Lot2Results.swift` | en-tête de `Lot2Results.swift` (« le déplace dans son dossier ») |
+| Revue fraîche de T2, constats 2, 3 et 7 | URL STAGING comparée exactement ; nom de RPC et clé non prouvés ; `AdmissionSignatureRecette` en doublon d'`AdmissionOtp` | `AdmissionRecette.origine(_:)` (barre finale, chemin, casse ignorés) et `lire(projet:…)` ; `SupabaseContratsGatewayTests` vérifie RPC et `p_contrat_id` ; type unique `AdmissionSignatureRecette` (`AdmissionOtp` n'a jamais été créé) | T8 |
+| Tri `cree_le` de la liste (web `order('cree_le', { ascending: false })`) | — | `order=cree_le.desc.nullsfirst` (supabase-swift ajoute toujours la clause NULLS ; NULLS FIRST est le défaut PostgreSQL de `DESC`) ; certificat `cree_le.asc.nullslast` | T8 : même tri que le web |
+| §3 T4a « Fichiers » | `PresencesScreen`, `BlocPointageView`, `PresenceHistoriqueRow`, `PresenceValideeRow`, `EspaceSoignantSection`, `ProfileScreen` ; aucun modèle Core nommé | + `Pointage/PresencesModel.swift`, `Pointage/PresencesAffichage.swift` (sans texte), `Libelles/LibellesPresences.swift`, `Screens/Presences/PresenceAVenirRow.swift` ; libellés verbatim dans `LibellesWeb` ; `PlaceholderScreen` gagne `etat` (défaut « Disponible au lot 1 », inchangé pour le lot 0) | T4a : `PresencesModelTests` exige un modèle testable ; un texte que le web tutoie ne peut pas être verbatim dans `LibellesWeb` (égalité au caractère près et test du vouvoiement) |
+| §3 T4a identifiants | `presences-empty-<onglet>` | `presences-empty-avenir`, `-actives`, `-aujourdhui`, `-historique` (suffixes des onglets `presences-tab-*`) ; + `presences-loading`, `presences-refresh-error`, `presences-session-expired`, `presences-session-check`, `presences-bandeau-a-valider`, `presence-avenir-<mission>`, `presence-validee-<presence>`, `presence-historique-detail-<ligne>`, `presence-historique-litige-<ligne>`, `pointage-zone-provisoire-<mission>`, `profil-espace`, `placeholder-documents`, `placeholder-contrats` | T4a : chaque contrôle ou état atteint par un XCUITest porte un identifiant (PRINCIPES §6) |
+| §3 T4a « BlocPointageView » (carte mission) ; « PresenceHistoriqueRow » (ligne) | carte et ligne ouvrent la mission (web l.57, l.685) | non cliquables jusqu'à T5a ; « Détail », « Voir ou signaler un litige » et « Voir le contrat » : renvois web rendus seulement avec le présentateur de T10 | gap verrouillé : en démo, le détail d'une mission de `demo-presences.json` est introuvable ; aucun bouton sans effet avant T10 |
+| `PresencesSoignant.tsx` l.722-726 (« Code : … » d'une présence) | code de pointage de la présence affiché | non affiché | aucune colonne `code_*` n'est lue (gap « B1-ter » de la migration B1, projection `PresenceLue`) |
+| `PresencesSoignant.tsx` l.459-477 (écran d'erreur) | une relecture en échec affiche l'écran d'erreur (`isError`) | présences gardées, encart `presences-refresh-error` ; écran d'erreur au premier chargement seulement | règle du lot 1 (`AccueilModel`, `MissionsListModel`) : jamais de démontage sur un rafraîchissement |
+| §3 T7 « Tests d'abord » (« CARTE_IDENTITE affichée « Rejeté ✗ » », « « Vérifié ✓ » ») | libellés de `STATUTS_VERIFICATION` | cartes des exigences : « Rejeté » et « Vérifié ✅ » (`DocumentsSoignant.tsx` l.763, l.697) ; `STATUTS_VERIFICATION` seulement pour les documents complémentaires (l.856-897) | T7 : parité de la page web, qui n'emploie pas ces libellés sur les cartes d'exigences |
+| §3 T7 `JustificatifsView` (« bannière cohérence, expiration proche ») ; `DocumentsSoignant.tsx` l.611-640 | bandeaux du web | bandeau d'incohérence et d'expiration portés ; bandeau RCP et textes d'accès des documents complémentaires non affichés (affichés depuis L2-TJ, D3-D4) | HARD STOP n°4 (restriction d'exercice, obligation d'assurance) : « En attente de Gabrielle », tranché par délégation le 8 novembre 2026 |
+| §3 T7 « Fichiers » (`DemoMediaPicker.swift`) ; §2.8 (« fichiers fictifs de 3 pixels ») | fichiers démo dans l'app | règle et octets dans JoleneCore (`Demo/DemoSourcesDocument.swift`, `Resources/media-demo/`), `DemoMediaPicker` (app) ne fait que les rendre ; PNG = trois pixels du pilote, HEIC = fixture de T6, PDF vide, `trop-gros` = PDF de 10 Mo + 1 octet | T7 : testables par `swift test` (préparation identique aux vrais sélecteurs) |
+| §3 T7 « Dépendances » (T4a : `EspaceSoignantSection`) ; §2.2 (`Appareil` injecté par `AppContainer`, T4b) | consommés | `EspaceSoignantSection` créée par T7 (ligne « Mes documents ») ; magasin de reçus par `AppContainer.recusJustificatifs` (point d'extension) | T4a et T4b non intégrés à la base de T7 : fusion d'une ligne par tranche à l'intégration |
+| §3 T9a « Fichiers » (`EspaceSoignantSection.swift`, `MesDocumentsScreen.swift`, `BlocPointageView.swift`) | destinations « Mes contrats », onglet Contrats, « Voir le contrat » natifs | `ContratsDestination` (une ligne par point d'entrée) + entrée provisoire `profil-contrats` dans `ProfileScreen` (`ContratsEntreeProfil`) ; bascule à l'intégration (« Consignes », « Intégration de T9a ») | T9a : T4a et T7 tournent en parallèle, leurs fichiers n'existent pas sur sa base (`feat/ios-lot2` `51b32cc8`) ; rien n'est inventé à leur place |
+| §3 T9a « zone de signature en renvoi web jusqu'à T9b » | renvoi web | zone « Votre signature » (`contrat-renvoi-web`) : messages de préparation du web (l.377 motif serveur verbatim, l.388) puis, avec le présentateur `.safari` (lot 1 T10), « ✍️ Signer le contrat » (libellé de la carte web qui ouvre la même page, `ListeContrats.tsx` l.223) ; sans présentateur, « Signature non disponible pour le moment » (`SignerContratOtp.tsx` l.230, repris hors de son contexte d'origine : erreur bloquante du serveur `CONTRAT_INACTIF`, `CONTRAT_DEJA_COMPLET` ou `DEJA_SIGNE`, l.222-236 ; description corrigée à l'intégration, revue de T9a m1) et aucun bouton | « jamais un bouton sans effet » (`PresentateurRenvoiWeb`, verrou de `DemoAccueilTests`) ; aucun texte nouveau |
+| Consigne T9a (« textes de rendu l.377, l.388, l.394, l.715 ») | quatre textes affichés | l.377 (avec et sans motif) et l.388 ajoutés à `LibellesWeb.Contrat` et affichés ; l.394 non repris : même texte que l.377 sans motif (rendu `renduRefuse(messageServeur: nil)`), et un échec de transport de l'edge reste une erreur d'écran entière (`ContratModel`, revue de T8 mineur 5) ; l.715 (« Préparation du document contractuel final… ») non repris : le natif n'a pas d'état intermédiaire visible, le chargement couvre l'écran | T9a : aucune modification de `ContratModel.charger` (T8), aucun texte affiché sans son état |
+| Décision 17 / §3 T9a lecteur (`WKWebView`, `loadHTMLString(html, baseURL: nil)`, règle `WKContentRuleList`, méta CSP) | règle « bloquant toute ressource » ; défilement du lecteur | six règles, une par schéma de chargement (`^https?:`, `^wss?:`, `^ftps?:`, `^file:`, `^data:`, `^blob:` : les filtres WebKit n'acceptent pas l'alternative), installées avant le chargement, rien chargé si la compilation échoue ; en-tête injecté = CSP + `<meta name="viewport">` (sans viewport, la page serait rendue à 980 px) ; lecteur non défilant, hauteur du document (`scrollView.contentSize`) : l'écran défile seul, fond blanc en mode sombre (l'original n'a pas de thème sombre). Règles pures dans `JoleneCore/Contrats/LecteurContrat.swift` (`LecteurContratTests`) | décision 17 ; un défilement imbriqué captait les glissements des XCUITest et de VoiceOver |
+| §3 T9a `ShareSheet.swift` (« `UIActivityViewController`, effacement à la fermeture ») | feuille | présentée par UIKit au-dessus de la scène (popover centré sur iPad), `completionWithItemsHandler` → effacement ; copie aussi effacée à la disparition de l'écran et toutes les copies au changement d'epoch (`MainTabView.onDisappear`, une ligne) | une feuille UIKit enveloppée dans une feuille SwiftUI perd sa liaison à la fermeture programmatique |
+| §3 T9a XCUITest « contrat signé → partage (feuille système présentée, fichier `.html`) » | nom du fichier asserté | présentation de la feuille système assertée (`ActivityListView` ou `UIActivityContentView`) ; le nom `Contrat-<numéro>.html` et l'effacement sont prouvés par `OriginalContratTests` (T8) et `ContratModelTests` (partage) | la feuille système n'expose pas de manière stable le nom du fichier à XCUITest |
+| §3 T9a XCUITest « lecteur visible, aucune requête (sentinelle) » | sentinelle | sentinelle « 0 requête » relue au retour au profil ; elle ne voit pas les chargements de WebKit (hors processus) : l'isolement du lecteur est prouvé par sa configuration et `LecteurContratTests` | `NetworkSentinel` observe `URLSession` (`URLProtocol`) |
+| `CertificatView` (« `contrat-certificat` ; export PDF → renvoi web ») | certificat dans la page du contrat | certificat résumé dans la page du contrat (l.656-663) et page `/contrat/:id/certificat` native (`CertificatScreen` : empreinte complète et explication, mention de la page), ouverte depuis la page du contrat par `contrat-certificat-ouvrir` (libellé `TextesWeb.Certificat.titrePage`) — la page web du contrat n'a pas ce lien ; T10 y route le lien | T9a : la page fait partie du périmètre §1.1 « Certificat et partage » ; sans ce lien, elle ne serait atteignable que par T10 |
+| Filtre « Tous » (`ListeContrats.tsx` l.121 : `f === 'Tous' ? 'Tous'`) | libellé gardé comme constante | libellé = `FiltreContrat.tous.rawValue` (zone de rendu l.121) | la ligne porte deux « Tous » (valeur comparée et texte) : une constante annotée l.121 ne survivait pas à la mutation de la garde TL |
+| Revue fraîche de T8, mineurs 1 et 4 (préalables à T9a) | — | `certificat()` compare l'identifiant sans la casse (`meme`), test ; message du téléchargement repris de `LibellesWeb.Contrat.aucunTelechargeable` (`ContratMission.tsx` l.428, gardé par TL), textes du pilote de T8 inventoriés mot pour mot (`ContratModelsTests`, `SupabaseContratsGatewayTests`) | T9a |
+| §3 T4b identifiants (`pointage-segment-<index>`, `pointage-en-service`) | sans mission | `pointage-segment-<mission>-<n>`, `pointage-en-service-<mission>` ; + identifiants de « T4b — application » | T4b : plusieurs blocs de pointage par écran (missions a et b dans Aujourd'hui) |
+| §3 T4b `ConsentementGpsSheet` ; `ConsentementGPS.tsx` l.18 (`onOpenChange` → refus) | fermer la feuille = refuser | choix explicite exigé (`interactiveDismissDisabled`) ; aucun choix enregistré sans un bouton | décision déléguée D-T4b-2 |
+| `ProfilSoignant.tsx` l.194 (`consentement_gps !== false` → interrupteur coché) | NULL affiché comme un consentement donné | NULL affiché éteint, avec l'explication du retrait (`TextesWeb.ProfilConsentementGps.explicationRetiree`) | décision déléguée D-T4b-1 |
+| `PresencesSoignant.tsx` l.67-74, l.87-94 (audit `p_details: { type: 'gps', consentement: true }`) | booléen JSON | chaîne `"true"` / `"false"` (`AuditPort.ecrire` : `[String: String]`, lot 1) | aucun lecteur serveur du détail ; `->>'consentement'` rend le même texte |
+| §3 T4b XCUITest `scan-incertain` (« Vérification du pointage… » puis « Pointage enregistré ») | état transitoire observé | état final et un seul scan affirmés (`pointage-demo-scans`), un seul segment ; « Vérification… » prouvé par `PointageModelTests` et `LibellesPresencesTests` | la démo réconcilie dans la même boucle (horloge fixe) : l'état transitoire ne dure que quelques millisecondes, aucune attente fixe permise (règle des XCUITest) |
+| §2.2 `DemoQRScannerView` | détections démo | DEBUG : détections rendues au toucher de `pointage-scanner-demo-lire`, la feuille reste présentée jusque-là (seconde revue fraîche de T4b, MJ1) ; Release : deux détections du payload 0,6 s après l'ouverture de la feuille | une lecture automatique fermait la feuille quelques centaines de millisecondes après son apparition : les XCUITest qui l'attendaient étaient en course ; une fermeture pendant l'animation d'ouverture serait ignorée par SwiftUI (d'où le délai en Release) |
+| `PointageRotatifSoignant.tsx` l.123 (`consentementGPS === true`, sinon GPS omis) ; `PresencesSoignant.tsx` l.306-313, l.386 (`pointerArrivee`, `pointerDepart`, seuls à ouvrir `ConsentementGPS`, jamais appelés) | le web vivant ne recueille jamais le consentement : un soignant à NULL pointe sans GPS | feuille de consentement verbatim au premier pointage d'un soignant à NULL, puis autorisation iOS (décision 4) | écart assumé (seconde revue fraîche de T4b, m4) : choix de conformité déjà tranché par la décision 4 (aucune position sans consentement relu vrai, comme le web) ; le natif propose le choix que le web vivant ne propose plus. Tableau des écarts T4b, (d) |
+| `BandeauHorsLigne.tsx` l.72-81 (bouton « Réessayer », `aria-label` « Réessayer la connexion ») | relance manuelle de la vérification de connexion | aucun bouton : `HorsLigneBandeau` suit `NWPathMonitor` (`NetworkMonitor`), qui met l'état à jour seul | écart assumé (seconde revue fraîche de T4b, m5) : la vérification web interroge le réseau à la demande ; iOS notifie chaque changement de chemin, un bouton n'aurait aucun effet propre. Tableau des écarts T4b, (e) |
+| §3 T4b `PresencesScreen` | — | `.scrollDismissesKeyboard(.immediately)` | le pavé numérique n'a pas de touche Entrée : un défilement le ferme et découvre le bouton de pointage |
+| §2.3 `PointagePort` (`detail` seul pour le détail) | créneaux et synthèse serveur | + `ficheDetail(missionId:context:)` → `FicheDetailPresences` (mission en projection `MissionPresenceLue.colonnes`, première présence par arrivée en projection `PresenceControlee.colonnes`), défaut « non câblé » en extension (T5a) | la synthèse, la validation, la relance et les contrôles du web lisent `missions` et `presences[0]` (`DetailPresencesMission.tsx` l.130-139), absents de `DetailPresences` ; `select('*')` du web remplacé par une projection (aucune coordonnée, aucun code) |
+| §2.3 `NotationPort` (`noter` seul) | écriture seule | + `finPrevue(missionId:context:)` (`missions?select=fin_le`), défaut « non câblé » en extension (T5a) | relecture de `fin_le` avant la proposition (`PointageRotatifSoignant.tsx` l.156 ; revue fraîche de L2-T3, m6) ; toujours aucune lecture de note |
+| §3 T5a « Fichiers » (`NotationSheet.swift` monté par le départ final) ; XCUITest « départ final de la mission b → feuille de notation » | feuille ouverte par la zone de pointage | point d'extension `notationAuDepart(pointage:contexte:)` livré, branché par T4b dans sa zone (consigne T5a) ; parcours XCUITest reporté à cette zone | la zone qui possède le `PointageModel` est la tranche T4b, en parallèle ; la mission b de la démo finit à 06h00 UTC (fin − 30 min non atteinte) |
+| §3 T5a « Fichiers » (`MissionDetailScreen` bloc ASSIGNEE du lot 1 T3, `AccueilScreen` + `missionsOublieesCount`) | points d'entrée dans les écrans du lot 1 | boutons ajoutés au détail de mission du lot 0/1 (seul écran de détail présent) ; « Présences et pointage » rendu quand l'écran sait changer d'onglet (depuis l'Accueil) ; bandeau d'oubli du lot 1 gardé, son renvoi web remplacé par « Pointer mon départ maintenant » natif ; widget « Aller pointer » sur le planning vérifié de l'Accueil (`PlanningAccueil.planifie`, prochain créneau de l'assemblage) | lot 1 T3/T6b/T6c n'a pas livré d'autre détail de mission ; le web relit le planning à chaque rendu, le natif au chargement de l'Accueil (60 s) |
+| §3 T5a XCUITest « Accueil › Aller pointer » | données démo de l'Accueil | scénario DEBUG `-JOLENE_DEMO_SCENARIO accueil-pointage` (`DemoDashboardGateway(scenario: .pointage)`) : mission du jour de `demo-presences.json` en tête et `missions_oubliees_count = 1` | la démo normale n'a ni mission à pointer dans l'heure ni départ oublié ; `DemoAccueilTests` reste inchangé |
+| §3 T9b « Fichiers » (`JoleneUITests/DemoSignatureTests.swift`) | `DemoSignatureTests` | `DemoSignatureContratTests` (3 cas), dans l'éclat « contrats » de `ios-swift-ci.yml` avec `DemoContratsTests` (`-only-testing`, `-skip-testing` du socle, classes exigées par le résumé ; décision 22, application à T9b) ; `SignatureOtpPresentation` (Core) en plus de `SignatureOtpView` | T9b : nom fixé par la consigne de la tranche ; la présentation pure porte les règles d'affichage testées par `swift test` (la vue n'en a aucune) ; éclat : revue fraîche de T9b (M1), « lot2 » dépassait déjà 20 min |
+| §3 T9b XCUITest « `otp-expire` → « Recevoir un nouveau code » (l.339) » | libellé atteint quand le minuteur local tombe à zéro (l.109, l.339) | un refus serveur `OTP_EXPIRE` expire aussi le code localement (`SessionSignatureOtp.terminerSignature` : échéance passée) : « Expiré », champ et « Signer » désactivés, « Recevoir un nouveau code » | T9b : définition live de `fn_signer_contrat_otp` relue le 9 novembre 2026 (`otp_envoye_a < now() - 10 min` → preuve passée à `expire`, refus `OTP_EXPIRE`) : ce code ne peut plus servir, quel que soit le minuteur local ; écart au web assumé par cet amendement (la décision 25 ne porte que sur l'horloge de la fenêtre de pointage ; référence corrigée par la revue fraîche de T9b, m4) ; le web garderait « Renvoyer le code » et un champ actif tant que son minuteur tourne ; l'horloge démo fixée n'atteint jamais zéro |
+| §3 T9b XCUITest « compte TEST sans admission → renvoi web » | — | scénario démo `-JOLENE_DEMO_SCENARIO compte-test` (`ScenarioDemoContrats.compteTest`, `soignants.est_compte_test` vrai, aucune admission comme en production) posé par `AppContainer` (DEBUG), comme `otp-expire` | T9b : le monde démo n'avait aucun compte TEST |
+| Confirmation de signature (`SignerContratOtp.tsx` l.194-199, l.209-221 ; `ContratMission.tsx` l.767-775, l.819-823) | « Contrat signé ✅ » publié dès la réponse, puis remplacé par « ✅ Vous avez déjà signé ce contrat » au rechargement du contrat | confirmation publiée sur la relecture de la gateway (contrat `signature_soignant` et ligne `signatures_contrats` `signe` de l'appelant, même empreinte), avec le contrat et le certificat relus ensuite par le modèle ; relecture du contrat en échec relancée une fois, puis « Les contrats ne peuvent pas être chargés. Réessayez. » et « Réessayer » (`ContratModel.actualiser()`, `contrat-relecture-erreur`, `contrat-relecture-reessayer`) sous la confirmation ; jeton refusé pendant une relecture → `sessionExpired` et bandeau « Session à vérifier » (`contrat-session-bandeau`) ; annulation → rien publié ; confirmation gardée tant que l'écran reste ouvert, au-dessus de « déjà signé » (relu) | T9b : jamais de succès sans relecture ; la confirmation porte la mention l.216 (décision déléguée du 8 novembre 2026, ci-dessous) ; revue fraîche de T9b (m1) : une relecture du modèle en échec laissait « Soignant(e) : ⏳ En attente » sous « Contrat signé ✅ », sans rien dire ; le succès, prouvé par la gateway, n'est ni retiré ni renvoyé |
+| Case de consentement (l.267-278) | `<input type="checkbox">` | bouton qui bascule le consentement, état exposé par le trait d'accessibilité `isSelected`, cible de 44 pt | T9b : pas de case native sur iOS ; un `Toggle` ne bascule pas au toucher du libellé |
+| Champ du code (l.309-320) | `aria-label` « Code SMS à 6 chiffres », désactivé une fois expiré | `OTPField` du lot 0 : libellé d'accessibilité du web (`LibellesWeb.SignatureOtp.champCodeAccessibilite`, nouveau paramètre, défaut du lot 0 inchangé) et texte indicatif du web « 123456 » (l.316, `LibellesWeb.SignatureOtp.champCodeIndication`, paramètre `placeholder`, défaut du lot 0 « 6 chiffres » inchangé ; revue fraîche de T9b, m7), désactivé par l'environnement SwiftUI ; le défilement de la page ferme le clavier numérique (`scrollDismissesKeyboard(.immediately)`) | T9b : un `UITextField` enveloppé ignore `.disabled` ; le clavier numérique n'a pas de touche de validation |
+| `ContratModel.signature` (T8) pour un compte TEST sans original contrôlé | `.indisponible` | `.renvoiWeb` (admission absente ou close, original contrôlé ou non) ; admission ouverte jusqu'à `canSend ? expiresAt : otpExpiresAt`, close sur une échéance nulle ou passée (`ContratMission.tsx` l.311-312) | T9b : le web bascule tout compte TEST sans admission sur un autre mode (l.256-266, l.722-726) ; jamais d'OTP sans admission (décision 18) ; échéance : revue fraîche de T9b (m2), la fin de la capacité gardait un formulaire sans envoi possible au-delà de l'échéance du code |
+| Annonces `role="status"` (`SignerContratOtp.tsx` l.211 confirmation, l.265 « Vérification de la signature en cours… ») | lues par les lecteurs d'écran à leur apparition | `contrat-signe` et `contrat-otp-suspendu` annoncés à VoiceOver à leur apparition (`annonceALApparition`, JoleneDesign : même règle qu'`InlineNotice(announcesOnAppear:)`, une fois par texte) | revue fraîche de T9b (m8) : VoiceOver n'annonce pas seul un contenu apparu après une action |
+
+## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
+
+Le critère P10 de la porte du blueprint (§1.3) est amendé dans « Amendements du blueprint » ci-dessus :
+`unwiredPorts.filter(Lot2PortsTests.portsLot2.contains).isEmpty` remplace `unwiredPorts.isEmpty`.
+
+| Ligne du plan | Formulation initiale | Critère retenu | Décision |
+|---|---|---|---|
+| l.62 | « deux systèmes … Les deux doivent être reproduits » | seul le système rotatif est porté ; ① interdit par garde | 1 |
+| l.180 | pointage par `fn_pointer_*`, QR `fn_generer_qr_mission` / `fn_valider_scan_qr`, file hors ligne, « PDF serveur » | `fn_scanner_code_pointage` seul, pauses par alternance, code de secours = six chiffres, aucune file ; HTML serveur contrôlé | 1, 2, 3, 17 |
+| l.183 | QR `fn_generer_qr_mission` accepté ; précision « comparée à une présence issue de la coquille » | P2 (QR rotatif, niveaux 1 et 5) ; P3 (clés `p_metadata` + précision relue sur STAGING) | 1, 21 |
+| l.186 | « File hors-ligne testée … QR expiré jamais remis en file » | P6 : aucun scan mis en file ni rejoué, réconciliation par relecture | 2 |
+
+## Textes opérationnels hors web (T1)
+
+Textes affichables, non juridiques (aucune marque de `MARQUES_JURIDIQUES` de
+`scripts/mobile/check-textes-juridiques-ios.mjs`), sans ligne web à reprendre verbatim : le web n'a ni journal de
+reçus ni trousseau (`src/lib/terminal.ts` recalcule une empreinte navigateur à chaque appel). Vouvoiement ;
+aucun ne cite de valeur stockée. Gardés mot pour mot par les tests indiqués.
+
+| Constante | Texte | Source | Test |
+|---|---|---|---|
+| `RecuScan.messageRecuEnCours` | « Un autre pointage doit être réconcilié avant de continuer. » | pilote `mobile-native/src/workflows/presence/attemptJournal.ts` l.71, repris tel quel | `RecuScanTests` |
+| `RecuScan.messageIllisible` | « Le suivi sécurisé du pointage ne peut pas être vérifié. Aucun nouveau scan ne peut être envoyé. » | pilote `attemptJournal.ts` l.16, repris tel quel | `RecuScanTests.testAllerRetourEtRelectureFailClosed` |
+| `KeychainTerminalIdentity.messageVerrouille` | « Le trousseau de cet appareil est verrouillé. Déverrouillez l'appareil puis réessayez. » | nouveau (T1, revue fraîche) : `errSecInteractionNotAllowed`, transitoire | `KeychainTerminalIdentityTests.testTextesOperationnelsInventories` |
+| `KeychainTerminalIdentity.messageIndisponible` | « L'identifiant de cet appareil n'a pas pu être lu. Le pointage est momentanément indisponible : réessayez. » | nouveau (T1) ; remplace « … redémarrez l'application. », faux pour une valeur illisible | idem |
+| `KeychainTerminalIdentity.messageIllisible` | « L'identifiant de cet appareil est illisible. Le pointage n'est pas disponible dans l'application sur cet appareil : pointez depuis jolene.app. » | nouveau (T1, revue fraîche) : valeur stockée hors format, jamais réécrite ; recours web (consigne T4b) | idem |
+| `PointageModel.messageEtatIndisponible`, `PointageQuery.fallbackEtat` | « Impossible de charger son état. » | web `PointageRotatifSoignant.tsx` l.86, repris tel quel (T3) | `PointageModelTests`, `SupabasePointageGatewayTests` |
+| `PointageQuery.fallbackRelance` | « Relance impossible. » | web `DetailPresencesMission.tsx` l.123, repris tel quel (T3) | `SupabasePointageGatewayTests.testDetailCarteMasqueeSurErreurEtRelanceVerbatim` |
+| `PointageQuery.fallbackPresences` | « Impossible de charger vos présences. Réessayez. » | nouveau (T3) : échec de lecture, modèle des replis du lot 1 | `SupabasePointageGatewayTests` |
+| `PointageQuery.fallbackScan` | « Impossible d'enregistrer le pointage. Réessayez. » | nouveau (T3) : rollback prouvé hors exceptions déclarées (repli de `SupabaseErrorMapping`) | `SupabasePointageGatewayTests.testRollbacksHorsListeEtContrat` |
+| `PointageQuery.fallbackLocalisation` | « Impossible d'enregistrer votre choix de localisation. Réessayez. » | nouveau (T3) : `fn_consentir_gps` en échec ou relecture vide (aucune hypothèse locale) | `SupabasePointageGatewayTests.testConsentementLuPuisEnregistreEtRelu` |
+| `PointageQuery.fallbackDetail` | « Impossible de charger le détail des présences. Réessayez. » | nouveau (T3) : repli de la synthèse serveur, jamais affiché (carte masquée) | `SupabasePointageGatewayTests` |
+
+## Textes opérationnels hors web (T4a)
+
+Non juridiques (aucune marque de `MARQUES_JURIDIQUES`), vouvoyés ; `LibellesPresences.swift` est dans `DOSSIERS_LOT2`.
+Les libellés repris tels quels du web sont dans `LibellesWeb` (`ListePresences`, `LignePresence`, `BlocPointage`,
+`EspaceSoignant`), gardés au caractère près par `tests/node/textes-juridiques-ios.node.mjs`. Les textes que le web
+tutoie sont vouvoyés, seule la personne change (décision 9 du lot 1) : sous-titre de la page (l.515), titre de
+l'erreur (l.467), descriptions des quatre états vides (l.565, l.588, l.611, l.764), motif « Aucun créneau planifié »
+(`BlocPointageMission.tsx` l.105) ; `LibellesPresencesTests` relit chaque source web. Les titres « Session à
+vérifier » et « Vérifier ma session » sont ceux de l'Accueil du lot 1 (`AccueilScreen`).
+
+| Constante | Texte | Source | Test |
+|---|---|---|---|
+| `LibellesPresences.EspaceSoignant.titreSection` | « Mon espace » | décision 24 du lot 2 (section du Profil ; aucune page web ne regroupe ces trois écrans) | `LibellesPresencesTests.testTextesOperationnelsInventories` |
+| `LibellesPresences.Provisoire.etat` | « Disponible au lot 2 » | provisoire (forme de l'onglet provisoire du lot 0), **retiré par T4b** (9 novembre 2026 : plus aucun écran provisoire du lot 2) | — |
+| `LibellesPresences.Provisoire.pointage` | « Le pointage dans l'application arrive avec la suite du lot 2. » | provisoire, **retiré par T4b** (zone de pointage livrée, assertions migrées) | — |
+| `LibellesPresences.Provisoire.documents` | « Vos justificatifs arrivent dans l'application avec la suite du lot 2. » | provisoire, **retiré à l'intégration de T7** (8 novembre 2026 : constante et assertions supprimées, « Mes documents » ouvre `MesDocumentsScreen`) | — |
+| `LibellesPresences.Provisoire.contrats` | « Vos contrats arrivent dans l'application avec la suite du lot 2. » | provisoire, **retiré à l'intégration de T9a** (8 novembre 2026 : constante et assertions supprimées, « Mes contrats » ouvre `ContratsDestination.liste`) | — |
+
+## Textes opérationnels hors web (T4b)
+
+Non juridiques (aucune marque de `MARQUES_JURIDIQUES`), vouvoyés, dans `Libelles/LibellesPresences.swift`
+(`DOSSIERS_LOT2`) ; gardés mot pour mot par `LibellesPresencesTests.testTextesOperationnelsDuPointageInventories`.
+Les libellés repris tels quels de `PointageRotatifSoignant.tsx` et `BandeauHorsLigne.tsx` sont dans
+`LibellesWeb.Pointage` (garde Node au caractère près) ; la surcharge du code inconnu (l.136) est vouvoyée, seule la
+personne change (décision 6, `testSurchargeDuCodeInconnuVouvoyeeDontSeuleLaPersonneChange`). Consentement, bandeau sans
+GPS et retours : `TextesWeb` (HARD STOP n°4).
+
+| Constante | Texte | Source | Test |
+|---|---|---|---|
+| `LibellesPresences.Pointage.verification` | « Vérification du pointage… » | nouveau (T4b) : `PointageModel.Issue.verification`, libellé du blueprint (§3 T4b) | idem |
+| `LibellesPresences.Pointage.nonRecu` | « Le pointage n'a pas été reçu. Saisissez le code actuellement affiché par l'établissement. » | nouveau (T4b) : `.nonRecu`, le code a pu tourner (§2.5) | idem |
+| `LibellesPresences.Pointage.horsLigne` | « Pointage impossible sans connexion. » | blueprint §2.5 (« Pointage impossible sans connexion ») : `.horsLigne`, aucun appel | idem |
+| `LibellesPresences.Pointage.autreMission` | « Ce code était celui d'une autre de vos missions : le pointage y a été enregistré. » | nouveau (T4b) : `.enregistreSurAutreMission` (consigne T4b : précision sur la mission pointée) | idem |
+| `LibellesPresences.Pointage.positionApproximative` | « Position approximative : le pointage a été envoyé sans position. Pour la joindre, activez « Position exacte » pour Jolene dans les réglages de localisation de l'appareil. » | décision 5 (encart « Position exacte ») | idem, `testEncartDePositionApproximative` |
+| `LibellesPresences.Pointage.fermer` | « Fermer » | nouveau (T4b) : fermeture de la feuille du scanner (le dialogue web se ferme par sa croix) | idem |
+| `LibellesPresences.Pointage.voirSurJolene` | « Voir sur jolene.app » | lot 1 (`AccueilScreen.swift`), repris par T7 : renvoi web d'un suivi non vérifiable | idem |
+| `LibellesPresences.Pointage.sessionAVerifier` | « Session à vérifier » | lot 1 (`MissionsListScreen.swift` l.107, `PresencesScreen`), repris tel quel (comme `LibellesJustificatifs.sessionAVerifier`, T7) : bloc de session expirée de la zone (revue fraîche de T4b, M1) | idem |
+| `LibellesPresences.Pointage.verifierMaSession` | « Vérifier ma session » | lot 1 (`MissionsListScreen.swift` l.108), repris tel quel : action du bloc (M1) | idem |
+| `LibellesPresences.Pointage.messageSessionExpiree` | « Votre session a expiré. Reconnectez-vous. » | `SessionController.sessionExpiredMessage` (lot 0), repris tel quel (M1) | idem |
+| `LibellesPresences.Liste.ecranNonDisponible` | « Cet espace n'est pas encore disponible dans l'application. Rendez-vous sur jolene.app. » | lot 0 (`MobileAccess.unsupportedRole`), repris tel quel comme `LibellesJustificatifs.espaceNonDisponible` (T7) : coupe-circuit `ios_natif_presences_actif` (seconde revue fraîche de T4b, m3) | `testTextesOperationnelsInventories` |
+
+Repris d'écrans déjà livrés, sans texte nouveau (seconde revue fraîche de T4b, m1) : le bloc « Session à vérifier » de la
+ligne du consentement du Profil reprend `LibellesPresences.Pointage.sessionAVerifier`, `messageSessionExpiree` et
+`verifierMaSession` (même bloc que la zone, M1) ; le renvoi du coupe-circuit reprend `LibellesPresences.Pointage.voirSurJolene`.
+
+Repris d'écrans déjà livrés, sans texte nouveau (revue fraîche de T4b, M3) : « Réessayer » de la ligne du consentement
+du Profil (`LibellesWeb.Pointage.reessayer`, même texte que le bouton web de `ProfilSoignant.tsx` l.412) ; l'indicateur
+de chargement de cette ligne reprend son libellé (`TextesWeb.ProfilConsentementGps.libelle`).
+
+DEBUG seulement (absents en Release, jamais vus par un utilisateur) : « Pointages enregistrés (démo) » et « N scan · M avec
+position » (`pointage-demo-scans`, preuve des XCUITest, sur le modèle de `documents-demo-envois`), et le bouton
+`pointage-demo-relire` (libellé vocalisé « Relire les compteurs (démo) » ; revue fraîche de T4b, m3), et le bouton
+« Simuler la lecture du QR (démo) » du scanner démo (`pointage-scanner-demo-lire`, seconde revue fraîche de T4b, MJ1).
+
+## Textes opérationnels hors web (T8)
+
+Non juridiques (aucune marque de `MARQUES_JURIDIQUES`), vouvoyés, repris tels quels de leur source ; T8 n'ajoute
+aucun texte de consentement, de signature ni de contrat (HARD STOP n°4 : tous viennent de `TextesWeb`).
+
+| Constante | Texte | Source | Test |
+|---|---|---|---|
+| `MessagesContrats.indisponible` | « Les contrats ne peuvent pas être chargés. Réessayez. » | pilote `mobile-native/src/workflows/contracts/supabaseGateway.ts` l.21 | `ContratModelTests`, `SupabaseContratsGatewayTests` |
+| `SupabaseContratsGateway.messageSignatureNonConfirmee` | « La signature ne peut pas être confirmée. Rechargez son état ; ne renvoyez pas automatiquement le code. » | pilote `supabaseGateway.ts` l.263 | `SupabaseContratsGatewayTests.testSuccesNonConfirmeParLaRelectureNEstPasUnSucces` |
+| `FichierContratTemporaire.messageIndisponible` | « Aucun contrat téléchargeable pour le moment. » | web `src/pages/ContratMission.tsx` l.428 | `OriginalContratTests` |
+
+Écart assumé : sans `telephone_masked` ni `expire_dans_minutes` dans un succès d'envoi, la session annonce « Code
+envoyé au numéro masqué. Valide 10 min. » (`LibellesWeb.SignatureOtp.numeroMasque`, l.296, et la durée du minuteur,
+l.145) là où le web afficherait `undefined`.
+
+## Textes opérationnels hors web (T7)
+
+Non juridiques (aucune marque de `MARQUES_JURIDIQUES`), vouvoyés ; aucun équivalent web : le web n'a ni journal de
+reçus ni réconciliation d'envoi (`DocumentsSoignant.tsx` l.361-431), ni section regroupant présences, documents et
+contrats. Modèle : `RecuScan.messageRecuEnCours` / `messageIllisible` (pilote `attemptJournal.ts`). Tous les autres
+libellés de l'écran sont ceux du web, repris tels quels ou vouvoyés (`Documents/LibellesJustificatifs.swift`, garde
+`LibellesJustificatifsTests`, qui relit chaque ligne web).
+
+| Constante | Texte | Source | Test |
+|---|---|---|---|
+| `LibellesJustificatifs.envoiAVerifier` | « L'envoi du document est en cours de vérification. Ne le renvoyez pas : cette page se mettra à jour. » | nouveau (T7) : `IssueEnvoiDocument.incertain`, reçu `started` gardé, aucun renvoi (décision 14) | `LibellesJustificatifsTests.testTextesOperationnelsInventories`, `PresentationJustificatifsTests` |
+| `LibellesJustificatifs.envoiNonRecu` | « Le document n'a pas été reçu. Choisissez-le de nouveau puis réessayez. » | nouveau (T7) : `.nonEnvoye`, aucun octet conservé, nouvelle sélection (décision 14) | idem |
+| `LibellesJustificatifs.envoiPrecedentAVerifier` | « Un autre envoi de document doit être vérifié avant de continuer. » | nouveau (T7) : `EtatEnvoi.recuEnCours`, sur le modèle de `RecuScan.messageRecuEnCours` | idem |
+| `LibellesJustificatifs.suiviIllisible` | « Le suivi sécurisé des envois ne peut pas être vérifié. Aucun nouveau document ne peut être envoyé. » | nouveau (T7) : `EtatEnvoi.suiviIllisible`, sur le modèle de `RecuScan.messageIllisible` ; renvoi web `DocumentsModel.renvoiWeb` | idem |
+| `LibellesJustificatifs.monEspace` | « Mon espace » | blueprint §7 Q24 (section « Mon espace » du Profil) ; titre de section | idem |
+
+Repris d'écrans natifs déjà livrés, sans texte nouveau : « Cet espace n'est pas encore disponible dans l'application.
+Rendez-vous sur jolene.app. » (`MobileAccess.unsupportedRole`, lot 0 : onglets DPAE et Contrats, drapeau
+`ios_natif_documents_actif` à faux), « Voir sur jolene.app » (`AccueilScreen.swift` l.283, lot 1), « Session à
+vérifier » / « Vérifier ma session » (`MissionsListScreen.swift` l.107-108, lot 1) et
+`SessionController.sessionExpiredMessage`.
+
+## Textes opérationnels hors web (T5a)
+
+Non juridiques (aucune marque de `MARQUES_JURIDIQUES`), vouvoyés ; `Libelles/LibellesDetailPresences.swift` est dans
+`DOSSIERS_LOT2`. Les fragments repris tels quels du web sont dans `LibellesWeb` (`DetailPresences`, `Notation`,
+`AllerPointer`, `OubliDepart`, `DetailMission`), gardés au caractère près par la garde Node. Textes que le web tutoie,
+vouvoyés (seule la personne change) : description de la feuille de notation (`PointageRotatifSoignant.tsx` l.280) et
+remerciement (`NotationRapide.tsx` l.162), relus par `LibellesDetailPresencesTests`. Textes de relance : `TextesWeb.Presences`
+(TL, verbatim tutoyé, décision de la vague 4).
+
+| Constante | Texte | Source | Test |
+|---|---|---|---|
+| `LibellesDetailPresences.Notation.erreurEnregistrement` | « La note n'a pas pu être enregistrée. Réessayez. » | web `NotationRapide.tsx` l.55, première phrase ; la seconde (« tu pourras noter depuis la mission ») promettrait une notation depuis le détail d'une mission, absente de l'application ; la feuille reste ouverte et « Envoyer ma note » réessaie | `LibellesDetailPresencesTests.testTextesOperationnelsInventories`, `NotationModelTests` |
+| `LibellesDetailPresences.voirSurLeWeb` | « Voir sur jolene.app » | repris du lot 1 (`AccueilScreen`) : renvoi web du récapitulatif financier | idem |
+| `LibellesDetailPresences.Echec.chargementImpossible` | « Le détail de vos présences n'a pas pu être chargé. Vérifiez votre connexion puis réessayez. » | repli quand l'erreur de lecture ne porte aucun message lisible (revue fraîche de T5a, m11 : l'écran affichait un message vide), sur le modèle du lot 1 (`MissionDetailModel.genericFailureMessage`, « La mission n'a pas pu être chargée. Vérifiez votre connexion puis réessayez. ») | `LibellesDetailPresencesTests.testTextesOperationnelsInventories` |
+
+Repris d'écrans natifs déjà livrés, sans texte nouveau : « Session à vérifier » / « Vérifier ma session » (lot 1, via
+`LibellesDetailPresences.Echec`, plus de chaîne en dur dans `DetailPresencesScreen`), `SessionController.sessionExpiredMessage`
+(lot 0, repli de la session expirée sans message) et `LibellesPresences.Liste.erreurTitre` (« Impossible de charger vos
+présences », T4a) pour l'échec de lecture du détail.
+
+## Textes opérationnels hors web (T9b)
+
+Aucun texte nouveau ; tous sont repris tels quels d'écrans ou de modules déjà livrés :
+
+| Texte | Source | Où (T9b) | Test |
+|---|---|---|---|
+| « Cet espace n'est pas encore disponible dans l'application. Rendez-vous sur jolene.app. » | lot 0, `MobileAccess.unsupportedRole` (via `ZoneSignature.messageRenvoiWeb`), comme les onglets DPAE de T7 | renvoi web d'un compte TEST sans admission ; « ✍️ Signer le contrat » (`LibellesWeb.Contrats.signerLeContrat`, `ListeContrats.tsx` l.223) seulement avec le présentateur `.safari` | `ContratModelTests.testZoneDeSignatureSelonLeContratEtLeCompte`, `DemoSignatureContratTests.testCompteTestSansAdmissionRenvoieVersLeWeb` |
+| « Les contrats ne peuvent pas être chargés. Réessayez. » et « Réessayer » | T8, `MessagesContrats.indisponible` (pilote `supabaseGateway.ts` l.21, inventorié ci-dessus) ; `LibellesWeb.Contrats.reessayer` (`AccesEtablissement.tsx` l.84, gardé par TL ; déjà le bouton de `contrat-erreur`) | sous la confirmation, quand le contrat n'a pas pu être relu après une signature confirmée (revue fraîche de T9b, m1) | `ContratModelTests.testSigneePuisRelecturesEnEchecProposeLActualisation`, `SignatureOtpPresentationTests.testRelectureEnEchecProposeeSeulementApresLaSignature` |
+| « Session à vérifier », « Vérifier ma session », « Votre session a expiré. Reconnectez-vous. » | lot 1, `MissionsListScreen.swift` l.107-108 et `SessionController.sessionExpiredMessage` (déjà sur l'écran de session à vérifier de `ContratScreen`, T9a) | bandeau `contrat-session-bandeau` quand un jeton est refusé, contrat affiché (m1) | `ContratModelTests.testSigneePuisSessionExpireeALaRelecture` |
+
+Le texte indicatif « 6 chiffres » du champ OTP du lot 0 n'apparaît plus sur l'écran de signature : le champ y porte celui
+du web, « 123456 » (`SignerContratOtp.tsx` l.316, `LibellesWeb.SignatureOtp.champCodeIndication`, gardé par TL ; revue
+fraîche de T9b, m7) ; le défaut du lot 0 reste celui d'`OTPField` (`OTPField.indicationParDefaut`), sans autre écran.
+
+## Décisions déléguées du 8 novembre 2026
+
+Mandat : le 8 novembre 2026, Gabrielle a délégué toutes les décisions, juridiques comprises (« arrête de me demander et
+prends les décisions, avance seul »). Les HARD STOP n°4 du lot 2, jusqu'ici « En attente de Gabrielle », sont donc
+instruits et tranchés ci-dessous par la tranche L2-TJ (branche `lot2/l2-tj-v2`, D1 à D12) ; les tranches T4b, T5a et
+T9b ont tranché leurs propres points dans les sous-sections qui suivent D12 (réunies à l'intégration du 9 novembre
+2026, chacune avec sa ligne de délégation). Restent hors de cette délégation :
+les PR B9 (go explicite au merge, règle 3 de `LOTS_2_5_DECISIONS`) et ce qui exige la présence physique de Gabrielle
+(appareil, numéros de téléphone, comptes Apple ou Twilio), toujours listés sous « En attente de Gabrielle ».
+
+Règles appliquées à chaque point :
+- **le natif suit le web mot pour mot** (décision de la vague 4) : tout texte juridique ou de consentement est repris
+  verbatim du web ou du serveur, tutoiement compris, avec sa source (fichier:ligne), et gardé au caractère près par
+  `tests/node/textes-juridiques-ios.node.mjs`. Le passage des textes juridiques au vouvoiement se fera d'abord sur le
+  web (PR HARD STOP), puis le natif suivra par la garde. Aucun wording juridique n'est inventé par le natif ;
+- **force des sources** : TEXTE (loi, règlement, décret : source primaire), JUGÉ (jurisprudence publiée), doctrine
+  (Apple, autorité administrative), choix de conformité Jolene (CGU de production, paramètre ou règle serveur relus
+  dans `supabase/schema/public.sql`). Une restriction exposée à l'utilisateur n'est retenue que si le serveur
+  l'applique réellement (lu dans le dump) ;
+- aucune écriture en production ni sur STAGING, aucun changement web ou serveur dans cette tranche : les corrections
+  hors natif sont consignées comme PR à préparer, hors lot 2.
+
+### D1 — TL : textes juridiques et de consentement verbatim (P9, validation écrite)
+
+- **Décision** : les textes de `JoleneCore/Legal/TextesWeb.swift` sont validés pour l'affichage natif, tels quels.
+  T4b, T7, T9a et T9b ne sont plus bloquées par la validation écrite de TL ; la revue sur iPhone (P9, appareil) reste
+  à faire par Gabrielle (« En attente de Gabrielle »).
+- **Consentement GPS et retrait** (`ConsentementGPS.tsx` l.25-65, `BandeauSansGPS.tsx` l.9, `SectionPreferences.tsx`
+  l.129-136 et l.161) — TEXTE : Règlement (UE) 2016/679 (RGPD), art. 6, § 1, a) (base légale citée « Art. 6.1.a
+  RGPD »), art. 7, § 3 (retrait à tout moment, aussi simple que le consentement), art. 7, § 4 et considérant 42
+  (consentement libre : aucun préjudice en cas de refus), art. 13 (information). Choix de conformité Jolene : CGU de
+  production §4.4 (`PageCGU.tsx` l.97-104 : position demandée au seul moment du pointage, aucun suivi continu ni en
+  arrière-plan, coordonnées brutes supprimées sous 90 jours) ; le natif n'a aucun `UIBackgroundModes` (§2.1).
+  Conformité : un refus ne bloque jamais le pointage (décision 4) et le retrait est porté par le Profil natif (T4b,
+  correction 15), condition de livraison de l'écran de consentement. Le natif n'écrit aucun audit
+  `GPS_CONSENTEMENT_*` (absent du CHECK).
+- **Attestation de santé** (`DocumentsSoignant.tsx` l.75, l.93, l.106, l.112, l.132) — TEXTE : Code pénal, art. 441-7
+  (attestation faisant état de faits matériellement inexacts : un an et 15 000 €) ; Code de la santé publique,
+  art. L.3111-4 (obligation vaccinale des professionnels exposés). JUGÉ : Cass. crim., 7 mars 2012, n° 11-82.153,
+  publié au bulletin : « seules les déclarations établies en faveur d'un tiers bénéficiaire constituent une
+  attestation ou un certificat » au sens de l'art. 441-7 ; une déclaration sur l'honneur faite pour soi-même n'y entre
+  pas. Choix de conformité Jolene : déclaration sur l'honneur au lieu de stocker des pièces de santé
+  (`fn_trg_bloquer_documents_sante`, `docs/CONFORMITE.md` ; RGPD art. 5, § 1, c) et art. 9). Décision : affichage
+  verbatim maintenu (texte de production, aucun wording inventé) ; « toute fausse déclaration est passible de
+  poursuites » reste exact (responsabilité civile et contractuelle), mais la référence à l'art. 441-7 est fragile pour
+  une auto-déclaration (arrêt précité). **PR web à préparer hors lot** (HARD STOP, wording) : revoir la parenthèse
+  « (Art. 441-7 du Code pénal) » de la l.112 ; le natif suivra par la garde.
+- **Contrat : bandeaux, CDD à préparer, document figé, pied de page, mode OTP** (`ContratMission.tsx` l.559-579,
+  l.608, l.628-642, l.745-748, l.827, l.836-842) — TEXTE : Code civil, art. 1366 (l'écrit électronique a la même force
+  probante que l'écrit papier, sous réserve d'identification de son auteur et d'intégrité) et art. 1367 (signature
+  électronique : procédé fiable d'identification garantissant son lien avec l'acte ; la fiabilité n'est présumée que
+  dans les conditions du décret n° 2017-1416 du 28 septembre 2017, c'est-à-dire pour une signature qualifiée) ;
+  Règlement (UE) n° 910/2014 (eIDAS), art. 25, § 1 (une signature non qualifiée ne peut être privée d'effet au seul
+  motif de sa forme). « Conforme art. 1366-1367 Code civil » affirme le respect des conditions d'identification et
+  d'intégrité (OTP SMS, horodatage, empreinte SHA-256 de l'original, `fn_signer_contrat_otp`), pas une présomption de
+  fiabilité ; le pied de page dit « Signature électronique simple. » et le certificat renvoie à un prestataire qualifié
+  pour une signature qualifiée : cohérent, validé.
+- **Art. L.1242-12 du Code du travail** (mention « Contrat salarié écrit ») : voir D6.
+- **`MESSAGES_ERREUR`** (`SignerContratOtp.tsx` l.30-45) : messages liés aux codes de `fn_envoyer_otp_signature` et
+  `fn_signer_contrat_otp` (choix Jolene, aucun énoncé de droit hors l'intégrité `HASH_DOCUMENT_CHANGE`), validés.
+- **Compte à rebours 72 h** (`Countdown72hSignature.tsx` l.43, l.69-70) : choix Jolene appliqué par le serveur (cron
+  d'expiration : contrats non signés `cree_le + 72 h` → `EXPIRE` et mission annulée, `public.sql` l.53042-53045) ;
+  état dérivé de `cree_le`, jamais stocké. Validé.
+- **Certificat** (`CertificatSignature.tsx` l.95-175, `CertificatSignaturePage.tsx` l.185-215) : document probatoire
+  conforme aux textes ci-dessus (signature simple ou avancée, renvoi au prestataire qualifié pour eIDAS qualifiée).
+  Validé. Observation hors lot, non bloquante : « signature électronique sécurisée » (l.172-175, l.214) est une
+  notion du décret n° 2001-272, abrogé par le décret n° 2017-1416 ; à moderniser côté web (PR HARD STOP), le natif
+  suivra.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D2 — T4a : bandeau « à valider » et texte de relance
+
+- **Textes** : `TextesWeb.Presences.bandeauAValider` (`PresencesSoignant.tsx` l.658), `relanceTitre` et
+  `relanceExplication` (`DetailPresencesMission.tsx` l.697-698).
+- **Sources** : choix Jolene appliqué par le serveur — `fn_valider_presences_72h_auto` (`public.sql` l.65474-65500 :
+  paramètre `delai_autovalidation_presence_h`, défaut 72 ; exclut les présences en litige ou en alerte de fraude) ;
+  CGU de production §4.6 (`PageCGU.tsx` l.115 : « En l'absence de contestation, les présences peuvent être validées
+  automatiquement après 72 heures ») ; CGU art. 2 et 4.5 (`PageCGU.tsx` l.48, l.109 : l'établissement est l'employeur
+  légal, Jolene n'est ni employeur ni tiers-déclarant) pour « En salarié, le salaire est versé par l'établissement
+  employeur ».
+- **Décision** : validés verbatim, tutoiement compris. Consigne : toute modification de `delai_autovalidation_presence_h`
+  impose une PR HARD STOP des textes (web puis natif), le délai étant écrit dans le texte.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D3 — T7 : bandeau RCP (affiché)
+
+- **Textes** (`DocumentsSoignant.tsx`) : l.623 « Ton assurance RCP est expirée. Pense à la renouveler. », l.624 « Tu ne
+  peux pas postuler aux missions libérales tant que ta RCP n'est pas à jour. », l.634 « L'assurance RCP est obligatoire
+  pour l'exercice libéral et mixte. Téléverse ton attestation RCP. ».
+- **Sources** : TEXTE — Code de la santé publique, art. L.1142-2 (les professionnels de santé exerçant à titre libéral
+  sont tenus de souscrire une assurance de responsabilité civile professionnelle) et art. L.1142-25 (manquement puni de
+  45 000 € d'amende) ; l'exercice mixte comporte une part libérale, soumise à l'obligation. Choix de conformité Jolene,
+  **appliqué par le serveur** : `fn_documents_ok_pour_mission(…, 'LIBERAL')` (`public.sql` l.31652-31730) exige chaque
+  pièce critique `LIBERAL_ONLY` vérifiée et non expirée (RCP_ASSURANCE critique `LIBERAL_ONLY` à expiration, matrice
+  paramétrée `documents_requis_par_profession`), appelée à la candidature (`fn_accepter_mission_urgence` l.5178,
+  `fn_enregistrer_swipe` l.32857, `fn_finaliser_attribution_mission` l.36806, `fn_proposer_mission_soignant` l.49361) ;
+  `dec_verifier_docs_avant_debut` (l.3903-3926) refuse le démarrage d'une mission libérale sans RCP valide. La
+  restriction affichée est donc exacte et dérivée d'une table paramétrée (aucune règle en dur).
+- **Décision** : affichés verbatim, tutoiement du web compris (`TextesWeb.Justificatifs.rcpExpiree`,
+  `rcpExpireeRestriction`, `rcpObligatoire`), par `PresentationJustificatifs.bandeauRcp` (règle de T6
+  `DossierDocuments.alerteRcp`), entre les expirations proches et l'incohérence comme le web ; identifiants
+  `documents-rcp`, `documents-rcp-expiree`, `documents-rcp-restriction`, `documents-rcp-obligatoire` ; démo
+  `-JOLENE_DEMO_SCENARIO rcp-expiree` ; tests `PresentationJustificatifsTests.testBandeauRcpCommeLeWeb`,
+  `DemoDocumentsGatewayTests.testScenarioRcpExpireeMontreLeBandeauRcp`, XCUITest
+  `DemoDocumentsTests.testRcpExpireeAfficheLeBandeauDuWeb`.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D4 — T7 : textes d'accès des documents complémentaires (affichés)
+
+- **Textes** (`DocumentsSoignant.tsx`) : l.867-868 (scolarité : « … contrôle les crédits, stages, unités
+  d'enseignement et attestations exigés avant d'ouvrir une pré-éligibilité. ») et l.882-883 (licence : « … délivrée
+  par le Conseil de l'Ordre : elle est contrôlée avant tout accès aux remplacements de médecin. »).
+- **Sources** : TEXTE — Code de la santé publique, art. L.4131-2 (autorisation d'exercer comme remplaçant d'un médecin
+  délivrée pour une durée limitée par le conseil départemental de l'ordre des médecins). Choix de conformité Jolene,
+  **appliqué par le serveur** : validation d'une attestation de scolarité refusée sans
+  `conditions_scolarite_confirmees` (« l'année seule ne suffit pas », `fn_admin_moderer_document` l.11260-11284) et
+  sans formation ni année compatibles avec la profession (`fn_professions_autorisees_scolarite`, l.11762-11789) ;
+  licence retenue seulement vérifiée, valide au plus 13 mois et avec sa spécialité canonique
+  (`fn_recalculer_preuves_etudiant_internal_20260810`, l.52125-52150). Les deux textes décrivent exactement ces
+  contrôles.
+- **Décision** : affichés verbatim, tutoiement compris (`TextesWeb.Justificatifs.accesScolarite`, `accesLicence`), dans
+  `PresentationJustificatifs.complementaires` ; identifiant `document-description-<TYPE>` ; tests
+  `PresentationJustificatifsTests.testDocumentsComplementairesAvecTextesDAccesDuWeb`, XCUITest
+  `DemoDocumentsTests.testDocumentsComplementairesAffichentLesTextesDAccesDuWeb`.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D5 — T7 : encart RIB (non porté au lot 2)
+
+- **Texte** : « À quoi sert ton RIB ? » (`DocumentsSoignant.tsx` l.821-849, variantes l.830-843).
+- **Sources** : exact sur le fond — l'établissement employeur lit le RIB du salarié pour sa mission
+  (`fn_consulter_rib_soignant_internal_20260801`, `public.sql` l.25619) ; information sur les destinataires conforme à
+  l'art. 13, § 1, e) du RGPD ; CGU art. 4.5 (établissement employeur).
+- **Décision** : texte jugé exact, **non porté au lot 2** pour une raison non juridique : ses deux variantes renvoient à
+  des écrans absents du natif (bouton « Configurer mes versements → » vers `/soignant/stripe-connect` ; chemin
+  « Mon compte → Coordonnées bancaires »), versements du lot 3. Les afficher sans destination enfreindrait « aucun
+  bouton sans effet ». À porter verbatim avec le lot 3.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D6 — Mention du pied de page des contrats CDDU et VACATION (revue fraîche de T8, mineur 10)
+
+- **Décision juridique** : prise par Gabrielle elle-même le 08/11/2026 et livrée sur le web par #1122 (`b2e75eb6`) :
+  `TYPES_CONTRAT_MENTION_SALARIEE = ['CDD', 'SALARIE', 'CDDU', 'VACATION']` (`ContratMission.tsx` l.65) reçoivent
+  « Contrat salarié écrit — art. L.1242-12 du Code du travail. ». TEXTE : Code du travail, art. L.1242-12 (le CDD est
+  établi par écrit et comporte la définition précise de son motif) et art. L.1242-2, 3° (CDD d'usage) ; la vacation
+  salariée de droit privé est un CDD.
+- **Reprise native** (cette tranche) : `ContratRules.mentionPiedDePage` lit `TextesWeb.Contrat.typesMentionSalariee`,
+  gardé type par type contre la constante du web (la garde lit désormais une liste nommée `const … = [...]`) ; zone de
+  rendu du pied de page recopiée (l.836-842) ; tests `ContratRulesTests.testMentionSalarieePourCdduEtVacationCommeLeWeb`
+  et garde Node « TJ : les types à mention salariée… ». La règle pure du web vit dans une page TSX, hors de
+  l'exporteur golden : pas de vecteur, cas CDDU et VACATION ajoutés aux tests.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026 (reprise native ; la règle juridique est
+  celle de Gabrielle, #1122)
+
+### D7 — Originaux de démonstration lisibles par l'App Review
+
+- **Faits** : `demo-contrat-001.html` et `demo-contrat-002.html` sont rendus par le moteur serveur (`rendreCddEmployeur`
+  + `wrapInDocument`) ; toutes les données de partie sont marquées fictives (« Établissement fictif République »,
+  « Représentant fictif — Direction fictive », « Camille Démo », « Donnée fictive de démonstration », numéros
+  `DEMO-0001` et `DEMO-0002`). Aucune personne ni organisation réelle, aucun document présenté comme authentique.
+- **Sources** : doctrine Apple — App Store Review Guidelines, 2.1 (fournir un compte ou un mode de démonstration
+  complet) ; le texte contractuel montré est celui du gabarit de production (parité exacte avec ce qu'un soignant lit).
+- **Décision** : conservés et lisibles en mode démo. Condition : ils restent produits par
+  `scripts/mobile/export-demo-fixtures.mjs` (exporteur sans diff) et marqués fictifs ; toute donnée réelle y est
+  interdite.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D8 — Classement des statuts de signature
+
+- « ✅ Signé », « ⏳ En attente », « Statut : … », « Établissement : ✅ Signé le <date> » (liste et page du contrat) restent
+  dans `LibellesWeb` (hors HARD STOP, verbatim, gardés par la même garde). Motif (CLAUDE.md, HARD STOP n°4 : restriction
+  d'exercice, avertissement citant une loi, wording à portée contractuelle) : ce sont des libellés d'état dérivés des
+  drapeaux serveur (`signature_soignant`, `signature_etablissement`, `statut`), sans énoncé de droit ; l'affirmation
+  probatoire vit dans le certificat (`TextesWeb.Certificat`, HARD STOP). Choix de conformité Jolene.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D9 — Zone « Votre signature » sans présentateur
+
+- « Signature non disponible pour le moment » (`SignerContratOtp.tsx` l.230), affiché seul et sans bouton tant que le
+  présentateur `.safari` (lot 1 T10) n'est pas injecté : exact (la signature n'est pas disponible dans l'app à ce
+  moment), aucun énoncé de droit, aucun texte nouveau. Maintenu jusqu'à T9b (signature native) ; cette tranche ne touche
+  pas l'écran de signature (T9b en parallèle).
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D10 — Lien vers la page du certificat
+
+- `contrat-certificat-ouvrir` garde `TextesWeb.Certificat.titrePage` (« Certificat de signature »,
+  `CertificatSignaturePage.tsx` l.185) : titre de la page ouverte, simple navigation, aucun énoncé nouveau ; la page
+  est dans le périmètre §1.1 « Certificat et partage ». Conservé.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D11 — Go de T9b (signature OTP) et de T5b (contestation)
+
+- **T9b** : go donné. Conditions inchangées du blueprint : textes de `TextesWeb.SignatureOtp` et `TextesWeb.Contrat`
+  seulement (D1), consentement et code liés à `(contratId, empreinte, documentPret)`, OTP SMS seul (décision 18), renvoi
+  web pour un compte TEST sans admission ; captures xcresult des trois formats dans la PR ; revue sur iPhone (P9) par
+  Gabrielle avant « livré ».
+- **T5b** : go donné, avec D12 : fenêtre lue au serveur (`fn_fenetre_contestation_ouverte`), aucun texte de délai,
+  aucun appel `fn_creer_notification`.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D12 — Q9 : délai de contestation d'une présence (48 h serveur, 72 h web)
+
+- **Faits** (sources primaires) :
+  - serveur, choix Jolene paramétré : `fn_fenetre_contestation_ouverte` (`public.sql` l.36627-36715) ouvre
+    `DESACCORD_HEURES_POINTAGE` tant que `valide_le + delai_contestation_pointage_h` n'est pas dépassé, défaut 48 h
+    (l.36649-36657) ; valeur semée « 48 » (« Fenêtre 48h post-pointage », `db/migrations_archive/20260417130000_cp_litiges_1_ddl.sql`
+    l.158). La valeur actuelle en production n'est pas relue (lecture limitée aux définitions, règle 3) ;
+  - web : constante client de 72 h (`PanneauContestation.tsx` l.43-46, « Lot 13 : … alignée sur la spec (72 h, comme
+    l'auto-validation) ») et textes l.347 (« 72h pour répondre »), l.354 et l.394 (« Sans résolution sous 72 h,
+    l'admin plateforme tranchera. ») ;
+  - CGU de production : §4.6 (`PageCGU.tsx` l.115) : auto-validation possible « après 72 heures » en l'absence de
+    contestation, aucun délai de contestation fixé ; l.182 : solution amiable recherchée sous 30 jours, puis tribunaux ;
+  - escalade : `fn_litiges_escalader_auto` (`public.sql` l.40761-40884) passe un litige sans réponse en
+    `EN_MEDIATION` après `delai_escalade_liberal_h` (semé à 72 h) en libéral et `delai_escalade_salarie_jours_ouvres`
+    (5 jours ouvrés) en salarié : ni « 72h pour répondre » en salarié, ni arbitrage de l'admin.
+- **Droit** : TEXTE — Code civil, art. 1110 et 1190 (les CGU sont un contrat d'adhésion, interprété dans le doute contre
+  celui qui l'a proposé : un utilisateur à qui l'interface annonce 72 h peut opposer ces 72 h à Jolene) et art. 1104
+  (bonne foi) ; Code du travail, art. L.3245-1 (action en paiement du salaire : trois ans) et Code civil, art. 2254,
+  al. 3 (la prescription des salaires ne s'aménage pas par contrat) : la fenêtre ne borne que le canal de litige de la
+  plateforme, jamais le droit d'agir du soignant.
+- **Décision** :
+  1. **valeur cible 72 h** pour `delai_contestation_pointage_h` : favorable au soignant, alignée sur l'auto-validation
+     72 h des CGU §4.6 et sur ce que le web annonce depuis le Lot 13 ; une fenêtre serveur plus courte que celle annoncée
+     fermerait la contestation à des utilisateurs à qui l'interface la dit ouverte (art. 1190) ;
+  2. **PR de paramétrage à préparer hors lot** (rien n'est écrit par cette tranche ; catégorie B9, données de
+     production, go explicite au merge) : migration `INSERT INTO public.parametres_litiges (cle, valeur, description)
+     VALUES ('delai_contestation_pointage_h', '72', 'Fenêtre 72 h après validation pour contester une présence (Q9,
+     DECISIONS_LOT2 D12).') ON CONFLICT (cle) DO UPDATE SET valeur = EXCLUDED.valeur, description =
+     EXCLUDED.description, modifie_le = now();` ; aligner `tests/litiges/cp1-ddl.test.sql` si une assertion porte sur
+     « 48 », puis la fiche `fn_fenetre_contestation_ouverte` de `CONTRATS_RPC_SOIGNANT.md` (valeur en vigueur ; le
+     défaut 48 h du code, gardé par `check-rpc-contracts.node.mjs`, ne change pas) ;
+  3. **PR web HARD STOP à préparer hors lot** : retirer « l'admin plateforme tranchera » (l.354, seconde phrase de
+     l.394) et « 72h pour répondre » (l.347), faux en salarié, sans les remplacer ; une fois le paramètre à 72 h, la
+     phrase « Vous avez 72 h après la validation pour contester. » (l.394) devient exacte ; remplacer la constante
+     client `DELAI_CONTESTATION_MS` par `fn_fenetre_contestation_ouverte` (une seule source, CLAUDE.md « État dérivé ») ;
+     le retrait de l'appel client `fn_creer_notification` reste la proposition B9 ci-dessous ;
+  4. **natif** : aucun texte de délai (verrou `ANCRES_Q9` maintenu dans la garde, motif mis à jour) ; bouton de
+     contestation conditionné par le serveur (décision 9) ; go de T5b (D11).
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### T4b — consentement GPS et conservation des positions de pointage (L2-T4b, 8 et 9 novembre 2026)
+
+- **D-T4b-0 — Textes de TL affichés par T4b validés pour l'affichage natif.** Feuille de consentement
+  (`TextesWeb.ConsentementGps`, `ConsentementGPS.tsx` l.25-64), bandeau (`TextesWeb.BandeauSansGps`, `BandeauSansGPS.tsx`
+  l.9), retours (`TextesWeb.Presences`, `PresencesSoignant.tsx` l.76, l.95) et Profil (`TextesWeb.ProfilConsentementGps`,
+  `SectionPreferences.tsx` l.129-161), verbatim et gardés par `textes-juridiques-ios`. Sources : Règlement (UE) 2016/679
+  (RGPD) art. 6, paragraphe 1, a) (base légale : consentement), art. 7, paragraphe 3 (retrait à tout moment, aussi simple
+  que le consentement : le Profil natif porte désormais le retrait promis par la base légale, correction 15), art. 13,
+  paragraphe 2, c) (information sur le droit de retrait, donnée par la phrase de base légale) — textes de loi. Force :
+  choix de conformité Jolene (aucune jurisprudence citée). **Constat remonté** (texte inchangé) : la phrase « Données
+  conservées 1 an puis supprimées » (l.38) n'est tenue par le serveur que pour `presences` (coordonnées effacées après
+  90 jours : cron `anonymiser-gps` → `fn_anonymiser_gps_anciennes`, `public.sql` l.18506 ; `fn_purger_gps_ancien`
+  l.51387) ; `scans_pointage.latitude`, `longitude`, `precision_gps_m` et `ip_address` n'ont aucune purge datée au dump
+  (seulement à la suppression du compte, l.60179-60182). Proposition : PR backend séparée (B9, suppression de données
+  prod) qui efface ces colonnes de `scans_pointage` au plus tard un an après `scanne_le`, sinon correction du texte sur le
+  web d'abord ; ni l'une ni l'autre n'est faite par le chantier iOS. Décision prise par Claude sur délégation explicite
+  de Gabrielle du 08/11/2026.
+- **D-T4b-1 — Consentement jamais donné (NULL) affiché éteint dans le Profil.** Le web coche l'interrupteur quand la
+  valeur est NULL (`ProfilSoignant.tsx` l.194, `!== false`). Sources : RGPD art. 4, point 11 (consentement : manifestation
+  de volonté libre, spécifique, éclairée et univoque, par une déclaration ou un acte positif clair), art. 7, paragraphe 1
+  (le responsable doit pouvoir démontrer le consentement) — textes de loi ; considérant 32 (le silence, les cases cochées
+  par défaut ou l'inactivité ne valent pas consentement) — texte du règlement. Force : choix de conformité Jolene appuyé
+  sur le texte. Effet : interrupteur éteint et explication du retrait (`explicationRetiree`, texte du web, aucun texte
+  nouveau). Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+  **Amendement du 9 novembre 2026 (revue fraîche de T4b, M2)** : la première version disait « l'activer appelle
+  `fn_consentir_gps(true)` comme le web ». C'était inexact : le web n'active jamais depuis NULL, puisqu'il affiche déjà
+  l'interrupteur coché (`ProfilSoignant.tsx` l.194). Ce chemin faisait aussi consentir sans la feuille d'information et
+  sans l'audit que garde la correction 15 du blueprint (`LOT2_PLAN.md` l.41 : `RGPD_CONSENTEMENT_DONNE` « au premier
+  consentement »). Décision amendée : activer depuis NULL présente d'abord la feuille verbatim (`ConsentementGpsSheet`,
+  textes de TL déjà validés pour l'affichage par D-T4b-0 : finalité, « Données conservées 1 an puis supprimées », base
+  légale et droit de retrait). Sa réponse passe par `ConsentementGpsModel.repondre` : `fn_consentir_gps`, relecture, audit
+  `RGPD_CONSENTEMENT_DONNE` (détails `type: gps`, `consentement`), puis l'autorisation iOS après un « Autoriser »
+  seulement. Aucune RPC ne part avant cette réponse (`feuilleRequise`). La feuille ne se ferme que par ses boutons
+  (D-T4b-2). Par filet, une bascule depuis NULL qui n'est pas une activation (retrait) est auditée comme une première
+  réponse. Sources primaires :
+  - RGPD art. 4, point 11 (consentement « éclairé ») et considérant 42 (un consentement éclairé suppose de connaître au
+    moins le responsable et les finalités du traitement) ;
+  - art. 13, paragraphe 1, c) (finalités et base juridique) et paragraphe 2, a) (durée de conservation), informations à
+    fournir « au moment où les données sont obtenues » ;
+  - art. 7, paragraphe 1 (démontrer le consentement : d'où l'audit) — textes de loi ;
+  - CJUE, 1er octobre 2019, *Planet49*, C-673/17 : une case cochée par défaut, que l'utilisateur doit décocher pour
+    refuser, ne vaut pas consentement valable — **JUGÉ** (fonde l'affichage éteint de NULL).
+  Force : choix de conformité Jolene appuyé sur le texte et sur la jurisprudence de la CJUE. Aucun texte nouveau. Effet
+  côté web inchangé : le web devrait lui aussi cesser d'afficher NULL coché (PR web à proposer, hors chantier iOS).
+  Tests : `ConsentementGpsModelTests.testActivationDepuisLeProfilSansReponsePresenteLaFeuilleSansAucuneRPC`,
+  `testFeuilleDuProfilAccepteeEnregistreRelitAuditeEtActive`, `testFeuilleDuProfilRefuseeEnregistreFauxEtAudite`,
+  `testReponseAUneValeurNulleSansFeuilleAuditeLaPremiereReponse` ; XCUITest
+  `DemoPointageTests.testConsentementRetireEtReactiveDepuisLeProfil`. Décision prise par Claude sur délégation explicite
+  de Gabrielle du 08/11/2026.
+- **D-T4b-2 — La feuille de consentement exige un choix explicite.** Le dialogue web enregistre un refus quand on le
+  ferme (`ConsentementGPS.tsx` l.18, `onOpenChange` → `onRefuser`) ; le natif ne se ferme que par « Je refuse » ou
+  « Autoriser la localisation ». Sources : RGPD art. 4, point 11 et art. 7, paragraphe 1 (le choix enregistré doit être
+  celui exprimé par la personne) — textes de loi. Force : choix de conformité Jolene. Un refus n'est jamais pénalisant (le
+  pointage part sans position) ; aucun texte nouveau. Décision prise par Claude sur délégation explicite de Gabrielle du
+  08/11/2026.
+- **D-T4b-3 — Durée de conservation des positions de pointage : le serveur tient la promesse « 1 an », le texte ne
+  change pas** (revue fraîche de T4b, m6 ; suite du constat de D-T4b-0). Faits relus au dump `supabase/schema/public.sql` :
+  - `fn_anonymiser_gps_anciennes` (l.18506-18520, cron `anonymiser-gps`) et `fn_purger_gps_ancien` (l.51387) n'effacent
+    que les coordonnées de `presences`, après 90 jours ;
+  - `scans_pointage.latitude`, `longitude`, `precision_gps_m` et `ip_address` ne sont effacées qu'à la suppression du
+    compte (`fn_supprimer_mon_compte`, l.60179-60182), jamais à une date ;
+  - or la feuille de consentement promet « Données conservées 1 an puis supprimées » (`src/components/ConsentementGPS.tsx`
+    l.38).
+
+  Sources primaires :
+  - RGPD art. 5, paragraphe 1, e) (limitation de la conservation) ;
+  - art. 13, paragraphe 2, a) (la durée annoncée doit être exacte) ;
+  - art. 7, paragraphe 1 (le consentement porte sur l'information donnée) — textes de loi.
+
+  Force : choix de conformité Jolene (aucune jurisprudence citée). Options :
+  - corriger le texte (allonger ou rendre vague la durée annoncée) : affaiblirait une garantie déjà donnée à chaque
+    soignant qui a consenti ;
+  - **purger côté serveur** (retenue) : effacer ces quatre colonnes de `scans_pointage` au plus tard un an après
+    `scanne_le`, par une fonction et un cron, depuis la définition live (garde-fou 9.0 n°2), avec un test SQL.
+
+  Cette PR backend relève de **B9** (suppression de données de production) : préparée hors chantier iOS, elle ne se merge
+  qu'avec le go de Gabrielle (« En attente de Gabrielle », B9 ci-dessous). Le natif affiche le texte du web inchangé. Le
+  web ne change pas tant que la purge n'est pas mergée. Décision prise par Claude sur délégation explicite de Gabrielle du
+  08/11/2026.
+
+### T5a — détail des présences, notation rapide, points d'entrée (L2-T5a, 9 novembre 2026)
+
+- **Relance de l'établissement : textes verbatim tutoyés, affichés.** `TextesWeb.Presences.relanceTitre` et
+  `relanceExplication` (`DetailPresencesMission.tsx` l.697-698, gardés par TL) sont affichés tels quels, tutoiement compris
+  (décision de la vague 4 : le natif suit le web mot pour mot ; le vouvoiement des textes juridiques partira du web).
+  Sources, phrase par phrase (sources corrigées après la revue fraîche n°1 de T5a, M2 ; aucune n'est JUGÉE ni une
+  doctrine ministérielle : toutes sont des **choix de conformité Jolene**, CGU de production `src/pages/PageCGU.tsx` et
+  implémentation serveur relue en production, en lecture seule, le 9 novembre 2026) :
+  1. « La validation des heures (automatique sous 72 h) » — CGU §4.6, l.115 : « En l'absence de contestation, les
+     présences peuvent être validées automatiquement après 72 heures » ; serveur : `fn_valider_presences_72h_auto`
+     (définition live : `delai_autovalidation_presence_h`, défaut 72 ; présences en litige, en alerte de téléportation ou
+     de fraude exclues). Valeur de production du paramètre : 72, relue en lecture seule par la revue fraîche n°1 de T5a
+     (lecture de données, que la règle de lecture seule de la tranche n'autorise pas : non relue par la tranche).
+  2. « est distincte du versement » — CGU §4.6, l.115 : « Après la fin prévue de la mission et la validation des
+     présences, Jolene donne normalement l'instruction de versement des honoraires sous 24 à 72 heures. Ce délai concerne
+     l'instruction donnée au prestataire de paiement et non l'arrivée bancaire effective. » La validation est un acte, le
+     versement un second acte, postérieur et distinct (instruction de versement, puis arrivée bancaire) ; en salarié, le
+     versement ne relève pas de Jolene (point 3).
+  3. « En salarié, le salaire est versé par l'établissement employeur » — CGU art. 2, l.48 (« L'Éditeur n'est en aucun
+     cas employeur, co-employeur ou mandataire social des Soignants »), l.50 (« Le contrat de travail ou de prestation est
+     conclu directement entre l'Établissement et le Soignant ») et CGU §4.5, l.109 (« L'Établissement, en sa qualité
+     d'employeur légal du Soignant ») ; serveur : `dec_definir_type_paiement` (`supabase/schema/public.sql` l.1537-1564,
+     définition live identique relue le 9 novembre 2026) fixe pour une mission salariée `type_paiement_soignant =
+     'BULLETIN_PAIE'` et `mode_paiement_soignant = 'DIRECT'` (l.1554-1555), sans flux de paiement Jolene. **Déduction
+     explicitée** : aucune clause ne dit littéralement « le salaire est versé par » ; la CGU fait de l'Établissement
+     l'employeur légal (l.109), signataire direct du contrat de travail (l.50), et exclut Jolene de toute qualité
+     d'employeur (l.48) ; le salaire, contrepartie du contrat de travail, est donc versé par l'Établissement, ce que le
+     serveur confirme (bulletin de paie, paiement direct). Aucun article du Code du travail n'est cité : la phrase repose
+     sur ces clauses de production, non sur une source législative relue par la tranche.
+  4. « En libéral, le paiement suit les modalités de la mission » — CGU §4.6, l.115 (« Pour une mission affichée comme
+     éligible au paiement rapide, le paiement est préparé via Stripe Connect avant son exécution » ; « l'instruction de
+     versement des honoraires ») : la modalité de paiement est un attribut de la mission affichée ; serveur :
+     `dec_definir_type_paiement` fixe pour une mission libérale `NOTE_HONORAIRES` et `STRIPE_CONNECT` (l.1550-1552), à
+     l'assignation, mission par mission ; l'éligibilité au paiement rapide est exposée par `fn_etablissements_safe`
+     (`paiement_rapide`, l.35093, l.35116-35120). Phrase couverte.
+  5. « Tu peux envoyer un rappel. » — texte d'action (bouton « Relancer l'établissement », `fn_relancer_validation_presence`),
+     sans portée juridique.
+  Écart relevé, sans effet sur le natif (règle du verbatim) : le web écrit « sous 72 h » là où la CGU dit « après
+  72 heures » ; correction à porter d'abord sur le web (PR HARD STOP séparée, hors chantier iOS), puis reprise par la garde.
+- **Libellés du détail classés hors HARD STOP.** « Heures retenues après litige » (l.399), « ✅ Relevé clôturé après
+  arbitrage » (l.639) et « Mission clôturée avant la fin du planning initial. Les créneaux futurs ne sont plus à effectuer ;
+  les heures retenues après arbitrage déterminent la régularisation financière. » (l.449) décrivent un état et un calcul
+  déjà décidés (heures arbitrées par l'admin, `presences.heures_ajustees_litige`) ; ils ne citent aucun texte, n'ouvrent
+  aucun droit, ne fixent ni délai ni obligation (critères de CLAUDE.md, HARD STOP n°4) : choix de conformité Jolene, rangés
+  dans `LibellesWeb.DetailPresences`, verbatim et gardés par la garde Node. Source primaire de « déterminent la
+  régularisation financière » (revue fraîche n°1 de T5a, m9) : les lecteurs **live** de la colonne, relus en production
+  en lecture seule le 9 novembre 2026, et non le commentaire de colonne (`public.sql` l.71273, « FIX 5 consommation, à
+  venir », périmé) : `fn_admin_resoudre_litige(uuid, text, text, numeric, numeric, text)` (dump l.13003 ; heures de
+  référence `COALESCE(heures_ajustees_litige, heures_reelles)`, l.13334-13338, qui fondent l'ajustement de la facture),
+  `fn_admin_resoudre_litige_complement_honoraires` (l.13939 ; `COALESCE(…, heures_ajustees_litige, heures_reelles)`,
+  l.14074-14079 et l.14114-14122, base du complément d'honoraires) et `fn_admin_resoudre_litige_salarie` (l.14475 ;
+  l.14702-14706, heures avant régularisation salariale). La surcharge à cinq arguments de `fn_admin_resoudre_litige` ne
+  lit pas la colonne. Le récapitulatif financier (l.705-800, montants calculés côté client) reste non porté (décision 11) :
+  titre seul et renvoi web.
+- **Récapitulatif financier : route forcée web** (revue fraîche n°1 de T5a, M3). `presence-revenus-web` ouvre
+  `PresencesRenvois.recapitulatifFinancier(missionId:)`, `.safari(https://jolene.app/soignant/presences/mission/<id>)`
+  construite par `JoleneLink.canonicalURL` sans `LinkRouter` (identifiant `[A-Za-z0-9-]` seulement), exception documentée
+  comme `ContratPresentation.renvoiSignature` : quand T10 rend la route native, le renvoi reste (là où
+  `AccueilPresentation.renvoiWeb` rendait nil, sans test rouge). Cible de la décision 11 respectée : renvoi web jusqu'au
+  lot 3, lien Revenus natif ensuite. Choix produit, sans portée juridique.
+- **Notation : garde des lectures de notes** (revue fraîche n°1 de T5a, M1 ; LOT2_PLAN §5 ; CLAUDE.md « Publication
+  différée », un test-garde par surface). `tests/node/lecture-notes-ios.node.mjs`, lancée par l'étape « Garde de
+  livraison mobile » de `validate-pr.yml` : tout fichier `.swift` de `ios-native/` (sources, tests, tests UI) est découpé
+  (commentaires `//`, `///`, `/* */` imbriqués **ignorés** ; chaînes simples, multilignes, brutes et interpolations
+  conservées ; découpage impossible → rouge) ; rougit sur `notations_missions`, `evaluations_publiees` et
+  `from("notations…")` hors commentaire. Exclusion unique, listée, commentée et comptée (exactement un usage, sous
+  `/Tests/`) : l'assertion négative `!$0.path.contains("notations_missions")` de `SupabaseNotationGatewayTests`. Les
+  mentions de `Lot2Ports.swift`, `NotationModel.swift`, `SupabaseNotationGateway.swift`, `NotationSheet.swift` et de l'en-tête
+  de `SupabaseNotationGatewayTests.swift` sont des commentaires. **Mutation prouvée** le 9 novembre 2026 : ajout à
+  `SupabaseNotationGateway.swift` d'une extension `lireNotes` qui appelle `client.from("notations_missions")` → garde
+  rouge (deux fautes à la ligne 76 : `from("notations…")` et `notations_missions`), retour à l'original → verte ; la
+  même mutation est rejouée en permanence par le test « mutation » de la garde.
+- **Points d'entrée : `estAssigne` garanti par le serveur** (revue fraîche n°1 de T5a, m6). Le web n'affiche
+  « Présences et pointage » et « Voir mes heures pointées et mes pauses » que sous `estAssigne &&`
+  (`DetailMissionSoignant.tsx` l.1406, `soignant_assigne_id === user.id` l.633). Le natif ne relit pas
+  `soignant_assigne_id` (projection `MissionQuery.missionSelect` du lot 0, « à l'identique » du pilote, inchangée) :
+  l'espace natif ne s'ouvre qu'à un compte SOIGNANT (`MobileAccess.validate`, `Models/Account.swift` l.35-38) et la RLS
+  `pol_mission_select` (`public.sql` l.79410, définition live identique relue le 9 novembre 2026) ne lui laisse lire une
+  mission non OUVERTE que si `soignant_assigne_id = auth.uid()`. Écart consigné, sans effet ; le bouton est désormais
+  proposé depuis Explorer aussi (`MissionsListScreen(…, ouvrirOnglet:)`). Choix technique, sans portée juridique.
+- **Notation : aucune lecture de note (publication différée = filtre centralisé).** Le natif n'appelle que
+  `fn_creer_notation_mission` (écriture) et ne lit jamais `notations_missions` ; aucune note, publiée ou non, n'est affichée
+  (le bouton web « Notation envoyée », `BoutonNoterMission.tsx` l.32-61, qui lit `notations_missions` en direct, n'est pas
+  porté). Définitions live relues en lecture seule le 9 novembre 2026 (`pg_get_functiondef`, `pg_policy`, projet
+  `flripxtsyegjshnhzjkz`) : `fn_creer_notation_mission` rend `{success, id, tardive}` sans aucune note et publie seule les deux
+  sens (`publie_le`) ; « Mission déjà notée pour ce sens » ne révèle que la note de l'appelant ; `fn_presences_detail_mission`
+  et `fn_relancer_validation_presence` ne lisent pas `notations_missions` ; `pol_notations_select` filtre les notes REÇUES par
+  `publie_le IS NOT NULL AND masque = false` et laisse l'auteur lire sa propre note (non affichée par le natif). Aucune source
+  lue par T5a ne contourne le filtre de `evaluations_publiees` : aucun constat serveur à remonter.
+- **Notation : mémoire locale « une fois par mission et par utilisateur ».** `UserDefaults` (`jolene.notation.checkout.<userId>.
+  <missionId>`), posée avant l'ouverture, jamais effacée, comme le `localStorage` du web (`PointageRotatifSoignant.tsx`
+  l.154-161) ; « Plus tard » ne la retire pas. Choix produit (aucune portée juridique).
+- **Notation : texte d'échec.** La promesse du web « tu pourras noter depuis la mission » (`NotationRapide.tsx` l.55) n'a pas
+  de chemin dans l'application : texte opérationnel inventorié « La note n'a pas pu être enregistrée. Réessayez. » (non
+  juridique, « Textes opérationnels hors web (T5a) »).
+
+Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+
+### T9b — signature OTP des contrats dans l'app (go juridique, HARD STOP n°4)
+
+- **Question** : l'écran natif de signature (`Jolene/Screens/Contrats/SignatureOtpView.swift`) peut-il être livré avec
+  les textes du web qui citent le Code civil (« preuve juridique art. 1366 Code civil », « art. 1366-1367 Code civil »),
+  et le procédé natif donne-t-il à la signature la même valeur que la signature web ?
+- **Sources primaires** :
+  - Code civil, art. 1366 (l'écrit électronique a la même force probante que l'écrit papier si son auteur peut être
+    dûment identifié et s'il est établi et conservé dans des conditions qui en garantissent l'intégrité), art. 1367
+    (la signature identifie son auteur et manifeste son consentement ; électronique, elle consiste en l'usage d'un
+    procédé fiable d'identification garantissant son lien avec l'acte ; la fiabilité n'est **présumée** que dans les
+    conditions fixées par décret) et art. 1174 al. 1 (un écrit exigé pour la validité d'un acte, tel le contrat écrit
+    de l'art. L.1242-12 du Code du travail, peut être établi et conservé sous forme électronique dans les conditions
+    des art. 1366 et 1367) ;
+  - décret n° 2017-1416 du 28 septembre 2017 : la présomption de fiabilité est réservée à la signature électronique
+    **qualifiée** (règlement eIDAS) ; il abroge le décret n° 2001-272, qui définissait l'ancienne « signature
+    électronique sécurisée » ;
+  - Code civil, art. 1353 al. 1 (celui qui réclame l'exécution d'une obligation doit la prouver) ; Code de procédure
+    civile, art. 287, dernier alinéa (si la dénégation ou le refus de reconnaissance porte sur un écrit ou une signature
+    électroniques, le juge vérifie si les conditions des art. 1366 et 1367 du Code civil sont satisfaites) ;
+  - règlement (UE) n° 910/2014 (eIDAS), art. 25 §1 (l'effet juridique et la recevabilité d'une signature électronique
+    en justice ne peuvent être refusés au seul motif de sa forme électronique ou de ce qu'elle n'est pas qualifiée) et
+    §2 (seule la signature qualifiée équivaut à la signature manuscrite) ; art. 26 (signature avancée : liée au
+    signataire de manière univoque, l'identifie, créée par des moyens sous son contrôle exclusif, liée aux données
+    signées de sorte que toute modification ultérieure soit détectable) ;
+  - web : `src/components/SignerContratOtp.tsx` (l.30-49 `MESSAGES_ERREUR`, l.115-120 codes bloquants, l.127-207
+    envoi et signature, l.209-354 rendu : l.216, l.230, l.242-245, l.265, l.276, l.288, l.296-339, l.348) et
+    `src/pages/ContratMission.tsx` l.708-817 (zone « Votre signature »), l.831-837 (pied de page : « Signature
+    électronique simple. ») ;
+  - serveur, définitions **live** relues en lecture seule en production le 9 novembre 2026 (`pg_get_functiondef`,
+    projet `flripxtsyegjshnhzjkz`) : `fn_envoyer_otp_signature(uuid)` (8 349 caractères) — contrat verrouillé, refus
+    `CONTRAT_INACTIF` / `CONTRAT_DEJA_COMPLET` / `DEJA_SIGNE`, limite par IP, téléphone du profil, 3 SMS par 24 h, code de
+    six chiffres conservé **haché** avec le contrat et l'utilisateur, SMS « valide 10 min », numéro masqué renvoyé ;
+    `fn_signer_contrat_otp(uuid, text, text, text)` (7 364 caractères), fonction de vérification — compte actif, 5
+    tentatives, 10 min (preuve passée à `expire` au-delà), code comparé à son empreinte, document : SHA-256 UTF-8 de
+    `contenu_html` égal à `hash_document` **et** à `p_hash_document`, `storage_path` et date de rendu présents, aucune
+    variable `{{…}}`, aucune signature antérieure sur une autre empreinte, puis `signe_a`, `otp_valide_a`, adresse IP
+    (`x-forwarded-for`) et navigateur conservés dans `signatures_contrats`, `mode_signature = 'JOLENE_OTP'`. Ces deux
+    définitions sont celles décrites par `CONTRATS_RPC_SOIGNANT.md` et `LOT2_PLAN.md` §2.4 (aucune dérive constatée).
+- **JUGÉ / doctrine / choix Jolene** : aucune jurisprudence n'est invoquée (rien n'est JUGÉ ici) et aucune doctrine
+  ministérielle n'a été retenue ; la décision repose sur les textes ci-dessus et sur des choix de conformité Jolene.
+- **Analyse** :
+  1. Qualification : OTP SMS envoyé au téléphone du profil d'un compte authentifié, lié à l'empreinte SHA-256 du document
+     figé, horodaté par le serveur, avec IP et navigateur. C'est une signature électronique **non qualifiée** (le web la
+     dit « simple », l.831-837) : son effet juridique et sa recevabilité en justice ne peuvent être refusés au seul motif
+     de sa forme électronique ou de ce qu'elle n'est pas qualifiée (eIDAS art. 25 §1), mais sa fiabilité n'est pas
+     présumée (art. 1367 al. 2 ; décret 2017-1416). En cas de contestation, la charge de la preuve pèse sur la partie qui
+     se prévaut de l'acte signé, l'établissement ou le soignant (art. 1353 al. 1) ; le juge vérifie alors les conditions
+     des art. 1366 et 1367 (CPC art. 287, dernier alinéa) ; Jolene fournit le dossier de preuve qu'elle conserve
+     (horodatage, IP, navigateur, empreinte, OTP validé, certificat). Aucun texte natif ne revendique une qualification
+     supérieure (ni « qualifiée » ni « avancée »). (Formulation précisée par la revue fraîche de T9b, m5 : la précédente
+     faisait peser la preuve sur Jolene et glosait l'art. 25 §1 par « opposable ».)
+  2. Même valeur probante que le web : le natif appelle les mêmes fonctions serveur, avec le même code, la même
+     empreinte et `p_signature_image` nul ; c'est le serveur qui contrôle l'intégrité et conserve la preuve. Le natif
+     ajoute des garanties : l'original affiché est contrôlé par triple empreinte (texte haché = `hash_document` = octets
+     Storage) et rendu octet pour octet (décision 17, plus strict que la vue filtrée du web : art. 1366, intégrité) ;
+     l'empreinte est relue avant tout SMS ; le consentement et le code sont remis à zéro à chaque changement de révision ;
+     une signature n'est annoncée qu'après relecture serveur du contrat et de sa preuve par la gateway (`signature_soignant`
+     et ligne `signatures_contrats` `signe` de l'appelant sur la même empreinte) ; si le modèle ne peut ensuite relire le
+     contrat pour l'écran, il le relance une fois puis propose l'actualisation, sans jamais retirer ni renvoyer la
+     signature (revue fraîche de T9b, m1).
+  3. Consentement (art. 1367 al. 1) : case explicite au texte du web (l.276), décochée à chaque révision, puis geste
+     distinct « Signer » (l.348).
+  4. Textes : tous verbatim du web, vouvoyés comme sur le web, gardés par TL (`TextesWeb.SignatureOtp`,
+     `LibellesWeb.SignatureOtp`) ; liste affichée : titre l.242, explication l.244-245, consentement l.276, « Recevoir le
+     code SMS pour signer » l.288, « Code envoyé au … » l.151 et l.296, envois restants l.297-300, minuteur et « Expiré »
+     l.305, tentatives l.326-327, « Renvoyer le code » / « Recevoir un nouveau code » l.339, infobulles l.336, « Signer »
+     l.348, « Vérification de la signature en cours… » l.265, `MESSAGES_ERREUR` l.31-43 (et l.167, l.171), « Contrat
+     signé ✅ » et « — Mission confirmée par les 2 parties. » l.197/l.214, mention l.216, « Signature non disponible pour
+     le moment » l.230 (erreurs bloquantes seulement), texte indicatif « 123456 » l.316 et libellé vocalisé du champ
+     « Code SMS à 6 chiffres » l.319.
+     **Non repris** (décision 18 : OTP seul, pas de sélecteur de mode ; revue fraîche de T9b, m6) : `ContratMission.tsx`
+     l.721 « Choisissez votre mode de signature : », l.740 « 📱 Signature électronique OTP SMS » et son badge
+     « RECOMMANDÉE » (l.741), l.743 « Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code
+     civil. », l.724 (compte de démonstration : signature manuscrite), l.729 « Recette TEST : SMS de signature autorisé
+     uniquement pour ce contrat. », l.749-750 (signature manuscrite). Aucun n'est affiché par le natif ; la référence aux
+     art. 1366-1367 reste portée par l'explication l.244-245 et la mention l.216, verbatim.
+  5. Mention l.216 (« Signé avec succès. Horodatage, IP et hash du document conservés (art. 1366-1367 Code civil). »)
+     gardée affichée après la relecture, là où le web la remplace au rechargement : exacte, puisque la relecture de la
+     gateway prouve `statut_signature = 'signe'` sur la même empreinte et que la fonction live conserve horodatage, IP et
+     empreinte ;
+     limite consignée : l'IP vient de l'en-tête `x-forwarded-for` posé par la passerelle Supabase (nulle sans lui).
+  6. Point relevé, non bloquant : le titre web « Signature électronique sécurisée » (l.242, et `CertificatSignaturePage.tsx`
+     l.214) reprend le nom de la catégorie du décret n° 2001-272 abrogé, qui emportait la présomption de fiabilité ;
+     la même page dit « Signature électronique simple. » (l.831-837), ce qui écarte toute confusion sur la portée. Le natif
+     le reprend verbatim (décision de la vague 4 : le natif suit le web mot pour mot) ; recommandation pour une PR web
+     HARD STOP séparée : retirer « sécurisée » ou l'expliciter, puis reprise verbatim par la garde.
+- **Décision** : go juridique de T9b accordé. La signature OTP native est livrée avec les seuls textes verbatim ci-dessus,
+  sans aucun wording nouveau, sur les fonctions serveur relues ; le mode démo simule la signature sans réseau
+  (sentinelle « 0 requête ») sur des contrats fictifs ; un compte TEST sans admission de recette est renvoyé vers le web
+  (décision 18). Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+
+
+## En attente de Gabrielle
+
+Depuis la délégation du 8 novembre 2026, ne restent ici que ce qui exige la présence physique de Gabrielle (appareil,
+numéros de téléphone, comptes Apple ou Twilio) et les PR B9 (go explicite au merge). Les points HARD STOP n°4 du lot 2
+(TL, T4a, T7, T9a, T9b, T5b, Q9) sont tranchés sous « Décisions déléguées du 8 novembre 2026 ». Rien de ce qui suit
+n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranche indiquée.
+
+### HARD STOP n°4 — revue sur appareil (présence physique)
+
+- **P9** : revue sur iPhone des écrans de consentement GPS (T4b), d'attestation santé et des justificatifs (T7 : bandeau
+  RCP et textes d'accès, D3-D4) et de signature (T9b) avant de déclarer le lot livré ; les textes eux-mêmes sont validés
+  (D1) ; pour T9b, la signature réelle STAGING (P5 : son téléphone, capacité S1, compte Twilio de recette, « Actions
+  manuelles » ci-dessous).
+
+### B9 (PR préparées et poussées, jamais mergées sans go)
+
+- **B1** — `fn_scanner_code_pointage` sans `nouveau_code` ni `nouveau_hmac` (fonction `SECURITY DEFINER`, depuis la
+  définition live) ; bascule de la fiche et de la garde de T0 : « Ordonnancement et branches ». La PR B1
+  (`fix/scanner-code-sans-code-suivant`) couvre aussi `fn_declarer_fin_retroactive` : même retrait de `nouveau_code`
+  et `nouveau_hmac` de sa réponse (le soignant assigné peut l'appeler lui-même en PostgREST) et verrou de sa garde
+  d'autorisation, qui vaut NULL pour un compte sans lien avec la mission. **Mergée sur `main`** après le go du
+  8 novembre 2026 (#1117) ; fiche et garde basculées dans `feat/ios-lot2` le même jour.
+- **S1** — allocateur STAGING de capacité SMS de signature (`scripts/ci/allouer-capacite-sms-signature-staging.mjs`,
+  workflow protégé) : secrets STAGING, fonctions `SECURITY DEFINER` du supplément, données.
+- **Purge datée des positions de `scans_pointage`** (constat de D-T4b-0, décision D-T4b-3 ; revue fraîche de T4b, m6) :
+  - écart : la feuille de consentement promet « Données conservées 1 an puis supprimées »
+    (`src/components/ConsentementGPS.tsx` l.38) ; or `scans_pointage.latitude`, `longitude`, `precision_gps_m` et
+    `ip_address` ne sont effacées qu'à la suppression du compte (`fn_supprimer_mon_compte`, `public.sql` l.60179-60182) ;
+    les purges datées (`fn_anonymiser_gps_anciennes` l.18506, `fn_purger_gps_ancien` l.51387) ne visent que `presences` ;
+  - PR backend proposée (non préparée par le chantier iOS) : `fix/purge-positions-scans-pointage`, avec :
+    - une migration qui crée `fn_purger_positions_scans_pointage()` (`SECURITY DEFINER`, `search_path` fixé, `REVOKE` de
+      `PUBLIC`, aucun `GRANT` à `authenticated`) ; elle passe les quatre colonnes à NULL pour `scanne_le < now() -
+      interval '1 year'` ;
+    - le cron quotidien `jolene_purger_positions_scans_pointage` (garde `pg_extension pg_cron` pour les branches preview,
+      CLAUDE.md « Patterns backend (Lot 13) ») ;
+    - un test SQL : une ligne de plus d'un an est purgée, une ligne récente est intacte, aucun scan n'est supprimé ;
+    - une ligne `journaux_audit` par passage, après vérification du CHECK `journaux_audit_action_check` ;
+  - catégorie B9 (suppression de données de production, `SECURITY DEFINER`) : go explicite de Gabrielle avant le merge ;
+  - sans cette PR, la promesse « 1 an » reste fausse pour les scans : le texte n'est pas reformulé (D-T4b-3).
+- **T11** — go au dispatch du workflow STAGING du lot 2 et du mode `--appareil` de sa fixture pour T12 (secrets
+  service_role et comptes TEST exposés à l'environnement protégé, création et nettoyage de données STAGING).
+- **Go du 8 novembre 2026** : les PR B9 du 3 novembre — B1 du lot 2 (scanner, `fix/scanner-code-sans-code-suivant`),
+  B3 du lot 3 (contestation de paiement, `fix/contestation-paiement-soignant`), B4 (score de matching, B1 du lot 4,
+  `fix/score-matching-inconnu-null`), B5b du lot 5 (visibilité établissement par permission,
+  `fix/visibilite-etablissement-par-permission`) et S1 du lot 2 (allocateur SMS, `feat/staging-capacite-sms-signature`)
+  — ont reçu le go de Gabrielle le 8 novembre 2026 et passent en merge sériel sur `main` (CI verte et revue fraîche B8
+  clôturable, par la file de merge de la session principale : `LOTS_2_5_DECISIONS`, règle 5).
+- **Système ① toujours appelable** (constat T0 sur le dump `public.sql`, RLS/auth) : les neuf RPC ① de
+  `RPC_POINTAGE_SYSTEME_1` (décision 1 amendée) ne sont plus montées côté web, mais gardent le `GRANT … TO
+  authenticated` en production (l.81953, l.83013, l.83079, l.83997, l.84003, l.84009, l.84015, l.85495, l.85523) :
+  PostgREST les sert à tout compte connecté. Avec les gardes NULL de `fn_codes_pointage_mission`,
+  `fn_generer_qr_mission` et `fn_generer_code_secours_mission`, elles permettent à un soignant de **pointer à
+  distance** (chaînes et verdicts : renvoi « Gardes NULL » ci-dessous). Les fiches ① de `CONTRATS_RPC_SOIGNANT.md`
+  les décrivent comme mortes côté web : elles restent appelables.
+  **Proposition** (PR backend séparée, B9, depuis la définition live, garde-fou 9.0 n°2) : `REVOKE EXECUTE ON
+  FUNCTION … FROM authenticated` sur les neuf RPC ①, `fn_generer_code_secours_mission` comprise, après vérification
+  que `SyncHorsLigne` (monté par `LayoutApp.tsx`, rejoue `fn_pointer_*` depuis `src/lib/horsLigne.ts`) ne porte
+  plus aucun pointage réel ; à défaut, des gardes `IS DISTINCT FROM` / `COALESCE` qui refusent quand
+  `mon_etablissement_id()` est NULL, dans `fn_codes_pointage_mission`, `fn_generer_qr_mission` et
+  `fn_generer_code_secours_mission`. Dans les deux cas, un rejet explicite qui renvoie à ce constat (principe « un
+  gap connu reste verrouillé »).
+- **Constat T0 (nouveau, RLS/auth) — `fn_creer_notification`** (revue fraîche de T0) : tout compte authentifié peut
+  écrire une notification arbitraire (destinataire, type, titre, corps, `lien`) à n'importe quel destinataire :
+  fonction `SECURITY DEFINER` (l.27450-27475), `GRANT … TO authenticated` (l.82276), seul contrôle
+  `auth.uid() IS NULL` (refus des appels anonymes hors cron). `docs/audit-fonctionnel-pre-lancement.md` l.177 la
+  marque pourtant « ✅ FIXÉ » : le correctif n'a ajouté que ce contrôle d'authentification. Le natif ne l'appelle
+  jamais (décision 9, `RPC_JAMAIS_SUIVIES`) ; le web l'appelle encore (`PanneauContestation.tsx` l.147-155).
+  **Proposition** (PR backend séparée, B9, depuis la définition live) : retirer l'appel web (le trigger
+  `trg_notifier_creation_litige` notifie déjà) puis `REVOKE EXECUTE … FROM authenticated`, ou contrôler le
+  destinataire et le type, avec un rejet explicite.
+- **Gardes NULL des fonctions `SECURITY DEFINER` — renvoi unique à l'audit du 3 novembre 2026** : les listes
+  partielles de constats de T0 (gardes ternaires de `fn_presences_detail_mission` et `fn_etat_pointage_mission`,
+  chaînes de pointage à distance du système ①, « Motif à auditer ») sont remplacées par l'audit des gardes NULL du
+  3 novembre 2026, relu en lecture seule sur la définition live de chaque fonction en production : rapport en annexe,
+  `docs/mobile-swift/AUDIT_GARDES_NULL_2026-11-03.md` (verdict, gravité et correction proposée par fonction).
+  Corrections : PR B9 dédiée `fix/gardes-null-security-definer`, hors lot 2, mergée par #1126 (`e7dcbf51`, 9 novembre
+  2026). **Basculé le 12 novembre 2026** (merge du lot 3, qui amène #1126 dans `feat/ios-lot2`, « Ordonnancement et
+  branches ») : les gardes des 18 RPC relevées par T0 sont NULL-safe (`COALESCE(… = mon_etablissement_id(), false)`),
+  sauf l'affectation de `v_is_etab` de `fn_etat_pointage_mission` (lecture, pas une garde : fiche
+  `fn_etat_pointage_mission`) ; la garde de T0 exige leur forme corrigée et **aucune garde nue** au dump (méthode
+  `gardesNuesEtablissement` de `tests/node/check-rpc-contracts.node.mjs`, qui ne tient pour sûre que la forme exacte
+  `COALESCE(<ident> = mon_etablissement_id(), false)` — `!=`, `<>`, une négation ou un test booléen sous `COALESCE`
+  restent nus —, moins les deux exclusions motivées, chacune limitée à sa surcharge et aux conditions qui portent son
+  témoin ; tests de mutation à l'appui, revues B8 de l'intégration, M1, puis des commits suivants, m1). Le `REVOKE EXECUTE` des neuf RPC ① reste une proposition
+  ouverte. Le natif n'appelle `fn_etat_pointage_mission` et
+  `fn_presences_detail_mission` que pour ses missions et n'en dépend pas.
+- **Remontée** : ces constats sont à remonter à Gabrielle par la session principale, hors branche, sans attendre la PR
+  de `feat/ios-lot2` (aucune PR n'est ouverte sur cette branche avant la fin du lot 1).
+- **Q9 — PR de paramétrage `delai_contestation_pointage_h` = 72** (décision D12 du 8 novembre 2026) : à préparer hors
+  lot 2 (migration `INSERT … ON CONFLICT (cle) DO UPDATE`, écrasement d'une valeur de production : B9), puis go explicite
+  au merge. Aucune écriture par les tranches iOS ; restent ouverts, comme les autres points B9 ci-dessus (S1 relève de
+  la file de merge, T11 du dispatch STAGING), sans changement par la tranche L2-TJ.
+
+### Actions manuelles (STAGING, appareil, Apple)
+
+- Dispatcher `install-sms-staging-closed.yml` (supplément de recette, jamais fait par un agent) puis le workflow de S1 ;
+  relire en lecture seule le MD5 de `fn_envoyer_otp_signature` STAGING épinglé par le supplément.
+- Fournir deux numéros de téléphone réels (soignant et établissement de recette) et le compte Twilio de recette en
+  secrets d'environnement ; confirmer `canal_sms` et des comptes TEST confirmés pour la portée.
+- Indiquer si `ANTHROPIC_API_KEY` est configurée sur STAGING (sinon P4 se prouve par la file de revue manuelle).
+- Relever `parametres_litiges.delai_contestation_pointage_h` sur STAGING et en production (lecture seule) : sans effet
+  sur D12 (la PR de paramétrage pose 72 quelle que soit la valeur), utile pour la note de la PR.
+- Recette appareil T12 : iPhone avec TestFlight Staging 2.0.0 (26), front web lancé localement contre STAGING pour
+  afficher le QR, SMS reçu, arrêts forcés, photo HEIC non identitaire ; archive et upload du build 26.
+- Hors lot 2, à anticiper : clé APNs sous `GDU5AA28M9` (lot 3) ; compte de démonstration capable de signer, ou mention
+  dans les notes de review Apple (lot 6).
+
+## Points consignés hors lot 2
+
+- `dec_fenetre_pointage` (`public.sql` l.1961) formate l'heure sans fuseau (UTC) dans « Pointage trop tôt. La mission
+  commence à %. » : affiché verbatim ; correctif backend à proposer (consigné dans `PORTE_LOT2.md` à la clôture).
+- `SyncHorsLigne` (monté par `LayoutApp.tsx`) rejoue `fn_pointer_*` depuis `src/lib/horsLigne.ts`, alimenté seulement
+  par `stockerPointageHorsLigne`, appelée uniquement dans les fonctions web mortes `pointerArrivee` / `pointerDepart` :
+  résidu web du système ①, non reproduit (retrait à proposer côté web, préalable au REVOKE du constat B9). Une garde
+  Node rougit si `stockerPointageHorsLigne` gagne un importeur ou un appel ailleurs.
+- Le web journalise le retrait du consentement GPS sous `GPS_CONSENTEMENT_ACTIVE` / `GPS_CONSENTEMENT_RETIRE`, absents
+  du CHECK `journaux_audit_action_check` : son audit échoue en silence (la trace serveur `DONNEES_PERSO_MODIFICATION`
+  existe).

@@ -49,8 +49,22 @@ public enum DemoWorld {
             recovery: UnwiredRecoveryPort(),            // T10
             justificatifs: UnwiredJustificatifStoragePort() // T7
         )
+        câblerLot2(&gateways)
         câblerLot3(&gateways)
         return gateways
+    }
+
+    /// Lot 2 (blueprint `LOT2_PLAN.md` §2.2) : seul point d'assignation des ports du lot 2 du monde démo,
+    /// après l'init du lot 1 (aucun troisième init). Chaque tranche y remplace son stub par sa gateway démo
+    /// dans la même PR qu'au monde Supabase (`SupabaseGateways.câblerLot2`) et retire le port de
+    /// `DemoWorldTests.portsEnAttenteLot2`. L'appareil démo (GPS, réseau, terminal) n'est pas un port
+    /// backend : `Appareil.demo(gps:reseau:)`, injecté par `AppContainer` (T4b).
+    static func câblerLot2(_ gateways: inout Gateways) {
+        gateways.pointage = DemoPointageGateway(clock: FixedClock(fixedNow)) // T3
+        gateways.contestation = UnwiredContestationPort()          // T5b
+        gateways.notation = DemoNotationGateway()                  // T5a
+        gateways.documents = DemoDocumentsGateway()                // T6 (scénario démo : `-JOLENE_DEMO_SCENARIO`, T7)
+        gateways.contrats = DemoContratsGateway(clock: FixedClock(fixedNow)) // T8
     }
 
     /// Lot 3 (blueprint `LOT3_PLAN.md` §2.2) : seul point d'assignation des ports du lot 3 du monde
@@ -85,16 +99,24 @@ actor DemoSessionStore {
 
 /// Accepte n'importe quel email et mot de passe non vides et renvoie l'utilisateur démo
 /// confirmé. `restoreSession` renvoie `nil` au premier lancement, puis l'utilisateur
-/// après `signIn`, jusqu'à `signOut`. Lot 3, T7 : l'adresse d'un compte créé pendant ce lancement
-/// (`DemoInscriptionGateway`, mêmes `store` et `comptes`) ouvre ce nouveau compte, sans profil soignant.
+/// après `signIn`, jusqu'à `signOut`. Lot 2 (T4b, seconde revue fraîche, m2) : liée à une
+/// `ExpirationSessionDemo` (scénarios DEBUG `session-expiree-*`), une restauration d'une
+/// session ouverte (« Vérifier ma session » → `SessionController.start`) la revalide.
+/// Lot 3, T7 : l'adresse d'un compte créé pendant ce lancement (`DemoInscriptionGateway`,
+/// mêmes `store` et `comptes`) ouvre ce nouveau compte, sans profil soignant.
 public struct DemoAuthGateway: AuthPort {
     let store = DemoSessionStore()
     let comptes = DemoComptesInscription()
+    private let expiration: ExpirationSessionDemo?
 
-    public init() {}
+    public init(expiration: ExpirationSessionDemo? = nil) {
+        self.expiration = expiration
+    }
 
     public func restoreSession() async throws -> AuthenticatedUser? {
-        await store.current()
+        let user = await store.current()
+        if user != nil { await expiration?.revalider() }
+        return user
     }
 
     public func signIn(email: String, password: String) async throws -> AuthenticatedUser {

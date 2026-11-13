@@ -50,8 +50,21 @@ public enum SupabaseGateways {
             recovery: UnwiredRecoveryPort(),            // T10
             justificatifs: UnwiredJustificatifStoragePort() // T7
         )
+        câblerLot2(&gateways, client: client, clock: clock)
         câblerLot3(&gateways, client: client)
         return gateways
+    }
+
+    /// Lot 2 (blueprint `LOT2_PLAN.md` §2.2) : seul point d'assignation des ports du lot 2 du monde
+    /// Supabase, après l'init du lot 1 (aucun troisième init). Chaque tranche y remplace son stub par sa
+    /// gateway dans la même PR qu'au monde démo (`DemoWorld.câblerLot2`) ;
+    /// `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes.
+    static func câblerLot2(_ gateways: inout Gateways, client: SupabaseClient, clock: any ClockPort = SystemClock()) {
+        gateways.pointage = SupabasePointageGateway(client: client, clock: gateways.clock) // T3
+        gateways.contestation = UnwiredContestationPort()          // T5b
+        gateways.notation = SupabaseNotationGateway(client: client) // T5a
+        gateways.documents = SupabaseDocumentsGateway(client: client, clock: clock) // T6
+        gateways.contrats = SupabaseContratsGateway(client: client, clock: gateways.clock) // T8
     }
 
     /// Lot 3 (blueprint `LOT3_PLAN.md` §2.2) : seul point d'assignation des ports du lot 3 du monde

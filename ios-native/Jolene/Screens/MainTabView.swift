@@ -86,7 +86,8 @@ struct MainTabView: View {
             .accessibilityIdentifier("tab-accueil")
 
             NavigationStack(path: $cheminExplorer) {
-                MissionsListScreen(session: session, snapshot: snapshot)
+                // Lot 2 T5a (revue fraîche, m6) : changement d'onglet transmis au détail d'une mission.
+                MissionsListScreen(session: session, snapshot: snapshot) { selection = $0 }
             }
             .tabItem { Label("Explorer", systemImage: "magnifyingglass") }
             .tag(Tab.explorer)
@@ -112,13 +113,13 @@ struct MainTabView: View {
             .accessibilityIdentifier("tab-revenus")
 
             NavigationStack(path: $cheminProfil) {
-                ProfileScreen(container: container, session: session, snapshot: snapshot)
+                ProfileScreen(container: container, session: session, snapshot: snapshot) { selection = $0 }
                     .navigationDestination(for: PreferencesNotificationsRoute.self) { _ in
                         PreferencesScreen(session: session, snapshot: snapshot, push: container.push,
                                           permission: container.pushPermission)
                     }
                     .navigationDestination(for: ProfilEditionRoute.self) { _ in
-                        // Lot 3, T10 : localisation provisoire du profil (`AppContainer.localisationProfil`).
+                        // Lot 3, T10 : localisation du profil (`AppContainer.localisationProfil`).
                         ProfilEditionScreen(session: session, snapshot: snapshot, localisation: container.localisationProfil,
                                             selectionAvatarDemo: container.selectionAvatarDemo)
                     }
@@ -128,6 +129,10 @@ struct MainTabView: View {
             .accessibilityIdentifier("tab-profil")
         }
         .tint(JoleneColor.rose700)
+        // Lot 2 T4b : capacités d'appareil et zone de pointage (point d'extension de T4a), au-dessus des onglets.
+        .environment(\.appareil, container.appareil)
+        .environment(\.fabriqueZonePointage, container.fabriqueZonePointage)
+        .onDisappear { FichierContratTemporaire.effacerTout() } // lot 2 T9a : copies de contrats effacées au changement d'epoch
         // Fond de carte (`carteTuiles`) : injecté à la racine par `RootView` (revue T4a), hérité ici.
         // Lot 3, T5 : pré-prompt (surcouche modale) et issue de l'activation.
         .overlay {

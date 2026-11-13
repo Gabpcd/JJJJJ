@@ -1,0 +1,186 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "contrats": [
+    {
+      "id": "demo-contrat-001",
+      "mission_id": "demo-assignee-001",
+      "soignant_id": "demo-soignant",
+      "etablissement_id": "demo-etab-1",
+      "numero_contrat": "DEMO-0001",
+      "type_contrat": "CDD",
+      "statut": "EN_ATTENTE_SIGNATURES",
+      "mode_signature": "JOLENE_OTP",
+      "contenu_html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\" />\n<title>Contrat DEMO-0001</title>\n<style>\n  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #0f172a; line-height: 1.6; padding: 40px; max-width: 900px; margin: 0 auto; }\n  h1 { color: #d6336c; font-size: 22px; border-bottom: 2px solid #fce7f3; padding-bottom: 8px; }\n  h2 { color: #4b1d3a; font-size: 16px; margin-top: 24px; }\n  p { margin: 8px 0; }\n  strong { color: #1e293b; }\n  em { color: #64748b; font-size: 12px; }\n  .header-mention { background: #fef3f7; border-left: 4px solid #d6336c; padding: 12px 16px; margin-bottom: 24px; font-size: 13px; }\n</style>\n</head>\n<body>\n<section data-jolene-cdd=\"employeur-v1\" data-cadre=\"PRIVE_TERME_PRECIS\" data-auteur=\"demo-etab-1\" data-prepare-le=\"2026-11-01T14&#58;05&#58;00.000Z\"><h1>Contrat à durée déterminée — DEMO-0001</h1>\n    <p>Contrat de droit privé à terme précis préparé à partir des informations confirmées par l’employeur.\n    Jolene intervient comme plateforme technique ; l’établissement est l’employeur.</p>\n    <h2>Parties</h2><p><strong>Établissement fictif République</strong>, SIRET , 75011, Paris.</p>\n    <p><strong>Représentant de l’employeur :</strong> Représentant fictif — Direction fictive</p><p><strong>Camille Démo</strong>, né(e) le non renseignée, .</p>\n    <h2>Motif et poste</h2><p><strong>Cas de recours déclaré :</strong> Accroissement temporaire d’activité</p>\n    <p><strong>Motif précis :</strong> Donnée fictive de démonstration</p>\n    <p><strong>Poste :</strong> Donnée fictive de démonstration</p><p><strong>Qualification :</strong> Donnée fictive de démonstration</p><p><strong>Lieu de travail :</strong> Donnée fictive de démonstration</p>\n    <p><strong>Poste présentant des risques particuliers :</strong> Non, selon la déclaration de l’employeur</p>\n    <h2>Terme et temps de travail</h2><p>Du 5 novembre 2026 à 08&#58;00 au 5 novembre 2026 à 16&#58;00. Durée prévisionnelle : 8 heures.\n    Mission : Démonstration · Mission assignée 1.</p><p><strong>Renouvellement éventuel :</strong> Donnée fictive de démonstration</p>\n    <p><strong>Temps partiel :</strong> Non, selon la déclaration de l’employeur</p>\n    <h2>Convention collective</h2><p><strong>Convention collective applicable ou absence confirmée :</strong> Donnée fictive de démonstration</p>\n    <h2>Période d’essai</h2><p>Aucune période d’essai n’est convenue.</p>\n    <h2>Rémunération</h2><p>Taux horaire brut enregistré pour la mission : 27.00 €.</p>\n    <p><strong>Salaire, primes, indemnités et autres accessoires :</strong> Donnée fictive de démonstration</p>\n    <h2>Retraite et prévoyance</h2><p><strong>Retraite complémentaire :</strong> Donnée fictive de démonstration — Donnée fictive de démonstration</p>\n    <p><strong>Prévoyance :</strong> Déclarée non applicable par l’employeur</p>\n    </section>\n</body>\n</html>",
+      "hash_document": "d2f2a942b25f34790fe5fa5bf0d6d1150d51f3f1e85499213133d49221d6caf5",
+      "storage_path": "demo-contrat-001/original-001.html",
+      "contenu_html_rendu_le": "2026-11-01T14:05:00.000Z",
+      "signature_soignant": false,
+      "signature_soignant_le": null,
+      "signature_etablissement": false,
+      "signature_etablissement_le": null,
+      "cree_le": "2026-11-01T14:00:00.000Z"
+    },
+    {
+      "id": "demo-contrat-002",
+      "mission_id": "demo-terminee-001",
+      "soignant_id": "demo-soignant",
+      "etablissement_id": "demo-etab-1",
+      "numero_contrat": "DEMO-0002",
+      "type_contrat": "CDD",
+      "statut": "SIGNE_COMPLET",
+      "mode_signature": "JOLENE_OTP",
+      "contenu_html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\" />\n<title>Contrat DEMO-0002</title>\n<style>\n  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #0f172a; line-height: 1.6; padding: 40px; max-width: 900px; margin: 0 auto; }\n  h1 { color: #d6336c; font-size: 22px; border-bottom: 2px solid #fce7f3; padding-bottom: 8px; }\n  h2 { color: #4b1d3a; font-size: 16px; margin-top: 24px; }\n  p { margin: 8px 0; }\n  strong { color: #1e293b; }\n  em { color: #64748b; font-size: 12px; }\n  .header-mention { background: #fef3f7; border-left: 4px solid #d6336c; padding: 12px 16px; margin-bottom: 24px; font-size: 13px; }\n</style>\n</head>\n<body>\n<section data-jolene-cdd=\"employeur-v1\" data-cadre=\"PRIVE_TERME_PRECIS\" data-auteur=\"demo-etab-1\" data-prepare-le=\"2026-10-29T00&#58;05&#58;00.000Z\"><h1>Contrat à durée déterminée — DEMO-0002</h1>\n    <p>Contrat de droit privé à terme précis préparé à partir des informations confirmées par l’employeur.\n    Jolene intervient comme plateforme technique ; l’établissement est l’employeur.</p>\n    <h2>Parties</h2><p><strong>Établissement fictif République</strong>, SIRET , 75011, Paris.</p>\n    <p><strong>Représentant de l’employeur :</strong> Représentant fictif — Direction fictive</p><p><strong>Camille Démo</strong>, né(e) le non renseignée, .</p>\n    <h2>Motif et poste</h2><p><strong>Cas de recours déclaré :</strong> Accroissement temporaire d’activité</p>\n    <p><strong>Motif précis :</strong> Donnée fictive de démonstration</p>\n    <p><strong>Poste :</strong> Donnée fictive de démonstration</p><p><strong>Qualification :</strong> Donnée fictive de démonstration</p><p><strong>Lieu de travail :</strong> Donnée fictive de démonstration</p>\n    <p><strong>Poste présentant des risques particuliers :</strong> Non, selon la déclaration de l’employeur</p>\n    <h2>Terme et temps de travail</h2><p>Du 1 novembre 2026 à 08&#58;00 au 1 novembre 2026 à 16&#58;00. Durée prévisionnelle : 8 heures.\n    Mission : Démonstration · Mission terminée 1.</p><p><strong>Renouvellement éventuel :</strong> Donnée fictive de démonstration</p>\n    <p><strong>Temps partiel :</strong> Non, selon la déclaration de l’employeur</p>\n    <h2>Convention collective</h2><p><strong>Convention collective applicable ou absence confirmée :</strong> Donnée fictive de démonstration</p>\n    <h2>Période d’essai</h2><p>Aucune période d’essai n’est convenue.</p>\n    <h2>Rémunération</h2><p>Taux horaire brut enregistré pour la mission : 26.00 €.</p>\n    <p><strong>Salaire, primes, indemnités et autres accessoires :</strong> Donnée fictive de démonstration</p>\n    <h2>Retraite et prévoyance</h2><p><strong>Retraite complémentaire :</strong> Donnée fictive de démonstration — Donnée fictive de démonstration</p>\n    <p><strong>Prévoyance :</strong> Déclarée non applicable par l’employeur</p>\n    </section>\n</body>\n</html>",
+      "hash_document": "1d12b5baa19833cfb7b4e8d0fd43bc83e4a78c16058d26f9668641e30d7b2b15",
+      "storage_path": "demo-contrat-002/original-002.html",
+      "contenu_html_rendu_le": "2026-10-29T00:05:00.000Z",
+      "signature_soignant": true,
+      "signature_soignant_le": "2026-10-29T02:00:00.000Z",
+      "signature_etablissement": true,
+      "signature_etablissement_le": "2026-10-29T01:00:00.000Z",
+      "cree_le": "2026-10-29T00:00:00.000Z"
+    },
+    {
+      "id": "demo-contrat-003",
+      "mission_id": "demo-contrat-mission-003",
+      "soignant_id": "demo-soignant",
+      "etablissement_id": "demo-etab-2",
+      "numero_contrat": "DEMO-0003",
+      "type_contrat": "CDD",
+      "statut": "EN_ATTENTE_SIGNATURES",
+      "mode_signature": "JOLENE_OTP",
+      "contenu_html": null,
+      "hash_document": null,
+      "storage_path": null,
+      "contenu_html_rendu_le": null,
+      "signature_soignant": false,
+      "signature_soignant_le": null,
+      "signature_etablissement": false,
+      "signature_etablissement_le": null,
+      "cree_le": "2026-11-01T22:00:00.000Z"
+    },
+    {
+      "id": "demo-contrat-pointage-c",
+      "mission_id": "demo-presence-c",
+      "soignant_id": "demo-soignant",
+      "etablissement_id": "demo-etab-3",
+      "numero_contrat": "DEMO-0004",
+      "type_contrat": "CDD",
+      "statut": "SIGNE_SOIGNANT",
+      "mode_signature": "JOLENE_OTP",
+      "contenu_html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\" />\n<title>Contrat DEMO-0004</title>\n<style>\n  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #0f172a; line-height: 1.6; padding: 40px; max-width: 900px; margin: 0 auto; }\n  h1 { color: #d6336c; font-size: 22px; border-bottom: 2px solid #fce7f3; padding-bottom: 8px; }\n  h2 { color: #4b1d3a; font-size: 16px; margin-top: 24px; }\n  p { margin: 8px 0; }\n  strong { color: #1e293b; }\n  em { color: #64748b; font-size: 12px; }\n  .header-mention { background: #fef3f7; border-left: 4px solid #d6336c; padding: 12px 16px; margin-bottom: 24px; font-size: 13px; }\n</style>\n</head>\n<body>\n<section data-jolene-cdd=\"employeur-v1\" data-cadre=\"PRIVE_TERME_PRECIS\" data-auteur=\"demo-etab-3\" data-prepare-le=\"2026-11-01T04&#58;05&#58;00.000Z\"><h1>Contrat à durée déterminée — DEMO-0004</h1>\n    <p>Contrat de droit privé à terme précis préparé à partir des informations confirmées par l’employeur.\n    Jolene intervient comme plateforme technique ; l’établissement est l’employeur.</p>\n    <h2>Parties</h2><p><strong>Cabinet fictif du Parc</strong>, SIRET , 94300, Vincennes.</p>\n    <p><strong>Représentant de l’employeur :</strong> Représentant fictif — Direction fictive</p><p><strong>Camille Démo</strong>, né(e) le non renseignée, .</p>\n    <h2>Motif et poste</h2><p><strong>Cas de recours déclaré :</strong> Accroissement temporaire d’activité</p>\n    <p><strong>Motif précis :</strong> Donnée fictive de démonstration</p>\n    <p><strong>Poste :</strong> Donnée fictive de démonstration</p><p><strong>Qualification :</strong> Donnée fictive de démonstration</p><p><strong>Lieu de travail :</strong> Donnée fictive de démonstration</p>\n    <p><strong>Poste présentant des risques particuliers :</strong> Non, selon la déclaration de l’employeur</p>\n    <h2>Terme et temps de travail</h2><p>Du 2 novembre 2026 à 07&#58;00 au 2 novembre 2026 à 15&#58;00. Durée prévisionnelle : 8 heures.\n    Mission : Démonstration · Contrat à signer.</p><p><strong>Renouvellement éventuel :</strong> Donnée fictive de démonstration</p>\n    <p><strong>Temps partiel :</strong> Non, selon la déclaration de l’employeur</p>\n    <h2>Convention collective</h2><p><strong>Convention collective applicable ou absence confirmée :</strong> Donnée fictive de démonstration</p>\n    <h2>Période d’essai</h2><p>Aucune période d’essai n’est convenue.</p>\n    <h2>Rémunération</h2><p>Taux horaire brut enregistré pour la mission : 26.00 €.</p>\n    <p><strong>Salaire, primes, indemnités et autres accessoires :</strong> Donnée fictive de démonstration</p>\n    <h2>Retraite et prévoyance</h2><p><strong>Retraite complémentaire :</strong> Donnée fictive de démonstration — Donnée fictive de démonstration</p>\n    <p><strong>Prévoyance :</strong> Déclarée non applicable par l’employeur</p>\n    </section>\n</body>\n</html>",
+      "hash_document": "9d846eb7e077c8afb230586046833375546ac2a9954c3417abc2e93af7269372",
+      "storage_path": "demo-contrat-pointage-c/original-pointage-c.html",
+      "contenu_html_rendu_le": "2026-11-01T04:05:00.000Z",
+      "signature_soignant": true,
+      "signature_soignant_le": "2026-11-01T05:00:00.000Z",
+      "signature_etablissement": false,
+      "signature_etablissement_le": null,
+      "cree_le": "2026-11-01T04:00:00.000Z"
+    }
+  ],
+  "missions": [
+    {
+      "id": "demo-assignee-001",
+      "intitule": "Démonstration · Mission assignée 1",
+      "service": "Médecine polyvalente",
+      "debut_le": "2026-11-05T07:00:00.000Z",
+      "fin_le": "2026-11-05T15:00:00.000Z",
+      "duree_heures": 8,
+      "taux_horaire_base": 27
+    },
+    {
+      "id": "demo-terminee-001",
+      "intitule": "Démonstration · Mission terminée 1",
+      "service": "Médecine polyvalente",
+      "debut_le": "2026-11-01T07:00:00.000Z",
+      "fin_le": "2026-11-01T15:00:00.000Z",
+      "duree_heures": 8,
+      "taux_horaire_base": 26
+    },
+    {
+      "id": "demo-contrat-mission-003",
+      "intitule": "Démonstration · Mission à préparer 3",
+      "service": "Soins de suite",
+      "debut_le": "2026-11-14T07:00:00.000Z",
+      "fin_le": "2026-11-14T15:00:00.000Z",
+      "duree_heures": 8,
+      "taux_horaire_base": 27
+    },
+    {
+      "id": "demo-presence-c",
+      "intitule": "Démonstration · Contrat à signer",
+      "service": "Consultations",
+      "debut_le": "2026-11-02T06:00:00.000Z",
+      "fin_le": "2026-11-02T14:00:00.000Z",
+      "duree_heures": 8,
+      "taux_horaire_base": 26
+    }
+  ],
+  "originaux": [
+    {
+      "contrat_id": "demo-contrat-001",
+      "storage_path": "demo-contrat-001/original-001.html",
+      "fichier": "demo-contrat-001.html"
+    },
+    {
+      "contrat_id": "demo-contrat-002",
+      "storage_path": "demo-contrat-002/original-002.html",
+      "fichier": "demo-contrat-002.html"
+    },
+    {
+      "contrat_id": "demo-contrat-pointage-c",
+      "storage_path": "demo-contrat-pointage-c/original-pointage-c.html",
+      "fichier": "demo-contrat-pointage-c.html"
+    }
+  ],
+  "signatures": [
+    {
+      "id": "demo-signature-002-etab",
+      "contrat_id": "demo-contrat-002",
+      "signataire_user_id": "demo-etab-1",
+      "signataire_role": "etablissement",
+      "signe_a": "2026-10-29T01:00:00.000Z",
+      "ip_signature": null,
+      "user_agent": null,
+      "hash_document": "1d12b5baa19833cfb7b4e8d0fd43bc83e4a78c16058d26f9668641e30d7b2b15",
+      "otp_valide_a": "2026-10-29T01:00:00.000Z",
+      "psc_session_active": false,
+      "rpps_verifie": false,
+      "traits_identite_verifies": false,
+      "statut_signature": "signe",
+      "cree_le": "2026-10-29T01:00:00.000Z"
+    },
+    {
+      "id": "demo-signature-002-soignant",
+      "contrat_id": "demo-contrat-002",
+      "signataire_user_id": "demo-soignant",
+      "signataire_role": "soignant",
+      "signe_a": "2026-10-29T02:00:00.000Z",
+      "ip_signature": null,
+      "user_agent": null,
+      "hash_document": "1d12b5baa19833cfb7b4e8d0fd43bc83e4a78c16058d26f9668641e30d7b2b15",
+      "otp_valide_a": "2026-10-29T02:00:00.000Z",
+      "psc_session_active": false,
+      "rpps_verifie": false,
+      "traits_identite_verifies": false,
+      "statut_signature": "signe",
+      "cree_le": "2026-10-29T02:00:00.000Z"
+    },
+    {
+      "id": "demo-signature-pointage-c-soignant",
+      "contrat_id": "demo-contrat-pointage-c",
+      "signataire_user_id": "demo-soignant",
+      "signataire_role": "soignant",
+      "signe_a": "2026-11-01T05:00:00.000Z",
+      "ip_signature": null,
+      "user_agent": null,
+      "hash_document": "9d846eb7e077c8afb230586046833375546ac2a9954c3417abc2e93af7269372",
+      "otp_valide_a": "2026-11-01T05:00:00.000Z",
+      "psc_session_active": false,
+      "rpps_verifie": false,
+      "traits_identite_verifies": false,
+      "statut_signature": "signe",
+      "cree_le": "2026-11-01T05:00:00.000Z"
+    }
+  ]
+}

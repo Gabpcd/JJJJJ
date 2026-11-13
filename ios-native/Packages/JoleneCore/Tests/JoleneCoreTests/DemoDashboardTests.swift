@@ -122,7 +122,9 @@ final class DemoDashboardTests: XCTestCase {
 
     /// Surcharge DEBUG `JOLENE_FORCE_OUBLI_POINTAGE=1` (`AppContainer`) : le même tableau de bord démo, avec une mission
     /// qui semble attendre un pointage de départ (`missions_oubliees_count` = 1). Tout le reste est inchangé ; l'encart
-    /// porte le texte web, et le bouton du renvoi `/soignant/presences` est prouvé par `DemoAccueilTests`.
+    /// porte le texte web, et son bouton natif « Pointer mon départ maintenant » (lot 2 T5a ; il remplace le renvoi
+    /// `/soignant/presences` depuis la fusion des lots 2 et 3) est prouvé par
+    /// `DemoAccueilTests.testOubliDePointageOuvreLesPresencesNatives`.
     func testVarianteOubliDePointageNeChangeQueLeCompteur() async throws {
         XCTAssertEqual(DemoDashboardGateway.variableOubliPointage, "JOLENE_FORCE_OUBLI_POINTAGE")
         let defaut = try await DemoDashboardGateway().dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
@@ -135,7 +137,7 @@ final class DemoDashboardTests: XCTestCase {
         attendu.missionsOublieesCount = 1
         XCTAssertEqual(variante, attendu, "seul le compteur change")
         XCTAssertEqual(AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences),
-                       .safari(URL(string: "https://jolene.app/soignant/presences")!), "route du bouton : renvoi web canonique")
+                       .safari(URL(string: "https://jolene.app/soignant/presences")!), "route canonique de la page Présences web (`AccueilPresentation.lienPresences`)")
     }
 
     func testEchecForceRefuseToutAutreUtilisateur() async {

@@ -3,12 +3,13 @@ import XCTest
 
 /// Point de fusion VERROUILLÉ de la localisation du profil (lot 3, T10 ; revue fraîche B8 de T10, m1 ;
 /// `DECISIONS_LOT3.md`, « Décisions déléguées du 8 novembre 2026 », « T10 — localisation du profil livrée sans le port du
-/// lot 2 ») : la position du profil passe aujourd'hui par le port minimal `LocalisationPort` et l'implémentation isolée
-/// `LocalisationProfilProvisoire` (cible app), parce que `LocationPort` du lot 2 n'est pas sur la base du lot 3. Ce test
-/// échoue dès que `LocationPort` du lot 2 arrive dans JoleneCore alors que l'implémentation provisoire existe encore :
-/// la fusion ne peut pas laisser deux services de localisation dans l'app (PRINCIPES §2). Avant la fusion, il exige que
-/// l'implémentation provisoire soit la SEULE utilisatrice de CoreLocation dans la cible app, et la règle de la précision
-/// réduite tranchée (`LocalisationPolicy.issuePrecisionReduite`).
+/// lot 2 ») : sur la base du lot 3, la position du profil passait par le port minimal `LocalisationPort` et une
+/// implémentation isolée de la cible app, parce que `LocationPort` du lot 2 n'était pas sur cette base. Ce test échoue dès
+/// que `LocationPort` du lot 2 est dans JoleneCore alors que l'implémentation provisoire existe encore : la fusion ne peut
+/// pas laisser deux services de localisation dans l'app (PRINCIPES §2). Avant la fusion, il exigeait que l'implémentation
+/// provisoire soit la SEULE utilisatrice de CoreLocation dans la cible app, et la règle de la précision réduite tranchée
+/// (`LocalisationPolicy.issuePrecisionReduite`). Fusion des lots 2 et 3 : l'implémentation provisoire est supprimée et
+/// `LocalisationProfilAppareil` sert le port sur `Appareil.localisation` ; ses issues sont prouvées ci-dessous.
 final class FusionLocalisationLot2Tests: XCTestCase {
     /// Racine `ios-native/` (le fichier est sous `ios-native/Packages/JoleneCore/Tests/JoleneCoreTests/`).
     private static var racine: URL {
@@ -78,5 +79,86 @@ final class FusionLocalisationLot2Tests: XCTestCase {
         XCTAssertTrue(decisions.contains("`.precisionReduite` → `.indisponible`"), "règle de fusion consignée")
         XCTAssertTrue(decisions.contains("T10 — localisation du profil livrée sans le port du lot 2"),
                       "décision explicite qui déroge au blueprint v2 §3 T10")
+    }
+
+    // MARK: - Adaptateur de la fusion (`LocalisationProfilAppareil`)
+
+    /// Correspondance des issues du lot 2 vers celles du profil (`DECISIONS_LOT3.md`, section T10, point 1).
+    func testAdaptateurTraduitLesIssuesDuLot2() {
+        XCTAssertEqual(LocalisationProfilAppareil.issue(.disponible(latitude: 45.75, longitude: 4.83, precisionM: 12)),
+                       .disponible(latitude: 45.75, longitude: 4.83))
+        XCTAssertEqual(LocalisationProfilAppareil.issue(.refusee), .refusee)
+        XCTAssertEqual(LocalisationProfilAppareil.issue(.indisponible), .indisponible)
+        XCTAssertEqual(LocalisationProfilAppareil.issue(.precisionReduite), LocalisationPolicy.issuePrecisionReduite)
+    }
+
+    /// Sur l'appareil démo du lot 2 : l'autorisation est demandée une seule fois (jamais si elle a déjà été décidée), puis
+    /// la position unique traduite ; refus, indisponibilité et précision réduite ne portent aucune coordonnée.
+    func testAdaptateurSurLAppareilDemoDuLot2() async {
+        let accorde = DemoLocationPort(scenario: .accorde)
+        let profil = LocalisationProfilAppareil(localisation: accorde)
+        let premiere = await profil.localiser(delai: LocalisationPolicy.delaiProfil)
+        XCTAssertEqual(premiere, .disponible(latitude: DemoWorld.context.profile.adresseLat ?? 0,
+                                             longitude: DemoWorld.context.profile.adresseLng ?? 0))
+        _ = await profil.localiser(delai: LocalisationPolicy.delaiProfil)
+        let demandes = await accorde.demandes
+        XCTAssertEqual(demandes, 1, "autorisation déjà décidée : aucune seconde demande")
+        let refusee = await LocalisationProfilAppareil(localisation: DemoLocationPort(scenario: .refuse)).localiser(delai: 15)
+        XCTAssertEqual(refusee, .refusee)
+        let indisponible = await LocalisationProfilAppareil(localisation: DemoLocationPort(scenario: .indisponible)).localiser(delai: 15)
+        XCTAssertEqual(indisponible, .indisponible)
+        let reduite = await LocalisationProfilAppareil(localisation: DemoLocationPort(scenario: .reduite)).localiser(delai: 15)
+        XCTAssertEqual(reduite, LocalisationPolicy.issuePrecisionReduite)
+    }
+
+    /// Revue B8 de T10, m1 : en précision réduite, aucune position n'est demandée.
+    func testPrecisionReduiteSansDemandeDePosition() async {
+        let espion = LocationEspion(etat: .accordee(precise: false))
+        let issue = await LocalisationProfilAppareil(localisation: espion).localiser(delai: 15)
+        XCTAssertEqual(issue, .indisponible)
+        let positions = await espion.demandesPosition
+        let autorisations = await espion.demandesAutorisation
+        XCTAssertEqual(positions, 0, "aucune position demandée en précision réduite")
+        XCTAssertEqual(autorisations, 0, "autorisation déjà décidée")
+    }
+
+    /// Revue B8 de T10, m12 : l'attente de la réponse à la feuille d'autorisation est bornée ; sans réponse, l'issue est
+    /// `.indisponible` et aucune position n'est demandée.
+    func testAttenteDeLAutorisationBornee() async {
+        let espion = LocationEspion(etat: .nonDeterminee, reponseApres: 30)
+        let debut = Date()
+        let issue = await LocalisationProfilAppareil(localisation: espion, delaiAutorisation: 0.05).localiser(delai: 15)
+        XCTAssertEqual(issue, .indisponible)
+        XCTAssertLessThan(Date().timeIntervalSince(debut), 10, "attente bornée au délai d'autorisation")
+        let autorisations = await espion.demandesAutorisation
+        let positions = await espion.demandesPosition
+        XCTAssertEqual(autorisations, 1)
+        XCTAssertEqual(positions, 0)
+    }
+}
+
+/// `LocationPort` espion : autorisation scriptée, réponse à la feuille éventuellement tardive (`reponseApres` secondes),
+/// demandes comptées ; position toujours indisponible.
+private actor LocationEspion: LocationPort {
+    private var etat: AutorisationPosition
+    private let reponseApres: TimeInterval
+    private(set) var demandesAutorisation = 0
+    private(set) var demandesPosition = 0
+
+    init(etat: AutorisationPosition, reponseApres: TimeInterval = 0) {
+        self.etat = etat
+        self.reponseApres = reponseApres
+    }
+
+    func autorisation() -> AutorisationPosition { etat }
+
+    func demanderAutorisation() async {
+        demandesAutorisation += 1
+        try? await Task.sleep(nanoseconds: UInt64(reponseApres * 1_000_000_000))
+    }
+
+    func positionUnique(delai: TimeInterval) -> ObservationGps {
+        demandesPosition += 1
+        return .indisponible
     }
 }

@@ -72,7 +72,12 @@ final class DemoProfilTests: JoleneUITestCase {
         XCTAssertEqual(villeRelue.value as? String, "Lyon", "profil relu à la réouverture")
 
         retour.tap()
+        // Depuis la fusion des lots 2 et 3, « Mon espace » (lot 2) sépare « Application » (sentinelle) de « Mon profil » :
+        // au retour au hub, la liste reste sur « Mon profil » et la cellule de la sentinelle est hors de l'écran sur
+        // iPhone (run 43349573460), d'où un défilement borné vers le haut, comme `DemoPhotoPositionTests`.
+        require("Retour au hub du profil") { self.containerVisible(self.element("profile-list")) }
         let sentinel = element("network-sentinel")
+        if !visible(sentinel) { scrollTo(sentinel, in: element("profile-list"), downward: false) }
         require("La sentinelle réseau est exposée") { sentinel.exists }
         XCTAssertEqual(sentinel.label, "0 requête", "Lecture et enregistrement démo : aucune requête réseau")
         record("\(proofPrefix)-profil-retour")

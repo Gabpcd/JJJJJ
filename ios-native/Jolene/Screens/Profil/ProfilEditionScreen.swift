@@ -27,7 +27,8 @@ struct ProfilEditionRoute: Hashable {}
 ///
 /// Lot 3, T10 : photo de profil en tête (`AvatarProfilModel`, reçu durable et relecture de `avatar_url`) ; carte
 /// « Adresse » avec « Utiliser ma position actuelle » (port `LocalisationPort` injecté par `MainTabView` depuis
-/// `AppContainer.localisationProfil`, provisoire jusqu'à la fusion avec le lot 2) au-dessus de la ville de recherche.
+/// `AppContainer.localisationProfil`, servi par `Appareil.localisation` du lot 2 depuis la fusion des lots 2 et 3) au-dessus
+/// de la ville de recherche.
 struct ProfilEditionScreen: View {
     @StateObject private var model: ProfilEditionModel
     @StateObject private var avatar: AvatarProfilModel
