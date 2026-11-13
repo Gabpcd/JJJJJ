@@ -150,11 +150,33 @@ class DemoPointageUITestCase: JoleneUITestCase {
     }
 
     /// Interrupteur SwiftUI : touché sur sa poignée (bord de fin), le libellé seul ne le bascule pas.
+    ///
+    /// Un toucher perdu est rejoué, jamais un toucher reçu (run 43296363876, ipad-portrait,
+    /// `testConsentementRetireEtReactiveDepuisLeProfil` : toucher synthétisé sur l'interrupteur actif, à l'écran, sans
+    /// défilement préalable ; 15 s plus tard ni feuille, ni valeur changée, ni interrupteur désactivé — le modèle n'avait rien
+    /// reçu ; non reproduit en local ni sur les deux autres formats). Tout toucher reçu par la ligne du Profil laisse une
+    /// trace observable : valeur relue changée, interrupteur désactivé (demande en vol ou feuille requise,
+    /// `ConsentementGpsRow`), feuille de consentement présentée ou retour (`profil-gps-retour`) changé. Sans aucune de ces
+    /// traces au bout de 3 s, le toucher n'a pas atteint l'app : il est rejoué, trois essais au plus. L'issue attendue reste
+    /// exigée par l'appelant.
     func basculer(_ interrupteur: XCUIElement) {
         require("L'interrupteur est actif") { interrupteur.isEnabled && self.visible(interrupteur) }
-        let poignee = interrupteur.switches.firstMatch
-        let cible = poignee.exists ? poignee : interrupteur
-        cible.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        let valeurAvant = interrupteur.value as? String
+        let retour = element("profil-gps-retour")
+        let retourAvant = retour.exists ? retour.label : nil
+        let feuille = element("gps-consent-sheet")
+        for essai in 1...3 {
+            let poignee = interrupteur.switches.firstMatch
+            let cible = poignee.exists ? poignee : interrupteur
+            cible.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+            // Une attente neuve par essai : XCTest refuse d'attendre deux fois la même.
+            let recu = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                (interrupteur.value as? String) != valeurAvant || !interrupteur.isEnabled || feuille.exists
+                    || (retour.exists ? retour.label : nil) != retourAvant
+            }, object: nil)
+            if XCTWaiter.wait(for: [recu], timeout: 3) == .completed { return }
+            XCTContext.runActivity(named: "Toucher de l'interrupteur sans effet observable (essai \(essai) sur 3)") { _ in }
+        }
     }
 
     func libelle(_ identifiant: String) -> String {
