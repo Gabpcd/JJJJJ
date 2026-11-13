@@ -9,8 +9,9 @@ import XCTest
 /// Migré par T4b : la zone de pointage (`pointage-code-<mission>`, `pointage-submit-<mission>`, parcours complet dans
 /// `DemoPointageTests`) remplace l'encart provisoire `pointage-zone-provisoire-<mission>` ; « Voir le contrat » ouvre le
 /// contrat natif (`demo-contrat-pointage-c`, ajouté aux fixtures démo par T4b). « Détail » ouvre le détail natif (T5a).
-/// Gap verrouillé (aucun bouton sans effet) : « Voir ou signaler un litige » (lot 4) n'est rendu qu'avec le présentateur
-/// de renvois web, que T10 injecte : son absence est affirmée ici, T10 la remplace par sa présence.
+/// « Voir ou signaler un litige » (lot 4) n'est rendu qu'avec le présentateur de renvois web (jamais un bouton sans
+/// effet) : depuis la fusion du lot 3, le présentateur `.safari` du coordinateur des liens (L3-T3b, qui remplace L1-T10)
+/// est injecté ; sa présence et la page web présentée (`/soignant/litiges`) sont affirmées ici.
 final class DemoPresencesTests: JoleneUITestCase {
     /// Libellés exacts des onglets (`PresencesSoignant.tsx` l.520-523).
     private static let onglets: [(identifiant: String, libelle: String)] = [
@@ -106,11 +107,24 @@ final class DemoPresencesTests: JoleneUITestCase {
             "28 oct. · 16h00", "7.5h",
             "Relevé reconstruit depuis les segments de pointage. La validation historique n’est pas disponible sur cet ancien dossier.",
         ])
-        XCTAssertFalse(element("presence-historique-litige-effectifs-mission-demo-presence-h3").exists,
-                       "« Voir ou signaler un litige » sans présentateur web (T10) : jamais un bouton sans effet")
         XCTAssertTrue(element("presence-historique-detail-demo-presence-h1-presence").exists,
                       "« Détail » ouvre le détail natif des présences (T5a, `DemoPresenceDetailTests`)")
         record("\(proofPrefix)-presences-historique")
+        // « Voir ou signaler un litige » (l.752, lot 4 natif) : migré à la fusion des lots 2 et 3 (règle 8). Le
+        // présentateur `.safari` du coordinateur des liens (L3-T3b) est injecté : le bouton est rendu et présente
+        // `/soignant/litiges` (double démo, aucune requête réseau), puis « Fermer » rend l'historique. Avant la fusion,
+        // ce test exigeait son absence (jamais un bouton sans effet).
+        let litige = element("presence-historique-litige-effectifs-mission-demo-presence-h3")
+        require("« Voir ou signaler un litige » est proposé sur la ligne reconstruite") { litige.exists }
+        scrollTo(litige, in: ecran)
+        XCTAssertEqual(litige.label, "Voir ou signaler un litige", "libellé du web")
+        tap("presence-historique-litige-effectifs-mission-demo-presence-h3")
+        liensRenvoiWebAffiche("https://jolene.app/soignant/litiges")
+        record("\(proofPrefix)-presences-litige-web")
+        liensFermerRenvoiWeb()
+        require("L'historique est de retour") {
+            self.containerVisible(ecran) && self.element("presences-tab-historique").isSelected
+        }
 
         // Retour au Profil : aucune requête réseau en démonstration.
         revenir()

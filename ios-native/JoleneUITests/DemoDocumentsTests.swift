@@ -232,10 +232,18 @@ final class DemoDocumentsTests: JoleneUITestCase {
         let dpae = element("documents-dpae-renvoi")
         require("L'onglet DPAE renvoie au web") { dpae.exists }
         XCTAssertTrue(dpae.label.contains("Cet espace n'est pas encore disponible dans l'application. Rendez-vous sur jolene.app."))
-        // Verrou du gap (`PresentateurRenvoiWeb`) : aucun bouton tant que le présentateur n'est pas injecté.
-        XCTAssertFalse(element("documents-dpae-web").exists)
         XCTAssertTrue(element("documents-tab-dpae").isSelected)
         record("\(proofPrefix)-documents-dpae")
+        // Migré à la fusion des lots 2 et 3 (règle 8) : le présentateur `.safari` du coordinateur des liens (L3-T3b) est
+        // injecté, « Voir sur jolene.app » est donc rendu et présente la page DPAE du web (double démo, aucune requête
+        // réseau) ; « Fermer » rend l'onglet DPAE. Avant la fusion, ce test exigeait son absence (jamais un bouton sans effet).
+        let web = element("documents-dpae-web")
+        require("L'onglet DPAE propose « Voir sur jolene.app »") { web.exists }
+        XCTAssertEqual(web.label, "Voir sur jolene.app")
+        tap("documents-dpae-web")
+        liensRenvoiWebAffiche("https://jolene.app/soignant/dpae")
+        liensFermerRenvoiWeb()
+        require("L'onglet DPAE est de retour") { self.element("documents-dpae-renvoi").exists && self.element("documents-tab-dpae").isSelected }
 
         tap("documents-tab-contrats")
         require("L'onglet Contrats affiche la liste native (T9a)") { self.containerVisible(self.element("contrats-liste")) }

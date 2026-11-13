@@ -7,8 +7,9 @@ import XCTest
 /// restantes, code `000000` accepté puis relu (contrat, section Signatures et certificat), « déjà signé ». Textes
 /// verbatim du web (`SignerContratOtp.tsx`, `TextesWeb.SignatureOtp`, `LibellesWeb.SignatureOtp`). Scénarios DEBUG
 /// `-JOLENE_DEMO_SCENARIO otp-expire` (tout code refusé `OTP_EXPIRE`) et `compte-test` (compte TEST sans admission de
-/// recette : renvoi web, sans bouton tant qu'aucun présentateur `.safari` n'est injecté, gap verrouillé comme
-/// `DemoContratsTests`). Aucune requête réseau (sentinelle), aucun SMS : la signature est simulée par le monde démo.
+/// recette : renvoi web ; depuis la fusion du lot 3, le présentateur `.safari` du coordinateur des liens est injecté et
+/// « ✍️ Signer le contrat » présente la page web du contrat). Aucune requête réseau (sentinelle), aucun SMS : la
+/// signature est simulée par le monde démo.
 ///
 /// Identifiants : `contrat-zone-signature`, `contrat-signature-otp`, `contrat-consentement`, `contrat-otp-envoyer`,
 /// `contrat-otp-envoye`, `contrat-otp-destinataire`, `contrat-otp-sms-restants`, `contrat-otp-minuteur`,
@@ -172,12 +173,26 @@ final class DemoSignatureContratTests: JoleneUITestCase {
         scrollTo(message, in: ecran)
         XCTAssertTrue(element("contrat-renvoi-web").exists)
         XCTAssertTrue(message.label.hasSuffix(Self.espaceNonDisponible), "texte du lot 0 : \(message.label)")
-        XCTAssertFalse(element("contrat-renvoi-web-action").exists, "aucun bouton sans effet avant T10 (présentateur `.safari`)")
         XCTAssertFalse(element("contrat-signature-otp").exists, "décision 18 : jamais d'OTP pour un compte TEST sans admission")
         XCTAssertFalse(element("contrat-consentement").exists)
         XCTAssertFalse(element("contrat-otp-envoyer").exists)
         XCTAssertFalse(element("contract-otp").exists)
         record("\(proofPrefix)-signature-compte-test")
+        // Migré à la fusion des lots 2 et 3 (règle 8) : le présentateur `.safari` du coordinateur des liens (L3-T3b, qui
+        // remplace L1-T10) est injecté ; « ✍️ Signer le contrat » est rendu et présente la page web du contrat
+        // (`ContratPresentation.renvoiSignature`, double démo, aucune requête réseau), puis « Fermer » rend le contrat.
+        // Avant la fusion, ce test exigeait son absence (jamais un bouton sans effet).
+        let action = element("contrat-renvoi-web-action")
+        require("Le renvoi web de la signature propose son bouton") { action.exists }
+        scrollTo(action, in: ecran)
+        XCTAssertEqual(action.label, "✍️ Signer le contrat", "libellé du web")
+        tap("contrat-renvoi-web-action")
+        liensRenvoiWebAffiche("https://jolene.app/contrat/demo-contrat-001")
+        record("\(proofPrefix)-signature-compte-test-web")
+        liensFermerRenvoiWeb()
+        require("Le contrat est de retour, toujours sans OTP") {
+            self.containerVisible(ecran) && self.element("contrat-renvoi-web").exists && !self.element("contrat-signature-otp").exists
+        }
 
         goBack()
         require("La liste des contrats est de retour") { self.containerVisible(self.element("contrats-liste")) }

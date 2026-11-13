@@ -198,7 +198,8 @@
   - `ios_natif_presences_actif` : lu par `PresencesScreen` à l'apparition (T4b), comme les documents ; à faux, la page
     entière (onglets, blocs, zones de pointage) devient un renvoi web `/soignant/presences`
     (`presences-desactive-renvoi`, texte du lot 0 `LibellesPresences.Liste.ecranNonDisponible` ; bouton
-    `presences-desactive-web` seulement avec le présentateur des renvois web de T10, aucun bouton sans effet). La ligne
+    `presences-desactive-web` seulement avec le présentateur des renvois web, aucun bouton sans effet ; rendu depuis la
+    fusion du lot 3, qui injecte ce présentateur, « Fusion du lot 3 » ci-dessous). La ligne
     du consentement GPS du Profil reste native : le texte de consentement promet le retrait « depuis votre profil »
     (correction 15), un coupe-circuit du pointage ne doit pas retirer ce chemin. XCUITest
     `DemoPointageEtatsTests.testDrapeauPresencesDesactiveRenvoieLaPageAuWebSansZoneDePointage` (trois formats) ;
@@ -454,7 +455,8 @@
     `/soignant/presences` (aujourd'hui `.safari` dans `LinkRouter`) ; le bandeau « à valider »
     (`TextesWeb.Presences.bandeauAValider`, HARD STOP n°4 de TL, `presences-bandeau-a-valider`) ne s'affiche qu'avec ce
     filtre, donc pas avant T10. L'injection du présentateur fait apparaître « Voir le contrat », « Détail » et « Voir ou
-    signaler un litige » : T10 remplace les absences affirmées par `DemoPresencesTests` par leur présence ;
+    signaler un litige » : T10 remplace les absences affirmées par `DemoPresencesTests` par leur présence (fait à la
+    fusion du lot 3 : « Fusion du lot 3 » ci-dessous) ;
   - **CI** : `LibellesPresencesTests` relit `src/pages/PresencesSoignant.tsx` et
     `src/components/pointage/BlocPointageMission.tsx`, absents des filtres `paths` d'`ios-swift-ci.yml` (comme
     `DocumentsSoignant.tsx` pour `MessagesDocumentsTests`) : un changement web de ces textes vouvoyés n'est vu qu'à la
@@ -655,7 +657,8 @@
     `PointageCodeView` (fichier de T4b, ajout localisé) et relit la fin prévue avant de proposer la note (consigne T5a
     ci-dessous) ; `ZonePointageContexte` porte désormais `horloge` et `services`, à transmettre si T5a construit d'autres
     blocs. **T10** : le bouton `pointage-renvoi-web-<m>` (suivi non vérifiable) n'apparaît qu'avec le présentateur des
-    renvois web ; T10 l'affirme alors présent.
+    renvois web ; T10 l'affirme alors présent (présentateur injecté depuis la fusion du lot 3 ; état non simulé en démo,
+    aucun XCUITest : « Fusion du lot 3 » ci-dessous).
 - **T4b** (revue fraîche de T1) : une `JoleneError(.environment)` de `KeychainTerminalIdentity` s'affiche telle
   quelle dans le bloc de pointage, bouton désactivé. `messageVerrouille` et `messageIndisponible` : nouvel essai à
   la tentative suivante (aucun échec mémorisé). `messageIllisible` (valeur stockée hors format) : **voie de
@@ -767,7 +770,8 @@
     mémoire partagé en démo, `KeychainReceiptStore` sinon) en attendant `Appareil` de T4b, qui le remplace par
     `appareil.recus` ; `EspaceSoignantSection` (Profil › « Mon espace ») créée par T7 avec la seule ligne « Mes
     documents » (`profil-documents`), T4a y ajoute ses lignes ; renvois web (onglets DPAE et Contrats, journal
-    illisible, drapeau à faux) par `PresentateurRenvoiWeb` seulement, aucun bouton tant que T10 ne l'injecte pas ;
+    illisible, drapeau à faux) par `PresentateurRenvoiWeb` seulement, aucun bouton tant que T10 ne l'injecte pas (injecté
+    depuis la fusion du lot 3) ;
     `MesDocumentsScreen(ongletInitial:)` attend la route `?tab=` de T10 ;
   - `AppContainer` : `mediaDemo` (`DemoMediaPicker`, `-JOLENE_DEMO_SOURCE_DOC`, DEBUG) et, conformément à la consigne
     ci-dessus, `-JOLENE_DEMO_SCENARIO upload-incertain` → `DemoDocumentsGateway(scenario: .uploadIncertain)` (DEBUG) ;
@@ -814,7 +818,7 @@
     (« ✍️ Signer le contrat » → `https://jolene.app/contrat/<id>`, `ContratPresentation.renvoiSignature`) et la page du
     certificat `certificat-export` (« Télécharger PDF » → `/contrat/<id>/certificat`) ; `DemoContratsTests` affirme
     aujourd'hui leur absence (gap verrouillé, comme `DemoAccueilTests`) : T10 remplace ces assertions par la présence du
-    bouton et la présentation du renvoi.
+    bouton et la présentation du renvoi (fait à la fusion du lot 3 : « Fusion du lot 3 » ci-dessous).
   - **État après l'intégration du 8 novembre 2026** (`int-lot2-v3`, poussée sur `feat/ios-lot2`) : faits — la ligne
     `profil-contrats` d'`EspaceSoignantSection` ouvre `ContratsDestination.liste`, `ContratsEntreeProfil.swift` et sa
     ligne de `ProfileScreen` sont supprimés, l'onglet Contrats de `MesDocumentsScreen` monte la liste (présentation
@@ -876,13 +880,15 @@
   - **T10** : `/soignant/presences/mission/:id` → `DetailPresencesScreen(missionId:session:snapshot:)` ; le présentateur
     `.safari` fait apparaître `presence-revenus-web` (récapitulatif financier, `PresencesRenvois.recapitulatifFinancier`) :
     T10 remplace l'absence affirmée par `DemoPresenceDetailTests` par sa présence et la présentation de
-    `https://jolene.app/soignant/presences/mission/<id>`. Ce renvoi est une route **forcée web** (exception documentée,
-    décision « Récapitulatif financier : route forcée web » ci-dessous) : il ne passe pas par `LinkRouter` et ne
-    disparaît donc pas quand T10 rend la route native (correction de la revue fraîche n°1 de T5a, M3 : l'ancien
-    `PresencesRenvois.detail`, résolu par `AccueilPresentation.renvoiWeb`, aurait rendu nil). Ne jamais le réécrire avec
+    `https://jolene.app/soignant/presences/mission/<id>` (fait à la fusion du lot 3 : « Fusion du lot 3 » ci-dessous).
+    Ce renvoi est une route **forcée web** (exception documentée, décision « Récapitulatif financier : route forcée
+    web » ci-dessous) : il ne passe pas par `LinkRouter` et ne disparaît donc pas quand T10 rend la route native
+    (correction de la revue fraîche n°1 de T5a, M3 : l'ancien `PresencesRenvois.detail`, résolu par
+    `AccueilPresentation.renvoiWeb`, aurait rendu nil). Ne jamais le réécrire avec
     `AccueilPresentation.renvoiWeb` : `PresencesAffichageTests.testRecapitulatifFinancierResteUnRenvoiWebQuandLeDetailDevientNatif`
     rougit.
-  - **Lot 3** : le lien Revenus natif remplace ce renvoi (décision 11).
+  - **Lot 3** : le lien Revenus natif remplace ce renvoi (décision 11) ; non fait à la fusion du lot 3 (renvoi web
+    conservé, « Fusion du lot 3 » ci-dessous).
   - **Intégrateur** : `LibellesDetailPresencesTests` relit `src/components/NotationRapide.tsx` et
     `src/components/pointage/PointageRotatifSoignant.tsx`, et la garde Node relit aussi `WidgetAllerPointer.tsx`,
     `BandeauOubliDepart.tsx` et `DetailMissionSoignant.tsx` : leur ajout aux filtres `paths` d'`ios-swift-ci.yml` est à
@@ -912,7 +918,8 @@
   indisponibilité, avec les conditions `disabled` du web ; « Signature non disponible pour le moment » n'y sert plus qu'aux
   erreurs bloquantes `CONTRAT_INACTIF`, `CONTRAT_DEJA_COMPLET`, `DEJA_SIGNE` (l.222-236). Le renvoi web d'un compte TEST
   affiche le texte du lot 0 (`MobileAccess.unsupportedRole`) et « ✍️ Signer le contrat » seulement avec le présentateur
-  `.safari` (lot 1 T10, absent : gap verrouillé par `DemoSignatureContratTests`). Identifiants migrés (règle 8) :
+  `.safari` (lot 1 T10, absent alors : gap verrouillé par `DemoSignatureContratTests` ; injecté depuis la fusion du lot 3,
+  qui affirme le bouton et sa page web, « Fusion du lot 3 » ci-dessous). Identifiants migrés (règle 8) :
   `contrat-renvoi-web-indisponible` disparaît, la zone est `contrat-zone-signature` (assertions de `DemoContratsTests`
   sur les contrats signé et CDD), le renvoi web garde `contrat-renvoi-web` (+ `-message`, `-action`). Revue fraîche de T8 :
   mineur 2 (relecture du modèle après un échec de transport, un délai épuisé et les refus qui ferment la signature, chaque
@@ -929,6 +936,27 @@
   (`DemoPointageGateway.Scenario`, `scan-incertain`) : conflit attendu au rebase, garder les deux blocs (règle par
   défaut). Même règle pour `.github/workflows/ios-swift-ci.yml` (éclats de T4b et de T9b) : la garde
   `tests/node/ios-swift-ci-eclats.node.mjs` dit si la fusion est cohérente.
+- **Fusion du lot 3 (12-13 novembre 2026) : présentateur `.safari` injecté, renvois web du lot 2 rendus.** Le
+  coordinateur des liens du lot 3 (`DeepLinkCoordinator`, L3-T3b, qui remplace le présentateur de L1-T10) pose
+  `presentateurRenvoiWeb` à la racine de la fenêtre (`PointDEntreeLiens`) : tous les boutons de renvoi du lot 2, jusque-là
+  absents (verrou « jamais un bouton sans effet »), sont rendus et présentent leur page dans la feuille du renvoi web
+  (`SFSafariViewController` en staging et production, double démo `renvoi-web-demo` sans réseau). C'était le
+  comportement attendu de « T10 » (consignes de T4a, T5a, T7, T9a et T9b ci-dessus) ; aucun câblage d'écran n'a manqué.
+  Le run CI 43296363876 (`08f24c73`) rougissait sur les assertions d'absence ; elles sont remplacées (règle 8) par la
+  présence du bouton, son libellé, l'URL canonique présentée (`liensRenvoiWebAffiche`) et la fermeture
+  (`liensFermerRenvoiWeb`), sentinelle « 0 requête » conservée :
+  `DemoPresenceDetailTests.testHistoriqueDetailDUnePresenceAValiderEtRelance` (`presence-revenus-web` →
+  `https://jolene.app/soignant/presences/mission/demo-presence-h2`, route forcée web, décision 11),
+  `DemoPresencesTests.testOngletsAVenirActivesEtHistoriqueSansRequete` (`presence-historique-litige-<ligne>` →
+  `/soignant/litiges`), `DemoDocumentsTests.testOngletContratsNatifEtDpaeEnRenvoiWeb` (`documents-dpae-web` →
+  `/soignant/dpae`, décision 16), `DemoContratsTests.testContratSigneCertificatEtPartageDuFichierOriginal`
+  (`certificat-export` → `/contrat/<id>/certificat`), `DemoSignatureContratTests.testCompteTestSansAdmissionRenvoieVersLeWeb`
+  (`contrat-renvoi-web-action` → `/contrat/<id>`, décision 18) ; ajouté : `DemoPointageEtatsTests` affirme aussi
+  `presences-desactive-web` (drapeau à faux → `/soignant/presences`). Restent sans preuve XCUITest (états non simulés en
+  démo) : `pointage-renvoi-web-<m>` (suivi de pointage non vérifiable) et le renvoi du journal illisible des
+  justificatifs ; ils passent par le même présentateur. Toujours ouvert : la décision 11 prévoit qu'au lot 3 le lien
+  Revenus natif remplace le renvoi du récapitulatif financier ; la fusion ne le fait pas (fonctionnalité, hors
+  correction), le renvoi web reste donc la destination de `presence-revenus-web`.
 
 ## Amendements du blueprint (`LOT2_PLAN.md`)
 

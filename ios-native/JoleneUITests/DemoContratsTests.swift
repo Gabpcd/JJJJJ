@@ -119,7 +119,7 @@ final class DemoContratsTests: JoleneUITestCase {
         XCTAssertEqual(dejaSigne.label, "✅ Vous avez déjà signé ce contrat")
         record("\(proofPrefix)-contrat-signe-certificat")
 
-        // Page du certificat : empreinte complète, export PDF en renvoi web (aucun bouton avant T10).
+        // Page du certificat : empreinte complète, export PDF en renvoi web.
         let ouvrir = element("contrat-certificat-ouvrir")
         scrollTo(ouvrir, in: ecran)
         tap("contrat-certificat-ouvrir")
@@ -130,8 +130,20 @@ final class DemoContratsTests: JoleneUITestCase {
         XCTAssertEqual(empreinte.label.count, 64)
         XCTAssertTrue(empreinte.label.hasPrefix("1d12b5ba"), "empreinte du contrat démo signé (fixture de l'exporteur)")
         XCTAssertTrue(element("certificat-signatures-demo-signature-002-soignant").exists, "certificat résumé repris sur la page")
-        XCTAssertFalse(element("certificat-export").exists, "export PDF : renvoi web, aucun bouton avant T10")
         record("\(proofPrefix)-certificat")
+        // Export PDF (`LOT2_PLAN.md` §1.2, non porté) : migré à la fusion des lots 2 et 3 (règle 8). Le présentateur
+        // `.safari` du coordinateur des liens (L3-T3b, qui remplace L1-T10) est injecté : « Télécharger PDF » est rendu et
+        // présente la page web du certificat (double démo, aucune requête réseau), puis « Fermer » rend la page native.
+        // Avant la fusion, ce test exigeait son absence (jamais un bouton sans effet).
+        let export = element("certificat-export")
+        require("L'export PDF propose son renvoi web") { export.exists }
+        scrollTo(export, in: page)
+        XCTAssertEqual(export.label, "Télécharger PDF", "libellé du web")
+        tap("certificat-export")
+        liensRenvoiWebAffiche("https://jolene.app/contrat/demo-contrat-002/certificat")
+        record("\(proofPrefix)-certificat-export-web")
+        liensFermerRenvoiWeb()
+        require("La page du certificat est de retour") { self.containerVisible(page) && empreinte.exists }
         goBack()
 
         // Partage : la feuille système présente le fichier original contrôlé.

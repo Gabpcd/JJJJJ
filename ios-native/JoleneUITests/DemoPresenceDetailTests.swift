@@ -8,9 +8,11 @@ import XCTest
 /// Parcours : Historique › « Détail » (présence à valider : synthèse, segment, contrôles, relance verbatim du serveur
 /// puis refus « déjà relancé ») ; présence validée et ligne reconstruite (aucune relance, aucun contrôle) ; détail d'une
 /// mission ASSIGNEE › « Présences et pointage » (onglet À venir) ; Accueil (scénario `accueil-pointage`) › widget
-/// « Aller pointer » (onglet Aujourd'hui) et « Pointer mon départ maintenant ». Gap verrouillé : le récapitulatif
-/// financier n'est qu'un renvoi web (route forcée web `PresencesRenvois.recapitulatifFinancier`, qui survit au routage
-/// natif de T10), absent sans le présentateur de T10. La feuille de notation se monte dans la zone de pointage de T4b
+/// « Aller pointer » (onglet Aujourd'hui) et « Pointer mon départ maintenant ». Le récapitulatif financier n'est qu'un
+/// renvoi web (route forcée web `PresencesRenvois.recapitulatifFinancier`, qui survit au routage natif de T10) : depuis
+/// la fusion du lot 3, le présentateur `.safari` du coordinateur des liens (L3-T3b) est injecté, le bouton
+/// `presence-revenus-web` est rendu et présente `https://jolene.app/soignant/presences/mission/<id>` (double démo).
+/// La feuille de notation se monte dans la zone de pointage de T4b
 /// (`notationAuDepart`) : son parcours XCUITest arrive avec cette zone. Sentinelle réseau « 0 requête » relue à la fin
 /// du parcours détail + relance et du parcours Accueil (PRINCIPES §7, niveau 2 ; LOT2_PLAN §2.8 ; revue fraîche, m3).
 final class DemoPresenceDetailTests: JoleneUITestCase {
@@ -51,9 +53,24 @@ final class DemoPresenceDetailTests: JoleneUITestCase {
         require("Une seconde relance affiche le refus du serveur") {
             retour.exists && retour.label.contains("Tu as déjà relancé cet établissement aujourd'hui. Il a été notifié.")
         }
-        XCTAssertFalse(element("presence-revenus-web").exists,
-                       "récapitulatif financier : renvoi web sans présentateur (T10) : jamais un bouton sans effet")
         record("\(proofPrefix)-presence-detail-relance")
+
+        // Récapitulatif financier (décision 11) : route forcée web `PresencesRenvois.recapitulatifFinancier`. Migré à la
+        // fusion des lots 2 et 3 (règle 8) : le présentateur `.safari` du coordinateur des liens (L3-T3b) est injecté à la
+        // racine, le bouton est donc rendu, et il a son effet — la page web de la mission est présentée (double démo
+        // `renvoi-web-demo`, aucune requête réseau), puis « Fermer » rend le détail. Avant la fusion, ce test exigeait
+        // son absence (jamais un bouton sans effet).
+        let revenus = element("presence-revenus-web")
+        require("Le récapitulatif financier propose son renvoi web") { revenus.exists }
+        degager(revenus, dans: ecran)
+        XCTAssertEqual(revenus.label, "Voir sur jolene.app", "libellé repris du lot 1 (`LibellesDetailPresences.voirSurLeWeb`)")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "💶 Récapitulatif financier"))
+                        .firstMatch.exists, "titre de section du web (`DetailPresencesMission.tsx` l.705)")
+        revenus.tap()
+        liensRenvoiWebAffiche("https://jolene.app/soignant/presences/mission/demo-presence-h2")
+        record("\(proofPrefix)-presence-detail-recapitulatif-web")
+        liensFermerRenvoiWeb()
+        require("Le détail des présences est de retour") { self.containerVisible(ecran) && self.element("presence-detail-entete").exists }
 
         // Détail › Présences › Profil : le détail et la relance n'ont émis aucune requête réseau.
         revenir()

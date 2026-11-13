@@ -13,11 +13,12 @@ import XCTest
 /// - `session-expiree-consentement` : la première lecture du consentement répond 401, puis 401 jusqu'à la revalidation —
 ///   preuve de m1 (seconde revue) : la ligne du Profil montre « Session à vérifier » et non un « Réessayer » inopérant.
 /// Coupe-circuit D-FLAGS (m3) : `-JOLENE_FLAG_ios_natif_presences_actif false` (`DemoFlagsGateway.surcharges`) → la page
-/// Présences devient un renvoi web, sans zone de pointage.
+/// Présences devient un renvoi web, sans zone de pointage ; « Voir sur jolene.app » y présente la page web (présentateur
+/// `.safari` du coordinateur des liens, injecté depuis la fusion du lot 3).
 ///
 /// Identifiants : `pointage-session-expired-<m>`, `pointage-session-check-<m>`, `pointage-consentement-echec-<m>`,
 /// `gps-consent-retour`, `profil-gps-session-expired`, `profil-gps-session-check`, `profil-gps-consentement`,
-/// `presences-desactive-renvoi`, `pointage-demo-scans`, `pointage-demo-relire`.
+/// `presences-desactive-renvoi`, `presences-desactive-web`, `pointage-demo-scans`, `pointage-demo-relire`.
 final class DemoPointageEtatsTests: DemoPointageUITestCase {
     private static let sessionExpiree = "Votre session a expiré. Reconnectez-vous."
     /// `SessionController.timeoutMessage`, message de la panne simulée de `fn_consentir_gps`.
@@ -138,5 +139,15 @@ final class DemoPointageEtatsTests: DemoPointageUITestCase {
         XCTAssertFalse(element("pointage-code-\(Self.missionA)").exists)
         XCTAssertFalse(element("pointage-demo-scans").exists, "la page native n'est pas montée")
         record("\(proofPrefix)-presences-coupe-circuit")
+        // Fusion des lots 2 et 3 : le présentateur `.safari` du coordinateur des liens (L3-T3b) est injecté, le bouton du
+        // renvoi est donc rendu et il a son effet — la page web des présences est présentée (double démo, aucune requête
+        // réseau), puis « Fermer » rend le renvoi (jamais un bouton sans effet).
+        let web = element("presences-desactive-web")
+        require("Le renvoi propose « Voir sur jolene.app »") { web.exists }
+        XCTAssertEqual(web.label, "Voir sur jolene.app")
+        tap("presences-desactive-web")
+        liensRenvoiWebAffiche("https://jolene.app/soignant/presences")
+        liensFermerRenvoiWeb()
+        require("Le renvoi de la page Présences est de retour") { renvoi.exists }
     }
 }
