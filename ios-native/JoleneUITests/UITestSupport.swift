@@ -8,7 +8,7 @@ import XCTest
 /// sont `drag(_:fromY:toY:)` (défilement borné de `scrollTo`) et `dragSliderPastMinimum(_:)`
 /// (curseur amené à sa borne basse), qui emploient `press(forDuration:thenDragTo:…)` entre deux
 /// coordonnées calculées : c'est l'unique API XCUITest de glissement à point de départ contrôlé,
-/// et elle n'active rien. Aucune attente arbitraire : toutes passent par `require` (prédicat
+/// et elle n'active rien. Le défilement tient le doigt immobile à l'arrivée : aucun élan après le geste. Aucune attente arbitraire : toutes passent par `require` (prédicat
 /// borné, délai fonctionnel et budget de blocage distincts). `require` ne borne que l'évaluation
 /// de conditions : les actions (`tap`, `typeText`, glissements) n'y passent pas et restent
 /// soumises aux seuls délais propres à XCTest. La preuve est l'assertion ; les captures
@@ -91,8 +91,17 @@ class JoleneUITestCase: XCTestCase {
         app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", label)).firstMatch
     }
 
+    /// Élément présent, à l'écran et atteignable. `isHittable` n'est demandé qu'APRÈS avoir vérifié qu'une part réelle
+    /// du cadre (au moins 1 pt sur 1 pt) est dans la fenêtre : sur une ligne de liste SwiftUI sortie de l'écran, XCTest
+    /// ÉCHOUE au lieu de répondre faux (« Failed to determine hittability … Activation point invalid and no suggested
+    /// hit points based on element frame », runs 43276693380 et 43296247455, iPad paysage, `DemoPreferencesTests`,
+    /// interrupteur `prefs-sms-alertes` en haut d'un écran défilé vers le bas). Même règle qu'avant, ordre inversé.
     func visible(_ element: XCUIElement) -> Bool {
-        element.exists && element.isHittable && !element.frame.isEmpty && app.frame.intersects(element.frame)
+        guard element.exists else { return false }
+        let cadre = element.frame
+        let part = app.frame.intersection(cadre)
+        guard !cadre.isEmpty, !part.isNull, part.width >= 1, part.height >= 1 else { return false }
+        return element.isHittable
     }
 
     func fullyVisible(_ element: XCUIElement, inside container: XCUIElement) -> Bool {
@@ -114,6 +123,14 @@ class JoleneUITestCase: XCTestCase {
     func coveredByKeyboard(_ element: XCUIElement) -> Bool {
         let keyboard = app.keyboards.firstMatch
         return keyboard.exists && element.frame.maxY > keyboard.frame.minY
+    }
+
+    /// Élément recouvert, même en partie, par une barre de navigation ATTEIGNABLE : celle de l'écran
+    /// au premier plan ; la barre d'un écran recouvert par une feuille ne l'est pas et n'est pas
+    /// comptée (`PasDeDefilement.recouvertParUneBarre`).
+    func coveredByNavigationBar(_ element: XCUIElement) -> Bool {
+        let barres = app.navigationBars.allElementsBoundByIndex.filter { $0.exists && $0.isHittable }.map(\.frame)
+        return PasDeDefilement.recouvertParUneBarre(element.frame, barres: barres)
     }
 
     /// Part maximale du délai de `require` décomptée pour UNE évaluation de la condition. Une
@@ -275,6 +292,16 @@ class JoleneUITestCase: XCTestCase {
         _ = XCTWaiter().wait(for: [pause], timeout: duration)
     }
 
+    /// Absence prouvée sur une fenêtre bornée (attente inversée, comme le délai du pré-prompt de `DemoPushTests`) :
+    /// échoue dès que `condition` devient vraie pendant `duree`. Une lecture instantanée laisserait passer une
+    /// présentation encore en cours d'animation (revue B8 de T3b, m8). Jamais un délai fixe sans condition.
+    func requireAbsence(_ description: String, pendant duree: TimeInterval = 3, condition: @escaping () -> Bool) {
+        let predicate = NSPredicate { _, _ in condition() }
+        let apparition = XCTNSPredicateExpectation(predicate: predicate, object: nil)
+        apparition.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [apparition], timeout: duree), .completed, description)
+    }
+
     // MARK: Actions
 
     /// Un `tap()` natif, jamais `press(forDuration:)` pour activer : la navigation attendue est vérifiée ensuite.
@@ -291,11 +318,21 @@ class JoleneUITestCase: XCTestCase {
     /// Délais et budget de blocage par défaut de `require` : le premier champ interrogé à froid
     /// (`login-email`, premier test du processus) relève du budget à froid de `require`
     /// (`coldStallBudget`), pas d'un délai propre à `focus`.
+    /// Un champ recouvert par la barre de navigation translucide de l'écran (iPad paysage, run
+    /// 42579729412 : `profil-ville-recherche` à y = 104…145 sous la barre 32…140, touché sur la bande
+    /// visible de 4 pt, puis sous la barre, sans jamais recevoir le focus) est d'abord redescendu
+    /// sous la barre, par glissements bornés.
     func focus(_ field: XCUIElement, in container: XCUIElement) {
         require("Le champ à saisir est affiché") { self.containerVisible(field) }
         var attempts = 0
-        while coveredByKeyboard(field) && attempts < 10 {
-            drag(container, fromY: 0.6, toY: 0.3)
+        while attempts < 10 {
+            if coveredByKeyboard(field) {
+                drag(container, fromY: 0.6, toY: 0.3)
+            } else if coveredByNavigationBar(field) {
+                drag(container, fromY: 0.4, toY: 0.6)
+            } else {
+                break
+            }
             attempts += 1
         }
         require("Le champ à saisir est atteignable hors clavier") { self.visible(field) && !self.coveredByKeyboard(field) }
@@ -369,11 +406,20 @@ class JoleneUITestCase: XCTestCase {
         XCTAssertFalse(viewport.isNull || viewport.isEmpty, "Un défilement exige un viewport visible hors clavier")
         guard !viewport.isNull && !viewport.isEmpty else { return }
         let origin = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
-        let x = viewport.midX - app.frame.minX
+        // Jamais un départ sur un curseur, qui capterait le geste (`PasDeDefilement.abscisseDeGlissement`,
+        // run 42593592247) : le milieu du viewport, sinon un couloir latéral.
+        let curseurs = app.sliders.allElementsBoundByIndex.filter { $0.exists }.map { $0.frame }
+        let x = PasDeDefilement.abscisseDeGlissement(viewport: viewport, departY: viewport.minY + viewport.height * fromY,
+                                                     obstacles: curseurs) - app.frame.minX
         let top = viewport.minY - app.frame.minY
         let start = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * fromY))
         let end = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * toY))
-        start.press(forDuration: 0.05, thenDragTo: end)
+        // Doigt tenu immobile 0,3 s à l'arrivée avant le relâché : vitesse de relâché nulle, donc aucun élan. Sans
+        // cette tenue, le défilement continuait sur sa lancée et l'action suivante (toucher, curseur, lecture de
+        // l'atteignabilité) tombait sur une liste en mouvement : le toucher arrêtait le défilement au lieu d'activer
+        // le contrôle (runs 42664161349 et 43276693380 : interrupteur de complétion, « Se connecter » de
+        // l'inscription, curseur du rayon, « Activation point invalid » d'un interrupteur des préférences).
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .default, thenHoldForDuration: 0.3)
     }
 
     /// Amène un curseur (`Slider`) à sa borne basse par un glissement qui part du pouce et finit
@@ -407,17 +453,16 @@ class JoleneUITestCase: XCTestCase {
     func scrollTo(_ target: XCUIElement, in container: XCUIElement, downward: Bool = true) {
         require("Le conteneur de défilement attendu est visible") { self.containerVisible(container) }
         var scrolls = 0
-        while !fullyVisible(target, inside: container) && scrolls < 20 {
-            var forward = downward
-            var distance: CGFloat = 0.55
-            if target.exists && !target.frame.isEmpty {
-                let frame = target.frame
-                let viewport = container.frame
-                if frame.minY < viewport.minY { forward = false } else if frame.maxY > viewport.maxY { forward = true }
-                distance = min(0.55, max(0.08, (viewport.height - frame.height) * 0.4 / viewport.height))
-            }
-            drag(container, fromY: 0.5 + (forward ? distance : -distance) / 2,
-                 toY: 0.5 - (forward ? distance : -distance) / 2)
+        // 40 pas au plus : sans élan (`drag`), un pas défile au plus 55 % du conteneur ; la boucle s'arrête dès que la
+        // cible est entièrement visible.
+        while !fullyVisible(target, inside: container) && scrolls < 40 {
+            // Direction et amplitude : `PasDeDefilement` (testé par `PasDeDefilementTests`). Une cible
+            // déjà dans le cadre du conteneur revient vers le centre d'un pas court, jamais dans la
+            // direction de recherche `downward` (run 42579729412 : vingt glissements en alternance).
+            let pas = PasDeDefilement.suivant(cible: target.exists ? target.frame : nil, conteneur: container.frame,
+                                              versLaSuiteParDefaut: downward)
+            let distance = pas.versLaSuite ? pas.amplitude : -pas.amplitude
+            drag(container, fromY: 0.5 + distance / 2, toY: 0.5 - distance / 2)
             scrolls += 1
         }
         require("Le contrôle demandé est entièrement visible après un défilement borné") {

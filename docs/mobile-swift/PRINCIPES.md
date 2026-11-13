@@ -40,7 +40,23 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   (`DemoWorldTests.portsEnAttenteLot1`) ; `SupabaseGatewaysTests` compare le monde Supabase
   au monde démo, si bien qu'un port câblé dans un seul monde rougit un test. Chaque tranche
   câble son port dans les deux mondes et le retire de la liste dans la même PR ; elle est
-  vide à la clôture du lot (`unwiredPorts.isEmpty`, T12).
+  vide à la clôture du lot : aucun nom du lot 1 dans `unwiredPorts`
+  (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`, T12). Pas
+  `unwiredPorts.isEmpty` : cette liste nomme aussi les ports du lot 3 tant que ce lot est ouvert.
+- Lot 3 (T1, `docs/mobile-swift/LOT3_PLAN.md` §2.2) : treize champs ajoutés dans un bloc
+  « Lot 3 » du corps de `Gateways`, même règle (stubs de `Ports/Lot3Ports.swift`, message
+  `UnwiredPorts.erreur(port:tranche:lot:)` qui cite la tranche, le lot et son plan). Pas de
+  troisième init : les deux inits existants restent mot pour mot et chaque monde assigne ses
+  ports du lot 3 après l'init complet du lot 1, dans une fonction unique `câblerLot3(_:)`
+  (`DemoWorld`, `SupabaseGateways`). `unwiredPorts` nomme aussi les ports du lot 3 ; liste
+  attendue unique `DemoWorldTests.portsEnAttenteLot3`, comparée entre les deux mondes par
+  `SupabaseGatewaysTests`. Les capacités système du lot 3 (autorisation et enregistrement
+  push, flux hébergé, rapport de crash) sont des ports hors `Gateways`, injectés par
+  `AppContainer` ; la localisation est le `LocationPort` du lot 2, sans variante. Seule exception, provisoire et
+  consignée (`DECISIONS_LOT3.md`, section T10) : tant que le lot 2 n'est pas fusionné, la position du profil passe par
+  le port minimal `LocalisationPort` et une implémentation isolée (`LocalisationProfilProvisoire`), supprimée à la
+  fusion au profit d'un adaptateur sur `Appareil.localisation` (décision « T10 — localisation du profil livrée sans le
+  port du lot 2 », garde `FusionLocalisationLot2Tests`, rouge tant que les deux coexistent).
 
 ## 3. Aucun succès fabriqué
 
@@ -84,6 +100,10 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   `.blocked(.unsupportedRole(nil))`, test `testUnknownRoleIsBlockedWithNil`) renvoie vers
   jolene.app sans ce repli : l'inscription est hors périmètre natif jusqu'au lot 3, qui
   portera le repli `parcours_inscription` avec l'inscription (`PARITE_SOIGNANT.md`).
+  Lot 3, T7 : le repli est porté **dans la vue** — `RootView` sert ces `.blocked` (rôle `INCONNU` ou profil
+  soignant absent, `OnboardingResolution.concerne`) par l'aiguillage d'onboarding (`OnboardingRootView`), qui relit
+  `parcours_inscription` ; `RoleResolution`, `SessionController` et `MobileAccess` sont inchangés et aucun espace
+  soignant n'est ouvert sans profil (D9).
 - Chaque appel de port de la résolution (restauration, rôle, profil) est borné à 15 s
   (`SessionController.resolutionTimeout`, comme le pilote) ; au-delà, l'état est
   récupérable (`.signedOut` avec message générique, epoch inchangé), jamais un chargement

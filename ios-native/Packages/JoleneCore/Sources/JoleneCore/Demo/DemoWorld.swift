@@ -33,7 +33,7 @@ public enum DemoWorld {
     /// câblé ici dans la même PR que sa tranche ; un port encore stub y est nommé explicitement
     /// (`DemoWorldTests.testAucunPortNonCable`).
     public static func gateways(drapeaux: [String: Bool]) -> Gateways {
-        Gateways(
+        var gateways = Gateways(
             auth: DemoAuthGateway(),
             role: DemoRoleGateway(),
             missions: DemoMissionsGateway(),
@@ -49,6 +49,29 @@ public enum DemoWorld {
             recovery: UnwiredRecoveryPort(),            // T10
             justificatifs: UnwiredJustificatifStoragePort() // T7
         )
+        câblerLot3(&gateways)
+        return gateways
+    }
+
+    /// Lot 3 (blueprint `LOT3_PLAN.md` §2.2) : seul point d'assignation des ports du lot 3 du monde
+    /// démo, après l'init du lot 1 (aucun troisième init). Chaque tranche y remplace son stub par sa
+    /// gateway démo dans la même PR qu'au monde Supabase (`SupabaseGateways.câblerLot3`) et retire
+    /// le port de `DemoWorldTests.portsEnAttenteLot3`.
+    static func câblerLot3(_ gateways: inout Gateways) {
+        gateways.push = DemoPushGateway()                                  // T4
+        gateways.notifications = DemoNotificationsGateway()                // T5
+        gateways.preferences = DemoPreferencesGateway()                    // T6
+        // T7 (compte, confirmation, parcours) ; T8 (brouillon, modes d'exercice, `register-soignant` simulée).
+        gateways.inscription = DemoInscriptionGateway(auth: gateways.auth as? DemoAuthGateway ?? DemoAuthGateway())
+        gateways.profil = DemoProfilGateway()                              // T9
+        gateways.avatar = DemoWorld.avatar(profil: gateways.profil)       // T10 (même ligne démo que `profil`)
+        gateways.geocodage = DemoGeocodage()                               // T10
+        gateways.motDePasse = DemoMotDePasseGateway()                      // T11
+        gateways.exportRGPD = DemoExportRGPDGateway()                      // T11
+        gateways.revenus = DemoRevenusGateway()                            // T12
+        gateways.paiements = UnwiredPaiementsDeclaresPort()                // T13
+        gateways.iban = UnwiredIbanPort()                                  // T14b
+        gateways.stripeConnect = UnwiredStripeConnectPort()                // T14a
     }
 }
 
@@ -62,9 +85,11 @@ actor DemoSessionStore {
 
 /// Accepte n'importe quel email et mot de passe non vides et renvoie l'utilisateur démo
 /// confirmé. `restoreSession` renvoie `nil` au premier lancement, puis l'utilisateur
-/// après `signIn`, jusqu'à `signOut`.
+/// après `signIn`, jusqu'à `signOut`. Lot 3, T7 : l'adresse d'un compte créé pendant ce lancement
+/// (`DemoInscriptionGateway`, mêmes `store` et `comptes`) ouvre ce nouveau compte, sans profil soignant.
 public struct DemoAuthGateway: AuthPort {
-    private let store = DemoSessionStore()
+    let store = DemoSessionStore()
+    let comptes = DemoComptesInscription()
 
     public init() {}
 
@@ -77,7 +102,7 @@ public struct DemoAuthGateway: AuthPort {
         guard !emailSaisi.isEmpty, !password.isEmpty else {
             throw JoleneError(.invalidCredentials, "Saisissez votre email et votre mot de passe.")
         }
-        await store.set(DemoWorld.user)
+        await store.set(await comptes.utilisateur(email: emailSaisi) ?? DemoWorld.user)
         // Relecture après mutation : aucun succès fabriqué.
         guard let user = await store.current() else {
             throw JoleneError(.unknown, "La session de démonstration n'a pas pu être ouverte.")

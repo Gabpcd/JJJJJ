@@ -1,0 +1,51 @@
+import Foundation
+import Combine
+
+/// Liens d'inscription (lot 3, T7), alimentés par le coordinateur de liens de L3-T3b depuis l'intégration du lot 3
+/// (`AiguillageLiens.Action.inscription`, `DeepLinkCoordinator` ; `DECISIONS_LOT3.md`, section T7 et intégration) :
+/// ces liens sont consommés **hors de l'espace prêt** (écran de connexion, aiguillage d'onboarding), comme la
+/// connexion ; le coordinateur y dépose la `DestinationLien` reçue (Universal Link, `-JOLENE_OPEN_URL`) et `RootView`
+/// présente :
+/// - `/inscription/confirmer` → écran de confirmation (une demande par lien reçu, au-dessus de tout état) ;
+/// - `/inscription/soignant` et `/inscription/reprendre` → « Créer un compte » (profession du lien pré-remplie)
+///   ou aiguillage d'onboarding, selon la session ;
+/// - `/inscription/completer` (T8) → comme la reprise : connexion hors session, aiguillage d'onboarding (complétion
+///   du profil) avec une identité.
+/// Seule la **destination** est lue (`DestinationLien.destination`) : une page dont l'écran n'est pas livré reste un
+/// renvoi web et n'est pas consommée ici. Rien n'est journalisé :
+/// les identifiants du lien (`token_hash`, `code`, jetons) ne sont portés que par `AuthCallbackCredentials`,
+/// dont la description est masquée.
+@MainActor
+public final class BoiteLiensInscription: ObservableObject {
+    /// Confirmation à présenter ; `id` distingue deux liens successifs (une nouvelle tentative par lien reçu).
+    public struct Confirmation: Identifiable, Equatable, Sendable {
+        public let id: Int
+        public let credentials: AuthCallbackCredentials?
+    }
+
+    @Published public private(set) var confirmation: Confirmation?
+    @Published public private(set) var inscription: EtapeInscription?
+    private var compteur = 0
+
+    public init() {}
+
+    /// Vrai si le lien est un lien d'inscription consommé hors de l'espace (le coordinateur ne le présente pas
+    /// lui-même) ; faux pour toute autre destination.
+    @discardableResult
+    public func recevoir(_ lien: DestinationLien) -> Bool {
+        switch lien.destination {
+        case .confirmerInscription(let credentials):
+            compteur += 1
+            confirmation = Confirmation(id: compteur, credentials: credentials)
+            return true
+        case .inscription(let etape):
+            inscription = etape
+            return true
+        default:
+            return false
+        }
+    }
+
+    public func retirerConfirmation() { confirmation = nil }
+    public func retirerInscription() { inscription = nil }
+}

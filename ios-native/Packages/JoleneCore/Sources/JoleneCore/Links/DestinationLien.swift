@@ -1,0 +1,107 @@
+import Foundation
+
+/// Destination effective d'un lien Jolene (Universal Link, `lien` d'une notification push, lien
+/// interne) — lot 3, T3a.
+///
+/// `LinkRouter` donne la route du chemin (table de `src/App.tsx`) ; `DestinationLien` décide ce que
+/// l'app présente : la route elle-même si son écran natif est livré (écran provisoire d'onglet
+/// compris), sinon un renvoi `.safari` sur l'URL canonique du lien (`https://jolene.app` + chemin,
+/// query et fragment conservés). Ainsi un lien vers un écran pas encore livré ouvre la page web au
+/// lieu de ne rien ouvrir.
+///
+/// Consommateurs (lot 3, T3b) : `DeepLinkIntent` / `AiguillageLiens` (`DeepLinkIntent.swift`, liens
+/// universels, `-JOLENE_OPEN_URL`, taps push), présentés par `DeepLinkCoordinator` (app) ;
+/// `CibleNotification` (centre de notifications) ; `AccueilPresentation.renvoiWeb`.
+///
+/// Ligne par tranche : la tranche d'écran du lot 3 passe sa ligne de `ecranNatifLivre` à `true` et
+/// ajuste `DestinationLienTests` (table des écrans, famille du vecteur push, totaux) ; elle ajoute
+/// aussi sa cible dans l'espace (`CibleNotification`, `MainTabView.presenter`), exigée par la garde
+/// `CentreNotificationsTests.testToutEcranNatifLivreAUneCibleNativePresentable` (revue L3-T5, M1).
+///
+/// Journalisation (PRINCIPES §7) : ne journaliser que `description` — celle de `DestinationLien`,
+/// de `JoleneRoute` ou d'`EtapeInscription`, toutes masquées (`LienMasque`) —, jamais `canonique`,
+/// `externalURL`, `EtapeInscription.query` ni un identifiant extrait. Le chemin porte des jetons
+/// (`/etab/invitation/:token`) et des identifiants (`/contrat/:id`, `/soignant/missions/:id`) ; la
+/// query et le fragment d'un lien de rappel portent `token_hash`, `code`, `access_token`,
+/// `refresh_token`.
+public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
+    /// Route rendue par `LinkRouter`, indépendante de la disponibilité des écrans.
+    public let route: JoleneRoute
+    /// URL web canonique du lien reçu, servie par Safari si l'écran n'est pas livré. Jamais
+    /// journalisée : `LienMasque.gabarit(_:)` en donne une forme montrable.
+    public let canonique: URL
+
+    /// Universal Link entrant : mêmes refus que `LinkRouter.route(url:)` (hôte, schéma, port).
+    public init?(url: URL) {
+        guard let routage = LinkRouter.routage(url: url) else { return nil }
+        self.init(route: routage.route, canonique: routage.canonique)
+    }
+
+    /// Lien interne (chemin relatif ou hôte web de confiance) : mêmes refus que
+    /// `LinkRouter.resolve(link:)`.
+    public init?(link: String) {
+        guard let routage = LinkRouter.routage(link: link) else { return nil }
+        self.init(route: routage.route, canonique: routage.canonique)
+    }
+
+    init(route: JoleneRoute, canonique: URL) {
+        self.route = route
+        self.canonique = canonique
+    }
+
+    /// Cas de route et gabarit du chemin, segments dynamiques, query et fragment masqués.
+    public var description: String {
+        "DestinationLien(route: \(route), chemin: \(LienMasque.gabarit(canonique)), "
+            + "destination: \(destination.isNative ? "natif" : "web"))"
+    }
+    public var debugDescription: String { description }
+
+    /// Ce que l'app présente : la route si son écran natif est livré, une route externe telle
+    /// quelle, sinon `.safari(canonique)`.
+    public var destination: JoleneRoute {
+        guard route.isNative, !Self.ecranNatifLivre(route) else { return route }
+        return .safari(canonique)
+    }
+
+    /// Destination dans l'app pour une route native (`false` pour une route externe) : `true` veut
+    /// dire « la route a sa destination dans l'app », écran provisoire d'onglet (`PlaceholderScreen`)
+    /// compris, présentée par le coordinateur de liens (L3-T3b). Une ligne par tranche d'écran : la
+    /// tranche qui livre l'écran passe sa ligne à `true`.
+    public static func ecranNatifLivre(_ route: JoleneRoute) -> Bool {
+        switch route {
+        case .connexion, .accueil, .explorer, .missionDetail:
+            return true                                  // lots 0 et 1 : écrans présents sur la base
+        case .resetPassword:
+            return false                                 // reset natif non livré (reliquat L1-T10) ; `?code=` refusé par `DeepLinkIntent` (option B)
+        case .confirmerInscription:
+            return true                                  // T7 — `ConfirmationInscriptionScreen` (hors espace : `BoiteLiensInscription`)
+        case .missions:
+            return true                                  // onglet Mes missions : placeholder jusqu'à L1-T5
+        case .serieDetail:
+            return false                                 // renvoi web assumé (décision 11 du lot 1) ; natif au lot 4
+        case .revenus(section: .apercu):
+            return true                                  // T12 — RevenusScreen (onglet Revenus)
+        case .monCompte:
+            return true                                  // hub `ProfileScreen` (lot 1 T8 ; complété par L3-T11)
+        case .notifications:
+            return true                                  // T5 — centre de notifications (`NotificationsScreen`)
+        case .parametresNotifications:
+            return true                                  // T6 — `PreferencesScreen` (onglet Profil, entrée « Réglages »)
+        case .inscription(let etape):
+            switch etape.page {
+            case .soignant, .reprendre: return true      // T7 — compte rapide, aiguillage onboarding (hors espace : `BoiteLiensInscription`)
+            case .completer: return true                 // T8 — `CompletionProfilScreen` dans l'aiguillage (hors espace : `BoiteLiensInscription`)
+            }
+        case .profil:
+            return true                                  // T9 — édition du profil (`ProfilEditionScreen`), alias `reputation`
+        case .revenus(section: .paiementsAConfirmer):
+            return false                                 // T13 — paiements à confirmer
+        case .stripeConnect:
+            return false                                 // T14a — Stripe Connect
+        case .revenus(section: .factures), .revenus(section: .bulletins), .revenus(section: .avances):
+            return false                                 // renvoi web assumé jusqu'au lot 4 (D4)
+        case .safari, .etablissement:
+            return false
+        }
+    }
+}

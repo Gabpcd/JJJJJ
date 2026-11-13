@@ -200,20 +200,48 @@ final class DemoWorldTests: XCTestCase {
     /// n'a pas de liste propre : `SupabaseGatewaysTests.testAucunPortNonCable` compare
     /// `SupabaseGateways.make(client:).unwiredPorts` à `DemoWorld.gateways().unwiredPorts`, si
     /// bien qu'un port câblé dans un seul monde rougit l'un des deux tests. Critère de sortie de
-    /// T12 (blueprint §2.2) : liste vide, `unwiredPorts.isEmpty` dans les deux mondes.
+    /// T12 (blueprint §2.2) : liste vide, soit aucun nom du lot 1 dans `unwiredPorts` des deux
+    /// mondes (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`) — jamais
+    /// `unwiredPorts.isEmpty`, qui nomme aussi les ports du lot 3 tant que ce lot est ouvert.
     static let portsEnAttenteLot1 = ["candidature", "presence", "favoris", "mesMissions",
                                      "recovery", "justificatifs"]
 
+    /// Lot 3 (T1) — ports du lot 3 que leur tranche n'a pas encore câblés : SOURCE UNIQUE de la liste (blueprint
+    /// lot 3 §2.2). Chaque tranche câble son port dans `câblerLot3(_:)` des deux mondes
+    /// (`DemoWorld`, `SupabaseGateways`) et le retire d'ici dans la même PR ;
+    /// `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes. Liste vide à la
+    /// clôture du lot 3.
+    static let portsEnAttenteLot3 = [// T9 : `profil` câblé ; T7 : `inscription` câblé, complété par T8 ; T11 : `motDePasse`, `exportRGPD` ; T10 : `avatar`, `geocodage`
+                                     "paiements", "iban",
+                                     "stripeConnect"] // T4 : `push` câblé (DemoPushGateway) ; T5 : `notifications` ; T6 : `preferences` câblé (DemoPreferencesGateway) ; T12 : `revenus` (DemoRevenusGateway)
+
     func testAucunPortNonCable() {
         let gateways = DemoWorld.gateways()
-        XCTAssertEqual(gateways.unwiredPorts, Self.portsEnAttenteLot1,
+        XCTAssertEqual(gateways.unwiredPorts, Self.portsEnAttenteLot1 + Self.portsEnAttenteLot3,
                        "tout port livré doit être câblé dans DemoWorld.gateways() dans la même PR")
+        // Forme du critère de clôture de chaque lot : ses seuls noms, filtrés dans `unwiredPorts` (vide à T12 pour le lot 1).
+        XCTAssertEqual(gateways.unwiredPorts.filter(Lot1PortsTests.portsLot1.contains), Self.portsEnAttenteLot1)
+        XCTAssertEqual(gateways.unwiredPorts.filter(Lot3PortsTests.portsLot3.contains), Self.portsEnAttenteLot3)
         XCTAssertTrue(gateways.audit is DemoAuditGateway)
         XCTAssertTrue(gateways.flags is DemoFlagsGateway)
         XCTAssertTrue(gateways.dashboard is DemoDashboardGateway, "T3 câble le tableau de bord")
         XCTAssertTrue(gateways.compte is DemoAccountGateway, "T8 câble la suppression de compte")
-        XCTAssertEqual(DemoWorld.gateways(drapeaux: [:]).unwiredPorts, Self.portsEnAttenteLot1)
+        XCTAssertTrue(gateways.preferences is DemoPreferencesGateway, "lot 3, T6 câble les préférences de notifications")
+        XCTAssertEqual(DemoWorld.gateways(drapeaux: [:]).unwiredPorts, Self.portsEnAttenteLot1 + Self.portsEnAttenteLot3)
         XCTAssertEqual(gateways.clock.now(), DemoWorld.fixedNow)
+    }
+
+    func testCablerLot3AssigneLesStubsSansToucherAuLot1() {
+        var gateways = Gateways(auth: DemoAuthGateway(), role: DemoRoleGateway(), missions: DemoMissionsGateway())
+        gateways.push = FakePushRegistration()
+        DemoWorld.câblerLot3(&gateways)
+        XCTAssertTrue(gateways.push is DemoPushGateway, "T4 câble le push : le double est remplacé par la gateway démo")
+        XCTAssertTrue(gateways.stripeConnect is UnwiredStripeConnectPort, "T14a n'est pas livrée : stub nommé explicitement")
+        XCTAssertEqual(gateways.unwiredPorts, Lot1PortsTests.portsLot1 + Self.portsEnAttenteLot3,
+                       "câblerLot3 n'assigne que le bloc du lot 3")
+        let monde = DemoWorld.gateways()
+        XCTAssertTrue(monde.audit is DemoAuditGateway, "le câblage du lot 1 reste celui de l'init")
+        XCTAssertTrue(monde.compte is DemoAccountGateway)
     }
 
     func testAuditDemoJournaliseEnMemoireSansReseau() async throws {

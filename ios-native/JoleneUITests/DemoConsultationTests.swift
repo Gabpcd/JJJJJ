@@ -70,7 +70,9 @@ final class DemoConsultationTests: JoleneUITestCase {
         tabButton("tab-missions", label: "Mes missions").tap()
         require("Mes missions affiche son état honnête") { self.visible(self.element("placeholder-missions")) }
         tabButton("tab-revenus", label: "Revenus").tap()
-        require("Revenus affiche son état honnête") { self.visible(self.element("placeholder-revenus")) }
+        // Lot 3, T12 (règle 8) : l'onglet Revenus natif remplace le placeholder du lot 0.
+        require("Revenus affiche l'onglet natif") { self.containerVisible(self.element("revenus-screen")) }
+        XCTAssertFalse(element("placeholder-revenus").exists, "placeholder du lot 0 remplacé par L3-T12")
     }
 
     private func openExplorer() {

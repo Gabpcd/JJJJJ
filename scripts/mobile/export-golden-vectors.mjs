@@ -8,7 +8,11 @@
  * par règle, un JSON de vecteurs `{ name, input, expected }` dans
  * `ios-native/Packages/JoleneCore/Tests/JoleneCoreTests/Resources/golden/`.
  * Un hook `module.register()` résout l'alias `@/lib/<module>` et les imports
- * relatifs sans extension de ces modules (lot 1, T2).
+ * relatifs sans extension de ces modules (lot 1, T2). Lot 3, T2 : liste
+ * d'exceptions nommée pour `src/lib/pushNative.ts` seulement (modules inertes,
+ * décision 22 du lot 3) et règles push, revenus, profil, session et RPPS ; les
+ * `case` de `navigationPathForEvent` sont lus par le compilateur TypeScript
+ * (`typescript`, dépendance de développement du dépôt), bornés au corps de la fonction.
  *
  * Les vecteurs proviennent des tests vitest existants ET de grilles
  * systématiques (changements d'heure Europe/Paris, fins de mois, années
@@ -76,13 +80,30 @@ try {
 // `.ts` réel, qui est le même module que celui chargé par `lib()` ci-dessous
 // (une seule instance de `date-heure-paris`). Tout autre alias `@/` est refusé
 // explicitement : une règle golden reste pure (ni client Supabase ni React).
+//
+// Exception nommée (lot 3, T2, décision 22) : `src/lib/pushNative.ts` mêle la
+// règle pure `navigationPathForEvent` et le cycle de vie Capacitor. Ses imports
+// impurs (`@/integrations/supabase/client`, `./platform`, `./logger`,
+// `./pushDeviceToken`, `./nativeResume`, `./navigationNotification`) sont
+// remplacés, pour ce seul parent, par des modules inertes qui lèvent dès qu'ils
+// sont appelés ou lus (aucune règle exportée ne les touche). `./nativeLinks`
+// reste réel : son import `@capacitor/core` s'évalue sous Node
+// (`Capacitor.isNativePlatform()` → false) et n'est utilisé que par
+// `urlCallbackPublique`, hors du routage. Aucun autre parent ni alias n'est
+// concerné ; `src/` n'est pas modifié.
 const HOOK_RESOLUTION = `
 let racineSrc = null;
+let inertes = {};
 const AVEC_EXTENSION = /\\.[cm]?[jt]sx?$/;
 export async function initialize(donnees) {
   racineSrc = donnees.racineSrc;
+  inertes = donnees.inertes ?? {};
 }
 export async function resolve(specifier, context, nextResolve) {
+  const inertesDuParent = typeof context.parentURL === 'string' ? inertes[context.parentURL] : undefined;
+  if (inertesDuParent && Object.prototype.hasOwnProperty.call(inertesDuParent, specifier)) {
+    return { url: inertesDuParent[specifier], shortCircuit: true };
+  }
   if (specifier.startsWith('@/')) {
     if (!specifier.startsWith('@/lib/')) {
       throw new Error('export golden : alias « ' + specifier + ' » refusé depuis ' + context.parentURL
@@ -100,9 +121,48 @@ export async function resolve(specifier, context, nextResolve) {
   return nextResolve(specifier, context);
 }
 `;
+// Modules inertes de `pushNative.ts` : un export par nom réellement importé
+// (`fonction` lève à l'appel, `objet` à toute lecture de propriété, `valeur` à
+// toute conversion en texte ou en nombre).
+const PUSH_NATIVE = resolve(RACINE, 'src/lib/pushNative.ts');
+const MODULES_INERTES_PUSH = {
+  '@/integrations/supabase/client': { supabase: 'objet' },
+  './platform': { isNative: 'fonction' },
+  './logger': { logger: 'objet' },
+  './pushDeviceToken': { memoriserTokenPushAppareil: 'fonction' },
+  './nativeResume': { signalerNavigationNative: 'fonction' },
+  './navigationNotification': { OUVERTURE_NOTIFICATION: 'valeur' },
+};
+const IMPORTS_REELS_PUSH = ['./nativeLinks'];
+{
+  // Garde : si `pushNative.ts` change d'imports, l'exception nommée doit être revue.
+  const importsPush = [...readFileSync(PUSH_NATIVE, 'utf8').matchAll(/^import\s[^;]*?from\s+'([^']+)';/gm)].map((m) => m[1]).sort();
+  const attendus = [...Object.keys(MODULES_INERTES_PUSH), ...IMPORTS_REELS_PUSH].sort();
+  if (JSON.stringify(importsPush) !== JSON.stringify(attendus)) {
+    console.error(`export golden : imports de src/lib/pushNative.ts inattendus (${importsPush.join(', ')}) ; attendus : ${attendus.join(', ')}. Revoir MODULES_INERTES_PUSH (décision 22 du lot 3).`);
+    process.exit(2);
+  }
+}
+function moduleInerte(specifier, exports) {
+  const leve = `throw new Error(${JSON.stringify(`export golden : « ${specifier} » est un module inerte de pushNative.ts, il ne doit pas être utilisé par une règle golden.`)});`;
+  const lignes = Object.entries(exports).map(([nom, genre]) => {
+    if (genre === 'fonction') return `export function ${nom}() { ${leve} }`;
+    if (genre === 'objet') return `export const ${nom} = new Proxy({}, { get() { ${leve} } });`;
+    return `export const ${nom} = Object.freeze({ toString() { ${leve} }, valueOf() { ${leve} }, [Symbol.toPrimitive]() { ${leve} } });`;
+  });
+  return `data:text/javascript,${encodeURIComponent(lignes.join('\n'))}`;
+}
+
 register(`data:text/javascript,${encodeURIComponent(HOOK_RESOLUTION)}`, {
   parentURL: import.meta.url,
-  data: { racineSrc: pathToFileURL(`${resolve(RACINE, 'src')}/`).href },
+  data: {
+    racineSrc: pathToFileURL(`${resolve(RACINE, 'src')}/`).href,
+    inertes: {
+      [pathToFileURL(PUSH_NATIVE).href]: Object.fromEntries(
+        Object.entries(MODULES_INERTES_PUSH).map(([specifier, exports]) => [specifier, moduleInerte(specifier, exports)]),
+      ),
+    },
+  },
 });
 
 const lib = (nom) => import(pathToFileURL(resolve(RACINE, 'src/lib', nom)).href);
@@ -114,6 +174,15 @@ const pointage = await lib('disponibilite-pointage.ts');
 const planningCandidat = await planningComposant('planning-candidat.ts');
 const selectionSerie = await planningComposant('selection-serie-candidat.ts');
 const completude = await lib('completude-planning-mission.ts');
+// Lot 3, T2.
+const pushNative = await lib('pushNative.ts');
+const financeMission = await lib('missionFinanceDisplay.ts');
+const paiementUi = await lib('paiementSoignantUi.ts');
+const validationProfil = await lib('valider-profil-soignant.ts');
+const modesExercice = await lib('preferencesModesExercice.ts');
+const constantes = await lib('constantes.ts');
+const SESSION_COUNT = resolve(RACINE, 'src/lib/session-count.ts');
+const ts = (await import('typescript')).default;
 
 // ---------------------------------------------------------------------------
 // Outils
@@ -147,6 +216,64 @@ function dernierJourDuMois(annee, mois) {
   return new Date(Date.UTC(annee, mois, 0, 12)).getUTCDate();
 }
 
+/**
+ * JSON canonique (clés triées) d'une valeur telle que `JSON.stringify` l'écrit : deux valeurs
+ * ont le même rendu si et seulement si leurs JSON écrits sont identiques à l'ordre des clés près
+ * (comparaison `toEqual` sans dépendre de l'ordre des clés). Comme `JSON.stringify` : `toJSON`
+ * appliqué ; clé d'objet de valeur `undefined`, fonction ou symbole omise ; même valeur dans un
+ * tableau (trou compris) écrite `null` ; nombre non fini écrit `null`. Une valeur que JSON n'écrit
+ * pas rend `undefined`, texte non JSON distinct de tout rendu écrit.
+ */
+function canon(valeur) {
+  if (valeur !== null && typeof valeur === 'object' && typeof valeur.toJSON === 'function') return canon(valeur.toJSON());
+  if (valeur === undefined || typeof valeur === 'function' || typeof valeur === 'symbol') return 'undefined';
+  if (Array.isArray(valeur)) {
+    return `[${Array.from(valeur, (element) => { const rendu = canon(element); return rendu === 'undefined' ? 'null' : rendu; }).join(',')}]`;
+  }
+  if (valeur !== null && typeof valeur === 'object') {
+    const paires = Object.keys(valeur).sort().map((cle) => [cle, canon(valeur[cle])]).filter(([, rendu]) => rendu !== 'undefined');
+    return `{${paires.map(([cle, rendu]) => `${JSON.stringify(cle)}:${rendu}`).join(',')}}`;
+  }
+  return JSON.stringify(valeur);
+}
+
+// Garde de `canon` (revue de L3-T2) : la clé de fusion des vecteurs doit suivre le JSON
+// réellement écrit (`JSON.stringify`), que relit le contrôle Swift de `RulesGoldenTests`.
+// Une clé d'objet de valeur `undefined` n'est pas écrite (≡ clé absente, ≢ `null`) ; dans un
+// tableau, `undefined` s'écrit `null` ; `toJSON` (Date) s'applique ; un nombre non fini s'écrit `null`.
+for (const [a, b, identiques] of [
+  [{ data: undefined }, {}, true],
+  [{ data: undefined }, { data: null }, false],
+  [{ data: null }, {}, false],
+  [{ reponse: { data: undefined, error: null } }, { reponse: { error: null } }, true],
+  [[undefined], [null], true],
+  [[undefined], [], false],
+  [{ b: 1, a: { d: 2, c: 3 } }, { a: { c: 3, d: 2 }, b: 1 }, true],
+  [{ instant: new Date(0) }, { instant: '1970-01-01T00:00:00.000Z' }, true],
+  [{ n: Number.NaN }, { n: null }, true],
+  [{ n: -0 }, { n: 0 }, true],
+]) {
+  if ((canon(a) === canon(b)) !== identiques) {
+    console.error(`export golden : canon() ne suit pas JSON.stringify (${canon(a)} ${identiques ? '≠' : '='} ${canon(b)}).`);
+    process.exit(2);
+  }
+}
+
+/**
+ * JSON canonique d'une valeur écrite dans un vecteur. Refuse ce que `JSON.stringify` n'écrit pas
+ * (`undefined` : la clé `input` ou `expected` disparaîtrait du fichier) et vérifie que `canon`
+ * coïncide avec la forme relue du JSON écrit (garde : l'export échoue sinon).
+ */
+function canonEcrit(regle, quoi, valeur) {
+  if (valeur === undefined) throw new Error(`${regle}: ${quoi} vaut undefined, que JSON.stringify n'écrit pas.`);
+  const ecrit = canon(valeur);
+  const relu = canon(JSON.parse(JSON.stringify(valeur)));
+  if (ecrit !== relu) {
+    throw new Error(`${regle}: ${quoi} : le JSON canonique ${ecrit} ne suit pas le JSON écrit ${relu}.`);
+  }
+  return ecrit;
+}
+
 class Collecteur {
   constructor(regle) {
     this.regle = regle;
@@ -158,20 +285,22 @@ class Collecteur {
 
   ajoute(name, input, expected) {
     if (this.noms.has(name)) throw new Error(`${this.regle}: nom de vecteur dupliqué « ${name} »`);
-    // Une entrée identique (même JSON) n'apporte aucune couverture : elle est fusionnée
-    // avec le premier vecteur qui la porte (les cas vitest précèdent les grilles). Un
-    // attendu différent pour la même entrée serait une incohérence de l'export.
-    const cle = JSON.stringify(input);
+    // Une entrée identique (même JSON écrit, rendu canonique à clés triées, comme le contrôle
+    // Swift de `RulesGoldenTests` qui relit ce JSON) n'apporte aucune couverture : elle est
+    // fusionnée avec le premier vecteur qui la porte (les cas vitest précèdent les grilles).
+    // Un attendu différent pour la même entrée serait une incohérence de l'export.
+    const cle = canonEcrit(this.regle, `« ${name} » (input)`, input);
+    const attendu = canonEcrit(this.regle, `« ${name} » (expected)`, expected);
     const existant = this.entrees.get(cle);
     if (existant) {
-      if (JSON.stringify(existant.expected) !== JSON.stringify(expected)) {
+      if (existant.attendu !== attendu) {
         throw new Error(`${this.regle}: entrée identique avec attendus différents (« ${existant.name} », « ${name} »)`);
       }
       this.fusionnes.push(`${name} → ${existant.name}`);
       return;
     }
     this.noms.add(name);
-    this.entrees.set(cle, { name, expected });
+    this.entrees.set(cle, { name, attendu });
     this.vecteurs.push({ name, input, expected });
   }
 
@@ -1234,6 +1363,657 @@ function vecteursCompletudePlanning() {
 }
 
 // ---------------------------------------------------------------------------
+// Règles 8 à 14 : lot 3, T2 (push, session, revenus, profil, modes d'exercice, RPPS)
+// ---------------------------------------------------------------------------
+
+/**
+ * Garde des cas vitest : l'export échoue si le web ne vérifie plus son propre test
+ * (`partiel` = `toMatchObject`). Comparaison sur la forme écrite (`canon`) : une clé de valeur
+ * `undefined` vaut une clé absente, jamais `null`. Le vecteur exporté porte la sortie complète.
+ */
+function verifieVitest(regle, name, obtenu, attendu, partiel = false) {
+  const ok = partiel && obtenu && typeof obtenu === 'object'
+    ? Object.entries(attendu).every(([cle, valeur]) => canon({ [cle]: obtenu[cle] }) === canon({ [cle]: valeur }))
+    : canon(obtenu) === canon(attendu);
+  if (!ok) throw new Error(`${regle}: « ${name} » ne vérifie plus l'attente vitest ${canon(attendu)} (obtenu ${canon(obtenu)}).`);
+  return obtenu;
+}
+
+// ---------------------------------------------------------------------------
+// Règle 8 : push-routing (`navigationPathForEvent`, src/lib/pushNative.ts)
+// ---------------------------------------------------------------------------
+/**
+ * Domaine : valeurs JSON du payload (`send-push` n'envoie que des chaînes ; toute
+ * autre valeur est ignorée par `valeurTexte`). Les liens restent dans le domaine de
+ * `JoleneLink.normalize` (lot 0 : ASCII imprimable, sans espace interne, sans
+ * tabulation ni saut de ligne, que `new URL()` encoderait ou retirerait à la volée).
+ */
+function vecteursPushRouting() {
+  const c = new Collecteur('push-routing');
+  const route = (nom, data, role, vitest) => {
+    const name = `navigationPathForEvent/${nom}`;
+    const obtenu = pushNative.navigationPathForEvent(data, role);
+    if (vitest !== undefined) verifieVitest('push-routing', name, obtenu, vitest);
+    c.ajoute(name, { fonction: 'navigationPathForEvent', data, role }, obtenu);
+  };
+
+  // Types routés, lus dans les `case` du corps de `navigationPathForEvent` seul (arbre du
+  // compilateur TypeScript : une fonction voisine n'y entre pas) : garde de dérive (le port
+  // Swift doit router exactement la même liste, dans le même ordre).
+  const source = readFileSync(PUSH_NATIVE, 'utf8');
+  const arbre = ts.createSourceFile(PUSH_NATIVE, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const declarations = arbre.statements.filter((noeud) => ts.isFunctionDeclaration(noeud) && noeud.name?.text === 'navigationPathForEvent');
+  if (declarations.length !== 1 || !declarations[0].body) {
+    throw new Error('push-routing: déclaration de navigationPathForEvent introuvable ou dupliquée dans src/lib/pushNative.ts.');
+  }
+  const types = [];
+  const visite = (noeud) => {
+    if (ts.isCaseClause(noeud)) {
+      if (!ts.isStringLiteral(noeud.expression)) {
+        throw new Error(`push-routing: case non littéral dans navigationPathForEvent (${noeud.expression.getText(arbre)}).`);
+      }
+      types.push(noeud.expression.text);
+    }
+    ts.forEachChild(noeud, visite);
+  };
+  visite(declarations[0].body);
+  if (types.length === 0 || new Set(types).size !== types.length) {
+    throw new Error('push-routing: liste des types de navigationPathForEvent illisible ou dupliquée.');
+  }
+  c.ajoute('typesRoutes/switch-navigationPathForEvent', { fonction: 'typesRoutes' }, types);
+
+  // --- Issus de pushNative.test.ts (6 it, 15 attentes) -------------------
+  route('vitest-1-lien-externe-refuse', { lien: 'https://evil.example/phishing' }, null, null);
+  route('vitest-1-lien-interne-query-hash', { lien: '/soignant/missions?id=1#pointage' }, null, '/soignant/missions?id=1#pointage');
+  route('vitest-2-candidature-recue', { type_evenement: 'CANDIDATURE_RECUE', mission_id: 'm1' }, null, '/etablissement/missions/m1');
+  route('vitest-2-candidature-acceptee', { type_evenement: 'CANDIDATURE_ACCEPTEE', mission_id: 'm1' }, null, '/soignant/missions/m1');
+  route('vitest-3-annulation-soignant-vue-etab', { type_evenement: 'CANDIDATURE_ANNULEE_SOIGNANT' }, 'ADMIN_ETABLISSEMENT', '/etablissement/missions');
+  route('vitest-3-mission-annulee-etab-vue-soignant', { type_evenement: 'MISSION_ANNULEE_ETAB' }, 'SOIGNANT', '/soignant/missions');
+  route('vitest-4-mission-urgente', { type_evenement: 'MISSION_URGENTE', mission_id: 'm1' }, 'SOIGNANT', '/soignant/missions/m1');
+  route('vitest-4-mission-a-pourvoir', { type_evenement: 'MISSION_A_POURVOIR' }, 'SOIGNANT', '/soignant/recherche-missions');
+  route('vitest-4-rappel-mission', { type_evenement: 'RAPPEL_MISSION', mission_id: 'm1' }, 'SOIGNANT', '/soignant/missions/m1');
+  route('vitest-4-dpae-non-regularisee', { type_evenement: 'DPAE_NON_REGULARISEE_POINTAGE', contrat_id: 'c1' }, 'ADMIN_ETABLISSEMENT', '/contrat/c1');
+  route('vitest-5-racine-avec-type', { lien: '/', type_evenement: 'MISSION_ASSIGNEE' }, 'SOIGNANT', '/soignant/missions');
+  route('vitest-5-racine-sans-type', { lien: '/' }, null, '/');
+  route('vitest-6-litige-vue-etab', { type_evenement: 'LITIGE_OUVERT', litige_id: 'l1' }, 'ADMIN_ETABLISSEMENT', '/etablissement/litiges#l1');
+  route('vitest-6-facture-vue-etab', { type_evenement: 'FACTURE_EMISE', facture_id: 'f1' }, 'ADMIN_ETABLISSEMENT', '/etablissement/facturation/f1');
+  route('vitest-6-facture-vue-soignant', { type_evenement: 'FACTURE_EMISE' }, 'SOIGNANT', '/soignant/mes-gains?tab=factures');
+
+  // --- Grille types × rôles × identifiants ----------------------------------
+  const ROLES = [['soignant', 'SOIGNANT'], ['admin-etab', 'ADMIN_ETABLISSEMENT'], ['etab-legacy', 'ETABLISSEMENT'],
+    ['admin-plateforme', 'ADMIN_PLATEFORME'], ['admin', 'ADMIN'], ['sans-role', null]];
+  const IDS = [
+    ['sans-id', {}],
+    ['ids-simples', { mission_id: 'm1', contrat_id: 'c1', facture_id: 'f1', litige_id: 'l1' }],
+    ['ids-a-encoder', { mission_id: ' m 1/2#?é ', contrat_id: 'c/1?x=1&y', facture_id: 'f#1%', litige_id: "l 1😀!'()*~-_." }],
+  ];
+  const TYPES_GRILLE = [...types.map((t) => [t, t]), ['type-inconnu', 'TYPE_INCONNU'], ['type-absent', undefined],
+    ['type-entoure-espaces', '  MISSION_URGENTE\t'], ['type-minuscules', 'mission_urgente']];
+  const avecType = (type, reste) => (type === undefined ? { ...reste } : { type_evenement: type, ...reste });
+  for (const [nomType, type] of TYPES_GRILLE) {
+    for (const [nomRole, role] of ROLES) {
+      for (const [nomIds, ids] of IDS) route(`grille/${nomType}/${nomRole}/${nomIds}`, avecType(type, ids), role);
+    }
+    for (const [nomRole, role] of [['admin-groupe', 'ADMIN_GROUPE'], ['role-inconnu', 'INCONNU']]) {
+      route(`grille/${nomType}/${nomRole}/ids-simples`, avecType(type, IDS[1][1]), role);
+    }
+    // Espaces JavaScript (`trim`) et valeurs non textuelles : ignorées comme absentes.
+    for (const [nomRole, role] of [['soignant', 'SOIGNANT'], ['admin-etab', 'ADMIN_ETABLISSEMENT']]) {
+      route(`grille/${nomType}/${nomRole}/ids-blancs-ou-non-texte`,
+        avecType(type, { mission_id: '   ', contrat_id: 42, facture_id: true, litige_id: ' ﻿　' }), role);
+      route(`grille/${nomType}/${nomRole}/ids-espaces-unicode`,
+        avecType(type, { mission_id: '\u0085m1', contrat_id: '　c1 ', facture_id: '᠎f1', litige_id: ' l1 ' }), role);
+    }
+  }
+
+  // --- Liens explicites : clés `lien`, `link`, `url` ---------------------------
+  const LIENS = [
+    ['interne-query-hash', '/soignant/missions?id=1#pointage'],
+    ['interne-simple', '/soignant/stripe-connect'],
+    ['racine', '/'],
+    ['racine-query', '/?x=1'],
+    ['racine-fragment', '/#x'],
+    ['https-jolene', 'https://jolene.app/soignant/notifications'],
+    ['https-www', 'https://www.jolene.app/soignant/profil?tab=a'],
+    ['https-app', 'https://app.jolene.app/soignant/mes-gains?tab=factures#f1'],
+    ['https-majuscules', 'HTTPS://JOLENE.APP/Soignant/Missions'],
+    ['https-sans-chemin', 'https://jolene.app'],
+    ['https-port-443', 'https://jolene.app:443/soignant/missions'],
+    ['https-port-8443', 'https://jolene.app:8443/soignant/missions'],
+    ['https-externe', 'https://evil.example/phishing'],
+    ['https-sous-domaine-piege', 'https://jolene.app.evil.example/x'],
+    ['https-identifiants-piege', 'https://jolene.app@evil.example/x'],
+    ['http-jolene', 'http://jolene.app/soignant/missions'],
+    ['protocole-relatif', '//evil.example/x'],
+    ['antislash', '/\\evil.example'],
+    ['javascript', 'javascript:alert(1)'],
+    ['relatif-sans-barre', 'soignant/missions'],
+    ['segments-points', '/soignant/../admin/./litiges'],
+    ['pourcent-encode', '/soignant/missions/a%20b'],
+    ['entoure-espaces', '  /soignant/missions  '],
+    ['vide', ''],
+    ['blanc', '   '],
+  ];
+  for (const [nomLien, lien] of LIENS) {
+    for (const [nomType, type] of [['sans-type', undefined], ['type-connu', 'MISSION_ASSIGNEE'], ['type-inconnu', 'TYPE_INCONNU']]) {
+      route(`lien/${nomLien}/${nomType}`, avecType(type, { lien, mission_id: 'm1' }), 'SOIGNANT');
+    }
+    route(`link/${nomLien}`, { link: lien }, 'SOIGNANT');
+    route(`url/${nomLien}`, { url: lien }, 'SOIGNANT');
+  }
+
+  // --- Priorité des clés et type non textuel --------------------------------
+  route('priorite/lien-invalide-masque-link', { lien: 'https://evil.example/x', link: '/soignant/profil', type_evenement: 'MISSION_ASSIGNEE', mission_id: 'm1' }, 'SOIGNANT');
+  route('priorite/lien-blanc-cede-a-link', { lien: '   ', link: '/soignant/profil' }, 'SOIGNANT');
+  route('priorite/lien-non-texte-cede-a-url', { lien: 5, url: '/soignant/notifications' }, 'SOIGNANT');
+  route('priorite/link-vide-cede-a-url', { link: '', url: 'https://jolene.app/soignant/stripe-connect?success=true' }, 'SOIGNANT');
+  route('priorite/lien-racine-masque-link-avec-type', { lien: '/', link: '/soignant/profil', type_evenement: 'MISSION_ASSIGNEE' }, 'SOIGNANT');
+  route('priorite/link-racine-sans-type', { link: '/' }, null);
+  route('priorite/lien-gagne-sur-type-etab', { lien: '/soignant/profil', type_evenement: 'FACTURE_EMISE', facture_id: 'f1' }, 'ADMIN_ETABLISSEMENT');
+  route('priorite/type-non-texte', { type_evenement: 5, mission_id: 'm1' }, 'SOIGNANT');
+  route('priorite/type-blanc', { type_evenement: '   ', mission_id: 'm1' }, 'SOIGNANT');
+  route('priorite/lien-racine-type-non-texte', { lien: '/', type_evenement: 5 }, 'SOIGNANT');
+  route('priorite/lien-racine-type-blanc', { lien: '/', type_evenement: ' ' }, 'SOIGNANT');
+  route('priorite/lien-racine-type-inconnu', { lien: '/', type_evenement: 'TYPE_INCONNU' }, 'SOIGNANT');
+  route('priorite/payload-vide', {}, 'SOIGNANT');
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 9 : session-count (`estSessionRecurrente` sur compteur, src/lib/session-count.ts)
+// ---------------------------------------------------------------------------
+/**
+ * Le module lit `localStorage` / `sessionStorage` et garde un drapeau de module :
+ * chaque vecteur charge une instance neuve (`?instance=N`) sur des stockages simulés.
+ * Domaine : compteurs dont le successeur reste sous 1e21 (au-delà, `String(n)` passe
+ * en notation exponentielle) ; au-delà de 2^53, `String(n)` écrit les chiffres les plus
+ * courts qui relisent le même nombre (vecteurs 2^60, 2^69, 21 chiffres), que le port
+ * reproduit. « Stockage indisponible » est hors domaine natif (UserDefaults ne lève pas).
+ */
+async function vecteursSessionCount() {
+  const c = new Collecteur('session-count');
+  const globaux = ['window', 'localStorage', 'sessionStorage'];
+  const avant = Object.fromEntries(globaux.map((nom) => [nom, Object.getOwnPropertyDescriptor(globalThis, nom)]));
+  const stockage = (entrees) => {
+    const valeurs = new Map(entrees);
+    return { getItem: (cle) => (valeurs.has(cle) ? valeurs.get(cle) : null), setItem: (cle, valeur) => { valeurs.set(cle, String(valeur)); }, valeurs };
+  };
+  let instance = 0;
+  const charger = async (local, session) => {
+    for (const [nom, valeur] of [['window', globalThis], ['localStorage', local], ['sessionStorage', session]]) {
+      Object.defineProperty(globalThis, nom, { value: valeur, configurable: true, writable: true });
+    }
+    instance += 1;
+    return import(`${pathToFileURL(SESSION_COUNT).href}?instance=${instance}`);
+  };
+  const COMPTEURS = [['absent', null], ['vide', ''], ['zero', '0'], ['un', '1'], ['deux', '2'], ['dix', '10'],
+    ['espaces-trois', '  3'], ['nbsp-deux', ' 2'], ['deux-suffixe-texte', '2abc'], ['un-virgule-neuf', '1.9'],
+    ['deux-virgule-cinq', '2.5'], ['moins-un', '-1'], ['moins-zero', '-0'], ['plus-deux', '+2'], ['exposant', '1e3'],
+    ['hexadecimal', '0x10'], ['texte', 'abc'], ['chiffre-arabe', '٢'], ['blanc', '   '],
+    ['au-dela-2-puissance-53', '9007199254740993'], ['vingt-chiffres', '99999999999999999999'],
+    // Au-delà de 2^53, `String(n)` écrit les chiffres les plus courts, pas la valeur exacte du
+    // Double (2^60 → « 1152921504606847000 », non « 1152921504606846976 »).
+    ['deux-puissance-60', '1152921504606846976'], ['deux-puissance-69', '590295810358705651712'],
+    ['vingt-et-un-chiffres', '123456789012345678901']];
+  try {
+    for (const [nom, brut] of COMPTEURS) {
+      const entrees = brut === null ? [] : [['jolene_session_count', brut]];
+      const lecture = await charger(stockage(entrees), stockage([]));
+      c.ajoute(`estSessionRecurrente/${nom}`, { fonction: 'estSessionRecurrente', compteur: brut },
+        { numero: lecture.getNumeroSession(), recurrente: lecture.estSessionRecurrente() });
+
+      for (const dejaComptee of [false, true]) {
+        const local = stockage(entrees);
+        const session = stockage(dejaComptee ? [['jolene_session_counted', '1']] : []);
+        const module = await charger(local, session);
+        const retours = [module.incrementerSession(), module.incrementerSession()];
+        c.ajoute(`incrementerSession/${nom}/${dejaComptee ? 'session-deja-comptee' : 'nouvelle-session'}`,
+          { fonction: 'incrementerSession', compteur: brut, dejaCompteeCetteSession: dejaComptee, appels: 2 },
+          { retours, compteurApres: local.valeurs.has('jolene_session_count') ? local.valeurs.get('jolene_session_count') : null,
+            recurrenteApres: module.estSessionRecurrente() });
+      }
+    }
+  } finally {
+    for (const nom of globaux) {
+      if (avant[nom]) Object.defineProperty(globalThis, nom, avant[nom]);
+      else delete globalThis[nom];
+    }
+  }
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 10 : mission-finance-display (src/lib/missionFinanceDisplay.ts)
+// ---------------------------------------------------------------------------
+/**
+ * Domaine : types de l'interface `MissionFinanceAffichee` (nombre JSON ou null, booléen
+ * ou null, texte ou null, clé absente). La correction du plafond Rist est vectorisée
+ * même si l'écran natif ne lit pas ces colonnes (décision 5 du lot 3, correction 19).
+ */
+function vecteursMissionFinance() {
+  const c = new Collecteur('mission-finance-display');
+  const net = (nom, mission, vitest) => {
+    const name = `netEstimeAfficheMission/${nom}`;
+    const obtenu = financeMission.netEstimeAfficheMission(mission);
+    if (vitest !== undefined) verifieVitest('mission-finance-display', name, obtenu, vitest);
+    c.ajoute(name, { fonction: 'netEstimeAfficheMission', mission }, obtenu);
+  };
+  const montant = (nom, mission, vitest) => {
+    const name = `montantFinanceAfficheMission/${nom}`;
+    const obtenu = financeMission.montantFinanceAfficheMission(mission);
+    if (vitest !== undefined) verifieVitest('mission-finance-display', name, obtenu, vitest, vitest !== null);
+    c.ajoute(name, { fonction: 'montantFinanceAfficheMission', mission }, obtenu);
+  };
+
+  // --- Issus de missionFinanceDisplay.test.ts --------------------------------
+  net('vitest-medecin-liberal-plafond-historique', { profession_requise: 'MEDECIN', type_contrat_recherche: 'LIBERAL', soignant_assigne_id: null,
+    taux_horaire_base: 90, taux_rist_plafonne: 30, rist_plafond_applique: true, net_estime: 280.80 }, 842.40);
+  net('vitest-ide-taux-coherent', { profession_requise: 'IDE', type_contrat_recherche: 'SALARIE', soignant_assigne_id: null,
+    taux_horaire_base: 31, taux_rist_plafonne: 31, rist_plafond_applique: false, net_estime: 351.11 }, 351.11);
+  net('vitest-vrai-plafond-salarie-assigne', { profession_requise: 'IDE', type_contrat_applique: 'SALARIE', soignant_assigne_id: 'soignant-1',
+    taux_horaire_base: 35, taux_rist_plafonne: 30, rist_plafond_applique: true, net_estime: 339.77 }, 339.77);
+  net('vitest-net-a-payer-jamais-net', { type_contrat_applique: 'SALARIE', net_estime: null, net_a_payer: 100 }, null);
+  montant('vitest-honoraires-sans-abattement', { type_contrat_applique: 'LIBERAL', net_a_payer: 1_000, net_estime: 780, total_brut: 1_000 },
+    { montant: 1_000, nature: 'HONORAIRES_LIBERAUX', libelleCourt: 'honoraires' });
+  montant('vitest-net-estime-salarie', { type_contrat_applique: 'SALARIE', net_a_payer: 444.68, net_estime: 346.85 },
+    { montant: 346.85, nature: 'NET_SALARIE_ESTIME' });
+  montant('vitest-pas-de-net-invente', { type_contrat_recherche: 'SALARIE', net_a_payer: 444.68, net_estime: null }, null);
+  montant('vitest-brut-contrat-a-choisir', { type_contrat_recherche: 'TOUS', total_brut: 500, net_a_payer: 590, net_estime: 460 },
+    { montant: 500, nature: 'BRUT_INDICATIF', libelleCourt: 'brut indicatif' });
+
+  // --- Contrat effectif : appliqué × recherché ---------------------------------
+  const CONTRATS = [['absent', undefined], ['null', null], ['liberal', 'LIBERAL'], ['salarie', 'SALARIE'], ['tous', 'TOUS'], ['vide', ''], ['cdd', 'CDD']];
+  const avec = (base, champs) => {
+    const mission = { ...base };
+    for (const [cle, valeur] of Object.entries(champs)) if (valeur !== undefined) mission[cle] = valeur;
+    return mission;
+  };
+  const montantsTypes = { net_a_payer: 444.68, total_brut: 500, net_estime: 346.85 };
+  for (const [nomA, applique] of CONTRATS) {
+    for (const [nomR, recherche] of CONTRATS) {
+      const mission = avec(montantsTypes, { type_contrat_applique: applique, type_contrat_recherche: recherche });
+      montant(`contrat/applique-${nomA}/recherche-${nomR}`, mission);
+    }
+  }
+
+  // --- Montants disponibles par régime -----------------------------------------
+  const VALEURS = [['absent', undefined], ['null', null], ['zero', 0], ['positif', 123.45]];
+  for (const [nomRegime, regime] of [['liberal', { type_contrat_applique: 'LIBERAL' }], ['salarie', { type_contrat_applique: 'SALARIE' }],
+    ['a-choisir', { type_contrat_recherche: 'TOUS' }]]) {
+    for (const [nomN, netAPayer] of VALEURS) {
+      for (const [nomB, totalBrut] of VALEURS) {
+        for (const [nomE, netEstime] of VALEURS) {
+          const mission = avec(regime, { net_a_payer: netAPayer, total_brut: totalBrut, net_estime: netEstime });
+          montant(`montants/${nomRegime}/net-a-payer-${nomN}/total-brut-${nomB}/net-estime-${nomE}`, mission);
+        }
+      }
+    }
+    for (const [nomV, valeur] of [['negatif', -12.5], ['tres-grand', 1e21], ['somme-flottante', 0.1 + 0.2], ['minuscule', 1e-7]]) {
+      for (const champ of ['net_a_payer', 'total_brut', 'net_estime']) {
+        montant(`montants/${nomRegime}/${champ}-${nomV}`, avec(regime, { [champ]: valeur }));
+      }
+    }
+  }
+
+  // --- Correction de l'ancien plafond Rist -------------------------------------
+  const CONTRATS_RIST = [['liberal-applique', { type_contrat_applique: 'LIBERAL' }], ['liberal-recherche', { type_contrat_recherche: 'LIBERAL' }],
+    ['salarie-applique', { type_contrat_applique: 'SALARIE' }], ['tous-recherche', { type_contrat_recherche: 'TOUS' }],
+    ['applique-salarie-recherche-liberal', { type_contrat_applique: 'SALARIE', type_contrat_recherche: 'LIBERAL' }],
+    ['applique-vide-recherche-liberal', { type_contrat_applique: '', type_contrat_recherche: 'LIBERAL' }]];
+  const TAUX = [['90-sur-30', 90, 30], ['31-sur-31', 31, 31], ['30-sur-35', 30, 35], ['sans-taux-publie', null, 30],
+    ['plafond-nul', 90, 0], ['35-sur-30', 35, 30]];
+  const montantsRist = { net_a_payer: 280.80, total_brut: 300, net_estime: 210.6 };
+  for (const [nomContrat, contrat] of CONTRATS_RIST) {
+    for (const [nomAssigne, assigne] of [['non-assignee', null], ['assigne-vide', ''], ['assignee', 's1']]) {
+      for (const [nomTaux, base, plafond] of TAUX) {
+        for (const [nomRist, rist] of [['plafond-applique', true], ['plafond-non-applique', false]]) {
+          const mission = avec({ ...montantsRist, ...contrat }, { soignant_assigne_id: assigne, taux_horaire_base: base, taux_rist_plafonne: plafond, rist_plafond_applique: rist });
+          const nom = `rist/${nomContrat}/${nomAssigne}/${nomTaux}/${nomRist}`;
+          montant(nom, mission);
+          if (nomContrat === 'salarie-applique') net(nom, mission);
+        }
+      }
+    }
+  }
+  for (const [nomRist, rist] of [['rist-null', null], ['rist-absent', undefined]]) {
+    const mission = avec({ ...montantsRist, type_contrat_recherche: 'LIBERAL' }, { taux_horaire_base: 90, taux_rist_plafonne: 30, rist_plafond_applique: rist });
+    montant(`rist/liberal-recherche/${nomRist}`, mission);
+    net(`rist/liberal-recherche/${nomRist}`, mission);
+  }
+  for (const [nomTaux, base, plafond] of [['plafond-negatif', 90, -5], ['plafond-absent', 90, undefined], ['taux-absent', undefined, 30]]) {
+    const mission = avec({ ...montantsRist, type_contrat_recherche: 'LIBERAL', rist_plafond_applique: true }, { taux_horaire_base: base, taux_rist_plafonne: plafond });
+    montant(`rist/liberal-recherche/${nomTaux}`, mission);
+  }
+
+  // --- Arrondi `Math.round(x * 100) / 100` de la correction ----------------------
+  for (const valeur of [0.01, 0.03, 0.05, 0.125, 1.005, 2.675, 33.33, 100.125, 1e-7, 123456789.12, 280.8, 0.015]) {
+    const mission = { type_contrat_recherche: 'LIBERAL', taux_horaire_base: 3, taux_rist_plafonne: 2, rist_plafond_applique: true, net_a_payer: valeur };
+    montant(`arrondi/ratio-1-5/${String(valeur)}`, mission);
+  }
+  for (const valeur of [0.01, 1.005, 280.8, 351.11]) {
+    const mission = { type_contrat_recherche: 'LIBERAL', taux_horaire_base: 90, taux_rist_plafonne: 30, rist_plafond_applique: true, net_a_payer: valeur };
+    montant(`arrondi/ratio-3/${String(valeur)}`, mission);
+  }
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 11 : paiement-soignant-ui (src/lib/paiementSoignantUi.ts)
+// ---------------------------------------------------------------------------
+/**
+ * Domaine : `unknown` = toute valeur JSON (NaN et ±Infinity ne sont pas représentables :
+ * le port les couvre par un test unitaire Swift). Dates : formats ISO de PostgREST
+ * (date seule, offset ou Z, fractions) et ISO sans offset hors changement d'heure ;
+ * identifiants en minuscules ASCII, chiffres et tirets (uuid), où `localeCompare`
+ * suit l'ordre des points de code.
+ */
+function vecteursPaiementUi() {
+  const c = new Collecteur('paiement-soignant-ui');
+  const repartir = (nom, du, regle, vitest) => {
+    const name = `repartirPaiementConfirme/${nom}`;
+    const obtenu = paiementUi.repartirPaiementConfirme(du, regle);
+    if (vitest !== undefined) verifieVitest('paiement-soignant-ui', name, obtenu, vitest);
+    const input = { fonction: 'repartirPaiementConfirme' };
+    if (du !== undefined) input.montantDu = du;
+    if (regle !== undefined) input.montantRegle = regle;
+    c.ajoute(name, input, obtenu);
+  };
+  const indexer = (nom, paiements, vitest) => {
+    const name = `indexerDernierPaiementParMission/${nom}`;
+    const index = paiementUi.indexerDernierPaiementParMission(paiements);
+    const obtenu = Object.fromEntries(Object.entries(index).map(([mission, paiement]) => [mission, paiement.id]));
+    if (vitest !== undefined) verifieVitest('paiement-soignant-ui', name, obtenu, vitest);
+    c.ajoute(name, { fonction: 'indexerDernierPaiementParMission', paiements }, obtenu);
+  };
+  const classer = (nom, paiement, vitest, partiel = false) => {
+    const name = `classerPaiementSalaire/${nom}`;
+    const obtenu = paiementUi.classerPaiementSalaire(paiement);
+    if (vitest !== undefined) verifieVitest('paiement-soignant-ui', name, obtenu, vitest, partiel);
+    const input = { fonction: 'classerPaiementSalaire' };
+    if (paiement !== undefined) input.paiement = paiement;
+    c.ajoute(name, input, obtenu);
+  };
+
+  // --- Issus de paiementSoignantUi.test.ts ---------------------------------
+  indexer('vitest-plus-recent-quel-que-soit-l-ordre', [
+    { id: 'ancien', mission_id: 'm1', statut: 'DECLARE', cree_le: '2026-07-01T10:00:00Z' },
+    { id: 'autre', mission_id: 'm2', statut: 'CONFIRME', cree_le: '2026-07-02T10:00:00Z' },
+    { id: 'recent', mission_id: 'm1', statut: 'CONFIRME', cree_le: '2026-07-03T10:00:00Z' },
+  ], { m1: 'recent', m2: 'autre' });
+  indexer('vitest-mise-a-jour-et-departage', [
+    { id: 'a', mission_id: 'm1', modifie_le: '2026-07-04T10:00:00Z' },
+    { id: 'b', mission_id: 'm1', modifie_le: '2026-07-04T10:00:00Z' },
+    { id: 'cree-apres', mission_id: 'm2', cree_le: '2026-07-06T10:00:00Z', date_paiement: '2026-07-01' },
+    { id: 'paye-apres', mission_id: 'm2', cree_le: '2026-07-05T10:00:00Z', date_paiement: '2026-07-07' },
+  ], { m1: 'b', m2: 'cree-apres' });
+  repartir('vitest-partiel', 346.85, 300, { montantPaye: 300, montantRestant: 46.85, estPartiel: true });
+  repartir('vitest-complet', 500, 500, { montantPaye: 500, montantRestant: 0, estPartiel: false });
+  repartir('vitest-superieur-au-du', 500, 510, { montantPaye: 510, montantRestant: 0, estPartiel: false });
+
+  const confirme = { statut: 'CONFIRME', confirme_par_soignant: true, conteste: false, montant_net: 300 };
+  classer('vitest-reference-employeur-distincte', { ...confirme, montant_du_reference: 425, source_montant_du: 'BULLETIN_OFFICIEL_ETABLISSEMENT' },
+    { etat: 'confirme', libelle: 'Réception confirmée', montantDeclare: 300, montantReferenceEmployeur: 425 });
+  for (const [nom, confirmation] of [['false', false], ['null', null], ['absente', undefined]]) {
+    const paiement = { ...confirme };
+    if (confirmation === undefined) delete paiement.confirme_par_soignant; else paiement.confirme_par_soignant = confirmation;
+    classer(`vitest-confirmation-explicite-${nom}`, paiement, { etat: 'a_verifier' }, true);
+  }
+  for (const [nom, montantNet] of [['null', null], ['absent', undefined], ['vide', ''], ['blanc', ' '], ['zero', 0], ['zero-texte', '0'],
+    ['negatif', -1], ['texte', 'invalide'], ['vrai', true], ['objet', {}]]) {
+    const paiement = { ...confirme };
+    if (montantNet === undefined) delete paiement.montant_net; else paiement.montant_net = montantNet;
+    classer(`vitest-montant-invalide-${nom}`, paiement, { etat: 'a_verifier', montantDeclare: null }, true);
+  }
+  for (const statut of ['RESOLU', 'CONTESTE', 'DECLARE', 'EN_ATTENTE', 'INCONNU']) {
+    const name = `vitest-statut-${statut}-pas-confirme`;
+    const obtenu = paiementUi.classerPaiementSalaire({ ...confirme, statut });
+    if (obtenu.etat === 'confirme') throw new Error(`paiement-soignant-ui: « ${name} » ne vérifie plus l'attente vitest.`);
+    classer(name, { ...confirme, statut });
+  }
+  classer('vitest-contestation-prime', { ...confirme, conteste: true }, { etat: 'conteste' }, true);
+  for (const [nom, source] of [['estimation', 'ESTIMATION_AVANT_PAS_A_CONFIRMER'], ['facture-honoraires', 'FACTURE_HONORAIRES'], ['null', null], ['absente', undefined]]) {
+    const paiement = { ...confirme, montant_du_reference: 999 };
+    if (source !== undefined) paiement.source_montant_du = source;
+    classer(`vitest-source-non-employeur-${nom}`, paiement, { montantReferenceEmployeur: null }, true);
+  }
+  classer('vitest-decimal-postgrest', { ...confirme, montant_net: '300.25' }, { montantDeclare: 300.25 }, true);
+  classer('vitest-absence-de-declaration', undefined, { etat: 'absent' }, true);
+
+  // --- Grille de `repartirPaiementConfirme` ------------------------------------
+  const MONTANTS = [['absent', undefined], ['null', null], ['zero', 0], ['300', 300], ['346-85', 346.85], ['500', 500], ['510', 510],
+    ['negatif', -10], ['texte-decimal', '300.25'], ['texte-vide', ''], ['texte-invalide', 'abc'], ['vrai', true], ['objet', {}],
+    ['tableau-un', [5]], ['demi-centime', 0.005], ['huitieme', 0.125]];
+  for (const [nomDu, du] of MONTANTS) {
+    for (const [nomRegle, regle] of MONTANTS) repartir(`grille/du-${nomDu}/regle-${nomRegle}`, du, regle);
+  }
+  for (const [nom, du, regle] of [
+    ['texte-espaces', ' 12 ', '2'], ['texte-hexadecimal', '0x1A', '0'], ['texte-exposant', '1e3', '2.5e2'], ['texte-infini', 'Infinity', 0],
+    ['texte-infini-negatif', 0, '-Infinity'], ['texte-plus', '+5', '.5'], ['texte-point-final', '5.', '0'], ['texte-separateur', '1_000', 0],
+    ['texte-octal', '0o17', '0b11'], ['texte-signe-hexadecimal', '-0x10', 0], ['texte-nbsp', ' 7 ', '﻿2'],
+    ['texte-nel', '\u00857', 0], ['faux', false, false], ['tableau-vide', [], 3], ['tableau-texte', ['  5 '], [null]],
+    ['tableau-deux', [1, 2], [[3]]], ['tableau-booleen', [true], [{}]], ['tableau-imbrique-vide', [[]], 0],
+    ['tres-grand', 1e21, 0], ['tres-grand-regle', 2e21, 1e21], ['ecart-flottant', 0.3, 0.1], ['egalite-flottante', 0.1 + 0.2, 0.3],
+    ['solde-minuscule', 100.004, 100], ['paye-minuscule', 5, 0.001], ['demi-centimes', 2.675, 1.005], ['huitiemes', 100.375, 0.625],
+    ['negatif-du', -50, 10], ['entiers-grands', 123456789.125, 0.375],
+  ]) repartir(`limites/${nom}`, du, regle);
+
+  // --- Grille de `classerPaiementSalaire` ---------------------------------------
+  for (const [nomStatut, statut] of [['absent', undefined], ['null', null], ['declare', 'DECLARE'], ['confirme', 'CONFIRME'], ['conteste', 'CONTESTE'],
+    ['resolu', 'RESOLU'], ['en-attente', 'EN_ATTENTE'], ['inconnu', 'INCONNU'], ['vide', ''], ['minuscules', 'confirme']]) {
+    for (const [nomConfirme, confirmeParSoignant] of [['confirme-vrai', true], ['confirme-faux', false], ['confirme-null', null]]) {
+      for (const [nomConteste, conteste] of [['conteste-vrai', true], ['conteste-faux', false], ['conteste-null', null]]) {
+        for (const [nomMontant, montantNet] of [['montant-300', 300], ['montant-null', null], ['montant-texte-zero', '0']]) {
+          const paiement = { confirme_par_soignant: confirmeParSoignant, conteste, montant_net: montantNet };
+          if (statut !== undefined) paiement.statut = statut;
+          classer(`grille/${nomStatut}/${nomConfirme}/${nomConteste}/${nomMontant}`, paiement);
+        }
+      }
+    }
+  }
+  for (const [nomSource, source] of [['bulletin', 'BULLETIN_OFFICIEL_ETABLISSEMENT'], ['estimation', 'ESTIMATION_AVANT_PAS_A_CONFIRMER'],
+    ['facture', 'FACTURE_HONORAIRES'], ['null', null], ['vide', ''], ['minuscules', 'bulletin_officiel_etablissement']]) {
+    for (const [nomRef, reference] of [['425', 425], ['texte-425-5', '425.5'], ['zero', 0], ['negatif', -1], ['null', null],
+      ['absente', undefined], ['texte', 'x'], ['vrai', true]]) {
+      const paiement = { statut: 'DECLARE', montant_net: 300, source_montant_du: source };
+      if (reference !== undefined) paiement.montant_du_reference = reference;
+      classer(`reference/${nomSource}/${nomRef}`, paiement);
+    }
+  }
+  for (const [nom, montantNet] of [['texte-espaces', ' 12.5 '], ['texte-hexadecimal', '0x10'], ['texte-exposant', '3e2'], ['texte-infini', 'Infinity'],
+    ['texte-nbsp', ' 300'], ['tableau', [300]], ['minuscule', 1e-9], ['tres-grand', 1e21]]) {
+    classer(`montant/${nom}`, { ...confirme, montant_net: montantNet });
+  }
+  classer('paiement-null', null);
+  classer('paiement-vide', {});
+
+  // --- Grille de `indexerDernierPaiementParMission` -----------------------------
+  const p = (id, missionId, dates = {}) => ({ id, ...(missionId === undefined ? {} : { mission_id: missionId }), ...dates });
+  indexer('liste-vide', []);
+  indexer('ordre-inverse', [p('recent', 'm1', { cree_le: '2026-07-03T10:00:00Z' }), p('ancien', 'm1', { cree_le: '2026-07-01T10:00:00Z' })]);
+  indexer('egalite-ordre-inverse', [p('b', 'm1', { modifie_le: '2026-07-04T10:00:00Z' }), p('a', 'm1', { modifie_le: '2026-07-04T10:00:00Z' })]);
+  indexer('modifie-le-prioritaire', [p('x', 'm1', { modifie_le: '2026-07-01T10:00:00Z', cree_le: '2026-07-09T10:00:00Z' }), p('y', 'm1', { cree_le: '2026-07-05T10:00:00Z' })]);
+  indexer('modifie-le-null-cede-a-cree-le', [p('x', 'm1', { modifie_le: null, cree_le: '2026-07-09T10:00:00Z' }), p('y', 'm1', { cree_le: '2026-07-05T10:00:00Z' })]);
+  indexer('modifie-le-vide-vaut-zero', [p('x', 'm1', { modifie_le: '', cree_le: '2026-07-09T10:00:00Z' }), p('y', 'm1', { cree_le: '2026-07-01T10:00:00Z' })]);
+  indexer('date-paiement-seule', [p('x', 'm1', { date_paiement: '2026-07-02' }), p('y', 'm1', { date_paiement: '2026-07-01' })]);
+  indexer('date-illisible-vaut-zero', [p('x', 'm1', { cree_le: 'pas une date' }), p('y', 'm1', { cree_le: '2026-07-01T10:00:00Z' })]);
+  indexer('toutes-sans-date-departage-id', [p('b', 'm1'), p('c', 'm1'), p('a', 'm1')]);
+  indexer('sans-mission-ignore', [p('a', null, { cree_le: '2026-07-09T10:00:00Z' }), p('b', '', { cree_le: '2026-07-09T10:00:00Z' }),
+    p('c', undefined, { cree_le: '2026-07-09T10:00:00Z' }), p('d', 'm1', { cree_le: '2026-07-01T10:00:00Z' })]);
+  indexer('meme-instant-offsets', [p('a', 'm1', { cree_le: '2026-07-04T12:00:00+02:00' }), p('b', 'm1', { cree_le: '2026-07-04T10:00:00Z' })]);
+  indexer('meme-instant-offsets-ordre-inverse', [p('b', 'm1', { cree_le: '2026-07-04T10:00:00Z' }), p('a', 'm1', { cree_le: '2026-07-04T12:00:00+02:00' })]);
+  indexer('microsecondes-tronquees', [p('a', 'm1', { cree_le: '2026-07-04T10:00:00.123456+00:00' }), p('b', 'm1', { cree_le: '2026-07-04T10:00:00.123Z' })]);
+  indexer('microsecondes-ordre', [p('b', 'm1', { cree_le: '2026-07-04T10:00:00.123+00:00' }), p('a', 'm1', { cree_le: '2026-07-04T10:00:00.124+00:00' })]);
+  indexer('iso-sans-offset-heure-de-paris', [p('a', 'm1', { cree_le: '2026-07-04T12:00:00' }), p('b', 'm1', { cree_le: '2026-07-04T10:00:00Z' })]);
+  indexer('iso-sans-offset-hiver', [p('b', 'm1', { cree_le: '2026-01-04T11:00:00' }), p('a', 'm1', { cree_le: '2026-01-04T10:00:00.001Z' })]);
+  indexer('date-seule-minuit-utc', [p('a', 'm1', { date_paiement: '2026-07-04' }), p('b', 'm1', { cree_le: '2026-07-04T00:00:00Z' })]);
+  indexer('plusieurs-missions', [p('a1', 'm1', { cree_le: '2026-07-01T10:00:00Z' }), p('b1', 'm2', { cree_le: '2026-07-09T10:00:00Z' }),
+    p('a2', 'm1', { cree_le: '2026-07-02T10:00:00Z' }), p('b2', 'm2', { cree_le: '2026-07-08T10:00:00Z' }), p('c1', 'm3')]);
+  indexer('uuid-departage', [
+    p('5b0e2f6a-1c3d-4e5f-8a9b-0c1d2e3f4a5b', 'm1', { cree_le: '2026-07-04T10:00:00Z' }),
+    p('5b0e2f6a-1c3d-4e5f-8a9b-0c1d2e3f4a5c', 'm1', { cree_le: '2026-07-04T10:00:00Z' }),
+    p('5b0e2f6a-1c3d-4e5f-8a9b-0c1d2e3f4a59', 'm1', { cree_le: '2026-07-04T10:00:00Z' }),
+  ]);
+  indexer('ids-tirets-et-chiffres', [p('a-1', 'm1'), p('a1', 'm1'), p('a-b', 'm1'), p('ab', 'm1'), p('a', 'm1')]);
+  indexer('date-anterieure-1970', [p('a', 'm1', { cree_le: '1969-12-31T23:59:59Z' }), p('b', 'm1')]);
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 12 : valider-profil-soignant (src/lib/valider-profil-soignant.ts)
+// ---------------------------------------------------------------------------
+/**
+ * Sortie : `{ specialites }` si le profil est accepté, `{ erreur: 'PROFIL_INVALIDE' }`
+ * pour toute levée (le web traite de la même façon l'erreur `PROFIL_INVALIDE` et la
+ * `SyntaxError` de `JSON.parse`, `ProfilSoignant.tsx` l.153-156). Domaine : valeurs JSON
+ * (sans séquence `\uD800` isolée, qu'aucune chaîne Swift ne représente).
+ */
+function vecteursValidationProfil() {
+  const c = new Collecteur('valider-profil-soignant');
+  const valider = (nom, data, userId = 'a', vitestValide) => {
+    const name = `validerProfilSoignant/${nom}`;
+    let obtenu;
+    try {
+      obtenu = { specialites: validationProfil.validerProfilSoignant(data, userId).specialites };
+    } catch {
+      obtenu = { erreur: 'PROFIL_INVALIDE' };
+    }
+    if (vitestValide !== undefined) verifieVitest('valider-profil-soignant', name, obtenu, vitestValide);
+    c.ajoute(name, { fonction: 'validerProfilSoignant', data, userId }, obtenu);
+  };
+  const base = { id: 'a', prenom: null, nom: null, email: null, profession: null };
+  const refus = { erreur: 'PROFIL_INVALIDE' };
+
+  // --- Issus de valider-profil-soignant.test.ts -------------------------------
+  valider('vitest-specialites-json-historiques', { ...base, prenom: null, specialites: '["Urgences"]' }, 'a', { specialites: ['Urgences'] });
+  valider('vitest-specialites-vides', { ...base, specialites: '' }, 'a', { specialites: [] });
+  valider('vitest-specialites-null', { ...base, specialites: null }, 'a', { specialites: [] });
+  for (const [nom, delta] of [['prenom-objet', { prenom: {} }], ['heures-texte', { heures_cumulees: '4' }],
+    ['rpps-verifie-texte', { rpps_verifie: 'true' }], ['specialites-objet', { specialites: [{}] }], ['specialites-faux', { specialites: false }],
+    ['specialites-json-null', { specialites: 'null' }], ['specialites-json-objet', { specialites: '{}' }]]) {
+    valider(`vitest-refus-${nom}`, { ...base, ...delta }, 'a', refus);
+  }
+  // `{ adresse_lat: Infinity }` (vitest) n'est pas représentable en JSON : test unitaire Swift.
+
+  // --- Forme générale ------------------------------------------------------------
+  valider('accepte-base', base);
+  valider('accepte-profil-rempli', { ...base, prenom: 'Léa', nom: 'Martin', email: 'lea@example.invalid', profession: 'IDE',
+    specialites: ['Urgences', 'Bloc'], heures_cumulees: 120.5, rpps_verifie: true, numero_secu: '1', champ_inconnu: { a: 1 } });
+  for (const [nom, data] of [['null', null], ['tableau', [base]], ['texte', 'profil'], ['nombre', 5], ['vrai', true], ['objet-vide', {}]]) valider(`refus-donnee-${nom}`, data);
+  valider('refus-id-different', base, 'b');
+  valider('refus-id-absent', { prenom: null, nom: null, email: null, profession: null });
+  valider('refus-id-nombre', { ...base, id: 5 }, '5');
+  valider('refus-id-null', { ...base, id: null });
+  valider('accepte-user-id-vide', { ...base, id: '' }, '');
+  valider('refus-cle-error-null', { ...base, error: null });
+  valider('refus-cle-error-texte', { ...base, error: 'Profil introuvable' });
+  for (const cle of ['prenom', 'nom', 'email', 'profession']) {
+    const sans = { ...base };
+    delete sans[cle];
+    valider(`refus-cle-obligatoire-absente-${cle}`, sans);
+  }
+
+  // --- Types par famille de champs -----------------------------------------------
+  const TEXTES = ['email', 'prenom', 'nom', 'profession', 'specialite_medicale', 'specialite_medicale_declaree', 'specialite_source',
+    'rpps_verifie_le', 'statut_liberal', 'type_exercice', 'telephone', 'date_naissance', 'numero_rpps', 'bio', 'avatar_url',
+    'ville_recherche', 'types_contrat_acceptes', 'type_contrat'];
+  const NOMBRES = ['heures_cumulees', 'adresse_lat', 'adresse_lng', 'rayon_deplacement_km', 'annees_experience', 'taux_horaire_minimum', 'urgence_rayon_km'];
+  const BOOLEENS = ['specialite_verifiee', 'rpps_verifie', 'attestation_cumul_activite', 'consentement_gps', 'disponible_urgence', 'tous_documents_valides'];
+  const familles = [
+    ['texte', TEXTES, [['texte', 'x'], ['texte-vide', ''], ['null', null], ['nombre', 42], ['vrai', true], ['objet', {}], ['tableau', ['x']]]],
+    ['nombre', NOMBRES, [['entier', 12], ['zero', 0], ['negatif', -1.5], ['null', null], ['texte', '4'], ['vrai', true], ['objet', {}], ['tableau', [1]]]],
+    ['booleen', BOOLEENS, [['vrai', true], ['faux', false], ['null', null], ['texte', 'true'], ['un', 1], ['objet', {}]]],
+  ];
+  for (const [famille, cles, valeurs] of familles) {
+    for (const cle of cles) for (const [nomValeur, valeur] of valeurs) valider(`${famille}/${cle}/${nomValeur}`, { ...base, [cle]: valeur });
+  }
+  // Champ hors des trois listes : jamais contrôlé.
+  valider('champ-hors-liste-objet', { ...base, numero_secu: { a: 1 }, specialite: 5 });
+
+  // --- Spécialités -----------------------------------------------------------------
+  for (const [nom, specialites] of [
+    ['absentes', undefined], ['tableau-vide', []], ['tableau-textes', ['Urgences', 'Bloc']], ['tableau-texte-vide', ['']],
+    ['tableau-nombre', [1]], ['tableau-null', [null]], ['tableau-mixte', ['a', 1]], ['tableau-imbrique', [['a']]],
+    ['nombre', 3], ['vrai', true], ['objet', { a: 'b' }],
+    ['json-tableau-vide', '[]'], ['json-espaces', ' \t\n[ "a" , "b" ]\r\n'], ['json-echappements', '["\\u00e9\\n\\"x\\"\\/\\\\", "\\ud83d\\ude00"]'],
+    ['json-nombre', '[1]'], ['json-null', '[null]'], ['json-mixte', '["a",1]'], ['json-imbrique', '[["a"]]'], ['json-objet-texte', '{"a":"b"}'],
+    ['json-texte', '"Urgences"'], ['json-nombre-seul', '5'], ['json-vrai', 'true'], ['json-null-seul', 'null'],
+    ['syntaxe-texte-nu', 'Urgences'], ['syntaxe-virgule-finale', '["a",]'], ['syntaxe-virgule-seule', '[,]'], ['syntaxe-non-ferme', '["a"'],
+    ['syntaxe-apostrophes', "['a']"], ['syntaxe-reste', '["a"]x'], ['syntaxe-deux-tableaux', '[][]'], ['syntaxe-controle', '["a\tb"]'],
+    ['syntaxe-echappement-inconnu', '["\\x"]'], ['syntaxe-unicode-court', '["\\u00e"]'], ['syntaxe-blanc', '   '],
+    ['syntaxe-espace-insecable', ' []'], ['syntaxe-virgule-debut', '[,"a"]'], ['syntaxe-deux-virgules', '["a",,"b"]'],
+    ['syntaxe-sans-virgule', '["a" "b"]'],
+  ]) {
+    const data = { ...base };
+    if (specialites !== undefined) data.specialites = specialites;
+    valider(`specialites/${nom}`, data);
+  }
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 13 : preferences-modes-exercice (src/lib/preferencesModesExercice.ts)
+// ---------------------------------------------------------------------------
+function vecteursModesExercice() {
+  const c = new Collecteur('preferences-modes-exercice');
+  const selectionne = (nom, contrats, mode, vitest) => {
+    const name = `modeExerciceSelectionne/${nom}`;
+    const obtenu = modesExercice.modeExerciceSelectionne(contrats, mode);
+    if (vitest !== undefined) verifieVitest('preferences-modes-exercice', name, obtenu, vitest);
+    c.ajoute(name, { fonction: 'modeExerciceSelectionne', contrats, mode }, obtenu);
+  };
+  const modifier = (nom, contrats, mode, choix, vitest) => {
+    const name = `modifierPreferenceModeExercice/${nom}`;
+    const obtenu = modesExercice.modifierPreferenceModeExercice(contrats, mode, choix);
+    if (vitest !== undefined) verifieVitest('preferences-modes-exercice', name, obtenu, vitest);
+    c.ajoute(name, { fonction: 'modifierPreferenceModeExercice', contrats, mode, selectionne: choix }, obtenu);
+  };
+
+  // --- Issus de preferencesModesExercice.test.ts --------------------------------
+  for (const code of ['CDD', 'VACATION', 'SALARIE']) {
+    selectionne(`vitest-${code}-salarie`, [code, 'LIBERAL'], 'SALARIE', true);
+    modifier(`vitest-${code}-conserve`, [code, 'LIBERAL'], 'SALARIE', true, [code, 'LIBERAL']);
+    modifier(`vitest-${code}-retire-liberal`, [code, 'LIBERAL'], 'LIBERAL', false, [code]);
+  }
+  modifier('vitest-ajoute-salarie', [], 'SALARIE', true, ['SALARIE']);
+  modifier('vitest-ajoute-liberal', ['SALARIE'], 'LIBERAL', true, ['SALARIE', 'LIBERAL']);
+  modifier('vitest-retire-salarie', ['SALARIE', 'LIBERAL'], 'SALARIE', false, ['LIBERAL']);
+  modifier('vitest-retire-toutes-variantes-salariees', ['CDD', 'VACATION', 'SALARIE', 'LIBERAL'], 'SALARIE', false, ['LIBERAL']);
+
+  // --- Grille listes × mode × choix ---------------------------------------------
+  const LISTES = [['vide', []], ['cdd', ['CDD']], ['vacation', ['VACATION']], ['salarie', ['SALARIE']], ['liberal', ['LIBERAL']],
+    ['tous', ['TOUS']], ['mixte', ['MIXTE']], ['minuscules', ['salarie', 'liberal']], ['texte-vide', ['']],
+    ['cdd-liberal', ['CDD', 'LIBERAL']], ['quatre-codes', ['CDD', 'VACATION', 'SALARIE', 'LIBERAL']],
+    ['doublons-liberal', ['LIBERAL', 'LIBERAL']], ['doublons-salarie', ['SALARIE', 'CDD', 'SALARIE']],
+    ['inconnu-et-liberal', ['TOUS', 'LIBERAL', 'AUTRE']], ['ordre-liberal-d-abord', ['LIBERAL', 'VACATION']]];
+  for (const [nomListe, contrats] of LISTES) {
+    for (const mode of ['SALARIE', 'LIBERAL']) {
+      selectionne(`grille/${nomListe}/${mode}`, contrats, mode);
+      for (const choix of [true, false]) modifier(`grille/${nomListe}/${mode}/${choix ? 'coche' : 'decoche'}`, contrats, mode, choix);
+    }
+  }
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 14 : professions-rpps (listes de src/lib/constantes.ts l.55 et l.61)
+// ---------------------------------------------------------------------------
+/** Vecteur de dérive (pas une règle juridique) : listes verbatim et appartenance par profession. */
+function vecteursProfessionsRpps() {
+  const c = new Collecteur('professions-rpps');
+  c.ajoute('liste/PROFESSIONS_SANS_RPPS', { fonction: 'PROFESSIONS_SANS_RPPS' }, constantes.PROFESSIONS_SANS_RPPS);
+  c.ajoute('liste/PROFESSIONS_RPPS_REQUIS', { fonction: 'PROFESSIONS_RPPS_REQUIS' }, constantes.PROFESSIONS_RPPS_REQUIS);
+  const professions = [...constantes.PROFESSIONS.map((p) => p.valeur), 'INCONNUE', '', 'as', 'medecin'];
+  for (const profession of professions) {
+    c.ajoute(`classer/${profession || 'vide'}`, { fonction: 'classer', profession }, {
+      sansRpps: constantes.PROFESSIONS_SANS_RPPS.includes(profession),
+      rppsRequis: constantes.PROFESSIONS_RPPS_REQUIS.includes(profession),
+    });
+  }
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
 // Écriture
 // ---------------------------------------------------------------------------
 const fichiers = {
@@ -1244,6 +2024,14 @@ const fichiers = {
   'planning-candidat.json': vecteursPlanningCandidat(),
   'selection-serie-candidat.json': vecteursSelectionSerie(),
   'completude-planning-mission.json': vecteursCompletudePlanning(),
+  // Lot 3, T2.
+  'push-routing.json': vecteursPushRouting(),
+  'session-count.json': await vecteursSessionCount(),
+  'mission-finance-display.json': vecteursMissionFinance(),
+  'paiement-soignant-ui.json': vecteursPaiementUi(),
+  'valider-profil-soignant.json': vecteursValidationProfil(),
+  'preferences-modes-exercice.json': vecteursModesExercice(),
+  'professions-rpps.json': vecteursProfessionsRpps(),
 };
 
 let total = 0;

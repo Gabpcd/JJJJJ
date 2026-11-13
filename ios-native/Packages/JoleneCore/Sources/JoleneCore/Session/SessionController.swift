@@ -35,6 +35,21 @@ public actor SessionController {
     /// délai) alors que le SDK peut encore détenir une session : un nouvel appel à
     /// `start()` suffit, aucun mot de passe n'est requis.
     private var restoreRetryable = false
+    /// Lot 3, T4 (revue B8) : nombre d'absences de session **confirmées** depuis la création du contrôleur —
+    /// restauration qui ne trouve aucune session (`restoreSession()` → nil) ou session effacée par le SDK
+    /// (`AuthEvent.signedOut` avec une identité active). Seule cause, pour le push, d'une fin de session subie
+    /// ou d'un lancement sans session (`SessionStore`). Un `.signedOut` transitoire (restauration, rôle ou
+    /// profil en échec : le SDK peut encore détenir la session), une connexion refusée, une déconnexion voulue
+    /// et, au merge de L1-T9, le verrou biométrique (`lockForBiometrics()`) ne l'incrémentent jamais.
+    private var absencesConfirmees = 0
+
+    /// Lot 3, T4 : état courant et nombre d'absences de session confirmées, lus ensemble par une seule lecture
+    /// de l'acteur. La cause d'un `.signedOut` se lit ici, jamais dans le texte de son message ni dans
+    /// `canRetryRestore` (que `SessionStore` publie après `state`).
+    struct Publication: Sendable, Equatable {
+        let state: SessionState
+        let absencesConfirmees: Int
+    }
 
     public init(gateways: Gateways, resolutionTimeout: TimeInterval = SessionController.defaultResolutionTimeout) {
         self.configured = gateways
@@ -47,6 +62,32 @@ public actor SessionController {
 
     /// Vrai après un `start()` dont la restauration a échoué de façon transitoire.
     public var canRetryRestore: Bool { restoreRetryable }
+
+    /// Lot 3, T4 : état courant et absences confirmées (`SessionStore.refresh`).
+    var publication: Publication { Publication(state: currentState, absencesConfirmees: absencesConfirmees) }
+
+    /// Lot 3, T4 : `start()` puis `publication`, lue sur l'acteur dès le retour de `start()`, sans suspension
+    /// entre les deux : le compteur est celui de l'état rendu (`SessionStore.start`).
+    func startPublication() async -> Publication {
+        _ = await start()
+        return publication
+    }
+
+    /// Lot 3, T4 : `handleAuthEvent(_:)` puis `publication`, sans suspension entre les deux
+    /// (`SessionStore.observeAuthEvents`).
+    func handleAuthEventPublication(_ event: AuthEvent) async -> Publication {
+        _ = await handleAuthEvent(event)
+        return publication
+    }
+
+    /// Lot 3, T8 (revue B8, m6) : epoch courant si l'identité active est `userId` (sans casse), nil sinon — lus ensemble,
+    /// sans suspension. Un écran attaché à un utilisateur (complétion du profil, `ParcoursInscription.userId`) ne
+    /// capture son epoch qu'ainsi : jamais les données d'un compte envoyées avec la session d'un autre. Lecture seule,
+    /// aucun effet sur l'état ni sur l'epoch.
+    public func epoch(identite userId: String) -> Int? {
+        guard let activeUserId, activeUserId.lowercased() == userId.lowercased() else { return nil }
+        return currentEpoch
+    }
 
     /// Ports utilisables pour un epoch donné, ou nil si cet epoch est périmé.
     /// Un appelant qui obtient nil abandonne son travail : son identité a changé.
@@ -87,6 +128,7 @@ public actor SessionController {
             if activeUserId != nil { bumpEpoch() }
             activeUserId = nil
             currentState = .signedOut(message: nil)
+            absencesConfirmees += 1 // le port confirme qu'aucune session n'existe
             return currentState
         }
         let sameIdentity = user.id == activeUserId
@@ -168,6 +210,7 @@ public actor SessionController {
             activeUserId = nil
             restoreRetryable = false
             currentState = .signedOut(message: Self.sessionExpiredMessage)
+            absencesConfirmees += 1 // session effacée par le SDK
             return currentState
         case let .session(userId):
             guard let active = activeUserId, active != userId, currentState != .loading else { return currentState }

@@ -46,12 +46,16 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.audit is SupabaseAuditGateway)
         XCTAssertTrue(gateways.flags is SupabaseFlagsGateway)
         XCTAssertTrue(gateways.compte is SupabaseAccountGateway)
+        XCTAssertTrue(gateways.push is SupabasePushGateway, "lot 3, T4 : enregistrement et désactivation du token APNs")
     }
 
     /// Aucune liste propre à ce monde : les ports encore stubs côté Supabase doivent être
     /// exactement ceux du monde démo (`DemoWorld.gateways()`, figés par la source unique
-    /// `DemoWorldTests.portsEnAttenteLot1`). Une PR qui câble un port dans un seul monde fait
-    /// diverger les deux ensembles et rougit ce test ; T12 exige `unwiredPorts.isEmpty`.
+    /// `DemoWorldTests.portsEnAttenteLot1` et `portsEnAttenteLot3`). Une PR qui câble un port dans
+    /// un seul monde fait diverger les deux ensembles et rougit ce test. T12 (clôture du lot 1)
+    /// exige qu'aucun nom du lot 1 ne reste dans `unwiredPorts`
+    /// (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`), pas `unwiredPorts.isEmpty` :
+    /// les ports du lot 3 y restent nommés tant que ce lot est ouvert.
     func testAucunPortNonCable() {
         let supabase = SupabaseGateways.make(client: TestClient.make()).unwiredPorts
         let demo = DemoWorld.gateways().unwiredPorts
@@ -61,6 +65,13 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(supabase.contains("flags"), "T1 câble les drapeaux")
         XCTAssertFalse(supabase.contains("dashboard"), "T3 câble le tableau de bord")
         XCTAssertFalse(supabase.contains("compte"), "T8 câble la suppression de compte")
+        XCTAssertFalse(supabase.contains("push"), "lot 3, T4 câble le push")
+        XCTAssertFalse(supabase.contains("notifications"), "lot 3, T5 câble le centre de notifications")
+        XCTAssertFalse(supabase.contains("profil"), "lot 3, T9 câble le profil")
+        XCTAssertFalse(supabase.contains("avatar") || supabase.contains("geocodage"), "lot 3, T10 câble l'avatar et le géocodage")
+        let gateways = SupabaseGateways.make(client: TestClient.make())
+        XCTAssertTrue(gateways.avatar is EnvoiAvatar, "reçu durable et relecture d'`EnvoiAvatar` sur Supabase Storage")
+        XCTAssertTrue(gateways.geocodage is ApiAdresseGeocodage)
     }
 
     func testClientOptionsUsePkceInjectedStorageAndJoleneHeader() {

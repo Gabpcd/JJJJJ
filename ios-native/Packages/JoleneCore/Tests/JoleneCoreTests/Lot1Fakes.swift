@@ -145,7 +145,8 @@ struct FakeJustificatifs: JustificatifStoragePort {
 }
 
 enum Lot1Fakes {
-    /// Jeu complet (second init de `Gateways`) : aucun port « non câblé ».
+    /// Jeu complet du lot 1 (second init de `Gateways`) : aucun port du lot 1 « non câblé » ; le bloc
+    /// du lot 3 reste à ses stubs (`Lot3PortsTests`).
     static func gateways(audit: AuditPort = FakeAudit(), flags: FlagsPort = FakeFlags(),
                          clock: ClockPort = FixedClock(Date(timeIntervalSince1970: 1_793_577_600))) -> Gateways {
         Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions(), clock: clock,

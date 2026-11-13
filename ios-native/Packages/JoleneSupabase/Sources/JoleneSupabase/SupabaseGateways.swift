@@ -34,7 +34,7 @@ public enum SupabaseGateways {
         clock: any ClockPort = SystemClock(),
         enrich: @escaping MissionQuery.Enricher = MissionQuery.defaultEnrich
     ) -> Gateways {
-        Gateways(
+        var gateways = Gateways(
             auth: SupabaseAuthGateway(client: client),
             role: SupabaseRoleGateway(client: client),
             missions: SupabaseMissionsGateway(client: client, clock: clock, enrich: enrich),
@@ -50,6 +50,30 @@ public enum SupabaseGateways {
             recovery: UnwiredRecoveryPort(),            // T10
             justificatifs: UnwiredJustificatifStoragePort() // T7
         )
+        câblerLot3(&gateways, client: client)
+        return gateways
+    }
+
+    /// Lot 3 (blueprint `LOT3_PLAN.md` §2.2) : seul point d'assignation des ports du lot 3 du monde
+    /// Supabase, après l'init du lot 1 (aucun troisième init). Chaque tranche y remplace son stub par
+    /// sa gateway dans la même PR qu'au monde démo (`DemoWorld.câblerLot3`) ;
+    /// `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes.
+    static func câblerLot3(_ gateways: inout Gateways, client: SupabaseClient) {
+        gateways.push = SupabasePushGateway(client: client)                // T4
+        gateways.notifications = SupabaseNotificationsGateway(client: client, clock: gateways.clock) // T5
+        gateways.preferences = SupabasePreferencesGateway(client: client)  // T6
+        gateways.inscription = SupabaseInscriptionGateway(client: client) // T7 (complétion refusée jusqu'à T8)
+        gateways.profil = SupabaseProfilGateway(client: client)            // T9
+        // T10 : reçu Keychain provisoire (`KeychainRecusAvatar`) jusqu'à la fusion avec le journal du lot 2.
+        gateways.avatar = EnvoiAvatar(stockage: SupabaseAvatarStorage(client: client), profil: SupabaseProfilGateway(client: client),
+                                      recus: KeychainRecusAvatar(), horloge: gateways.clock)
+        gateways.geocodage = ApiAdresseGeocodage()                         // T10
+        gateways.motDePasse = SupabaseMotDePasseGateway(client: client)    // T11
+        gateways.exportRGPD = SupabaseExportGateway(client: client)        // T11
+        gateways.revenus = SupabaseRevenusGateway(client: client)          // T12
+        gateways.paiements = UnwiredPaiementsDeclaresPort()                // T13
+        gateways.iban = UnwiredIbanPort()                                  // T14b
+        gateways.stripeConnect = UnwiredStripeConnectPort()                // T14a
     }
 
     /// Construction du client : options vérifiées dans `SupabaseClientOptions` de 2.55.5

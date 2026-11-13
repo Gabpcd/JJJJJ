@@ -1,0 +1,75 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "paiements": [
+    {
+      "etat": "RETARDE",
+      "a_litige": false,
+      "mission_id": "demo-escrow-001",
+      "mission_date": "2026-10-28T07:00:00+00:00",
+      "date_affichee": "2026-11-04T08:00:00+00:00",
+      "honoraires_cents": 15000,
+      "mission_intitule": "Démonstration · Paiement rapide 1",
+      "etablissement_nom": "Cabinet fictif du Parc"
+    },
+    {
+      "etat": "LITIGE",
+      "a_litige": true,
+      "mission_id": "demo-assignee-002",
+      "mission_date": "2026-11-09T07:00:00+00:00",
+      "date_affichee": null,
+      "honoraires_cents": 24000,
+      "mission_intitule": "Démonstration · Mission assignée 2",
+      "etablissement_nom": "Établissement fictif des Lilas"
+    },
+    {
+      "etat": "ATTENTE_VALIDATION",
+      "a_litige": false,
+      "mission_id": "demo-escrow-003",
+      "mission_date": "2026-11-01T07:00:00+00:00",
+      "date_affichee": null,
+      "honoraires_cents": 18000,
+      "mission_intitule": "Démonstration · Paiement rapide 3",
+      "etablissement_nom": "Établissement fictif République"
+    },
+    {
+      "etat": "VERSEMENT_EN_COURS",
+      "a_litige": false,
+      "mission_id": "demo-escrow-004",
+      "mission_date": "2026-10-30T07:00:00+00:00",
+      "date_affichee": "2026-11-03T09:00:00+00:00",
+      "honoraires_cents": 21000,
+      "mission_intitule": "Démonstration · Paiement rapide 4",
+      "etablissement_nom": "Cabinet fictif du Parc"
+    },
+    {
+      "etat": "RESERVE",
+      "a_litige": false,
+      "mission_id": "demo-escrow-005",
+      "mission_date": "2026-11-07T07:00:00+00:00",
+      "date_affichee": null,
+      "honoraires_cents": 24000,
+      "mission_intitule": "Démonstration · Paiement rapide 5",
+      "etablissement_nom": "Établissement fictif des Lilas"
+    },
+    {
+      "etat": "VERSE",
+      "a_litige": false,
+      "mission_id": "demo-escrow-006",
+      "mission_date": "2026-10-23T07:00:00+00:00",
+      "date_affichee": "2026-10-30T10:00:00+00:00",
+      "honoraires_cents": 19500,
+      "mission_intitule": "Démonstration · Paiement rapide 6",
+      "etablissement_nom": "Cabinet fictif du Parc"
+    },
+    {
+      "etat": "ANNULE",
+      "a_litige": false,
+      "mission_id": "demo-escrow-007",
+      "mission_date": "2026-10-18T07:00:00+00:00",
+      "date_affichee": null,
+      "honoraires_cents": 12000,
+      "mission_intitule": "Démonstration · Paiement rapide 7",
+      "etablissement_nom": "Établissement fictif République"
+    }
+  ]
+}

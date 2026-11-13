@@ -128,6 +128,14 @@ public enum UnwiredPorts {
     public static func erreur(port: String, tranche: String) -> JoleneError {
         JoleneError(.contract, "Port « \(port) » non câblé : livré par la tranche \(tranche) du lot 1 (docs/mobile-swift/LOT1_PLAN.md §3).")
     }
+
+    /// Surcharge générique des lots suivants (blueprints lot 2 §2.2 et lot 3 §2.2) : cite la tranche,
+    /// le lot et son plan `docs/mobile-swift/LOT<lot>_PLAN.md`. Ajoutée une seule fois par la
+    /// première T1 intégrée (lot 2 ou lot 3), réutilisée par l'autre ; pour `lot: 1`, même texte
+    /// que `erreur(port:tranche:)`.
+    public static func erreur(port: String, tranche: String, lot: Int) -> JoleneError {
+        JoleneError(.contract, "Port « \(port) » non câblé : livré par la tranche \(tranche) du lot \(lot) (docs/mobile-swift/LOT\(lot)_PLAN.md §3).")
+    }
 }
 
 public struct UnwiredDashboardPort: DashboardPort, UnwiredPort {

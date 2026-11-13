@@ -12,26 +12,33 @@ import JoleneDesign
 /// missions pour vous, missions proposées, gains du mois, notifications non lues.
 /// Exclus (HARD STOP n°4) : `BandeauAlerte48h` et l'encart « cumul d'activité ».
 ///
-/// Renvois web (pointage, notifications) : routes `.safari` résolues par `LinkRouter`
-/// (`AccueilPresentation.renvoiWeb`), jamais une URL écrite en dur, présentées seulement par le
-/// présentateur injecté par T10 (`PresentateurRenvoiWeb`, `SFSafariViewController`), jamais par
-/// `openURL` (chemins AASA : retour silencieux dans l'app). Sans présentateur, le compteur reste
-/// affiché et aucun bouton n'est rendu (gap verrouillé, `DemoAccueilTests`).
+/// Renvoi web du pointage : route `.safari` résolue par `LinkRouter`
+/// (`AccueilPresentation.renvoiWeb`), jamais une URL écrite en dur, présentée seulement par le
+/// présentateur `.safari` du coordinateur des liens (`PresentateurRenvoiWeb`, `SFSafariViewController`,
+/// injecté à la racine par L3-T3b), jamais par `openURL` (chemins AASA : retour dans l'app). Sans
+/// présentateur (aperçu isolé), le compteur reste affiché et aucun bouton n'est rendu.
+///
+/// Lot 3, T5 (point de fusion de T3a, `DECISIONS_LOT3.md`) : le centre de notifications est natif ; le compteur
+/// des non lues ouvre `NotificationsScreen` dans la pile de l'Accueil (`CentreNotificationsRoute`, enregistrée par
+/// `MainTabView`) au lieu du renvoi web « Voir sur jolene.app ». Une notification lue dans le centre avance le jeton
+/// `peremption` : le tableau (et son compteur) est relu à l'apparition suivante, même avant 60 s (revue L3-T5, m1).
 struct AccueilScreen: View {
     static let renvoiPresences = AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences)
-    static let renvoiNotifications = AccueilPresentation.renvoiWeb(AccueilPresentation.lienNotifications)
 
     @StateObject private var model: AccueilModel
     @ObservedObject private var session: SessionStore
     private let snapshot: SessionSnapshot
+    private let peremption: Int
     private let ouvrirOnglet: (MainTabView.Tab) -> Void
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
     @Environment(\.ajoutCalendrierMission) private var calendrier
     @State private var issueCalendrier: AjoutCalendrierIssue?
 
-    init(session: SessionStore, snapshot: SessionSnapshot, ouvrirOnglet: @escaping (MainTabView.Tab) -> Void) {
+    init(session: SessionStore, snapshot: SessionSnapshot, peremption: Int = 0,
+         ouvrirOnglet: @escaping (MainTabView.Tab) -> Void) {
         self.session = session
         self.snapshot = snapshot
+        self.peremption = peremption
         self.ouvrirOnglet = ouvrirOnglet
         _model = StateObject(wrappedValue: AccueilModel(controller: session.controller, snapshot: snapshot))
     }
@@ -67,8 +74,9 @@ struct AccueilScreen: View {
         .navigationDestination(for: MissionRoute.self) { route in
             MissionDetailScreen(route: route, initial: model.mission(id: route.id), session: session, snapshot: snapshot)
         }
-        // Premier affichage, relance après une tâche annulée, relecture au-delà de 60 s.
-        .task { await model.loadIfStale() }
+        // Premier affichage, relance après une tâche annulée, relecture au-delà de 60 s ou après une lecture dans
+        // le centre de notifications (jeton `peremption`, relu dès qu'il avance).
+        .task(id: peremption) { await model.loadIfStale(peremption: peremption) }
     }
 
     // MARK: - États
@@ -279,13 +287,22 @@ struct AccueilScreen: View {
                 .foregroundStyle(JoleneColor.midnight)
                 .accessibilityIdentifier("accueil-notifications")
             Spacer(minLength: 0)
-            if let presentateurRenvoiWeb, let route = Self.renvoiNotifications {
-                Button("Voir sur jolene.app") { presentateurRenvoiWeb.presenter(route) }
-                    .font(JoleneFont.callout.weight(.semibold))
-                    .foregroundStyle(JoleneColor.rose800)
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("accueil-notifications-action")
+            // Lot 3, T5 : centre natif. Libellé « Voir » (`PageNotifications.tsx` l.165, verbatim).
+            NavigationLink(value: CentreNotificationsRoute()) {
+                HStack(spacing: JoleneSpacing.xs) {
+                    Text(CentreNotificationsTextes.voir)
+                    Image(systemName: "chevron.right").accessibilityHidden(true)
+                }
+                .font(JoleneFont.callout.weight(.semibold))
+                .foregroundStyle(JoleneColor.rose800)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(CentreNotificationsTextes.voir)
+            // Indication sans source web, épinglée, tranchée par délégation (L3-TJ, TJ5 ; revue L3-T5, m11).
+            .accessibilityHint(CentreNotificationsTextes.indicationOuvrirCentre)
+            .accessibilityIdentifier("accueil-notifications-action")
         }
         .padding(.horizontal, JoleneSpacing.lg)
         .padding(.vertical, JoleneSpacing.sm)

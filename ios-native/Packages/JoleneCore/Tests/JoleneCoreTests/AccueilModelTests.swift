@@ -232,6 +232,42 @@ final class AccueilModelTests: XCTestCase {
         XCTAssertEqual(AccueilModel.delaiRelecture, 60)
     }
 
+    /// Lot 3, T5 (revue L3-T5, m1) : une notification lue dans le centre périme le compteur des non lues ; le
+    /// jeton de péremption avancé impose une relecture à l'apparition suivante, même avant 60 s, une seule fois.
+    func testJetonDePeremptionImposeUneRelectureAvantSoixanteSecondes() async throws {
+        let port = ScriptedDashboard([.snapshot(tableau("A")), .snapshot(tableau("B")), .snapshot(tableau("C"))])
+        let (controller, snapshot) = try await pret(port)
+        let model = AccueilModel(controller: controller, snapshot: snapshot)
+        await model.loadIfStale(peremption: 0)
+        XCTAssertEqual(port.calls, 1, "premier affichage : chargement")
+        await model.loadIfStale(peremption: 0)
+        XCTAssertEqual(port.calls, 1, "même jeton, moins de 60 s : données fraîches")
+        await model.loadIfStale(peremption: 1)
+        XCTAssertEqual(port.calls, 2, "jeton avancé : relecture immédiate")
+        XCTAssertEqual(model.tableau?.profil?.prenom, "B")
+        await model.loadIfStale(peremption: 1)
+        XCTAssertEqual(port.calls, 2, "jeton déjà vu : pas de seconde relecture")
+    }
+
+    /// Une relecture de péremption annulée (onglet quitté) n'est pas perdue : l'apparition suivante relit.
+    func testRelectureDePeremptionAnnuleeRepriseALApparitionSuivante() async throws {
+        let entree = Gate(), sortie = Gate()
+        let port = ScriptedDashboard([.snapshot(tableau("A")), .retenue(.success(tableau("B")), entree: entree, sortie: sortie),
+                                      .snapshot(tableau("C"))])
+        let (controller, snapshot) = try await pret(port)
+        let model = AccueilModel(controller: controller, snapshot: snapshot)
+        await model.loadIfStale(peremption: 0)
+        let tache = Task { await model.loadIfStale(peremption: 1) }
+        await entree.wait()
+        tache.cancel()
+        await tache.value
+        await sortie.open()
+        XCTAssertEqual(model.tableau?.profil?.prenom, "A", "relecture annulée : rien n'est publié")
+        await model.loadIfStale(peremption: 1)
+        XCTAssertEqual(port.calls, 3, "toujours périmé : relu à l'apparition suivante")
+        XCTAssertEqual(model.tableau?.profil?.prenom, "C")
+    }
+
     func testEchecNeRelancePasAutomatiquementALApparition() async throws {
         let port = ScriptedDashboard([.failure(JoleneError(.network, "Connexion impossible.")), .snapshot(tableau("A"))])
         let (controller, snapshot) = try await pret(port)

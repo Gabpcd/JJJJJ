@@ -65,6 +65,23 @@ final class LinksAASATests: XCTestCase {
         XCTAssertNil(AASAPatterns.firstMatch(path: "/soignant"))
     }
 
+    /// Lot 3, T3 : les routes soignant ajoutées sont couvertes par l'AASA existant (`/soignant/*` ou
+    /// `/inscription/*`, aucun motif ajouté) ; un Universal Link sur ces chemins ouvre donc l'app.
+    func testRoutesLot3CouvertesParLesMotifsExistants() {
+        let soignant = ["/soignant/notifications", "/soignant/parametres/notifications", "/soignant/stripe-connect",
+                        "/soignant/mes-gains", "/soignant/mes-factures-honoraires", "/soignant/mes-avances",
+                        "/soignant/bulletins-paie", "/soignant/profil", "/soignant/reputation", "/soignant/mon-compte",
+                        "/soignant/parametres", "/soignant/parametres-complet", "/soignant/score", "/soignant/fiabilite",
+                        "/soignant/fiabilite-legacy"]
+        for chemin in soignant {
+            XCTAssertEqual(AASAPatterns.firstMatch(path: chemin)?.pattern, "/soignant/*", chemin)
+        }
+        for chemin in ["/inscription/soignant", "/inscription/reprendre", "/inscription/completer"] {
+            XCTAssertEqual(AASAPatterns.firstMatch(path: chemin)?.pattern, "/inscription/*", chemin)
+        }
+        XCTAssertEqual(AASAPatterns.paths.count, 15, "aucun motif ajouté au lot 3")
+    }
+
     /// Garde de dérive : la constante Swift doit être identique aux `paths` du fichier versionné,
     /// pour chacun des appID déclarés. Ignoré si le dépôt web n'est pas présent (package isolé).
     func testTableIdentiqueAuFichierDuDepot() throws {

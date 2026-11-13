@@ -1,0 +1,13 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "exercice": {
+    "type_exercice": "MIXTE",
+    "est_compte_test": false
+  },
+  "totaux": {
+    "mois_en_cours": 195,
+    "total": 1425.6,
+    "en_attente": 780,
+    "stripe_connect_actif": true
+  }
+}
