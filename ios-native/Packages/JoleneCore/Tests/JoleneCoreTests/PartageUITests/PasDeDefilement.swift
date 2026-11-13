@@ -47,15 +47,21 @@ struct PasDeDefilement: Sendable, Equatable {
     static let margeLaterale: CGFloat = 0.1
     /// Débord vertical de la zone tactile d'un curseur au-delà de son cadre (31 pt pour 44 pt tactiles).
     static let debordTactile: CGFloat = 8
+    /// Distance entre le bord du viewport et une gouttière de glissement, hors de la piste d'un curseur pleine largeur
+    /// (marge de page de 16 pt au moins, piste à 32 pt du bord sur iPhone).
+    static let margeGouttiere: CGFloat = 12
 
     /// Abscisse du point de départ d'un glissement vertical à `departY` : le milieu du viewport, sauf si
     /// ce point tombe sur un obstacle (curseur, dont la zone tactile déborde de `debordTactile`), qui
     /// capterait le geste et changerait sa valeur sans faire défiler la page (run 42593592247,
     /// ipad-landscape : `profil-rayon` passé à 50 km, vingt glissements sans effet) ; alors le couloir
-    /// gauche (`margeLaterale`), puis le couloir droit ; le milieu si aucun n'est libre.
+    /// gauche (`margeLaterale`), puis le couloir droit ; puis, quand un curseur pleine largeur couvre les trois
+    /// (iPhone, run 43296363876), la gouttière droite (`margeGouttiere`), puis la gauche (le bord gauche porte le geste
+    /// système de retour) ; le milieu si aucun n'est libre.
     static func abscisseDeGlissement(viewport: CGRect, departY: CGFloat, obstacles: [CGRect]) -> CGFloat {
         let couloirs = [viewport.midX, viewport.minX + viewport.width * margeLaterale,
-                        viewport.maxX - viewport.width * margeLaterale]
+                        viewport.maxX - viewport.width * margeLaterale,
+                        viewport.maxX - margeGouttiere, viewport.minX + margeGouttiere]
         let zones = obstacles.filter { !$0.isEmpty }.map { $0.insetBy(dx: 0, dy: -debordTactile) }
         return couloirs.first { x in !zones.contains { $0.contains(CGPoint(x: x, y: departY)) } } ?? viewport.midX
     }
