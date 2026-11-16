@@ -2707,8 +2707,9 @@ limitée à ce delta.
   conforme : aucun masquage d'échec, script borné et sans secret, plafond 357/360 min, bouton « OK » sans effet métier
   ni texte juridique, flux de signature OTP inchangé.
 - **M1 (corrigé)** : l'hypothèse « SwiftPM 6.2 épingle KSCrash » était fausse. L'artefact `package-resolved-*-6a145748…`
-  du run 43959073553 (Xcode 26.4.1, 17E202) montre l'inverse : Xcode 26.4.1 élague `kscrash`, `opentelemetry-swift-core`
-  et `swift-atomics` (dépendances gardées par un trait désactivé, épinglées par Xcode 16.4) et recalcule `originHash`
+  du run 43959073553 (Xcode 26.4.1, 17E202) montre l'inverse : Xcode 26.4.1 élague `opentelemetry-swift-core` (trait
+  `OpenTelemetry` de supabase-swift, désactivé) et `swift-atomics` (sa dépendance), qu'Xcode 16.4 épingle ; aucun des
+  deux n'épingle `kscrash` (pin ajouté à la main au 2ᵉ tour) et recalcule `originHash`
   (`97a49726…`). Le `Package.resolved` versionné est désormais copié tel quel de l'artefact ; les gardes
   `ios-swift-ci-eclats.node.mjs` et `ios-native-testflight.node.mjs` exigent l'absence des trois pins et cet
   `originHash` ; `SENTRY_IOS.md` §1 est corrigé.
@@ -2716,3 +2717,18 @@ limitée à ce delta.
   `code: 12AB34` → partiellement masqué). Impact faible (codes OTP et de pointage à six chiffres). À traiter dans une
   prochaine tranche : masquer le jeton nu entier après `:` sous un nom sensible.
 - Reste à prouver : CI UI verte sur les trois formats avec `skipped = 0`, puis revue B8 n°4 limitée à ce delta.
+
+### Revue fraîche B8 de la vague 5, 4ᵉ tour (delta 6a145748..950214f6) : A_CORRIGER, textes corrigés (17/11/2026)
+
+- Verdict : A_CORRIGER, 0 bloquant, 1 majeur, 1 mineur, tous de texte (issuecomment-6930436937). `Package.resolved`
+  identique octet pour octet à l'artefact CI (3 formats identiques), gardes justes (elles rougissent sur les deux
+  anciennes versions).
+- **M1-bis (corrigé)** : l'ancienne hypothèse « SwiftPM 6.2 épingle KSCrash » subsistait dans `SENTRY_IOS.md` (§ version,
+  titre KSCrash, paragraphe « Package.resolved de référence », vérifications), le commentaire de l'étape de
+  `ios-swift-ci.yml` et celui du test TestFlight. Réécrits selon le constat de l'artefact.
+- **m2 (corrigé)** : Xcode 16.4 n'a jamais épinglé KSCrash (10 pins en `149035c9`, sans `kscrash`) : le pin avait été
+  ajouté à la main. L'écart réel porte sur `opentelemetry-swift-core` (trait `OpenTelemetry` de supabase-swift) et
+  `swift-atomics` (sa dépendance). Textes alignés (`SENTRY_IOS.md`, commentaire et message du test des éclats, cette
+  revue).
+- Aucun changement du `Package.resolved` ni des assertions : delta de texte uniquement. Preuve CI iOS portée par le run
+  du commit précédent (`950214f6`), code identique.

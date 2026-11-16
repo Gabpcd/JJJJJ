@@ -15,14 +15,14 @@ appel réseau vers Sentry** n'a été fait.
 |---|---|
 | Publiée depuis au moins deux semaines | 9.32.0, publiée le 29/10/2026, soit 18 jours avant l'ouverture de la tranche (16/11/2026). Les versions suivantes sont trop récentes : 9.33.0 (04/11) et 9.34.0 (12/11). Révision épinglée dans `Package.resolved` : `4e1e4ba9ce329f91ad6bfb63bab6da576a3f348c`, qui est bien le tag `9.32.0`. |
 | Xcode 16.4 en local | Xcode 16.4 (Swift 6.1.2) lit `Package@swift-6.1.swift` (*tools* 6.1). Le binaire `Sentry.xcframework` est compilé avec **Swift 6.1.2** : en-tête `swift-compiler-version` du `.swiftinterface`. Résolution SPM, `build-for-testing` et XCUITest démo ont été vérifiés en local (`REVUES_LOT3.md`, section L3-T15). |
-| Xcode 26.4.1 en CI | Xcode 26.4.1 lit `Package@swift-6.2.swift`, qui expose le même produit `Sentry` sur le même binaire. Un compilateur plus récent lit les interfaces produites par Swift 6.1.2. Le build CI n'a pas été lancé localement : la CI de la PR le prouvera. Sa résolution épingle en plus KSCrash (ci-dessous). |
+| Xcode 26.4.1 en CI | Xcode 26.4.1 lit `Package@swift-6.2.swift`, qui expose le même produit `Sentry` sur le même binaire. Un compilateur plus récent lit les interfaces produites par Swift 6.1.2. Le build CI n'a pas été lancé localement : la CI de la PR le prouvera. Sa résolution diffère de celle d'Xcode 16.4 (« KSCrash » et « Package.resolved » ci-dessous). |
 | Cible iOS | Le paquet exige iOS 15 au minimum ; l'app est en iOS 16. |
 | Correctifs utiles | 9.31.0 : état de l'application résolu correctement quand le SDK démarre depuis `App.init` en SwiftUI. Avant ce correctif, le suivi des app hangs pouvait signaler un blocage fatal avec un fil principal inactif (#8988), or c'est précisément notre point de démarrage. 9.32.0 : plus d'interblocage dans le traitement des `NSException` (#9463). |
 
 **Produit choisi : `Sentry`.** C'est le `Sentry.xcframework` **statique** plus `SentryCppHelper`, importé par la seule
 cible app. `Sentry-Dynamic` n'est pas utilisé : il ajouterait un framework dynamique au lancement, sans gain pour nous.
 
-**KSCrash : déclaré par Sentry, épinglé par SwiftPM 6.2, jamais lié à l'app** (revue B8 de la vague 5, M1). Constat
+**KSCrash : déclaré par Sentry, jamais épinglé ni lié à l'app** (revue B8 de la vague 5, M1). Constat
 dans les manifestes de la révision `4e1e4ba9` (tag `9.32.0`) :
 
 - `Package@swift-6.2.swift` et `Package@swift-6.1.swift` déclarent tous deux, sans condition,
@@ -32,29 +32,28 @@ dans les manifestes de la révision `4e1e4ba9` (tag `9.32.0`) :
   `_SentryPrivate` et `SentryObjCInternal`, sous la condition `.when(traits: ["V10"])`. Le trait `V10` est réservé au
   développement de Sentry. Le paquet ne déclare aucun trait par défaut, et `project.yml` n'en active aucun.
 - Dans le manifeste 6.1, aucune cible n'en dépend hors `SDK_V10=1` (`kscrashSwiftDependencies` vide).
-- **Constat CI (run 43959073553, Xcode 26.4.1 build 17E202, artefact `package-resolved-*-6a145748…`) : SwiftPM 6.2
-  élague les dépendances gardées par un trait désactivé, il ne les épingle pas.** L'hypothèse inverse du premier
-  correctif (ajouter un pin `kscrash`) était fausse : Xcode 26.4.1 retire `kscrash`, mais aussi
-  `opentelemetry-swift-core` et `swift-atomics`, que Xcode 16.4 (SwiftPM 6.1, en local) épinglait, et recalcule
-  `originHash` (`97a49726…`). Le `Package.resolved` versionné est **copié tel quel de l'artefact de la CI** : 8 pins, ni
-  `kscrash`, ni `opentelemetry-swift-core`, ni `swift-atomics`. C'est celui que lit l'archive TestFlight avec
-  `-onlyUsePackageVersionsFromResolvedFile`. Ne jamais committer le fichier réécrit par Xcode 16.4 en local (il remet
-  ces trois pins) : en cas de doute, l'étape « Package.resolved de l'app inchangé » publie le bon fichier en artefact.
+- **Constat CI (run 43959073553, Xcode 26.4.1 build 17E202, artefact `package-resolved-*-6a145748…`).** Ni Xcode 16.4
+  ni Xcode 26.4.1 n'épinglent KSCrash : le pin `kscrash` du premier correctif avait été ajouté à la main, sur une
+  hypothèse fausse. L'écart réel entre les deux toolchains porte sur deux autres paquets. Xcode 16.4 (SwiftPM 6.1, en
+  local) épingle `opentelemetry-swift-core`, que supabase-swift déclare sous son trait `OpenTelemetry` (désactivé par
+  défaut), et `swift-atomics`, dépendance d'`opentelemetry-swift-core`. Xcode 26.4.1 (SwiftPM 6.2) les élague et
+  recalcule `originHash` (`97a49726…`). Le `Package.resolved` versionné est **copié tel quel de l'artefact de la CI** :
+  8 pins. C'est celui que lit l'archive TestFlight avec `-onlyUsePackageVersionsFromResolvedFile`. Ne jamais committer
+  le fichier réécrit par Xcode 16.4 en local (il remet ces deux pins et l'ancien `originHash`) ni un pin ajouté à la
+  main : en cas de doute, l'étape « Package.resolved de l'app inchangé » publie le bon fichier en artefact.
 - **Jamais lié à l'app.** Le produit `Sentry` que la cible app importe est le binaire `Sentry.xcframework` plus
   `SentryCppHelper`, qui n'a aucune dépendance. Les cibles qui dépendent de KSCrash relèvent du produit compilé depuis
   les sources, `SentrySPM`, que l'app n'importe pas. Activer le trait `V10` ne lierait donc pas KSCrash à notre produit.
   Une seule chose le lierait : la variable `SDK_V10=1` à l'évaluation du manifeste, qui remplace le produit binaire
   `Sentry` par une compilation depuis les sources liée à KSCrash sans condition. Aucun workflow ni xcconfig ne la pose.
-  Sous Xcode 26.4.1, SwiftPM n'épingle même pas KSCrash (élagué, voir ci-dessus) ; sous Xcode 16.4, il le clone sans
-  compiler ni lier aucune de ses cibles.
+  Aucune des deux toolchains ne l'épingle (constat ci-dessus).
 
 **Le `Package.resolved` de référence est donc celui qu'écrit Xcode 26.4.1.** C'est la version que vérifie
 `ios-swift-ci.yml` et que lit l'archive TestFlight (`-onlyUsePackageVersionsFromResolvedFile`, même toolchain : garde
-`ios-native-testflight.node.mjs`). Sans le pin `kscrash`, cette option ferait échouer la résolution de l'archive. La
-vérification locale (Xcode 16.4) ne vaut que pour les paquets qu'elle résout : elle ne prouve rien sur ce pin. Personne
-n'a vérifié si une résolution sous Xcode 16.4 retire le pin ou modifie `originHash` : ne jamais committer un
-`Package.resolved` réécrit par Xcode 16.4. `originHash` n'a pas été modifié en ajoutant le pin : il dépend des
-dépendances racines, inchangées. Si la CI le réécrit quand même, l'étape le dit (diagnostic ci-dessous).
+`ios-native-testflight.node.mjs`). La vérification locale
+(Xcode 16.4) ne la reproduit pas : une résolution locale remet `opentelemetry-swift-core`, `swift-atomics` et l'ancien
+`originHash`. Les gardes node refusent ce fichier. Si la CI le réécrit à nouveau (montée de version d'un paquet ou de
+la toolchain), l'étape le dit et publie le bon fichier (diagnostic ci-dessous).
 
 **Coût CI à connaître.** À la résolution, SPM télécharge les **sept** xcframeworks binaires que déclare le paquet,
 utilisés ou non, soit environ 3,3 Go au total, dont 372 Mo pour le produit retenu. Le cache `spm-xcodebuild-…`
@@ -297,8 +296,9 @@ trois types de données comme liés à l'utilisateur, ce qui est exact puisque l
   - `tests/node/ios-native-testflight.node.mjs` : le secret est facultatif, lu par l'archive seule, jamais exigé ni
     affiché ; le DSN n'est pas versionné, et ce document ne propose jamais de l'écrire dans un fichier (m5) ; l'archive lit
     le `Package.resolved` sous la même toolchain et avec la même clé de cache qu'`ios-swift-ci.yml`, sans le réécrire,
-    pin `kscrash` compris (revue B8 de la vague 5, M1) ;
+    dans la version écrite par Xcode 26.4.1 (revue B8 de la vague 5, M1) ;
   - `tests/node/ios-swift-ci-eclats.node.mjs` : le `Package.resolved` de l'app est vérifié juste après la résolution
     SPM, avant les éclats (m4). Revue B8 de la vague 5 : une dérive fait toujours échouer l'étape, après copie du fichier
-    résolu ; l'artefact `package-resolved-<format>-<sha>` est publié juste après, sur échec seulement ; le pin `kscrash`
-    est exigé (M1). Le socle porte la même condition que les autres éclats (m1).
+    résolu ; l'artefact `package-resolved-<format>-<sha>` est publié juste après, sur échec seulement ; le fichier
+    exigé est celui d'Xcode 26.4.1 : 8 pins, sans `kscrash`, `opentelemetry-swift-core` ni `swift-atomics`, avec
+    l'`originHash` de la CI (M1). Le socle porte la même condition que les autres éclats (m1).

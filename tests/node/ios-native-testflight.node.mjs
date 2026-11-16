@@ -436,8 +436,8 @@ test('SENTRY_IOS.md : DSN local en ligne de commande seulement, jamais dans un x
 });
 
 test('l\'archive lit le Package.resolved vérifié par ios-swift-ci.yml, sous la même toolchain, sans jamais le réécrire', () => {
-  // Revue B8 de la vague 5, M1 : le Package.resolved versionné est celui qu'écrit Xcode 26.4.1 (SwiftPM 6.2), qui épingle
-  // KSCrash (déclaré par sentry-cocoa 9.32.0) là où Xcode 16.4 ne l'épingle pas (SENTRY_IOS.md §1). ios-swift-ci.yml
+  // Revue B8 de la vague 5, M1 : le Package.resolved versionné est celui qu'écrit Xcode 26.4.1 (SwiftPM 6.2), qui élague
+  // opentelemetry-swift-core et swift-atomics là où Xcode 16.4 les épingle (SENTRY_IOS.md §1). ios-swift-ci.yml
   // vérifie ce fichier ; l'archive le lit avec -onlyUsePackageVersionsFromResolvedFile. Une autre toolchain ici livrerait
   // un graphe que la CI n'a pas vérifié, ou ferait échouer la résolution sur un pin manquant.
   const ci = readFileSync(join(root, '.github/workflows/ios-swift-ci.yml'), 'utf8');

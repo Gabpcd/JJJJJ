@@ -371,9 +371,9 @@ jobs:
         # version exacte, dépendances transitives épinglées). Un Package.resolved réécrit voudrait dire que la CI a testé
         # un graphe que le dépôt ne décrit pas ; l'étape échoue toujours dans ce cas (jamais de continue-on-error).
         # Revue B8 de la vague 5, M1 : la référence est le fichier qu'écrit Xcode 26.4.1 (SwiftPM 6.2), celui du TestFlight
-        # (`-onlyUsePackageVersionsFromResolvedFile`, ios-native-testflight.yml). Il épingle KSCrash, que sentry-cocoa
-        # 9.32.0 déclare sans condition et que SwiftPM 6.2 résout même sous le trait V10 désactivé ; Xcode 16.4 ne l'épingle
-        # pas (SENTRY_IOS.md §1). Diagnostic sans relancer ni attendre la fin du job : le diff est imprimé ici, le fichier
+        # (`-onlyUsePackageVersionsFromResolvedFile`, ios-native-testflight.yml). SwiftPM 6.2 y élague
+        # opentelemetry-swift-core et swift-atomics (trait OpenTelemetry de supabase-swift, désactivé), qu'Xcode 16.4
+        # épingle ; aucun des deux n'épingle KSCrash (SENTRY_IOS.md §1). Diagnostic sans relancer ni attendre la fin du job : le diff est imprimé ici, le fichier
         # résolu et ce diff sont copiés dans $JOLENE_UI_OUTPUT/package-resolved/, puis publiés aussitôt par l'étape
         # suivante dans l'artefact « package-resolved-<format>-<sha> », lisible pendant que les éclats tournent.
         # **Correctif : committer tel quel le Package.resolved de cet artefact** (ou corriger project.yml si une version a
