@@ -11,7 +11,8 @@ import XCTest
 ///   (l.132) et créneaux (l.137) ;
 /// - confirmer → relecture `CONFIRME` ; `{error:'Paiement déjà confirmé'}` verbatim sans relecture ;
 /// - contester : motif envoyé tel que saisi ; `{success, litige_id}` sans relecture `CONTESTE` → erreur, jamais un
-///   succès ; `LITIGE_DEJA_OUVERT` verbatim ; 23505 non restituée → message générique, jamais un succès ;
+///   succès ; `{success:true}` sans `litige_id` non vide → erreur de contrat, même avec une relecture `CONTESTE` (revue
+///   B8 n°1, m1) ; `LITIGE_DEJA_OUVERT` verbatim ; 23505 non restituée → message générique, jamais un succès ;
 /// - un seul POST par mutation, jamais renvoyé.
 final class SupabasePaiementsGatewayTests: XCTestCase {
     private let registry = StubRegistry.shared
@@ -217,6 +218,28 @@ final class SupabasePaiementsGatewayTests: XCTestCase {
                 XCTAssertEqual(erreur.message, "Erreur lors du traitement", relue)
             }
             XCTAssertEqual(registry.requests(to: contesterChemin).count, 1, "jamais renvoyée")
+        }
+    }
+
+    /// Revue B8 n°1 de T13, m1 : la preuve d'une contestation est `{success:true, litige_id}` de B3 (l.25837) **et** la
+    /// relecture `CONTESTE` ; une ligne `CONTESTE` seule ne prouve pas le litige (statut aussi écrit par un UPDATE direct
+    /// sous `pol_paie_soig_update` ou par `fn_ouvrir_litige_rate_limited`). Un succès sans identifiant de litige non
+    /// vide est un décalage de contrat, jamais un succès, même si la relecture rend `CONTESTE` ; la ligne n'est pas
+    /// relue ici (le modèle relit la liste après toute issue) et la mutation n'est jamais renvoyée.
+    func testSuccesSansLitigeIdEstUneErreurDeContratMemeAvecRelectureCONTESTE() async throws {
+        for corps in [#"{"success":true}"#, #"{"success":true,"litige_id":null}"#, #"{"success":true,"litige_id":""}"#,
+                      #"{"success":true,"litige_id":"   "}"#, #"{"success":true,"litige_id":42}"#] {
+            registry.reset()
+            registry.add("POST", contesterChemin, respond: .json(200, corps))
+            stubRelecture(Self.ligne(statut: "CONTESTE", conteste: true))
+            do {
+                let issue = try await gateway().contester(id: "p-1", motif: "Montant erroné", context: TestClient.context)
+                XCTFail("\(corps) : jamais un succès sans litige_id, obtenu \(issue)")
+            } catch let erreur as JoleneError {
+                XCTAssertEqual(erreur, JoleneError(.contract, SupabaseErrorMapping.contractMessage), corps)
+            }
+            XCTAssertEqual(registry.requests(to: contesterChemin).count, 1, "\(corps) : jamais renvoyée")
+            XCTAssertTrue(registry.requests(to: paiementsChemin).isEmpty, "\(corps) : contrat rompu, aucune relecture ici")
         }
     }
 
