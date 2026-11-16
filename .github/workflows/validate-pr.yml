@@ -140,6 +140,9 @@ jobs:
       - name: DPAE CDDU et VACATION (B9) — migration, instantané et bancs sans réseau
         run: node --test tests/node/dpae-contrats-cddu-vacation.node.mjs
 
+      - name: Prospection sans MSSanté (B9) — préflight, corps d'origine et source unique sans réseau
+        run: node --test tests/node/prospection-sans-mssante.node.mjs
+
       - name: Isolation du draft contrat SQL sans réseau
         run: node --test tests/node/contrat-v11-sql-proof.node.mjs
 
