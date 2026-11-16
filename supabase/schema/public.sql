@@ -538,6 +538,183 @@ CREATE TABLE IF NOT EXISTS "public"."externalisation_actions" (
 ALTER TABLE "public"."externalisation_actions" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."missions" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "etablissement_id" "uuid" NOT NULL,
+    "intitule" "text" NOT NULL,
+    "description" "text",
+    "profession_requise" "public"."type_profession" NOT NULL,
+    "service" "text",
+    "debut_le" timestamp with time zone NOT NULL,
+    "fin_le" timestamp with time zone NOT NULL,
+    "duree_heures" numeric(7,2),
+    "taux_horaire_base" numeric(8,2) NOT NULL,
+    "taux_rist_plafonne" numeric(8,2),
+    "rist_plafond_applique" boolean DEFAULT false,
+    "heures_nuit" numeric(5,2) DEFAULT 0,
+    "heures_dimanche" numeric(5,2) DEFAULT 0,
+    "heures_ferie" numeric(5,2) DEFAULT 0,
+    "montant_majoration_nuit" numeric(8,2) DEFAULT 0,
+    "montant_majoration_dimanche" numeric(8,2) DEFAULT 0,
+    "montant_majoration_ferie" numeric(8,2) DEFAULT 0,
+    "taux_ifm" numeric(5,4) DEFAULT 0.10,
+    "taux_icp" numeric(5,4) DEFAULT 0.10,
+    "montant_ifm" numeric(8,2) DEFAULT 0,
+    "montant_icp" numeric(8,2) DEFAULT 0,
+    "total_brut" numeric(10,2) DEFAULT 0,
+    "net_a_payer" numeric(10,2) DEFAULT 0,
+    "est_urgente" boolean DEFAULT false,
+    "niveau_urgence" integer DEFAULT 0,
+    "statut" "public"."statut_mission" DEFAULT 'OUVERTE'::"public"."statut_mission",
+    "soignant_assigne_id" "uuid",
+    "cree_le" timestamp with time zone DEFAULT "now"(),
+    "modifie_le" timestamp with time zone DEFAULT "now"(),
+    "taux_commission" numeric(5,2) DEFAULT 15.00,
+    "montant_commission_ht" numeric(10,2),
+    "montant_commission_tva" numeric(10,2),
+    "montant_commission_ttc" numeric(10,2),
+    "commission_facturee" boolean DEFAULT false,
+    "facture_id" "uuid",
+    "type_paiement_soignant" "text" DEFAULT 'BULLETIN_PAIE'::"text",
+    "numero_note_honoraires" "text",
+    "code_arrivee" "text",
+    "code_depart" "text",
+    "net_estime" numeric,
+    "mode_attribution" "text" DEFAULT 'PREMIER_ARRIVE'::"text",
+    "annulee_le" timestamp with time zone,
+    "annulee_par" "uuid",
+    "terminee_le" timestamp with time zone,
+    "motif_annulation" "text",
+    "serie_id" "uuid",
+    "type_contrat_recherche" "text" DEFAULT 'TOUS'::"text" NOT NULL,
+    "stripe_payment_intent_id" "text",
+    "stripe_transfer_id" "text",
+    "mode_paiement_soignant" "text" DEFAULT 'DIRECT'::"text",
+    "choix_contrat_soignant" "text",
+    "nb_creneaux" smallint DEFAULT 0 NOT NULL,
+    "taux_horaire_base_fige" numeric,
+    "taux_majoration_nuit_fige" numeric,
+    "taux_majoration_dimanche_fige" numeric,
+    "taux_majoration_ferie_fige" numeric,
+    "heure_debut_nuit_fige" time without time zone,
+    "heure_fin_nuit_fige" time without time zone,
+    "taux_commission_fige" numeric,
+    "fige_le" timestamp with time zone,
+    "debut_effectif" timestamp with time zone,
+    "fin_effective" timestamp with time zone,
+    "duree_heures_effective" numeric,
+    "code_pointage_actif" "text",
+    "code_pointage_hmac" "text",
+    "prochain_type_scan" "text" DEFAULT 'OUVERTURE'::"text",
+    "nb_scans" smallint DEFAULT 0,
+    "regularisation_sociale_requise" boolean DEFAULT false NOT NULL,
+    "commission_a_recalculer" boolean DEFAULT false NOT NULL,
+    "type_contrat_applique" "public"."type_contrat_applique_enum",
+    "relance_paiement_1_le" timestamp with time zone,
+    "relance_paiement_2_le" timestamp with time zone,
+    "specialite_medicale_requise" "text",
+    "accepte_non_specialises" boolean DEFAULT true,
+    "strategie_facturation" "public"."strategie_facturation" DEFAULT 'FINALE_UNIQUE'::"public"."strategie_facturation" NOT NULL,
+    "absence_sans_prevenir" boolean DEFAULT false NOT NULL,
+    "est_asap" boolean DEFAULT false NOT NULL,
+    "relances_sans_candidat" integer DEFAULT 0 NOT NULL,
+    "derniere_relance_sans_candidat_le" timestamp with time zone,
+    "boostee_le" timestamp with time zone,
+    "montant_boost_ht" numeric,
+    "garantie_remplacement" boolean DEFAULT false NOT NULL,
+    "presence_confirmee_le" timestamp with time zone,
+    "remplacement_de_mission_id" "uuid",
+    "est_arret_maladie" boolean DEFAULT false NOT NULL,
+    "arret_maladie_declare_le" timestamp with time zone,
+    "mode_remuneration" "text" DEFAULT 'TAUX_HORAIRE'::"text" NOT NULL,
+    "retrocession_pct" numeric,
+    "montant_honoraires_bruts" numeric,
+    "justificatif_honoraires_cle" "text",
+    "honoraires_confirmes_le" timestamp with time zone,
+    "derniere_relance_candidatures_le" timestamp with time zone,
+    "mission_source" "text",
+    "nature_tva_prestation" "text",
+    "nature_tva_declaree_par" "uuid",
+    "nature_tva_declaree_le" timestamp with time zone,
+    "nature_tva_confirmee_soignant" "text",
+    "nature_tva_confirmee_par" "uuid",
+    "nature_tva_confirmee_le" timestamp with time zone,
+    "statut_validation_tva" "text" DEFAULT 'NON_REQUISE'::"text" NOT NULL,
+    "revue_tva_motif" "text",
+    "revue_tva_resolue_par" "uuid",
+    "revue_tva_resolue_le" timestamp with time zone,
+    "accepte_internes" boolean DEFAULT false NOT NULL,
+    "accepte_internes_confirme_par" "uuid",
+    "accepte_internes_confirme_le" timestamp with time zone,
+    CONSTRAINT "chk_duree_positive" CHECK ((("duree_heures" IS NULL) OR (("duree_heures" >= (0)::numeric) AND ("duree_heures" <= (17568)::numeric)))),
+    CONSTRAINT "chk_missions_dates" CHECK (("debut_le" < "fin_le")),
+    CONSTRAINT "chk_prochain_type_scan" CHECK (("prochain_type_scan" = ANY (ARRAY['OUVERTURE'::"text", 'FERMETURE'::"text"]))),
+    CONSTRAINT "chk_taux_commission" CHECK ((("taux_commission" IS NULL) OR (("taux_commission" >= (0)::numeric) AND ("taux_commission" <= (30)::numeric)))),
+    CONSTRAINT "chk_taux_horaire_raisonnable" CHECK ((("taux_horaire_base" = (0)::numeric) OR (("taux_horaire_base" > (0)::numeric) AND ("taux_horaire_base" <= (1000)::numeric)))),
+    CONSTRAINT "chk_type_contrat_recherche" CHECK (("type_contrat_recherche" = ANY (ARRAY['TOUS'::"text", 'SALARIE'::"text", 'LIBERAL'::"text"]))),
+    CONSTRAINT "ck_max_732_creneaux" CHECK ((("nb_creneaux" >= 0) AND ("nb_creneaux" <= 732))),
+    CONSTRAINT "missions_mission_source_check" CHECK (("mission_source" = ANY (ARRAY['SWIPE'::"text", 'CANDIDATURE'::"text", 'REBOOK'::"text", 'PROPOSITION_DIRECTE'::"text", 'REMPLACEMENT'::"text", 'REPUBLICATION'::"text"]))),
+    CONSTRAINT "missions_mode_attribution_check" CHECK (("mode_attribution" = ANY (ARRAY['PREMIER_ARRIVE'::"text", 'CANDIDATURE'::"text"]))),
+    CONSTRAINT "missions_mode_paiement_soignant_check" CHECK (("mode_paiement_soignant" = ANY (ARRAY['DIRECT'::"text", 'STRIPE_CONNECT'::"text", 'VIREMENT'::"text"]))),
+    CONSTRAINT "missions_mode_remuneration_check" CHECK (("mode_remuneration" = ANY (ARRAY['TAUX_HORAIRE'::"text", 'RETROCESSION'::"text"]))),
+    CONSTRAINT "missions_nature_tva_confirmee_soignant_check" CHECK ((("nature_tva_confirmee_soignant" IS NULL) OR ("nature_tva_confirmee_soignant" = ANY (ARRAY['SOIN_THERAPEUTIQUE_EXONERE'::"text", 'PRESTATION_TAXABLE'::"text"])))),
+    CONSTRAINT "missions_nature_tva_prestation_check" CHECK ((("nature_tva_prestation" IS NULL) OR ("nature_tva_prestation" = ANY (ARRAY['SOIN_THERAPEUTIQUE_EXONERE'::"text", 'PRESTATION_TAXABLE'::"text"])))),
+    CONSTRAINT "missions_niveau_urgence_check" CHECK ((("niveau_urgence" >= 0) AND ("niveau_urgence" <= 3))),
+    CONSTRAINT "missions_retrocession_pct_check" CHECK ((("retrocession_pct" IS NULL) OR (("retrocession_pct" > (0)::numeric) AND ("retrocession_pct" <= (100)::numeric)))),
+    CONSTRAINT "missions_statut_validation_tva_check" CHECK (("statut_validation_tva" = ANY (ARRAY['NON_REQUISE'::"text", 'A_CONFIRMER'::"text", 'CONFIRMEE'::"text", 'A_REVOIR'::"text"]))),
+    CONSTRAINT "missions_type_paiement_soignant_check" CHECK (("type_paiement_soignant" = ANY (ARRAY['BULLETIN_PAIE'::"text", 'NOTE_HONORAIRES'::"text"])))
+);
+
+ALTER TABLE ONLY "public"."missions" FORCE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."missions" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."missions"."code_arrivee" IS 'DEPRECATED CP5b — remplacé par code_pointage_actif.';
+
+
+
+COMMENT ON COLUMN "public"."missions"."code_depart" IS 'DEPRECATED CP5b — remplacé par code_pointage_actif.';
+
+
+
+COMMENT ON COLUMN "public"."missions"."regularisation_sociale_requise" IS 'TRUE si résolution modifie heures facture > 3 mois.';
+
+
+
+COMMENT ON COLUMN "public"."missions"."commission_a_recalculer" IS 'TRUE si ajustement nécessite recalcul commission.';
+
+
+
+COMMENT ON COLUMN "public"."missions"."type_contrat_applique" IS 'CP-LITIGES-7a FIX 3 — type de contrat réellement appliqué à la mission, figé au moment de l''assignation. NULL tant que soignant_assigne_id est NULL ou si le backfill n''a pas pu trancher (MIXTE ambigu).';
+
+
+
+COMMENT ON COLUMN "public"."missions"."relance_paiement_1_le" IS 'CP-C-2 : J+7 post fin_le mission SALARIE non payee relance etab';
+
+
+
+COMMENT ON COLUMN "public"."missions"."relance_paiement_2_le" IS 'CP-C-2 : J+21 post fin_le 2e relance plus pressante';
+
+
+
+COMMENT ON COLUMN "public"."missions"."strategie_facturation" IS 'Stratégie figée à l''assignation par fn_geler_mission_a_assignation : FINALE_UNIQUE si durée ≤ 7 jours, HEBDO_ET_FINALE si > 7 jours. Une prolongation post-assignation NE modifie PAS la stratégie.';
+
+
+
+COMMENT ON COLUMN "public"."missions"."est_asap" IS 'Mission urgente publiée < 2h avant son début (pool urgence). Annulation soignant après la fenêtre de rétractation = -25 pts de score (vs -10 pour une mission classique).';
+
+
+
+COMMENT ON COLUMN "public"."missions"."nature_tva_prestation" IS 'Nature TVA déclarée par l établissement puis confirmée par le soignant avant facturation libérale.';
+
+
+
+COMMENT ON COLUMN "public"."missions"."statut_validation_tva" IS 'Le statut TVA ne bloque jamais l exécution ni les litiges ; il bloque uniquement la création d une nouvelle facture tant qu il n est pas CONFIRMEE.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."_sha256_hex"("p_input" "text") RETURNS "text"
     LANGUAGE "sql" IMMUTABLE
     SET "search_path" TO 'public', 'extensions'
@@ -9782,6 +9959,213 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_admin_graphiques"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_admin_growth_brouillon_decider"("p_id" "uuid", "p_action" "text", "p_sujet" "text" DEFAULT NULL::"text", "p_corps" "text" DEFAULT NULL::"text", "p_motif" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_action text := upper(btrim(COALESCE(p_action, '')));
+  v_b public.growth_brouillons%ROWTYPE;
+  v_contact_id uuid;
+  v_crm jsonb;
+  v_motif text;
+  v_sujet text := NULLIF(btrim(COALESCE(p_sujet, '')), '');
+  v_corps text := NULLIF(btrim(COALESCE(p_corps, '')), '');
+BEGIN
+  IF auth.uid() IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Accès admin requis' USING ERRCODE = '42501';
+  END IF;
+  IF v_action NOT IN ('MODIFIER', 'VALIDER', 'REJETER', 'MARQUER_ENVOYE') THEN
+    RAISE EXCEPTION 'Action invalide : %', v_action;
+  END IF;
+
+  SELECT * INTO v_b FROM public.growth_brouillons WHERE id = p_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Brouillon introuvable';
+  END IF;
+
+  IF v_action IN ('MODIFIER', 'VALIDER', 'REJETER') AND v_b.statut NOT IN ('BROUILLON', 'VALIDE') THEN
+    RAISE EXCEPTION 'Brouillon déjà traité (%)', v_b.statut;
+  END IF;
+  IF v_action = 'MARQUER_ENVOYE' AND v_b.statut <> 'VALIDE' THEN
+    RAISE EXCEPTION 'Seul un brouillon validé peut être marqué envoyé (statut actuel : %)', v_b.statut;
+  END IF;
+  IF v_corps IS NOT NULL AND char_length(v_corps) > 8000 THEN
+    RAISE EXCEPTION 'Corps trop long';
+  END IF;
+  IF v_sujet IS NOT NULL AND char_length(v_sujet) > 300 THEN
+    RAISE EXCEPTION 'Sujet trop long';
+  END IF;
+
+  -- Joignabilité revérifiée à chaque validation et au constat d'envoi : une
+  -- opposition, un refus d'emails ou une suppression de compte a pu arriver.
+  -- Pas de RAISE ici : il annulerait le rejet, qui doit persister.
+  IF v_action IN ('VALIDER', 'MARQUER_ENVOYE') AND v_b.canal = 'EMAIL' THEN
+    v_motif := private.fn_growth_destinataire_bloque(
+      v_b.cible_type, v_b.cible_id, v_b.destinataire_email,
+      v_b.contexte->>'telephone', v_b.contexte->>'finess');
+    IF v_motif = 'COMPTE_SUPPRIME' THEN
+      DELETE FROM public.growth_brouillons WHERE id = p_id;
+      RETURN jsonb_build_object('success', false, 'id', p_id, 'statut', 'SUPPRIME',
+        'raison', 'Compte supprimé : brouillon effacé, aucun envoi possible');
+    ELSIF v_motif IS NOT NULL THEN
+      UPDATE public.growth_brouillons
+         SET statut = 'REJETE', maj_le = now(),
+             motif_rejet = CASE v_motif
+               WHEN 'STOP' THEN 'Opposition (STOP) ou contact perdu'
+               WHEN 'EMAILS_DESACTIVES' THEN 'Emails désactivés par le destinataire'
+               ELSE 'Destinataire invalide' END
+       WHERE id = p_id;
+      RETURN jsonb_build_object('success', false, 'id', p_id, 'statut', 'REJETE',
+        'raison', CASE v_motif
+          WHEN 'STOP' THEN 'Contact en opposition (STOP) ou perdu : aucun envoi possible'
+          WHEN 'EMAILS_DESACTIVES' THEN 'Le destinataire a désactivé ces emails : aucun envoi possible'
+          ELSE 'Destinataire invalide : aucun envoi possible' END);
+    END IF;
+  END IF;
+
+  IF v_action = 'MODIFIER' THEN
+    UPDATE public.growth_brouillons
+       SET sujet = COALESCE(v_sujet, sujet), corps = COALESCE(v_corps, corps), maj_le = now()
+     WHERE id = p_id;
+  ELSIF v_action = 'VALIDER' THEN
+    UPDATE public.growth_brouillons
+       SET sujet = COALESCE(v_sujet, sujet), corps = COALESCE(v_corps, corps),
+           statut = 'VALIDE', valide_par = auth.uid(), valide_le = now(), maj_le = now()
+     WHERE id = p_id;
+  ELSIF v_action = 'REJETER' THEN
+    UPDATE public.growth_brouillons
+       SET statut = 'REJETE', motif_rejet = left(COALESCE(NULLIF(btrim(p_motif), ''), 'Rejeté par l''admin'), 500),
+           maj_le = now()
+     WHERE id = p_id;
+  ELSE
+    -- Constat d'envoi : alimente le CRM et la séquence existants.
+    IF v_b.canal = 'EMAIL' AND v_b.cible_type = 'PROSPECT_ETABLISSEMENT' THEN
+      v_crm := public.fn_admin_sourcing_ajouter_crm('ETABLISSEMENT', v_b.cible_id, v_b.score);
+      v_contact_id := (v_crm->>'contact_id')::uuid;
+      PERFORM public.fn_crm_enregistrer_email_envoye(
+        v_contact_id, false, 'Brouillon agent ' || v_b.id || ' (étape ' || COALESCE(v_b.sequence_etape, 1) || ')');
+      UPDATE public.prospects_etablissements
+         SET email_envoye_le = COALESCE(email_envoye_le, now())
+       WHERE finess = v_b.cible_id;
+    ELSIF v_b.canal = 'EMAIL' AND v_b.cible_type = 'CONTACT_CRM' THEN
+      v_contact_id := v_b.cible_id::uuid;
+      PERFORM public.fn_crm_enregistrer_email_envoye(
+        v_contact_id, false, 'Brouillon agent ' || v_b.id || ' (étape ' || COALESCE(v_b.sequence_etape, 2) || ')');
+      -- L'étape 3 annonce « je ne vous relancerai plus » : le CRM ne doit plus
+      -- programmer de relance ni garder de tâche ouverte.
+      IF v_b.sequence_etape = 3 THEN
+        UPDATE public.sales_contacts
+           SET sequence_active = false, prochaine_action_le = NULL, a_rappeler = false, maj_le = now()
+         WHERE id = v_contact_id;
+        UPDATE public.sales_taches
+           SET statut = 'ANNULEE', maj_le = now()
+         WHERE contact_id = v_contact_id AND statut IN ('A_FAIRE', 'EN_COURS');
+      END IF;
+    END IF;
+    UPDATE public.growth_brouillons
+       SET statut = 'ENVOYE', envoye_par = auth.uid(), envoye_le = now(), maj_le = now()
+     WHERE id = p_id;
+  END IF;
+
+  SELECT * INTO v_b FROM public.growth_brouillons WHERE id = p_id;
+  RETURN jsonb_build_object('success', true, 'id', v_b.id, 'statut', v_b.statut,
+    'contact_crm_id', v_contact_id);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_growth_brouillon_decider"("p_id" "uuid", "p_action" "text", "p_sujet" "text", "p_corps" "text", "p_motif" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_admin_growth_entonnoir"("p_jours" integer DEFAULT 7) RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_jours integer := greatest(1, least(365, COALESCE(p_jours, 7)));
+BEGIN
+  IF auth.uid() IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Accès admin requis' USING ERRCODE = '42501';
+  END IF;
+  RETURN private.fn_growth_entonnoir(now() - make_interval(days => v_jours), now());
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_growth_entonnoir"("p_jours" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_admin_growth_executer_agents"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF auth.uid() IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Accès admin requis' USING ERRCODE = '42501';
+  END IF;
+  RETURN private.fn_growth_agents_executer('ADMIN');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_growth_executer_agents"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_admin_growth_planification"("p_actif" boolean DEFAULT NULL::boolean) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_job record;
+  v_cron boolean := EXISTS (SELECT 1 FROM pg_catalog.pg_extension WHERE extname = 'pg_cron');
+  v_jobs jsonb := '[]'::jsonb;
+BEGIN
+  IF auth.uid() IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Accès admin requis' USING ERRCODE = '42501';
+  END IF;
+
+  IF p_actif IS NOT NULL THEN
+    INSERT INTO public.growth_config (cle, valeur, maj_le)
+    VALUES ('agents_croissance_actifs', CASE WHEN p_actif THEN 'true' ELSE 'false' END, now())
+    ON CONFLICT (cle) DO UPDATE SET valeur = EXCLUDED.valeur, maj_le = now();
+    IF v_cron THEN
+      FOR v_job IN
+        SELECT j.jobid FROM cron.job j
+        WHERE j.jobname IN ('jolene_growth_agents_quotidien', 'jolene_growth_rapport_hebdo')
+      LOOP
+        PERFORM cron.alter_job(job_id := v_job.jobid, active := p_actif);
+      END LOOP;
+    END IF;
+    INSERT INTO public.growth_agent_executions (agent, declencheur, fin_le, details)
+    VALUES ('PLANIFICATION', 'ADMIN', now(),
+      jsonb_build_object('actif', p_actif, 'par', auth.uid()));
+  END IF;
+
+  IF v_cron THEN
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+             'jobname', j.jobname, 'schedule', j.schedule, 'active', j.active)
+             ORDER BY j.jobname), '[]'::jsonb)
+      INTO v_jobs
+    FROM cron.job j
+    WHERE j.jobname IN ('jolene_growth_agents_quotidien', 'jolene_growth_rapport_hebdo');
+  END IF;
+
+  RETURN jsonb_build_object(
+    'actif', private.fn_growth_config('agents_croissance_actifs', 'false') = 'true'
+             AND (NOT v_cron OR (
+               jsonb_array_length(v_jobs) = 2
+               AND NOT EXISTS (
+                 SELECT 1 FROM jsonb_array_elements(v_jobs) x WHERE (x->>'active')::boolean IS NOT TRUE))),
+    'pg_cron', v_cron,
+    'jobs', v_jobs);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_growth_planification"("p_actif" boolean) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_admin_health_check"() RETURNS "jsonb"
@@ -35199,6 +35583,7 @@ DECLARE
   v_mission RECORD;
   v_is_etab boolean;
   v_is_soignant boolean;
+  v_peut_voir_code boolean := false;
   v_segments jsonb;
   v_segment_ouvert boolean;
 BEGIN
@@ -35214,8 +35599,16 @@ BEGIN
   v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id();
   v_is_soignant := v_mission.soignant_assigne_id = auth.uid();
 
-  IF NOT v_is_etab AND NOT v_is_soignant THEN
+  -- B5b : un NULL (compte sans établissement, mission non affectée, session
+  -- sans identité) vaut refus ; il laissait lire l'état de toute mission.
+  IF NOT COALESCE(v_is_etab, false) AND NOT COALESCE(v_is_soignant, false) THEN
     RETURN jsonb_build_object('error', 'Accès interdit');
+  END IF;
+
+  -- B5b : le code n'est servi qu'aux membres habilités au pointage
+  -- (permission « pointage » ; LECTURE_SEULE garde l'état sans le code).
+  IF v_is_etab IS TRUE THEN
+    v_peut_voir_code := public.fn_a_permission_etablissement('pointage', v_mission.etablissement_id) IS TRUE;
   END IF;
 
   -- Segments effectifs (les vrais créneaux travaillés, base de la paie)
@@ -35233,8 +35626,8 @@ BEGIN
     'nb_scans', v_mission.nb_scans,
     'segment_ouvert', COALESCE(v_segment_ouvert, false),
     'segments', v_segments,
-    -- Visible uniquement par l'établissement (l'affiche au soignant à pointer).
-    'code_pointage_actif', CASE WHEN v_is_etab THEN v_mission.code_pointage_actif ELSE NULL END,
+    -- Visible uniquement par l'établissement habilité au pointage (l'affiche au soignant à pointer).
+    'code_pointage_actif', CASE WHEN v_peut_voir_code THEN v_mission.code_pointage_actif ELSE NULL END,
     'est_etab', v_is_etab
   );
 END;
@@ -44651,10 +45044,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_mon_etablissement_complet"() RETURNS "js
 DECLARE
   v_etab_id uuid := public.mon_etablissement_id();
   v_result jsonb;
+  v_paiement boolean;
+  v_lecture_finances boolean;
 BEGIN
   IF v_etab_id IS NULL THEN
     RETURN jsonb_build_object('error', 'Etablissement introuvable');
   END IF;
+
+  -- B5b : identifiants Stripe réservés à la permission paiement (aucun écran
+  -- ne les lit) ; suffixe IBAN réservé à la lecture financière (lecture_paiement
+  -- ou paiement, comme canReadFinance du web : Paramètres › Facturation). Les
+  -- clés restent présentes et valent null ; rib_s3_key est inchangé.
+  v_paiement := public.fn_a_permission_etablissement('paiement', v_etab_id) IS TRUE;
+  v_lecture_finances := v_paiement
+    OR public.fn_a_permission_etablissement('lecture_paiement', v_etab_id) IS TRUE;
 
   SELECT row_to_json(e)::jsonb
   INTO v_result
@@ -44663,7 +45066,8 @@ BEGIN
       et.id, et.nom, et.siret, et.finess, et.type::text, et.groupe_sante_id,
       et.adresse_rue, et.adresse_ville, et.adresse_code_postal, et.adresse_departement,
       et.adresse_lat, et.adresse_lng, et.email_contact, et.telephone_contact,
-      et.stripe_customer_id, et.stripe_account_id,
+      CASE WHEN v_paiement THEN et.stripe_customer_id END AS stripe_customer_id,
+      CASE WHEN v_paiement THEN et.stripe_account_id END AS stripe_account_id,
       et.taux_commission_negocie,
       COALESCE(et.taux_commission_negocie, gs.taux_commission_negocie, 15) AS taux_commission_effectif,
       et.mode_facturation, et.mode_paiement_commission,
@@ -44672,7 +45076,8 @@ BEGIN
       et.formule_abonnement, et.convention_collective, et.couleur_theme, et.logo_url,
       et.contrat_url, et.contrat_uploade_le, et.contrat_valide,
       et.contrat_service_signe, et.contrat_service_signe_le,
-      et.rib_s3_key, et.rib_ia_coherent, et.iban_last4, et.sms_actif,
+      et.rib_s3_key, et.rib_ia_coherent,
+      CASE WHEN v_lecture_finances THEN et.iban_last4 END AS iban_last4, et.sms_actif,
       et.taux_majoration_nuit_pourcent, et.taux_majoration_dimanche_pourcent,
       et.taux_majoration_ferie_pourcent,
       et.est_secteur_public, et.peut_publier_missions, et.statut_verification,
@@ -57674,8 +58079,17 @@ DECLARE
     v_commissions_impayees NUMERIC;
     v_nb_factures_impayees INT;
     v_litiges_ouverts INT;
+    v_lecture_finances BOOLEAN;
+    v_lecture_candidatures BOOLEAN;
 BEGIN
     IF v_etab_id IS NULL THEN RETURN jsonb_build_object('error', 'Établissement introuvable'); END IF;
+
+    -- B5b : montants réservés à la lecture financière (lecture_paiement ou
+    -- paiement, comme canReadFinance du web) ; noms des candidats réservés à
+    -- lecture_candidatures. Les clés restent présentes et valent null.
+    v_lecture_finances := public.fn_a_permission_etablissement('lecture_paiement', v_etab_id) IS TRUE
+        OR public.fn_a_permission_etablissement('paiement', v_etab_id) IS TRUE;
+    v_lecture_candidatures := public.fn_a_permission_etablissement('lecture_candidatures', v_etab_id) IS TRUE;
     
     v_debut_mois := DATE_TRUNC('month', NOW());
     
@@ -57717,8 +58131,8 @@ BEGIN
         'missions_terminees', (SELECT COUNT(*) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'TERMINEE'),
         'missions_terminees_ce_mois', v_terminees_ce_mois,
         'soignants_ce_mois', v_soignants_ce_mois,
-        'commissions_cumulees', COALESCE((SELECT SUM(montant_ht) FROM factures WHERE etablissement_id = v_etab_id AND statut != 'ANNULEE'), 0),
-        'commissions_impayees', v_commissions_impayees,
+        'commissions_cumulees', CASE WHEN v_lecture_finances THEN COALESCE((SELECT SUM(montant_ht) FROM factures WHERE etablissement_id = v_etab_id AND statut != 'ANNULEE'), 0) END,
+        'commissions_impayees', CASE WHEN v_lecture_finances THEN v_commissions_impayees END,
         'nb_factures_impayees', v_nb_factures_impayees,
         'pool_urgence_count', v_pool_urgence_count,
         'messages_non_lus', v_messages_non_lus,
@@ -57728,7 +58142,7 @@ BEGIN
             SELECT COUNT(*) FROM candidatures c JOIN missions m ON m.id = c.mission_id
             WHERE m.etablissement_id = v_etab_id AND c.statut = 'EN_ATTENTE'
         ),
-        'candidatures_recentes', COALESCE((
+        'candidatures_recentes', CASE WHEN v_lecture_candidatures THEN COALESCE((
             SELECT jsonb_agg(row_to_json(x)) FROM (
                 SELECT c.id::TEXT AS candidature_id, m.intitule AS mission_intitule,
                     m.id::TEXT AS mission_id,
@@ -57739,7 +58153,7 @@ BEGIN
                 WHERE m.etablissement_id = v_etab_id AND c.statut = 'EN_ATTENTE'
                 ORDER BY c.cree_le DESC LIMIT 5
             ) x
-        ), '[]'::JSONB),
+        ), '[]'::JSONB) END,
         'missions_assignees_detail', COALESCE((
             SELECT jsonb_agg(row_to_json(x)) FROM (
                 SELECT m.id::TEXT AS mission_id, m.intitule, m.debut_le, m.fin_le,
@@ -70175,6 +70589,77 @@ COMMENT ON COLUMN "public"."groupes_sante"."contrat_fin" IS 'Date de fin du cont
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."growth_agent_executions" (
+    "id" bigint NOT NULL,
+    "agent" "text" NOT NULL,
+    "declencheur" "text" NOT NULL,
+    "debut_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "fin_le" timestamp with time zone,
+    "brouillons_crees" integer DEFAULT 0 NOT NULL,
+    "details" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "erreur" "text",
+    CONSTRAINT "growth_agent_executions_declencheur_check" CHECK (("declencheur" = ANY (ARRAY['CRON'::"text", 'ADMIN'::"text"])))
+);
+
+
+ALTER TABLE "public"."growth_agent_executions" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."growth_agent_executions" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."growth_agent_executions_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."growth_brouillons" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "agent" "text" NOT NULL,
+    "canal" "text" NOT NULL,
+    "cible_type" "text" NOT NULL,
+    "cible_id" "text",
+    "destinataire_nom" "text",
+    "destinataire_email" "text",
+    "departement" "text",
+    "profession" "text",
+    "sequence_etape" smallint,
+    "sujet" "text",
+    "corps" "text" NOT NULL,
+    "lien" "text",
+    "contexte" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "score" smallint,
+    "statut" "text" DEFAULT 'BROUILLON'::"text" NOT NULL,
+    "motif_rejet" "text",
+    "idempotence_key" "text" NOT NULL,
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "maj_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "expire_le" timestamp with time zone,
+    "valide_par" "uuid",
+    "valide_le" timestamp with time zone,
+    "envoye_par" "uuid",
+    "envoye_le" timestamp with time zone,
+    CONSTRAINT "growth_brouillons_agent_check" CHECK (("agent" = ANY (ARRAY['PROSPECTION_ETABLISSEMENT'::"text", 'POST_SOCIAL'::"text", 'MISSION_A_POURVOIR'::"text", 'REACTIVATION'::"text"]))),
+    CONSTRAINT "growth_brouillons_canal_check" CHECK (("canal" = ANY (ARRAY['EMAIL'::"text", 'LINKEDIN'::"text", 'FACEBOOK_GROUPE'::"text"]))),
+    CONSTRAINT "growth_brouillons_cible_type_check" CHECK (("cible_type" = ANY (ARRAY['PROSPECT_ETABLISSEMENT'::"text", 'CONTACT_CRM'::"text", 'SOIGNANT'::"text", 'ETABLISSEMENT'::"text", 'MISSION'::"text", 'PUBLIC'::"text"]))),
+    CONSTRAINT "growth_brouillons_corps_check" CHECK ((("char_length"("corps") >= 1) AND ("char_length"("corps") <= 8000))),
+    CONSTRAINT "growth_brouillons_email_destinataire" CHECK ((("canal" <> 'EMAIL'::"text") OR ("destinataire_email" IS NOT NULL))),
+    CONSTRAINT "growth_brouillons_sequence_etape_check" CHECK ((("sequence_etape" >= 1) AND ("sequence_etape" <= 3))),
+    CONSTRAINT "growth_brouillons_statut_check" CHECK (("statut" = ANY (ARRAY['BROUILLON'::"text", 'VALIDE'::"text", 'REJETE'::"text", 'ENVOYE'::"text", 'EXPIRE'::"text"]))),
+    CONSTRAINT "growth_brouillons_sujet_check" CHECK ((("sujet" IS NULL) OR ("char_length"("sujet") <= 300)))
+);
+
+
+ALTER TABLE "public"."growth_brouillons" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."growth_brouillons" IS 'Brouillons des agents de croissance. Aucun envoi automatique : validation puis envoi/publication humains.';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."growth_config" (
     "cle" "text" NOT NULL,
     "valeur" "text",
@@ -70183,6 +70668,17 @@ CREATE TABLE IF NOT EXISTS "public"."growth_config" (
 
 
 ALTER TABLE "public"."growth_config" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."growth_rapports_hebdo" (
+    "semaine_debut" "date" NOT NULL,
+    "semaine_fin" "date" NOT NULL,
+    "donnees" "jsonb" NOT NULL,
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."growth_rapports_hebdo" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."health_check" (
@@ -70669,183 +71165,6 @@ ALTER TABLE "public"."mission_series" OWNER TO "postgres";
 
 
 COMMENT ON TABLE "public"."mission_series" IS 'Groupe de missions récurrentes (série). Chaque mission de la série référence mission_series.id via missions.serie_id.';
-
-
-
-CREATE TABLE IF NOT EXISTS "public"."missions" (
-    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
-    "etablissement_id" "uuid" NOT NULL,
-    "intitule" "text" NOT NULL,
-    "description" "text",
-    "profession_requise" "public"."type_profession" NOT NULL,
-    "service" "text",
-    "debut_le" timestamp with time zone NOT NULL,
-    "fin_le" timestamp with time zone NOT NULL,
-    "duree_heures" numeric(7,2),
-    "taux_horaire_base" numeric(8,2) NOT NULL,
-    "taux_rist_plafonne" numeric(8,2),
-    "rist_plafond_applique" boolean DEFAULT false,
-    "heures_nuit" numeric(5,2) DEFAULT 0,
-    "heures_dimanche" numeric(5,2) DEFAULT 0,
-    "heures_ferie" numeric(5,2) DEFAULT 0,
-    "montant_majoration_nuit" numeric(8,2) DEFAULT 0,
-    "montant_majoration_dimanche" numeric(8,2) DEFAULT 0,
-    "montant_majoration_ferie" numeric(8,2) DEFAULT 0,
-    "taux_ifm" numeric(5,4) DEFAULT 0.10,
-    "taux_icp" numeric(5,4) DEFAULT 0.10,
-    "montant_ifm" numeric(8,2) DEFAULT 0,
-    "montant_icp" numeric(8,2) DEFAULT 0,
-    "total_brut" numeric(10,2) DEFAULT 0,
-    "net_a_payer" numeric(10,2) DEFAULT 0,
-    "est_urgente" boolean DEFAULT false,
-    "niveau_urgence" integer DEFAULT 0,
-    "statut" "public"."statut_mission" DEFAULT 'OUVERTE'::"public"."statut_mission",
-    "soignant_assigne_id" "uuid",
-    "cree_le" timestamp with time zone DEFAULT "now"(),
-    "modifie_le" timestamp with time zone DEFAULT "now"(),
-    "taux_commission" numeric(5,2) DEFAULT 15.00,
-    "montant_commission_ht" numeric(10,2),
-    "montant_commission_tva" numeric(10,2),
-    "montant_commission_ttc" numeric(10,2),
-    "commission_facturee" boolean DEFAULT false,
-    "facture_id" "uuid",
-    "type_paiement_soignant" "text" DEFAULT 'BULLETIN_PAIE'::"text",
-    "numero_note_honoraires" "text",
-    "code_arrivee" "text",
-    "code_depart" "text",
-    "net_estime" numeric,
-    "mode_attribution" "text" DEFAULT 'PREMIER_ARRIVE'::"text",
-    "annulee_le" timestamp with time zone,
-    "annulee_par" "uuid",
-    "terminee_le" timestamp with time zone,
-    "motif_annulation" "text",
-    "serie_id" "uuid",
-    "type_contrat_recherche" "text" DEFAULT 'TOUS'::"text" NOT NULL,
-    "stripe_payment_intent_id" "text",
-    "stripe_transfer_id" "text",
-    "mode_paiement_soignant" "text" DEFAULT 'DIRECT'::"text",
-    "choix_contrat_soignant" "text",
-    "nb_creneaux" smallint DEFAULT 0 NOT NULL,
-    "taux_horaire_base_fige" numeric,
-    "taux_majoration_nuit_fige" numeric,
-    "taux_majoration_dimanche_fige" numeric,
-    "taux_majoration_ferie_fige" numeric,
-    "heure_debut_nuit_fige" time without time zone,
-    "heure_fin_nuit_fige" time without time zone,
-    "taux_commission_fige" numeric,
-    "fige_le" timestamp with time zone,
-    "debut_effectif" timestamp with time zone,
-    "fin_effective" timestamp with time zone,
-    "duree_heures_effective" numeric,
-    "code_pointage_actif" "text",
-    "code_pointage_hmac" "text",
-    "prochain_type_scan" "text" DEFAULT 'OUVERTURE'::"text",
-    "nb_scans" smallint DEFAULT 0,
-    "regularisation_sociale_requise" boolean DEFAULT false NOT NULL,
-    "commission_a_recalculer" boolean DEFAULT false NOT NULL,
-    "type_contrat_applique" "public"."type_contrat_applique_enum",
-    "relance_paiement_1_le" timestamp with time zone,
-    "relance_paiement_2_le" timestamp with time zone,
-    "specialite_medicale_requise" "text",
-    "accepte_non_specialises" boolean DEFAULT true,
-    "strategie_facturation" "public"."strategie_facturation" DEFAULT 'FINALE_UNIQUE'::"public"."strategie_facturation" NOT NULL,
-    "absence_sans_prevenir" boolean DEFAULT false NOT NULL,
-    "est_asap" boolean DEFAULT false NOT NULL,
-    "relances_sans_candidat" integer DEFAULT 0 NOT NULL,
-    "derniere_relance_sans_candidat_le" timestamp with time zone,
-    "boostee_le" timestamp with time zone,
-    "montant_boost_ht" numeric,
-    "garantie_remplacement" boolean DEFAULT false NOT NULL,
-    "presence_confirmee_le" timestamp with time zone,
-    "remplacement_de_mission_id" "uuid",
-    "est_arret_maladie" boolean DEFAULT false NOT NULL,
-    "arret_maladie_declare_le" timestamp with time zone,
-    "mode_remuneration" "text" DEFAULT 'TAUX_HORAIRE'::"text" NOT NULL,
-    "retrocession_pct" numeric,
-    "montant_honoraires_bruts" numeric,
-    "justificatif_honoraires_cle" "text",
-    "honoraires_confirmes_le" timestamp with time zone,
-    "derniere_relance_candidatures_le" timestamp with time zone,
-    "mission_source" "text",
-    "nature_tva_prestation" "text",
-    "nature_tva_declaree_par" "uuid",
-    "nature_tva_declaree_le" timestamp with time zone,
-    "nature_tva_confirmee_soignant" "text",
-    "nature_tva_confirmee_par" "uuid",
-    "nature_tva_confirmee_le" timestamp with time zone,
-    "statut_validation_tva" "text" DEFAULT 'NON_REQUISE'::"text" NOT NULL,
-    "revue_tva_motif" "text",
-    "revue_tva_resolue_par" "uuid",
-    "revue_tva_resolue_le" timestamp with time zone,
-    "accepte_internes" boolean DEFAULT false NOT NULL,
-    "accepte_internes_confirme_par" "uuid",
-    "accepte_internes_confirme_le" timestamp with time zone,
-    CONSTRAINT "chk_duree_positive" CHECK ((("duree_heures" IS NULL) OR (("duree_heures" >= (0)::numeric) AND ("duree_heures" <= (17568)::numeric)))),
-    CONSTRAINT "chk_missions_dates" CHECK (("debut_le" < "fin_le")),
-    CONSTRAINT "chk_prochain_type_scan" CHECK (("prochain_type_scan" = ANY (ARRAY['OUVERTURE'::"text", 'FERMETURE'::"text"]))),
-    CONSTRAINT "chk_taux_commission" CHECK ((("taux_commission" IS NULL) OR (("taux_commission" >= (0)::numeric) AND ("taux_commission" <= (30)::numeric)))),
-    CONSTRAINT "chk_taux_horaire_raisonnable" CHECK ((("taux_horaire_base" = (0)::numeric) OR (("taux_horaire_base" > (0)::numeric) AND ("taux_horaire_base" <= (1000)::numeric)))),
-    CONSTRAINT "chk_type_contrat_recherche" CHECK (("type_contrat_recherche" = ANY (ARRAY['TOUS'::"text", 'SALARIE'::"text", 'LIBERAL'::"text"]))),
-    CONSTRAINT "ck_max_732_creneaux" CHECK ((("nb_creneaux" >= 0) AND ("nb_creneaux" <= 732))),
-    CONSTRAINT "missions_mission_source_check" CHECK (("mission_source" = ANY (ARRAY['SWIPE'::"text", 'CANDIDATURE'::"text", 'REBOOK'::"text", 'PROPOSITION_DIRECTE'::"text", 'REMPLACEMENT'::"text", 'REPUBLICATION'::"text"]))),
-    CONSTRAINT "missions_mode_attribution_check" CHECK (("mode_attribution" = ANY (ARRAY['PREMIER_ARRIVE'::"text", 'CANDIDATURE'::"text"]))),
-    CONSTRAINT "missions_mode_paiement_soignant_check" CHECK (("mode_paiement_soignant" = ANY (ARRAY['DIRECT'::"text", 'STRIPE_CONNECT'::"text", 'VIREMENT'::"text"]))),
-    CONSTRAINT "missions_mode_remuneration_check" CHECK (("mode_remuneration" = ANY (ARRAY['TAUX_HORAIRE'::"text", 'RETROCESSION'::"text"]))),
-    CONSTRAINT "missions_nature_tva_confirmee_soignant_check" CHECK ((("nature_tva_confirmee_soignant" IS NULL) OR ("nature_tva_confirmee_soignant" = ANY (ARRAY['SOIN_THERAPEUTIQUE_EXONERE'::"text", 'PRESTATION_TAXABLE'::"text"])))),
-    CONSTRAINT "missions_nature_tva_prestation_check" CHECK ((("nature_tva_prestation" IS NULL) OR ("nature_tva_prestation" = ANY (ARRAY['SOIN_THERAPEUTIQUE_EXONERE'::"text", 'PRESTATION_TAXABLE'::"text"])))),
-    CONSTRAINT "missions_niveau_urgence_check" CHECK ((("niveau_urgence" >= 0) AND ("niveau_urgence" <= 3))),
-    CONSTRAINT "missions_retrocession_pct_check" CHECK ((("retrocession_pct" IS NULL) OR (("retrocession_pct" > (0)::numeric) AND ("retrocession_pct" <= (100)::numeric)))),
-    CONSTRAINT "missions_statut_validation_tva_check" CHECK (("statut_validation_tva" = ANY (ARRAY['NON_REQUISE'::"text", 'A_CONFIRMER'::"text", 'CONFIRMEE'::"text", 'A_REVOIR'::"text"]))),
-    CONSTRAINT "missions_type_paiement_soignant_check" CHECK (("type_paiement_soignant" = ANY (ARRAY['BULLETIN_PAIE'::"text", 'NOTE_HONORAIRES'::"text"])))
-);
-
-ALTER TABLE ONLY "public"."missions" FORCE ROW LEVEL SECURITY;
-
-
-ALTER TABLE "public"."missions" OWNER TO "postgres";
-
-
-COMMENT ON COLUMN "public"."missions"."code_arrivee" IS 'DEPRECATED CP5b — remplacé par code_pointage_actif.';
-
-
-
-COMMENT ON COLUMN "public"."missions"."code_depart" IS 'DEPRECATED CP5b — remplacé par code_pointage_actif.';
-
-
-
-COMMENT ON COLUMN "public"."missions"."regularisation_sociale_requise" IS 'TRUE si résolution modifie heures facture > 3 mois.';
-
-
-
-COMMENT ON COLUMN "public"."missions"."commission_a_recalculer" IS 'TRUE si ajustement nécessite recalcul commission.';
-
-
-
-COMMENT ON COLUMN "public"."missions"."type_contrat_applique" IS 'CP-LITIGES-7a FIX 3 — type de contrat réellement appliqué à la mission, figé au moment de l''assignation. NULL tant que soignant_assigne_id est NULL ou si le backfill n''a pas pu trancher (MIXTE ambigu).';
-
-
-
-COMMENT ON COLUMN "public"."missions"."relance_paiement_1_le" IS 'CP-C-2 : J+7 post fin_le mission SALARIE non payee relance etab';
-
-
-
-COMMENT ON COLUMN "public"."missions"."relance_paiement_2_le" IS 'CP-C-2 : J+21 post fin_le 2e relance plus pressante';
-
-
-
-COMMENT ON COLUMN "public"."missions"."strategie_facturation" IS 'Stratégie figée à l''assignation par fn_geler_mission_a_assignation : FINALE_UNIQUE si durée ≤ 7 jours, HEBDO_ET_FINALE si > 7 jours. Une prolongation post-assignation NE modifie PAS la stratégie.';
-
-
-
-COMMENT ON COLUMN "public"."missions"."est_asap" IS 'Mission urgente publiée < 2h avant son début (pool urgence). Annulation soignant après la fenêtre de rétractation = -25 pts de score (vs -10 pour une mission classique).';
-
-
-
-COMMENT ON COLUMN "public"."missions"."nature_tva_prestation" IS 'Nature TVA déclarée par l établissement puis confirmée par le soignant avant facturation libérale.';
-
-
-
-COMMENT ON COLUMN "public"."missions"."statut_validation_tva" IS 'Le statut TVA ne bloque jamais l exécution ni les litiges ; il bloque uniquement la création d une nouvelle facture tant qu il n est pas CONFIRMEE.';
 
 
 
@@ -73019,8 +73338,28 @@ ALTER TABLE ONLY "public"."groupes_sante"
 
 
 
+ALTER TABLE ONLY "public"."growth_agent_executions"
+    ADD CONSTRAINT "growth_agent_executions_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."growth_brouillons"
+    ADD CONSTRAINT "growth_brouillons_idempotence_key_key" UNIQUE ("idempotence_key");
+
+
+
+ALTER TABLE ONLY "public"."growth_brouillons"
+    ADD CONSTRAINT "growth_brouillons_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."growth_config"
     ADD CONSTRAINT "growth_config_pkey" PRIMARY KEY ("cle");
+
+
+
+ALTER TABLE ONLY "public"."growth_rapports_hebdo"
+    ADD CONSTRAINT "growth_rapports_hebdo_pkey" PRIMARY KEY ("semaine_debut");
 
 
 
@@ -74296,6 +74635,22 @@ CREATE INDEX "idx_fraude_signals_parrainage" ON "public"."parrainage_fraude_sign
 
 
 CREATE INDEX "idx_groupes_parent" ON "public"."groupes_sante" USING "btree" ("groupe_parent_id");
+
+
+
+CREATE INDEX "idx_growth_agent_executions_recent" ON "public"."growth_agent_executions" USING "btree" ("agent", "debut_le" DESC);
+
+
+
+CREATE INDEX "idx_growth_brouillons_cible" ON "public"."growth_brouillons" USING "btree" ("cible_type", "cible_id");
+
+
+
+CREATE INDEX "idx_growth_brouillons_email" ON "public"."growth_brouillons" USING "btree" ("lower"("destinataire_email")) WHERE ("destinataire_email" IS NOT NULL);
+
+
+
+CREATE INDEX "idx_growth_brouillons_file" ON "public"."growth_brouillons" USING "btree" ("statut", "agent", "cree_le" DESC);
 
 
 
@@ -78066,7 +78421,28 @@ CREATE POLICY "fs_update_own" ON "public"."filtres_sauvegardes" FOR UPDATE TO "a
 ALTER TABLE "public"."groupes_sante" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."growth_agent_executions" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "growth_agent_executions_admin_lecture" ON "public"."growth_agent_executions" FOR SELECT TO "authenticated" USING (( SELECT "public"."est_admin"() AS "est_admin"));
+
+
+
+ALTER TABLE "public"."growth_brouillons" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "growth_brouillons_admin_lecture" ON "public"."growth_brouillons" FOR SELECT TO "authenticated" USING (( SELECT "public"."est_admin"() AS "est_admin"));
+
+
+
 ALTER TABLE "public"."growth_config" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."growth_rapports_hebdo" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "growth_rapports_hebdo_admin_lecture" ON "public"."growth_rapports_hebdo" FOR SELECT TO "authenticated" USING (( SELECT "public"."est_admin"() AS "est_admin"));
+
 
 
 ALTER TABLE "public"."health_check" ENABLE ROW LEVEL SECURITY;
@@ -80153,6 +80529,11 @@ GRANT ALL ON TABLE "public"."externalisation_actions" TO "service_role";
 
 
 
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."missions" TO "authenticated";
+GRANT ALL ON TABLE "public"."missions" TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."_sha256_hex"("p_input" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."_sha256_hex"("p_input" "text") TO "service_role";
 
@@ -81049,6 +81430,30 @@ GRANT ALL ON FUNCTION "public"."fn_admin_get_user_id_by_email"("p_email" "text")
 REVOKE ALL ON FUNCTION "public"."fn_admin_graphiques"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_graphiques"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_admin_graphiques"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_admin_growth_brouillon_decider"("p_id" "uuid", "p_action" "text", "p_sujet" "text", "p_corps" "text", "p_motif" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_growth_brouillon_decider"("p_id" "uuid", "p_action" "text", "p_sujet" "text", "p_corps" "text", "p_motif" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_growth_brouillon_decider"("p_id" "uuid", "p_action" "text", "p_sujet" "text", "p_corps" "text", "p_motif" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_admin_growth_entonnoir"("p_jours" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_growth_entonnoir"("p_jours" integer) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_growth_entonnoir"("p_jours" integer) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_admin_growth_executer_agents"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_growth_executer_agents"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_growth_executer_agents"() TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_admin_growth_planification"("p_actif" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_growth_planification"("p_actif" boolean) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_growth_planification"("p_actif" boolean) TO "authenticated";
 
 
 
@@ -86221,8 +86626,27 @@ GRANT ALL ON TABLE "public"."groupes_sante" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."growth_agent_executions" TO "service_role";
+GRANT SELECT ON TABLE "public"."growth_agent_executions" TO "authenticated";
+
+
+
+GRANT ALL ON SEQUENCE "public"."growth_agent_executions_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."growth_brouillons" TO "service_role";
+GRANT SELECT ON TABLE "public"."growth_brouillons" TO "authenticated";
+
+
+
 GRANT SELECT,INSERT,UPDATE ON TABLE "public"."growth_config" TO "authenticated";
 GRANT ALL ON TABLE "public"."growth_config" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."growth_rapports_hebdo" TO "service_role";
+GRANT SELECT ON TABLE "public"."growth_rapports_hebdo" TO "authenticated";
 
 
 
@@ -86326,11 +86750,6 @@ GRANT ALL ON TABLE "public"."mission_creneaux" TO "service_role";
 
 GRANT SELECT,INSERT ON TABLE "public"."mission_series" TO "authenticated";
 GRANT ALL ON TABLE "public"."mission_series" TO "service_role";
-
-
-
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."missions" TO "authenticated";
-GRANT ALL ON TABLE "public"."missions" TO "service_role";
 
 
 
