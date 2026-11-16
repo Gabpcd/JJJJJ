@@ -6,20 +6,24 @@ import Foundation
 ///
 /// Masqués, où qu'ils apparaissent dans un texte :
 /// - la valeur d'un paramètre sensible (`finsDeNomsSensibles` : famille des jetons — `token`, `access_token`,
-///   `refresh_token`, `provider_token`, `provider_refresh_token`, `token_hash`, formes camelCase comprises — et mots de
-///   passe ; `nomsSensiblesExacts` : `code`, `email`, `iban`) : en requête ou en fragment, encodé une ou deux fois (`%3D`,
-///   `%253D`), en JSON (échappé ou non) et dans une description Swift (`refreshToken: "…"`) — jamais `error_code`,
-///   `status_code`, `barcode`, `token_type` ;
+///   `refresh_token`, `provider_token`, `provider_refresh_token`, `token_hash`, formes camelCase comprises —, mots de
+///   passe et codes OTP — `otp`, `otp_code`, `p_otp_code` de `fn_signer_contrat_otp` ; `nomsSensiblesExacts` : `code`,
+///   `email`, `iban`, avec ou sans le préfixe `p_` des paramètres RPC, dont `p_code`, le code QR de pointage) : en requête
+///   ou en fragment, encodé une ou deux fois (`%3D`, `%253D`), en JSON (échappé ou non, valeur texte ou nombre) et dans
+///   une description Swift (`refreshToken: "…"`, `code: 123456`) — jamais `error_code`, `status_code`, `barcode`,
+///   `token_type`, `p_code_postal` ;
 /// - les jetons porteurs (`Bearer …`) et les JWT isolés ;
-/// - les adresses e-mail (`@`, `%40` ou `%2540`) ;
+/// - les adresses e-mail (`@`, `%40` ou `%2540`), parties locales et domaines non ASCII compris (`josé@example.fr`) ;
 /// - les IBAN (compacts, ou par groupes de quatre séparés par une espace, une espace insécable U+00A0 ou U+202F, ou un
 ///   tiret ; toutes casses), contrôle mod 97 non exigé : un IBAN mal saisi reste une donnée bancaire. Un UUID (mission,
 ///   présence) n'est jamais pris pour un IBAN.
 /// Un texte de plus de `longueurMaximale` caractères est tronqué avant tout traitement (`marqueTroncature`) : le coût
-/// reste borné (revue B8 n°1, m1). Dans un dictionnaire, la valeur d'une clé sensible (`estCleSensible`) est masquée
-/// quel qu'en soit le type (texte, tableau, dictionnaire, nombre) ; seul un nombre sous la clé `code` est conservé (code
-/// d'erreur NSError ou HTTP). Le nom de l'appareil (contexte `device`, souvent le prénom de la personne) est retiré. Les
-/// fils d'Ariane réseau (`http`) sont rejetés.
+/// reste borné (revue B8 n°1, m1). Le mot que la limite coupe est retiré en entier (revue B8 de la vague 5, m3) : une
+/// adresse, un JWT ou une valeur encodée coupés ne seraient plus reconnus, et leur début survivrait. Dans un dictionnaire,
+/// la valeur d'une clé sensible (`estCleSensible`) est masquée quel qu'en soit le type (texte, tableau, dictionnaire,
+/// nombre) ; seul un nombre sous la clé exacte `code` est conservé (code d'erreur NSError ou HTTP). Dans un texte, rien ne
+/// distingue un code d'erreur d'un code OTP ou de pointage : un nombre sous `code` y est masqué. Le nom de l'appareil
+/// (contexte `device`, souvent le prénom de la personne) est retiré. Les fils d'Ariane réseau (`http`) sont rejetés.
 ///
 /// Masquer trop (un hexadécimal pris pour un IBAN) est accepté ; laisser passer une donnée ne l'est pas.
 public enum CrashScrubber {
@@ -32,16 +36,20 @@ public enum CrashScrubber {
     public static let marqueTroncature = "…[tronqué]"
 
     /// Fins de noms de paramètres sensibles (motif, sans casse) : tout nom qui se termine ainsi est sensible, quel que soit
-    /// son préfixe (`refresh_token`, `refreshToken`, `provider_refresh_token`, `tokenHash`, `new_password`, `motDePasse`).
-    static let finsDeNomsSensibles = #"token(?:[_-]?hash)?|password|mot[_-]?de[_-]?passe"#
-    /// Noms de paramètres sensibles exacts (motif, sans casse) : jamais la fin d'un autre nom (`error_code`, `barcode`).
-    static let nomsSensiblesExacts = #"code|email|iban"#
+    /// son préfixe (`refresh_token`, `refreshToken`, `provider_refresh_token`, `tokenHash`, `new_password`, `motDePasse`,
+    /// `otp`, `p_otp_code`, `otpCode`).
+    static let finsDeNomsSensibles = #"token(?:[_-]?hash)?|password|mot[_-]?de[_-]?passe|otp(?:[_-]?code)?"#
+    /// Noms de paramètres sensibles exacts (motif, sans casse), avec ou sans le préfixe `p_` des paramètres RPC (`p_code`,
+    /// code QR de pointage de `fn_scanner_code_pointage`) : jamais la fin d'un autre nom (`error_code`, `barcode`) ni le
+    /// début d'un autre (`p_code_postal`).
+    static let nomsSensiblesExacts = #"(?:p_)?(?:code|email|iban)"#
 
-    /// Clés de dictionnaire sensibles exactes, comparées sans casse ni séparateur (`_`, `-`).
+    /// Clés de dictionnaire sensibles exactes, comparées sans casse, sans le préfixe `p_` des paramètres RPC ni séparateur
+    /// (`_`, `-`) : `code`, `p_code`, `Email`, `p_iban`…
     public static let clesSensibles: Set<String> = ["code", "email", "iban"]
     /// Fins de clés sensibles, comparées sans casse ni séparateur : `refresh_token`, `refreshToken`,
-    /// `provider_refresh_token`, `token_hash`, `tokenHash`, `new_password`, `mot_de_passe`…
-    public static let suffixesSensibles = ["token", "tokenhash", "password", "motdepasse"]
+    /// `provider_refresh_token`, `token_hash`, `tokenHash`, `new_password`, `mot_de_passe`, `otp`, `p_otp_code`…
+    public static let suffixesSensibles = ["token", "tokenhash", "password", "motdepasse", "otp", "otpcode"]
 
     /// Catégories ou types de fils d'Ariane rejetés : réseau (`enableNetworkBreadcrumbs = false`, défense en profondeur).
     public static let filsRejetes: Set<String> = ["http"]
@@ -56,7 +64,15 @@ public enum CrashScrubber {
         var tronque = false
         if let coupure = brut.index(brut.startIndex, offsetBy: longueurMaximale, limitedBy: brut.endIndex),
            coupure < brut.endIndex {
-            net = String(brut[..<coupure])
+            var garde = brut[..<coupure]
+            // Revue B8 de la vague 5, m3 : le mot que la limite coupe est retiré en entier, jusqu'au dernier blanc. Coupés,
+            // une adresse (`jean.dupont@exam`), un JWT (en-tête et charge utile sans signature) ou une valeur encodée ne
+            // seraient plus reconnus par les règles, et leur début survivrait. Un texte sans blanc avant la limite est un
+            // seul mot coupé : il ne reste que le marqueur. Un mot qui finit exactement à la limite est gardé.
+            if !brut[coupure].isWhitespace {
+                garde = garde[..<(garde.lastIndex(where: \.isWhitespace).map(garde.index(after:)) ?? garde.startIndex)]
+            }
+            net = String(garde)
             tronque = true
         }
         for regle in regles {
@@ -70,11 +86,14 @@ public enum CrashScrubber {
         return tronque ? net + marqueTroncature : net
     }
 
-    /// Caractères d'une partie locale d'adresse e-mail (forme encodée `%40` comprise).
-    private static let partieLocale = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._%+-")
+    /// Caractères d'une partie locale d'adresse e-mail (forme encodée `%40` comprise) : lettres et chiffres de toutes les
+    /// écritures, marques combinantes comprises (adresses internationalisées, RFC 6531 : `josé@…` ; revue B8 de la vague 5,
+    /// m3), plus `.`, `_`, `%`, `+` et `-`. Une demi-paire de substitution n'est jamais lue : la coupure ne sépare pas une
+    /// paire.
+    private static let partieLocale = CharacterSet.letters.union(.decimalDigits).union(CharacterSet(charactersIn: "._%+-"))
 
     /// Adresses e-mail : chaque arobase suivie d'un domaine (`arobase`, recherche ancrée sur `@`, `%40` ou `%2540`) est
-    /// masquée avec la partie locale qui la précède, lue à rebours sur 64 caractères au plus (RFC 5321). Coût linéaire :
+    /// masquée avec la partie locale qui la précède, lue à rebours sur 64 unités UTF-16 au plus (RFC 5321). Coût linéaire :
     /// aucune position du texte n'est essayée comme début d'adresse (revue B8 n°1, m1).
     private static func masquerAdresses(_ texte: String, arobase: NSRegularExpression) -> String {
         let source = texte as NSString
@@ -107,9 +126,12 @@ public enum CrashScrubber {
         }
     }
 
-    /// Vrai pour une clé dont toute valeur est masquée (sans casse ni séparateur `_` ou `-`).
+    /// Vrai pour une clé dont toute valeur est masquée (sans casse, sans le préfixe `p_` des paramètres RPC, sans séparateur
+    /// `_` ou `-`).
     public static func estCleSensible(_ cle: String) -> Bool {
-        let normalisee = cle.lowercased().filter { $0 != "_" && $0 != "-" }
+        let minuscule = cle.lowercased()
+        let sansPrefixe = minuscule.hasPrefix("p_") ? minuscule.dropFirst(2) : Substring(minuscule)
+        let normalisee = sansPrefixe.filter { $0 != "_" && $0 != "-" }
         return clesSensibles.contains(normalisee) || suffixesSensibles.contains { normalisee.hasSuffix($0) }
     }
 
@@ -179,6 +201,10 @@ public enum CrashScrubber {
         let nomComplet = #"(?:[A-Za-z0-9_-]*(?:"# + fins + ")|" + exacts + ")"
         // Chaîne JSON ou Swift entre guillemets (échappements compris), coupée par la fin du texte au besoin.
         let chaine = #""(?:[^"\\]|\\.)*(?:"|\z)"#
+        // Nombre JSON ou Swift (revue B8 de la vague 5, m3 : un code OTP ou de pointage numérique est un secret).
+        let nombre = #"-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?"#
+        // Lettres, marques et chiffres de toutes les écritures (domaine d'adresse internationalisé, revue B8 de la vague 5).
+        let etiquette = #"[\p{L}\p{M}\p{Nd}-]{1,63}"#
         // Séparateur d'une valeur de paramètre : `=`, ou `%3D` et `%253D` (encodé une ou deux fois).
         let egal = #"(\s*=\s*|%3D|%253D)"#
         // Valeur d'un paramètre : entre guillemets, ou nue jusqu'au séparateur suivant (`&`, `#`, blanc, encodés compris).
@@ -196,15 +222,17 @@ public enum CrashScrubber {
             // Nom exact après un séparateur encodé une ou deux fois (`%3Fcode%3D…`, `%253Fcode%253D…`) : la règle
             // précédente exige qu'aucune lettre ni aucun chiffre ne le précède.
             (#"(?i)(%3F|%26|%23|%253F|%2526|%2523)("# + exacts + ")" + egal + valeurDeParametre, "$1$2$3\(m)"),
-            // Clé JSON échappée (JSON dans une chaîne JSON) : `\"refresh_token\":\"…\"`.
-            (#"(?i)(\\""# + nomComplet + #"\\"\s*:\s*)\\"(?:[^"\\]|\\(?!"))*(?:\\"|\z)"#, #"$1\\"\#(m)\\""#),
-            // Clé JSON dans un texte (corps de réponse illisible, description d'erreur).
-            (#"(?i)(""# + nomComplet + #""\s*:\s*)"# + chaine, "$1\"\(m)\""),
-            // Description Swift (`String(describing:)`, `dump`) : `refreshToken: "…"`, `tokenHash: Optional("…")`.
-            ("(?i)" + nom + #"(\s*:\s*(?:Optional\()?)"# + chaine, "$1$2\"\(m)\""),
-            // Adresse e-mail : arobase (`@`, `%40` ou `%2540`) et domaine borné (RFC 5321) ; la partie locale, au plus 64
-            // caractères avant l'arobase, est lue à rebours (`masquerAdresses`).
-            (#"(?i)(?:@|%2540|%40)[A-Z0-9-]{1,63}(?:\.[A-Z0-9-]{1,63}){0,8}\.[A-Z]{2,63}"#, nil),
+            // Clé JSON échappée (JSON dans une chaîne JSON) : `\"refresh_token\":\"…\"`, `\"code\":123456`.
+            (#"(?i)(\\""# + nomComplet + #"\\"\s*:\s*)(?:\\"(?:[^"\\]|\\(?!"))*(?:\\"|\z)|"# + nombre + ")",
+             #"$1\\"\#(m)\\""#),
+            // Clé JSON dans un texte (corps de réponse illisible, description d'erreur), valeur texte ou nombre.
+            (#"(?i)(""# + nomComplet + #""\s*:\s*)(?:"# + chaine + "|" + nombre + ")", "$1\"\(m)\""),
+            // Description Swift (`String(describing:)`, `dump`) : `refreshToken: "…"`, `tokenHash: Optional("…")`,
+            // `code: 123456`.
+            ("(?i)" + nom + #"(\s*:\s*(?:Optional\()?)(?:"# + chaine + "|" + nombre + ")", "$1$2\"\(m)\""),
+            // Adresse e-mail : arobase (`@`, `%40` ou `%2540`) et domaine borné (RFC 5321), internationalisé compris ; la
+            // partie locale, au plus 64 unités avant l'arobase, est lue à rebours (`masquerAdresses`).
+            (#"(?i)(?:@|%2540|%40)"# + etiquette + #"(?:\."# + etiquette + #"){0,8}\.[\p{L}\p{M}]{2,63}"#, nil),
             // IBAN : pays, clé, puis 8 à 32 caractères par groupes de quatre (séparateurs facultatifs) ; jamais un UUID ni
             // la suite d'un identifiant à tirets.
             (#"(?i)(?<![A-Z0-9_-])(?!"# + uuid + #")[A-Z]{2}[0-9]{2}(?:"# + separateurIBAN + #"?[A-Z0-9]{4}){2,7}(?:"#

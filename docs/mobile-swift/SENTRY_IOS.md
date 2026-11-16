@@ -139,36 +139,49 @@ m3).
 
 - **Masqués**, avec le texte `[masqué]`, partout dans un texte :
   - la valeur d'un paramètre sensible :
-    - tout nom qui finit par `token`, `token_hash`, `password` ou `mot_de_passe`, séparateurs `_` et `-` facultatifs et
-      camelCase compris : `token`, `access_token`, `refresh_token`, `provider_token`, `provider_refresh_token`,
-      `refreshToken`, `tokenHash`, `motDePasse`… ;
-    - les noms exacts `code`, `email` et `iban` ;
+    - tout nom qui finit par `token`, `token_hash`, `password`, `mot_de_passe`, `otp` ou `otp_code`, séparateurs `_` et
+      `-` facultatifs et camelCase compris : `token`, `access_token`, `refresh_token`, `provider_token`,
+      `provider_refresh_token`, `refreshToken`, `tokenHash`, `motDePasse`, `otpCode`, `p_otp_code` (code reçu par SMS
+      pour signer un contrat, `fn_signer_contrat_otp`)… ;
+    - les noms exacts `code`, `email` et `iban`, avec ou sans le préfixe `p_` des paramètres RPC : `p_code` est le code
+      QR de pointage (`fn_scanner_code_pointage`) ;
   - cette valeur est masquée sous toutes ses formes : en requête ou en fragment, encodée une ou deux fois (`%3F…%3D`,
-    `%253F…%253D`), en JSON (échappé `\"refresh_token\":\"…\"` ou non), dans une description Swift
-    (`refreshToken: "…"`, `tokenHash: Optional("…")`), et jusqu'à la fin du texte si la valeur est coupée ;
+    `%253F…%253D`), en JSON (échappé `\"refresh_token\":\"…\"` ou non, valeur texte **ou nombre** : `{"code":123456}`),
+    dans une description Swift (`refreshToken: "…"`, `tokenHash: Optional("…")`, `code: 123456`), et jusqu'à la fin du
+    texte si la valeur est coupée. Dans un texte, rien ne distingue un code d'erreur d'un code OTP ou de pointage : tout
+    nombre sous `code` y est masqué (revue B8 de la vague 5, m3), `Code=-1009` d'une description de `NSError` compris.
+    Le code d'erreur reste lisible dans `mechanism.meta`, conservé tel quel ;
   - les jetons `Bearer` et les JWT ;
-  - les adresses e-mail, y compris encodées (`%40`, `%2540`) ;
+  - les adresses e-mail, y compris encodées (`%40`, `%2540`) et internationalisées : partie locale et domaine en lettres
+    de toute écriture, accents composés ou décomposés compris (`josé@example.fr`, `zoë@exämple.fr` ; revue B8 de la
+    vague 5, m3) ;
   - les IBAN : compacts, ou par groupes de quatre séparés par une espace, une espace insécable (U+00A0, U+202F) ou un
     tiret, toutes casses, sans contrôle mod 97 (un IBAN mal saisi reste une donnée bancaire).
 - **Dictionnaires** (`extra`, contextes, `mechanism.data`, données des fils d'Ariane) : parcourus en profondeur. Une clé
-  est sensible si, sans casse ni séparateur, elle vaut `code`, `email` ou `iban`, ou finit par `token`, `tokenhash`,
-  `password` ou `motdepasse`. **Toute** valeur d'une clé sensible est masquée, qu'il s'agisse d'un texte, d'un tableau, d'un
-  dictionnaire ou d'un nombre, à une exception près : un nombre sous la clé `code`, qui est un code d'erreur NSError ou
-  HTTP.
+  est sensible si, sans casse, sans le préfixe `p_` et sans séparateur, elle vaut `code`, `email` ou `iban`, ou finit par
+  `token`, `tokenhash`, `password`, `motdepasse`, `otp` ou `otpcode`. **Toute** valeur d'une clé sensible est masquée,
+  qu'il s'agisse d'un texte, d'un tableau, d'un dictionnaire ou d'un nombre, à une exception près : un nombre sous la clé
+  exacte `code`, clé structurée qui porte un code d'erreur NSError ou HTTP. `p_code` et `otp` numériques sont masqués.
 - **Retirés** : le nom de l'appareil (contexte `device`, qui porte souvent le prénom), la requête de l'événement et le
   nom du serveur. L'utilisateur est réduit à son seul identifiant.
 - **Rejetés** : les fils d'Ariane réseau (`http`), par défense en profondeur puisque ces fils sont déjà coupés.
 - **Coût borné** (revue B8 n°1, m1) : un texte de plus de 8 192 caractères est tronqué avant traitement et se termine
-  par `…[tronqué]`. Les expressions sont compilées une seule fois. Aucun motif n'essaie chaque position du texte avec un
+  par `…[tronqué]`. **Le mot que la limite coupe est retiré en entier**, jusqu'au dernier blanc (revue B8 de la vague 5,
+  m3). Coupés, une adresse (`jean.dupont@exam`), un JWT sans signature ou une valeur encodée ne seraient plus reconnus, et
+  leur début survivrait. Un texte sans aucun blanc avant la limite se réduit donc au marqueur. Seule limite connue : un IBAN
+  à groupes coupé avant la fin de son deuxième groupe garde le pays, la clé et au plus le code banque (`FR76 3000`), qui
+  n'identifient personne. Les expressions sont compilées une seule fois. Aucun motif n'essaie chaque position du texte avec un
   retour arrière non borné : les motifs sont ancrés sur un caractère précis ou sur une borne explicite, et l'adresse
   e-mail est cherchée à partir de son arobase. La garde est `CrashScrubberTests.testHuitMilleCaracteresAdversesTraitesSousLeSeuil` :
-  six textes adverses d'au moins 8 000 caractères, plus un texte réaliste, doivent chacun passer sous **100 ms**. On retient le
-  plus court de trois passages, si bien qu'une préemption passagère du simulateur ou du runner ne fait pas échouer le test.
-  Mesures sur MacBook avec Xcode 16.4, en Debug, par texte : de 0,7 à 8,6 ms en `swift test` macOS, et de 1,1 à 3,3 ms sur
-  le simulateur iPhone 16 (iOS 18.6). Avant la correction, ces textes prenaient de 1,5 à 2,1 s.
-- `error_code`, `status_code`, `barcode`, `token_type`, `codeEtablissement` et les UUID de mission restent lisibles,
-  même ceux qui commencent par deux lettres et deux chiffres. Masquer trop est accepté (un hexadécimal pris pour un
-  IBAN) ; laisser passer une donnée ne l'est pas.
+  dix textes adverses d'au moins 8 000 caractères, plus un texte réaliste, doivent chacun passer sous **100 ms**. Quatre de
+  ces textes viennent de la vague 5 : noms OTP, codes de pointage, adresse non ASCII, mot coupé de 9 000 caractères. On
+  retient le plus court de trois passages, si bien qu'une préemption passagère du simulateur ou du runner ne fait pas
+  échouer le test. Mesures sur MacBook avec Xcode 16.4, en Debug, par texte : de 0,7 à 8,6 ms en `swift test` macOS, et de
+  1,1 à 3,3 ms sur le simulateur iPhone 16 (iOS 18.6). Avant la correction, ces textes prenaient de 1,5 à 2,1 s. Après les
+  règles de la vague 5 : de 0,6 à 6,0 ms en `swift test` macOS (simulateur non remesuré).
+- `error_code`, `status_code`, `barcode`, `token_type`, `codeEtablissement`, `p_code_postal`, `codePostal` et les UUID de
+  mission restent lisibles, même ceux qui commencent par deux lettres et deux chiffres. Masquer trop est accepté (un
+  hexadécimal pris pour un IBAN) ; laisser passer une donnée ne l'est pas.
 
 À régler côté serveur par Gabrielle (§7) : « Prevent Storing of IP Addresses » et le *Data Scrubber* du projet, en
 seconde barrière.
@@ -267,15 +280,22 @@ trois types de données comme liés à l'utilisateur, ce qui est exact puisque l
 ## 9. Tests
 
 - `JoleneCore` (`swift test`) :
-  - `CrashScrubberTests` : nettoyage, faux négatifs de la revue B8 n°1 (m2), coût borné et troncature (m1) ;
+  - `CrashScrubberTests` : nettoyage, faux négatifs de la revue B8 n°1 (m2), coût borné et troncature (m1) ; faux
+    négatifs de la revue B8 de la vague 5 (m3) : adresses non ASCII, codes OTP, `p_code`, nombres sous `code` dans un
+    texte, mot coupé par la troncature ;
   - `CrashReportingTests` : démarrage, refus (DSN à mot de passe compris), release, réglages, identifiant de session
-    (changement d'identité vers un espace bloqué, M2), et gardes statiques de la cible app (import isolé, démarrage avant
+    (changement d'identité vers un espace bloqué, M2 ; retrait au début de `signIn` relevé au moment même de l'appel
+    d'authentification, revue B8 de la vague 5, m2), et gardes statiques de la cible app (import isolé, démarrage avant
     le conteneur, démo sans port, crash de test sous DEBUG, DSN non versionné, recensement des propriétés traitées par
     `beforeSend` et `beforeBreadcrumb`, M1 et m3).
 - Sentinelle réseau de la démo, inchangée : les XCUITest démo lisent toujours « 0 requête » (`network-sentinel`),
   puisque Sentry ne démarre jamais en démo.
 - Node :
   - `tests/node/ios-native-testflight.node.mjs` : le secret est facultatif, lu par l'archive seule, jamais exigé ni
-    affiché ; le DSN n'est pas versionné, et ce document ne propose jamais de l'écrire dans un fichier (m5) ;
+    affiché ; le DSN n'est pas versionné, et ce document ne propose jamais de l'écrire dans un fichier (m5) ; l'archive lit
+    le `Package.resolved` sous la même toolchain et avec la même clé de cache qu'`ios-swift-ci.yml`, sans le réécrire,
+    pin `kscrash` compris (revue B8 de la vague 5, M1) ;
   - `tests/node/ios-swift-ci-eclats.node.mjs` : le `Package.resolved` de l'app est vérifié juste après la résolution
-    SPM, avant les éclats (m4).
+    SPM, avant les éclats (m4). Revue B8 de la vague 5 : une dérive fait toujours échouer l'étape, après copie du fichier
+    résolu ; l'artefact `package-resolved-<format>-<sha>` est publié juste après, sur échec seulement ; le pin `kscrash`
+    est exigé (M1). Le socle porte la même condition que les autres éclats (m1).
