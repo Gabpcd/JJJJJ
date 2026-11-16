@@ -98,7 +98,7 @@ actor DemoComptesInscription {
     func parcoursCourant() -> ParcoursInscription? { parcours }
 
     /// `UPDATE parcours_inscription SET donnees = donnees || p_donnees` (fusion de premier niveau, `public.sql`
-    /// l.32503-32505) : seules les clés transmises (`CompletionRules.donneesBrouillon`) remplacent les anciennes ; nil
+    /// l.32887-32889) : seules les clés transmises (`CompletionRules.donneesBrouillon`) remplacent les anciennes ; nil
     /// sans parcours (`P0002`). La déclaration étudiant n'est jamais transmise : elle est conservée.
     func enregistrer(_ formulaire: FormulaireInscription) -> ParcoursInscription? {
         guard var ligne = parcours else { return nil }
@@ -158,13 +158,13 @@ public struct DemoInscriptionGateway: InscriptionPort {
     static let horodatage = "2026-11-02T00:00:00+00:00"
 
     /// Refus de `fn_demarrer_inscription` (22023), verbatim serveur.
-    // source: supabase/schema/public.sql:30163
+    // source: supabase/schema/public.sql:30547
     static let refusTypeOuConditions = "Vérifiez le type de compte et les conditions acceptées."
-    // source: supabase/schema/public.sql:30167
+    // source: supabase/schema/public.sql:30551
     static let refusProfession = "Choisissez votre profession."
 
     /// Refus de `fn_enregistrer_parcours_inscription` (P0002) et de `register-soignant` (T8), verbatim serveur.
-    // source: supabase/schema/public.sql:32505
+    // source: supabase/schema/public.sql:32889
     static let refusInscriptionIntrouvable = "Inscription introuvable."
     // source: supabase/functions/register-soignant/index.ts:237
     static let refusChampsManquants = "Champs obligatoires manquants (prénom, nom, profession)."
