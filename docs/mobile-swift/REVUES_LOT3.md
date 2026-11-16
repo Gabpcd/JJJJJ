@@ -2644,3 +2644,59 @@ _À compléter par le relecteur (contexte vierge) : verdict, ce qui a été vér
 - Premier build Sentry sous Xcode 26.4.1 et étape « Package.resolved de l'app inchangé » en CI.
 - Revue fraîche B8 n°2 de L3-T15 (sur la PR).
 - Recette appareil (T12, T17) ; STAGING (T16).
+
+### Revue fraîche B8 de la vague 5 (L3-T15 n°2 comprise) : A_CORRIGER, corrections (16/11/2026)
+
+Verdict du relecteur à contexte vierge, sur la tête `9191d779` (commentaire 6928639814 de la PR #1133) : **A_CORRIGER**.
+Constats : 0 bloquant, 1 majeur, 3 mineurs. Les corrections sont des commits locaux de `feat/ios-vague5`, poussés avec le
+correctif du gel iPhone en CI (`fix/ios-gel-iphone-ci`) pour n'occuper les machines macOS qu'une fois.
+
+- **M1 — l'étape « Package.resolved de l'app inchangé » échouait sous Xcode 26.4.1.** Cela touchait iPad portrait et
+  paysage au run 43948577842, dont les journaux ont été perdus à l'annulation. Cause, relue dans les manifestes de
+  sentry-cocoa `4e1e4ba9` : `Package@swift-6.2.swift` et `Package@swift-6.1.swift` déclarent sans condition KSCrash
+  (`18a633de…`), utilisé seulement sous le trait `V10`. SwiftPM 6.2 l'épingle quand même, SwiftPM 6.1 (Xcode 16.4) non.
+  Corrections :
+  - pin `kscrash` ajouté au `Package.resolved` de l'app, `originHash` inchangé ;
+  - l'étape se diagnostique seule : diff imprimé, fichier résolu, diff et version d'Xcode copiés, puis échec dans tous
+    les cas. L'étape suivante publie, sur échec seulement, l'artefact `package-resolved-<format>-<sha>`. Correctif
+    documenté : committer ce fichier ;
+  - TestFlight : même toolchain, même clé de cache, `-onlyUsePackageVersionsFromResolvedFile` sur les deux résolutions
+    (nouvelle garde dans `ios-native-testflight.node.mjs`) ;
+  - `SENTRY_IOS.md` §1 : KSCrash est épinglé mais jamais lié à l'app. Le produit `Sentry` est le binaire plus
+    `SentryCppHelper`, et seule la variable `SDK_V10=1` lierait KSCrash. Le fichier de référence est celui d'Xcode
+    26.4.1.
+
+  **Non prouvé localement** : que la CI ne réécrive plus `originHash`, ni qu'Xcode 16.4 ne retire pas le pin en local.
+  L'étape le dira, artefact à l'appui.
+- **m1 — socle** : il porte maintenant `if: always() && steps.build.outcome == 'success'`, comme les dix autres
+  éclats. Délais : 25 + 1 (vérification) + 1 (artefact) + 11 × 30 = 357 ≤ 360, marge inchangée.
+- **m2 — retrait de l'identifiant au début de `signIn`** : `TemoinConnexion` relève les identifiants au moment même de
+  l'appel `AuthPort.signIn`. Le test de la connexion refusée l'exige désormais, et un nouveau test couvre la connexion
+  depuis un espace prêt (même compte, puis compte bloqué). Contre-épreuve : avec la ligne 119 de `SessionStore.swift`
+  commentée, 6 assertions échouent dans ces deux tests ; avec la ligne restaurée, les 31 `CrashReportingTests` passent.
+- **m3 — `CrashScrubber`** (tests d'abord : 4 tests, 60 assertions rouges) :
+  - adresses à partie locale ou domaine non ASCII ;
+  - noms `otp` et `otp_code` (dont `p_otp_code`) ;
+  - `p_code` (code QR de pointage) ;
+  - nombre sous un nom sensible en JSON et en description Swift. Dans un dictionnaire, un nombre sous la clé exacte
+    `code` reste conservé ;
+  - mot coupé par la troncature, retiré en entier.
+
+  Test de durée vert : de 0,6 à 6,0 ms par texte, avec quatre textes adverses de plus.
+
+Vérifications locales (Xcode 16.4, Swift 6.1.2 ; aucun build Xcode, la machine étant occupée par un autre agent) :
+
+- `swift test -Xswiftc -strict-concurrency=complete` : JoleneCore **1 748 tests, 0 échec**, 0 avertissement ;
+  JoleneSupabase **488 tests, 0 échec**, 0 avertissement ;
+- « Garde de livraison mobile » (six fichiers de `validate-pr.yml`) : **249 réussis, 0 échec** (248 + la garde
+  TestFlight de M1) ;
+- `ios-swift-ci-eclats.node.mjs` **8/8** (6 + 2), `ios-native-testflight.node.mjs` **56/56** ;
+- dix mutations du workflow et du `Package.resolved`, toutes tuées par `ios-swift-ci-eclats.node.mjs` : socle sans
+  condition, `exit 1` retiré, `continue-on-error`, artefact toujours publié, mal nommé ou déplacé, copie retirée, délai
+  de 5 min, pin `kscrash` retiré ou changé ;
+- étape de vérification rejouée en local, sans dérive puis avec : code 0, puis code 1 avec diff imprimé et trois
+  fichiers copiés ;
+- `Package.resolved` : JSON valide, identités dans l'ordre alphabétique, format d'Xcode. `.build` supprimés.
+
+Reste à prouver : CI trois formats sur la tête poussée (étape `Package.resolved` verte, `skipped = 0`), puis revue B8
+limitée à ce delta.
