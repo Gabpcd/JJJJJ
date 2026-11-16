@@ -95,7 +95,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .profil:
             return true                                  // T9 — édition du profil (`ProfilEditionScreen`), alias `reputation`
         case .revenus(section: .paiementsAConfirmer):
-            return false                                 // T13 — paiements à confirmer
+            return true                                  // T13 — section « Paiements à confirmer » de RevenusScreen
         case .stripeConnect:
             return false                                 // T14a — Stripe Connect
         case .revenus(section: .factures), .revenus(section: .bulletins), .revenus(section: .avances):

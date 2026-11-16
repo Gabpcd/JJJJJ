@@ -429,11 +429,11 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(try cible("/inscription/confirmer?token_hash=h&type=signup"), .aucune)
         XCTAssertEqual(try cible("/inscription/soignant?profession=IDE"), .aucune)
         XCTAssertEqual(try cible("/inscription/completer?ref=ABCD-12"), .aucune, "T8 : complétion hors espace")
-        // Destination effective, jamais la route brute : factures et paiements restent des renvois web (D4, T13).
+        // Destination effective, jamais la route brute : les factures restent un renvoi web (D4) ; « Paiements à
+        // confirmer » est la section native de Revenus depuis T13.
         XCTAssertEqual(try cible("/soignant/mes-gains?tab=factures"),
                        .web(.safari(URL(string: "https://jolene.app/soignant/mes-gains?tab=factures")!)))
-        XCTAssertEqual(try cible("/soignant/mes-gains?tab=paiements"),
-                       .web(.safari(URL(string: "https://jolene.app/soignant/mes-gains?tab=paiements")!)))
+        XCTAssertEqual(try cible("/soignant/mes-gains?tab=paiements"), .revenus(section: .paiementsAConfirmer))
         XCTAssertEqual(try cible("/etablissement/missions/abc"),
                        .web(.etablissement(URL(string: "https://jolene.app/etablissement/missions/abc")!)))
         XCTAssertEqual(try cible("/connexion"), .aucune, "connexion depuis un espace prêt : coordinateur de L1-T10")
@@ -446,8 +446,8 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(try cible("https://www.jolene.app/reset-password/?code=c&type=recovery#x"), .aucune)
 
         let racine = URL(string: "https://jolene.app/")!
-        for cible in [CibleNotification.accueil, .explorer, .missions, .revenus(section: .apercu), .monCompte, .mission(id: "m"), .centre,
-                      .preferences, .profil] {
+        for cible in [CibleNotification.accueil, .explorer, .missions, .revenus(section: .apercu),
+                      .revenus(section: .paiementsAConfirmer), .monCompte, .mission(id: "m"), .centre, .preferences, .profil] {
             XCTAssertTrue(cible.estPresentable(renvoiWebDisponible: false), "\(cible)")
         }
         XCTAssertFalse(CibleNotification.web(.safari(racine)).estPresentable(renvoiWebDisponible: false))
@@ -459,9 +459,10 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertTrue(CibleNotification.mission(id: "m").estPresentable(renvoiWebDisponible: false, depuisCentre: true))
         XCTAssertTrue(CibleNotification.preferences.estPresentable(renvoiWebDisponible: false, depuisCentre: true))
         XCTAssertTrue(CibleNotification.profil.estPresentable(renvoiWebDisponible: false, depuisCentre: true))
-        // Une section de Revenus autre que l'aperçu n'a pas de présentation dans l'espace avant sa tranche (T13) :
-        // elle n'est jamais réduite en silence à l'onglet (verrou, garde ci-dessous).
-        for section in SectionRevenus.allCases where section != .apercu {
+        // Une section de Revenus sans tranche livrée (factures, bulletins, avances : lot 4, D4) n'a pas de présentation
+        // dans l'espace : elle n'est jamais réduite en silence à l'onglet (verrou, garde ci-dessous). T13 a livré
+        // « Paiements à confirmer ».
+        for section in SectionRevenus.allCases where section != .apercu && section != .paiementsAConfirmer {
             XCTAssertFalse(CibleNotification.revenus(section: section).estPresentable(renvoiWebDisponible: true), "\(section)")
         }
     }

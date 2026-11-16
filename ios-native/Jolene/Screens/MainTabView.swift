@@ -31,7 +31,8 @@ import JoleneDesign
 /// - une notification lue dans le centre périme le compteur de l'Accueil (`lecturesCentre`, jeton de péremption
 ///   d'`AccueilModel`, revue L3-T5 m1) ;
 /// - (lot 3, T12) onglet Revenus natif (`RevenusScreen`, pile `cheminRevenus`), à la place du placeholder du lot 0 ;
-///   ses renvois web et l'état vide passent par `presenter` (cible de l'espace), la surcouche du pré-prompt est gardée.
+///   ses renvois web et l'état vide passent par `presenter` (cible de l'espace), la surcouche du pré-prompt est gardée ;
+/// - (lot 3, T13) section « Paiements à confirmer » de Revenus, cible du push `PAIEMENT_RECU` (`sectionRevenus`).
 struct MainTabView: View {
     /// Onglets de l'espace : enum dédié de JoleneCore (revue L3-T5, m9), jamais les drapeaux `EcranNatif`.
     typealias Tab = OngletEspace
@@ -56,6 +57,9 @@ struct MainTabView: View {
     /// Présentations de l'onglet Revenus par un lien ou un tap (jeton de péremption de `RevenusModel`, revue B8 de T12,
     /// m1) : le web relit `/soignant/mes-gains` à chaque navigation, l'onglet natif relit alors ses sections.
     @State private var presentationsRevenus = 0
+    /// Section de Revenus de la dernière présentation (lot 3, T13) : « Paiements à confirmer » fait défiler l'onglet
+    /// jusqu'à sa section (push `PAIEMENT_RECU`, lien `?tab=paiements`).
+    @State private var sectionRevenus: SectionRevenus = .apercu
     /// Notifications lues dans le centre (jeton de péremption du compteur de l'Accueil).
     @State private var lecturesCentre = 0
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
@@ -104,7 +108,8 @@ struct MainTabView: View {
             // Lot 3, T12 : onglet Revenus natif (remplace le placeholder du lot 0) ; ses renvois web (litige, factures,
             // paie, présences) passent par `presenter`, et sa pile revient à sa racine sur un lien ou un tap.
             NavigationStack(path: $cheminRevenus) {
-                RevenusScreen(session: session, snapshot: snapshot, peremption: presentationsRevenus) { cible in
+                RevenusScreen(session: session, snapshot: snapshot, peremption: presentationsRevenus,
+                              section: sectionRevenus) { cible in
                     presenter(cible, depuisCentre: false)
                 }
             }
@@ -187,12 +192,14 @@ struct MainTabView: View {
             cheminExplorer = NavigationPath()
         case .missions:
             selection = .missions
-        case .revenus:
-            // Seule la racine (`.apercu`) est présentable avant T13 (garde de `estPresentable`) ; lot 3, T12 : la pile de
-            // l'onglet revient à sa racine (revue B8 de T3b, m5), comme Explorer, et ses sections sont relues (jeton de
+        case .revenus(let section):
+            // Présentables (garde de `estPresentable`) : la racine (`.apercu`, T12) et « Paiements à confirmer »
+            // (`.paiementsAConfirmer`, T13 : l'onglet défile jusqu'à `revenus-paiements-declares`) ; lot 3, T12 : la pile
+            // de l'onglet revient à sa racine (revue B8 de T3b, m5), comme Explorer, et ses sections sont relues (jeton de
             // péremption, revue B8 de T12, m1).
             selection = .revenus
             cheminRevenus = NavigationPath()
+            sectionRevenus = section
             presentationsRevenus += 1
         case .monCompte:
             selection = .profil

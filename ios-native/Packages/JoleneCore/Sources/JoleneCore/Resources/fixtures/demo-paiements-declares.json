@@ -1,0 +1,105 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "paiements": [
+    {
+      "id": "demo-paiement-001",
+      "montant_net": 162.4,
+      "mission_id": "demo-terminee-001",
+      "etablissement_id": "demo-etab-1",
+      "reference_virement": null,
+      "methode": "VIREMENT",
+      "date_paiement": "2026-11-01",
+      "statut": "DECLARE",
+      "confirme_par_soignant": false,
+      "conteste": false
+    },
+    {
+      "id": "demo-paiement-004",
+      "montant_net": 256,
+      "mission_id": "demo-terminee-002",
+      "etablissement_id": "demo-etab-3",
+      "reference_virement": "VIR-DEMO-0002",
+      "methode": "VIREMENT",
+      "date_paiement": "2026-10-31",
+      "statut": "DECLARE",
+      "confirme_par_soignant": false,
+      "conteste": false
+    }
+  ],
+  "missions": [
+    {
+      "id": "demo-terminee-001",
+      "intitule": "Démonstration · Mission terminée 1",
+      "debut_le": "2026-11-01T07:00:00+00:00",
+      "fin_le": "2026-11-01T15:00:00+00:00",
+      "duree_heures": 8,
+      "taux_horaire_base": 26,
+      "taux_rist_plafonne": null,
+      "rist_plafond_applique": false,
+      "total_brut": 208,
+      "net_a_payer": 224.6
+    },
+    {
+      "id": "demo-terminee-002",
+      "intitule": "Démonstration · Mission terminée 2",
+      "debut_le": "2026-10-20T07:00:00+00:00",
+      "fin_le": "2026-10-20T15:00:00+00:00",
+      "duree_heures": 8,
+      "taux_horaire_base": 32,
+      "taux_rist_plafonne": null,
+      "rist_plafond_applique": false,
+      "total_brut": 256,
+      "net_a_payer": 256
+    }
+  ],
+  "presences": [
+    {
+      "mission_id": "demo-terminee-001",
+      "pointage_arrivee_le": "2026-11-01T07:05:00+00:00",
+      "pointage_depart_le": "2026-11-01T15:00:00+00:00",
+      "methode_pointage_arrivee": "GPS",
+      "heures_ajustees_litige": null
+    },
+    {
+      "mission_id": "demo-terminee-002",
+      "pointage_arrivee_le": "2026-10-20T07:00:00+00:00",
+      "pointage_depart_le": "2026-10-20T15:00:00+00:00",
+      "methode_pointage_arrivee": "CODE",
+      "heures_ajustees_litige": null
+    }
+  ],
+  "creneaux": [
+    {
+      "id": "demo-creneau-t1-p",
+      "mission_id": "demo-terminee-001",
+      "debut": "2026-11-01T07:00:00+00:00",
+      "fin": "2026-11-01T15:00:00+00:00",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-creneau-t1-e1",
+      "mission_id": "demo-terminee-001",
+      "debut": "2026-11-01T07:05:00+00:00",
+      "fin": "2026-11-01T11:00:00+00:00",
+      "est_pause": false,
+      "type_creneau": "EFFECTIF"
+    },
+    {
+      "id": "demo-creneau-t1-e2",
+      "mission_id": "demo-terminee-001",
+      "debut": "2026-11-01T11:30:00+00:00",
+      "fin": "2026-11-01T15:00:00+00:00",
+      "est_pause": false,
+      "type_creneau": "EFFECTIF"
+    },
+    {
+      "id": "demo-creneau-t2-p",
+      "mission_id": "demo-terminee-002",
+      "debut": "2026-10-20T07:00:00+00:00",
+      "fin": "2026-10-20T15:00:00+00:00",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    }
+  ]
+}

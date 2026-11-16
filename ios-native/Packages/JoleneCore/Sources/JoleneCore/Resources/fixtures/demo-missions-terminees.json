@@ -190,6 +190,33 @@
       "date_paiement": "2026-10-12",
       "modifie_le": "2026-10-12T09:00:00+00:00",
       "cree_le": "2026-10-12T09:00:00+00:00"
+    },
+    {
+      "id": "demo-paiement-004",
+      "mission_id": "demo-terminee-002",
+      "facture_honoraire_id": "demo-facture-honoraires-002",
+      "statut": "DECLARE",
+      "montant_net": 256,
+      "confirme_par_soignant": false,
+      "conteste": false,
+      "montant_du_reference": 256,
+      "source_montant_du": "FACTURE_HONORAIRES",
+      "methode": "VIREMENT",
+      "reference_virement": "VIR-DEMO-0002",
+      "date_paiement": "2026-10-31",
+      "modifie_le": "2026-10-31T10:00:00+00:00",
+      "cree_le": "2026-10-31T10:00:00+00:00"
+    }
+  ],
+  "factures_honoraires": [
+    {
+      "id": "demo-facture-honoraires-002",
+      "mission_id": "demo-terminee-002",
+      "soignant_id": "demo-soignant",
+      "etablissement_id": "demo-etab-3",
+      "type_document": "FACTURE",
+      "statut": "EMISE",
+      "montant_ttc": 256
     }
   ]
 }

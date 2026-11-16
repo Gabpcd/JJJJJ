@@ -110,8 +110,8 @@ export const RPC_SUIVIES = [
   { name: 'fn_types_exercice_autorises', statut: 'consommee', lot: 3 }, // L3-T8 : SupabaseInscriptionGateway
   { name: 'fn_modifier_mon_profil', statut: 'consommee', lot: 3 }, // L3-T9 : SupabaseProfilGateway
   { name: 'fn_rgpd_exporter_rate_limited', statut: 'consommee', lot: 3 }, // L3-T11 : SupabaseExportGateway
-  { name: 'fn_confirmer_paiement_soignant', statut: 'a_venir', lot: 3 },
-  { name: 'fn_contester_paiement_soignant', statut: 'a_venir', lot: 3 },
+  { name: 'fn_confirmer_paiement_soignant', statut: 'consommee', lot: 3 }, // L3-T13 : SupabasePaiementsGateway
+  { name: 'fn_contester_paiement_soignant', statut: 'consommee', lot: 3 }, // L3-T13 : SupabasePaiementsGateway (B3, #1118)
   { name: 'fn_consulter_mon_iban', statut: 'a_venir', lot: 3 },
   { name: 'fn_enregistrer_mon_iban', statut: 'a_venir', lot: 3 },
   { name: 'fn_mes_revenus_connect', statut: 'consommee', lot: 3 }, // L3-T12 : SupabaseRevenusGateway

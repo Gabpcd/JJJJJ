@@ -84,7 +84,7 @@ public enum SupabaseGateways {
         gateways.motDePasse = SupabaseMotDePasseGateway(client: client)    // T11
         gateways.exportRGPD = SupabaseExportGateway(client: client)        // T11
         gateways.revenus = SupabaseRevenusGateway(client: client)          // T12
-        gateways.paiements = UnwiredPaiementsDeclaresPort()                // T13
+        gateways.paiements = SupabasePaiementsGateway(client: client)      // T13
         gateways.iban = UnwiredIbanPort()                                  // T14b
         gateways.stripeConnect = UnwiredStripeConnectPort()                // T14a
     }

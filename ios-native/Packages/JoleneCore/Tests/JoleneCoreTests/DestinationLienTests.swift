@@ -23,8 +23,6 @@ final class DestinationLienTests: XCTestCase {
              "https://jolene.app/soignant/stripe-connect?success=true"),                                            // T14a
             ("https://jolene.app/soignant/stripe-connect?refresh=true", .stripeConnect(retour: .rafraichir),
              "https://jolene.app/soignant/stripe-connect?refresh=true"),                                            // T14a
-            ("https://jolene.app/soignant/mes-gains?tab=paiements", .revenus(section: .paiementsAConfirmer),
-             "https://jolene.app/soignant/mes-gains?tab=paiements"),                                                // T13
         ]
         for c in cas {
             let d = try XCTUnwrap(lien(c.lien), c.lien)
@@ -33,6 +31,19 @@ final class DestinationLienTests: XCTestCase {
             XCTAssertFalse(DestinationLien.ecranNatifLivre(d.route), c.lien)
             XCTAssertEqual(d.destination, .safari(url(c.canonique)), c.lien)
             XCTAssertEqual(d.canonique, url(c.canonique), c.lien)
+        }
+    }
+
+    /// T13 : « Paiements à confirmer » (`?tab=paiements`, push `PAIEMENT_RECU`, correction 15) est livrée — section de
+    /// l'onglet Revenus natif, jamais un renvoi web ; query et fragment ignorés comme pour l'aperçu.
+    func testPaiementsAConfirmerLivresEnNatif() throws {
+        for s in ["https://jolene.app/soignant/mes-gains?tab=paiements",
+                  "https://www.jolene.app/soignant/mes-gains?tab=paiements&utm_source=push#haut"] {
+            let d = try XCTUnwrap(lien(s), s)
+            XCTAssertEqual(d.route, .revenus(section: .paiementsAConfirmer), s)
+            XCTAssertTrue(DestinationLien.ecranNatifLivre(d.route), s)
+            XCTAssertEqual(d.destination, .revenus(section: .paiementsAConfirmer), s)
+            XCTAssertNil(d.destination.externalURL, s)
         }
     }
 
@@ -175,11 +186,11 @@ final class DestinationLienTests: XCTestCase {
     }
 
     func testLienInterneDuPush() throws {
-        // `PAIEMENT_RECU` (correction 15) : section « Paiements à confirmer », renvoi web jusqu'à T13.
+        // `PAIEMENT_RECU` (correction 15) : section « Paiements à confirmer », native depuis T13.
         let chemin = try XCTUnwrap(PushRouting.path(data: ["type_evenement": "PAIEMENT_RECU"], role: "SOIGNANT"))
         let paiement = try XCTUnwrap(DestinationLien(link: chemin))
         XCTAssertEqual(paiement.route, .revenus(section: .paiementsAConfirmer))
-        XCTAssertEqual(paiement.destination, .safari(url("https://jolene.app/soignant/mes-gains?tab=paiements")))
+        XCTAssertEqual(paiement.destination, .revenus(section: .paiementsAConfirmer), "T13 : section native de Revenus")
         // `FACTURE_EMISE` soignant : onglet factures, renvoi web assumé jusqu'au lot 4.
         let facture = try XCTUnwrap(DestinationLien(link: try XCTUnwrap(PushRouting.path(data: ["type_evenement": "FACTURE_EMISE"],
                                                                                            role: "SOIGNANT"))))
@@ -243,7 +254,7 @@ final class DestinationLienTests: XCTestCase {
             "/soignant/notifications": ("notifications", "notifications", 6),                // T5
             "/soignant/profil": ("profil", "profil", 7),                                     // T9 (livrée)
             "/soignant/stripe-connect": ("stripeConnect", "safari", 6),                      // T14a
-            "/soignant/mes-gains?tab=paiements": ("revenus(paiements)", "safari", 32),       // T13
+            "/soignant/mes-gains?tab=paiements": ("revenus(paiements)", "revenus(paiements)", 32), // T13 (livrée)
             "/soignant/mes-gains?tab=factures": ("revenus(factures)", "safari", 21),         // lot 4 (D4)
             "/soignant/litiges": ("safari", "safari", 46),
             "/soignant/mes-documents": ("safari", "safari", 30),
@@ -278,8 +289,8 @@ final class DestinationLienTests: XCTestCase {
             }
         }
         XCTAssertEqual(decomptes, attendus.mapValues { $0.nombre }, "décomptes par famille")
-        XCTAssertEqual(natifs, 461, "destinations natives (T5 : +6, centre de notifications ; T9 : +7, profil)")
-        XCTAssertEqual(renvois, 429, "renvois web")
+        XCTAssertEqual(natifs, 493, "destinations natives (T5 : +6, centre de notifications ; T9 : +7, profil ; T13 : +32, paiements à confirmer)")
+        XCTAssertEqual(renvois, 397, "renvois web (T13 : -32)")
     }
 
     // MARK: Description masquée (PRINCIPES §7 : ni identifiant ni jeton dans les logs)
@@ -429,7 +440,7 @@ final class DestinationLienTests: XCTestCase {
             (.inscription(EtapeInscription(page: .reprendre, query: nil)), true, "T7 : OnboardingRootView, hors espace"),
             (.inscription(EtapeInscription(page: .completer, query: nil)), true, "T8 : CompletionProfilScreen, hors espace"),
             (.profil, true, "T9 : ProfilEditionScreen"),
-            (.revenus(section: .paiementsAConfirmer), false, "T13"),
+            (.revenus(section: .paiementsAConfirmer), true, "T13 : section de RevenusScreen"),
             (.stripeConnect(retour: nil), false, "T14a"),
             (.stripeConnect(retour: .succes), false, "T14a"),
             (.revenus(section: .factures), false, "lot 4"),

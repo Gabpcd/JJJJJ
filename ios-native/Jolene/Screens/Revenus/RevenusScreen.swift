@@ -23,48 +23,91 @@ import JoleneDesign
 ///
 /// Fraîcheur (revue B8 de T12, m1) : relecture à l'apparition et au retour au premier plan des sections lues il y a
 /// plus de 60 s, et immédiate quand `peremption` avance (lien universel ou tap qui présente l'onglet, `MainTabView`).
+///
+/// Lot 3, T13 : section « Paiements à confirmer » (`PaiementsDeclaresSection`, modèle `PaiementsDeclaresModel`) au-dessus
+/// des paiements rapides (ordre du web, `MesGains.tsx` l.382-427) ; lue avec les autres sections, et chaque mutation
+/// terminée relit les missions (`miseAJour` → `relireApresDeclaration`, `onUpdate` du web l.383). Présenté pour la
+/// section `.paiementsAConfirmer` (push `PAIEMENT_RECU`, lien `?tab=paiements`), l'onglet défile jusqu'à la section une
+/// fois celle-ci lue.
 struct RevenusScreen: View {
+    /// Ancre de défilement de la section « Paiements à confirmer ».
+    static let ancrePaiements = "revenus-ancre-paiements-declares"
+
     @StateObject private var model: RevenusModel
+    @StateObject private var paiements: PaiementsDeclaresModel
     @ObservedObject private var session: SessionStore
     private let peremption: Int
+    private let section: SectionRevenus
     private let ouvrir: (CibleNotification) -> Void
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
     @Environment(\.scenePhase) private var scenePhase
     /// Onglet affiché : le retour au premier plan ne relit que l'onglet visible.
     @State private var affiche = false
+    /// Dernière présentation (jeton `peremption`) déjà défilée jusqu'aux paiements à confirmer.
+    @State private var presentationDefilee: Int?
 
-    init(session: SessionStore, snapshot: SessionSnapshot, peremption: Int = 0,
+    init(session: SessionStore, snapshot: SessionSnapshot, peremption: Int = 0, section: SectionRevenus = .apercu,
          ouvrir: @escaping (CibleNotification) -> Void) {
         self.session = session
         self.peremption = peremption
+        self.section = section
         self.ouvrir = ouvrir
         _model = StateObject(wrappedValue: RevenusModel(controller: session.controller, snapshot: snapshot))
+        _paiements = StateObject(wrappedValue: PaiementsDeclaresModel(controller: session.controller, snapshot: snapshot))
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: JoleneSpacing.xl) {
-                entete
-                totaux
-                paiementsRapides
-                missions
+        ScrollViewReader { defilement in
+            ScrollView {
+                VStack(alignment: .leading, spacing: JoleneSpacing.xl) {
+                    entete
+                    totaux
+                    PaiementsDeclaresSection(model: paiements)
+                        .id(Self.ancrePaiements)
+                    paiementsRapides
+                    missions
+                }
+                .padding(JoleneSpacing.lg)
+                .frame(maxWidth: 720)
+                .frame(maxWidth: .infinity)
             }
-            .padding(JoleneSpacing.lg)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
+            .refreshable {
+                async let revenus: Void = model.charger()
+                async let declares: Void = paiements.charger()
+                _ = await (revenus, declares)
+            }
+            // T13 : le motif de contestation est la seule saisie de l'onglet ; un défilement referme le clavier, qui ne
+            // masque jamais « Envoyer la contestation ».
+            .scrollDismissesKeyboard(.immediately)
+            .accessibilityIdentifier("revenus-screen")
+            // Premier affichage, relance après une tâche annulée, relecture au-delà de 60 s ou dès que le jeton avance ;
+            // section « Paiements à confirmer » demandée (T13) : défilement une fois les sections lues (les totaux, au-dessus,
+            // ne la déplacent plus).
+            .task(id: peremption) {
+                async let revenus: Void = model.chargerSiNecessaire(peremption: peremption)
+                async let declares: Void = paiements.chargerSiNecessaire(peremption: peremption)
+                _ = await (revenus, declares)
+                // Une seule fois par présentation : un simple retour sur l'onglet ne fait pas défiler à nouveau.
+                guard section == .paiementsAConfirmer, peremption != presentationDefilee, !Task.isCancelled else { return }
+                presentationDefilee = peremption
+                await Task.yield()
+                withAnimation { defilement.scrollTo(Self.ancrePaiements, anchor: .top) }
+            }
         }
-        .refreshable { await model.charger() }
-        .accessibilityIdentifier("revenus-screen")
         .background(JoleneColor.lavender.ignoresSafeArea())
         .navigationTitle(RevenusTextes.titre)
-        // Premier affichage, relance après une tâche annulée, relecture au-delà de 60 s ou dès que le jeton avance.
-        .task(id: peremption) { await model.chargerSiNecessaire(peremption: peremption) }
         .onAppear { affiche = true }
         .onDisappear { affiche = false }
         .onChange(of: scenePhase) { phase in
             guard phase == .active, affiche else { return }
-            Task { await model.chargerSiNecessaire(peremption: peremption) }
+            Task {
+                async let revenus: Void = model.chargerSiNecessaire(peremption: peremption)
+                async let declares: Void = paiements.chargerSiNecessaire(peremption: peremption)
+                _ = await (revenus, declares)
+            }
         }
+        // T13 : une confirmation ou une contestation terminée relit l'état des missions affichées.
+        .onChange(of: paiements.miseAJour) { _ in Task { await model.relireApresDeclaration() } }
     }
 
     // MARK: - En-tête et renvois web

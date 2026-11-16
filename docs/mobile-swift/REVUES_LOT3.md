@@ -2314,3 +2314,119 @@ Note : pendant la lecture, j'ai écrit trois fichiers temporaires dans le scratc
   TestFlight externe (TJ2).
 - Mineurs ouverts : T8 m1-m6, T10 m1-m9, T12 m1-m2, L3-TJ m1-m4 (revues ci-dessus), plus ceux des vagues
   précédentes.
+
+## L3-T13
+
+### Consignes de l'auteur pour l'intégration (branche `lot3/l3-t13-v3`, 16/11/2026)
+
+**B9 paiements : go humain requis avant merge.** Paiements déclarés (confirmation, contestation ouverte après B3,
+#1118) : PR préparée, jamais mergée sans le go explicite de Gabrielle ; « CI verte + revue fraîche » ne le remplace pas.
+Base `origin/feat/ios-lot2` (`bc533bcf`, identique à `main` après #1131 sur les chemins touchés). Décisions, écarts et
+textes : `DECISIONS_LOT3.md`, section T13.
+
+- **À faire avant le go** : relire en lecture seule la définition **live** de `fn_contester_paiement_soignant`
+  (`pg_get_functiondef`, TJ7) et de `fn_confirmer_paiement_soignant` ; la tranche n'a eu aucun accès backend et s'est
+  fondée sur la migration B3 et le dump (corps identiques). Si la définition live diffère de la fiche, refermer
+  « Contester » sans texte nouveau (TJ7). **Fait le 16/11/2026** (coordinateur, lecture seule ; conforme, consigné dans
+  `DECISIONS_LOT3.md`, section T13 ; voir la revue B8 n°1 ci-dessous, m7).
+- **Fichiers partagés touchés (ajouts localisés)** : `Models/Lot3Results.swift` (`PaiementDeclare` : mission, présences,
+  créneaux ; trois structures de détail), `Revenus/RevenusModel.swift` (`relireApresDeclaration`), `Demo/DemoWorld.swift`
+  et `Demo/DemoRevenusGateway.swift` (un seul serveur simulé relu par l'onglet), `SupabaseGateways.swift` (une ligne),
+  `AppContainer.swift` (variante `JOLENE_DEMO_PAIEMENTS`), `MainTabView.swift` (`sectionRevenus`, cas `.revenus(section)`
+  de `presenter`), `Screens/Revenus/RevenusScreen.swift` (section montée au-dessus des paiements rapides, défilement,
+  `scrollDismissesKeyboard`), `Links/DestinationLien.swift` et `Notifications/CentreNotifications.swift` (section
+  livrée et présentable), tests de routage (`DestinationLienTests`, `CentreNotificationsTests`, `DeepLinkIntentTests`,
+  `PushTapIntentTests` : `?tab=paiements` natif, 493 natifs / 397 renvois), `DemoWorldTests.portsEnAttenteLot3`
+  (« paiements » retiré), `export-demo-fixtures.mjs` (seconde déclaration `demo-paiement-004` dans
+  `demo-missions-terminees.json`, nouvelle fixture `demo-paiements-declares.json`), `check-rpc-contracts.mjs` +
+  `rpc-contracts.json` + `CONTRATS_RPC_SOIGNANT.md` + `check-rpc-contracts-lot3.node.mjs` (deux RPC consommées, éclat
+  `lot3-revenus`), `ios-swift-ci.yml` (`DemoPaiementsTests` dans `lot3-revenus`, sauté par le socle), `project.pbxproj`
+  (`xcodegen generate`), `PARITE_SOIGNANT.md`, `DECISIONS_LOT3.md`.
+- **Au conflit avec T14a / T14b** (même onglet, même éclat) : garder les deux côtés dans `RevenusScreen`, `MainTabView`
+  (`cheminRevenus`, `sectionRevenus`), `DemoWorld.câblerLot3`, `SupabaseGateways.câblerLot3`, `portsEnAttenteLot3`,
+  `LOT3_CONSOMMEES` et les classes de l'éclat `lot3-revenus` (relire la durée de l'éclat, 30 min).
+- **Vérifications de l'auteur** (Xcode 16.4 local, Swift 6.1.2, `-strict-concurrency=complete` des paquets) :
+  `swift test` JoleneCore 1 668 tests, JoleneSupabase 487 tests, 0 échec, 0 ignoré, aucun avertissement sur les
+  fichiers recompilés ; tests ajoutés : `PaiementsDeclaresTests` (11), `PaiementsDeclaresModelTests` (11),
+  `DemoPaiementsGatewayTests` (7), `SupabasePaiementsGatewayTests` (12) ; contrôle par mutation (garde `enCours`
+  retirée, relecture `CONTESTE` relâchée) : 6 échecs, code restauré. `xcodegen generate` (pbxproj : deux fichiers) ;
+  `xcodebuild build-for-testing` sur un simulateur dédié iPhone 16 / iOS 18.6 → `TEST BUILD SUCCEEDED`, aucun
+  avertissement dans nos sources. XCUITest (iphone portrait seulement, machine très chargée) : `DemoPaiementsTests`
+  4/4 (second passage, après correction d'un défilement manquant avant la saisie du motif dans le test ; premier
+  passage : 1 échec du test, 1 échec d'environnement `kAXErrorServerNotFound` au lancement) ; `DemoRevenusTests`
+  7/7 (deux passages, le second sur la tête finale). Gardes Node : étape « Garde de livraison mobile » de `validate-pr.yml` 245/245, `ios-swift-ci-eclats` et
+  `check-rpc-contracts-lot3` verts, `check-rpc-contracts.mjs` sans dérive, `export-demo-fixtures.mjs --check`
+  identique (19 fichiers). **Non mesuré localement** : iPad portrait et paysage (CI), STAGING (T16), appareil.
+
+#### Avant le merge
+- Le go explicite de Gabrielle (**B9 paiements : go humain requis avant merge**).
+- Relecture live en lecture seule des deux RPC (ci-dessus) — **faite le 16/11/2026, conforme** (m7 ci-dessous).
+- L'éclat CI `lot3-revenus` vert sur iphone, ipad-portrait et ipad-landscape, avec `skipped = 0`, `DemoPaiementsTests`
+  compris, et sa durée sous 30 min.
+- Revue fraîche B8 — **n°1 : CLÔTURABLE** (0 bloquant, 0 majeur, 7 mineurs traités ci-dessous).
+
+### Revue B8 n°1 L3-T13 : CLÔTURABLE, mineurs traités (auteur, branche `lot3/l3-t13-v3`, 16/11/2026)
+
+Verdict de la revue fraîche : **CLÔTURABLE** (0 bloquant, 0 majeur, 7 mineurs). Les sept mineurs sont traités sur la
+branche, sans merge (**B9 paiements : go humain requis avant merge**). Détail et sources : `DECISIONS_LOT3.md`,
+section T13 et sous-section « T13 — corrections de la revue fraîche B8 n°1 ». Test d'abord pour m1 (commit séparé,
+rouge vérifié sur la tête `3627b4b5`). Aucun texte affiché nouveau, aucune RPC nouvelle, aucun appel backend depuis la
+tranche.
+
+- **m1** (preuve de la contestation) : la justification « une ligne relue `CONTESTE` prouve le litige » est remplacée
+  par « `success:true` de B3 + relecture `CONTESTE` » (`PaiementsDeclares.swift`, `PaiementsDeclaresRelecture` ;
+  fiche `fn_contester_paiement_soignant` ; `DECISIONS_LOT3.md`) : `CONTESTE` s'écrit aussi sans litige de B3 (UPDATE
+  direct sous `pol_paie_soig_update`, établissement compris ; `fn_ouvrir_litige_rate_limited`). Le gateway Supabase
+  exige `litige_id` non vide dans la réponse, sinon erreur de contrat, jamais un succès, sans relecture.
+  Test `SupabasePaiementsGatewayTests.testSuccesSansLitigeIdEstUneErreurDeContratMemeAvecRelectureCONTESTE` (cinq
+  corps : absent, `null`, vide, blanc, nombre ; relecture `CONTESTE` en place) : **rouge avant la correction**
+  (2 échecs : `conteste(…, litigeId: nil)` rendu comme succès, relecture faite), vert après.
+- **m2** : vouvoiement de l.259 (« déclare vous avoir payé ») rattaché à « décision 9 du lot 1, TJ8 » (TJ7 ne nomme
+  que l.55) : `PaiementsDeclares.swift` (en-tête des textes, constante), `PaiementsDeclaresTests`, `DECISIONS_LOT3.md`,
+  et les mêmes mentions dans `PaiementsDeclaresSection.swift`, `DemoPaiementsTests.swift`, `PARITE_SOIGNANT.md`.
+- **m3** : `DECISIONS_LOT3.md` documente que `PAIEMENT_RECLAME` mène aussi à la section native (même chemin
+  `?tab=paiements`, `PushRouting`) : les 32 vecteurs de la famille sont 16 `PAIEMENT_RECU` + 16 `PAIEMENT_RECLAME`
+  (décompte relu sur `golden/push-routing.json`).
+- **m4** : `demo-paiement-004` (`DECLARE` libéral sans facture, refusé par le serveur depuis `20261001122318`) est lié
+  à une facture cohérente (`demo-facture-honoraires-002`, `EMISE`, 256 € TTC, même mission et mêmes parties ;
+  `montant_du_reference` et `source_montant_du` posés comme par `trg_paiement_liberal_facture`). Aucune mission
+  salariée de la démo ne pouvait la porter (missions 1 et 4 déjà déclarées, mission 3 sans contrat figé ; une mission
+  ajoutée changerait l'onglet). Garde à l'export (`verifierDeclarationsDemo` : l'ancienne ligne lève
+  `LIBERAL_FACTURE_REQUISE`). Fixtures régénérées : seul `demo-missions-terminees.json` change (paiement 004 et
+  `factures_honoraires`) ; `demo-paiements-declares.json` identique ; `--check` identique (19 fichiers) ; T12 inchangé
+  (mission 2 « Paiement suivi dans Factures », `DemoRevenusTests` ci-dessous).
+- **m5** : `CartePaiementDeclare` expose `prefixe` et `montant`, `titre` en est la concaténation ; la vue rend
+  `Text(verbatim: prefixe) + Text(verbatim: montant)` (une seule source avec le libellé d'accessibilité) ; assertions
+  ajoutées à `PaiementsDeclaresTests.testCarteCompleteCommeLeBandeauDuWeb`.
+- **m6** : `DemoPaiementsTests.testTapPushPaiementRecuOuvreLesPaiementsDeclares` vérifie sur iPhone que l'onglet a
+  défilé (`revenus-sous-titre` entièrement au-dessus du bas des barres de navigation) ; sur iPad, l'assertion actuelle
+  est gardée.
+- **m7** : vérification de la production faite par le coordinateur le 16/11/2026 (lecture seule ; empreintes `md5`
+  des deux RPC, `SECURITY DEFINER`, `search_path`, droits, migration `20261102205808` au registre,
+  `notifications_type_check`, index `uq_litige_mission_type_ouvert_legacy`, triggers `BEFORE INSERT` de `litiges`,
+  inventaire `SECURITY DEFINER`) consignée dans `DECISIONS_LOT3.md` (section T13) comme levée de la condition TJ7
+  « définition live relue avant d'ouvrir Contester » ; fiches des deux RPC et commentaire du gateway mis à jour.
+- **Fichiers touchés** : `SupabasePaiementsGateway.swift` et ses tests, `PaiementsDeclares.swift`,
+  `PaiementsDeclaresTests.swift`, `PaiementsDeclaresSection.swift`, `DemoPaiementsTests.swift`,
+  `DemoRevenusGateway.swift` (commentaire), `export-demo-fixtures.mjs` + `demo-missions-terminees.json`,
+  `CONTRATS_RPC_SOIGNANT.md`, `DECISIONS_LOT3.md`, `PARITE_SOIGNANT.md`, ce fichier. Aucun fichier ajouté ni retiré
+  (`xcodegen generate` sans diff du pbxproj).
+- **Vérifications de l'auteur** (Xcode 16.4 local, Swift 6.1.2) : `swift test -Xswiftc
+  -strict-concurrency=complete` : JoleneCore 1 668 tests, JoleneSupabase 488 tests (487 + le test m1), 0 échec, aucun
+  avertissement ; `xcodegen generate --spec project.yml` sans diff ; `xcodebuild build-for-testing` sur un simulateur
+  dédié iPhone 16 / iOS 18.6 (`-derivedDataPath` dans le worktree) → `TEST BUILD SUCCEEDED`, aucun avertissement dans
+  nos sources ; étape « Garde de livraison mobile » de `validate-pr.yml` 245/245 ; `check-rpc-contracts-lot3` +
+  `ios-swift-ci-eclats` 35/35 ; `check-rpc-contracts.mjs --check` sans dérive (47 RPC) ; `export-demo-fixtures.mjs
+  --check` identique (19 fichiers). **XCUITest non mesurés localement** (machine saturée, charge de 130 à 310, disque
+  descendu à 634 Mo libres par d'autres sessions) : 1er passage, installation refusée (disque plein) ; relance, « Timed
+  out waiting for AX loaded notification » ; dernier passage sur simulateur démarré au préalable : 8 échecs
+  d'environnement, aucun sur une assertion (`kAXErrorServerNotFound` ×3, `kAXErrorIPCTimeout` sur le test m6 avant son
+  assertion, délai d'orientation, budget de blocage dépassé avec « condition vraie à la dernière » ×3), run arrêté
+  avant les trois derniers `DemoRevenusTests` (jusqu'à 55 min par test). Affichage T12 de la démo prouvé au niveau 1
+  par `DemoRevenusGatewayTests` (mission 2 « Paiement suivi dans Factures », lignes 1, 3, 4 inchangées).
+  **À prouver en CI** : éclat `lot3-revenus` (`DemoPaiementsTests` 4 tests, dont m6, et `DemoRevenusTests` 7 tests)
+  vert sur iphone, ipad-portrait et ipad-landscape, `skipped = 0`.
+
+#### Avant le merge (après la revue n°1)
+- Le go explicite de Gabrielle (**B9 paiements : go humain requis avant merge**).
+- L'éclat CI `lot3-revenus` vert sur les trois formats (ci-dessus), XCUITest de m6 compris.

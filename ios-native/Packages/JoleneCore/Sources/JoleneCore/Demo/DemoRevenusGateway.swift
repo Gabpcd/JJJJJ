@@ -19,7 +19,9 @@ extension DemoFixtures {
 
     /// `demo-missions-terminees.json` : lignes `missions` TERMINEE du profil fictif (toutes leurs colonnes, dont les
     /// colonnes Rist de la mission témoin, que le décodeur des colonnes de `MesGains.tsx` l.95 ignore) et lignes
-    /// `paiements_soignant` (colonnes de l.102).
+    /// `paiements_soignant` (colonnes de l.102). `factures_honoraires` (facture de la déclaration libérale, pour qu'elle
+    /// soit une ligne que le serveur admet ; revue B8 n°1 de T13, m4) n'est pas décodée : les factures restent un renvoi
+    /// web (D4).
     public struct MissionsTermineesFile: Decodable, Sendable {
         public var fixedNow: String
         public var missions: [MissionTerminee]
@@ -37,8 +39,14 @@ extension DemoFixtures {
 /// `RevenusAssemblage`), même visibilité des totaux (`ExerciceRevenus.afficheTotaux`, `TotauxRevenus.visibles`), même tri (`debut_le`
 /// décroissant) et mêmes pages de 50. Noms d'établissement : `demo-etablissements.json` (rôle de
 /// `fn_etablissements_safe`). Refuse tout contexte qui n'est pas celui du profil fictif (`.demoOnly`).
+/// Lot 3, T13 : avec le serveur simulé des paiements déclarés (`DemoPaiementsGateway`, même acteur que
+/// `gateways.paiements`), les déclarations relues suivent ses confirmations et contestations.
 public struct DemoRevenusGateway: RevenusPort {
-    public init() {}
+    private let paiementsDeclares: DemoPaiementsGateway?
+
+    public init(paiementsDeclares: DemoPaiementsGateway? = nil) {
+        self.paiementsDeclares = paiementsDeclares
+    }
 
     public func totaux(context: MissionReadContext) async throws -> TotauxRevenus? {
         try Self.verifier(context)
@@ -72,7 +80,8 @@ public struct DemoRevenusGateway: RevenusPort {
         let tranche = debut < triees.count ? Array(triees[debut..<min(debut + RevenusAssemblage.taillePage, triees.count)]) : []
         let noms = Dictionary(try DemoFixtures.loadEtablissements().etablissements.map { ($0.id, $0.nom) },
                               uniquingKeysWith: { premier, _ in premier })
-        return RevenusAssemblage.page(tranche, paiements: fichier.paiements, etablissements: noms, page: page)
+        let paiements = await paiementsDeclares?.surcharger(fichier.paiements) ?? fichier.paiements
+        return RevenusAssemblage.page(tranche, paiements: paiements, etablissements: noms, page: page)
     }
 
     static func verifier(_ context: MissionReadContext) throws {

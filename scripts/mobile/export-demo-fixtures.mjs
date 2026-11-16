@@ -786,6 +786,9 @@ export function buildDemoEscrow(now = new Date(FIXED_NOW)) {
  * (colonnes de `MesGains.tsx` l.102). Quatre cas du blueprint (§2.7) : salariée (déclaration à confirmer ; mêmes montants
  * que la carte des gains de l'Accueil démo), libérale, contrat non choisi, plafond Rist historique (montant stocké
  * 280 €, jamais rétabli à 320 €) ; plus une salariée confirmée après une contestation (dernière déclaration).
+ * Lot 3, T13 (revue B8 n°1, m4) : chaque déclaration est une ligne que le serveur admet (`verifierDeclarationsDemo`) ;
+ * la déclaration libérale est liée à sa facture d'honoraires (`factures_honoraires`, pièce que l'app ne lit pas : les
+ * factures restent un renvoi web, D4).
  */
 export function buildDemoMissionsTerminees(now = new Date(FIXED_NOW)) {
   const mission = (rang, jours, etab, service, applique, recherche, taux, brut, net, netEstime, rist = null) => {
@@ -802,29 +805,122 @@ export function buildDemoMissionsTerminees(now = new Date(FIXED_NOW)) {
       presences: [{ valide_par_etablissement: true, valide_auto_72h_le: null, valide_le: timestamptz(new Date(fin.getTime() + 3_600_000)) }],
     };
   };
-  const paiement = (rang, missionRang, statut, montant, confirme, conteste, jours, heure) => {
+  // Pièce libérale (`fn_declarer_paiement_facture_soignant`, migration `20261001122318`) : `montant_du_reference` et
+  // `source_montant_du` sont ceux que pose `trg_paiement_liberal_facture` (montant TTC de la facture, `FACTURE_HONORAIRES`).
+  const paiement = (rang, missionRang, statut, montant, confirme, conteste, jours, heure, reference = null, facture = null) => {
     const instant = timestamptz(instantDemo(now, jours, heure));
     return {
       id: `demo-paiement-${String(rang).padStart(3, '0')}`,
       mission_id: `demo-terminee-${String(missionRang).padStart(3, '0')}`,
-      facture_honoraire_id: null, statut, montant_net: montant, confirme_par_soignant: confirme, conteste,
-      montant_du_reference: null, source_montant_du: null, methode: 'VIREMENT', reference_virement: null,
+      facture_honoraire_id: facture?.id ?? null, statut, montant_net: montant, confirme_par_soignant: confirme, conteste,
+      montant_du_reference: facture?.montant_ttc ?? null, source_montant_du: facture ? 'FACTURE_HONORAIRES' : null,
+      methode: 'VIREMENT', reference_virement: reference,
       date_paiement: instant.slice(0, 10), modifie_le: instant, cree_le: instant,
     };
   };
+  const missions = [
+    mission(1, -1, 'demo-etab-1', 'Médecine polyvalente', 'SALARIE', 'SALARIE', 26, 208, 224.6, 162.4),
+    mission(2, -13, 'demo-etab-3', 'Soins à domicile', 'LIBERAL', 'LIBERAL', 32, 256, 256, null),
+    mission(3, -21, 'demo-etab-2', 'Gériatrie', null, null, 30, 240, null, null),
+    mission(4, -28, 'demo-etab-1', 'Médecine polyvalente', 'SALARIE', 'SALARIE', 27, 216, 233.2, 170.5),
+    mission(5, -35, 'demo-etab-3', 'Soins à domicile', 'LIBERAL', 'LIBERAL', 40, 280, 280, null, 35),
+  ];
+  // Facture d'honoraires émise de la mission libérale 2 (montant TTC = honoraires de la mission, 256 €).
+  const facture2 = {
+    id: 'demo-facture-honoraires-002', mission_id: 'demo-terminee-002', soignant_id: DEMO_PROFILE.user_id,
+    etablissement_id: 'demo-etab-3', type_document: 'FACTURE', statut: 'EMISE', montant_ttc: 256,
+  };
+  const paiements = [
+    paiement(1, 1, 'DECLARE', 162.4, false, false, -1, 18),
+    paiement(2, 4, 'CONTESTE', 160, false, true, -25, 9),
+    paiement(3, 4, 'CONFIRME', 170.5, true, false, -21, 9),
+    // Lot 3, T13 : seconde déclaration à confirmer, avec référence de virement, sur la mission libérale 2 et liée à sa
+    // facture (revue B8 n°1, m4 : sans facture, le serveur la refuse, `LIBERAL_FACTURE_REQUISE`). Aucune mission
+    // salariée de la démo ne peut la porter : les missions 1 et 4 ont déjà une déclaration `DECLARE` ou `CONFIRME`
+    // (« Paiement déjà déclaré pour cette mission »), la mission 3 n'a pas de contrat figé (`CONTRAT_NON_FIGE`), et une
+    // nouvelle mission ajouterait une ligne à l'onglet (T12). L'état affiché de la mission 2 reste « Paiement suivi dans
+    // Factures » (T12).
+    paiement(4, 2, 'DECLARE', 256, false, false, -2, 10, 'VIR-DEMO-0002', facture2),
+  ];
+  verifierDeclarationsDemo(missions, paiements, [facture2]);
+  return { fixed_now: now.toISOString(), missions, paiements, factures_honoraires: [facture2] };
+}
+
+/**
+ * Lot 3, T13 (revue B8 n°1, m4) : chaque déclaration démo est une ligne que le serveur admet (dump
+ * `supabase/schema/public.sql`, `fn_declarer_paiement_soignant_internal_20260801` ; migration
+ * `20261001122318_lier_paiements_liberaux_aux_factures.sql`, `trg_paiement_liberal_facture`) : contrat figé, au plus une
+ * déclaration `DECLARE` ou `CONFIRME` par mission, et pour une mission libérale une facture `FACTURE` de la même mission,
+ * des mêmes parties, `EMISE` ou `EN_RETARD` à la déclaration, dont le montant TTC est le montant déclaré. Lève sinon :
+ * l'export échoue au lieu d'écrire une fixture que le serveur refuserait.
+ */
+function verifierDeclarationsDemo(missions, paiements, factures) {
+  const parMission = new Map(missions.map((m) => [m.id, m]));
+  const parFacture = new Map(factures.map((f) => [f.id, f]));
+  const declarees = new Map();
+  for (const p of paiements) {
+    const m = parMission.get(p.mission_id);
+    const refus = (motif) => { throw new Error(`Déclaration démo ${p.id} refusée par le serveur : ${motif}`); };
+    if (!m) refus('mission inconnue');
+    if (m.type_contrat_applique == null) refus('CONTRAT_NON_FIGE');
+    if (['DECLARE', 'CONFIRME'].includes(p.statut)) {
+      if (declarees.has(m.id)) refus(`Paiement déjà déclaré pour cette mission (${declarees.get(m.id)})`);
+      declarees.set(m.id, p.id);
+    }
+    if (m.type_contrat_applique !== 'LIBERAL') continue;
+    const f = parFacture.get(p.facture_honoraire_id);
+    if (!f) refus('LIBERAL_FACTURE_REQUISE');
+    if (f.type_document !== 'FACTURE' || f.mission_id !== m.id || f.soignant_id !== m.soignant_assigne_id
+      || f.etablissement_id !== m.etablissement_id || f.montant_ttc !== p.montant_net
+      || p.montant_du_reference !== f.montant_ttc || p.source_montant_du !== 'FACTURE_HONORAIRES') {
+      refus('MONTANT_FACTURE_INCOHERENT');
+    }
+    if (p.statut === 'DECLARE' && !['EMISE', 'EN_RETARD'].includes(f.statut)) refus('DECLARATION_FACTURE_INVALIDE');
+  }
+}
+
+/**
+ * Lot 3, T13 : paiements déclarés du profil fictif, état initial du serveur simulé (`DemoPaiementsGateway`). Les lignes
+ * `DECLARE` sont celles de `buildDemoMissionsTerminees` (mêmes identifiants : une confirmation démo change l'état de la
+ * mission dans l'onglet), avec les colonnes de `BandeauPaiementDeclare.tsx` l.97 plus `statut`, `confirme_par_soignant`
+ * et `conteste` ; missions (colonnes de l.122), présences (l.132) et créneaux (l.137) de ces missions. Mission 1 :
+ * pointée en deux segments (pause de 30 min) ; mission 2 : sans créneau effectif, détail par la présence (code).
+ */
+export function buildDemoPaiementsDeclares(now = new Date(FIXED_NOW)) {
+  const { missions, paiements } = buildDemoMissionsTerminees(now);
+  const declares = paiements.filter((p) => p.statut === 'DECLARE');
+  const parId = new Map(missions.map((m) => [m.id, m]));
+  const ids = [...new Set(declares.map((p) => p.mission_id))];
+  const decale = (iso, minutes) => timestamptz(new Date(new Date(iso).getTime() + minutes * 60_000));
+  const creneau = (id, mission, debut, fin, type) => ({ id, mission_id: mission, debut, fin, est_pause: false, type_creneau: type });
+  const m1 = parId.get('demo-terminee-001');
+  const m2 = parId.get('demo-terminee-002');
   return {
     fixed_now: now.toISOString(),
-    missions: [
-      mission(1, -1, 'demo-etab-1', 'Médecine polyvalente', 'SALARIE', 'SALARIE', 26, 208, 224.6, 162.4),
-      mission(2, -13, 'demo-etab-3', 'Soins à domicile', 'LIBERAL', 'LIBERAL', 32, 256, 256, null),
-      mission(3, -21, 'demo-etab-2', 'Gériatrie', null, null, 30, 240, null, null),
-      mission(4, -28, 'demo-etab-1', 'Médecine polyvalente', 'SALARIE', 'SALARIE', 27, 216, 233.2, 170.5),
-      mission(5, -35, 'demo-etab-3', 'Soins à domicile', 'LIBERAL', 'LIBERAL', 40, 280, 280, null, 35),
+    paiements: declares.map((p) => ({
+      id: p.id, montant_net: p.montant_net, mission_id: p.mission_id, etablissement_id: parId.get(p.mission_id).etablissement_id,
+      reference_virement: p.reference_virement, methode: p.methode, date_paiement: p.date_paiement,
+      statut: p.statut, confirme_par_soignant: p.confirme_par_soignant, conteste: p.conteste,
+    })),
+    missions: ids.map((id) => {
+      const m = parId.get(id);
+      return {
+        id: m.id, intitule: m.intitule, debut_le: m.debut_le, fin_le: m.fin_le, duree_heures: m.duree_heures,
+        taux_horaire_base: m.taux_horaire_base, taux_rist_plafonne: m.taux_rist_plafonne,
+        rist_plafond_applique: m.rist_plafond_applique, total_brut: m.total_brut, net_a_payer: m.net_a_payer,
+      };
+    }),
+    presences: [
+      { mission_id: m1.id, pointage_arrivee_le: decale(m1.debut_le, 5), pointage_depart_le: m1.fin_le,
+        methode_pointage_arrivee: 'GPS', heures_ajustees_litige: null },
+      { mission_id: m2.id, pointage_arrivee_le: m2.debut_le, pointage_depart_le: m2.fin_le,
+        methode_pointage_arrivee: 'CODE', heures_ajustees_litige: null },
     ],
-    paiements: [
-      paiement(1, 1, 'DECLARE', 162.4, false, false, -1, 18),
-      paiement(2, 4, 'CONTESTE', 160, false, true, -25, 9),
-      paiement(3, 4, 'CONFIRME', 170.5, true, false, -21, 9),
+    creneaux: [
+      creneau('demo-creneau-t1-p', m1.id, m1.debut_le, m1.fin_le, 'PREVISIONNEL'),
+      creneau('demo-creneau-t1-e1', m1.id, decale(m1.debut_le, 5), decale(m1.debut_le, 240), 'EFFECTIF'),
+      creneau('demo-creneau-t1-e2', m1.id, decale(m1.debut_le, 270), m1.fin_le, 'EFFECTIF'),
+      creneau('demo-creneau-t2-p', m2.id, m2.debut_le, m2.fin_le, 'PREVISIONNEL'),
     ],
   };
 }
@@ -848,6 +944,7 @@ export async function buildFixtures() {
     'demo-revenus.json': buildDemoRevenus(), // lot 3, T12
     'demo-escrow.json': buildDemoEscrow(), // lot 3, T12
     'demo-missions-terminees.json': buildDemoMissionsTerminees(), // lot 3, T12
+    'demo-paiements-declares.json': buildDemoPaiementsDeclares(), // lot 3, T13
   };
 }
 
