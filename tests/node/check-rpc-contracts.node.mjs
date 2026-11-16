@@ -868,8 +868,26 @@ test('CONTRATS fn_etat_pointage_mission : clés de réponse et refus du dump, co
     assert.ok(body.includes(`'${cle}'`), `témoin SQL : clé ${cle}`);
     assert.ok(fiche.includes(`\`${cle}\``), `clé ${cle} absente de la fiche`);
   }
-  assert.match(body, /'code_pointage_actif', CASE WHEN v_is_etab THEN v_mission\.code_pointage_actif ELSE NULL END/);
+  // B5b (#1119, déployée le 08/11/2026, dump re-baseliné #1121) : le code n'est servi qu'aux membres de
+  // l'établissement de la mission habilités « pointage » (fn_a_permission_etablissement) ; LECTURE_SEULE garde
+  // l'état sans le code, un compte sans lien est refusé. Un retour à `CASE WHEN v_is_etab` (tout membre) rougit.
+  assert.match(body, /'code_pointage_actif', CASE WHEN v_peut_voir_code THEN v_mission\.code_pointage_actif ELSE NULL END/);
+  assert.doesNotMatch(body, /CASE WHEN v_is_etab THEN v_mission\.code_pointage_actif/,
+    'code_pointage_actif de nouveau servi à tout membre de l établissement (retour arrière de B5b ?)');
+  assert.ok(body.includes('v_peut_voir_code boolean := false;'), 'v_peut_voir_code : refus par défaut absent');
+  assert.equal(body.split('v_peut_voir_code :=').length - 1, 1, 'v_peut_voir_code : une seule affectation attendue');
+  assert.ok(body.includes("  IF v_is_etab IS TRUE THEN\n    v_peut_voir_code := public.fn_a_permission_etablissement('pointage', v_mission.etablissement_id) IS TRUE;\n  END IF;"),
+    'v_peut_voir_code : plus dérivé de la permission « pointage » sur l établissement de la mission');
+  assert.ok(body.includes('IF NOT COALESCE(v_is_etab, false) AND NOT COALESCE(v_is_soignant, false) THEN'),
+    'garde d accès de nouveau en logique ternaire (retour arrière de B5b ?)');
+  const pointage = corpsSql(read(SOURCES.schema), enteteFn('fn_a_permission_etablissement'))
+    .match(/WHEN 'pointage' THEN v_role IN \(([^)]*)\)/);
+  assert.ok(pointage, 'fn_a_permission_etablissement : règle « pointage » introuvable');
+  assert.ok(pointage[1].includes("'POINTAGE_ONLY'") && !pointage[1].includes("'LECTURE_SEULE'"),
+    `fn_a_permission_etablissement : rôles « pointage » changés (${pointage[1]}) — revoir la fiche fn_etat_pointage_mission`);
   assert.ok(fiche.includes('jamais décodé'), 'code_pointage_actif : « jamais décodé » absent');
+  assert.ok(fiche.includes('B5b') && fiche.includes("fn_a_permission_etablissement('pointage'"),
+    'fiche fn_etat_pointage_mission : visibilité du code par permission « pointage » (B5b) non consignée');
   // Revue fraîche de T0 : `est_etab` vaut JSON null pour tout compte sans établissement (false OR NULL = NULL),
   // soignant assigné compris, et jamais false pour lui : un décodage en Bool non optionnel échouerait sur 100 % des
   // réponses réelles. `est_admin()` rend un booléen non nul (COALESCE), `mon_etablissement_id()` NULL hors établissement.

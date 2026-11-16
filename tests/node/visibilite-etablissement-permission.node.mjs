@@ -149,8 +149,11 @@ test('fixture : corps LIVE exacts, propriétaire et ACL du dump, aucune donnée'
     assert.notEqual(md5(`${corps} `), attendu, 'une dérive blanche change le verrou');
     const dansSchema = md5(sourceBody(schema, nomDe(signature)));
     if (CIBLES.includes(signature)) {
-      // Avant déploiement : corps LIVE ; après re-baseline : corps de la migration.
-      assert.ok([attendu, md5(sourceBody(migration, nomDe(signature)))].includes(dansSchema), signature);
+      // B5b déployée le 08/11/2026 (#1119) puis re-baselinée (#1121) : le dump prod porte exactement le corps
+      // de la migration. Le corps LIVE d'avant (cette fixture, base du rejeu PG17) n'y est plus admis.
+      assert.equal(dansSchema, md5(sourceBody(migration, nomDe(signature))),
+        `${signature} : le dump prod ne porte plus le corps B5b (retour arrière ou redéfinition à relire)`);
+      assert.notEqual(dansSchema, attendu, signature);
     }
     if (dansSchema === attendu) assert.equal(corps, sourceBody(schema, nomDe(signature)));
   }
@@ -161,6 +164,8 @@ test('fixture : corps LIVE exacts, propriétaire et ACL du dump, aucune donnée'
 });
 
 test('diff minimal depuis le LIVE : seules les lignes prévues sont retirées', () => {
+  // Lignes du corps LIVE d'AVANT B5b (fixture figée), retirées par la migration : ce n'est plus la forme de
+  // production. Depuis la re-baseline #1121, le dump porte le corps de la migration (test « fixture »).
   const attendus = {
     'fn_etat_pointage_mission(uuid)': [
       '  IF NOT v_is_etab AND NOT v_is_soignant THEN',
