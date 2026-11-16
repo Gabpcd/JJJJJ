@@ -226,19 +226,19 @@ test('revue B8 vague 5, M1 : une dérive du Package.resolved échoue toujours et
   assert.equal(somme, 357, '25 (build) + 1 (vérification) + 1 (artefact) + 11 × 30 (éclats) : marge de 3 min inchangée');
 });
 
-// Revue B8 de la vague 5, M1 : sentry-cocoa 9.32.0 déclare KSCrash à une révision fixe dans Package@swift-6.2.swift
-// (et Package@swift-6.1.swift) ; SwiftPM 6.2 (Xcode 26.4.1, CI et TestFlight) l'épingle même sous le trait V10
-// désactivé, Xcode 16.4 non. Le Package.resolved versionné est celui d'Xcode 26.4.1 (docs/mobile-swift/SENTRY_IOS.md §1).
-test('revue B8 vague 5, M1 : le Package.resolved de l app épingle KSCrash à la révision déclarée par sentry-cocoa 9.32.0', () => {
+// Revue B8 de la vague 5, M1 (3ᵉ tour) : constat CI du run 43959073553 — SwiftPM 6.2 (Xcode 26.4.1, CI et TestFlight)
+// ÉLAGUE les dépendances gardées par un trait désactivé (kscrash, opentelemetry-swift-core, swift-atomics) que
+// Xcode 16.4 épinglait. Le Package.resolved versionné est copié tel quel de l'artefact de la CI
+// (docs/mobile-swift/SENTRY_IOS.md §1) ; ce test refuse le fichier réécrit par Xcode 16.4.
+test('revue B8 vague 5, M1 : le Package.resolved de l app est celui d Xcode 26.4.1 (dépendances conditionnelles élaguées)', () => {
   const resolu = JSON.parse(read(PACKAGE_RESOLVED_APP));
   const pin = identite => resolu.pins.find(p => p.identity === identite);
-  assert.equal(pin('sentry-cocoa')?.state.version, '9.32.0', 'révision de KSCrash relue pour sentry-cocoa 9.32.0 seulement');
-  assert.deepEqual(pin('kscrash'), {
-    identity: 'kscrash',
-    kind: 'remoteSourceControl',
-    location: 'https://github.com/getsentry/KSCrash.git',
-    state: { revision: '18a633dec20c265f03386294f9d82d208bb13094' },
-  });
+  assert.equal(pin('sentry-cocoa')?.state.version, '9.32.0', 'résolution relue pour sentry-cocoa 9.32.0 seulement');
+  for (const elague of ['kscrash', 'opentelemetry-swift-core', 'swift-atomics']) {
+    assert.equal(pin(elague), undefined, `${elague} : épinglé par Xcode 16.4, élagué par Xcode 26.4.1 — ne pas committer la version locale`);
+  }
+  assert.equal(resolu.originHash, '97a49726c2293404c4b2d9ccada02485783926893cc361503715ca54c01809ce',
+    'originHash calculé par Xcode 26.4.1 (artefact package-resolved du run 43959073553)');
   const identites = resolu.pins.map(p => p.identity);
   assert.deepEqual(identites, [...identites].sort(), 'pins dans l ordre alphabétique des identités, comme Xcode les écrit');
   assert.equal(read(PACKAGE_RESOLVED_APP), `${JSON.stringify(resolu, null, 2).replace(/": /g, '" : ')}\n`,

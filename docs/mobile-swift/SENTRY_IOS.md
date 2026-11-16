@@ -32,18 +32,21 @@ dans les manifestes de la révision `4e1e4ba9` (tag `9.32.0`) :
   `_SentryPrivate` et `SentryObjCInternal`, sous la condition `.when(traits: ["V10"])`. Le trait `V10` est réservé au
   développement de Sentry. Le paquet ne déclare aucun trait par défaut, et `project.yml` n'en active aucun.
 - Dans le manifeste 6.1, aucune cible n'en dépend hors `SDK_V10=1` (`kscrashSwiftDependencies` vide).
-- **SwiftPM 6.2 (Xcode 26.4.1 : CI et TestFlight) résout quand même la dépendance gardée par un trait désactivé.** Le
-  `Package.resolved` de l'app porte donc le pin `kscrash` à cette révision, sans version : c'est une révision fixe, pas
-  un tag. SwiftPM 6.1 (Xcode 16.4, en local) ne l'épingle pas, car aucune cible n'en dépend. C'est l'écart qui a fait
-  échouer l'étape « Package.resolved de l'app inchangé » au run 43948577842. KSCrash ne déclare lui-même aucune
-  dépendance : aucun autre pin n'en découle.
+- **Constat CI (run 43959073553, Xcode 26.4.1 build 17E202, artefact `package-resolved-*-6a145748…`) : SwiftPM 6.2
+  élague les dépendances gardées par un trait désactivé, il ne les épingle pas.** L'hypothèse inverse du premier
+  correctif (ajouter un pin `kscrash`) était fausse : Xcode 26.4.1 retire `kscrash`, mais aussi
+  `opentelemetry-swift-core` et `swift-atomics`, que Xcode 16.4 (SwiftPM 6.1, en local) épinglait, et recalcule
+  `originHash` (`97a49726…`). Le `Package.resolved` versionné est **copié tel quel de l'artefact de la CI** : 8 pins, ni
+  `kscrash`, ni `opentelemetry-swift-core`, ni `swift-atomics`. C'est celui que lit l'archive TestFlight avec
+  `-onlyUsePackageVersionsFromResolvedFile`. Ne jamais committer le fichier réécrit par Xcode 16.4 en local (il remet
+  ces trois pins) : en cas de doute, l'étape « Package.resolved de l'app inchangé » publie le bon fichier en artefact.
 - **Jamais lié à l'app.** Le produit `Sentry` que la cible app importe est le binaire `Sentry.xcframework` plus
   `SentryCppHelper`, qui n'a aucune dépendance. Les cibles qui dépendent de KSCrash relèvent du produit compilé depuis
   les sources, `SentrySPM`, que l'app n'importe pas. Activer le trait `V10` ne lierait donc pas KSCrash à notre produit.
   Une seule chose le lierait : la variable `SDK_V10=1` à l'évaluation du manifeste, qui remplace le produit binaire
   `Sentry` par une compilation depuis les sources liée à KSCrash sans condition. Aucun workflow ni xcconfig ne la pose.
-  SwiftPM clone le dépôt de KSCrash, mais ne compile ni ne lie aucune de ses cibles (lecture des manifestes ; un
-  `build-for-testing.log` de la CI peut le confirmer).
+  Sous Xcode 26.4.1, SwiftPM n'épingle même pas KSCrash (élagué, voir ci-dessus) ; sous Xcode 16.4, il le clone sans
+  compiler ni lier aucune de ses cibles.
 
 **Le `Package.resolved` de référence est donc celui qu'écrit Xcode 26.4.1.** C'est la version que vérifie
 `ios-swift-ci.yml` et que lit l'archive TestFlight (`-onlyUsePackageVersionsFromResolvedFile`, même toolchain : garde

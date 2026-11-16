@@ -2700,3 +2700,19 @@ Vérifications locales (Xcode 16.4, Swift 6.1.2 ; aucun build Xcode, la machine 
 
 Reste à prouver : CI trois formats sur la tête poussée (étape `Package.resolved` verte, `skipped = 0`), puis revue B8
 limitée à ce delta.
+
+### Revue fraîche B8 de la vague 5, 3ᵉ tour (delta 9191d779..6a145748) : A_CORRIGER, correction de M1 (16/11/2026)
+
+- Verdict : A_CORRIGER, 1 majeur, 1 mineur (issuecomment-6930121681). Branche `fix/ios-gel-iphone-ci` (gel iPhone) jugée
+  conforme : aucun masquage d'échec, script borné et sans secret, plafond 357/360 min, bouton « OK » sans effet métier
+  ni texte juridique, flux de signature OTP inchangé.
+- **M1 (corrigé)** : l'hypothèse « SwiftPM 6.2 épingle KSCrash » était fausse. L'artefact `package-resolved-*-6a145748…`
+  du run 43959073553 (Xcode 26.4.1, 17E202) montre l'inverse : Xcode 26.4.1 élague `kscrash`, `opentelemetry-swift-core`
+  et `swift-atomics` (dépendances gardées par un trait désactivé, épinglées par Xcode 16.4) et recalcule `originHash`
+  (`97a49726…`). Le `Package.resolved` versionné est désormais copié tel quel de l'artefact ; les gardes
+  `ios-swift-ci-eclats.node.mjs` et `ios-native-testflight.node.mjs` exigent l'absence des trois pins et cet
+  `originHash` ; `SENTRY_IOS.md` §1 est corrigé.
+- **m1 (suivi, non bloquant)** : `CrashScrubber` laisse passer un jeton nu non numérique après `code:` (`code: ABC123`,
+  `code: 12AB34` → partiellement masqué). Impact faible (codes OTP et de pointage à six chiffres). À traiter dans une
+  prochaine tranche : masquer le jeton nu entier après `:` sous un nom sensible.
+- Reste à prouver : CI UI verte sur les trois formats avec `skipped = 0`, puis revue B8 n°4 limitée à ce delta.
