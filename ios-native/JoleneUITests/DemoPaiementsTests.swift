@@ -6,14 +6,15 @@ import XCTest
 ///
 /// Ce que ces tests prouvent (niveau 2), et seulement cela :
 /// - la section « Paiements à confirmer » (`revenus-paiements-declares`) de l'onglet Revenus : en-tête verbatim du web
-///   (vouvoyé, TJ7), détail déplié (méthode, date, mission, taux, montant déclaré, pointages) ;
+///   (vouvoyé : décision 9 du lot 1, TJ8), détail déplié (méthode, date, mission, taux, montant déclaré, pointages) ;
 /// - « Confirmer la réception » → « Paiement confirmé ✅ » après relecture, carte retirée parce que le serveur ne la rend
 ///   plus, état de la mission relu (« Réception confirmée ») ;
 /// - contestation sans motif impossible (« Envoyer la contestation » désactivé, motif blanc compris), puis envoyée avec un
 ///   motif → « Contestation envoyée », état de la mission relu (« Paiement contesté ») ;
 /// - refus serveur verbatim (`JOLENE_DEMO_PAIEMENTS=refus`) : « Paiement déjà confirmé » (confirmé ailleurs, carte retirée
 ///   à la relecture), « Un litige de ce type est déjà ouvert pour cette mission. » (carte gardée), jamais un succès ;
-/// - tap push `PAIEMENT_RECU` → onglet Revenus sur `revenus-paiements-declares` (correction 15 ; cas reporté de T5).
+/// - tap push `PAIEMENT_RECU` → onglet Revenus sur `revenus-paiements-declares` (correction 15 ; cas reporté de T5), et
+///   sur iPhone l'onglet a défilé jusqu'à la section (en-tête de l'onglet hors du cadre utile, revue B8 n°1, m6).
 /// Les règles (une mutation à la fois, double tap, relecture, 23505, délai dépassé, epoch, borne du motif) sont prouvées au
 /// niveau 1 (`PaiementsDeclaresModelTests`, `PaiementsDeclaresTests`, `DemoPaiementsGatewayTests`,
 /// `SupabasePaiementsGatewayTests`).
@@ -123,11 +124,27 @@ final class DemoPaiementsTests: JoleneUITestCase {
 
     /// Cas reporté de T5 (blueprint §3 T13) : `PAIEMENT_RECU` mène à `/soignant/mes-gains?tab=paiements` (correction 15),
     /// section native « Paiements à confirmer » de l'onglet Revenus, jamais un renvoi web.
+    ///
+    /// Revue B8 n°1, m6 : sur iPhone, la section est déjà près du haut de l'onglet ; la voir ne prouve pas que l'onglet a
+    /// défilé jusqu'à elle (`RevenusScreen`, ancre `revenus-ancre-paiements-declares`). Le défilement est prouvé par
+    /// l'en-tête de l'onglet (`revenus-sous-titre`, au-dessus de la section) sorti du cadre utile : entièrement au-dessus
+    /// du bas des barres de navigation (ou du haut de l'écran sans barre). Sur iPad, où l'onglet peut tenir sans défiler,
+    /// l'assertion reste la visibilité de la première carte.
     func testTapPushPaiementRecuOuvreLesPaiementsDeclares() throws {
         launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", "PAIEMENT_RECU"])
         connexionDemo()
         require("L'onglet Revenus s'ouvre sur les paiements à confirmer", timeout: 30) {
             self.element("revenus-paiements-declares").exists && self.visible(self.element("paiement-deplier-\(Self.premier)"))
+        }
+        if UIDevice.current.userInterfaceIdiom != .pad {
+            let ecran = element("revenus-screen")
+            let enTete = element("revenus-sous-titre")
+            require("iPhone : l'onglet a défilé jusqu'à la section (en-tête de l'onglet hors du cadre utile)", timeout: 30) {
+                guard enTete.exists, self.containerVisible(ecran) else { return false }
+                let haut = self.basDesBarresDeNavigation(sur: ecran) ?? ecran.frame.minY
+                return enTete.frame.maxY <= haut + 1
+            }
+            XCTAssertTrue(visible(element("paiement-deplier-\(Self.premier)")), "la section reste à l'écran après le défilement")
         }
         XCTAssertFalse(element("renvoi-web-demo").exists, "section native livrée : jamais un renvoi web")
         XCTAssertEqual(element("deeplink-route").label, "revenus(paiements)")

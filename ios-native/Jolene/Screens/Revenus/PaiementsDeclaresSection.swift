@@ -10,9 +10,11 @@ import JoleneDesign
 /// Une carte par paiement `DECLARE` : en-tête (« 💰 {établissement} déclare vous avoir payé {montant} », mission,
 /// indication), qui déplie le détail (méthode, date, référence, mission, taux, brut, montant déclaré, pointages) et les
 /// actions « Confirmer la réception » et « Contester » ; « Contester » ouvre le formulaire du motif (obligatoire, 500
-/// caractères au plus). Tous les textes viennent de `PaiementsDeclaresTextes` (verbatim web, deux textes vouvoyés, TJ7) ;
-/// les règles (une mutation à la fois, relecture, refus verbatim) sont dans le modèle et testées là. La vue n'ajoute
-/// aucune logique, aucun calcul de montant et aucun texte.
+/// caractères au plus). Tous les textes viennent de `PaiementsDeclaresTextes` (verbatim web ; deux textes vouvoyés :
+/// l.55, TJ7 ; l.259, décision 9 du lot 1 et TJ8) par `CartePaiementDeclare` ; les règles (une mutation à la fois,
+/// relecture, refus verbatim) sont dans le modèle et testées là. La vue n'ajoute aucune logique, aucun calcul de montant
+/// et aucun texte ; l'en-tête n'est pas recomposé : il rend `prefixe` puis `montant`, dont `titre` (libellé
+/// d'accessibilité) est la concaténation (revue B8 n°1, m5).
 ///
 /// Rien n'est rendu pendant la première lecture ni sans paiement à confirmer (`return null` du web, l.216), sauf l'issue
 /// d'une mutation, qui reste affichée après la disparition de la dernière carte.
@@ -98,8 +100,9 @@ private struct CartePaiementDeclareVue: View {
                 .font(JoleneFont.callout)
                 .foregroundStyle(JoleneColor.rose800)
             VStack(alignment: .leading, spacing: JoleneSpacing.xs) {
-                (Text("💰 \(carte.nom) \(PaiementsDeclaresTextes.declareVousAvoirPaye) ")
-                    + Text(carte.montant).foregroundColor(JoleneColor.rose800))
+                // Une seule source avec le libellé d'accessibilité (`carte.titre` = `prefixe` + `montant`), rendue telle
+                // quelle (`verbatim` : ni clé de traduction, ni Markdown).
+                (Text(verbatim: carte.prefixe) + Text(verbatim: carte.montant).foregroundColor(JoleneColor.rose800))
                     .font(JoleneFont.callout.weight(.semibold))
                     .foregroundStyle(JoleneColor.midnight)
                     .fixedSize(horizontal: false, vertical: true)

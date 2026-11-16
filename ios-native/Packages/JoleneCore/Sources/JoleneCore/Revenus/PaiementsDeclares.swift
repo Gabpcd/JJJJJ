@@ -11,8 +11,9 @@ import Foundation
 // MARK: - Textes
 
 /// Textes du bandeau, verbatim web (`// source: fichier:ligne`, garde `PaiementsDeclaresTests`) ; les deux textes
-/// tutoyés, non juridiques, passent au vouvoiement (TJ7 ; décision 9 du lot 1). Aucun texte nouveau, aucun texte sur la
-/// portée juridique d'une confirmation ou d'une contestation (TJ7).
+/// tutoyés, non juridiques, passent au vouvoiement : l.55 (TJ7, qui le nomme ; décision 9 du lot 1) et l.259 (décision 9
+/// du lot 1, TJ8 : texte non juridique, vouvoiement). Aucun texte nouveau, aucun texte sur la portée juridique d'une
+/// confirmation ou d'une contestation (TJ7).
 public enum PaiementsDeclaresTextes {
     // source: src/components/BandeauPaiementDeclare.tsx:51
     public static let motifTitre = "Motif de contestation :"
@@ -41,7 +42,8 @@ public enum PaiementsDeclaresTextes {
     public static let reessayer = "Réessayer"
     // source: src/components/BandeauPaiementDeclare.tsx:161
     public static let etablissementDefaut = "Établissement"
-    /// Adapté au vouvoiement (TJ7) de src/components/BandeauPaiementDeclare.tsx:259 (« déclare t'avoir payé »).
+    /// Adapté au vouvoiement (décision 9 du lot 1, TJ8) de src/components/BandeauPaiementDeclare.tsx:259 (« déclare
+    /// t'avoir payé »).
     public static let declareVousAvoirPaye = "déclare vous avoir payé"
     // source: src/components/BandeauPaiementDeclare.tsx:264
     public static let mission = "Mission :"
@@ -231,8 +233,12 @@ public enum PaiementsDeclaresAssemblage {
 
 /// Règle unique des deux mondes : un succès annoncé par la RPC n'est un succès qu'après relecture de la ligne
 /// (`CONFIRME` et `confirme_par_soignant`, ou `CONTESTE` et `conteste`). Sans relecture probante, l'issue est une erreur
-/// (« Erreur lors du traitement », texte web l.200), jamais un succès. B3 écrit le paiement et le litige dans un même
-/// sous-bloc (l.25791-25824 du dump) : une ligne relue `CONTESTE` prouve aussi le litige.
+/// (« Erreur lors du traitement », texte web l.200), jamais un succès. Pour une contestation, la preuve est
+/// `success:true` de B3 + relecture `CONTESTE` : B3 insère le litige dans le même sous-bloc que l'UPDATE `CONTESTE`
+/// (l.25791-25824 du dump) et ne répond `success` qu'avec son `litige_id` (l.25837), exigé non vide par le gateway
+/// Supabase (sinon erreur de contrat). Une ligne relue `CONTESTE` seule ne prouve pas le litige : ce statut s'écrit
+/// aussi sans litige de B3 (UPDATE direct du soignant ou de l'établissement sous `pol_paie_soig_update`, l.79489, admis
+/// par `fn_protect_paiement_soignant`, l.50607-50622 ; contestation de facture `fn_ouvrir_litige_rate_limited`, l.46765).
 public enum PaiementsDeclaresRelecture {
     public static func confirmation(relue: PaiementDeclare?) throws -> IssuePaiement {
         guard let relue, relue.statut == PaiementsDeclaresAssemblage.statutConfirme, relue.confirmeParSoignant else {
@@ -254,10 +260,15 @@ public enum PaiementsDeclaresRelecture {
 /// Carte d'un paiement déclaré, chaînes prêtes pour la vue (aucun calcul dans la vue).
 public struct CartePaiementDeclare: Equatable, Sendable, Identifiable {
     public var id: String
-    /// « 💰 {nom} déclare vous avoir payé {montant} » (l.259-260).
-    public var titre: String
+    /// « 💰 {nom} déclare vous avoir payé » suivi d'une espace (séparateur `{' '}` de l.259) : début de l'en-tête, rendu
+    /// tel quel par la vue, avant le montant mis en couleur (l.260).
+    public var prefixe: String
     public var nom: String
+    /// Montant formaté du serveur (`fmt(p.montant_net)`, l.260).
     public var montant: String
+    /// « 💰 {nom} déclare vous avoir payé {montant} » (l.259-260) : seule source de l'en-tête affiché (`prefixe` puis
+    /// `montant`) et de son libellé d'accessibilité (revue B8 n°1 de T13, m5).
+    public var titre: String { prefixe + montant }
     /// « Mission : {intitulé} » (l.262-266), nil sans intitulé.
     public var mission: String?
     public var indication: String
@@ -324,7 +335,7 @@ public enum PaiementsDeclaresPresentation {
             infos.append(InfoPaiementDeclare(cle: "reference", libelle: T.reference, valeur: reference))
         }
         return CartePaiementDeclare(
-            id: p.id, titre: "💰 \(nom) \(T.declareVousAvoirPaye) \(montant)", nom: nom, montant: montant,
+            id: p.id, prefixe: "💰 \(nom) \(T.declareVousAvoirPaye) ", nom: nom, montant: montant,
             mission: nonVide(p.mission?.intitule).map { "\(T.mission) \($0)" }, indication: T.indication, infos: infos,
             blocMission: p.mission.map { blocMission($0, paiement: p) }, pointages: pointages(p))
     }

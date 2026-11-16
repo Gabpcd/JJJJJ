@@ -53,8 +53,9 @@ final class PaiementsDeclaresTests: XCTestCase {
         }
     }
 
-    /// TJ7 : deux textes tutoyés non juridiques passent au vouvoiement ; leur source est épinglée (si le web change, le
-    /// test rougit). Le motif de repli du web n'est jamais une constante native.
+    /// Deux textes tutoyés non juridiques passent au vouvoiement : l.55 (TJ7, décision 9 du lot 1) et l.259 (décision 9
+    /// du lot 1, TJ8) ; leur source est épinglée (si le web change, le test rougit). Le motif de repli du web n'est jamais
+    /// une constante native (TJ7).
     func testTextesVouvoyesEtRepliDuWebAbsent() throws {
         let source = try CompteVerbatimTests.lignes(Self.bandeau)
         XCTAssertTrue(source[54].contains("placeholder=\"Décris pourquoi tu contestes ce paiement...\""), "l.55")
@@ -191,6 +192,11 @@ final class PaiementsDeclaresTests: XCTestCase {
         let carte = PaiementsDeclaresPresentation.carte(complet())
         let nbsp = "\u{00A0}"
         XCTAssertEqual(carte.titre, "💰 Clinique des Tests déclare vous avoir payé 162,40\(nbsp)€")
+        // Revue B8 n°1, m5 : l'en-tête rendu (`prefixe` puis `montant` en couleur) et son libellé d'accessibilité
+        // (`titre`) ont une seule source ; le séparateur `{' '}` de l.259 appartient au préfixe.
+        XCTAssertEqual(carte.prefixe, "💰 Clinique des Tests déclare vous avoir payé ")
+        XCTAssertEqual(carte.montant, "162,40\(nbsp)€")
+        XCTAssertEqual(carte.titre, carte.prefixe + carte.montant)
         XCTAssertEqual(carte.mission, "Mission : Nuit")
         XCTAssertEqual(carte.indication, "Touchez pour voir le détail · Confirmez ou contestez")
         XCTAssertEqual(carte.infos.map { "\($0.libelle) \($0.valeur)" },

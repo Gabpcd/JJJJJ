@@ -5,8 +5,9 @@ import Supabase
 /// `PaiementsDeclaresPort` sur Supabase (lot 3, T13, B9), port de `BandeauPaiementDeclare.tsx` (l.89-203). Contrats :
 /// fiches `fn_confirmer_paiement_soignant` et `fn_contester_paiement_soignant` de `docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md`
 /// (contestation d'après B3, #1118, migration `20261102205808_contestation_paiement_soignant.sql`, corps identique au
-/// dump `supabase/schema/public.sql` l.25741-25839 ; GRANT EXECUTE `authenticated` l.82094 et l.82235). Définition live
-/// non relue par cette tranche (aucun appel au backend autorisé) : point à vérifier avant le go B9.
+/// dump `supabase/schema/public.sql` l.25741-25839 ; GRANT EXECUTE `authenticated` l.82094 et l.82235). Définitions
+/// live relues en lecture seule par le coordinateur le 16/11/2026 (empreintes, droits et registre consignés dans
+/// `DECISIONS_LOT3.md`, section T13) : condition de TJ7 levée.
 ///
 /// - Liste : `paiements_soignant` du soignant en `DECLARE` avec **exactement** les colonnes de l.97 (RLS
 ///   `pol_paie_soig_select`) ; noms d'établissement par `fn_etablissements_safe` seul, dont l'échec laisse le repli
@@ -16,9 +17,11 @@ import Supabase
 /// - Confirmer / contester : un seul POST, jamais renvoyé ; `{error}` → refus, message serveur verbatim (« Non
 ///   authentifié » de la confirmation → session expirée) ; `{success:true}` → relecture de la ligne
 ///   (`PaiementsDeclaresRelecture` : `CONFIRME` et `confirme_par_soignant`, ou `CONTESTE` et `conteste`), sans quoi
-///   « Erreur lors du traitement », jamais un succès ; tout autre corps → contrat ; exception PostgREST (dont une 23505
-///   non restituée par B3) → `SupabaseErrorMapping` avec le repli du web (l.200), jamais un succès. Le motif est envoyé
-///   tel que saisi (le serveur le borne après `btrim`), jamais remplacé par le repli `'Contesté par le soignant'`.
+///   « Erreur lors du traitement », jamais un succès ; une contestation exige en plus `litige_id` non vide dans la
+///   réponse (`success:true` de B3 + relecture `CONTESTE`), sinon contrat ; tout autre corps → contrat ; exception
+///   PostgREST (dont une 23505 non restituée par B3) → `SupabaseErrorMapping` avec le repli du web (l.200), jamais un
+///   succès. Le motif est envoyé tel que saisi (le serveur le borne après `btrim`), jamais remplacé par le repli
+///   `'Contesté par le soignant'`.
 /// Rien n'est journalisé (ni montant, ni identifiant, ni motif).
 public struct SupabasePaiementsGateway: PaiementsDeclaresPort {
     public static let confirmerRPC = "fn_confirmer_paiement_soignant"
@@ -88,8 +91,20 @@ public struct SupabasePaiementsGateway: PaiementsDeclaresPort {
                                                     params: ["p_paiement_id": .string(id), "p_motif": .string(motif)],
                                                     fallback: PaiementsDeclaresTextes.erreurTraitement)
         if let refus = try Self.refus(reponse) { return refus }
-        let litige = reponse.string("litige_id")
+        // Revue B8 n°1 de T13, m1 : B3 ne répond `success` qu'avec l'identifiant du litige inséré dans le même sous-bloc
+        // que l'UPDATE `CONTESTE` (dump l.25791-25824, réponse l.25837). Sans `litige_id` non vide, la réponse n'est pas
+        // celle de B3 : erreur de contrat, jamais un succès, et aucune relecture ne la rattrape (une ligne `CONTESTE` peut
+        // venir d'ailleurs). La liste est relue par le modèle après toute issue.
+        guard let litige = Self.litigeId(reponse) else { throw JoleneError(.contract, SupabaseErrorMapping.contractMessage) }
         return try PaiementsDeclaresRelecture.contestation(relue: try await relire(id: id, context: context), litigeId: litige)
+    }
+
+    /// `litige_id` de la réponse de B3 : texte non blanc, nil sinon (absent, `null`, vide, blanc ou d'un autre type).
+    static func litigeId(_ reponse: RPCResponse) -> String? {
+        guard let valeur = reponse.string("litige_id"), !valeur.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return valeur
     }
 
     /// Refus `{error}` (et `error_code` de B3) → issue `.refuse`, message verbatim ; « Non authentifié » → session

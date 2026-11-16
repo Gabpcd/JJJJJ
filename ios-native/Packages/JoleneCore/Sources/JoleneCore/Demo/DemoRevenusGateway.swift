@@ -19,7 +19,9 @@ extension DemoFixtures {
 
     /// `demo-missions-terminees.json` : lignes `missions` TERMINEE du profil fictif (toutes leurs colonnes, dont les
     /// colonnes Rist de la mission témoin, que le décodeur des colonnes de `MesGains.tsx` l.95 ignore) et lignes
-    /// `paiements_soignant` (colonnes de l.102).
+    /// `paiements_soignant` (colonnes de l.102). `factures_honoraires` (facture de la déclaration libérale, pour qu'elle
+    /// soit une ligne que le serveur admet ; revue B8 n°1 de T13, m4) n'est pas décodée : les factures restent un renvoi
+    /// web (D4).
     public struct MissionsTermineesFile: Decodable, Sendable {
         public var fixedNow: String
         public var missions: [MissionTerminee]
