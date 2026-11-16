@@ -278,10 +278,11 @@ final class CrashReportingTests: XCTestCase {
         let session = MutableAuthState(restored: MondeDeuxComptes.a, restoreError: nil)
         let reseau = ReseauProfils()
         let events = AuthEventEmitter()
+        let temoin = TemoinConnexion()
         let controller: SessionController
 
         init() {
-            controller = SessionController(gateways: Gateways(auth: AuthDeuxComptes(session: session, events: events),
+            controller = SessionController(gateways: Gateways(auth: AuthDeuxComptes(session: session, events: events, temoin: temoin),
                                                               role: NeutralRole(), missions: MissionsDeuxComptes(reseau: reseau)))
         }
     }
@@ -291,14 +292,33 @@ final class CrashReportingTests: XCTestCase {
         func regler(horsLigne: Bool) { self.horsLigne = horsLigne }
     }
 
+    /// Revue B8 de la vague 5, m2 : identifiants remis au rapport de crash, relevés au moment même de l'appel
+    /// `AuthPort.signIn`. À cet instant, la connexion n'a encore publié aucun état (`.loading` ne touche pas
+    /// l'identifiant) : seul le retrait du début de `SessionStore.signIn` peut y avoir ajouté `nil`. Le `.blocked` ou le
+    /// `.signedOut` publié après le refus, eux, viennent trop tard pour ce relevé.
+    private final class TemoinConnexion: @unchecked Sendable {
+        private let verrou = NSLock()
+        private var espion: EspionCrash?
+        private var _releves: [[String?]] = []
+        var releves: [[String?]] { verrou.lock(); defer { verrou.unlock() }; return _releves }
+        func observer(_ espion: EspionCrash) { verrou.lock(); self.espion = espion; verrou.unlock() }
+        func noterAppel() {
+            verrou.lock()
+            defer { verrou.unlock() }
+            if let espion { _releves.append(espion.utilisateurs) }
+        }
+    }
+
     private struct AuthDeuxComptes: AuthPort {
         let session: MutableAuthState
         let events: AuthEventEmitter
+        let temoin: TemoinConnexion
         func restoreSession() async throws -> AuthenticatedUser? {
             if let erreur = await session.restoreError { throw erreur }
             return await session.restored
         }
         func signIn(email: String, password: String) async throws -> AuthenticatedUser {
+            temoin.noterAppel()
             guard let compte = await session.restored else { throw JoleneError(.invalidCredentials, "refusé") }
             return compte
         }
@@ -320,6 +340,7 @@ final class CrashReportingTests: XCTestCase {
         let monde = MondeDeuxComptes()
         let espion = EspionCrash()
         let store = SessionStore(controller: monde.controller, crashReporting: espion)
+        monde.temoin.observer(espion)
         store.observeAuthEvents()
         await store.start()
         XCTAssertTrue(store.state.isReady, "A ouvre son espace")
@@ -370,19 +391,39 @@ final class CrashReportingTests: XCTestCase {
     }
 
     func testConnexionRefuseeRetireLIdentifiantJusquAuReadySuivant() async {
-        // `signIn` retire l'identifiant avant la tentative, comme il vide le navigateur intégré (T3b) : une connexion
-        // refusée laisse l'app sans identifiant, reposé au `.ready` suivant seulement.
+        // Une connexion refusée laisse l'app sans identifiant, reposé au `.ready` suivant seulement. Le `nil` final vient
+        // aussi du `.signedOut` du refus : seul le relevé au moment de l'appel (`TemoinConnexion`) prouve que `signIn` l'a
+        // retiré AVANT la tentative, comme il vide le navigateur intégré (T3b ; revue B8 de la vague 5, m2).
         let (store, espion, monde) = await storeDeuxComptes()
         await monde.session.set(restored: nil, restoreError: nil)
         await store.signIn(email: "inconnu@example.invalid", password: "fictif")
         guard case .signedOut(let message?) = store.state, !message.isEmpty else {
             return XCTFail("attendu : connexion refusée, obtenu \(store.state)")
         }
+        XCTAssertEqual(monde.temoin.releves, [["u-a", nil]], "identifiant de A retiré avant l'appel d'authentification")
         XCTAssertEqual(espion.utilisateurs, ["u-a", nil])
         await monde.session.set(restored: MondeDeuxComptes.a, restoreError: nil)
         await store.signIn(email: "a@example.invalid", password: "fictif")
         XCTAssertTrue(store.state.isReady)
+        XCTAssertEqual(monde.temoin.releves, [["u-a", nil], ["u-a", nil]], "rien de reposé avant le `.ready`")
         XCTAssertEqual(espion.utilisateurs, ["u-a", nil, "u-a"])
+    }
+
+    func testConnexionDepuisUnEspacePretRetireLIdentifiantAvantLAppel() async {
+        // Revue B8 de la vague 5, m2 : depuis un espace prêt, ni `.blocked` ni `.signedOut` n'ont encore été publiés au
+        // moment de l'appel ; le `nil` relevé ne peut venir que du retrait du début de `SessionStore.signIn`.
+        let (store, espion, monde) = await storeDeuxComptes()
+        // Même compte : retiré avant l'appel, reposé au `.ready` (sans le retrait, rien ne bougerait).
+        await store.signIn(email: "a@example.invalid", password: "fictif")
+        XCTAssertTrue(store.state.isReady)
+        XCTAssertEqual(monde.temoin.releves, [["u-a", nil]], "identifiant de A retiré avant l'appel d'authentification")
+        XCTAssertEqual(espion.utilisateurs, ["u-a", nil, "u-a"])
+        // Autre compte, espace bloqué : l'identifiant de A n'est déjà plus là quand B s'authentifie.
+        await monde.session.set(restored: MondeDeuxComptes.b, restoreError: nil)
+        await store.signIn(email: "b@example.invalid", password: "fictif")
+        guard case .blocked = store.state else { return XCTFail("attendu : espace bloqué de B, obtenu \(store.state)") }
+        XCTAssertEqual(monde.temoin.releves, [["u-a", nil], ["u-a", nil, "u-a", nil]], "aucun crash de B attribué à A")
+        XCTAssertEqual(espion.utilisateurs, ["u-a", nil, "u-a", nil])
     }
 
     // MARK: - Gardes statiques de la cible app
