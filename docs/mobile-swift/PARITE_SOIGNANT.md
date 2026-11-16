@@ -58,7 +58,7 @@ et `/soignant/conformite` restent des renvois web. Les liens de push du lot 2 (`
 « présences d'une mission » de Revenus suivent (m7). Coupe-circuit `ios_natif_contrats_actif` lu par
 `ContratsDestination` (D-FLAGS). Les renvois qui mènent à la page web (coupe-circuits, suivi non vérifiable) deviennent
 des routes forcées web. Aucun statut ne passe « natif » sans run vert trois formats de `ios-swift-ci.yml`
-(`DemoLiensLot2Tests`, éclat « documents ») ; preuve niveau 1 : `LinksRouterLot2Tests`. Écart de fixtures démo : les
+(`DemoLiensLot2Tests`, éclat « lot3-inscription » depuis la revue B8 n°1 de T10, M1) ; preuve niveau 1 : `LinksRouterLot2Tests`. Écart de fixtures démo : les
 missions de Revenus n'existent pas dans le monde démo des présences, leur détail natif dit « introuvable » en démo.
 
 Sous-lignes (préfixées `›`) : une route web qui regroupe plusieurs onglets ou vues est détaillée pour que
