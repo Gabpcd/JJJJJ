@@ -121,6 +121,7 @@ Détail de l'agent de prospection :
 - Score explicable : type d'établissement, email générique, téléphone, signal BOAMP sur 90 jours, tension BMO.
 - Les départements alternent dans la file.
 - Exclusions : STOP, PERDU, OPPOSITION, adresse déjà en séquence.
+- Adresses MSSanté exclues (domaine `mssante.fr` et ses sous-domaines, premiers contacts et relances, `20261116143942`) : MSSanté est un espace de confiance fermé, une boîte MSSanté n'échange qu'avec les messageries MSSanté de la liste blanche de l'ANS, donc un email envoyé depuis Gmail est rejeté (ANS : [doctrine MSSanté](https://esante.gouv.fr/doctrine/mssante), [« Basiques de la MSSanté », 08/2026](https://esante.gouv.fr/sites/default/files/media/document/Pr%C3%A9sentation%20-%20Basiques%20de%20la%20MSSant%C3%A9%20-%20082026.pdf)).
 
 Parcours de la fondatrice (Admin → Acquisition → **Agents de croissance**, `/admin/fondateur/agents`) :
 1. **À valider** : relire, modifier si besoin, puis « Valider et ouvrir Gmail » (email pré-rempli)
