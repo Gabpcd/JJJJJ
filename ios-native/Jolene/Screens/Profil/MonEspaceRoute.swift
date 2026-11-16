@@ -14,6 +14,11 @@ import JoleneCore
 /// Les liens internes aux écrans du lot 2 (« Voir le contrat » d'un bloc de pointage, « Détail » d'une ligne
 /// d'historique, carte d'un contrat, certificat ouvert depuis le contrat) restent des `NavigationLink { destination }` :
 /// ils s'empilent toujours au-dessus d'une de ces routes, que le retour à la racine retire avec elle.
+///
+/// Présentée par `MainTabView.presenter`, la route est enveloppée d'un jeton (`PresentationJetonnee<MonEspaceRoute>`,
+/// revue B8 n°1 de L2-T10, m1) : présenter la route déjà à la base de la pile change quand même le chemin, l'écran est
+/// reconstruit (modèles relus) et ce qui était empilé au-dessus est retiré. Les entrées du hub et de l'Accueil
+/// (`NavigationLink(value:)`) empilent la route nue : chaque toucher pousse déjà un nouvel élément.
 enum MonEspaceRoute: Hashable {
     /// Page Présences, `?tab=` et `?filtre=` bruts (`PresencesScreen(parametreOnglet:parametreFiltre:)`).
     case presences(onglet: String?, filtre: String?)
@@ -43,11 +48,16 @@ enum MonEspaceRoute: Hashable {
 }
 
 extension View {
-    /// Enregistre les écrans de « Mon espace » sur la pile qui porte cette vue (racine de l'Accueil ou du Profil).
+    /// Enregistre les écrans de « Mon espace » sur la pile qui porte cette vue (racine de l'Accueil ou du Profil) : route
+    /// nue (entrées par valeur) et route jetonnée (présentateur de l'espace, m1).
     func destinationsMonEspace(container: AppContainer, session: SessionStore, snapshot: SessionSnapshot,
                                ouvrirOnglet: @escaping (MainTabView.Tab) -> Void) -> some View {
         navigationDestination(for: MonEspaceRoute.self) { route in
             MonEspaceDestination(route: route, container: container, session: session, snapshot: snapshot,
+                                 ouvrirOnglet: ouvrirOnglet)
+        }
+        .navigationDestination(for: PresentationJetonnee<MonEspaceRoute>.self) { presentation in
+            MonEspaceDestination(route: presentation.route, container: container, session: session, snapshot: snapshot,
                                  ouvrirOnglet: ouvrirOnglet)
         }
     }
@@ -69,6 +79,11 @@ private struct MonEspaceDestination: View {
                             ouvrirOnglet: ouvrirOnglet)
         case .detailPresences(let missionId):
             DetailPresencesScreen(missionId: missionId, session: session, snapshot: snapshot)
+                #if DEBUG
+                // Revue B8 n°1 de L2-T10, m2 : identifiant de la mission présentée, lu par les XCUITest (valeur
+                // d'accessibilité de `presence-detail-screen`) ; démo seulement, jamais en STAGING où il serait réel.
+                .accessibilityValue(container.isDemo ? missionId : "")
+                #endif
         case .documents(let onglet):
             MesDocumentsScreen(container: container, session: session, snapshot: snapshot, ongletInitial: onglet)
         case .contrats:

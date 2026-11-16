@@ -9,8 +9,9 @@ import JoleneDesign
 /// `/soignant/documents` et `/soignant/contrats` (L2-T10, `ongletInitial`, `MonEspaceRoute.documents`).
 ///
 /// Drapeau `ios_natif_documents_actif` (D-FLAGS, fail-open) : lu à l'apparition ; à faux, l'écran entier devient un
-/// renvoi web. Le modèle des justificatifs vit avec l'écran (`@StateObject`) : changer d'onglet ne relance ni ne perd un
-/// envoi en vol (registre `EssaisDocumentsEnVol` du processus).
+/// renvoi web vers « Mes documents » sur l'onglet de l'écran (celui du lien, ou celui choisi avant la lecture du
+/// drapeau ; revue B8 n°1 de L2-T10, m4). Le modèle des justificatifs vit avec l'écran (`@StateObject`) : changer d'onglet
+/// ne relance ni ne perd un envoi en vol (registre `EssaisDocumentsEnVol` du processus).
 ///
 /// Identifiants : `documents-screen`, `documents-tab-justificatifs`, `documents-tab-contrats`, `documents-tab-dpae`,
 /// `documents-<onglet>-renvoi` (+ `-web` quand un présentateur de renvoi web est injecté).
@@ -45,8 +46,9 @@ struct MesDocumentsScreen: View {
                     renvoi(identifiant: "documents-dpae", route: AccueilPresentation.renvoiWeb(Self.lienDpae))
                 }
             } else {
-                // Route forcée web (L2-T10) : `/soignant/mes-documents` ouvre cet écran depuis T10.
-                renvoi(identifiant: "documents-desactive", route: DocumentsModel.routeRenvoiWeb)
+                // Route forcée web (L2-T10) : `/soignant/mes-documents` ouvre cet écran depuis T10. L'onglet du lien est
+                // conservé (revue B8 n°1 de L2-T10, m4) : `?tab=contrats` mène à l'onglet Contrats du web.
+                renvoi(identifiant: "documents-desactive", route: DocumentsModel.routeRenvoiWeb(onglet: onglet))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

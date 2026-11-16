@@ -287,6 +287,87 @@ final class LinksRouterLot2Tests: XCTestCase {
         XCTAssertEqual(AccueilPresentation.renvoiWeb("/soignant/dpae"), .safari(url("https://jolene.app/soignant/dpae")))
     }
 
+    // MARK: - Revue B8 n°1 de L2-T10 (m1, m3, m4)
+
+    /// m4 : quand un coupe-circuit renvoie au web, la page web s'ouvre sur l'onglet (et le filtre des présences) du lien,
+    /// jamais sur l'onglet par défaut. Valeurs exactes du web seulement : rien d'autre du lien n'est recopié.
+    func testCoupeCircuitsRenvoientAuWebSurLOngletDuLien() throws {
+        let presences = "https://jolene.app/soignant/presences"
+        XCTAssertEqual(PresencesRenvois.presences(onglet: "historique", aValider: true),
+                       .safari(url(presences + "?tab=historique&filtre=a_valider")))
+        for onglet in PointageRules.OngletPresences.allCases {
+            XCTAssertEqual(PresencesRenvois.presences(onglet: onglet.rawValue, aValider: false),
+                           .safari(url(presences + "?tab=" + onglet.rawValue)), onglet.rawValue)
+        }
+        XCTAssertEqual(PresencesRenvois.presences(onglet: nil, aValider: true), .safari(url(presences + "?filtre=a_valider")))
+        XCTAssertEqual(PresencesRenvois.presences(onglet: nil, aValider: false), .safari(url(presences)))
+        XCTAssertEqual(PresencesRenvois.presences, PresencesRenvois.presences(onglet: nil, aValider: false),
+                       "suivi non vérifiable : page des présences sans onglet")
+        // Onglet inconnu (le web afficherait un onglet vide) ou détourné : non transmis.
+        for inconnu in ["", "SECRET", "Historique", "historique&filtre=x", "historique#f", "avenir/../x"] {
+            XCTAssertEqual(PresencesRenvois.presences(onglet: inconnu, aValider: false), .safari(url(presences)), inconnu)
+        }
+
+        for onglet in OngletDocuments.allCases {
+            XCTAssertEqual(DocumentsModel.routeRenvoiWeb(onglet: onglet),
+                           .safari(url("https://jolene.app/soignant/mes-documents?tab=" + onglet.rawValue)), onglet.rawValue)
+        }
+        XCTAssertEqual(DocumentsModel.routeRenvoiWeb, DocumentsModel.routeRenvoiWeb(onglet: .justificatifs),
+                       "journal illisible : onglet Justificatifs, comme avant")
+
+        // Bout en bout, du lien au renvoi : mêmes conversions que `MonEspaceRoute` et les écrans.
+        guard case let .presences(onglet, filtre)? = LinkRouter.resolve(link: "/soignant/presences?tab=historique&filtre=a_valider") else {
+            return XCTFail("route des présences attendue")
+        }
+        XCTAssertEqual(PresencesRenvois.presences(onglet: onglet, aValider: PointageRules.filtreAValider(filtre)),
+                       .safari(url(presences + "?tab=historique&filtre=a_valider")))
+        for (lien, attendu) in [("/soignant/contrats", "contrats"), ("/soignant/mes-documents?tab=dpae", "dpae"),
+                                ("/soignant/mes-documents?tab=inconnu", "justificatifs")] {
+            guard case let .documents(brut)? = LinkRouter.resolve(link: lien) else { return XCTFail("\(lien) : route des documents attendue") }
+            XCTAssertEqual(DocumentsModel.routeRenvoiWeb(onglet: OngletDocuments(parametre: brut)),
+                           .safari(url("https://jolene.app/soignant/mes-documents?tab=" + attendu)), lien)
+        }
+    }
+
+    /// m1 : chaque présentation d'une route par le présentateur de l'espace est une valeur nouvelle ; présenter deux fois la
+    /// route déjà à la base de la pile change donc le chemin (SwiftUI reconstruit l'écran et retire ce qui est au-dessus).
+    func testPresentationsSuccessivesDeLaMemeRouteChangentLeChemin() {
+        enum Route: Hashable { case contrat(String), certificat(String) }
+        var jetons = JetonsDePresentation()
+        let premiere = jetons.presenter(Route.contrat("c-1"))
+        let seconde = jetons.presenter(Route.contrat("c-1"))
+        XCTAssertEqual(premiere.route, seconde.route, "même route")
+        XCTAssertNotEqual(premiere, seconde, "même route présentée deux fois : deux valeurs")
+        XCTAssertNotEqual([premiere], [seconde], "le chemin de la pile change")
+        XCTAssertEqual(Set([premiere, seconde]).count, 2, "deux éléments de chemin distincts")
+        XCTAssertGreaterThan(seconde.jeton, premiere.jeton)
+        let autre = jetons.presenter(Route.certificat("c-1"))
+        XCTAssertEqual(autre.route, .certificat("c-1"))
+        XCTAssertEqual(jetons.dernier, 3, "un jeton par présentation")
+        // Une présentation reste égale à elle-même (le chemin inchangé n'est pas reconstruit).
+        XCTAssertEqual(premiere, PresentationJetonnee(route: Route.contrat("c-1"), jeton: premiere.jeton))
+    }
+
+    /// m3 : la porte des contrats attend la lecture du drapeau (ni écran natif ni renvoi avant), puis suit le drapeau ;
+    /// drapeau absent (la passerelle rend son défaut sur erreur, décision 15) ou passerelle absente : fail-open.
+    func testPorteDesContratsAttendLeDrapeauPuisResteFailOpen() async {
+        XCTAssertEqual(PorteEcranNatif(drapeau: nil), .lecture, "avant la lecture : aucune lecture réseau de l'écran")
+        XCTAssertEqual(PorteEcranNatif(drapeau: true), .natif)
+        XCTAssertEqual(PorteEcranNatif(drapeau: false), .renvoiWeb)
+        let cle = EcranNatif.contrats.cle
+        XCTAssertEqual(cle, "ios_natif_contrats_actif")
+        let faux = await PorteEcranNatif.lire(.contrats, flags: DemoFlagsGateway(surcharges: [cle: false]))
+        XCTAssertEqual(faux, .renvoiWeb)
+        let vrai = await PorteEcranNatif.lire(.contrats, flags: DemoFlagsGateway(surcharges: [cle: true]))
+        XCTAssertEqual(vrai, .natif)
+        let absent = await PorteEcranNatif.lire(.contrats, flags: DemoFlagsGateway())
+        XCTAssertEqual(absent, .natif, "drapeau absent ou illisible : défaut fail-open")
+        let sansPasserelle = await PorteEcranNatif.lire(.contrats, flags: nil)
+        XCTAssertEqual(sansPasserelle, .natif, "aucune passerelle pour l'epoch : fail-open, comme avant")
+        let autreEcran = await PorteEcranNatif.lire(.contrats, flags: DemoFlagsGateway(surcharges: [EcranNatif.documents.cle: false]))
+        XCTAssertEqual(autreEcran, .natif, "seul le drapeau des contrats décide")
+    }
+
     // MARK: - Descriptions masquées (PRINCIPES §7) et libellé DEBUG
 
     private func textes(_ valeur: Any) -> [String] {

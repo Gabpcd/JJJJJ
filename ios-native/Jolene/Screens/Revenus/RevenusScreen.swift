@@ -17,9 +17,9 @@ import JoleneDesign
 /// Navigation, par la cible de l'espace (`CibleNotification`, `MainTabView.presenter`) : le litige d'un paiement rapide
 /// ouvre la page web de la mission (`/soignant/missions/:id`, comme le `Link` du web l.152-155 ; revue B8 n°2 de T12,
 /// M1 : le détail natif ne porte pas le bloc litige du web, l'empiler serait une impasse), une ligne de mission ouvre
-/// ses présences (`/soignant/presences/mission/:id`, lot 2 : renvoi web aujourd'hui) et l'état vide ouvre Explorer. Un
-/// renvoi web n'est proposé qu'avec le présentateur `.safari` du coordinateur des liens (jamais `openURL`, jamais un
-/// bouton sans effet).
+/// le détail natif de ses présences (`/soignant/presences/mission/:id`, lot 2, natif depuis L2-T10 : empilé sur l'onglet
+/// Profil remis à sa racine, comme les entrées de « Mon espace ») et l'état vide ouvre Explorer. Un renvoi web n'est
+/// proposé qu'avec le présentateur `.safari` du coordinateur des liens (jamais `openURL`, jamais un bouton sans effet).
 ///
 /// Fraîcheur (revue B8 de T12, m1) : relecture à l'apparition et au retour au premier plan des sections lues il y a
 /// plus de 60 s, et immédiate quand `peremption` avance (lien universel ou tap qui présente l'onglet, `MainTabView`).

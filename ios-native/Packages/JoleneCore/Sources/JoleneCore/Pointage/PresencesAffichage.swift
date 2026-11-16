@@ -178,11 +178,26 @@ public extension InstantanePresences {
 public enum PresencesRenvois {
     /// Page web des présences : voie de récupération d'un suivi de pointage non vérifiable (journal illisible, HTTP 200
     /// sans preuve, identifiant terminal illisible ; consignes T3 et T4b de `DECISIONS_LOT2.md`), le pointage web
-    /// n'utilisant ni ce journal ni cet identifiant, et renvoi de la page quand le coupe-circuit
-    /// `ios_natif_presences_actif` est à faux (D-FLAGS). Route FORCÉE web (L2-T10) : `AccueilPresentation.renvoiWeb`
+    /// n'utilisant ni ce journal ni cet identifiant. Route FORCÉE web (L2-T10) : `AccueilPresentation.renvoiWeb`
     /// rendrait nil depuis que `/soignant/presences` ouvre `PresencesScreen`, et le renvoi disparaîtrait sans bruit.
     public static var presences: JoleneRoute? {
-        JoleneLink.canonicalURL(link: "/soignant/presences").map(JoleneRoute.safari)
+        presences(onglet: nil, aValider: false)
+    }
+
+    /// Renvoi de la page quand le coupe-circuit `ios_natif_presences_actif` est à faux (D-FLAGS) : la page web sur
+    /// l'onglet et le filtre du lien (revue B8 n°1 de L2-T10, m4 ; `?tab=` et `?filtre=` de `PresencesSoignant.tsx`
+    /// l.276-279), route FORCÉE web comme `presences`. `?tab=` n'est repris que pour une valeur exacte du web
+    /// (`PointageRules.OngletPresences`) : une valeur inconnue n'est pas transmise, le web retombe alors sur son onglet
+    /// par défaut au lieu d'un onglet vide (même règle que l'onglet initial natif, écart de T4a) ; `?filtre=a_valider`
+    /// n'est repris que s'il était posé. Aucune autre donnée du lien n'est recopiée.
+    public static func presences(onglet: String?, aValider: Bool) -> JoleneRoute? {
+        var parametres: [String] = []
+        if let onglet = onglet.flatMap(PointageRules.OngletPresences.init(rawValue:)) {
+            parametres.append("tab=" + onglet.rawValue)
+        }
+        if aValider { parametres.append("filtre=a_valider") }
+        let requete = parametres.isEmpty ? "" : "?" + parametres.joined(separator: "&")
+        return JoleneLink.canonicalURL(link: "/soignant/presences" + requete).map(JoleneRoute.safari)
     }
 
     /// `navigate('/soignant/litiges')` (`PresencesSoignant.tsx` l.752).

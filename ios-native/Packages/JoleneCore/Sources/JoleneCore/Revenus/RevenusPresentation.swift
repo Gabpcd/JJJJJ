@@ -184,8 +184,8 @@ public enum RevenusPresentation {
     /// Documents de paie (lot 4) : renvoi web assumé (D4).
     public static let lienBulletins = "/soignant/mes-gains?tab=bulletins"
 
-    /// Détail des présences d'une mission (`navigate(`/soignant/presences/mission/${m.id}`)`, l.705) : écran du lot 2,
-    /// renvoi web tant qu'il n'est pas livré.
+    /// Détail des présences d'une mission (`navigate(`/soignant/presences/mission/${m.id}`)`, l.705) : écran natif du lot 2
+    /// depuis L2-T10 (`LinkRouter` → `.presencesMission`, cible `.detailPresences` empilée sur l'onglet Profil).
     public static func lienPresences(missionId: String) -> String { "/soignant/presences/mission/\(missionId)" }
 
     /// Page de la mission d'un paiement rapide en litige (`Link to={`/soignant/missions/${l.mission_id}`}`,

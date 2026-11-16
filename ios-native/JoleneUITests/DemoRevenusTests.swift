@@ -142,7 +142,8 @@ final class DemoRevenusTests: JoleneUITestCase {
     /// ouvre `DetailPresencesScreen` sur l'onglet Profil (« Mon espace »), plus la page web. Les missions de Revenus
     /// (`demo-missions-terminees.json`) n'existent pas dans le monde démo des présences (`demo-presences.json`) : le détail
     /// natif affiche « introuvable » en démo (écart de fixtures consigné, `PARITE_SOIGNANT.md`) ; la preuve porte sur
-    /// l'écran ouvert, jamais un renvoi web, et le retour à Revenus intact.
+    /// l'écran ouvert **pour la mission de la ligne** (revue B8 n°1 de L2-T10, m2 : identifiant de la route présentée,
+    /// valeur d'accessibilité DEBUG démo de `presence-detail-screen`), jamais un renvoi web, et le retour à Revenus intact.
     func testMissionOuvreLeDetailNatifDeSesPresences() throws {
         launchDemo()
         connexionDemo()
@@ -151,7 +152,7 @@ final class DemoRevenusTests: JoleneUITestCase {
         scrollTo(ligne, in: ecran)
         require("La ligne de mission est atteignable") { self.visible(ligne) }
         ligne.tap()
-        revenusDetailNatifDesPresences()
+        revenusDetailNatifDesPresences(missionId: "demo-terminee-002")
         record("\(proofPrefix)-revenus-presences")
         ouvrirRevenus()
         require("L'onglet Revenus est intact") { self.containerVisible(self.element("revenus-screen")) }
@@ -163,7 +164,7 @@ final class DemoRevenusTests: JoleneUITestCase {
         require("Le bouton d'ouverture de la mission est atteignable") { self.visible(bouton) && bouton.isEnabled }
         XCTAssertEqual(bouton.label, "Voir mission Démonstration · Mission terminée 2")
         bouton.tap()
-        revenusDetailNatifDesPresences()
+        revenusDetailNatifDesPresences(missionId: "demo-terminee-002")
         ouvrirRevenus()
         require("L'onglet Revenus est intact après le bouton") { self.containerVisible(self.element("revenus-screen")) }
     }
@@ -192,16 +193,19 @@ final class DemoRevenusTests: JoleneUITestCase {
             self.containerVisible(self.element("presence-detail-screen")) && !self.element("presences-screen").exists
         }
         record("\(proofPrefix)-revenus-presences-pile-profil")
-        revenusDetailNatifDesPresences()
+        revenusDetailNatifDesPresences(missionId: "demo-terminee-002")
         XCTAssertFalse(element("presences-screen").exists, "le retour mène au hub, jamais à « Mes présences »")
     }
 
-    /// Détail natif des présences empilé sur l'onglet Profil (L2-T10), jamais la page web ; retour au hub.
-    private func revenusDetailNatifDesPresences() {
+    /// Détail natif des présences de `missionId` empilé sur l'onglet Profil (L2-T10), jamais la page web ; retour au hub.
+    /// L'identifiant est celui de la route présentée (valeur d'accessibilité DEBUG démo, revue B8 n°1 de L2-T10, m2) :
+    /// « introuvable » seul ne distinguerait pas la mission de la ligne d'une autre.
+    private func revenusDetailNatifDesPresences(missionId: String) {
         let detail = element("presence-detail-screen")
         require("Le détail natif des présences est ouvert", timeout: 30) {
             self.containerVisible(detail) && self.element("presence-detail-introuvable").exists
         }
+        XCTAssertEqual(detail.value as? String, missionId, "détail des présences de la mission de la ligne")
         XCTAssertFalse(element("renvoi-web-demo").exists, "détail natif (L2-T10) : jamais la page web")
         let retour = app.navigationBars.buttons.firstMatch
         require("Le bouton retour est disponible") { self.visible(retour) }

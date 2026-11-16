@@ -57,12 +57,18 @@ public final class DocumentsModel: ObservableObject {
     public static let dureeSuivi: TimeInterval = 60
     /// Voie de récupération d'un journal illisible : l'envoi web n'utilise pas ce journal.
     public static let renvoiWeb = "/soignant/mes-documents?tab=justificatifs"
-    /// Route du renvoi web (`renvoiWeb`), aussi présentée quand le coupe-circuit `ios_natif_documents_actif` est à faux.
-    /// Route FORCÉE web (L2-T10) : `/soignant/mes-documents` ouvre `MesDocumentsScreen` depuis T10, si bien que
-    /// `AccueilPresentation.renvoiWeb` rendrait nil et le renvoi disparaîtrait sans bruit (même motif que
-    /// `PresencesRenvois.recapitulatifFinancier`).
+    /// Route du renvoi web (`renvoiWeb`) d'un journal illisible. Route FORCÉE web (L2-T10) : `/soignant/mes-documents`
+    /// ouvre `MesDocumentsScreen` depuis T10, si bien que `AccueilPresentation.renvoiWeb` rendrait nil et le renvoi
+    /// disparaîtrait sans bruit (même motif que `PresencesRenvois.recapitulatifFinancier`).
     public static var routeRenvoiWeb: JoleneRoute? {
-        JoleneLink.canonicalURL(link: renvoiWeb).map(JoleneRoute.safari)
+        routeRenvoiWeb(onglet: .justificatifs)
+    }
+
+    /// Renvoi de l'écran quand le coupe-circuit `ios_natif_documents_actif` est à faux : « Mes documents » sur le web, sur
+    /// l'onglet de l'écran (celui du lien, `?tab=` de `MesDocuments.tsx` l.18-24 ; revue B8 n°1 de L2-T10, m4), route
+    /// FORCÉE web comme `routeRenvoiWeb`. L'onglet est déjà une valeur exacte du web (`OngletDocuments`).
+    public static func routeRenvoiWeb(onglet: OngletDocuments) -> JoleneRoute? {
+        JoleneLink.canonicalURL(link: "/soignant/mes-documents?tab=" + onglet.rawValue).map(JoleneRoute.safari)
     }
     /// Code de refus restitué pour un nom ou un libellé hors bornes (message du web, `DocumentsSoignant.tsx` l.400-402).
     public static let codeMetadonneesInvalides = "METADONNEES_DOCUMENT_INVALIDES"

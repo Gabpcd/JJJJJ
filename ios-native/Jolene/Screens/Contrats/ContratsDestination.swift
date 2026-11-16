@@ -9,21 +9,24 @@ import JoleneDesign
 ///
 /// Seul point de construction des écrans de contrat : il lit le coupe-circuit `ios_natif_contrats_actif` (D-FLAGS de
 /// `DECISIONS_LOT2.md`, à la charge de L2-T10 ; fail-open comme `ios_natif_presences_actif` et
-/// `ios_natif_documents_actif`). À faux, l'écran devient un renvoi web : `/contrat/<id>`, `/contrat/<id>/certificat` ou
+/// `ios_natif_documents_actif`), et ne construit l'écran natif qu'une fois le drapeau lu (`PorteEcranNatif`, revue B8
+/// n°1 de L2-T10, m3). À faux, l'écran devient un renvoi web : `/contrat/<id>`, `/contrat/<id>/certificat` ou
 /// `/soignant/mes-documents?tab=contrats` (routes forcées web de `ContratPresentation`, ces chemins étant natifs depuis
 /// T10), texte du lot 0 et « Voir sur jolene.app » repris de « Mes documents », bouton seulement avec le présentateur des
-/// renvois web (jamais un bouton sans effet). Identifiants : `contrats-desactive-renvoi`, `contrats-desactive-web`.
+/// renvois web (jamais un bouton sans effet). Identifiants : `contrats-porte-lecture`, `contrats-desactive-renvoi`,
+/// `contrats-desactive-web`.
 ///
 /// Écart consigné (L2-T10) : `?statut=` (`FiltreContrat.initial(statut:)`) n'est porté par aucun lien. L'alias web
 /// `/soignant/contrats` le perd (`Navigate` à cible fixe, `src/App.tsx` l.407) et aucun lien du web ne pose
-/// `/soignant/mes-documents?tab=contrats&statut=` ; la liste s'ouvre donc sur « Tous », comme le web.
+/// `/soignant/mes-documents?tab=contrats&statut=` ; la liste s'ouvre donc sur « Tous », comme le web (aucun filtre
+/// initial transmis : revue B8 n°1 de L2-T10, m7).
 enum ContratsDestination {
     @MainActor
-    static func liste(session: SessionStore, snapshot: SessionSnapshot, filtreInitial: FiltreContrat = .tous,
+    static func liste(session: SessionStore, snapshot: SessionSnapshot,
                       presentation: ContratsListeView.Presentation = .ecran) -> some View {
         PorteContrats(session: session, snapshot: snapshot, renvoi: ContratPresentation.renvoiListe,
                       titre: presentation == .ecran ? LibellesWeb.Contrats.titre : nil) {
-            ContratsListeView(session: session, snapshot: snapshot, filtreInitial: filtreInitial, presentation: presentation)
+            ContratsListeView(session: session, snapshot: snapshot, presentation: presentation)
         }
     }
 
@@ -44,28 +47,47 @@ enum ContratsDestination {
     }
 }
 
-/// Coupe-circuit `ios_natif_contrats_actif` (L2-T10) : lu à l'apparition (fail-open tant qu'il n'est pas lu, comme
-/// `PresencesScreen` et `MesDocumentsScreen`) ; à faux, le contenu est remplacé par son renvoi web.
+/// Coupe-circuit `ios_natif_contrats_actif` (L2-T10) : lu à l'apparition ; tant qu'il n'est pas lu, une vue neutre de
+/// chargement (ni l'écran natif, qui lancerait ses lectures réseau, ni le renvoi ; revue B8 n°1 de L2-T10, m3) ; à vrai
+/// ou illisible (fail-open, la passerelle rend le défaut sur erreur), le contenu natif ; à faux, son renvoi web.
 struct PorteContrats<Contenu: View>: View {
     let session: SessionStore
     let snapshot: SessionSnapshot
     let renvoi: JoleneRoute?
-    /// Titre de navigation du renvoi (écran « Mes contrats » seulement ; l'onglet de « Mes documents » n'en impose pas).
+    /// Titre de navigation de la lecture et du renvoi (écran « Mes contrats » seulement ; l'onglet de « Mes documents »
+    /// n'en impose pas).
     let titre: String?
     @ViewBuilder let contenu: () -> Contenu
-    @State private var ecranActif = true
+    @State private var porte = PorteEcranNatif(drapeau: nil)
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
 
     var body: some View {
         Group {
-            if ecranActif { contenu() } else { renvoiDesactive }
+            switch porte {
+            case .lecture: lecture
+            case .natif: contenu()
+            case .renvoiWeb: renvoiDesactive
+            }
         }
-        .task { ecranActif = await Self.drapeau(session: session, snapshot: snapshot) }
+        .task { porte = await Self.lire(session: session, snapshot: snapshot) }
     }
 
-    private static func drapeau(session: SessionStore, snapshot: SessionSnapshot) async -> Bool {
-        guard let gateways = await session.controller.gateways(for: snapshot.epoch) else { return true }
-        return await gateways.flags.ecranActif(.contrats)
+    private static func lire(session: SessionStore, snapshot: SessionSnapshot) async -> PorteEcranNatif {
+        await PorteEcranNatif.lire(.contrats, flags: session.controller.gateways(for: snapshot.epoch)?.flags)
+    }
+
+    /// Vue neutre tant que le drapeau n'est pas lu : aucun texte affiché nouveau, aucune lecture lancée.
+    @ViewBuilder
+    private var lecture: some View {
+        let vue = ProgressView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(JoleneColor.lavender.ignoresSafeArea())
+            .accessibilityIdentifier("contrats-porte-lecture")
+        if let titre {
+            vue.navigationTitle(titre)
+        } else {
+            vue
+        }
     }
 
     @ViewBuilder

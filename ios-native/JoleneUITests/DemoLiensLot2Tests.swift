@@ -14,12 +14,17 @@ import XCTest
 /// - `/soignant/mes-documents?tab=contrats` ouvre « Mes documents » sur l'onglet Contrats natif ;
 /// - `/soignant/dpae` reste un renvoi web, présenté aussitôt, sans session, jamais rejoué après la connexion ;
 /// - chaque écran de « Mon espace » s'empile sur l'onglet Profil remis à sa racine : le retour ramène au hub ;
+/// - le même lien reçu alors que sa route est déjà à la base de la pile du Profil (« Mes documents » ouvert sur Contrats,
+///   onglet DPAE choisi depuis) reconstruit l'écran sur l'onglet du lien : la route présentée porte un jeton neuf (revue
+///   B8 n°1 de L2-T10, m1) ;
 /// - libellé DEBUG `deeplink-route` (démo) : route effectivement présentée par le coordinateur ; aucune requête réseau.
-/// Ailleurs, pour tenir l'éclat « documents » sous ses 30 min (décision 22) : le coupe-circuit `ios_natif_contrats_actif`
-/// (D-FLAGS, à la charge de T10) dans `DemoContratsTests.testCoupeCircuitDesContratsRenvoieLeLienEtLaListeAuWeb`
-/// (éclat « contrats ») ; la pile du Profil remise à sa racine quand un écran de « Mon espace » poussé par son entrée est
-/// affiché (revue B8 de la PR #1131, m3) dans `DemoRevenusTests.testPresencesDUneMissionRemettentLeProfilASaRacine`
-/// (éclat « lot3-revenus ») ; le tap push `CONTRAT_A_SIGNER` dans `DemoPushTests.testTapContratASignerOuvreLeContratNatif`.
+/// La classe tourne dans l'éclat « lot3-inscription » de `ios-swift-ci.yml` (revue B8 n°1 de L2-T10, M1 : « documents »
+/// mesurait 18,5 min en iPad portrait au run 43400770161 et aurait dépassé 20 min). Ailleurs, dans leur éclat de
+/// domaine : le coupe-circuit `ios_natif_contrats_actif` (D-FLAGS, à la charge de T10) dans
+/// `DemoContratsTests.testCoupeCircuitDesContratsRenvoieLeLienEtLaListeAuWeb` (éclat « contrats ») ; la pile du Profil
+/// remise à sa racine quand un écran de « Mon espace » poussé par son entrée est affiché (revue B8 de la PR #1131, m3)
+/// dans `DemoRevenusTests.testPresencesDUneMissionRemettentLeProfilASaRacine` (éclat « lot3-revenus ») ; le tap push
+/// `CONTRAT_A_SIGNER` dans `DemoPushTests.testTapContratASignerOuvreLeContratNatif`.
 /// Les règles (table des chemins, onglets inconnus, alias, liens de push, aiguillage, routes forcées web) sont prouvées au
 /// niveau 1 (`LinksRouterLot2Tests`). Le lien universel réel (AASA, tap depuis Mail) se prouve sur appareil (T12).
 final class DemoLiensLot2Tests: JoleneUITestCase {
@@ -53,6 +58,40 @@ final class DemoLiensLot2Tests: JoleneUITestCase {
         XCTAssertEqual(element("deeplink-route").label, "contratCertificat demo-contrat-002")
         record("\(proofPrefix)-liens-lot2-certificat")
         lot2RetourAuHub(depuis: page)
+    }
+
+    /// Revue B8 n°1 de L2-T10, m1 : `/soignant/mes-documents?tab=contrats` ouvre « Mes documents » sur l'onglet Contrats
+    /// (route à la base de la pile du Profil) ; l'onglet DPAE est choisi, puis **le même lien** est reçu pendant le renvoi
+    /// web de la DPAE (lien remis par le double, `-JOLENE_OPEN_URL_SUIVANT`). Le renvoi est fermé et l'écran est
+    /// reconstruit sur l'onglet du lien : la route présentée porte un jeton neuf, le chemin de la pile change (sans jeton,
+    /// chemin égal, l'écran restait sur DPAE). Aucun défilement : cas court, pour l'éclat « lot3-inscription ».
+    func testMemeLienRelitLEcranEtRetablitSonOnglet() throws {
+        let lien = "https://jolene.app/soignant/mes-documents?tab=contrats"
+        launchDemo(extraArguments: ["-JOLENE_OPEN_URL", lien, "-JOLENE_OPEN_URL_SUIVANT", lien])
+        lot2ConnexionDemo()
+        let ecran = element("documents-screen")
+        require("« Mes documents » est ouvert sur l'onglet Contrats", timeout: 30) {
+            self.containerVisible(ecran) && self.element("documents-tab-contrats").isSelected
+        }
+        XCTAssertEqual(element("deeplink-route").label, "documents(contrats)")
+        tap("documents-tab-dpae")
+        require("L'onglet DPAE est choisi") {
+            self.element("documents-tab-dpae").isSelected && self.element("documents-dpae-renvoi").exists
+        }
+        tap("documents-dpae-web")
+        liensRenvoiWebAffiche("https://jolene.app/soignant/dpae")
+        let suivant = element("renvoi-web-lien-suivant")
+        require("Le double du renvoi remet le même lien") { self.visible(suivant) && suivant.isEnabled }
+        XCTAssertEqual(suivant.label, lien)
+        suivant.tap()
+        require("Le renvoi est fermé et l'écran est relu sur l'onglet du lien", timeout: 30) {
+            !self.element("renvoi-web-demo").exists && self.containerVisible(ecran)
+                && self.element("documents-tab-contrats").isSelected && self.element("contrats-liste").exists
+        }
+        XCTAssertFalse(element("documents-tab-dpae").isSelected, "l'onglet choisi avant le lien n'est pas conservé")
+        XCTAssertEqual(element("deeplink-route").label, "documents(contrats)", "navigation exécutée par l'espace")
+        record("\(proofPrefix)-liens-lot2-meme-lien")
+        lot2RetourAuHub(depuis: ecran)
     }
 
     func testLienPresencesOngletHistorique() throws {
@@ -100,6 +139,7 @@ final class DemoLiensLot2Tests: JoleneUITestCase {
         XCTAssertTrue(entete.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Démonstration · Présence à valider"))
                         .firstMatch.exists, "en-tête de la mission démo")
         XCTAssertFalse(element("presence-detail-introuvable").exists)
+        XCTAssertEqual(ecran.value as? String, "demo-presence-h2", "mission de la route présentée (valeur DEBUG démo, m2)")
         XCTAssertFalse(element("renvoi-web-demo").exists, "détail natif (T5a) : jamais un renvoi web")
         XCTAssertEqual(element("deeplink-route").label, "presencesMission demo-presence-h2")
         record("\(proofPrefix)-liens-lot2-detail-presences")
