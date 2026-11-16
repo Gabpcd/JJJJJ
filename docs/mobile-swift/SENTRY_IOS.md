@@ -15,12 +15,43 @@ appel réseau vers Sentry** n'a été fait.
 |---|---|
 | Publiée depuis au moins deux semaines | 9.32.0, publiée le 29/10/2026, soit 18 jours avant l'ouverture de la tranche (16/11/2026). Les versions suivantes sont trop récentes : 9.33.0 (04/11) et 9.34.0 (12/11). Révision épinglée dans `Package.resolved` : `4e1e4ba9ce329f91ad6bfb63bab6da576a3f348c`, qui est bien le tag `9.32.0`. |
 | Xcode 16.4 en local | Xcode 16.4 (Swift 6.1.2) lit `Package@swift-6.1.swift` (*tools* 6.1). Le binaire `Sentry.xcframework` est compilé avec **Swift 6.1.2** : en-tête `swift-compiler-version` du `.swiftinterface`. Résolution SPM, `build-for-testing` et XCUITest démo ont été vérifiés en local (`REVUES_LOT3.md`, section L3-T15). |
-| Xcode 26.4.1 en CI | Xcode 26.4.1 lit `Package@swift-6.2.swift`, qui expose le même produit `Sentry` sur le même binaire. Un compilateur plus récent lit les interfaces produites par Swift 6.1.2. Le build CI n'a pas été lancé localement : la CI de la PR le prouvera. |
+| Xcode 26.4.1 en CI | Xcode 26.4.1 lit `Package@swift-6.2.swift`, qui expose le même produit `Sentry` sur le même binaire. Un compilateur plus récent lit les interfaces produites par Swift 6.1.2. Le build CI n'a pas été lancé localement : la CI de la PR le prouvera. Sa résolution épingle en plus KSCrash (ci-dessous). |
 | Cible iOS | Le paquet exige iOS 15 au minimum ; l'app est en iOS 16. |
 | Correctifs utiles | 9.31.0 : état de l'application résolu correctement quand le SDK démarre depuis `App.init` en SwiftUI. Avant ce correctif, le suivi des app hangs pouvait signaler un blocage fatal avec un fil principal inactif (#8988), or c'est précisément notre point de démarrage. 9.32.0 : plus d'interblocage dans le traitement des `NSException` (#9463). |
 
 **Produit choisi : `Sentry`.** C'est le `Sentry.xcframework` **statique** plus `SentryCppHelper`, importé par la seule
 cible app. `Sentry-Dynamic` n'est pas utilisé : il ajouterait un framework dynamique au lancement, sans gain pour nous.
+
+**KSCrash : déclaré par Sentry, épinglé par SwiftPM 6.2, jamais lié à l'app** (revue B8 de la vague 5, M1). Constat
+dans les manifestes de la révision `4e1e4ba9` (tag `9.32.0`) :
+
+- `Package@swift-6.2.swift` et `Package@swift-6.1.swift` déclarent tous deux, sans condition,
+  `.package(url: "https://github.com/getsentry/KSCrash.git", revision: "18a633dec20c265f03386294f9d82d208bb13094")`.
+  `Package.swift` (outils 6.0) ne le déclare que sous la variable d'environnement `SDK_V10=1`.
+- Dans le manifeste 6.2, les produits `Recording` et `RecordingCore` de KSCrash sont des dépendances de `SentrySwift`,
+  `_SentryPrivate` et `SentryObjCInternal`, sous la condition `.when(traits: ["V10"])`. Le trait `V10` est réservé au
+  développement de Sentry. Le paquet ne déclare aucun trait par défaut, et `project.yml` n'en active aucun.
+- Dans le manifeste 6.1, aucune cible n'en dépend hors `SDK_V10=1` (`kscrashSwiftDependencies` vide).
+- **SwiftPM 6.2 (Xcode 26.4.1 : CI et TestFlight) résout quand même la dépendance gardée par un trait désactivé.** Le
+  `Package.resolved` de l'app porte donc le pin `kscrash` à cette révision, sans version : c'est une révision fixe, pas
+  un tag. SwiftPM 6.1 (Xcode 16.4, en local) ne l'épingle pas, car aucune cible n'en dépend. C'est l'écart qui a fait
+  échouer l'étape « Package.resolved de l'app inchangé » au run 43948577842. KSCrash ne déclare lui-même aucune
+  dépendance : aucun autre pin n'en découle.
+- **Jamais lié à l'app.** Le produit `Sentry` que la cible app importe est le binaire `Sentry.xcframework` plus
+  `SentryCppHelper`, qui n'a aucune dépendance. Les cibles qui dépendent de KSCrash relèvent du produit compilé depuis
+  les sources, `SentrySPM`, que l'app n'importe pas. Activer le trait `V10` ne lierait donc pas KSCrash à notre produit.
+  Une seule chose le lierait : la variable `SDK_V10=1` à l'évaluation du manifeste, qui remplace le produit binaire
+  `Sentry` par une compilation depuis les sources liée à KSCrash sans condition. Aucun workflow ni xcconfig ne la pose.
+  SwiftPM clone le dépôt de KSCrash, mais ne compile ni ne lie aucune de ses cibles (lecture des manifestes ; un
+  `build-for-testing.log` de la CI peut le confirmer).
+
+**Le `Package.resolved` de référence est donc celui qu'écrit Xcode 26.4.1.** C'est la version que vérifie
+`ios-swift-ci.yml` et que lit l'archive TestFlight (`-onlyUsePackageVersionsFromResolvedFile`, même toolchain : garde
+`ios-native-testflight.node.mjs`). Sans le pin `kscrash`, cette option ferait échouer la résolution de l'archive. La
+vérification locale (Xcode 16.4) ne vaut que pour les paquets qu'elle résout : elle ne prouve rien sur ce pin. Personne
+n'a vérifié si une résolution sous Xcode 16.4 retire le pin ou modifie `originHash` : ne jamais committer un
+`Package.resolved` réécrit par Xcode 16.4. `originHash` n'a pas été modifié en ajoutant le pin : il dépend des
+dépendances racines, inchangées. Si la CI le réécrit quand même, l'étape le dit (diagnostic ci-dessous).
 
 **Coût CI à connaître.** À la résolution, SPM télécharge les **sept** xcframeworks binaires que déclare le paquet,
 utilisés ou non, soit environ 3,3 Go au total, dont 372 Mo pour le produit retenu. Le cache `spm-xcodebuild-…`
@@ -32,9 +63,15 @@ compilée par un Swift lisible en local, et relire le CHANGELOG (options renomm�
 `beforeSend`). Il faut aussi relire les en-têtes publics `SentryEvent.h`, `SentryMessage.h`, `SentryException.h`,
 `SentryMechanism.h` et `SentryBreadcrumb.h`, puis classer chaque propriété nouvelle dans le recensement de
 `CrashReportingTests` (§4) ; la garde `testRecensementDeLaVersionEpinglee` rougit tant que ce n'est pas fait. Ensuite :
-`xcodegen generate`, puis `xcodebuild -resolvePackageDependencies`, puis les tests de ce document. Le `Package.resolved`
-de l'app est commité tel que la résolution l'écrit : l'étape « Package.resolved de l'app inchangé après la résolution
-SPM » d'`ios-swift-ci.yml` (`git diff --exit-code`, revue B8 n°1, m4) rougit si la CI le réécrit.
+`xcodegen generate`, puis `xcodebuild -resolvePackageDependencies` **sous Xcode 26.4.1**, puis les tests de ce document.
+Le `Package.resolved` de l'app est commité tel que cette résolution l'écrit. L'étape « Package.resolved de l'app inchangé
+après la résolution SPM » d'`ios-swift-ci.yml` (`git diff --exit-code`, revue B8 n°1, m4) échoue si la CI le réécrit.
+Elle se diagnostique seule (revue B8 de la vague 5, M1) : elle imprime le diff, puis l'étape suivante publie aussitôt,
+sur échec seulement, l'artefact `package-resolved-<format>-<sha>`. Cet artefact contient le `Package.resolved` résolu
+par la CI, le diff et la version d'Xcode. **Correctif : committer tel quel le `Package.resolved` de cet artefact**,
+puis relancer la CI. Faute de Mac sous Xcode 26.4.1, c'est aussi la façon d'obtenir le fichier de référence après une
+montée de version. Les éclats tournent quand même (socle compris), si bien que la dérive ne masque aucun résultat de
+test.
 
 ## 2. Architecture
 

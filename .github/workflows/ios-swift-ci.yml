@@ -361,16 +361,42 @@ jobs:
           echo "Durée build-for-testing : ${duree}s (mesure pour la porte go/no-go, docs/mobile-swift/PORTE_LOT0.md)"
           grep -q "TEST BUILD SUCCEEDED" "$JOLENE_UI_OUTPUT/build-for-testing.log" || { echo "::error::build-for-testing a échoué (code $code). Voir build-for-testing.log dans l'artefact."; exit 1; }
       - name: Package.resolved de l'app inchangé après la résolution SPM
+        id: package_resolved
         # Revue fraîche B8 n°1 de L3-T15, m4 : build-for-testing résout les paquets (Sentry Cocoa et supabase-swift en
         # version exacte, dépendances transitives épinglées). Un Package.resolved réécrit voudrait dire que la CI a testé
-        # un graphe que le dépôt ne décrit pas. Délai de 2 min, hors éclats : le plafond du job reste tenu (25 + 2 + 11 × 30
-        # = 357 ≤ 360). Garde : tests/node/ios-swift-ci-eclats.node.mjs.
-        timeout-minutes: 2
+        # un graphe que le dépôt ne décrit pas ; l'étape échoue toujours dans ce cas (jamais de continue-on-error).
+        # Revue B8 de la vague 5, M1 : la référence est le fichier qu'écrit Xcode 26.4.1 (SwiftPM 6.2), celui du TestFlight
+        # (`-onlyUsePackageVersionsFromResolvedFile`, ios-native-testflight.yml). Il épingle KSCrash, que sentry-cocoa
+        # 9.32.0 déclare sans condition et que SwiftPM 6.2 résout même sous le trait V10 désactivé ; Xcode 16.4 ne l'épingle
+        # pas (SENTRY_IOS.md §1). Diagnostic sans relancer ni attendre la fin du job : le diff est imprimé ici, le fichier
+        # résolu et ce diff sont copiés dans $JOLENE_UI_OUTPUT/package-resolved/, puis publiés aussitôt par l'étape
+        # suivante dans l'artefact « package-resolved-<format>-<sha> », lisible pendant que les éclats tournent.
+        # **Correctif : committer tel quel le Package.resolved de cet artefact** (ou corriger project.yml si une version a
+        # changé), puis relancer la CI. Délai de 1 min, plus 1 min pour l'artefact, hors éclats : le plafond du job reste
+        # tenu (25 + 1 + 1 + 11 × 30 = 357 ≤ 360). Garde : tests/node/ios-swift-ci-eclats.node.mjs.
+        timeout-minutes: 1
         run: |
-          git diff --exit-code -- ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved || {
-            echo "::error::Package.resolved de l'app réécrit par la résolution SPM (diff ci-dessus). Résoudre en local (xcodebuild -resolvePackageDependencies) et committer le fichier, ou corriger project.yml (docs/mobile-swift/SENTRY_IOS.md §1)."
+          fichier=ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          if ! git diff --exit-code -- "$fichier"; then
+            diagnostic="$JOLENE_UI_OUTPUT/package-resolved"
+            mkdir -p "$diagnostic"
+            git diff -- "$fichier" > "$diagnostic/Package.resolved.diff" || true
+            if [ -f "$fichier" ]; then cp "$fichier" "$diagnostic/Package.resolved"; else echo "Package.resolved absent après la résolution SPM." > "$diagnostic/Package.resolved.absent"; fi
+            { xcodebuild -version; echo "Commit testé : ${{ github.event.pull_request.head.sha || github.sha }}"; } > "$diagnostic/toolchain.txt" 2>&1 || true
+            echo "::error::Package.resolved de l'app réécrit par la résolution SPM d'Xcode 26.4.1 (diff ci-dessus). Correctif : committer tel quel le Package.resolved de l'artefact package-resolved-$JOLENE_UI_FORMAT-<sha> (ou corriger project.yml si une version a changé), puis relancer la CI (docs/mobile-swift/SENTRY_IOS.md §1)."
             exit 1
-          }
+          fi
+      - name: Publier le Package.resolved résolu par la CI (diagnostic, sur échec seulement)
+        # Immédiatement après la vérification : l'artefact est lisible dès qu'elle échoue, même si le job est annulé ensuite
+        # (journaux perdus à l'annulation, run 43948577842). Il ne change jamais le statut : la vérification a déjà échoué.
+        if: failure() && steps.package_resolved.outcome == 'failure'
+        timeout-minutes: 1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: package-resolved-${{ matrix.format }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ios-native/test-results/${{ matrix.format }}/package-resolved/
+          retention-days: 7
+          if-no-files-found: warn
       # Éclats (DECISIONS_LOT2 décision 22 : découpage par domaine dès qu'un format dépasse 20 min). Fusion des lots 2 et 3 :
       # socle une seule fois, puis les éclats du lot 2, puis ceux du lot 3 ; chaque classe XCUITest nommée par -only-testing
       # dans un seul éclat, et sautée par le socle (gardes : tests/node/ios-swift-ci-eclats.node.mjs et
@@ -404,6 +430,9 @@ jobs:
       # (paiements déclarés, quatre tests), sans nouvel éclat (onze au plus).
       - name: test-without-building — éclat socle (JoleneCoreTests, JoleneDesignTests, XCUITest lots 0 et 1) (${{ matrix.format }})
         id: tests
+        # Même condition que les dix autres éclats (revue B8 de la vague 5, m1) : une dérive du Package.resolved (étape
+        # précédente) ne masque plus JoleneCoreTests, JoleneDesignTests ni les XCUITest des lots 0 et 1.
+        if: always() && steps.build.outcome == 'success'
         # Délai propre à l'étape : un simulateur ou un runner xctest bloqué est interrompu ici,
         # pas par le timeout du job, et le xcresult est clos avant le résumé.
         timeout-minutes: 30

@@ -435,6 +435,31 @@ test('SENTRY_IOS.md : DSN local en ligne de commande seulement, jamais dans un x
   assert.match(doc, /région de données/i);
 });
 
+test('l\'archive lit le Package.resolved vérifié par ios-swift-ci.yml, sous la même toolchain, sans jamais le réécrire', () => {
+  // Revue B8 de la vague 5, M1 : le Package.resolved versionné est celui qu'écrit Xcode 26.4.1 (SwiftPM 6.2), qui épingle
+  // KSCrash (déclaré par sentry-cocoa 9.32.0) là où Xcode 16.4 ne l'épingle pas (SENTRY_IOS.md §1). ios-swift-ci.yml
+  // vérifie ce fichier ; l'archive le lit avec -onlyUsePackageVersionsFromResolvedFile. Une autre toolchain ici livrerait
+  // un graphe que la CI n'a pas vérifié, ou ferait échouer la résolution sur un pin manquant.
+  const ci = readFileSync(join(root, '.github/workflows/ios-swift-ci.yml'), 'utf8');
+  for (const cle of ['JOLENE_XCODE_APP', 'JOLENE_XCODE_VERSION_ATTENDUE', 'JOLENE_XCODE_BUILD_ATTENDU']) {
+    const valeur = (texte) => new RegExp(`^ {2}${cle}: (.+)$`, 'm').exec(texte)?.[1];
+    assert.ok(valeur(workflow), `${cle} absente du workflow TestFlight`);
+    assert.equal(valeur(workflow), valeur(ci), `${cle} : TestFlight et ios-swift-ci.yml divergent`);
+  }
+  const resolutions = workflow.split('\n      - name: ').filter((etape) => /^ {10}xcodebuild (?:-showBuildSettings|archive)\b/m.test(etape));
+  assert.equal(resolutions.length, 2, 'réglages Release et archive : les deux appels qui résolvent les paquets');
+  for (const etape of resolutions) {
+    assert.match(etape, / -onlyUsePackageVersionsFromResolvedFile \\\n/, `${etape.split('\n')[0]} : Package.resolved lu sans réécriture`);
+  }
+  assert.doesNotMatch(workflow, /-resolvePackageDependencies|-disableAutomaticPackageResolution/, 'aucune résolution à part');
+  const cle = (texte) => /\n {10}key: (spm-xcodebuild-[^\n]+)\n/.exec(texte)?.[1];
+  assert.ok(cle(workflow)?.includes("hashFiles('ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'"));
+  assert.equal(cle(workflow), cle(ci), 'cache SPM : même clé que celui qu\'alimente ios-swift-ci.yml');
+  const resolu = JSON.parse(readFileSync(join(root, 'ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'), 'utf8'));
+  assert.equal(resolu.pins.find((pin) => pin.identity === 'kscrash')?.state.revision, '18a633dec20c265f03386294f9d82d208bb13094',
+    'pin kscrash de SwiftPM 6.2 présent : sans lui, -onlyUsePackageVersionsFromResolvedFile fait échouer l\'archive');
+});
+
 // Toute soumission, livraison de fiche ou distribution externe ; `default_platform(:ios)` rend
 // `fastlane submit` équivalent à `fastlane ios submit`, d'où la forme sans plateforme.
 const INTERDIT = /upload_to_app_store|\bdeliver\b|submit_for_review|automatic_release|distribute_external: true|groups:|notify_external_testers: true|\bfastlane\s+(?:ios\s+)?(?:submit|deliver|release|appstore)\b/;

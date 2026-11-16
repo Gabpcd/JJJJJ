@@ -2,6 +2,14 @@
   "originHash" : "40fcf693954f0c5aa9f24413da8786adfecb6d127d055ce01693d4228ee48fbd",
   "pins" : [
     {
+      "identity" : "kscrash",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/getsentry/KSCrash.git",
+      "state" : {
+        "revision" : "18a633dec20c265f03386294f9d82d208bb13094"
+      }
+    },
+    {
       "identity" : "opentelemetry-swift-core",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/open-telemetry/opentelemetry-swift-core.git",
