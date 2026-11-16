@@ -327,7 +327,13 @@ class JoleneUITestCase: XCTestCase {
         var attempts = 0
         while attempts < 10 {
             if coveredByKeyboard(field) {
-                drag(container, fromY: 0.6, toY: 0.3)
+                // Un pavé sans touche Entrée qui recouvre le champ est fermé par « OK », jamais par un glissement
+                // (`fermerLePaveNumerique`, « Gel iPhone CI — 16/11/2026 ») ; un autre clavier reste ouvert.
+                if app.buttons.matching(identifier: "clavier-ok").firstMatch.exists {
+                    fermerLePaveNumerique()
+                } else {
+                    drag(container, fromY: 0.6, toY: 0.3)
+                }
             } else if coveredByNavigationBar(field) {
                 drag(container, fromY: 0.4, toY: 0.6)
             } else {
@@ -341,6 +347,23 @@ class JoleneUITestCase: XCTestCase {
             field.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5)).tap()
         }
         require("Le champ a le focus clavier avant la saisie") { self.hasKeyboardFocus(field) }
+    }
+
+    /// Ferme un pavé sans touche Entrée (numérique, décimal, téléphonique) par son bouton « OK » (`clavier-ok`,
+    /// `BoutonClavierOK` de JoleneDesign), puis attend la disparition du clavier : à appeler AVANT tout défilement. Au run
+    /// 43889328109 (iPhone 17, iOS 26.2), un glissement qui fermait le pavé (`.scrollDismissesKeyboard(.immediately)`) a
+    /// gelé le serveur de rendu du simulateur, puis tous les éclats suivants (DECISIONS_LOT2, « Gel iPhone CI —
+    /// 16/11/2026 »). Sans clavier ouvert, rien à faire. Un seul « OK » est exigé : la barre suit le focus du champ, deux
+    /// champs numériques d'un même écran n'empilent jamais deux boutons.
+    func fermerLePaveNumerique() {
+        guard app.keyboards.firstMatch.exists else { return }
+        let boutons = app.buttons.matching(identifier: "clavier-ok")
+        let ok = boutons.firstMatch
+        require("Le bouton OK est affiché au-dessus du pavé") { self.visible(ok) }
+        XCTAssertEqual(boutons.count, 1, "un seul bouton OK au-dessus du pavé")
+        XCTAssertEqual(ok.label, "OK", "libellé d'interface standard")
+        ok.tap()
+        require("Le pavé est fermé par OK, sans défilement") { !self.app.keyboards.firstMatch.exists }
     }
 
     // MARK: Barre d'onglets

@@ -117,7 +117,8 @@ struct PresencesScreen: View {
             .frame(maxWidth: .infinity)
         }
         .refreshable { await model.load() }
-        // T4b : le pavé numérique n'a pas de touche Entrée ; un défilement le ferme et découvre le bouton de pointage.
+        // T4b : le pavé numérique n'a pas de touche Entrée ; un défilement le ferme et découvre le bouton de pointage. Le
+        // bouton « OK » du pavé (`BoutonClavierOK`, `clavier-ok`) le ferme sans défilement (« Gel iPhone CI — 16/11/2026 »).
         .scrollDismissesKeyboard(.immediately)
         .accessibilityIdentifier("presences-screen")
         .background(JoleneColor.lavender.ignoresSafeArea())

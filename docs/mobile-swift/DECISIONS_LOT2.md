@@ -1893,3 +1893,116 @@ n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranc
 - Le web journalise le retrait du consentement GPS sous `GPS_CONSENTEMENT_ACTIVE` / `GPS_CONSENTEMENT_RETIRE`, absents
   du CHECK `journaux_audit_action_check` : son audit échoue en silence (la trace serveur `DONNEES_PERSO_MODIFICATION`
   existe).
+
+## Gel iPhone CI — 16/11/2026
+
+Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026. Branche `fix/ios-gel-iphone-ci`, depuis
+`main`. Aucun B9, aucun HARD STOP : aucun texte juridique n'est touché, « OK » est un libellé d'interface standard.
+
+### Diagnostic (run 43889328109, `main` à `7e451e7d`, iPhone 17, iOS 26.2)
+
+- Premier test en échec : `DemoPointageTests.testPrecisionReduiteNEnvoieAucunePositionEtAfficheLEncart`. Le test saisit un
+  code dans `pointage-code-<m>` (pavé numérique ouvert), puis `appuyerSurPointer` (`DemoPointageUITestCase.swift`) fait
+  glisser la page de 0,55 à 0,45 ; `PresencesScreen` porte `.scrollDismissesKeyboard(.immediately)`. Le gel commence
+  pendant ce geste, quand le clavier se ferme.
+- Pile du fil principal, identique dans deux `sample` pris à 76 s d'écart : `_UIUpdateCycleNotifyIdle` →
+  `CA::Transaction::commit` → `CA::Render::Message::send_message` → `mach_msg2_trap`. L'app attend le serveur de rendu du
+  simulateur ; aucune fonction Jolene n'est dans la pile.
+- Le service RTI de saisie disparaît 15 s après. Le simulateur ne relance plus l'app ensuite, et les éclats suivants sont
+  coupés à 30 min sans preuve (même scénario au run 42568134868, `REVUES_LOT2.md` : « Failed to get launch progress »,
+  éclats « documents » et « contrats » arrêtés à l'installation du runner).
+- L'iPad ne fait pas ce geste.
+- Conclusion : défaut hors de l'app (simulateur, serveur de rendu). Déclencheur probable : la fermeture du pavé numérique
+  pendant un défilement.
+
+### Décision
+
+1. **Résilience de la CI** (`.github/workflows/ios-swift-ci.yml`, `scripts/mobile/ios-ci-gel-simulateur.sh`). Au début
+   de chaque éclat qui suit le socle, `relancer-si-gel <éclat>` relit l'éclat précédent : issue de l'étape
+   (`steps.<id>.outcome`), code de sortie de xcodebuild et journal. Le simulateur est redémarré (`simctl shutdown`,
+   `boot`, `bootstatus -b`) dans trois cas :
+   - l'éclat est en échec et son journal contient « main thread busy », « failed to quiesce », « Failed to get launch
+     progress » ou « exceeded execution time allowance » (casse ignorée) ;
+   - l'étape précédente est interrompue ou en échec (délai de 30 min dépassé, sans code de sortie) ;
+   - xcodebuild a été tué (code 124, 130, 137 ou 143).
+
+   Un échec d'assertion ordinaire (code 65, journal sans marque) ne redémarre rien. Un éclat vert (code 0) non plus, même
+   si son journal garde une attente absorbée.
+
+   **L'éclat gelé reste en échec** : rien n'est masqué. Le résumé xcresult exige toujours les onze éclats verts, et aucun
+   test n'est relancé. Le redémarrage est annoncé par une annotation, une ligne du résumé du job et une trace
+   `relance-simulateur-avant-<éclat>.txt` dans l'artefact. Il ne fait jamais échouer l'étape.
+2. **Instrumentation** du veilleur des éclats presences et pointage (`veiller`), en remplacement du veilleur en ligne.
+   Mêmes marques de déclenchement qu'avant, plus les trois du redémarrage. Trois passes à 60 s d'écart, chacune avec :
+   - `sample` de l'app Jolene, de backboardd et de SpringBoard du simulateur (pid lu par
+     `simctl spawn <udid> launchctl list`, sinon `pgrep` sur le chemin du runtime) ;
+   - capture `simctl io <udid> screenshot`, bornée à 30 s ;
+   - journal du simulateur des 10 dernières minutes, filtré sur backboardd, SpringBoard, Jolene, UIKit et CoreAnimation
+     (passes 1 et 3, borné à 90 s) ;
+   - copie des `.ips` de moins d'une heure, de l'hôte et du simulateur ;
+   - `vm_stat`, `sysctl vm.swapusage` et `top -l 1`.
+
+   Les fichiers `gel-<éclat>-*` vont dans l'artefact. Chaque outil est borné, son échec est consigné, jamais propagé.
+   macOS n'a pas `timeout` : le script a sa propre borne (`borne`), compatible avec bash 3.2.
+3. **Bouton « OK » des pavés sans touche Entrée** (`BoutonClavierOK`, JoleneDesign, identifiant `clavier-ok`). Il ferme le
+   clavier sans défilement et porte un seul libellé, « OK ». Il n'apparaît que sur les claviers sans touche Entrée :
+   pavé numérique, décimal ou téléphonique. La barre SwiftUI (`boutonOKClavier(_:actif:)`) est conditionnée au focus du
+   champ : les deux zones de pointage d'un même écran n'empilent jamais deux boutons. Champs concernés :
+   - `NumericCodeField` (code de pointage) ;
+   - `OTPField` (code de signature, UIKit : barre d'accessoire, même libellé, même identifiant) ;
+   - `JoleneTextField` pour les natures téléphone, code, montant, entier, NIR, SIRET et code postal (téléphone de la
+     complétion et du profil, taux minimum des filtres) ;
+   - RPPS de la complétion et du profil.
+
+   Le comportement de l'app ne change pas autrement : un défilement ferme toujours le pavé
+   (`.scrollDismissesKeyboard`). Dans les XCUITest, `fermerLePaveNumerique()` (`UITestSupport`) touche `clavier-ok`, puis
+   attend la disparition du clavier, avant tout défilement. Il exige un seul bouton, au libellé « OK ». Il est appelé
+   par :
+   - `appuyerSurPointer`, qui ne fait plus glisser la page pavé ouvert ;
+   - `saisir`, si un pavé est resté ouvert ;
+   - `testHorsLigneDesactiveLePointageSansAucunEnvoi`, avant son défilement ;
+   - `saisirCode` de `DemoSignatureContratTests` (la page du contrat porte aussi
+     `.scrollDismissesKeyboard(.immediately)`) ;
+   - `focus`, quand un pavé numérique recouvre le champ à saisir (sinon le glissement reste celui d'avant).
+
+   Texte opérationnel hors web : « OK » (`BoutonClavierOK.libelle`), non juridique, gardé par `BoutonClavierOKTests`.
+
+### Budget de temps de la CI
+
+- Le redémarrage se fait **dans** l'éclat suivant. Il est borné à 2 min (`JOLENE_RELANCE_BORNE_S`, 120 s) et mesuré à
+  16 s en local (iPhone 16, iOS 18.6). Aucune étape ni minute n'est ajoutée au plafond du job.
+- Plafond du job : 25 + 11 × 30 = 355 min sur `main`. Avec l'étape de 2 min du `Package.resolved` de `feat/ios-vague5`
+  (L3-T15, m4), on arrive à 357 min, sous les 360 min de GitHub une fois les deux branches réunies.
+- Un éclat qui suit un gel garde au moins 28 min pour ses tests. Au run 42568134868, l'éclat le plus long mesurait
+  21,9 min (« pointage » sur iPhone). Le veilleur tourne en tâche de fond pendant xcodebuild, sans délai propre.
+
+### Gardes et vérifications
+
+- `tests/node/ios-swift-ci-eclats.node.mjs` (job « Cœur » de la CI iOS) vérifie la structure du workflow : chaque éclat
+  après le socle reçoit l'issue et le code de l'éclat précédent, et le contrôle du gel précède son xcodebuild. Il vérifie
+  aussi que le veilleur des éclats presences et pointage est lancé puis arrêté, que la borne de 120 s est en place et que
+  le script figure dans les filtres de chemins.
+- Le même fichier exécute le script avec des outils simulés, sans simulateur ni réseau :
+  - chaque marque, une étape interrompue ou un xcodebuild tué redémarre le simulateur ;
+  - un éclat vert, un échec ordinaire ou un éclat sauté ne redémarre rien ;
+  - un redémarrage bloqué est coupé à sa borne ;
+  - le veilleur produit ses relevés, et un veilleur dont chaque outil échoue rend 0.
+- `BoutonClavierOKTests` (JoleneDesignTests, niveau 1) vérifie le libellé, l'identifiant et les claviers concernés.
+  Il vérifie aussi la nature de saisie de `JoleneTextField`, la barre UIKit, et le champ OTP rendu, dont « OK » rend le
+  focus.
+- XCUITest : `DemoPointageTests`, `DemoPointageEtatsTests` et `DemoSignatureContratTests`, au travers de
+  `fermerLePaveNumerique()`. Ils ne couvrent ni le téléphone, ni le taux, ni le RPPS : aucun XCUITest ne saisit dans
+  ces champs. Pour eux, la preuve reste de niveau 1 (natures de saisie).
+- Vérifications locales du 16/11/2026 (Xcode 16.4, simulateur dédié iPhone 16, iOS 18.6, portrait) :
+  - `ios-swift-ci-eclats` : 14/14 ;
+  - « Garde de livraison mobile » de `validate-pr.yml` : 245/245 ;
+  - `JoleneDesignTests` : 83/83, dont `BoutonClavierOKTests` 5/5 ;
+  - `DemoPointageTests` : 10/10 en 252 s, dont `testPrecisionReduiteNEnvoieAucunePositionEtAfficheLEncart` ;
+  - `DemoPointageEtatsTests` et `DemoSignatureContratTests` : 7/7 en 236 s ;
+  - script sur un vrai simulateur, avec le bash 3.2 de macOS : relevés du veilleur produits, redémarrage en 16 s.
+- Fusion simulée avec `origin/feat/ios-vague5` (`git merge-tree`) : aucun conflit. Sur l'arbre fusionné, les gardes
+  restent vertes (`ios-swift-ci-eclats` 15/15, garde de livraison mobile) et la somme des délais d'étapes est de
+  357 min.
+- Reste à prouver en CI : un run complet de la branche sur les trois formats, dont l'iPhone 17 en iOS 26.2. Aucun
+  workflow n'est déclenché par la tranche. Si un gel se reproduit malgré le bouton, les relevés de backboardd et de
+  SpringBoard serviront à instruire un rapport du défaut du simulateur.
