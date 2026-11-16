@@ -7,7 +7,9 @@ import Foundation
 /// déjà à la base de la pile rendait un chemin **égal** à l'ancien : SwiftUI n'y voyait aucun changement, l'écran n'était
 /// ni relu (modèles `@StateObject` conservés) ni remis au premier plan (un écran poussé au-dessus par
 /// `NavigationLink { destination }`, comme le certificat ouvert depuis le contrat, restait affiché). Avec le jeton, deux
-/// présentations de la même route sont deux valeurs différentes : le chemin change toujours et l'écran est reconstruit.
+/// présentations de la même route sont deux valeurs différentes : le chemin change toujours. La destination lie en plus
+/// l'identité de l'écran au jeton (`.id(jeton)`, `MonEspaceRoute.swift`) : à la même position de la pile, SwiftUI
+/// servirait sinon la nouvelle valeur à l'écran déjà monté, avec son état (constaté en XCUITest).
 public struct PresentationJetonnee<Route: Hashable>: Hashable {
     public let route: Route
     /// Rang de la présentation dans sa pile (`JetonsDePresentation`), strictement croissant.

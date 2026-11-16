@@ -16,9 +16,9 @@ import JoleneCore
 /// ils s'empilent toujours au-dessus d'une de ces routes, que le retour à la racine retire avec elle.
 ///
 /// Présentée par `MainTabView.presenter`, la route est enveloppée d'un jeton (`PresentationJetonnee<MonEspaceRoute>`,
-/// revue B8 n°1 de L2-T10, m1) : présenter la route déjà à la base de la pile change quand même le chemin, l'écran est
-/// reconstruit (modèles relus) et ce qui était empilé au-dessus est retiré. Les entrées du hub et de l'Accueil
-/// (`NavigationLink(value:)`) empilent la route nue : chaque toucher pousse déjà un nouvel élément.
+/// revue B8 n°1 de L2-T10, m1) : présenter la route déjà à la base de la pile change quand même le chemin, et l'écran,
+/// dont l'identité suit le jeton (`.id`), est reconstruit (modèles relus, onglet du lien rétabli). Les entrées du hub et
+/// de l'Accueil (`NavigationLink(value:)`) empilent la route nue : chaque toucher pousse déjà un nouvel élément.
 enum MonEspaceRoute: Hashable {
     /// Page Présences, `?tab=` et `?filtre=` bruts (`PresencesScreen(parametreOnglet:parametreFiltre:)`).
     case presences(onglet: String?, filtre: String?)
@@ -59,6 +59,10 @@ extension View {
         .navigationDestination(for: PresentationJetonnee<MonEspaceRoute>.self) { presentation in
             MonEspaceDestination(route: presentation.route, container: container, session: session, snapshot: snapshot,
                                  ouvrirOnglet: ouvrirOnglet)
+                // Identité de l'écran liée au jeton : à la même position de la pile, SwiftUI sert la nouvelle valeur à
+                // l'écran déjà monté (modèles `@StateObject` et onglet `@State` conservés, constaté en XCUITest) ;
+                // `.id` le reconstruit, donc le relit.
+                .id(presentation.jeton)
         }
     }
 }

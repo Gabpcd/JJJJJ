@@ -234,7 +234,8 @@ struct MainTabView: View {
             // L2-T10 : écrans de « Mon espace », empilés sur l'onglet Profil comme ses entrées (même règle que les
             // préférences : le Profil repart de sa racine, puis l'écran s'y empile), depuis un lien, un tap push, le
             // centre ou l'onglet Revenus (présences d'une mission). Revue B8 n°1 de L2-T10, m1 : la route porte un jeton
-            // neuf, sans quoi le même lien reçu deux fois laisserait le chemin égal (écran ni relu ni remis devant).
+            // neuf, sans quoi le même lien reçu deux fois laisserait le chemin égal (écran ni relu ni remis devant) ;
+            // la destination lie l'identité de l'écran à ce jeton (`destinationsMonEspace`, `.id`).
             guard let route = MonEspaceRoute(cible) else { return }
             selection = .profil
             cheminProfil = NavigationPath()
