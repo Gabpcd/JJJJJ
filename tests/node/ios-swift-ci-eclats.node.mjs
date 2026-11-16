@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -171,4 +173,249 @@ test('décision 22 : chaque XCUITest tourne dans un seul éclat, les classes STA
   const attendu = [...staging, ...vues.keys()].map(c => `JoleneUITests/${c}`).sort();
   assert.deepEqual([...socle.sauf].sort(), attendu, 'le socle doit exclure les classes STAGING et celles des autres éclats, rien d autre');
   assert.deepEqual(parResume.find(r => r.nom === 'socle').classes, [], 'le socle n exige aucune classe nommée');
+});
+
+// Gel iPhone CI — 16/11/2026 (docs/mobile-swift/DECISIONS_LOT2.md, section du même nom ; run 43889328109) : le fil
+// principal de l'app attend le serveur de rendu du simulateur (`CA::Render::Message::send_message`) après un glissement
+// qui ferme le pavé numérique ; le simulateur ne relance plus l'app et les éclats suivants meurent à 30 min sans preuve.
+// Résilience : au début de chaque éclat après le socle, `relancer-si-gel` redémarre le simulateur si l'éclat précédent a
+// gelé ou dépassé son délai, en 2 min au plus, DANS les 30 min de l'éclat (aucune étape, aucune minute de plus au plafond
+// du job). L'éclat gelé reste en échec : le résumé exige toujours chaque éclat vert. Instrumentation : le veilleur des
+// éclats presences et pointage relève l'app, backboardd, SpringBoard, l'écran, le journal du simulateur, les .ips et la
+// mémoire de l'hôte. Les deux sous-commandes sont exécutées ici avec des outils simulés (aucun simulateur, aucun réseau).
+const SCRIPT_GEL = 'scripts/mobile/ios-ci-gel-simulateur.sh';
+const MARQUES_GEL = ['main thread busy', 'failed to quiesce', 'Failed to get launch progress', 'exceeded execution time allowance'];
+
+test('gel iPhone : chaque éclat après le socle relance le simulateur si l éclat précédent a gelé, avant son xcodebuild', () => {
+  assert.ok(parEtape.length >= 3, 'éclats non lus');
+  for (let i = 1; i < parEtape.length; i += 1) {
+    const e = parEtape[i];
+    const precedent = parEtape[i - 1];
+    const texte = liste.find(x => x.id === e.id).texte;
+    assert.ok(texte.includes(`\n          ECLAT_PRECEDENT: ${precedent.nom}\n`), `éclat ${e.nom} : ECLAT_PRECEDENT ≠ ${precedent.nom}`);
+    assert.ok(texte.includes(`\n          ECLAT_PRECEDENT_ISSUE: \${{ steps.${precedent.id}.outcome }}\n`),
+      `éclat ${e.nom} : issue de steps.${precedent.id} non transmise`);
+    assert.ok(texte.includes(`\n          ECLAT_PRECEDENT_CODE: \${{ steps.${precedent.id}.outputs.code }}\n`),
+      `éclat ${e.nom} : code de steps.${precedent.id} non transmis`);
+    const appel = texte.indexOf(`\n          bash ${SCRIPT_GEL} relancer-si-gel ${e.nom} || `);
+    assert.ok(appel >= 0, `éclat ${e.nom} : aucun « bash ${SCRIPT_GEL} relancer-si-gel ${e.nom} || … » (jamais un échec d étape)`);
+    assert.ok(appel < texte.indexOf('xcodebuild test-without-building'), `éclat ${e.nom} : le contrôle du gel précède xcodebuild`);
+    assert.equal(texte.split('relancer-si-gel').length - 1, 1, `éclat ${e.nom} : un seul contrôle du gel`);
+  }
+  const texteSocle = liste.find(x => x.id === socle.id).texte;
+  assert.ok(!texteSocle.includes('relancer-si-gel') && !texteSocle.includes('ECLAT_PRECEDENT'), 'le socle suit le build : aucun éclat précédent');
+  for (const e of liste.filter(x => x.texte.includes('relancer-si-gel'))) {
+    assert.ok(parEtape.some(p => p.id === e.id), `étape « ${e.nom} » : le redémarrage n a lieu que dans un éclat`);
+  }
+  // Le script est dans les filtres de chemins (pull_request et push) : le modifier relance la CI iOS.
+  assert.equal(yml.split(`\n      - '${SCRIPT_GEL}'\n`).length - 1, 2, `${SCRIPT_GEL} absent des filtres de chemins pull_request et push`);
+});
+
+test('gel iPhone : le redémarrage est borné à 2 min dans l éclat suivant, le plafond du job est inchangé', () => {
+  const script = read(SCRIPT_GEL);
+  assert.ok(script.includes('borne_s="${JOLENE_RELANCE_BORNE_S:-120}"'), 'borne par défaut du redémarrage ≠ 120 s');
+  for (const commande of ['xcrun simctl shutdown "$UDID"', 'xcrun simctl boot "$UDID"', 'xcrun simctl bootstatus "$UDID" -b']) {
+    assert.ok(script.includes(`borne_restante "$fin" ${commande}`), `redémarrage : « ${commande} » non borné par l échéance commune`);
+  }
+  for (const marque of MARQUES_GEL) assert.ok(script.toLowerCase().includes(marque.toLowerCase()), `marque de gel « ${marque} » absente`);
+  // Aucune étape n'est ajoutée pour le redémarrage : le plafond reste la somme des éclats plus le build.
+  assert.equal(liste.filter(e => /simulateur/i.test(e.nom) && /red[ée]marr/i.test(e.nom)).length, 0, 'aucune étape de redémarrage hors éclat');
+  for (const e of parEtape) assert.equal(e.delai, 30, `éclat ${e.nom} : délai ≠ 30 min (le redémarrage s y loge)`);
+  const plafond = Number(/^ {4}timeout-minutes: (\d+)$/m.exec(job)?.[1]);
+  assert.ok(plafond <= 360, `plafond du job au-delà de celui de GitHub : ${plafond} min`);
+  assert.ok(job.includes('borné à 2 min') && job.includes('aucune étape ni minute'), 'budget du redémarrage non documenté dans le commentaire du job');
+  const syntaxe = spawnSync('bash', ['-n', join(root, SCRIPT_GEL)], { encoding: 'utf8' });
+  assert.equal(syntaxe.status, 0, `bash -n ${SCRIPT_GEL} : ${syntaxe.stderr}`);
+});
+
+test('gel iPhone : les éclats presences et pointage lancent le veilleur instrumenté, arrêté après xcodebuild', () => {
+  for (const nom of ['presences', 'pointage']) {
+    const e = parEtape.find(x => x.nom === nom);
+    assert.ok(e, `éclat ${nom} absent`);
+    const texte = liste.find(x => x.id === e.id).texte;
+    assert.ok(texte.includes(`journal="$JOLENE_UI_OUTPUT/test-without-building-${nom}.log"`), `éclat ${nom} : journal du veilleur`);
+    const lancement = `bash ${SCRIPT_GEL} veiller ${nom} "$journal" > "$JOLENE_UI_OUTPUT/gel-${nom}-veilleur.log" 2>&1 &\n          veilleur=$!`;
+    assert.ok(texte.includes(lancement), `éclat ${nom} : veilleur non lancé en tâche de fond (sortie dans l artefact)`);
+    const iXcode = texte.indexOf('xcodebuild test-without-building');
+    assert.ok(texte.indexOf(lancement) < iXcode, `éclat ${nom} : veilleur lancé avant xcodebuild`);
+    const arret = texte.indexOf('kill "$veilleur" 2>/dev/null || true');
+    assert.ok(arret > iXcode && texte.indexOf('pkill -P "$veilleur" 2>/dev/null || true') > iXcode, `éclat ${nom} : veilleur arrêté après xcodebuild`);
+    assert.ok(!/\bsample "\$pid"/.test(texte), `éclat ${nom} : l ancien veilleur en ligne est remplacé par le script`);
+  }
+  const script = read(SCRIPT_GEL);
+  for (const attendu of ['borne 30 xcrun simctl io "$UDID" screenshot', 'xcrun simctl spawn "$UDID" launchctl list',
+    'xcrun simctl spawn "$UDID" log show --last 10m', 'RuntimeRoot/usr/libexec/backboardd', 'SpringBoard.app/SpringBoard',
+    'vm_stat', 'sysctl vm.swapusage', 'top -l 1', '*.ips']) {
+    assert.ok(script.includes(attendu), `veilleur : « ${attendu} » absent`);
+  }
+});
+
+// Bac à sable : outils simulés en tête du PATH (chaque appel est journalisé), sortie et HOME temporaires.
+function bac(outils) {
+  const dir = mkdtempSync(join(tmpdir(), 'jolene-gel-'));
+  const bin = join(dir, 'bin');
+  const sortie = join(dir, 'sortie');
+  mkdirSync(bin);
+  mkdirSync(sortie);
+  const appels = join(dir, 'appels.log');
+  for (const [nom, corps] of Object.entries(outils)) {
+    writeFileSync(join(bin, nom), `#!/usr/bin/env bash\nprintf '%s\\n' "${nom} $*" >> '${appels}'\n${corps}\n`);
+    chmodSync(join(bin, nom), 0o755);
+  }
+  return {
+    dir, sortie,
+    appels: () => (existsSync(appels) ? readFileSync(appels, 'utf8').trim().split('\n').filter(Boolean) : []),
+    lancer: (args, env = {}) => spawnSync('bash', [join(root, SCRIPT_GEL), ...args], {
+      encoding: 'utf8', timeout: 60_000,
+      env: { PATH: `${bin}:${process.env.PATH}`, HOME: dir, UDID: 'UDID-TEST', JOLENE_UI_OUTPUT: sortie, ...env },
+    }),
+    nettoyer: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
+const XCRUN_REDEMARRAGE = 'exit 0';
+const REDEMARRAGE = ['xcrun simctl shutdown UDID-TEST', 'xcrun simctl boot UDID-TEST', 'xcrun simctl bootstatus UDID-TEST -b'];
+
+function relancer(b, { issue = 'success', code = '0', journal = null, precedent = 'pointage', env = {} } = {}) {
+  if (journal !== null) writeFileSync(join(b.sortie, `test-without-building-${precedent}.log`), journal);
+  const resume = join(b.dir, 'resume.md');
+  const r = b.lancer(['relancer-si-gel', 'documents'], {
+    ECLAT_PRECEDENT: precedent, ECLAT_PRECEDENT_ISSUE: issue, ECLAT_PRECEDENT_CODE: code, GITHUB_STEP_SUMMARY: resume, ...env,
+  });
+  return { ...r, resume: existsSync(resume) ? readFileSync(resume, 'utf8') : '' };
+}
+
+test('gel iPhone : chaque marque de gel du journal précédent redémarre le simulateur (shutdown, boot, bootstatus -b)', () => {
+  for (const ligne of ['t = 312.07s Wait for app.jolene.ios to idle: main thread busy for 60.0s',
+    'App failed to quiesce within 60s', 'Failed to get launch progress for app.jolene.ios',
+    "Test Case '-[JoleneUITests.DemoPointageTests testX]' exceeded execution time allowance of 10 minutes",
+    'MAIN THREAD BUSY']) {
+    const b = bac({ xcrun: XCRUN_REDEMARRAGE });
+    try {
+      const r = relancer(b, { issue: 'success', code: '65', journal: `Test Suite 'DemoPointageTests' started\n${ligne}\n** TEST FAILED **\n` });
+      assert.equal(r.status, 0, r.stderr);
+      assert.deepEqual(b.appels(), REDEMARRAGE, `« ${ligne} » : redémarrage attendu`);
+      assert.match(r.stdout, /::warning::Éclat pointage : gel ou dépassement constaté/);
+      assert.match(r.stdout, /l'éclat pointage reste en échec/);
+      assert.match(r.resume, /éclat pointage .* simulateur redémarré avant l'éclat documents/);
+      assert.ok(existsSync(join(b.sortie, 'relance-simulateur-avant-documents.txt')), 'trace du redémarrage dans l artefact');
+    } finally { b.nettoyer(); }
+  }
+});
+
+test('gel iPhone : une étape interrompue (délai dépassé) ou un xcodebuild tué redémarre aussi le simulateur', () => {
+  for (const [issue, code] of [['failure', ''], ['cancelled', ''], ['success', '137'], ['success', '143'], ['success', '124']]) {
+    const b = bac({ xcrun: XCRUN_REDEMARRAGE });
+    try {
+      const r = relancer(b, { issue, code, journal: "Test Suite 'DemoPointageTests' started\n" });
+      assert.equal(r.status, 0, r.stderr);
+      assert.deepEqual(b.appels(), REDEMARRAGE, `issue ${issue}, code ${code || 'absent'} : redémarrage attendu`);
+    } finally { b.nettoyer(); }
+  }
+});
+
+test('gel iPhone : un éclat vert, un échec d assertion ordinaire ou un éclat sauté ne redémarre rien', () => {
+  // Un éclat vert dont le journal garde une attente absorbée (« main thread busy » passager) n'est pas un éclat en échec.
+  for (const [issue, code, journal] of [['success', '0', '** TEST SUCCEEDED **\n'], ['success', '65', 'XCTAssertEqual failed\n** TEST FAILED **\n'],
+    ['skipped', '', null], ['success', '0', null], ['success', '0', 'Wait for app to idle: main thread busy for 3.1s\n** TEST SUCCEEDED **\n']]) {
+    const b = bac({ xcrun: XCRUN_REDEMARRAGE });
+    try {
+      const r = relancer(b, { issue, code, journal });
+      assert.equal(r.status, 0, r.stderr);
+      assert.deepEqual(b.appels(), [], `issue ${issue}, code ${code || 'absent'} : aucun redémarrage`);
+      assert.doesNotMatch(r.stdout, /::warning::/);
+      assert.equal(r.resume, '', 'rien au résumé sans gel');
+    } finally { b.nettoyer(); }
+  }
+});
+
+test('gel iPhone : un redémarrage bloqué est coupé à sa borne et ne fait jamais échouer l étape', () => {
+  const bloque = bac({ xcrun: 'case "$*" in *bootstatus*) sleep 30 ;; esac' });
+  try {
+    const debut = Date.now();
+    const r = relancer(bloque, { issue: 'failure', code: '', env: { JOLENE_RELANCE_BORNE_S: '2' } });
+    const duree = (Date.now() - debut) / 1000;
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(duree < 12, `redémarrage coupé à sa borne (2 s + grâce), mesuré ${duree} s`);
+    assert.deepEqual(bloque.appels(), REDEMARRAGE);
+    assert.match(r.stdout, /redémarrage non abouti/);
+  } finally { bloque.nettoyer(); }
+  const enEchec = bac({ xcrun: 'echo "simctl indisponible" >&2; exit 1' });
+  try {
+    const r = relancer(enEchec, { issue: 'failure', code: '' });
+    assert.equal(r.status, 0, 'un simctl en échec ne fait pas échouer l étape');
+    assert.match(r.stdout, /redémarrage non abouti/);
+  } finally { enEchec.nettoyer(); }
+  const borne = bac({});
+  try {
+    const debut = Date.now();
+    const r = borne.lancer(['borne', '1', 'sleep', '30']);
+    assert.ok((Date.now() - debut) / 1000 < 8, 'borne : commande coupée');
+    assert.equal(r.status, 143, 'borne : code de la commande coupée (SIGTERM)');
+    assert.equal(borne.lancer(['borne', '5', 'true']).status, 0, 'borne : code de la commande terminée');
+  } finally { borne.nettoyer(); }
+});
+
+const OUTILS_VEILLEUR = {
+  pgrep: 'case "$*" in *Jolene.app*) echo 4242 ;; *backboardd*) echo 5151 ;; *SpringBoard*) echo 6161 ;; esac',
+  sample: 'while [ $# -gt 0 ]; do if [ "$1" = -file ]; then echo "pile $*" > "$2"; fi; shift; done',
+  sudo: 'exit 1',
+  vm_stat: 'echo "Pages free: 1"',
+  sysctl: 'echo "vm.swapusage: total = 1024.00M"',
+  top: 'echo "Processes: 1 total"',
+  xcrun: [
+    'case "$*" in',
+    '  *"launchctl list"*) printf "PID\\tStatus\\tLabel\\n111\\t0\\tcom.apple.backboardd\\n222\\t0\\tcom.apple.SpringBoard\\n" ;;',
+    '  *"io UDID-TEST screenshot"*) for d; do :; done; printf "PNG" > "$d" ;;',
+    '  *"log show"*) echo "journal du simulateur" ;;',
+    'esac',
+  ].join('\n'),
+};
+
+test('gel iPhone : le veilleur relève l app, backboardd, SpringBoard, l écran, le journal, les .ips et la mémoire, trois fois', () => {
+  const b = bac(OUTILS_VEILLEUR);
+  try {
+    const journal = join(b.sortie, 'test-without-building-pointage.log');
+    writeFileSync(journal, 't = 120.00s Wait for app.jolene.ios to idle: main thread busy\n');
+    const rapports = join(b.dir, 'Library/Logs/DiagnosticReports');
+    mkdirSync(rapports, { recursive: true });
+    writeFileSync(join(rapports, 'Jolene-2026-11-16.ips'), '{}');
+    const r = b.lancer(['veiller', 'pointage', journal],
+      { JOLENE_VEILLEUR_PAS_S: '0', JOLENE_VEILLEUR_PAUSE_S: '0', JOLENE_IPS_HOTE: rapports });
+    assert.equal(r.status, 0, r.stderr);
+    const fichiers = readdirSync(b.sortie);
+    for (const n of [1, 2, 3]) {
+      for (const f of [`gel-pointage-sample-${n}.txt`, `gel-pointage-backboardd-sample-${n}.txt`, `gel-pointage-springboard-sample-${n}.txt`,
+        `gel-pointage-ecran-${n}.png`, `gel-pointage-memoire-${n}.txt`]) assert.ok(fichiers.includes(f), `${f} absent : ${fichiers.join(', ')}`);
+    }
+    for (const n of [1, 3]) assert.ok(fichiers.includes(`gel-pointage-journal-simulateur-${n}.txt`), `journal du simulateur, passe ${n}`);
+    const memoire = readFileSync(join(b.sortie, 'gel-pointage-memoire-1.txt'), 'utf8');
+    for (const t of ['vm_stat', 'Pages free', 'vm.swapusage', 'top -l 1', 'Processes']) assert.ok(memoire.includes(t), `mémoire : « ${t} »`);
+    assert.ok(existsSync(join(b.sortie, 'gel-pointage-ips/hote/Jolene-2026-11-16.ips')), '.ips récent de l hôte copié');
+    const appels = b.appels();
+    assert.ok(appels.includes(`sample 4242 5 -file ${join(b.sortie, 'gel-pointage-sample-1.txt')}`), 'sample de l app Jolene');
+    assert.ok(appels.includes(`sample 111 5 -file ${join(b.sortie, 'gel-pointage-backboardd-sample-1.txt')}`), 'sample de backboardd (pid du simulateur)');
+    assert.ok(appels.includes(`sample 222 5 -file ${join(b.sortie, 'gel-pointage-springboard-sample-1.txt')}`), 'sample de SpringBoard (pid du simulateur)');
+    const logShow = appels.find(a => a.includes('log show'));
+    assert.ok(logShow?.startsWith('xcrun simctl spawn UDID-TEST log show --last 10m'), `log show : ${logShow}`);
+    for (const t of ['backboardd', 'SpringBoard', 'UIKit', 'coreanimation']) assert.ok(logShow.toLowerCase().includes(t.toLowerCase()), `prédicat : ${t}`);
+    assert.ok(appels.includes(`xcrun simctl io UDID-TEST screenshot ${join(b.sortie, 'gel-pointage-ecran-1.png')}`), 'capture de l écran du simulateur');
+  } finally { b.nettoyer(); }
+});
+
+test('gel iPhone : un veilleur dont chaque outil échoue reste muet pour l étape (code 0, traces dans l artefact)', () => {
+  const b = bac({ pgrep: 'case "$*" in *backboardd*) echo 5151 ;; esac; exit 0', sample: 'exit 1', sudo: 'exit 1', vm_stat: 'exit 1',
+    sysctl: 'exit 1', top: 'exit 1', xcrun: 'exit 1' });
+  try {
+    const journal = join(b.sortie, 'test-without-building-presences.log');
+    writeFileSync(journal, 'Failed to get launch progress\n');
+    const r = b.lancer(['veiller', 'presences', journal], { JOLENE_VEILLEUR_PAS_S: '0', JOLENE_VEILLEUR_PAUSE_S: '0', JOLENE_IPS_HOTE: join(b.dir, 'absent') });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(b.appels().includes('pgrep -n -f RuntimeRoot/usr/libexec/backboardd'), 'repli pgrep sur le chemin du runtime');
+    assert.ok(b.appels().some(a => a.startsWith('sample 5151 5 -file ')), 'sample du pid trouvé par pgrep');
+    assert.match(readFileSync(join(b.sortie, 'gel-presences-springboard-sample-1.txt'), 'utf8'), /processus introuvable/);
+    assert.match(readFileSync(join(b.sortie, 'gel-presences-sample-1.txt'), 'utf8'), /processus introuvable/);
+    assert.match(readFileSync(join(b.sortie, 'gel-presences-backboardd-sample-1.txt'), 'utf8'), /sample a échoué/);
+    assert.ok(existsSync(join(b.sortie, 'gel-presences-ecran-1.txt')), 'capture en échec consignée');
+  } finally { b.nettoyer(); }
 });
