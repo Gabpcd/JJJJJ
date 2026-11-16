@@ -31,7 +31,11 @@ import JoleneDesign
 /// - une notification lue dans le centre périme le compteur de l'Accueil (`lecturesCentre`, jeton de péremption
 ///   d'`AccueilModel`, revue L3-T5 m1) ;
 /// - (lot 3, T12) onglet Revenus natif (`RevenusScreen`, pile `cheminRevenus`), à la place du placeholder du lot 0 ;
-///   ses renvois web et l'état vide passent par `presenter` (cible de l'espace), la surcouche du pré-prompt est gardée.
+///   ses renvois web et l'état vide passent par `presenter` (cible de l'espace), la surcouche du pré-prompt est gardée ;
+/// - (lot 2, T10) écrans de « Mon espace » (présences, détail des présences d'une mission, Mes documents, contrat,
+///   certificat) : routes par valeur `MonEspaceRoute`, enregistrées sur les piles de l'Accueil (widget « Aller pointer »,
+///   oubli de départ) et du Profil (entrées de « Mon espace ») ; une cible de lien, de tap push, du centre ou de la ligne
+///   « présences d'une mission » de Revenus s'empile sur le Profil remis à sa racine.
 struct MainTabView: View {
     /// Onglets de l'espace : enum dédié de JoleneCore (revue L3-T5, m9), jamais les drapeaux `EcranNatif`.
     typealias Tab = OngletEspace
@@ -80,6 +84,8 @@ struct MainTabView: View {
                             presenter(cible, depuisCentre: true)
                         }
                     }
+                    // L2-T10 : widget « Aller pointer » et oubli de départ (liens par valeur, `MonEspaceRoute`).
+                    .destinationsMonEspace(container: container, session: session, snapshot: snapshot) { selection = $0 }
             }
             .tabItem { Label("Accueil", systemImage: "house") }
             .tag(Tab.accueil)
@@ -123,6 +129,8 @@ struct MainTabView: View {
                         ProfilEditionScreen(session: session, snapshot: snapshot, localisation: container.localisationProfil,
                                             selectionAvatarDemo: container.selectionAvatarDemo)
                     }
+                    // L2-T10 : « Mon espace » (présences, documents, contrats) — entrées du hub, liens, taps et centre.
+                    .destinationsMonEspace(container: container, session: session, snapshot: snapshot) { selection = $0 }
             }
             .tabItem { Label("Profil", systemImage: "person") }
             .tag(Tab.profil)
@@ -217,6 +225,14 @@ struct MainTabView: View {
             selection = .profil
             cheminProfil = NavigationPath()
             cheminProfil.append(ProfilEditionRoute())
+        case .presences, .detailPresences, .documents, .contrat, .certificat:
+            // L2-T10 : écrans de « Mon espace », empilés sur l'onglet Profil comme ses entrées (même règle que les
+            // préférences : le Profil repart de sa racine, puis l'écran s'y empile), depuis un lien, un tap push, le
+            // centre ou l'onglet Revenus (présences d'une mission).
+            guard let route = MonEspaceRoute(cible) else { return }
+            selection = .profil
+            cheminProfil = NavigationPath()
+            cheminProfil.append(route)
         case .web(let route):
             presentateurRenvoiWeb?.presenter(route)
         case .aucune:

@@ -12,9 +12,10 @@ import XCTest
 ///   Rist à 280 €) et l'état de la dernière déclaration, notes « net estimé » verbatim ;
 /// - le litige du paiement rapide ouvre la page web de la mission (bloc litige du web, absent du détail natif ; revue B8
 ///   n°2 de T12, M1), présentée par le double démo du présentateur `.safari` ;
-/// - « Factures », « Paie » et une ligne de mission (présences, lot 2) sont des renvois web canoniques (D4), présentés
-///   par le double démo du présentateur `.safari` (aucune requête réseau) ; la ligne s'ouvre aussi par un vrai bouton
-///   nommé comme le `aria-label` du web (accessibilité, revue B8 de T12, m5) ;
+/// - « Factures » et « Paie » sont des renvois web canoniques (D4), présentés par le double démo du présentateur `.safari`
+///   (aucune requête réseau) ; une ligne de mission ouvre le détail natif de ses présences (lot 2, natif depuis L2-T10),
+///   empilé sur le Profil remis à sa racine, et s'ouvre aussi par un vrai bouton nommé comme le `aria-label` du web
+///   (accessibilité, revue B8 de T12, m5) ;
 /// - état d'erreur puis reprise (`JOLENE_FORCE_REVENUS_ECHEC=1`) ;
 /// - lien universel `/soignant/mes-gains` (aperçu natif) et tap push `FACTURE_EMISE` (section factures : renvoi web, D4 ;
 ///   cas reporté de T5).
@@ -137,7 +138,12 @@ final class DemoRevenusTests: JoleneUITestCase {
         XCTAssertFalse(element("revenus-avances-web").exists, "avance de trésorerie : drapeau affacturage_actif non lu, défaut false (web l.848, l.897)")
     }
 
-    func testMissionOuvreSesPresencesSurLeWeb() throws {
+    /// Migré par L2-T10 (règle 8 ; revue B8 de la PR #1131, m7) : `/soignant/presences/mission/:id` est natif, la ligne
+    /// ouvre `DetailPresencesScreen` sur l'onglet Profil (« Mon espace »), plus la page web. Les missions de Revenus
+    /// (`demo-missions-terminees.json`) n'existent pas dans le monde démo des présences (`demo-presences.json`) : le détail
+    /// natif affiche « introuvable » en démo (écart de fixtures consigné, `PARITE_SOIGNANT.md`) ; la preuve porte sur
+    /// l'écran ouvert, jamais un renvoi web, et le retour à Revenus intact.
+    func testMissionOuvreLeDetailNatifDeSesPresences() throws {
         launchDemo()
         connexionDemo()
         let ecran = ouvrirRevenus()
@@ -145,9 +151,9 @@ final class DemoRevenusTests: JoleneUITestCase {
         scrollTo(ligne, in: ecran)
         require("La ligne de mission est atteignable") { self.visible(ligne) }
         ligne.tap()
-        liensRenvoiWebAffiche("https://jolene.app/soignant/presences/mission/demo-terminee-002")
+        revenusDetailNatifDesPresences()
         record("\(proofPrefix)-revenus-presences")
-        liensFermerRenvoiWeb()
+        ouvrirRevenus()
         require("L'onglet Revenus est intact") { self.containerVisible(self.element("revenus-screen")) }
 
         // Revue B8 de T12, m5 : action atteignable par VoiceOver, le Contrôle vocal et le clavier — un vrai bouton, nommé
@@ -157,9 +163,50 @@ final class DemoRevenusTests: JoleneUITestCase {
         require("Le bouton d'ouverture de la mission est atteignable") { self.visible(bouton) && bouton.isEnabled }
         XCTAssertEqual(bouton.label, "Voir mission Démonstration · Mission terminée 2")
         bouton.tap()
-        liensRenvoiWebAffiche("https://jolene.app/soignant/presences/mission/demo-terminee-002")
-        liensFermerRenvoiWeb()
+        revenusDetailNatifDesPresences()
+        ouvrirRevenus()
         require("L'onglet Revenus est intact après le bouton") { self.containerVisible(self.element("revenus-screen")) }
+    }
+
+    /// L2-T10 (revue B8 de la PR #1131, m3) : « Mes présences » est ouvert depuis le hub (lien par valeur, `MonEspaceRoute`),
+    /// puis la ligne « présences d'une mission » de Revenus présente une cible du lot 2 par le même `presenter` que les liens
+    /// et les taps push : le Profil repart de sa racine, le détail s'y empile, et le retour mène au hub, jamais à « Mes
+    /// présences » resté dessous.
+    func testPresencesDUneMissionRemettentLeProfilASaRacine() throws {
+        launchDemo()
+        connexionDemo()
+        tabButton("tab-profil", label: "Profil").tap()
+        let hub = element("profile-list")
+        require("Le hub est affiché") { self.containerVisible(hub) }
+        let entree = element("profil-presences")
+        if !visible(entree) { scrollTo(entree, in: hub) }
+        tap("profil-presences")
+        require("« Mes présences » est empilé sur le Profil", timeout: 30) { self.containerVisible(self.element("presences-screen")) }
+
+        let ecran = ouvrirRevenus()
+        let ligne = element("revenus-mission-demo-terminee-002")
+        scrollTo(ligne, in: ecran)
+        require("La ligne de mission est atteignable") { self.visible(ligne) }
+        ligne.tap()
+        require("« Mes présences » a été retiré de la pile du Profil", timeout: 30) {
+            self.containerVisible(self.element("presence-detail-screen")) && !self.element("presences-screen").exists
+        }
+        record("\(proofPrefix)-revenus-presences-pile-profil")
+        revenusDetailNatifDesPresences()
+        XCTAssertFalse(element("presences-screen").exists, "le retour mène au hub, jamais à « Mes présences »")
+    }
+
+    /// Détail natif des présences empilé sur l'onglet Profil (L2-T10), jamais la page web ; retour au hub.
+    private func revenusDetailNatifDesPresences() {
+        let detail = element("presence-detail-screen")
+        require("Le détail natif des présences est ouvert", timeout: 30) {
+            self.containerVisible(detail) && self.element("presence-detail-introuvable").exists
+        }
+        XCTAssertFalse(element("renvoi-web-demo").exists, "détail natif (L2-T10) : jamais la page web")
+        let retour = app.navigationBars.buttons.firstMatch
+        require("Le bouton retour est disponible") { self.visible(retour) }
+        retour.tap()
+        require("Retour au hub, racine de l'onglet Profil") { self.containerVisible(self.element("profile-list")) && !detail.exists }
     }
 
     func testErreurPuisReprise() throws {

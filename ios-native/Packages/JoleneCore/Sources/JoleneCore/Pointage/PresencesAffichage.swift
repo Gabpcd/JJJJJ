@@ -165,23 +165,24 @@ public extension InstantanePresences {
     }
 }
 
-/// Renvois web de la page Présences tant que leurs écrans natifs ne sont pas livrés : contrat (T9a), litiges (lot 4).
-/// Routes résolues par `LinkRouter` (`AccueilPresentation.renvoiWeb`, nil dès que la route devient native), jamais une
-/// URL écrite en dur ; présentées seulement par le présentateur `.safari` injecté par T10.
+/// Renvois web de la page Présences tant que leurs écrans natifs ne sont pas livrés : litiges (lot 4). Route résolue
+/// par `LinkRouter` (`AccueilPresentation.renvoiWeb`, nil dès que la route devient native), jamais une URL écrite en
+/// dur ; présentée seulement par le présentateur `.safari` (coordinateur des liens, fusion du lot 3). Le renvoi du
+/// contrat (`BlocPointageMission.tsx` l.95) est retiré par L2-T10 : « Voir le contrat » ouvre le contrat natif
+/// (`ContratsDestination.contrat`) et `/contrat/:id` est une route native.
 ///
-/// Exception documentée : le récapitulatif financier du détail des présences (`recapitulatifFinancier`) est une route
-/// FORCÉE web, indépendante du routage natif (même motif que `ContratPresentation.renvoiSignature`).
+/// Exceptions documentées : routes FORCÉES web, indépendantes du routage natif (même motif que
+/// `ContratPresentation.renvoiSignature`) — le récapitulatif financier du détail des présences
+/// (`recapitulatifFinancier`) et la page web des présences (`presences`, L2-T10 : `/soignant/presences` est une route
+/// native depuis T10, son renvoi doit pourtant mener au web).
 public enum PresencesRenvois {
-    /// `navigate(`/contrat/${contrat.id}`)` (`BlocPointageMission.tsx` l.95).
-    public static func contrat(id: String) -> JoleneRoute? {
-        AccueilPresentation.renvoiWeb("/contrat/" + id)
-    }
-
     /// Page web des présences : voie de récupération d'un suivi de pointage non vérifiable (journal illisible, HTTP 200
     /// sans preuve, identifiant terminal illisible ; consignes T3 et T4b de `DECISIONS_LOT2.md`), le pointage web
-    /// n'utilisant ni ce journal ni cet identifiant.
+    /// n'utilisant ni ce journal ni cet identifiant, et renvoi de la page quand le coupe-circuit
+    /// `ios_natif_presences_actif` est à faux (D-FLAGS). Route FORCÉE web (L2-T10) : `AccueilPresentation.renvoiWeb`
+    /// rendrait nil depuis que `/soignant/presences` ouvre `PresencesScreen`, et le renvoi disparaîtrait sans bruit.
     public static var presences: JoleneRoute? {
-        AccueilPresentation.renvoiWeb("/soignant/presences")
+        JoleneLink.canonicalURL(link: "/soignant/presences").map(JoleneRoute.safari)
     }
 
     /// `navigate('/soignant/litiges')` (`PresencesSoignant.tsx` l.752).

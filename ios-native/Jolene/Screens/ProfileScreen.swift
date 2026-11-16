@@ -80,7 +80,7 @@ struct ProfileScreen: View {
             // pour ne pas déplacer la déconnexion ni la sentinelle réseau, lues sans défilement par les XCUITest
             // des lots 0 et 1 (cellules hors écran d'une `List` absentes de l'arbre d'accessibilité).
             // Une ligne par tranche (T4a présences, T7 documents, T9a contrats ; T4b consentement GPS).
-            EspaceSoignantSection(container: container, session: session, snapshot: snapshot, ouvrirOnglet: ouvrirOnglet)
+            EspaceSoignantSection(session: session, snapshot: snapshot) // L2-T10 : liens par valeur (`MonEspaceRoute`)
             ProfilEntreeSection() // lot 3, T9 : « Mon profil » (`MonCompteSoignant.tsx` l.59)
             Section(HubCompte.titreReglages) {
                 // Lot 3, T6 : « Notifications » (l.115) vers les préférences ; lien par valeur, `MainTabView` enregistre

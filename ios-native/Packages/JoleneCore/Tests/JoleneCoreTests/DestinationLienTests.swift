@@ -207,6 +207,11 @@ final class DestinationLienTests: XCTestCase {
         case .profil: return "profil"
         case .stripeConnect: return "stripeConnect"
         case .revenus(let section): return "revenus(\(section.rawValue))"
+        case .presences: return "presences"                   // L2-T10
+        case .presencesMission: return "presencesMission"     // L2-T10
+        case .documents: return "documents"                   // L2-T10
+        case .contrat: return "contrat"                       // L2-T10
+        case .contratCertificat: return "contratCertificat"   // L2-T10
         case .safari: return "safari"
         case .etablissement: return "etablissement"
         default: return "autre : \(route)"
@@ -246,10 +251,10 @@ final class DestinationLienTests: XCTestCase {
             "/soignant/mes-gains?tab=paiements": ("revenus(paiements)", "safari", 32),       // T13
             "/soignant/mes-gains?tab=factures": ("revenus(factures)", "safari", 21),         // lot 4 (D4)
             "/soignant/litiges": ("safari", "safari", 46),
-            "/soignant/mes-documents": ("safari", "safari", 30),
+            "/soignant/mes-documents": ("documents", "documents", 30),                       // L2-T10 (contrats, dpae)
             "/etablissement/*": ("etablissement", "etablissement", 125),
             "/admin/*": ("safari", "safari", 47),
-            "/contrat/*": ("safari", "safari", 97),
+            "/contrat/*": ("contrat", "contrat", 97),                                        // L2-T10
             "/": ("safari", "safari", 20),
             "/Soignant/Missions": ("safari", "safari", 5),                                   // casse : chemin inconnu
         ]
@@ -278,8 +283,9 @@ final class DestinationLienTests: XCTestCase {
             }
         }
         XCTAssertEqual(decomptes, attendus.mapValues { $0.nombre }, "décomptes par famille")
-        XCTAssertEqual(natifs, 461, "destinations natives (T5 : +6, centre de notifications ; T9 : +7, profil)")
-        XCTAssertEqual(renvois, 429, "renvois web")
+        XCTAssertEqual(natifs, 588, "destinations natives (T5 : +6, centre de notifications ; T9 : +7, profil ; "
+                       + "L2-T10 : +127, contrats et Mes documents)")
+        XCTAssertEqual(renvois, 302, "renvois web (L2-T10 : −127)")
     }
 
     // MARK: Description masquée (PRINCIPES §7 : ni identifiant ni jeton dans les logs)
@@ -306,9 +312,14 @@ final class DestinationLienTests: XCTestCase {
              "confirmerInscription(AuthCallbackCredentials(pkce, valeur masquée))", "/inscription/confirmer?‹masqué›"),
             ("https://jolene.app/etab/invitation/SECRET6",
              "etablissement(/etab/invitation/‹masqué›)", "/etab/invitation/‹masqué›"),
-            ("https://jolene.app/contrat/SECRET7", "safari(/contrat/‹masqué›)", "/contrat/‹masqué›"),
-            ("https://jolene.app/contrat/SECRET7/certificat#SECRET7", "safari(/contrat/‹masqué›/certificat#‹masqué›)",
+            // L2-T10 : contrat et certificat natifs (`contrat`, `contratCertificat`), identifiant masqué.
+            ("https://jolene.app/contrat/SECRET7", "contrat(id masqué)", "/contrat/‹masqué›"),
+            ("https://jolene.app/contrat/SECRET7/certificat#SECRET7", "contratCertificat(id masqué)",
              "/contrat/‹masqué›/certificat#‹masqué›"),
+            ("https://jolene.app/soignant/presences/mission/SECRET7", "presencesMission(id masqué)",
+             "/soignant/presences/mission/‹masqué›"),
+            ("https://jolene.app/soignant/presences?tab=SECRET7&filtre=SECRET7", "presences(onglet masqué, filtre masqué)",
+             "/soignant/presences?‹masqué›"),
             ("https://jolene.app/soignant/missions/SECRET8", "missionDetail(id masqué)", "/soignant/missions/‹masqué›"),
             ("https://jolene.app/mission/SECRET8", "missionDetail(id masqué)", "/mission/‹masqué›"),
             ("https://jolene.app/soignant/missions/serie/SECRET8", "serieDetail(id masqué)", "/soignant/missions/serie/‹masqué›"),
@@ -357,6 +368,15 @@ final class DestinationLienTests: XCTestCase {
             (.stripeConnect(retour: nil), "stripeConnect(sans retour)"),
             (.stripeConnect(retour: .succes), "stripeConnect(succes)"),
             (.stripeConnect(retour: .rafraichir), "stripeConnect(rafraichir)"),
+            (.presences(onglet: nil, filtre: nil), "presences(sans onglet, sans filtre)"),                   // L2-T10
+            (.presences(onglet: "aujourdhui", filtre: "a_valider"), "presences(aujourdhui, a_valider)"),
+            (.presences(onglet: "SECRET", filtre: nil), "presences(onglet masqué, sans filtre)"),
+            (.presencesMission(id: "SECRET"), "presencesMission(id masqué)"),
+            (.documents(onglet: nil), "documents(sans onglet)"),
+            (.documents(onglet: "dpae"), "documents(dpae)"),
+            (.documents(onglet: "SECRET"), "documents(onglet masqué)"),
+            (.contrat(id: "SECRET"), "contrat(id masqué)"),
+            (.contratCertificat(id: "SECRET"), "contratCertificat(id masqué)"),
             (.safari(url("https://jolene.app/admin/SECRET?SECRET#SECRET")), "safari(/admin/‹masqué›?‹masqué›#‹masqué›)"),
             (.safari(url("https://jolene.app")), "safari(/)"),
             (.etablissement(url("https://jolene.app/etablissement/missions/SECRET")),
@@ -389,6 +409,8 @@ final class DestinationLienTests: XCTestCase {
             "/soignant/parametres-complet", "/soignant/score", "/soignant/fiabilite", "/soignant/fiabilite-legacy",
             "/soignant/notifications", "/soignant/parametres/notifications", "/soignant/stripe-connect",
             "/soignant/litiges", "/soignant/mes-documents", "/soignant/presences", "/soignant/mes-favoris",
+            "/soignant/presences/mission", "/soignant/documents", "/soignant/contrats", "/soignant/dpae",       // L2-T10
+            "/soignant/conformite", "/contrat/certificat",
             "/auth/psc/callback", "/etab/invitation", "/admin/litiges", "/admin/reclamations", "/groupe",
             "/etablissement/contrats", "/etablissement/facturation", "/etablissement/litiges",
             "/etablissement/mes-reclamations", "/etablissement/missions", "/etablissement/tableau-de-bord",
@@ -435,6 +457,13 @@ final class DestinationLienTests: XCTestCase {
             (.revenus(section: .factures), false, "lot 4"),
             (.revenus(section: .bulletins), false, "lot 4"),
             (.revenus(section: .avances), false, "lot 4"),
+            (.presences(onglet: nil, filtre: nil), true, "L2-T10 : PresencesScreen (T4a)"),
+            (.presences(onglet: "historique", filtre: "a_valider"), true, "L2-T10 : PresencesScreen, onglet et filtre du lien"),
+            (.presencesMission(id: "m"), true, "L2-T10 : DetailPresencesScreen (T5a)"),
+            (.documents(onglet: nil), true, "L2-T10 : MesDocumentsScreen (T7)"),
+            (.documents(onglet: "dpae"), true, "L2-T10 : MesDocumentsScreen, onglet DPAE en renvoi web dans l'écran"),
+            (.contrat(id: "c"), true, "L2-T10 : ContratScreen (T9a)"),
+            (.contratCertificat(id: "c"), true, "L2-T10 : CertificatRoute (T9a)"),
         ]
         for (route, livre, tranche) in table {
             XCTAssertEqual(DestinationLien.ecranNatifLivre(route), livre, "\(route) (\(tranche))")

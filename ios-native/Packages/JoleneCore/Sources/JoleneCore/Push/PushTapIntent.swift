@@ -83,6 +83,10 @@ public struct PushTapIntent: Equatable, Sendable, CustomStringConvertible, Custo
         case .safari(let url): return "safari \(url.absoluteString)"
         case .etablissement(let url): return "etablissement \(url.absoluteString)"
         case .missionDetail(let id): return "missionDetail \(id)"
+        // Lot 2, T10 : identifiant démo du contrat ou de la mission (les onglets passent par la description masquée).
+        case .presencesMission(let id): return "presencesMission \(id)"
+        case .contrat(let id): return "contrat \(id)"
+        case .contratCertificat(let id): return "contratCertificat \(id)"
         default: return String(describing: route)
         }
     }

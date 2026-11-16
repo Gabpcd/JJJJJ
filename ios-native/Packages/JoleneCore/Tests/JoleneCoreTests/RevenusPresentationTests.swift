@@ -274,9 +274,12 @@ final class RevenusPresentationTests: XCTestCase {
                        .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/mes-gains?tab=factures"))))
         XCTAssertEqual(RevenusPresentation.renvoiWeb(RevenusPresentation.lienBulletins),
                        .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/mes-gains?tab=bulletins"))))
-        XCTAssertEqual(RevenusPresentation.renvoiWeb(RevenusPresentation.lienPresences(missionId: "m-1")),
-                       .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/presences/mission/m-1"))),
-                       "détail des présences (lot 2) : `navigate('/soignant/presences/mission/${m.id}')`, l.705")
+        // L2-T10 : le détail des présences d'une mission est natif (`navigate('/soignant/presences/mission/${m.id}')`,
+        // l.705) : plus de renvoi web, la ligne ouvre `DetailPresencesScreen` par sa cible de l'espace.
+        XCTAssertNil(RevenusPresentation.renvoiWeb(RevenusPresentation.lienPresences(missionId: "m-1")),
+                     "détail des présences natif depuis L2-T10")
+        let presences = try XCTUnwrap(DestinationLien(link: RevenusPresentation.lienPresences(missionId: "m-1")))
+        XCTAssertEqual(CibleNotification(presences), .detailPresences(missionId: "m-1"))
         XCTAssertNil(RevenusPresentation.renvoiWeb("/soignant/mes-gains"), "l'aperçu est natif : jamais un renvoi")
     }
 

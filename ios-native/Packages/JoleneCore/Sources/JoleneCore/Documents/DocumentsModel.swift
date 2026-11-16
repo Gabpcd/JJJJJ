@@ -57,6 +57,13 @@ public final class DocumentsModel: ObservableObject {
     public static let dureeSuivi: TimeInterval = 60
     /// Voie de récupération d'un journal illisible : l'envoi web n'utilise pas ce journal.
     public static let renvoiWeb = "/soignant/mes-documents?tab=justificatifs"
+    /// Route du renvoi web (`renvoiWeb`), aussi présentée quand le coupe-circuit `ios_natif_documents_actif` est à faux.
+    /// Route FORCÉE web (L2-T10) : `/soignant/mes-documents` ouvre `MesDocumentsScreen` depuis T10, si bien que
+    /// `AccueilPresentation.renvoiWeb` rendrait nil et le renvoi disparaîtrait sans bruit (même motif que
+    /// `PresencesRenvois.recapitulatifFinancier`).
+    public static var routeRenvoiWeb: JoleneRoute? {
+        JoleneLink.canonicalURL(link: renvoiWeb).map(JoleneRoute.safari)
+    }
     /// Code de refus restitué pour un nom ou un libellé hors bornes (message du web, `DocumentsSoignant.tsx` l.400-402).
     public static let codeMetadonneesInvalides = "METADONNEES_DOCUMENT_INVALIDES"
 

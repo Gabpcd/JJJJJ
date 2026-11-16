@@ -152,7 +152,8 @@ public enum AccueilPresentation {
 
     // MARK: - Renvois web
 
-    /// Pointage (lot 2) : écran web au lot 1.
+    /// Pointage (lot 2) : écran web au lot 1, natif depuis L2-T10 (`renvoiWeb` rend alors nil ; l'Accueil ouvre
+    /// `PresencesScreen` par ses points d'entrée de T5a).
     public static let lienPresences = "/soignant/presences"
     /// Centre de notifications : écran web au lot 1, natif depuis L3-T5 (`renvoiWeb` rend alors nil).
     public static let lienNotifications = "/soignant/notifications"
