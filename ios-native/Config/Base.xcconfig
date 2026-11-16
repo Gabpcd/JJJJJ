@@ -15,3 +15,7 @@ JOLENE_ENVIRONMENT = staging
 JOLENE_SUPABASE_URL =
 JOLENE_SUPABASE_PUBLISHABLE_KEY =
 APS_ENVIRONMENT = development
+// Lot 3, T15 : DSN Sentry du projet jolene-ios, JAMAIS versionné (docs/mobile-swift/SENTRY_IOS.md). Vide : Sentry
+// désactivé. Injecté en ligne de commande (xcodebuild JOLENE_SENTRY_DSN=…) : ios-native-testflight.yml depuis le secret
+// facultatif SENTRY_DSN_IOS, en local par Gabrielle pour la recette du crash de test.
+JOLENE_SENTRY_DSN =

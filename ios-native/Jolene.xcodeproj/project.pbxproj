@@ -31,6 +31,7 @@
 		35B21204F757910A731C8D4B /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57522BC17747DB1695651ECD /* MainTabView.swift */; };
 		39A7227E7A346A452229D7BC /* DemoLiensLot3Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4D20F07781F9A2E52365D03 /* DemoLiensLot3Tests.swift */; };
 		39ADB82A0945C81321608C52 /* AvatarProfilSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC935FC14BF8B87C100F46ED /* AvatarProfilSection.swift */; };
+		3C22247EE58E326D7B6D0427 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = A75AB8525FE90E0193869B59 /* Sentry */; };
 		40A4FBAC77F9A66CC400B21C /* DemoPointageUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBF18123CB11BB80E8541D97 /* DemoPointageUITestCase.swift */; };
 		45BF2836A6AF8ECDBEB42B16 /* RecusJustificatifs.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAB84E5DAE9D6DA747E6BC3E /* RecusJustificatifs.swift */; };
 		496EB218D427D36B5164DC14 /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B12ED2CF03F5935EB224B9A /* AppContainer.swift */; };
@@ -47,6 +48,7 @@
 		5CE7FB62EB256D49B5BB2692 /* ConsentementGpsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 638210FD006E1B4B3AC396BB /* ConsentementGpsRow.swift */; };
 		5D19DC4BE2E5EDA204CAF770 /* DetailPresencesScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C4B1EDFCA7189E5163D414 /* DetailPresencesScreen.swift */; };
 		5E0893D0CB68B03799F6D7D9 /* StagingConnexionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */; };
+		5E46487082E601A0075BF63C /* CrashReporting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705899DA6E3B27D41139A5A3 /* CrashReporting.swift */; };
 		618DCEFB2E7DF8FD3AC1FF28 /* BlocPointageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC682D167D3736C3877FC191 /* BlocPointageView.swift */; };
 		634E2F09A431203F99161794 /* SuppressionCompteScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D38838D39EB705DD25FE585 /* SuppressionCompteScreen.swift */; };
 		6A2FA992EC44B425AB4036F2 /* AccueilLignes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C1F510DF2473734BC92D4D /* AccueilLignes.swift */; };
@@ -175,6 +177,7 @@
 		676FE905DF85E7AE14260D5C /* ConfirmationInscriptionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationInscriptionScreen.swift; sourceTree = "<group>"; };
 		6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StagingConnexionTests.swift; sourceTree = "<group>"; };
 		6F98E168F9C28FBB06551D7B /* Production.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Production.xcconfig; sourceTree = "<group>"; };
+		705899DA6E3B27D41139A5A3 /* CrashReporting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReporting.swift; sourceTree = "<group>"; };
 		70EB2E65EA45ACA03AFE4DE7 /* ProfilEditionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilEditionScreen.swift; sourceTree = "<group>"; };
 		71858F13CA71857DE1D5A7A3 /* CompletionProfilScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionProfilScreen.swift; sourceTree = "<group>"; };
 		7467C13956527741B132313A /* JoleneCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JoleneCore; path = Packages/JoleneCore; sourceTree = SOURCE_ROOT; };
@@ -263,6 +266,7 @@
 				0D698398E212FA5FBDD89C50 /* JoleneCore in Frameworks */,
 				78268B78D4B307017EBE8941 /* JoleneSupabase in Frameworks */,
 				7D9EC7EEACF825A03C5D6935 /* JoleneDesign in Frameworks */,
+				3C22247EE58E326D7B6D0427 /* Sentry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -338,6 +342,7 @@
 				1B12ED2CF03F5935EB224B9A /* AppContainer.swift */,
 				9BF575ABB489174FA886328B /* AvatarPicker.swift */,
 				4D6A37369D110A146F3E4CAF /* ContratReaderView.swift */,
+				705899DA6E3B27D41139A5A3 /* CrashReporting.swift */,
 				B3F0A6856D66A3E37F08A0E7 /* DeepLinkCoordinator.swift */,
 				0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */,
 				F77D89390B0B48A7470C7E56 /* NotificationCenterDelegate.swift */,
@@ -574,6 +579,7 @@
 				321C808452B052BEA85F8CB7 /* JoleneCore */,
 				1711BDF2D3665B719A9D26AE /* JoleneSupabase */,
 				AD05F490DB7A1E31B77DE468 /* JoleneDesign */,
+				A75AB8525FE90E0193869B59 /* Sentry */,
 			);
 			productName = Jolene;
 			productReference = 8849E363C23BD3AB5AC2ABB6 /* Jolene.app */;
@@ -627,6 +633,7 @@
 			mainGroup = 6A2AED5AE18D5B5DB1E97607;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				22ED4972124854B8863E07C0 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 				DAFA15C1D2F36A114BCDB722 /* XCLocalSwiftPackageReference "Packages/JoleneCore" */,
 				66F2EF7D27B075F7EED927E6 /* XCLocalSwiftPackageReference "Packages/JoleneDesign" */,
 				D97B92E08169C987D6879B30 /* XCLocalSwiftPackageReference "Packages/JoleneSupabase" */,
@@ -683,6 +690,7 @@
 				C28FE82FC3C26CC7455ADE6B /* ContratScreen.swift in Sources */,
 				F5C6A799F28E1EE9C19F980C /* ContratsDestination.swift in Sources */,
 				8879BD3DACD1FE62F3EE32AE /* ContratsListeView.swift in Sources */,
+				5E46487082E601A0075BF63C /* CrashReporting.swift in Sources */,
 				CC8BBD760207E7B120FA3DF3 /* DeepLinkCoordinator.swift in Sources */,
 				343FDABE16FFD739ACFBF788 /* DemoMediaPicker.swift in Sources */,
 				AAF9D461252ABF4E4F76B795 /* DemoQRScannerView.swift in Sources */,
@@ -1019,6 +1027,17 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		22ED4972124854B8863E07C0 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = exactVersion;
+				version = 9.32.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		1711BDF2D3665B719A9D26AE /* JoleneSupabase */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1027,6 +1046,11 @@
 		321C808452B052BEA85F8CB7 /* JoleneCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = JoleneCore;
+		};
+		A75AB8525FE90E0193869B59 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 22ED4972124854B8863E07C0 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
 		};
 		AD05F490DB7A1E31B77DE468 /* JoleneDesign */ = {
 			isa = XCSwiftPackageProductDependency;

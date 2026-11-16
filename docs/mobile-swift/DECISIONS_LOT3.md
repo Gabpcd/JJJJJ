@@ -1706,6 +1706,96 @@ sont reportés dans les puces ci-dessus. Les autres :
   barres de navigation) : la section, déjà proche du haut, était visible même sans défilement. Sur iPad, l'assertion
   reste la visibilité de la première carte.
 
+## T15 — Sentry Cocoa (branche `lot3/l3-t15-v3`, 16/11/2026)
+
+Mise en œuvre de D21. Mode d'emploi, réglages et recette : `docs/mobile-swift/SENTRY_IOS.md`. T15 n'est pas B9
+(D18) : la tranche ne touche ni paiement, ni authentification, ni RLS. Le DSN, le projet `jolene-ios` et la lecture
+de l'événement restent à Gabrielle (§6.5).
+
+- **Version** : `sentry-cocoa` **9.32.0** (`exactVersion`, révision `4e1e4ba9`). C'est la dernière version publiée
+  depuis au moins deux semaines (29/10/2026). Son binaire est compilé avec Swift 6.1.2, donc lisible par Xcode 16.4 en
+  local et par Xcode 26.4.1 en CI. Elle corrige le démarrage depuis `App.init`, qui pouvait produire de faux app hangs
+  (#8988). Produit `Sentry` (xcframework statique), importé par la cible app seule.
+- **Écart au blueprint, plus strict** : `enableNetworkTracking = false`, `tracePropagationTargets = []` et relecture
+  de session à 0. Le SDK n'instrumente donc pas les requêtes et n'envoie aucun en-tête `sentry-trace` ni `baggage` à
+  Supabase, à `api-adresse.data.gouv.fr` ou à Stripe.
+- **Démarrage** : jamais en démo, jamais sans DSN `https` bien formé, jamais pour un environnement refusé par la garde
+  ni sans release lisible dans le bundle. Dans ces cas, aucun adaptateur n'est construit. La lecture de
+  l'environnement est celle du conteneur (`AppContainer.environnementDeLancement`, extrait sans changement de
+  comportement), faite **avant** lui dans `JoleneApp.init`.
+- **Session** : identifiant seul, posé au `.ready` d'une nouvelle identité ; une revalidation ne le repose pas. Un
+  espace bloqué ne le pose pas (le blueprint dit « sur `.ready` »). (Corrigé, revue B8 n°1, M2.) Il n'existe que pendant
+  un espace prêt : retiré par toute publication de `.blocked` ou de `.signedOut`, fin transitoire comprise, et avant
+  `signIn` et `ouvrirIdentiteInscription` (section suivante).
+- **Nettoyage** (`CrashScrubber`) : il va au-delà de la liste du blueprint. Sont aussi masqués `refresh_token` (§2.6),
+  les jetons `Bearer` et les JWT, et les formes encodées et JSON. Sont retirés le nom de l'appareil, la requête et le
+  nom du serveur ; l'utilisateur est réduit à son identifiant. Les fils d'Ariane `http` sont rejetés.
+- **Crash de test** : `-JOLENE_SENTRY_CRASH_TEST`, compilé en DEBUG seulement. Il ne s'exécute que si Sentry a
+  démarré, une fois, deux secondes après le lancement, et doit être lancé sans débogueur.
+- **Livraison** : `ios-native-testflight.yml` lit le secret **facultatif** `SENTRY_DSN_IOS`, dans l'étape d'archive
+  seulement (`JOLENE_SENTRY_DSN`). Absent, le build part sans Sentry, sans échec. Les xcconfig versionnés laissent
+  `JOLENE_SENTRY_DSN` vide (gardes Swift et node).
+- **Manifeste de confidentialité** : celui de Sentry est embarqué
+  (`Frameworks/Sentry.framework/PrivacyInfo.xcprivacy`). Ses déclarations sont déjà couvertes par celui de l'app (lot
+  0), qui n'est pas modifié.
+- **Coût CI** : SPM télécharge les sept xcframeworks du paquet (environ 3,3 Go). Le cache `spm-xcodebuild-…` les
+  absorbe après le premier run de chaque clé `Package.resolved`.
+
+### T15 — corrections de la revue fraîche B8 n°1 (verdict A_CORRIGER, 16/11/2026)
+
+Tests d'abord : commit `test(ios-native): L3-T15 — tests de la revue B8 n°1 (rouges)`, rouge sur `9bdccbc9` (preuves :
+`REVUES_LOT3.md`, section L3-T15). Mode d'emploi mis à jour : `SENTRY_IOS.md` §1 à §7 et §9.
+
+- **M1 — mécanisme de l'exception.** Sentry 9.32.0 range les `crash_info_messages` dans `exceptions[].mechanism.data`
+  (`SentryCrashReportConverter.m` l.501-511, révision `4e1e4ba9`) : il s'agit des messages du runtime Swift, dont le texte
+  d'un `fatalError`. Ce dictionnaire passe désormais par `CrashScrubber.dictionnaire`, et `mechanism.desc` par
+  `CrashScrubber.texte`. Le type de l'exception et `event.logger` sont nettoyés eux aussi.
+- **M2 — identifiant d'un autre compte.** Il ne reste jamais posé hors d'un espace prêt. `.blocked` le retire (le
+  suivi `identitePubliee` est inchangé), `.signedOut` aussi, quelle qu'en soit la cause, et `signIn` comme
+  `ouvrirIdentiteInscription` le retirent avant d'ouvrir une identité. C'est le même point d'appel que
+  `finIdentiteWeb`. **Au-delà de la proposition du relecteur** : la fin transitoire le retire aussi. Depuis un espace
+  prêt, le contrôleur ne publie une fin transitoire qu'avec une autre identité (`.session(B)` dont le profil est
+  illisible, connexion), car une revalidation de la même identité est silencieuse et garde `.ready`. « Le conserver sur
+  une fin transitoire » aurait donc attribué à A les crashs survenus pendant la session de B. La revalidation hors
+  ligne de A garde l'espace prêt, et donc l'identifiant (test inchangé).
+- **m1 — coût borné.** Les expressions sont compilées une fois (`static let regles`, repli fermé si l'une ne compile pas).
+  Un texte est tronqué au-delà de 8 192 caractères (`…[tronqué]`). L'adresse e-mail est cherchée à partir de son
+  arobase, avec une partie locale lue à rebours sur 64 caractères au plus. Les noms sensibles commencent par leur
+  initiale (les préfixes `refresh_`, `provider_` restent hors de la correspondance), ce qui laisse le moteur sauter les
+  autres positions. Les bornes sont des classes ASCII et non `\b`, cinq fois plus lent dès qu'un texte n'est plus ASCII.
+  Seuil du test : 100 ms pour 8 000 caractères. On garde le plus court de trois passages, ce qui écarte la flakiness
+  d'une préemption passagère. Plus d'un ordre de grandeur sépare le seuil des mesures, faites en Debug sur MacBook :
+  de 0,7 à 8,6 ms en `swift test` macOS, de 1,1 à 3,3 ms sur le simulateur iPhone 16 (iOS 18.6).
+- **m2 — faux négatifs.** Sont désormais couverts : la famille des jetons par suffixe (`provider_refresh_token`,
+  `provider_token`, `token`, camelCase `refreshToken`, `tokenHash`, `accessToken`), `password`, `mot_de_passe`, le JSON
+  échappé, le double encodage (`%253F`, `%253D`, `%2540`), les descriptions Swift (`Optional("…")` compris), toute valeur
+  d'une clé sensible (tableau, dictionnaire, nombre), et l'IBAN à espaces insécables (U+00A0, U+202F) ou à tirets.
+  **Seule exception** : un nombre sous la clé exacte `code` est conservé, car c'est un code d'erreur NSError ou HTTP
+  (test existant). Les identifiants techniques restent lisibles (`error_code`, `status_code`, `barcode`, `token_type`,
+  `codeEtablissement`), comme les UUID qui commencent par deux lettres et deux chiffres : l'ancienne règle IBAN masquait
+  déjà la fin d'un tel UUID, et ce masquage excessif est corrigé.
+- **m3 — sélection des champs, garde statique plutôt que déplacement.** L'app n'a pas de cible de tests unitaires
+  (`project.yml` : `Jolene` et `JoleneUITests` seulement). Déplacer la sélection dans JoleneCore aurait demandé un modèle
+  miroir de cinq types Sentry, et laissé la correspondance entre ce modèle et Sentry, dans la cible app, sans test : le
+  défaut M1 aurait pu se reproduire là. La garde statique (`CrashReportingTests`) est plus simple et couvre ce risque :
+  - elle recense **toutes** les propriétés publiques d'`Event`, `SentryMessage`, `Exception`, `Mechanism` et
+    `Breadcrumb` de 9.32.0, chacune traitée (ligne exacte attendue) ou conservée (raison écrite) ;
+  - elle refuse toute affectation non recensée dans `CrashReporting.swift` ;
+  - elle rougit à toute montée de version de Sentry tant que le recensement n'est pas refait.
+  Chaque ligne traitée applique une règle pure de `CrashScrubber`, elle-même testée.
+- **m4 — `Package.resolved` figé en CI.** Une étape suit `build-for-testing`, qui est la résolution SPM : elle lance
+  `git diff --exit-code` sur `ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`. Son
+  délai est de 2 min, hors éclats ; le plafond du job reste tenu (25 + 2 + 330 = 357 ≤ 360 min) et les délais d'éclats ne
+  changent pas. La garde node est dans `ios-swift-ci-eclats.node.mjs`. **Non prouvé localement** : Xcode 26.4.1 pourrait
+  réécrire `originHash` autrement qu'Xcode 16.4. Le premier run CI le dira, et le remède est écrit dans le message
+  d'erreur.
+- **m5 — DSN local en ligne de commande seulement**, jamais dans un fichier : `Staging.xcconfig` est versionnée.
+  `SENTRY_IOS.md` §5 et §6 donnent la commande `xcodebuild` ; une garde node interdit au document de proposer un
+  xcconfig.
+- **m6 — DSN à mot de passe refusé** (`composants.password != nil`), avec son test. L'hôte n'est **pas** restreint à une
+  région : Gabrielle confirme d'abord la région de données de l'organisation `jolene-z6`, la région UE étant
+  recommandée pour des données de santé (§6.5, `SENTRY_IOS.md` §5 et §7). La restriction suivra.
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -2370,7 +2460,12 @@ bloquent ni les merges du lot 3 ni la recette interne (build Debug installé par
   « secure password change » ; validation de la reformulation du critère d'inscription (« PKCE échangé » → « lien
   `token_hash` vérifié dans l'app »).
 - **§6.5 Sentry** : créer le projet `jolene-ios` (org `jolene-z6`), fournir le DSN, lire l'événement de crash de test ;
-  jeton dSYM local si la symbolication est voulue.
+  jeton dSYM local si la symbolication est voulue. (T15, 16/11/2026) Le DSN se dépose dans le secret de dépôt GitHub
+  **`SENTRY_DSN_IOS`**, facultatif : sans lui, TestFlight part sans Sentry. Pour la recette locale du crash de test, il
+  est passé à `xcodebuild` et jamais commité. Côté projet, activer « Prevent Storing of IP Addresses ». Mode d'emploi :
+  `docs/mobile-swift/SENTRY_IOS.md` §5 à §7. (Revue B8 n°1 de T15, m6) Confirmer d'abord la **région de données** de
+  l'organisation `jolene-z6`, la région UE étant recommandée pour des données de santé ; la restriction de l'hôte du DSN
+  à cette région suivra.
 - **§6.6 Go B9** : B3, T7, T8, T12, T13, T14a, T14b, dispatch de T16, la PR backend de l'export RGPD (TJ4), et les
   signalements de la section B9 ; go au merge seulement, les décisions juridiques étant prises par délégation.
   (T8, 09/11/2026) Go de merge de `lot3/l3-t8-v2` ; la preuve STAGING de la complétion (ligne `soignants` relue après

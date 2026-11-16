@@ -35,6 +35,14 @@ import Combine
 /// (`signOut` après la révocation, `signOutLocally` après la purge, absence de session confirmée après une
 /// identité), avant chaque `signIn` et avant la relecture d'une identité ouverte par l'inscription
 /// (`ouvrirIdentiteInscription`, intégration T7), jamais sur une fin transitoire ni au lancement à froid sans session.
+///
+/// Lot 3, T15 (D21) — rapport de crash `CrashReportingPort`, optionnel (nil : démo, Sentry non démarré, doubles de
+/// test) : identifiant de l'utilisateur seul, posé à la publication de `.ready` (une fois par identité ; une revalidation,
+/// même hors ligne, garde l'espace prêt et ne le repose pas). Revue B8 n°1, M2 : il n'existe que pendant un espace prêt —
+/// retiré (`nil`) par toute publication de `.blocked` ou de `.signedOut` (fin d'identité, connexion refusée, fin
+/// transitoire : depuis `.ready`, celle-ci n'arrive qu'avec une autre identité), et avant toute ouverture d'identité
+/// (`signIn`, `ouvrirIdentiteInscription`), comme le navigateur intégré est vidé (T3b). L'identifiant d'un compte ne suit
+/// donc jamais le compte suivant, même vers un espace bloqué.
 @MainActor
 public final class SessionStore: ObservableObject {
     @Published public private(set) var state: SessionState {
@@ -51,6 +59,8 @@ public final class SessionStore: ObservableObject {
     public let push: PushCoordinator?
     /// Lot 3, T3b (revue B8, M1) : navigateur intégré à vider à chaque fin d'identité (nil sans renvoi web).
     public let finIdentiteWeb: FinIdentiteWebPort?
+    /// Lot 3, T15 : rapport de crash (nil en démo et sans Sentry démarré).
+    public let crashReporting: CrashReportingPort?
     /// Lot 3, T4 : enregistrement push lancé par le dernier `.ready` d'un nouvel epoch (preuves des tests).
     private(set) var pushEnCours: Task<Void, Never>?
     /// Lot 3, T4 : désinscription locale lancée par la dernière fin de session subie (preuves des tests).
@@ -68,14 +78,18 @@ public final class SessionStore: ObservableObject {
     /// Lot 3, T4 : absences de session confirmées par le contrôleur déjà vues (`SessionController.Publication`) ;
     /// une même absence publiée deux fois (retour de `start()` et boucle d'événements) n'est traitée qu'une fois.
     private var absencesVues = 0
+    /// Lot 3, T15 : identifiant remis au rapport de crash (nil : aucun, ou retiré).
+    private var utilisateurCrash: String?
     /// Lot 3, T4 : vrai seulement pendant la publication (`appliquer`) d'un état qui porte une absence de session
     /// confirmée encore jamais vue ; lu par `suivreIdentite`. Toute autre affectation de `state` le trouve faux.
     private var publicationConfirmeAbsence = false
 
-    public init(controller: SessionController, push: PushCoordinator? = nil, finIdentiteWeb: FinIdentiteWebPort? = nil) {
+    public init(controller: SessionController, push: PushCoordinator? = nil, finIdentiteWeb: FinIdentiteWebPort? = nil,
+                crashReporting: CrashReportingPort? = nil) {
         self.controller = controller
         self.push = push
         self.finIdentiteWeb = finIdentiteWeb
+        self.crashReporting = crashReporting
         self.state = .idle
     }
 
@@ -94,6 +108,7 @@ public final class SessionStore: ObservableObject {
     /// un lien de confirmation reçu dans un espace ouvert).
     public func ouvrirIdentiteInscription() async {
         finIdentiteWeb?.identiteTerminee()
+        signalerUtilisateurCrash(nil) // lot 3, T15 (revue B8 n°1, M2) : reposé au `.ready` de l'identité relue
         await start()
     }
 
@@ -101,6 +116,7 @@ public final class SessionStore: ObservableObject {
         // Lot 3, T3b (revue B8, M1) : l'identité qui s'ouvre ne trouve jamais les données web d'une autre (identité
         // close hors de l'app, session web ouverte sans identité native, identité remplacée après une fin transitoire).
         finIdentiteWeb?.identiteTerminee()
+        signalerUtilisateurCrash(nil) // lot 3, T15 (revue B8 n°1, M2) : ni l'identifiant d'une autre identité
         state = .loading
         canRetryRestore = false
         state = await controller.signIn(email: email, password: password)
@@ -186,6 +202,7 @@ public final class SessionStore: ObservableObject {
         case let .ready(snapshot):
             identitePubliee = true
             dernierEpochPret = snapshot.epoch
+            signalerUtilisateurCrash(snapshot.user.id) // lot 3, T15
             guard let push, snapshot.epoch != ancien.snapshot?.epoch else { return }
             // Après la fin de session précédente : sa désinscription ne suit jamais le nouvel enregistrement.
             let finPrecedente = finDeSessionPush
@@ -195,7 +212,12 @@ public final class SessionStore: ObservableObject {
             }
         case .blocked:
             identitePubliee = true
+            // Lot 3, T15 (revue B8 n°1, M2) : un espace bloqué ne porte aucun identifiant, pas même celui de l'espace prêt
+            // qu'il remplace (lien de confirmation d'un autre compte, `.session` d'une autre identité).
+            signalerUtilisateurCrash(nil)
         case .signedOut:
+            // Lot 3, T15 (revue B8 n°1, M2) : aucun identifiant hors d'un espace prêt, quelle que soit la cause.
+            signalerUtilisateurCrash(nil)
             if finsDeSessionVoulues > 0 {
                 // `signOut` / `signOutLocally` : le coordinateur est déjà prévenu, l'identité est partie.
                 oublierIdentiteSuivie()
@@ -227,6 +249,13 @@ public final class SessionStore: ObservableObject {
     private func oublierIdentiteSuivie() {
         identitePubliee = false
         dernierEpochPret = nil
+    }
+
+    /// Lot 3, T15 : remet l'identifiant au rapport de crash s'il a changé (aucun appel sans rapport de crash).
+    private func signalerUtilisateurCrash(_ id: String?) {
+        guard let crashReporting, id != utilisateurCrash else { return }
+        utilisateurCrash = id
+        crashReporting.utilisateur(id: id)
     }
 
     /// Epoch de l'identité ouverte (espace prêt ou bloqué : JWT présent), nil sans identité.

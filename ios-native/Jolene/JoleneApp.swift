@@ -6,9 +6,16 @@ import JoleneDesign
 struct JoleneApp: App {
     /// Lot 3, T4 : délégué d'application qui remet le token APNs à `PushRegistrar`.
     @UIApplicationDelegateAdaptor(PushAppDelegate.self) private var pushDelegate
-    @StateObject private var container = AppContainer()
+    @StateObject private var container: AppContainer
     @Environment(\.scenePhase) private var scenePhase
     @State private var backgroundedAt: Date?
+
+    /// Lot 3, T15 (D21) : Sentry démarré avant le conteneur, jamais en démo ni sans DSN (`CrashReporting`) ; le port
+    /// rendu suit la session (identifiant utilisateur).
+    init() {
+        let crashReporting = CrashReporting.demarrerAuLancement()
+        _container = StateObject(wrappedValue: AppContainer(crashReporting: crashReporting))
+    }
 
     var body: some Scene {
         WindowGroup {

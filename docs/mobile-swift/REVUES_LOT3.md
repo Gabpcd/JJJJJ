@@ -2430,3 +2430,141 @@ tranche.
 #### Avant le merge (après la revue n°1)
 - Le go explicite de Gabrielle (**B9 paiements : go humain requis avant merge**).
 - L'éclat CI `lot3-revenus` vert sur les trois formats (ci-dessus), XCUITest de m6 compris.
+
+## L3-T15
+
+### Consignes de l'auteur pour l'intégration (branche `lot3/l3-t15-v3`, 16/11/2026)
+
+Sentry Cocoa (D21), **non B9** (D18). Base : `origin/feat/ios-lot2` (`bc533bcf`), c'est-à-dire `main` avec les lots 3
+et 2. Décisions et écarts : `DECISIONS_LOT3.md`, section T15. Mode d'emploi, réglages et recette :
+`docs/mobile-swift/SENTRY_IOS.md`.
+
+- **Version** : `sentry-cocoa` 9.32.0 (`exactVersion`), produit `Sentry` (xcframework statique), importé par
+  `Jolene/Composition/CrashReporting.swift` seul.
+- **Fichiers partagés touchés** (à résoudre au conflit en gardant les deux côtés) :
+  - `project.yml` : paquet `Sentry` et dépendance de la cible app ;
+  - `Jolene.xcodeproj/project.pbxproj` : à régénérer par `xcodegen generate`, jamais fusionné à la main ;
+  - `Package.resolved` de l'app : ajout de la ligne `sentry-cocoa`, plus `originHash` ;
+  - `JoleneApp.swift` : `init()` et `@StateObject` sans valeur initiale ;
+  - `AppContainer.swift` : extraction de `environnementDeLancement` et paramètre `crashReporting` ;
+  - `SessionStore.swift` : paramètre `crashReporting` et deux appels dans `suivreIdentite` et `oublierIdentiteSuivie` ;
+  - `Info.plist` et `Base.xcconfig` (`JOLENE_SENTRY_DSN`) ;
+  - `ios-native-testflight.yml` : environnement de l'étape d'archive et une ligne `xcodebuild` ;
+  - `tests/node/ios-native-testflight.node.mjs` : test des secrets étendu, plus deux tests ;
+  - `TESTFLIGHT.md`, `DECISIONS_LOT3.md` (section T15 et §6.5), `RECETTE_DEVICE_LOT3.md` §5.
+- **Matrice de parité** : aucune ligne concernée, Sentry n'a ni route ni écran. `PrivacyInfo.xcprivacy` n'est pas modifié : le
+  manifeste de Sentry est embarqué et déjà couvert (`SENTRY_IOS.md` §8).
+- **Vérifications de l'auteur** (Xcode 16.4, Swift 6.1.2) :
+  - `swift build --build-tests -Xswiftc -strict-concurrency=complete` puis `swift test` dans JoleneCore :
+    **1 675 tests, 0 échec, 0 ignoré**, 0 avertissement (dont `CrashScrubberTests` 16 et `CrashReportingTests` 21) ;
+  - même commande dans JoleneSupabase : **475 tests, 0 échec, 0 ignoré** (paquet non modifié, compilé contre le
+    nouveau `SessionStore`) ;
+  - `xcodegen generate` ;
+  - `xcodebuild build-for-testing` (Debug, simulateur dédié iPhone 16 / iOS 18.6, `-derivedDataPath` dans le
+    worktree) : **TEST BUILD SUCCEEDED**, 0 avertissement de nos sources ;
+  - `xcodebuild build` **Release**, simulateur, sans signature, `-onlyUsePackageVersionsFromResolvedFile` : **BUILD
+    SUCCEEDED**, 0 avertissement de nos sources. `JoleneSentryDSN` est vide dans le binaire et le crash de test n'y est
+    pas compilé ; `Frameworks/Sentry.framework/PrivacyInfo.xcprivacy` est embarqué ;
+  - XCUITest `DemoAccueilTests` (3) et `DemoConsultationTests` (1, sentinelle « 0 requête ») : **4 réussis, 0 échec,
+    0 ignoré**. Le démarrage de l'app n'a pas régressé et la démo ne fait aucune requête ;
+  - gardes Node de « Garde de livraison mobile » : **247 réussis, 0 échec** ;
+  - `ios-swift-ci-eclats.node.mjs` : 5 réussis ;
+  - `ios-native-testflight.mjs depot` : vert.
+- **Non prouvé ici** :
+  - build Xcode 26.4.1, à prouver par la CI ;
+  - XCUITest sur les trois formats, à prouver par la CI ;
+  - réception réelle d'un événement : aucun DSN, aucun appel à Sentry ; T17, après §6.5.
+- **Points d'attention pour la revue** :
+  - le premier run CI de chaque clé `Package.resolved` télécharge les sept xcframeworks du paquet (environ 3,3 Go)
+    avant que le cache ne les absorbe ;
+  - les artefacts TestFlight (IPA, `archive.log`) contiendront le DSN dès que `SENTRY_DSN_IOS` existera. C'est une clé
+    d'envoi seulement, déjà présente dans toute IPA livrée (`SENTRY_IOS.md` §5).
+
+### Revue fraîche B8 — L3-T15 (n°1)
+
+**Revue B8 n°1 L3-T15 : A_CORRIGER, M1/M2/m1-m6 traités** (pointe revue `9bdccbc9`, corrections ci-dessous).
+
+Constats du relecteur :
+
+- **M1** : `exceptions[].mechanism.data` (où Sentry 9.32.0 range `crash_info_messages`) et `mechanism.desc` ne passaient
+  pas par `CrashScrubber`.
+- **M2** : l'identifiant de A restait posé quand une identité B ouvrait un espace bloqué.
+- **m1** : expressions recompilées à chaque texte, adresse e-mail non bornée, longueur non plafonnée.
+- **m2** : faux négatifs (`provider_refresh_token`, camelCase, JSON échappé, double encodage, `token`, `password`,
+  valeurs non textuelles des clés sensibles, IBAN à espaces insécables ou tirets).
+- **m3** : la sélection des champs de `nettoyer(Event)` et `nettoyer(Breadcrumb)` n'était pas testée.
+- **m4** : `Package.resolved` non vérifié après la résolution SPM en CI.
+- **m5** : `SENTRY_IOS.md` proposait d'écrire le DSN dans `Staging.xcconfig`, qui est versionnée.
+- **m6** : un DSN à mot de passe était accepté, et la région n'était pas mentionnée.
+
+### Corrections de la revue fraîche B8 n°1 (auteur, branche `lot3/l3-t15-v3`, 16/11/2026)
+
+Détail et justifications : `DECISIONS_LOT3.md`, section « T15 — corrections de la revue fraîche B8 n°1 ». Mode d'emploi :
+`SENTRY_IOS.md` §1 à §7 et §9. Tests d'abord, dans un commit séparé (`581ff96f`), puis les corrections (`620e7467`).
+Aucun test n'est sauté, désactivé ni affaibli. Seul le décompte des règles compilées est passé de 8 à 9 dans le commit de
+correction : la règle des paramètres a été coupée en deux pour le coût.
+
+- **Preuve rouge** sur le code de `9bdccbc9`, avec une cale de compilation temporaire non commitée (trois symboles
+  nouveaux de `CrashScrubber`) :
+  - `CrashReportingTests` : 30 tests, **20 échecs** (recensement des propriétés, identifiant de A après B bloqué, DSN à mot
+    de passe) ;
+  - `CrashScrubberTests` : 26 tests, **68 échecs**, dont 8 000 caractères traités en 1,56 s, 1,56 s, 2,13 s et 1,63 s
+    pour un seuil de 100 ms ;
+  - `ios-swift-ci-eclats.node.mjs` : 1 échec sur 6 (aucune vérification de `Package.resolved`) ;
+  - `ios-native-testflight.node.mjs` : 1 échec sur 55 (consigne d'écrire le DSN dans un xcconfig).
+- **M1** : `nettoyer(_ exception: Exception)` nettoie `value`, `type`, `mechanism.desc` (`CrashScrubber.texte`) et
+  `mechanism.data` (`CrashScrubber.dictionnaire`) ; `event.logger` est nettoyé lui aussi. La garde statique recense les
+  27 propriétés d'`Event`, les 3 de `SentryMessage`, les 6 d'`Exception`, les 7 de `Mechanism` et les 7 de `Breadcrumb`
+  (en-têtes 9.32.0 relus dans le cache SPM).
+- **M2** : `.blocked` et `.signedOut` retirent l'identifiant, et `signIn` comme `ouvrirIdentiteInscription` le retirent
+  avant d'ouvrir une identité. **Au-delà de la proposition** : la fin transitoire le retire aussi, car depuis un espace
+  prêt elle n'arrive qu'avec une autre identité. Tests : A prêt puis B bloqué par un lien de confirmation, puis par
+  `.session(B)` : `["u-a", nil]` ; fin transitoire puis `signIn(B)` vers un espace bloqué : `["u-a", nil]` ; connexion
+  refusée puis reconnexion : `["u-a", nil, "u-a"]`.
+- **m1** : expressions compilées une fois et texte tronqué au-delà de 8 192 caractères (`…[tronqué]`). L'adresse est
+  cherchée à partir de son arobase, avec une partie locale de 64 caractères au plus. Les motifs sont ancrés, et leurs
+  bornes sont des classes ASCII plutôt que `\b`. Le test porte sur six textes adverses et un texte réaliste, chacun sous
+  100 ms (le plus court de trois passages). Mesures par texte, en Debug : de 0,7 à 8,6 ms en `swift test` macOS ; de
+  1,1 à 3,3 ms sur le simulateur iPhone 16 (iOS 18.6).
+- **m2** : couverts par sept tests nouveaux, dont un de non-régression sur les identifiants techniques. Seule exception
+  au masquage de toute valeur d'une clé sensible : un nombre sous `code`, conservé par un test existant.
+- **m3** : **garde statique** retenue, plutôt qu'un déplacement dans JoleneCore. L'app n'a pas de cible de tests
+  unitaires, et un modèle miroir aurait laissé la correspondance avec Sentry sans test. Justification complète dans
+  `DECISIONS_LOT3.md`.
+- **m4** : étape « Package.resolved de l'app inchangé après la résolution SPM », placée juste après `build-for-testing`
+  (2 min, hors éclats, plafond du job tenu, délais d'éclats inchangés). Garde node dans `ios-swift-ci-eclats.node.mjs`.
+  **À prouver par la CI** : Xcode 26.4.1 pourrait réécrire `originHash`.
+- **m5** : DSN en ligne de commande seulement (`SENTRY_IOS.md` §5 et §6), garde node.
+- **m6** : DSN à mot de passe refusé, avec test ; région de données à confirmer par Gabrielle (UE recommandée), la
+  restriction d'hôte suivra (`SENTRY_IOS.md` §5 et §7, `DECISIONS_LOT3.md` §6.5).
+- **Fichiers partagés touchés en plus** : `SessionStore.swift` (deux appels dans `signIn` et
+  `ouvrirIdentiteInscription`, deux dans `suivreIdentite`, un retiré d'`oublierIdentiteSuivie`) et `ios-swift-ci.yml`
+  (une étape après le build). `tests/node/ios-swift-ci-eclats.node.mjs` et `tests/node/ios-native-testflight.node.mjs`
+  gagnent un test chacun.
+- **Vérifications de l'auteur** (Xcode 16.4, Swift 6.1.2, sur `620e7467`) :
+  - `swift build --build-tests -Xswiftc -strict-concurrency=complete` puis `swift test` dans JoleneCore :
+    **1 694 tests, 0 échec, 0 ignoré**, 0 avertissement (dont `CrashScrubberTests` 26 et `CrashReportingTests` 30) ;
+  - même commande dans JoleneSupabase : **475 tests, 0 échec, 0 ignoré**, 0 avertissement (paquet non modifié,
+    compilé contre le nouveau `SessionStore`) ;
+  - `xcodebuild build-for-testing` (Debug, simulateur dédié iPhone 16 / iOS 18.6) : **TEST BUILD SUCCEEDED**, 0
+    avertissement de nos sources ; `Package.resolved` de l'app inchangé après la résolution SPM d'Xcode 16.4 ;
+  - sur ce simulateur, `CrashReportingTests` et `CrashScrubberTests` : **56 réussis, 0 échec** ;
+  - `xcodebuild build` **Release**, simulateur, sans signature, `-onlyUsePackageVersionsFromResolvedFile` : **BUILD
+    SUCCEEDED**, 0 avertissement de nos sources ; `JoleneSentryDSN` vide dans l'Info.plist,
+    `Sentry.framework/PrivacyInfo.xcprivacy` embarqué ;
+  - XCUITest `DemoAccueilTests` (3) et `DemoConsultationTests` (1, sentinelle « 0 requête ») : **4 réussis**. Machine
+    partagée très chargée (charge moyenne de 200 à 670) : `testOubliDePointageOuvreLesPresencesNatives` et
+    `testDemoConsultation` ont d'abord échoué sur le budget de blocage du harnais (thread bloqué de 18 à 61 s pour un
+    budget de 15 s, condition vraie à la dernière évaluation). Relancés seuls, à charge plus basse, ils réussissent
+    (104 s et 35 s). Aucun test modifié ;
+  - gardes Node de « Garde de livraison mobile » : **248 réussis, 0 échec**. Le DerivedData local de l'auteur
+    (`ios-native/build/DerivedData-l3t15b`, hors dépôt) était sorti du worktree pendant ce passage : la garde
+    double-aveugle n'exclut que les dossiers nommés `DerivedData`, et rougit sur deux sources de `sentry-cocoa` qu'il
+    contient ;
+  - `ios-swift-ci-eclats.node.mjs` : **6 réussis**, dont la garde m4.
+- **Non prouvé ici** : build Xcode 26.4.1 et étape `Package.resolved` en CI ; XCUITest sur les trois formats ; aucune
+  réception réelle d'événement (aucun DSN, aucun appel à Sentry).
+
+### Revue fraîche B8 — L3-T15 (n°2)
+
+_À compléter par le relecteur (contexte vierge) : verdict, ce qui a été vérifié, constats, conditions avant merge._
