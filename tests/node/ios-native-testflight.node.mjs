@@ -381,14 +381,44 @@ test('le workflow ne se déclenche qu\'à la main, depuis main, un envoi à la f
   assert.match(workflow, /^permissions:\n {2}contents: read\n\n/m);
 });
 
-test('le workflow n\'utilise que les secrets iOS déjà exigés par prepare-ci-signing.mjs', () => {
+test('le workflow n\'utilise que les secrets iOS déjà exigés par prepare-ci-signing.mjs, plus le DSN Sentry facultatif', () => {
   // Liste de référence lue dans la source existante (branche iOS), jamais recopiée ici.
   const signing = readFileSync(join(root, 'scripts/mobile/prepare-ci-signing.mjs'), 'utf8');
   const branche = signing.slice(signing.indexOf("platform === 'ios'"));
   const attendus = [...new Set([...branche.matchAll(/'((?:IOS|ASC)_[A-Z0-9_]+)'/g)].map((m) => m[1]))].sort();
   assert.equal(attendus.length, 6);
+  // Lot 3, T15 : SENTRY_DSN_IOS est lu en plus, jamais exigé (test suivant) ; aucun autre secret.
+  assert.ok(!attendus.includes('SENTRY_DSN_IOS'), 'le DSN Sentry ne doit pas devenir un secret de signature exigé');
   const utilises = [...new Set([...workflow.matchAll(/secrets\.(\w+)/g)].map((m) => m[1]))].sort();
-  assert.deepEqual(utilises, attendus);
+  assert.deepEqual(utilises, [...attendus, 'SENTRY_DSN_IOS'].sort());
+});
+
+test('le DSN Sentry (lot 3, T15) vient du secret facultatif SENTRY_DSN_IOS, transmis à l\'archive seule, jamais exigé ni affiché', () => {
+  // Une seule lecture du secret, dans l'environnement de l'étape d'archive (docs/mobile-swift/SENTRY_IOS.md).
+  assert.equal([...workflow.matchAll(/secrets\.SENTRY_DSN_IOS\b/g)].length, 1);
+  const debut = workflow.indexOf('      - name: Archive Release signée\n');
+  assert.ok(debut >= 0, 'étape d\'archive absente');
+  const fin = workflow.indexOf('\n      - name: ', debut + 1);
+  const archive = workflow.slice(debut, fin);
+  assert.match(archive, /^ {8}env:\n(?: {10}#.*\n)* {10}SENTRY_DSN_IOS: \$\{\{ secrets\.SENTRY_DSN_IOS \}\}\n/m);
+  // Valeur vide si le secret manque : réglage xcodebuild vide, Sentry désactivé dans l'app, aucun échec.
+  assert.match(archive, /^ {12}JOLENE_SENTRY_DSN="\$\{SENTRY_DSN_IOS:-\}" \\$/m);
+  const ailleurs = workflow.slice(0, debut) + workflow.slice(fin);
+  assert.doesNotMatch(ailleurs, /SENTRY_DSN_IOS|JOLENE_SENTRY_DSN/, 'le DSN ne sert qu\'à l\'archive');
+  // Jamais exigé (aucun test d'absence qui ferait échouer l'envoi), jamais affiché.
+  assert.doesNotMatch(workflow, /\[\[? +-[nz] +"?\$\{?SENTRY_DSN_IOS|SENTRY_DSN_IOS:\?|SENTRY_DSN_IOS[^\n]*exit 1/);
+  assert.doesNotMatch(workflow, /(?:echo|printf)[^\n]*\$\{?(?:SENTRY_DSN_IOS|JOLENE_SENTRY_DSN)/);
+});
+
+test('le DSN Sentry n\'est jamais versionné : Info.plist le lit du réglage, les xcconfig le laissent vide', () => {
+  const files = loadSources(root);
+  assert.equal(parsePlist(files.infoPlist).JoleneSentryDSN, '$(JOLENE_SENTRY_DSN)');
+  const staging = readFileSync(join(root, 'ios-native/Config/Staging.xcconfig'), 'utf8');
+  const reglages = { ...parseXcconfig(files.baseXcconfig), ...parseXcconfig(staging), ...parseXcconfig(files.productionXcconfig) };
+  assert.equal(reglages.JOLENE_SENTRY_DSN, '', 'Base.xcconfig définit JOLENE_SENTRY_DSN vide, aucun xcconfig ne le remplit');
+  for (const texte of [files.baseXcconfig, staging, files.productionXcconfig]) {
+    assert.doesNotMatch(texte, /sentry\.io|^JOLENE_SENTRY_DSN *= *\S/im);
+  }
 });
 
 // Toute soumission, livraison de fiche ou distribution externe ; `default_platform(:ios)` rend

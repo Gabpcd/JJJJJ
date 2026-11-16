@@ -156,6 +156,10 @@ jobs:
             || { tail -n 40 "$RUNNER_TEMP/show-build-settings.log"; exit 1; }
           node scripts/mobile/ios-native-testflight.mjs settings "$RUNNER_TEMP/build-settings.json" --build "$BUILD_NUMBER"
       - name: Archive Release signée
+        env:
+          # Lot 3, T15 : DSN Sentry du projet jolene-ios (docs/mobile-swift/SENTRY_IOS.md). Secret FACULTATIF : absent,
+          # la valeur est vide et l'app est livrée sans Sentry, sans échec ; jamais affiché ni exigé.
+          SENTRY_DSN_IOS: ${{ secrets.SENTRY_DSN_IOS }}
         run: |
           mkdir -p "$RUNNER_TEMP/logs"
           xcodebuild archive \
@@ -167,6 +171,7 @@ jobs:
             -skipPackagePluginValidation \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             JOLENE_CODE_SIGN_IDENTITY="$JOLENE_SIGNING_IDENTITY" JOLENE_PROVISIONING_PROFILE="$JOLENE_PROFILE_NAME" \
+            JOLENE_SENTRY_DSN="${SENTRY_DSN_IOS:-}" \
             OTHER_CODE_SIGN_FLAGS="--keychain $JOLENE_KEYCHAIN" \
             > "$RUNNER_TEMP/logs/archive.log" 2>&1 \
             || { grep -E "error: " "$RUNNER_TEMP/logs/archive.log" | tail -n 40; tail -n 40 "$RUNNER_TEMP/logs/archive.log"; echo "::error::xcodebuild archive a échoué (journal archive.log dans l'artefact)."; exit 1; }
