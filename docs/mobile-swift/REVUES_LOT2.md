@@ -1634,7 +1634,8 @@ consignés dans `DECISIONS_LOT2.md`, « T10 — liens du lot 2 » ; lignes de pa
   (famille push : `/contrat/*` et `/soignant/mes-documents` natifs, 588 natifs / 302 renvois), `DeepLinkIntentTests`,
   `CentreNotificationsTests` (genres du lot 2 dans la garde), `PushTapIntentTests`, `PresencesAffichageTests`,
   `RevenusPresentationTests`, `AccueilAssemblageTests`, `DemoDashboardTests` ; XCUITest : `DemoLiensLot2Tests` (7, éclat
-  « documents »), `DemoContratsTests.testCoupeCircuitDesContratsRenvoieLeLienEtLaListeAuWeb`,
+  « documents » dans cette livraison ; « lot3-inscription » depuis la revue B8 n°1, M1),
+  `DemoContratsTests.testCoupeCircuitDesContratsRenvoieLeLienEtLaListeAuWeb`,
   `DemoRevenusTests.testPresencesDUneMissionRemettentLeProfilASaRacine` (m3), migrés
   `DemoPushTests.testTapContratASignerOuvreLeContratNatif` et `DemoRevenusTests.testMissionOuvreLeDetailNatifDeSesPresences`.
 
@@ -1670,9 +1671,93 @@ Points d'attention pour le relecteur :
    d'onglet, comme `.mission` vers l'Accueil) ; alternative possible : empiler sur la pile de l'onglet courant.
 2. Mélange `NavigationLink(value:)` / `NavigationLink { destination }` : seuls les points d'entrée à la racine des piles
    passent par valeur ; les liens internes des écrans du lot 2 restent par destination (au-dessus d'une route par valeur).
-3. Éclat « documents » : ~18 min mesurées avant l'ajout de `DemoLiensLot2Tests` (7 lancements à froid) ; à remesurer.
+3. Éclat de `DemoLiensLot2Tests` : « documents », sur une mesure erronée (« ~18 min » avant l'ajout). Corrigé par la revue
+   B8 n°1 (M1) : « documents » mesurait 9,7 / 18,5 / 18,1 min (iPhone / iPad portrait / iPad paysage) au run de base
+   43400770161 ; la classe tourne dans « lot3-inscription » (4,9 / 9,0 / 8,7 min au même run). À remesurer.
 4. Monde démo : détail des présences « introuvable » pour les missions de Revenus (fixtures disjointes).
 
-### Revue fraîche B8 — L2-T10
+### Revue fraîche B8 — L2-T10 (n°1)
 
-_À compléter par le relecteur (contexte vierge, `/code-review` + skill de revue)._
+**Verdict : CLÔTURABLE** — un majeur (M1) à corriger avant merge, sept mineurs (m1 à m7). Constats tels que transmis à
+l'auteur pour correction (relecteur à contexte vierge, tête `e1277974`, base `bc533bcf`) :
+- **M1** (`ios-swift-ci.yml`) : `DemoLiensLot2Tests` rangé dans l'éclat « documents » sur une prémisse fausse (« ~18 min, le
+  moins chargé »). Au run de base 43400770161, « documents » mesure 9,7 / 18,5 / 18,1 min (iPhone / iPad portrait / iPad
+  paysage) ; l'ajout (~5,5 à 8 min) lui ferait dépasser les 20 min de la décision 22.
+- **m1** (`MainTabView.presenter`) : un lien vers la route déjà à la base de la pile du Profil est sans effet (chemin égal).
+- **m2** (`DemoRevenusTests`) : la migration de T10 a affaibli la preuve, qui acceptait le détail de n'importe quelle mission.
+- **m3** (`ContratsDestination`) : tant que `ios_natif_contrats_actif` n'est pas lu, l'écran natif est construit et lance
+  ses lectures réseau.
+- **m4** (`MesDocumentsScreen`, `PresencesScreen`) : le renvoi web d'un coupe-circuit perd l'onglet (et `?filtre=`) du lien.
+- **m5** : les cibles du lot 2 présentées depuis un autre onglet (ligne « présences d'une mission » de Revenus) changent
+  d'onglet.
+- **m6** : tests manquants (voir « Suivis » ci-dessous).
+- **m7** : commentaires périmés (`RevenusScreen.swift`, `MainTabView.swift`, `ContratsListeView.swift`,
+  `RevenusPresentation.swift`) et paramètre `filtreInitial` de `ContratsDestination.liste` sans appelant.
+
+### Corrections après la revue B8 n°1 (auteur, 2026-11-16, branche `lot2/l2-t10-v3`)
+
+- **M1, corrigé** : `DemoLiensLot2Tests` passe dans l'éclat « lot3-inscription » (`-only-testing`, classes exigées par le
+  résumé ; le `-skip-testing` du socle est inchangé). « lot3-inscription » mesurait 4,9 / 9,0 / 8,7 min au run
+  43400770161 ; « lot3-revenus » n'est pas utilisé (une autre tranche en cours le charge). Commentaire du job,
+  `DECISIONS_LOT2.md` (T10, puce CI), `PARITE_SOIGNANT.md`, point d'attention 3 ci-dessus et garde
+  `check-rpc-contracts-lot3.node.mjs` (classes attendues de « lot3-inscription ») mis à jour avec les chiffres réels.
+- **m1, corrigé** : `MainTabView.presenter` empile `PresentationJetonnee<MonEspaceRoute>` (`JetonsDePresentation`, JoleneCore,
+  jeton incrémenté à chaque présentation), enregistrée par `destinationsMonEspace` à côté de la route nue, avec
+  `.id(jeton)` sur l'écran : le chemin change toujours et l'écran est reconstruit. Le jeton seul ne suffisait pas : le
+  XCUITest ci-dessous échouait encore (à la même position de la pile, SwiftUI servait la nouvelle valeur à l'écran déjà
+  monté, onglet choisi conservé), d'où `.id`. Niveau 1 : `LinksRouterLot2Tests.testPresentationsSuccessivesDeLaMemeRouteChangentLeChemin`.
+  Niveau 2 : `DemoLiensLot2Tests.testMemeLienRelitLEcranEtRetablitSonOnglet` (« Mes documents » ouvert par
+  `?tab=contrats`, onglet DPAE choisi, même lien remis pendant le renvoi DPAE → écran relu sur Contrats), sans défilement.
+- **m2, corrigé** (option la plus simple) : identifiant de la route présentée exposé en DEBUG et en démo seulement comme
+  valeur d'accessibilité de `presence-detail-screen` (`MonEspaceDestination`) ; `DemoRevenusTests` l'assertit
+  (`demo-terminee-002`) aux trois ouvertures du détail, et `DemoLiensLot2Tests.testLienDetailDesPresencesDUneMission`
+  (`demo-presence-h2`). L'alignement des fixtures (`export-demo-fixtures.mjs`) est écarté : il ajouterait une mission au
+  monde démo des présences, partagé par les XCUITest des présences, du pointage et du détail ; l'écart de fixtures (2) de
+  `DECISIONS_LOT2.md` reste à aligner.
+- **m3, corrigé** : `PorteContrats` suit `PorteEcranNatif` (JoleneCore : `.lecture` tant que le drapeau n'est pas lu, vue
+  neutre `contrats-porte-lecture` sans texte nouveau ; `.natif` ; `.renvoiWeb`), fail-open conservé (drapeau absent ou
+  illisible, passerelle absente). Niveau 1 : `LinksRouterLot2Tests.testPorteDesContratsAttendLeDrapeauPuisResteFailOpen`.
+- **m4, corrigé** : `PresencesRenvois.presences(onglet:aValider:)` (`?tab=` aux seules valeurs exactes du web,
+  `?filtre=a_valider` s'il était posé) et `DocumentsModel.routeRenvoiWeb(onglet:)` (onglet de l'écran, celui du lien) ; le
+  suivi non vérifiable et le journal illisible gardent leurs routes. Niveau 1 :
+  `LinksRouterLot2Tests.testCoupeCircuitsRenvoientAuWebSurLOngletDuLien` (dont le bout en bout lien → route → renvoi).
+- **m7, corrigé** : les quatre commentaires ; `filtreInitial` retiré de `ContratsDestination.liste` et de
+  `ContratsListeView` (aucun appelant ; `ContratsListeModel(filtreInitial:)` et ses tests du cœur restent).
+- Contre-épreuves : les trois corrections de niveau 1 neutralisées (jeton constant, porte à `.natif` avant lecture, renvoi
+  des documents figé sur Justificatifs) font échouer les trois nouveaux tests (9 assertions), puis les fichiers sont
+  restaurés ; côté XCUITest, l'app reconstruite sans le jeton (`cheminProfil.append(route)`) fait échouer
+  `testMemeLienRelitLEcranEtRetablitSonOnglet` à l'étape « écran relu sur l'onglet du lien » (condition fausse à chacune
+  des 24 évaluations sur 30 s : renvoi fermé, écran affiché, mais toujours sur DPAE), comme l'app avec le jeton sans
+  `.id` ; la correction complète est ensuite rétablie et l'app reconstruite.
+
+#### Suivis consignés (m5, m6 : comportement inchangé)
+- **m5** — onglet porteur des cibles du lot 2 : depuis Revenus, la ligne « présences d'une mission » bascule sur le Profil
+  (point d'attention 1). Recommandation du relecteur, à trancher par une tranche suivante : empiler sur l'onglet courant
+  pour les navigations internes (lignes d'un écran de l'app), le Profil restant l'onglet des liens universels, des taps
+  push et du centre.
+- **m6** — tests manquants, recommandés par le relecteur : `/contrat/<id>/certificat` sous coupe-circuit
+  (`ios_natif_contrats_actif` à faux) ; `documents-desactive-web` et `documents-suivi-web` en XCUITest ; cas mixte
+  `NavigationLink { destination }` + lien (écran poussé au-dessus d'une route par valeur, puis lien vers cette route).
+  Le cas mixte a été vérifié une fois en local (iPhone : contrat ouvert par lien, certificat empilé, même lien → contrat au
+  premier plan, certificat retiré), mais le test n'est pas conservé : sept défilements, 84 s en local, trop long pour
+  l'éclat ; le niveau 2 de m1 repose sur le cas court ci-dessus.
+
+#### Vérifications locales (Xcode 16.4, simulateur dédié iPhone 16 iOS 18.6 ; la CI tourne Xcode 26.4.1, iOS 26.2)
+- `JoleneCore` : `swift build --build-tests -Xswiftc -strict-concurrency=complete` sans avertissement hors
+  `.build/checkouts/` ; `swift test -Xswiftc -strict-concurrency=complete` : 1 657 tests XCTest, 0 échec
+  (`LinksRouterLot2Tests` : 19 tests, dont les 3 nouveaux).
+- `xcodegen generate --spec project.yml` : `project.pbxproj` inchangé (les deux fichiers nouveaux sont dans le package
+  JoleneCore).
+- App : `xcodebuild build-for-testing` (schéma `Jolene`, Debug, `-derivedDataPath` dans le worktree) : `TEST BUILD
+  SUCCEEDED`, aucun avertissement dans nos sources.
+- XCUITest, iPhone portrait (simulateur dédié iPhone 16 iOS 18.6, recréé une fois : l'app et le runner ne se lançaient
+  plus, `RequestDenied`, machine à une charge de 150 à 900 et disque saturé par d'autres travaux ; échecs de lancement
+  relancés sans changement de code) : `DemoLiensLot2Tests` 8 / 8 (dont `testMemeLienRelitLEcranEtRetablitSonOnglet`,
+  31,9 s) ; `DemoRevenusTests` 8 / 8 ; `DemoContratsTests` 4 / 4 (dont le coupe-circuit, désormais précédé de la vue neutre de la porte).
+- Gardes Node : étape « Garde de livraison mobile » de `validate-pr.yml` (six fichiers) : 245 tests, 0 échec ;
+  `ios-swift-ci-eclats.node.mjs` : 5 tests, 0 échec.
+
+Non vérifié en local : iPad portrait et paysage ; Xcode 26.4.1 / iOS 26.2 ; durée réelle de « lot3-inscription » avec
+`DemoLiensLot2Tests` (à mesurer au premier run CI) ; `JoleneSupabase` non relancé (non modifié ; ajouts du cœur
+seulement additifs) ; les autres classes des éclats touchés (`DemoInscriptionTests`, `DemoCompletionInscriptionTests`,
+`DemoDocumentsTests`, `DemoPresenceDetailTests`, `DemoPresencesTests`, `DemoPushTests`).
