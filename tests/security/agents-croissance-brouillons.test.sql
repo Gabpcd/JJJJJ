@@ -1,5 +1,6 @@
 -- Agents de croissance (20261109140000) : brouillons seulement, garde STOP,
 -- opposition, idempotence, décisions admin et entonnoir de la cohorte réelle.
+-- §9 : adresses MSSanté exclues et brouillons MSSanté expirés (20261116143942).
 -- Staging uniquement ; toutes les fixtures et mutations sont annulées.
 BEGIN;
 SET LOCAL statement_timeout = '60s';
@@ -16,6 +17,12 @@ DECLARE
   v_contact uuid;
   v_contact_mss uuid;
   v_contact_cls uuid;
+  v_id_mss uuid;
+  v_id_mss_valide uuid;
+  v_id_faux_ami uuid;
+  v_file_n integer;
+  v_places_avant integer;
+  v_places_apres integer;
   v_refus boolean;
 BEGIN
   -- 1. Droits : RPC admin fermées à anon, primitives private fermées à tous.
@@ -294,22 +301,79 @@ BEGIN
   END IF;
 
   -- 9. MSSanté (20261116143942) : espace de confiance fermé, injoignable depuis
-  -- Gmail. Aucun prospect ni contact CRM MSSanté n'est retenu ; l'adresse
-  -- classique l'est ; seuls les brouillons MSSanté en attente sont expirés.
-  -- La migration a déjà tourné dans cette transaction : plus aucun brouillon
-  -- MSSanté de l'agent n'attend de validation.
+  -- Gmail. Une seule règle, private.fn_growth_email_mssante, appliquée par
+  -- l'agent, par le prédicat unique fn_growth_destinataire_bloque et par
+  -- private.fn_growth_expirer_brouillons_mssante, la fonction même qu'exécute
+  -- la migration. Chaque preuve porte sur des témoins créés ici et comptés :
+  -- aucune assertion ne peut passer à vide.
+
+  -- 9.a Post-condition de la migration sur les données réelles du staging. Elle
+  -- peut porter sur zéro ligne : la preuve de l'expiration est au 9.f.
   IF EXISTS (SELECT 1 FROM public.growth_brouillons b
-             WHERE b.agent = 'PROSPECTION_ETABLISSEMENT' AND b.statut = 'BROUILLON'
-               AND btrim(b.destinataire_email) ~* '@([a-z0-9-]+\.)*mssante\.fr$') THEN
-    RAISE EXCEPTION 'MSSanté : un brouillon de prospection MSSanté attend encore une validation';
+             WHERE b.agent = 'PROSPECTION_ETABLISSEMENT' AND b.statut IN ('BROUILLON', 'VALIDE')
+               AND private.fn_growth_email_mssante(b.destinataire_email)) THEN
+    RAISE EXCEPTION 'MSSanté : un brouillon de prospection MSSanté est encore en file après la migration';
   END IF;
 
+  -- 9.b Droits : les trois fonctions neuves restent fermées à anon et authenticated.
+  IF has_function_privilege('anon', 'private.fn_growth_email_mssante(text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'private.fn_growth_email_mssante(text)', 'EXECUTE')
+     OR has_function_privilege('anon', 'private.fn_growth_motif_expiration_mssante()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'private.fn_growth_motif_expiration_mssante()', 'EXECUTE')
+     OR has_function_privilege('anon', 'private.fn_growth_expirer_brouillons_mssante()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'private.fn_growth_expirer_brouillons_mssante()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'MSSanté : une fonction private MSSanté est exécutable par anon ou authenticated';
+  END IF;
+
+  -- 9.c Règle : mssante.fr et ses sous-domaines, casse et blancs de bord
+  -- ignorés ; les faux amis restent joignables ; NULL et vide valent false.
+  SELECT count(*) INTO v_n
+  FROM (VALUES
+    ('contact@ehpad-recette.mssante.fr', true),
+    (' Direction@MSSante.FR ', true),
+    ('secretariat@a.b.mssante.fr', true),
+    ('rh@ch_recette.mssante.fr', true),
+    ('rh@hôpital-recette.mssante.fr', true),
+    (E'rh@mssante.fr\t', true),
+    ('contact@pasmssante.fr', false),
+    ('contact@recette-pasmssante.fr', false),
+    ('contact@mssante.fr.exemple.com', false),
+    ('contact@mssante-fr.fr', false),
+    ('contact@xmssante.fr', false),
+    ('mssante.fr@gmail.com', false),
+    ('', false),
+    (NULL, false)
+  ) AS t(email, attendu)
+  WHERE private.fn_growth_email_mssante(t.email) IS NOT DISTINCT FROM t.attendu;
+  IF v_n <> 14 THEN
+    RAISE EXCEPTION 'MSSanté : fn_growth_email_mssante juste sur % cas sur 14', v_n;
+  END IF;
+
+  -- 9.d Prédicat unique : motif MSSANTE pour tout type de cible, après les
+  -- motifs existants (compte supprimé et STOP gardent la priorité).
+  INSERT INTO public.sales_contacts (type, nom, email, statut, ne_plus_contacter)
+  VALUES ('ETABLISSEMENT', 'STOP MSSanté recette', 'stop@ehpad-recette.mssante.fr', 'PERDU', true);
+  IF private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', 'ZZGROW040', 'contact@ehpad-recette.mssante.fr', NULL, NULL) IS DISTINCT FROM 'MSSANTE'
+     OR private.fn_growth_destinataire_bloque('CONTACT_CRM', '73000000-0000-4000-8000-000000000040', ' Direction@MSSante.FR ', NULL, NULL) IS DISTINCT FROM 'MSSANTE'
+     OR private.fn_growth_destinataire_bloque('PUBLIC', NULL, 'rh@mssante.fr', NULL, NULL) IS DISTINCT FROM 'MSSANTE'
+     OR private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', 'ZZGROW040', 'stop@ehpad-recette.mssante.fr', NULL, NULL) IS DISTINCT FROM 'STOP'
+     OR private.fn_growth_destinataire_bloque('SOIGNANT', '73000000-0000-4000-8000-000000000040', 'rh@mssante.fr', NULL, NULL) IS DISTINCT FROM 'COMPTE_SUPPRIME'
+     OR private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', 'ZZGROW040', 'contact@mssante.fr.exemple.com', NULL, NULL) IS NOT NULL
+     OR private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', 'ZZGROW040', 'contact@pasmssante.fr', NULL, NULL) IS NOT NULL THEN
+    RAISE EXCEPTION 'MSSanté : prédicat fn_growth_destinataire_bloque inexact (motif MSSANTE, priorité STOP et compte supprimé, faux amis)';
+  END IF;
+
+  -- 9.e Agent : aucun prospect ni relance MSSanté retenu ; l'adresse classique
+  -- et les trois faux amis le sont. Quota relevé au maximum pour le 9.g.
+  UPDATE public.growth_config SET valeur = '100' WHERE cle = 'agents_prospection_quota_jour';
   INSERT INTO public.prospects_etablissements (finess, nom, type_jolene, email, ville, departement, statut_sourcing)
   VALUES
     ('ZZGROW010', 'EHPAD Recette MSSanté', 'EHPAD', 'contact@ehpad-recette.mssante.fr', 'Recetteville', 'ZZ', 'A_QUALIFIER'),
     ('ZZGROW011', 'EHPAD Recette MSSanté racine', 'EHPAD', ' Direction@MSSante.FR ', 'Recetteville', 'ZZ', 'A_QUALIFIER'),
     ('ZZGROW012', 'EHPAD Recette Classique', 'EHPAD', 'accueil@ehpad-recette-classique.test', 'Recetteville', 'ZZ', 'A_QUALIFIER'),
-    ('ZZGROW013', 'EHPAD Recette Faux ami', 'EHPAD', 'contact@recette-pasmssante.fr', 'Recetteville', 'ZZ', 'A_QUALIFIER');
+    ('ZZGROW013', 'EHPAD Recette Faux ami tiret', 'EHPAD', 'contact@recette-pasmssante.fr', 'Recetteville', 'ZZ', 'A_QUALIFIER'),
+    ('ZZGROW014', 'EHPAD Recette Faux ami suffixe', 'EHPAD', 'contact@mssante.fr.exemple.com', 'Recetteville', 'ZZ', 'A_QUALIFIER'),
+    ('ZZGROW015', 'EHPAD Recette Faux ami préfixe', 'EHPAD', 'contact@pasmssante.fr', 'Recetteville', 'ZZ', 'A_QUALIFIER');
 
   -- Relances CRM : deux contacts ouverts par l'agent, échus, l'un MSSanté.
   INSERT INTO public.sales_contacts (type, nom, email, finess, departement, type_etab, statut,
@@ -336,9 +400,10 @@ BEGIN
     RAISE EXCEPTION 'MSSanté : une adresse MSSanté a été retenue par l''agent — %', v_res;
   END IF;
   IF (SELECT count(*) FROM public.growth_brouillons
-      WHERE cible_type = 'PROSPECT_ETABLISSEMENT' AND cible_id IN ('ZZGROW012', 'ZZGROW013')
-        AND statut = 'BROUILLON' AND sequence_etape = 1) <> 2 THEN
-    RAISE EXCEPTION 'MSSanté : les adresses classiques (dont le faux ami pasmssante.fr) doivent être retenues — %', v_res;
+      WHERE cible_type = 'PROSPECT_ETABLISSEMENT'
+        AND cible_id IN ('ZZGROW012', 'ZZGROW013', 'ZZGROW014', 'ZZGROW015')
+        AND statut = 'BROUILLON' AND sequence_etape = 1) <> 4 THEN
+    RAISE EXCEPTION 'MSSanté : l''adresse classique et les faux amis (recette-pasmssante.fr, mssante.fr.exemple.com, pasmssante.fr) doivent être retenus — %', v_res;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM public.growth_brouillons
                  WHERE cible_type = 'CONTACT_CRM' AND cible_id = v_contact_cls::text
@@ -346,48 +411,129 @@ BEGIN
     RAISE EXCEPTION 'MSSanté : la relance CRM d''une adresse classique doit être préparée — %', v_res;
   END IF;
 
-  -- Expiration : même UPDATE que la migration, sur des brouillons témoins.
+  -- 9.f Expiration : private.fn_growth_expirer_brouillons_mssante(), la
+  -- fonction qu'appelle la migration, sur des brouillons témoins.
   INSERT INTO public.growth_brouillons (agent, canal, cible_type, cible_id, destinataire_email,
-    sequence_etape, corps, statut, valide_le, idempotence_key, maj_le)
+    sequence_etape, corps, statut, valide_le, motif_rejet, idempotence_key, maj_le)
   VALUES
     ('PROSPECTION_ETABLISSEMENT', 'EMAIL', 'PROSPECT_ETABLISSEMENT', 'ZZGROW030', 'accueil@ehpad-recette.mssante.fr',
-     1, 'Recette', 'BROUILLON', NULL, 'recette-mssante:ZZGROW030', now() - interval '1 day'),
+     1, 'Recette', 'BROUILLON', NULL, NULL, 'recette-mssante:ZZGROW030', now() - interval '1 day'),
     ('PROSPECTION_ETABLISSEMENT', 'EMAIL', 'CONTACT_CRM', 'ZZGROW031', ' Contact@MSSANTE.FR ',
-     2, 'Recette', 'BROUILLON', NULL, 'recette-mssante:ZZGROW031', now() - interval '1 day'),
+     2, 'Recette', 'BROUILLON', NULL, NULL, 'recette-mssante:ZZGROW031', now() - interval '1 day'),
     ('PROSPECTION_ETABLISSEMENT', 'EMAIL', 'PROSPECT_ETABLISSEMENT', 'ZZGROW032', 'rh@ehpad-recette-valide.mssante.fr',
-     1, 'Recette', 'VALIDE', now(), 'recette-mssante:ZZGROW032', now() - interval '1 day'),
+     1, 'Recette', 'VALIDE', now(), NULL, 'recette-mssante:ZZGROW032', now() - interval '1 day'),
     ('PROSPECTION_ETABLISSEMENT', 'EMAIL', 'PROSPECT_ETABLISSEMENT', 'ZZGROW033', 'accueil@ehpad-recette-classique-2.test',
-     1, 'Recette', 'BROUILLON', NULL, 'recette-mssante:ZZGROW033', now() - interval '1 day'),
-    ('PROSPECTION_ETABLISSEMENT', 'EMAIL', 'PROSPECT_ETABLISSEMENT', 'ZZGROW034', 'contact@recette-pasmssante.fr',
-     1, 'Recette', 'BROUILLON', NULL, 'recette-mssante:ZZGROW034', now() - interval '1 day'),
+     1, 'Recette', 'BROUILLON', NULL, NULL, 'recette-mssante:ZZGROW033', now() - interval '1 day'),
+    ('PROSPECTION_ETABLISSEMENT', 'EMAIL', 'PROSPECT_ETABLISSEMENT', 'ZZGROW034', 'rh@recette-pasmssante.fr',
+     1, 'Recette', 'BROUILLON', NULL, NULL, 'recette-mssante:ZZGROW034', now() - interval '1 day'),
+    ('PROSPECTION_ETABLISSEMENT', 'EMAIL', 'PROSPECT_ETABLISSEMENT', 'ZZGROW036', 'rh@mssante.fr.exemple.com',
+     1, 'Recette', 'BROUILLON', NULL, NULL, 'recette-mssante:ZZGROW036', now() - interval '1 day'),
+    ('PROSPECTION_ETABLISSEMENT', 'EMAIL', 'PROSPECT_ETABLISSEMENT', 'ZZGROW037', 'rh@pasmssante.fr',
+     1, 'Recette', 'BROUILLON', NULL, NULL, 'recette-mssante:ZZGROW037', now() - interval '1 day'),
+    ('PROSPECTION_ETABLISSEMENT', 'EMAIL', 'PROSPECT_ETABLISSEMENT', 'ZZGROW038', 'rh@ehpad-recette-rejete.mssante.fr',
+     1, 'Recette', 'REJETE', NULL, 'Rejeté par l''admin', 'recette-mssante:ZZGROW038', now() - interval '1 day'),
     ('REACTIVATION', 'EMAIL', 'SOIGNANT', '73000000-0000-4000-8000-000000000035', 'soignant@cabinet-recette.mssante.fr',
-     NULL, 'Recette', 'BROUILLON', NULL, 'recette-mssante:ZZGROW035', now() - interval '1 day');
+     NULL, 'Recette', 'BROUILLON', NULL, NULL, 'recette-mssante:ZZGROW035', now() - interval '1 day');
 
-  UPDATE public.growth_brouillons b
-     SET statut = 'EXPIRE',
-         maj_le = now(),
-         motif_rejet = 'Adresse MSSanté : messagerie fermée aux emails hors MSSanté, un envoi depuis Gmail serait rejeté',
-         idempotence_key = CASE WHEN b.valide_le IS NULL
-                                THEN b.idempotence_key || ':expire:' || b.id
-                                ELSE b.idempotence_key END
-   WHERE b.agent = 'PROSPECTION_ETABLISSEMENT'
-     AND b.statut = 'BROUILLON'
-     AND b.destinataire_email IS NOT NULL
-     AND btrim(b.destinataire_email) ~* '@([a-z0-9-]+\.)*mssante\.fr$';
+  -- Places du jour avant l'expiration (9.g). Précondition : aucun premier
+  -- contact créé par ce passage et quota du jour limitant (file non pleine).
+  SELECT count(*) INTO v_file_n FROM public.growth_brouillons
+  WHERE agent = 'PROSPECTION_ETABLISSEMENT' AND statut = 'BROUILLON';
+  v_res := private.fn_growth_agent_prospection();
+  v_places_avant := (v_res->>'places_du_jour')::integer;
+  IF (v_res->>'premiers_contacts')::integer <> 0 OR v_places_avant < 1 OR v_places_avant >= 500 - v_file_n THEN
+    RAISE EXCEPTION 'MSSanté : précondition du banc de quota non remplie (aucun premier contact, quota du jour limitant) — %', v_res;
+  END IF;
 
-  IF (SELECT count(*) FROM public.growth_brouillons
-      WHERE cible_id IN ('ZZGROW030', 'ZZGROW031') AND statut = 'EXPIRE' AND maj_le = now()
-        AND motif_rejet LIKE 'Adresse MSSanté%'
-        AND idempotence_key = 'recette-mssante:' || cible_id || ':expire:' || id) <> 2 THEN
-    RAISE EXCEPTION 'MSSanté : les brouillons MSSanté en attente doivent expirer et libérer leur clé';
+  v_n := private.fn_growth_expirer_brouillons_mssante();
+  IF v_n < 3 THEN
+    RAISE EXCEPTION 'MSSanté : l''expiration doit toucher au moins les 3 témoins MSSanté en file, % ligne(s)', v_n;
   END IF;
   IF (SELECT count(*) FROM public.growth_brouillons
-      WHERE cible_id IN ('ZZGROW032', 'ZZGROW033', 'ZZGROW034', '73000000-0000-4000-8000-000000000035')
-        AND statut = CASE cible_id WHEN 'ZZGROW032' THEN 'VALIDE' ELSE 'BROUILLON' END
-        AND maj_le < now() AND motif_rejet IS NULL
-        AND idempotence_key NOT LIKE '%:expire:%') <> 4
-     OR (SELECT statut FROM public.growth_brouillons WHERE cible_id = 'ZZGROW020') <> 'ENVOYE' THEN
-    RAISE EXCEPTION 'MSSanté : l''expiration a touché un brouillon validé, envoyé, classique ou d''un autre agent';
+      WHERE cible_id IN ('ZZGROW030', 'ZZGROW031') AND statut = 'EXPIRE' AND maj_le = now()
+        AND motif_rejet = private.fn_growth_motif_expiration_mssante()
+        AND idempotence_key = 'recette-mssante:' || cible_id || ':expire:' || id) <> 2 THEN
+    RAISE EXCEPTION 'MSSanté : les brouillons MSSanté jamais validés doivent expirer avec le motif et libérer leur clé';
+  END IF;
+  IF (SELECT count(*) FROM public.growth_brouillons
+      WHERE cible_id = 'ZZGROW032' AND statut = 'EXPIRE' AND maj_le = now() AND valide_le IS NOT NULL
+        AND motif_rejet = private.fn_growth_motif_expiration_mssante()
+        AND idempotence_key = 'recette-mssante:ZZGROW032') <> 1 THEN
+    RAISE EXCEPTION 'MSSanté : un brouillon MSSanté VALIDE doit expirer avec le motif en gardant sa clé (cible exclue)';
+  END IF;
+  IF (SELECT count(*) FROM public.growth_brouillons
+      WHERE cible_id IN ('ZZGROW033', 'ZZGROW034', 'ZZGROW036', 'ZZGROW037', '73000000-0000-4000-8000-000000000035')
+        AND statut = 'BROUILLON' AND maj_le < now() AND motif_rejet IS NULL
+        AND idempotence_key NOT LIKE '%:expire:%') <> 5
+     OR (SELECT count(*) FROM public.growth_brouillons
+         WHERE cible_id = 'ZZGROW038' AND statut = 'REJETE' AND maj_le < now()
+           AND motif_rejet = 'Rejeté par l''admin') <> 1
+     OR (SELECT count(*) FROM public.growth_brouillons
+         WHERE idempotence_key = 'recette-mssante:ZZGROW020:etape1' AND statut = 'ENVOYE') <> 1 THEN
+    RAISE EXCEPTION 'MSSanté : l''expiration a touché un brouillon classique, faux ami, rejeté, envoyé ou d''un autre agent';
+  END IF;
+
+  -- 9.g Quota du jour : les deux brouillons d'étape 1 du jour expirés par la
+  -- correction (030 et 032) rendent leur place ; une expiration ordinaire, sans
+  -- ce motif, continue de consommer le quota.
+  SELECT count(*) INTO v_file_n FROM public.growth_brouillons
+  WHERE agent = 'PROSPECTION_ETABLISSEMENT' AND statut = 'BROUILLON';
+  v_res := private.fn_growth_agent_prospection();
+  v_places_apres := (v_res->>'places_du_jour')::integer;
+  IF (v_res->>'premiers_contacts')::integer <> 0 OR v_places_apres >= 500 - v_file_n
+     OR v_places_apres <> v_places_avant + 2 THEN
+    RAISE EXCEPTION 'MSSanté : le quota du jour doit ignorer les 2 brouillons expirés par la correction (avant %, après %) — %',
+      v_places_avant, v_places_apres, v_res;
+  END IF;
+  UPDATE public.growth_brouillons
+     SET statut = 'EXPIRE', maj_le = now(), idempotence_key = idempotence_key || ':expire:' || id
+   WHERE idempotence_key = 'recette-mssante:ZZGROW033';
+  SELECT count(*) INTO v_file_n FROM public.growth_brouillons
+  WHERE agent = 'PROSPECTION_ETABLISSEMENT' AND statut = 'BROUILLON';
+  v_res := private.fn_growth_agent_prospection();
+  IF (v_res->>'premiers_contacts')::integer <> 0 OR (v_res->>'places_du_jour')::integer >= 500 - v_file_n
+     OR (v_res->>'places_du_jour')::integer <> v_places_apres THEN
+    RAISE EXCEPTION 'MSSanté : une expiration ordinaire doit continuer de consommer le quota du jour (attendu %) — %',
+      v_places_apres, v_res;
+  END IF;
+
+  -- 9.h Décision admin : la revalidation par le prédicat unique refuse une
+  -- adresse MSSanté à la validation comme au constat d'envoi ; un faux ami
+  -- reste validable.
+  INSERT INTO public.growth_brouillons (agent, canal, cible_type, cible_id, destinataire_email,
+    sequence_etape, corps, statut, valide_le, idempotence_key)
+  VALUES ('PROSPECTION_ETABLISSEMENT', 'EMAIL', 'PROSPECT_ETABLISSEMENT', 'ZZGROW041',
+    'direction@ehpad-recette-tardif.mssante.fr', 1, 'Recette', 'BROUILLON', NULL, 'recette-mssante:ZZGROW041')
+  RETURNING id INTO v_id_mss;
+  INSERT INTO public.growth_brouillons (agent, canal, cible_type, cible_id, destinataire_email,
+    sequence_etape, corps, statut, valide_le, contexte, idempotence_key)
+  VALUES ('PROSPECTION_ETABLISSEMENT', 'EMAIL', 'CONTACT_CRM', v_contact_mss::text,
+    'direction@ch-recette.mssante.fr', 2, 'Recette', 'VALIDE', now(),
+    jsonb_build_object('finess', 'ZZGROW020'), 'recette-mssante:ZZGROW042')
+  RETURNING id INTO v_id_mss_valide;
+  SELECT id INTO v_id_faux_ami FROM public.growth_brouillons WHERE idempotence_key = 'recette-mssante:ZZGROW034';
+
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  PERFORM set_config('request.jwt.claims', jsonb_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  v_res := public.fn_admin_growth_brouillon_decider(v_id_mss, 'VALIDER');
+  IF COALESCE((v_res->>'success')::boolean, true) IS NOT FALSE OR v_res->>'statut' IS DISTINCT FROM 'REJETE' THEN
+    RAISE EXCEPTION 'MSSanté : la validation d''un brouillon MSSanté doit le rejeter — %', v_res;
+  END IF;
+  v_res := public.fn_admin_growth_brouillon_decider(v_id_mss_valide, 'MARQUER_ENVOYE');
+  IF COALESCE((v_res->>'success')::boolean, true) IS NOT FALSE OR v_res->>'statut' IS DISTINCT FROM 'REJETE' THEN
+    RAISE EXCEPTION 'MSSanté : le constat d''envoi d''un brouillon MSSanté validé doit le rejeter — %', v_res;
+  END IF;
+  v_res := public.fn_admin_growth_brouillon_decider(v_id_faux_ami, 'VALIDER');
+  IF v_res->>'statut' IS DISTINCT FROM 'VALIDE' THEN
+    RAISE EXCEPTION 'MSSanté : un faux ami (recette-pasmssante.fr) doit rester validable — %', v_res;
+  END IF;
+  EXECUTE 'RESET ROLE';
+  IF (SELECT count(*) FROM public.growth_brouillons
+      WHERE id IN (v_id_mss, v_id_mss_valide) AND statut = 'REJETE'
+        AND motif_rejet = 'Destinataire invalide' AND envoye_le IS NULL) <> 2
+     OR (SELECT sequence_etape FROM public.sales_contacts WHERE id = v_contact_mss) <> 1 THEN
+    RAISE EXCEPTION 'MSSanté : rejet non persisté ou séquence CRM avancée malgré le refus';
   END IF;
 END;
 $test$;

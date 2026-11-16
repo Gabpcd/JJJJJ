@@ -51,7 +51,7 @@ La demande (établissements) passe avant l'offre : un soignant inscrit sans miss
 
 | Canal | Effort | Impact attendu | Délai |
 |---|---|---|---|
-| Emails B2B personnalisés via l'agent de prospection : 20 par jour, envoyés depuis le Gmail de la fondatrice, séquence J+3/J+7/J+14 | 20 min/j | 656 établissements éligibles dans 75/92/56 ; à 2-4 % de réponses positives, 13 à 26 rendez-vous | 1-4 semaines |
+| Emails B2B personnalisés via l'agent de prospection : 20 par jour, envoyés depuis le Gmail de la fondatrice, séquence J+3/J+7/J+14 | 20 min/j | Établissements de 75/92/56 joignables par une adresse classique (les adresses MSSanté sont exclues, §4) ; 2 à 4 % de réponses positives attendues | 1-4 semaines |
 | Appels ciblés : 10/j sur les établissements qui ont ouvert ou répondu, numéro fourni dans chaque brouillon | 30 min/j | Le meilleur taux de conversion B2B santé | dès J+1 |
 | Concierge première mission : publier au téléphone avec l'établissement | 15 min par établissement | Lève le blocage « première mission » | immédiat |
 | Signaux BOAMP et France Travail : bonus de score dans l'agent | 0 (réactivation des imports) | Cible les établissements qui recrutent déjà | après go |
@@ -121,7 +121,7 @@ Détail de l'agent de prospection :
 - Score explicable : type d'établissement, email générique, téléphone, signal BOAMP sur 90 jours, tension BMO.
 - Les départements alternent dans la file.
 - Exclusions : STOP, PERDU, OPPOSITION, adresse déjà en séquence.
-- Adresses MSSanté exclues (domaine `mssante.fr` et ses sous-domaines, premiers contacts et relances, `20261116143942`) : MSSanté est un espace de confiance fermé, une boîte MSSanté n'échange qu'avec les messageries MSSanté de la liste blanche de l'ANS, donc un email envoyé depuis Gmail est rejeté (ANS : [doctrine MSSanté](https://esante.gouv.fr/doctrine/mssante), [« Basiques de la MSSanté », 08/2026](https://esante.gouv.fr/sites/default/files/media/document/Pr%C3%A9sentation%20-%20Basiques%20de%20la%20MSSant%C3%A9%20-%20082026.pdf)).
+- Adresses MSSanté exclues (domaine `mssante.fr` et ses sous-domaines, `20261116143942`) : premiers contacts, relances, et revalidation par le prédicat unique (§5). Une seule règle, `private.fn_growth_email_mssante`. Les brouillons MSSanté encore en file (`BROUILLON` ou `VALIDE`) ont expiré au déploiement, avec un motif visible dans l'historique, et ne comptent pas dans le quota du jour. MSSanté est un espace de confiance fermé, une boîte MSSanté n'échange qu'avec les messageries MSSanté de la liste blanche de l'ANS, donc un email envoyé depuis Gmail est rejeté (ANS : [doctrine MSSanté](https://esante.gouv.fr/doctrine/mssante), [« Basiques de la MSSanté », 08/2026](https://esante.gouv.fr/sites/default/files/media/document/Pr%C3%A9sentation%20-%20Basiques%20de%20la%20MSSant%C3%A9%20-%20082026.pdf)).
 
 Parcours de la fondatrice (Admin → Acquisition → **Agents de croissance**, `/admin/fondateur/agents`) :
 1. **À valider** : relire, modifier si besoin, puis « Valider et ouvrir Gmail » (email pré-rempli)
@@ -162,8 +162,7 @@ contacts qu'il a lui-même ouverts, ce qui garde cette mention exacte.
 
 Choix de conformité proposés :
 - **Pas de prospection des soignants particuliers.** Les 170 886 emails RPPS ne sont pas utilisés,
-  car le consentement préalable est requis (L34-5). Hypothèse non vérifiée : les adresses MSSanté
-  seraient réservées aux échanges de santé. À instruire si le sujet revient.
+  car le consentement préalable est requis (L34-5).
 - Les emails de réactivation ne visent que des inscrits (relation existante). Ils respectent
   `preferences_notifications.canal_email` et rappellent que les préférences se gèrent dans le compte.
 - Les posts sont publiés à la main dans des groupes publics : pas d'auto-post, pas de scraping des
@@ -176,7 +175,8 @@ existe), contrats et facturation automatiques. Il n'y a aucune mention réglemen
 Garde-fous du code :
 - Un **prédicat unique**, `private.fn_growth_destinataire_bloque`, sert aux agents comme à la
   validation. Il refuse un compte supprimé, les emails désactivés (préférence globale ou événement
-  `SERIE_ONBOARDING`) et les oppositions STOP.
+  `SERIE_ONBOARDING`), les oppositions STOP et, en dernier, les adresses MSSanté (motif `MSSANTE`,
+  affiché « Destinataire invalide » à la validation).
 - La visibilité d'une mission vient de `fn_mission_publique`.
 - Les brouillons d'un compte supprimé sont effacés.
 - Un brouillon non envoyé, même validé, expire.

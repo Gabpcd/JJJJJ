@@ -8,20 +8,190 @@
 -- prospects_etablissements contient 21 304 adresses MSSanté et 9 329 adresses
 -- classiques (source FINESS_DATA_GOUV) : l'agent doit viser les classiques.
 --
--- 1. private.fn_growth_agent_prospection : corps repris à l'identique de
---    20261109140000_agents_croissance_brouillons.sql (seule définition du
---    dépôt ; dernière version du registre distant au 16/11 : 20261109140000).
---    Deux conditions ajoutées : l'exclusion des domaines mssante.fr et de leurs
---    sous-domaines, sur les premiers contacts (prospects_etablissements) et
---    sur les relances CRM (sales_contacts). La fonction reste SECURITY
---    INVOKER (appelée par l'orchestrateur et par la RPC admin SECURITY
---    DEFINER fn_admin_growth_executer_agents) : rien à inventorier.
--- 2. Les brouillons encore au statut BROUILLON de cet agent dont le
---    destinataire est une adresse MSSanté passent en EXPIRE, comme le ferait
---    l'expiration de l'orchestrateur : un brouillon jamais validé libère sa
---    clé. Aucun DELETE. Les brouillons VALIDE, ENVOYE, REJETE ou EXPIRE ne
---    sont pas touchés (un brouillon validé a pu partir sans constat).
+-- 0. Préflight fail-closed (CLAUDE.md, garde-fous 9.0 n°2 : toute
+--    redéfinition part de la définition LIVE). Les deux fonctions redéfinies
+--    doivent être, en base, exactement celles de
+--    20261109140000_agents_croissance_brouillons.sql : md5(prosrc), SECURITY
+--    INVOKER, volatilité et search_path. Sinon la migration entière est
+--    refusée avant toute écriture. Empreintes = md5 du texte compris entre
+--    les deux délimiteurs $body$ de 20261109140000 (ce que PostgreSQL stocke
+--    dans pg_proc.prosrc), recalculées par tests/node/prospection-sans-mssante.node.mjs.
+-- 1. Une seule règle MSSanté : private.fn_growth_email_mssante(text), IMMUTABLE
+--    (domaine mssante.fr et ses sous-domaines, casse et espaces de bord
+--    ignorés ; NULL = false).
+-- 2. private.fn_growth_destinataire_bloque (prédicat UNIQUE des agents et de
+--    la décision admin) : corps repris à l'identique, plus le motif 'MSSANTE'
+--    après les motifs existants (compte supprimé, emails désactivés, STOP
+--    gardent la priorité). La validation et le constat d'envoi refusent donc
+--    aussi une adresse MSSanté, pour tous les agents.
+-- 3. private.fn_growth_agent_prospection : corps repris à l'identique, plus
+--    l'exclusion MSSanté des premiers contacts et des relances CRM, et un
+--    quota du jour qui ne compte plus les brouillons expirés par la présente
+--    correction (repérés par leur motif_rejet).
+-- 4. private.fn_growth_expirer_brouillons_mssante() : expire les brouillons
+--    MSSanté de l'agent encore en file (BROUILLON ou VALIDE), sans DELETE, avec
+--    la libération de clé de l'orchestrateur (seul un brouillon jamais validé
+--    libère sa cible). Appelée ci-dessous et par
+--    tests/security/agents-croissance-brouillons.test.sql (une seule source).
+-- Toutes les fonctions restent SECURITY INVOKER (rien à inventorier dans
+-- private.security_definer_inventory) ; propriétaire et ACL d'origine
+-- conservés par CREATE OR REPLACE, REVOKE d'origine rejoués.
 
+DO $prospection_sans_mssante_avant$
+DECLARE
+  p record;
+BEGIN
+  SELECT * INTO p FROM pg_catalog.pg_proc
+  WHERE oid = pg_catalog.to_regprocedure('private.fn_growth_agent_prospection()');
+  IF NOT FOUND
+    OR pg_catalog.md5(p.prosrc) <> 'f7fe0ee536b4e2bcf737c10194744b06'
+    OR p.prosecdef IS DISTINCT FROM false
+    OR p.provolatile <> 'v'
+    OR p.proconfig IS DISTINCT FROM ARRAY['search_path=""']::text[]
+  THEN
+    RAISE EXCEPTION 'PROSPECTION_SANS_MSSANTE_SOURCE_AVANT_DIVERGENTE : private.fn_growth_agent_prospection() en base (md5 %, prosecdef %, search_path %) ne correspond plus au corps de 20261109140000 (md5 f7fe0ee536b4e2bcf737c10194744b06, SECURITY INVOKER, search_path vide). Redéfinition refusée : repartir de la définition LIVE (CLAUDE.md, garde-fous 9.0 n°2).',
+      COALESCE(pg_catalog.md5(p.prosrc), 'fonction absente'), p.prosecdef, p.proconfig;
+  END IF;
+
+  SELECT * INTO p FROM pg_catalog.pg_proc
+  WHERE oid = pg_catalog.to_regprocedure('private.fn_growth_destinataire_bloque(text,text,text,text,text)');
+  IF NOT FOUND
+    OR pg_catalog.md5(p.prosrc) <> '0e27c9a65a314a4b70af2c0df4923031'
+    OR p.prosecdef IS DISTINCT FROM false
+    OR p.provolatile <> 's'
+    OR p.proconfig IS DISTINCT FROM ARRAY['search_path=""']::text[]
+  THEN
+    RAISE EXCEPTION 'PROSPECTION_SANS_MSSANTE_SOURCE_AVANT_DIVERGENTE : private.fn_growth_destinataire_bloque(text,text,text,text,text) en base (md5 %, prosecdef %, search_path %) ne correspond plus au corps de 20261109140000 (md5 0e27c9a65a314a4b70af2c0df4923031, SECURITY INVOKER, STABLE, search_path vide). Redéfinition refusée : repartir de la définition LIVE (CLAUDE.md, garde-fous 9.0 n°2).',
+      COALESCE(pg_catalog.md5(p.prosrc), 'fonction absente'), p.prosecdef, p.proconfig;
+  END IF;
+
+  -- Les trois fonctions créées ici sont neuves : un homonyme en base serait
+  -- une dérive non capturée que CREATE OR REPLACE écraserait sans trace.
+  IF pg_catalog.to_regprocedure('private.fn_growth_email_mssante(text)') IS NOT NULL
+    OR pg_catalog.to_regprocedure('private.fn_growth_motif_expiration_mssante()') IS NOT NULL
+    OR pg_catalog.to_regprocedure('private.fn_growth_expirer_brouillons_mssante()') IS NOT NULL
+  THEN
+    RAISE EXCEPTION 'PROSPECTION_SANS_MSSANTE_HELPER_DEJA_PRESENT : une fonction private.fn_growth_*_mssante existe déjà en base sans migration du dépôt. Redéfinition refusée : repartir de la définition LIVE (CLAUDE.md, garde-fous 9.0 n°2).';
+  END IF;
+END;
+$prospection_sans_mssante_avant$;
+
+-- ---------------------------------------------------------------------------
+-- 1. Règle MSSanté unique et motif d'expiration
+-- ---------------------------------------------------------------------------
+-- true si l'adresse relève de MSSanté (domaine mssante.fr ou un sous-domaine).
+-- Faux amis non exclus : pasmssante.fr, mssante.fr.exemple.com, mssante-fr.fr.
+CREATE OR REPLACE FUNCTION private.fn_growth_email_mssante(p_email text)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+SET search_path TO ''
+AS $body$
+  SELECT COALESCE(lower(btrim(p_email, E' \t\r\n')) ~ '[@.]mssante\.fr$', false);
+$body$;
+
+-- Motif posé par fn_growth_expirer_brouillons_mssante, relu par le quota du
+-- jour de l'agent de prospection : une seule source pour les deux.
+CREATE OR REPLACE FUNCTION private.fn_growth_motif_expiration_mssante()
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+SET search_path TO ''
+AS $body$
+  SELECT 'Adresse MSSanté : messagerie fermée aux emails hors MSSanté, un envoi depuis Gmail serait rejeté'::text;
+$body$;
+
+REVOKE ALL ON FUNCTION private.fn_growth_email_mssante(text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.fn_growth_motif_expiration_mssante() FROM PUBLIC, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 2. Prédicat UNIQUE de joignabilité : + MSSanté
+-- ---------------------------------------------------------------------------
+-- Prédicat UNIQUE de joignabilité d'un destinataire (agents + décision admin).
+-- NULL = joignable ; sinon le motif. Ne jamais re-décider localement.
+CREATE OR REPLACE FUNCTION private.fn_growth_destinataire_bloque(
+  p_cible_type text, p_cible_id text, p_email text, p_telephone text, p_finess text
+)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SET search_path TO ''
+AS $body$
+DECLARE
+  v_uid uuid;
+  v_finess text := p_finess;
+BEGIN
+  IF p_cible_type IN ('SOIGNANT', 'ETABLISSEMENT') THEN
+    BEGIN
+      v_uid := p_cible_id::uuid;
+    EXCEPTION WHEN invalid_text_representation THEN
+      RETURN 'CIBLE_INVALIDE';
+    END;
+    IF p_cible_type = 'SOIGNANT' AND NOT EXISTS (
+      SELECT 1 FROM public.soignants s
+      WHERE s.id = v_uid AND s.supprime_le IS NULL AND s.est_compte_test IS FALSE
+    ) THEN
+      RETURN 'COMPTE_SUPPRIME';
+    END IF;
+    IF p_cible_type = 'ETABLISSEMENT' THEN
+      SELECT e.finess INTO v_finess FROM public.etablissements e
+      WHERE e.id = v_uid AND e.supprime_le IS NULL AND e.est_compte_test IS FALSE;
+      IF NOT FOUND THEN
+        RETURN 'COMPTE_SUPPRIME';
+      END IF;
+    END IF;
+    -- Mêmes préférences que send-email : canal email global, puis l'événement
+    -- SERIE_ONBOARDING (relances d'activation).
+    IF EXISTS (SELECT 1 FROM public.preferences_notifications pn
+               WHERE pn.utilisateur_id = v_uid AND pn.canal_email IS FALSE)
+       OR EXISTS (SELECT 1 FROM public.preferences_notifications_par_evenement pe
+                  WHERE pe.utilisateur_id = v_uid AND pe.type_evenement::text = 'SERIE_ONBOARDING'
+                    AND pe.canal::text = 'EMAIL' AND pe.actif IS FALSE) THEN
+      RETURN 'EMAILS_DESACTIVES';
+    END IF;
+    IF public.fn_sales_outreach_est_interdit(
+         NULL, CASE WHEN p_cible_type = 'SOIGNANT' THEN 'SOIGNANT' ELSE 'ETABLISSEMENT' END,
+         CASE WHEN p_cible_type = 'ETABLISSEMENT' THEN v_finess END, p_email, p_telephone) THEN
+      RETURN 'STOP';
+    END IF;
+    -- MSSanté (20261116143942) : messagerie fermée, un envoi depuis Gmail est rejeté.
+    IF private.fn_growth_email_mssante(p_email) THEN
+      RETURN 'MSSANTE';
+    END IF;
+    RETURN NULL;
+  ELSIF p_cible_type IN ('PROSPECT_ETABLISSEMENT', 'CONTACT_CRM') THEN
+    IF p_cible_type = 'CONTACT_CRM' THEN
+      BEGIN
+        v_uid := p_cible_id::uuid;
+      EXCEPTION WHEN invalid_text_representation THEN
+        RETURN 'CIBLE_INVALIDE';
+      END;
+    END IF;
+    IF public.fn_sales_outreach_est_interdit(
+         v_uid, 'ETABLISSEMENT',
+         CASE WHEN p_cible_type = 'PROSPECT_ETABLISSEMENT' THEN p_cible_id ELSE p_finess END,
+         p_email, p_telephone) THEN
+      RETURN 'STOP';
+    END IF;
+    -- MSSanté (20261116143942) : messagerie fermée, un envoi depuis Gmail est rejeté.
+    IF private.fn_growth_email_mssante(p_email) THEN
+      RETURN 'MSSANTE';
+    END IF;
+    RETURN NULL;
+  END IF;
+  -- MSSanté (20261116143942) : messagerie fermée, un envoi depuis Gmail est rejeté.
+  IF private.fn_growth_email_mssante(p_email) THEN
+    RETURN 'MSSANTE';
+  END IF;
+  RETURN NULL;
+END;
+$body$;
+
+REVOKE ALL ON FUNCTION private.fn_growth_destinataire_bloque(text, text, text, text, text) FROM PUBLIC, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 3. Agent 1 — prospection établissements : + MSSanté, quota du jour
+-- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION private.fn_growth_agent_prospection()
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -59,6 +229,8 @@ BEGIN
   SELECT count(*) INTO v_deja
   FROM public.growth_brouillons b
   WHERE b.agent = 'PROSPECTION_ETABLISSEMENT' AND b.sequence_etape = 1
+    -- Un brouillon expiré par la correction MSSanté (20261116143942) ne consomme pas le quota du jour.
+    AND NOT (b.statut = 'EXPIRE' AND b.motif_rejet IS NOT DISTINCT FROM private.fn_growth_motif_expiration_mssante())
     AND b.cree_le >= date_trunc('day', now() AT TIME ZONE 'Europe/Paris') AT TIME ZONE 'Europe/Paris';
   SELECT count(*) INTO v_file
   FROM public.growth_brouillons b
@@ -122,7 +294,7 @@ BEGIN
         AND NULLIF(btrim(p.email), '') IS NOT NULL
         AND btrim(p.email) ~* '^[^@[:space:]]+@[^@[:space:]]+\.[a-z]{2,}$'
         -- MSSanté : espace de confiance fermé, un envoi depuis Gmail est rejeté.
-        AND btrim(p.email) !~* '@([a-z0-9-]+\.)*mssante\.fr$'
+        AND NOT private.fn_growth_email_mssante(p.email)
         AND p.email_envoye_le IS NULL
         AND p.ajoute_crm_le IS NULL
         AND p.statut_sourcing NOT IN ('IGNORE', 'OPPOSITION')
@@ -234,7 +406,8 @@ BEGIN
       AND COALESCE(sc.archive, false) IS FALSE
       AND sc.sequence_etape BETWEEN 1 AND 2
       AND NULLIF(btrim(sc.email), '') IS NOT NULL
-      AND btrim(sc.email) !~* '@([a-z0-9-]+\.)*mssante\.fr$'
+      -- MSSanté : une relance y serait rejetée comme le premier email.
+      AND NOT private.fn_growth_email_mssante(sc.email)
       -- Seuls les contacts ouverts par cet agent : la mention de source reste exacte.
       AND EXISTS (
         SELECT 1 FROM public.growth_brouillons b0
@@ -297,18 +470,46 @@ $body$;
 REVOKE ALL ON FUNCTION private.fn_growth_agent_prospection() FROM PUBLIC, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- Brouillons MSSanté déjà en file : expirés, jamais supprimés.
--- motif_rejet n'est contraint par aucun CHECK : il reste lisible dans
--- l'historique de l'onglet Agents (« Motif : … »).
+-- 4. Brouillons MSSanté déjà en file : expirés, jamais supprimés
 -- ---------------------------------------------------------------------------
-UPDATE public.growth_brouillons b
-   SET statut = 'EXPIRE',
-       maj_le = now(),
-       motif_rejet = 'Adresse MSSanté : messagerie fermée aux emails hors MSSanté, un envoi depuis Gmail serait rejeté',
-       idempotence_key = CASE WHEN b.valide_le IS NULL
-                              THEN b.idempotence_key || ':expire:' || b.id
-                              ELSE b.idempotence_key END
- WHERE b.agent = 'PROSPECTION_ETABLISSEMENT'
-   AND b.statut = 'BROUILLON'
-   AND b.destinataire_email IS NOT NULL
-   AND btrim(b.destinataire_email) ~* '@([a-z0-9-]+\.)*mssante\.fr$';
+-- BROUILLON et VALIDE : un brouillon validé affiche encore « Rouvrir Gmail » et
+-- « J'ai envoyé ». Libération de clé identique à l'expiration de
+-- l'orchestrateur (fn_growth_agents_executer, 20261109140000) : un brouillon
+-- jamais validé libère sa cible ; un brouillon validé a pu partir sans
+-- constat, sa clé et sa cible restent donc bloquées. motif_rejet n'est
+-- contraint par aucun CHECK et reste lisible dans l'historique de l'onglet
+-- Agents (« Motif : … »). Une seule source : cette fonction est aussi celle
+-- qu'exécute tests/security/agents-croissance-brouillons.test.sql.
+CREATE OR REPLACE FUNCTION private.fn_growth_expirer_brouillons_mssante()
+RETURNS integer
+LANGUAGE plpgsql
+SET search_path TO ''
+AS $body$
+DECLARE
+  v_n integer;
+BEGIN
+  UPDATE public.growth_brouillons b
+     SET statut = 'EXPIRE',
+         maj_le = now(),
+         motif_rejet = private.fn_growth_motif_expiration_mssante(),
+         idempotence_key = CASE WHEN b.valide_le IS NULL
+                                THEN b.idempotence_key || ':expire:' || b.id
+                                ELSE b.idempotence_key END
+   WHERE b.agent = 'PROSPECTION_ETABLISSEMENT'
+     AND b.statut IN ('BROUILLON', 'VALIDE')
+     AND private.fn_growth_email_mssante(b.destinataire_email);
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  RETURN v_n;
+END;
+$body$;
+
+REVOKE ALL ON FUNCTION private.fn_growth_expirer_brouillons_mssante() FROM PUBLIC, anon, authenticated;
+
+DO $prospection_sans_mssante_expiration$
+DECLARE
+  v_n integer;
+BEGIN
+  v_n := private.fn_growth_expirer_brouillons_mssante();
+  RAISE NOTICE 'Brouillons MSSanté de l''agent de prospection expirés : %', v_n;
+END;
+$prospection_sans_mssante_expiration$;
