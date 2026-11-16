@@ -1610,9 +1610,21 @@ sans changer aucune règle ni aucun texte affiché :
 - **Verrou levé (TJ7).** B3 (#1118) est sur la base : « Contester » est ouvert. Contrat vérifié sur la migration
   `20261102205808_contestation_paiement_soignant.sql` et sur le dump `supabase/schema/public.sql` (l.25741-25839, corps
   identiques ; huit `error_code` ; GRANT `authenticated` l.82235) et par la garde `check-rpc-contracts-lot3.node.mjs`.
-  **Définition live non relue** : la tranche n'avait aucun accès au backend (consigne de la tranche) ; TJ7 demande cette
-  relecture en lecture seule avant d'ouvrir le bouton : **à faire avant le go B9** (si elle diffère de la fiche, refermer
-  « Contester » sans texte nouveau, TJ7).
+  **Définition live relue : condition de TJ7 levée** (revue fraîche B8 n°1, m7). La tranche n'avait aucun accès au
+  backend ; le coordinateur a relu la production en lecture seule le 16/11/2026 (aucune écriture, aucun appel depuis la
+  tranche) :
+  - `fn_contester_paiement_soignant(uuid,text)` : `md5(prosrc)` `368f41ca6e0157cd48ebbf6a638cecae`, `SECURITY DEFINER`,
+    `search_path=public` ; `EXECUTE` refusé à `anon`, accordé à `authenticated` et `service_role` ;
+  - `fn_confirmer_paiement_soignant(uuid)` : `md5(prosrc)` `b4483c528bfcbecb2fc84f161a93b84e`, `SECURITY DEFINER`,
+    `search_path=public, pg_temp` ; mêmes droits ;
+  - migration `20261102205808` (B3) inscrite au registre `supabase_migrations.schema_migrations` ;
+  - `notifications_type_check` : `md5` `9abaa9884a7cba5a880244fb4a877d8c`, avec `SYSTEM` (notification à
+    l'administrateur, dump l.25830-25835) et `LITIGE_OUVERT` (établissement, `trg_notifier_creation_litige`) ;
+  - index `uq_litige_mission_type_ouvert_legacy` identique au dump (l.75346) ;
+  - triggers `BEFORE INSERT` sur `litiges` : `dec_litige_48h` et `trg_litige_mapping_categorie`, et eux seuls ;
+  - inventaire `SECURITY DEFINER` conforme.
+  Conforme à la fiche : « Contester » reste ouvert (TJ7). Une dérive ultérieure de la définition live referme
+  « Contester » sans texte nouveau (TJ7) ; la garde `check-rpc-contracts-lot3.node.mjs` suit le dump, pas la production.
 - **Règles.** Une seule mutation à la fois (`enCours`, double tap sans effet, toutes les actions désactivées jusqu'à la
   relecture) ; « Paiement confirmé ✅ » / « Contestation envoyée » seulement après relecture de la ligne
   (`CONFIRME` + `confirme_par_soignant`, `CONTESTE` + `conteste`), sinon « Erreur lors du traitement » ; refus serveur
@@ -1621,23 +1633,34 @@ sans changer aucune règle ni aucun texte affiché :
   relecture, jamais un renvoi ; liste relue après toute issue (aucun retrait local d'office), puis état des missions relu
   (`relireApresDeclaration`, `onUpdate` → `reloadKey` du web) ; motif non blanc obligatoire, borné à 500 scalaires
   Unicode, envoyé tel que saisi ; repli web `'Contesté par le soignant'` jamais envoyé. Ligne `litiges` non relue par
-  l'app : B3 écrit paiement et litige dans le même sous-bloc (dump l.25791-25824), une ligne relue `CONTESTE` le prouve ;
-  relecture `litiges` réservée à la preuve STAGING (T16).
+  l'app : la preuve d'une contestation est `success:true` de B3 + relecture `CONTESTE` (revue fraîche B8 n°1, m1). B3
+  insère le litige dans le même sous-bloc que l'UPDATE `CONTESTE` (dump l.25791-25824) et ne répond `success` qu'avec
+  son `litige_id` (l.25837) : le gateway Supabase exige `litige_id` non vide, sinon erreur de contrat, jamais un succès
+  (`SupabasePaiementsGatewayTests.testSuccesSansLitigeIdEstUneErreurDeContratMemeAvecRelectureCONTESTE`). Une ligne
+  relue `CONTESTE` seule ne prouve pas le litige : ce statut s'écrit aussi sans litige de B3 (UPDATE direct du soignant
+  ou de l'établissement sous `pol_paie_soig_update`, l.79489, que `fn_protect_paiement_soignant` admet, l.50607-50622 ;
+  contestation de facture par `fn_ouvrir_litige_rate_limited`, l.46765). Relecture `litiges` réservée à la preuve
+  STAGING (T16).
 - **Routes.** `DestinationLien.ecranNatifLivre(.revenus(section: .paiementsAConfirmer))` passe à `true` ;
   `CibleNotification.revenus(.paiementsAConfirmer)` présentable ; `MainTabView.presenter` sélectionne Revenus et fait
   défiler jusqu'à la section (`sectionRevenus`, ancre `revenus-ancre-paiements-declares`). Tap push `PAIEMENT_RECU`
-  (correction 15, cas reporté de T5) : section native. Tests de routage ajustés (32 vecteurs push de la famille
-  `?tab=paiements` passent du renvoi web au natif : 493 natifs, 397 renvois).
+  (correction 15, cas reporté de T5) : section native. `PAIEMENT_RECLAME` y mène aussi (revue fraîche B8 n°1, m3) :
+  même chemin `/soignant/mes-gains?tab=paiements` pour un soignant (`PushRouting.path`, `case "PAIEMENT_RECU",
+  "PAIEMENT_RECLAME"`, port de `navigationPathForEvent`, `src/lib/pushNative.ts`), donc même section native. Tests de
+  routage ajustés : les 32 vecteurs push de la famille `?tab=paiements` (vecteur golden `push-routing`, 16
+  `PAIEMENT_RECU` + 16 `PAIEMENT_RECLAME`) passent du renvoi web au natif : 493 natifs, 397 renvois.
 - **Textes (HARD STOP n°4, délégué, TJ7/TJ8).** Verbatim du web, épinglés à leur ligne
   (`PaiementsDeclaresTests.testChaqueTexteRepriseDuWebEstVerbatimASaLigne`) : « Motif de contestation : » l.51,
   « Envoyer la contestation » l.62, « Annuler » l.64, « Confirmer la réception » l.397, « Contester » l.407, « Paiement
   confirmé ✅ » et « Contestation envoyée » l.195, « Erreur lors du traitement » l.200, « Paiements à confirmer
   indisponibles » l.208, « Impossible de charger les paiements à confirmer. » l.170, « Réessayer » l.211,
   « Établissement » l.161, « Mission : » l.264, « Touchez pour voir le détail · Confirmez ou contestez » l.268, libellés
-  du détail l.282-374 et méthodes l.71-77. Vouvoyés (non juridiques, TJ7 ; décision 9 du lot 1) : l.55 « Décrivez
-  pourquoi vous contestez ce paiement... », l.259 « déclare vous avoir payé ». Refus du serveur simulé en démo : textes
-  du dump, verbatim. **Aucun texte nouveau, aucun texte juridique** ; aucune mention de la portée d'une confirmation ou
-  d'une contestation (garde `testAucunTexteJuridiqueAjoute`). Aucune décision juridique n'a été nécessaire.
+  du détail l.282-374 et méthodes l.71-77. Vouvoyés (non juridiques) : l.55 « Décrivez pourquoi vous contestez ce
+  paiement... » (TJ7, qui le nomme ; décision 9 du lot 1) ; l.259 « déclare vous avoir payé » (décision 9 du lot 1,
+  TJ8 : texte non juridique, vouvoiement ; TJ7 ne nomme que l.55 ; revue fraîche B8 n°1, m2). Refus du serveur simulé
+  en démo : textes du dump, verbatim. **Aucun texte nouveau, aucun texte juridique** ; aucune mention de la portée d'une
+  confirmation ou d'une contestation (garde `testAucunTexteJuridiqueAjoute`). Aucune décision juridique n'a été
+  nécessaire.
 - **Écarts au web (non juridiques, consignés).**
   1. Refus serveur affiché verbatim (`error`) là où le web affiche toujours « Erreur lors du traitement » (l.199-200)
      (TJ7) ; erreur de lecture : message de `JoleneError` (jamais `error.message` brut, l.170 ; PRINCIPES §3).
@@ -1657,6 +1680,32 @@ sans changer aucune règle ni aucun texte affiché :
 - **CI UI.** `DemoPaiementsTests` (4 tests) rangé dans l'éclat `lot3-revenus` (domaine T12-T14b), sauté par le socle ;
   aucun nouvel éclat (onze au plus).
 
+### T13 — corrections de la revue fraîche B8 n°1 (verdict CLÔTURABLE, 0 bloquant, 0 majeur, 7 mineurs ; 16/11/2026)
+
+m1 (preuve de la contestation), m2 (source du vouvoiement de l.259), m3 (`PAIEMENT_RECLAME`) et m7 (définition live)
+sont reportés dans les puces ci-dessus. Les autres :
+
+- **m4 — déclaration démo admise par le serveur.** `demo-paiement-004` était un `DECLARE` sans facture sur la mission
+  libérale `demo-terminee-002`, ligne que le serveur refuse depuis `20261001122318`
+  (`trg_paiement_liberal_facture` : `LIBERAL_FACTURE_REQUISE`). Option retenue : **lier une facture cohérente**
+  (`demo-facture-honoraires-002`, `FACTURE` `EMISE` de la même mission, des mêmes parties, 256 € TTC = montant
+  déclaré ; `montant_du_reference` 256 et `source_montant_du` `FACTURE_HONORAIRES`, valeurs que pose le trigger),
+  exportée dans `demo-missions-terminees.json` (`factures_honoraires`, non décodée par l'app : factures en renvoi web,
+  D4). L'option « mission salariée » est écartée : aucune mission salariée de la démo ne peut porter une seconde
+  déclaration (missions 1 et 4 : `DECLARE` ou `CONFIRME` déjà présents, « Paiement déjà déclaré pour cette mission »,
+  `fn_declarer_paiement_soignant_internal_20260801` ; mission 3 : `CONTRAT_NON_FIGE`), et une mission ajoutée
+  changerait l'onglet (T12). `export-demo-fixtures.mjs` vérifie désormais chaque déclaration démo contre ces règles
+  (`verifierDeclarationsDemo`, l'export échoue sinon ; vérifié sur l'ancienne ligne : `LIBERAL_FACTURE_REQUISE`).
+  Affichage inchangé : `demo-paiements-declares.json` identique (colonnes de l.97), mission 2 toujours « Paiement suivi
+  dans Factures » (T12, régime libéral).
+- **m5 — en-tête de la carte d'une seule source.** `CartePaiementDeclare` expose `prefixe` (« 💰 {nom} déclare vous
+  avoir payé » et le séparateur `{' '}` de l.259) et `montant` ; `titre` (libellé d'accessibilité) est leur
+  concaténation ; la vue rend `Text(verbatim: prefixe) + Text(verbatim: montant)` en couleur, sans recomposer la chaîne.
+- **m6 — défilement prouvé sur iPhone.** `DemoPaiementsTests.testTapPushPaiementRecuOuvreLesPaiementsDeclares` exige
+  en plus, sur iPhone, que l'en-tête de l'onglet (`revenus-sous-titre`) soit sorti du cadre utile (au-dessus du bas des
+  barres de navigation) : la section, déjà proche du haut, était visible même sans défilement. Sur iPad, l'assertion
+  reste la visibilité de la première carte.
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -1672,7 +1721,8 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 - **T12** — revenus en lecture (paiements, escrow) ; branche `lot3/l3-t12-v2` poussée (section T12 ci-dessus), lecture
   seule, aucune action de paiement.
 - **T13** — paiements déclarés (confirmation ; contestation ouverte après B3) ; branche `lot3/l3-t13-v3` poussée
-  (section T13 ci-dessus), go humain requis avant merge.
+  (section T13 ci-dessus), revue fraîche B8 n°1 CLÔTURABLE (mineurs traités), définitions live relues le 16/11/2026 ;
+  go humain requis avant merge.
 - **T14a** — Stripe Connect.
 - **T14b** — IBAN (données bancaires).
 - **T16** — dispatch STAGING (secrets STAGING, suppression des comptes jetables, bascule transactionnelle de la

@@ -1607,7 +1607,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_rgpd_exporter_rate_limited"() RETURNS "j
 ## fn_confirmer_paiement_soignant
 
 - **Statut natif** : consommée (lot 3, T13) par `JoleneSupabase/Revenus/SupabasePaiementsGateway.swift`
-  (`confirmer`) — **B9** (paiements, D18) : PR jamais mergée sans le go explicite de Gabrielle.
+  (`confirmer`) — **B9** (paiements, D18) : PR jamais mergée sans le go explicite de Gabrielle. Définition **live**
+  relue en lecture seule par le coordinateur le 16/11/2026 (`md5(prosrc)` `b4483c528bfcbecb2fc84f161a93b84e`,
+  `SECURITY DEFINER`, `search_path=public, pg_temp`, `EXECUTE` à `authenticated` et `service_role`, pas à `anon` ;
+  `DECISIONS_LOT3.md`, section T13).
 - **Usage** : « Confirmer la réception » d'un paiement manuel `DECLARE` (web `BandeauPaiementDeclare.tsx`
   l.177-203) ; une seule mutation à la fois, boutons désactivés jusqu'à la relecture de la liste ; « Paiement confirmé
   ✅ » affiché seulement après relecture `paiements_soignant` (`statut = 'CONFIRME'`, `confirme_par_soignant = true`,
@@ -1638,14 +1641,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_paiement_soignant"("p_paiement
 - **Statut natif** : consommée (lot 3, T13) par `JoleneSupabase/Revenus/SupabasePaiementsGateway.swift`
   (`contester`) — **B9** : PR jamais mergée sans le go explicite de Gabrielle. La PR backend **B3** est sur `main`
   (#1118, migration `20261102205808_contestation_paiement_soignant.sql`, D19, correction 3) ; T13 lève le verrou côté
-  app (TJ7) : corps de la migration identique au dump (l.25741-25839) ; définition **live** non relue par T13 (aucun
-  accès backend dans la tranche), à confirmer avant le go B9.
+  app (TJ7) : corps de la migration identique au dump (l.25741-25839) ; définition **live** relue en lecture seule par
+  le coordinateur le 16/11/2026 (`md5(prosrc)` `368f41ca6e0157cd48ebbf6a638cecae`, `SECURITY DEFINER`,
+  `search_path=public`, `EXECUTE` à `authenticated` et `service_role`, pas à `anon` ; migration `20261102205808` au
+  registre ; détail : `DECISIONS_LOT3.md`, section T13) : condition de TJ7 levée.
 - **Usage** : « Contester » avec un motif non blanc (`trim`) de 500 scalaires Unicode au plus, envoyé tel que saisi
   (jamais le repli web `'Contesté par le soignant'`) ; « Contestation envoyée » seulement après relecture
   `paiements_soignant` (`statut = 'CONTESTE'` et `conteste = true`) ; la ligne `litiges` n'est pas relue par l'app :
-  B3 écrit paiement et litige dans un même sous-bloc (l.25791-25824), une ligne relue `CONTESTE` le prouve (lecture
-  `litiges` réservée à la preuve STAGING de T16) ; une seule mutation à la fois, boutons désactivés jusqu'à la
-  relecture de la liste. Tests : `SupabasePaiementsGatewayTests`, `PaiementsDeclaresModelTests`.
+  la preuve est `success:true` de B3 + relecture `CONTESTE`. B3 insère le litige dans le même sous-bloc que l'UPDATE
+  `CONTESTE` (l.25791-25824) et ne répond `success` qu'avec son `litige_id` (l.25837), exigé non vide (sinon erreur de
+  contrat, jamais un succès) ; une ligne relue `CONTESTE` seule ne prouve pas le litige (statut aussi écrit sans litige
+  de B3 : UPDATE direct du soignant ou de l'établissement sous `pol_paie_soig_update`, l.79489 ; contestation de
+  facture par `fn_ouvrir_litige_rate_limited`, l.46765). Lecture `litiges` réservée à la preuve STAGING de T16 ; une
+  seule mutation à la fois, boutons désactivés jusqu'à la relecture de la liste. Tests :
+  `SupabasePaiementsGatewayTests`, `PaiementsDeclaresModelTests`.
 - **Signature SQL** (`supabase/schema/public.sql` l.25741) :
 
 ```sql
