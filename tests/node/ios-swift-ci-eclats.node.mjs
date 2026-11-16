@@ -150,6 +150,26 @@ test('décision 22 : le plafond du job couvre la somme des éclats plus le build
   assert.ok(plafond >= somme + 15, `plafond du job ${plafond} min < ${somme} min d éclats + 15 min de build`);
 });
 
+// Revue fraîche B8 n°1 de L3-T15, m4 : la résolution SPM (faite par build-for-testing, une fois par job) ne réécrit
+// jamais le Package.resolved versionné de l'app. Une version de paquet ou un originHash différent ferait tester la CI
+// sur un graphe de dépendances que le dépôt ne décrit pas (Sentry Cocoa, supabase-swift épinglés en version exacte).
+const PACKAGE_RESOLVED_APP = 'ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved';
+
+test('L3-T15 m4 : Package.resolved de l app inchangé après la résolution SPM, avant le premier éclat', () => {
+  assert.ok(read(PACKAGE_RESOLVED_APP).includes('"identity" : "sentry-cocoa"'), `${PACKAGE_RESOLVED_APP} illisible`);
+  const iBuild = liste.findIndex(e => e.id === 'build');
+  assert.ok(iBuild >= 0 && liste[iBuild].texte.includes('xcodebuild build-for-testing'), 'étape build-for-testing (id build) absente');
+  const iGarde = liste.findIndex(e => e.texte.includes(`git diff --exit-code -- ${PACKAGE_RESOLVED_APP}`));
+  assert.ok(iGarde >= 0, `aucune étape ne vérifie « git diff --exit-code -- ${PACKAGE_RESOLVED_APP} »`);
+  assert.equal(iGarde, iBuild + 1, 'la vérification suit immédiatement la résolution SPM (build-for-testing)');
+  const premierEclat = liste.findIndex(e => /^test-without-building — éclat /.test(e.nom));
+  assert.ok(iGarde < premierEclat, 'la vérification précède les éclats');
+  const garde = liste[iGarde];
+  assert.equal(garde.si, null, 'la vérification ne tourne qu après un build réussi (condition par défaut)');
+  assert.ok(garde.delai <= 2, `délai de la vérification : ${garde.delai} min (au plus 2 : le plafond du job reste tenu)`);
+  assert.ok(!/^test-without-building/.test(garde.nom), 'la vérification n est pas un éclat');
+});
+
 test('décision 22 : chaque XCUITest tourne dans un seul éclat, les classes STAGING jamais', () => {
   assert.ok(socle, 'éclat socle absent');
   assert.deepEqual(socle.seulement.sort(), ['JoleneCoreTests', 'JoleneDesignTests', 'JoleneUITests']);

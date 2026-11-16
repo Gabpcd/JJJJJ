@@ -421,6 +421,20 @@ test('le DSN Sentry n\'est jamais versionné : Info.plist le lit du réglage, le
   }
 });
 
+test('SENTRY_IOS.md : DSN local en ligne de commande seulement, jamais dans un xcconfig versionné ; région à confirmer', () => {
+  // Revue fraîche B8 n°1 de L3-T15, m5 : `Config/Staging.xcconfig` est versionnée (comme Base et Production) ; une
+  // consigne « ajouter temporairement la ligne » finit tôt ou tard dans un commit. m6 : la restriction d'hôte du DSN
+  // attend la région de données de l'organisation Sentry, confirmée par Gabrielle.
+  const doc = readFileSync(join(root, 'docs/mobile-swift/SENTRY_IOS.md'), 'utf8');
+  const versionnes = ['Base', 'Staging', 'Production'].map((nom) => `ios-native/Config/${nom}.xcconfig`);
+  for (const chemin of versionnes) assert.ok(readFileSync(join(root, chemin), 'utf8').length > 0, `${chemin} absent`);
+  assert.doesNotMatch(doc, /^\s*JOLENE_SENTRY_DSN *= *https/m, 'aucune ligne xcconfig portant un DSN dans la doc');
+  assert.doesNotMatch(doc, /ajouter[^\n]*(?:Staging|Production|Base)\.xcconfig/i, 'aucune consigne d\'écrire le DSN dans un xcconfig');
+  assert.match(doc, /xcodebuild[^\n`]*JOLENE_SENTRY_DSN='https:\/\/…'/, 'commande xcodebuild avec le DSN en argument');
+  assert.match(doc, /jamais dans un fichier/i);
+  assert.match(doc, /région de données/i);
+});
+
 // Toute soumission, livraison de fiche ou distribution externe ; `default_platform(:ios)` rend
 // `fastlane submit` équivalent à `fastlane ios submit`, d'où la forme sans plateforme.
 const INTERDIT = /upload_to_app_store|\bdeliver\b|submit_for_review|automatic_release|distribute_external: true|groups:|notify_external_testers: true|\bfastlane\s+(?:ios\s+)?(?:submit|deliver|release|appstore)\b/;

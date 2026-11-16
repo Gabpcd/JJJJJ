@@ -83,6 +83,17 @@ final class CrashReportingTests: XCTestCase {
         }
     }
 
+    func testDSNAvecMotDePasseJamaisDemarre() {
+        // Revue B8 n°1, m6 : un DSN Sentry porte une clé publique seule. Une partie `:<secret>` (ancien format à clé
+        // secrète, ou valeur collée par erreur) n'est jamais embarquée dans l'app : Sentry reste désactivé.
+        for dsn in ["https://0123456789abcdef:fedcba9876543210@o1.ingest.example.invalid/1",
+                    "https://0123456789abcdef:@o1.ingest.example.invalid/1"] {
+            XCTAssertNil(ConfigurationCrash.dsnValide(dsn), dsn)
+            XCTAssertNil(ConfigurationCrash.auLancement(environnement: Self.production, info: Self.info(dsn: dsn)), dsn)
+        }
+        XCTAssertEqual(ConfigurationCrash.dsnValide(Self.dsnFictif), Self.dsnFictif, "clé publique seule : accepté")
+    }
+
     func testEnvironnementRefuseOuModeInconnuJamaisDemarre() {
         var sansCle = Self.staging
         sansCle.publishableKey = ""
@@ -253,6 +264,125 @@ final class CrashReportingTests: XCTestCase {
         XCTAssertEqual(espion.appels, [], "identifiant posé sur `.ready` seulement (blueprint §3 T15)")
     }
 
+    // MARK: - Identifiant utilisateur : changement d'identité (revue B8 n°1, M2)
+
+    /// Monde à deux comptes : A (profil soignant, espace prêt) et B (sans profil, espace bloqué). Restauration et
+    /// connexion servent le compte courant de `session` ; `reseau` rend les profils illisibles (fin transitoire).
+    private struct MondeDeuxComptes {
+        static let a = AuthenticatedUser(id: "u-a", email: "a@example.invalid",
+                                         emailConfirmedAt: Date(timeIntervalSince1970: 1_700_000_000), appMetadataRole: "SOIGNANT")
+        static let b = AuthenticatedUser(id: "u-b", email: "b@example.invalid",
+                                         emailConfirmedAt: Date(timeIntervalSince1970: 1_700_000_000), appMetadataRole: "SOIGNANT")
+        let session = MutableAuthState(restored: MondeDeuxComptes.a, restoreError: nil)
+        let reseau = ReseauProfils()
+        let events = AuthEventEmitter()
+        let controller: SessionController
+
+        init() {
+            controller = SessionController(gateways: Gateways(auth: AuthDeuxComptes(session: session, events: events),
+                                                              role: NeutralRole(), missions: MissionsDeuxComptes(reseau: reseau)))
+        }
+    }
+
+    private actor ReseauProfils {
+        private(set) var horsLigne = false
+        func regler(horsLigne: Bool) { self.horsLigne = horsLigne }
+    }
+
+    private struct AuthDeuxComptes: AuthPort {
+        let session: MutableAuthState
+        let events: AuthEventEmitter
+        func restoreSession() async throws -> AuthenticatedUser? {
+            if let erreur = await session.restoreError { throw erreur }
+            return await session.restored
+        }
+        func signIn(email: String, password: String) async throws -> AuthenticatedUser {
+            guard let compte = await session.restored else { throw JoleneError(.invalidCredentials, "refusé") }
+            return compte
+        }
+        func signOut() async throws {}
+        func authEvents() -> AsyncStream<AuthEvent> { events.stream() }
+    }
+
+    private struct MissionsDeuxComptes: MissionsPort {
+        let reseau: ReseauProfils
+        func profile(userId: String) async throws -> SoignantProfile? {
+            if await reseau.horsLigne { throw JoleneError(.network, "hors ligne") }
+            return userId == MondeDeuxComptes.a.id ? SoignantProfile(id: userId, profession: "IDE") : nil
+        }
+        func listMissions(context: MissionReadContext, filters: MissionFilters) async throws -> [Mission] { [] }
+        func mission(id: String, context: MissionReadContext) async throws -> Mission? { nil }
+    }
+
+    private func storeDeuxComptes() async -> (SessionStore, EspionCrash, MondeDeuxComptes) {
+        let monde = MondeDeuxComptes()
+        let espion = EspionCrash()
+        let store = SessionStore(controller: monde.controller, crashReporting: espion)
+        store.observeAuthEvents()
+        await store.start()
+        XCTAssertTrue(store.state.isReady, "A ouvre son espace")
+        XCTAssertEqual(espion.utilisateurs, ["u-a"])
+        return (store, espion, monde)
+    }
+
+    func testLienDeConfirmationDUnAutreCompteVersUnEspaceBloqueRetireLIdentifiant() async {
+        // Espace de A prêt ; un lien de confirmation de B est échangé (`ouvrirIdentiteInscription`) : B sans profil.
+        let (store, espion, monde) = await storeDeuxComptes()
+        await monde.session.set(restored: MondeDeuxComptes.b, restoreError: nil)
+        await store.ouvrirIdentiteInscription()
+        guard case .blocked = store.state else { return XCTFail("attendu : espace bloqué de B, obtenu \(store.state)") }
+        XCTAssertEqual(espion.utilisateurs, ["u-a", nil], "aucun crash de B attribué à A")
+        // Même compte relu par l'inscription : retiré avant la relecture, reposé au `.ready`.
+        await monde.session.set(restored: MondeDeuxComptes.a, restoreError: nil)
+        await store.ouvrirIdentiteInscription()
+        XCTAssertTrue(store.state.isReady)
+        XCTAssertEqual(espion.utilisateurs, ["u-a", nil, "u-a"])
+        await store.ouvrirIdentiteInscription()
+        XCTAssertEqual(espion.utilisateurs, ["u-a", nil, "u-a", nil, "u-a"])
+    }
+
+    func testSessionDUnAutreCompteVersUnEspaceBloqueRetireLIdentifiant() async {
+        // Espace de A prêt ; le SDK annonce la session de B (`.session(B)`, identité différente) : B sans profil.
+        let (store, espion, monde) = await storeDeuxComptes()
+        await monde.session.set(restored: MondeDeuxComptes.b, restoreError: nil)
+        monde.events.emit(.session(userId: MondeDeuxComptes.b.id))
+        await waitUntil { @MainActor in store.evenementsAuthTraites == 1 }
+        guard case .blocked = store.state else { return XCTFail("attendu : espace bloqué de B, obtenu \(store.state)") }
+        XCTAssertEqual(espion.utilisateurs, ["u-a", nil])
+    }
+
+    func testFinTransitoirePuisConnexionDUnAutreCompteBloqueRetireLIdentifiant() async {
+        // Espace de A prêt ; la session de B arrive alors que le profil est illisible : fin transitoire (le SDK détient la
+        // session de B, plus celle de A). Puis connexion de B depuis l'écran affiché : espace bloqué.
+        let (store, espion, monde) = await storeDeuxComptes()
+        await monde.session.set(restored: MondeDeuxComptes.b, restoreError: nil)
+        await monde.reseau.regler(horsLigne: true)
+        monde.events.emit(.session(userId: MondeDeuxComptes.b.id))
+        await waitUntil { @MainActor in store.evenementsAuthTraites == 1 }
+        XCTAssertEqual(store.state, .signedOut(message: SessionController.profileLoadFailedMessage))
+        XCTAssertEqual(espion.utilisateurs, ["u-a", nil], "l'espace de A est fermé : son identifiant ne suit pas B")
+        await monde.reseau.regler(horsLigne: false)
+        await store.signIn(email: "b@example.invalid", password: "fictif")
+        guard case .blocked = store.state else { return XCTFail("attendu : espace bloqué de B, obtenu \(store.state)") }
+        XCTAssertEqual(espion.utilisateurs, ["u-a", nil])
+    }
+
+    func testConnexionRefuseeRetireLIdentifiantJusquAuReadySuivant() async {
+        // `signIn` retire l'identifiant avant la tentative, comme il vide le navigateur intégré (T3b) : une connexion
+        // refusée laisse l'app sans identifiant, reposé au `.ready` suivant seulement.
+        let (store, espion, monde) = await storeDeuxComptes()
+        await monde.session.set(restored: nil, restoreError: nil)
+        await store.signIn(email: "inconnu@example.invalid", password: "fictif")
+        guard case .signedOut(let message?) = store.state, !message.isEmpty else {
+            return XCTFail("attendu : connexion refusée, obtenu \(store.state)")
+        }
+        XCTAssertEqual(espion.utilisateurs, ["u-a", nil])
+        await monde.session.set(restored: MondeDeuxComptes.a, restoreError: nil)
+        await store.signIn(email: "a@example.invalid", password: "fictif")
+        XCTAssertTrue(store.state.isReady)
+        XCTAssertEqual(espion.utilisateurs, ["u-a", nil, "u-a"])
+    }
+
     // MARK: - Gardes statiques de la cible app
 
     /// Racine `ios-native/` (le fichier est sous `ios-native/Packages/JoleneCore/Tests/JoleneCoreTests/`).
@@ -335,6 +465,149 @@ final class CrashReportingTests: XCTestCase {
         XCTAssertNil(avant[ouverture.upperBound...].range(of: "#endif"), "SentrySDK.crash() hors d'un bloc #if DEBUG")
         XCTAssertTrue(reporting.contains("ConfigurationCrash.crashTestDemande(arguments:"),
                       "le crash de test n'est déclenché que si Sentry a démarré")
+    }
+
+    // MARK: - Champs reçus par `beforeSend` et `beforeBreadcrumb` (revue B8 n°1, M1 et m3)
+
+    /// Version de Sentry dont les propriétés publiques sont recensées ci-dessous : en-têtes `SentryEvent.h`,
+    /// `SentryMessage.h`, `SentryException.h`, `SentryMechanism.h` et `SentryBreadcrumb.h` de `Sources/Sentry/Public/`, à
+    /// la révision épinglée `4e1e4ba9`. Une montée de version rougit `testRecensementDeLaVersionEpinglee` : relire ces
+    /// en-têtes, classer chaque propriété nouvelle (traitée ou conservée, avec sa raison), puis changer cette version.
+    private static let versionRecensee = "9.32.0"
+
+    /// Toutes les propriétés publiques d'un type Sentry reçu par les rappels : chacune est traitée par
+    /// `CrashReporting.swift` (ligne exacte attendue) ou conservée telle quelle (raison). La cible app n'a pas de tests
+    /// unitaires (`project.yml`) : cette garde statique tient lieu de test des fonctions `nettoyer`, dont chaque ligne
+    /// applique une règle pure de `CrashScrubber`, elle-même testée (`CrashScrubberTests`).
+    private struct Recensement {
+        let type: String
+        /// Variable qui porte une instance de ce type dans `CrashReporting.swift`.
+        let variable: String
+        let proprietes: [String]
+        let traitees: [String: String]
+        let conservees: [String: String]
+    }
+
+    private static let recensements: [Recensement] = [
+        Recensement(
+            type: "Event", variable: "event",
+            proprietes: ["breadcrumbs", "context", "debugMeta", "dist", "environment", "error", "eventId", "exceptions",
+                         "extra", "fingerprint", "level", "logger", "message", "modules", "platform", "releaseName",
+                         "request", "sdk", "serverName", "stacktrace", "startTimestamp", "tags", "threads", "timestamp",
+                         "transaction", "type", "user"],
+            traitees: [
+                "message": "event.message = propre",
+                "exceptions": "event.exceptions?.forEach { nettoyer($0) }",
+                "breadcrumbs": "event.breadcrumbs = event.breadcrumbs?.compactMap { nettoyer($0) }",
+                "tags": "event.tags = event.tags.map(CrashScrubber.etiquettes)",
+                "extra": "event.extra = event.extra.map(CrashScrubber.dictionnaire)",
+                "context": "event.context = event.context.map(CrashScrubber.contextes)",
+                "transaction": "event.transaction = event.transaction.map(CrashScrubber.texte)",
+                "fingerprint": "event.fingerprint = event.fingerprint?.map(CrashScrubber.texte)",
+                "logger": "event.logger = event.logger.map(CrashScrubber.texte)",
+                "request": "event.request = nil",
+                "serverName": "event.serverName = nil",
+                "user": "event.user = event.user?.userId.map { User(userId: $0) }",
+            ],
+            conservees: [
+                "eventId": "identifiant aléatoire de l'événement",
+                "error": "NSError d'une capture manuelle, jamais sérialisé (SentryEvent.m) ; l'app ne capture aucune erreur",
+                "timestamp": "date", "startTimestamp": "date", "level": "niveau", "platform": "« cocoa »",
+                "releaseName": "posé par l'app (release du bundle)", "dist": "posé par le SDK (numéro de build)",
+                "environment": "posé par l'app (mode)", "type": "posé par le SDK (« default », « transaction »)",
+                "sdk": "nom, version et intégrations du SDK", "modules": "noms et versions de modules",
+                "threads": "piles des fils (symboles, adresses)", "stacktrace": "pile (symboles, adresses)",
+                "debugMeta": "images binaires chargées (UUID, adresses)",
+            ]),
+        Recensement(
+            type: "Message", variable: "propre",
+            proprietes: ["formatted", "message", "params"],
+            traitees: [
+                "formatted": "let propre = SentryMessage(formatted: CrashScrubber.texte(message.formatted))",
+                "message": "propre.message = message.message.map(CrashScrubber.texte)",
+                "params": "propre.params = message.params?.map(CrashScrubber.texte)",
+            ],
+            conservees: [:]),
+        Recensement(
+            type: "Exception", variable: "exception",
+            proprietes: ["mechanism", "module", "stacktrace", "threadId", "type", "value"],
+            traitees: [
+                "value": "exception.value = exception.value.map(CrashScrubber.texte)",
+                "type": "exception.type = exception.type.map(CrashScrubber.texte)",
+                "mechanism": "guard let mecanisme = exception.mechanism else { return }",
+            ],
+            conservees: ["module": "module Swift ou nil", "threadId": "numéro de fil", "stacktrace": "pile (symboles, adresses)"]),
+        Recensement(
+            type: "Mechanism", variable: "mecanisme",
+            proprietes: ["data", "desc", "handled", "helpLink", "meta", "synthetic", "type"],
+            traitees: [
+                // Sentry 9.32.0 y range `crash_info_messages` (messages du runtime Swift, texte d'un `fatalError` compris) :
+                // `SentryCrashReportConverter.m` l.501-511.
+                "data": "mecanisme.data = mecanisme.data.map(CrashScrubber.dictionnaire)",
+                "desc": "mecanisme.desc = mecanisme.desc.map(CrashScrubber.texte)",
+            ],
+            conservees: ["type": "« mach », « signal », « nsexception », « AppHang »…", "handled": "booléen",
+                         "synthetic": "booléen", "helpLink": "lien d'aide posé par le SDK",
+                         "meta": "signal, exception Mach, domaine et code NSError"]),
+        Recensement(
+            type: "Breadcrumb", variable: "fil",
+            proprietes: ["category", "data", "level", "message", "origin", "timestamp", "type"],
+            traitees: [
+                "category": "guard CrashScrubber.filConserve(categorie: fil.category, type: fil.type) else { return nil }",
+                "type": "guard CrashScrubber.filConserve(categorie: fil.category, type: fil.type) else { return nil }",
+                "message": "fil.message = fil.message.map(CrashScrubber.texte)",
+                "data": "for (cle, valeur) in CrashScrubber.dictionnaire(fil.data ?? [:]) { fil.setData(value: valeur, key: cle) }",
+            ],
+            conservees: ["level": "niveau", "timestamp": "date", "origin": "origine posée par le SDK (« auto.… »)"]),
+    ]
+
+    func testRecensementCompletEtSansDoublon() {
+        XCTAssertEqual(Self.recensements.map(\.type), ["Event", "Message", "Exception", "Mechanism", "Breadcrumb"])
+        for r in Self.recensements {
+            let traitees = Set(r.traitees.keys), conservees = Set(r.conservees.keys)
+            XCTAssertEqual(traitees.intersection(conservees), [], "\(r.type) : propriété à la fois traitée et conservée")
+            XCTAssertEqual(traitees.union(conservees), Set(r.proprietes), "\(r.type) : propriété non classée")
+            XCTAssertEqual(r.proprietes.count, Set(r.proprietes).count, r.type)
+        }
+    }
+
+    func testChaqueProprieteTraiteeLEstDansCrashReporting() throws {
+        // M1 : `exceptions[].mechanism.data` (où Sentry 9.32.0 range `crash_info_messages`) et `mechanism.desc` passent
+        // par `CrashScrubber`, comme la valeur et le type de l'exception.
+        let reporting = try Self.lire("Jolene/Composition/CrashReporting.swift")
+        for r in Self.recensements {
+            for (propriete, ligne) in r.traitees.sorted(by: { $0.key < $1.key }) {
+                XCTAssertTrue(reporting.contains(ligne), "\(r.type).\(propriete) : « \(ligne) » absent de CrashReporting.swift")
+            }
+        }
+    }
+
+    func testAucuneAffectationHorsRecensement() throws {
+        // m3 : toute propriété réécrite par `CrashReporting.swift` est recensée comme traitée (rien de nettoyé, retiré ou
+        // ajouté en silence) ; les options du SDK (`options.…`) ne sont pas concernées.
+        let reporting = try Self.lire("Jolene/Composition/CrashReporting.swift")
+        let variables = Dictionary(uniqueKeysWithValues: Self.recensements.map { ($0.variable, $0) })
+        let affectation = try NSRegularExpression(pattern: #"\b(event|propre|exception|mecanisme|fil)\.(\w+)\s*=[^=]"#)
+        let plage = NSRange(reporting.startIndex..<reporting.endIndex, in: reporting)
+        var vues = 0
+        for resultat in affectation.matches(in: reporting, range: plage) {
+            guard let v = Range(resultat.range(at: 1), in: reporting), let p = Range(resultat.range(at: 2), in: reporting),
+                  let r = variables[String(reporting[v])] else { continue }
+            vues += 1
+            XCTAssertNotNil(r.traitees[String(reporting[p])], "\(r.type).\(reporting[p]) réécrite sans être recensée")
+        }
+        XCTAssertGreaterThanOrEqual(vues, 15, "affectations lues : \(vues)")
+    }
+
+    func testRecensementDeLaVersionEpinglee() throws {
+        let projet = try Self.lire("project.yml")
+        XCTAssertTrue(projet.contains("    url: https://github.com/getsentry/sentry-cocoa\n    exactVersion: \(Self.versionRecensee)\n"),
+                      "Sentry n'est plus en \(Self.versionRecensee) : relire les en-têtes et refaire le recensement")
+        let resolu = try Self.lire("Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")
+        let sentry = try XCTUnwrap(resolu.range(of: "\"identity\" : \"sentry-cocoa\""))
+        let suite = resolu[sentry.upperBound...]
+        let fin = suite.range(of: "}")?.upperBound ?? suite.endIndex
+        XCTAssertTrue(suite[..<fin].contains("\"version\" : \"\(Self.versionRecensee)\""), "Package.resolved ≠ \(Self.versionRecensee)")
     }
 
     func testDSNJamaisVersionne() throws {

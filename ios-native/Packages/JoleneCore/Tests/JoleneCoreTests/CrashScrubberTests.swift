@@ -162,6 +162,151 @@ final class CrashScrubberTests: XCTestCase {
         XCTAssertEqual(net["jolene"]?["dernier_lien"] as? String, "https://jolene.app/?code=\(masque)")
     }
 
+    // MARK: - Revue B8 n°1, m2 : faux négatifs
+
+    func testParametresDeLaFamilleDesJetonsEtMotDePasseSontMasques() {
+        // `provider_refresh_token` et `provider_token` (retour OAuth de Supabase), `token`, `password`.
+        assertMasque("https://jolene.app/#access_token=acc-0&provider_token=p-secret-1&provider_refresh_token=p-secret-2&type=x",
+                     sansFragments: ["acc-0", "p-secret-1", "p-secret-2"])
+        XCTAssertTrue(CrashScrubber.texte("?provider_refresh_token=p-secret-2&type=x").hasSuffix("&type=x"),
+                      "les paramètres voisins restent lisibles")
+        assertMasque("lien ?token=t-secret-3&type=invite", sansFragments: ["t-secret-3"],
+                     attendu: "lien ?token=\(masque)&type=invite")
+        assertMasque("form password=m0t-de-p4sse&email=x", sansFragments: ["m0t-de-p4sse"])
+        assertMasque("mot_de_passe=secret-fr-1 motDePasse=\"secret-fr-2\"", sansFragments: ["secret-fr-1", "secret-fr-2"])
+    }
+
+    func testClesCamelCaseDUneDescriptionSwiftSontMasquees() {
+        // Description d'une session (`String(describing:)`, `dump`) : clés camelCase, valeurs entre guillemets.
+        let brut = #"Session(accessToken: "acc-secret-1", refreshToken: "ref-secret-2", tokenHash: Optional("th-secret-3"), "#
+            + #"expiresIn: 3600, providerRefreshToken: "prov-secret-4")"#
+        assertMasque(brut, sansFragments: ["acc-secret-1", "ref-secret-2", "th-secret-3", "prov-secret-4"])
+        XCTAssertTrue(CrashScrubber.texte(brut).contains("expiresIn: 3600"), "un champ non sensible reste lisible")
+    }
+
+    func testJSONEchappeEtClesCamelCaseEnJSONSontMasques() {
+        // JSON dans une chaîne JSON (corps de réponse journalisé tel quel) : guillemets échappés.
+        let echappe = #"{"body":"{\"refresh_token\":\"esc-secret-1\",\"user\":\"u-1\",\"tokenHash\":\"esc-secret-2\"}"}"#
+        assertMasque(echappe, sansFragments: ["esc-secret-1", "esc-secret-2"])
+        XCTAssertTrue(CrashScrubber.texte(echappe).contains(#"\"user\":\"u-1\""#), CrashScrubber.texte(echappe))
+        assertMasque(#"{"accessToken":"js-secret-3","refreshToken":"js-secret-4"}"#, sansFragments: ["js-secret-3", "js-secret-4"])
+        // Valeur coupée (texte tronqué) : masquée jusqu'à la fin.
+        assertMasque(#"{"refresh_token":"coupe-secret-5"#, sansFragments: ["coupe-secret-5"])
+    }
+
+    func testDoubleEncodageEstMasque() {
+        // URL de redirection encodée deux fois (`%25` = `%`) : `%253F` pour `?`, `%253D` pour `=`.
+        assertMasque("redirect_to=https%253A%252F%252Fjolene.app%252Finscription%253Ftoken_hash%253Ddouble-secret-1",
+                     sansFragments: ["double-secret-1"])
+        assertMasque("next=%252F%253Fcode%253Ddouble-secret-2%2526type%253Dx", sansFragments: ["double-secret-2"])
+        assertMasque("contact=prenom.nom%2540example.invalid", sansFragments: ["prenom.nom", "example.invalid"])
+    }
+
+    func testIBANSepareParEspacesInsecablesOuTiretsEstMasque() {
+        for separateur in ["\u{00A0}", "\u{202F}", "-"] {
+            let iban = ["FR76", "3000", "6000", "0112", "3456", "7890", "189"].joined(separator: separateur)
+            assertMasque("IBAN \(iban) refusé", sansFragments: ["3000", "7890", "189"], attendu: "IBAN \(masque) refusé")
+        }
+    }
+
+    func testIdentifiantsTechniquesVoisinsToujoursLisibles() {
+        // Généralisation des noms (suffixe `token`, camelCase) et des séparateurs d'IBAN (tiret) : aucun excès de masque
+        // sur les identifiants techniques — UUID de mission commençant par deux lettres et deux chiffres compris.
+        for texte in ["token_type=bearer", "tokens=3", "passwordless=true", "errorCode: \"IBAN_INVALIDE\"",
+                      "Mission ab12cd34-ef56-ab78-cd90-ef12ab34cd56 introuvable", "FR-75 Paris",
+                      "error_code=IBAN_INVALIDE", "barcode=3760001", "status_code=500", "codeEtablissement=E1"] {
+            XCTAssertEqual(CrashScrubber.texte(texte), texte)
+        }
+    }
+
+    func testCleSensibleMasqueToutTypeDeValeur() throws {
+        // Une clé sensible masque sa valeur quel qu'en soit le type (tableau, dictionnaire, nombre) ; seul un nombre sous
+        // la clé exacte `code` est conservé (code d'erreur NSError ou HTTP, `testDictionnaireImbriqueMasqueParValeurEtParCle`).
+        let brut: [String: Any] = [
+            "refresh_token": ["tab-secret-1"],
+            "password": ["champ": "dict-secret-2"],
+            "refreshToken": "camel-secret-3",
+            "tokenHash": "camel-secret-4",
+            "provider_refresh_token": "prov-secret-5",
+            "access-token": 42,
+            "code": 7,
+            "ecran": "profil",
+        ]
+        let net = CrashScrubber.dictionnaire(brut)
+        let rendu = String(describing: net)
+        for fragment in ["tab-secret-1", "dict-secret-2", "camel-secret-3", "camel-secret-4", "prov-secret-5", "42"] {
+            XCTAssertFalse(rendu.contains(fragment), "« \(fragment) » survit : \(rendu)")
+        }
+        for cle in ["refresh_token", "password", "refreshToken", "tokenHash", "provider_refresh_token", "access-token"] {
+            XCTAssertEqual(net[cle] as? String, masque, cle)
+        }
+        XCTAssertEqual(net["code"] as? Int, 7)
+        XCTAssertEqual(net["ecran"] as? String, "profil")
+        XCTAssertEqual(CrashScrubber.etiquettes(["refreshToken": "e-1", "token_type": "bearer"]),
+                       ["refreshToken": masque, "token_type": "bearer"])
+    }
+
+    // MARK: - Revue B8 n°1, m1 : coût borné
+
+    /// Durée la plus courte de trois nettoyages du même texte : une préemption ponctuelle du processus (simulateur ou
+    /// runner chargé) ne fait pas échouer le test.
+    private func dureeMinimale(_ texte: String) -> TimeInterval {
+        (0..<3).map { _ -> TimeInterval in
+            let debut = DispatchTime.now().uptimeNanoseconds
+            _ = CrashScrubber.texte(texte)
+            return TimeInterval(DispatchTime.now().uptimeNanoseconds - debut) / 1e9
+        }.min() ?? .infinity
+    }
+
+    /// Seuil : 100 ms pour 8 000 caractères, en Debug, sur le simulateur comme en `swift test` macOS. Mesures de la
+    /// correction (MacBook, Xcode 16.4) : quelques millisecondes ; avant elle, l'adresse e-mail non bornée et le JWT sans
+    /// borne de début coûtaient un temps quadratique (`REVUES_LOT3.md`, section L3-T15). Marge d'un ordre de grandeur au
+    /// moins : le test ne doit pas être instable sur un runner partagé.
+    static let seuilHuitMilleCaracteres: TimeInterval = 0.1
+
+    func testHuitMilleCaracteresAdversesTraitesSousLeSeuil() {
+        let unite = "https://jolene.app/confirmer?token_hash=h-1&type=signup {\"refresh_token\":\"r-2\"} u@example.invalid "
+            + "FR76 3000 6000 0112 3456 7890 189 Bearer b.c.d eyJabcd.efgh.ijkl "
+        let textes: [(String, String)] = [
+            ("sans @ ni point", String(repeating: "a", count: 8_000)),
+            ("partie locale d'adresse", String(repeating: "a.", count: 4_000)),
+            ("début de JWT répété", String(repeating: "eyJ", count: 2_667)),
+            ("noms de jetons collés", String(repeating: "x_token", count: 1_143)),
+            ("texte réaliste répété", String(repeating: unite, count: 8_000 / unite.count + 1)),
+        ]
+        for (nom, texte) in textes {
+            XCTAssertGreaterThanOrEqual(texte.count, 8_000)
+            let duree = dureeMinimale(texte)
+            XCTAssertLessThan(duree, Self.seuilHuitMilleCaracteres,
+                              "\(nom) : \(Int(duree * 1000)) ms pour \(texte.count) caractères")
+        }
+    }
+
+    func testTexteTropLongTronqueAvecUnMarqueur() {
+        XCTAssertEqual(CrashScrubber.longueurMaximale, 8_192)
+        let avant = "?token_hash=coupe-secret-1 "
+        let apres = " apres-la-coupure u@example.invalid"
+        let brut = avant + String(repeating: "x ", count: 10_000) + apres
+        let net = CrashScrubber.texte(brut)
+        XCTAssertTrue(net.hasSuffix(CrashScrubber.marqueTroncature), "marqueur de troncature absent")
+        XCTAssertEqual(net.count, CrashScrubber.longueurMaximale - avant.count + "?token_hash=\(masque) ".count
+                       + CrashScrubber.marqueTroncature.count)
+        XCTAssertFalse(net.contains("coupe-secret-1"), "la partie conservée est nettoyée")
+        XCTAssertFalse(net.contains("apres-la-coupure"), "rien au-delà de la longueur maximale")
+        // Un texte à la longueur maximale exacte n'est pas tronqué.
+        let juste = String(repeating: "y", count: CrashScrubber.longueurMaximale)
+        XCTAssertEqual(CrashScrubber.texte(juste), juste)
+    }
+
+    func testReglesCompileesUneFoisEtToutesValides() {
+        // Expressions compilées une seule fois (`static let`) ; un motif invalide rendrait `regles` nil et chaque texte
+        // serait masqué en entier (repli fermé), ce que ce test interdit.
+        let regles = CrashScrubber.regles
+        XCTAssertNotNil(regles, "une expression ne compile pas")
+        XCTAssertEqual(regles?.count, 8)
+        XCTAssertTrue(regles?.first?.expression === CrashScrubber.regles?.first?.expression, "expressions recompilées")
+    }
+
     // MARK: - Fils d'Ariane
 
     func testFilsDArianeReseauJamaisConserves() {
