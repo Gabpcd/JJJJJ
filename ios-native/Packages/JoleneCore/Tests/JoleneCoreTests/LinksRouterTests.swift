@@ -40,8 +40,8 @@ final class LinksRouterTests: XCTestCase {
         XCTAssertEqual(route("https://jolene.app/etab/invitation/token?source=email"),
                        .etablissement(URL(string: "https://jolene.app/etab/invitation/token?source=email")!)) // /etab/invitation/*
         XCTAssertEqual(route("https://jolene.app/mission/mission-id"), .missionDetail(id: "mission-id"))    // /mission/*
-        XCTAssertEqual(route("https://jolene.app/contrat/contrat-id"),
-                       .safari(URL(string: "https://jolene.app/contrat/contrat-id")!))                      // /contrat/* lot 2
+        // Changement volontaire de L2-T10 : `/contrat/<id>` n'est plus `.safari`, le contrat est natif (lot 2, T9a).
+        XCTAssertEqual(route("https://jolene.app/contrat/contrat-id"), .contrat(id: "contrat-id"))         // /contrat/* lot 2
         XCTAssertEqual(route("https://jolene.app/soignant/missions"), .missions)                            // /soignant/missions
         XCTAssertEqual(route("https://jolene.app/soignant/missions/mission-id"), .missionDetail(id: "mission-id")) // /soignant/missions/*
         XCTAssertEqual(route("https://jolene.app/etablissement/missions"),
@@ -115,8 +115,8 @@ final class LinksRouterTests: XCTestCase {
                        "sans identifiant de série, le web rend /soignant/missions/:id")
         XCTAssertEqual(route("https://jolene.app/soignant/missions/a/b"),
                        .safari(URL(string: "https://jolene.app/soignant/missions/a/b")!), "profondeur inconnue")
-        XCTAssertEqual(route("https://jolene.app/soignant/presences/mission/abc"),
-                       .safari(URL(string: "https://jolene.app/soignant/presences/mission/abc")!), "pointage lot 2")
+        XCTAssertEqual(route("https://jolene.app/soignant/presences/mission/abc"), .presencesMission(id: "abc"),
+                       "pointage lot 2 : détail des présences natif depuis L2-T10 (`LinksRouterLot2Tests`)")
     }
 
     func testTraversalNeContournePasLeRoutage() {
@@ -242,7 +242,9 @@ final class LinksRouterTests: XCTestCase {
 
     func testCheminsSoignantSansEcranLot3RestentSafariAvecQueryEtFragment() {
         for chemin in ["/soignant/notifications/abc", "/soignant/parametres/recherches-sauvegardees",
-                       "/soignant/litiges?tab=reclamations#l%201", "/soignant/mes-documents?tab=contrats",
+                       // `/soignant/mes-documents?tab=contrats` en est sorti à L2-T10 (onglet Contrats natif) ; la page DPAE
+                       // reste web (décision 16 du lot 2).
+                       "/soignant/litiges?tab=reclamations#l%201", "/soignant/dpae?tab=x#y",
                        "/soignant/stripe-connect/retour", "/soignant/mes-gains/factures", "/soignant/Notifications"] {
             XCTAssertEqual(route("https://www.jolene.app" + chemin), .safari(URL(string: "https://jolene.app" + chemin)!), chemin)
         }

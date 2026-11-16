@@ -11,7 +11,11 @@ import JoleneDesign
 /// `DeepLinkIntentTests`, `PresentationsRacineTests`) ; le coordinateur exécute ses actions :
 /// - navigation dans l'espace prêt : `demande` (cible `CibleNotification` + epoch), exécutée par
 ///   `MainTabView.presenter` (onglet, retour à la racine, écran empilé) puis acquittée ; une demande d'un autre epoch
-///   n'est jamais exécutée ;
+///   n'est jamais exécutée. Depuis L2-T10, les liens et les taps push du lot 2 (`/soignant/presences[?tab=&filtre=]`,
+///   `/soignant/presences/mission/:id`, `/soignant/mes-documents?tab=`, alias `/soignant/documents` et
+///   `/soignant/contrats`, `/contrat/:id`, `/contrat/:id/certificat` ; pushs `CONTRAT_*` et `DPAE_*`) y mènent aux écrans
+///   natifs de « Mon espace », empilés sur le Profil par valeur (`MonEspaceRoute`) ; `/soignant/dpae` et
+///   `/soignant/conformite` restent des renvois web ;
 /// - renvoi web : présentateur `.safari` de l'app (`PresentateurRenvoiWeb`, injecté à la racine par
 ///   `PointDEntreeLiens`) — `SFSafariViewController` en staging/production, double démo sans réseau
 ///   (`renvoi-web-demo`, URL lue dans `renvoi-web-url`) ; jamais `openURL` (les chemins `/soignant/*` reviendraient

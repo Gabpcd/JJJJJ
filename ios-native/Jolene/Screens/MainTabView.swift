@@ -32,7 +32,12 @@ import JoleneDesign
 ///   d'`AccueilModel`, revue L3-T5 m1) ;
 /// - (lot 3, T12) onglet Revenus natif (`RevenusScreen`, pile `cheminRevenus`), à la place du placeholder du lot 0 ;
 ///   ses renvois web et l'état vide passent par `presenter` (cible de l'espace), la surcouche du pré-prompt est gardée ;
-/// - (lot 3, T13) section « Paiements à confirmer » de Revenus, cible du push `PAIEMENT_RECU` (`sectionRevenus`).
+/// - (lot 3, T13) section « Paiements à confirmer » de Revenus, cible du push `PAIEMENT_RECU` (`sectionRevenus`) ;
+/// - (lot 2, T10) écrans de « Mon espace » (présences, détail des présences d'une mission, Mes documents, contrat,
+///   certificat) : routes par valeur `MonEspaceRoute`, enregistrées sur les piles de l'Accueil (widget « Aller pointer »,
+///   oubli de départ) et du Profil (entrées de « Mon espace ») ; une cible de lien, de tap push, du centre ou de la ligne
+///   « présences d'une mission » de Revenus s'empile sur le Profil remis à sa racine, avec un jeton de présentation
+///   (`PresentationJetonnee`, revue B8 n°1 de L2-T10, m1) : le même lien deux fois change le chemin, l'écran est relu.
 struct MainTabView: View {
     /// Onglets de l'espace : enum dédié de JoleneCore (revue L3-T5, m9), jamais les drapeaux `EcranNatif`.
     typealias Tab = OngletEspace
@@ -50,6 +55,9 @@ struct MainTabView: View {
     @State private var cheminExplorer = NavigationPath()
     /// Pile de l'onglet Profil (intégration du lot 3) : préférences de notifications et édition du profil.
     @State private var cheminProfil = NavigationPath()
+    /// Jetons des écrans de « Mon espace » présentés sur le Profil (revue B8 n°1 de L2-T10, m1) : chaque présentation est
+    /// une valeur nouvelle, si bien qu'un lien vers la route déjà à la base de la pile change quand même le chemin.
+    @State private var jetonsMonEspace = JetonsDePresentation()
     /// Pile de l'onglet Revenus (lot 3, T12), ramenée à sa racine par un lien ou un tap. Rien n'y est empilé depuis la
     /// revue B8 n°2 de T12 (M1 : le paiement rapide en litige ouvre la page web de la mission) ; elle reste le point
     /// d'extension des sections de T13, T14a et T14b.
@@ -84,6 +92,8 @@ struct MainTabView: View {
                             presenter(cible, depuisCentre: true)
                         }
                     }
+                    // L2-T10 : widget « Aller pointer » et oubli de départ (liens par valeur, `MonEspaceRoute`).
+                    .destinationsMonEspace(container: container, session: session, snapshot: snapshot) { selection = $0 }
             }
             .tabItem { Label("Accueil", systemImage: "house") }
             .tag(Tab.accueil)
@@ -106,7 +116,8 @@ struct MainTabView: View {
             .accessibilityIdentifier("tab-missions")
 
             // Lot 3, T12 : onglet Revenus natif (remplace le placeholder du lot 0) ; ses renvois web (litige, factures,
-            // paie, présences) passent par `presenter`, et sa pile revient à sa racine sur un lien ou un tap.
+            // paie) et le détail natif des présences d'une mission (L2-T10, empilé sur le Profil) passent par
+            // `presenter`, et sa pile revient à sa racine sur un lien ou un tap.
             NavigationStack(path: $cheminRevenus) {
                 RevenusScreen(session: session, snapshot: snapshot, peremption: presentationsRevenus,
                               section: sectionRevenus) { cible in
@@ -128,6 +139,8 @@ struct MainTabView: View {
                         ProfilEditionScreen(session: session, snapshot: snapshot, localisation: container.localisationProfil,
                                             selectionAvatarDemo: container.selectionAvatarDemo)
                     }
+                    // L2-T10 : « Mon espace » (présences, documents, contrats) — entrées du hub, liens, taps et centre.
+                    .destinationsMonEspace(container: container, session: session, snapshot: snapshot) { selection = $0 }
             }
             .tabItem { Label("Profil", systemImage: "person") }
             .tag(Tab.profil)
@@ -224,6 +237,16 @@ struct MainTabView: View {
             selection = .profil
             cheminProfil = NavigationPath()
             cheminProfil.append(ProfilEditionRoute())
+        case .presences, .detailPresences, .documents, .contrat, .certificat:
+            // L2-T10 : écrans de « Mon espace », empilés sur l'onglet Profil comme ses entrées (même règle que les
+            // préférences : le Profil repart de sa racine, puis l'écran s'y empile), depuis un lien, un tap push, le
+            // centre ou l'onglet Revenus (présences d'une mission). Revue B8 n°1 de L2-T10, m1 : la route porte un jeton
+            // neuf, sans quoi le même lien reçu deux fois laisserait le chemin égal (écran ni relu ni remis devant) ;
+            // la destination lie l'identité de l'écran à ce jeton (`destinationsMonEspace`, `.id`).
+            guard let route = MonEspaceRoute(cible) else { return }
+            selection = .profil
+            cheminProfil = NavigationPath()
+            cheminProfil.append(jetonsMonEspace.presenter(route))
         case .web(let route):
             presentateurRenvoiWeb?.presenter(route)
         case .aucune:

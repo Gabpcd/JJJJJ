@@ -54,6 +54,15 @@ final class DeepLinkIntentTests: XCTestCase {
             // Onglet « Confidentialité » du profil web (export RGPD, suppression de compte) : le hub natif porte les deux
             // depuis L3-T11 (intégration du lot 3 ; revue B8 de T3b, m3, garde de `LinksRouterTests`).
             ("https://jolene.app/soignant/profil?tab=confidentialite#suppression-compte", .monCompte),
+            // L2-T10 : écrans de « Mon espace » (lot 2), empilés sur l'onglet Profil.
+            ("https://jolene.app/soignant/presences?tab=historique&filtre=a_valider",
+             .presences(onglet: "historique", filtre: "a_valider")),
+            ("https://jolene.app/soignant/presences/mission/m%201", .detailPresences(missionId: "m 1")),
+            ("https://jolene.app/soignant/mes-documents?tab=contrats", .documents(onglet: .contrats)),
+            ("https://jolene.app/soignant/documents", .documents(onglet: .justificatifs)),
+            ("https://jolene.app/soignant/contrats", .documents(onglet: .contrats)),
+            ("https://jolene.app/contrat/c1", .contrat(id: "c1")),
+            ("https://jolene.app/contrat/c1/certificat", .certificat(contratId: "c1")),
         ]
         for (lien, cible) in cas {
             let obtenue = try intention(lien)
@@ -85,7 +94,9 @@ final class DeepLinkIntentTests: XCTestCase {
             "https://jolene.app/reset-password",                                      // sans identifiants
             "https://jolene.app/inscription/etablissement",
             "https://jolene.app/auth/psc/callback?status=success",                    // PSC non construit (D8)
-            "https://jolene.app/contrat/c1",
+            // `/contrat/c1` en est sorti à L2-T10 (contrat natif) ; DPAE et Conformité restent des pages web.
+            "https://jolene.app/soignant/dpae",                                        // décision 16 du lot 2
+            "https://jolene.app/soignant/conformite",                                  // lot 4
             "https://jolene.app/admin/litiges",
             "https://jolene.app/groupe/tableau",
             "https://jolene.app/aide/pro-sante-connect?x=1",                          // hors AASA
@@ -369,7 +380,7 @@ final class DeepLinkIntentTests: XCTestCase {
         aiguillage.renvoiWebPresente(.safari(litiges)) // présenté par l'app (centre, Accueil, profil)
         XCTAssertNil(aiguillage.recevoir(url: litiges), "même URL revenue par lien universel : ignorée")
         XCTAssertNil(aiguillage.recevoir(url: url("https://www.jolene.app/soignant/litiges")), "même URL canonique")
-        let autre = url("https://jolene.app/contrat/c1")
+        let autre = url("https://jolene.app/soignant/dpae") // `/contrat/c1` est natif depuis L2-T10
         XCTAssertEqual(aiguillage.recevoir(url: autre), .renvoiWeb(.safari(autre)), "autre lien : présenté")
         aiguillage.renvoiWebPresente(.safari(autre))
         aiguillage.renvoiWebFerme()
@@ -541,5 +552,8 @@ final class DeepLinkIntentTests: XCTestCase {
         "/soignant/mon-compte", "/soignant/profil", "/soignant/notifications", "/soignant/parametres/notifications",
         "/soignant/stripe-connect", "/soignant/stripe-connect?success=true", "/soignant/stripe-connect?refresh=true",
         "/soignant/litiges", "/etablissement/missions/abc",
+        // L2-T10 : routes du lot 2.
+        "/soignant/presences?tab=historique&filtre=a_valider", "/soignant/presences/mission/m-1",
+        "/soignant/mes-documents?tab=contrats", "/contrat/c-1", "/contrat/c-1/certificat", "/soignant/dpae",
     ]
 }

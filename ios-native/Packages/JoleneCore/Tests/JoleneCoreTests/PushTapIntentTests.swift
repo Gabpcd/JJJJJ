@@ -71,8 +71,9 @@ final class PushTapIntentTests: XCTestCase {
             (["type_evenement": "SYSTEM", "lien": "/soignant/notifications"], .notifications, .centre),
             (["type_evenement": "LITIGE_OUVERT", "litige_id": "l1"],
              .safari(url("https://jolene.app/soignant/litiges#l1")), .web(.safari(url("https://jolene.app/soignant/litiges#l1")))),
-            (["type_evenement": "CONTRAT_A_SIGNER", "contrat_id": "c1"],
-             .safari(url("https://jolene.app/contrat/c1")), .web(.safari(url("https://jolene.app/contrat/c1")))),
+            // L2-T10 : le contrat est natif (« Mon espace », onglet Profil), plus un renvoi web.
+            (["type_evenement": "CONTRAT_A_SIGNER", "contrat_id": "c1"], .contrat(id: "c1"), .contrat(id: "c1")),
+            (["type_evenement": "DPAE_RAPPEL"], .documents(onglet: "dpae"), .documents(onglet: .dpae)),
             (["type_evenement": "FACTURE_EMISE"], .revenus(section: .factures),
              .web(.safari(url("https://jolene.app/soignant/mes-gains?tab=factures")))),
             (["type_evenement": "PAIEMENT_RECU"], .revenus(section: .paiementsAConfirmer),

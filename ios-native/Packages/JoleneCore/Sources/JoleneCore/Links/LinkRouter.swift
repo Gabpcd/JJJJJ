@@ -27,12 +27,22 @@ import Foundation
 /// | `/soignant/notifications` (lot 3)                 | `.notifications`                  |
 /// | `/soignant/parametres/notifications` (lot 3)      | `.parametresNotifications`        |
 /// | `/soignant/stripe-connect` (`?success=true` / `?refresh=true`, lot 3) | `.stripeConnect(retour:)` |
+/// | `/soignant/presences` (`?tab=`, `?filtre=` tels que reçus, lot 2 T10) | `.presences(onglet:filtre:)` |
+/// | `/soignant/presences/mission/{id}` (lot 2 T10)    | `.presencesMission(id:)`          |
+/// | `/soignant/mes-documents` (`?tab=justificatifs\|contrats\|dpae` tel que reçu, lot 2 T10) | `.documents(onglet:)` |
+/// | alias `/soignant/documents` (`Navigate`, l.388), `/soignant/contrats` (l.407) : onglet fixé par la redirection | `.documents(onglet: "justificatifs" / "contrats")` |
+/// | `/contrat/{id}` (lot 2 T10)                       | `.contrat(id:)`                   |
+/// | `/contrat/{id}/certificat` (lot 2 T10)            | `.contratCertificat(id:)`         |
+/// | `/soignant/dpae` (alias web de `?tab=dpae`, l.405) et `/soignant/conformite` (l.325) : pages web (décision 16 du lot 2, lot 4) | `.safari(URL)` |
 /// | `/etablissement/*`, `/etab/invitation/*`          | `.etablissement(URL)`             |
-/// | tout le reste (`/admin/*`, `/groupe/*`, `/contrat/*`, `/auth/psc/callback`, `/inscription/etablissement`, `/inscription/soignant/completion`, autres `/inscription/*`, autres `/soignant/*`, chemins hors AASA) | `.safari(URL)` |
+/// | tout le reste (`/admin/*`, `/groupe/*`, autres `/contrat/*`, `/auth/psc/callback`, `/inscription/etablissement`, `/inscription/soignant/completion`, autres `/inscription/*`, autres `/soignant/*`, chemins hors AASA) | `.safari(URL)` |
 ///
 /// Le routeur ne dit pas si l'écran d'une route native est livré : `DestinationLien` renvoie vers
 /// Safari une route dont la tranche d'écran n'est pas encore mergée. Limite connue : `?tab=` n'est
-/// lu que pour Revenus ; les autres onglets en query (`?tab=passees`) ne sont pas portés.
+/// lu que pour Revenus, Présences et Mes documents ; les autres onglets en query (`?tab=passees`) ne sont pas
+/// portés, et `?statut=` de la liste des contrats (`ListeContrats.tsx` l.55-56) n'est pas repris par
+/// `/soignant/mes-documents?tab=contrats` (aucun lien du web ne le pose ; l'alias `/soignant/contrats` le perd
+/// comme le `Navigate` du web).
 public enum LinkRouter {
     /// Entrée Universal Link (`onOpenURL`, `NSUserActivity`). N'accepte que les hôtes de
     /// `AASAPatterns.hosts` en https sans port ; retourne `nil` pour tout autre hôte.
@@ -105,6 +115,19 @@ public enum LinkRouter {
         case "/soignant/notifications": return .notifications
         case "/soignant/parametres/notifications": return .parametresNotifications
         case "/soignant/stripe-connect": return .stripeConnect(retour: RetourConnect(query: query))
+        // Lot 2, T10 (`src/App.tsx` l.323, l.326) : `?tab=` et `?filtre=` lus comme `searchParams.get` du web
+        // (`PresencesSoignant.tsx` l.276-279, `MesDocuments.tsx` l.18), valeur brute ; l'écran décide (onglet dérivé ou
+        // `justificatifs` pour une valeur inconnue).
+        case "/soignant/presences":
+            let parametres = FormQuery(query)
+            return .presences(onglet: parametres.get("tab"), filtre: parametres.get("filtre"))
+        case "/soignant/mes-documents": return .documents(onglet: FormQuery(query).get("tab"))
+        // Alias `Navigate` (l.388, l.407) : la redirection fixe l'onglet et ne reprend pas la query du lien.
+        case "/soignant/documents": return .documents(onglet: "justificatifs")
+        case "/soignant/contrats": return .documents(onglet: "contrats")
+        // DPAE (alias web de `?tab=dpae`, l.405 ; onglet en renvoi web, décision 16) et Conformité (l.325, lot 4) : pages
+        // web, nommées ici pour que la table le dise (même effet que le défaut).
+        case "/soignant/dpae", "/soignant/conformite": return .safari(canonical)
         default: break
         }
 
@@ -117,6 +140,17 @@ public enum LinkRouter {
         }
         if segments.count == 2, segments[0] == "mission", let id = identifier(segments[1]) {
             return .missionDetail(id: id)
+        }
+        // Lot 2, T10 : détail des présences d'une mission (l.327), contrat (l.440) et son certificat (l.441).
+        if segments.count == 4, segments[0] == "soignant", segments[1] == "presences", segments[2] == "mission",
+           let id = identifier(segments[3]) {
+            return .presencesMission(id: id)
+        }
+        if segments.count == 2, segments[0] == "contrat", let id = identifier(segments[1]) {
+            return .contrat(id: id)
+        }
+        if segments.count == 3, segments[0] == "contrat", segments[2] == "certificat", let id = identifier(segments[1]) {
+            return .contratCertificat(id: id)
         }
         if segments.count >= 2, segments[0] == "etablissement" || (segments[0] == "etab" && segments[1] == "invitation") {
             return .etablissement(canonical)

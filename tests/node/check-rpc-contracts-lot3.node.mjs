@@ -801,12 +801,14 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
   // au run 42549855710, avant les deux XCUITest de L3-TJ ; seuil de 20 min, décision 22 de DECISIONS_LOT2).
   const wf = read('.github/workflows/ios-swift-ci.yml');
   // Intégration du lot 3 (09/11/2026) : T8 (complétion) rejoint « lot3-inscription », T10 et T12 ont leur éclat ;
-  // ordre des étapes et de la boucle des xcresult.
+  // ordre des étapes et de la boucle des xcresult. Revue B8 n°1 de L2-T10 (M1) : `DemoLiensLot2Tests` (liens du lot 2)
+  // tourne dans « lot3-inscription » (4,9 / 9,0 / 8,7 min au run 43400770161), « documents » (18,5 min en iPad portrait)
+  // ne pouvant pas la recevoir sous 20 min.
   const eclats = new Map([
     ['lot3-compte', ['DemoLiensLot3Tests', 'DemoCompteLot3Tests']],
     ['lot3-push', ['DemoPushTests']],
     ['lot3-notifications', ['DemoNotificationsTests', 'DemoPreferencesTests', 'DemoProfilTests']],
-    ['lot3-inscription', ['DemoInscriptionTests', 'DemoCompletionInscriptionTests']],
+    ['lot3-inscription', ['DemoInscriptionTests', 'DemoCompletionInscriptionTests', 'DemoLiensLot2Tests']],
     ['lot3-profil-photo', ['DemoPhotoPositionTests']],
     // L3-T13 : les paiements déclarés rejoignent l'éclat de l'onglet Revenus (domaine T12-T14b), sans nouvel éclat.
     ['lot3-revenus', ['DemoRevenusTests', 'DemoPaiementsTests']],

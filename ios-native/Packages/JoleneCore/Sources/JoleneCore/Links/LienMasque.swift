@@ -24,6 +24,8 @@ public enum LienMasque {
         // Chemins servis par Safari (`src/App.tsx`, routage push, Accueil).
         "certificat", "completion", "succes", "litiges", "reclamations", "mes-reclamations", "mes-documents",
         "presences", "contrats", "facturation",
+        // Lot 2, T10 : alias et pages web de « Mes documents » (`src/App.tsx` l.325, l.388, l.405).
+        "documents", "dpae", "conformite",
     ]
 
     /// Gabarit d'une URL : chemin masqué, puis `?‹masqué›` et `#‹masqué›` si la query ou le fragment
@@ -70,11 +72,33 @@ extension JoleneRoute: CustomStringConvertible, CustomDebugStringConvertible {
             case .rafraichir: return "stripeConnect(rafraichir)"
             case nil: return "stripeConnect(sans retour)"
             }
+        case .presences(let onglet, let filtre):
+            let ongletMontre = LienMasque.valeurConnue(onglet, parmi: Set(PointageRules.OngletPresences.allCases.map(\.rawValue)),
+                                                       absente: "sans onglet", inconnue: "onglet masqué")
+            let filtreMontre = LienMasque.valeurConnue(filtre, parmi: ["a_valider"], absente: "sans filtre",
+                                                       inconnue: "filtre masqué")
+            return "presences(\(ongletMontre), \(filtreMontre))"
+        case .presencesMission: return "presencesMission(id masqué)"
+        case .documents(let onglet):
+            let ongletMontre = LienMasque.valeurConnue(onglet, parmi: Set(OngletDocuments.allCases.map(\.rawValue)),
+                                                       absente: "sans onglet", inconnue: "onglet masqué")
+            return "documents(\(ongletMontre))"
+        case .contrat: return "contrat(id masqué)"
+        case .contratCertificat: return "contratCertificat(id masqué)"
         case .safari(let url): return "safari(\(LienMasque.gabarit(url)))"
         case .etablissement(let url): return "etablissement(\(LienMasque.gabarit(url)))"
         }
     }
     public var debugDescription: String { description }
+}
+
+extension LienMasque {
+    /// Valeur de query montrée seulement si elle appartient au vocabulaire fermé de l'écran (onglets du web, filtre
+    /// « à valider ») ; toute autre valeur, venue du lien, est masquée (lot 2, T10).
+    static func valeurConnue(_ valeur: String?, parmi connues: Set<String>, absente: String, inconnue: String) -> String {
+        guard let valeur else { return absente }
+        return connues.contains(valeur) ? valeur : inconnue
+    }
 }
 
 /// La query d'une étape porte un code de parrainage (`ref`, `parrain`) : jamais montrée.

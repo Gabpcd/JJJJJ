@@ -274,7 +274,9 @@ tranches qui la mettent en œuvre (§3 du blueprint).
 - **XCUITest « contrat à signer » (m6)** : `DemoPushTests.testTapContratASignerVersLeWebDuContrat`
   (`CONTRAT_A_SIGNER:contrat_id=demo-contrat-001` → `safari https://jolene.app/contrat/demo-contrat-001`, renvoi web
   tant que l'écran contrats du lot 2 n'est pas intégré). Le libellé `push-tap-cible` n'est exposé qu'en build DEBUG
-  **et** en démo (m8).
+  **et** en démo (m8). **Basculé par L2-T10** (liens du lot 2, `LOT2_PLAN.md` §3 T10 ; revue B8 de la PR #1131, m7) :
+  `/contrat/:id` est natif, le test devient `DemoPushTests.testTapContratASignerOuvreLeContratNatif` (`contrat-screen`
+  sur l'onglet Profil, `deeplink-route` = `contrat demo-contrat-001`).
 - **Pré-prompt** : `MainTabView` (surcouche) ; compteur `jolene.sessionCount` et marque `jolene.pushPrePrompt` en
   `UserDefaults` (staging/production), en mémoire vive en démo (chaque lancement démo est une 1re session) ;
   `-JOLENE_SESSION_COUNT <n>` (DEBUG) impose le numéro de session sans persistance — `StagingConnexionTests` le passe
@@ -1457,7 +1459,8 @@ faux au regard du web (M1) ou ajouté.
   `revenus-mission-ouvrir-<id>`), nommé comme le `aria-label` du web (« Voir mission … », `MesGains.tsx` l.703 ; le
   web : `role="button"`, `tabIndex`, Entrée/Espace, l.701-706) : atteignable par VoiceOver, le Contrôle vocal et le
   clavier. L'action nommée posée sur le conteneur `contain` (jamais focalisé) est retirée ; le tap de la ligne et les
-  identifiants internes sont inchangés. XCUITest : `testMissionOuvreSesPresencesSurLeWeb` touche aussi le bouton.
+  identifiants internes sont inchangés. XCUITest : `testMissionOuvreSesPresencesSurLeWeb` touche aussi le bouton
+  (renommé `testMissionOuvreLeDetailNatifDeSesPresences` par L2-T10 : le détail des présences d'une mission est natif).
   Aucun texte affiché nouveau (libellé vocalisé = `aria-label` web).
 - **m6** : `SuiviVersementsConnect` consigné (écart 9, T14a) et dans `PARITE_SOIGNANT.md`.
 - **m7 — sources.** `PageStripeConnect.tsx` l.104 → l.106 (et conditions d'affichage citées) ; « web l.92 » → l.93 ;
