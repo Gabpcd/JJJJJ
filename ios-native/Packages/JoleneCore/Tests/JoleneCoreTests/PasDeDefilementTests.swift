@@ -112,4 +112,21 @@ final class PasDeDefilementTests: XCTestCase {
         XCTAssertEqual(PasDeDefilement.abscisseDeGlissement(viewport: viewport, departY: 415, obstacles: [toute]), 201,
                        "aucun couloir libre : le milieu, comme avant")
     }
+
+    /// Run 43296363876, UI — iphone (fusion des lots 2 et 3, `DemoPhotoPositionTests.testPositionRenseigneLaVilleEnregistreeEtRelue`
+    /// et `.testGeocodageSansResultatPositionRecupereeVilleInchangee`) : sur l'iPhone 17 (402 pt), le curseur `profil-rayon`
+    /// (32,2…370,5 × 581,7…612,7) couvre les trois couloirs (201 ; 40,2 ; 361,8) ; les quarante glissements de
+    /// `scrollTo("profil-enregistrer")` partaient de (201 ; 600,7), sur le curseur, et la page ne défilait jamais. Les
+    /// gouttières des bords (hors de la piste d'un curseur pleine largeur) restent libres : la droite d'abord (le bord
+    /// gauche porte le geste système de retour).
+    func testCurseurPleineLargeurSurIPhonePasseALaGouttiereDroite() {
+        let viewport = CGRect(x: 0, y: 0, width: 402, height: 874)
+        let rayon = CGRect(x: 32.2, y: 581.7, width: 338.3, height: 31)
+        XCTAssertEqual(PasDeDefilement.abscisseDeGlissement(viewport: viewport, departY: 600.7, obstacles: [rayon]),
+                       390, accuracy: 0.001)
+        // Gouttière droite occupée aussi (contrôle qui touche le bord droit) : la gouttière gauche.
+        let droite = CGRect(x: 360, y: 581.7, width: 42, height: 31)
+        XCTAssertEqual(PasDeDefilement.abscisseDeGlissement(viewport: viewport, departY: 600.7, obstacles: [rayon, droite]),
+                       12, accuracy: 0.001)
+    }
 }

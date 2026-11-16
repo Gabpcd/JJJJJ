@@ -1,0 +1,5196 @@
+[
+  {
+    "name": "classerFormatDocument/grille/nom=.pdf|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": ".pdf",
+      "type": ""
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=.pdf|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": ".pdf",
+      "type": " "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=.pdf|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": ".pdf",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=.pdf|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": ".pdf",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=.pdf|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": ".pdf",
+      "type": "application/octet-stream"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=.pdf|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": ".pdf",
+      "type": "application/pdf"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=.pdf|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": ".pdf",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=.pdf|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": ".pdf",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=.pdf|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": ".pdf",
+      "type": "image/jpeg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=.pdf|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": ".pdf",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=.pdf|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": ".pdf",
+      "type": "image/png"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=.pdf|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": ".pdf",
+      "type": "image/webp"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=.pdf|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": ".pdf",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=C:\\Users\\x\\scan.pdf|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "C:\\Users\\x\\scan.pdf",
+      "type": ""
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=C:\\Users\\x\\scan.pdf|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "C:\\Users\\x\\scan.pdf",
+      "type": " "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=C:\\Users\\x\\scan.pdf|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "C:\\Users\\x\\scan.pdf",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=C:\\Users\\x\\scan.pdf|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "C:\\Users\\x\\scan.pdf",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=C:\\Users\\x\\scan.pdf|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "C:\\Users\\x\\scan.pdf",
+      "type": "application/octet-stream"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=C:\\Users\\x\\scan.pdf|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "C:\\Users\\x\\scan.pdf",
+      "type": "application/pdf"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=C:\\Users\\x\\scan.pdf|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "C:\\Users\\x\\scan.pdf",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=C:\\Users\\x\\scan.pdf|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "C:\\Users\\x\\scan.pdf",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=C:\\Users\\x\\scan.pdf|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "C:\\Users\\x\\scan.pdf",
+      "type": "image/jpeg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=C:\\Users\\x\\scan.pdf|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "C:\\Users\\x\\scan.pdf",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=C:\\Users\\x\\scan.pdf|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "C:\\Users\\x\\scan.pdf",
+      "type": "image/png"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=C:\\Users\\x\\scan.pdf|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "C:\\Users\\x\\scan.pdf",
+      "type": "image/webp"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=C:\\Users\\x\\scan.pdf|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "C:\\Users\\x\\scan.pdf",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=archive.tar.gz|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "archive.tar.gz",
+      "type": ""
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=archive.tar.gz|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "archive.tar.gz",
+      "type": " "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=archive.tar.gz|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "archive.tar.gz",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=archive.tar.gz|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "archive.tar.gz",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=archive.tar.gz|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "archive.tar.gz",
+      "type": "application/octet-stream"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=archive.tar.gz|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "archive.tar.gz",
+      "type": "application/pdf"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=archive.tar.gz|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "archive.tar.gz",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=archive.tar.gz|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "archive.tar.gz",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=archive.tar.gz|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "archive.tar.gz",
+      "type": "image/jpeg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=archive.tar.gz|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "archive.tar.gz",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=archive.tar.gz|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "archive.tar.gz",
+      "type": "image/png"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=archive.tar.gz|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "archive.tar.gz",
+      "type": "image/webp"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=archive.tar.gz|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "archive.tar.gz",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier.pdf/photo|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier.pdf/photo",
+      "type": ""
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier.pdf/photo|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier.pdf/photo",
+      "type": " "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier.pdf/photo|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier.pdf/photo",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier.pdf/photo|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier.pdf/photo",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier.pdf/photo|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier.pdf/photo",
+      "type": "application/octet-stream"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier.pdf/photo|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier.pdf/photo",
+      "type": "application/pdf"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier.pdf/photo|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier.pdf/photo",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier.pdf/photo|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier.pdf/photo",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier.pdf/photo|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier.pdf/photo",
+      "type": "image/jpeg"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier.pdf/photo|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier.pdf/photo",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier.pdf/photo|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier.pdf/photo",
+      "type": "image/png"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier.pdf/photo|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier.pdf/photo",
+      "type": "image/webp"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier.pdf/photo|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier.pdf/photo",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier/sous/photo.jpg|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier/sous/photo.jpg",
+      "type": ""
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier/sous/photo.jpg|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier/sous/photo.jpg",
+      "type": " "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier/sous/photo.jpg|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier/sous/photo.jpg",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier/sous/photo.jpg|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier/sous/photo.jpg",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier/sous/photo.jpg|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier/sous/photo.jpg",
+      "type": "application/octet-stream"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier/sous/photo.jpg|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier/sous/photo.jpg",
+      "type": "application/pdf"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier/sous/photo.jpg|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier/sous/photo.jpg",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier/sous/photo.jpg|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier/sous/photo.jpg",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier/sous/photo.jpg|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier/sous/photo.jpg",
+      "type": "image/jpeg"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier/sous/photo.jpg|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier/sous/photo.jpg",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier/sous/photo.jpg|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier/sous/photo.jpg",
+      "type": "image/png"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier/sous/photo.jpg|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier/sous/photo.jpg",
+      "type": "image/webp"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=dossier/sous/photo.jpg|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "dossier/sous/photo.jpg",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.HEIF|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIF",
+      "type": ""
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.HEIF|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIF",
+      "type": " "
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.HEIF|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIF",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.HEIF|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIF",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.HEIF|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIF",
+      "type": "application/octet-stream"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.HEIF|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIF",
+      "type": "application/pdf"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.HEIF|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIF",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.HEIF|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIF",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.HEIF|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIF",
+      "type": "image/jpeg"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.HEIF|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIF",
+      "type": "image/jpg"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.HEIF|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIF",
+      "type": "image/png"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.HEIF|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIF",
+      "type": "image/webp"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.HEIF|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIF",
+      "type": "text/html"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.JPEG|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.JPEG",
+      "type": ""
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.JPEG|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.JPEG",
+      "type": " "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.JPEG|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.JPEG",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.JPEG|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.JPEG",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.JPEG|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.JPEG",
+      "type": "application/octet-stream"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.JPEG|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.JPEG",
+      "type": "application/pdf"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.JPEG|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.JPEG",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.JPEG|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.JPEG",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.JPEG|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.JPEG",
+      "type": "image/jpeg"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.JPEG|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.JPEG",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.JPEG|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.JPEG",
+      "type": "image/png"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.JPEG|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.JPEG",
+      "type": "image/webp"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.JPEG|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.JPEG",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.gif|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.gif",
+      "type": ""
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.gif|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.gif",
+      "type": " "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.gif|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.gif",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.gif|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.gif",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.gif|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.gif",
+      "type": "application/octet-stream"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.gif|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.gif",
+      "type": "application/pdf"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.gif|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.gif",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.gif|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.gif",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.gif|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.gif",
+      "type": "image/jpeg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.gif|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.gif",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.gif|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.gif",
+      "type": "image/png"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.gif|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.gif",
+      "type": "image/webp"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.gif|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.gif",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.heic|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heic",
+      "type": ""
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.heic|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heic",
+      "type": " "
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.heic|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heic",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.heic|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heic",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.heic|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heic",
+      "type": "application/octet-stream"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.heic|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heic",
+      "type": "application/pdf"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.heic|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heic",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.heic|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heic",
+      "type": "image/jpeg"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.heic|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heic",
+      "type": "image/jpg"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.heic|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heic",
+      "type": "image/png"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.heic|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heic",
+      "type": "image/webp"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.heic|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heic",
+      "type": "text/html"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpeg|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpeg",
+      "type": ""
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpeg|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpeg",
+      "type": " "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpeg|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpeg",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpeg|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpeg",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpeg|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpeg",
+      "type": "application/octet-stream"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpeg|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpeg",
+      "type": "application/pdf"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpeg|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpeg",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpeg|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpeg",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpeg|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpeg",
+      "type": "image/jpeg"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpeg|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpeg",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpeg|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpeg",
+      "type": "image/png"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpeg|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpeg",
+      "type": "image/webp"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpeg|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpeg",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg.exe|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg.exe",
+      "type": ""
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg.exe|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg.exe",
+      "type": " "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg.exe|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg.exe",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg.exe|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg.exe",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg.exe|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg.exe",
+      "type": "application/octet-stream"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg.exe|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg.exe",
+      "type": "application/pdf"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg.exe|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg.exe",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg.exe|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg.exe",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg.exe|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg.exe",
+      "type": "image/jpeg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg.exe|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg.exe",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg.exe|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg.exe",
+      "type": "image/png"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg.exe|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg.exe",
+      "type": "image/webp"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg.exe|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg.exe",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg",
+      "type": ""
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg",
+      "type": " "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg",
+      "type": "application/octet-stream"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg",
+      "type": "application/pdf"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg",
+      "type": "image/png"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg",
+      "type": "image/webp"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpg|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpé|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpé",
+      "type": ""
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpé|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpé",
+      "type": " "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpé|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpé",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpé|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpé",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpé|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpé",
+      "type": "application/octet-stream"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpé|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpé",
+      "type": "application/pdf"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpé|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpé",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpé|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpé",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpé|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpé",
+      "type": "image/jpeg"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpé|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpé",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpé|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpé",
+      "type": "image/png"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpé|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpé",
+      "type": "image/webp"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.jpé|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpé",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.pdf.jpg|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.pdf.jpg",
+      "type": ""
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.pdf.jpg|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.pdf.jpg",
+      "type": " "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.pdf.jpg|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.pdf.jpg",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.pdf.jpg|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.pdf.jpg",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.pdf.jpg|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.pdf.jpg",
+      "type": "application/octet-stream"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.pdf.jpg|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.pdf.jpg",
+      "type": "application/pdf"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.pdf.jpg|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.pdf.jpg",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.pdf.jpg|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.pdf.jpg",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.pdf.jpg|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.pdf.jpg",
+      "type": "image/jpeg"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.pdf.jpg|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.pdf.jpg",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.pdf.jpg|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.pdf.jpg",
+      "type": "image/png"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.pdf.jpg|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.pdf.jpg",
+      "type": "image/webp"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.pdf.jpg|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.pdf.jpg",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.png|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.png",
+      "type": ""
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.png|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.png",
+      "type": " "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.png|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.png",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.png|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.png",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.png|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.png",
+      "type": "application/octet-stream"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.png|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.png",
+      "type": "application/pdf"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.png|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.png",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.png|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.png",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.png|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.png",
+      "type": "image/jpeg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.png|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.png",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.png|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.png",
+      "type": "image/webp"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.png|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.png",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.webp|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.webp",
+      "type": ""
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.webp|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.webp",
+      "type": " "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.webp|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.webp",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.webp|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.webp",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.webp|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.webp",
+      "type": "application/octet-stream"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.webp|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.webp",
+      "type": "application/pdf"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.webp|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.webp",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.webp|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.webp",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.webp|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.webp",
+      "type": "image/jpeg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.webp|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.webp",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.webp|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.webp",
+      "type": "image/png"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.webp|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.webp",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.",
+      "type": ""
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.",
+      "type": " "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.",
+      "type": "application/octet-stream"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.",
+      "type": "application/pdf"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.",
+      "type": "image/jpeg"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.",
+      "type": "image/png"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.",
+      "type": "image/webp"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=photo.|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=preuve.pdf|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "preuve.pdf",
+      "type": ""
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=preuve.pdf|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "preuve.pdf",
+      "type": " "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=preuve.pdf|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "preuve.pdf",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=preuve.pdf|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "preuve.pdf",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=preuve.pdf|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "preuve.pdf",
+      "type": "application/octet-stream"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=preuve.pdf|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "preuve.pdf",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=preuve.pdf|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "preuve.pdf",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=preuve.pdf|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "preuve.pdf",
+      "type": "image/jpeg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=preuve.pdf|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "preuve.pdf",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=preuve.pdf|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "preuve.pdf",
+      "type": "image/png"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=preuve.pdf|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "preuve.pdf",
+      "type": "image/webp"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=preuve.pdf|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "preuve.pdf",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=sans-extension|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "sans-extension",
+      "type": ""
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=sans-extension|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "sans-extension",
+      "type": " "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=sans-extension|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "sans-extension",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=sans-extension|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "sans-extension",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=sans-extension|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "sans-extension",
+      "type": "application/octet-stream"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=sans-extension|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "sans-extension",
+      "type": "application/pdf"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=sans-extension|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "sans-extension",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=sans-extension|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "sans-extension",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=sans-extension|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "sans-extension",
+      "type": "image/jpeg"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=sans-extension|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "sans-extension",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=sans-extension|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "sans-extension",
+      "type": "image/png"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=sans-extension|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "sans-extension",
+      "type": "image/webp"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=sans-extension|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "sans-extension",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=scan.PDF|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "scan.PDF",
+      "type": ""
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=scan.PDF|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "scan.PDF",
+      "type": " "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=scan.PDF|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "scan.PDF",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=scan.PDF|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "scan.PDF",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=scan.PDF|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "scan.PDF",
+      "type": "application/pdf"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=scan.PDF|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "scan.PDF",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=scan.PDF|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "scan.PDF",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=scan.PDF|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "scan.PDF",
+      "type": "image/jpeg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=scan.PDF|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "scan.PDF",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=scan.PDF|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "scan.PDF",
+      "type": "image/png"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=scan.PDF|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "scan.PDF",
+      "type": "image/webp"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=scan.PDF|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "scan.PDF",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=|type=",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "",
+      "type": ""
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=|type= ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "",
+      "type": " "
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=|type= IMAGE/JPEG ",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "",
+      "type": " IMAGE/JPEG "
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=|type=Image/HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "",
+      "type": "Image/HEIC"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=|type=application/octet-stream",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "",
+      "type": "application/octet-stream"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=|type=application/pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "",
+      "type": "application/pdf"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=|type=image/heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=|type=image/heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=|type=image/jpeg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "",
+      "type": "image/jpeg"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=|type=image/jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "",
+      "type": "image/jpg"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=|type=image/png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "",
+      "type": "image/png"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=|type=image/webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "",
+      "type": "image/webp"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/grille/nom=|type=text/html",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/vitest-accepte-photo.jpg",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.jpg",
+      "type": "image/jpeg"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/vitest-accepte-photo.png",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.png",
+      "type": "image/png"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/vitest-accepte-photo.webp",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.webp",
+      "type": "image/webp"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/vitest-accepte-preuve.pdf",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/vitest-accepte-scan.PDF",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "scan.PDF",
+      "type": "application/octet-stream"
+    },
+    "expected": "SUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/vitest-deux-formats-contradictoires",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "piece.jpg",
+      "type": "application/pdf"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/vitest-extension-image-contredite",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "malware.jpg",
+      "type": "text/html"
+    },
+    "expected": "UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/vitest-heic-photo.HEIC",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.HEIC",
+      "type": ""
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/vitest-heic-photo.heic",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heic",
+      "type": "image/heic"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "classerFormatDocument/vitest-heic-photo.heif",
+    "input": {
+      "fonction": "classerFormatDocument",
+      "name": "photo.heif",
+      "type": "image/heif"
+    },
+    "expected": "HEIC_UNSUPPORTED"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-00/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "photo.jpg",
+      "mime": "application/pdf"
+    },
+    "expected": "photo.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-00/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "photo.jpg",
+      "mime": "image/jpeg"
+    },
+    "expected": "photo.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-00/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "photo.jpg",
+      "mime": "image/png"
+    },
+    "expected": "photo.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-00/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "photo.jpg",
+      "mime": "image/webp"
+    },
+    "expected": "photo.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-01/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "PHOTO.JPG",
+      "mime": "application/pdf"
+    },
+    "expected": "PHOTO.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-01/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "PHOTO.JPG",
+      "mime": "image/jpeg"
+    },
+    "expected": "PHOTO.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-01/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "PHOTO.JPG",
+      "mime": "image/png"
+    },
+    "expected": "PHOTO.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-01/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "PHOTO.JPG",
+      "mime": "image/webp"
+    },
+    "expected": "PHOTO.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-02/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Carte d’identité recto.pdf",
+      "mime": "application/pdf"
+    },
+    "expected": "Carte-d-identite-recto.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-02/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Carte d’identité recto.pdf",
+      "mime": "image/jpeg"
+    },
+    "expected": "Carte-d-identite-recto.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-02/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Carte d’identité recto.pdf",
+      "mime": "image/png"
+    },
+    "expected": "Carte-d-identite-recto.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-02/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Carte d’identité recto.pdf",
+      "mime": "image/webp"
+    },
+    "expected": "Carte-d-identite-recto.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-03/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Élodie Durand — diplôme.PNG",
+      "mime": "application/pdf"
+    },
+    "expected": "Elodie-Durand-diplome.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-03/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Élodie Durand — diplôme.PNG",
+      "mime": "image/jpeg"
+    },
+    "expected": "Elodie-Durand-diplome.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-03/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Élodie Durand — diplôme.PNG",
+      "mime": "image/png"
+    },
+    "expected": "Elodie-Durand-diplome.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-03/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Élodie Durand — diplôme.PNG",
+      "mime": "image/webp"
+    },
+    "expected": "Elodie-Durand-diplome.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-04/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "scan",
+      "mime": "application/pdf"
+    },
+    "expected": "scan.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-04/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "scan",
+      "mime": "image/jpeg"
+    },
+    "expected": "scan.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-04/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "scan",
+      "mime": "image/png"
+    },
+    "expected": "scan.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-04/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "scan",
+      "mime": "image/webp"
+    },
+    "expected": "scan.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-05/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "",
+      "mime": "application/pdf"
+    },
+    "expected": "document.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-05/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "",
+      "mime": "image/jpeg"
+    },
+    "expected": "document.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-05/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "",
+      "mime": "image/png"
+    },
+    "expected": "document.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-05/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "",
+      "mime": "image/webp"
+    },
+    "expected": "document.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-06/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": ".pdf",
+      "mime": "application/pdf"
+    },
+    "expected": "document.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-06/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": ".pdf",
+      "mime": "image/jpeg"
+    },
+    "expected": "document.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-06/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": ".pdf",
+      "mime": "image/png"
+    },
+    "expected": "document.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-06/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": ".pdf",
+      "mime": "image/webp"
+    },
+    "expected": "document.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-07/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "...",
+      "mime": "application/pdf"
+    },
+    "expected": "document.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-07/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "...",
+      "mime": "image/jpeg"
+    },
+    "expected": "document.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-07/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "...",
+      "mime": "image/png"
+    },
+    "expected": "document.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-07/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "...",
+      "mime": "image/webp"
+    },
+    "expected": "document.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-08/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "---.jpg",
+      "mime": "application/pdf"
+    },
+    "expected": "document.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-08/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "---.jpg",
+      "mime": "image/jpeg"
+    },
+    "expected": "document.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-08/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "---.jpg",
+      "mime": "image/png"
+    },
+    "expected": "document.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-08/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "---.jpg",
+      "mime": "image/webp"
+    },
+    "expected": "document.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-09/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "dossier/sous-dossier/fichier.webp",
+      "mime": "application/pdf"
+    },
+    "expected": "fichier.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-09/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "dossier/sous-dossier/fichier.webp",
+      "mime": "image/jpeg"
+    },
+    "expected": "fichier.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-09/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "dossier/sous-dossier/fichier.webp",
+      "mime": "image/png"
+    },
+    "expected": "fichier.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-09/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "dossier/sous-dossier/fichier.webp",
+      "mime": "image/webp"
+    },
+    "expected": "fichier.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-10/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "C:\\Users\\Élise\\Documents\\RIB.pdf",
+      "mime": "application/pdf"
+    },
+    "expected": "RIB.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-10/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "C:\\Users\\Élise\\Documents\\RIB.pdf",
+      "mime": "image/jpeg"
+    },
+    "expected": "RIB.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-10/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "C:\\Users\\Élise\\Documents\\RIB.pdf",
+      "mime": "image/png"
+    },
+    "expected": "RIB.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-10/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "C:\\Users\\Élise\\Documents\\RIB.pdf",
+      "mime": "image/webp"
+    },
+    "expected": "RIB.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-11/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "nom_avec_underscore-et-tiret.jpeg",
+      "mime": "application/pdf"
+    },
+    "expected": "nom_avec_underscore-et-tiret.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-11/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "nom_avec_underscore-et-tiret.jpeg",
+      "mime": "image/jpeg"
+    },
+    "expected": "nom_avec_underscore-et-tiret.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-11/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "nom_avec_underscore-et-tiret.jpeg",
+      "mime": "image/png"
+    },
+    "expected": "nom_avec_underscore-et-tiret.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-11/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "nom_avec_underscore-et-tiret.jpeg",
+      "mime": "image/webp"
+    },
+    "expected": "nom_avec_underscore-et-tiret.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-12/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "emoji 😀 test.png",
+      "mime": "application/pdf"
+    },
+    "expected": "emoji-test.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-12/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "emoji 😀 test.png",
+      "mime": "image/jpeg"
+    },
+    "expected": "emoji-test.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-12/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "emoji 😀 test.png",
+      "mime": "image/png"
+    },
+    "expected": "emoji-test.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-12/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "emoji 😀 test.png",
+      "mime": "image/webp"
+    },
+    "expected": "emoji-test.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-13/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "x.tar.gz",
+      "mime": "application/pdf"
+    },
+    "expected": "x-tar.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-13/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "x.tar.gz",
+      "mime": "image/jpeg"
+    },
+    "expected": "x-tar.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-13/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "x.tar.gz",
+      "mime": "image/png"
+    },
+    "expected": "x-tar.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-13/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "x.tar.gz",
+      "mime": "image/webp"
+    },
+    "expected": "x-tar.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-14/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pdf",
+      "mime": "application/pdf"
+    },
+    "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-14/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pdf",
+      "mime": "image/jpeg"
+    },
+    "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-14/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pdf",
+      "mime": "image/png"
+    },
+    "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-14/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pdf",
+      "mime": "image/webp"
+    },
+    "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-15/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.jpg",
+      "mime": "application/pdf"
+    },
+    "expected": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-15/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.jpg",
+      "mime": "image/jpeg"
+    },
+    "expected": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-15/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.jpg",
+      "mime": "image/png"
+    },
+    "expected": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-15/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.jpg",
+      "mime": "image/webp"
+    },
+    "expected": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-16/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Œuvre ß æ.pdf",
+      "mime": "application/pdf"
+    },
+    "expected": "uvre.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-16/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Œuvre ß æ.pdf",
+      "mime": "image/jpeg"
+    },
+    "expected": "uvre.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-16/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Œuvre ß æ.pdf",
+      "mime": "image/png"
+    },
+    "expected": "uvre.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-16/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Œuvre ß æ.pdf",
+      "mime": "image/webp"
+    },
+    "expected": "uvre.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-17/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "école.pdf",
+      "mime": "application/pdf"
+    },
+    "expected": "ecole.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-17/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "école.pdf",
+      "mime": "image/jpeg"
+    },
+    "expected": "ecole.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-17/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "école.pdf",
+      "mime": "image/png"
+    },
+    "expected": "ecole.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-17/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "école.pdf",
+      "mime": "image/webp"
+    },
+    "expected": "ecole.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-18/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "ﬁchier.pdf",
+      "mime": "application/pdf"
+    },
+    "expected": "chier.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-18/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "ﬁchier.pdf",
+      "mime": "image/jpeg"
+    },
+    "expected": "chier.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-18/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "ﬁchier.pdf",
+      "mime": "image/png"
+    },
+    "expected": "chier.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-18/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "ﬁchier.pdf",
+      "mime": "image/webp"
+    },
+    "expected": "chier.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-19/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "한국어.pdf",
+      "mime": "application/pdf"
+    },
+    "expected": "document.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-19/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "한국어.pdf",
+      "mime": "image/jpeg"
+    },
+    "expected": "document.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-19/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "한국어.pdf",
+      "mime": "image/png"
+    },
+    "expected": "document.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-19/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "한국어.pdf",
+      "mime": "image/webp"
+    },
+    "expected": "document.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-20/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "dossier/",
+      "mime": "application/pdf"
+    },
+    "expected": "document.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-20/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "dossier/",
+      "mime": "image/jpeg"
+    },
+    "expected": "document.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-20/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "dossier/",
+      "mime": "image/png"
+    },
+    "expected": "document.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-20/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "dossier/",
+      "mime": "image/webp"
+    },
+    "expected": "document.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-21/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "photo.jpé",
+      "mime": "application/pdf"
+    },
+    "expected": "photo-jpe.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-21/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "photo.jpé",
+      "mime": "image/jpeg"
+    },
+    "expected": "photo-jpe.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-21/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "photo.jpé",
+      "mime": "image/png"
+    },
+    "expected": "photo-jpe.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-21/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "photo.jpé",
+      "mime": "image/webp"
+    },
+    "expected": "photo-jpe.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-22/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "-début-.pdf",
+      "mime": "application/pdf"
+    },
+    "expected": "debut.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-22/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "-début-.pdf",
+      "mime": "image/jpeg"
+    },
+    "expected": "debut.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-22/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "-début-.pdf",
+      "mime": "image/png"
+    },
+    "expected": "debut.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-22/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "-début-.pdf",
+      "mime": "image/webp"
+    },
+    "expected": "debut.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-23/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": " espace .pdf",
+      "mime": "application/pdf"
+    },
+    "expected": "espace.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-23/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": " espace .pdf",
+      "mime": "image/jpeg"
+    },
+    "expected": "espace.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-23/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": " espace .pdf",
+      "mime": "image/png"
+    },
+    "expected": "espace.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-23/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": " espace .pdf",
+      "mime": "image/webp"
+    },
+    "expected": "espace.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-24/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Ça été ÇA.jpg",
+      "mime": "application/pdf"
+    },
+    "expected": "Ca-ete-CA.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-24/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Ça été ÇA.jpg",
+      "mime": "image/jpeg"
+    },
+    "expected": "Ca-ete-CA.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-24/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Ça été ÇA.jpg",
+      "mime": "image/png"
+    },
+    "expected": "Ca-ete-CA.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-24/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "Ça été ÇA.jpg",
+      "mime": "image/webp"
+    },
+    "expected": "Ca-ete-CA.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-25/application/pdf",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "ñandú.png",
+      "mime": "application/pdf"
+    },
+    "expected": "nandu.pdf"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-25/image/jpeg",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "ñandú.png",
+      "mime": "image/jpeg"
+    },
+    "expected": "nandu.jpg"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-25/image/png",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "ñandú.png",
+      "mime": "image/png"
+    },
+    "expected": "nandu.png"
+  },
+  {
+    "name": "sanitiserNomFichier/grille-25/image/webp",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "ñandú.png",
+      "mime": "image/webp"
+    },
+    "expected": "nandu.webp"
+  },
+  {
+    "name": "sanitiserNomFichier/vitest-chemin-et-points",
+    "input": {
+      "fonction": "sanitiserNomFichier",
+      "name": "../../Pièce.. finale.jpg",
+      "mime": "application/pdf"
+    },
+    "expected": "Piece-finale.pdf"
+  },
+  {
+    "name": "verifierFichierDocument/defaut-10-mo-exact",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 10485760,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "application/pdf",
+      "extension": "pdf"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/defaut-10-mo-plus-1",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 10485761,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "TOO_LARGE",
+      "message": "Le fichier ne doit pas dépasser 10 Mo."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/heic-contenu",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.heic",
+      "type": "image/heic",
+      "taille": 12,
+      "entete": [
+        0,
+        0,
+        0,
+        24,
+        102,
+        116,
+        121,
+        112,
+        104,
+        101,
+        105,
+        99
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "HEIC_UNSUPPORTED",
+      "message": "Le format HEIC/HEIF ne peut pas être vérifié. Prenez une photo depuis Jolene ou choisissez un PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/heic-sans-mime",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "IMG_0001.HEIC",
+      "type": "",
+      "taille": 12,
+      "entete": [
+        0,
+        0,
+        0,
+        24,
+        102,
+        116,
+        121,
+        112,
+        104,
+        101,
+        105,
+        99
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "HEIC_UNSUPPORTED",
+      "message": "Le format HEIC/HEIF ne peut pas être vérifié. Prenez une photo depuis Jolene ou choisissez un PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/heic-vide",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.heic",
+      "type": "image/heic",
+      "taille": 0,
+      "entete": []
+    },
+    "expected": {
+      "ok": false,
+      "code": "EMPTY",
+      "message": "Le fichier sélectionné est vide."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/html-annonce-pdf",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 6,
+      "entete": [
+        60,
+        104,
+        116,
+        109,
+        108,
+        62
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/jpeg-annonce-png",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.png",
+      "type": "image/png",
+      "taille": 12,
+      "entete": [
+        255,
+        216,
+        255,
+        224,
+        0,
+        16,
+        74,
+        70,
+        73,
+        70,
+        0,
+        1
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/jpeg-extension-jpeg",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.JPEG",
+      "type": "",
+      "taille": 12,
+      "entete": [
+        255,
+        216,
+        255,
+        224,
+        0,
+        16,
+        74,
+        70,
+        73,
+        70,
+        0,
+        1
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/jpeg",
+      "extension": "jpg"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/jpeg-lecture-impossible",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.jpg",
+      "type": "image/jpeg",
+      "taille": 16,
+      "entete": null
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Impossible de lire le fichier sélectionné."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/jpeg-mime-absent",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.jpg",
+      "type": "",
+      "taille": 12,
+      "entete": [
+        255,
+        216,
+        255,
+        224,
+        0,
+        16,
+        74,
+        70,
+        73,
+        70,
+        0,
+        1
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/jpeg",
+      "extension": "jpg"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/jpeg-mime-exact",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.jpg",
+      "type": "image/jpeg",
+      "taille": 12,
+      "entete": [
+        255,
+        216,
+        255,
+        224,
+        0,
+        16,
+        74,
+        70,
+        73,
+        70,
+        0,
+        1
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/jpeg",
+      "extension": "jpg"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/jpeg-mime-majuscules-espaces",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.jpg",
+      "type": " IMAGE/JPEG ",
+      "taille": 12,
+      "entete": [
+        255,
+        216,
+        255,
+        224,
+        0,
+        16,
+        74,
+        70,
+        73,
+        70,
+        0,
+        1
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/jpeg",
+      "extension": "jpg"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/jpeg-octet-stream",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.jpg",
+      "type": "application/octet-stream",
+      "taille": 12,
+      "entete": [
+        255,
+        216,
+        255,
+        224,
+        0,
+        16,
+        74,
+        70,
+        73,
+        70,
+        0,
+        1
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/jpeg",
+      "extension": "jpg"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/jpeg-sans-extension",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "fichier",
+      "type": "image/jpeg",
+      "taille": 12,
+      "entete": [
+        255,
+        216,
+        255,
+        224,
+        0,
+        16,
+        74,
+        70,
+        73,
+        70,
+        0,
+        1
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/jpeg",
+      "extension": "jpg"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/jpeg-signature-gif",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.jpg",
+      "type": "image/jpeg",
+      "taille": 6,
+      "entete": [
+        71,
+        73,
+        70,
+        56,
+        57,
+        97
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/jpeg-sous-ensemble-images",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.jpg",
+      "type": "image/jpeg",
+      "taille": 12,
+      "entete": [
+        255,
+        216,
+        255,
+        224,
+        0,
+        16,
+        74,
+        70,
+        73,
+        70,
+        0,
+        1
+      ],
+      "options": {
+        "allowedMimes": [
+          "image/jpeg",
+          "image/png",
+          "image/webp"
+        ]
+      }
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/jpeg",
+      "extension": "jpg"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/jpeg-sous-ensemble-pdf",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.jpg",
+      "type": "image/jpeg",
+      "taille": 12,
+      "entete": [
+        255,
+        216,
+        255,
+        224,
+        0,
+        16,
+        74,
+        70,
+        73,
+        70,
+        0,
+        1
+      ],
+      "options": {
+        "allowedMimes": [
+          "application/pdf"
+        ]
+      }
+    },
+    "expected": {
+      "ok": false,
+      "code": "UNSUPPORTED",
+      "message": "Ce type de fichier n’est pas autorisé ici."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/max-5-mo-exact",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 5242880,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ],
+      "options": {
+        "maxBytes": 5242880
+      }
+    },
+    "expected": {
+      "ok": true,
+      "mime": "application/pdf",
+      "extension": "pdf"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/max-5-mo-plus-1",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 5242881,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ],
+      "options": {
+        "maxBytes": 5242880
+      }
+    },
+    "expected": {
+      "ok": false,
+      "code": "TOO_LARGE",
+      "message": "Le fichier ne doit pas dépasser 5 Mo."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/max-5-octets-message-0-mo",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.png",
+      "type": "image/png",
+      "taille": 12,
+      "entete": [
+        137,
+        80,
+        78,
+        71,
+        13,
+        10,
+        26,
+        10,
+        0,
+        0,
+        0,
+        13
+      ],
+      "options": {
+        "maxBytes": 5
+      }
+    },
+    "expected": {
+      "ok": false,
+      "code": "TOO_LARGE",
+      "message": "Le fichier ne doit pas dépasser 0 Mo."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/mime-jpg-non-standard",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.jpg",
+      "type": "image/jpg",
+      "taille": 12,
+      "entete": [
+        255,
+        216,
+        255,
+        224,
+        0,
+        16,
+        74,
+        70,
+        73,
+        70,
+        0,
+        1
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "UNSUPPORTED",
+      "message": "Format non pris en charge, ou extension et type de fichier incohérents. Utilisez un PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/mime-pdf-extension-jpg",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "piece.jpg",
+      "type": "application/pdf",
+      "taille": 9,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "UNSUPPORTED",
+      "message": "Format non pris en charge, ou extension et type de fichier incohérents. Utilisez un PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/mime-texte",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "note.txt",
+      "type": "text/plain",
+      "taille": 7,
+      "entete": [
+        98,
+        111,
+        110,
+        106,
+        111,
+        117,
+        114
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "UNSUPPORTED",
+      "message": "Format non pris en charge, ou extension et type de fichier incohérents. Utilisez un PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/pdf-annonce-jpeg-sans-mime",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.jpg",
+      "type": "",
+      "taille": 9,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/pdf-lecture-impossible",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 16,
+      "entete": null
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Impossible de lire le fichier sélectionné."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/pdf-mime-absent",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "",
+      "taille": 9,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "application/pdf",
+      "extension": "pdf"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/pdf-mime-exact",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 9,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "application/pdf",
+      "extension": "pdf"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/pdf-mime-majuscules-espaces",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": " APPLICATION/PDF ",
+      "taille": 9,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "application/pdf",
+      "extension": "pdf"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/pdf-octet-stream",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/octet-stream",
+      "taille": 9,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "application/pdf",
+      "extension": "pdf"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/pdf-sans-extension",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "fichier",
+      "type": "application/pdf",
+      "taille": 9,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "application/pdf",
+      "extension": "pdf"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/pdf-sans-tiret",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 7,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        49,
+        46,
+        55
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/pdf-signature-gif",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 6,
+      "entete": [
+        71,
+        73,
+        70,
+        56,
+        57,
+        97
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/pdf-sous-ensemble-images",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 9,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ],
+      "options": {
+        "allowedMimes": [
+          "image/jpeg",
+          "image/png",
+          "image/webp"
+        ]
+      }
+    },
+    "expected": {
+      "ok": false,
+      "code": "UNSUPPORTED",
+      "message": "Ce type de fichier n’est pas autorisé ici."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/pdf-sous-ensemble-pdf",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 9,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ],
+      "options": {
+        "allowedMimes": [
+          "application/pdf"
+        ]
+      }
+    },
+    "expected": {
+      "ok": true,
+      "mime": "application/pdf",
+      "extension": "pdf"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/pdf-tronque-3-octets",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 3,
+      "entete": [
+        37,
+        80,
+        68
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/png-annonce-jpeg",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.jpg",
+      "type": "image/jpeg",
+      "taille": 12,
+      "entete": [
+        137,
+        80,
+        78,
+        71,
+        13,
+        10,
+        26,
+        10,
+        0,
+        0,
+        0,
+        13
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/png-lecture-impossible",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.png",
+      "type": "image/png",
+      "taille": 16,
+      "entete": null
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Impossible de lire le fichier sélectionné."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/png-mime-absent",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.png",
+      "type": "",
+      "taille": 12,
+      "entete": [
+        137,
+        80,
+        78,
+        71,
+        13,
+        10,
+        26,
+        10,
+        0,
+        0,
+        0,
+        13
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/png",
+      "extension": "png"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/png-mime-exact",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.png",
+      "type": "image/png",
+      "taille": 12,
+      "entete": [
+        137,
+        80,
+        78,
+        71,
+        13,
+        10,
+        26,
+        10,
+        0,
+        0,
+        0,
+        13
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/png",
+      "extension": "png"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/png-mime-majuscules-espaces",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.png",
+      "type": " IMAGE/PNG ",
+      "taille": 12,
+      "entete": [
+        137,
+        80,
+        78,
+        71,
+        13,
+        10,
+        26,
+        10,
+        0,
+        0,
+        0,
+        13
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/png",
+      "extension": "png"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/png-octet-stream",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.png",
+      "type": "application/octet-stream",
+      "taille": 12,
+      "entete": [
+        137,
+        80,
+        78,
+        71,
+        13,
+        10,
+        26,
+        10,
+        0,
+        0,
+        0,
+        13
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/png",
+      "extension": "png"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/png-sans-extension",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "fichier",
+      "type": "image/png",
+      "taille": 12,
+      "entete": [
+        137,
+        80,
+        78,
+        71,
+        13,
+        10,
+        26,
+        10,
+        0,
+        0,
+        0,
+        13
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/png",
+      "extension": "png"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/png-signature-gif",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.png",
+      "type": "image/png",
+      "taille": 6,
+      "entete": [
+        71,
+        73,
+        70,
+        56,
+        57,
+        97
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/png-sous-ensemble-images",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.png",
+      "type": "image/png",
+      "taille": 12,
+      "entete": [
+        137,
+        80,
+        78,
+        71,
+        13,
+        10,
+        26,
+        10,
+        0,
+        0,
+        0,
+        13
+      ],
+      "options": {
+        "allowedMimes": [
+          "image/jpeg",
+          "image/png",
+          "image/webp"
+        ]
+      }
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/png",
+      "extension": "png"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/png-sous-ensemble-pdf",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.png",
+      "type": "image/png",
+      "taille": 12,
+      "entete": [
+        137,
+        80,
+        78,
+        71,
+        13,
+        10,
+        26,
+        10,
+        0,
+        0,
+        0,
+        13
+      ],
+      "options": {
+        "allowedMimes": [
+          "application/pdf"
+        ]
+      }
+    },
+    "expected": {
+      "ok": false,
+      "code": "UNSUPPORTED",
+      "message": "Ce type de fichier n’est pas autorisé ici."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/png-tronque",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.png",
+      "type": "image/png",
+      "taille": 7,
+      "entete": [
+        137,
+        80,
+        78,
+        71,
+        13,
+        10,
+        26
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/sans-extension-sans-mime",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "scan",
+      "type": "",
+      "taille": 9,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "UNSUPPORTED",
+      "message": "Format non pris en charge, ou extension et type de fichier incohérents. Utilisez un PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/signature-au-dela-de-12-octets-ignoree",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 21,
+      "entete": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/trop-lourd-avant-format",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.heic",
+      "type": "image/heic",
+      "taille": 10485761,
+      "entete": [
+        0,
+        0,
+        0,
+        24,
+        102,
+        116,
+        121,
+        112,
+        104,
+        101,
+        105,
+        99
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "TOO_LARGE",
+      "message": "Le fichier ne doit pas dépasser 10 Mo."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/un-octet-pdf",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "preuve.pdf",
+      "type": "application/pdf",
+      "taille": 1,
+      "entete": [
+        37
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/vide-avant-format",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "note.txt",
+      "type": "text/plain",
+      "taille": 0,
+      "entete": []
+    },
+    "expected": {
+      "ok": false,
+      "code": "EMPTY",
+      "message": "Le fichier sélectionné est vide."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/vitest-pdf-sans-mime",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "SCAN.PDF",
+      "type": "",
+      "taille": 9,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55,
+        10
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "application/pdf",
+      "extension": "pdf"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/vitest-signature-binaire",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "piece.pdf",
+      "type": "application/pdf",
+      "taille": 4,
+      "entete": [
+        255,
+        216,
+        255,
+        0
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/vitest-sous-ensemble-pdf",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.jpg",
+      "type": "image/jpeg",
+      "taille": 4,
+      "entete": [
+        255,
+        216,
+        255,
+        0
+      ],
+      "options": {
+        "allowedMimes": [
+          "application/pdf"
+        ]
+      }
+    },
+    "expected": {
+      "ok": false,
+      "code": "UNSUPPORTED",
+      "message": "Ce type de fichier n’est pas autorisé ici."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/vitest-trop-lourd",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "lourd.pdf",
+      "type": "application/pdf",
+      "taille": 8,
+      "entete": [
+        37,
+        80,
+        68,
+        70,
+        45,
+        49,
+        46,
+        55
+      ],
+      "options": {
+        "maxBytes": 4
+      }
+    },
+    "expected": {
+      "ok": false,
+      "code": "TOO_LARGE",
+      "message": "Le fichier ne doit pas dépasser 0 Mo."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/vitest-vide",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "vide.pdf",
+      "type": "application/pdf",
+      "taille": 0,
+      "entete": []
+    },
+    "expected": {
+      "ok": false,
+      "code": "EMPTY",
+      "message": "Le fichier sélectionné est vide."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/webp-lecture-impossible",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.webp",
+      "type": "image/webp",
+      "taille": 16,
+      "entete": null
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Impossible de lire le fichier sélectionné."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/webp-mime-absent",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.webp",
+      "type": "",
+      "taille": 16,
+      "entete": [
+        82,
+        73,
+        70,
+        70,
+        36,
+        0,
+        0,
+        0,
+        87,
+        69,
+        66,
+        80,
+        86,
+        80,
+        56,
+        32
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/webp",
+      "extension": "webp"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/webp-mime-exact",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.webp",
+      "type": "image/webp",
+      "taille": 16,
+      "entete": [
+        82,
+        73,
+        70,
+        70,
+        36,
+        0,
+        0,
+        0,
+        87,
+        69,
+        66,
+        80,
+        86,
+        80,
+        56,
+        32
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/webp",
+      "extension": "webp"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/webp-mime-majuscules-espaces",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.webp",
+      "type": " IMAGE/WEBP ",
+      "taille": 16,
+      "entete": [
+        82,
+        73,
+        70,
+        70,
+        36,
+        0,
+        0,
+        0,
+        87,
+        69,
+        66,
+        80,
+        86,
+        80,
+        56,
+        32
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/webp",
+      "extension": "webp"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/webp-octet-stream",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.webp",
+      "type": "application/octet-stream",
+      "taille": 16,
+      "entete": [
+        82,
+        73,
+        70,
+        70,
+        36,
+        0,
+        0,
+        0,
+        87,
+        69,
+        66,
+        80,
+        86,
+        80,
+        56,
+        32
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/webp",
+      "extension": "webp"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/webp-riff-tronque-11-octets",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.webp",
+      "type": "image/webp",
+      "taille": 11,
+      "entete": [
+        82,
+        73,
+        70,
+        70,
+        36,
+        0,
+        0,
+        0,
+        87,
+        69,
+        66
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/webp-riff-wave",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.webp",
+      "type": "image/webp",
+      "taille": 12,
+      "entete": [
+        82,
+        73,
+        70,
+        70,
+        36,
+        0,
+        0,
+        0,
+        87,
+        65,
+        86,
+        69
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/webp-sans-extension",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "fichier",
+      "type": "image/webp",
+      "taille": 16,
+      "entete": [
+        82,
+        73,
+        70,
+        70,
+        36,
+        0,
+        0,
+        0,
+        87,
+        69,
+        66,
+        80,
+        86,
+        80,
+        56,
+        32
+      ]
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/webp",
+      "extension": "webp"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/webp-signature-gif",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.webp",
+      "type": "image/webp",
+      "taille": 6,
+      "entete": [
+        71,
+        73,
+        70,
+        56,
+        57,
+        97
+      ]
+    },
+    "expected": {
+      "ok": false,
+      "code": "INVALID_SIGNATURE",
+      "message": "Le contenu du fichier ne correspond pas au format annoncé. Exportez-le à nouveau en PDF, JPEG, PNG ou WebP."
+    }
+  },
+  {
+    "name": "verifierFichierDocument/webp-sous-ensemble-images",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.webp",
+      "type": "image/webp",
+      "taille": 16,
+      "entete": [
+        82,
+        73,
+        70,
+        70,
+        36,
+        0,
+        0,
+        0,
+        87,
+        69,
+        66,
+        80,
+        86,
+        80,
+        56,
+        32
+      ],
+      "options": {
+        "allowedMimes": [
+          "image/jpeg",
+          "image/png",
+          "image/webp"
+        ]
+      }
+    },
+    "expected": {
+      "ok": true,
+      "mime": "image/webp",
+      "extension": "webp"
+    }
+  },
+  {
+    "name": "verifierFichierDocument/webp-sous-ensemble-pdf",
+    "input": {
+      "fonction": "verifierFichierDocument",
+      "name": "photo.webp",
+      "type": "image/webp",
+      "taille": 16,
+      "entete": [
+        82,
+        73,
+        70,
+        70,
+        36,
+        0,
+        0,
+        0,
+        87,
+        69,
+        66,
+        80,
+        86,
+        80,
+        56,
+        32
+      ],
+      "options": {
+        "allowedMimes": [
+          "application/pdf"
+        ]
+      }
+    },
+    "expected": {
+      "ok": false,
+      "code": "UNSUPPORTED",
+      "message": "Ce type de fichier n’est pas autorisé ici."
+    }
+  }
+]

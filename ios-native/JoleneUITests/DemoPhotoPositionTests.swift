@@ -233,8 +233,12 @@ final class DemoPhotoPositionTests: JoleneUITestCase {
         require("Retour au hub du profil") { self.containerVisible(self.element("profile-list")) }
     }
 
+    /// La sentinelle est dans « Application », au-dessus de « Mon espace » (lot 2) et de « Mon profil » : depuis la fusion
+    /// des lots 2 et 3, revenir au hub après `scrollTo("profil-ouvrir")` laisse sa cellule hors de l'écran sur iPhone (run
+    /// 43296363876 : cellule absente de l'arbre, liste ouverte sur « Mon espace »), d'où un défilement borné vers le haut.
     private func sentinelleSansRequete() {
         let sentinel = element("network-sentinel")
+        if !visible(sentinel) { scrollTo(sentinel, in: element("profile-list"), downward: false) }
         require("La sentinelle réseau est exposée") { sentinel.exists }
         XCTAssertEqual(sentinel.label, "0 requête", "photo, position et géocodage démo : aucune requête réseau")
     }

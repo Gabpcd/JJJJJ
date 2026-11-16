@@ -1,0 +1,1492 @@
+[
+  {
+    "name": "choisirContenuContratAffiche/grille/absent/absent/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche"
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/absent/absent/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "conserverOriginal": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/absent/absent/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "conserverOriginal": false
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/absent/apercu/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuReconstitue": "<p>Aperçu</p>"
+    },
+    "expected": "<p>Aperçu</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/absent/apercu/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuReconstitue": "<p>Aperçu</p>",
+      "conserverOriginal": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/absent/apercu/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuReconstitue": "<p>Aperçu</p>",
+      "conserverOriginal": false
+    },
+    "expected": "<p>Aperçu</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/absent/null/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuReconstitue": null
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/absent/null/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuReconstitue": null,
+      "conserverOriginal": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/absent/null/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuReconstitue": null,
+      "conserverOriginal": false
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/absent/vide/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuReconstitue": ""
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/absent/vide/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuReconstitue": "",
+      "conserverOriginal": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/absent/vide/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuReconstitue": "",
+      "conserverOriginal": false
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/null/absent/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": null
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/null/absent/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": null,
+      "conserverOriginal": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/null/absent/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": null,
+      "conserverOriginal": false
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/null/apercu/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": null,
+      "contenuReconstitue": "<p>Aperçu</p>"
+    },
+    "expected": "<p>Aperçu</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/null/apercu/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": null,
+      "contenuReconstitue": "<p>Aperçu</p>",
+      "conserverOriginal": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/null/apercu/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": null,
+      "contenuReconstitue": "<p>Aperçu</p>",
+      "conserverOriginal": false
+    },
+    "expected": "<p>Aperçu</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/null/null/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": null,
+      "contenuReconstitue": null
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/null/null/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": null,
+      "contenuReconstitue": null,
+      "conserverOriginal": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/null/null/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": null,
+      "contenuReconstitue": null,
+      "conserverOriginal": false
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/null/vide/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": null,
+      "contenuReconstitue": ""
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/null/vide/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": null,
+      "contenuReconstitue": "",
+      "conserverOriginal": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/null/vide/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": null,
+      "contenuReconstitue": "",
+      "conserverOriginal": false
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original-variable/absent/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original {{variable}}</p>"
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original-variable/absent/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original {{variable}}</p>",
+      "conserverOriginal": true
+    },
+    "expected": "<p>Original {{variable}}</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original-variable/absent/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original {{variable}}</p>",
+      "conserverOriginal": false
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original-variable/apercu/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original {{variable}}</p>",
+      "contenuReconstitue": "<p>Aperçu</p>"
+    },
+    "expected": "<p>Aperçu</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original-variable/apercu/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original {{variable}}</p>",
+      "contenuReconstitue": "<p>Aperçu</p>",
+      "conserverOriginal": true
+    },
+    "expected": "<p>Original {{variable}}</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original-variable/apercu/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original {{variable}}</p>",
+      "contenuReconstitue": "<p>Aperçu</p>",
+      "conserverOriginal": false
+    },
+    "expected": "<p>Aperçu</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original-variable/null/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original {{variable}}</p>",
+      "contenuReconstitue": null
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original-variable/null/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original {{variable}}</p>",
+      "contenuReconstitue": null,
+      "conserverOriginal": true
+    },
+    "expected": "<p>Original {{variable}}</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original-variable/null/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original {{variable}}</p>",
+      "contenuReconstitue": null,
+      "conserverOriginal": false
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original-variable/vide/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original {{variable}}</p>",
+      "contenuReconstitue": ""
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original-variable/vide/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original {{variable}}</p>",
+      "contenuReconstitue": "",
+      "conserverOriginal": true
+    },
+    "expected": "<p>Original {{variable}}</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original-variable/vide/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original {{variable}}</p>",
+      "contenuReconstitue": "",
+      "conserverOriginal": false
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original/absent/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original</p>"
+    },
+    "expected": "<p>Original</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original/absent/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original</p>",
+      "conserverOriginal": true
+    },
+    "expected": "<p>Original</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original/absent/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original</p>",
+      "conserverOriginal": false
+    },
+    "expected": "<p>Original</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original/apercu/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original</p>",
+      "contenuReconstitue": "<p>Aperçu</p>"
+    },
+    "expected": "<p>Original</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original/apercu/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original</p>",
+      "contenuReconstitue": "<p>Aperçu</p>",
+      "conserverOriginal": true
+    },
+    "expected": "<p>Original</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original/apercu/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original</p>",
+      "contenuReconstitue": "<p>Aperçu</p>",
+      "conserverOriginal": false
+    },
+    "expected": "<p>Original</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original/null/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original</p>",
+      "contenuReconstitue": null
+    },
+    "expected": "<p>Original</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original/null/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original</p>",
+      "contenuReconstitue": null,
+      "conserverOriginal": true
+    },
+    "expected": "<p>Original</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original/null/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original</p>",
+      "contenuReconstitue": null,
+      "conserverOriginal": false
+    },
+    "expected": "<p>Original</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original/vide/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original</p>",
+      "contenuReconstitue": ""
+    },
+    "expected": "<p>Original</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original/vide/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original</p>",
+      "contenuReconstitue": "",
+      "conserverOriginal": true
+    },
+    "expected": "<p>Original</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/original/vide/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original</p>",
+      "contenuReconstitue": "",
+      "conserverOriginal": false
+    },
+    "expected": "<p>Original</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/vide/absent/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": ""
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/vide/absent/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "",
+      "conserverOriginal": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/vide/absent/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "",
+      "conserverOriginal": false
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/vide/apercu/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "",
+      "contenuReconstitue": "<p>Aperçu</p>"
+    },
+    "expected": "<p>Aperçu</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/vide/apercu/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "",
+      "contenuReconstitue": "<p>Aperçu</p>",
+      "conserverOriginal": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/vide/apercu/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "",
+      "contenuReconstitue": "<p>Aperçu</p>",
+      "conserverOriginal": false
+    },
+    "expected": "<p>Aperçu</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/vide/null/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "",
+      "contenuReconstitue": null
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/vide/null/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "",
+      "contenuReconstitue": null,
+      "conserverOriginal": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/vide/null/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "",
+      "contenuReconstitue": null,
+      "conserverOriginal": false
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/vide/vide/conservation-absente",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "",
+      "contenuReconstitue": ""
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/vide/vide/conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "",
+      "contenuReconstitue": "",
+      "conserverOriginal": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/grille/vide/vide/ne-pas-conserver",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "",
+      "contenuReconstitue": "",
+      "conserverOriginal": false
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/vitest-apercu-si-variables",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>{{motif_cdd}}</p>",
+      "contenuReconstitue": "<p>Aperçu</p>"
+    },
+    "expected": "<p>Aperçu</p>"
+  },
+  {
+    "name": "choisirContenuContratAffiche/vitest-original-absent-conserve",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": null,
+      "contenuReconstitue": "<p>Nouveau template</p>",
+      "conserverOriginal": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "choisirContenuContratAffiche/vitest-original-avec-variable-conserve",
+    "input": {
+      "fonction": "choisirContenuContratAffiche",
+      "contenuServeur": "<p>Original {{variable}}</p>",
+      "contenuReconstitue": "<p>Nouveau template</p>",
+      "conserverOriginal": true
+    },
+    "expected": "<p>Original {{variable}}</p>"
+  },
+  {
+    "name": "contientVariablesContratNonRendues/absent",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues"
+    },
+    "expected": false
+  },
+  {
+    "name": "contientVariablesContratNonRendues/accents",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "{{prénom_soignant}}"
+    },
+    "expected": true
+  },
+  {
+    "name": "contientVariablesContratNonRendues/accolade-interne",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "{{ x } }}"
+    },
+    "expected": false
+  },
+  {
+    "name": "contientVariablesContratNonRendues/accolades-espacees",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "{ {x} }"
+    },
+    "expected": false
+  },
+  {
+    "name": "contientVariablesContratNonRendues/chaine-vide",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": ""
+    },
+    "expected": false
+  },
+  {
+    "name": "contientVariablesContratNonRendues/deux-variables",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "{{x}} et {{y}}"
+    },
+    "expected": true
+  },
+  {
+    "name": "contientVariablesContratNonRendues/espace-seul",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "{{ }}"
+    },
+    "expected": true
+  },
+  {
+    "name": "contientVariablesContratNonRendues/espaces",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "{{ motif }}"
+    },
+    "expected": true
+  },
+  {
+    "name": "contientVariablesContratNonRendues/fermeture-simple",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "{{x}"
+    },
+    "expected": false
+  },
+  {
+    "name": "contientVariablesContratNonRendues/fin-de-texte",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "Signé par {{"
+    },
+    "expected": false
+  },
+  {
+    "name": "contientVariablesContratNonRendues/html-attribut",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "<a title=\"{{titre}}\">x</a>"
+    },
+    "expected": true
+  },
+  {
+    "name": "contientVariablesContratNonRendues/inversees",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "}}{{"
+    },
+    "expected": false
+  },
+  {
+    "name": "contientVariablesContratNonRendues/multiligne",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "{{a\nb}}"
+    },
+    "expected": true
+  },
+  {
+    "name": "contientVariablesContratNonRendues/null",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": null
+    },
+    "expected": false
+  },
+  {
+    "name": "contientVariablesContratNonRendues/ouverture-simple",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "{x}}"
+    },
+    "expected": false
+  },
+  {
+    "name": "contientVariablesContratNonRendues/quadruple",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "{{{{}}}}"
+    },
+    "expected": true
+  },
+  {
+    "name": "contientVariablesContratNonRendues/sans-variable",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "texte sans variable"
+    },
+    "expected": false
+  },
+  {
+    "name": "contientVariablesContratNonRendues/triple",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "{{{x}}}"
+    },
+    "expected": true
+  },
+  {
+    "name": "contientVariablesContratNonRendues/vide",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "{{}}"
+    },
+    "expected": false
+  },
+  {
+    "name": "contientVariablesContratNonRendues/vitest-motif-cdd",
+    "input": {
+      "fonction": "contientVariablesContratNonRendues",
+      "html": "<p>{{motif_cdd}}</p>"
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-absent/contrat-absent/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>"
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-absent/contrat-absent/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>"
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-absent/contrat-null/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "contrat": null
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-absent/contrat-null/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "contrat": null
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-absent/en-attente/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "contrat": {
+        "statut": "EN_ATTENTE_SIGNATURES"
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-absent/en-attente/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "contrat": {
+        "statut": "EN_ATTENTE_SIGNATURES"
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-absent/signature-etablissement/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "contrat": {
+        "signature_etablissement": true
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-absent/signature-etablissement/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "contrat": {
+        "signature_etablissement": true
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-absent/signe-soignant/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "contrat": {
+        "statut": "SIGNE_SOIGNANT"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-absent/signe-soignant/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "contrat": {
+        "statut": "SIGNE_SOIGNANT"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-null/contrat-absent/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": null
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-null/contrat-null/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": null,
+      "contrat": null
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-null/contrat-null/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": null,
+      "contrat": null
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-null/en-attente/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": null,
+      "contrat": {
+        "statut": "EN_ATTENTE_SIGNATURES"
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-null/en-attente/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": null,
+      "contrat": {
+        "statut": "EN_ATTENTE_SIGNATURES"
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-null/signature-etablissement/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": null,
+      "contrat": {
+        "signature_etablissement": true
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-null/signature-etablissement/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": null,
+      "contrat": {
+        "signature_etablissement": true
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-null/signe-soignant/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": null,
+      "contrat": {
+        "statut": "SIGNE_SOIGNANT"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-null/signe-soignant/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": null,
+      "contrat": {
+        "statut": "SIGNE_SOIGNANT"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-present/contrat-absent/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": "contrat/ancien.html"
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-present/contrat-null/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": "contrat/ancien.html",
+      "contrat": null
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-present/contrat-null/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": "contrat/ancien.html",
+      "contrat": null
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-present/en-attente/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": "contrat/ancien.html",
+      "contrat": {
+        "statut": "EN_ATTENTE_SIGNATURES"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-present/en-attente/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": "contrat/ancien.html",
+      "contrat": {
+        "statut": "EN_ATTENTE_SIGNATURES"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-present/signature-etablissement/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": "contrat/ancien.html",
+      "contrat": {
+        "signature_etablissement": true
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-present/signature-etablissement/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": "contrat/ancien.html",
+      "contrat": {
+        "signature_etablissement": true
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-present/signe-soignant/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": "contrat/ancien.html",
+      "contrat": {
+        "statut": "SIGNE_SOIGNANT"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-present/signe-soignant/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": "contrat/ancien.html",
+      "contrat": {
+        "statut": "SIGNE_SOIGNANT"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-vide/contrat-absent/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": ""
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-vide/contrat-absent/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": ""
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-vide/contrat-null/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": "",
+      "contrat": null
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-vide/contrat-null/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": "",
+      "contrat": null
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-vide/en-attente/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": "",
+      "contrat": {
+        "statut": "EN_ATTENTE_SIGNATURES"
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-vide/en-attente/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": "",
+      "contrat": {
+        "statut": "EN_ATTENTE_SIGNATURES"
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-vide/signature-etablissement/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": "",
+      "contrat": {
+        "signature_etablissement": true
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-vide/signature-etablissement/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": "",
+      "contrat": {
+        "signature_etablissement": true
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-vide/signe-soignant/apercu",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": "",
+      "contrat": {
+        "statut": "SIGNE_SOIGNANT"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/grille/stockage-vide/signe-soignant/variables",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": "",
+      "contrat": {
+        "statut": "SIGNE_SOIGNANT"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/vitest-apercu-sans-stockage",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>Aperçu</p>",
+      "storagePath": null
+    },
+    "expected": true
+  },
+  {
+    "name": "contratNecessiteRenduServeur/vitest-preuve-sans-stockage-signature-etablissement",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": null,
+      "storagePath": null,
+      "contrat": {
+        "signature_etablissement": true
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/vitest-preuve-sans-stockage-signature-etablissement-le",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": null,
+      "storagePath": null,
+      "contrat": {
+        "signature_etablissement_le": "2026-01-01"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/vitest-preuve-sans-stockage-signature-soignant",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": null,
+      "storagePath": null,
+      "contrat": {
+        "signature_soignant": true
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/vitest-preuve-sans-stockage-signature-soignant-le",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": null,
+      "storagePath": null,
+      "contrat": {
+        "signature_soignant_le": "2026-01-01"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/vitest-preuve-sans-stockage-statut-signe-complet",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": null,
+      "storagePath": null,
+      "contrat": {
+        "statut": "SIGNE_COMPLET"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/vitest-preuve-sans-stockage-statut-signe-soignant",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": null,
+      "storagePath": null,
+      "contrat": {
+        "statut": "SIGNE_SOIGNANT"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/vitest-stockage-ancien-avec-variable",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>{{motif_cdd}}</p>",
+      "storagePath": "contrat/ancien.html"
+    },
+    "expected": false
+  },
+  {
+    "name": "contratNecessiteRenduServeur/vitest-stockage-ancien-sans-variable",
+    "input": {
+      "fonction": "contratNecessiteRenduServeur",
+      "html": "<p>10h/jour (L3121-18)</p>",
+      "storagePath": "contrat/ancien.html"
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/absent",
+    "input": {
+      "fonction": "contratPossedeSignature"
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/annule-avec-date-etablissement",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "statut": "ANNULE",
+        "signature_etablissement_le": "2026-01-01"
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratPossedeSignature/expire-sans-preuve",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "statut": "EXPIRE",
+        "signature_soignant": false,
+        "signature_etablissement": false,
+        "signature_soignant_le": null,
+        "signature_etablissement_le": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/null",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": null
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/signature-etablissement-faux",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "signature_etablissement": false
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/signature-etablissement-le-iso",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "signature_etablissement_le": "2026-01-01T10:00:00Z"
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratPossedeSignature/signature-soignant-faux",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "signature_soignant": false
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/signature-soignant-le-null",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "signature_soignant_le": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/signature-soignant-le-vide",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "signature_soignant_le": ""
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/signature-soignant-null",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "signature_soignant": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/statut-en-attente",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "statut": "EN_ATTENTE_SIGNATURES"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/statut-espace-signe",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "statut": " SIGNE_COMPLET"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/statut-minuscules",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "statut": "signe_complet"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/statut-non-signe",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "statut": "NON_SIGNE"
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/statut-null",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "statut": null
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/statut-signe",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "statut": "SIGNE"
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratPossedeSignature/statut-vide",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "statut": ""
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/vide",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {}
+    },
+    "expected": false
+  },
+  {
+    "name": "contratPossedeSignature/vitest-signature-etablissement",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "signature_etablissement": true
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratPossedeSignature/vitest-signature-etablissement-le",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "signature_etablissement_le": "2026-01-01"
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratPossedeSignature/vitest-signature-soignant",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "signature_soignant": true
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratPossedeSignature/vitest-signature-soignant-le",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "signature_soignant_le": "2026-01-01"
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratPossedeSignature/vitest-statut-signe-complet",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "statut": "SIGNE_COMPLET"
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "contratPossedeSignature/vitest-statut-signe-soignant",
+    "input": {
+      "fonction": "contratPossedeSignature",
+      "contrat": {
+        "statut": "SIGNE_SOIGNANT"
+      }
+    },
+    "expected": true
+  }
+]

@@ -1158,6 +1158,13 @@ Tests d'abord (commit de tests rouge à la compilation : API absente), puis corr
      `FusionLocalisationLot2Tests` (rouge dès que le port du lot 2 arrive dans JoleneCore alors que l'implémentation
      provisoire existe encore) ; règle de la précision réduite tranchée avant la fusion (même décision) :
      l'implémentation provisoire rend déjà `.indisponible`, comme le lot 2, et la recette appareil le dit.
+     **Réalisé à la fusion des lots 2 et 3 (12 novembre 2026)** : implémentation provisoire supprimée ;
+     `LocalisationProfilAppareil` (JoleneCore, `Ports/LocalisationPort.swift`) sert `LocalisationPort` sur
+     `Appareil.localisation` en staging et en production, avec l'attente bornée de l'autorisation (m12) et la
+     correspondance ci-dessus (tests `FusionLocalisationLot2Tests`). `DemoLocalisationProfil` est conservé en démo : la
+     position de `DemoLocationPort` est l'adresse du profil fictif, et l'enregistrement ne changerait plus la position
+     relue (`DemoPhotoPositionTests`). Écart connu : `LocationService` clôt `.indisponible` une demande encore ouverte
+     quand une autre arrive (pointage et profil partagent le service) ; l'écran du profil n'en lance qu'une à la fois.
   2. **Journal des reçus.** Le blueprint utilise `ReceiptJournal` « du lot 1 T7 », qui n'existe sur aucune branche
      du lot 1 ; il est livré par L2-T1 (`Receipts/ReceiptJournal.swift`, `RecuDurable.swift`, `KeychainReceiptStore`).
      Point d'extension : `RecuAvatar` porte déjà les membres de `RecuDurable` (domaine `avatar`, `userId`,

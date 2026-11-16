@@ -8,9 +8,16 @@ struct MissionDetailScreen: View {
     @StateObject private var model: MissionDetailModel
     @ObservedObject private var session: SessionStore
     @Environment(\.dismiss) private var dismiss
+    // Lot 2 T5a : points d'entrée vers les présences (onglet calculé sur l'horloge des gateways de la session).
+    private let snapshot: SessionSnapshot
+    private let ouvrirOnglet: ((MainTabView.Tab) -> Void)?
+    @State private var horloge: (any ClockPort)?
 
-    init(route: MissionRoute, initial: Mission?, session: SessionStore, snapshot: SessionSnapshot) {
+    init(route: MissionRoute, initial: Mission?, session: SessionStore, snapshot: SessionSnapshot,
+         ouvrirOnglet: ((MainTabView.Tab) -> Void)? = nil) {
         self.session = session
+        self.snapshot = snapshot
+        self.ouvrirOnglet = ouvrirOnglet
         _model = StateObject(wrappedValue: MissionDetailModel(missionId: route.id, initial: initial,
                                                               controller: session.controller, snapshot: snapshot))
     }
@@ -38,7 +45,10 @@ struct MissionDetailScreen: View {
         .navigationTitle("Mission")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("mission-detail")
-        .task { await model.load() }
+        .task {
+            if horloge == nil { horloge = await session.controller.gateways(for: snapshot.epoch)?.clock }
+            await model.load()
+        }
     }
 
     private func content(_ mission: Mission) -> some View {
@@ -88,6 +98,7 @@ struct MissionDetailScreen: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("mission-detail-creneaux")
+            entreePresences(mission)
             if let description = mission.record.description, !description.isEmpty {
                 card {
                     Text("Description").font(JoleneFont.headline).foregroundStyle(JoleneColor.midnight)
@@ -102,6 +113,48 @@ struct MissionDetailScreen: View {
         .padding(JoleneSpacing.lg)
         .frame(maxWidth: 640)
         .frame(maxWidth: .infinity)
+    }
+
+    /// Lot 2 T5a (`DetailMissionSoignant.tsx` l.1477-1494) : « Présences et pointage » (ASSIGNEE, EN_COURS) vers la page
+    /// Présences sur l'onglet calculé (`PointsEntreePresences.entreeMission`), rendu seulement quand l'écran sait changer
+    /// d'onglet (états vides de la page) ; « Voir mes heures pointées et mes pauses » (TERMINEE) vers le détail natif.
+    @ViewBuilder
+    private func entreePresences(_ mission: Mission) -> some View {
+        if let horloge, let entree = PointsEntreePresences.entreeMission(statut: mission.record.statut, creneaux: mission.creneauxPlanifies,
+                                                                          maintenant: horloge.now()) {
+            switch entree {
+            case let .presences(onglet):
+                if let ouvrirOnglet {
+                    NavigationLink {
+                        PresencesScreen(session: session, snapshot: snapshot, parametreOnglet: onglet.rawValue, ouvrirOnglet: ouvrirOnglet)
+                    } label: {
+                        boutonEntree(LibellesWeb.DetailMission.presencesEtPointage)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("mission-presences")
+                }
+            case .heures:
+                NavigationLink {
+                    DetailPresencesScreen(missionId: mission.id, session: session, snapshot: snapshot)
+                } label: {
+                    boutonEntree(LibellesWeb.DetailMission.heuresPointees)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("mission-heures")
+            }
+        }
+    }
+
+    private func boutonEntree(_ titre: String) -> some View {
+        Text(titre)
+            .font(JoleneFont.button)
+            .foregroundStyle(JoleneColor.onGradient)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, JoleneSpacing.lg)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .background(JoleneColor.heroGradient)
+            .clipShape(Capsule())
+            .contentShape(Capsule())
     }
 
     private func lieu(_ mission: Mission) -> String? {

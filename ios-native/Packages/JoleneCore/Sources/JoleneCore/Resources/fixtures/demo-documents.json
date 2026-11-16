@@ -1,0 +1,132 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "profil": {
+    "profession": "IDE",
+    "type_exercice": "MIXTE",
+    "rpps_verifie": false,
+    "adeli_verifie": false
+  },
+  "attestation_sante_signee_le": null,
+  "exigences": [
+    {
+      "id": "demo-exigence-carte-identite",
+      "profession": "IDE",
+      "type_document": "CARTE_IDENTITE",
+      "description": "Exigence de démonstration",
+      "a_expiration": true,
+      "duree_validite_mois": null,
+      "est_critique": true,
+      "type_exercice_requis": "TOUS"
+    },
+    {
+      "id": "demo-exigence-diplome",
+      "profession": "IDE",
+      "type_document": "DIPLOME",
+      "description": "Exigence de démonstration",
+      "a_expiration": false,
+      "duree_validite_mois": null,
+      "est_critique": true,
+      "type_exercice_requis": "TOUS"
+    },
+    {
+      "id": "demo-exigence-rcp-assurance",
+      "profession": "IDE",
+      "type_document": "RCP_ASSURANCE",
+      "description": "Exigence de démonstration",
+      "a_expiration": true,
+      "duree_validite_mois": null,
+      "est_critique": true,
+      "type_exercice_requis": "LIBERAL_ONLY"
+    },
+    {
+      "id": "demo-exigence-rib",
+      "profession": "IDE",
+      "type_document": "RIB",
+      "description": "Exigence de démonstration",
+      "a_expiration": true,
+      "duree_validite_mois": null,
+      "est_critique": false,
+      "type_exercice_requis": "LIBERAL_ONLY"
+    },
+    {
+      "id": "demo-exigence-vaccinations",
+      "profession": "IDE",
+      "type_document": "VACCINATIONS",
+      "description": "Exigence de démonstration",
+      "a_expiration": true,
+      "duree_validite_mois": null,
+      "est_critique": true,
+      "type_exercice_requis": "TOUS"
+    }
+  ],
+  "documents": [
+    {
+      "id": "demo-doc-carte-identite",
+      "type_document": "CARTE_IDENTITE",
+      "libelle": null,
+      "s3_cle": "demo-soignant/documents/CARTE_IDENTITE/1793318400000-piece-identite-demonstration.pdf",
+      "nom_fichier": "piece-identite-demonstration.pdf",
+      "type_mime": "application/pdf",
+      "taille_octets": 2048,
+      "valide_depuis": null,
+      "valide_jusqua": "2026-10-01",
+      "statut_verification": "REJETE",
+      "motif_rejet": "Pièce de démonstration illisible.",
+      "televerse_le": "2026-10-30T00:00:00.000Z",
+      "verification_attempt_id": null,
+      "est_critique": true,
+      "profession_certifiee": null
+    },
+    {
+      "id": "demo-doc-rcp",
+      "type_document": "RCP_ASSURANCE",
+      "libelle": null,
+      "s3_cle": "demo-soignant/documents/RCP_ASSURANCE/1793145600000-rcp-demonstration.pdf",
+      "nom_fichier": "rcp-demonstration.pdf",
+      "type_mime": "application/pdf",
+      "taille_octets": 2048,
+      "valide_depuis": null,
+      "valide_jusqua": "2026-11-14",
+      "statut_verification": "VERIFIE",
+      "motif_rejet": null,
+      "televerse_le": "2026-10-28T00:00:00.000Z",
+      "verification_attempt_id": null,
+      "est_critique": true,
+      "profession_certifiee": null
+    },
+    {
+      "id": "demo-doc-diplome",
+      "type_document": "DIPLOME",
+      "libelle": null,
+      "s3_cle": "demo-soignant/documents/DIPLOME/1792540800000-diplome-demonstration.pdf",
+      "nom_fichier": "diplome-demonstration.pdf",
+      "type_mime": "application/pdf",
+      "taille_octets": 2048,
+      "valide_depuis": "2020-07-01",
+      "valide_jusqua": null,
+      "statut_verification": "VERIFIE",
+      "motif_rejet": null,
+      "televerse_le": "2026-10-21T00:00:00.000Z",
+      "verification_attempt_id": null,
+      "est_critique": true,
+      "profession_certifiee": null
+    },
+    {
+      "id": "demo-doc-rib",
+      "type_document": "RIB",
+      "libelle": null,
+      "s3_cle": "demo-soignant/documents/RIB/1759017600000-rib-demonstration.pdf",
+      "nom_fichier": "rib-demonstration.pdf",
+      "type_mime": "application/pdf",
+      "taille_octets": 2048,
+      "valide_depuis": null,
+      "valide_jusqua": "2026-10-15",
+      "statut_verification": "EXPIRE",
+      "motif_rejet": null,
+      "televerse_le": "2025-09-28T00:00:00.000Z",
+      "verification_attempt_id": null,
+      "est_critique": false,
+      "profession_certifiee": null
+    }
+  ]
+}

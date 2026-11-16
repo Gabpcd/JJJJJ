@@ -87,6 +87,16 @@ public struct Gateways: Sendable {
     public var recovery: RecoveryPort = UnwiredRecoveryPort()
     public var justificatifs: JustificatifStoragePort = UnwiredJustificatifStoragePort()
 
+    // Lot 2 — ajout additif (PRINCIPES §2, blueprint `LOT2_PLAN.md` §2.2) : même règle que le lot 1,
+    // stubs dans `Ports/Lot2Ports.swift` (message : « …livré par la tranche Tn du lot 2 »). Pas de
+    // troisième init : chaque monde assigne ces ports après l'init complet du lot 1, dans sa fonction
+    // `câblerLot2(_:)` (`DemoWorld`, `SupabaseGateways`) ; liste attendue `DemoWorldTests.portsEnAttenteLot2`.
+    public var pointage: PointagePort = UnwiredPointagePort()                 // T3
+    public var contestation: ContestationPort = UnwiredContestationPort()     // T5b
+    public var notation: NotationPort = UnwiredNotationPort()                 // T5a
+    public var documents: DocumentsPort = UnwiredDocumentsPort()              // T6
+    public var contrats: ContratsPort = UnwiredContratsPort()                 // T8
+
     // Lot 3 — ajout additif (PRINCIPES §2, blueprint `LOT3_PLAN.md` §2.2) : même règle que le lot 1,
     // stubs dans `Ports/Lot3Ports.swift` (message : « …livré par la tranche Tn du lot 3 »). Pas de
     // troisième init : chaque monde assigne ces ports après l'init complet du lot 1, dans sa fonction
@@ -121,13 +131,16 @@ public struct Gateways: Sendable {
         self.audit = audit; self.flags = flags; self.recovery = recovery; self.justificatifs = justificatifs
     }
 
-    /// Noms des champs du lot 1, puis du lot 3, encore servis par un stub « non câblé », dans
-    /// l'ordre de déclaration. Vide pour un monde complet.
+    /// Noms des champs du lot 1, puis du lot 2, puis du lot 3, encore servis par un stub « non
+    /// câblé », dans l'ordre de déclaration. Vide pour un monde complet.
     public var unwiredPorts: [String] {
         let ports: [(nom: String, port: Any)] = [
             ("dashboard", dashboard), ("candidature", candidature), ("presence", presence),
             ("favoris", favoris), ("mesMissions", mesMissions), ("compte", compte),
             ("audit", audit), ("flags", flags), ("recovery", recovery), ("justificatifs", justificatifs),
+            // Lot 2
+            ("pointage", pointage), ("contestation", contestation), ("notation", notation),
+            ("documents", documents), ("contrats", contrats),
             // Lot 3
             ("push", push), ("notifications", notifications), ("preferences", preferences),
             ("inscription", inscription), ("profil", profil), ("avatar", avatar), ("geocodage", geocodage),

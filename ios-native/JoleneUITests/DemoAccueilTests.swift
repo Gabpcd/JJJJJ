@@ -7,8 +7,8 @@ import XCTest
 /// (`BandeauAlerte48h`, « cumul d'activité »), puis navigation vers le détail et vers Explorer ;
 /// état d'erreur et reprise par « Réessayer » (`testAccueilErreurPuisReprise`). Gaps verrouillés
 /// (aucun bouton sans effet) : pas de bouton calendrier (T5) tant que son implémentation n'est pas
-/// injectée ; le présentateur de renvoi web est injecté depuis L3-T3b (aucun oubli de pointage en démo par défaut ;
-/// variante `JOLENE_FORCE_OUBLI_POINTAGE` : bouton et renvoi `/soignant/presences`, `testOubliDePointageOuvreLesPresencesSurLeWeb`).
+/// injectée ; aucun oubli de pointage en démo par défaut (variante `JOLENE_FORCE_OUBLI_POINTAGE` : encart et bouton
+/// natif « Pointer mon départ maintenant » vers la page Présences du lot 2, `testOubliDePointageOuvreLesPresencesNatives`).
 ///
 /// Coût : les recherches de libellé sont limitées aux descendants de `accueil-screen` et faites
 /// en une seule requête, et chaque ligne n'est résolue qu'une fois (borne CI globale, #1104).
@@ -78,11 +78,14 @@ final class DemoAccueilTests: JoleneUITestCase {
         let voirNotifications = dansEcran("accueil-notifications-action", ecran)
         degager(voirNotifications, dans: ecran)
         XCTAssertEqual(voirNotifications.label, "Voir", "« Voir » ouvre le centre de notifications natif")
-        // Renvoi web du pointage : la démo par défaut n'a aucun pointage oublié (encart absent, ci-dessus), donc aucun
-        // bouton. Le bouton et son renvoi sont prouvés par la variante `JOLENE_FORCE_OUBLI_POINTAGE`
-        // (`testOubliDePointageOuvreLesPresencesSurLeWeb`, revue B8 de T3b, m4 : verrou T12 n°2 du lot 1 levé).
+        // Pointage (lot 2 T5a) : natif ; bandeau et widget n'apparaissent qu'avec le scénario `accueil-pointage`
+        // (`DemoPresenceDetailTests`) ou la variante `JOLENE_FORCE_OUBLI_POINTAGE` (`testOubliDePointageOuvreLesPresencesNatives`).
+        XCTAssertFalse(dansEcran("accueil-oubli-depart", ecran).exists,
+                       "aucun départ oublié dans la démo : pas de « Pointer mon départ maintenant » (lot 2 T5a, `DemoPresenceDetailTests`)")
+        XCTAssertFalse(dansEcran("accueil-pointer", ecran).exists, "aucune mission à pointer dans l'heure dans la démo")
+        // Fusion des lots 2 et 3 : l'ancien renvoi web du pointage (« Vérifier mes présences sur jolene.app ») n'existe plus.
         XCTAssertFalse(dansEcran("accueil-oubli-pointage-action", ecran).exists,
-                       "aucun oubli de pointage dans la démo : aucun bouton « Vérifier mes présences »")
+                       "aucun bouton « Vérifier mes présences » : le pointage est natif (lot 2 T5a)")
         record("\(proofPrefix)-accueil-bas")
 
         ouvrirProchaineMissionPuisRevenir(ecran)
@@ -118,11 +121,13 @@ final class DemoAccueilTests: JoleneUITestCase {
         record("\(proofPrefix)-accueil-reprise")
     }
 
-    /// Verrou T12 n°2 du lot 1 (`LOT1_PLAN.md` §3 T10 ; revue B8 de T3b, m4) : avec un oubli de pointage (variante
-    /// démo `JOLENE_FORCE_OUBLI_POINTAGE=1`, `DemoDashboardGateway(missionsOubliees: 1)`), l'encart au texte web et le
-    /// bouton « Vérifier mes présences sur jolene.app » sont affichés, et le bouton présente le renvoi web canonique
-    /// `/soignant/presences` (double démo du présentateur `.safari`, aucune requête réseau), jamais `openURL`.
-    func testOubliDePointageOuvreLesPresencesSurLeWeb() throws {
+    /// Verrou T12 n°2 du lot 1 (`LOT1_PLAN.md` §3 T10 ; revue B8 de T3b, m4), migré à la fusion des lots 2 et 3
+    /// (règle 8, ancien `testOubliDePointageOuvreLesPresencesSurLeWeb`) : avec un oubli de pointage (variante démo
+    /// `JOLENE_FORCE_OUBLI_POINTAGE=1`, `DemoDashboardGateway(missionsOubliees: 1)`), l'encart au texte web et le bouton
+    /// natif « Pointer mon départ maintenant » (lot 2 T5a, `onPointer` du web, `DashboardSoignant.tsx` l.493) sont affichés,
+    /// et le bouton ouvre la page Présences native (`presences-screen`) ; l'ancien renvoi web « Vérifier mes présences sur
+    /// jolene.app » (`/soignant/presences`) n'existe plus et aucune feuille du renvoi web n'est présentée.
+    func testOubliDePointageOuvreLesPresencesNatives() throws {
         launchDemo(environment: [Self.variableOubliPointage: "1"])
         connexionDemo()
 
@@ -134,17 +139,20 @@ final class DemoAccueilTests: JoleneUITestCase {
         XCTAssertEqual(encart.label,
                        "Attention : Oubli de pointage ?. 1 mission semble attendre un pointage de départ. Vérifiez vos présences.",
                        "texte web de l'encart (`InlineNotice.accessibilityLabel`)")
-        let action = dansEcran("accueil-oubli-pointage-action", ecran)
+        XCTAssertFalse(dansEcran("accueil-oubli-pointage-action", ecran).exists,
+                       "plus de renvoi web « Vérifier mes présences sur jolene.app » : le pointage est natif (lot 2 T5a)")
+        let action = dansEcran("accueil-oubli-depart", ecran)
         degager(action, dans: ecran)
-        XCTAssertEqual(action.label, "Vérifier mes présences sur jolene.app")
+        XCTAssertTrue(action.label.contains("Pointer mon départ maintenant"), "bouton : \(action.label)")
         record("\(proofPrefix)-accueil-oubli-pointage")
         action.tap()
-        liensRenvoiWebAffiche("https://jolene.app/soignant/presences")
-        record("\(proofPrefix)-accueil-oubli-pointage-renvoi")
-        liensFermerRenvoiWeb()
-        require("L'Accueil est de nouveau affiché") { self.containerVisible(ecran) && action.exists }
-        XCTAssertEqual(element("deeplink-route").label, "safari https://jolene.app/soignant/presences",
-                       "route présentée à l'apparition de la feuille")
+        let presences = element("presences-screen")
+        require("La page Présences native est chargée", timeout: 30) {
+            self.containerVisible(presences) && self.element("presences-tab-aujourdhui").exists
+                && !self.element("presences-loading").exists
+        }
+        XCTAssertFalse(element("renvoi-web-demo").exists, "aucun renvoi web présenté")
+        record("\(proofPrefix)-accueil-oubli-pointage-presences")
     }
 
     /// `DemoDashboardGateway.variableOubliPointage` (JoleneCore, épinglée par `DemoDashboardTests`).

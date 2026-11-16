@@ -808,6 +808,9 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
     ['lot3-profil-photo', ['DemoPhotoPositionTests']],
     ['lot3-revenus', ['DemoRevenusTests']],
   ]);
+  // Fusion des lots 2 et 3 : les éclats du lot 2 (`ios-swift-ci-eclats.node.mjs`, DECISIONS_LOT2 décision 22) suivent le
+  // socle et précèdent ceux du lot 3, dans les étapes, la boucle des xcresult et la liste ECLATS du relevé.
+  const eclatsLot2 = ['presences', 'pointage', 'documents', 'contrats'];
   const etapes = wf.split('\n      - name: ').slice(1);
   const etape = nom => etapes.find(e => e.startsWith(`test-without-building — éclat ${nom} `));
   const socle = etape('socle');
@@ -830,11 +833,12 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
   }
   const boucle = wf.match(/for eclat in ([a-z0-9 -]+); do/);
   assert.ok(boucle, 'boucle des xcresult absente');
-  assert.deepEqual(boucle[1].split(' '), ['socle', ...eclats.keys()], 'boucle des xcresult : tous les éclats');
+  assert.deepEqual(boucle[1].split(' '), ['socle', ...eclatsLot2, ...eclats.keys()], 'boucle des xcresult : tous les éclats');
+  for (const nom of eclatsLot2) assert.ok(etape(nom), `éclat ${nom} du lot 2 absent`);
   // Intégration du lot 3 : le relevé des attentes bloquées lit le manifest.json de chaque éclat (même liste).
   const releve = wf.match(/\n {10}ECLATS: ([a-z0-9 -]+)\n/);
   assert.ok(releve, 'relevé des attentes bloquées : liste ECLATS absente');
-  assert.deepEqual(releve[1].split(' '), ['socle', ...eclats.keys()], 'relevé des attentes bloquées : tous les éclats');
+  assert.deepEqual(releve[1].split(' '), ['socle', ...eclatsLot2, ...eclats.keys()], 'relevé des attentes bloquées : tous les éclats');
   assert.ok(wf.includes('const manifeste = join(attachments, "manifest.json");') && wf.includes('const attachments = join(racine, eclat);'),
     'relevé des attentes bloquées : un manifest.json par éclat (attachments/<éclat>/)');
   for (const classe of toutes) {
@@ -842,7 +846,8 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
   }
   // Plafond du job au-dessus de la somme des éclats (socle compris, 30 min chacun) et du build.
   const plafond = Number(wf.match(/\n {2}ui:\n[\s\S]*?\n {4}timeout-minutes: (\d+)/)[1]);
-  assert.ok(plafond >= 30 * (eclats.size + 1) + 20, `plafond du job UI trop bas : ${plafond} min`);
+  assert.ok(plafond >= 30 * (eclatsLot2.length + eclats.size + 1) + 20, `plafond du job UI trop bas : ${plafond} min`);
+  assert.ok(plafond <= 360, `plafond du job UI au-delà de celui de GitHub (360 min) : ${plafond} min`);
 });
 
 test('PARITE_SOIGNANT.md : lignes du lot 3 (profil, revenus, notifications, Stripe, préférences, alias)', () => {
