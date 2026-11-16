@@ -38,6 +38,10 @@ import JoleneSupabase
 /// scanner de QR et zone de pointage ; sélecteurs de médias démo (`mediaDemo`) ; scénarios DEBUG
 /// `-JOLENE_DEMO_SCENARIO`, `-JOLENE_DEMO_GPS`, `-JOLENE_DEMO_RESEAU`, `-JOLENE_DEMO_QR`, `-JOLENE_DEMO_SOURCE_DOC` et
 /// `-JOLENE_FLAG_<cle>` (démo seulement).
+///
+/// Lot 3, T15 : rapport de crash (`CrashReporting`, démarré par `JoleneApp` avant le conteneur sur la même lecture de
+/// l'environnement, `environnementDeLancement`) remis à la session en staging et en production seulement (identifiant
+/// utilisateur) ; jamais en démo.
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -87,27 +91,16 @@ final class AppContainer: ObservableObject {
 
     var isDemo: Bool { environment.mode == .demo }
 
-    convenience init() {
+    convenience init(crashReporting: CrashReportingPort? = nil) {
         self.init(arguments: CommandLine.arguments,
                   processEnvironment: ProcessInfo.processInfo.environment,
-                  info: Bundle.main.infoDictionary ?? [:])
+                  info: Bundle.main.infoDictionary ?? [:], crashReporting: crashReporting)
     }
 
-    init(arguments: [String], processEnvironment: [String: String], info: [String: Any]) {
-        #if DEBUG
-        let allowOverrides = true
-        #else
-        let allowOverrides = false
-        #endif
-        var environment = JoleneEnvironment.load(arguments: arguments, environment: processEnvironment, info: info,
-                                                 allowOverrides: allowOverrides)
-        #if DEBUG
-        // Test de garde (EnvironmentGuardTests) : une clé injectée par l'environnement de
-        // test remplace la clé du bundle. Jamais compilé en Release.
-        if let forced = processEnvironment["JOLENE_FORCE_BAD_KEY"], !forced.isEmpty {
-            environment.publishableKey = forced
-        }
-        #endif
+    init(arguments: [String], processEnvironment: [String: String], info: [String: Any],
+         crashReporting: CrashReportingPort? = nil) {
+        let environment = Self.environnementDeLancement(arguments: arguments, processEnvironment: processEnvironment,
+                                                        info: info)
         self.environment = environment
         let boite = NotificationCenterDelegate.shared.boite
         tapsPush = boite
@@ -200,7 +193,8 @@ final class AppContainer: ObservableObject {
                 pushPermission = permission
                 // Fusion des lots 2 et 3 : la position du profil passe par le service de position du lot 2.
                 localisationProfil = LocalisationProfilAppareil(localisation: appareil.localisation)
-                let store = SessionStore(controller: controller, push: coordinator, finIdentiteWeb: liens)
+                let store = SessionStore(controller: controller, push: coordinator, finIdentiteWeb: liens,
+                                         crashReporting: crashReporting) // lot 3, T15
                 // Session effacée côté SDK (révocation, déconnexion globale, refresh refusé) :
                 // l'écran bascule sans action de l'utilisateur.
                 store.observeAuthEvents()
@@ -223,6 +217,28 @@ final class AppContainer: ObservableObject {
                 environmentError = JoleneError(.environment, "Configuration de l'application invalide.")
             }
         }
+    }
+
+    /// Environnement du lancement : Info.plist, et en DEBUG seulement les surcharges `-JOLENE_MODE` / `JOLENE_MODE` et
+    /// `JOLENE_FORCE_BAD_KEY`. Lot 3, T15 : partagé avec `CrashReporting`, qui démarre Sentry avant le conteneur sur cette
+    /// même lecture (un mode démo ou refusé ici l'est aussi là).
+    nonisolated static func environnementDeLancement(arguments: [String], processEnvironment: [String: String],
+                                                     info: [String: Any]) -> JoleneEnvironment {
+        #if DEBUG
+        let allowOverrides = true
+        #else
+        let allowOverrides = false
+        #endif
+        var environment = JoleneEnvironment.load(arguments: arguments, environment: processEnvironment, info: info,
+                                                 allowOverrides: allowOverrides)
+        #if DEBUG
+        // Test de garde (EnvironmentGuardTests) : une clé injectée par l'environnement de
+        // test remplace la clé du bundle. Jamais compilé en Release.
+        if let forced = processEnvironment["JOLENE_FORCE_BAD_KEY"], !forced.isEmpty {
+            environment.publishableKey = forced
+        }
+        #endif
+        return environment
     }
 
     /// Ports du monde démo. DEBUG seulement : `JOLENE_FORCE_ACCUEIL_ECHEC=1` (variable d'environnement

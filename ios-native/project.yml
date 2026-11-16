@@ -23,6 +23,11 @@ packages:
     path: Packages/JoleneSupabase
   JoleneDesign:
     path: Packages/JoleneDesign
+  # Lot 3, T15 (D21) : Sentry Cocoa, crashs et app hangs sans PII. Version exacte, compatible Xcode 16.4 (local)
+  # et 26.4.1 (CI) ; choix et mise à jour : docs/mobile-swift/SENTRY_IOS.md. Importé par la cible app seulement.
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa
+    exactVersion: 9.32.0
 targets:
   Jolene:
     type: application
@@ -35,6 +40,8 @@ targets:
       - package: JoleneCore
       - package: JoleneSupabase
       - package: JoleneDesign
+      - package: Sentry
+        product: Sentry
     settings:
       base:
         INFOPLIST_FILE: Jolene/Info.plist

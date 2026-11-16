@@ -35,6 +35,12 @@ import Combine
 /// (`signOut` après la révocation, `signOutLocally` après la purge, absence de session confirmée après une
 /// identité), avant chaque `signIn` et avant la relecture d'une identité ouverte par l'inscription
 /// (`ouvrirIdentiteInscription`, intégration T7), jamais sur une fin transitoire ni au lancement à froid sans session.
+///
+/// Lot 3, T15 (D21) — rapport de crash `CrashReportingPort`, optionnel (nil : démo, Sentry non démarré, doubles de
+/// test) : identifiant de l'utilisateur seul posé à la publication de `.ready` (une fois par identité, une revalidation
+/// ne le repose pas), retiré (`nil`) à chaque fin d'identité suivie (déconnexion volontaire, fin de compte, absence de
+/// session confirmée), conservé sur une fin transitoire (le SDK détient encore la session). Un espace bloqué ne le pose
+/// pas.
 @MainActor
 public final class SessionStore: ObservableObject {
     @Published public private(set) var state: SessionState {
@@ -51,6 +57,8 @@ public final class SessionStore: ObservableObject {
     public let push: PushCoordinator?
     /// Lot 3, T3b (revue B8, M1) : navigateur intégré à vider à chaque fin d'identité (nil sans renvoi web).
     public let finIdentiteWeb: FinIdentiteWebPort?
+    /// Lot 3, T15 : rapport de crash (nil en démo et sans Sentry démarré).
+    public let crashReporting: CrashReportingPort?
     /// Lot 3, T4 : enregistrement push lancé par le dernier `.ready` d'un nouvel epoch (preuves des tests).
     private(set) var pushEnCours: Task<Void, Never>?
     /// Lot 3, T4 : désinscription locale lancée par la dernière fin de session subie (preuves des tests).
@@ -68,14 +76,18 @@ public final class SessionStore: ObservableObject {
     /// Lot 3, T4 : absences de session confirmées par le contrôleur déjà vues (`SessionController.Publication`) ;
     /// une même absence publiée deux fois (retour de `start()` et boucle d'événements) n'est traitée qu'une fois.
     private var absencesVues = 0
+    /// Lot 3, T15 : identifiant remis au rapport de crash (nil : aucun, ou retiré).
+    private var utilisateurCrash: String?
     /// Lot 3, T4 : vrai seulement pendant la publication (`appliquer`) d'un état qui porte une absence de session
     /// confirmée encore jamais vue ; lu par `suivreIdentite`. Toute autre affectation de `state` le trouve faux.
     private var publicationConfirmeAbsence = false
 
-    public init(controller: SessionController, push: PushCoordinator? = nil, finIdentiteWeb: FinIdentiteWebPort? = nil) {
+    public init(controller: SessionController, push: PushCoordinator? = nil, finIdentiteWeb: FinIdentiteWebPort? = nil,
+                crashReporting: CrashReportingPort? = nil) {
         self.controller = controller
         self.push = push
         self.finIdentiteWeb = finIdentiteWeb
+        self.crashReporting = crashReporting
         self.state = .idle
     }
 
@@ -186,6 +198,7 @@ public final class SessionStore: ObservableObject {
         case let .ready(snapshot):
             identitePubliee = true
             dernierEpochPret = snapshot.epoch
+            signalerUtilisateurCrash(snapshot.user.id) // lot 3, T15
             guard let push, snapshot.epoch != ancien.snapshot?.epoch else { return }
             // Après la fin de session précédente : sa désinscription ne suit jamais le nouvel enregistrement.
             let finPrecedente = finDeSessionPush
@@ -227,6 +240,14 @@ public final class SessionStore: ObservableObject {
     private func oublierIdentiteSuivie() {
         identitePubliee = false
         dernierEpochPret = nil
+        signalerUtilisateurCrash(nil) // lot 3, T15 : fin d'identité
+    }
+
+    /// Lot 3, T15 : remet l'identifiant au rapport de crash s'il a changé (aucun appel sans rapport de crash).
+    private func signalerUtilisateurCrash(_ id: String?) {
+        guard let crashReporting, id != utilisateurCrash else { return }
+        utilisateurCrash = id
+        crashReporting.utilisateur(id: id)
     }
 
     /// Epoch de l'identité ouverte (espace prêt ou bloqué : JWT présent), nil sans identité.

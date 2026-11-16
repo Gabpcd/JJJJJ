@@ -226,14 +226,24 @@ final class CrashReportingTests: XCTestCase {
     }
 
     func testFinTransitoireConserveLIdentifiant() async {
+        // Revalidation hors ligne d'un espace prêt : l'espace reste prêt (PRINCIPES §5, erreur transitoire tolérée) ;
+        // l'identifiant n'est ni retiré ni reposé.
         let restaurations = MutableAuthState(restored: MondePush.utilisateur, restoreError: nil)
-        let monde = MondePush(restaurations: restaurations)
-        let (store, espion) = store(monde)
+        let (store, espion) = store(MondePush(restaurations: restaurations))
         await store.start()
         await restaurations.set(restored: MondePush.utilisateur, restoreError: JoleneError(.network, "hors ligne"))
         await store.start()
-        XCTAssertEqual(store.state, .signedOut(message: SessionController.restoreFailedMessage))
+        XCTAssertTrue(store.state.isReady)
         XCTAssertEqual(espion.utilisateurs, ["u-push"], "le SDK détient encore la session : identité inchangée")
+        // Lancement à froid hors ligne, profil illisible : `.signedOut` transitoire, aucun identifiant posé ni retiré.
+        let horsLigne = MondePush(restaurations: MutableAuthState(restored: nil, restoreError: JoleneError(.network, "hors ligne")))
+        let (froid, espionFroid) = self.store(horsLigne)
+        await froid.start()
+        XCTAssertEqual(froid.state, .signedOut(message: SessionController.restoreFailedMessage))
+        let (illisible, espionIllisible) = self.store(MondePush(missions: MissionsHorsLigne()))
+        await illisible.start()
+        XCTAssertEqual(illisible.state, .signedOut(message: SessionController.profileLoadFailedMessage))
+        XCTAssertEqual(espionFroid.appels + espionIllisible.appels, [])
     }
 
     func testEspaceBloqueNePosePasDIdentifiant() async {
