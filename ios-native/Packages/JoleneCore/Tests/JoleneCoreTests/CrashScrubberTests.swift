@@ -246,6 +246,99 @@ final class CrashScrubberTests: XCTestCase {
                        ["refreshToken": masque, "token_type": "bearer"])
     }
 
+    // MARK: - Revue B8 de la vague 5, m3 : faux négatifs résiduels
+
+    func testAdresseAPartieLocaleNonASCIIEstMasquee() {
+        // La lecture à rebours s'arrêtait sur la première lettre non ASCII : ni la partie locale ni le domaine n'étaient
+        // masqués. Lettres accentuées (composées ou décomposées), autres écritures, domaine internationalisé.
+        assertMasque("Connexion refusée pour josé@example.fr", sansFragments: ["josé", "example.fr"],
+                     attendu: "Connexion refusée pour \(masque)")
+        assertMasque("contact jose\u{0301}.noe\u{0308}l@example.fr", sansFragments: ["jose", "l@", "example"],
+                     attendu: "contact \(masque)")
+        assertMasque("zoë.müller@exämple.fr refusée", sansFragments: ["zoë", "müller", "exämple"], attendu: "\(masque) refusée")
+        assertMasque("adresse 李雷@example.cn", sansFragments: ["李雷", "example.cn"], attendu: "adresse \(masque)")
+        assertMasque("email=renée%40example.fr&x=1", sansFragments: ["renée", "example.fr"])
+    }
+
+    func testCodeOTPDeSignatureEstMasque() throws {
+        // `fn_signer_contrat_otp(p_contrat_id, p_otp_code, …)` (rpc-contracts.json) : le code reçu par SMS signe le contrat.
+        let corps = #"{"p_contrat_id":"c-1","p_otp_code":"otp-secret-1","p_hash_document":"h-1"}"#
+        assertMasque(corps, sansFragments: ["otp-secret-1"])
+        XCTAssertTrue(CrashScrubber.texte(corps).contains(#""p_contrat_id":"c-1""#), "les paramètres voisins restent lisibles")
+        assertMasque("otp=654321", sansFragments: ["654321"], attendu: "otp=\(masque)")
+        assertMasque("?otp_code=445566&type=x", sansFragments: ["445566"], attendu: "?otp_code=\(masque)&type=x")
+        assertMasque(#"Signature(otpCode: "112233", contratId: "c-2")"#, sansFragments: ["112233"])
+        assertMasque(#"{"p_otp_code":778899}"#, sansFragments: ["778899"])
+        let net = CrashScrubber.dictionnaire(["p_otp_code": "otp-secret-2", "otp": 123_456, "otpCode": "otp-secret-3",
+                                              "p_contrat_id": "c-3"])
+        XCTAssertEqual(net["p_otp_code"] as? String, masque)
+        XCTAssertEqual(net["otp"] as? String, masque, "un code OTP numérique est masqué")
+        XCTAssertEqual(net["otpCode"] as? String, masque)
+        XCTAssertEqual(net["p_contrat_id"] as? String, "c-3")
+    }
+
+    func testCodeNumeriqueDansUnTexteEtCodeDePointageSontMasques() throws {
+        // Dans un texte, rien ne distingue un code d'erreur d'un code OTP ou de pointage : tout nombre sous `code` est masqué
+        // (revue B8 de la vague 5, m3), comme un texte. `p_code` (code QR de pointage, `fn_scanner_code_pointage`) aussi.
+        for (brut, secret) in [
+            ("code=123456", "123456"),
+            (#"{"code":"223456"}"#, "223456"),
+            (#"{"code":323456}"#, "323456"),
+            (#"{"code": -42.5e3, "x": 1}"#, "42.5e3"),
+            ("Verification(code: 423456)", "423456"),
+            ("code: Optional(523456)", "523456"),
+            (#"{"body":"{\"code\":623456}"}"#, "623456"),
+            ("p_code=723456", "723456"),
+            (#"{"p_code":"823456","p_metadata":{}}"#, "823456"),
+            (#"{"p_code":923456}"#, "923456"),
+        ] {
+            assertMasque(brut, sansFragments: [secret])
+        }
+        XCTAssertTrue(CrashScrubber.texte(#"{"p_code":"823456","p_metadata":{}}"#).contains(#""p_metadata":{}"#))
+        XCTAssertTrue(CrashScrubber.texte(#"{"code": -42.5e3, "x": 1}"#).contains(#""x": 1"#), "la suite reste lisible")
+        let net = CrashScrubber.dictionnaire(["p_code": 987_654, "pointage": ["p_code": "qr-secret-1"], "code": 42])
+        XCTAssertEqual(net["p_code"] as? String, masque, "code de pointage numérique masqué")
+        XCTAssertEqual((net["pointage"] as? [String: Any])?["p_code"] as? String, masque)
+        XCTAssertEqual(net["code"] as? Int, 42, "dictionnaire : un nombre sous la clé exacte `code` reste un code d'erreur")
+        // Noms voisins toujours lisibles.
+        for texte in ["p_code_postal=75001", "postal_code=75001", "codePostal: 75001", "error_code=IBAN_INVALIDE",
+                      "codeEtablissement=E1", "laptop=1", "status_code=500"] {
+            XCTAssertEqual(CrashScrubber.texte(texte), texte)
+        }
+    }
+
+    /// Texte de `longueurMaximale` caractères au moins : des « a » séparés par une espace, puis `fin`, qui commence
+    /// `avant` caractères avant la limite.
+    private func texteCoupe(_ fin: String, avant: Int) -> String {
+        let debut = CrashScrubber.longueurMaximale - avant
+        precondition(debut % 2 == 0, "le préfixe « a » + espace doit finir par une espace")
+        return String(repeating: "a ", count: debut / 2) + fin
+    }
+
+    func testMotCoupeParLaTroncatureRetireEnEntier() {
+        // Une adresse coupée dans son domaine (`jean.dupont@exam`) n'était plus reconnue : sa partie locale survivait.
+        for (fin, avant, fragments) in [
+            ("jean.dupont@example.fr suite", 16, ["jean", "dupont", "exam"]),
+            ("jean.dupont@example.fr suite", 6, ["jean"]),
+            ("contact=jean.dupont%40example.fr&x=1 suite", 30, ["jean", "dupont"]),
+            ("eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImpAZXhhbXBsZS5mciJ9.c2lnbmF0dXJl suite", 40, ["eyJ", "eyJlbWFpbCI6"]),
+        ] {
+            let net = CrashScrubber.texte(texteCoupe(fin, avant: avant))
+            XCTAssertTrue(net.hasSuffix(CrashScrubber.marqueTroncature), "marqueur absent")
+            for fragment in fragments {
+                XCTAssertFalse(net.contains(fragment), "« \(fragment) » survit à la troncature de « \(fin) »")
+            }
+            XCTAssertTrue(net.hasSuffix("a \(CrashScrubber.marqueTroncature)"), "seul le mot coupé est retiré : …\(net.suffix(30))")
+        }
+        // Un mot qui finit exactement à la limite n'est pas coupé : il est gardé, puis nettoyé comme le reste.
+        let entier = texteCoupe("mot-ok suite", avant: 6)
+        XCTAssertTrue(CrashScrubber.texte(entier).hasSuffix("a mot-ok\(CrashScrubber.marqueTroncature)"))
+        let adresseEntiere = texteCoupe("u@example.fr suite", avant: 12)
+        XCTAssertTrue(CrashScrubber.texte(adresseEntiere).hasSuffix("a \(masque)\(CrashScrubber.marqueTroncature)"))
+        // Un texte sans aucun blanc avant la limite est un seul mot coupé : rien n'en reste.
+        XCTAssertEqual(CrashScrubber.texte(String(repeating: "x", count: 9_000)), CrashScrubber.marqueTroncature)
+    }
+
     // MARK: - Revue B8 n°1, m1 : coût borné
 
     /// Durée la plus courte de trois nettoyages du même texte : une préemption ponctuelle du processus (simulateur ou
@@ -262,7 +355,9 @@ final class CrashScrubberTests: XCTestCase {
     /// correction (MacBook, Xcode 16.4, Debug) : de 0,7 à 8,6 ms en `swift test` macOS, de 1,1 à 3,3 ms sur le simulateur
     /// iPhone 16 (iOS 18.6). Avant elle, ces textes prenaient de 1,5 à 2,1 s : l'adresse e-mail non bornée, le JWT et les
     /// noms sans borne de début avaient un coût quadratique (`REVUES_LOT3.md`, section L3-T15). Plus d'un ordre de grandeur
-    /// de marge : le test ne doit pas être instable sur un runner partagé.
+    /// de marge : le test ne doit pas être instable sur un runner partagé. Revue B8 de la vague 5 (m3 : OTP, `p_code`,
+    /// nombres, adresses non ASCII, mot coupé retiré) : de 0,6 à 6,0 ms par texte en `swift test` macOS (Xcode 16.4, Debug),
+    /// simulateur non remesuré.
     static let seuilHuitMilleCaracteres: TimeInterval = 0.1
 
     func testHuitMilleCaracteresAdversesTraitesSousLeSeuil() {
@@ -275,6 +370,11 @@ final class CrashScrubberTests: XCTestCase {
             ("noms de jetons collés", String(repeating: "x_token", count: 1_143)),
             ("adresse en fin de texte", String(repeating: "a", count: 7_990) + "@example.fr"),
             ("texte non ASCII", String(repeating: "aé", count: 4_000)),
+            // Revue B8 de la vague 5, m3 : noms OTP et codes de pointage, partie locale non ASCII, mot coupé par la limite.
+            ("noms OTP collés", String(repeating: "x_otp", count: 1_600)),
+            ("codes de pointage collés", String(repeating: "p_code:", count: 1_143)),
+            ("adresse non ASCII en fin de texte", String(repeating: "é", count: 7_990) + "@exämple.fr"),
+            ("mot coupé de 9 000 caractères", String(repeating: "x", count: 9_000)),
             ("texte réaliste répété", String(repeating: unite, count: 8_000 / unite.count + 1)),
         ]
         for (nom, texte) in textes {
