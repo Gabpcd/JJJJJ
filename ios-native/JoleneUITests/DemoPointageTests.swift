@@ -146,6 +146,8 @@ final class DemoPointageTests: DemoPointageUITestCase {
         let ecran = ouvrirMesPresences()
         require("Bandeau hors ligne du web") { self.libelle("hors-ligne-bandeau").contains("Pas de connexion internet") }
         saisir("123456", mission: Self.missionA, dans: ecran)
+        // Pavé fermé par « OK » avant le défilement, jamais par un glissement (« Gel iPhone CI — 16/11/2026 »).
+        fermerLePaveNumerique()
         let bouton = element("pointage-submit-\(Self.missionA)")
         scrollTo(bouton, in: ecran)
         XCTAssertFalse(bouton.isEnabled, "hors ligne : bouton désactivé, aucun scan mis en file (décision 2)")

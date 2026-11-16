@@ -48,6 +48,10 @@ public struct OTPField: UIViewRepresentable {
         field.textAlignment = .center
         field.delegate = context.coordinator
         field.addTarget(context.coordinator, action: #selector(Coordinator.editingChanged(_:)), for: .editingChanged)
+        // Le pavé numérique n'a pas de touche Entrée : « OK » le ferme sans défilement (`BoutonClavierOK`, `clavier-ok`).
+        context.coordinator.champ = field
+        field.inputAccessoryView = BoutonClavierOK.barreUIKit(cible: context.coordinator,
+                                                              action: #selector(Coordinator.fermerClavier))
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         return field
     }
@@ -67,7 +71,13 @@ public struct OTPField: UIViewRepresentable {
 
     @MainActor public final class Coordinator: NSObject, UITextFieldDelegate {
         var parent: OTPField
+        /// Champ servi, pour que « OK » lui rende le focus.
+        weak var champ: UITextField?
         init(_ parent: OTPField) { self.parent = parent }
+
+        @objc func fermerClavier() {
+            champ?.resignFirstResponder()
+        }
 
         public func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange,
                               replacementString string: String) -> Bool {

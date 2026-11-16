@@ -31,6 +31,9 @@ public struct JoleneInputTraits: Equatable, Sendable {
     public var isSecure: Bool
     public var maxLength: Int?
 
+    /// Pavé sans touche Entrée (téléphone, code, montant, nombres) : le champ porte le bouton « OK » (`BoutonClavierOK`).
+    public var sansToucheEntree: Bool { BoutonClavierOK.requis(pour: keyboard) }
+
     public static func resolve(_ kind: JoleneInputKind) -> JoleneInputTraits {
         switch kind {
         case .email:
@@ -91,6 +94,7 @@ public struct JoleneTextField: View {
                 .autocorrectionDisabled(!traits.autocorrection)
                 .submitLabel(traits.submitLabel.swiftUI)
                 .focused($focused)
+                .boutonOKClavier($focused, actif: traits.sansToucheEntree)
                 .onSubmit(onSubmit)
                 .onChange(of: text) { value in
                     if let max = traits.maxLength, value.count > max { text = String(value.prefix(max)) }

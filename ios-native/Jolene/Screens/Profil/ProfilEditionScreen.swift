@@ -387,6 +387,8 @@ private struct ChampProfil: View {
                 .autocorrectionDisabled()
                 .submitLabel(.done)
                 .focused($focus)
+                // RPPS au pavé numérique, sans touche Entrée : « OK » le ferme sans défilement.
+                .boutonOKClavier($focus, actif: BoutonClavierOK.requis(pour: clavier))
                 .padding(.horizontal, JoleneSpacing.lg)
                 .frame(minHeight: 48)
                 .background(JoleneColor.cloud)

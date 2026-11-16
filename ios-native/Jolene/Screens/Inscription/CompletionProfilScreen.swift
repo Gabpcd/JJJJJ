@@ -34,6 +34,8 @@ struct CompletionProfilScreen: View {
     @State private var selecteurDateOuvert = false
     /// Compteur `fermeturesRenvoiWeb` au moment où la complétion web a été ouverte depuis cet écran.
     @State private var retourWebAttendu: Int?
+    /// Focus du RPPS (pavé numérique sans touche Entrée : « OK » le ferme, `BoutonClavierOK`).
+    @FocusState private var rppsFocus: Bool
     private let recharger: () -> Void
     private let seDeconnecter: () -> Void
 
@@ -206,6 +208,8 @@ struct CompletionProfilScreen: View {
                 .keyboardType(.numberPad)
                 .textContentType(nil)
                 .autocorrectionDisabled()
+                .focused($rppsFocus)
+                .boutonOKClavier($rppsFocus)
                 .padding(.horizontal, JoleneSpacing.lg)
                 .frame(minHeight: 48)
                 .background(JoleneColor.cloud)
