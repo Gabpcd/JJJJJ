@@ -244,7 +244,9 @@ final class AppContainer: ObservableObject {
     /// du parcours ; lot 3, T11 : `JOLENE_FORCE_EXPORT_ECHEC=1` fait refuser l'export RGPD
     /// avec le message serveur verbatim (`DemoCompteLot3Tests.testExportRefuseParLeServeurAfficheLeMessageSansFeuille`) ;
     /// lot 3, T12 : `JOLENE_FORCE_REVENUS_ECHEC=1` fait échouer la première lecture des missions terminées
-    /// (`DemoRevenusEchecGateway`, `DemoRevenusTests.testErreurPuisReprise`).
+    /// (`DemoRevenusEchecGateway`, `DemoRevenusTests.testErreurPuisReprise`) ; lot 3, T13 : `JOLENE_DEMO_PAIEMENTS=refus`
+    /// rejoue les refus serveur des paiements déclarés (`DemoPaiementsGateway.Scenario.refus`,
+    /// `DemoPaiementsTests.testRefusServeurVerbatimJamaisUnSucces`).
     /// Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
@@ -301,6 +303,13 @@ final class AppContainer: ObservableObject {
         }
         if processEnvironment[DemoRevenusEchecGateway.variableEnvironnement] == "1" {
             gateways.revenus = DemoRevenusEchecGateway() // lot 3, T12 (`DemoRevenusTests.testErreurPuisReprise`)
+        }
+        if let scenario = processEnvironment[DemoPaiementsGateway.variableEnvironnement].flatMap(DemoPaiementsGateway.Scenario.init),
+           scenario != .normal {
+            // Lot 3, T13 : un seul serveur simulé, relu aussi par l'onglet (état des missions).
+            let paiements = DemoPaiementsGateway(scenario: scenario)
+            gateways.paiements = paiements
+            gateways.revenus = DemoRevenusGateway(paiementsDeclares: paiements)
         }
         return gateways
         #else

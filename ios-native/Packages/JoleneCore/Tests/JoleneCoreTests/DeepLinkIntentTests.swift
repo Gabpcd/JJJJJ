@@ -44,6 +44,7 @@ final class DeepLinkIntentTests: XCTestCase {
             ("https://jolene.app/mission/m1", .mission(id: "m1")),
             ("https://jolene.app/soignant/mes-gains", .revenus(section: .apercu)),
             ("https://jolene.app/soignant/mes-gains?tab=inconnu", .revenus(section: .apercu)),
+            ("https://jolene.app/soignant/mes-gains?tab=paiements", .revenus(section: .paiementsAConfirmer)), // T13
             ("https://jolene.app/soignant/mon-compte", .monCompte),
             ("https://jolene.app/soignant/parametres", .monCompte),
             ("https://jolene.app/soignant/profil", .profil),
@@ -72,7 +73,6 @@ final class DeepLinkIntentTests: XCTestCase {
             "https://jolene.app/soignant/mes-gains?tab=factures",                     // lot 4 (D4)
             "https://jolene.app/soignant/mes-gains?tab=bulletins&annee=2026",          // lot 4 (D4)
             "https://jolene.app/soignant/mes-gains?tab=avances",                      // lot 4 (D4)
-            "https://jolene.app/soignant/mes-gains?tab=paiements",                    // T13
             "https://jolene.app/soignant/mes-factures-honoraires",                    // alias, lot 4
             "https://jolene.app/soignant/stripe-connect?success=true",                // T14a
             "https://jolene.app/soignant/stripe-connect?refresh=true",                // T14a
@@ -249,12 +249,13 @@ final class DeepLinkIntentTests: XCTestCase {
     }
 
     /// Sections de Revenus lues dans `?tab=` (comparaison exacte, `MesGains.tsx` l.899-900) : l'aperçu ouvre l'onglet
-    /// natif ; factures, bulletins et avances restent des renvois web (D4), « Paiements à confirmer » jusqu'à T13.
+    /// natif ; « Paiements à confirmer » ouvre l'onglet sur sa section (T13) ; factures, bulletins et avances restent des
+    /// renvois web (D4).
     func testSectionsDeRevenusDepuisTab() throws {
         let cas: [(String, SectionRevenus, Bool)] = [
             ("tab=apercu", .apercu, true), ("", .apercu, true), ("tab=APERCU", .apercu, true), ("tab=inconnu", .apercu, true),
             ("tab=factures", .factures, false), ("tab=bulletins", .bulletins, false), ("tab=avances", .avances, false),
-            ("tab=paiements", .paiementsAConfirmer, false),
+            ("tab=paiements", .paiementsAConfirmer, true),
         ]
         for (query, section, natif) in cas {
             let lien = "https://jolene.app/soignant/mes-gains" + (query.isEmpty ? "" : "?" + query)
@@ -263,7 +264,7 @@ final class DeepLinkIntentTests: XCTestCase {
             switch try intention(lien) {
             case .espace(let d):
                 XCTAssertTrue(natif, lien)
-                XCTAssertEqual(CibleNotification(d), .revenus(section: .apercu), lien)
+                XCTAssertEqual(CibleNotification(d), .revenus(section: section), lien)
             case .renvoiWeb(let d):
                 XCTAssertFalse(natif, lien)
                 XCTAssertEqual(d.destination, .safari(url(lien)), lien)

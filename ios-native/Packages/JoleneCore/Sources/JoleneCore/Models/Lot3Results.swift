@@ -291,7 +291,9 @@ public struct PageMissionsTerminees: Equatable, Sendable {
 
 // MARK: - Paiements déclarés (T13)
 
-/// Ligne `paiements_soignant` (l.70881) lue sous RLS ; nom d'établissement via `fn_etablissements_safe` seul.
+/// Ligne `paiements_soignant` (l.70947) lue sous RLS ; nom d'établissement via `fn_etablissements_safe` seul.
+/// T13 : `mission`, `presences` et `creneaux` sont les lignes que `BandeauPaiementDeclare.tsx` relit pour le détail
+/// (l.119-153 : colonnes l.122, l.132, l.137), vides pour une relecture après mutation.
 public struct PaiementDeclare: Equatable, Sendable, Identifiable {
     public var id: String
     public var missionId: String
@@ -304,14 +306,73 @@ public struct PaiementDeclare: Equatable, Sendable, Identifiable {
     public var confirmeParSoignant: Bool
     public var conteste: Bool
     public var etablissementNom: String?
+    public var mission: MissionPaiementDeclare?
+    public var presences: [PresencePaiementDeclare]
+    public var creneaux: [CreneauPaiementDeclare]
 
     public init(id: String, missionId: String, etablissementId: String, montantNet: Double, methode: String,
                 referenceVirement: String? = nil, datePaiement: String? = nil, statut: String,
-                confirmeParSoignant: Bool = false, conteste: Bool = false, etablissementNom: String? = nil) {
+                confirmeParSoignant: Bool = false, conteste: Bool = false, etablissementNom: String? = nil,
+                mission: MissionPaiementDeclare? = nil, presences: [PresencePaiementDeclare] = [],
+                creneaux: [CreneauPaiementDeclare] = []) {
         self.id = id; self.missionId = missionId; self.etablissementId = etablissementId; self.montantNet = montantNet
         self.methode = methode; self.referenceVirement = referenceVirement; self.datePaiement = datePaiement
         self.statut = statut; self.confirmeParSoignant = confirmeParSoignant; self.conteste = conteste
-        self.etablissementNom = etablissementNom
+        self.etablissementNom = etablissementNom; self.mission = mission; self.presences = presences
+        self.creneaux = creneaux
+    }
+}
+
+/// Mission d'un paiement déclaré : colonnes de `BandeauPaiementDeclare.tsx` l.122, valeurs serveur jamais recalculées.
+public struct MissionPaiementDeclare: Equatable, Sendable {
+    public var id: String
+    public var intitule: String?
+    public var debutLe: String?
+    public var finLe: String?
+    public var dureeHeures: Double?
+    public var tauxHoraireBase: Double?
+    public var tauxRistPlafonne: Double?
+    public var ristPlafondApplique: Bool?
+    public var totalBrut: Double?
+    public var netAPayer: Double?
+
+    public init(id: String, intitule: String? = nil, debutLe: String? = nil, finLe: String? = nil, dureeHeures: Double? = nil,
+                tauxHoraireBase: Double? = nil, tauxRistPlafonne: Double? = nil, ristPlafondApplique: Bool? = nil,
+                totalBrut: Double? = nil, netAPayer: Double? = nil) {
+        self.id = id; self.intitule = intitule; self.debutLe = debutLe; self.finLe = finLe; self.dureeHeures = dureeHeures
+        self.tauxHoraireBase = tauxHoraireBase; self.tauxRistPlafonne = tauxRistPlafonne
+        self.ristPlafondApplique = ristPlafondApplique; self.totalBrut = totalBrut; self.netAPayer = netAPayer
+    }
+}
+
+/// Présence d'un paiement déclaré : colonnes de `BandeauPaiementDeclare.tsx` l.132.
+public struct PresencePaiementDeclare: Equatable, Sendable {
+    public var missionId: String
+    public var pointageArriveeLe: String?
+    public var pointageDepartLe: String?
+    public var methodePointageArrivee: String?
+    public var heuresAjusteesLitige: Double?
+
+    public init(missionId: String, pointageArriveeLe: String? = nil, pointageDepartLe: String? = nil,
+                methodePointageArrivee: String? = nil, heuresAjusteesLitige: Double? = nil) {
+        self.missionId = missionId; self.pointageArriveeLe = pointageArriveeLe; self.pointageDepartLe = pointageDepartLe
+        self.methodePointageArrivee = methodePointageArrivee; self.heuresAjusteesLitige = heuresAjusteesLitige
+    }
+}
+
+/// Créneau d'un paiement déclaré : colonnes de `BandeauPaiementDeclare.tsx` l.137.
+public struct CreneauPaiementDeclare: Equatable, Sendable {
+    public var id: String
+    public var missionId: String
+    public var debut: String
+    public var fin: String?
+    public var estPause: Bool?
+    public var typeCreneau: String?
+
+    public init(id: String, missionId: String, debut: String, fin: String? = nil, estPause: Bool? = nil,
+                typeCreneau: String? = nil) {
+        self.id = id; self.missionId = missionId; self.debut = debut; self.fin = fin; self.estPause = estPause
+        self.typeCreneau = typeCreneau
     }
 }
 

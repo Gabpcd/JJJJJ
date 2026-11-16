@@ -37,8 +37,14 @@ extension DemoFixtures {
 /// `RevenusAssemblage`), même visibilité des totaux (`ExerciceRevenus.afficheTotaux`, `TotauxRevenus.visibles`), même tri (`debut_le`
 /// décroissant) et mêmes pages de 50. Noms d'établissement : `demo-etablissements.json` (rôle de
 /// `fn_etablissements_safe`). Refuse tout contexte qui n'est pas celui du profil fictif (`.demoOnly`).
+/// Lot 3, T13 : avec le serveur simulé des paiements déclarés (`DemoPaiementsGateway`, même acteur que
+/// `gateways.paiements`), les déclarations relues suivent ses confirmations et contestations.
 public struct DemoRevenusGateway: RevenusPort {
-    public init() {}
+    private let paiementsDeclares: DemoPaiementsGateway?
+
+    public init(paiementsDeclares: DemoPaiementsGateway? = nil) {
+        self.paiementsDeclares = paiementsDeclares
+    }
 
     public func totaux(context: MissionReadContext) async throws -> TotauxRevenus? {
         try Self.verifier(context)
@@ -72,7 +78,8 @@ public struct DemoRevenusGateway: RevenusPort {
         let tranche = debut < triees.count ? Array(triees[debut..<min(debut + RevenusAssemblage.taillePage, triees.count)]) : []
         let noms = Dictionary(try DemoFixtures.loadEtablissements().etablissements.map { ($0.id, $0.nom) },
                               uniquingKeysWith: { premier, _ in premier })
-        return RevenusAssemblage.page(tranche, paiements: fichier.paiements, etablissements: noms, page: page)
+        let paiements = await paiementsDeclares?.surcharger(fichier.paiements) ?? fichier.paiements
+        return RevenusAssemblage.page(tranche, paiements: paiements, etablissements: noms, page: page)
     }
 
     static func verifier(_ context: MissionReadContext) throws {

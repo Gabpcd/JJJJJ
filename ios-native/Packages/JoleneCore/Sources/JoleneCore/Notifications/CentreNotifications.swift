@@ -82,8 +82,10 @@ public enum CibleNotification: Equatable, Sendable {
     case explorer
     /// Onglet Mes missions (`/soignant/missions`).
     case missions
-    /// Onglet Revenus et sa section (`?tab=`) : seule la racine (`.apercu`) est présentable avant les tranches de
-    /// ses sections (T13 « Paiements à confirmer ») ; une section n'est jamais réduite en silence à l'onglet.
+    /// Onglet Revenus et sa section (`?tab=`) : la racine (`.apercu`) et, depuis T13, « Paiements à confirmer »
+    /// (`.paiementsAConfirmer`, push `PAIEMENT_RECU`, correction 15 : l'onglet s'ouvre sur la section
+    /// `revenus-paiements-declares`) ; les autres sections restent des renvois web (D4) et ne sont jamais réduites en
+    /// silence à l'onglet.
     case revenus(section: SectionRevenus)
     /// Onglet Profil, hub du compte (`/soignant/mon-compte`).
     case monCompte
@@ -155,12 +157,12 @@ public enum CibleNotification: Equatable, Sendable {
 
     /// Présentable dans l'espace : un renvoi web exige le présentateur `.safari` (injecté à la racine par le
     /// coordinateur des liens depuis L3-T3b ; jamais `openURL` : les chemins `/soignant/*` reviendraient dans l'app par
-    /// lien universel, sans effet) ; une section de Revenus attend sa tranche ; depuis le centre (`depuisCentre`), le
-    /// centre lui-même n'a rien à ouvrir.
+    /// lien universel, sans effet) ; une section de Revenus attend sa tranche (aperçu T12, paiements à confirmer T13) ;
+    /// depuis le centre (`depuisCentre`), le centre lui-même n'a rien à ouvrir.
     public func estPresentable(renvoiWebDisponible: Bool, depuisCentre: Bool = false) -> Bool {
         switch self {
         case .accueil, .explorer, .missions, .monCompte, .mission, .preferences, .profil: return true
-        case .revenus(let section): return section == .apercu
+        case .revenus(let section): return section == .apercu || section == .paiementsAConfirmer
         case .centre: return !depuisCentre
         case .web: return renvoiWebDisponible
         case .aucune: return false

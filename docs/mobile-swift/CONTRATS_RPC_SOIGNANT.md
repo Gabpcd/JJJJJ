@@ -127,8 +127,8 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_types_exercice_autorises` | consommée lot 3 (T8) | 3 (T8) | PUBLIC_VOLONTAIRE | anon, authenticated, service_role | déclarée |
 | `fn_modifier_mon_profil` | consommée lot 3 (T9) | 3 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_rgpd_exporter_rate_limited` | consommée lot 3 (T11) | 3 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_confirmer_paiement_soignant` | à venir | 3 (T13, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_contester_paiement_soignant` | à venir | 3 (T13, B3 mergée #1118, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_confirmer_paiement_soignant` | consommée lot 3 (T13) | 3 (T13) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_contester_paiement_soignant` | consommée lot 3 (T13) | 3 (T13) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_consulter_mon_iban` | à venir | 3 (T14b, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_enregistrer_mon_iban` | à venir | 3 (T14b, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_mes_revenus_connect` | consommée lot 3 (T12) | 3 (T12) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -1606,10 +1606,13 @@ CREATE OR REPLACE FUNCTION "public"."fn_rgpd_exporter_rate_limited"() RETURNS "j
 
 ## fn_confirmer_paiement_soignant
 
-- **Statut natif** : à venir (lot 3, T13) — **B9** (paiements, D18).
-- **Usage prévu** : « Confirmer la réception » d'un paiement manuel `DECLARE` (web `BandeauPaiementDeclare.tsx`
-  l.178-206) ; bouton désactivé pendant l'appel ; état « confirmé » affiché seulement après relecture
-  `paiements_soignant` (`statut = 'CONFIRME'`, `confirme_par_soignant = true`), jamais de retrait local d'office.
+- **Statut natif** : consommée (lot 3, T13) par `JoleneSupabase/Revenus/SupabasePaiementsGateway.swift`
+  (`confirmer`) — **B9** (paiements, D18) : PR jamais mergée sans le go explicite de Gabrielle.
+- **Usage** : « Confirmer la réception » d'un paiement manuel `DECLARE` (web `BandeauPaiementDeclare.tsx`
+  l.177-203) ; une seule mutation à la fois, boutons désactivés jusqu'à la relecture de la liste ; « Paiement confirmé
+  ✅ » affiché seulement après relecture `paiements_soignant` (`statut = 'CONFIRME'`, `confirme_par_soignant = true`,
+  `PaiementsDeclaresRelecture`), sinon « Erreur lors du traitement » ; jamais de retrait local d'office (la liste est
+  relue après toute issue). Tests : `SupabasePaiementsGatewayTests`, `PaiementsDeclaresModelTests`.
 - **Signature SQL** (`supabase/schema/public.sql` l.24548) :
 
 ```sql
@@ -1632,11 +1635,17 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_paiement_soignant"("p_paiement
 
 ## fn_contester_paiement_soignant
 
-- **Statut natif** : à venir (lot 3, T13) — **B9**. La PR backend **B3** est sur `main` (#1118, migration
-  `20261102205808_contestation_paiement_soignant.sql`, D19, correction 3) : le verrou côté app de T13 peut être levé
-  dans la PR de T13, qui consomme le contrat ci-dessous.
-- **Usage prévu** : « Contester » avec un motif non vide de 500 caractères au plus ; relecture
-  `paiements_soignant.statut = 'CONTESTE'` et de la ligne `litiges` ; bouton désactivé pendant l'appel.
+- **Statut natif** : consommée (lot 3, T13) par `JoleneSupabase/Revenus/SupabasePaiementsGateway.swift`
+  (`contester`) — **B9** : PR jamais mergée sans le go explicite de Gabrielle. La PR backend **B3** est sur `main`
+  (#1118, migration `20261102205808_contestation_paiement_soignant.sql`, D19, correction 3) ; T13 lève le verrou côté
+  app (TJ7) : corps de la migration identique au dump (l.25741-25839) ; définition **live** non relue par T13 (aucun
+  accès backend dans la tranche), à confirmer avant le go B9.
+- **Usage** : « Contester » avec un motif non blanc (`trim`) de 500 scalaires Unicode au plus, envoyé tel que saisi
+  (jamais le repli web `'Contesté par le soignant'`) ; « Contestation envoyée » seulement après relecture
+  `paiements_soignant` (`statut = 'CONTESTE'` et `conteste = true`) ; la ligne `litiges` n'est pas relue par l'app :
+  B3 écrit paiement et litige dans un même sous-bloc (l.25791-25824), une ligne relue `CONTESTE` le prouve (lecture
+  `litiges` réservée à la preuve STAGING de T16) ; une seule mutation à la fois, boutons désactivés jusqu'à la
+  relecture de la liste. Tests : `SupabasePaiementsGatewayTests`, `PaiementsDeclaresModelTests`.
 - **Signature SQL** (`supabase/schema/public.sql` l.25741) :
 
 ```sql
@@ -1669,8 +1678,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_contester_paiement_soignant"("p_paiement
   `notifications_type_check` (l.70862), qui faisait échouer toute contestation en **23514**, est retiré ;
   l'établissement reste notifié en `LITIGE_OUVERT` par `trg_notifier_creation_litige` (l.76127).
 - **Verrou côté app** (T13, « un gap connu reste verrouillé ») : il couvrait l'état d'avant B3 (aucun appel,
-  message explicite). B3 étant mergée, T13 ouvre « Contester » dans sa propre PR (B9) avec ces refus restitués et
-  une relecture après toute issue ambiguë.
+  message explicite). B3 étant mergée, T13 ouvre « Contester » dans sa propre PR (B9) avec ces refus restitués
+  verbatim (`error`) et une relecture après toute issue ; une **23505** d'une autre contrainte (relevée par `RAISE`)
+  passe par `SupabaseErrorMapping` : « Erreur lors du traitement » (repli du web l.200), jamais un succès ni un détail
+  technique.
 - **Preuve STAGING** : `CONTESTE` + une ligne `litiges` + notification établissement `LITIGE_OUVERT` relues (T16) ;
   second appel → `{error:'Paiement déjà contesté', error_code:'DEJA_CONTESTE'}` sans second litige.
 

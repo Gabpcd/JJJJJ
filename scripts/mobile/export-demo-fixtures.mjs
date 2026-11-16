@@ -802,13 +802,13 @@ export function buildDemoMissionsTerminees(now = new Date(FIXED_NOW)) {
       presences: [{ valide_par_etablissement: true, valide_auto_72h_le: null, valide_le: timestamptz(new Date(fin.getTime() + 3_600_000)) }],
     };
   };
-  const paiement = (rang, missionRang, statut, montant, confirme, conteste, jours, heure) => {
+  const paiement = (rang, missionRang, statut, montant, confirme, conteste, jours, heure, reference = null) => {
     const instant = timestamptz(instantDemo(now, jours, heure));
     return {
       id: `demo-paiement-${String(rang).padStart(3, '0')}`,
       mission_id: `demo-terminee-${String(missionRang).padStart(3, '0')}`,
       facture_honoraire_id: null, statut, montant_net: montant, confirme_par_soignant: confirme, conteste,
-      montant_du_reference: null, source_montant_du: null, methode: 'VIREMENT', reference_virement: null,
+      montant_du_reference: null, source_montant_du: null, methode: 'VIREMENT', reference_virement: reference,
       date_paiement: instant.slice(0, 10), modifie_le: instant, cree_le: instant,
     };
   };
@@ -825,6 +825,55 @@ export function buildDemoMissionsTerminees(now = new Date(FIXED_NOW)) {
       paiement(1, 1, 'DECLARE', 162.4, false, false, -1, 18),
       paiement(2, 4, 'CONTESTE', 160, false, true, -25, 9),
       paiement(3, 4, 'CONFIRME', 170.5, true, false, -21, 9),
+      // Lot 3, T13 : seconde déclaration à confirmer (mission libérale : l'état de sa ligne reste « Paiement suivi dans
+      // Factures », T12), avec référence de virement.
+      paiement(4, 2, 'DECLARE', 256, false, false, -2, 10, 'VIR-DEMO-0002'),
+    ],
+  };
+}
+
+/**
+ * Lot 3, T13 : paiements déclarés du profil fictif, état initial du serveur simulé (`DemoPaiementsGateway`). Les lignes
+ * `DECLARE` sont celles de `buildDemoMissionsTerminees` (mêmes identifiants : une confirmation démo change l'état de la
+ * mission dans l'onglet), avec les colonnes de `BandeauPaiementDeclare.tsx` l.97 plus `statut`, `confirme_par_soignant`
+ * et `conteste` ; missions (colonnes de l.122), présences (l.132) et créneaux (l.137) de ces missions. Mission 1 :
+ * pointée en deux segments (pause de 30 min) ; mission 2 : sans créneau effectif, détail par la présence (code).
+ */
+export function buildDemoPaiementsDeclares(now = new Date(FIXED_NOW)) {
+  const { missions, paiements } = buildDemoMissionsTerminees(now);
+  const declares = paiements.filter((p) => p.statut === 'DECLARE');
+  const parId = new Map(missions.map((m) => [m.id, m]));
+  const ids = [...new Set(declares.map((p) => p.mission_id))];
+  const decale = (iso, minutes) => timestamptz(new Date(new Date(iso).getTime() + minutes * 60_000));
+  const creneau = (id, mission, debut, fin, type) => ({ id, mission_id: mission, debut, fin, est_pause: false, type_creneau: type });
+  const m1 = parId.get('demo-terminee-001');
+  const m2 = parId.get('demo-terminee-002');
+  return {
+    fixed_now: now.toISOString(),
+    paiements: declares.map((p) => ({
+      id: p.id, montant_net: p.montant_net, mission_id: p.mission_id, etablissement_id: parId.get(p.mission_id).etablissement_id,
+      reference_virement: p.reference_virement, methode: p.methode, date_paiement: p.date_paiement,
+      statut: p.statut, confirme_par_soignant: p.confirme_par_soignant, conteste: p.conteste,
+    })),
+    missions: ids.map((id) => {
+      const m = parId.get(id);
+      return {
+        id: m.id, intitule: m.intitule, debut_le: m.debut_le, fin_le: m.fin_le, duree_heures: m.duree_heures,
+        taux_horaire_base: m.taux_horaire_base, taux_rist_plafonne: m.taux_rist_plafonne,
+        rist_plafond_applique: m.rist_plafond_applique, total_brut: m.total_brut, net_a_payer: m.net_a_payer,
+      };
+    }),
+    presences: [
+      { mission_id: m1.id, pointage_arrivee_le: decale(m1.debut_le, 5), pointage_depart_le: m1.fin_le,
+        methode_pointage_arrivee: 'GPS', heures_ajustees_litige: null },
+      { mission_id: m2.id, pointage_arrivee_le: m2.debut_le, pointage_depart_le: m2.fin_le,
+        methode_pointage_arrivee: 'CODE', heures_ajustees_litige: null },
+    ],
+    creneaux: [
+      creneau('demo-creneau-t1-p', m1.id, m1.debut_le, m1.fin_le, 'PREVISIONNEL'),
+      creneau('demo-creneau-t1-e1', m1.id, decale(m1.debut_le, 5), decale(m1.debut_le, 240), 'EFFECTIF'),
+      creneau('demo-creneau-t1-e2', m1.id, decale(m1.debut_le, 270), m1.fin_le, 'EFFECTIF'),
+      creneau('demo-creneau-t2-p', m2.id, m2.debut_le, m2.fin_le, 'PREVISIONNEL'),
     ],
   };
 }
@@ -848,6 +897,7 @@ export async function buildFixtures() {
     'demo-revenus.json': buildDemoRevenus(), // lot 3, T12
     'demo-escrow.json': buildDemoEscrow(), // lot 3, T12
     'demo-missions-terminees.json': buildDemoMissionsTerminees(), // lot 3, T12
+    'demo-paiements-declares.json': buildDemoPaiementsDeclares(), // lot 3, T13
   };
 }
 

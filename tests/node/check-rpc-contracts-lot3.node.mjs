@@ -60,6 +60,8 @@ const LOT3_CONSOMMEES = new Map([
   ['fn_rgpd_exporter_rate_limited', ['T11', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Compte/SupabaseExportGateway.swift']],
   ['fn_mes_revenus_connect', ['T12', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Revenus/SupabaseRevenusGateway.swift']],
   ['fn_mes_paiements_escrow', ['T12', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Revenus/SupabaseRevenusGateway.swift']],
+  ['fn_confirmer_paiement_soignant', ['T13', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Revenus/SupabasePaiementsGateway.swift']],
+  ['fn_contester_paiement_soignant', ['T13', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Revenus/SupabasePaiementsGateway.swift']],
 ]);
 // Hors manifeste (capture du 2026-07-29) : classement manuel documentaire (correction 13).
 const HORS_MANIFESTE = ['fn_demarrer_inscription', 'fn_enregistrer_parcours_inscription'];
@@ -806,7 +808,8 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
     ['lot3-notifications', ['DemoNotificationsTests', 'DemoPreferencesTests', 'DemoProfilTests']],
     ['lot3-inscription', ['DemoInscriptionTests', 'DemoCompletionInscriptionTests']],
     ['lot3-profil-photo', ['DemoPhotoPositionTests']],
-    ['lot3-revenus', ['DemoRevenusTests']],
+    // L3-T13 : les paiements déclarés rejoignent l'éclat de l'onglet Revenus (domaine T12-T14b), sans nouvel éclat.
+    ['lot3-revenus', ['DemoRevenusTests', 'DemoPaiementsTests']],
   ]);
   // Fusion des lots 2 et 3 : les éclats du lot 2 (`ios-swift-ci-eclats.node.mjs`, DECISIONS_LOT2 décision 22) suivent le
   // socle et précèdent ceux du lot 3, dans les étapes, la boucle des xcresult et la liste ECLATS du relevé.
