@@ -1597,6 +1597,40 @@ sans changer aucune règle ni aucun texte affiché :
   correctifs ci-dessus ; corrections proposées dans `REVUES_LOT3.md` (section d'intégration de la vague 4), à
   livrer avec une nouvelle recette des trois formats avant tout merge du lot.
 
+## T15 — Sentry Cocoa (branche `lot3/l3-t15-v3`, 16/11/2026)
+
+Mise en œuvre de D21. Mode d'emploi, réglages et recette : `docs/mobile-swift/SENTRY_IOS.md`. T15 n'est pas B9
+(D18) : la tranche ne touche ni paiement, ni authentification, ni RLS. Le DSN, le projet `jolene-ios` et la lecture
+de l'événement restent à Gabrielle (§6.5).
+
+- **Version** : `sentry-cocoa` **9.32.0** (`exactVersion`, révision `4e1e4ba9`). C'est la dernière version publiée
+  depuis au moins deux semaines (29/10/2026). Son binaire est compilé avec Swift 6.1.2, donc lisible par Xcode 16.4 en
+  local et par Xcode 26.4.1 en CI. Elle corrige le démarrage depuis `App.init`, qui pouvait produire de faux app hangs
+  (#8988). Produit `Sentry` (xcframework statique), importé par la cible app seule.
+- **Écart au blueprint, plus strict** : `enableNetworkTracking = false`, `tracePropagationTargets = []` et relecture
+  de session à 0. Le SDK n'instrumente donc pas les requêtes et n'envoie aucun en-tête `sentry-trace` ni `baggage` à
+  Supabase, à `api-adresse.data.gouv.fr` ou à Stripe.
+- **Démarrage** : jamais en démo, jamais sans DSN `https` bien formé, jamais pour un environnement refusé par la garde
+  ni sans release lisible dans le bundle. Dans ces cas, aucun adaptateur n'est construit. La lecture de
+  l'environnement est celle du conteneur (`AppContainer.environnementDeLancement`, extrait sans changement de
+  comportement), faite **avant** lui dans `JoleneApp.init`.
+- **Session** : identifiant seul, posé au `.ready` d'une nouvelle identité et retiré (`nil`) à chaque fin d'identité
+  suivie. Une revalidation ne le repose pas et une fin transitoire ne le retire pas. Un espace bloqué ne le pose pas
+  (le blueprint dit « sur `.ready` »).
+- **Nettoyage** (`CrashScrubber`) : il va au-delà de la liste du blueprint. Sont aussi masqués `refresh_token` (§2.6),
+  les jetons `Bearer` et les JWT, et les formes encodées et JSON. Sont retirés le nom de l'appareil, la requête et le
+  nom du serveur ; l'utilisateur est réduit à son identifiant. Les fils d'Ariane `http` sont rejetés.
+- **Crash de test** : `-JOLENE_SENTRY_CRASH_TEST`, compilé en DEBUG seulement. Il ne s'exécute que si Sentry a
+  démarré, une fois, deux secondes après le lancement, et doit être lancé sans débogueur.
+- **Livraison** : `ios-native-testflight.yml` lit le secret **facultatif** `SENTRY_DSN_IOS`, dans l'étape d'archive
+  seulement (`JOLENE_SENTRY_DSN`). Absent, le build part sans Sentry, sans échec. Les xcconfig versionnés laissent
+  `JOLENE_SENTRY_DSN` vide (gardes Swift et node).
+- **Manifeste de confidentialité** : celui de Sentry est embarqué
+  (`Frameworks/Sentry.framework/PrivacyInfo.xcprivacy`). Ses déclarations sont déjà couvertes par celui de l'app (lot
+  0), qui n'est pas modifié.
+- **Coût CI** : SPM télécharge les sept xcframeworks du paquet (environ 3,3 Go). Le cache `spm-xcodebuild-…` les
+  absorbe après le premier run de chaque clé `Package.resolved`.
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -2259,7 +2293,10 @@ bloquent ni les merges du lot 3 ni la recette interne (build Debug installé par
   « secure password change » ; validation de la reformulation du critère d'inscription (« PKCE échangé » → « lien
   `token_hash` vérifié dans l'app »).
 - **§6.5 Sentry** : créer le projet `jolene-ios` (org `jolene-z6`), fournir le DSN, lire l'événement de crash de test ;
-  jeton dSYM local si la symbolication est voulue.
+  jeton dSYM local si la symbolication est voulue. (T15, 16/11/2026) Le DSN se dépose dans le secret de dépôt GitHub
+  **`SENTRY_DSN_IOS`**, facultatif : sans lui, TestFlight part sans Sentry. Pour la recette locale du crash de test, il
+  est passé à `xcodebuild` et jamais commité. Côté projet, activer « Prevent Storing of IP Addresses ». Mode d'emploi :
+  `docs/mobile-swift/SENTRY_IOS.md` §5 à §7.
 - **§6.6 Go B9** : B3, T7, T8, T12, T13, T14a, T14b, dispatch de T16, la PR backend de l'export RGPD (TJ4), et les
   signalements de la section B9 ; go au merge seulement, les décisions juridiques étant prises par délégation.
   (T8, 09/11/2026) Go de merge de `lot3/l3-t8-v2` ; la preuve STAGING de la complétion (ligne `soignants` relue après
