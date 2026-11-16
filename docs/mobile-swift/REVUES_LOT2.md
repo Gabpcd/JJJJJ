@@ -1761,3 +1761,10 @@ Non vérifié en local : iPad portrait et paysage ; Xcode 26.4.1 / iOS 26.2 ; du
 `DemoLiensLot2Tests` (à mesurer au premier run CI) ; `JoleneSupabase` non relancé (non modifié ; ajouts du cœur
 seulement additifs) ; les autres classes des éclats touchés (`DemoInscriptionTests`, `DemoCompletionInscriptionTests`,
 `DemoDocumentsTests`, `DemoPresenceDetailTests`, `DemoPresencesTests`, `DemoPushTests`).
+
+#### Intégration (vague 5, 16/11/2026)
+Fusionnée sur `feat/ios-vague5` après L3-T13 et L3-T15 (`0da9b1f7`) : conflits, tables de routage communes et
+vérifications locales dans `REVUES_LOT3.md`, section « Intégration de L3-T13, L3-T15 et L2-T10 (vague 5) ».
+`DemoLiensLot2Tests` 8/8 et `DemoRevenusTests` 8/8 sur iPhone portrait (iOS 18.6) avec la section « Paiements à
+confirmer » de T13 au-dessus des paiements rapides ; `DemoPushTests` 12/15, les trois échecs étant antérieurs à la
+vague (contre-épreuve sur `main`, même section).

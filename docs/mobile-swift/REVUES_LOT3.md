@@ -2568,3 +2568,79 @@ correction : la règle des paramètres a été coupée en deux pour le coût.
 ### Revue fraîche B8 — L3-T15 (n°2)
 
 _À compléter par le relecteur (contexte vierge) : verdict, ce qui a été vérifié, constats, conditions avant merge._
+
+## Intégration de L3-T13, L3-T15 et L2-T10 (vague 5, 16/11/2026) — fusions et vérifications locales
+
+### Fusions
+
+- Branche `feat/ios-vague5` depuis `origin/main` (`dc4131e8`, dont #1132 hors `ios-native/`), fusions `--no-ff`, sans
+  rebase ni squash, dans l'ordre : `lot3/l3-t13-v3` (`0a462e05`) → `26e509f4` ; `lot3/l3-t15-v3` (`7fda4df3`) →
+  `2ee0830b` ; `lot2/l2-t10-v3` (`7fb0479a`) → `0da9b1f7`.
+- Base commune réelle des trois tranches : le lot 2 (`bc533bcf`), squash-mergé dans `main` en `7e451e7d` avec un arbre
+  identique. Pour T13, git a pris `6242af3b` comme base, d'où deux conflits artificiels (`ios-swift-ci.yml`,
+  `project.pbxproj`) résolus par le côté T13 ; contrôle : l'arbre fusionné diffère de T13 par les seuls cinq fichiers de
+  #1132 et de `main` par les seuls 37 fichiers de T13. T15 et T10 fusionnent ensuite sur la base `bc533bcf`.
+- Conflits résolus en gardant les deux côtés :
+  - `DECISIONS_LOT3.md`, `REVUES_LOT3.md` (T15) : sections T13 et T15 ajoutées au même endroit, gardées toutes deux ;
+  - `ios-swift-ci.yml` (T10) : commentaire des éclats du lot 3 réunissant `DemoLiensLot2Tests` (« lot3-inscription »,
+    revue B8 n°1 de L2-T10, M1) et `DemoPaiementsTests` (« lot3-revenus », T13) ; `-only-testing`, `-skip-testing` du
+    socle et classes du résumé fusionnés sans conflit, chacun avec ses deux classes ;
+  - `MainTabView.swift` (T10) : documentation des deux tranches ; code fusionné sans conflit (`sectionRevenus` de T13,
+    `destinationsMonEspace` et jetons de présentation de T10, deux branches de `presenter`) ;
+  - `CentreNotifications.swift` (T10, `estPresentable`) : écrans du lot 2 présentables (T10) et Revenus « Paiements à
+    confirmer » présentable (T13) ;
+  - `DestinationLienTests.swift` (T10) : décomptes du corpus recalculés sur les deux tranches (natifs 461 + 32 (T13) +
+    127 (T10) = 620 ; renvois 429 − 32 − 127 = 270 ; total 890 inchangé) ;
+  - `project.pbxproj` : jamais fusionné à la main, régénéré par `xcodegen generate --spec project.yml` après chaque
+    fusion (identique à la fusion après T13 et T15).
+- Tables de routage : `PAIEMENT_RECU` et `PAIEMENT_RECLAME` (même chemin `?tab=paiements`, `PushRouting`) mènent à la
+  section native de T13 ; `CONTRAT_*`, `DPAE_*`, `/contrat/*`, `/soignant/presences*` et `/soignant/mes-documents` aux
+  écrans de « Mon espace » de T10 (`DestinationLien.ecranNatifLivre`, `CibleNotification`, `PushTapIntentTests`,
+  `DeepLinkIntentTests`, `CentreNotificationsTests`, `DestinationLienTests`).
+- B9 paiements (T13) : go humain écrit de Gabrielle du 16/11/2026, transmis par le coordinateur : « continue, tu as mon
+  go pour les paiements ». Définitions live des deux RPC relues en lecture seule le même jour (`DECISIONS_LOT3.md`,
+  section T13). Aucun texte juridique nouveau dans la vague.
+
+### Vérifications locales (pointe `0da9b1f7`, Xcode 16.4, Swift 6.1.2 ; la CI tourne Xcode 26.4.1, iOS 26.2)
+
+- `swift test -Xswiftc -strict-concurrency=complete` : **JoleneCore 1 743 tests, 0 échec, 0 ignoré**, 0 avertissement ;
+  **JoleneSupabase 488 tests, 0 échec, 0 ignoré**, 0 avertissement (« CoreData: error: Failed to create
+  NSXPCConnection » : bruit du bac à sable, sans échec). `.build` supprimé.
+- `xcodegen generate --spec project.yml` : aucun diff. `xcodebuild build-for-testing` (schéma `Jolene`, Debug,
+  simulateur dédié `jolene-v5` iPhone 16 / iOS 18.6, `-derivedDataPath` dans le worktree, sans signature) : **TEST BUILD
+  SUCCEEDED**, 0 avertissement de nos sources (seules les notes d'`appintentsmetadataprocessor`) ; `Package.resolved` de
+  l'app inchangé après la résolution SPM d'Xcode 16.4.
+- XCUITest ciblés, iPhone portrait (`-parallel-testing-enabled NO`, comme la CI) : **38 tests, 35 réussis, 3 échecs,
+  0 ignoré** — `DemoLiensLot2Tests` 8/8, `DemoPaiementsTests` 4/4, `DemoRevenusTests` 8/8, `DemoAccueilTests` 3/3,
+  `DemoPushTests` 12/15. Durées locales (indicatives) : `DemoLiensLot2Tests` 104 s, `DemoPaiementsTests` 112 s,
+  `DemoRevenusTests` 156 s.
+  - Les trois échecs (`testAppareilAutoriseTokenEnregistrePuisDeconnexion`, `testAppareilNonDemandeCarteEtActivationAuTap`,
+    `testPrePromptPlusTard`) sont **antérieurs à la vague** : contre-épreuve sur `main` (`dc4131e8`, mêmes sources
+    `ios-native/` que `bc533bcf`), même simulateur, les trois mêmes tests échouent de la même façon (3/3) ; ils étaient
+    verts en CI sur `bc533bcf` (run 43400770161, iOS 26.2). Mécanisme : `aucuneCarteDansLeHub` amène le hub en bas
+    (`compte-suppression-info`), puis `prefsOuvrirEntree` touche de nouveau l'onglet Profil et `scrollTo` cherche
+    `profile-preferences-notifications` vers le bas ; sur iOS 18.6, l'entrée, restée au-dessus, n'apparaît jamais dans
+    l'arbre d'accessibilité (cellules hors écran d'une `List`) pendant les 40 glissements vers le bas. Seuls
+    les tests qui enchaînent ces deux étapes échouent (`testAppareilRefuse`, sans l'étape du bas, réussit). Défaut de
+    TEST, hors du périmètre de la vague, non corrigé ici ; suivi proposé : remonter le hub (ou chercher vers le haut)
+    avant `prefsOuvrirEntree`.
+- Gardes Node : étape « Garde de livraison mobile » de `validate-pr.yml` (six fichiers) **248 réussis, 0 échec** ;
+  `ios-swift-ci-eclats.node.mjs` 6/6 ; `ios-native-testflight.node.mjs` 55/55 ; `check-rpc-contracts.node.mjs` 57/57 ;
+  `check-rpc-contracts-lot3.node.mjs` 30/30. `check-rpc-contracts.mjs` : 47 RPC, aucune dérive.
+  `export-demo-fixtures.mjs --check` : identique (19 fichiers).
+- Hors `ios-native/` : `tsc -b` (TypeScript 5.8.3 du dépôt) sans erreur ; `npm run test:guards` : 17/17.
+- Éclats de `ios-swift-ci.yml` : onze éclats à 30 min chacun, build 25 min, étape `Package.resolved` 2 min :
+  25 + 2 + 11 × 30 = 357 ≤ 360 (plafond du job). « lot3-inscription » mesurait 4,9 / 9,0 / 8,7 min au run 43400770161
+  avant `DemoLiensLot2Tests` ; « lot3-revenus » porte maintenant `DemoRevenusTests` (8) et `DemoPaiementsTests` (4).
+- Simulateur `jolene-v5`, DerivedData et `.build` supprimés à la fin. Aucun appel backend, aucun secret, aucun workflow
+  déclenché à la main.
+
+### Reste à prouver
+
+- CI iOS trois formats (iphone, ipad-portrait, ipad-landscape), `skipped = 0`, dont les éclats « lot3-revenus »
+  (`DemoPaiementsTests`) et « lot3-inscription » (`DemoLiensLot2Tests`) sous 20 min. Le dernier run de `main`
+  (43889328109, `7e451e7d`) avait UI — iphone rouge à partir de l'éclat « pointage » (chaque éclat arrêté à 30 min, aucun
+  xcresult), ipad verts.
+- Premier build Sentry sous Xcode 26.4.1 et étape « Package.resolved de l'app inchangé » en CI.
+- Revue fraîche B8 n°2 de L3-T15 (sur la PR).
+- Recette appareil (T12, T17) ; STAGING (T16).
