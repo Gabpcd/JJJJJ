@@ -205,7 +205,8 @@
     du consentement GPS du Profil reste native : le texte de consentement promet le retrait « depuis votre profil »
     (correction 15), un coupe-circuit du pointage ne doit pas retirer ce chemin. XCUITest
     `DemoPointageEtatsTests.testDrapeauPresencesDesactiveRenvoieLaPageAuWebSansZoneDePointage` (trois formats) ;
-  - `ios_natif_contrats_actif` : **à la charge de T10** (liens du lot 2, qui route `/contrat/{id}` et
+  - `ios_natif_contrats_actif` : **à la charge de T10, fait par L2-T10** (« T10 — liens du lot 2 » ci-dessous ;
+    `DemoContratsTests.testCoupeCircuitDesContratsRenvoieLeLienEtLaListeAuWeb`) (liens du lot 2, qui route `/contrat/{id}` et
     `/contrat/{id}/certificat` et injecte le présentateur des renvois web) : `ContratsDestination` (liste, contrat,
     certificat), seul point de construction des écrans de contrat (Mon espace, onglet Contrats de Mes documents, « Voir
     le contrat » de la zone de pointage, liens), lit le drapeau ; à faux, renvoi web `/contrat/<id>` ou
@@ -1711,6 +1712,43 @@ Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
   sans aucun wording nouveau, sur les fonctions serveur relues ; le mode démo simule la signature sans réseau
   (sentinelle « 0 requête ») sur des contrats fictifs ; un compte TEST sans admission de recette est renvoyé vers le web
   (décision 18). Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
+
+### T10 — liens du lot 2 (L2-T10, 16 novembre 2026, branche `lot2/l2-t10-v3`)
+
+Aucun B9, aucun HARD STOP, aucun texte affiché nouveau (les renvois réutilisent le texte du lot 0 et « Voir sur
+jolene.app »). Choix de la tranche, à relire par la revue fraîche :
+- **Table** (`LinkRouter`, `src/App.tsx` l.323-327, l.388, l.405-407, l.440-441) : `/soignant/presences` →
+  `.presences(onglet:filtre:)` (`?tab=` et `?filtre=` bruts, l'écran décide) ; `/soignant/presences/mission/:id` →
+  `.presencesMission(id:)` ; `/soignant/mes-documents` → `.documents(onglet:)` ; alias `Navigate` à cible fixe
+  `/soignant/documents` → onglet Justificatifs et `/soignant/contrats` → onglet Contrats (query du lien non reprise, comme
+  le web) ; `/contrat/:id` → `.contrat(id:)` (changement volontaire : plus `.safari`) ; `/contrat/:id/certificat` →
+  `.contratCertificat(id:)` ; `/soignant/dpae` et `/soignant/conformite` → Safari, nommés dans la table.
+- **Présentation** : les cinq cibles (`CibleNotification.presences`, `.detailPresences`, `.documents`, `.contrat`,
+  `.certificat`) s'empilent sur l'onglet **Profil** remis à sa racine, comme les entrées de « Mon espace » (décision 24),
+  qu'elles viennent d'un lien universel, d'un tap push, du centre de notifications ou de la ligne « présences d'une
+  mission » de Revenus (qui changeait donc d'onglet, comme `.mission` vers l'Accueil). Routes **par valeur**
+  (`MonEspaceRoute`, `Jolene/Screens/Profil/MonEspaceRoute.swift`) enregistrées sur les piles de l'Accueil et du Profil ;
+  les entrées de « Mon espace » et les deux points d'entrée de l'Accueil (widget « Aller pointer », oubli de départ)
+  deviennent des liens par valeur (revue B8 de la PR #1131, m3) ; les liens internes aux écrans du lot 2 restent des
+  `NavigationLink { destination }`, toujours au-dessus d'une route par valeur que le retour à la racine retire.
+- **Routes forcées web** : un renvoi qui doit mener à la page web ne passe plus par `LinkRouter`, qui rendrait nil depuis
+  que le chemin est natif (même motif que `PresencesRenvois.recapitulatifFinancier`, revue de T5a M3) :
+  `PresencesRenvois.presences` (coupe-circuit des présences, suivi non vérifiable), `DocumentsModel.routeRenvoiWeb`
+  (coupe-circuit des documents, journal illisible), `ContratPresentation.renvoiContrat` et `renvoiListe` (coupe-circuit
+  des contrats). `PresencesRenvois.contrat`, sans appelant depuis T4b (« Voir le contrat » natif), est retiré.
+- **D-FLAGS** : `ios_natif_contrats_actif` est lu par `ContratsDestination` (`PorteContrats`, fail-open), seul point de
+  construction des écrans de contrat ; à faux, renvoi web forcé (`contrats-desactive-renvoi`, `contrats-desactive-web`).
+- **Écarts consignés** : (1) `?statut=` de la liste des contrats n'est porté par aucun lien (l'alias le perd comme le
+  web, et aucun lien du web ne pose `/soignant/mes-documents?tab=contrats&statut=`) : la consigne T9a « `/soignant/contrats?statut=`
+  → `FiltreContrat.initial` » contredisait le `Navigate` du web et n'est pas appliquée ; (2) monde démo : les missions de
+  Revenus (`demo-missions-terminees.json`) n'existent pas dans celui des présences, leur détail natif dit « introuvable »
+  en démo (à aligner par l'exporteur des fixtures, T12 ou tranche suivante) ; (3) un onglet `?tab=` inconnu des présences
+  retombe sur l'onglet dérivé (écart de T4a inchangé).
+- **CI** : `DemoLiensLot2Tests` (sept liens à froid) rejoint l'éclat « documents » (~18 min mesurées avant l'ajout, le
+  moins chargé du lot 2 ; un douzième éclat dépasserait le plafond de 360 min du job) ; le coupe-circuit des contrats
+  est prouvé dans `DemoContratsTests` (éclat « contrats ») et la pile du Profil dans `DemoRevenusTests` (éclat
+  « lot3-revenus »), pour ne pas charger « documents ». Durées à remesurer au premier run ; si « documents » dépasse
+  20 min, scinder le job UI par lot (commentaire du job), pas d'éclat supplémentaire.
 
 
 ## En attente de Gabrielle

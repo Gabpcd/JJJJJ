@@ -1608,3 +1608,71 @@ extraites de l'enregistrement d'écran pour le partage).
   Toutes sont relevées par éclat, en annotation et dans le résumé.
 - Ce que la CI ne prouve pas : la recette appareil (T12), les écrans STAGING (T11), la revue P9 sur iPhone par Gabrielle
   et la notation au départ final (`.notationAuDepart`, non branchée).
+
+## L2-T10
+
+### Livraison de l'auteur (2026-11-16, branche `lot2/l2-t10-v3`, base `bc533bcf`)
+
+Tranche « Liens du lot 2 » (`LOT2_PLAN.md` §3 T10), sans B9 ni HARD STOP, sans texte affiché nouveau. Choix et écarts
+consignés dans `DECISIONS_LOT2.md`, « T10 — liens du lot 2 » ; lignes de parité mises à jour dans `PARITE_SOIGNANT.md`.
+
+- **Routes** (`JoleneRoute`, `LinkRouter`) : `.presences(onglet:filtre:)`, `.presencesMission(id:)`, `.documents(onglet:)`,
+  `.contrat(id:)`, `.contratCertificat(id:)` ; alias `/soignant/documents` et `/soignant/contrats` à onglet fixe ;
+  `/soignant/dpae` et `/soignant/conformite` → Safari. Changement volontaire de `LinksRouterTests` : `/contrat/<id>` et
+  `/soignant/presences/mission/<id>` ne sont plus `.safari`.
+- **Destination et cible** : lignes de `DestinationLien.ecranNatifLivre` à `true`, classement `.espace` de
+  `DeepLinkIntent`, cinq cibles de `CibleNotification` (onglet Profil), descriptions masquées (`LienMasque`), libellé
+  DEBUG `deeplink-route` (`contrat <id>`, `contratCertificat <id>`, `presencesMission <id>`).
+- **Montage** (exécuté par `MainTabView.presenter` pour le `DeepLinkCoordinator`) : routes par valeur `MonEspaceRoute`
+  enregistrées sur les piles de l'Accueil et du Profil ; entrées de « Mon espace » et deux points d'entrée de l'Accueil
+  passés en liens par valeur (revue B8 de la PR #1131, m3). Les liens de push du lot 2 (`CONTRAT_*`, `DPAE_*`) et la ligne
+  « présences d'une mission » de Revenus mènent aux écrans natifs (m7).
+- **Routes forcées web** : `PresencesRenvois.presences`, `DocumentsModel.routeRenvoiWeb`, `ContratPresentation.renvoiContrat`
+  et `renvoiListe` ; `PresencesRenvois.contrat` (sans appelant) retiré.
+- **D-FLAGS** : `ios_natif_contrats_actif` lu par `ContratsDestination` (`PorteContrats`).
+- **Tests** : `LinksRouterLot2Tests` (16 tests, niveau 1) ; migrés (règle 8) : `LinksRouterTests`, `DestinationLienTests`
+  (famille push : `/contrat/*` et `/soignant/mes-documents` natifs, 588 natifs / 302 renvois), `DeepLinkIntentTests`,
+  `CentreNotificationsTests` (genres du lot 2 dans la garde), `PushTapIntentTests`, `PresencesAffichageTests`,
+  `RevenusPresentationTests`, `AccueilAssemblageTests`, `DemoDashboardTests` ; XCUITest : `DemoLiensLot2Tests` (7, éclat
+  « documents »), `DemoContratsTests.testCoupeCircuitDesContratsRenvoieLeLienEtLaListeAuWeb`,
+  `DemoRevenusTests.testPresencesDUneMissionRemettentLeProfilASaRacine` (m3), migrés
+  `DemoPushTests.testTapContratASignerOuvreLeContratNatif` et `DemoRevenusTests.testMissionOuvreLeDetailNatifDeSesPresences`.
+
+Vérifications locales de l'auteur (Xcode 16.4, Swift 6.1, Node 24.14 ; la CI tourne Xcode 26.4.1, iOS 26.2) :
+- `JoleneCore` : `swift build --build-tests -Xswiftc -strict-concurrency=complete` sans avertissement ; `swift test` :
+  1 654 tests XCTest, 0 échec. Contre-épreuve : la ligne `.contrat, .contratCertificat` de `ecranNatifLivre` passée à
+  `false` fait échouer `LinksRouterLot2Tests`, `DestinationLienTests` et `CentreNotificationsTests` (119 échecs), puis
+  le fichier est restauré. Les tests du cœur ont été écrits dans la même passe que le code, pas avant.
+- `JoleneSupabase` (non modifié, dépend de JoleneCore) : même build sans avertissement ; `swift test` : 475 tests, 0 échec.
+- `xcodegen generate --spec project.yml` (`project.yml` inchangé ; le pbxproj gagne les deux nouveaux fichiers).
+- App : `xcodebuild build-for-testing` (schéma `Jolene`, Debug, simulateur dédié iPhone 16 iOS 18.6, `-derivedDataPath`
+  dans le worktree) : `TEST BUILD SUCCEEDED`, aucun avertissement dans nos sources.
+- XCUITest sur ce simulateur (iPhone portrait seulement), machine très chargée (charge 80 à 200, autres agents) :
+  `DemoLiensLot2Tests` 7 / 7 (dont une relance, voir ci-dessous) ; `DemoPushTests.testTapContratASignerOuvreLeContratNatif`,
+  `DemoRevenusTests.testMissionOuvreLeDetailNatifDeSesPresences`, `.testPresencesDUneMissionRemettentLeProfilASaRacine`,
+  `DemoContratsTests.testCoupeCircuitDesContratsRenvoieLeLienEtLaListeAuWeb`,
+  `DemoPointageEtatsTests.testDrapeauPresencesDesactiveRenvoieLaPageAuWebSansZoneDePointage`,
+  `DemoAccueilTests.testOubliDePointageOuvreLesPresencesNatives`,
+  `DemoPresenceDetailTests.testAccueilAllerPointerEtOubliDeDepartOuvrentLesPresences`, `DemoPresencesTests` (4),
+  `DemoDocumentsTests.testOngletContratsNatifEtDpaeEnRenvoiWeb` : verts. Trois échecs au **lancement** de l'app, avant
+  toute étape du test (`kAXErrorIPCTimeout`, puis `kAXErrorServerNotFound` : session d'automatisation établie en 60 à
+  95 s), relancés sans changement de code et verts ; entre-temps, la seule requête de `DemoLiensLot2Tests` sur tout
+  l'arbre de l'app a été bornée à l'en-tête (comme `DemoPresenceDetailTests.verifier`).
+- Gardes Node : étape « Garde de livraison mobile » de `validate-pr.yml` + `ios-swift-ci-eclats.node.mjs` : 250 tests,
+  0 échec.
+
+Non vérifié en local : iPad portrait et paysage ; les autres XCUITest des éclats touchés (le reste de `DemoContratsTests`,
+`DemoDocumentsTests`, `DemoPushTests`, `DemoRevenusTests`, `DemoPresenceDetailTests`) ; Xcode 26.4.1 / iOS 26.2 ; durée
+réelle de l'éclat « documents » ; lien universel réel (AASA, appareil, T12).
+
+Points d'attention pour le relecteur :
+1. Onglet porteur des cibles du lot 2 : le Profil (« Mon espace »), y compris depuis la ligne de Revenus (changement
+   d'onglet, comme `.mission` vers l'Accueil) ; alternative possible : empiler sur la pile de l'onglet courant.
+2. Mélange `NavigationLink(value:)` / `NavigationLink { destination }` : seuls les points d'entrée à la racine des piles
+   passent par valeur ; les liens internes des écrans du lot 2 restent par destination (au-dessus d'une route par valeur).
+3. Éclat « documents » : ~18 min mesurées avant l'ajout de `DemoLiensLot2Tests` (7 lancements à froid) ; à remesurer.
+4. Monde démo : détail des présences « introuvable » pour les missions de Revenus (fixtures disjointes).
+
+### Revue fraîche B8 — L2-T10
+
+_À compléter par le relecteur (contexte vierge, `/code-review` + skill de revue)._
