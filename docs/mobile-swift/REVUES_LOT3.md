@@ -2314,3 +2314,52 @@ Note : pendant la lecture, j'ai écrit trois fichiers temporaires dans le scratc
   TestFlight externe (TJ2).
 - Mineurs ouverts : T8 m1-m6, T10 m1-m9, T12 m1-m2, L3-TJ m1-m4 (revues ci-dessus), plus ceux des vagues
   précédentes.
+
+## L3-T13
+
+### Consignes de l'auteur pour l'intégration (branche `lot3/l3-t13-v3`, 16/11/2026)
+
+**B9 paiements : go humain requis avant merge.** Paiements déclarés (confirmation, contestation ouverte après B3,
+#1118) : PR préparée, jamais mergée sans le go explicite de Gabrielle ; « CI verte + revue fraîche » ne le remplace pas.
+Base `origin/feat/ios-lot2` (`bc533bcf`, identique à `main` après #1131 sur les chemins touchés). Décisions, écarts et
+textes : `DECISIONS_LOT3.md`, section T13.
+
+- **À faire avant le go** : relire en lecture seule la définition **live** de `fn_contester_paiement_soignant`
+  (`pg_get_functiondef`, TJ7) et de `fn_confirmer_paiement_soignant` ; la tranche n'a eu aucun accès backend et s'est
+  fondée sur la migration B3 et le dump (corps identiques). Si la définition live diffère de la fiche, refermer
+  « Contester » sans texte nouveau (TJ7).
+- **Fichiers partagés touchés (ajouts localisés)** : `Models/Lot3Results.swift` (`PaiementDeclare` : mission, présences,
+  créneaux ; trois structures de détail), `Revenus/RevenusModel.swift` (`relireApresDeclaration`), `Demo/DemoWorld.swift`
+  et `Demo/DemoRevenusGateway.swift` (un seul serveur simulé relu par l'onglet), `SupabaseGateways.swift` (une ligne),
+  `AppContainer.swift` (variante `JOLENE_DEMO_PAIEMENTS`), `MainTabView.swift` (`sectionRevenus`, cas `.revenus(section)`
+  de `presenter`), `Screens/Revenus/RevenusScreen.swift` (section montée au-dessus des paiements rapides, défilement,
+  `scrollDismissesKeyboard`), `Links/DestinationLien.swift` et `Notifications/CentreNotifications.swift` (section
+  livrée et présentable), tests de routage (`DestinationLienTests`, `CentreNotificationsTests`, `DeepLinkIntentTests`,
+  `PushTapIntentTests` : `?tab=paiements` natif, 493 natifs / 397 renvois), `DemoWorldTests.portsEnAttenteLot3`
+  (« paiements » retiré), `export-demo-fixtures.mjs` (seconde déclaration `demo-paiement-004` dans
+  `demo-missions-terminees.json`, nouvelle fixture `demo-paiements-declares.json`), `check-rpc-contracts.mjs` +
+  `rpc-contracts.json` + `CONTRATS_RPC_SOIGNANT.md` + `check-rpc-contracts-lot3.node.mjs` (deux RPC consommées, éclat
+  `lot3-revenus`), `ios-swift-ci.yml` (`DemoPaiementsTests` dans `lot3-revenus`, sauté par le socle), `project.pbxproj`
+  (`xcodegen generate`), `PARITE_SOIGNANT.md`, `DECISIONS_LOT3.md`.
+- **Au conflit avec T14a / T14b** (même onglet, même éclat) : garder les deux côtés dans `RevenusScreen`, `MainTabView`
+  (`cheminRevenus`, `sectionRevenus`), `DemoWorld.câblerLot3`, `SupabaseGateways.câblerLot3`, `portsEnAttenteLot3`,
+  `LOT3_CONSOMMEES` et les classes de l'éclat `lot3-revenus` (relire la durée de l'éclat, 30 min).
+- **Vérifications de l'auteur** (Xcode 16.4 local, Swift 6.1.2, `-strict-concurrency=complete` des paquets) :
+  `swift test` JoleneCore 1 668 tests, JoleneSupabase 487 tests, 0 échec, 0 ignoré, aucun avertissement sur les
+  fichiers recompilés ; tests ajoutés : `PaiementsDeclaresTests` (11), `PaiementsDeclaresModelTests` (11),
+  `DemoPaiementsGatewayTests` (7), `SupabasePaiementsGatewayTests` (12) ; contrôle par mutation (garde `enCours`
+  retirée, relecture `CONTESTE` relâchée) : 6 échecs, code restauré. `xcodegen generate` (pbxproj : deux fichiers) ;
+  `xcodebuild build-for-testing` sur un simulateur dédié iPhone 16 / iOS 18.6 → `TEST BUILD SUCCEEDED`, aucun
+  avertissement dans nos sources. XCUITest (iphone portrait seulement, machine très chargée) : `DemoPaiementsTests`
+  4/4 (second passage, après correction d'un défilement manquant avant la saisie du motif dans le test ; premier
+  passage : 1 échec du test, 1 échec d'environnement `kAXErrorServerNotFound` au lancement) ; `DemoRevenusTests`
+  7/7 (deux passages, le second sur la tête finale). Gardes Node : étape « Garde de livraison mobile » de `validate-pr.yml` 245/245, `ios-swift-ci-eclats` et
+  `check-rpc-contracts-lot3` verts, `check-rpc-contracts.mjs` sans dérive, `export-demo-fixtures.mjs --check`
+  identique (19 fichiers). **Non mesuré localement** : iPad portrait et paysage (CI), STAGING (T16), appareil.
+
+#### Avant le merge
+- Le go explicite de Gabrielle (**B9 paiements : go humain requis avant merge**).
+- Relecture live en lecture seule des deux RPC (ci-dessus).
+- L'éclat CI `lot3-revenus` vert sur iphone, ipad-portrait et ipad-landscape, avec `skipped = 0`, `DemoPaiementsTests`
+  compris, et sa durée sous 30 min.
+- Revue fraîche B8.

@@ -1597,6 +1597,66 @@ sans changer aucune règle ni aucun texte affiché :
   correctifs ci-dessus ; corrections proposées dans `REVUES_LOT3.md` (section d'intégration de la vague 4), à
   livrer avec une nouvelle recette des trois formats avant tout merge du lot.
 
+## T13 — paiements déclarés : confirmer, contester (branche `lot3/l3-t13-v3`, 16/11/2026 ; B9, jamais mergée sans go)
+
+- **Livré.** Section « Paiements à confirmer » de l'onglet Revenus (`Jolene/Screens/Revenus/PaiementsDeclaresSection.swift`,
+  `revenus-paiements-declares`), port de `src/components/BandeauPaiementDeclare.tsx`, placée au-dessus des paiements
+  rapides (consigne de T12, ordre du web `MesGains.tsx` l.382-427). Cœur : `Revenus/PaiementsDeclares.swift` (textes,
+  décodeurs des colonnes l.97, l.122, l.132, l.137, assemblage, règle de relecture `PaiementsDeclaresRelecture`,
+  présentation de la carte), `Revenus/PaiementsDeclaresModel.swift` ; démo `Demo/DemoPaiementsGateway.swift` (serveur
+  simulé, fixture `demo-paiements-declares.json`, variante `JOLENE_DEMO_PAIEMENTS=refus`), relu aussi par l'onglet
+  (`DemoRevenusGateway(paiementsDeclares:)`) ; Supabase `Revenus/SupabasePaiementsGateway.swift`. RPC passées en
+  `consommee` : `fn_confirmer_paiement_soignant`, `fn_contester_paiement_soignant`.
+- **Verrou levé (TJ7).** B3 (#1118) est sur la base : « Contester » est ouvert. Contrat vérifié sur la migration
+  `20261102205808_contestation_paiement_soignant.sql` et sur le dump `supabase/schema/public.sql` (l.25741-25839, corps
+  identiques ; huit `error_code` ; GRANT `authenticated` l.82235) et par la garde `check-rpc-contracts-lot3.node.mjs`.
+  **Définition live non relue** : la tranche n'avait aucun accès au backend (consigne de la tranche) ; TJ7 demande cette
+  relecture en lecture seule avant d'ouvrir le bouton : **à faire avant le go B9** (si elle diffère de la fiche, refermer
+  « Contester » sans texte nouveau, TJ7).
+- **Règles.** Une seule mutation à la fois (`enCours`, double tap sans effet, toutes les actions désactivées jusqu'à la
+  relecture) ; « Paiement confirmé ✅ » / « Contestation envoyée » seulement après relecture de la ligne
+  (`CONFIRME` + `confirme_par_soignant`, `CONTESTE` + `conteste`), sinon « Erreur lors du traitement » ; refus serveur
+  `error` verbatim (dont « Paiement déjà confirmé », « Un litige de ce type est déjà ouvert pour cette mission. ») ;
+  23505 non restituée par B3 → `SupabaseErrorMapping` (repli du web), jamais un succès ; délai dépassé → message et
+  relecture, jamais un renvoi ; liste relue après toute issue (aucun retrait local d'office), puis état des missions relu
+  (`relireApresDeclaration`, `onUpdate` → `reloadKey` du web) ; motif non blanc obligatoire, borné à 500 scalaires
+  Unicode, envoyé tel que saisi ; repli web `'Contesté par le soignant'` jamais envoyé. Ligne `litiges` non relue par
+  l'app : B3 écrit paiement et litige dans le même sous-bloc (dump l.25791-25824), une ligne relue `CONTESTE` le prouve ;
+  relecture `litiges` réservée à la preuve STAGING (T16).
+- **Routes.** `DestinationLien.ecranNatifLivre(.revenus(section: .paiementsAConfirmer))` passe à `true` ;
+  `CibleNotification.revenus(.paiementsAConfirmer)` présentable ; `MainTabView.presenter` sélectionne Revenus et fait
+  défiler jusqu'à la section (`sectionRevenus`, ancre `revenus-ancre-paiements-declares`). Tap push `PAIEMENT_RECU`
+  (correction 15, cas reporté de T5) : section native. Tests de routage ajustés (32 vecteurs push de la famille
+  `?tab=paiements` passent du renvoi web au natif : 493 natifs, 397 renvois).
+- **Textes (HARD STOP n°4, délégué, TJ7/TJ8).** Verbatim du web, épinglés à leur ligne
+  (`PaiementsDeclaresTests.testChaqueTexteRepriseDuWebEstVerbatimASaLigne`) : « Motif de contestation : » l.51,
+  « Envoyer la contestation » l.62, « Annuler » l.64, « Confirmer la réception » l.397, « Contester » l.407, « Paiement
+  confirmé ✅ » et « Contestation envoyée » l.195, « Erreur lors du traitement » l.200, « Paiements à confirmer
+  indisponibles » l.208, « Impossible de charger les paiements à confirmer. » l.170, « Réessayer » l.211,
+  « Établissement » l.161, « Mission : » l.264, « Touchez pour voir le détail · Confirmez ou contestez » l.268, libellés
+  du détail l.282-374 et méthodes l.71-77. Vouvoyés (non juridiques, TJ7 ; décision 9 du lot 1) : l.55 « Décrivez
+  pourquoi vous contestez ce paiement... », l.259 « déclare vous avoir payé ». Refus du serveur simulé en démo : textes
+  du dump, verbatim. **Aucun texte nouveau, aucun texte juridique** ; aucune mention de la portée d'une confirmation ou
+  d'une contestation (garde `testAucunTexteJuridiqueAjoute`). Aucune décision juridique n'a été nécessaire.
+- **Écarts au web (non juridiques, consignés).**
+  1. Refus serveur affiché verbatim (`error`) là où le web affiche toujours « Erreur lors du traitement » (l.199-200)
+     (TJ7) ; erreur de lecture : message de `JoleneError` (jamais `error.message` brut, l.170 ; PRINCIPES §3).
+  2. Succès après relecture et liste relue ; le web annonce le succès dès la réponse et retire la carte localement
+     (l.195-196).
+  3. Une mutation à la fois pour toute la section ; le web désactive seulement la carte en cours (`processing`, l.392).
+  4. Motif borné à 500 scalaires Unicode (borne du serveur, `char_length`) ; le web à 500 unités UTF-16
+     (`maxLength`, l.58).
+  5. Heures des présences à l'heure de Paris (le web : heure locale de l'appareil, identique en France) ; éléments
+     d'une ligne de présence séparés par « · » (le web : `span` en ligne).
+  6. L'état déplié n'est pas vocalisé (le web : `aria-expanded`, l.253) : il faudrait un texte nouveau ; le contenu
+     déplié est lu dans l'ordre.
+  7. Défilement de l'onglet refermant le clavier (`scrollDismissesKeyboard(.immediately)`) : le motif est la seule
+     saisie de l'onglet.
+  8. « Déclarations de salaire par mission » et « Voir les paiements à confirmer » (`MesGains.tsx` l.386-423) restent non
+     portés (écart 1 de T12).
+- **CI UI.** `DemoPaiementsTests` (4 tests) rangé dans l'éclat `lot3-revenus` (domaine T12-T14b), sauté par le socle ;
+  aucun nouvel éclat (onze au plus).
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -1611,7 +1671,8 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   `lot3/l3-t8-v2` poussée (section T8 ci-dessus), décisions juridiques déléguées T8-J1 à T8-J5.
 - **T12** — revenus en lecture (paiements, escrow) ; branche `lot3/l3-t12-v2` poussée (section T12 ci-dessus), lecture
   seule, aucune action de paiement.
-- **T13** — paiements déclarés (confirmation ; contestation après B3).
+- **T13** — paiements déclarés (confirmation ; contestation ouverte après B3) ; branche `lot3/l3-t13-v3` poussée
+  (section T13 ci-dessus), go humain requis avant merge.
 - **T14a** — Stripe Connect.
 - **T14b** — IBAN (données bancaires).
 - **T16** — dispatch STAGING (secrets STAGING, suppression des comptes jetables, bascule transactionnelle de la
