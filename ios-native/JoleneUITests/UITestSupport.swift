@@ -450,23 +450,56 @@ class JoleneUITestCase: XCTestCase {
         start.press(forDuration: 0.25, thenDragTo: end, withVelocity: .default, thenHoldForDuration: 0.25)
     }
 
+    /// Bas des barres de navigation qui recouvrent le haut de `container` : sous iOS 26, les barres sont translucides
+    /// et le défilement passe sous elles. Un élément qui s'y trouve peut être déclaré atteignable par XCUITest, mais un
+    /// toucher à cet endroit atteint la barre, qui ramène le défilement en haut (run 42559541711, iPad paysage,
+    /// `DemoContratsTests.testContratSigneCertificatEtPartageDuFichierOriginal` : « Télécharger le contrat » sous la
+    /// barre, aucune feuille de partage). Seules comptent les barres qui commencent dans la moitié haute du conteneur :
+    /// la barre d'une page restée derrière une feuille commence au-dessus de la feuille et n'en masque rien.
+    func basDesBarresDeNavigation(sur container: XCUIElement) -> CGFloat? {
+        let cadre = container.frame
+        var bas: CGFloat?
+        for barre in app.navigationBars.allElementsBoundByIndex where barre.exists {
+            let f = barre.frame
+            guard !f.isEmpty, f.minY >= cadre.minY - 1, f.minY < cadre.midY,
+                  f.maxX > cadre.minX, f.minX < cadre.maxX else { continue }
+            bas = max(bas ?? f.maxY, f.maxY)
+        }
+        return bas
+    }
+
+    /// Entièrement visible dans `container` ET hors des barres de navigation qui en recouvrent le haut.
+    func visibleSousLesBarres(_ target: XCUIElement, inside container: XCUIElement) -> Bool {
+        guard fullyVisible(target, inside: container) else { return false }
+        guard let bas = basDesBarresDeNavigation(sur: container) else { return true }
+        return target.frame.minY >= bas - 1
+    }
+
     func scrollTo(_ target: XCUIElement, in container: XCUIElement, downward: Bool = true) {
         require("Le conteneur de défilement attendu est visible") { self.containerVisible(container) }
         var scrolls = 0
         // 40 pas au plus : sans élan (`drag`), un pas défile au plus 55 % du conteneur ; la boucle s'arrête dès que la
         // cible est entièrement visible.
-        while !fullyVisible(target, inside: container) && scrolls < 40 {
-            // Direction et amplitude : `PasDeDefilement` (testé par `PasDeDefilementTests`). Une cible
-            // déjà dans le cadre du conteneur revient vers le centre d'un pas court, jamais dans la
-            // direction de recherche `downward` (run 42579729412 : vingt glissements en alternance).
-            let pas = PasDeDefilement.suivant(cible: target.exists ? target.frame : nil, conteneur: container.frame,
+        while !visibleSousLesBarres(target, inside: container) && scrolls < 40 {
+            // Direction et amplitude : `PasDeDefilement` (testé par `PasDeDefilementTests`), calculées sur la partie du
+            // conteneur hors des barres de navigation qui en recouvrent le haut (fusion des lots 2 et 3 : les deux lots
+            // avaient corrigé le même défaut, chacun de son côté). Une cible déjà dans ce cadre revient vers le centre
+            // d'un pas court, jamais dans la direction de recherche `downward` (lot 3, run 42579729412 : vingt
+            // glissements en alternance) ; une cible sous la barre translucide est ramenée vers le bas au lieu d'être
+            // poussée plus haut à chaque glissement (lot 2, run 42559541711, iPad paysage,
+            // `DemoPointageTests.testHorsLigneDesactiveLePointageSansAucunEnvoi`).
+            var cadreUtile = container.frame
+            if let bas = basDesBarresDeNavigation(sur: container), bas > cadreUtile.minY {
+                cadreUtile = CGRect(x: cadreUtile.minX, y: bas, width: cadreUtile.width, height: max(0, cadreUtile.maxY - bas))
+            }
+            let pas = PasDeDefilement.suivant(cible: target.exists ? target.frame : nil, conteneur: cadreUtile,
                                               versLaSuiteParDefaut: downward)
             let distance = pas.versLaSuite ? pas.amplitude : -pas.amplitude
             drag(container, fromY: 0.5 + distance / 2, toY: 0.5 - distance / 2)
             scrolls += 1
         }
         require("Le contrôle demandé est entièrement visible après un défilement borné") {
-            self.fullyVisible(target, inside: container)
+            self.visibleSousLesBarres(target, inside: container)
         }
     }
 

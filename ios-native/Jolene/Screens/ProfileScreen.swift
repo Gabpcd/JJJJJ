@@ -7,6 +7,8 @@ import JoleneDesign
 /// - lot 0 : « Compte » (identité minimale), « Se déconnecter », « Application » (version, diagnostic démo) — en
 ///   tête et inchangées : les XCUITest des lots 0 à 3 les lisent sans défilement (écart d'ordre assumé avec le web,
 ///   qui place « Se déconnecter » après « Aide & légal ») ;
+/// - lot 2, T4a (décision 24 du lot 2) : « Mon espace » (`EspaceSoignantSection` : Mes présences, Mes documents,
+///   Mes contrats, consentement GPS), juste après « Application », comme au lot 2 ;
 /// - lot 3, T9 : « Mon profil » (`ProfilEntreeSection`, `profil-ouvrir`) ;
 /// - « Réglages » : « Notifications » (T6, préférences, `profile-preferences-notifications`, hôte de la carte
 ///   d'autorisation de T4 : aucune seconde carte ici) et le thème Système / Clair / Sombre (T11, D16) ;
@@ -16,14 +18,17 @@ import JoleneDesign
 ///   présentateur `.safari` du coordinateur des liens, L3-T3b) ;
 /// - lot 1, T8 : « Suppression de compte », dernière section.
 /// Entrées natives en liens par valeur (`ProfilEditionRoute`, `PreferencesNotificationsRoute` enregistrées par
-/// `MainTabView` ; `MotDePasseRoute` enregistrée ici, sur la liste et non dans ses lignes). Entrées web : `JoleneRoute`
-/// puis `DestinationLien.destination`. Points d'extension (sans entrée tant que l'écran ou le présentateur manque) :
-/// paiements et Stripe (T14a), coordonnées bancaires (T14b), biométrie (L1-T9), centre de notifications (ouvert
-/// depuis l'Accueil, le hub web n'en a pas). Identifiant de la liste : `profile-list`.
+/// `MainTabView` ; `MotDePasseRoute` enregistrée ici, sur la liste et non dans ses lignes) ; celles de « Mon espace »
+/// (lot 2) en liens à destination. Entrées web : `JoleneRoute` puis `DestinationLien.destination`. Points d'extension
+/// (sans entrée tant que l'écran ou le présentateur manque) : paiements et Stripe (T14a), coordonnées bancaires
+/// (T14b), biométrie (L1-T9), centre de notifications (ouvert depuis l'Accueil, le hub web n'en a pas). Identifiant de
+/// la liste : `profile-list`.
 struct ProfileScreen: View {
     let container: AppContainer
     @ObservedObject var session: SessionStore
     let snapshot: SessionSnapshot
+    /// Bascule d'onglet des actions des états vides de la page Présences (lot 2, T4a).
+    var ouvrirOnglet: (MainTabView.Tab) -> Void = { _ in }
     @State private var isSigningOut = false
     /// Export RGPD : modèle tenu par le hub (et non par sa section, ligne d'une liste paresseuse) pour que la
     /// feuille de partage survive au défilement.
@@ -33,10 +38,12 @@ struct ProfileScreen: View {
     @StateObject private var motDePasse: MotDePasseModel
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
 
-    init(container: AppContainer, session: SessionStore, snapshot: SessionSnapshot) {
+    init(container: AppContainer, session: SessionStore, snapshot: SessionSnapshot,
+         ouvrirOnglet: @escaping (MainTabView.Tab) -> Void = { _ in }) {
         self.container = container
         self.session = session
         self.snapshot = snapshot
+        self.ouvrirOnglet = ouvrirOnglet
         _export = StateObject(wrappedValue: ExportRGPDModel(session: session, snapshot: snapshot))
         _motDePasse = StateObject(wrappedValue: MotDePasseModel(session: session, snapshot: snapshot))
     }
@@ -69,6 +76,11 @@ struct ProfileScreen: View {
                 }
                 #endif
             }
+            // Lot 2, T4a (décision 24) : Mes présences, Mes documents, Mes contrats. Placée après « Application »
+            // pour ne pas déplacer la déconnexion ni la sentinelle réseau, lues sans défilement par les XCUITest
+            // des lots 0 et 1 (cellules hors écran d'une `List` absentes de l'arbre d'accessibilité).
+            // Une ligne par tranche (T4a présences, T7 documents, T9a contrats ; T4b consentement GPS).
+            EspaceSoignantSection(container: container, session: session, snapshot: snapshot, ouvrirOnglet: ouvrirOnglet)
             ProfilEntreeSection() // lot 3, T9 : « Mon profil » (`MonCompteSoignant.tsx` l.59)
             Section(HubCompte.titreReglages) {
                 // Lot 3, T6 : « Notifications » (l.115) vers les préférences ; lien par valeur, `MainTabView` enregistre

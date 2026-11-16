@@ -16,9 +16,10 @@
  *   node scripts/mobile/export-demo-fixtures.mjs          # écrit les fichiers
  *   node scripts/mobile/export-demo-fixtures.mjs --check  # échoue si un fichier diffère
  */
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const FIXED_NOW = '2026-11-02T00:00:00.000Z';
 export const MISSION_COUNT = 30;
@@ -229,6 +230,352 @@ export function buildDemoDashboard(now = new Date(FIXED_NOW), missions = buildDe
       { id: 'demo-terminee-001', type_contrat_applique: 'SALARIE', type_contrat_recherche: 'SALARIE', total_brut: 208, net_a_payer: 224.6, net_estime: 162.4 },
     ],
   };
+}
+
+/**
+ * Présences et pointage démo (lot 2, T3 ; blueprint `docs/mobile-swift/LOT2_PLAN.md` §2.8), lus par
+ * `DemoPointageGateway`. Colonnes des requêtes de `src/pages/PresencesSoignant.tsx` réduites à celles que lit l'app
+ * (`MissionPresenceLue`, `PresenceLue`, `MissionDePresence`) : aucun montant, aucune colonne `code_pointage_*`,
+ * jamais l'embed `etablissements` (noms par `demo-etablissements.json`, comme `fn_etablissements_safe`).
+ *   - demo-presence-a : ASSIGNEE, créneau 00:05Z → 08:05Z le 02/11, contrat SIGNE_COMPLET, code affiché 123456
+ *     (onglet Aujourd'hui, pointage ouvert car dans les 15 min) ;
+ *   - demo-presence-b : EN_COURS, segment EFFECTIF ouvert depuis 2026-11-01T22:00Z, code affiché 654321 ;
+ *   - demo-presence-c : ASSIGNEE ce jour, contrat SIGNE_SOIGNANT (motif CONTRAT), aucun code ;
+ *   - demo-presence-d : ASSIGNEE, créneau le 03/11 (À venir) ;
+ *   - demo-presence-e : ASSIGNEE sur plusieurs jours sans créneau (« Planning détaillé à confirmer ») ;
+ *   - historique : h1 validée il y a 10 h, h2 non validée, h3 sans présence reconstruite depuis deux EFFECTIF.
+ * `codes_affiches` simule le code affiché par l'écran établissement fictif (`AffichageCodeRotatifEtab`) : il n'est
+ * jamais renvoyé par le monde démo, qui le fait tourner après chaque scan. `consentement_gps` nul : le soignant n'a
+ * pas encore répondu.
+ */
+export function buildDemoPresences(now = new Date(FIXED_NOW)) {
+  const minutes = (n) => new Date(now.getTime() + n * 60_000);
+  const heures = (n) => minutes(n * 60);
+  const iso = (date) => date.toISOString();
+  const creneau = (id, missionId, debut, fin, type = 'PREVISIONNEL') => ({
+    id, mission_id: missionId, debut: iso(debut), fin: fin ? iso(fin) : null, est_pause: false, type_creneau: type,
+  });
+  const mission = (id, intitule, statut, debut, fin, etablissementId, service) => ({
+    id, intitule: `Démonstration · ${intitule}`, service, debut_le: iso(debut), fin_le: iso(fin),
+    duree_heures: (fin.getTime() - debut.getTime()) / 3_600_000, statut, etablissement_id: etablissementId,
+  });
+  const missions = [
+    mission('demo-presence-a', 'Pointage du jour', 'ASSIGNEE', minutes(5), minutes(8 * 60 + 5), 'demo-etab-1', 'Médecine polyvalente'),
+    mission('demo-presence-b', 'Mission en cours', 'EN_COURS', heures(-2), heures(6), 'demo-etab-2', 'Soins de suite'),
+    mission('demo-presence-c', 'Contrat à signer', 'ASSIGNEE', heures(6), heures(14), 'demo-etab-3', 'Consultations'),
+    mission('demo-presence-d', 'Mission de demain', 'ASSIGNEE', heures(31), heures(39), 'demo-etab-1', 'Médecine polyvalente'),
+    mission('demo-presence-e', 'Planning à confirmer', 'ASSIGNEE', heures(8 * 24 + 7), heures(12 * 24 + 15), 'demo-etab-2', 'Soins de suite'),
+  ];
+  const missionsHistorique = [
+    mission('demo-presence-h1', 'Présence validée', 'TERMINEE', heures(-41), heures(-33), 'demo-etab-1', 'Médecine polyvalente'),
+    mission('demo-presence-h2', 'Présence à valider', 'TERMINEE', heures(-65), heures(-57), 'demo-etab-2', 'Soins de suite'),
+    mission('demo-presence-h3', 'Heures pointées sans présence', 'TERMINEE', heures(-113), heures(-105), 'demo-etab-3', 'Consultations'),
+  ];
+  const creneaux = [
+    creneau('demo-presence-a-prevu', 'demo-presence-a', minutes(5), minutes(8 * 60 + 5)),
+    creneau('demo-presence-b-prevu', 'demo-presence-b', heures(-2), heures(6)),
+    creneau('demo-presence-b-effectif-1', 'demo-presence-b', heures(-2), null, 'EFFECTIF'),
+    creneau('demo-presence-c-prevu', 'demo-presence-c', heures(6), heures(14)),
+    creneau('demo-presence-d-prevu', 'demo-presence-d', heures(31), heures(39)),
+    creneau('demo-presence-h1-prevu', 'demo-presence-h1', heures(-41), heures(-33)),
+    creneau('demo-presence-h1-effectif-1', 'demo-presence-h1', heures(-41), heures(-33), 'EFFECTIF'),
+    creneau('demo-presence-h2-prevu', 'demo-presence-h2', heures(-65), heures(-57)),
+    creneau('demo-presence-h2-effectif-1', 'demo-presence-h2', heures(-65), heures(-57), 'EFFECTIF'),
+    creneau('demo-presence-h3-prevu', 'demo-presence-h3', heures(-113), heures(-105)),
+    creneau('demo-presence-h3-effectif-1', 'demo-presence-h3', heures(-113), heures(-108), 'EFFECTIF'),
+    creneau('demo-presence-h3-effectif-2', 'demo-presence-h3', minutes(-108 * 60 + 30), heures(-105), 'EFFECTIF'),
+  ].sort((a, b) => new Date(a.debut).getTime() - new Date(b.debut).getTime());
+  const embed = (m, avecStatut) => ({
+    id: m.id, intitule: m.intitule, etablissement_id: m.etablissement_id, debut_le: m.debut_le, fin_le: m.fin_le,
+    ...(avecStatut ? { statut: m.statut } : {}),
+  });
+  const presence = (id, m, valideLe, avecStatut) => ({
+    id, mission_id: m.id, soignant_id: DEMO_PROFILE.user_id, pointage_arrivee_le: m.debut_le, pointage_depart_le: m.fin_le,
+    valide_par_etablissement: valideLe !== null, valide_le: valideLe,
+    methode_pointage_arrivee: 'CODE', methode_pointage_depart: 'CODE', missions: embed(m, avecStatut),
+  });
+  const [h1, h2] = missionsHistorique;
+  // Lot 2 T4b : le contrat de la mission c, signé par le soignant seul, est aussi un contrat de `demo-contrats.json`
+  // (« Voir le contrat » natif) ; créé 20 h avant l'horloge pour que son délai de 72 h ne soit pas échu.
+  const contrat = (missionId, statut, creeLe = heures(-72)) => ({
+    id: `demo-contrat-pointage-${missionId.slice('demo-presence-'.length)}`, mission_id: missionId, statut,
+    cree_le: iso(creeLe),
+  });
+  return {
+    fixed_now: now.toISOString(),
+    consentement_gps: null,
+    missions,
+    presences_validees: [presence('demo-presence-h1-presence', h1, iso(heures(-10)), false)],
+    historique: [
+      presence('demo-presence-h1-presence', h1, iso(heures(-10)), true),
+      presence('demo-presence-h2-presence', h2, null, true),
+    ],
+    missions_historique: missionsHistorique,
+    creneaux,
+    contrats: [
+      contrat('demo-presence-a', 'SIGNE_COMPLET'), contrat('demo-presence-b', 'SIGNE_COMPLET'),
+      contrat('demo-presence-c', 'SIGNE_SOIGNANT', heures(-20)), contrat('demo-presence-d', 'SIGNE_COMPLET'),
+      contrat('demo-presence-e', 'SIGNE_COMPLET'),
+    ],
+    codes_affiches: { 'demo-presence-a': '123456', 'demo-presence-b': '654321' },
+  };
+}
+
+/**
+ * Lot 2 T6 (`docs/mobile-swift/LOT2_PLAN.md` §2.8) : justificatifs du profil fictif (IDE MIXTE, comme DEMO_PROFILE).
+ * Exigences fictives marquées « Exigence de démonstration » : aucune règle réelle n'est reproduite, seule la forme des
+ * lignes de `documents_requis_par_profession` ; VACCINATIONS y figure pour prouver le filtre des pièces de santé
+ * (`TYPES_DOCUMENTS_EXCLUS_UPLOAD`). Pièces : diplôme vérifié ; pièce d'identité REJETE avec une date passée (doit
+ * s'afficher Rejetée, pas Expirée) ; RCP vérifiée qui expire dans 12 jours ; RIB expiré. Les clés Storage suivent le
+ * chemin du web (`<uid>/documents/<TYPE>/<ms>-<nom>`), sans aucun objet réel.
+ */
+export function buildDemoDocuments(now = new Date(FIXED_NOW)) {
+  const uid = DEMO_PROFILE.user_id;
+  const jour = (decalage) => {
+    const d = new Date(now);
+    d.setUTCDate(d.getUTCDate() + decalage);
+    return d.toISOString().slice(0, 10);
+  };
+  const instant = (decalage) => new Date(now.getTime() + decalage * 86_400_000).toISOString();
+  const exigence = (type, critique, exercice) => ({
+    id: `demo-exigence-${type.toLowerCase().replaceAll('_', '-')}`,
+    profession: DEMO_PROFILE.profile.profession,
+    type_document: type,
+    description: 'Exigence de démonstration',
+    a_expiration: type !== 'DIPLOME',
+    duree_validite_mois: null,
+    est_critique: critique,
+    type_exercice_requis: exercice,
+  });
+  const piece = (id, type, nom, mime, televerseJours, extra) => {
+    const ms = new Date(instant(televerseJours)).getTime();
+    return {
+      id,
+      type_document: type,
+      libelle: null,
+      s3_cle: `${uid}/documents/${type}/${ms}-${nom}`,
+      nom_fichier: nom,
+      type_mime: mime,
+      taille_octets: 2048,
+      valide_depuis: null,
+      valide_jusqua: null,
+      statut_verification: 'VERIFIE',
+      motif_rejet: null,
+      televerse_le: instant(televerseJours),
+      verification_attempt_id: null,
+      est_critique: true,
+      profession_certifiee: null,
+      ...extra,
+    };
+  };
+  return {
+    fixed_now: now.toISOString(),
+    profil: {
+      profession: DEMO_PROFILE.profile.profession,
+      type_exercice: DEMO_PROFILE.profile.type_exercice,
+      rpps_verifie: false,
+      adeli_verifie: false,
+    },
+    attestation_sante_signee_le: null,
+    exigences: [
+      exigence('CARTE_IDENTITE', true, 'TOUS'),
+      exigence('DIPLOME', true, 'TOUS'),
+      exigence('RCP_ASSURANCE', true, 'LIBERAL_ONLY'),
+      exigence('RIB', false, 'LIBERAL_ONLY'),
+      exigence('VACCINATIONS', true, 'TOUS'),
+    ],
+    // Les plus récentes d'abord (`order('televerse_le', { ascending: false })`).
+    documents: [
+      piece('demo-doc-carte-identite', 'CARTE_IDENTITE', 'piece-identite-demonstration.pdf', 'application/pdf', -3,
+        { statut_verification: 'REJETE', valide_jusqua: jour(-32), motif_rejet: 'Pièce de démonstration illisible.' }),
+      piece('demo-doc-rcp', 'RCP_ASSURANCE', 'rcp-demonstration.pdf', 'application/pdf', -5, { valide_jusqua: jour(12) }),
+      piece('demo-doc-diplome', 'DIPLOME', 'diplome-demonstration.pdf', 'application/pdf', -12, { valide_depuis: '2020-07-01' }),
+      piece('demo-doc-rib', 'RIB', 'rib-demonstration.pdf', 'application/pdf', -400,
+        { statut_verification: 'EXPIRE', valide_jusqua: jour(-18), est_critique: false }),
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Lot 2, T8 — contrats démo (docs/mobile-swift/LOT2_PLAN.md §2.8 « Contrats »).
+// Les originaux sont rendus par le moteur serveur lui-même : `rendreCddEmployeur`
+// (supabase/functions/_shared/cdd-employeur.ts, sans import, chargeable par Node) puis le gabarit
+// `wrapInDocument` de supabase/functions/generate-contrat-mission-pdf/index.ts, relu tel quel dans le
+// source (la fonction n'est pas exportable : le fichier importe des modules Deno). Aucun texte de
+// contrat n'est écrit ici : seules les données déclarées par « l'employeur » sont fictives et le
+// disent. L'empreinte est le SHA-256 des octets UTF-8 du document complet, comme `sha256Hex` de l'edge.
+// ---------------------------------------------------------------------------------------------
+
+export const EDGE_CONTRAT = 'supabase/functions/generate-contrat-mission-pdf/index.ts';
+const ENTETE_WRAP = 'function wrapInDocument(htmlBody: string, contratNumero: string): string {\n  return `';
+
+/** `escapeHtml` de l'edge (index.ts l.25-33), recopiée : même ordre des cinq remplacements. */
+function escapeHtmlEdge(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/** Gabarit exact de `wrapInDocument`, extrait du source de l'edge (échoue si sa forme change). */
+export function gabaritWrapInDocument(source = readFileSync(join(ROOT, EDGE_CONTRAT), 'utf8')) {
+  const debut = source.indexOf(ENTETE_WRAP);
+  if (debut < 0) throw new Error(`${EDGE_CONTRAT} : wrapInDocument introuvable (forme changée)`);
+  const corps = source.slice(debut + ENTETE_WRAP.length);
+  const fin = corps.indexOf('`;\n}');
+  if (fin < 0) throw new Error(`${EDGE_CONTRAT} : fin du gabarit de wrapInDocument introuvable`);
+  const gabarit = corps.slice(0, fin);
+  const interpolations = gabarit.match(/\$\{[^}]*\}/g) ?? [];
+  const attendues = ['${escapeHtml(contratNumero)}', '${htmlBody}'];
+  // Sans échappement ni accent grave, le texte source du gabarit est sa valeur à l'exécution.
+  if (interpolations.length !== attendues.length || interpolations.some((x, i) => x !== attendues[i])
+    || gabarit.includes('`') || gabarit.includes('\\')) {
+    throw new Error(`${EDGE_CONTRAT} : interpolations de wrapInDocument inattendues (${interpolations.join(', ')})`);
+  }
+  return gabarit;
+}
+
+export function wrapInDocument(htmlBody, contratNumero, gabarit = gabaritWrapInDocument()) {
+  return gabarit.replace('${escapeHtml(contratNumero)}', () => escapeHtmlEdge(contratNumero))
+    .replace('${htmlBody}', () => htmlBody);
+}
+
+/** Date et heure de Paris au format long de l'edge (`formatDate`, l.36-47), sans dépendre des littéraux ICU. */
+function dateLongueParis(iso) {
+  const parties = Object.fromEntries(new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(iso)).map(p => [p.type, p.value]));
+  return `${parties.day} ${parties.month} ${parties.year} à ${parties.hour}:${parties.minute}`;
+}
+
+const FICTIF = 'Donnée fictive de démonstration';
+
+/** Données « employeur » fictives, cadre `PRIVE_TERME_PRECIS`, validées par `validerDonneesCdd` de l'edge. */
+const DONNEES_CDD_DEMO = {
+  cadre: 'PRIVE_TERME_PRECIS', confirme: true,
+  representant_nom: 'Représentant fictif', representant_qualite: 'Direction fictive',
+  motif_type: 'ACCROISSEMENT', motif_precis: FICTIF, poste: FICTIF, qualification: FICTIF, lieu_travail: FICTIF,
+  risques: 'NON', convention_collective: FICTIF, renouvellement: FICTIF, essai: 'AUCUN', remuneration_accessoires: FICTIF,
+  temps_partiel: 'NON', retraite_nom: FICTIF, retraite_adresse: FICTIF, prevoyance: 'NON',
+};
+
+/** Original démo complet : `rendreCddEmployeur` puis `wrapInDocument`, empreinte SHA-256 UTF-8. */
+export function rendreOriginalDemo({ numero, mission, etablissement, prepareLe }, moteur) {
+  const { donnees, champs } = moteur.validerDonneesCdd(DONNEES_CDD_DEMO);
+  if (!donnees) throw new Error(`données CDD démo refusées par validerDonneesCdd : ${champs.join(', ')}`);
+  // Variables de `buildVariables` (index.ts l.75-115) : valeurs échappées par `escapeHtml`.
+  const vars = {
+    numero_contrat: escapeHtmlEdge(numero),
+    etablissement_nom: escapeHtmlEdge(etablissement.nom),
+    etablissement_siret: escapeHtmlEdge(''),
+    etablissement_adresse: escapeHtmlEdge([etablissement.adresse_code_postal, etablissement.adresse_ville].filter(Boolean).join(', ')),
+    soignant_prenom: escapeHtmlEdge('Camille'),
+    soignant_nom: escapeHtmlEdge('Démo'),
+    soignant_date_naissance: escapeHtmlEdge('non renseignée'),
+    soignant_adresse: escapeHtmlEdge(''),
+    intitule_mission: escapeHtmlEdge(mission.intitule),
+    debut_le: escapeHtmlEdge(dateLongueParis(mission.debut_le)),
+    fin_le: escapeHtmlEdge(dateLongueParis(mission.fin_le)),
+    duree_heures: escapeHtmlEdge(mission.duree_heures),
+    taux_horaire: Number(mission.taux_horaire_base).toFixed(2),
+  };
+  const html = wrapInDocument(moteur.rendreCddEmployeur(vars, donnees, etablissement.id, prepareLe), numero);
+  return { html, empreinte: createHash('sha256').update(html, 'utf8').digest('hex') };
+}
+
+/**
+ * Contrats démo (§2.8) : `demo-contrat-001` CDD `EN_ATTENTE_SIGNATURES` créé 10 h avant l'horloge (62 h
+ * restantes) avec original ; `demo-contrat-002` CDD `SIGNE_COMPLET` avec original et deux lignes de
+ * certificat (projection `SignatureCertificat.colonnes`) ; `demo-contrat-003` CDD sans original (aucune
+ * action soignant, décision 19). Lignes à la projection `ContratDetail.selection`, contexte de mission à
+ * celle de `MissionContrat.selection`. Le second original sert au partage d'un contrat signé (T9a).
+ * Lot 2 T4b : `demo-contrat-pointage-c`, contrat de la mission c de `demo-presences.json` (« Voir le contrat » du bloc
+ * de pointage), dérivé de cette fixture (identifiant, mission, statut `SIGNE_SOIGNANT`, `cree_le`) : CDD avec original,
+ * signé par le soignant seul (une ligne de certificat), en attente de l'établissement.
+ */
+export function buildDemoContrats(moteur, now = new Date(FIXED_NOW), dashboard = buildDemoDashboard(now),
+  presences = buildDemoPresences(now)) {
+  const etab = id => DEMO_ETABLISSEMENTS.find(e => e.id === id);
+  const iso = ms => new Date(ms).toISOString();
+  const heure = 3_600_000;
+  const assignee = dashboard.missions_assignees.find(m => m.id === 'demo-assignee-001');
+  const termineeDebut = instantDemo(now, -1, 7);
+  const missions = [
+    { id: assignee.id, intitule: assignee.intitule, service: assignee.service, debut_le: assignee.debut_le, fin_le: assignee.fin_le,
+      duree_heures: assignee.duree_heures, taux_horaire_base: assignee.taux_horaire_base },
+    { id: 'demo-terminee-001', intitule: 'Démonstration · Mission terminée 1', service: 'Médecine polyvalente',
+      debut_le: termineeDebut.toISOString(), fin_le: iso(termineeDebut.getTime() + 8 * heure), duree_heures: 8, taux_horaire_base: 26 },
+    { id: 'demo-contrat-mission-003', intitule: 'Démonstration · Mission à préparer 3', service: 'Soins de suite',
+      debut_le: instantDemo(now, 12, 7).toISOString(), fin_le: iso(instantDemo(now, 12, 7).getTime() + 8 * heure), duree_heures: 8,
+      taux_horaire_base: 27 },
+  ];
+  const missionC = presences.missions.find(m => m.id === 'demo-presence-c');
+  const contratC = presences.contrats.find(c => c.mission_id === missionC.id);
+  missions.push({ id: missionC.id, intitule: missionC.intitule, service: missionC.service, debut_le: missionC.debut_le,
+    fin_le: missionC.fin_le, duree_heures: missionC.duree_heures, taux_horaire_base: 26 });
+  const ligne = (champs) => ({
+    id: champs.id, mission_id: champs.mission.id, soignant_id: DEMO_PROFILE.user_id, etablissement_id: champs.etablissement,
+    numero_contrat: champs.numero, type_contrat: 'CDD', statut: champs.statut, mode_signature: 'JOLENE_OTP',
+    contenu_html: champs.original?.html ?? null, hash_document: champs.original?.empreinte ?? null,
+    storage_path: champs.original ? `${champs.id}/${champs.fichierStorage ?? `original-${champs.id.slice(-3)}`}.html` : null,
+    contenu_html_rendu_le: champs.original ? champs.renduLe : null,
+    signature_soignant: champs.signeLe != null, signature_soignant_le: champs.signeLe ?? null,
+    signature_etablissement: champs.signeEtabLe != null, signature_etablissement_le: champs.signeEtabLe ?? null,
+    cree_le: champs.creeLe,
+  });
+  const creeLe1 = iso(now.getTime() - 10 * heure);
+  const renduLe1 = iso(now.getTime() - 10 * heure + 5 * 60_000);
+  const original1 = rendreOriginalDemo({ numero: 'DEMO-0001', mission: missions[0], etablissement: etab('demo-etab-1'), prepareLe: renduLe1 }, moteur);
+  const creeLe2 = iso(now.getTime() - 96 * heure);
+  const renduLe2 = iso(now.getTime() - 96 * heure + 5 * 60_000);
+  const signeEtab2 = iso(now.getTime() - 95 * heure);
+  const signeSoignant2 = iso(now.getTime() - 94 * heure);
+  const original2 = rendreOriginalDemo({ numero: 'DEMO-0002', mission: missions[1], etablissement: etab('demo-etab-1'), prepareLe: renduLe2 }, moteur);
+  const creeLeC = new Date(contratC.cree_le).getTime();
+  const renduLeC = iso(creeLeC + 5 * 60_000);
+  const signeSoignantC = iso(creeLeC + 60 * 60_000);
+  const originalC = rendreOriginalDemo({ numero: 'DEMO-0004', mission: missions[3], etablissement: etab(missionC.etablissement_id),
+    prepareLe: renduLeC }, moteur);
+  const contrats = [
+    ligne({ id: 'demo-contrat-001', mission: missions[0], etablissement: 'demo-etab-1', numero: 'DEMO-0001',
+      statut: 'EN_ATTENTE_SIGNATURES', original: original1, renduLe: renduLe1, creeLe: creeLe1 }),
+    ligne({ id: 'demo-contrat-002', mission: missions[1], etablissement: 'demo-etab-1', numero: 'DEMO-0002',
+      statut: 'SIGNE_COMPLET', original: original2, renduLe: renduLe2, creeLe: creeLe2, signeLe: signeSoignant2, signeEtabLe: signeEtab2 }),
+    ligne({ id: 'demo-contrat-003', mission: missions[2], etablissement: 'demo-etab-2', numero: 'DEMO-0003',
+      statut: 'EN_ATTENTE_SIGNATURES', original: null, creeLe: iso(now.getTime() - 2 * heure) }),
+    ligne({ id: contratC.id, mission: missions[3], etablissement: missionC.etablissement_id, numero: 'DEMO-0004',
+      statut: contratC.statut, original: originalC, renduLe: renduLeC, creeLe: contratC.cree_le, signeLe: signeSoignantC,
+      fichierStorage: 'original-pointage-c' }),
+  ];
+  const signature = (id, role, userId, signeA, contratId = 'demo-contrat-002', empreinte = original2.empreinte) => ({
+    id, contrat_id: contratId, signataire_user_id: userId, signataire_role: role, signe_a: signeA,
+    ip_signature: null, user_agent: null, hash_document: empreinte, otp_valide_a: signeA,
+    psc_session_active: false, rpps_verifie: false, traits_identite_verifies: false, statut_signature: 'signe', cree_le: signeA,
+  });
+  return {
+    json: {
+      fixed_now: now.toISOString(),
+      contrats,
+      missions,
+      originaux: [
+        { contrat_id: 'demo-contrat-001', storage_path: contrats[0].storage_path, fichier: 'demo-contrat-001.html' },
+        { contrat_id: 'demo-contrat-002', storage_path: contrats[1].storage_path, fichier: 'demo-contrat-002.html' },
+        { contrat_id: contratC.id, storage_path: contrats[3].storage_path, fichier: `${contratC.id}.html` },
+      ],
+      signatures: [
+        signature('demo-signature-002-etab', 'etablissement', 'demo-etab-1', signeEtab2),
+        signature('demo-signature-002-soignant', 'soignant', DEMO_PROFILE.user_id, signeSoignant2),
+        signature('demo-signature-pointage-c-soignant', 'soignant', DEMO_PROFILE.user_id, signeSoignantC, contratC.id,
+          originalC.empreinte),
+      ],
+    },
+    fichiers: { 'demo-contrat-001.html': original1.html, 'demo-contrat-002.html': original2.html,
+      [`${contratC.id}.html`]: originalC.html },
+  };
+}
+
+/** Moteur de rendu serveur (`cdd-employeur.ts`), chargé par le décapage de types de Node 24. */
+export async function chargerMoteurContrat() {
+  return import(pathToFileURL(join(ROOT, 'supabase', 'functions', '_shared', 'cdd-employeur.ts')).href);
 }
 
 /**
@@ -482,12 +829,17 @@ export function buildDemoMissionsTerminees(now = new Date(FIXED_NOW)) {
   };
 }
 
-export function buildFixtures() {
+export async function buildFixtures() {
+  const contrats = buildDemoContrats(await chargerMoteurContrat());
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
     'demo-etablissements.json': { fixed_now: FIXED_NOW, etablissements: DEMO_ETABLISSEMENTS },
     'demo-profile.json': { fixed_now: FIXED_NOW, ...DEMO_PROFILE },
     'demo-dashboard.json': buildDemoDashboard(),
+    'demo-presences.json': buildDemoPresences(),
+    'demo-documents.json': buildDemoDocuments(),
+    'demo-contrats.json': contrats.json,
+    ...Object.fromEntries(Object.entries(contrats.fichiers).map(([nom, texte]) => [nom, { brut: texte }])),
     'demo-notifications.json': buildDemoNotifications(),
     'demo-preferences.json': buildDemoPreferences(), // lot 3, T6
     'demo-profil-complet.json': buildDemoProfilComplet(),
@@ -499,11 +851,12 @@ export function buildFixtures() {
   };
 }
 
-const serialize = (value) => `${JSON.stringify(value, null, 2)}\n`;
+/** JSON indenté, ou texte brut tel quel pour un original de contrat (`{ brut }`, octets hachés). */
+const serialize = (value) => (value && typeof value.brut === 'string' ? value.brut : `${JSON.stringify(value, null, 2)}\n`);
 
-function main(argv) {
+async function main(argv) {
   const check = argv.includes('--check');
-  const fixtures = buildFixtures();
+  const fixtures = await buildFixtures();
   mkdirSync(FIXTURES_DIR, { recursive: true });
   let drift = 0;
   for (const [name, value] of Object.entries(fixtures)) {
@@ -531,5 +884,5 @@ function main(argv) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main(process.argv.slice(2));
+  await main(process.argv.slice(2));
 }

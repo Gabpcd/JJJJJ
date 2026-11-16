@@ -28,10 +28,16 @@ import JoleneSupabase
 /// (Accueil avec un oubli de pointage, m4).
 ///
 /// Lot 3, T10 : localisation ponctuelle du profil (`localisationProfil`) — démo : `DemoLocalisationProfil` (DEBUG :
-/// `-JOLENE_DEMO_LOCALISATION accordee|refusee|indisponible`) ; staging/production : `LocalisationProfilProvisoire`,
-/// implémentation isolée remplacée à la fusion par un adaptateur sur `LocationService` du lot 2 (une seule source de
-/// position dans l'app). DEBUG, démo : `-JOLENE_DEMO_AVATAR refus` (stockage en refus), `-JOLENE_DEMO_AVATAR illisible`
-/// (photo choisie illisible, revue B8 M1) et `-JOLENE_DEMO_GEOCODAGE echec`.
+/// `-JOLENE_DEMO_LOCALISATION accordee|refusee|indisponible`) ; staging/production : `LocalisationProfilAppareil`,
+/// adaptateur sur `Appareil.localisation` (`LocationService` du lot 2), qui remplace depuis la fusion des lots 2 et 3
+/// l'implémentation isolée de T10 (une seule source de position dans l'app). DEBUG, démo : `-JOLENE_DEMO_AVATAR refus`
+/// (stockage en refus), `-JOLENE_DEMO_AVATAR illisible` (photo choisie illisible, revue B8 M1) et
+/// `-JOLENE_DEMO_GEOCODAGE echec`.
+///
+/// Lot 2 (T4b, T7, T9b) : capacités d'appareil (`appareil` : position, réseau, identifiant terminal, reçus durables),
+/// scanner de QR et zone de pointage ; sélecteurs de médias démo (`mediaDemo`) ; scénarios DEBUG
+/// `-JOLENE_DEMO_SCENARIO`, `-JOLENE_DEMO_GPS`, `-JOLENE_DEMO_RESEAU`, `-JOLENE_DEMO_QR`, `-JOLENE_DEMO_SOURCE_DOC` et
+/// `-JOLENE_FLAG_<cle>` (démo seulement).
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -52,6 +58,16 @@ final class AppContainer: ObservableObject {
     private(set) var prePrompt: ContextePrePromptPush?
     /// Lot 1, T8 : avis de fin de compte partagé entre l'écran de suppression et la racine.
     let finDeCompte = AvisFinDeCompte()
+    /// Lot 2, T7 : sélecteurs de médias du monde démo (`DemoMediaPicker`, fichier de `-JOLENE_DEMO_SOURCE_DOC` en DEBUG),
+    /// à la place de l'appareil photo, de la photothèque et de Fichiers ; nil hors démo (vrais sélecteurs).
+    private(set) var mediaDemo: DemoMediaPicker?
+    /// Lot 2, T4b : capacités d'appareil (position, réseau, identifiant terminal, magasin des reçus durables), réelles ou
+    /// démo (`Appareil.demo`, scénarios `-JOLENE_DEMO_GPS` et `-JOLENE_DEMO_RESEAU` en DEBUG), injectées à côté des
+    /// gateways (blueprint §2.2) ; scanner de QR réel ou démo (`-JOLENE_DEMO_QR` en DEBUG) ; fabrique de la zone de
+    /// pointage, injectée au-dessus des onglets par `MainTabView`.
+    let appareil: Appareil
+    let scannerQR: ModeScannerQR
+    let fabriqueZonePointage: FabriqueZonePointageNative
     /// Lot 3, T7 : liens d'inscription (`/inscription/confirmer`, `/inscription/soignant`, `/inscription/reprendre`)
     /// consommés hors de l'espace prêt ; alimentés par le coordinateur des liens (T3b, intégration du lot 3), lus par
     /// `RootView`.
@@ -111,7 +127,17 @@ final class AppContainer: ObservableObject {
         DossierExportTemporaire.systeme.purgerResidus()
 
         // Un mode inconnu (`unknownModeRaw`) est refusé par `validate()` avant tout choix de gateways.
-        if let error = Self.refusal(of: environment) {
+        let refus = Self.refusal(of: environment)
+        // Garde d'environnement d'abord (seconde revue fraîche de T4b, m7) : un mode refusé (mauvaise clé,
+        // `JOLENE_FORCE_BAD_KEY`, mode inconnu) reçoit l'appareil démo, jamais utilisé (aucune session n'est construite) ;
+        // aucun service réel (CoreLocation, `NWPathMonitor`, trousseau) n'est créé pour lui.
+        let appareil = refus == nil ? Self.appareil(mode: environment.mode, arguments: arguments) : Appareil.demo()
+        let scanner = Self.scanner(mode: environment.mode, arguments: arguments)
+        self.appareil = appareil
+        scannerQR = scanner
+        fabriqueZonePointage = FabriqueZonePointageNative(appareil: appareil, scanner: scanner)
+
+        if let error = refus {
             #if DEBUG
             networkSentinel = nil
             #endif
@@ -139,6 +165,11 @@ final class AppContainer: ObservableObject {
             networkSentinel = NetworkSentinel.Monitor.shared
             #endif
             let gateways = Self.demoGateways(arguments: arguments, processEnvironment: processEnvironment)
+            #if DEBUG
+            mediaDemo = DemoMediaPicker(source: SourceDocumentDemo(arguments: arguments))
+            #else
+            mediaDemo = DemoMediaPicker(source: .png)
+            #endif
             clock = gateways.clock
             let controller = SessionController(gateways: gateways)
             let permission = DemoPushPermission(etat: Self.autorisationPushDemo(arguments: arguments))
@@ -167,7 +198,8 @@ final class AppContainer: ObservableObject {
                                                   registrar: registrar, memoire: KeychainPushTokenStore())
                 push = coordinator
                 pushPermission = permission
-                localisationProfil = LocalisationProfilProvisoire()
+                // Fusion des lots 2 et 3 : la position du profil passe par le service de position du lot 2.
+                localisationProfil = LocalisationProfilAppareil(localisation: appareil.localisation)
                 let store = SessionStore(controller: controller, push: coordinator, finIdentiteWeb: liens)
                 // Session effacée côté SDK (révocation, déconnexion globale, refresh refusé) :
                 // l'écran bascule sans action de l'utilisateur.
@@ -196,12 +228,16 @@ final class AppContainer: ObservableObject {
     /// Ports du monde démo. DEBUG seulement : `JOLENE_FORCE_ACCUEIL_ECHEC=1` (variable d'environnement
     /// du processus, comme `JOLENE_FORCE_BAD_KEY`) fait échouer le premier chargement de l'Accueil
     /// (`DemoDashboardEchecGateway`) pour la recette de l'état d'erreur et de la reprise
-    /// (`DemoAccueilTests.testAccueilErreurPuisReprise`) ; lot 3, T6 : `JOLENE_FORCE_PREFERENCES_ECHEC=1`,
+    /// (`DemoAccueilTests.testAccueilErreurPuisReprise`) ; lot 2 T7 : `-JOLENE_DEMO_SCENARIO upload-incertain`
+    /// pose `DemoDocumentsGateway(scenario: .uploadIncertain)` (réponse perdue après application, `DemoDocumentsTests`) ;
+    /// lot 2 T4b (seconde revue fraîche, m3) : `-JOLENE_FLAG_<cle> true|false` surcharge un drapeau d'écran
+    /// (`DemoFlagsGateway.surcharges`, coupe-circuit D-FLAGS) ; lot 2 T9b : `otp-expire` et `compte-test` posent
+    /// `DemoContratsGateway(scenario:)` ; lot 3, T6 : `JOLENE_FORCE_PREFERENCES_ECHEC=1`,
     /// de même pour les préférences de notifications (`DemoPreferencesEchecGateway`,
     /// `DemoPreferencesTests.testPreferencesErreurPuisReprise`) ; lot 3, T9 : `JOLENE_DEMO_PROFIL=<variante>`
     /// (`VarianteProfilDemo`) sert le profil démo dans une variante de recette (`DemoProfilTests`) ; lot 3, T3b :
     /// `JOLENE_FORCE_OUBLI_POINTAGE=1` sert le tableau de bord démo avec un oubli de pointage
-    /// (`DemoDashboardGateway(missionsOubliees:)`, `DemoAccueilTests.testOubliDePointageOuvreLesPresencesSurLeWeb`) ;
+    /// (`DemoDashboardGateway(missionsOubliees:)`, `DemoAccueilTests.testOubliDePointageOuvreLesPresencesNatives`) ;
     /// lot 3, T7 : `-JOLENE_DEMO_INSCRIPTION_REFUS <code>` (`RefusInscriptionDemo`, blueprint §2.7) rejoue un refus
     /// d'inscription (`DemoInscriptionTests`), y compris ceux de la complétion (T8, `DemoCompletionInscriptionTests`) ;
     /// lot 3, T8 : `JOLENE_DEMO_BROUILLON=<variante>` (`VarianteBrouillonDemo`) simule un brouillon serveur au démarrage
@@ -212,11 +248,18 @@ final class AppContainer: ObservableObject {
     /// Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
-        var gateways = DemoWorld.gateways()
+        var gateways = DemoWorld.gateways(drapeaux: DemoFlagsGateway.surcharges(arguments: arguments))
+        // Lot 2 T4b : `-JOLENE_DEMO_SCENARIO scan-incertain` (premier scan appliqué, réponse perdue, réconciliation) ;
+        // seconde revue fraîche (m2) : `session-expiree-scan`, `session-expiree-consentement` (pointage et authentification
+        // démo liés : « Vérifier ma session » revalide), `consentement-echec`.
+        DemoPointageGateway.Scenario(arguments: arguments).installer(dans: &gateways)
+        // Lot 3, T7 ; T8. Fusion des lots 2 et 3 : le scénario de pointage ci-dessus peut remplacer l'authentification
+        // démo (`ExpirationSessionDemo`) ; l'inscription démo est donc liée APRÈS lui, à l'authentification effectivement
+        // servie (mêmes `store` et `comptes` : la connexion par mot de passe retrouve le compte créé).
         let refusInscription = RefusInscriptionDemo(arguments: arguments)
         let brouillonInscription = processEnvironment[VarianteBrouillonDemo.variableEnvironnement]
             .flatMap(VarianteBrouillonDemo.init(rawValue:))
-        if refusInscription != nil || brouillonInscription != nil, let auth = gateways.auth as? DemoAuthGateway {
+        if let auth = gateways.auth as? DemoAuthGateway {
             gateways.inscription = DemoInscriptionGateway(auth: auth, refus: refusInscription,
                                                           brouillon: brouillonInscription) // lot 3, T7 ; T8
         }
@@ -224,6 +267,21 @@ final class AppContainer: ObservableObject {
             gateways.dashboard = DemoDashboardEchecGateway()
         } else if processEnvironment[DemoDashboardGateway.variableOubliPointage] == "1" {
             gateways.dashboard = DemoDashboardGateway(missionsOubliees: 1) // lot 3, T3b (revue B8, m4)
+        }
+        let scenarioDocuments = ScenarioDocumentsDemo(arguments: arguments)
+        if scenarioDocuments != .normal {
+            gateways.documents = DemoDocumentsGateway(scenario: scenarioDocuments)
+        }
+        // Lot 2 T5a : `-JOLENE_DEMO_SCENARIO accueil-pointage` → mission du jour à pointer et départ oublié sur l'Accueil
+        // (widget « Aller pointer », bandeau d'oubli de départ ; `DemoPresenceDetailTests`).
+        if ScenarioAccueilDemo(arguments: arguments) == .pointage, processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] != "1" {
+            gateways.dashboard = DemoDashboardGateway(scenario: .pointage)
+        }
+        // Lot 2 T9b : `-JOLENE_DEMO_SCENARIO otp-expire` (tout code refusé `OTP_EXPIRE`) ou `compte-test` (compte TEST
+        // sans admission : renvoi web de la signature), `DemoSignatureContratTests`.
+        let scenarioContrats = ScenarioDemoContrats(arguments: arguments)
+        if scenarioContrats != .nominal {
+            gateways.contrats = DemoContratsGateway(scenario: scenarioContrats)
         }
         if processEnvironment["JOLENE_FORCE_PREFERENCES_ECHEC"] == "1" {
             gateways.preferences = DemoPreferencesEchecGateway() // lot 3, T6
@@ -247,6 +305,31 @@ final class AppContainer: ObservableObject {
         return gateways
         #else
         return DemoWorld.gateways()
+        #endif
+    }
+
+    /// Appareil réel (Staging, Production : CoreLocation, `NWPathMonitor`, trousseau) ou démo (aucun prompt système,
+    /// aucun réseau ; scénarios DEBUG). Appelé seulement pour un mode accepté par la garde d'environnement (`init`).
+    private static func appareil(mode: JoleneMode, arguments: [String]) -> Appareil {
+        switch mode {
+        case .demo:
+            #if DEBUG
+            return Appareil.demo(gps: ScenarioGpsDemo(arguments: arguments), reseau: ScenarioReseauDemo(arguments: arguments))
+            #else
+            return Appareil.demo()
+            #endif
+        case .staging, .production:
+            return Appareil(localisation: LocationService(), reseau: NetworkMonitor(), terminal: KeychainTerminalIdentity(),
+                            recus: KeychainReceiptStore())
+        }
+    }
+
+    private static func scanner(mode: JoleneMode, arguments: [String]) -> ModeScannerQR {
+        guard mode == .demo else { return .reel }
+        #if DEBUG
+        return .demo(ScenarioQRDemo(arguments: arguments))
+        #else
+        return .demo(ScenarioQRDemo(arguments: []))
         #endif
     }
 

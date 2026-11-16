@@ -1,0 +1,1553 @@
+[
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/arrivee-premier-depart-dernier-par-debut",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-07T06:00:00Z",
+            "fin": "2026-07-07T10:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF",
+            "id": "e2"
+          },
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-08T20:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF",
+            "id": "e1-long"
+          },
+          {
+            "debut": "2026-07-07T12:00:00Z",
+            "fin": "2026-07-07T13:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF",
+            "id": "e3"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-07T13:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": {
+            "nom": "Clinique Test",
+            "ville": "Lyon"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-07T06:00:00Z",
+              "fin": "2026-07-07T10:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF",
+              "id": "e2"
+            },
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-08T20:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF",
+              "id": "e1-long"
+            },
+            {
+              "debut": "2026-07-07T12:00:00Z",
+              "fin": "2026-07-07T13:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF",
+              "id": "e3"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/aucune-mission",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": []
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/creneaux-identifiants-conserves",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF",
+            "id": "c1",
+            "mission_id": "m"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": {
+            "nom": "Clinique Test",
+            "ville": "Lyon"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF",
+              "id": "c1",
+              "mission_id": "m"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/effectif-fin-vide-ignore",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-07T06:00:00Z",
+            "fin": "",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": []
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/effectif-ouvert-ignore",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF",
+            "id": "ferme"
+          },
+          {
+            "debut": "2026-07-07T06:00:00Z",
+            "fin": null,
+            "est_pause": false,
+            "type_creneau": "EFFECTIF",
+            "id": "ouvert"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": {
+            "nom": "Clinique Test",
+            "ville": "Lyon"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF",
+              "id": "ferme"
+            },
+            {
+              "debut": "2026-07-07T06:00:00Z",
+              "fin": null,
+              "est_pause": false,
+              "type_creneau": "EFFECTIF",
+              "id": "ouvert"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/etablissement-id-absent",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": null,
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/etablissement-id-null",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": null
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": null,
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/etablissement-id-vide",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": ""
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": null,
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/etablissement-inconnu",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {},
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": null,
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/legacy-sans-offset",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T08:00:00",
+            "fin": "2026-07-06T16:00:00",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T08:00:00",
+        "pointage_depart_le": "2026-07-06T16:00:00",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": {
+            "nom": "Clinique Test",
+            "ville": "Lyon"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-06T08:00:00",
+              "fin": "2026-07-06T16:00:00",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/mission-dupliquee-deux-lignes",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        },
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": {
+            "nom": "Clinique Test",
+            "ville": "Lyon"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      },
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": {
+            "nom": "Clinique Test",
+            "ville": "Lyon"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/mission-sans-creneaux",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {}
+    },
+    "expected": []
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/pause-effective-ignoree",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T12:00:00Z",
+            "fin": "2026-07-06T12:30:00Z",
+            "est_pause": true,
+            "type_creneau": "EFFECTIF"
+          },
+          {
+            "debut": "2026-07-06T13:00:00Z",
+            "fin": "2026-07-06T15:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T13:00:00Z",
+        "pointage_depart_le": "2026-07-06T15:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": {
+            "nom": "Clinique Test",
+            "ville": "Lyon"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-06T12:00:00Z",
+              "fin": "2026-07-06T12:30:00Z",
+              "est_pause": true,
+              "type_creneau": "EFFECTIF"
+            },
+            {
+              "debut": "2026-07-06T13:00:00Z",
+              "fin": "2026-07-06T15:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/pause-effective-seule-aucune-ligne",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T12:00:00Z",
+            "fin": "2026-07-06T12:30:00Z",
+            "est_pause": true,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": []
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/plusieurs-missions-ordre-conserve",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test"
+        },
+        "etab-2": {
+          "nom": "Hôpital Nord"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "b",
+          "etablissement_id": "etab-1"
+        },
+        {
+          "id": "a",
+          "etablissement_id": "etab-2"
+        },
+        {
+          "id": "c"
+        }
+      ],
+      "creneauxParMission": {
+        "a": [
+          {
+            "debut": "2026-07-01T06:00:00Z",
+            "fin": "2026-07-01T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ],
+        "b": [
+          {
+            "debut": "2026-07-02T06:00:00Z",
+            "fin": "2026-07-02T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ],
+        "c": [
+          {
+            "debut": "2026-07-03T06:00:00Z",
+            "fin": "2026-07-03T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-b",
+        "mission_id": "b",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-02T06:00:00Z",
+        "pointage_depart_le": "2026-07-02T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "b",
+          "etablissements": {
+            "nom": "Clinique Test"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-02T06:00:00Z",
+              "fin": "2026-07-02T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      },
+      {
+        "id": "effectifs-mission-a",
+        "mission_id": "a",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-01T06:00:00Z",
+        "pointage_depart_le": "2026-07-01T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "a",
+          "etablissements": {
+            "nom": "Hôpital Nord"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-01T06:00:00Z",
+              "fin": "2026-07-01T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      },
+      {
+        "id": "effectifs-mission-c",
+        "mission_id": "c",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-03T06:00:00Z",
+        "pointage_depart_le": "2026-07-03T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "c",
+          "etablissements": null,
+          "creneaux": [
+            {
+              "debut": "2026-07-03T06:00:00Z",
+              "fin": "2026-07-03T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/presence-autre-mission",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [
+        {
+          "mission_id": "autre"
+        }
+      ],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": {
+            "nom": "Clinique Test",
+            "ville": "Lyon"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/presence-meme-mission-exclut",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [
+        {
+          "mission_id": "autre"
+        },
+        {
+          "mission_id": "m"
+        }
+      ],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": []
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/presence-mission-id-null-ignoree",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [
+        {
+          "mission_id": null
+        }
+      ],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": {
+            "nom": "Clinique Test",
+            "ville": "Lyon"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/presence-mission-id-vide-ignoree",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [
+        {
+          "mission_id": ""
+        }
+      ],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": {
+            "nom": "Clinique Test",
+            "ville": "Lyon"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/presence-sans-mission-id-ignoree",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [
+        {}
+      ],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": {
+            "nom": "Clinique Test",
+            "ville": "Lyon"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/previsionnel-seul-aucune-ligne",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "PREVISIONNEL"
+          }
+        ]
+      }
+    },
+    "expected": []
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/seul-effectif-ouvert-aucune-ligne",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-1",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-07T06:00:00Z",
+            "fin": null,
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": []
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/soignant-propage",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "presences": [],
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test",
+          "ville": "Lyon"
+        }
+      },
+      "soignantId": "soignant-42",
+      "missions": [
+        {
+          "id": "m",
+          "etablissement_id": "etab-1"
+        }
+      ],
+      "creneauxParMission": {
+        "m": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-m",
+        "mission_id": "m",
+        "soignant_id": "soignant-42",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "m",
+          "etablissements": {
+            "nom": "Clinique Test",
+            "ville": "Lyon"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/vitest-effectifs-seuls",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "missions": [
+        {
+          "id": "mission-longue",
+          "intitule": "Mission longue",
+          "etablissement_id": "etab-1",
+          "statut": "TERMINEE"
+        }
+      ],
+      "presences": [],
+      "creneauxParMission": {
+        "mission-longue": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "PREVISIONNEL",
+            "id": "prevu"
+          },
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF",
+            "id": "effectif"
+          }
+        ]
+      },
+      "etablissements": {
+        "etab-1": {
+          "nom": "Clinique Test"
+        }
+      },
+      "soignantId": "soignant-1"
+    },
+    "expected": [
+      {
+        "id": "effectifs-mission-mission-longue",
+        "mission_id": "mission-longue",
+        "soignant_id": "soignant-1",
+        "pointage_arrivee_le": "2026-07-06T06:00:00Z",
+        "pointage_depart_le": "2026-07-06T14:00:00Z",
+        "valide_par_etablissement": false,
+        "valide_le": null,
+        "methode_pointage_arrivee": null,
+        "methode_pointage_depart": null,
+        "origine_effectifs_sans_presence": true,
+        "missions": {
+          "id": "mission-longue",
+          "etablissements": {
+            "nom": "Clinique Test"
+          },
+          "creneaux": [
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "prevu"
+            },
+            {
+              "debut": "2026-07-06T06:00:00Z",
+              "fin": "2026-07-06T14:00:00Z",
+              "est_pause": false,
+              "type_creneau": "EFFECTIF",
+              "id": "effectif"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "construireHistoriqueEffectifsSansPresence/vitest-ni-presence-ni-sans-effectif",
+    "input": {
+      "fonction": "construireHistoriqueEffectifsSansPresence",
+      "missions": [
+        {
+          "id": "avec-presence"
+        },
+        {
+          "id": "sans-effectif"
+        }
+      ],
+      "presences": [
+        {
+          "mission_id": "avec-presence"
+        }
+      ],
+      "creneauxParMission": {
+        "avec-presence": [
+          {
+            "debut": "2026-07-06T06:00:00Z",
+            "fin": "2026-07-06T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "EFFECTIF"
+          }
+        ],
+        "sans-effectif": [
+          {
+            "debut": "2026-07-07T06:00:00Z",
+            "fin": "2026-07-07T14:00:00Z",
+            "est_pause": false,
+            "type_creneau": "PREVISIONNEL"
+          }
+        ]
+      },
+      "etablissements": {},
+      "soignantId": "soignant-1"
+    },
+    "expected": []
+  },
+  {
+    "name": "mesureGpsDisponible/grille-chaine-nombre",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": "12"
+    },
+    "expected": false
+  },
+  {
+    "name": "mesureGpsDisponible/grille-grande",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": 12345.678
+    },
+    "expected": true
+  },
+  {
+    "name": "mesureGpsDisponible/grille-negative-zero-virgule",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": -0.5
+    },
+    "expected": false
+  },
+  {
+    "name": "mesureGpsDisponible/grille-objet",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": {}
+    },
+    "expected": false
+  },
+  {
+    "name": "mesureGpsDisponible/grille-tableau",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": []
+    },
+    "expected": false
+  },
+  {
+    "name": "mesureGpsDisponible/grille-vrai",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": true
+    },
+    "expected": false
+  },
+  {
+    "name": "mesureGpsDisponible/vitest-invalide-absente",
+    "input": {
+      "fonction": "mesureGpsDisponible"
+    },
+    "expected": false
+  },
+  {
+    "name": "mesureGpsDisponible/vitest-invalide-chaine-vide",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": ""
+    },
+    "expected": false
+  },
+  {
+    "name": "mesureGpsDisponible/vitest-invalide-chaine-zero",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": "0"
+    },
+    "expected": false
+  },
+  {
+    "name": "mesureGpsDisponible/vitest-invalide-faux",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": false
+    },
+    "expected": false
+  },
+  {
+    "name": "mesureGpsDisponible/vitest-invalide-negative",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": -1
+    },
+    "expected": false
+  },
+  {
+    "name": "mesureGpsDisponible/vitest-invalide-null",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": null
+    },
+    "expected": false
+  },
+  {
+    "name": "mesureGpsDisponible/vitest-mesure-700",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": 700
+    },
+    "expected": true
+  },
+  {
+    "name": "mesureGpsDisponible/vitest-mesure-dixieme",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": 0.2
+    },
+    "expected": true
+  },
+  {
+    "name": "mesureGpsDisponible/vitest-mesure-zero",
+    "input": {
+      "fonction": "mesureGpsDisponible",
+      "valeur": 0
+    },
+    "expected": true
+  }
+]

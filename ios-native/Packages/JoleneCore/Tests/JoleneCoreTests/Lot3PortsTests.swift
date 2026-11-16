@@ -17,7 +17,9 @@ final class Lot3PortsTests: XCTestCase {
 
     func testInitDuLot0LaisseLesPortsDuLot3NonCablesApresCeuxDuLot1() {
         let g = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
-        XCTAssertEqual(g.unwiredPorts, Lot1PortsTests.portsLot1 + Self.portsLot3, "lot 1 puis lot 3, ordre de déclaration")
+        // Fusion des lots 2 et 3 : le bloc du lot 2 (`Lot2PortsTests`) précède celui du lot 3.
+        XCTAssertEqual(g.unwiredPorts, Lot1PortsTests.portsLot1 + Lot2PortsTests.portsLot2 + Self.portsLot3,
+                       "lot 1 (puis lot 2) puis lot 3, ordre de déclaration")
         XCTAssertTrue(g.push is UnwiredPushRegistrationPort)
         XCTAssertTrue(g.notifications is UnwiredNotificationsCenterPort)
         XCTAssertTrue(g.preferences is UnwiredNotificationPreferencesPort)
@@ -35,14 +37,15 @@ final class Lot3PortsTests: XCTestCase {
 
     func testLeSecondInitDuLot1NeTouchePasAuBlocLot3() {
         let g = Lot1Fakes.gateways(clock: FixedClock(Date(timeIntervalSince1970: 1)))
-        XCTAssertEqual(g.unwiredPorts, Self.portsLot3, "le second init câble tout le lot 1, le lot 3 s'assigne après")
+        XCTAssertEqual(g.unwiredPorts, Lot2PortsTests.portsLot2 + Self.portsLot3,
+                       "le second init câble tout le lot 1, le lot 2 puis le lot 3 s'assignent après")
     }
 
     func testAssignerUnPortDuLot3LeRetireDeLaListe() {
         var g = Lot1Fakes.gateways(clock: SystemClock())
         g.push = FakePushRegistration()
         g.stripeConnect = FakeStripeConnect()
-        XCTAssertEqual(g.unwiredPorts, Self.portsLot3.filter { $0 != "push" && $0 != "stripeConnect" })
+        XCTAssertEqual(g.unwiredPorts, Lot2PortsTests.portsLot2 + Self.portsLot3.filter { $0 != "push" && $0 != "stripeConnect" })
         XCTAssertTrue(g.push is FakePushRegistration)
     }
 
@@ -105,8 +108,10 @@ final class Lot3PortsTests: XCTestCase {
     // MARK: - Audit (`AuditAction` +3 cas)
 
     func testActionsAuditDuLot3() {
+        // Fusion des lots 2 et 3 : l'action du lot 2 (`RGPD_CONSENTEMENT_DONNE`, `Lot2PortsTests`) précède celles du lot 3.
         XCTAssertEqual(AuditAction.allCases.map(\.rawValue),
-                       ["MISSION_ASSIGNATION", "DONNEES_PERSO_CONSULTATION", "DONNEES_PERSO_MODIFICATION", "RGPD_EXPORT_DONNEES"])
+                       ["MISSION_ASSIGNATION", "RGPD_CONSENTEMENT_DONNE",
+                        "DONNEES_PERSO_CONSULTATION", "DONNEES_PERSO_MODIFICATION", "RGPD_EXPORT_DONNEES"])
         XCTAssertEqual(AuditAction.donneesPersoConsultation.rawValue, "DONNEES_PERSO_CONSULTATION")
         XCTAssertEqual(AuditAction.donneesPersoModification.rawValue, "DONNEES_PERSO_MODIFICATION")
         XCTAssertEqual(AuditAction.rgpdExportDonnees.rawValue, "RGPD_EXPORT_DONNEES")
