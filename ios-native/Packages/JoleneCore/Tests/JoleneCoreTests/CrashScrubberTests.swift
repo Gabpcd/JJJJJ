@@ -259,9 +259,10 @@ final class CrashScrubberTests: XCTestCase {
     }
 
     /// Seuil : 100 ms pour 8 000 caractères, en Debug, sur le simulateur comme en `swift test` macOS. Mesures de la
-    /// correction (MacBook, Xcode 16.4) : quelques millisecondes ; avant elle, l'adresse e-mail non bornée et le JWT sans
-    /// borne de début coûtaient un temps quadratique (`REVUES_LOT3.md`, section L3-T15). Marge d'un ordre de grandeur au
-    /// moins : le test ne doit pas être instable sur un runner partagé.
+    /// correction (MacBook, Xcode 16.4, Debug) : de 0,7 à 8,6 ms en `swift test` macOS, de 1,1 à 3,3 ms sur le simulateur
+    /// iPhone 16 (iOS 18.6). Avant elle, ces textes prenaient de 1,5 à 2,1 s : l'adresse e-mail non bornée, le JWT et les
+    /// noms sans borne de début avaient un coût quadratique (`REVUES_LOT3.md`, section L3-T15). Plus d'un ordre de grandeur
+    /// de marge : le test ne doit pas être instable sur un runner partagé.
     static let seuilHuitMilleCaracteres: TimeInterval = 0.1
 
     func testHuitMilleCaracteresAdversesTraitesSousLeSeuil() {
@@ -272,6 +273,8 @@ final class CrashScrubberTests: XCTestCase {
             ("partie locale d'adresse", String(repeating: "a.", count: 4_000)),
             ("début de JWT répété", String(repeating: "eyJ", count: 2_667)),
             ("noms de jetons collés", String(repeating: "x_token", count: 1_143)),
+            ("adresse en fin de texte", String(repeating: "a", count: 7_990) + "@example.fr"),
+            ("texte non ASCII", String(repeating: "aé", count: 4_000)),
             ("texte réaliste répété", String(repeating: unite, count: 8_000 / unite.count + 1)),
         ]
         for (nom, texte) in textes {
@@ -303,7 +306,8 @@ final class CrashScrubberTests: XCTestCase {
         // serait masqué en entier (repli fermé), ce que ce test interdit.
         let regles = CrashScrubber.regles
         XCTAssertNotNil(regles, "une expression ne compile pas")
-        XCTAssertEqual(regles?.count, 8)
+        XCTAssertEqual(regles?.count, 9)
+        XCTAssertEqual(regles?.filter(\.adresse).count, 1, "une seule règle d'adresse, lue à rebours")
         XCTAssertTrue(regles?.first?.expression === CrashScrubber.regles?.first?.expression, "expressions recompilées")
     }
 

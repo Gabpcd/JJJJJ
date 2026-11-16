@@ -58,11 +58,14 @@ public struct ConfigurationCrash: Equatable, Sendable {
         return "\(valeurs[0])@\(valeurs[1])+\(valeurs[2])"
     }
 
-    /// DSN `https://<clé publique>@<hôte>/<projet>` débarrassé des blancs ; nil s'il est vide, non résolu ou mal formé.
+    /// DSN `https://<clé publique>@<hôte>/<projet>` débarrassé des blancs ; nil s'il est vide, non résolu ou mal formé, ou
+    /// s'il porte un mot de passe (`<clé>:<secret>@`, ancien format à clé secrète ou valeur collée par erreur : revue B8
+    /// n°1, m6). L'hôte n'est pas restreint à une région : la région de données de l'organisation reste à confirmer par
+    /// Gabrielle (`SENTRY_IOS.md` §5), la restriction suivra.
     public static func dsnValide(_ brut: Any?) -> String? {
         guard let texte = (brut as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !texte.isEmpty,
               !texte.contains("$("), let composants = URLComponents(string: texte), composants.scheme == "https",
-              let cle = composants.user, !cle.isEmpty, let hote = composants.host, !hote.isEmpty,
+              let cle = composants.user, !cle.isEmpty, composants.password == nil, let hote = composants.host, !hote.isEmpty,
               composants.path.count > 1 else { return nil }
         return texte
     }

@@ -360,6 +360,17 @@ jobs:
           echo "duree_build_s=$duree" >> "$GITHUB_OUTPUT"
           echo "Durée build-for-testing : ${duree}s (mesure pour la porte go/no-go, docs/mobile-swift/PORTE_LOT0.md)"
           grep -q "TEST BUILD SUCCEEDED" "$JOLENE_UI_OUTPUT/build-for-testing.log" || { echo "::error::build-for-testing a échoué (code $code). Voir build-for-testing.log dans l'artefact."; exit 1; }
+      - name: Package.resolved de l'app inchangé après la résolution SPM
+        # Revue fraîche B8 n°1 de L3-T15, m4 : build-for-testing résout les paquets (Sentry Cocoa et supabase-swift en
+        # version exacte, dépendances transitives épinglées). Un Package.resolved réécrit voudrait dire que la CI a testé
+        # un graphe que le dépôt ne décrit pas. Délai de 2 min, hors éclats : le plafond du job reste tenu (25 + 2 + 11 × 30
+        # = 357 ≤ 360). Garde : tests/node/ios-swift-ci-eclats.node.mjs.
+        timeout-minutes: 2
+        run: |
+          git diff --exit-code -- ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved || {
+            echo "::error::Package.resolved de l'app réécrit par la résolution SPM (diff ci-dessus). Résoudre en local (xcodebuild -resolvePackageDependencies) et committer le fichier, ou corriger project.yml (docs/mobile-swift/SENTRY_IOS.md §1)."
+            exit 1
+          }
       # Éclats (DECISIONS_LOT2 décision 22 : découpage par domaine dès qu'un format dépasse 20 min). Fusion des lots 2 et 3 :
       # socle une seule fois, puis les éclats du lot 2, puis ceux du lot 3 ; chaque classe XCUITest nommée par -only-testing
       # dans un seul éclat, et sautée par le socle (gardes : tests/node/ios-swift-ci-eclats.node.mjs et

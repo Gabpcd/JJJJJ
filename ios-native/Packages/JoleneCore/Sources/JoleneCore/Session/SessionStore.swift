@@ -37,10 +37,12 @@ import Combine
 /// (`ouvrirIdentiteInscription`, intégration T7), jamais sur une fin transitoire ni au lancement à froid sans session.
 ///
 /// Lot 3, T15 (D21) — rapport de crash `CrashReportingPort`, optionnel (nil : démo, Sentry non démarré, doubles de
-/// test) : identifiant de l'utilisateur seul posé à la publication de `.ready` (une fois par identité, une revalidation
-/// ne le repose pas), retiré (`nil`) à chaque fin d'identité suivie (déconnexion volontaire, fin de compte, absence de
-/// session confirmée), conservé sur une fin transitoire (le SDK détient encore la session). Un espace bloqué ne le pose
-/// pas.
+/// test) : identifiant de l'utilisateur seul, posé à la publication de `.ready` (une fois par identité ; une revalidation,
+/// même hors ligne, garde l'espace prêt et ne le repose pas). Revue B8 n°1, M2 : il n'existe que pendant un espace prêt —
+/// retiré (`nil`) par toute publication de `.blocked` ou de `.signedOut` (fin d'identité, connexion refusée, fin
+/// transitoire : depuis `.ready`, celle-ci n'arrive qu'avec une autre identité), et avant toute ouverture d'identité
+/// (`signIn`, `ouvrirIdentiteInscription`), comme le navigateur intégré est vidé (T3b). L'identifiant d'un compte ne suit
+/// donc jamais le compte suivant, même vers un espace bloqué.
 @MainActor
 public final class SessionStore: ObservableObject {
     @Published public private(set) var state: SessionState {
@@ -106,6 +108,7 @@ public final class SessionStore: ObservableObject {
     /// un lien de confirmation reçu dans un espace ouvert).
     public func ouvrirIdentiteInscription() async {
         finIdentiteWeb?.identiteTerminee()
+        signalerUtilisateurCrash(nil) // lot 3, T15 (revue B8 n°1, M2) : reposé au `.ready` de l'identité relue
         await start()
     }
 
@@ -113,6 +116,7 @@ public final class SessionStore: ObservableObject {
         // Lot 3, T3b (revue B8, M1) : l'identité qui s'ouvre ne trouve jamais les données web d'une autre (identité
         // close hors de l'app, session web ouverte sans identité native, identité remplacée après une fin transitoire).
         finIdentiteWeb?.identiteTerminee()
+        signalerUtilisateurCrash(nil) // lot 3, T15 (revue B8 n°1, M2) : ni l'identifiant d'une autre identité
         state = .loading
         canRetryRestore = false
         state = await controller.signIn(email: email, password: password)
@@ -208,7 +212,12 @@ public final class SessionStore: ObservableObject {
             }
         case .blocked:
             identitePubliee = true
+            // Lot 3, T15 (revue B8 n°1, M2) : un espace bloqué ne porte aucun identifiant, pas même celui de l'espace prêt
+            // qu'il remplace (lien de confirmation d'un autre compte, `.session` d'une autre identité).
+            signalerUtilisateurCrash(nil)
         case .signedOut:
+            // Lot 3, T15 (revue B8 n°1, M2) : aucun identifiant hors d'un espace prêt, quelle que soit la cause.
+            signalerUtilisateurCrash(nil)
             if finsDeSessionVoulues > 0 {
                 // `signOut` / `signOutLocally` : le coordinateur est déjà prévenu, l'identité est partie.
                 oublierIdentiteSuivie()
@@ -240,7 +249,6 @@ public final class SessionStore: ObservableObject {
     private func oublierIdentiteSuivie() {
         identitePubliee = false
         dernierEpochPret = nil
-        signalerUtilisateurCrash(nil) // lot 3, T15 : fin d'identité
     }
 
     /// Lot 3, T15 : remet l'identifiant au rapport de crash s'il a changé (aucun appel sans rapport de crash).

@@ -8,7 +8,9 @@ import XCTest
 ///   (`network-sentinel`, `DemoConsultationTests` et suivants) reste donc inchangée ;
 /// - environnement = mode de l'app, release `<CFBundleIdentifier>@<CFBundleShortVersionString>+<CFBundleVersion>` lue dans
 ///   le bundle (jamais codée en dur), réglages sans PII ;
-/// - identifiant utilisateur posé sur `.ready`, retiré (`nil`) à chaque fin d'identité, conservé sur une fin transitoire ;
+/// - identifiant utilisateur posé sur `.ready`, conservé par une revalidation transitoire (l'espace reste prêt), retiré
+///   (`nil`) hors d'un espace prêt : fin d'identité, espace bloqué, fin transitoire, avant toute ouverture d'identité
+///   (revue B8 n°1, M2 : jamais l'identifiant d'un compte pour le compte suivant) ;
 /// - crash de test (`-JOLENE_SENTRY_CRASH_TEST`, DEBUG) seulement si Sentry a démarré.
 /// Gardes statiques de la cible app (Sentry importé par `CrashReporting.swift` seul, démarrage avant le conteneur, démo
 /// sans rapport de crash, DSN jamais versionné) : lecture des sources, comme `FusionLocalisationLot2Tests`.

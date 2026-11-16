@@ -9,7 +9,7 @@ import Sentry
 /// (`AppContainer.environnementDeLancement`, surcharges DEBUG comprises) ; la décision est celle de JoleneCore
 /// (`ConfigurationCrash.auLancement`) : jamais en démo, jamais sans DSN (`JoleneSentryDSN` vide dans le dépôt), jamais
 /// pour un environnement refusé. Le port rendu (nil sinon) est remis à la session (`SessionStore`) par le conteneur, en
-/// staging et en production seulement : identifiant utilisateur sur `.ready`, retiré à la déconnexion.
+/// staging et en production seulement : identifiant utilisateur sur `.ready`, retiré hors d'un espace prêt.
 @MainActor
 enum CrashReporting {
     /// Délai du crash de test après le démarrage : Sentry a installé ses gestionnaires et l'app a fini son lancement.
@@ -45,7 +45,7 @@ struct SentryCrashReporting: CrashReportingPort {
         }
     }
 
-    /// Identifiant seul (ni e-mail, ni nom, ni adresse IP) ; nil à la déconnexion.
+    /// Identifiant seul (ni e-mail, ni nom, ni adresse IP) ; nil hors d'un espace prêt (`SessionStore`).
     func utilisateur(id: String?) {
         SentrySDK.setUser(id.map { User(userId: $0) })
     }
@@ -73,7 +73,9 @@ struct SentryCrashReporting: CrashReportingPort {
     }
 
     /// `beforeSend` : chaque texte et chaque dictionnaire de l'événement passe par `CrashScrubber` ; ni requête, ni nom de
-    /// serveur, ni autre donnée utilisateur que l'identifiant.
+    /// serveur, ni autre donnée utilisateur que l'identifiant. Chaque propriété publique d'`Event`, `SentryMessage`,
+    /// `Exception`, `Mechanism` et `Breadcrumb` (Sentry 9.32.0) est traitée ici ou conservée pour une raison écrite :
+    /// recensement et garde statique dans `CrashReportingTests` (revue B8 n°1, M1 et m3).
     static func nettoyer(_ event: Event) -> Event? {
         if let message = event.message {
             let propre = SentryMessage(formatted: CrashScrubber.texte(message.formatted))
@@ -81,17 +83,29 @@ struct SentryCrashReporting: CrashReportingPort {
             propre.params = message.params?.map(CrashScrubber.texte)
             event.message = propre
         }
-        event.exceptions?.forEach { $0.value = $0.value.map(CrashScrubber.texte) }
+        event.exceptions?.forEach { nettoyer($0) }
         event.breadcrumbs = event.breadcrumbs?.compactMap { nettoyer($0) }
         event.tags = event.tags.map(CrashScrubber.etiquettes)
         event.extra = event.extra.map(CrashScrubber.dictionnaire)
         event.context = event.context.map(CrashScrubber.contextes)
         event.transaction = event.transaction.map(CrashScrubber.texte)
         event.fingerprint = event.fingerprint?.map(CrashScrubber.texte)
+        event.logger = event.logger.map(CrashScrubber.texte)
         event.request = nil
         event.serverName = nil
         event.user = event.user?.userId.map { User(userId: $0) }
         return event
+    }
+
+    /// Exception (crash, `NSException`, app hang) : valeur, type et mécanisme nettoyés. Sentry 9.32.0 range dans
+    /// `mechanism.data` les `crash_info_messages` (messages du runtime Swift, texte d'un `fatalError` compris :
+    /// `SentryCrashReportConverter.m` l.501-511), et `mechanism.desc` est un texte libre.
+    static func nettoyer(_ exception: Exception) {
+        exception.value = exception.value.map(CrashScrubber.texte)
+        exception.type = exception.type.map(CrashScrubber.texte)
+        guard let mecanisme = exception.mechanism else { return }
+        mecanisme.desc = mecanisme.desc.map(CrashScrubber.texte)
+        mecanisme.data = mecanisme.data.map(CrashScrubber.dictionnaire)
     }
 
     /// `beforeBreadcrumb` : fils d'Ariane réseau rejetés, message et données nettoyés.
