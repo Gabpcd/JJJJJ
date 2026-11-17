@@ -60,10 +60,8 @@ final class DemoDocumentsTests: JoleneUITestCase {
         tap("document-confirmer")
 
         require("La feuille se ferme après l'enregistrement", timeout: 30) { !self.element("document-televersement").exists }
-        let issue = element("documents-envoi-issue")
-        require("L'issue de l'envoi est annoncée") { issue.exists }
-        XCTAssertTrue(issue.label.contains("Document téléversé — vérification en cours (~30 s)."))
         let statut = element("document-statut-DIPLOME")
+        attendreIssueVerificationOuVerdict(statut)
         require("Le verdict est relu en ligne", timeout: 30) { statut.exists && statut.label == "Vérifié ✅" }
 
         // Verdict VERIFIE : la prochaine exigence critique s'ouvre (`DocumentsSoignant.tsx` l.272-274).
@@ -132,11 +130,9 @@ final class DemoDocumentsTests: JoleneUITestCase {
 
         // Réponse perdue après application : réconciliation par relecture de la ligne, jamais de renvoi.
         require("La feuille se ferme après la réconciliation", timeout: 30) { !self.element("document-televersement").exists }
-        let issue = element("documents-envoi-issue")
-        require("La ligne relue donne la vérification en cours") { issue.exists }
-        XCTAssertTrue(issue.label.contains("Document téléversé — vérification en cours (~30 s)."))
-        XCTAssertEqual(element("documents-demo-envois").label, "1 envoi · 1 vérification", "aucun second envoi")
         let statut = element("document-statut-CARTE_IDENTITE")
+        attendreIssueVerificationOuVerdict(statut)
+        XCTAssertEqual(element("documents-demo-envois").label, "1 envoi · 1 vérification", "aucun second envoi")
         require("Le verdict est relu en ligne", timeout: 30) { statut.exists && statut.label == "Vérifié ✅" }
         let aJour = element("documents-entete-titre")
         require("Toutes les pièces obligatoires sont valides") { aJour.label == "Tous vos documents obligatoires sont à jour 🎉" }
@@ -274,6 +270,32 @@ final class DemoDocumentsTests: JoleneUITestCase {
         require("Le bouton de connexion est activé") { submit.isEnabled }
         if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
         toucherSeConnecter(submit, "La session est prête : la barre d'onglets est affichée") { self.tabBarExists }
+    }
+
+    /// Issue d'un envoi qui demande la vérification. Le bandeau « vérification en cours » est transitoire par conception :
+    /// `PresentationJustificatifs.issueAffichee` le masque dès le verdict relu (le badge de la carte prend le relais), et
+    /// le verdict démo arrive à la relecture de suivi suivante (`DocumentsModel.intervalleSuivi`, 5 s). Sur un simulateur
+    /// lent, la fermeture de la feuille peut couvrir toute cette fenêtre (run 43995728137, UI — iphone,
+    /// `testEnvoiIncertainReconcilieSansSecondEnvoi` : bandeau jamais observé, déjà remplacé par le verdict). D'où une
+    /// attente du bandeau OU du verdict ; le texte du bandeau est exigé quand il est observé (lu dans le même instantané
+    /// que sa présence, jamais sur un élément qui vient de disparaître), et prouvé hors de toute fenêtre par
+    /// `PresentationJustificatifsTests` (texte et masquage au verdict). Le verdict lui-même reste exigé par l'appelant.
+    private func attendreIssueVerificationOuVerdict(_ statut: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        let issue = element("documents-envoi-issue")
+        var texteIssue: String?
+        require("L'issue de l'envoi est annoncée, ou déjà remplacée par le verdict relu", file: file, line: line) {
+            if let instantane = try? issue.snapshot() {
+                texteIssue = instantane.label
+                return true
+            }
+            return (try? statut.snapshot())?.label == "Vérifié ✅"
+        }
+        if let texteIssue {
+            XCTAssertTrue(texteIssue.contains("Document téléversé — vérification en cours (~30 s)."),
+                          "texte du bandeau : \(texteIssue)", file: file, line: line)
+        } else {
+            XCTContext.runActivity(named: "Bandeau « vérification en cours » non observé : verdict déjà relu") { _ in }
+        }
     }
 
     /// Profil › Mon espace › Mes documents : l'onglet Justificatifs est ouvert par défaut (`MesDocuments.tsx` l.24).

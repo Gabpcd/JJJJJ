@@ -2766,12 +2766,43 @@ limitée à ce delta.
   du décompte, des budgets de blocage (15 s, 60 s à froid) et de la trace de `require` : un gel de plus de 15 s juste
   après la connexion aurait pu passer. `require` repose désormais sur un corps commun `attendre` ; `attendreSansEchec`
   en est la variante qui rend `false` sur condition fausse, mais échoue toujours sur budget de blocage dépassé, trace
-  comprise (issue « condition fausse au terme du délai, sans échec (geste rejoué) »), avec le fichier et la ligne de
-  l'appelant. `devientVrai` est supprimé.
-- **M2 (corrigé)** : chaque rejeu joint `consignerRejeu` (`<préfixe>-attente-bloquee-<Fichier>-<ligne>.txt`, lignes
-  « Attente », « Appelant », « Issue »), relevé par la section « Attentes bloquées absorbées » de la CI avec une
+  comprise (issue « condition fausse au terme du délai, sans échec (l'appelant décide de la suite) », libellé neutre
+  depuis le 6ᵉ tour, m1), avec le fichier et la ligne de l'appelant. `devientVrai` est supprimé.
+- **M2 (corrigé)** : chaque rejeu est consigné par `consignerRejeu`, qui joint
+  `<préfixe>-attente-bloquee-<Fichier>-<ligne>.txt` (lignes « Attente », « Appelant », « Issue »), relevé par la section « Attentes bloquées absorbées » de la CI avec une
   annotation par appelant, même dans un job vert, comme `DemoPointageUITestCase.basculer`.
 - **m1 (corrigé)** : `toucherSeConnecter` garde 30 s décomptées au total (8 s de fenêtre, puis 22 s de `require`).
 - **m2 (corrigé)** : en-tête de `UITestSupport.swift` aligné (`require` ou `attendreSansEchec`).
 - **m3, m4, m5 (corrigés)** : phrase sur `originHash` de ce journal, message du test TestFlight (« kscrash jamais
   épinglé »), mentions « réfutée » dans la section du 2ᵉ tour.
+
+### Revue fraîche B8 de la vague 5, 6ᵉ tour (delta b37b8d95..8bef3499) : CLÔTURABLE (17/11/2026)
+
+- Verdict : CLÔTURABLE, 0 bloquant, 0 majeur, 4 mineurs (issuecomment-6935051890). M1 et M2 du 5ᵉ tour corrigés ;
+  `require` inchangé pour ses appelants ; aucun double envoi de connexion possible.
+- Mineurs traités dans la PR de suivi (pas de poussée sur #1133, qui aurait relancé sa CI) :
+  - **m1** : issue neutre « condition fausse au terme du délai, sans échec (l'appelant décide de la suite) »
+    (`traceUncharged`) : aucun geste n'est rejoué quand le bouton est désactivé, qu'une erreur est affichée, ou au
+    3ᵉ glissement.
+  - **m2** : le budget de blocage vaut pour chaque attente (15 s, 60 s à froid), écrit dans le doc de
+    `toucherSeConnecter` : un gel au-delà du budget échoue toujours ; deux blocages absorbés peuvent cumuler deux budgets.
+  - **m3** : relevé CI. Ligne « Nature : geste rejoué » jointe par `consignerRejeu` ; l'étape annonce « Geste rejoué »
+    sans temps non décompté ni budget, compte rejeux et attentes à part, et signale une trace sans champ lisible.
+    `DemoPointageUITestCase.basculer` passe par `attendreSansEchec` et `consignerRejeu`, au nom de l'appelant : sa
+    trace en texte libre sortait en « « ? », ? non décomptées » au run 43995728137.
+  - **m4** : « chaque rejeu est consigné par `consignerRejeu`, qui joint … » (section du 5ᵉ tour).
+
+### CI iOS de 8bef3499 (run 43995728137) : course du bandeau « vérification en cours », relance ciblée (17/11/2026)
+
+- Tentative 1 : iPad portrait et paysage verts ; iPhone 1963 réussis, 1 échoué, 0 ignoré.
+  `DemoDocumentsTests.testEnvoiIncertainReconcilieSansSecondEnvoi` (l.136) : « La ligne relue donne la vérification en
+  cours — condition fausse à chacune des 7 évaluations sur 15,0 s décomptées ».
+- Cause : course du test, pas de l'app. Le bandeau `documents-envoi-issue` est masqué dès le verdict relu
+  (`issueAffichee`) ; en démo le verdict arrive à la relecture de suivi suivante (5 s). La fermeture de la feuille sur
+  un simulateur lent a couvert la fenêtre. Course présente depuis le lot 2 (#1131) ; #1133 ne touche ni le suivi ni le
+  bandeau, et le même test passe sur les deux iPad.
+- Décision : relance du seul job iPhone (tentative 2, issuecomment-6939136875) ; correction dans la PR de suivi :
+  `attendreIssueVerificationOuVerdict` attend le bandeau OU le verdict, exige le texte du bandeau quand il est observé
+  (lu dans le même instantané que sa présence) et laisse la preuve du texte et du masquage à
+  `PresentationJustificatifsTests`. Même correction pour `testTeleverserLeDiplomeHeicPuisVerifie`, exposé à la même
+  fenêtre. Les preuves « 1 envoi · 1 vérification » et « Vérifié ✅ » restent exigées.
