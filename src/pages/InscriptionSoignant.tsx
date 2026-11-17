@@ -1,5 +1,5 @@
 import { finaliserProfil, restaurerFormulaire, donneesFormulaire, enregistrerParcours, type ParcoursInscription } from '@/lib/inscriptionProgressive';
-import { donneesAReprendre, memoriserSaisie } from '@/lib/saisieInscriptionEnCours';
+import { memoriserSaisie, oublierSaisie, reprendreSaisie } from '@/lib/saisieInscriptionEnCours';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Sentry from '@sentry/react';
@@ -126,6 +126,8 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
   const champsAHighlighter = new Set(erreurInscription?.champs_highlight ?? []);
   const classeChampErreur = (champ: string) => champsAHighlighter.has(champ) ? 'border-destructive ring-1 ring-destructive/30' : '';
 
+  // Brouillon serveur, plus la saisie de l'onglet si elle a été faite sur lui.
+  const [reprise] = useState(() => parcours ? reprendreSaisie(parcours) : { donnees: {}, depuisOnglet: false });
   const [form, setForm] = useState(() => {
     const restaure = restaurerFormulaire({
     email: '', motDePasse: '', confirmMdp: '',
@@ -134,7 +136,7 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
     lat: null as number | null, lng: null as number | null,
     estSalarieEtablissement: null as boolean | null,
     estEtudiant: false, scolariteFormation: '', scolariteAnnee: '',
-    }, parcours ? donneesAReprendre(parcours) : {});
+    }, reprise.donnees);
     if (!formationsPourProfession(restaure.profession).some(f => f.valeur === restaure.scolariteFormation)) {
       restaure.scolariteFormation = '';
       restaure.scolariteAnnee = '';
@@ -178,9 +180,15 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
 
   // Une page ouverte depuis ce formulaire (CGU, aide) le démonte : garder la
   // saisie pour la rendre au retour (mémoire de l'onglet, jamais le stockage).
+  // Tant que rien n'a changé depuis l'ouverture sur le brouillon serveur, ne
+  // rien garder : ce brouillon suffit et pourra être corrigé ailleurs.
+  const [saisieOuverture] = useState(() => JSON.stringify(donneesFormulaire(form)));
   useEffect(() => {
-    if (parcours) memoriserSaisie(parcours, donneesFormulaire(form));
-  }, [parcours, form]);
+    if (!parcours) return;
+    const saisie = donneesFormulaire(form);
+    if (!reprise.depuisOnglet && JSON.stringify(saisie) === saisieOuverture) oublierSaisie(parcours);
+    else memoriserSaisie(parcours, saisie);
+  }, [parcours, form, reprise.depuisOnglet, saisieOuverture]);
 
   // Règle de PROFIL issue du référentiel DB. Elle est distincte de la matrice
   // profession_requise × établissement appliquée à chaque mission.
@@ -424,7 +432,12 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
   const enregistrerEtQuitter = async () => {
     if (!parcours) { setEtape(1); return; }
     setSubmitting(true);
-    try { await enregistrerParcours(donneesFormulaire(form)); navigate('/inscription/reprendre'); }
+    try {
+      await enregistrerParcours(donneesFormulaire(form));
+      // Le brouillon serveur porte désormais cette saisie.
+      oublierSaisie(parcours);
+      navigate('/inscription/reprendre');
+    }
     catch (err) { setErreurInscription(mapperErreurInscription(err)); }
     finally { setSubmitting(false); }
   };

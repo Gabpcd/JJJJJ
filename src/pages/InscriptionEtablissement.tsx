@@ -1,5 +1,5 @@
 import { finaliserProfil, restaurerFormulaire, donneesFormulaire, enregistrerParcours, type ParcoursInscription } from '@/lib/inscriptionProgressive';
-import { donneesAReprendre, memoriserSaisie } from '@/lib/saisieInscriptionEnCours';
+import { memoriserSaisie, oublierSaisie, reprendreSaisie } from '@/lib/saisieInscriptionEnCours';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -56,6 +56,8 @@ export default function InscriptionEtablissement({ parcours }: { parcours?: Parc
   const [erreurInscription, setErreurInscription] = useState<ErreurInscriptionMappee | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
+  // Brouillon serveur, plus la saisie de l'onglet si elle a été faite sur lui.
+  const [reprise] = useState(() => parcours ? reprendreSaisie(parcours) : { donnees: {}, depuisOnglet: false });
   const [form, setForm] = useState(() => restaurerFormulaire({
     email: '', motDePasse: '', confirmMdp: '',
     nom: '', siret: '', finess: '', type: '',
@@ -63,7 +65,7 @@ export default function InscriptionEtablissement({ parcours }: { parcours?: Parc
     emailContact: '', telephoneContact: '',
     numeroLicence: '',
     lat: null as number | null, lng: null as number | null,
-}, parcours ? donneesAReprendre(parcours) : {}));
+}, reprise.donnees));
 
   const [siretValidation, setSiretValidation] = useState<{ valide: boolean; message: string } | null>(null);
   const [inseeCheck, setInseeCheck] = useState<SiretInseeResult | null>(null);
@@ -74,9 +76,15 @@ export default function InscriptionEtablissement({ parcours }: { parcours?: Parc
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
   // Une page ouverte depuis ce formulaire (CGU, CGV, aide) le démonte : garder
   // la saisie pour la rendre au retour (mémoire de l'onglet, jamais le stockage).
+  // Tant que rien n'a changé depuis l'ouverture sur le brouillon serveur, ne
+  // rien garder : ce brouillon suffit et pourra être corrigé ailleurs.
+  const [saisieOuverture] = useState(() => JSON.stringify(donneesFormulaire(form)));
   useEffect(() => {
-    if (parcours) memoriserSaisie(parcours, donneesFormulaire(form));
-  }, [parcours, form]);
+    if (!parcours) return;
+    const saisie = donneesFormulaire(form);
+    if (!reprise.depuisOnglet && JSON.stringify(saisie) === saisieOuverture) oublierSaisie(parcours);
+    else memoriserSaisie(parcours, saisie);
+  }, [parcours, form, reprise.depuisOnglet, saisieOuverture]);
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu && cgv;
   const siretEstValide = validerSiret(form.siret).valide;
   // Funnel 2 étapes : étape 2 = identité établissement fusionnée (les anciennes
@@ -171,7 +179,12 @@ export default function InscriptionEtablissement({ parcours }: { parcours?: Parc
   const enregistrerEtQuitter = async () => {
     if (!parcours) { setEtape(1); return; }
     setSubmitting(true);
-    try { await enregistrerParcours(donneesFormulaire(form)); navigate('/inscription/reprendre'); }
+    try {
+      await enregistrerParcours(donneesFormulaire(form));
+      // Le brouillon serveur porte désormais cette saisie.
+      oublierSaisie(parcours);
+      navigate('/inscription/reprendre');
+    }
     catch (err) { setErreurInscription(mapperErreurInscription(err)); }
     finally { setSubmitting(false); }
   };
