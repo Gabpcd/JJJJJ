@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   creerCompteRapide,
   donneesFormulaire,
+  enregistrerParcours,
   finaliserProfil,
   restaurerFormulaire,
 } from "./inscriptionProgressive";
+import { memoriserSaisie, reprendreSaisie } from "./saisieInscriptionEnCours";
 
 const m = vi.hoisted(() => ({
   signUp: vi.fn(),
@@ -165,6 +167,18 @@ describe("inscription progressive", () => {
       }),
     ).toEqual({ prenom: "Camille" });
   });
+  it("un brouillon de mission enregistré par l’onglet ne valide pas une saisie dépassée (revue B8 n°3 #1137, n1)", async () => {
+    const compte = { user_id: "u1", type_compte: "SOIGNANT" as const };
+    const ouverture = { prenom: "", nom: "Recette" };
+    reprendreSaisie({ ...compte, donnees: ouverture });
+    memoriserSaisie({ ...compte, donnees: ouverture }, { prenom: "Camille", nom: "Recette" });
+    // Ailleurs, le nom a été corrigé : la RPC fusionne et renvoie la ligne entière.
+    const ligne = { ...compte, modifie_le: "", donnees: { prenom: "", nom: "Recette-Martin", missionChoisie: "m-42" } };
+    m.rpc.mockResolvedValue({ data: ligne, error: null });
+    await enregistrerParcours({ missionChoisie: "m-42" });
+    expect(reprendreSaisie(ligne)).toEqual({ donnees: ligne.donnees, depuisOnglet: false });
+  });
+
   it("enregistre la saisie et conserve la session lors d’un refus métier", async () => {
     m.getSession.mockResolvedValue({ data: { session: { access_token: "token", user: { email: "test@example.org" } } } });
     m.invoke.mockResolvedValue({
