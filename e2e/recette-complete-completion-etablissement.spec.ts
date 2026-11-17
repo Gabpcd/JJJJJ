@@ -55,6 +55,30 @@ test('complétion établissement : validation, sauvegarde partielle, panne et re
   expect(etat.inconnues).toEqual([]); expect(etat.erreurs).toEqual([]); expect(etat.ecritures).toEqual([]);
 });
 
+test('complétion établissement : la saisie revient après la lecture des CGV', async ({ page }, info) => {
+  const { etat, parcours, state } = await simulerCompletionEtablissement(page);
+  await entrer(page, 'inscription');
+  await allerA(page, '/inscription/completer');
+  await remplirProfil(page);
+  await page.getByRole('link', { name: '💰 CGV', exact: true }).click();
+  await expect(page).toHaveURL(/\/cgv$/);
+  // Les CGV doivent être réellement affichées : le formulaire est alors
+  // démonté, et seul ce cas prouve que la saisie survit au retour.
+  await expect(page.getByRole('heading', { level: 1, name: 'Conditions Générales de Vente', exact: true })).toBeVisible();
+  await expect(page.getByLabel("Nom de l'établissement *", { exact: true })).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/inscription\/completer$/);
+  await expect(page.getByLabel("Nom de l'établissement *", { exact: true })).toHaveValue(nomRecette);
+  await expect(page.getByLabel('SIRET * (14 chiffres)', { exact: true })).toHaveValue(siretRecette);
+  await expect(page.getByLabel("Type d'établissement *", { exact: true })).toHaveValue('EHPAD');
+  await expect(page.getByLabel('Ville *', { exact: true })).toHaveValue('Paris');
+  await preuve(page, 'completion-etablissement-retour-cgv', info);
+  // Rien n'a été envoyé au serveur pour autant : la saisie restait dans l'onglet.
+  expect(parcours.donnees).not.toHaveProperty('siret');
+  expect(state.appels.some(a => a.nom === 'register-etablissement')).toBe(false);
+  expect(etat.inconnues).toEqual([]); expect(etat.erreurs).toEqual([]); expect(etat.ecritures).toEqual([]);
+});
+
 test('onglets complémentaires : planning, sections facturation et retours aux vues métier', async ({ page }, info) => {
   const { etat } = await simulerEtablissement(page);
   etat.donnees = true;

@@ -3,6 +3,7 @@ import { extraireErreurEdgeFn } from "@/lib/erreurs";
 import { getAttribution } from "@/lib/attribution";
 import { reinitialiserCacheRole } from "@/hooks/useRole";
 import { urlCallbackPublique } from "@/lib/nativeLinks";
+import { brouillonEnregistre, oublierSaisie } from "@/lib/saisieInscriptionEnCours";
 
 export type TypeCompteInscription = "SOIGNANT" | "ETABLISSEMENT";
 export interface ParcoursInscription {
@@ -120,7 +121,11 @@ export async function enregistrerParcours(donnees: Record<string, unknown>) {
     { p_donnees: donnees },
   );
   if (error) throw error;
-  return data as unknown as ParcoursInscription;
+  const parcours = data as unknown as ParcoursInscription;
+  // Les champs écrits par l'onglet lui-même avancent dans la base de la saisie
+  // gardée en mémoire (sinon elle se croirait dépassée au prochain retour).
+  if (parcours?.user_id && parcours.type_compte) brouillonEnregistre(parcours, donnees);
+  return parcours;
 }
 
 export function restaurerFormulaire<T extends Record<string, unknown>>(
@@ -230,6 +235,8 @@ export async function finaliserProfil(
     );
   }
   reinitialiserCacheRole();
+  // Le profil est créé : la saisie gardée pour un retour arrière n'a plus lieu d'être.
+  oublierSaisie({ user_id: session.user.id, type_compte: type });
   const { error: refreshError } = await supabase.auth.refreshSession();
   if (refreshError)
     throw new Error(

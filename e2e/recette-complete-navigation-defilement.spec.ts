@@ -43,9 +43,19 @@ test('formulaire : bas accessible et position conservée après les CGU', async 
   expect(positionAvant).toBeGreaterThan(100);
   await page.getByRole('link', { name: '📋 CGU', exact: true }).click();
   await expect(page).toHaveURL(/\/cgu$/);
+  // Les CGU doivent être réellement affichées. Pendant le chargement de leur
+  // page, React garde le formulaire monté : un retour à ce moment-là ne
+  // prouvait rien, et le test ne voyait la perte de saisie qu'au hasard
+  // (CI iPad paysage des 13 et 17/11/2026).
+  await expect(page.getByRole('heading', { level: 1, name: /^Conditions Générales d.Utilisation$/ })).toBeVisible();
+  await expect(formation(page)).toHaveCount(0);
   await attendreAPI(page);
   await page.goBack();
   await expect(page).toHaveURL(/\/inscription\/completer$/);
+  await expect(page.getByLabel(/^Prénom \*/)).toHaveValue('Camille');
+  await expect(page.getByLabel(/^Téléphone \*/)).toHaveValue('0100000000');
+  await expect(page.getByRole('combobox', { name: 'Profession *', exact: true })).toContainText('Médecin');
+  await expect(page.getByRole('button', { name: 'Je suis étudiant en santé', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(formation(page)).toHaveValue('MEDECINE_DES');
   await attendreAPI(page);
   await expect.poll(() => main.evaluate(el => el.scrollTop)).toBeCloseTo(positionAvant, 0);

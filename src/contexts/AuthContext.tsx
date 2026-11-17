@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import * as Sentry from '@sentry/react';
 import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { getAttribution } from '@/lib/attribution';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { viderCacheHorsLigne } from '@/lib/cacheHorsLigne';
+import { oublierToutesLesSaisies } from '@/lib/saisieInscriptionEnCours';
 import { estRefusInscriptionAttendu, extraireErreurEdgeFn } from '@/lib/erreurs';
 import { useQueryClient } from '@tanstack/react-query';
 import { ouvrirUrlPsc } from '@/lib/pscNavigation';
@@ -140,6 +141,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, [queryClient]);
 
+  // Saisie d'inscription gardée en mémoire de l'onglet : l'effacer dès que la
+  // session se termine ou change de compte, quelle qu'en soit la cause
+  // (expiration, déconnexion dans un autre onglet, réinitialisation du mot de
+  // passe, autre compte ; revue B8 #1137, m2).
+  const utilisateurPrecedent = useRef(userId);
+  useEffect(() => {
+    if (utilisateurPrecedent.current && utilisateurPrecedent.current !== userId) oublierToutesLesSaisies();
+    utilisateurPrecedent.current = userId;
+  }, [userId]);
+
   // Initialise aussi le push pour une session restaurée, PSC ou biométrique —
   // pas seulement après le formulaire de connexion. Le module est idempotent.
   useEffect(() => {
@@ -201,6 +212,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const deconnexion = useCallback(async () => {
     const currentUser = user;
+    // Saisie d'inscription gardée en mémoire de l'onglet : rien ne doit rester
+    // après la déconnexion, même si la redirection PSC interrompt la suite.
+    oublierToutesLesSaisies();
     if (currentUser) {
       const { error: auditError } = await supabase.rpc('fn_audit_connexion', {
         p_action: 'DECONNEXION',

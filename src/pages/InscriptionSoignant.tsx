@@ -1,4 +1,5 @@
 import { finaliserProfil, restaurerFormulaire, donneesFormulaire, enregistrerParcours, type ParcoursInscription } from '@/lib/inscriptionProgressive';
+import { memoriserSaisie, oublierSaisie, reprendreSaisie } from '@/lib/saisieInscriptionEnCours';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Sentry from '@sentry/react';
@@ -125,6 +126,8 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
   const champsAHighlighter = new Set(erreurInscription?.champs_highlight ?? []);
   const classeChampErreur = (champ: string) => champsAHighlighter.has(champ) ? 'border-destructive ring-1 ring-destructive/30' : '';
 
+  // Brouillon serveur, plus la saisie de l'onglet si elle a été faite sur lui.
+  const [reprise] = useState(() => parcours ? reprendreSaisie(parcours) : { donnees: {}, depuisOnglet: false });
   const [form, setForm] = useState(() => {
     const restaure = restaurerFormulaire({
     email: '', motDePasse: '', confirmMdp: '',
@@ -133,7 +136,7 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
     lat: null as number | null, lng: null as number | null,
     estSalarieEtablissement: null as boolean | null,
     estEtudiant: false, scolariteFormation: '', scolariteAnnee: '',
-    }, parcours?.donnees || {});
+    }, reprise.donnees);
     if (!formationsPourProfession(restaure.profession).some(f => f.valeur === restaure.scolariteFormation)) {
       restaure.scolariteFormation = '';
       restaure.scolariteAnnee = '';
@@ -174,6 +177,15 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
     }
     return suivant;
   });
+
+  // Une page ouverte depuis ce formulaire (CGU, aide) le démonte : garder la
+  // saisie pour la rendre au retour (mémoire de l'onglet, jamais le stockage).
+  // La saisie n'est reprise que si le brouillon serveur n'a pas changé depuis
+  // (voir saisieInscriptionEnCours). Les recalculs automatiques au montage
+  // (LIBERAL retiré, préremplissage RPPS/INSEE) sont mémorisés comme le reste.
+  useEffect(() => {
+    if (parcours) memoriserSaisie(parcours, donneesFormulaire(form));
+  }, [parcours, form]);
 
   // Règle de PROFIL issue du référentiel DB. Elle est distincte de la matrice
   // profession_requise × établissement appliquée à chaque mission.
@@ -417,7 +429,12 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
   const enregistrerEtQuitter = async () => {
     if (!parcours) { setEtape(1); return; }
     setSubmitting(true);
-    try { await enregistrerParcours(donneesFormulaire(form)); navigate('/inscription/reprendre'); }
+    try {
+      await enregistrerParcours(donneesFormulaire(form));
+      // Le brouillon serveur porte désormais cette saisie.
+      oublierSaisie(parcours);
+      navigate('/inscription/reprendre');
+    }
     catch (err) { setErreurInscription(mapperErreurInscription(err)); }
     finally { setSubmitting(false); }
   };
