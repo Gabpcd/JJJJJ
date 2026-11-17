@@ -50,6 +50,15 @@ describe('AuthProvider — la saisie d’inscription ne survit pas à la session
     expect(garde('u1')).toBe(false);
   });
 
+  it('garde la saisie à la première connexion et quand la session se rafraîchit', async () => {
+    await monter();
+    memoriser('u1');
+    await evenement('INITIAL_SESSION', session('u1'));
+    await evenement('SIGNED_IN', session('u1'));
+    await evenement('TOKEN_REFRESHED', session('u1'));
+    expect(garde('u1')).toBe(true);
+  });
+
   it('efface la saisie quand un autre compte se connecte dans le même onglet', async () => {
     await monter();
     await evenement('SIGNED_IN', session('u1'));

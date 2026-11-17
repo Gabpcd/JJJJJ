@@ -6,11 +6,13 @@
  * démonte : sans cette mémoire, le retour arrière affichait un formulaire vide
  * (identité, profession, déclaration étudiant perdues ; CI iPad du 17/11/2026).
  *
- * La saisie n'est qu'une couche posée sur le brouillon serveur du moment où
- * elle a été faite. Si ce brouillon a changé depuis sur l'un des champs du
- * formulaire (correction faite ailleurs, autre appareil), la saisie est
- * obsolète : elle est ignorée et oubliée, le brouillon serveur l'emporte
- * (revue B8 #1137, B1).
+ * La saisie n'est qu'une couche posée sur le dernier brouillon serveur connu
+ * de l'onglet : celui chargé à l'ouverture du formulaire, ou celui que
+ * l'onglet vient lui-même d'enregistrer (`enregistrerParcours`, par exemple
+ * juste avant un envoi refusé ; revue B8 n°2 #1137, m1). Si le brouillon
+ * serveur a changé depuis sur l'un des champs du formulaire (correction faite
+ * ailleurs, autre appareil), la saisie est obsolète : elle est ignorée et
+ * oubliée, le brouillon serveur l'emporte (revue B8 #1137, B1).
  *
  * Rien n'est écrit dans le stockage du navigateur : ce sont des données
  * personnelles. Un rechargement repart donc du brouillon serveur. Les entrées
@@ -32,6 +34,8 @@ interface Saisie {
 }
 
 const saisies = new Map<string, Saisie>();
+/** Dernier brouillon serveur connu de l'onglet, par compte et type de compte. */
+const brouillonsConnus = new Map<string, Record<string, unknown>>();
 const cle = (compte: CompteSaisie) => `${compte.user_id}:${compte.type_compte}`;
 const empreinte = (brouillon: Brouillon, champs: string[]) =>
   JSON.stringify([...champs].sort().map((champ) => [champ, brouillon?.[champ] ?? null]));
@@ -45,6 +49,7 @@ export function reprendreSaisie(compte: CompteSaisie & { donnees?: Brouillon }):
   depuisOnglet: boolean;
 } {
   const serveur = { ...(compte.donnees ?? {}) };
+  brouillonsConnus.set(cle(compte), serveur);
   const memoire = saisies.get(cle(compte));
   if (!memoire) return { donnees: serveur, depuisOnglet: false };
   if (empreinte(compte.donnees, Object.keys(memoire.saisie)) !== memoire.base) {
@@ -55,17 +60,35 @@ export function reprendreSaisie(compte: CompteSaisie & { donnees?: Brouillon }):
 }
 
 /**
- * `compte.donnees` est le brouillon serveur sur lequel le formulaire a été
- * ouvert ; `saisie` doit déjà être filtrée (sans secrets) par `donneesFormulaire`.
+ * `saisie` doit déjà être filtrée (sans secrets) par `donneesFormulaire`. Sa
+ * base est le dernier brouillon serveur connu de l'onglet ; `compte.donnees`
+ * (le brouillon d'ouverture) ne sert que si l'onglet n'en connaît aucun.
  */
 export function memoriserSaisie(compte: CompteSaisie & { donnees?: Brouillon }, saisie: Record<string, unknown>) {
-  saisies.set(cle(compte), { base: empreinte(compte.donnees, Object.keys(saisie)), saisie: { ...saisie } });
+  const base = brouillonsConnus.get(cle(compte)) ?? compte.donnees;
+  saisies.set(cle(compte), { base: empreinte(base, Object.keys(saisie)), saisie: { ...saisie } });
+}
+
+/**
+ * L'onglet vient d'écrire `envoye` dans le brouillon serveur. Seuls ces champs
+ * avancent dans la base : la ligne renvoyée par le serveur peut contenir une
+ * correction faite ailleurs (autre appareil) que la saisie de l'onglet ne doit
+ * pas absorber, par exemple quand l'onglet n'enregistre qu'un brouillon de
+ * mission.
+ */
+export function brouillonEnregistre(compte: CompteSaisie, envoye: Record<string, unknown>) {
+  const connu = { ...(brouillonsConnus.get(cle(compte)) ?? {}), ...envoye };
+  brouillonsConnus.set(cle(compte), connu);
+  const memoire = saisies.get(cle(compte));
+  if (memoire) memoire.base = empreinte(connu, Object.keys(memoire.saisie));
 }
 
 export function oublierSaisie(compte: CompteSaisie) {
   saisies.delete(cle(compte));
+  brouillonsConnus.delete(cle(compte));
 }
 
 export function oublierToutesLesSaisies() {
   saisies.clear();
+  brouillonsConnus.clear();
 }

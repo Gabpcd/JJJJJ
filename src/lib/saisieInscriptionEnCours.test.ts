@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  brouillonEnregistre,
   memoriserSaisie,
   oublierSaisie,
   oublierToutesLesSaisies,
@@ -45,6 +46,34 @@ describe("saisie d'inscription en cours", () => {
       donnees: { ...avecMission, prenom: "Camille" },
       depuisOnglet: true,
     });
+  });
+
+  it("après un enregistrement du brouillon par l'onglet lui-même, la saisie suivante reste valable (revue B8 n°2 #1137, m1)", () => {
+    reprendreSaisie({ ...compte, donnees: serveur });
+    // finaliserProfil écrit le brouillon puis l'envoi échoue : le serveur porte la saisie envoyée.
+    const enregistre = { ...serveur, prenom: "Camille" };
+    brouillonEnregistre(compte, { prenom: "Camille" });
+    memoriserSaisie({ ...compte, donnees: serveur }, { ...enregistre, telephone: "0200000000" });
+    expect(reprendreSaisie({ ...compte, donnees: enregistre })).toEqual({
+      donnees: { ...enregistre, telephone: "0200000000" },
+      depuisOnglet: true,
+    });
+  });
+
+  it("un enregistrement par l'onglet recale aussi une saisie déjà mémorisée", () => {
+    reprendreSaisie({ ...compte, donnees: serveur });
+    memoriserSaisie({ ...compte, donnees: serveur }, { ...serveur, prenom: "Camille" });
+    brouillonEnregistre(compte, { prenom: "Camille" });
+    expect(reprendreSaisie({ ...compte, donnees: { ...serveur, prenom: "Camille" } }).depuisOnglet).toBe(true);
+  });
+
+  it("un enregistrement hors formulaire n'absorbe pas une correction faite ailleurs", () => {
+    reprendreSaisie({ ...compte, donnees: serveur });
+    memoriserSaisie({ ...compte, donnees: serveur }, { ...serveur, prenom: "Camille" });
+    // Ailleurs : nom corrigé. Ici : seul le brouillon de mission est enregistré.
+    brouillonEnregistre(compte, { missionChoisie: "m-42" });
+    const serveurCourant = { ...serveur, nom: "Recette-Martin", missionChoisie: "m-42" };
+    expect(reprendreSaisie({ ...compte, donnees: serveurCourant })).toEqual({ donnees: serveurCourant, depuisOnglet: false });
   });
 
   it("ne donne jamais la saisie d'un compte à un autre compte ou à un autre type", () => {

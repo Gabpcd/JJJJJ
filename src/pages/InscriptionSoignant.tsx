@@ -180,15 +180,12 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
 
   // Une page ouverte depuis ce formulaire (CGU, aide) le démonte : garder la
   // saisie pour la rendre au retour (mémoire de l'onglet, jamais le stockage).
-  // Tant que rien n'a changé depuis l'ouverture sur le brouillon serveur, ne
-  // rien garder : ce brouillon suffit et pourra être corrigé ailleurs.
-  const [saisieOuverture] = useState(() => JSON.stringify(donneesFormulaire(form)));
+  // La saisie n'est reprise que si le brouillon serveur n'a pas changé depuis
+  // (voir saisieInscriptionEnCours). Les recalculs automatiques au montage
+  // (LIBERAL retiré, préremplissage RPPS/INSEE) sont mémorisés comme le reste.
   useEffect(() => {
-    if (!parcours) return;
-    const saisie = donneesFormulaire(form);
-    if (!reprise.depuisOnglet && JSON.stringify(saisie) === saisieOuverture) oublierSaisie(parcours);
-    else memoriserSaisie(parcours, saisie);
-  }, [parcours, form, reprise.depuisOnglet, saisieOuverture]);
+    if (parcours) memoriserSaisie(parcours, donneesFormulaire(form));
+  }, [parcours, form]);
 
   // Règle de PROFIL issue du référentiel DB. Elle est distincte de la matrice
   // profession_requise × établissement appliquée à chaque mission.
