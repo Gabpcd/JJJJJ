@@ -2791,6 +2791,11 @@ limitée à ce delta.
     `DemoPointageUITestCase.basculer` passe par `attendreSansEchec` et `consignerRejeu`, au nom de l'appelant : sa
     trace en texte libre sortait en « « ? », ? non décomptées » au run 43995728137.
   - **m4** : « chaque rejeu est consigné par `consignerRejeu`, qui joint … » (section du 5ᵉ tour).
+- Suivi du 3ᵉ tour, m1 (`CrashScrubber`), dans la même PR : dans une description Swift, le jeton nu qui suit un nom
+  sensible est masqué en entier (`code: ABC123`, `code: 12AB34`, `code: Optional(A1B2C3)`, lettres non ASCII
+  comprises), jusqu'au premier blanc ou signe hors jeton ; noms voisins inchangés (`errorCode`, `status_code`,
+  `error_code`, `codePostal`, `p_code_postal`). Test d'abord (15 assertions rouges), puis `CrashScrubberTests` 31/31 et
+  JoleneCore 1 749 tests, 0 échec, en concurrence stricte ; test de durée sur 8 000 caractères adverses toujours vert.
 
 ### CI iOS de 8bef3499 (run 43995728137) : course du bandeau « vérification en cours », relance ciblée (17/11/2026)
 

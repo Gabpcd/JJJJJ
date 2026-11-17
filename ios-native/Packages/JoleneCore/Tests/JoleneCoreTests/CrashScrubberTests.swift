@@ -307,6 +307,30 @@ final class CrashScrubberTests: XCTestCase {
         }
     }
 
+    func testJetonNuApresUnNomSensibleDansUneDescriptionSwiftEstMasqueEnEntier() {
+        // Revue B8 de la vague 5, 3ᵉ tour, m1 : `code: ABC123` passait en clair, `code: 12AB34` n'était masqué qu'à moitié
+        // (le nombre `12`, pas `AB34`). Le jeton nu entier qui suit `nom :` est masqué, jusqu'au premier blanc ou signe.
+        for (brut, secret) in [
+            ("Verification(code: ABC123)", "ABC123"),
+            ("code: 12AB34, suite", "AB34"),
+            ("code: Optional(A1B2C3)", "A1B2C3"),
+            ("p_code: qr_secret-9.x", "qr_secret-9.x"),
+            ("otp: 4F2A9C", "4F2A9C"),
+            ("refreshToken: v1.abc-def~", "abc-def"),
+            ("email: jane.doe", "jane.doe"),
+            ("code: é42ü", "é42ü"),
+        ] {
+            assertMasque(brut, sansFragments: [secret])
+        }
+        XCTAssertEqual(CrashScrubber.texte("code: 12AB34, suite"), "code: \"\(masque)\", suite", "jeton entier, suite lisible")
+        XCTAssertEqual(CrashScrubber.texte("code: Optional(A1B2C3) fin"), "code: Optional(\"\(masque)\") fin")
+        // Noms voisins toujours lisibles.
+        for texte in ["errorCode: IBAN_INVALIDE", "status_code: E42", "barcode: X1", "codePostal: A75001",
+                      "p_code_postal: X", "error_code: ABC123"] {
+            XCTAssertEqual(CrashScrubber.texte(texte), texte)
+        }
+    }
+
     /// Texte de `longueurMaximale` caractères au moins : des « a » séparés par une espace, puis `fin`, qui commence
     /// `avant` caractères avant la limite.
     private func texteCoupe(_ fin: String, avant: Int) -> String {

@@ -10,8 +10,8 @@ import Foundation
 ///   passe et codes OTP — `otp`, `otp_code`, `p_otp_code` de `fn_signer_contrat_otp` ; `nomsSensiblesExacts` : `code`,
 ///   `email`, `iban`, avec ou sans le préfixe `p_` des paramètres RPC, dont `p_code`, le code QR de pointage) : en requête
 ///   ou en fragment, encodé une ou deux fois (`%3D`, `%253D`), en JSON (échappé ou non, valeur texte ou nombre) et dans
-///   une description Swift (`refreshToken: "…"`, `code: 123456`) — jamais `error_code`, `status_code`, `barcode`,
-///   `token_type`, `p_code_postal` ;
+///   une description Swift (`refreshToken: "…"`, `code: 123456`, jeton nu entier : `code: 12AB34`) — jamais
+///   `error_code`, `status_code`, `barcode`, `token_type`, `p_code_postal` ;
 /// - les jetons porteurs (`Bearer …`) et les JWT isolés ;
 /// - les adresses e-mail (`@`, `%40` ou `%2540`), parties locales et domaines non ASCII compris (`josé@example.fr`) ;
 /// - les IBAN (compacts, ou par groupes de quatre séparés par une espace, une espace insécable U+00A0 ou U+202F, ou un
@@ -203,6 +203,11 @@ public enum CrashScrubber {
         let chaine = #""(?:[^"\\]|\\.)*(?:"|\z)"#
         // Nombre JSON ou Swift (revue B8 de la vague 5, m3 : un code OTP ou de pointage numérique est un secret).
         let nombre = #"-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?"#
+        // Jeton nu d'une description Swift, pris en entier jusqu'au premier blanc ou signe hors jeton (revue B8 de la
+        // vague 5, 3ᵉ tour, m1 : `code: ABC123` passait en clair, `code: 12AB34` n'était masqué qu'à moitié). Il couvre
+        // les nombres (chiffres, `-`, `.`, `e`, `+`) et les remplace dans la règle des descriptions Swift : avec les deux,
+        // le nombre `12` de `12AB34` arrêterait la correspondance.
+        let jetonNu = #"[\p{L}\p{M}\p{N}._~+/=-]++"#
         // Lettres, marques et chiffres de toutes les écritures (domaine d'adresse internationalisé, revue B8 de la vague 5).
         let etiquette = #"[\p{L}\p{M}\p{Nd}-]{1,63}"#
         // Séparateur d'une valeur de paramètre : `=`, ou `%3D` et `%253D` (encodé une ou deux fois).
@@ -228,8 +233,8 @@ public enum CrashScrubber {
             // Clé JSON dans un texte (corps de réponse illisible, description d'erreur), valeur texte ou nombre.
             (#"(?i)(""# + nomComplet + #""\s*:\s*)(?:"# + chaine + "|" + nombre + ")", "$1\"\(m)\""),
             // Description Swift (`String(describing:)`, `dump`) : `refreshToken: "…"`, `tokenHash: Optional("…")`,
-            // `code: 123456`.
-            ("(?i)" + nom + #"(\s*:\s*(?:Optional\()?)(?:"# + chaine + "|" + nombre + ")", "$1$2\"\(m)\""),
+            // `code: 123456`, `code: ABC123`.
+            ("(?i)" + nom + #"(\s*:\s*(?:Optional\()?)(?:"# + chaine + "|" + jetonNu + ")", "$1$2\"\(m)\""),
             // Adresse e-mail : arobase (`@`, `%40` ou `%2540`) et domaine borné (RFC 5321), internationalisé compris ; la
             // partie locale, au plus 64 unités avant l'arobase, est lue à rebours (`masquerAdresses`).
             (#"(?i)(?:@|%2540|%40)"# + etiquette + #"(?:\."# + etiquette + #"){0,8}\.[\p{L}\p{M}]{2,63}"#, nil),
