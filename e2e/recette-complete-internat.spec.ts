@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { aller, entrer, preuve as preuveSoignant, recharger, sansDebordement, simulerSoignant, profil } from './helpers/recette-complete-soignant';
 import { allerA, entrer as entrerEtablissement, ids, preuve, simulerEtablissement, stabiliserLectures } from './helpers/recette-complete-etablissement';
 import { simulerCompletionEtablissement } from './helpers/recette-complete-completion-etablissement';
@@ -9,12 +9,13 @@ import { simulerCompletionEtablissement } from './helpers/recette-complete-compl
 // retour (« Publier la mission », plus bas) peut être emporté par ce défilement
 // et perdu sans erreur (CI iPhone du 17/11/2026). On attend la fermeture
 // complète et le focus rendu avant toute autre action.
-async function choisirSpecialite(page: Page, libelle: string) {
-  await page.getByRole('combobox').filter({ hasText: 'Toutes spécialités acceptées' }).click();
+async function choisirSpecialite(page: Page, libelle: string, portee: Page | Locator = page, invite = 'Toutes spécialités acceptées') {
+  await portee.getByRole('combobox').filter({ hasText: invite }).click();
+  // La liste est rendue dans un portail : l'option se cherche dans la page.
   const option = page.getByRole('option', { name: libelle, exact: true });
   await option.click();
   await expect(option).toHaveCount(0);
-  await expect(page.getByRole('combobox').filter({ hasText: libelle })).toBeFocused();
+  await expect(portee.getByRole('combobox').filter({ hasText: libelle })).toBeFocused();
 }
 
 // Vrais écrans, réponses intégralement synthétiques, fournisseurs bloqués.
@@ -217,8 +218,7 @@ test('admin — attestation remplacée, consultation liée à la nouvelle emprei
   const popup = await popupPromise;
   await expect(popup).toHaveURL(/attestation-fictive-lisible$/); await popup.close();
   await section.getByLabel('RPPS lu sur l’attestation').fill(profil.numero_rpps);
-  await section.getByRole('combobox').filter({ hasText: 'Sélectionnez une spécialité' }).click();
-  await page.getByRole('option', { name: 'Médecine générale', exact: true }).click();
+  await choisirSpecialite(page, 'Médecine générale', section, 'Sélectionnez une spécialité');
   await section.getByRole('checkbox', { name: /contrôlé l’inscription actuelle/ }).check();
   await section.getByRole('checkbox', { name: /attestation établit la qualification/ }).check();
   await section.getByLabel(/Motif documenté/).fill('Attestation fictive examinée pour le scénario de simulation.');
