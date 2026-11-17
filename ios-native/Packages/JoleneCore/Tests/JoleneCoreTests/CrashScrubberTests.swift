@@ -342,8 +342,22 @@ final class CrashScrubberTests: XCTestCase {
         ] {
             assertMasque(brut, sansFragments: fragments)
         }
-        XCTAssertEqual(CrashScrubber.texte("iban: FR76 1732 8844 0018 3164 8362 916"), "iban: \(masque)")
-        XCTAssertEqual(CrashScrubber.texte("email: jane.doe@example.com"), "email: \(masque)")
+        XCTAssertEqual(CrashScrubber.texte("iban: FR76 1732 8844 0018 3164 8362 916"), "iban: \"\(masque)\"")
+        XCTAssertEqual(CrashScrubber.texte("email: jane.doe@example.com"), "email: \"\(masque)\"")
+        XCTAssertEqual(CrashScrubber.texte("code: Optional(jane@x.fr)"), "code: Optional(\"\(masque)\")")
+    }
+
+    func testJetonDontLeDebutRessembleAUnIBANMasqueEnEntier() {
+        // Revue delta B8 de #1136, B1bis : la règle IBAN, passée avant la règle Swift, masquait le début du jeton ; la
+        // suite (`+/xyz==`, `/secretpart`, `.xyz`) sortait en clair, le jeton nu ne reprenant pas le marqueur.
+        for (brut, fragments) in [
+            ("tokenHash: Ab12cdEFghIJkl+/xyz==", ["Ab12", "xyz"]),
+            ("token: AB12CDEFGHIJKL/secretpart", ["AB12", "secretpart"]),
+            ("refreshToken: v1.AB12CDEFGHIJ.xyz", ["v1.", "AB12", "xyz"]),
+        ] {
+            assertMasque(brut, sansFragments: fragments)
+        }
+        XCTAssertEqual(CrashScrubber.texte("tokenHash: Ab12cdEFghIJkl+/xyz==, suite"), "tokenHash: \"\(masque)\", suite")
     }
 
     func testJetonNuEncodeMasqueEtNilLisible() {

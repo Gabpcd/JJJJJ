@@ -207,8 +207,12 @@ public enum CrashScrubber {
         // vague 5, 3ᵉ tour, m1 : `code: ABC123` passait en clair, `code: 12AB34` n'était masqué qu'à moitié). Il couvre
         // les nombres (chiffres, `-`, `.`, `e`, `+`) et les remplace dans la règle des descriptions Swift : avec les deux,
         // le nombre `12` de `12AB34` arrêterait la correspondance. `%` en fait partie (jeton encodé, `abc%2Bdef`) ; `nil`
-        // seul reste lisible (valeur absente, pas un secret) ; revue B8 de #1136, m1 et m2.
-        let jetonNu = #"(?!nil(?![\p{L}\p{M}\p{N}._~+/=%-]))[\p{L}\p{M}\p{N}._~+/=%-]++"#
+        // seul reste lisible (valeur absente, pas un secret) ; revue B8 de #1136, m1 et m2. Le marqueur déjà posé par les
+        // règles d'adresse et d'IBAN, qui passent avant, en fait aussi partie : un jeton dont seul le début ressemble à un
+        // IBAN (`Ab12cdEFghIJkl+/xyz==`) est repris en entier, suite comprise (revue delta B8 de #1136, B1bis).
+        let classeJeton = #"[\p{L}\p{M}\p{N}._~+/=%-]"#
+        let jetonNu = #"(?!nil(?!"# + classeJeton + #"))(?:"# + NSRegularExpression.escapedPattern(for: masque) + "|"
+            + classeJeton + ")++"
         // Lettres, marques et chiffres de toutes les écritures (domaine d'adresse internationalisé, revue B8 de la vague 5).
         let etiquette = #"[\p{L}\p{M}\p{Nd}-]{1,63}"#
         // Séparateur d'une valeur de paramètre : `=`, ou `%3D` et `%253D` (encodé une ou deux fois).

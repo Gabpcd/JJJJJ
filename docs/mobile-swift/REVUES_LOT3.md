@@ -2828,3 +2828,7 @@ limitée à ce delta.
 - Mineurs : **m1** `nil` seul reste lisible (`code: nil`) ; **m2** `%` fait partie du jeton nu (`abc%2Bdef`).
   `:` reste hors du jeton (`code: 12:34:56` garde `:34:56`, une heure, pas un secret). **m3** non retenu : le test du
   diplôme exige bien « 1 envoi · 1 vérification » (`DemoDocumentsTests`, après la feuille suivante).
+- Revue delta (commit 174a535f) : B2 et la régression B1 confirmés corrigés ; **B1bis** : la règle IBAN, désormais
+  avant la règle Swift, masquait le seul début d'un jeton qui ressemble à un IBAN (`tokenHash: Ab12cdEFghIJkl+/xyz==`
+  → `[masqué]+/xyz==`). Le jeton nu reprend maintenant le marqueur déjà posé et sa suite (`tokenHash: "[masqué]"`).
+  Test d'abord (4 échecs), puis `CrashScrubberTests` 34/34 et JoleneCore 1 752 tests, 0 échec.
