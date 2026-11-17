@@ -206,8 +206,9 @@ public enum CrashScrubber {
         // Jeton nu d'une description Swift, pris en entier jusqu'au premier blanc ou signe hors jeton (revue B8 de la
         // vague 5, 3ᵉ tour, m1 : `code: ABC123` passait en clair, `code: 12AB34` n'était masqué qu'à moitié). Il couvre
         // les nombres (chiffres, `-`, `.`, `e`, `+`) et les remplace dans la règle des descriptions Swift : avec les deux,
-        // le nombre `12` de `12AB34` arrêterait la correspondance.
-        let jetonNu = #"[\p{L}\p{M}\p{N}._~+/=-]++"#
+        // le nombre `12` de `12AB34` arrêterait la correspondance. `%` en fait partie (jeton encodé, `abc%2Bdef`) ; `nil`
+        // seul reste lisible (valeur absente, pas un secret) ; revue B8 de #1136, m1 et m2.
+        let jetonNu = #"(?!nil(?![\p{L}\p{M}\p{N}._~+/=%-]))[\p{L}\p{M}\p{N}._~+/=%-]++"#
         // Lettres, marques et chiffres de toutes les écritures (domaine d'adresse internationalisé, revue B8 de la vague 5).
         let etiquette = #"[\p{L}\p{M}\p{Nd}-]{1,63}"#
         // Séparateur d'une valeur de paramètre : `=`, ou `%3D` et `%253D` (encodé une ou deux fois).
@@ -232,9 +233,6 @@ public enum CrashScrubber {
              #"$1\\"\#(m)\\""#),
             // Clé JSON dans un texte (corps de réponse illisible, description d'erreur), valeur texte ou nombre.
             (#"(?i)(""# + nomComplet + #""\s*:\s*)(?:"# + chaine + "|" + nombre + ")", "$1\"\(m)\""),
-            // Description Swift (`String(describing:)`, `dump`) : `refreshToken: "…"`, `tokenHash: Optional("…")`,
-            // `code: 123456`, `code: ABC123`.
-            ("(?i)" + nom + #"(\s*:\s*(?:Optional\()?)(?:"# + chaine + "|" + jetonNu + ")", "$1$2\"\(m)\""),
             // Adresse e-mail : arobase (`@`, `%40` ou `%2540`) et domaine borné (RFC 5321), internationalisé compris ; la
             // partie locale, au plus 64 unités avant l'arobase, est lue à rebours (`masquerAdresses`).
             (#"(?i)(?:@|%2540|%40)"# + etiquette + #"(?:\."# + etiquette + #"){0,8}\.[\p{L}\p{M}]{2,63}"#, nil),
@@ -242,6 +240,11 @@ public enum CrashScrubber {
             // la suite d'un identifiant à tirets.
             (#"(?i)(?<![A-Z0-9_-])(?!"# + uuid + #")[A-Z]{2}[0-9]{2}(?:"# + separateurIBAN + #"?[A-Z0-9]{4}){2,7}(?:"#
                 + separateurIBAN + #"?[A-Z0-9]{1,4})?(?![A-Z0-9_])"#, m),
+            // Description Swift (`String(describing:)`, `dump`) : `refreshToken: "…"`, `tokenHash: Optional("…")`,
+            // `code: 123456`, `code: ABC123`. Après les adresses et les IBAN (revue B8 de #1136, B1) : le jeton nu
+            // s'arrête au premier blanc ou à l'arobase, il laisserait en clair le domaine d'une adresse ou la suite d'un
+            // IBAN groupé ; masqués avant, ils ne laissent que `[masqué]`, que le jeton nu ne reprend pas.
+            ("(?i)" + nom + #"(\s*:\s*(?:Optional\()?)(?:"# + chaine + "|" + jetonNu + ")", "$1$2\"\(m)\""),
         ]
         var compilees: [Regle] = []
         for (motif, gabarit) in motifs {

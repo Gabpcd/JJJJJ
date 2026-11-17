@@ -2811,3 +2811,20 @@ limitée à ce delta.
   (lu dans le même instantané que sa présence) et laisse la preuve du texte et du masquage à
   `PresentationJustificatifsTests`. Même correction pour `testTeleverserLeDiplomeHeicPuisVerifie`, exposé à la même
   fenêtre. Les preuves « 1 envoi · 1 vérification » et « Vérifié ✅ » restent exigées.
+- Tentative 2 (iPhone seul) : 1964 réussis, 0 échoué, 0 ignoré sur les trois formats ; #1133 mergée le 17/11.
+
+### Revue B8 de #1136 (suivi vague 5, 17/11/2026) : NON CLÔTURABLE, deux bloquants corrigés
+
+- **B1** (`CrashScrubber`, régression du suivi du 3ᵉ tour) : la règle des descriptions Swift passait avant les règles
+  d'adresse e-mail et d'IBAN. Son jeton nu s'arrête au premier blanc ou à l'arobase : `iban: FR76 1732 8844 …` laissait
+  `1732 8844 …` en clair, `email: jane.doe@example.com` laissait `@example.com`. Correction : adresses et IBAN sont
+  masqués avant la règle Swift, dont le jeton nu ne reprend pas `[masqué]`. Tests d'abord (12 échecs sur l'ancienne
+  version), puis `CrashScrubberTests` 33/33.
+- **B2** (`attendreIssueVerificationOuVerdict`) : pour le diplôme remplacé, déjà « Vérifié ✅ », la branche « verdict »
+  pouvait être vraie sur l'état d'avant (dossier pas encore relu) : l'aide ne prouvait rien. L'appelant fournit
+  désormais `verdictFrais`, preuve d'un verdict rendu après cet envoi : pour le diplôme, l'ouverture de la feuille
+  suivante (que seul le verdict VERIFIE de cet envoi déclenche, la feuille du diplôme étant fermée) ; pour la pièce
+  d'identité, « Vérifié ✅ » après un état d'avant « Rejeté », désormais vérifié avant l'envoi.
+- Mineurs : **m1** `nil` seul reste lisible (`code: nil`) ; **m2** `%` fait partie du jeton nu (`abc%2Bdef`).
+  `:` reste hors du jeton (`code: 12:34:56` garde `:34:56`, une heure, pas un secret). **m3** non retenu : le test du
+  diplôme exige bien « 1 envoi · 1 vérification » (`DemoDocumentsTests`, après la feuille suivante).

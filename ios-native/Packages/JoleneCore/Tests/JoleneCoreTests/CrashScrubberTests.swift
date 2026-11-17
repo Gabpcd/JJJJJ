@@ -331,6 +331,29 @@ final class CrashScrubberTests: XCTestCase {
         }
     }
 
+    func testDescriptionSwiftNeLaissePasLaSuiteDUnIBANNiLeDomaineDUneAdresse() {
+        // Revue B8 de #1136, B1 : la règle des descriptions Swift passait avant les adresses et les IBAN ; son jeton nu,
+        // arrêté au premier blanc ou à l'arobase, laissait `1732 8844 …` et `@example.com` en clair.
+        for (brut, fragments) in [
+            ("iban: FR76 1732 8844 0018 3164 8362 916", ["FR76", "1732", "8844", "916"]),
+            ("p_iban: FR76\u{00A0}1732\u{00A0}8844\u{00A0}0018\u{00A0}3164\u{00A0}8362\u{00A0}916", ["FR76", "1732", "916"]),
+            ("email: jane.doe@example.com", ["jane", "doe", "example"]),
+            ("Profil(email: Optional(jane.doe@example.com), code: 4F2A9C)", ["jane", "example", "4F2A9C"]),
+        ] {
+            assertMasque(brut, sansFragments: fragments)
+        }
+        XCTAssertEqual(CrashScrubber.texte("iban: FR76 1732 8844 0018 3164 8362 916"), "iban: \(masque)")
+        XCTAssertEqual(CrashScrubber.texte("email: jane.doe@example.com"), "email: \(masque)")
+    }
+
+    func testJetonNuEncodeMasqueEtNilLisible() {
+        // Revue B8 de #1136, m2 : `%` fait partie du jeton nu (`%2Bdef` passait en clair) ; m1 : `nil` seul reste lisible.
+        assertMasque("refreshToken: abc%2Bdef", sansFragments: ["abc", "2Bdef"])
+        XCTAssertEqual(CrashScrubber.texte("refreshToken: abc%2Bdef, suite"), "refreshToken: \"\(masque)\", suite")
+        XCTAssertEqual(CrashScrubber.texte("Verification(code: nil, otp: nil)"), "Verification(code: nil, otp: nil)")
+        assertMasque("code: nilou7", sansFragments: ["nilou7"])
+    }
+
     /// Texte de `longueurMaximale` caractères au moins : des « a » séparés par une espace, puis `fin`, qui commence
     /// `avant` caractères avant la limite.
     private func texteCoupe(_ fin: String, avant: Int) -> String {

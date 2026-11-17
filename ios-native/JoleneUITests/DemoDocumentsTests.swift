@@ -61,7 +61,10 @@ final class DemoDocumentsTests: JoleneUITestCase {
 
         require("La feuille se ferme après l'enregistrement", timeout: 30) { !self.element("document-televersement").exists }
         let statut = element("document-statut-DIPLOME")
-        attendreIssueVerificationOuVerdict(statut)
+        // Le diplôme remplacé était déjà « Vérifié ✅ » : ce badge peut encore montrer l'état d'avant tant que le dossier
+        // n'est pas relu. Seul le verdict VERIFIE de CET envoi ouvre la prochaine exigence critique (feuille suivante,
+        // `DocumentsSoignant.tsx` l.272-274) ; la feuille du diplôme est fermée (attente précédente).
+        attendreIssueVerificationOuVerdict(verdictFrais: { self.element("document-televersement").exists })
         require("Le verdict est relu en ligne", timeout: 30) { statut.exists && statut.label == "Vérifié ✅" }
 
         // Verdict VERIFIE : la prochaine exigence critique s'ouvre (`DocumentsSoignant.tsx` l.272-274).
@@ -118,6 +121,9 @@ final class DemoDocumentsTests: JoleneUITestCase {
         launchDemo(extraArguments: ["-JOLENE_DEMO_SOURCE_DOC", "png", "-JOLENE_DEMO_SCENARIO", "upload-incertain"])
         signInDemo()
         ouvrirMesDocuments()
+        let statut = element("document-statut-CARTE_IDENTITE")
+        require("La pièce d'identité est affichée") { statut.exists }
+        XCTAssertEqual(statut.label, "Rejeté", "état d'avant : un badge « Vérifié ✅ » ne peut venir que de cet envoi")
 
         tap("documents-prochaine-etape")
         attendreFeuille(type: "Pièce d'identité")
@@ -130,8 +136,7 @@ final class DemoDocumentsTests: JoleneUITestCase {
 
         // Réponse perdue après application : réconciliation par relecture de la ligne, jamais de renvoi.
         require("La feuille se ferme après la réconciliation", timeout: 30) { !self.element("document-televersement").exists }
-        let statut = element("document-statut-CARTE_IDENTITE")
-        attendreIssueVerificationOuVerdict(statut)
+        attendreIssueVerificationOuVerdict(verdictFrais: { (try? statut.snapshot())?.label == "Vérifié ✅" })
         XCTAssertEqual(element("documents-demo-envois").label, "1 envoi · 1 vérification", "aucun second envoi")
         require("Le verdict est relu en ligne", timeout: 30) { statut.exists && statut.label == "Vérifié ✅" }
         let aJour = element("documents-entete-titre")
@@ -280,21 +285,25 @@ final class DemoDocumentsTests: JoleneUITestCase {
     /// attente du bandeau OU du verdict ; le texte du bandeau est exigé quand il est observé (lu dans le même instantané
     /// que sa présence, jamais sur un élément qui vient de disparaître), et prouvé hors de toute fenêtre par
     /// `PresentationJustificatifsTests` (texte et masquage au verdict). Le verdict lui-même reste exigé par l'appelant.
-    private func attendreIssueVerificationOuVerdict(_ statut: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+    /// `verdictFrais` est la preuve, propre à l'appelant, d'un verdict rendu APRÈS cet envoi : jamais un badge que l'état
+    /// d'avant pouvait déjà porter (revue B8 de #1136, B2 : un diplôme remplacé était déjà « Vérifié ✅ »).
+    private func attendreIssueVerificationOuVerdict(verdictFrais: @escaping () -> Bool, file: StaticString = #filePath,
+                                                     line: UInt = #line) {
         let issue = element("documents-envoi-issue")
         var texteIssue: String?
-        require("L'issue de l'envoi est annoncée, ou déjà remplacée par le verdict relu", file: file, line: line) {
+        require("L'issue de l'envoi est annoncée, ou déjà remplacée par un verdict rendu après cet envoi", file: file,
+                line: line) {
             if let instantane = try? issue.snapshot() {
                 texteIssue = instantane.label
                 return true
             }
-            return (try? statut.snapshot())?.label == "Vérifié ✅"
+            return verdictFrais()
         }
         if let texteIssue {
             XCTAssertTrue(texteIssue.contains("Document téléversé — vérification en cours (~30 s)."),
                           "texte du bandeau : \(texteIssue)", file: file, line: line)
         } else {
-            XCTContext.runActivity(named: "Bandeau « vérification en cours » non observé : verdict déjà relu") { _ in }
+            XCTContext.runActivity(named: "Bandeau « vérification en cours » non observé : verdict de cet envoi déjà relu") { _ in }
         }
     }
 
