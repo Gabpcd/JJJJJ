@@ -56,6 +56,17 @@ on:
       - 'src/pages/InscriptionSoignant.tsx'
       - 'src/lib/inscriptionProgressive.ts'
       - 'src/components/inscription/DeclarationEtudiant.tsx'
+      - 'src/components/planning/planning-candidat.ts'
+      - 'src/components/planning/selection-serie-candidat.ts'
+      - 'src/integrations/supabase/types.ts'
+      - 'supabase/schema/public.sql'
+      - 'supabase/SECURITY_DEFINER_MANIFEST.json'
+      - '.github/workflows/ios-swift-ci.yml'
+      - 'tests/node/ios-swift-ci-eclats.node.mjs'
+      - 'scripts/mobile/ios-ci-gel-simulateur.sh'
+      # Scripts exécutés par ce workflow (sélection du simulateur, contrôle des captures).
+      - 'mobile-native/scripts/ios-ci-toolchain.mjs'
+      - 'mobile-native/scripts/png-dimensions.mjs'
       # Sources hors ios-native/ relues par les tests Swift (littéral de chemin, annotations d'un fichier Swift relu) :
       # garde scripts/mobile/check-sources-web-ios-ci.mjs, lancée par validate-pr (incident #1137 du 17/11).
       - 'docs/mobile-swift/DECISIONS_LOT2.md'
@@ -95,14 +106,6 @@ on:
       - 'supabase/functions/register-soignant/index.ts'
       - 'supabase/functions/stripe-connect-onboard/index.ts'
       - 'supabase/migrations/20260714084802_synchroniser_regles_profil_exercice.sql'
-      - 'src/components/planning/planning-candidat.ts'
-      - 'src/components/planning/selection-serie-candidat.ts'
-      - 'src/integrations/supabase/types.ts'
-      - 'supabase/schema/public.sql'
-      - 'supabase/SECURITY_DEFINER_MANIFEST.json'
-      - '.github/workflows/ios-swift-ci.yml'
-      - 'tests/node/ios-swift-ci-eclats.node.mjs'
-      - 'scripts/mobile/ios-ci-gel-simulateur.sh'
   push:
     branches: [main]
     paths:
@@ -151,6 +154,17 @@ on:
       - 'src/pages/InscriptionSoignant.tsx'
       - 'src/lib/inscriptionProgressive.ts'
       - 'src/components/inscription/DeclarationEtudiant.tsx'
+      - 'src/components/planning/planning-candidat.ts'
+      - 'src/components/planning/selection-serie-candidat.ts'
+      - 'src/integrations/supabase/types.ts'
+      - 'supabase/schema/public.sql'
+      - 'supabase/SECURITY_DEFINER_MANIFEST.json'
+      - '.github/workflows/ios-swift-ci.yml'
+      - 'tests/node/ios-swift-ci-eclats.node.mjs'
+      - 'scripts/mobile/ios-ci-gel-simulateur.sh'
+      # Scripts exécutés par ce workflow (sélection du simulateur, contrôle des captures).
+      - 'mobile-native/scripts/ios-ci-toolchain.mjs'
+      - 'mobile-native/scripts/png-dimensions.mjs'
       # Sources hors ios-native/ relues par les tests Swift (littéral de chemin, annotations d'un fichier Swift relu) :
       # garde scripts/mobile/check-sources-web-ios-ci.mjs, lancée par validate-pr (incident #1137 du 17/11).
       - 'docs/mobile-swift/DECISIONS_LOT2.md'
@@ -190,14 +204,6 @@ on:
       - 'supabase/functions/register-soignant/index.ts'
       - 'supabase/functions/stripe-connect-onboard/index.ts'
       - 'supabase/migrations/20260714084802_synchroniser_regles_profil_exercice.sql'
-      - 'src/components/planning/planning-candidat.ts'
-      - 'src/components/planning/selection-serie-candidat.ts'
-      - 'src/integrations/supabase/types.ts'
-      - 'supabase/schema/public.sql'
-      - 'supabase/SECURITY_DEFINER_MANIFEST.json'
-      - '.github/workflows/ios-swift-ci.yml'
-      - 'tests/node/ios-swift-ci-eclats.node.mjs'
-      - 'scripts/mobile/ios-ci-gel-simulateur.sh'
   workflow_dispatch:
 
 permissions:

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import {
@@ -153,18 +155,29 @@ const brut = (pr, push, jobs = '  coeur:\n    runs-on: ubuntu-latest\n') =>
   + `  workflow_dispatch:\n\njobs:\n${jobs}`;
 const LISTE = "    paths:\n      - 'ios-native/**'\n";
 
-test('revue B8 (B1) : un « paths: » que la garde ne sait pas lire est refusé, jamais lu comme « aucun filtre »', () => {
-  // Commentaire sur la ligne de la clé : la liste qui suit est lue.
-  assert.deepEqual(motifsDuFiltre(brut("    paths: # filtre iOS\n      - 'ios-native/**'\n", LISTE)),
-    { pull_request: ['ios-native/**'], push: ['ios-native/**'] });
-  // Liste en ligne, ancre et alias YAML : GitHub les applique, la garde ne les lit pas.
-  assert.throws(() => motifsDuFiltre(brut("    paths: ['ios-native/**']\n", LISTE)), /non gérée/);
-  assert.throws(() => motifsDuFiltre(brut("    paths: &chemins\n      - 'ios-native/**'\n", '    paths: *chemins\n')), /non gérée/);
-  assert.throws(() => motifsDuFiltre(brut(LISTE, '    paths: *chemins\n')), /non gérée/);
-  // Liste vide, ou élément d'une forme inconnue : refusés plutôt que tronqués.
-  assert.throws(() => motifsDuFiltre(brut('    paths:\n', LISTE)), /vide/);
-  assert.throws(() => motifsDuFiltre(brut("    paths:\n      - &a 'ios-native/**'\n", LISTE)), /non gérée/);
-  assert.throws(() => motifsDuFiltre(brut("    paths:\n        - 'ios-native/**'\n", LISTE)), /non gérée/);
+test('revue B8 (B1) : le filtre est lu comme GitHub le lit, jamais pris pour « aucun filtre » par erreur', () => {
+  const lu = { pull_request: ['ios-native/**'], push: ['ios-native/**'] };
+  // Formes YAML valides que GitHub applique : commentaire, liste en ligne, ancre et alias, élément ancré, indentation libre.
+  assert.deepEqual(motifsDuFiltre(brut("    paths: # filtre iOS\n      - 'ios-native/**'\n", LISTE)), lu);
+  assert.deepEqual(motifsDuFiltre(brut("    paths: ['ios-native/**']\n", LISTE)), lu);
+  assert.deepEqual(motifsDuFiltre(brut("    paths: &chemins\n      - 'ios-native/**'\n", '    paths: *chemins\n')), lu);
+  assert.deepEqual(motifsDuFiltre(brut("    paths:\n      - &a 'ios-native/**'\n", LISTE)), lu);
+  assert.deepEqual(motifsDuFiltre(brut("    paths:\n        - 'ios-native/**'\n", LISTE)), lu);
+  assert.deepEqual(motifsDuFiltre(brut("    'paths':\n      - 'ios-native/**'\n", LISTE)), lu);
+  // Seconde revue : corps de `push:` ré-indenté, clé entre guillemets ; le fichier absent est vu.
+  const reindente = "  push:\n      branches: [main]\n      paths:\n        - 'ios-native/**'\n";
+  const yml = `on:\n  pull_request:\n    branches: [main]\n    paths:\n      - 'ios-native/**'\n      - '${PAGE}'\n${reindente}`;
+  const { erreurs } = verifier({ filtre: yml });
+  assert.equal(erreurs.length, 1, erreurs.join('\n'));
+  assert.match(erreurs[0], /filtre push /);
+  // Clé sans valeur, valeur qui n'est pas une liste de chaînes, paths-ignore : refusés.
+  assert.throws(() => motifsDuFiltre(brut('    paths:\n', LISTE)), /liste/);
+  assert.throws(() => motifsDuFiltre(brut('    paths: ios-native/**\n', LISTE)), /liste/);
+  assert.throws(() => motifsDuFiltre(brut('    paths:\n      - [a]\n', LISTE)), /liste/);
+  assert.throws(() => motifsDuFiltre(brut("    paths-ignore:\n      - 'docs/**'\n", LISTE)), /paths-ignore/);
+  // Événement sans corps, ou forme courte `on: [push, pull_request]` : non filtré.
+  assert.deepEqual(motifsDuFiltre('on: [push, pull_request]\n'), { pull_request: ['**'], push: ['**'] });
+  assert.deepEqual(motifsDuFiltre(`on:\n  pull_request:\n${LISTE}  push:\n`).push, ['**']);
 });
 
 test('revue B8 : les événements sont cherchés dans le bloc « on: », pas parmi les jobs', () => {
@@ -176,37 +189,70 @@ test('revue B8 : un chemin construit (interpolation, concaténation, segments) e
     ['let web = try source("src/pages/\\(nom).tsx")', /construit/],
     ['let web = try source("src/pages/" + nom)', /dossier/],
     ['let web = racine.appendingPathComponent("src").appendingPathComponent("pages/Page.tsx")', /construit/],
+    ['let web = racine.appendingPathComponent("src", isDirectory: true)', /construit/],
+    ['let web = racine.appending(path: "src")', /construit/],
+    ['let web = racine.appending(component: "../src")', /construit/],
   ];
   for (const [ligne, attendu] of cas) {
     const { erreurs } = verifier({ swift: [{ chemin: TEST_SWIFT, texte: `${ligne}\n` }], filtre: workflow(['ios-native/**', PAGE]) });
     assert.equal(erreurs.length, 1, `${ligne}\n${erreurs.join('\n')}`);
     assert.match(erreurs[0], attendu);
   }
+});
+
+test('revue B8 : préfixes ./, ../, / et interpolation en tête ne masquent pas le chemin lu', () => {
+  for (const ligne of [
+    'let w = try lire("../src/pages/Page.tsx")',
+    'let w = racine.appendingPathComponent("../../../../../src/pages/Page.tsx")',
+    'let w = try source("./src/pages/Page.tsx")',
+    'let w = try String(contentsOfFile: "\\(racine.path)/src/pages/Page.tsx")',
+    'let w = try String(contentsOfFile: racine.path + "/src/pages/Page.tsx")',
+    'XCTAssertTrue(l.contains(#"say "hi"#)); let w = try source("src/pages/Page.tsx")',
+  ]) {
+    const { lectures, erreurs } = verifier({ swift: [{ chemin: TEST_SWIFT, texte: `${ligne}\n` }] });
+    assert.deepEqual([...lectures.keys()], [PAGE], ligne);
+    assert.equal(erreurs.length, 1, `${ligne}\n${erreurs.join('\n')}`);
+  }
+});
+
+test('revue B8 : un fichier Swift relu par un chemin relatif (ios-native/, paquet) compte aussi', () => {
+  const regle = { chemin: REGLE_SWIFT, texte: '// source: src/lib/regle.ts:12\nstatic let a = "A"\n' };
+  for (const relatif of ['Packages/JoleneCore/Sources/JoleneCore/Regles/Regle.swift', 'Sources/JoleneCore/Regles/Regle.swift']) {
+    const relecteur = { chemin: TEST_SWIFT, texte: `let lignes = try lire("${relatif}")\n` };
+    const { lectures } = verifier({ swift: [regle, relecteur], depot: ['src/lib/regle.ts'] });
+    assert.deepEqual([...lectures.keys()], ['src/lib/regle.ts'], relatif);
+  }
+});
+
+test('revue B8 : pas de faux positif sur une clé de stockage, un préfixe ou un segment court', () => {
+  const depot = [PAGE, 'public/robots.txt', 'tests/a/b.ts', 'ios/App/x.swift'];
+  for (const ligne of [
+    'let cle = "public/avatars/x.jpg"', 'let cle = "public/u-1.jpg"', 'let cle = "public/avatars"',
+    'let d = "tests/unitaires"', 'XCTAssertTrue(chemin.hasPrefix("src/"))', 'let v = "ios/\\(version)"',
+  ]) {
+    assert.deepEqual(verifier({ swift: [{ chemin: TEST_SWIFT, texte: `${ligne}\n` }], depot }).erreurs, [], ligne);
+  }
   // Un message qui commence par un chemin puis interpole autre chose n'est pas un chemin construit (JoleneDesignLot1Tests).
   const message = { chemin: TEST_SWIFT, texte: 'throw XCTSkip("src/pages/Page.tsx introuvable : \\(fichier.path)")\n' };
-  assert.deepEqual(verifier({ swift: [message] }).erreurs, []);
-});
-
-test('revue B8 : un guillemet impair plus tôt sur la ligne ne masque pas le chemin lu', () => {
-  const texte = 'XCTAssertTrue(l.contains(#"say "hi"#)); let w = try source("src/pages/Page.tsx")\n';
-  const { lectures } = verifier({ swift: [{ chemin: TEST_SWIFT, texte }] });
-  assert.deepEqual([...lectures.keys()], [PAGE]);
-});
-
-test('revue B8 : un fichier Swift relu par un chemin relatif à ios-native/ compte aussi', () => {
-  const regle = { chemin: REGLE_SWIFT, texte: '// source: src/lib/regle.ts:12\nstatic let a = "A"\n' };
-  const relecteur = { chemin: TEST_SWIFT, texte: 'let lignes = try lire("Packages/JoleneCore/Sources/JoleneCore/Regles/Regle.swift")\n' };
-  const { lectures } = verifier({ swift: [regle, relecteur], depot: ['src/lib/regle.ts'] });
-  assert.deepEqual([...lectures.keys()], ['src/lib/regle.ts']);
-});
-
-test('revue B8 : « introuvable » vise un fichier d’un dossier du dépôt, pas une clé de stockage', () => {
-  const cle = { chemin: TEST_SWIFT, texte: 'let cle = "public/avatars/x.jpg"\n' };
-  assert.deepEqual(verifier({ swift: [cle], depot: [PAGE, 'public/robots.txt'] }).erreurs, []);
+  assert.deepEqual(verifier({ swift: [message], filtre: workflow(['ios-native/**', PAGE]) }).erreurs, []);
+  // Un fichier supprimé dont le dossier existe encore reste refusé (XCTSkip).
   const aasa = { chemin: TEST_SWIFT, texte: 'let f = "public/.well-known/apple-app-site-association"\n' };
   const supprime = verifier({ swift: [aasa], depot: [PAGE, 'public/.well-known/assetlinks.json'] });
   assert.equal(supprime.erreurs.length, 1, supprime.erreurs.join('\n'));
   assert.match(supprime.erreurs[0], /introuvable/);
+});
+
+test('revue B8 : la CLI tourne aussi lancée à travers un lien symbolique', () => {
+  const dossier = mkdtempSync(join(tmpdir(), 'sources-web-ios-ci-'));
+  try {
+    const lien = join(dossier, 'garde.mjs');
+    symlinkSync(join(ROOT, 'scripts/mobile/check-sources-web-ios-ci.mjs'), lien);
+    const sortie = spawnSync(process.execPath, [lien], { cwd: ROOT, encoding: 'utf8' });
+    assert.equal(sortie.status, 0, sortie.stderr);
+    assert.match(sortie.stdout, /fichiers hors ios-native\/ lus par du Swift/);
+  } finally {
+    rmSync(dossier, { recursive: true, force: true });
+  }
 });
 
 test('dépôt réel : chaque fichier lu par du Swift hors garde figure aux deux filtres de ios-swift-ci.yml', () => {

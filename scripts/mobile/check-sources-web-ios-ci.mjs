@@ -10,26 +10,31 @@
  * a décalé `InscriptionSoignant.tsx` et 50 tests de `CompletionVerbatimTests` ont échoué (corrigés par #1138).
  *
  * Est une lecture, dans tout fichier `.swift` de `ios-native/` :
- *   - un littéral de chaîne égal au chemin d'un fichier du dépôt hors `ios-native/` (`source("src/…")`,
- *     `static let hub = "src/pages/…"`) ;
+ *   - un chemin de fichier du dépôt hors `ios-native/` écrit dans un littéral (`source("src/…")`,
+ *     `static let hub = "src/pages/…"`), préfixes `./`, `../` et `/` ou interpolation de tête (`"\(racine.path)/src/…"`)
+ *     compris ;
  *   - une annotation `// source:`, `// source-objet:` ou `// source-ensemble:` (en début ou en fin de ligne) d'un
- *     fichier Swift dont le chemin (depuis la racine ou depuis `ios-native/`) figure lui-même en littéral dans du
- *     Swift : c'est ainsi que `CompletionVerbatimTests`
- *     relit `CompletionProfil.swift` et `InscriptionVerbatimTests` relit `InscriptionRules.swift`.
+ *     fichier Swift dont le chemin (depuis la racine, `ios-native/` ou un paquet) figure lui-même dans un littéral :
+ *     c'est ainsi que `CompletionVerbatimTests` relit `CompletionProfil.swift` et `InscriptionVerbatimTests` relit
+ *     `InscriptionRules.swift`.
  * Les annotations d'un fichier Swift qu'aucun test ne relit sont de la documentation. C'est le cas de
  * `TextesWeb.swift` et `LibellesWeb.swift` : la garde tolérante `check-textes-juridiques-ios.mjs` les relit dans
  * validate-pr (check requis ; texte modifié en erreur, décalage de lignes en avertissement), aucun test Swift. Un test
  * Swift qui se mettrait à les relire rendrait leurs citations obligatoires dans le filtre.
  *
- * Les littéraux des commentaires comptent aussi : lecture par excès, un chemin périmé dans une doc est à corriger.
+ * Refusés, pour qu'aucune lecture n'échappe en silence :
+ *   - un dossier lu (`"src/pages"`, `"src/pages/" + nom`) et un chemin construit (interpolation au fil d'un dossier du
+ *     dépôt, segment racine seul passé à `appendingPathComponent` ou `appending(path:|component:)`) : couverture
+ *     inconnue ;
+ *   - un chemin cité introuvable (fichier d'un sous-dossier existant ou à extension de source, ou annotation d'un
+ *     fichier relu) : les tests Swift lèvent `XCTSkip` sur un fichier absent, une PR web qui le renomme ou le supprime
+ *     passerait donc en silence.
+ * Limite connue : un test qui parcourrait un dossier pour relire les annotations de chaque fichier Swift n'est pas vu ;
+ * la convention du dépôt est de citer chaque fichier relu dans un littéral (CompletionVerbatimTests, InscriptionVerbatimTests).
  *
- * Refusés : un littéral égal à un dossier (`"src/pages"`, `"src/pages/" + nom`) ou un chemin construit sous un dossier
- * racine (interpolation `\(…)`, `appendingPathComponent("src")`) : couverture inconnue ; un chemin cité introuvable
- * (littéral dont le dossier existe ou qui porte une extension de source, ou annotation d'un fichier relu) : les tests
- * Swift lèvent `XCTSkip` sur un fichier absent, une PR web qui le renomme ou le supprime passerait donc en silence.
- *
- * Chaque fichier lu doit correspondre à un motif des DEUX filtres (`pull_request` et `push`). Seuls `*` et `**` sont
- * interprétés ; `?`, `+`, `[…]` et `!` (quantificateurs et négation chez GitHub) et `paths-ignore` sont refusés.
+ * Chaque fichier lu doit correspondre à un motif des DEUX filtres (`pull_request` et `push`), lus avec le paquet `yaml`
+ * comme GitHub les lit. Seuls `*` et `**` sont interprétés ; `?`, `+`, `[…]` et `!` (quantificateurs et négation chez
+ * GitHub), `paths-ignore` et un `paths` qui n'est pas une liste de chaînes sont refusés.
  *
  * Coût assumé : élargir le filtre relance la CI iOS (macOS, ~3 h, délai maximal de 6 h pour le job `ui`) sur les PR
  * web qui touchent ces fichiers.
@@ -43,9 +48,10 @@
  * Aucun réseau, aucun secret : le script ne lit que des fichiers du dépôt (et `git ls-files`).
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { parse } from 'yaml';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const SCRIPT = 'scripts/mobile/check-sources-web-ios-ci.mjs';
@@ -83,45 +89,34 @@ function verifierMotif(motif, evenement) {
 }
 
 /**
- * Motifs `paths` des événements `pull_request` et `push`, cherchés dans le bloc `on:` (absent : l'événement n'est pas
- * filtré, `**`). Seule la forme « `paths:` puis un `- 'motif'` par ligne » est lue ; toute autre écriture (liste en
- * ligne, ancre, alias, liste vide, élément inconnu) lève une erreur au lieu d'être lue comme « aucun filtre » ou
- * comme une liste tronquée (revue B8 de #1139).
+ * Motifs `paths` des événements `pull_request` et `push`, lus par le paquet `yaml` comme GitHub les lit (commentaires,
+ * listes en ligne, ancres, alias, indentation libre). Événement sans `paths` : non filtré (`**`). Refusés : `paths`
+ * qui n'est pas une liste non vide de chaînes, `paths-ignore`, événement absent de `on` (revues B8 de #1139).
  */
 export function motifsDuFiltre(yml) {
-  const lignes = yml.split('\n');
-  const debutOn = lignes.findIndex(l => /^on:\s*(#.*)?$/.test(l));
-  if (debutOn < 0) throw new Error(`${WORKFLOW_IOS} : bloc « on: » introuvable (seule la forme bloc est lue par ${SCRIPT}).`);
-  let finOn = debutOn + 1;
-  while (finOn < lignes.length && (lignes[finOn] === '' || /^[ #]/.test(lignes[finOn]))) finOn += 1;
-  const blocOn = lignes.slice(debutOn + 1, finOn);
-  const refus = (evenement, ligne, quoi) => new Error(`${WORKFLOW_IOS} : « ${ligne.trim()} » (${evenement}) : ${quoi} `
-    + `non gérée par ${SCRIPT} ; écrivez « paths: » puis un « - 'chemin' » par ligne.`);
+  let on;
+  try {
+    on = parse(yml)?.on;
+  } catch (erreur) {
+    throw new Error(`${WORKFLOW_IOS} : YAML illisible par ${SCRIPT} (${erreur.message}).`);
+  }
   const filtres = {};
   for (const evenement of EVENEMENTS) {
-    const debut = blocOn.findIndex(l => new RegExp(`^ {2}${evenement}:\\s*(#.*)?$`).test(l));
-    if (debut < 0) throw new Error(`${WORKFLOW_IOS} : événement ${evenement} introuvable dans « on: ».`);
-    let fin = debut + 1;
-    while (fin < blocOn.length && (blocOn[fin] === '' || /^ {3,}/.test(blocOn[fin]) || /^\s*#/.test(blocOn[fin]))) fin += 1;
-    const bloc = blocOn.slice(debut + 1, fin);
-    if (bloc.some(l => /^ {4}paths-ignore\s*:/.test(l))) {
-      throw new Error(`${WORKFLOW_IOS} : paths-ignore (${evenement}) non géré par ${SCRIPT}.`);
+    const forme = typeof on === 'string' || Array.isArray(on);
+    const present = forme ? [on].flat().includes(evenement) : on !== null && typeof on === 'object' && evenement in on;
+    if (!present) throw new Error(`${WORKFLOW_IOS} : événement ${evenement} introuvable dans « on ».`);
+    const corps = forme ? null : on[evenement];
+    if (corps === null || corps === undefined) { filtres[evenement] = ['**']; continue; }
+    if (typeof corps !== 'object' || Array.isArray(corps)) {
+      throw new Error(`${WORKFLOW_IOS} : corps de ${evenement} non géré par ${SCRIPT} (objet attendu).`);
     }
-    const cles = bloc.flatMap((l, i) => (/^ {4}paths\s*:/.test(l) ? [i] : []));
-    if (!cles.length) { filtres[evenement] = ['**']; continue; }
-    if (cles.length > 1 || !/^ {4}paths:\s*(#.*)?$/.test(bloc[cles[0]])) {
-      throw refus(evenement, bloc[cles.at(-1)], 'syntaxe (liste en ligne, ancre, alias ou clé répétée)');
+    if ('paths-ignore' in corps) throw new Error(`${WORKFLOW_IOS} : paths-ignore (${evenement}) non géré par ${SCRIPT}.`);
+    if (!('paths' in corps)) { filtres[evenement] = ['**']; continue; }
+    const { paths } = corps;
+    if (!Array.isArray(paths) || !paths.length || !paths.every(m => typeof m === 'string')) {
+      throw new Error(`${WORKFLOW_IOS} : paths (${evenement}) doit être une liste non vide de chaînes pour ${SCRIPT}.`);
     }
-    const motifs = [];
-    for (const ligne of bloc.slice(cles[0] + 1)) {
-      if (/^\s*(#.*)?$/.test(ligne)) continue;
-      if (/^ {4}\S/.test(ligne)) break;
-      const item = /^ {6}- (?:'([^']*)'|"([^"]*)"|([^\s'"&*#!][^\s#]*))\s*(?:#.*)?$/.exec(ligne);
-      if (!item) throw refus(evenement, ligne, 'syntaxe d’élément');
-      motifs.push(verifierMotif(item[1] ?? item[2] ?? item[3], evenement));
-    }
-    if (!motifs.length) throw new Error(`${WORKFLOW_IOS} : paths (${evenement}) vide, non géré par ${SCRIPT}.`);
-    filtres[evenement] = motifs;
+    filtres[evenement] = paths.map(m => verifierMotif(m, evenement));
   }
   return filtres;
 }
@@ -145,30 +140,46 @@ export function lecturesDuSwift({ swift, fichiersDepot }) {
   const lectures = new Map();
   const relus = new Map();
   const erreurs = [];
-  const racineWeb = valeur => valeur !== 'ios-native' && racines.has(valeur);
-  const parent = valeur => valeur.split('/').slice(0, -1).join('/');
+  const racineWeb = racine => racine !== 'ios-native' && racines.has(racine);
+  const parent = chemin => chemin.split('/').slice(0, -1).join('/');
+  const swiftSuivis = fichiersDepot.filter(f => f.startsWith(NATIF) && f.endsWith('.swift'));
+  /** Jeton de chemin sans ses préfixes `./`, `../` et `/` ; `null` s'il contient un segment vide, `.` ou `..`. */
+  const normaliser = jeton => {
+    const valeur = jeton.replace(/^(?:\.{1,2}\/|\/)+/, '');
+    const net = valeur.replace(/\/+$/, '');
+    if (!net || net.split('/').some(seg => !seg || seg === '.' || seg === '..')) return null;
+    return { net, dossier: valeur.endsWith('/') };
+  };
+  const conseil = 'si ce n’est pas une lecture (commentaire, préfixe), écrivez le chemin sans guillemets';
   for (const { chemin, texte } of swift) {
     const nom = basename(chemin);
-    // Contenu réduit à des caractères de chemin : un guillemet impair plus tôt sur la ligne ne décale pas la lecture.
-    for (const [, brut] of texte.matchAll(/"([\w.-]+(?:\/[\w.-]+)+\/?|[\w.-]+\/)"/g)) {
-      const valeur = brut.replace(/\/$/, '');
-      const dossier = brut.endsWith('/');
-      const natif = valeur.startsWith(NATIF) ? valeur : `${NATIF}${valeur}`;
-      if (!dossier && natif.endsWith('.swift') && depot.has(natif)) { ajouter(relus, natif, chemin); continue; }
-      if (!racineWeb(valeur.split('/')[0])) continue;
-      if (!dossier && depot.has(valeur)) ajouter(lectures, valeur, nom);
-      else if (dossiers.has(valeur)) {
-        erreurs.push(`${nom} lit le dossier « ${brut} » : ${SCRIPT} ne sait pas quels fichiers il couvre ; citez chaque fichier lu en entier.`);
-      } else if (dossiers.has(parent(valeur)) || EXTENSIONS_SOURCE.test(valeur)) {
-        erreurs.push(`${nom} cite « ${valeur} », introuvable dans le dépôt : le test Swift lèverait XCTSkip et ne vérifierait plus rien ; corrigez le chemin.`);
+    // Jeton de caractères de chemin ouvert par un guillemet ou par la fin d'une interpolation `\(…)`, fermé par un
+    // guillemet : une seule classe répétée (aucun retour arrière exponentiel) ; un guillemet impair plus tôt sur la
+    // ligne ne décale pas la lecture, le contenu d'un faux littéral contenant une espace.
+    for (const [, jeton] of texte.matchAll(/[")]([\w./-]+)"/g)) {
+      const lu = normaliser(jeton);
+      if (!lu || (!lu.net.includes('/') && !lu.dossier)) continue;
+      const { net, dossier } = lu;
+      if (!dossier && net.endsWith('.swift')) {
+        const relu = swiftSuivis.filter(f => f === net || f.endsWith(`/${net}`));
+        for (const f of relu) ajouter(relus, f, chemin);
+        if (relu.length) continue;
+      }
+      if (!racineWeb(net.split('/')[0])) continue;
+      if (!dossier && depot.has(net)) ajouter(lectures, net, nom);
+      else if (net.includes('/') && dossiers.has(net)) {
+        erreurs.push(`${nom} lit le dossier « ${net}/ » : ${SCRIPT} ne sait pas quels fichiers il couvre ; citez chaque fichier lu en entier (${conseil}).`);
+      } else if (!dossier && ((parent(net).includes('/') && dossiers.has(parent(net))) || EXTENSIONS_SOURCE.test(net))) {
+        erreurs.push(`${nom} cite « ${net} », introuvable dans le dépôt : le test Swift lèverait XCTSkip et ne vérifierait plus rien ; corrigez le chemin (${conseil}).`);
       }
     }
-    const construits = [
-      // Interpolation au fil du chemin (`"src/pages/\(nom).tsx"`), pas après une espace (message d'XCTSkip).
-      ...[...texte.matchAll(/"([\w.-]+)\/[\w.\/-]*\\\(/g)].map(m => m[1]),
-      ...[...texte.matchAll(/appendingPathComponent\(\s*"([\w.-]+)"\s*\)/g)].map(m => m[1]),
-    ].filter(racineWeb);
-    for (const racine of construits) {
+    // Chemins construits : interpolation au fil d'un dossier du dépôt (`"src/pages/\(nom).tsx"`, pas un message
+    // `"src/x introuvable : \(…)"`), ou segment racine seul passé à appendingPathComponent / appending(path:|component:).
+    const interpoles = [...texte.matchAll(/[")]([\w./-]*)\\\(/g)].map(m => normaliser(m[1]))
+      .filter(lu => lu && lu.net.includes('/') && dossiers.has(lu.net)).map(lu => lu.net.split('/')[0]);
+    const segments = [...texte.matchAll(/(?:appendingPathComponent\(|appending\(\s*(?:path|component):)\s*"([^"\n]*)"\s*[,)]/g)]
+      .map(m => normaliser(m[1])).filter(lu => lu && !lu.net.includes('/')).map(lu => lu.net);
+    for (const racine of [...interpoles, ...segments].filter(racineWeb)) {
       erreurs.push(`${nom} lit un chemin construit sous « ${racine}/ » (interpolation ou segments) : ${SCRIPT} ne peut pas savoir quel fichier est lu ; écrivez le chemin en entier dans un seul littéral.`);
     }
   }
@@ -228,6 +239,11 @@ export function main(argv = process.argv.slice(2)) {
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href) {
-  process.exitCode = main();
-}
+const lanceDirectement = () => {
+  try {
+    return Boolean(process.argv[1]) && pathToFileURL(realpathSync(process.argv[1])).href === import.meta.url;
+  } catch {
+    return false;
+  }
+};
+if (lanceDirectement()) process.exitCode = main();
