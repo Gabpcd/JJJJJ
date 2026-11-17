@@ -11,80 +11,80 @@ import Foundation
 public enum CompletionTextes {
     // MARK: En-tête
 
-    // source: src/pages/InscriptionSoignant.tsx:440
+    // source: src/pages/InscriptionSoignant.tsx:457
     public static let titre = "Vos informations professionnelles"
-    // source: src/pages/InscriptionSoignant.tsx:539
+    // source: src/pages/InscriptionSoignant.tsx:556
     public static let sousTitre = "Ces informations permettent de vérifier votre profil avant de candidater."
 
     // MARK: Identité et coordonnées
 
-    // source: src/pages/InscriptionSoignant.tsx:542
+    // source: src/pages/InscriptionSoignant.tsx:559
     public static let prenom = "Prénom *"
-    // source: src/pages/InscriptionSoignant.tsx:546
+    // source: src/pages/InscriptionSoignant.tsx:563
     public static let nom = "Nom *"
-    // source: src/pages/InscriptionSoignant.tsx:550
+    // source: src/pages/InscriptionSoignant.tsx:567
     public static let telephone = "Téléphone *"
-    // source: src/pages/InscriptionSoignant.tsx:550
+    // source: src/pages/InscriptionSoignant.tsx:567
     public static let telephonePlaceholder = "+33 6 ..."
-    // source: src/pages/InscriptionSoignant.tsx:551
+    // source: src/pages/InscriptionSoignant.tsx:568
     public static let telephoneInvalide = "Numéro de téléphone invalide"
-    // source: src/pages/InscriptionSoignant.tsx:552
+    // source: src/pages/InscriptionSoignant.tsx:569
     public static let telephoneAide = "Nécessaire pour qu'un établissement puisse vous joindre (missions urgentes)."
-    // source: src/pages/InscriptionSoignant.tsx:554
+    // source: src/pages/InscriptionSoignant.tsx:571
     public static let dateNaissance = "Date de naissance *"
-    // source: src/pages/InscriptionSoignant.tsx:555
+    // source: src/pages/InscriptionSoignant.tsx:572
     public static let dateNaissanceObligatoire = "La date de naissance est obligatoire"
-    // source: src/pages/InscriptionSoignant.tsx:556
+    // source: src/pages/InscriptionSoignant.tsx:573
     public static let dateNaissanceMineur = "Vous devez avoir 18 ans révolus pour vous inscrire"
     /// Profession du parcours, affichée en lecture seule (le web la laisse modifiable ; blueprint §3 T8 : « profession
     /// figée du parcours », principe « État dérivé »).
-    // source: src/pages/InscriptionSoignant.tsx:559
+    // source: src/pages/InscriptionSoignant.tsx:576
     public static let profession = "Profession *"
 
     // MARK: RPPS (correction 20, décision 11)
 
-    // source: src/pages/InscriptionSoignant.tsx:582
+    // source: src/pages/InscriptionSoignant.tsx:599
     public static let numeroRpps = "Numéro RPPS"
     /// Suffixe du libellé quand le numéro est obligatoire (`{rppsObligatoireInscription ? ' *' : ''}`).
-    // source: src/pages/InscriptionSoignant.tsx:582
+    // source: src/pages/InscriptionSoignant.tsx:599
     public static let suffixeObligatoire = " *"
-    // source: src/pages/InscriptionSoignant.tsx:586
+    // source: src/pages/InscriptionSoignant.tsx:603
     public static let aideRppsAideSoignant = "Optionnel pour les aides-soignants : si vous disposez déjà d’une identité RPPS, nous la vérifions dans l’Annuaire Santé. Votre diplôme reste obligatoire."
-    // source: src/pages/InscriptionSoignant.tsx:587
+    // source: src/pages/InscriptionSoignant.tsx:604
     public static let aideRppsOptionnel = "Vous ne le connaissez pas par cœur ? Vous pouvez laisser vide et le compléter plus tard — la vérification se fera à ce moment-là."
-    // source: src/pages/InscriptionSoignant.tsx:591
+    // source: src/pages/InscriptionSoignant.tsx:608
     public static let aideRppsAnnuaire = "Les 11 chiffres ne suffisent pas : Jolene interroge l’Annuaire Santé officiel et recoupe l’identité, la profession et la situation active."
-    // source: src/pages/InscriptionSoignant.tsx:594
+    // source: src/pages/InscriptionSoignant.tsx:611
     public static let rppsPlaceholderObligatoire = "11 chiffres"
-    // source: src/pages/InscriptionSoignant.tsx:594
+    // source: src/pages/InscriptionSoignant.tsx:611
     public static let rppsPlaceholderOptionnel = "11 chiffres (optionnel)"
-    // source: src/pages/InscriptionSoignant.tsx:658
+    // source: src/pages/InscriptionSoignant.tsx:675
     public static let aucunRpps = "ℹ️ Aucun RPPS n'est demandé pour ce profil. Votre diplôme et votre carte d'identité restent vérifiés avant toute mission."
 
     // MARK: Type d'exercice (`ExerciceTypeSection`, l.53-99 ; HARD STOP n°4 : affichage seul, jamais transmis)
 
-    // source: src/pages/InscriptionSoignant.tsx:65
+    // source: src/pages/InscriptionSoignant.tsx:66
     public static let typeExercice = "Type d'exercice"
     /// Phrase du type unique, fragments du JSX l.68 (`phraseTypeUnique`).
-    // source: src/pages/InscriptionSoignant.tsx:68
+    // source: src/pages/InscriptionSoignant.tsx:69
     public static let typeUniqueDebut = "En tant que"
-    // source: src/pages/InscriptionSoignant.tsx:68
+    // source: src/pages/InscriptionSoignant.tsx:69
     public static let typeUniqueMilieu = ", votre type d'exercice est automatiquement défini comme"
-    // source: src/pages/InscriptionSoignant.tsx:68
+    // source: src/pages/InscriptionSoignant.tsx:69
     public static let typeUniqueSalarie = "salarié"
-    // source: src/pages/InscriptionSoignant.tsx:68
+    // source: src/pages/InscriptionSoignant.tsx:69
     public static let typeUniqueLiberal = "libéral"
-    // source: src/pages/InscriptionSoignant.tsx:68
+    // source: src/pages/InscriptionSoignant.tsx:69
     public static let typeUniqueMixte = "mixte"
-    // source: src/pages/InscriptionSoignant.tsx:77
+    // source: src/pages/InscriptionSoignant.tsx:78
     public static let questionSalarie = "Êtes-vous actuellement salarié(e) d'un établissement de santé ?"
-    // source: src/pages/InscriptionSoignant.tsx:79
-    public static let oui = "Oui"
     // source: src/pages/InscriptionSoignant.tsx:80
+    public static let oui = "Oui"
+    // source: src/pages/InscriptionSoignant.tsx:81
     public static let non = "Non"
-    // source: src/pages/InscriptionSoignant.tsx:84
+    // source: src/pages/InscriptionSoignant.tsx:85
     public static let exclusivite = "ℹ️ Vous pourrez effectuer des missions sur Jolene en complément de votre activité salariée. Vérifiez que votre contrat de travail n'inclut pas de clause d'exclusivité."
-    // source: src/pages/InscriptionSoignant.tsx:94
+    // source: src/pages/InscriptionSoignant.tsx:95
     public static let referentielIndisponible = "Le référentiel est momentanément indisponible. Vous pouvez poursuivre votre inscription ; le mode libéral pourra être activé après contrôle."
 
     // MARK: Étudiant (renvoi web, D11)
@@ -96,42 +96,42 @@ public enum CompletionTextes {
 
     // MARK: Validation (`handleSubmit`, l.354-357)
 
-    // source: src/pages/InscriptionSoignant.tsx:355
+    // source: src/pages/InscriptionSoignant.tsx:367
     public static let manquePrenom = "prénom"
-    // source: src/pages/InscriptionSoignant.tsx:355
+    // source: src/pages/InscriptionSoignant.tsx:367
     public static let manqueNom = "nom"
-    // source: src/pages/InscriptionSoignant.tsx:355
+    // source: src/pages/InscriptionSoignant.tsx:367
     public static let manqueTelephone = "téléphone valide"
-    // source: src/pages/InscriptionSoignant.tsx:355
+    // source: src/pages/InscriptionSoignant.tsx:367
     public static let manqueDateNaissance = "date de naissance (18 ans minimum)"
-    // source: src/pages/InscriptionSoignant.tsx:355
+    // source: src/pages/InscriptionSoignant.tsx:367
     public static let manqueProfession = "profession"
-    // source: src/pages/InscriptionSoignant.tsx:355
+    // source: src/pages/InscriptionSoignant.tsx:367
     public static let manqueModeExercice = "mode d’exercice"
-    // source: src/pages/InscriptionSoignant.tsx:355
+    // source: src/pages/InscriptionSoignant.tsx:367
     public static let manqueRpps = "numéro RPPS à 11 chiffres"
     /// `Vérifiez les informations suivantes : ${manque.join(', ')}.` (`messageManques`).
-    // source: src/pages/InscriptionSoignant.tsx:356
+    // source: src/pages/InscriptionSoignant.tsx:368
     public static let manqueDebut = "Vérifiez les informations suivantes :"
 
     // MARK: Actions
 
-    // source: src/pages/InscriptionSoignant.tsx:685
+    // source: src/pages/InscriptionSoignant.tsx:702
     public static let enregistrerPlusTard = "Enregistrer et continuer plus tard"
-    // source: src/pages/InscriptionSoignant.tsx:688
+    // source: src/pages/InscriptionSoignant.tsx:705
     public static let enregistrement = "Enregistrement…"
-    // source: src/pages/InscriptionSoignant.tsx:688
+    // source: src/pages/InscriptionSoignant.tsx:705
     public static let enregistrerMonProfil = "Enregistrer mon profil"
 
     // MARK: Finalisation (`finaliserProfil`)
 
-    // source: src/lib/inscriptionProgressive.ts:177
+    // source: src/lib/inscriptionProgressive.ts:182
     public static let sessionAbsente = "Reconnectez-vous pour reprendre votre inscription."
     /// Repli d'un refus de `register-soignant` sans `message` ni `error` lisible.
-    // source: src/lib/inscriptionProgressive.ts:224
+    // source: src/lib/inscriptionProgressive.ts:229
     public static let saisieConservee = "Votre saisie est conservée. Réessayez."
     /// Profil créé mais session non rafraîchie (ou espace non relu) : reconnexion.
-    // source: src/lib/inscriptionProgressive.ts:236
+    // source: src/lib/inscriptionProgressive.ts:243
     public static let profilEnregistreReconnecter = "Votre profil est enregistré. Reconnectez-vous pour ouvrir votre espace."
 }
 
