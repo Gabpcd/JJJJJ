@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { getAttribution } from '@/lib/attribution';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { viderCacheHorsLigne } from '@/lib/cacheHorsLigne';
+import { oublierToutesLesSaisies } from '@/lib/saisieInscriptionEnCours';
 import { estRefusInscriptionAttendu, extraireErreurEdgeFn } from '@/lib/erreurs';
 import { useQueryClient } from '@tanstack/react-query';
 import { ouvrirUrlPsc } from '@/lib/pscNavigation';
@@ -201,6 +202,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const deconnexion = useCallback(async () => {
     const currentUser = user;
+    // Saisie d'inscription gardée en mémoire de l'onglet : rien ne doit rester
+    // après la déconnexion, même si la redirection PSC interrompt la suite.
+    oublierToutesLesSaisies();
     if (currentUser) {
       const { error: auditError } = await supabase.rpc('fn_audit_connexion', {
         p_action: 'DECONNEXION',

@@ -1,4 +1,5 @@
 import { finaliserProfil, restaurerFormulaire, donneesFormulaire, enregistrerParcours, type ParcoursInscription } from '@/lib/inscriptionProgressive';
+import { donneesAReprendre, memoriserSaisie } from '@/lib/saisieInscriptionEnCours';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -62,7 +63,7 @@ export default function InscriptionEtablissement({ parcours }: { parcours?: Parc
     emailContact: '', telephoneContact: '',
     numeroLicence: '',
     lat: null as number | null, lng: null as number | null,
-}, parcours?.donnees || {}));
+}, parcours ? donneesAReprendre(parcours) : {}));
 
   const [siretValidation, setSiretValidation] = useState<{ valide: boolean; message: string } | null>(null);
   const [inseeCheck, setInseeCheck] = useState<SiretInseeResult | null>(null);
@@ -71,6 +72,11 @@ export default function InscriptionEtablissement({ parcours }: { parcours?: Parc
   const [finessLoading, setFinessLoading] = useState(false);
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
+  // Une page ouverte depuis ce formulaire (CGU, CGV, aide) le démonte : garder
+  // la saisie pour la rendre au retour (mémoire de l'onglet, jamais le stockage).
+  useEffect(() => {
+    if (parcours) memoriserSaisie(parcours, donneesFormulaire(form));
+  }, [parcours, form]);
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu && cgv;
   const siretEstValide = validerSiret(form.siret).valide;
   // Funnel 2 étapes : étape 2 = identité établissement fusionnée (les anciennes

@@ -1,4 +1,5 @@
 import { finaliserProfil, restaurerFormulaire, donneesFormulaire, enregistrerParcours, type ParcoursInscription } from '@/lib/inscriptionProgressive';
+import { donneesAReprendre, memoriserSaisie } from '@/lib/saisieInscriptionEnCours';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Sentry from '@sentry/react';
@@ -133,7 +134,7 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
     lat: null as number | null, lng: null as number | null,
     estSalarieEtablissement: null as boolean | null,
     estEtudiant: false, scolariteFormation: '', scolariteAnnee: '',
-    }, parcours?.donnees || {});
+    }, parcours ? donneesAReprendre(parcours) : {});
     if (!formationsPourProfession(restaure.profession).some(f => f.valeur === restaure.scolariteFormation)) {
       restaure.scolariteFormation = '';
       restaure.scolariteAnnee = '';
@@ -174,6 +175,12 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
     }
     return suivant;
   });
+
+  // Une page ouverte depuis ce formulaire (CGU, aide) le démonte : garder la
+  // saisie pour la rendre au retour (mémoire de l'onglet, jamais le stockage).
+  useEffect(() => {
+    if (parcours) memoriserSaisie(parcours, donneesFormulaire(form));
+  }, [parcours, form]);
 
   // Règle de PROFIL issue du référentiel DB. Elle est distincte de la matrice
   // profession_requise × établissement appliquée à chaque mission.

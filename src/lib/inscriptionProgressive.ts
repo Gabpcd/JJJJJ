@@ -3,6 +3,7 @@ import { extraireErreurEdgeFn } from "@/lib/erreurs";
 import { getAttribution } from "@/lib/attribution";
 import { reinitialiserCacheRole } from "@/hooks/useRole";
 import { urlCallbackPublique } from "@/lib/nativeLinks";
+import { oublierSaisie } from "@/lib/saisieInscriptionEnCours";
 
 export type TypeCompteInscription = "SOIGNANT" | "ETABLISSEMENT";
 export interface ParcoursInscription {
@@ -230,6 +231,8 @@ export async function finaliserProfil(
     );
   }
   reinitialiserCacheRole();
+  // Le profil est créé : la saisie gardée pour un retour arrière n'a plus lieu d'être.
+  oublierSaisie({ user_id: session.user.id, type_compte: type });
   const { error: refreshError } = await supabase.auth.refreshSession();
   if (refreshError)
     throw new Error(
