@@ -2654,15 +2654,17 @@ correctif du gel iPhone en CI (`fix/ios-gel-iphone-ci`) pour n'occuper les machi
 - **M1 — l'étape « Package.resolved de l'app inchangé » échouait sous Xcode 26.4.1.** Cela touchait iPad portrait et
   paysage au run 43948577842, dont les journaux ont été perdus à l'annulation. Cause, relue dans les manifestes de
   sentry-cocoa `4e1e4ba9` : `Package@swift-6.2.swift` et `Package@swift-6.1.swift` déclarent sans condition KSCrash
-  (`18a633de…`), utilisé seulement sous le trait `V10`. SwiftPM 6.2 l'épingle quand même, SwiftPM 6.1 (Xcode 16.4) non.
+  (`18a633de…`), utilisé seulement sous le trait `V10`. SwiftPM 6.2 l'épingle quand même, SwiftPM 6.1 (Xcode 16.4) non
+  (hypothèse RÉFUTÉE au 3ᵉ tour par l'artefact du run 43959073553 : aucun des deux n'épingle KSCrash).
   Corrections :
-  - pin `kscrash` ajouté au `Package.resolved` de l'app, `originHash` inchangé ;
+  - pin `kscrash` ajouté au `Package.resolved` de l'app, `originHash` inchangé (retiré au 3ᵉ tour : pin ajouté à la
+    main, sur l'hypothèse réfutée) ;
   - l'étape se diagnostique seule : diff imprimé, fichier résolu, diff et version d'Xcode copiés, puis échec dans tous
     les cas. L'étape suivante publie, sur échec seulement, l'artefact `package-resolved-<format>-<sha>`. Correctif
     documenté : committer ce fichier ;
   - TestFlight : même toolchain, même clé de cache, `-onlyUsePackageVersionsFromResolvedFile` sur les deux résolutions
     (nouvelle garde dans `ios-native-testflight.node.mjs`) ;
-  - `SENTRY_IOS.md` §1 : KSCrash est épinglé mais jamais lié à l'app. Le produit `Sentry` est le binaire plus
+  - `SENTRY_IOS.md` §1 : KSCrash est épinglé mais jamais lié à l'app (« épinglé » réfuté au 3ᵉ tour). Le produit `Sentry` est le binaire plus
     `SentryCppHelper`, et seule la variable `SDK_V10=1` lierait KSCrash. Le fichier de référence est celui d'Xcode
     26.4.1.
 
@@ -2708,9 +2710,9 @@ limitée à ce delta.
   ni texte juridique, flux de signature OTP inchangé.
 - **M1 (corrigé)** : l'hypothèse « SwiftPM 6.2 épingle KSCrash » était fausse. L'artefact `package-resolved-*-6a145748…`
   du run 43959073553 (Xcode 26.4.1, 17E202) montre l'inverse : Xcode 26.4.1 élague `opentelemetry-swift-core` (trait
-  `OpenTelemetry` de supabase-swift, désactivé) et `swift-atomics` (sa dépendance), qu'Xcode 16.4 épingle ; aucun des
-  deux n'épingle `kscrash` (pin ajouté à la main au 2ᵉ tour) et recalcule `originHash`
-  (`97a49726…`). Le `Package.resolved` versionné est désormais copié tel quel de l'artefact ; les gardes
+  `OpenTelemetry` de supabase-swift, désactivé) et `swift-atomics` (sa dépendance), qu'Xcode 16.4 épingle, et il
+  recalcule `originHash` (`97a49726…`) ; aucune des deux versions d'Xcode n'épingle `kscrash` (pin ajouté à la main au
+  2ᵉ tour). Le `Package.resolved` versionné est désormais copié tel quel de l'artefact ; les gardes
   `ios-swift-ci-eclats.node.mjs` et `ios-native-testflight.node.mjs` exigent l'absence des trois pins et cet
   `originHash` ; `SENTRY_IOS.md` §1 est corrigé.
 - **m1 (suivi, non bloquant)** : `CrashScrubber` laisse passer un jeton nu non numérique après `code:` (`code: ABC123`,
@@ -2752,4 +2754,24 @@ limitée à ce delta.
     une seule fois après 8 s, et consigné ; un formulaire envoyé n'est jamais renvoyé ;
   - `dragSliderPastMinimum(_:)` : glissement rejoué depuis la nouvelle position du pouce, trois au plus, tant que le
     curseur n'est pas à sa borne basse ; chaque reprise est consignée ; la valeur reste exigée par l'appelant.
-- `devientVrai(en:_:)` : attente bornée sans échec (`XCTWaiter` sans délégué), réservée au choix de rejouer un geste.
+- Attente avant rejeu : `attendreSansEchec` (5ᵉ tour, M1 ; remplace `devientVrai`, qui passait par un `XCTWaiter`
+  brut), réservée au choix de rejouer un geste.
+
+### Revue fraîche B8 de la vague 5, 5ᵉ tour (delta 950214f6..b37b8d95) : A_CORRIGER, corrigé (17/11/2026)
+
+- Verdict : A_CORRIGER, 0 bloquant, 2 majeurs, 5 mineurs (issuecomment-6934874992). Textes de a3cc0963 conformes ;
+  pas de double envoi possible (`LoginScreen` désactive le bouton pendant l'envoi) ; 20 appels inchangés en description
+  et en condition.
+- **M1 (corrigé)** : `devientVrai` (attente `XCTNSPredicateExpectation` brute) sortait la transition connexion → session
+  du décompte, des budgets de blocage (15 s, 60 s à froid) et de la trace de `require` : un gel de plus de 15 s juste
+  après la connexion aurait pu passer. `require` repose désormais sur un corps commun `attendre` ; `attendreSansEchec`
+  en est la variante qui rend `false` sur condition fausse, mais échoue toujours sur budget de blocage dépassé, trace
+  comprise (issue « condition fausse au terme du délai, sans échec (geste rejoué) »), avec le fichier et la ligne de
+  l'appelant. `devientVrai` est supprimé.
+- **M2 (corrigé)** : chaque rejeu joint `consignerRejeu` (`<préfixe>-attente-bloquee-<Fichier>-<ligne>.txt`, lignes
+  « Attente », « Appelant », « Issue »), relevé par la section « Attentes bloquées absorbées » de la CI avec une
+  annotation par appelant, même dans un job vert, comme `DemoPointageUITestCase.basculer`.
+- **m1 (corrigé)** : `toucherSeConnecter` garde 30 s décomptées au total (8 s de fenêtre, puis 22 s de `require`).
+- **m2 (corrigé)** : en-tête de `UITestSupport.swift` aligné (`require` ou `attendreSansEchec`).
+- **m3, m4, m5 (corrigés)** : phrase sur `originHash` de ce journal, message du test TestFlight (« kscrash jamais
+  épinglé »), mentions « réfutée » dans la section du 2ᵉ tour.

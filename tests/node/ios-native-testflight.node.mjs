@@ -457,7 +457,7 @@ test('l\'archive lit le Package.resolved vérifié par ios-swift-ci.yml, sous la
   assert.equal(cle(workflow), cle(ci), 'cache SPM : même clé que celui qu\'alimente ios-swift-ci.yml');
   const resolu = JSON.parse(readFileSync(join(root, 'ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'), 'utf8'));
   assert.equal(resolu.pins.find((pin) => pin.identity === 'kscrash'), undefined,
-    'Package.resolved de Xcode 26.4.1 (kscrash élagué) : c\'est lui que lit -onlyUsePackageVersionsFromResolvedFile à l\'archive');
+    'Package.resolved de Xcode 26.4.1 (kscrash jamais épinglé) : c\'est lui que lit -onlyUsePackageVersionsFromResolvedFile à l\'archive');
   assert.equal(resolu.originHash, '97a49726c2293404c4b2d9ccada02485783926893cc361503715ca54c01809ce',
     'même résolution que la CI (artefact package-resolved du run 43959073553)');
 });
