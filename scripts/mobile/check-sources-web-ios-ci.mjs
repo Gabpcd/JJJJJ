@@ -13,7 +13,8 @@
  *   - un littéral de chaîne égal au chemin d'un fichier du dépôt hors `ios-native/` (`source("src/…")`,
  *     `static let hub = "src/pages/…"`) ;
  *   - une annotation `// source:`, `// source-objet:` ou `// source-ensemble:` (en début ou en fin de ligne) d'un
- *     fichier Swift dont le chemin figure lui-même en littéral dans du Swift : c'est ainsi que `CompletionVerbatimTests`
+ *     fichier Swift dont le chemin (depuis la racine ou depuis `ios-native/`) figure lui-même en littéral dans du
+ *     Swift : c'est ainsi que `CompletionVerbatimTests`
  *     relit `CompletionProfil.swift` et `InscriptionVerbatimTests` relit `InscriptionRules.swift`.
  * Les annotations d'un fichier Swift qu'aucun test ne relit sont de la documentation. C'est le cas de
  * `TextesWeb.swift` et `LibellesWeb.swift` : la garde tolérante `check-textes-juridiques-ios.mjs` les relit dans
@@ -22,14 +23,16 @@
  *
  * Les littéraux des commentaires comptent aussi : lecture par excès, un chemin périmé dans une doc est à corriger.
  *
- * Refusés : un littéral égal à un dossier (couverture inconnue) ; un chemin cité introuvable dans le dépôt (littéral
- * commençant par un dossier racine du dépôt, ou annotation d'un fichier relu) : les tests Swift lèvent `XCTSkip` sur
- * un fichier absent, une PR web qui le renomme ou le supprime passerait donc en silence.
+ * Refusés : un littéral égal à un dossier (`"src/pages"`, `"src/pages/" + nom`) ou un chemin construit sous un dossier
+ * racine (interpolation `\(…)`, `appendingPathComponent("src")`) : couverture inconnue ; un chemin cité introuvable
+ * (littéral dont le dossier existe ou qui porte une extension de source, ou annotation d'un fichier relu) : les tests
+ * Swift lèvent `XCTSkip` sur un fichier absent, une PR web qui le renomme ou le supprime passerait donc en silence.
  *
  * Chaque fichier lu doit correspondre à un motif des DEUX filtres (`pull_request` et `push`). Seuls `*` et `**` sont
  * interprétés ; `?`, `+`, `[…]` et `!` (quantificateurs et négation chez GitHub) et `paths-ignore` sont refusés.
  *
- * Coût assumé : élargir le filtre relance la CI iOS (macOS, jusqu'à ~3 h) sur les PR web qui touchent ces fichiers.
+ * Coût assumé : élargir le filtre relance la CI iOS (macOS, ~3 h, délai maximal de 6 h pour le job `ui`) sur les PR
+ * web qui touchent ces fichiers.
  * C'est le prix d'un couplage déjà présent dans les tests Swift ; le réduire, c'est rendre ces tests tolérants ou
  * les passer par la garde Node, pas retirer le fichier du filtre.
  *
@@ -50,6 +53,8 @@ export const WORKFLOW_IOS = '.github/workflows/ios-swift-ci.yml';
 export const TEST_NODE = 'tests/node/sources-web-ios-ci.node.mjs';
 export const EVENEMENTS = ['pull_request', 'push'];
 const NATIF = 'ios-native/';
+/** Extensions d'un fichier source : un tel chemin introuvable est refusé même si son dossier a disparu. */
+const EXTENSIONS_SOURCE = /\.(?:tsx?|jsx?|mjs|cjs|sql|md|json|css|html|ya?ml)$/;
 
 // Motif GitHub → expression régulière : `*` hors `/`, `**/` zéro ou plusieurs dossiers, `**` tout le reste.
 export function correspond(motif, chemin) {
@@ -77,30 +82,45 @@ function verifierMotif(motif, evenement) {
   return motif;
 }
 
-/** Motifs `paths` des événements `pull_request` et `push` (absent : l'événement n'est pas filtré, `**`). */
+/**
+ * Motifs `paths` des événements `pull_request` et `push`, cherchés dans le bloc `on:` (absent : l'événement n'est pas
+ * filtré, `**`). Seule la forme « `paths:` puis un `- 'motif'` par ligne » est lue ; toute autre écriture (liste en
+ * ligne, ancre, alias, liste vide, élément inconnu) lève une erreur au lieu d'être lue comme « aucun filtre » ou
+ * comme une liste tronquée (revue B8 de #1139).
+ */
 export function motifsDuFiltre(yml) {
   const lignes = yml.split('\n');
-  const debutOn = lignes.findIndex(l => /^on:\s*$/.test(l));
-  if (debutOn < 0) throw new Error(`${WORKFLOW_IOS} : bloc « on: » introuvable.`);
+  const debutOn = lignes.findIndex(l => /^on:\s*(#.*)?$/.test(l));
+  if (debutOn < 0) throw new Error(`${WORKFLOW_IOS} : bloc « on: » introuvable (seule la forme bloc est lue par ${SCRIPT}).`);
+  let finOn = debutOn + 1;
+  while (finOn < lignes.length && (lignes[finOn] === '' || /^[ #]/.test(lignes[finOn]))) finOn += 1;
+  const blocOn = lignes.slice(debutOn + 1, finOn);
+  const refus = (evenement, ligne, quoi) => new Error(`${WORKFLOW_IOS} : « ${ligne.trim()} » (${evenement}) : ${quoi} `
+    + `non gérée par ${SCRIPT} ; écrivez « paths: » puis un « - 'chemin' » par ligne.`);
   const filtres = {};
   for (const evenement of EVENEMENTS) {
-    const debut = lignes.findIndex((l, i) => i > debutOn && l === `  ${evenement}:`);
-    if (debut < 0) throw new Error(`${WORKFLOW_IOS} : événement ${evenement} introuvable.`);
+    const debut = blocOn.findIndex(l => new RegExp(`^ {2}${evenement}:\\s*(#.*)?$`).test(l));
+    if (debut < 0) throw new Error(`${WORKFLOW_IOS} : événement ${evenement} introuvable dans « on: ».`);
     let fin = debut + 1;
-    while (fin < lignes.length && (lignes[fin] === '' || /^ {3,}/.test(lignes[fin]) || /^\s*#/.test(lignes[fin]))) fin += 1;
-    const bloc = lignes.slice(debut + 1, fin);
-    if (bloc.some(l => /^ {4}paths-ignore:/.test(l))) {
+    while (fin < blocOn.length && (blocOn[fin] === '' || /^ {3,}/.test(blocOn[fin]) || /^\s*#/.test(blocOn[fin]))) fin += 1;
+    const bloc = blocOn.slice(debut + 1, fin);
+    if (bloc.some(l => /^ {4}paths-ignore\s*:/.test(l))) {
       throw new Error(`${WORKFLOW_IOS} : paths-ignore (${evenement}) non géré par ${SCRIPT}.`);
     }
-    const paths = bloc.findIndex(l => /^ {4}paths:\s*$/.test(l));
-    if (paths < 0) { filtres[evenement] = ['**']; continue; }
+    const cles = bloc.flatMap((l, i) => (/^ {4}paths\s*:/.test(l) ? [i] : []));
+    if (!cles.length) { filtres[evenement] = ['**']; continue; }
+    if (cles.length > 1 || !/^ {4}paths:\s*(#.*)?$/.test(bloc[cles[0]])) {
+      throw refus(evenement, bloc[cles.at(-1)], 'syntaxe (liste en ligne, ancre, alias ou clé répétée)');
+    }
     const motifs = [];
-    for (const ligne of bloc.slice(paths + 1)) {
+    for (const ligne of bloc.slice(cles[0] + 1)) {
       if (/^\s*(#.*)?$/.test(ligne)) continue;
-      const item = /^ {6}- (?:'([^']*)'|"([^"]*)"|(\S+))\s*(?:#.*)?$/.exec(ligne);
-      if (!item) break;
+      if (/^ {4}\S/.test(ligne)) break;
+      const item = /^ {6}- (?:'([^']*)'|"([^"]*)"|([^\s'"&*#!][^\s#]*))\s*(?:#.*)?$/.exec(ligne);
+      if (!item) throw refus(evenement, ligne, 'syntaxe d’élément');
       motifs.push(verifierMotif(item[1] ?? item[2] ?? item[3], evenement));
     }
+    if (!motifs.length) throw new Error(`${WORKFLOW_IOS} : paths (${evenement}) vide, non géré par ${SCRIPT}.`);
     filtres[evenement] = motifs;
   }
   return filtres;
@@ -125,17 +145,31 @@ export function lecturesDuSwift({ swift, fichiersDepot }) {
   const lectures = new Map();
   const relus = new Map();
   const erreurs = [];
+  const racineWeb = valeur => valeur !== 'ios-native' && racines.has(valeur);
+  const parent = valeur => valeur.split('/').slice(0, -1).join('/');
   for (const { chemin, texte } of swift) {
-    for (const [, valeur] of texte.matchAll(/"((?:[^"\\\n]|\\.)*)"/g)) {
-      if (!/^[\w.-]+(?:\/[\w.-]+)+$/.test(valeur)) continue;
-      if (valeur.startsWith(NATIF)) {
-        if (depot.has(valeur) && valeur.endsWith('.swift')) ajouter(relus, valeur, chemin);
-      } else if (depot.has(valeur)) ajouter(lectures, valeur, basename(chemin));
+    const nom = basename(chemin);
+    // Contenu réduit à des caractères de chemin : un guillemet impair plus tôt sur la ligne ne décale pas la lecture.
+    for (const [, brut] of texte.matchAll(/"([\w.-]+(?:\/[\w.-]+)+\/?|[\w.-]+\/)"/g)) {
+      const valeur = brut.replace(/\/$/, '');
+      const dossier = brut.endsWith('/');
+      const natif = valeur.startsWith(NATIF) ? valeur : `${NATIF}${valeur}`;
+      if (!dossier && natif.endsWith('.swift') && depot.has(natif)) { ajouter(relus, natif, chemin); continue; }
+      if (!racineWeb(valeur.split('/')[0])) continue;
+      if (!dossier && depot.has(valeur)) ajouter(lectures, valeur, nom);
       else if (dossiers.has(valeur)) {
-        erreurs.push(`${basename(chemin)} lit le dossier « ${valeur} » : ${SCRIPT} ne sait pas quels fichiers il couvre ; citez chaque fichier lu.`);
-      } else if (racines.has(valeur.split('/')[0])) {
-        erreurs.push(`${basename(chemin)} cite « ${valeur} », introuvable dans le dépôt : le test Swift lèverait XCTSkip et ne vérifierait plus rien ; corrigez le chemin.`);
+        erreurs.push(`${nom} lit le dossier « ${brut} » : ${SCRIPT} ne sait pas quels fichiers il couvre ; citez chaque fichier lu en entier.`);
+      } else if (dossiers.has(parent(valeur)) || EXTENSIONS_SOURCE.test(valeur)) {
+        erreurs.push(`${nom} cite « ${valeur} », introuvable dans le dépôt : le test Swift lèverait XCTSkip et ne vérifierait plus rien ; corrigez le chemin.`);
       }
+    }
+    const construits = [
+      // Interpolation au fil du chemin (`"src/pages/\(nom).tsx"`), pas après une espace (message d'XCTSkip).
+      ...[...texte.matchAll(/"([\w.-]+)\/[\w.\/-]*\\\(/g)].map(m => m[1]),
+      ...[...texte.matchAll(/appendingPathComponent\(\s*"([\w.-]+)"\s*\)/g)].map(m => m[1]),
+    ].filter(racineWeb);
+    for (const racine of construits) {
+      erreurs.push(`${nom} lit un chemin construit sous « ${racine}/ » (interpolation ou segments) : ${SCRIPT} ne peut pas savoir quel fichier est lu ; écrivez le chemin en entier dans un seul littéral.`);
     }
   }
   const textes = new Map(swift.map(f => [f.chemin, f.texte]));

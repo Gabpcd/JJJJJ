@@ -49,6 +49,8 @@ on:
       - 'src/lib/paiementSoignantUi.ts'
       - 'src/lib/valider-profil-soignant.ts'
       - 'src/lib/preferencesModesExercice.ts'
+      # Importé par preferencesModesExercice.ts, donc chargé par export-golden-vectors.mjs (revue B8 de #1139).
+      - 'src/lib/typesContrat.ts'
       # Lot 3, T8 : sources web relues ligne à ligne par CompletionVerbatimTests (annotations de
       # CompletionProfil.swift, hors garde check-textes-juridiques-ios) — incident #1137 du 17/11.
       - 'src/pages/InscriptionSoignant.tsx'
@@ -142,6 +144,8 @@ on:
       - 'src/lib/paiementSoignantUi.ts'
       - 'src/lib/valider-profil-soignant.ts'
       - 'src/lib/preferencesModesExercice.ts'
+      # Importé par preferencesModesExercice.ts, donc chargé par export-golden-vectors.mjs (revue B8 de #1139).
+      - 'src/lib/typesContrat.ts'
       # Lot 3, T8 : sources web relues ligne à ligne par CompletionVerbatimTests (annotations de
       # CompletionProfil.swift, hors garde check-textes-juridiques-ios) — incident #1137 du 17/11.
       - 'src/pages/InscriptionSoignant.tsx'
