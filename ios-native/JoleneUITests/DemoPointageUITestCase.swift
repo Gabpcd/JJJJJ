@@ -157,29 +157,29 @@ class DemoPointageUITestCase: JoleneUITestCase {
     /// trace observable : valeur relue changée, interrupteur désactivé (demande en vol ou feuille requise,
     /// `ConsentementGpsRow`), feuille de consentement présentée ou retour (`profil-gps-retour`) changé. Sans aucune de ces
     /// traces au bout de 3 s, le toucher n'a pas atteint l'app : il est rejoué, trois essais au plus, et chaque rejeu est
-    /// joint au relevé des attentes bloquées. L'issue attendue reste exigée par l'appelant.
-    func basculer(_ interrupteur: XCUIElement) {
-        require("L'interrupteur est actif") { interrupteur.isEnabled && self.visible(interrupteur) }
+    /// joint au relevé des attentes bloquées. L'issue attendue reste exigée par l'appelant. L'attente de 3 s passe par
+    /// `attendreSansEchec` (blocages décomptés, budgetés et tracés comme dans `require`) et chaque rejeu par
+    /// `consignerRejeu`, au nom de l'appelant (revue B8 de la vague 5, 6ᵉ tour, m3 : trace en texte libre illisible par
+    /// le relevé de la CI).
+    func basculer(_ interrupteur: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        require("L'interrupteur est actif", file: file, line: line) { interrupteur.isEnabled && self.visible(interrupteur) }
         let valeurAvant = interrupteur.value as? String
         let retour = element("profil-gps-retour")
         let retourAvant = retour.exists ? retour.label : nil
         let feuille = element("gps-consent-sheet")
+        let attente = "Le toucher de l'interrupteur \(interrupteur.identifier) est reçu"
         for essai in 1...3 {
             let poignee = interrupteur.switches.firstMatch
             let cible = poignee.exists ? poignee : interrupteur
             cible.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
-            // Une attente neuve par essai : XCTest refuse d'attendre deux fois la même.
-            let recu = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let recu = attendreSansEchec(attente, timeout: 3, file: file, line: line) {
                 (interrupteur.value as? String) != valeurAvant || !interrupteur.isEnabled || feuille.exists
                     || (retour.exists ? retour.label : nil) != retourAvant
-            }, object: nil)
-            if XCTWaiter.wait(for: [recu], timeout: 3) == .completed { return }
-            // Trace visible même dans un job vert (revue B8 des commits suivant l'intégration, m2) : pièce jointe au format
-            // du relevé « Attentes bloquées absorbées » d'ios-swift-ci.yml, qui la liste par fichier et ligne. Des rejeux
-            // récurrents signaleraient un défaut « il faut toucher deux fois » à instruire, pas un simple toucher perdu.
-            attachText("Toucher de l'interrupteur \(interrupteur.identifier) sans effet observable en 3 s (essai \(essai) sur 3) : "
-                       + "valeur \(valeurAvant ?? "nil") inchangée, interrupteur actif, aucune feuille ; toucher rejoué.",
-                       name: "\(proofPrefix)-attente-bloquee-DemoPointageUITestCase-\(#line).txt")
+            }
+            if recu { return }
+            guard essai < 3 else { return }
+            consignerRejeu(attente, issue: "toucher \(essai)/3 sans effet observable en 3 s (valeur « \(valeurAvant ?? "nil") » "
+                           + "inchangée, interrupteur actif, aucune feuille) : toucher rejoué", file: file, line: line)
         }
     }
 

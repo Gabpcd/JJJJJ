@@ -1021,6 +1021,9 @@ jobs:
         # section du résumé et en annotation sur la ligne de l’appelant (GitHub n’affiche que les
         # 10 premières annotations d’une étape ; le tableau du résumé les liste toutes). Relevé
         # d’information seulement : il ne décide jamais du statut du job (continue-on-error).
+        # Les rejeux de geste (`consignerRejeu`, ligne « Nature : geste rejoué ») partagent ce relevé
+        # par appelant mais sont annoncés comme rejeux, sans temps non décompté ni budget (revue B8 de
+        # la vague 5, 6ᵉ tour, m3). Une pièce jointe sans aucun champ lisible est annoncée comme telle.
         # Intégration du lot 3, puis fusion des lots 2 et 3 : un manifest.json par éclat (`attachments/<éclat>/`, étape
         # « Résumé xcresult », DECISIONS_LOT2 décision 22) ; la boucle reprend la liste des éclats de cette étape
         # (variable ECLATS), un éclat sans manifest.json lisible étant signalé, jamais ignoré en silence.
@@ -1063,14 +1066,17 @@ jobs:
                 // jointe (`<préfixe>-attente-bloquee-<Fichier>-<N>_<rang>_<UUID>.txt` une fois exportée).
                 const parRapport = (champ("Appelant") ?? "").match(/^(.+\.swift):(\d+)$/);
                 const parNom = nom.match(/-attente-bloquee-(.+)-(\d+)(?:_\d+_[0-9A-Fa-f-]+)?\.txt$/);
+                const rejeu = champ("Nature") === "geste rejoué";
                 bloquees.push({
                   eclat,
+                  rejeu,
+                  illisible: !champ("Attente") && !champ("Issue"),
                   test: t.testIdentifier ?? "?",
                   fichier: parRapport?.[1] ?? (parNom ? `${parNom[1]}.swift` : null),
                   ligne: parRapport?.[2] ?? parNom?.[2] ?? null,
                   attente: champ("Attente") ?? "?",
-                  nonDecompte: (champ("Temps non décompté") ?? "").match(/^\d+(?:[,.]\d+)? s/)?.[0] ?? "?",
-                  budget: champ("Budget de blocage") ?? "?",
+                  nonDecompte: rejeu ? "—" : (champ("Temps non décompté") ?? "").match(/^\d+(?:[,.]\d+)? s/)?.[0] ?? "?",
+                  budget: rejeu ? "—" : champ("Budget de blocage") ?? "?",
                   issue: champ("Issue") ?? "?",
                 });
               }
@@ -1080,12 +1086,19 @@ jobs:
             } else if (!bloquees.length) {
               lignes.push(`- aucune : aucun \`require\` n’a mesuré de temps non décompté (${releves} éclat(s) relevé(s) sur ${eclats.length})`);
             } else {
-              lignes.push("", `${bloquees.length} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app). Relevé d’information : le job n’échoue pas pour cela.`, "",
+              const rejeux = bloquees.filter(b => b.rejeu && !b.illisible).length;
+              const illisibles = bloquees.filter(b => b.illisible).length;
+              const attentes = bloquees.length - rejeux - illisibles;
+              lignes.push("", `${attentes} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app), ${rejeux} geste(s) ont été rejoués${illisibles ? `, ${illisibles} trace(s) sont illisibles` : ""}. Relevé d’information : le job n’échoue pas pour cela.`, "",
                 "| Éclat | Test | Appelant | Attente | Non décompté | Budget de blocage | Issue |", "| --- | --- | --- | --- | --- | --- | --- |");
               for (const b of bloquees) {
                 const appelant = b.fichier ? `${b.fichier}:${b.ligne}` : "?";
                 lignes.push(`| ${cell(b.eclat)} | ${cell(b.test)} | \`${cell(appelant)}\` | ${cell(b.attente)} | ${cell(b.nonDecompte)} | ${cell(b.budget)} | ${cell(b.issue)} |`);
-                const message = `Attente bloquée absorbée (${format}, éclat ${b.eclat}) : « ${b.attente} », ${b.nonDecompte} non décomptées (budget de blocage ${b.budget}), ${b.issue} — ${b.test}`;
+                const message = b.illisible
+                  ? `Trace d’attente illisible (${format}, éclat ${b.eclat}) : pièce jointe sans champ « Attente » ni « Issue » — ${b.test}`
+                  : b.rejeu
+                    ? `Geste rejoué (${format}, éclat ${b.eclat}) : « ${b.attente} », ${b.issue} — ${b.test}`
+                    : `Attente bloquée absorbée (${format}, éclat ${b.eclat}) : « ${b.attente} », ${b.nonDecompte} non décomptées (budget de blocage ${b.budget}), ${b.issue} — ${b.test}`;
                 const cible = b.fichier && b.ligne ? ` file=${prop(`ios-native/JoleneUITests/${b.fichier}`)},line=${prop(b.ligne)}` : "";
                 console.log(`::warning${cible}::${esc(message)}`);
               }

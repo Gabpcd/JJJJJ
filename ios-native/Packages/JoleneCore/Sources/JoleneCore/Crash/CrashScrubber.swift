@@ -10,8 +10,8 @@ import Foundation
 ///   passe et codes OTP — `otp`, `otp_code`, `p_otp_code` de `fn_signer_contrat_otp` ; `nomsSensiblesExacts` : `code`,
 ///   `email`, `iban`, avec ou sans le préfixe `p_` des paramètres RPC, dont `p_code`, le code QR de pointage) : en requête
 ///   ou en fragment, encodé une ou deux fois (`%3D`, `%253D`), en JSON (échappé ou non, valeur texte ou nombre) et dans
-///   une description Swift (`refreshToken: "…"`, `code: 123456`) — jamais `error_code`, `status_code`, `barcode`,
-///   `token_type`, `p_code_postal` ;
+///   une description Swift (`refreshToken: "…"`, `code: 123456`, jeton nu entier : `code: 12AB34`) — jamais
+///   `error_code`, `status_code`, `barcode`, `token_type`, `p_code_postal` ;
 /// - les jetons porteurs (`Bearer …`) et les JWT isolés ;
 /// - les adresses e-mail (`@`, `%40` ou `%2540`), parties locales et domaines non ASCII compris (`josé@example.fr`) ;
 /// - les IBAN (compacts, ou par groupes de quatre séparés par une espace, une espace insécable U+00A0 ou U+202F, ou un
@@ -203,6 +203,16 @@ public enum CrashScrubber {
         let chaine = #""(?:[^"\\]|\\.)*(?:"|\z)"#
         // Nombre JSON ou Swift (revue B8 de la vague 5, m3 : un code OTP ou de pointage numérique est un secret).
         let nombre = #"-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?"#
+        // Jeton nu d'une description Swift, pris en entier jusqu'au premier blanc ou signe hors jeton (revue B8 de la
+        // vague 5, 3ᵉ tour, m1 : `code: ABC123` passait en clair, `code: 12AB34` n'était masqué qu'à moitié). Il couvre
+        // les nombres (chiffres, `-`, `.`, `e`, `+`) et les remplace dans la règle des descriptions Swift : avec les deux,
+        // le nombre `12` de `12AB34` arrêterait la correspondance. `%` en fait partie (jeton encodé, `abc%2Bdef`) ; `nil`
+        // seul reste lisible (valeur absente, pas un secret) ; revue B8 de #1136, m1 et m2. Le marqueur déjà posé par les
+        // règles d'adresse et d'IBAN, qui passent avant, en fait aussi partie : un jeton dont seul le début ressemble à un
+        // IBAN (`Ab12cdEFghIJkl+/xyz==`) est repris en entier, suite comprise (revue delta B8 de #1136, B1bis).
+        let classeJeton = #"[\p{L}\p{M}\p{N}._~+/=%-]"#
+        let jetonNu = #"(?!nil(?!"# + classeJeton + #"))(?:"# + NSRegularExpression.escapedPattern(for: masque) + "|"
+            + classeJeton + ")++"
         // Lettres, marques et chiffres de toutes les écritures (domaine d'adresse internationalisé, revue B8 de la vague 5).
         let etiquette = #"[\p{L}\p{M}\p{Nd}-]{1,63}"#
         // Séparateur d'une valeur de paramètre : `=`, ou `%3D` et `%253D` (encodé une ou deux fois).
@@ -227,9 +237,6 @@ public enum CrashScrubber {
              #"$1\\"\#(m)\\""#),
             // Clé JSON dans un texte (corps de réponse illisible, description d'erreur), valeur texte ou nombre.
             (#"(?i)(""# + nomComplet + #""\s*:\s*)(?:"# + chaine + "|" + nombre + ")", "$1\"\(m)\""),
-            // Description Swift (`String(describing:)`, `dump`) : `refreshToken: "…"`, `tokenHash: Optional("…")`,
-            // `code: 123456`.
-            ("(?i)" + nom + #"(\s*:\s*(?:Optional\()?)(?:"# + chaine + "|" + nombre + ")", "$1$2\"\(m)\""),
             // Adresse e-mail : arobase (`@`, `%40` ou `%2540`) et domaine borné (RFC 5321), internationalisé compris ; la
             // partie locale, au plus 64 unités avant l'arobase, est lue à rebours (`masquerAdresses`).
             (#"(?i)(?:@|%2540|%40)"# + etiquette + #"(?:\."# + etiquette + #"){0,8}\.[\p{L}\p{M}]{2,63}"#, nil),
@@ -237,6 +244,11 @@ public enum CrashScrubber {
             // la suite d'un identifiant à tirets.
             (#"(?i)(?<![A-Z0-9_-])(?!"# + uuid + #")[A-Z]{2}[0-9]{2}(?:"# + separateurIBAN + #"?[A-Z0-9]{4}){2,7}(?:"#
                 + separateurIBAN + #"?[A-Z0-9]{1,4})?(?![A-Z0-9_])"#, m),
+            // Description Swift (`String(describing:)`, `dump`) : `refreshToken: "…"`, `tokenHash: Optional("…")`,
+            // `code: 123456`, `code: ABC123`. Après les adresses et les IBAN (revue B8 de #1136, B1) : le jeton nu
+            // s'arrête au premier blanc ou à l'arobase, il laisserait en clair le domaine d'une adresse ou la suite d'un
+            // IBAN groupé ; masqués avant, ils ne laissent que `[masqué]`, que le jeton nu ne reprend pas.
+            ("(?i)" + nom + #"(\s*:\s*(?:Optional\()?)(?:"# + chaine + "|" + jetonNu + ")", "$1$2\"\(m)\""),
         ]
         var compilees: [Regle] = []
         for (motif, gabarit) in motifs {

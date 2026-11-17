@@ -2766,12 +2766,69 @@ limitée à ce delta.
   du décompte, des budgets de blocage (15 s, 60 s à froid) et de la trace de `require` : un gel de plus de 15 s juste
   après la connexion aurait pu passer. `require` repose désormais sur un corps commun `attendre` ; `attendreSansEchec`
   en est la variante qui rend `false` sur condition fausse, mais échoue toujours sur budget de blocage dépassé, trace
-  comprise (issue « condition fausse au terme du délai, sans échec (geste rejoué) »), avec le fichier et la ligne de
-  l'appelant. `devientVrai` est supprimé.
-- **M2 (corrigé)** : chaque rejeu joint `consignerRejeu` (`<préfixe>-attente-bloquee-<Fichier>-<ligne>.txt`, lignes
-  « Attente », « Appelant », « Issue »), relevé par la section « Attentes bloquées absorbées » de la CI avec une
+  comprise (issue « condition fausse au terme du délai, sans échec (l'appelant décide de la suite) », libellé neutre
+  depuis le 6ᵉ tour, m1), avec le fichier et la ligne de l'appelant. `devientVrai` est supprimé.
+- **M2 (corrigé)** : chaque rejeu est consigné par `consignerRejeu`, qui joint
+  `<préfixe>-attente-bloquee-<Fichier>-<ligne>.txt` (lignes « Attente », « Appelant », « Issue »), relevé par la section « Attentes bloquées absorbées » de la CI avec une
   annotation par appelant, même dans un job vert, comme `DemoPointageUITestCase.basculer`.
 - **m1 (corrigé)** : `toucherSeConnecter` garde 30 s décomptées au total (8 s de fenêtre, puis 22 s de `require`).
 - **m2 (corrigé)** : en-tête de `UITestSupport.swift` aligné (`require` ou `attendreSansEchec`).
 - **m3, m4, m5 (corrigés)** : phrase sur `originHash` de ce journal, message du test TestFlight (« kscrash jamais
   épinglé »), mentions « réfutée » dans la section du 2ᵉ tour.
+
+### Revue fraîche B8 de la vague 5, 6ᵉ tour (delta b37b8d95..8bef3499) : CLÔTURABLE (17/11/2026)
+
+- Verdict : CLÔTURABLE, 0 bloquant, 0 majeur, 4 mineurs (issuecomment-6935051890). M1 et M2 du 5ᵉ tour corrigés ;
+  `require` inchangé pour ses appelants ; aucun double envoi de connexion possible.
+- Mineurs traités dans la PR de suivi (pas de poussée sur #1133, qui aurait relancé sa CI) :
+  - **m1** : issue neutre « condition fausse au terme du délai, sans échec (l'appelant décide de la suite) »
+    (`traceUncharged`) : aucun geste n'est rejoué quand le bouton est désactivé, qu'une erreur est affichée, ou au
+    3ᵉ glissement.
+  - **m2** : le budget de blocage vaut pour chaque attente (15 s, 60 s à froid), écrit dans le doc de
+    `toucherSeConnecter` : un gel au-delà du budget échoue toujours ; deux blocages absorbés peuvent cumuler deux budgets.
+  - **m3** : relevé CI. Ligne « Nature : geste rejoué » jointe par `consignerRejeu` ; l'étape annonce « Geste rejoué »
+    sans temps non décompté ni budget, compte rejeux et attentes à part, et signale une trace sans champ lisible.
+    `DemoPointageUITestCase.basculer` passe par `attendreSansEchec` et `consignerRejeu`, au nom de l'appelant : sa
+    trace en texte libre sortait en « « ? », ? non décomptées » au run 43995728137.
+  - **m4** : « chaque rejeu est consigné par `consignerRejeu`, qui joint … » (section du 5ᵉ tour).
+- Suivi du 3ᵉ tour, m1 (`CrashScrubber`), dans la même PR : dans une description Swift, le jeton nu qui suit un nom
+  sensible est masqué en entier (`code: ABC123`, `code: 12AB34`, `code: Optional(A1B2C3)`, lettres non ASCII
+  comprises), jusqu'au premier blanc ou signe hors jeton ; noms voisins inchangés (`errorCode`, `status_code`,
+  `error_code`, `codePostal`, `p_code_postal`). Test d'abord (15 assertions rouges), puis `CrashScrubberTests` 31/31 et
+  JoleneCore 1 749 tests, 0 échec, en concurrence stricte ; test de durée sur 8 000 caractères adverses toujours vert.
+
+### CI iOS de 8bef3499 (run 43995728137) : course du bandeau « vérification en cours », relance ciblée (17/11/2026)
+
+- Tentative 1 : iPad portrait et paysage verts ; iPhone 1963 réussis, 1 échoué, 0 ignoré.
+  `DemoDocumentsTests.testEnvoiIncertainReconcilieSansSecondEnvoi` (l.136) : « La ligne relue donne la vérification en
+  cours — condition fausse à chacune des 7 évaluations sur 15,0 s décomptées ».
+- Cause : course du test, pas de l'app. Le bandeau `documents-envoi-issue` est masqué dès le verdict relu
+  (`issueAffichee`) ; en démo le verdict arrive à la relecture de suivi suivante (5 s). La fermeture de la feuille sur
+  un simulateur lent a couvert la fenêtre. Course présente depuis le lot 2 (#1131) ; #1133 ne touche ni le suivi ni le
+  bandeau, et le même test passe sur les deux iPad.
+- Décision : relance du seul job iPhone (tentative 2, issuecomment-6939136875) ; correction dans la PR de suivi :
+  `attendreIssueVerificationOuVerdict` attend le bandeau OU le verdict, exige le texte du bandeau quand il est observé
+  (lu dans le même instantané que sa présence) et laisse la preuve du texte et du masquage à
+  `PresentationJustificatifsTests`. Même correction pour `testTeleverserLeDiplomeHeicPuisVerifie`, exposé à la même
+  fenêtre. Les preuves « 1 envoi · 1 vérification » et « Vérifié ✅ » restent exigées.
+- Tentative 2 (iPhone seul) : 1964 réussis, 0 échoué, 0 ignoré sur les trois formats ; #1133 mergée le 17/11.
+
+### Revue B8 de #1136 (suivi vague 5, 17/11/2026) : NON CLÔTURABLE, deux bloquants corrigés
+
+- **B1** (`CrashScrubber`, régression du suivi du 3ᵉ tour) : la règle des descriptions Swift passait avant les règles
+  d'adresse e-mail et d'IBAN. Son jeton nu s'arrête au premier blanc ou à l'arobase : `iban: FR76 1732 8844 …` laissait
+  `1732 8844 …` en clair, `email: jane.doe@example.com` laissait `@example.com`. Correction : adresses et IBAN sont
+  masqués avant la règle Swift, dont le jeton nu ne reprend pas `[masqué]`. Tests d'abord (12 échecs sur l'ancienne
+  version), puis `CrashScrubberTests` 33/33.
+- **B2** (`attendreIssueVerificationOuVerdict`) : pour le diplôme remplacé, déjà « Vérifié ✅ », la branche « verdict »
+  pouvait être vraie sur l'état d'avant (dossier pas encore relu) : l'aide ne prouvait rien. L'appelant fournit
+  désormais `verdictFrais`, preuve d'un verdict rendu après cet envoi : pour le diplôme, l'ouverture de la feuille
+  suivante (que seul le verdict VERIFIE de cet envoi déclenche, la feuille du diplôme étant fermée) ; pour la pièce
+  d'identité, « Vérifié ✅ » après un état d'avant « Rejeté », désormais vérifié avant l'envoi.
+- Mineurs : **m1** `nil` seul reste lisible (`code: nil`) ; **m2** `%` fait partie du jeton nu (`abc%2Bdef`).
+  `:` reste hors du jeton (`code: 12:34:56` garde `:34:56`, une heure, pas un secret). **m3** non retenu : le test du
+  diplôme exige bien « 1 envoi · 1 vérification » (`DemoDocumentsTests`, après la feuille suivante).
+- Revue delta (commit 174a535f) : B2 et la régression B1 confirmés corrigés ; **B1bis** : la règle IBAN, désormais
+  avant la règle Swift, masquait le seul début d'un jeton qui ressemble à un IBAN (`tokenHash: Ab12cdEFghIJkl+/xyz==`
+  → `[masqué]+/xyz==`). Le jeton nu reprend maintenant le marqueur déjà posé et sa suite (`tokenHash: "[masqué]"`).
+  Test d'abord (4 échecs), puis `CrashScrubberTests` 34/34 et JoleneCore 1 752 tests, 0 échec.

@@ -276,7 +276,7 @@ class JoleneUITestCase: XCTestCase {
         case .satisfied: outcome = "condition vraie"
         case .conditionFalse: outcome = conditionFausseEchoue
             ? "échec, condition fausse au terme du délai"
-            : "condition fausse au terme du délai, sans échec (geste rejoué)"
+            : "condition fausse au terme du délai, sans échec (l'appelant décide de la suite)"
         case .stallBudgetExceeded: outcome = "échec, budget de blocage dépassé"
         }
         let budget = cold
@@ -334,10 +334,13 @@ class JoleneUITestCase: XCTestCase {
     /// Consigne le rejeu d'un geste resté sans effet : pièce jointe au format du relevé « Attentes bloquées absorbées »
     /// d'`ios-swift-ci.yml` (lignes « Attente », « Appelant », « Issue », annotation par appelant), visible même dans un
     /// job vert, comme `DemoPointageUITestCase.basculer` (revue B8 de la vague 5, 5ᵉ tour, M2). Des rejeux récurrents au
-    /// même appelant signaleraient un défaut « il faut toucher deux fois » à instruire, pas un simple geste perdu.
+    /// même appelant signaleraient un défaut « il faut toucher deux fois » à instruire, pas un simple geste perdu. La ligne
+    /// « Nature : geste rejoué » fait annoncer la trace comme un rejeu, sans temps non décompté ni budget (revue B8 de la
+    /// vague 5, 6ᵉ tour, m3).
     func consignerRejeu(_ attente: String, issue: String, file: StaticString, line: UInt) {
         let fichier = (String(describing: file) as NSString).lastPathComponent
-        let rapport = ["Attente : \(attente)", "Appelant : \(fichier):\(line)", "Issue : \(issue)"].joined(separator: "\n")
+        let rapport = ["Attente : \(attente)", "Appelant : \(fichier):\(line)", "Nature : geste rejoué", "Issue : \(issue)"]
+            .joined(separator: "\n")
         XCTContext.runActivity(named: "Geste rejoué — « \(attente) » : \(issue)") { _ in }
         attachText(rapport, name: "\(proofPrefix)-attente-bloquee-\((fichier as NSString).deletingPathExtension)-\(line).txt")
     }
@@ -352,7 +355,10 @@ class JoleneUITestCase: XCTestCase {
     /// passe saisi, focus clavier toujours sur le champ). Un toucher qui a bien envoyé le formulaire n'est jamais rejoué :
     /// le bouton est alors désactivé, ou l'écran a changé. La première fenêtre (8 s) passe par `attendreSansEchec` :
     /// blocages décomptés, budgetés et tracés comme dans `require`. La preuve reste le `require` final, sur le reste du
-    /// délai (revue B8 de la vague 5, 5ᵉ tour, m1 : 30 s au total, pas 38).
+    /// délai (revue B8 de la vague 5, 5ᵉ tour, m1 : 30 s au total, pas 38). Le budget de blocage vaut pour chaque
+    /// attente, comme partout ailleurs : 15 s pour la première fenêtre, 15 s pour le `require` final (60 s chacune à
+    /// froid, premier test du processus). Un gel réel dépasse le budget de l'une des deux et fait échouer le test ; un
+    /// blocage absorbé de part et d'autre peut cumuler jusqu'à deux budgets (revue B8 de la vague 5, 6ᵉ tour, m2).
     func toucherSeConnecter(_ submit: XCUIElement, _ description: String, timeout: TimeInterval = 30,
                             file: StaticString = #filePath, line: UInt = #line, sessionPrete: () -> Bool) {
         let fenetre = min(8, timeout / 2)

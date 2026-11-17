@@ -307,6 +307,67 @@ final class CrashScrubberTests: XCTestCase {
         }
     }
 
+    func testJetonNuApresUnNomSensibleDansUneDescriptionSwiftEstMasqueEnEntier() {
+        // Revue B8 de la vague 5, 3ᵉ tour, m1 : `code: ABC123` passait en clair, `code: 12AB34` n'était masqué qu'à moitié
+        // (le nombre `12`, pas `AB34`). Le jeton nu entier qui suit `nom :` est masqué, jusqu'au premier blanc ou signe.
+        for (brut, secret) in [
+            ("Verification(code: ABC123)", "ABC123"),
+            ("code: 12AB34, suite", "AB34"),
+            ("code: Optional(A1B2C3)", "A1B2C3"),
+            ("p_code: qr_secret-9.x", "qr_secret-9.x"),
+            ("otp: 4F2A9C", "4F2A9C"),
+            ("refreshToken: v1.abc-def~", "abc-def"),
+            ("email: jane.doe", "jane.doe"),
+            ("code: é42ü", "é42ü"),
+        ] {
+            assertMasque(brut, sansFragments: [secret])
+        }
+        XCTAssertEqual(CrashScrubber.texte("code: 12AB34, suite"), "code: \"\(masque)\", suite", "jeton entier, suite lisible")
+        XCTAssertEqual(CrashScrubber.texte("code: Optional(A1B2C3) fin"), "code: Optional(\"\(masque)\") fin")
+        // Noms voisins toujours lisibles.
+        for texte in ["errorCode: IBAN_INVALIDE", "status_code: E42", "barcode: X1", "codePostal: A75001",
+                      "p_code_postal: X", "error_code: ABC123"] {
+            XCTAssertEqual(CrashScrubber.texte(texte), texte)
+        }
+    }
+
+    func testDescriptionSwiftNeLaissePasLaSuiteDUnIBANNiLeDomaineDUneAdresse() {
+        // Revue B8 de #1136, B1 : la règle des descriptions Swift passait avant les adresses et les IBAN ; son jeton nu,
+        // arrêté au premier blanc ou à l'arobase, laissait `1732 8844 …` et `@example.com` en clair.
+        for (brut, fragments) in [
+            ("iban: FR76 1732 8844 0018 3164 8362 916", ["FR76", "1732", "8844", "916"]),
+            ("p_iban: FR76\u{00A0}1732\u{00A0}8844\u{00A0}0018\u{00A0}3164\u{00A0}8362\u{00A0}916", ["FR76", "1732", "916"]),
+            ("email: jane.doe@example.com", ["jane", "doe", "example"]),
+            ("Profil(email: Optional(jane.doe@example.com), code: 4F2A9C)", ["jane", "example", "4F2A9C"]),
+        ] {
+            assertMasque(brut, sansFragments: fragments)
+        }
+        XCTAssertEqual(CrashScrubber.texte("iban: FR76 1732 8844 0018 3164 8362 916"), "iban: \"\(masque)\"")
+        XCTAssertEqual(CrashScrubber.texte("email: jane.doe@example.com"), "email: \"\(masque)\"")
+        XCTAssertEqual(CrashScrubber.texte("code: Optional(jane@x.fr)"), "code: Optional(\"\(masque)\")")
+    }
+
+    func testJetonDontLeDebutRessembleAUnIBANMasqueEnEntier() {
+        // Revue delta B8 de #1136, B1bis : la règle IBAN, passée avant la règle Swift, masquait le début du jeton ; la
+        // suite (`+/xyz==`, `/secretpart`, `.xyz`) sortait en clair, le jeton nu ne reprenant pas le marqueur.
+        for (brut, fragments) in [
+            ("tokenHash: Ab12cdEFghIJkl+/xyz==", ["Ab12", "xyz"]),
+            ("token: AB12CDEFGHIJKL/secretpart", ["AB12", "secretpart"]),
+            ("refreshToken: v1.AB12CDEFGHIJ.xyz", ["v1.", "AB12", "xyz"]),
+        ] {
+            assertMasque(brut, sansFragments: fragments)
+        }
+        XCTAssertEqual(CrashScrubber.texte("tokenHash: Ab12cdEFghIJkl+/xyz==, suite"), "tokenHash: \"\(masque)\", suite")
+    }
+
+    func testJetonNuEncodeMasqueEtNilLisible() {
+        // Revue B8 de #1136, m2 : `%` fait partie du jeton nu (`%2Bdef` passait en clair) ; m1 : `nil` seul reste lisible.
+        assertMasque("refreshToken: abc%2Bdef", sansFragments: ["abc", "2Bdef"])
+        XCTAssertEqual(CrashScrubber.texte("refreshToken: abc%2Bdef, suite"), "refreshToken: \"\(masque)\", suite")
+        XCTAssertEqual(CrashScrubber.texte("Verification(code: nil, otp: nil)"), "Verification(code: nil, otp: nil)")
+        assertMasque("code: nilou7", sansFragments: ["nilou7"])
+    }
+
     /// Texte de `longueurMaximale` caractères au moins : des « a » séparés par une espace, puis `fin`, qui commence
     /// `avant` caractères avant la limite.
     private func texteCoupe(_ fin: String, avant: Int) -> String {
