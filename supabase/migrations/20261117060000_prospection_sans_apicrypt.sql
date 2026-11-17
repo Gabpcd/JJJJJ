@@ -29,7 +29,8 @@
 --    (adresse MSSanté des apicrypteurs) ; le reste d'apicrypt.org (messagerie
 --    chiffrée entre apicrypteurs) est un CHOIX DE CONFORMITÉ JOLENE, prudent :
 --    aucune adresse de prospects_etablissements n'en relève au 17/11, et une
---    adresse joignable bloquée à tort coûte moins qu'un envoi rejeté. Le nom de la fonction et le motif d'expiration restent ceux de
+--    adresse joignable bloquée à tort coûte moins qu'un envoi rejeté. Le nom
+--    de la fonction et le motif d'expiration restent ceux de
 --    20261116143942 : les adresses interop-mssante sont des adresses MSSanté,
 --    et le quota du jour de l'agent relit ce motif à l'identique. Le prédicat
 --    fn_growth_destinataire_bloque (validation et constat d'envoi), l'agent de
