@@ -79,7 +79,7 @@ final class DemoCompletionInscriptionTests: JoleneUITestCase {
         tap("completion-salarie-oui")
         let exclusivite = element("completion-exclusivite")
         require("L'avertissement d'exclusivité est affiché") { exclusivite.exists }
-        XCTAssertEqual(exclusivite.label, Self.exclusivite, "texte verbatim (InscriptionSoignant.tsx l.84)")
+        XCTAssertEqual(exclusivite.label, Self.exclusivite, "texte verbatim (InscriptionSoignant.tsx l.85)")
         XCTAssertFalse(tabBarExists, "jamais l'espace soignant avant le profil complet (D9)")
         record("\(proofPrefix)-completion-formulaire")
 
@@ -221,7 +221,7 @@ final class DemoCompletionInscriptionTests: JoleneUITestCase {
         require("« Réessayer la vérification » est atteignable") { self.visible(reessayer) && reessayer.isEnabled }
         let referentiel = element("completion-referentiel-indisponible")
         scrollTo(referentiel, in: ecran)
-        XCTAssertEqual(referentiel.label, Self.referentielIndisponible, "texte verbatim (InscriptionSoignant.tsx l.94)")
+        XCTAssertEqual(referentiel.label, Self.referentielIndisponible, "texte verbatim (InscriptionSoignant.tsx l.95)")
         record("\(proofPrefix)-completion-referentiel-indisponible")
     }
 

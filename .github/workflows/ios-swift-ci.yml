@@ -49,6 +49,11 @@ on:
       - 'src/lib/paiementSoignantUi.ts'
       - 'src/lib/valider-profil-soignant.ts'
       - 'src/lib/preferencesModesExercice.ts'
+      # Lot 3, T8 : sources web relues ligne à ligne par CompletionVerbatimTests (annotations de
+      # CompletionProfil.swift, hors garde check-textes-juridiques-ios) — incident #1137 du 17/11.
+      - 'src/pages/InscriptionSoignant.tsx'
+      - 'src/lib/inscriptionProgressive.ts'
+      - 'src/components/inscription/DeclarationEtudiant.tsx'
       - 'src/components/planning/planning-candidat.ts'
       - 'src/components/planning/selection-serie-candidat.ts'
       - 'src/integrations/supabase/types.ts'
@@ -98,6 +103,11 @@ on:
       - 'src/lib/paiementSoignantUi.ts'
       - 'src/lib/valider-profil-soignant.ts'
       - 'src/lib/preferencesModesExercice.ts'
+      # Lot 3, T8 : sources web relues ligne à ligne par CompletionVerbatimTests (annotations de
+      # CompletionProfil.swift, hors garde check-textes-juridiques-ios) — incident #1137 du 17/11.
+      - 'src/pages/InscriptionSoignant.tsx'
+      - 'src/lib/inscriptionProgressive.ts'
+      - 'src/components/inscription/DeclarationEtudiant.tsx'
       - 'src/components/planning/planning-candidat.ts'
       - 'src/components/planning/selection-serie-candidat.ts'
       - 'src/integrations/supabase/types.ts'

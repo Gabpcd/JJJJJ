@@ -62,7 +62,7 @@ final class CompletionVerbatimTests: XCTestCase {
     func testPhraseDuTypeUniqueAssembleeCommeLeJSX() throws {
         // `En tant que <strong>{label}</strong>, votre type d'exercice est automatiquement défini comme <strong>{…}</strong>.`
         let lignes = try Self.source(Self.soignant)
-        let jsx = lignes[68 - 1].trimmingCharacters(in: .whitespaces)
+        let jsx = lignes[69 - 1].trimmingCharacters(in: .whitespaces)
         XCTAssertTrue(jsx.hasPrefix("En tant que <strong>{getLabelProfession(profession)}</strong>, votre type d'exercice est automatiquement défini comme <strong>{"), jsx)
         XCTAssertTrue(jsx.hasSuffix("</strong>."), jsx)
         XCTAssertTrue(jsx.contains("uniqueType === 'SALARIE' ? 'salarié' : uniqueType === 'LIBERAL' ? 'libéral' : 'mixte'"), jsx)
@@ -72,11 +72,11 @@ final class CompletionVerbatimTests: XCTestCase {
 
     func testListeDesInformationsAVerifierAssembleeCommeLeGabarit() throws {
         let lignes = try Self.source(Self.soignant)
-        XCTAssertTrue(lignes[356 - 1].contains("message: `Vérifiez les informations suivantes : ${manque.join(', ')}.`"))
-        // Ordre des éléments du web (l.355), « cohérence du RPPS » exclue (vérification en temps réel non portée, D11).
+        XCTAssertTrue(lignes[368 - 1].contains("message: `Vérifiez les informations suivantes : ${manque.join(', ')}.`"))
+        // Ordre des éléments du web (l.367), « cohérence du RPPS » exclue (vérification en temps réel non portée, D11).
         let ordre = [T.manquePrenom, T.manqueNom, T.manqueTelephone, T.manqueDateNaissance, T.manqueProfession,
                      T.manqueModeExercice, T.manqueRpps].map { "'\($0)'" }
-        let ligne = lignes[355 - 1]
+        let ligne = lignes[367 - 1]
         let positions = try ordre.map { try XCTUnwrap(ligne.range(of: $0), $0).lowerBound }
         XCTAssertEqual(positions, positions.sorted(), "ordre du web")
         XCTAssertTrue(ligne.contains("'cohérence du RPPS'"))
