@@ -1,7 +1,22 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { aller, entrer, preuve as preuveSoignant, recharger, sansDebordement, simulerSoignant, profil } from './helpers/recette-complete-soignant';
 import { allerA, entrer as entrerEtablissement, ids, preuve, simulerEtablissement, stabiliserLectures } from './helpers/recette-complete-etablissement';
 import { simulerCompletionEtablissement } from './helpers/recette-complete-completion-etablissement';
+
+// Le choix de spécialité est un Popover Radix : une fois son animation de
+// fermeture terminée, il rend le focus à son bouton avec un .focus() sans
+// preventScroll, donc la page remonte jusqu'à lui. Un clic lancé avant ce
+// retour (« Publier la mission », plus bas) peut être emporté par ce défilement
+// et perdu sans erreur (CI iPhone du 17/11/2026). On attend la fermeture
+// complète et le focus rendu avant toute autre action.
+async function choisirSpecialite(page: Page, libelle: string, portee: Page | Locator = page, invite = 'Toutes spécialités acceptées') {
+  await portee.getByRole('combobox').filter({ hasText: invite }).click();
+  // La liste est rendue dans un portail : l'option se cherche dans la page.
+  const option = page.getByRole('option', { name: libelle, exact: true });
+  await option.click();
+  await expect(option).toHaveCount(0);
+  await expect(portee.getByRole('combobox').filter({ hasText: libelle })).toBeFocused();
+}
 
 // Vrais écrans, réponses intégralement synthétiques, fournisseurs bloqués.
 test('inscription établissement — choix des internes sauvegardé, relu puis retiré du brouillon', async ({ page }, info) => {
@@ -12,8 +27,7 @@ test('inscription établissement — choix des internes sauvegardé, relu puis r
   await page.getByLabel('Intitulé *', { exact: true }).fill('Brouillon médical — simulation');
   await page.locator('#mission-profession').click();
   await page.getByRole('option', { name: 'Médecin', exact: true }).click();
-  await page.getByRole('combobox').filter({ hasText: 'Toutes spécialités acceptées' }).click();
-  await page.getByRole('option', { name: 'Médecine générale', exact: true }).click();
+  await choisirSpecialite(page, 'Médecine générale');
   const accueil = page.getByTestId('mission-accepte-internes');
   await accueil.check();
   await page.getByRole('radio', { name: /^Salarié/ }).check();
@@ -68,8 +82,7 @@ test('établissement — accueil explicite des internes, spécialité obligatoir
   await page.getByLabel('Taux horaire brut * (€/h)', { exact: true }).fill('30');
   await expect(page.getByRole('button', { name: 'Publier la mission', exact: true })).toBeDisabled();
   expect(state.mission).toBeNull();
-  await page.getByRole('combobox').filter({ hasText: 'Toutes spécialités acceptées' }).click();
-  await page.getByRole('option', { name: 'Médecine générale', exact: true }).click();
+  await choisirSpecialite(page, 'Médecine générale');
   await page.getByRole('button', { name: 'Publier la mission', exact: true }).click();
   const recap = page.getByRole('dialog');
   await expect(recap).toContainText('Internes : acceptés sous contrôle des preuves');
@@ -205,8 +218,7 @@ test('admin — attestation remplacée, consultation liée à la nouvelle emprei
   const popup = await popupPromise;
   await expect(popup).toHaveURL(/attestation-fictive-lisible$/); await popup.close();
   await section.getByLabel('RPPS lu sur l’attestation').fill(profil.numero_rpps);
-  await section.getByRole('combobox').filter({ hasText: 'Sélectionnez une spécialité' }).click();
-  await page.getByRole('option', { name: 'Médecine générale', exact: true }).click();
+  await choisirSpecialite(page, 'Médecine générale', section, 'Sélectionnez une spécialité');
   await section.getByRole('checkbox', { name: /contrôlé l’inscription actuelle/ }).check();
   await section.getByRole('checkbox', { name: /attestation établit la qualification/ }).check();
   await section.getByLabel(/Motif documenté/).fill('Attestation fictive examinée pour le scénario de simulation.');
