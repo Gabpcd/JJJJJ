@@ -18,10 +18,18 @@
 --    SECURITY INVOKER, IMMUTABLE, search_path vide). Empreinte = md5 du texte
 --    compris entre les deux délimiteurs $body$ de 20261116143942, recalculée
 --    par tests/node/prospection-sans-apicrypt.node.mjs et relue en prod le
---    17/11. Sinon la migration entière est refusée avant toute écriture.
+--    17/11. Les quatre fonctions de 20261116143942 qui portent l'effet de la
+--    règle sont verrouillées de même (revue B8 de #1134, m1) : le prédicat
+--    fn_growth_destinataire_bloque et l'agent fn_growth_agent_prospection, qui
+--    doivent l'appeler, l'expiration qui écrit en prod et le motif que relit le
+--    quota du jour. Sinon la migration entière est refusée avant toute écriture.
 -- 1. Règle unique élargie : apicrypt.org et ses sous-domaines, en plus de
 --    mssante.fr et ses sous-domaines (casse et blancs de bord ignorés ; NULL =
---    false). Le nom de la fonction et le motif d'expiration restent ceux de
+--    false). Force des sources : la FAQ Apicrypt fonde interop-mssante.apicrypt.org
+--    (adresse MSSanté des apicrypteurs) ; le reste d'apicrypt.org (messagerie
+--    chiffrée entre apicrypteurs) est un CHOIX DE CONFORMITÉ JOLENE, prudent :
+--    aucune adresse de prospects_etablissements n'en relève au 17/11, et une
+--    adresse joignable bloquée à tort coûte moins qu'un envoi rejeté. Le nom de la fonction et le motif d'expiration restent ceux de
 --    20261116143942 : les adresses interop-mssante sont des adresses MSSanté,
 --    et le quota du jour de l'agent relit ce motif à l'identique. Le prédicat
 --    fn_growth_destinataire_bloque (validation et constat d'envoi), l'agent de
@@ -51,9 +59,28 @@ BEGIN
       COALESCE(pg_catalog.md5(p.prosrc), 'fonction absente'), p.prosecdef, p.provolatile, p.proconfig;
   END IF;
 
-  IF pg_catalog.to_regprocedure('private.fn_growth_expirer_brouillons_mssante()') IS NULL THEN
-    RAISE EXCEPTION 'PROSPECTION_SANS_APICRYPT_EXPIRATION_ABSENTE : private.fn_growth_expirer_brouillons_mssante() (20261116143942) absente en base : expiration impossible. Redéfinition refusée.';
-  END IF;
+  -- Fonctions de 20261116143942 qui appliquent la règle : corps LIVE = corps du
+  -- dépôt (md5 relus en prod le 17/11), SECURITY INVOKER, search_path vide.
+  FOR p IN
+    SELECT v.signature, v.empreinte, v.volatilite, f.prosrc, f.prosecdef, f.provolatile, f.proconfig
+    FROM (VALUES
+      ('private.fn_growth_destinataire_bloque(text,text,text,text,text)', 'dd7d2f13403693c74fde8ece09452928', 's'),
+      ('private.fn_growth_agent_prospection()', '2ccf9311871dfc416d609f0112da9a5b', 'v'),
+      ('private.fn_growth_expirer_brouillons_mssante()', '4d3cf88d3acbc31eafbe0366231c9d10', 'v'),
+      ('private.fn_growth_motif_expiration_mssante()', '07b4d85eaf6cf499c62e4f9d6590e693', 'i')
+    ) AS v(signature, empreinte, volatilite)
+    LEFT JOIN pg_catalog.pg_proc f ON f.oid = pg_catalog.to_regprocedure(v.signature)
+  LOOP
+    IF p.prosrc IS NULL
+      OR pg_catalog.md5(p.prosrc) <> p.empreinte
+      OR p.prosecdef IS DISTINCT FROM false
+      OR p.provolatile::text <> p.volatilite
+      OR p.proconfig IS DISTINCT FROM ARRAY['search_path=""']::text[]
+    THEN
+      RAISE EXCEPTION 'PROSPECTION_SANS_APICRYPT_APPELANT_DIVERGENT : % en base (md5 %, prosecdef %, volatilité %, search_path %) ne correspond plus au corps de 20261116143942 (md5 %, SECURITY INVOKER, search_path vide) : l''effet de la règle n''est plus garanti. Redéfinition refusée : repartir de la définition LIVE (CLAUDE.md, garde-fous 9.0 n°2).',
+        p.signature, COALESCE(pg_catalog.md5(p.prosrc), 'fonction absente'), p.prosecdef, p.provolatile, p.proconfig, p.empreinte;
+    END IF;
+  END LOOP;
 END;
 $prospection_sans_apicrypt_avant$;
 
@@ -83,5 +110,16 @@ DECLARE
 BEGIN
   v_n := private.fn_growth_expirer_brouillons_mssante();
   RAISE NOTICE 'Brouillons Apicrypt de l''agent de prospection expirés : %', v_n;
+
+  -- Post-condition : le prédicat unique refuse une adresse interop-mssante, un
+  -- faux ami reste joignable, et plus aucun brouillon de prospection en file ne
+  -- relève de la règle (sinon toute la migration est annulée).
+  IF private.fn_growth_destinataire_bloque('PUBLIC', NULL, 'postcondition@interop-mssante.apicrypt.org', NULL, NULL) IS DISTINCT FROM 'MSSANTE'
+     OR private.fn_growth_destinataire_bloque('PUBLIC', NULL, 'postcondition@pasapicrypt.org', NULL, NULL) IS NOT NULL
+     OR EXISTS (SELECT 1 FROM public.growth_brouillons b
+                WHERE b.agent = 'PROSPECTION_ETABLISSEMENT' AND b.statut IN ('BROUILLON', 'VALIDE')
+                  AND private.fn_growth_email_mssante(b.destinataire_email)) THEN
+    RAISE EXCEPTION 'PROSPECTION_SANS_APICRYPT_POSTCONDITION : prédicat inexact ou brouillon Apicrypt encore en file après l''expiration.';
+  END IF;
 END;
 $prospection_sans_apicrypt_expiration$;

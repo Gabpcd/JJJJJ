@@ -2,8 +2,9 @@
 // Ne remplace pas la suite SQL (tests/security/agents-croissance-brouillons.test.sql,
 // section 10, exécutée sur le staging sous ROLLBACK) ; verrouille ce qu'elle ne
 // peut pas voir :
-//   * l'empreinte du préflight est bien celle du corps de 20261116143942
-//     (md5 du texte entre les deux délimiteurs $body$, comme pg_proc.prosrc) ;
+//   * les empreintes du préflight sont bien celles des corps de 20261116143942
+//     (md5 du texte entre les deux délimiteurs $body$, comme pg_proc.prosrc) :
+//     la règle redéfinie et les quatre fonctions qui en portent l'effet ;
 //   * seule la règle unique est redéfinie, en-tête identique, et son nouveau
 //     corps n'ajoute que apicrypt.org à mssante.fr ;
 //   * le préflight précède toute écriture ; l'expiration réutilise la fonction
@@ -70,13 +71,36 @@ test(`préflight : empreinte de fn_growth_email_mssante = corps de ${ORIGINE}`, 
   assert.match(verif, /RAISE EXCEPTION '[^']*CLAUDE\.md, garde-fous 9\.0 n°2/);
 });
 
-test('le préflight précède toute écriture et exige la fonction d\'expiration', () => {
+// Fonctions de 20261116143942 qui portent l'effet de la règle (revue B8 de #1134, m1) : md5 relus en prod le 17/11.
+const APPELANTS = [
+  ['private.fn_growth_destinataire_bloque', 'private.fn_growth_destinataire_bloque(text,text,text,text,text)', 's'],
+  ['private.fn_growth_agent_prospection', 'private.fn_growth_agent_prospection()', 'v'],
+  ['private.fn_growth_expirer_brouillons_mssante', 'private.fn_growth_expirer_brouillons_mssante()', 'v'],
+  ['private.fn_growth_motif_expiration_mssante', 'private.fn_growth_motif_expiration_mssante()', 'i'],
+];
+
+test('le préflight précède toute écriture et verrouille les quatre fonctions qui portent la règle', () => {
   const code = sansCommentaires(migration);
   const finPreflight = code.indexOf('$prospection_sans_apicrypt_avant$;');
   assert.ok(finPreflight > 0);
   assert.ok(finPreflight < code.search(/\b(CREATE|REVOKE|UPDATE|INSERT|DELETE)\b/));
-  assert.match(code.slice(0, finPreflight),
-    /to_regprocedure\('private\.fn_growth_expirer_brouillons_mssante\(\)'\) IS NULL THEN\s+RAISE EXCEPTION/);
+  const preflight = code.slice(0, finPreflight);
+  for (const [nom, signature, volatilite] of APPELANTS) {
+    const empreinte = md5(definition(origine, nom).corps);
+    assert.ok(preflight.includes(`('${signature}', '${empreinte}', '${volatilite}')`), `${signature} : empreinte ${empreinte}`);
+  }
+  assert.match(preflight, /IF p\.prosrc IS NULL\s+OR pg_catalog\.md5\(p\.prosrc\) <> p\.empreinte/);
+  assert.match(preflight, /OR p\.prosecdef IS DISTINCT FROM false\s+OR p\.provolatile::text <> p\.volatilite/);
+  assert.match(preflight, /RAISE EXCEPTION 'PROSPECTION_SANS_APICRYPT_APPELANT_DIVERGENT(?:[^']|'')*CLAUDE\.md, garde-fous 9\.0 n°2/);
+});
+
+test('post-condition : prédicat refusant une adresse interop-mssante, faux ami joignable, file vide de la règle', () => {
+  const code = sansCommentaires(migration);
+  const expiration = code.indexOf('private.fn_growth_expirer_brouillons_mssante();');
+  const post = code.slice(expiration);
+  assert.match(post, /fn_growth_destinataire_bloque\('PUBLIC', NULL, '[^']+@interop-mssante\.apicrypt\.org', NULL, NULL\) IS DISTINCT FROM 'MSSANTE'/);
+  assert.match(post, /fn_growth_destinataire_bloque\('PUBLIC', NULL, '[^']+@pasapicrypt\.org', NULL, NULL\) IS NOT NULL/);
+  assert.match(post, /AND private\.fn_growth_email_mssante\(b\.destinataire_email\)\) THEN\s+RAISE EXCEPTION 'PROSPECTION_SANS_APICRYPT_POSTCONDITION/);
 });
 
 test('seule la règle unique est redéfinie : en-tête identique, apicrypt.org ajouté à mssante.fr', () => {
