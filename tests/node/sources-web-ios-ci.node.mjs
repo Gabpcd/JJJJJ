@@ -192,6 +192,7 @@ test('revue B8 : un chemin construit (interpolation, concaténation, segments) e
     ['let web = racine.appendingPathComponent("src", isDirectory: true)', /construit/],
     ['let web = racine.appending(path: "src")', /construit/],
     ['let web = racine.appending(component: "../src")', /construit/],
+    ['let web = racine.appending(components: "src", "pages", "Page.tsx")', /construit/],
   ];
   for (const [ligne, attendu] of cas) {
     const { erreurs } = verifier({ swift: [{ chemin: TEST_SWIFT, texte: `${ligne}\n` }], filtre: workflow(['ios-native/**', PAGE]) });
@@ -208,6 +209,8 @@ test('revue B8 : préfixes ./, ../, / et interpolation en tête ne masquent pas 
     'let w = try String(contentsOfFile: "\\(racine.path)/src/pages/Page.tsx")',
     'let w = try String(contentsOfFile: racine.path + "/src/pages/Page.tsx")',
     'XCTAssertTrue(l.contains(#"say "hi"#)); let w = try source("src/pages/Page.tsx")',
+    'let w = try lire("ios-native/../src/pages/Page.tsx")',
+    'let w = try lire("src/lib/../pages/./Page.tsx")',
   ]) {
     const { lectures, erreurs } = verifier({ swift: [{ chemin: TEST_SWIFT, texte: `${ligne}\n` }] });
     assert.deepEqual([...lectures.keys()], [PAGE], ligne);

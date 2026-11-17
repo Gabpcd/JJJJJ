@@ -24,13 +24,17 @@
  *
  * Refusés, pour qu'aucune lecture n'échappe en silence :
  *   - un dossier lu (`"src/pages"`, `"src/pages/" + nom`) et un chemin construit (interpolation au fil d'un dossier du
- *     dépôt, segment racine seul passé à `appendingPathComponent` ou `appending(path:|component:)`) : couverture
+ *     dépôt, segment racine seul passé à `appendingPathComponent` ou `appending(path:|component:|components:)`) : couverture
  *     inconnue ;
  *   - un chemin cité introuvable (fichier d'un sous-dossier existant ou à extension de source, ou annotation d'un
  *     fichier relu) : les tests Swift lèvent `XCTSkip` sur un fichier absent, une PR web qui le renomme ou le supprime
  *     passerait donc en silence.
- * Limite connue : un test qui parcourrait un dossier pour relire les annotations de chaque fichier Swift n'est pas vu ;
- * la convention du dépôt est de citer chaque fichier relu dans un littéral (CompletionVerbatimTests, InscriptionVerbatimTests).
+ * Limites connues (revue B8 n° 3) : la détection lit les littéraux, pas l'exécution. Ne sont pas vus un test qui
+ * parcourrait un dossier pour relire les annotations de chaque fichier Swift, un fichier Swift relu par son seul nom
+ * (`dossier.appendingPathComponent("X.swift")`), un chemin assemblé depuis une constante (`Self.web`, `joined`). La
+ * convention du dépôt est de citer chaque fichier relu en entier dans un littéral (CompletionVerbatimTests,
+ * InscriptionVerbatimTests). À l'inverse, un fichier Swift cité dans un littéral voit toutes ses annotations rendues
+ * obligatoires même s'il n'est relu que par un `contains` : échec fermé, message explicite.
  *
  * Chaque fichier lu doit correspondre à un motif des DEUX filtres (`pull_request` et `push`), lus avec le paquet `yaml`
  * comme GitHub les lit. Seuls `*` et `**` sont interprétés ; `?`, `+`, `[…]` et `!` (quantificateurs et négation chez
@@ -49,7 +53,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parse } from 'yaml';
 
@@ -143,11 +147,11 @@ export function lecturesDuSwift({ swift, fichiersDepot }) {
   const racineWeb = racine => racine !== 'ios-native' && racines.has(racine);
   const parent = chemin => chemin.split('/').slice(0, -1).join('/');
   const swiftSuivis = fichiersDepot.filter(f => f.startsWith(NATIF) && f.endsWith('.swift'));
-  /** Jeton de chemin sans ses préfixes `./`, `../` et `/` ; `null` s'il contient un segment vide, `.` ou `..`. */
+  /** Jeton de chemin normalisé (`a/../b` → `b`, préfixes `./`, `../` et `/` retirés) ; `null` s'il ne reste rien. */
   const normaliser = jeton => {
-    const valeur = jeton.replace(/^(?:\.{1,2}\/|\/)+/, '');
+    const valeur = posix.normalize(jeton).replace(/^(?:\.\.\/|\.\/|\/)+/, '');
     const net = valeur.replace(/\/+$/, '');
-    if (!net || net.split('/').some(seg => !seg || seg === '.' || seg === '..')) return null;
+    if (!net || net === '.' || net === '..') return null;
     return { net, dossier: valeur.endsWith('/') };
   };
   const conseil = 'si ce n’est pas une lecture (commentaire, préfixe), écrivez le chemin sans guillemets';
@@ -177,7 +181,7 @@ export function lecturesDuSwift({ swift, fichiersDepot }) {
     // `"src/x introuvable : \(…)"`), ou segment racine seul passé à appendingPathComponent / appending(path:|component:).
     const interpoles = [...texte.matchAll(/[")]([\w./-]*)\\\(/g)].map(m => normaliser(m[1]))
       .filter(lu => lu && lu.net.includes('/') && dossiers.has(lu.net)).map(lu => lu.net.split('/')[0]);
-    const segments = [...texte.matchAll(/(?:appendingPathComponent\(|appending\(\s*(?:path|component):)\s*"([^"\n]*)"\s*[,)]/g)]
+    const segments = [...texte.matchAll(/(?:appendingPathComponent\(|appending\(\s*(?:path|components?):)\s*"([^"\n]*)"\s*[,)]/g)]
       .map(m => normaliser(m[1])).filter(lu => lu && !lu.net.includes('/')).map(lu => lu.net);
     for (const racine of [...interpoles, ...segments].filter(racineWeb)) {
       erreurs.push(`${nom} lit un chemin construit sous « ${racine}/ » (interpolation ou segments) : ${SCRIPT} ne peut pas savoir quel fichier est lu ; écrivez le chemin en entier dans un seul littéral.`);
