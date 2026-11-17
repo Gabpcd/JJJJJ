@@ -2732,3 +2732,24 @@ limitée à ce delta.
   revue).
 - Aucun changement du `Package.resolved` ni des assertions : delta de texte uniquement. Preuve CI iOS portée par le run
   du commit précédent (`950214f6`), code identique.
+
+### CI iOS du commit 950214f6 (run 43962293492) : iPhone vert, deux gestes perdus sur iPad (17/11/2026)
+
+- **UI — iphone : vert** (11 éclats, `skipped = 0`) : premier run iPhone vert depuis le gel du 16/11 ; le correctif
+  (« OK » du pavé numérique, veilleur du simulateur) tient.
+- **UI — ipad-landscape** : 1 échec sur 1 964, `DemoPushTests.testPrePromptDeuxiemeSessionPuisActiver` (éclat
+  lot3-push). Journal d'activité du xcresult : « Se connecter » touché (événement synthétisé sur le bouton
+  entièrement visible, 5 s après le dernier défilement), puis 30 s sans envoi ni erreur ; capture d'échec : mot de
+  passe saisi, focus toujours sur le champ. Aucun gel constaté par le veilleur. Test vert sur iPhone et iPad portrait,
+  vert en paysage sur `main` (run 43889328109) et sur la PR #1121 (run 43935117534).
+- **UI — ipad-portrait** : 1 échec sur 1 964, `DemoExplorerTests.testEtatVideGardeActualiserACoteDeLActionSecondaire`
+  (éclat socle) : curseur du rayon parti de 50 km, resté à « Rayon : 15 km » au lieu de 5 km après le glissement.
+  Vert sur les deux autres formats et sur `main`.
+- Aucun des deux tests ni leurs écrans ne sont modifiés par la vague 5 : gestes synthétisés perdus par le simulateur.
+  Rattrapage borné dans `UITestSupport.swift`, la preuve restant l'assertion :
+  - `toucherSeConnecter(_:_:sessionPrete:)` (20 aides de connexion des tests démo) : un toucher resté sans effet
+    (écran de connexion inchangé, bouton toujours actif — il se désactive dès l'envoi —, aucune erreur) est rejoué
+    une seule fois après 8 s, et consigné ; un formulaire envoyé n'est jamais renvoyé ;
+  - `dragSliderPastMinimum(_:)` : glissement rejoué depuis la nouvelle position du pouce, trois au plus, tant que le
+    curseur n'est pas à sa borne basse ; chaque reprise est consignée ; la valeur reste exigée par l'appelant.
+- `devientVrai(en:_:)` : attente bornée sans échec (`XCTWaiter` sans délégué), réservée au choix de rejouer un geste.

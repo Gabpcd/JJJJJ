@@ -225,8 +225,7 @@ final class DemoContratsTests: JoleneUITestCase {
         let submit = element("login-submit")
         require("Le bouton de connexion est activé") { submit.isEnabled }
         if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
-        submit.tap()
-        require("La session est prête : la barre d'onglets est affichée", timeout: 30) { self.tabBarExists }
+        toucherSeConnecter(submit, "La session est prête : la barre d'onglets est affichée") { self.tabBarExists }
     }
 
     /// `attendreListe: false` (coupe-circuit à faux, L2-T10) : la liste native n'est pas attendue, son renvoi la remplace.

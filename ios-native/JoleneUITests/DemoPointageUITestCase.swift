@@ -37,8 +37,7 @@ class DemoPointageUITestCase: JoleneUITestCase {
         let submit = element("login-submit")
         require("Le bouton de connexion est activé") { submit.isEnabled }
         if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
-        submit.tap()
-        require("La session démo est prête", timeout: 30) { self.tabBarExists }
+        toucherSeConnecter(submit, "La session démo est prête") { self.tabBarExists }
     }
 
     func ouvrirProfil() {

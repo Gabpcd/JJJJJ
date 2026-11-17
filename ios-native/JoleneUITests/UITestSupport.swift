@@ -302,7 +302,37 @@ class JoleneUITestCase: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [apparition], timeout: duree), .completed, description)
     }
 
+    /// Attente bornée SANS échec (un `XCTWaiter` sans délégué n'enregistre rien) : vrai dès que `condition` l'est
+    /// pendant `duree`. Réservée au choix de rejouer un geste perdu (`toucherSeConnecter`, `dragSliderPastMinimum`) ;
+    /// la preuve passe toujours ensuite par `require` ou par l'assertion de l'appelant. Jamais un délai fixe sans
+    /// condition.
+    func devientVrai(en duree: TimeInterval, _ condition: @escaping () -> Bool) -> Bool {
+        let predicate = NSPredicate { _, _ in condition() }
+        let attente = XCTNSPredicateExpectation(predicate: predicate, object: nil)
+        return XCTWaiter().wait(for: [attente], timeout: duree) == .completed
+    }
+
     // MARK: Actions
+
+    /// Touche « Se connecter » puis exige la session (`sessionPrete`, délai `timeout`). Un toucher resté sans aucun
+    /// effet est rejoué une seule fois, et consigné : écran de connexion inchangé, bouton toujours actif (il se
+    /// désactive dès l'envoi, `LoginScreen.canSubmit`), aucune erreur affichée. Run 43962293492, UI — ipad-landscape,
+    /// `DemoPushTests.testPrePromptDeuxiemeSessionPuisActiver` : toucher synthétisé sur le bouton entièrement visible,
+    /// 5 s après le dernier défilement, puis 30 s sans envoi ni erreur (capture d'échec : mot de passe saisi, focus
+    /// clavier toujours sur le champ). Un toucher qui a bien envoyé le formulaire n'est jamais rejoué : le bouton est
+    /// alors désactivé, ou l'écran a changé. La preuve reste le `require` final.
+    func toucherSeConnecter(_ submit: XCUIElement, _ description: String, timeout: TimeInterval = 30,
+                            file: StaticString = #filePath, line: UInt = #line,
+                            sessionPrete: @escaping () -> Bool) {
+        submit.tap()
+        if !devientVrai(en: 8, sessionPrete),
+           submit.exists, submit.isEnabled, visible(submit), !element("login-error").exists {
+            XCTContext.runActivity(named: "« Se connecter » touché sans effet après 8 s (bouton actif, aucune erreur) : "
+                                   + "un seul nouveau toucher") { _ in }
+            submit.tap()
+        }
+        require(description, timeout: timeout, file: file, line: line, condition: sessionPrete)
+    }
 
     /// Un `tap()` natif, jamais `press(forDuration:)` pour activer : la navigation attendue est vérifiée ensuite.
     func tap(_ identifier: String) {
@@ -453,8 +483,23 @@ class JoleneUITestCase: XCTestCase {
     /// 7,25 pt dans une piste qui commence à x = 316 et dont le premier pas (5 → 10 km, 19 pas sur
     /// 548 pt) s'arrondit dès 14,4 pt ; le curseur est resté à « Rayon : 10 km » pendant les 15 s
     /// d'attente. La valeur atteinte reste prouvée par l'appelant (libellé ou valeur affichés).
+    /// Un glissement synthétisé peut aussi s'interrompre avant la borne : run 43962293492, UI — ipad-portrait,
+    /// `DemoExplorerTests.testEtatVideGardeActualiserACoteDeLActionSecondaire`, curseur parti de 50 km et resté à
+    /// « Rayon : 15 km » pendant les 15 s d'attente. Le geste est alors rejoué depuis la nouvelle position du pouce,
+    /// trois glissements au plus, tant que le curseur n'est pas à sa borne basse ; chaque reprise est consignée.
     func dragSliderPastMinimum(_ slider: XCUIElement) {
         require("Le curseur est atteignable") { self.visible(slider) && slider.isEnabled }
+        for essai in 1...3 {
+            glisserAuDelaDuMinimum(slider)
+            if devientVrai(en: 2, { slider.normalizedSliderPosition < 0.005 }) { return }
+            let valeur = (slider.value as? String) ?? "?"
+            XCTContext.runActivity(named: "Glissement \(essai)/3 du curseur arrêté avant la borne basse "
+                                   + "(valeur « \(valeur) »)") { _ in }
+        }
+    }
+
+    /// Un glissement du pouce du curseur jusqu'au-delà de l'extrémité gauche de sa piste (`dragSliderPastMinimum`).
+    private func glisserAuDelaDuMinimum(_ slider: XCUIElement) {
         let frame = slider.frame
         let position = min(1, max(0, slider.normalizedSliderPosition))
         // Centre du pouce : la piste utile est réduite d'une demi-largeur de pouce à chaque bout,

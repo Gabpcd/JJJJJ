@@ -263,8 +263,7 @@ final class DemoExplorerTests: JoleneUITestCase {
         let submit = element("login-submit")
         require("Le bouton de connexion est activé") { submit.isEnabled }
         if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
-        submit.tap()
-        require("La session est prête : la barre d'onglets est affichée", timeout: 30) { self.tabBarExists }
+        toucherSeConnecter(submit, "La session est prête : la barre d'onglets est affichée") { self.tabBarExists }
 
         tabButton("tab-explorer", label: "Explorer").tap()
         attendreCompteur(Attendus.total, timeout: 30)
