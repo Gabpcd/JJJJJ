@@ -56,6 +56,7 @@ on:
       - 'supabase/SECURITY_DEFINER_MANIFEST.json'
       - '.github/workflows/ios-swift-ci.yml'
       - 'tests/node/ios-swift-ci-eclats.node.mjs'
+      - 'scripts/mobile/ios-ci-gel-simulateur.sh'
   push:
     branches: [main]
     paths:
@@ -104,6 +105,7 @@ on:
       - 'supabase/SECURITY_DEFINER_MANIFEST.json'
       - '.github/workflows/ios-swift-ci.yml'
       - 'tests/node/ios-swift-ci-eclats.node.mjs'
+      - 'scripts/mobile/ios-ci-gel-simulateur.sh'
   workflow_dispatch:
 
 permissions:
@@ -279,6 +281,9 @@ jobs:
     # mesurées très en dessous de leurs délais (lot 2 seul : environ 1 h 20 ; lot 3 seul : environ 1 h 35, socle compris) :
     # le délai d'un éclat tombe avant celui du job sauf si presque tous les éclats atteignent leurs 30 min. Au-delà de
     # onze éclats, scinder le job (un job par lot) plutôt que d'ajouter un éclat.
+    # Gel iPhone (DECISIONS_LOT2, « Gel iPhone CI — 16/11/2026 ») : après un éclat gelé ou hors délai, le simulateur est
+    # redémarré au début de l'éclat suivant, borné à 2 min dans ses 30 min (scripts/mobile/ios-ci-gel-simulateur.sh) :
+    # aucune étape ni minute ajoutée au plafond.
     timeout-minutes: 360
     strategy:
       fail-fast: false
@@ -360,6 +365,43 @@ jobs:
           echo "duree_build_s=$duree" >> "$GITHUB_OUTPUT"
           echo "Durée build-for-testing : ${duree}s (mesure pour la porte go/no-go, docs/mobile-swift/PORTE_LOT0.md)"
           grep -q "TEST BUILD SUCCEEDED" "$JOLENE_UI_OUTPUT/build-for-testing.log" || { echo "::error::build-for-testing a échoué (code $code). Voir build-for-testing.log dans l'artefact."; exit 1; }
+      - name: Package.resolved de l'app inchangé après la résolution SPM
+        id: package_resolved
+        # Revue fraîche B8 n°1 de L3-T15, m4 : build-for-testing résout les paquets (Sentry Cocoa et supabase-swift en
+        # version exacte, dépendances transitives épinglées). Un Package.resolved réécrit voudrait dire que la CI a testé
+        # un graphe que le dépôt ne décrit pas ; l'étape échoue toujours dans ce cas (jamais de continue-on-error).
+        # Revue B8 de la vague 5, M1 : la référence est le fichier qu'écrit Xcode 26.4.1 (SwiftPM 6.2), celui du TestFlight
+        # (`-onlyUsePackageVersionsFromResolvedFile`, ios-native-testflight.yml). SwiftPM 6.2 y élague
+        # opentelemetry-swift-core et swift-atomics (trait OpenTelemetry de supabase-swift, désactivé), qu'Xcode 16.4
+        # épingle ; aucun des deux n'épingle KSCrash (SENTRY_IOS.md §1). Diagnostic sans relancer ni attendre la fin du job : le diff est imprimé ici, le fichier
+        # résolu et ce diff sont copiés dans $JOLENE_UI_OUTPUT/package-resolved/, puis publiés aussitôt par l'étape
+        # suivante dans l'artefact « package-resolved-<format>-<sha> », lisible pendant que les éclats tournent.
+        # **Correctif : committer tel quel le Package.resolved de cet artefact** (ou corriger project.yml si une version a
+        # changé), puis relancer la CI. Délai de 1 min, plus 1 min pour l'artefact, hors éclats : le plafond du job reste
+        # tenu (25 + 1 + 1 + 11 × 30 = 357 ≤ 360). Garde : tests/node/ios-swift-ci-eclats.node.mjs.
+        timeout-minutes: 1
+        run: |
+          fichier=ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          if ! git diff --exit-code -- "$fichier"; then
+            diagnostic="$JOLENE_UI_OUTPUT/package-resolved"
+            mkdir -p "$diagnostic"
+            git diff -- "$fichier" > "$diagnostic/Package.resolved.diff" || true
+            if [ -f "$fichier" ]; then cp "$fichier" "$diagnostic/Package.resolved"; else echo "Package.resolved absent après la résolution SPM." > "$diagnostic/Package.resolved.absent"; fi
+            { xcodebuild -version; echo "Commit testé : ${{ github.event.pull_request.head.sha || github.sha }}"; } > "$diagnostic/toolchain.txt" 2>&1 || true
+            echo "::error::Package.resolved de l'app réécrit par la résolution SPM d'Xcode 26.4.1 (diff ci-dessus). Correctif : committer tel quel le Package.resolved de l'artefact package-resolved-$JOLENE_UI_FORMAT-<sha> (ou corriger project.yml si une version a changé), puis relancer la CI (docs/mobile-swift/SENTRY_IOS.md §1)."
+            exit 1
+          fi
+      - name: Publier le Package.resolved résolu par la CI (diagnostic, sur échec seulement)
+        # Immédiatement après la vérification : l'artefact est lisible dès qu'elle échoue, même si le job est annulé ensuite
+        # (journaux perdus à l'annulation, run 43948577842). Il ne change jamais le statut : la vérification a déjà échoué.
+        if: failure() && steps.package_resolved.outcome == 'failure'
+        timeout-minutes: 1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: package-resolved-${{ matrix.format }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ios-native/test-results/${{ matrix.format }}/package-resolved/
+          retention-days: 7
+          if-no-files-found: warn
       # Éclats (DECISIONS_LOT2 décision 22 : découpage par domaine dès qu'un format dépasse 20 min). Fusion des lots 2 et 3 :
       # socle une seule fois, puis les éclats du lot 2, puis ceux du lot 3 ; chaque classe XCUITest nommée par -only-testing
       # dans un seul éclat, et sautée par le socle (gardes : tests/node/ios-swift-ci-eclats.node.mjs et
@@ -372,7 +414,9 @@ jobs:
       # que « presences » reste sous 20 min avec DemoPointageEtatsTests. Éclats du lot 2 : « presences »
       # (DemoPresencesTests, DemoPointageEtatsTests), « pointage » (DemoPointageTests), « documents »
       # (DemoDocumentsTests ; DemoPresenceDetailTests de T5a depuis la fusion du lot 3 : « presences » atteignait
-      # 28,7 min de tests en paysage et dépassait ses 30 min sur les trois formats au run 43349573460),
+      # 28,7 min de tests en paysage et dépassait ses 30 min sur les trois formats au run 43349573460 ; « documents »
+      # mesurait ensuite 9,7 / 18,5 / 18,1 min (iphone / ipad-portrait / ipad-landscape) au run 43400770161 et ne peut
+      # plus rien recevoir sans dépasser 20 min),
       # « contrats » (DemoContratsTests, lecture T9a ; DemoSignatureContratTests, signature T9b). Les classes STAGING à
       # venir (lot 2 T11) s'ajoutent aux -skip-testing de l'éclat socle ; une nouvelle classe démo rejoint l'éclat de
       # son domaine, et ses -skip-testing du socle.
@@ -382,11 +426,18 @@ jobs:
       # « lot3-compte » prenait 19,1 min sur ipad-landscape (seuil de 20 min). « lot3-compte » : liens universels, hub
       # Compte ; « lot3-push » : taps push ; « lot3-notifications » : centre, préférences, profil ; « lot3-inscription » :
       # compte rapide (L3-T7, dont les deux XCUITest de L3-TJ, sorti de « lot3-compte ») et complétion du profil
-      # (L3-T8) ; « lot3-profil-photo » (L3-T10) : photo et position du profil, rangée à part parce que
-      # « lot3-notifications » (15 min sur iphone au run 42541548740) aurait dépassé 20 min ; « lot3-revenus » (L3-T12) :
-      # onglet Revenus, domaine des tranches T12, T13, T14a et T14b.
+      # (L3-T8), plus DemoLiensLot2Tests (L2-T10, liens du lot 2 lancés à froid ; revue B8 n°1 de L2-T10, M1) :
+      # « lot3-inscription » mesurait 4,9 / 9,0 / 8,7 min au run 43400770161, l'éclat le moins chargé hors
+      # « lot3-revenus » (qu'une autre tranche en cours charge), et les liens (~5,5 à 8 min) le laissent sous 20 min, sans
+      # douzième éclat (plafond du job) ; « lot3-profil-photo » (L3-T10) : photo et position du profil, rangée à part
+      # parce que « lot3-notifications » (15 min sur iphone au run 42541548740) aurait dépassé 20 min ; « lot3-revenus »
+      # (L3-T12) : onglet Revenus, domaine des tranches T12, T13, T14a et T14b ; L3-T13 y range DemoPaiementsTests
+      # (paiements déclarés, quatre tests), sans nouvel éclat (onze au plus).
       - name: test-without-building — éclat socle (JoleneCoreTests, JoleneDesignTests, XCUITest lots 0 et 1) (${{ matrix.format }})
         id: tests
+        # Même condition que les dix autres éclats (revue B8 de la vague 5, m1) : une dérive du Package.resolved (étape
+        # précédente) ne masque plus JoleneCoreTests, JoleneDesignTests ni les XCUITest des lots 0 et 1.
+        if: always() && steps.build.outcome == 'success'
         # Délai propre à l'étape : un simulateur ou un runner xctest bloqué est interrompu ici,
         # pas par le timeout du job, et le xcresult est clos avant le résumé.
         timeout-minutes: 30
@@ -415,6 +466,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoPointageEtatsTests \
             -skip-testing:JoleneUITests/DemoPointageTests \
             -skip-testing:JoleneUITests/DemoPresenceDetailTests \
+            -skip-testing:JoleneUITests/DemoLiensLot2Tests \
             -skip-testing:JoleneUITests/DemoDocumentsTests \
             -skip-testing:JoleneUITests/DemoContratsTests \
             -skip-testing:JoleneUITests/DemoSignatureContratTests \
@@ -428,6 +480,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoCompletionInscriptionTests \
             -skip-testing:JoleneUITests/DemoPhotoPositionTests \
             -skip-testing:JoleneUITests/DemoRevenusTests \
+            -skip-testing:JoleneUITests/DemoPaiementsTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -450,24 +503,21 @@ jobs:
           TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
           TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
           TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: socle
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests.outputs.code }}
         run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel presences || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat presences)."
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-presences.xcresult"
           set +e
-          # Diagnostic du gel iPhone (runs 42559541711 à 42593663323 : fil principal de l'app occupé après un
-          # glissement, clavier numérique ouvert). Dès que xcodebuild signale une app qui ne redevient pas inactive,
-          # trois `sample` du processus Jolene à 60 s d'écart, joints à l'artefact (gel-presences-sample-<n>.txt).
+          # Diagnostic du gel iPhone (runs 42559541711 à 43889328109 : fil principal de l'app en attente du serveur de
+          # rendu du simulateur pendant un glissement qui ferme le pavé numérique ; DECISIONS_LOT2, « Gel iPhone CI —
+          # 16/11/2026 »). Dès que xcodebuild signale une app qui ne redevient pas inactive, trois passes à 60 s d'écart :
+          # `sample` de l'app, de backboardd et de SpringBoard, capture d'écran, journal et .ips du simulateur, mémoire de
+          # l'hôte (gel-presences-*, dans l'artefact). Le veilleur ne fait jamais échouer l'étape.
           journal="$JOLENE_UI_OUTPUT/test-without-building-presences.log"
-          (
-            for n in 1 2 3; do
-              until grep -qE "App event loop idle notification not received|main thread busy|exceeded execution time allowance" "$journal" 2>/dev/null; do sleep 10; done
-              pid="$(pgrep -n -f '/Jolene.app/Jolene' || true)"
-              if [ -n "$pid" ]; then
-                sortie="$JOLENE_UI_OUTPUT/gel-presences-sample-$n.txt"
-                sample "$pid" 5 -file "$sortie" >/dev/null 2>&1 || sudo -n sample "$pid" 5 -file "$sortie" >/dev/null 2>&1 || true
-              fi
-              sleep 60
-            done
-          ) &
+          bash scripts/mobile/ios-ci-gel-simulateur.sh veiller presences "$journal" > "$JOLENE_UI_OUTPUT/gel-presences-veilleur.log" 2>&1 &
           veilleur=$!
           xcodebuild test-without-building \
             -project ios-native/Jolene.xcodeproj \
@@ -487,6 +537,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             > "$JOLENE_UI_OUTPUT/test-without-building-presences.log" 2>&1
           code=$?
+          pkill -P "$veilleur" 2>/dev/null || true
           kill "$veilleur" 2>/dev/null || true
           set -e
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-presences.log" | tail -n 60 || true
@@ -502,24 +553,21 @@ jobs:
           TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
           TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
           TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: presences
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_presences.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_presences.outputs.code }}
         run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel pointage || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat pointage)."
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-pointage.xcresult"
           set +e
-          # Diagnostic du gel iPhone (runs 42559541711 à 42593663323 : fil principal de l'app occupé après un
-          # glissement, clavier numérique ouvert). Dès que xcodebuild signale une app qui ne redevient pas inactive,
-          # trois `sample` du processus Jolene à 60 s d'écart, joints à l'artefact (gel-pointage-sample-<n>.txt).
+          # Diagnostic du gel iPhone (runs 42559541711 à 43889328109 : fil principal de l'app en attente du serveur de
+          # rendu du simulateur pendant un glissement qui ferme le pavé numérique ; DECISIONS_LOT2, « Gel iPhone CI —
+          # 16/11/2026 »). Dès que xcodebuild signale une app qui ne redevient pas inactive, trois passes à 60 s d'écart :
+          # `sample` de l'app, de backboardd et de SpringBoard, capture d'écran, journal et .ips du simulateur, mémoire de
+          # l'hôte (gel-pointage-*, dans l'artefact). Le veilleur ne fait jamais échouer l'étape.
           journal="$JOLENE_UI_OUTPUT/test-without-building-pointage.log"
-          (
-            for n in 1 2 3; do
-              until grep -qE "App event loop idle notification not received|main thread busy|exceeded execution time allowance" "$journal" 2>/dev/null; do sleep 10; done
-              pid="$(pgrep -n -f '/Jolene.app/Jolene' || true)"
-              if [ -n "$pid" ]; then
-                sortie="$JOLENE_UI_OUTPUT/gel-pointage-sample-$n.txt"
-                sample "$pid" 5 -file "$sortie" >/dev/null 2>&1 || sudo -n sample "$pid" 5 -file "$sortie" >/dev/null 2>&1 || true
-              fi
-              sleep 60
-            done
-          ) &
+          bash scripts/mobile/ios-ci-gel-simulateur.sh veiller pointage "$journal" > "$JOLENE_UI_OUTPUT/gel-pointage-veilleur.log" 2>&1 &
           veilleur=$!
           xcodebuild test-without-building \
             -project ios-native/Jolene.xcodeproj \
@@ -538,6 +586,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             > "$JOLENE_UI_OUTPUT/test-without-building-pointage.log" 2>&1
           code=$?
+          pkill -P "$veilleur" 2>/dev/null || true
           kill "$veilleur" 2>/dev/null || true
           set -e
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-pointage.log" | tail -n 60 || true
@@ -553,7 +602,12 @@ jobs:
           TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
           TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
           TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: pointage
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_pointage.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_pointage.outputs.code }}
         run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel documents || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat documents)."
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-documents.xcresult"
           set +e
           xcodebuild test-without-building \
@@ -588,7 +642,12 @@ jobs:
           TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
           TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
           TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: documents
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_documents.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_documents.outputs.code }}
         run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel contrats || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat contrats)."
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-contrats.xcresult"
           set +e
           xcodebuild test-without-building \
@@ -623,7 +682,12 @@ jobs:
           TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
           TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
           TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: contrats
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_contrats.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_contrats.outputs.code }}
         run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot3-compte || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot3-compte)."
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-compte.xcresult"
           set +e
           xcodebuild test-without-building \
@@ -657,7 +721,12 @@ jobs:
           TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
           TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
           TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: lot3-compte
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot3_compte.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot3_compte.outputs.code }}
         run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot3-push || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot3-push)."
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-push.xcresult"
           set +e
           xcodebuild test-without-building \
@@ -690,7 +759,12 @@ jobs:
           TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
           TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
           TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: lot3-push
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot3_push.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot3_push.outputs.code }}
         run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot3-notifications || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot3-notifications)."
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-notifications.xcresult"
           set +e
           xcodebuild test-without-building \
@@ -716,7 +790,7 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-notifications.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot3-notifications) : code $code"
-      - name: test-without-building — éclat lot3-inscription (XCUITest inscription et complétion du profil) (${{ matrix.format }})
+      - name: test-without-building — éclat lot3-inscription (XCUITest inscription, complétion du profil et liens du lot 2) (${{ matrix.format }})
         id: tests_lot3_inscription
         if: always() && steps.build.outcome == 'success'
         timeout-minutes: 30
@@ -725,7 +799,12 @@ jobs:
           TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
           TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
           TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: lot3-notifications
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot3_notifications.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot3_notifications.outputs.code }}
         run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot3-inscription || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot3-inscription)."
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-inscription.xcresult"
           set +e
           xcodebuild test-without-building \
@@ -738,6 +817,7 @@ jobs:
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoInscriptionTests \
             -only-testing:JoleneUITests/DemoCompletionInscriptionTests \
+            -only-testing:JoleneUITests/DemoLiensLot2Tests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -759,7 +839,12 @@ jobs:
           TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
           TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
           TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: lot3-inscription
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot3_inscription.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot3_inscription.outputs.code }}
         run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot3-profil-photo || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot3-profil-photo)."
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-profil-photo.xcresult"
           set +e
           xcodebuild test-without-building \
@@ -783,7 +868,7 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-profil-photo.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot3-profil-photo) : code $code"
-      - name: test-without-building — éclat lot3-revenus (XCUITest onglet Revenus) (${{ matrix.format }})
+      - name: test-without-building — éclat lot3-revenus (XCUITest onglet Revenus, paiements déclarés) (${{ matrix.format }})
         id: tests_lot3_revenus
         if: always() && steps.build.outcome == 'success'
         timeout-minutes: 30
@@ -792,7 +877,12 @@ jobs:
           TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
           TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
           TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: lot3-profil-photo
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot3_profil_photo.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot3_profil_photo.outputs.code }}
         run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot3-revenus || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot3-revenus)."
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-revenus.xcresult"
           set +e
           xcodebuild test-without-building \
@@ -804,6 +894,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/derived" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoRevenusTests \
+            -only-testing:JoleneUITests/DemoPaiementsTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -855,9 +946,9 @@ jobs:
               { nom: "lot3-compte", code: process.env.CODE_LOT3_COMPTE, classes: ["DemoLiensLot3Tests", "DemoCompteLot3Tests"] },
               { nom: "lot3-push", code: process.env.CODE_LOT3_PUSH, classes: ["DemoPushTests"] },
               { nom: "lot3-notifications", code: process.env.CODE_LOT3_NOTIFICATIONS, classes: ["DemoNotificationsTests", "DemoPreferencesTests", "DemoProfilTests"] },
-              { nom: "lot3-inscription", code: process.env.CODE_LOT3_INSCRIPTION, classes: ["DemoInscriptionTests", "DemoCompletionInscriptionTests"] },
+              { nom: "lot3-inscription", code: process.env.CODE_LOT3_INSCRIPTION, classes: ["DemoInscriptionTests", "DemoCompletionInscriptionTests", "DemoLiensLot2Tests"] },
               { nom: "lot3-profil-photo", code: process.env.CODE_LOT3_PROFIL_PHOTO, classes: ["DemoPhotoPositionTests"] },
-              { nom: "lot3-revenus", code: process.env.CODE_LOT3_REVENUS, classes: ["DemoRevenusTests"] },
+              { nom: "lot3-revenus", code: process.env.CODE_LOT3_REVENUS, classes: ["DemoRevenusTests", "DemoPaiementsTests"] },
             ];
             let total = 0, passed = 0, failed = 0, skipped = 0, log = "";
             const lignes = [`### UI — ${process.env.JOLENE_UI_FORMAT}`, ""];

@@ -145,15 +145,28 @@ public enum ContratPresentation {
 
     // MARK: - Renvois web
 
-    /// Page web du contrat, où se signe le contrat tant que T9b n'est pas mergée (décision 18). Toujours un renvoi
-    /// Safari, même quand `/contrat/:id` deviendra natif (T10) ; `nil` pour un identifiant hors `[A-Za-z0-9-]`.
+    /// Page web du contrat, où se signe le contrat pour un compte TEST sans admission (décision 18). Toujours un renvoi
+    /// Safari, `/contrat/:id` étant natif depuis T10 ; `nil` pour un identifiant hors `[A-Za-z0-9-]`.
     public static func renvoiSignature(contratId: String) -> JoleneRoute? {
         renvoi("/contrat/" + contratId, contratId: contratId)
     }
 
-    /// Page web du certificat, pour son export PDF (jsPDF, non porté : `LOT2_PLAN.md` §1.2).
+    /// Page web du certificat, pour son export PDF (jsPDF, non porté : `LOT2_PLAN.md` §1.2), et renvoi du certificat
+    /// quand le coupe-circuit `ios_natif_contrats_actif` est à faux (L2-T10).
     public static func renvoiCertificat(contratId: String) -> JoleneRoute? {
         renvoi("/contrat/" + contratId + "/certificat", contratId: contratId)
+    }
+
+    /// Coupe-circuit `ios_natif_contrats_actif` à faux (D-FLAGS, `DECISIONS_LOT2.md`, à la charge de L2-T10) : page web
+    /// du contrat. Route FORCÉE web, comme `renvoiSignature` : `/contrat/:id` est une route native depuis T10.
+    public static func renvoiContrat(contratId: String) -> JoleneRoute? {
+        renvoi("/contrat/" + contratId, contratId: contratId)
+    }
+
+    /// Coupe-circuit `ios_natif_contrats_actif` à faux : onglet Contrats de « Mes documents » sur le web
+    /// (`/soignant/mes-documents?tab=contrats`, D-FLAGS). Route FORCÉE web : le chemin est natif depuis L2-T10.
+    public static var renvoiListe: JoleneRoute? {
+        JoleneLink.canonicalURL(link: "/soignant/mes-documents?tab=contrats").map(JoleneRoute.safari)
     }
 
     private static func renvoi(_ chemin: String, contratId: String) -> JoleneRoute? {

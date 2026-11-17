@@ -13,6 +13,7 @@
 		0AC7DD7A87882A216DAE706D /* HorsLigneBandeau.swift in Sources */ = {isa = PBXBuildFile; fileRef = 273E684EB7D14269450AAE87 /* HorsLigneBandeau.swift */; };
 		0D698398E212FA5FBDD89C50 /* JoleneCore in Frameworks */ = {isa = PBXBuildFile; productRef = 321C808452B052BEA85F8CB7 /* JoleneCore */; };
 		108A5A026DD80CDCFA098BE8 /* NotificationCenterDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F77D89390B0B48A7470C7E56 /* NotificationCenterDelegate.swift */; };
+		11933738821F5C7870C4761B /* DemoLiensLot2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89986889CA66C02C2DCB55BA /* DemoLiensLot2Tests.swift */; };
 		12E6B9193B807F15C95D84AE /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8871298678DD982E3D6C3C26 /* RootView.swift */; };
 		13C886560C8EC3AF8C90DBE9 /* NotificationsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76297069ECDCBB5B5409052A /* NotificationsScreen.swift */; };
 		16BFD453D608D394DCB980DB /* DemoPointageEtatsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A03E32731E4230AA162597E /* DemoPointageEtatsTests.swift */; };
@@ -31,6 +32,7 @@
 		35B21204F757910A731C8D4B /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57522BC17747DB1695651ECD /* MainTabView.swift */; };
 		39A7227E7A346A452229D7BC /* DemoLiensLot3Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4D20F07781F9A2E52365D03 /* DemoLiensLot3Tests.swift */; };
 		39ADB82A0945C81321608C52 /* AvatarProfilSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC935FC14BF8B87C100F46ED /* AvatarProfilSection.swift */; };
+		3C22247EE58E326D7B6D0427 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = A75AB8525FE90E0193869B59 /* Sentry */; };
 		40A4FBAC77F9A66CC400B21C /* DemoPointageUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBF18123CB11BB80E8541D97 /* DemoPointageUITestCase.swift */; };
 		45BF2836A6AF8ECDBEB42B16 /* RecusJustificatifs.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAB84E5DAE9D6DA747E6BC3E /* RecusJustificatifs.swift */; };
 		496EB218D427D36B5164DC14 /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B12ED2CF03F5935EB224B9A /* AppContainer.swift */; };
@@ -47,11 +49,14 @@
 		5CE7FB62EB256D49B5BB2692 /* ConsentementGpsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 638210FD006E1B4B3AC396BB /* ConsentementGpsRow.swift */; };
 		5D19DC4BE2E5EDA204CAF770 /* DetailPresencesScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C4B1EDFCA7189E5163D414 /* DetailPresencesScreen.swift */; };
 		5E0893D0CB68B03799F6D7D9 /* StagingConnexionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */; };
+		5E46487082E601A0075BF63C /* CrashReporting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705899DA6E3B27D41139A5A3 /* CrashReporting.swift */; };
 		618DCEFB2E7DF8FD3AC1FF28 /* BlocPointageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC682D167D3736C3877FC191 /* BlocPointageView.swift */; };
 		634E2F09A431203F99161794 /* SuppressionCompteScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D38838D39EB705DD25FE585 /* SuppressionCompteScreen.swift */; };
 		6A2FA992EC44B425AB4036F2 /* AccueilLignes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C1F510DF2473734BC92D4D /* AccueilLignes.swift */; };
 		6AD94C7C2C0E66A224827616 /* PointageCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F45DE21AF53796F64DB403 /* PointageCodeView.swift */; };
 		70E18B80A0AC5A74ED210F8A /* MotDePasseScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3280662B63B64903F06565E /* MotDePasseScreen.swift */; };
+		71865F0B8B547EF1368F2E85 /* DemoPaiementsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC04E94F225BA576C0E48395 /* DemoPaiementsTests.swift */; };
+		72E4686721BAD65CCF2A13FE /* MonEspaceRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 746924A5216E2BAEEAD574FA /* MonEspaceRoute.swift */; };
 		7372653B481E694D77A0EEC9 /* PresenceValideeRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE57B974FE75D4114F229580 /* PresenceValideeRow.swift */; };
 		73A10EC601A7C8B4CEFF8D30 /* DemoContratsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E44CB4507BB6F0010EAE04 /* DemoContratsTests.swift */; };
 		78268B78D4B307017EBE8941 /* JoleneSupabase in Frameworks */ = {isa = PBXBuildFile; productRef = 1711BDF2D3665B719A9D26AE /* JoleneSupabase */; };
@@ -119,6 +124,7 @@
 		F5C6A799F28E1EE9C19F980C /* ContratsDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01E2478001F6F24CF2412D0 /* ContratsDestination.swift */; };
 		F76422A8F858F85FC8AF2063 /* ShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38258808A1C110F764DA2B97 /* ShareSheet.swift */; };
 		FAEDA57C217B1DE476251CF5 /* AppareilEnvironnement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B157B0FB088245CF6215DE4 /* AppareilEnvironnement.swift */; };
+		FF4867F1CDD9CA89D9CDFA66 /* PaiementsDeclaresSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B24FDF8D33F676E7EA256C9 /* PaiementsDeclaresSection.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -137,6 +143,7 @@
 		092224AB4FC11F33F59E094D /* JoleneDesign */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JoleneDesign; path = Packages/JoleneDesign; sourceTree = SOURCE_ROOT; };
 		09BAAAFAB24F1E5ED2DB1EF3 /* ProfilEntreeSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilEntreeSection.swift; sourceTree = "<group>"; };
 		0A7E2A5C1F0BCB93E044A7ED /* StockageAppareil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockageAppareil.swift; sourceTree = "<group>"; };
+		0B24FDF8D33F676E7EA256C9 /* PaiementsDeclaresSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaiementsDeclaresSection.swift; sourceTree = "<group>"; };
 		0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkSentinel.swift; sourceTree = "<group>"; };
 		19D81B7401EDB83F0DF34E07 /* DemoPointageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPointageTests.swift; sourceTree = "<group>"; };
 		1A8E49868C321275FFB1BD6C /* Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Staging.xcconfig; sourceTree = "<group>"; };
@@ -172,9 +179,11 @@
 		676FE905DF85E7AE14260D5C /* ConfirmationInscriptionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationInscriptionScreen.swift; sourceTree = "<group>"; };
 		6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StagingConnexionTests.swift; sourceTree = "<group>"; };
 		6F98E168F9C28FBB06551D7B /* Production.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Production.xcconfig; sourceTree = "<group>"; };
+		705899DA6E3B27D41139A5A3 /* CrashReporting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReporting.swift; sourceTree = "<group>"; };
 		70EB2E65EA45ACA03AFE4DE7 /* ProfilEditionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilEditionScreen.swift; sourceTree = "<group>"; };
 		71858F13CA71857DE1D5A7A3 /* CompletionProfilScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionProfilScreen.swift; sourceTree = "<group>"; };
 		7467C13956527741B132313A /* JoleneCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JoleneCore; path = Packages/JoleneCore; sourceTree = SOURCE_ROOT; };
+		746924A5216E2BAEEAD574FA /* MonEspaceRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonEspaceRoute.swift; sourceTree = "<group>"; };
 		75863F7AF6F7B4939160AE90 /* QuickLookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLookView.swift; sourceTree = "<group>"; };
 		76297069ECDCBB5B5409052A /* NotificationsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsScreen.swift; sourceTree = "<group>"; };
 		798D89ACB654F41113D150AC /* PresenceAVenirRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceAVenirRow.swift; sourceTree = "<group>"; };
@@ -184,6 +193,7 @@
 		846454508F8184B326E2928F /* ContratScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContratScreen.swift; sourceTree = "<group>"; };
 		8849E363C23BD3AB5AC2ABB6 /* Jolene.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Jolene.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8871298678DD982E3D6C3C26 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		89986889CA66C02C2DCB55BA /* DemoLiensLot2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoLiensLot2Tests.swift; sourceTree = "<group>"; };
 		8A03E32731E4230AA162597E /* DemoPointageEtatsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPointageEtatsTests.swift; sourceTree = "<group>"; };
 		8A5A131465CE9835771406E7 /* DocumentPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentPickerView.swift; sourceTree = "<group>"; };
 		8CB770AAEE245B16B5B601D7 /* DemoInscriptionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoInscriptionTests.swift; sourceTree = "<group>"; };
@@ -246,6 +256,7 @@
 		FA46CD23822CE21E1F5A286D /* EspaceSoignantSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EspaceSoignantSection.swift; sourceTree = "<group>"; };
 		FBACE81D4C09BE21265458D7 /* PresenceHistoriqueRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceHistoriqueRow.swift; sourceTree = "<group>"; };
 		FBF18123CB11BB80E8541D97 /* DemoPointageUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPointageUITestCase.swift; sourceTree = "<group>"; };
+		FC04E94F225BA576C0E48395 /* DemoPaiementsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPaiementsTests.swift; sourceTree = "<group>"; };
 		FC60681A6810F2F29BDDBCC0 /* MissionDetailScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionDetailScreen.swift; sourceTree = "<group>"; };
 		FD20E54361DC36A3FDE82ABE /* DemoCompteLot3Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoCompteLot3Tests.swift; sourceTree = "<group>"; };
 		FF79B346E72A8A27CEEB32E5 /* NotationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotationSheet.swift; sourceTree = "<group>"; };
@@ -259,6 +270,7 @@
 				0D698398E212FA5FBDD89C50 /* JoleneCore in Frameworks */,
 				78268B78D4B307017EBE8941 /* JoleneSupabase in Frameworks */,
 				7D9EC7EEACF825A03C5D6935 /* JoleneDesign in Frameworks */,
+				3C22247EE58E326D7B6D0427 /* Sentry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -334,6 +346,7 @@
 				1B12ED2CF03F5935EB224B9A /* AppContainer.swift */,
 				9BF575ABB489174FA886328B /* AvatarPicker.swift */,
 				4D6A37369D110A146F3E4CAF /* ContratReaderView.swift */,
+				705899DA6E3B27D41139A5A3 /* CrashReporting.swift */,
 				B3F0A6856D66A3E37F08A0E7 /* DeepLinkCoordinator.swift */,
 				0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */,
 				F77D89390B0B48A7470C7E56 /* NotificationCenterDelegate.swift */,
@@ -445,6 +458,7 @@
 				638210FD006E1B4B3AC396BB /* ConsentementGpsRow.swift */,
 				FA46CD23822CE21E1F5A286D /* EspaceSoignantSection.swift */,
 				F4548B776A71B3D851883356 /* EtatNotificationsAppareilRow.swift */,
+				746924A5216E2BAEEAD574FA /* MonEspaceRoute.swift */,
 				70EB2E65EA45ACA03AFE4DE7 /* ProfilEditionScreen.swift */,
 				09BAAAFAB24F1E5ED2DB1EF3 /* ProfilEntreeSection.swift */,
 			);
@@ -475,6 +489,7 @@
 		B5B4A5CAB579B8AB9B239569 /* Revenus */ = {
 			isa = PBXGroup;
 			children = (
+				0B24FDF8D33F676E7EA256C9 /* PaiementsDeclaresSection.swift */,
 				65672A4D60960C1448C0894D /* RevenusScreen.swift */,
 			);
 			path = Revenus;
@@ -526,8 +541,10 @@
 				79F35431F3E15876E9570306 /* DemoDocumentsTests.swift */,
 				54FD5A2A491C046BB3B80DAC /* DemoExplorerTests.swift */,
 				8CB770AAEE245B16B5B601D7 /* DemoInscriptionTests.swift */,
+				89986889CA66C02C2DCB55BA /* DemoLiensLot2Tests.swift */,
 				C4D20F07781F9A2E52365D03 /* DemoLiensLot3Tests.swift */,
 				F3F1FEAB1353A97204BA1A18 /* DemoNotificationsTests.swift */,
+				FC04E94F225BA576C0E48395 /* DemoPaiementsTests.swift */,
 				A137CA863E9DAA0471608D0F /* DemoPhotoPositionTests.swift */,
 				8A03E32731E4230AA162597E /* DemoPointageEtatsTests.swift */,
 				19D81B7401EDB83F0DF34E07 /* DemoPointageTests.swift */,
@@ -568,6 +585,7 @@
 				321C808452B052BEA85F8CB7 /* JoleneCore */,
 				1711BDF2D3665B719A9D26AE /* JoleneSupabase */,
 				AD05F490DB7A1E31B77DE468 /* JoleneDesign */,
+				A75AB8525FE90E0193869B59 /* Sentry */,
 			);
 			productName = Jolene;
 			productReference = 8849E363C23BD3AB5AC2ABB6 /* Jolene.app */;
@@ -621,6 +639,7 @@
 			mainGroup = 6A2AED5AE18D5B5DB1E97607;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				22ED4972124854B8863E07C0 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 				DAFA15C1D2F36A114BCDB722 /* XCLocalSwiftPackageReference "Packages/JoleneCore" */,
 				66F2EF7D27B075F7EED927E6 /* XCLocalSwiftPackageReference "Packages/JoleneDesign" */,
 				D97B92E08169C987D6879B30 /* XCLocalSwiftPackageReference "Packages/JoleneSupabase" */,
@@ -677,6 +696,7 @@
 				C28FE82FC3C26CC7455ADE6B /* ContratScreen.swift in Sources */,
 				F5C6A799F28E1EE9C19F980C /* ContratsDestination.swift in Sources */,
 				8879BD3DACD1FE62F3EE32AE /* ContratsListeView.swift in Sources */,
+				5E46487082E601A0075BF63C /* CrashReporting.swift in Sources */,
 				CC8BBD760207E7B120FA3DF3 /* DeepLinkCoordinator.swift in Sources */,
 				343FDABE16FFD739ACFBF788 /* DemoMediaPicker.swift in Sources */,
 				AAF9D461252ABF4E4F76B795 /* DemoQRScannerView.swift in Sources */,
@@ -697,6 +717,7 @@
 				289DFEBCA9517E61F75FA230 /* MissionDetailScreen.swift in Sources */,
 				C0F675E139EA54FE7CE00DBA /* MissionMapView.swift in Sources */,
 				C58B6F5E0E8386082C59403E /* MissionsListScreen.swift in Sources */,
+				72E4686721BAD65CCF2A13FE /* MonEspaceRoute.swift in Sources */,
 				70E18B80A0AC5A74ED210F8A /* MotDePasseScreen.swift in Sources */,
 				04E2A36262271CF062C3C054 /* NetworkMonitor.swift in Sources */,
 				DD5D9790C224E0A18AFCB9DC /* NetworkSentinel.swift in Sources */,
@@ -704,6 +725,7 @@
 				108A5A026DD80CDCFA098BE8 /* NotificationCenterDelegate.swift in Sources */,
 				13C886560C8EC3AF8C90DBE9 /* NotificationsScreen.swift in Sources */,
 				AE9B5CE2089FF23231F2639D /* OnboardingRootView.swift in Sources */,
+				FF4867F1CDD9CA89D9CDFA66 /* PaiementsDeclaresSection.swift in Sources */,
 				B54A6DF69D2E0920569D6D12 /* PhotoPickerView.swift in Sources */,
 				2A94C1A0F00563A7348B0C89 /* PlaceholderScreen.swift in Sources */,
 				6AD94C7C2C0E66A224827616 /* PointageCodeView.swift in Sources */,
@@ -749,8 +771,10 @@
 				8F36BAC7C752737B387653F5 /* DemoDocumentsTests.swift in Sources */,
 				F06D11FE9236C6488B87AE69 /* DemoExplorerTests.swift in Sources */,
 				B2BBA8856C98FD5860E7103C /* DemoInscriptionTests.swift in Sources */,
+				11933738821F5C7870C4761B /* DemoLiensLot2Tests.swift in Sources */,
 				39A7227E7A346A452229D7BC /* DemoLiensLot3Tests.swift in Sources */,
 				06E53C28EC5560600ABDEA27 /* DemoNotificationsTests.swift in Sources */,
+				71865F0B8B547EF1368F2E85 /* DemoPaiementsTests.swift in Sources */,
 				5319E0177664E1DD92CF8253 /* DemoPhotoPositionTests.swift in Sources */,
 				16BFD453D608D394DCB980DB /* DemoPointageEtatsTests.swift in Sources */,
 				2B73E55E9216D48F441587F3 /* DemoPointageTests.swift in Sources */,
@@ -1011,6 +1035,17 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		22ED4972124854B8863E07C0 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = exactVersion;
+				version = 9.32.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		1711BDF2D3665B719A9D26AE /* JoleneSupabase */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1019,6 +1054,11 @@
 		321C808452B052BEA85F8CB7 /* JoleneCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = JoleneCore;
+		};
+		A75AB8525FE90E0193869B59 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 22ED4972124854B8863E07C0 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
 		};
 		AD05F490DB7A1E31B77DE468 /* JoleneDesign */ = {
 			isa = XCSwiftPackageProductDependency;

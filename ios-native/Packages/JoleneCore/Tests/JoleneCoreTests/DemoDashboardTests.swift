@@ -136,8 +136,8 @@ final class DemoDashboardTests: XCTestCase {
         var attendu = defaut
         attendu.missionsOublieesCount = 1
         XCTAssertEqual(variante, attendu, "seul le compteur change")
-        XCTAssertEqual(AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences),
-                       .safari(URL(string: "https://jolene.app/soignant/presences")!), "route canonique de la page Présences web (`AccueilPresentation.lienPresences`)")
+        XCTAssertNil(AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences),
+                     "L2-T10 : la page Présences est native (`AccueilPresentation.lienPresences`), plus de renvoi web")
     }
 
     func testEchecForceRefuseToutAutreUtilisateur() async {

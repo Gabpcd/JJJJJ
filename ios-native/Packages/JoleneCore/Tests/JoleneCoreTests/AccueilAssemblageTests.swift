@@ -332,8 +332,8 @@ final class AccueilAssemblageTests: XCTestCase {
         // Pointage (lot 2) et notifications (lot 3) : résolus par `LinkRouter`, jamais une URL écrite en dur.
         XCTAssertEqual(AccueilPresentation.lienPresences, "/soignant/presences")
         XCTAssertEqual(AccueilPresentation.lienNotifications, "/soignant/notifications")
-        XCTAssertEqual(AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences),
-                       .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/presences"))))
+        // L2-T10 : la page Présences est native (`PresencesScreen`), plus de renvoi web (même point de fusion que le centre).
+        XCTAssertNil(AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences))
         // Lot 3, T5 : le centre de notifications est natif, plus de renvoi web (point de fusion de T3a).
         XCTAssertNil(AccueilPresentation.renvoiWeb(AccueilPresentation.lienNotifications))
         XCTAssertNil(AccueilPresentation.renvoiWeb("/soignant/missions"), "un écran natif n'est jamais ouvert comme renvoi web")

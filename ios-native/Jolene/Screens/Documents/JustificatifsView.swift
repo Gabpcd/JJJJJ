@@ -202,7 +202,8 @@ struct JustificatifsView: View {
             VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
                 InlineNotice(message.texte, tone: TonsJustificatifs.notice(message.ton), identifier: "documents-envoi-issue",
                              announcesOnAppear: true)
-                if model.envoi == .suiviIllisible, let presentateurRenvoiWeb, let route = AccueilPresentation.renvoiWeb(DocumentsModel.renvoiWeb) {
+                // Route forcée web (L2-T10) : `/soignant/mes-documents` est une route native depuis T10.
+                if model.envoi == .suiviIllisible, let presentateurRenvoiWeb, let route = DocumentsModel.routeRenvoiWeb {
                     JoleneButton(L.voirSurJoleneApp, style: .secondary) { presentateurRenvoiWeb.presenter(route) }
                         .accessibilityIdentifier("documents-suivi-web")
                 }

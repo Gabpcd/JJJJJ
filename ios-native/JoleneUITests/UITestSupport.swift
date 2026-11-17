@@ -9,7 +9,9 @@ import XCTest
 /// (curseur amené à sa borne basse), qui emploient `press(forDuration:thenDragTo:…)` entre deux
 /// coordonnées calculées : c'est l'unique API XCUITest de glissement à point de départ contrôlé,
 /// et elle n'active rien. Le défilement tient le doigt immobile à l'arrivée : aucun élan après le geste. Aucune attente arbitraire : toutes passent par `require` (prédicat
-/// borné, délai fonctionnel et budget de blocage distincts). `require` ne borne que l'évaluation
+/// borné, délai fonctionnel et budget de blocage distincts) ou, pour décider de rejouer un geste perdu, par
+/// `attendreSansEchec` (même décompte, mêmes budgets et même trace, sans échec sur condition fausse ; chaque rejeu est
+/// consigné par `consignerRejeu`). `require` ne borne que l'évaluation
 /// de conditions : les actions (`tap`, `typeText`, glissements) n'y passent pas et restent
 /// soumises aux seuls délais propres à XCTest. La preuve est l'assertion ; les captures
 /// (`record`) ne sont que des artefacts pour l'humain.
@@ -203,6 +205,28 @@ class JoleneUITestCase: XCTestCase {
     func require(_ description: String, timeout: TimeInterval = JoleneUITestCase.defaultTimeout,
                  stallBudget: TimeInterval = JoleneUITestCase.defaultStallBudget,
                  file: StaticString = #filePath, line: UInt = #line, condition: () -> Bool) {
+        attendre(description, timeout: timeout, stallBudget: stallBudget, conditionFausseEchoue: true,
+                 file: file, line: line, condition: condition)
+    }
+
+    /// Attente bornée SANS échec sur condition fausse : même décompte, mêmes budgets de blocage (normal et à froid), même
+    /// trace (`traceUncharged`) que `require`, mais une condition encore fausse au terme du délai rend `false` au lieu
+    /// d'échouer. Un budget de blocage dépassé échoue toujours, comme dans `require` : un gel n'est jamais absorbé par un
+    /// rejeu de geste (revue B8 de la vague 5, 5ᵉ tour, M1). Réservée au choix de rejouer un geste perdu
+    /// (`toucherSeConnecter`, `dragSliderPastMinimum`) ; la preuve passe ensuite par `require` ou par l'assertion de
+    /// l'appelant.
+    func attendreSansEchec(_ description: String, timeout: TimeInterval,
+                           stallBudget: TimeInterval = JoleneUITestCase.defaultStallBudget,
+                           file: StaticString = #filePath, line: UInt = #line, condition: () -> Bool) -> Bool {
+        attendre(description, timeout: timeout, stallBudget: stallBudget, conditionFausseEchoue: false,
+                 file: file, line: line, condition: condition)
+    }
+
+    /// Corps commun de `require` et `attendreSansEchec` : vrai si la condition est constatée vraie.
+    @discardableResult
+    private func attendre(_ description: String, timeout: TimeInterval, stallBudget: TimeInterval,
+                          conditionFausseEchoue: Bool, file: StaticString, line: UInt,
+                          condition: () -> Bool) -> Bool {
         let s = Self.seconds
         let cold = Self.coldStart && Self.coldStallBudget > stallBudget
         let budget = cold ? Self.coldStallBudget : stallBudget
@@ -217,23 +241,26 @@ class JoleneUITestCase: XCTestCase {
             evaluate: condition,
             pause: { self.pauseBetweenEvaluations($0) })
         if wait.needsTrace {
-            traceUncharged(wait, description: description, cold: cold, normalBudget: stallBudget, file: file, line: line)
+            traceUncharged(wait, description: description, cold: cold, normalBudget: stallBudget,
+                           conditionFausseEchoue: conditionFausseEchoue, file: file, line: line)
         }
         let budgetLabel = "budget de blocage \(s(budget))\(cold ? " à froid" : "")"
         switch wait.outcome {
         case .satisfied:
-            break
+            return true
         case .stallBudgetExceeded:
             let detail = "\(wait.stalls.count) évaluation(s) bloquée(s) sur \(wait.evaluations), la plus longue "
                 + "\(s(wait.longestStall)) ; condition \(wait.lastEvaluation ? "vraie" : "fausse") à la dernière"
             XCTFail("\(description) — observateur ou thread principal de l'app bloqué \(s(wait.uncharged)) non décomptées "
                     + "(\(budgetLabel)) : \(detail)", file: file, line: line)
         case .conditionFalse:
+            guard conditionFausseEchoue else { return false }
             let stall = wait.needsTrace ? ", plus \(s(wait.uncharged)) de blocage non décomptées (\(budgetLabel))" : ""
             let grace = wait.graceGranted ? ", évaluation de grâce comprise" : ""
             XCTFail("\(description) — condition fausse à chacune des \(wait.evaluations) évaluations sur \(s(timeout)) "
                     + "décomptées\(stall)\(grace)", file: file, line: line)
         }
+        return false
     }
 
     /// Consigne le temps non décompté d'un `require`, que l'attente réussisse ou non : activité
@@ -241,13 +268,15 @@ class JoleneUITestCase: XCTestCase {
     /// résumé CI lit les lignes « Appelant », « Issue », « Temps non décompté » et « Budget de
     /// blocage » : en changer le libellé, c'est changer `ios-swift-ci.yml`.
     private func traceUncharged(_ wait: RequireWait, description: String, cold: Bool, normalBudget: TimeInterval,
-                                file: StaticString, line: UInt) {
+                                conditionFausseEchoue: Bool = true, file: StaticString, line: UInt) {
         let s = Self.seconds
         let fileName = (String(describing: file) as NSString).lastPathComponent
         let outcome: String
         switch wait.outcome {
         case .satisfied: outcome = "condition vraie"
-        case .conditionFalse: outcome = "échec, condition fausse au terme du délai"
+        case .conditionFalse: outcome = conditionFausseEchoue
+            ? "échec, condition fausse au terme du délai"
+            : "condition fausse au terme du délai, sans échec (geste rejoué)"
         case .stallBudgetExceeded: outcome = "échec, budget de blocage dépassé"
         }
         let budget = cold
@@ -302,7 +331,41 @@ class JoleneUITestCase: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [apparition], timeout: duree), .completed, description)
     }
 
+    /// Consigne le rejeu d'un geste resté sans effet : pièce jointe au format du relevé « Attentes bloquées absorbées »
+    /// d'`ios-swift-ci.yml` (lignes « Attente », « Appelant », « Issue », annotation par appelant), visible même dans un
+    /// job vert, comme `DemoPointageUITestCase.basculer` (revue B8 de la vague 5, 5ᵉ tour, M2). Des rejeux récurrents au
+    /// même appelant signaleraient un défaut « il faut toucher deux fois » à instruire, pas un simple geste perdu.
+    func consignerRejeu(_ attente: String, issue: String, file: StaticString, line: UInt) {
+        let fichier = (String(describing: file) as NSString).lastPathComponent
+        let rapport = ["Attente : \(attente)", "Appelant : \(fichier):\(line)", "Issue : \(issue)"].joined(separator: "\n")
+        XCTContext.runActivity(named: "Geste rejoué — « \(attente) » : \(issue)") { _ in }
+        attachText(rapport, name: "\(proofPrefix)-attente-bloquee-\((fichier as NSString).deletingPathExtension)-\(line).txt")
+    }
+
     // MARK: Actions
+
+    /// Touche « Se connecter » puis exige la session (`sessionPrete`) sur `timeout` décomptées au total. Un toucher resté
+    /// sans aucun effet est rejoué une seule fois, et consigné (`consignerRejeu`) : écran de connexion inchangé, bouton
+    /// toujours actif (il se désactive dès l'envoi, `LoginScreen.canSubmit`), aucune erreur affichée. Run 43962293492,
+    /// UI — ipad-landscape, `DemoPushTests.testPrePromptDeuxiemeSessionPuisActiver` : toucher synthétisé sur le bouton
+    /// entièrement visible, 5 s après le dernier défilement, puis 30 s sans envoi ni erreur (capture d'échec : mot de
+    /// passe saisi, focus clavier toujours sur le champ). Un toucher qui a bien envoyé le formulaire n'est jamais rejoué :
+    /// le bouton est alors désactivé, ou l'écran a changé. La première fenêtre (8 s) passe par `attendreSansEchec` :
+    /// blocages décomptés, budgetés et tracés comme dans `require`. La preuve reste le `require` final, sur le reste du
+    /// délai (revue B8 de la vague 5, 5ᵉ tour, m1 : 30 s au total, pas 38).
+    func toucherSeConnecter(_ submit: XCUIElement, _ description: String, timeout: TimeInterval = 30,
+                            file: StaticString = #filePath, line: UInt = #line, sessionPrete: () -> Bool) {
+        let fenetre = min(8, timeout / 2)
+        submit.tap()
+        if !attendreSansEchec("\(description) (premier toucher)", timeout: fenetre, file: file, line: line,
+                              condition: sessionPrete),
+           submit.exists, submit.isEnabled, visible(submit), !element("login-error").exists {
+            consignerRejeu(description, issue: "« Se connecter » touché sans effet en \(Self.seconds(fenetre)) "
+                           + "(bouton actif, aucune erreur) : un seul nouveau toucher", file: file, line: line)
+            submit.tap()
+        }
+        require(description, timeout: timeout - fenetre, file: file, line: line, condition: sessionPrete)
+    }
 
     /// Un `tap()` natif, jamais `press(forDuration:)` pour activer : la navigation attendue est vérifiée ensuite.
     func tap(_ identifier: String) {
@@ -327,7 +390,13 @@ class JoleneUITestCase: XCTestCase {
         var attempts = 0
         while attempts < 10 {
             if coveredByKeyboard(field) {
-                drag(container, fromY: 0.6, toY: 0.3)
+                // Un pavé sans touche Entrée qui recouvre le champ est fermé par « OK », jamais par un glissement
+                // (`fermerLePaveNumerique`, « Gel iPhone CI — 16/11/2026 ») ; un autre clavier reste ouvert.
+                if app.buttons.matching(identifier: "clavier-ok").firstMatch.exists {
+                    fermerLePaveNumerique()
+                } else {
+                    drag(container, fromY: 0.6, toY: 0.3)
+                }
             } else if coveredByNavigationBar(field) {
                 drag(container, fromY: 0.4, toY: 0.6)
             } else {
@@ -341,6 +410,23 @@ class JoleneUITestCase: XCTestCase {
             field.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5)).tap()
         }
         require("Le champ a le focus clavier avant la saisie") { self.hasKeyboardFocus(field) }
+    }
+
+    /// Ferme un pavé sans touche Entrée (numérique, décimal, téléphonique) par son bouton « OK » (`clavier-ok`,
+    /// `BoutonClavierOK` de JoleneDesign), puis attend la disparition du clavier : à appeler AVANT tout défilement. Au run
+    /// 43889328109 (iPhone 17, iOS 26.2), un glissement qui fermait le pavé (`.scrollDismissesKeyboard(.immediately)`) a
+    /// gelé le serveur de rendu du simulateur, puis tous les éclats suivants (DECISIONS_LOT2, « Gel iPhone CI —
+    /// 16/11/2026 »). Sans clavier ouvert, rien à faire. Un seul « OK » est exigé : la barre suit le focus du champ, deux
+    /// champs numériques d'un même écran n'empilent jamais deux boutons.
+    func fermerLePaveNumerique() {
+        guard app.keyboards.firstMatch.exists else { return }
+        let boutons = app.buttons.matching(identifier: "clavier-ok")
+        let ok = boutons.firstMatch
+        require("Le bouton OK est affiché au-dessus du pavé") { self.visible(ok) }
+        XCTAssertEqual(boutons.count, 1, "un seul bouton OK au-dessus du pavé")
+        XCTAssertEqual(ok.label, "OK", "libellé d'interface standard")
+        ok.tap()
+        require("Le pavé est fermé par OK, sans défilement") { !self.app.keyboards.firstMatch.exists }
     }
 
     // MARK: Barre d'onglets
@@ -430,8 +516,26 @@ class JoleneUITestCase: XCTestCase {
     /// 7,25 pt dans une piste qui commence à x = 316 et dont le premier pas (5 → 10 km, 19 pas sur
     /// 548 pt) s'arrondit dès 14,4 pt ; le curseur est resté à « Rayon : 10 km » pendant les 15 s
     /// d'attente. La valeur atteinte reste prouvée par l'appelant (libellé ou valeur affichés).
-    func dragSliderPastMinimum(_ slider: XCUIElement) {
-        require("Le curseur est atteignable") { self.visible(slider) && slider.isEnabled }
+    /// Un glissement synthétisé peut aussi s'interrompre avant la borne : run 43962293492, UI — ipad-portrait,
+    /// `DemoExplorerTests.testEtatVideGardeActualiserACoteDeLActionSecondaire`, curseur parti de 50 km et resté à
+    /// « Rayon : 15 km » pendant les 15 s d'attente. Le geste est alors rejoué depuis la nouvelle position du pouce,
+    /// trois glissements au plus, tant que le curseur n'est pas à sa borne basse ; chaque reprise est consignée
+    /// (`consignerRejeu`) et chaque constat passe par `attendreSansEchec` (blocages décomptés et budgetés).
+    func dragSliderPastMinimum(_ slider: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        require("Le curseur est atteignable", file: file, line: line) { self.visible(slider) && slider.isEnabled }
+        let attente = "Le curseur \(slider.identifier) est à sa borne basse"
+        for essai in 1...3 {
+            glisserAuDelaDuMinimum(slider)
+            if attendreSansEchec(attente, timeout: 2, file: file, line: line,
+                                 condition: { slider.normalizedSliderPosition < 0.005 }) { return }
+            guard essai < 3 else { return } // la valeur atteinte reste exigée par l'appelant
+            consignerRejeu(attente, issue: "glissement \(essai)/3 arrêté avant la borne basse (valeur « "
+                           + "\((slider.value as? String) ?? "?") ») : glissement rejoué depuis le pouce", file: file, line: line)
+        }
+    }
+
+    /// Un glissement du pouce du curseur jusqu'au-delà de l'extrémité gauche de sa piste (`dragSliderPastMinimum`).
+    private func glisserAuDelaDuMinimum(_ slider: XCUIElement) {
         let frame = slider.frame
         let position = min(1, max(0, slider.normalizedSliderPosition))
         // Centre du pouce : la piste utile est réduite d'une demi-largeur de pouce à chaque bout,

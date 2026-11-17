@@ -56,8 +56,9 @@ final class PushTapIntentTests: XCTestCase {
     }
 
     /// Au moins six types de la table du web (critère « tap ouvrant l'écran attendu », niveau 1 ici) : route
-    /// résolue et cible de l'espace. `FACTURE_EMISE` et `PAIEMENT_RECU` visent des écrans livrés après T5 : renvoi web
-    /// d'ici leur tranche (T12, T13). Les préférences (T6) ont leur cible native depuis l'intégration du lot 3.
+    /// résolue et cible de l'espace. `FACTURE_EMISE` vise la section des factures, renvoi web assumé (D4) ;
+    /// `PAIEMENT_RECU` ouvre la section native « Paiements à confirmer » de Revenus depuis T13 (correction 15). Les
+    /// préférences (T6) ont leur cible native depuis l'intégration du lot 3.
     func testCiblesDesTypesPrincipaux() throws {
         let cas: [(donnees: [String: String], route: JoleneRoute, cible: CibleNotification)] = [
             (["type_evenement": "RAPPEL_MISSION", "mission_id": "demo-assignee-001"],
@@ -70,12 +71,13 @@ final class PushTapIntentTests: XCTestCase {
             (["type_evenement": "SYSTEM", "lien": "/soignant/notifications"], .notifications, .centre),
             (["type_evenement": "LITIGE_OUVERT", "litige_id": "l1"],
              .safari(url("https://jolene.app/soignant/litiges#l1")), .web(.safari(url("https://jolene.app/soignant/litiges#l1")))),
-            (["type_evenement": "CONTRAT_A_SIGNER", "contrat_id": "c1"],
-             .safari(url("https://jolene.app/contrat/c1")), .web(.safari(url("https://jolene.app/contrat/c1")))),
+            // L2-T10 : le contrat est natif (« Mon espace », onglet Profil), plus un renvoi web.
+            (["type_evenement": "CONTRAT_A_SIGNER", "contrat_id": "c1"], .contrat(id: "c1"), .contrat(id: "c1")),
+            (["type_evenement": "DPAE_RAPPEL"], .documents(onglet: "dpae"), .documents(onglet: .dpae)),
             (["type_evenement": "FACTURE_EMISE"], .revenus(section: .factures),
              .web(.safari(url("https://jolene.app/soignant/mes-gains?tab=factures")))),
             (["type_evenement": "PAIEMENT_RECU"], .revenus(section: .paiementsAConfirmer),
-             .web(.safari(url("https://jolene.app/soignant/mes-gains?tab=paiements")))),
+             .revenus(section: .paiementsAConfirmer)),
             (["type_evenement": "SYSTEM", "lien": "/soignant/parametres/notifications"], .parametresNotifications,
              .preferences),
         ]

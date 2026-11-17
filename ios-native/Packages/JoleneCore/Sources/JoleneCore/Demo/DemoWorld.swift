@@ -82,8 +82,10 @@ public enum DemoWorld {
         gateways.geocodage = DemoGeocodage()                               // T10
         gateways.motDePasse = DemoMotDePasseGateway()                      // T11
         gateways.exportRGPD = DemoExportRGPDGateway()                      // T11
-        gateways.revenus = DemoRevenusGateway()                            // T12
-        gateways.paiements = UnwiredPaiementsDeclaresPort()                // T13
+        // T12 ; T13 : un seul serveur simulé des paiements déclarés, relu aussi par l'onglet (état des missions).
+        let paiements = DemoPaiementsGateway()
+        gateways.revenus = DemoRevenusGateway(paiementsDeclares: paiements)
+        gateways.paiements = paiements                                     // T13
         gateways.iban = UnwiredIbanPort()                                  // T14b
         gateways.stripeConnect = UnwiredStripeConnectPort()                // T14a
     }

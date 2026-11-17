@@ -60,6 +60,8 @@ const LOT3_CONSOMMEES = new Map([
   ['fn_rgpd_exporter_rate_limited', ['T11', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Compte/SupabaseExportGateway.swift']],
   ['fn_mes_revenus_connect', ['T12', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Revenus/SupabaseRevenusGateway.swift']],
   ['fn_mes_paiements_escrow', ['T12', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Revenus/SupabaseRevenusGateway.swift']],
+  ['fn_confirmer_paiement_soignant', ['T13', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Revenus/SupabasePaiementsGateway.swift']],
+  ['fn_contester_paiement_soignant', ['T13', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Revenus/SupabasePaiementsGateway.swift']],
 ]);
 // Hors manifeste (capture du 2026-07-29) : classement manuel documentaire (correction 13).
 const HORS_MANIFESTE = ['fn_demarrer_inscription', 'fn_enregistrer_parcours_inscription'];
@@ -799,14 +801,17 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
   // au run 42549855710, avant les deux XCUITest de L3-TJ ; seuil de 20 min, décision 22 de DECISIONS_LOT2).
   const wf = read('.github/workflows/ios-swift-ci.yml');
   // Intégration du lot 3 (09/11/2026) : T8 (complétion) rejoint « lot3-inscription », T10 et T12 ont leur éclat ;
-  // ordre des étapes et de la boucle des xcresult.
+  // ordre des étapes et de la boucle des xcresult. Revue B8 n°1 de L2-T10 (M1) : `DemoLiensLot2Tests` (liens du lot 2)
+  // tourne dans « lot3-inscription » (4,9 / 9,0 / 8,7 min au run 43400770161), « documents » (18,5 min en iPad portrait)
+  // ne pouvant pas la recevoir sous 20 min.
   const eclats = new Map([
     ['lot3-compte', ['DemoLiensLot3Tests', 'DemoCompteLot3Tests']],
     ['lot3-push', ['DemoPushTests']],
     ['lot3-notifications', ['DemoNotificationsTests', 'DemoPreferencesTests', 'DemoProfilTests']],
-    ['lot3-inscription', ['DemoInscriptionTests', 'DemoCompletionInscriptionTests']],
+    ['lot3-inscription', ['DemoInscriptionTests', 'DemoCompletionInscriptionTests', 'DemoLiensLot2Tests']],
     ['lot3-profil-photo', ['DemoPhotoPositionTests']],
-    ['lot3-revenus', ['DemoRevenusTests']],
+    // L3-T13 : les paiements déclarés rejoignent l'éclat de l'onglet Revenus (domaine T12-T14b), sans nouvel éclat.
+    ['lot3-revenus', ['DemoRevenusTests', 'DemoPaiementsTests']],
   ]);
   // Fusion des lots 2 et 3 : les éclats du lot 2 (`ios-swift-ci-eclats.node.mjs`, DECISIONS_LOT2 décision 22) suivent le
   // socle et précèdent ceux du lot 3, dans les étapes, la boucle des xcresult et la liste ECLATS du relevé.

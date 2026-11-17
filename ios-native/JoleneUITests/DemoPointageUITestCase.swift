@@ -37,8 +37,7 @@ class DemoPointageUITestCase: JoleneUITestCase {
         let submit = element("login-submit")
         require("Le bouton de connexion est activé") { submit.isEnabled }
         if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
-        submit.tap()
-        require("La session démo est prête", timeout: 30) { self.tabBarExists }
+        toucherSeConnecter(submit, "La session démo est prête") { self.tabBarExists }
     }
 
     func ouvrirProfil() {
@@ -82,10 +81,12 @@ class DemoPointageUITestCase: JoleneUITestCase {
         return ecran
     }
 
-    /// Saisie au clavier numérique du champ de la mission (focus exigé avant `typeText`).
+    /// Saisie au clavier numérique du champ de la mission (focus exigé avant `typeText`). Un pavé resté ouvert est fermé par
+    /// « OK » avant le défilement vers le champ (« Gel iPhone CI — 16/11/2026 »).
     func saisir(_ code: String, mission: String, dans ecran: XCUIElement) {
         let champ = element("pointage-code-\(mission)")
         require("Le champ du code de \(mission) est rendu", timeout: 30) { champ.exists }
+        fermerLePaveNumerique()
         scrollTo(champ, in: ecran)
         focus(champ, in: ecran)
         // Un code refusé reste dans le champ (comme le web) : effacé avant la nouvelle saisie. Le texte est centré : un
@@ -106,17 +107,15 @@ class DemoPointageUITestCase: JoleneUITestCase {
         require("Le code saisi est dans le champ") { (champ.value as? String) == code }
     }
 
-    /// Le bouton d'action, amené hors du clavier (un glissement de la page le ferme), puis touché.
+    /// Le bouton d'action, amené à l'écran pavé fermé, puis touché. Le pavé numérique est d'abord fermé par « OK »
+    /// (`fermerLePaveNumerique`), jamais par un glissement : au run 43889328109 (iPhone 17, iOS 26.2), le glissement
+    /// 0,55 → 0,45 qui le fermait (`.scrollDismissesKeyboard(.immediately)` de la page) a gelé le serveur de rendu du
+    /// simulateur pendant `testPrecisionReduiteNEnvoieAucunePositionEtAfficheLEncart` (DECISIONS_LOT2, « Gel iPhone CI —
+    /// 16/11/2026 »). Le défilement borné amène ensuite le bouton hors de la barre de navigation translucide (un toucher
+    /// sous la barre l'atteint, elle) : `visibleSousLesBarres` (UITestSupport, run 42559541711).
     func appuyerSurPointer(_ mission: String, dans ecran: XCUIElement) {
-        let bouton = element("pointage-submit-\(mission)")
-        var glissements = 0
-        // Hors du clavier ET hors de la barre de navigation translucide (un toucher sous la barre l'atteint, elle) :
-        // `visibleSousLesBarres` (UITestSupport, run 42559541711).
-        while (coveredByKeyboard(bouton) || !visibleSousLesBarres(bouton, inside: ecran)) && glissements < 10 {
-            drag(ecran, fromY: 0.55, toY: 0.45)
-            if !coveredByKeyboard(bouton), !visibleSousLesBarres(bouton, inside: ecran) { scrollTo(bouton, in: ecran) }
-            glissements += 1
-        }
+        fermerLePaveNumerique()
+        scrollTo(element("pointage-submit-\(mission)"), in: ecran)
         tap("pointage-submit-\(mission)")
     }
 

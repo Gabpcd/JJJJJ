@@ -216,21 +216,28 @@ final class DemoPushTests: JoleneUITestCase {
         }
     }
 
-    /// Blueprint §3 T5 : `CONTRAT_A_SIGNER:contrat_id` → `/contrat/<id>` (renvoi web tant que l'écran du lot 2 n'est
-    /// pas intégré) : la page web canonique du contrat est présentée par le présentateur `.safari` du coordinateur des
-    /// liens (L3-T3b) ; à sa fermeture, l'espace est intact.
-    func testTapContratASignerVersLeWebDuContrat() throws {
-        let page = "https://jolene.app/contrat/demo-contrat-001"
+    /// Blueprint §3 T5 : `CONTRAT_A_SIGNER:contrat_id` → `/contrat/<id>`. Migré par L2-T10 (règle 8 ; revue B8 de la PR
+    /// #1131, m7) : le contrat est natif depuis l'intégration du lot 2, le tap ouvre `ContratScreen` sur l'onglet Profil
+    /// (« Mon espace »), jamais la page web ; le retour mène au hub. Avant T10, ce test exigeait le renvoi web canonique.
+    func testTapContratASignerOuvreLeContratNatif() throws {
         launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", "CONTRAT_A_SIGNER:contrat_id=demo-contrat-001"])
         signInDemo()
-        liensRenvoiWebAffiche(page)
+        let ecran = element("contrat-screen")
+        let titre = element("contrat-titre")
+        require("Le contrat natif est ouvert par le tap", timeout: 30) { self.containerVisible(ecran) && titre.exists }
+        XCTAssertEqual(titre.label, "Contrat DEMO-0001")
+        XCTAssertFalse(element("renvoi-web-demo").exists, "contrat natif (L2-T10) : jamais la page web")
         XCTAssertFalse(element("access-blocked").exists)
         XCTAssertFalse(element("env-blocked").exists)
         aucuneAlerte()
+        XCTAssertEqual(element("deeplink-route").label, "contrat demo-contrat-001")
         record("\(proofPrefix)-push-tap-contrat")
-        liensFermerRenvoiWeb()
-        require("L'espace est intact après la fermeture du renvoi") { self.containerVisible(self.element("accueil-screen")) }
-        XCTAssertEqual(element("deeplink-route").label, "safari \(page)", "page web canonique du contrat")
+        let retour = app.navigationBars.buttons.firstMatch
+        require("Le bouton retour est disponible") { self.visible(retour) }
+        retour.tap()
+        require("Retour au hub, à la racine de l'onglet Profil") {
+            self.containerVisible(self.element("profile-list")) && !ecran.exists
+        }
     }
 
     func testTapLitigeVersLeWebSansEcranBloquant() throws {
@@ -382,8 +389,7 @@ final class DemoPushTests: JoleneUITestCase {
         let submit = element("login-submit")
         require("Le bouton de connexion est activé") { submit.isEnabled }
         if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
-        submit.tap()
-        require("La session est prête : la barre d'onglets est affichée", timeout: 30) { self.tabBarExists }
+        toucherSeConnecter(submit, "La session est prête : la barre d'onglets est affichée") { self.tabBarExists }
     }
 
     private func openProfile() {

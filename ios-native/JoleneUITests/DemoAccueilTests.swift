@@ -190,8 +190,7 @@ final class DemoAccueilTests: JoleneUITestCase {
         if app.keyboards.firstMatch.exists, !visible(submit) {
             scrollTo(submit, in: scroll)
         }
-        submit.tap()
-        require("La session démo est prête", timeout: 30) { self.tabBarExists && self.containerVisible(self.element("accueil-screen")) }
+        toucherSeConnecter(submit, "La session démo est prête") { self.tabBarExists && self.containerVisible(self.element("accueil-screen")) }
     }
 
     /// Défilement borné jusqu'à la ligne, puis chaque fragment attendu dans son libellé accessible,

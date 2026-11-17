@@ -10,31 +10,27 @@ import JoleneDesign
 /// `MesDocumentsScreen`), T9a (`profil-contrats`, `ContratsDestination.liste`, qui remplace l'écran provisoire et
 /// l'entrée `ContratsEntreeProfil` de T9a à l'intégration) ; T4b : consentement GPS (`ConsentementGpsRow`,
 /// `profil-gps-consentement`), retrait et réactivation promis par le texte de consentement (correction 15).
+///
+/// L2-T10 (revue B8 de la PR #1131, m3) : les trois entrées sont des liens **par valeur** (`MonEspaceRoute`, enregistrée
+/// par `MainTabView` sur la pile du Profil), pour qu'un lien ou un tap push ramène la pile à sa racine avant d'empiler sa
+/// cible, même quand un écran de « Mon espace » est affiché.
 struct EspaceSoignantSection: View {
-    let container: AppContainer
     @ObservedObject var session: SessionStore
     let snapshot: SessionSnapshot
-    let ouvrirOnglet: (MainTabView.Tab) -> Void
 
     var body: some View {
         Section {
-            NavigationLink {
-                PresencesScreen(session: session, snapshot: snapshot, ouvrirOnglet: ouvrirOnglet)
-            } label: {
+            NavigationLink(value: MonEspaceRoute.presences(onglet: nil, filtre: nil)) {
                 Label(LibellesWeb.ListePresences.titre, systemImage: "clock")
             }
             .accessibilityIdentifier("profil-presences")
 
-            NavigationLink {
-                MesDocumentsScreen(container: container, session: session, snapshot: snapshot)
-            } label: {
+            NavigationLink(value: MonEspaceRoute.documents(onglet: .justificatifs)) {
                 Label(LibellesWeb.EspaceSoignant.mesDocuments, systemImage: "folder")
             }
             .accessibilityIdentifier("profil-documents")
 
-            NavigationLink {
-                ContratsDestination.liste(session: session, snapshot: snapshot)
-            } label: {
+            NavigationLink(value: MonEspaceRoute.contrats) {
                 Label(LibellesWeb.Contrats.titre, systemImage: "signature")
             }
             .accessibilityIdentifier("profil-contrats")

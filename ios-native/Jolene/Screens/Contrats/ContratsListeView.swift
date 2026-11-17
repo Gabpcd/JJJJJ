@@ -3,10 +3,10 @@ import JoleneCore
 import JoleneDesign
 
 /// Liste des contrats du soignant (lot 2, T9a ; `ListeContrats.tsx`) : vue de `ContratsListeModel` (JoleneCore,
-/// T8). Filtres « Tous / En attente / Signés / Annulés » appliqués localement comme le web (l.93), filtre initial
-/// depuis `?statut=` (`filtreInitial`, route de T10), cartes du rendu mobile du web (`ContratPresentation.carte`),
-/// états vides du soignant et erreur de chargement verbatim (`LibellesWeb.Contrats`). Chaque carte ouvre
-/// `ContratScreen`.
+/// T8). Filtres « Tous / En attente / Signés / Annulés » appliqués localement comme le web (l.93), ouverts sur « Tous »
+/// (aucun lien ne porte `?statut=` : écart consigné par L2-T10, `ContratsDestination`), cartes du rendu mobile du web
+/// (`ContratPresentation.carte`), états vides du soignant et erreur de chargement verbatim (`LibellesWeb.Contrats`).
+/// Chaque carte ouvre `ContratScreen`.
 ///
 /// Deux présentations : écran poussé (« Mes contrats » du Profil : titre de navigation) ou onglet Contrats de
 /// « Mes documents » (T7 : titre dans le contenu, comme le `h2` du web, l.101 ; aucun titre de navigation imposé à
@@ -20,13 +20,11 @@ struct ContratsListeView: View {
     private let snapshot: SessionSnapshot
     private let presentation: Presentation
 
-    init(session: SessionStore, snapshot: SessionSnapshot, filtreInitial: FiltreContrat = .tous,
-         presentation: Presentation = .ecran) {
+    init(session: SessionStore, snapshot: SessionSnapshot, presentation: Presentation = .ecran) {
         self.session = session
         self.snapshot = snapshot
         self.presentation = presentation
-        _model = StateObject(wrappedValue: ContratsListeModel(controller: session.controller, snapshot: snapshot,
-                                                              filtreInitial: filtreInitial))
+        _model = StateObject(wrappedValue: ContratsListeModel(controller: session.controller, snapshot: snapshot))
     }
 
     var body: some View {

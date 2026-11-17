@@ -1,6 +1,6 @@
 import Foundation
 
-/// Destination d'un lien Jolene dans l'app native (lot 0, complétée au lot 3 par T3). Les cas
+/// Destination d'un lien Jolene dans l'app native (lot 0, complétée au lot 3 par T3 et au lot 2 par T10). Les cas
 /// natifs reflètent les cinq onglets et les écrans du parcours soignant ; les deux sorties non
 /// natives renvoient vers le web avec l'URL canonique (`https://jolene.app/...`, query et fragment
 /// conservés).
@@ -45,6 +45,21 @@ public enum JoleneRoute: Equatable, Sendable {
     /// Stripe Connect (lot 3, T14a) : `/soignant/stripe-connect`, avec le retour de l'onboarding
     /// hébergé (`return_url` / `refresh_url`) s'il est présent.
     case stripeConnect(retour: RetourConnect?)
+    /// Page Présences (lot 2, T10) : `/soignant/presences` (`src/App.tsx` l.326), `?tab=` et `?filtre=` tels que reçus
+    /// (`PresencesSoignant.tsx` l.276-279, `searchParams.get`). L'onglet initial et le filtre « à valider » sont
+    /// décidés par `PointageRules.ongletInitial` et `PointageRules.filtreAValider` (valeur inconnue : onglet dérivé,
+    /// écart assumé de T4a).
+    case presences(onglet: String?, filtre: String?)
+    /// Détail des présences d'une mission (lot 2, T10) : `/soignant/presences/mission/:id` (l.327).
+    case presencesMission(id: String)
+    /// « Mes documents » (lot 2, T10) : `/soignant/mes-documents` (l.323), `?tab=` tel que reçu (`MesDocuments.tsx`
+    /// l.18-24, `justificatifs` par défaut, `OngletDocuments(parametre:)`) ; alias `Navigate` `/soignant/documents`
+    /// (l.388, onglet Justificatifs) et `/soignant/contrats` (l.407, onglet Contrats), dont la redirection fixe l'onglet.
+    case documents(onglet: String?)
+    /// Page d'un contrat (lot 2, T10) : `/contrat/:id` (l.440).
+    case contrat(id: String)
+    /// Certificat des signatures d'un contrat (lot 2, T10) : `/contrat/:id/certificat` (l.441).
+    case contratCertificat(id: String)
     /// Chemin servi par Safari (`SFSafariViewController`) : `/admin/*`, `/groupe/*` et tout
     /// chemin sans écran natif.
     case safari(URL)

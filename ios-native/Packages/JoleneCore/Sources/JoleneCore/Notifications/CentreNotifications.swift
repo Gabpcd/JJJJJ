@@ -63,7 +63,8 @@ public enum CentreNotificationsTextes {
 /// Ce que l'espace prêt fait d'une destination de lien (ligne du centre, tap push, lien universel : aiguillage
 /// unique `AiguillageLiens` de L3-T3b) : un onglet (Revenus avec sa section), le détail d'une mission, le centre de
 /// notifications, les préférences de notifications (T6) et l'édition du profil (T9), empilées sur l'onglet Profil
-/// (intégration du lot 3) ; un renvoi web passe par le présentateur `.safari` (`PresentateurRenvoiWeb`, injecté à la
+/// (intégration du lot 3), et les écrans de « Mon espace » du lot 2 (présences, détail des présences d'une mission,
+/// Mes documents, contrat, certificat ; L2-T10), empilés sur l'onglet Profil comme ses entrées ; un renvoi web passe par le présentateur `.safari` (`PresentateurRenvoiWeb`, injecté à la
 /// racine par le coordinateur des liens) ; la connexion n'a pas de présentation dans l'espace (`.aucune`).
 ///
 /// Construite depuis une `DestinationLien` seulement (jamais la route brute : `.revenus(section: .factures)`
@@ -82,8 +83,10 @@ public enum CibleNotification: Equatable, Sendable {
     case explorer
     /// Onglet Mes missions (`/soignant/missions`).
     case missions
-    /// Onglet Revenus et sa section (`?tab=`) : seule la racine (`.apercu`) est présentable avant les tranches de
-    /// ses sections (T13 « Paiements à confirmer ») ; une section n'est jamais réduite en silence à l'onglet.
+    /// Onglet Revenus et sa section (`?tab=`) : la racine (`.apercu`) et, depuis T13, « Paiements à confirmer »
+    /// (`.paiementsAConfirmer`, push `PAIEMENT_RECU`, correction 15 : l'onglet s'ouvre sur la section
+    /// `revenus-paiements-declares`) ; les autres sections restent des renvois web (D4) et ne sont jamais réduites en
+    /// silence à l'onglet.
     case revenus(section: SectionRevenus)
     /// Onglet Profil, hub du compte (`/soignant/mon-compte`).
     case monCompte
@@ -98,6 +101,18 @@ public enum CibleNotification: Equatable, Sendable {
     /// qui mène au hub depuis l'export RGPD de L3-T11), empilée sur l'onglet Profil comme l'entrée « Mon profil » du
     /// hub.
     case profil
+    /// Lot 2, T10 — écrans de « Mon espace » (section du Profil, décision 24 du lot 2), empilés sur l'onglet Profil comme
+    /// ses entrées : page Présences avec `?tab=` et `?filtre=` du lien (`/soignant/presences`) ;
+    case presences(onglet: String?, filtre: String?)
+    /// détail des présences d'une mission (`/soignant/presences/mission/:id`) ;
+    case detailPresences(missionId: String)
+    /// « Mes documents » sur l'onglet du lien (`/soignant/mes-documents?tab=`, alias `/soignant/documents` et
+    /// `/soignant/contrats`) : `OngletDocuments(parametre:)`, justificatifs pour une valeur absente ou inconnue ;
+    case documents(onglet: OngletDocuments)
+    /// page d'un contrat (`/contrat/:id`) ;
+    case contrat(id: String)
+    /// certificat des signatures d'un contrat (`/contrat/:id/certificat`).
+    case certificat(contratId: String)
     /// Renvoi web (`.safari` ou `.etablissement`), présenté par le présentateur de renvoi web s'il est injecté
     /// (coordinateur des liens, L3-T3b) ; reset `token_hash`/implicit compris, tant que son écran natif n'est pas
     /// livré.
@@ -125,6 +140,11 @@ public enum CibleNotification: Equatable, Sendable {
         case .notifications: self = .centre
         case .parametresNotifications: self = .preferences
         case .profil: self = .profil
+        case .presences(let onglet, let filtre): self = .presences(onglet: onglet, filtre: filtre)
+        case .presencesMission(let id): self = .detailPresences(missionId: id)
+        case .documents(let onglet): self = .documents(onglet: OngletDocuments(parametre: onglet))
+        case .contrat(let id): self = .contrat(id: id)
+        case .contratCertificat(let id): self = .certificat(contratId: id)
         case .safari, .etablissement: self = .web(destination)
         case .connexion, .resetPassword, .confirmerInscription:
             self = .aucune
@@ -149,18 +169,21 @@ public enum CibleNotification: Equatable, Sendable {
         case .missions: return .missions
         case .revenus: return .revenus
         case .monCompte, .preferences, .profil: return .profil
+        case .presences, .detailPresences, .documents, .contrat, .certificat: return .profil // « Mon espace » (L2-T10)
         case .web, .aucune: return nil
         }
     }
 
     /// Présentable dans l'espace : un renvoi web exige le présentateur `.safari` (injecté à la racine par le
     /// coordinateur des liens depuis L3-T3b ; jamais `openURL` : les chemins `/soignant/*` reviendraient dans l'app par
-    /// lien universel, sans effet) ; une section de Revenus attend sa tranche ; depuis le centre (`depuisCentre`), le
-    /// centre lui-même n'a rien à ouvrir.
+    /// lien universel, sans effet) ; une section de Revenus attend sa tranche (aperçu T12, paiements à confirmer T13) ;
+    /// depuis le centre (`depuisCentre`), le centre lui-même n'a rien à ouvrir.
     public func estPresentable(renvoiWebDisponible: Bool, depuisCentre: Bool = false) -> Bool {
         switch self {
         case .accueil, .explorer, .missions, .monCompte, .mission, .preferences, .profil: return true
-        case .revenus(let section): return section == .apercu
+        // L2-T10 : écrans du lot 2 ; leur coupe-circuit (D-FLAGS) est lu par l'écran, qui devient alors un renvoi web.
+        case .presences, .detailPresences, .documents, .contrat, .certificat: return true
+        case .revenus(let section): return section == .apercu || section == .paiementsAConfirmer
         case .centre: return !depuisCentre
         case .web: return renvoiWebDisponible
         case .aucune: return false

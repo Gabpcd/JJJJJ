@@ -92,7 +92,9 @@ et arrête le job avant l'envoi. Aucune garde ne se désactive par une option.
 
 Seuls les six secrets existants sont utilisés (`IOS_DISTRIBUTION_P12_BASE64`,
 `IOS_CERTIFICATE_PASSWORD`, `IOS_PROFILE_BASE64`, `ASC_KEY_ID`, `ASC_ISSUER_ID`,
-`ASC_PRIVATE_KEY_BASE64`) ; un test node le vérifie. `prepare-ci-signing.mjs ios` les décode dans
+`ASC_PRIVATE_KEY_BASE64`), plus le secret **facultatif** `SENTRY_DSN_IOS` (lot 3, T15) : lu par
+l'étape d'archive seule et passé à `xcodebuild` en `JOLENE_SENTRY_DSN` ; absent, le build part sans
+Sentry, sans échec (`docs/mobile-swift/SENTRY_IOS.md`) ; un test node le vérifie. `prepare-ci-signing.mjs ios` les décode dans
 `$RUNNER_TEMP/jolene-signing` (droits 0600). Le trousseau temporaire a un mot de passe aléatoire,
 masqué dans les journaux. La dernière étape, en `if: always()`, supprime le trousseau, le matériel de
 signature, les profils installés et la clé App Store Connect écrite par fastlane, y compris en cas

@@ -29,6 +29,8 @@ public struct NumericCodeField: View {
             .font(.system(.title2, design: .monospaced).weight(.semibold))
             .multilineTextAlignment(.center)
             .focused($focused)
+            // Le pavé numérique n'a pas de touche Entrée : « OK » le ferme sans défilement (`BoutonClavierOK`).
+            .boutonOKClavier($focused)
             .onChange(of: code) { valeur in
                 let filtre = Self.filtrer(valeur)
                 if filtre != valeur { code = filtre }

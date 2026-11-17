@@ -2314,3 +2314,464 @@ Note : pendant la lecture, j'ai écrit trois fichiers temporaires dans le scratc
   TestFlight externe (TJ2).
 - Mineurs ouverts : T8 m1-m6, T10 m1-m9, T12 m1-m2, L3-TJ m1-m4 (revues ci-dessus), plus ceux des vagues
   précédentes.
+
+## L3-T13
+
+### Consignes de l'auteur pour l'intégration (branche `lot3/l3-t13-v3`, 16/11/2026)
+
+**B9 paiements : go humain requis avant merge.** Paiements déclarés (confirmation, contestation ouverte après B3,
+#1118) : PR préparée, jamais mergée sans le go explicite de Gabrielle ; « CI verte + revue fraîche » ne le remplace pas.
+Base `origin/feat/ios-lot2` (`bc533bcf`, identique à `main` après #1131 sur les chemins touchés). Décisions, écarts et
+textes : `DECISIONS_LOT3.md`, section T13.
+
+- **À faire avant le go** : relire en lecture seule la définition **live** de `fn_contester_paiement_soignant`
+  (`pg_get_functiondef`, TJ7) et de `fn_confirmer_paiement_soignant` ; la tranche n'a eu aucun accès backend et s'est
+  fondée sur la migration B3 et le dump (corps identiques). Si la définition live diffère de la fiche, refermer
+  « Contester » sans texte nouveau (TJ7). **Fait le 16/11/2026** (coordinateur, lecture seule ; conforme, consigné dans
+  `DECISIONS_LOT3.md`, section T13 ; voir la revue B8 n°1 ci-dessous, m7).
+- **Fichiers partagés touchés (ajouts localisés)** : `Models/Lot3Results.swift` (`PaiementDeclare` : mission, présences,
+  créneaux ; trois structures de détail), `Revenus/RevenusModel.swift` (`relireApresDeclaration`), `Demo/DemoWorld.swift`
+  et `Demo/DemoRevenusGateway.swift` (un seul serveur simulé relu par l'onglet), `SupabaseGateways.swift` (une ligne),
+  `AppContainer.swift` (variante `JOLENE_DEMO_PAIEMENTS`), `MainTabView.swift` (`sectionRevenus`, cas `.revenus(section)`
+  de `presenter`), `Screens/Revenus/RevenusScreen.swift` (section montée au-dessus des paiements rapides, défilement,
+  `scrollDismissesKeyboard`), `Links/DestinationLien.swift` et `Notifications/CentreNotifications.swift` (section
+  livrée et présentable), tests de routage (`DestinationLienTests`, `CentreNotificationsTests`, `DeepLinkIntentTests`,
+  `PushTapIntentTests` : `?tab=paiements` natif, 493 natifs / 397 renvois), `DemoWorldTests.portsEnAttenteLot3`
+  (« paiements » retiré), `export-demo-fixtures.mjs` (seconde déclaration `demo-paiement-004` dans
+  `demo-missions-terminees.json`, nouvelle fixture `demo-paiements-declares.json`), `check-rpc-contracts.mjs` +
+  `rpc-contracts.json` + `CONTRATS_RPC_SOIGNANT.md` + `check-rpc-contracts-lot3.node.mjs` (deux RPC consommées, éclat
+  `lot3-revenus`), `ios-swift-ci.yml` (`DemoPaiementsTests` dans `lot3-revenus`, sauté par le socle), `project.pbxproj`
+  (`xcodegen generate`), `PARITE_SOIGNANT.md`, `DECISIONS_LOT3.md`.
+- **Au conflit avec T14a / T14b** (même onglet, même éclat) : garder les deux côtés dans `RevenusScreen`, `MainTabView`
+  (`cheminRevenus`, `sectionRevenus`), `DemoWorld.câblerLot3`, `SupabaseGateways.câblerLot3`, `portsEnAttenteLot3`,
+  `LOT3_CONSOMMEES` et les classes de l'éclat `lot3-revenus` (relire la durée de l'éclat, 30 min).
+- **Vérifications de l'auteur** (Xcode 16.4 local, Swift 6.1.2, `-strict-concurrency=complete` des paquets) :
+  `swift test` JoleneCore 1 668 tests, JoleneSupabase 487 tests, 0 échec, 0 ignoré, aucun avertissement sur les
+  fichiers recompilés ; tests ajoutés : `PaiementsDeclaresTests` (11), `PaiementsDeclaresModelTests` (11),
+  `DemoPaiementsGatewayTests` (7), `SupabasePaiementsGatewayTests` (12) ; contrôle par mutation (garde `enCours`
+  retirée, relecture `CONTESTE` relâchée) : 6 échecs, code restauré. `xcodegen generate` (pbxproj : deux fichiers) ;
+  `xcodebuild build-for-testing` sur un simulateur dédié iPhone 16 / iOS 18.6 → `TEST BUILD SUCCEEDED`, aucun
+  avertissement dans nos sources. XCUITest (iphone portrait seulement, machine très chargée) : `DemoPaiementsTests`
+  4/4 (second passage, après correction d'un défilement manquant avant la saisie du motif dans le test ; premier
+  passage : 1 échec du test, 1 échec d'environnement `kAXErrorServerNotFound` au lancement) ; `DemoRevenusTests`
+  7/7 (deux passages, le second sur la tête finale). Gardes Node : étape « Garde de livraison mobile » de `validate-pr.yml` 245/245, `ios-swift-ci-eclats` et
+  `check-rpc-contracts-lot3` verts, `check-rpc-contracts.mjs` sans dérive, `export-demo-fixtures.mjs --check`
+  identique (19 fichiers). **Non mesuré localement** : iPad portrait et paysage (CI), STAGING (T16), appareil.
+
+#### Avant le merge
+- Le go explicite de Gabrielle (**B9 paiements : go humain requis avant merge**).
+- Relecture live en lecture seule des deux RPC (ci-dessus) — **faite le 16/11/2026, conforme** (m7 ci-dessous).
+- L'éclat CI `lot3-revenus` vert sur iphone, ipad-portrait et ipad-landscape, avec `skipped = 0`, `DemoPaiementsTests`
+  compris, et sa durée sous 30 min.
+- Revue fraîche B8 — **n°1 : CLÔTURABLE** (0 bloquant, 0 majeur, 7 mineurs traités ci-dessous).
+
+### Revue B8 n°1 L3-T13 : CLÔTURABLE, mineurs traités (auteur, branche `lot3/l3-t13-v3`, 16/11/2026)
+
+Verdict de la revue fraîche : **CLÔTURABLE** (0 bloquant, 0 majeur, 7 mineurs). Les sept mineurs sont traités sur la
+branche, sans merge (**B9 paiements : go humain requis avant merge**). Détail et sources : `DECISIONS_LOT3.md`,
+section T13 et sous-section « T13 — corrections de la revue fraîche B8 n°1 ». Test d'abord pour m1 (commit séparé,
+rouge vérifié sur la tête `3627b4b5`). Aucun texte affiché nouveau, aucune RPC nouvelle, aucun appel backend depuis la
+tranche.
+
+- **m1** (preuve de la contestation) : la justification « une ligne relue `CONTESTE` prouve le litige » est remplacée
+  par « `success:true` de B3 + relecture `CONTESTE` » (`PaiementsDeclares.swift`, `PaiementsDeclaresRelecture` ;
+  fiche `fn_contester_paiement_soignant` ; `DECISIONS_LOT3.md`) : `CONTESTE` s'écrit aussi sans litige de B3 (UPDATE
+  direct sous `pol_paie_soig_update`, établissement compris ; `fn_ouvrir_litige_rate_limited`). Le gateway Supabase
+  exige `litige_id` non vide dans la réponse, sinon erreur de contrat, jamais un succès, sans relecture.
+  Test `SupabasePaiementsGatewayTests.testSuccesSansLitigeIdEstUneErreurDeContratMemeAvecRelectureCONTESTE` (cinq
+  corps : absent, `null`, vide, blanc, nombre ; relecture `CONTESTE` en place) : **rouge avant la correction**
+  (2 échecs : `conteste(…, litigeId: nil)` rendu comme succès, relecture faite), vert après.
+- **m2** : vouvoiement de l.259 (« déclare vous avoir payé ») rattaché à « décision 9 du lot 1, TJ8 » (TJ7 ne nomme
+  que l.55) : `PaiementsDeclares.swift` (en-tête des textes, constante), `PaiementsDeclaresTests`, `DECISIONS_LOT3.md`,
+  et les mêmes mentions dans `PaiementsDeclaresSection.swift`, `DemoPaiementsTests.swift`, `PARITE_SOIGNANT.md`.
+- **m3** : `DECISIONS_LOT3.md` documente que `PAIEMENT_RECLAME` mène aussi à la section native (même chemin
+  `?tab=paiements`, `PushRouting`) : les 32 vecteurs de la famille sont 16 `PAIEMENT_RECU` + 16 `PAIEMENT_RECLAME`
+  (décompte relu sur `golden/push-routing.json`).
+- **m4** : `demo-paiement-004` (`DECLARE` libéral sans facture, refusé par le serveur depuis `20261001122318`) est lié
+  à une facture cohérente (`demo-facture-honoraires-002`, `EMISE`, 256 € TTC, même mission et mêmes parties ;
+  `montant_du_reference` et `source_montant_du` posés comme par `trg_paiement_liberal_facture`). Aucune mission
+  salariée de la démo ne pouvait la porter (missions 1 et 4 déjà déclarées, mission 3 sans contrat figé ; une mission
+  ajoutée changerait l'onglet). Garde à l'export (`verifierDeclarationsDemo` : l'ancienne ligne lève
+  `LIBERAL_FACTURE_REQUISE`). Fixtures régénérées : seul `demo-missions-terminees.json` change (paiement 004 et
+  `factures_honoraires`) ; `demo-paiements-declares.json` identique ; `--check` identique (19 fichiers) ; T12 inchangé
+  (mission 2 « Paiement suivi dans Factures », `DemoRevenusTests` ci-dessous).
+- **m5** : `CartePaiementDeclare` expose `prefixe` et `montant`, `titre` en est la concaténation ; la vue rend
+  `Text(verbatim: prefixe) + Text(verbatim: montant)` (une seule source avec le libellé d'accessibilité) ; assertions
+  ajoutées à `PaiementsDeclaresTests.testCarteCompleteCommeLeBandeauDuWeb`.
+- **m6** : `DemoPaiementsTests.testTapPushPaiementRecuOuvreLesPaiementsDeclares` vérifie sur iPhone que l'onglet a
+  défilé (`revenus-sous-titre` entièrement au-dessus du bas des barres de navigation) ; sur iPad, l'assertion actuelle
+  est gardée.
+- **m7** : vérification de la production faite par le coordinateur le 16/11/2026 (lecture seule ; empreintes `md5`
+  des deux RPC, `SECURITY DEFINER`, `search_path`, droits, migration `20261102205808` au registre,
+  `notifications_type_check`, index `uq_litige_mission_type_ouvert_legacy`, triggers `BEFORE INSERT` de `litiges`,
+  inventaire `SECURITY DEFINER`) consignée dans `DECISIONS_LOT3.md` (section T13) comme levée de la condition TJ7
+  « définition live relue avant d'ouvrir Contester » ; fiches des deux RPC et commentaire du gateway mis à jour.
+- **Fichiers touchés** : `SupabasePaiementsGateway.swift` et ses tests, `PaiementsDeclares.swift`,
+  `PaiementsDeclaresTests.swift`, `PaiementsDeclaresSection.swift`, `DemoPaiementsTests.swift`,
+  `DemoRevenusGateway.swift` (commentaire), `export-demo-fixtures.mjs` + `demo-missions-terminees.json`,
+  `CONTRATS_RPC_SOIGNANT.md`, `DECISIONS_LOT3.md`, `PARITE_SOIGNANT.md`, ce fichier. Aucun fichier ajouté ni retiré
+  (`xcodegen generate` sans diff du pbxproj).
+- **Vérifications de l'auteur** (Xcode 16.4 local, Swift 6.1.2) : `swift test -Xswiftc
+  -strict-concurrency=complete` : JoleneCore 1 668 tests, JoleneSupabase 488 tests (487 + le test m1), 0 échec, aucun
+  avertissement ; `xcodegen generate --spec project.yml` sans diff ; `xcodebuild build-for-testing` sur un simulateur
+  dédié iPhone 16 / iOS 18.6 (`-derivedDataPath` dans le worktree) → `TEST BUILD SUCCEEDED`, aucun avertissement dans
+  nos sources ; étape « Garde de livraison mobile » de `validate-pr.yml` 245/245 ; `check-rpc-contracts-lot3` +
+  `ios-swift-ci-eclats` 35/35 ; `check-rpc-contracts.mjs --check` sans dérive (47 RPC) ; `export-demo-fixtures.mjs
+  --check` identique (19 fichiers). **XCUITest non mesurés localement** (machine saturée, charge de 130 à 310, disque
+  descendu à 634 Mo libres par d'autres sessions) : 1er passage, installation refusée (disque plein) ; relance, « Timed
+  out waiting for AX loaded notification » ; dernier passage sur simulateur démarré au préalable : 8 échecs
+  d'environnement, aucun sur une assertion (`kAXErrorServerNotFound` ×3, `kAXErrorIPCTimeout` sur le test m6 avant son
+  assertion, délai d'orientation, budget de blocage dépassé avec « condition vraie à la dernière » ×3), run arrêté
+  avant les trois derniers `DemoRevenusTests` (jusqu'à 55 min par test). Affichage T12 de la démo prouvé au niveau 1
+  par `DemoRevenusGatewayTests` (mission 2 « Paiement suivi dans Factures », lignes 1, 3, 4 inchangées).
+  **À prouver en CI** : éclat `lot3-revenus` (`DemoPaiementsTests` 4 tests, dont m6, et `DemoRevenusTests` 7 tests)
+  vert sur iphone, ipad-portrait et ipad-landscape, `skipped = 0`.
+
+#### Avant le merge (après la revue n°1)
+- Le go explicite de Gabrielle (**B9 paiements : go humain requis avant merge**).
+- L'éclat CI `lot3-revenus` vert sur les trois formats (ci-dessus), XCUITest de m6 compris.
+
+## L3-T15
+
+### Consignes de l'auteur pour l'intégration (branche `lot3/l3-t15-v3`, 16/11/2026)
+
+Sentry Cocoa (D21), **non B9** (D18). Base : `origin/feat/ios-lot2` (`bc533bcf`), c'est-à-dire `main` avec les lots 3
+et 2. Décisions et écarts : `DECISIONS_LOT3.md`, section T15. Mode d'emploi, réglages et recette :
+`docs/mobile-swift/SENTRY_IOS.md`.
+
+- **Version** : `sentry-cocoa` 9.32.0 (`exactVersion`), produit `Sentry` (xcframework statique), importé par
+  `Jolene/Composition/CrashReporting.swift` seul.
+- **Fichiers partagés touchés** (à résoudre au conflit en gardant les deux côtés) :
+  - `project.yml` : paquet `Sentry` et dépendance de la cible app ;
+  - `Jolene.xcodeproj/project.pbxproj` : à régénérer par `xcodegen generate`, jamais fusionné à la main ;
+  - `Package.resolved` de l'app : ajout de la ligne `sentry-cocoa`, plus `originHash` ;
+  - `JoleneApp.swift` : `init()` et `@StateObject` sans valeur initiale ;
+  - `AppContainer.swift` : extraction de `environnementDeLancement` et paramètre `crashReporting` ;
+  - `SessionStore.swift` : paramètre `crashReporting` et deux appels dans `suivreIdentite` et `oublierIdentiteSuivie` ;
+  - `Info.plist` et `Base.xcconfig` (`JOLENE_SENTRY_DSN`) ;
+  - `ios-native-testflight.yml` : environnement de l'étape d'archive et une ligne `xcodebuild` ;
+  - `tests/node/ios-native-testflight.node.mjs` : test des secrets étendu, plus deux tests ;
+  - `TESTFLIGHT.md`, `DECISIONS_LOT3.md` (section T15 et §6.5), `RECETTE_DEVICE_LOT3.md` §5.
+- **Matrice de parité** : aucune ligne concernée, Sentry n'a ni route ni écran. `PrivacyInfo.xcprivacy` n'est pas modifié : le
+  manifeste de Sentry est embarqué et déjà couvert (`SENTRY_IOS.md` §8).
+- **Vérifications de l'auteur** (Xcode 16.4, Swift 6.1.2) :
+  - `swift build --build-tests -Xswiftc -strict-concurrency=complete` puis `swift test` dans JoleneCore :
+    **1 675 tests, 0 échec, 0 ignoré**, 0 avertissement (dont `CrashScrubberTests` 16 et `CrashReportingTests` 21) ;
+  - même commande dans JoleneSupabase : **475 tests, 0 échec, 0 ignoré** (paquet non modifié, compilé contre le
+    nouveau `SessionStore`) ;
+  - `xcodegen generate` ;
+  - `xcodebuild build-for-testing` (Debug, simulateur dédié iPhone 16 / iOS 18.6, `-derivedDataPath` dans le
+    worktree) : **TEST BUILD SUCCEEDED**, 0 avertissement de nos sources ;
+  - `xcodebuild build` **Release**, simulateur, sans signature, `-onlyUsePackageVersionsFromResolvedFile` : **BUILD
+    SUCCEEDED**, 0 avertissement de nos sources. `JoleneSentryDSN` est vide dans le binaire et le crash de test n'y est
+    pas compilé ; `Frameworks/Sentry.framework/PrivacyInfo.xcprivacy` est embarqué ;
+  - XCUITest `DemoAccueilTests` (3) et `DemoConsultationTests` (1, sentinelle « 0 requête ») : **4 réussis, 0 échec,
+    0 ignoré**. Le démarrage de l'app n'a pas régressé et la démo ne fait aucune requête ;
+  - gardes Node de « Garde de livraison mobile » : **247 réussis, 0 échec** ;
+  - `ios-swift-ci-eclats.node.mjs` : 5 réussis ;
+  - `ios-native-testflight.mjs depot` : vert.
+- **Non prouvé ici** :
+  - build Xcode 26.4.1, à prouver par la CI ;
+  - XCUITest sur les trois formats, à prouver par la CI ;
+  - réception réelle d'un événement : aucun DSN, aucun appel à Sentry ; T17, après §6.5.
+- **Points d'attention pour la revue** :
+  - le premier run CI de chaque clé `Package.resolved` télécharge les sept xcframeworks du paquet (environ 3,3 Go)
+    avant que le cache ne les absorbe ;
+  - les artefacts TestFlight (IPA, `archive.log`) contiendront le DSN dès que `SENTRY_DSN_IOS` existera. C'est une clé
+    d'envoi seulement, déjà présente dans toute IPA livrée (`SENTRY_IOS.md` §5).
+
+### Revue fraîche B8 — L3-T15 (n°1)
+
+**Revue B8 n°1 L3-T15 : A_CORRIGER, M1/M2/m1-m6 traités** (pointe revue `9bdccbc9`, corrections ci-dessous).
+
+Constats du relecteur :
+
+- **M1** : `exceptions[].mechanism.data` (où Sentry 9.32.0 range `crash_info_messages`) et `mechanism.desc` ne passaient
+  pas par `CrashScrubber`.
+- **M2** : l'identifiant de A restait posé quand une identité B ouvrait un espace bloqué.
+- **m1** : expressions recompilées à chaque texte, adresse e-mail non bornée, longueur non plafonnée.
+- **m2** : faux négatifs (`provider_refresh_token`, camelCase, JSON échappé, double encodage, `token`, `password`,
+  valeurs non textuelles des clés sensibles, IBAN à espaces insécables ou tirets).
+- **m3** : la sélection des champs de `nettoyer(Event)` et `nettoyer(Breadcrumb)` n'était pas testée.
+- **m4** : `Package.resolved` non vérifié après la résolution SPM en CI.
+- **m5** : `SENTRY_IOS.md` proposait d'écrire le DSN dans `Staging.xcconfig`, qui est versionnée.
+- **m6** : un DSN à mot de passe était accepté, et la région n'était pas mentionnée.
+
+### Corrections de la revue fraîche B8 n°1 (auteur, branche `lot3/l3-t15-v3`, 16/11/2026)
+
+Détail et justifications : `DECISIONS_LOT3.md`, section « T15 — corrections de la revue fraîche B8 n°1 ». Mode d'emploi :
+`SENTRY_IOS.md` §1 à §7 et §9. Tests d'abord, dans un commit séparé (`581ff96f`), puis les corrections (`620e7467`).
+Aucun test n'est sauté, désactivé ni affaibli. Seul le décompte des règles compilées est passé de 8 à 9 dans le commit de
+correction : la règle des paramètres a été coupée en deux pour le coût.
+
+- **Preuve rouge** sur le code de `9bdccbc9`, avec une cale de compilation temporaire non commitée (trois symboles
+  nouveaux de `CrashScrubber`) :
+  - `CrashReportingTests` : 30 tests, **20 échecs** (recensement des propriétés, identifiant de A après B bloqué, DSN à mot
+    de passe) ;
+  - `CrashScrubberTests` : 26 tests, **68 échecs**, dont 8 000 caractères traités en 1,56 s, 1,56 s, 2,13 s et 1,63 s
+    pour un seuil de 100 ms ;
+  - `ios-swift-ci-eclats.node.mjs` : 1 échec sur 6 (aucune vérification de `Package.resolved`) ;
+  - `ios-native-testflight.node.mjs` : 1 échec sur 55 (consigne d'écrire le DSN dans un xcconfig).
+- **M1** : `nettoyer(_ exception: Exception)` nettoie `value`, `type`, `mechanism.desc` (`CrashScrubber.texte`) et
+  `mechanism.data` (`CrashScrubber.dictionnaire`) ; `event.logger` est nettoyé lui aussi. La garde statique recense les
+  27 propriétés d'`Event`, les 3 de `SentryMessage`, les 6 d'`Exception`, les 7 de `Mechanism` et les 7 de `Breadcrumb`
+  (en-têtes 9.32.0 relus dans le cache SPM).
+- **M2** : `.blocked` et `.signedOut` retirent l'identifiant, et `signIn` comme `ouvrirIdentiteInscription` le retirent
+  avant d'ouvrir une identité. **Au-delà de la proposition** : la fin transitoire le retire aussi, car depuis un espace
+  prêt elle n'arrive qu'avec une autre identité. Tests : A prêt puis B bloqué par un lien de confirmation, puis par
+  `.session(B)` : `["u-a", nil]` ; fin transitoire puis `signIn(B)` vers un espace bloqué : `["u-a", nil]` ; connexion
+  refusée puis reconnexion : `["u-a", nil, "u-a"]`.
+- **m1** : expressions compilées une fois et texte tronqué au-delà de 8 192 caractères (`…[tronqué]`). L'adresse est
+  cherchée à partir de son arobase, avec une partie locale de 64 caractères au plus. Les motifs sont ancrés, et leurs
+  bornes sont des classes ASCII plutôt que `\b`. Le test porte sur six textes adverses et un texte réaliste, chacun sous
+  100 ms (le plus court de trois passages). Mesures par texte, en Debug : de 0,7 à 8,6 ms en `swift test` macOS ; de
+  1,1 à 3,3 ms sur le simulateur iPhone 16 (iOS 18.6).
+- **m2** : couverts par sept tests nouveaux, dont un de non-régression sur les identifiants techniques. Seule exception
+  au masquage de toute valeur d'une clé sensible : un nombre sous `code`, conservé par un test existant.
+- **m3** : **garde statique** retenue, plutôt qu'un déplacement dans JoleneCore. L'app n'a pas de cible de tests
+  unitaires, et un modèle miroir aurait laissé la correspondance avec Sentry sans test. Justification complète dans
+  `DECISIONS_LOT3.md`.
+- **m4** : étape « Package.resolved de l'app inchangé après la résolution SPM », placée juste après `build-for-testing`
+  (2 min, hors éclats, plafond du job tenu, délais d'éclats inchangés). Garde node dans `ios-swift-ci-eclats.node.mjs`.
+  **À prouver par la CI** : Xcode 26.4.1 pourrait réécrire `originHash`.
+- **m5** : DSN en ligne de commande seulement (`SENTRY_IOS.md` §5 et §6), garde node.
+- **m6** : DSN à mot de passe refusé, avec test ; région de données à confirmer par Gabrielle (UE recommandée), la
+  restriction d'hôte suivra (`SENTRY_IOS.md` §5 et §7, `DECISIONS_LOT3.md` §6.5).
+- **Fichiers partagés touchés en plus** : `SessionStore.swift` (deux appels dans `signIn` et
+  `ouvrirIdentiteInscription`, deux dans `suivreIdentite`, un retiré d'`oublierIdentiteSuivie`) et `ios-swift-ci.yml`
+  (une étape après le build). `tests/node/ios-swift-ci-eclats.node.mjs` et `tests/node/ios-native-testflight.node.mjs`
+  gagnent un test chacun.
+- **Vérifications de l'auteur** (Xcode 16.4, Swift 6.1.2, sur `620e7467`) :
+  - `swift build --build-tests -Xswiftc -strict-concurrency=complete` puis `swift test` dans JoleneCore :
+    **1 694 tests, 0 échec, 0 ignoré**, 0 avertissement (dont `CrashScrubberTests` 26 et `CrashReportingTests` 30) ;
+  - même commande dans JoleneSupabase : **475 tests, 0 échec, 0 ignoré**, 0 avertissement (paquet non modifié,
+    compilé contre le nouveau `SessionStore`) ;
+  - `xcodebuild build-for-testing` (Debug, simulateur dédié iPhone 16 / iOS 18.6) : **TEST BUILD SUCCEEDED**, 0
+    avertissement de nos sources ; `Package.resolved` de l'app inchangé après la résolution SPM d'Xcode 16.4 ;
+  - sur ce simulateur, `CrashReportingTests` et `CrashScrubberTests` : **56 réussis, 0 échec** ;
+  - `xcodebuild build` **Release**, simulateur, sans signature, `-onlyUsePackageVersionsFromResolvedFile` : **BUILD
+    SUCCEEDED**, 0 avertissement de nos sources ; `JoleneSentryDSN` vide dans l'Info.plist,
+    `Sentry.framework/PrivacyInfo.xcprivacy` embarqué ;
+  - XCUITest `DemoAccueilTests` (3) et `DemoConsultationTests` (1, sentinelle « 0 requête ») : **4 réussis**. Machine
+    partagée très chargée (charge moyenne de 200 à 670) : `testOubliDePointageOuvreLesPresencesNatives` et
+    `testDemoConsultation` ont d'abord échoué sur le budget de blocage du harnais (thread bloqué de 18 à 61 s pour un
+    budget de 15 s, condition vraie à la dernière évaluation). Relancés seuls, à charge plus basse, ils réussissent
+    (104 s et 35 s). Aucun test modifié ;
+  - gardes Node de « Garde de livraison mobile » : **248 réussis, 0 échec**. Le DerivedData local de l'auteur
+    (`ios-native/build/DerivedData-l3t15b`, hors dépôt) était sorti du worktree pendant ce passage : la garde
+    double-aveugle n'exclut que les dossiers nommés `DerivedData`, et rougit sur deux sources de `sentry-cocoa` qu'il
+    contient ;
+  - `ios-swift-ci-eclats.node.mjs` : **6 réussis**, dont la garde m4.
+- **Non prouvé ici** : build Xcode 26.4.1 et étape `Package.resolved` en CI ; XCUITest sur les trois formats ; aucune
+  réception réelle d'événement (aucun DSN, aucun appel à Sentry).
+
+### Revue fraîche B8 — L3-T15 (n°2)
+
+_À compléter par le relecteur (contexte vierge) : verdict, ce qui a été vérifié, constats, conditions avant merge._
+
+## Intégration de L3-T13, L3-T15 et L2-T10 (vague 5, 16/11/2026) — fusions et vérifications locales
+
+### Fusions
+
+- Branche `feat/ios-vague5` depuis `origin/main` (`dc4131e8`, dont #1132 hors `ios-native/`), fusions `--no-ff`, sans
+  rebase ni squash, dans l'ordre : `lot3/l3-t13-v3` (`0a462e05`) → `26e509f4` ; `lot3/l3-t15-v3` (`7fda4df3`) →
+  `2ee0830b` ; `lot2/l2-t10-v3` (`7fb0479a`) → `0da9b1f7`.
+- Base commune réelle des trois tranches : le lot 2 (`bc533bcf`), squash-mergé dans `main` en `7e451e7d` avec un arbre
+  identique. Pour T13, git a pris `6242af3b` comme base, d'où deux conflits artificiels (`ios-swift-ci.yml`,
+  `project.pbxproj`) résolus par le côté T13 ; contrôle : l'arbre fusionné diffère de T13 par les seuls cinq fichiers de
+  #1132 et de `main` par les seuls 37 fichiers de T13. T15 et T10 fusionnent ensuite sur la base `bc533bcf`.
+- Conflits résolus en gardant les deux côtés :
+  - `DECISIONS_LOT3.md`, `REVUES_LOT3.md` (T15) : sections T13 et T15 ajoutées au même endroit, gardées toutes deux ;
+  - `ios-swift-ci.yml` (T10) : commentaire des éclats du lot 3 réunissant `DemoLiensLot2Tests` (« lot3-inscription »,
+    revue B8 n°1 de L2-T10, M1) et `DemoPaiementsTests` (« lot3-revenus », T13) ; `-only-testing`, `-skip-testing` du
+    socle et classes du résumé fusionnés sans conflit, chacun avec ses deux classes ;
+  - `MainTabView.swift` (T10) : documentation des deux tranches ; code fusionné sans conflit (`sectionRevenus` de T13,
+    `destinationsMonEspace` et jetons de présentation de T10, deux branches de `presenter`) ;
+  - `CentreNotifications.swift` (T10, `estPresentable`) : écrans du lot 2 présentables (T10) et Revenus « Paiements à
+    confirmer » présentable (T13) ;
+  - `DestinationLienTests.swift` (T10) : décomptes du corpus recalculés sur les deux tranches (natifs 461 + 32 (T13) +
+    127 (T10) = 620 ; renvois 429 − 32 − 127 = 270 ; total 890 inchangé) ;
+  - `project.pbxproj` : jamais fusionné à la main, régénéré par `xcodegen generate --spec project.yml` après chaque
+    fusion (identique à la fusion après T13 et T15).
+- Tables de routage : `PAIEMENT_RECU` et `PAIEMENT_RECLAME` (même chemin `?tab=paiements`, `PushRouting`) mènent à la
+  section native de T13 ; `CONTRAT_*`, `DPAE_*`, `/contrat/*`, `/soignant/presences*` et `/soignant/mes-documents` aux
+  écrans de « Mon espace » de T10 (`DestinationLien.ecranNatifLivre`, `CibleNotification`, `PushTapIntentTests`,
+  `DeepLinkIntentTests`, `CentreNotificationsTests`, `DestinationLienTests`).
+- B9 paiements (T13) : go humain écrit de Gabrielle du 16/11/2026, transmis par le coordinateur : « continue, tu as mon
+  go pour les paiements ». Définitions live des deux RPC relues en lecture seule le même jour (`DECISIONS_LOT3.md`,
+  section T13). Aucun texte juridique nouveau dans la vague.
+
+### Vérifications locales (pointe `0da9b1f7`, Xcode 16.4, Swift 6.1.2 ; la CI tourne Xcode 26.4.1, iOS 26.2)
+
+- `swift test -Xswiftc -strict-concurrency=complete` : **JoleneCore 1 743 tests, 0 échec, 0 ignoré**, 0 avertissement ;
+  **JoleneSupabase 488 tests, 0 échec, 0 ignoré**, 0 avertissement (« CoreData: error: Failed to create
+  NSXPCConnection » : bruit du bac à sable, sans échec). `.build` supprimé.
+- `xcodegen generate --spec project.yml` : aucun diff. `xcodebuild build-for-testing` (schéma `Jolene`, Debug,
+  simulateur dédié `jolene-v5` iPhone 16 / iOS 18.6, `-derivedDataPath` dans le worktree, sans signature) : **TEST BUILD
+  SUCCEEDED**, 0 avertissement de nos sources (seules les notes d'`appintentsmetadataprocessor`) ; `Package.resolved` de
+  l'app inchangé après la résolution SPM d'Xcode 16.4.
+- XCUITest ciblés, iPhone portrait (`-parallel-testing-enabled NO`, comme la CI) : **38 tests, 35 réussis, 3 échecs,
+  0 ignoré** — `DemoLiensLot2Tests` 8/8, `DemoPaiementsTests` 4/4, `DemoRevenusTests` 8/8, `DemoAccueilTests` 3/3,
+  `DemoPushTests` 12/15. Durées locales (indicatives) : `DemoLiensLot2Tests` 104 s, `DemoPaiementsTests` 112 s,
+  `DemoRevenusTests` 156 s.
+  - Les trois échecs (`testAppareilAutoriseTokenEnregistrePuisDeconnexion`, `testAppareilNonDemandeCarteEtActivationAuTap`,
+    `testPrePromptPlusTard`) sont **antérieurs à la vague** : contre-épreuve sur `main` (`dc4131e8`, mêmes sources
+    `ios-native/` que `bc533bcf`), même simulateur, les trois mêmes tests échouent de la même façon (3/3) ; ils étaient
+    verts en CI sur `bc533bcf` (run 43400770161, iOS 26.2). Mécanisme : `aucuneCarteDansLeHub` amène le hub en bas
+    (`compte-suppression-info`), puis `prefsOuvrirEntree` touche de nouveau l'onglet Profil et `scrollTo` cherche
+    `profile-preferences-notifications` vers le bas ; sur iOS 18.6, l'entrée, restée au-dessus, n'apparaît jamais dans
+    l'arbre d'accessibilité (cellules hors écran d'une `List`) pendant les 40 glissements vers le bas. Seuls
+    les tests qui enchaînent ces deux étapes échouent (`testAppareilRefuse`, sans l'étape du bas, réussit). Défaut de
+    TEST, hors du périmètre de la vague, non corrigé ici ; suivi proposé : remonter le hub (ou chercher vers le haut)
+    avant `prefsOuvrirEntree`.
+- Gardes Node : étape « Garde de livraison mobile » de `validate-pr.yml` (six fichiers) **248 réussis, 0 échec** ;
+  `ios-swift-ci-eclats.node.mjs` 6/6 ; `ios-native-testflight.node.mjs` 55/55 ; `check-rpc-contracts.node.mjs` 57/57 ;
+  `check-rpc-contracts-lot3.node.mjs` 30/30. `check-rpc-contracts.mjs` : 47 RPC, aucune dérive.
+  `export-demo-fixtures.mjs --check` : identique (19 fichiers).
+- Hors `ios-native/` : `tsc -b` (TypeScript 5.8.3 du dépôt) sans erreur ; `npm run test:guards` : 17/17.
+- Éclats de `ios-swift-ci.yml` : onze éclats à 30 min chacun, build 25 min, étape `Package.resolved` 2 min :
+  25 + 2 + 11 × 30 = 357 ≤ 360 (plafond du job). « lot3-inscription » mesurait 4,9 / 9,0 / 8,7 min au run 43400770161
+  avant `DemoLiensLot2Tests` ; « lot3-revenus » porte maintenant `DemoRevenusTests` (8) et `DemoPaiementsTests` (4).
+- Simulateur `jolene-v5`, DerivedData et `.build` supprimés à la fin. Aucun appel backend, aucun secret, aucun workflow
+  déclenché à la main.
+
+### Reste à prouver
+
+- CI iOS trois formats (iphone, ipad-portrait, ipad-landscape), `skipped = 0`, dont les éclats « lot3-revenus »
+  (`DemoPaiementsTests`) et « lot3-inscription » (`DemoLiensLot2Tests`) sous 20 min. Le dernier run de `main`
+  (43889328109, `7e451e7d`) avait UI — iphone rouge à partir de l'éclat « pointage » (chaque éclat arrêté à 30 min, aucun
+  xcresult), ipad verts.
+- Premier build Sentry sous Xcode 26.4.1 et étape « Package.resolved de l'app inchangé » en CI.
+- Revue fraîche B8 n°2 de L3-T15 (sur la PR).
+- Recette appareil (T12, T17) ; STAGING (T16).
+
+### Revue fraîche B8 de la vague 5 (L3-T15 n°2 comprise) : A_CORRIGER, corrections (16/11/2026)
+
+Verdict du relecteur à contexte vierge, sur la tête `9191d779` (commentaire 6928639814 de la PR #1133) : **A_CORRIGER**.
+Constats : 0 bloquant, 1 majeur, 3 mineurs. Les corrections sont des commits locaux de `feat/ios-vague5`, poussés avec le
+correctif du gel iPhone en CI (`fix/ios-gel-iphone-ci`) pour n'occuper les machines macOS qu'une fois.
+
+- **M1 — l'étape « Package.resolved de l'app inchangé » échouait sous Xcode 26.4.1.** Cela touchait iPad portrait et
+  paysage au run 43948577842, dont les journaux ont été perdus à l'annulation. Cause, relue dans les manifestes de
+  sentry-cocoa `4e1e4ba9` : `Package@swift-6.2.swift` et `Package@swift-6.1.swift` déclarent sans condition KSCrash
+  (`18a633de…`), utilisé seulement sous le trait `V10`. SwiftPM 6.2 l'épingle quand même, SwiftPM 6.1 (Xcode 16.4) non
+  (hypothèse RÉFUTÉE au 3ᵉ tour par l'artefact du run 43959073553 : aucun des deux n'épingle KSCrash).
+  Corrections :
+  - pin `kscrash` ajouté au `Package.resolved` de l'app, `originHash` inchangé (retiré au 3ᵉ tour : pin ajouté à la
+    main, sur l'hypothèse réfutée) ;
+  - l'étape se diagnostique seule : diff imprimé, fichier résolu, diff et version d'Xcode copiés, puis échec dans tous
+    les cas. L'étape suivante publie, sur échec seulement, l'artefact `package-resolved-<format>-<sha>`. Correctif
+    documenté : committer ce fichier ;
+  - TestFlight : même toolchain, même clé de cache, `-onlyUsePackageVersionsFromResolvedFile` sur les deux résolutions
+    (nouvelle garde dans `ios-native-testflight.node.mjs`) ;
+  - `SENTRY_IOS.md` §1 : KSCrash est épinglé mais jamais lié à l'app (« épinglé » réfuté au 3ᵉ tour). Le produit `Sentry` est le binaire plus
+    `SentryCppHelper`, et seule la variable `SDK_V10=1` lierait KSCrash. Le fichier de référence est celui d'Xcode
+    26.4.1.
+
+  **Non prouvé localement** : que la CI ne réécrive plus `originHash`, ni qu'Xcode 16.4 ne retire pas le pin en local.
+  L'étape le dira, artefact à l'appui.
+- **m1 — socle** : il porte maintenant `if: always() && steps.build.outcome == 'success'`, comme les dix autres
+  éclats. Délais : 25 + 1 (vérification) + 1 (artefact) + 11 × 30 = 357 ≤ 360, marge inchangée.
+- **m2 — retrait de l'identifiant au début de `signIn`** : `TemoinConnexion` relève les identifiants au moment même de
+  l'appel `AuthPort.signIn`. Le test de la connexion refusée l'exige désormais, et un nouveau test couvre la connexion
+  depuis un espace prêt (même compte, puis compte bloqué). Contre-épreuve : avec la ligne 119 de `SessionStore.swift`
+  commentée, 6 assertions échouent dans ces deux tests ; avec la ligne restaurée, les 31 `CrashReportingTests` passent.
+- **m3 — `CrashScrubber`** (tests d'abord : 4 tests, 60 assertions rouges) :
+  - adresses à partie locale ou domaine non ASCII ;
+  - noms `otp` et `otp_code` (dont `p_otp_code`) ;
+  - `p_code` (code QR de pointage) ;
+  - nombre sous un nom sensible en JSON et en description Swift. Dans un dictionnaire, un nombre sous la clé exacte
+    `code` reste conservé ;
+  - mot coupé par la troncature, retiré en entier.
+
+  Test de durée vert : de 0,6 à 6,0 ms par texte, avec quatre textes adverses de plus.
+
+Vérifications locales (Xcode 16.4, Swift 6.1.2 ; aucun build Xcode, la machine étant occupée par un autre agent) :
+
+- `swift test -Xswiftc -strict-concurrency=complete` : JoleneCore **1 748 tests, 0 échec**, 0 avertissement ;
+  JoleneSupabase **488 tests, 0 échec**, 0 avertissement ;
+- « Garde de livraison mobile » (six fichiers de `validate-pr.yml`) : **249 réussis, 0 échec** (248 + la garde
+  TestFlight de M1) ;
+- `ios-swift-ci-eclats.node.mjs` **8/8** (6 + 2), `ios-native-testflight.node.mjs` **56/56** ;
+- dix mutations du workflow et du `Package.resolved`, toutes tuées par `ios-swift-ci-eclats.node.mjs` : socle sans
+  condition, `exit 1` retiré, `continue-on-error`, artefact toujours publié, mal nommé ou déplacé, copie retirée, délai
+  de 5 min, pin `kscrash` retiré ou changé ;
+- étape de vérification rejouée en local, sans dérive puis avec : code 0, puis code 1 avec diff imprimé et trois
+  fichiers copiés ;
+- `Package.resolved` : JSON valide, identités dans l'ordre alphabétique, format d'Xcode. `.build` supprimés.
+
+Reste à prouver : CI trois formats sur la tête poussée (étape `Package.resolved` verte, `skipped = 0`), puis revue B8
+limitée à ce delta.
+
+### Revue fraîche B8 de la vague 5, 3ᵉ tour (delta 9191d779..6a145748) : A_CORRIGER, correction de M1 (16/11/2026)
+
+- Verdict : A_CORRIGER, 1 majeur, 1 mineur (issuecomment-6930121681). Branche `fix/ios-gel-iphone-ci` (gel iPhone) jugée
+  conforme : aucun masquage d'échec, script borné et sans secret, plafond 357/360 min, bouton « OK » sans effet métier
+  ni texte juridique, flux de signature OTP inchangé.
+- **M1 (corrigé)** : l'hypothèse « SwiftPM 6.2 épingle KSCrash » était fausse. L'artefact `package-resolved-*-6a145748…`
+  du run 43959073553 (Xcode 26.4.1, 17E202) montre l'inverse : Xcode 26.4.1 élague `opentelemetry-swift-core` (trait
+  `OpenTelemetry` de supabase-swift, désactivé) et `swift-atomics` (sa dépendance), qu'Xcode 16.4 épingle, et il
+  recalcule `originHash` (`97a49726…`) ; aucune des deux versions d'Xcode n'épingle `kscrash` (pin ajouté à la main au
+  2ᵉ tour). Le `Package.resolved` versionné est désormais copié tel quel de l'artefact ; les gardes
+  `ios-swift-ci-eclats.node.mjs` et `ios-native-testflight.node.mjs` exigent l'absence des trois pins et cet
+  `originHash` ; `SENTRY_IOS.md` §1 est corrigé.
+- **m1 (suivi, non bloquant)** : `CrashScrubber` laisse passer un jeton nu non numérique après `code:` (`code: ABC123`,
+  `code: 12AB34` → partiellement masqué). Impact faible (codes OTP et de pointage à six chiffres). À traiter dans une
+  prochaine tranche : masquer le jeton nu entier après `:` sous un nom sensible.
+- Reste à prouver : CI UI verte sur les trois formats avec `skipped = 0`, puis revue B8 n°4 limitée à ce delta.
+
+### Revue fraîche B8 de la vague 5, 4ᵉ tour (delta 6a145748..950214f6) : A_CORRIGER, textes corrigés (17/11/2026)
+
+- Verdict : A_CORRIGER, 0 bloquant, 1 majeur, 1 mineur, tous de texte (issuecomment-6930436937). `Package.resolved`
+  identique octet pour octet à l'artefact CI (3 formats identiques), gardes justes (elles rougissent sur les deux
+  anciennes versions).
+- **M1-bis (corrigé)** : l'ancienne hypothèse « SwiftPM 6.2 épingle KSCrash » subsistait dans `SENTRY_IOS.md` (§ version,
+  titre KSCrash, paragraphe « Package.resolved de référence », vérifications), le commentaire de l'étape de
+  `ios-swift-ci.yml` et celui du test TestFlight. Réécrits selon le constat de l'artefact.
+- **m2 (corrigé)** : Xcode 16.4 n'a jamais épinglé KSCrash (10 pins en `149035c9`, sans `kscrash`) : le pin avait été
+  ajouté à la main. L'écart réel porte sur `opentelemetry-swift-core` (trait `OpenTelemetry` de supabase-swift) et
+  `swift-atomics` (sa dépendance). Textes alignés (`SENTRY_IOS.md`, commentaire et message du test des éclats, cette
+  revue).
+- Aucun changement du `Package.resolved` ni des assertions : delta de texte uniquement. Preuve CI iOS portée par le run
+  du commit précédent (`950214f6`), code identique.
+
+### CI iOS du commit 950214f6 (run 43962293492) : iPhone vert, deux gestes perdus sur iPad (17/11/2026)
+
+- **UI — iphone : vert** (11 éclats, `skipped = 0`) : premier run iPhone vert depuis le gel du 16/11 ; le correctif
+  (« OK » du pavé numérique, veilleur du simulateur) tient.
+- **UI — ipad-landscape** : 1 échec sur 1 964, `DemoPushTests.testPrePromptDeuxiemeSessionPuisActiver` (éclat
+  lot3-push). Journal d'activité du xcresult : « Se connecter » touché (événement synthétisé sur le bouton
+  entièrement visible, 5 s après le dernier défilement), puis 30 s sans envoi ni erreur ; capture d'échec : mot de
+  passe saisi, focus toujours sur le champ. Aucun gel constaté par le veilleur. Test vert sur iPhone et iPad portrait,
+  vert en paysage sur `main` (run 43889328109) et sur la PR #1121 (run 43935117534).
+- **UI — ipad-portrait** : 1 échec sur 1 964, `DemoExplorerTests.testEtatVideGardeActualiserACoteDeLActionSecondaire`
+  (éclat socle) : curseur du rayon parti de 50 km, resté à « Rayon : 15 km » au lieu de 5 km après le glissement.
+  Vert sur les deux autres formats et sur `main`.
+- Aucun des deux tests ni leurs écrans ne sont modifiés par la vague 5 : gestes synthétisés perdus par le simulateur.
+  Rattrapage borné dans `UITestSupport.swift`, la preuve restant l'assertion :
+  - `toucherSeConnecter(_:_:sessionPrete:)` (20 aides de connexion des tests démo) : un toucher resté sans effet
+    (écran de connexion inchangé, bouton toujours actif — il se désactive dès l'envoi —, aucune erreur) est rejoué
+    une seule fois après 8 s, et consigné ; un formulaire envoyé n'est jamais renvoyé ;
+  - `dragSliderPastMinimum(_:)` : glissement rejoué depuis la nouvelle position du pouce, trois au plus, tant que le
+    curseur n'est pas à sa borne basse ; chaque reprise est consignée ; la valeur reste exigée par l'appelant.
+- Attente avant rejeu : `attendreSansEchec` (5ᵉ tour, M1 ; remplace `devientVrai`, qui passait par un `XCTWaiter`
+  brut), réservée au choix de rejouer un geste.
+
+### Revue fraîche B8 de la vague 5, 5ᵉ tour (delta 950214f6..b37b8d95) : A_CORRIGER, corrigé (17/11/2026)
+
+- Verdict : A_CORRIGER, 0 bloquant, 2 majeurs, 5 mineurs (issuecomment-6934874992). Textes de a3cc0963 conformes ;
+  pas de double envoi possible (`LoginScreen` désactive le bouton pendant l'envoi) ; 20 appels inchangés en description
+  et en condition.
+- **M1 (corrigé)** : `devientVrai` (attente `XCTNSPredicateExpectation` brute) sortait la transition connexion → session
+  du décompte, des budgets de blocage (15 s, 60 s à froid) et de la trace de `require` : un gel de plus de 15 s juste
+  après la connexion aurait pu passer. `require` repose désormais sur un corps commun `attendre` ; `attendreSansEchec`
+  en est la variante qui rend `false` sur condition fausse, mais échoue toujours sur budget de blocage dépassé, trace
+  comprise (issue « condition fausse au terme du délai, sans échec (geste rejoué) »), avec le fichier et la ligne de
+  l'appelant. `devientVrai` est supprimé.
+- **M2 (corrigé)** : chaque rejeu joint `consignerRejeu` (`<préfixe>-attente-bloquee-<Fichier>-<ligne>.txt`, lignes
+  « Attente », « Appelant », « Issue »), relevé par la section « Attentes bloquées absorbées » de la CI avec une
+  annotation par appelant, même dans un job vert, comme `DemoPointageUITestCase.basculer`.
+- **m1 (corrigé)** : `toucherSeConnecter` garde 30 s décomptées au total (8 s de fenêtre, puis 22 s de `require`).
+- **m2 (corrigé)** : en-tête de `UITestSupport.swift` aligné (`require` ou `attendreSansEchec`).
+- **m3, m4, m5 (corrigés)** : phrase sur `originHash` de ce journal, message du test TestFlight (« kscrash jamais
+  épinglé »), mentions « réfutée » dans la section du 2ᵉ tour.

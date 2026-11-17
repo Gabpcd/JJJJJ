@@ -137,10 +137,9 @@ struct AccueilScreen: View {
     private func oubliPointage(_ texte: String) -> some View {
         VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
             InlineNotice(texte, title: "Oubli de pointage ?", tone: .warning, identifier: "accueil-oubli-pointage")
-            // `onPointer` du web (`DashboardSoignant.tsx` l.493) : page Présences, onglet dérivé.
-            NavigationLink {
-                PresencesScreen(session: session, snapshot: snapshot, ouvrirOnglet: ouvrirOnglet)
-            } label: {
+            // `onPointer` du web (`DashboardSoignant.tsx` l.493) : page Présences, onglet dérivé. Lien par valeur (L2-T10,
+            // `MonEspaceRoute`, enregistrée par `MainTabView` sur la pile de l'Accueil).
+            NavigationLink(value: MonEspaceRoute.presences(onglet: nil, filtre: nil)) {
                 Label(LibellesWeb.OubliDepart.pointerMonDepart, systemImage: "flag")
                     .font(JoleneFont.button)
                     .foregroundStyle(JoleneColor.rose700)
@@ -167,9 +166,8 @@ struct AccueilScreen: View {
             if let horaire = widget.horaire {
                 Text(horaire).font(JoleneFont.caption).foregroundStyle(JoleneColor.bubblegum)
             }
-            NavigationLink {
-                PresencesScreen(session: session, snapshot: snapshot, parametreOnglet: widget.onglet.rawValue, ouvrirOnglet: ouvrirOnglet)
-            } label: {
+            // Lien par valeur (L2-T10, `MonEspaceRoute`) : un lien ou un tap push ramène la pile de l'Accueil à sa racine.
+            NavigationLink(value: MonEspaceRoute.presences(onglet: widget.onglet.rawValue, filtre: nil)) {
                 Label(widget.bouton, systemImage: "mappin")
                     .font(JoleneFont.button)
                     .foregroundStyle(JoleneColor.onGradient)

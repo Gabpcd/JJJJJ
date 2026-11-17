@@ -429,11 +429,11 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(try cible("/inscription/confirmer?token_hash=h&type=signup"), .aucune)
         XCTAssertEqual(try cible("/inscription/soignant?profession=IDE"), .aucune)
         XCTAssertEqual(try cible("/inscription/completer?ref=ABCD-12"), .aucune, "T8 : complétion hors espace")
-        // Destination effective, jamais la route brute : factures et paiements restent des renvois web (D4, T13).
+        // Destination effective, jamais la route brute : les factures restent un renvoi web (D4) ; « Paiements à
+        // confirmer » est la section native de Revenus depuis T13.
         XCTAssertEqual(try cible("/soignant/mes-gains?tab=factures"),
                        .web(.safari(URL(string: "https://jolene.app/soignant/mes-gains?tab=factures")!)))
-        XCTAssertEqual(try cible("/soignant/mes-gains?tab=paiements"),
-                       .web(.safari(URL(string: "https://jolene.app/soignant/mes-gains?tab=paiements")!)))
+        XCTAssertEqual(try cible("/soignant/mes-gains?tab=paiements"), .revenus(section: .paiementsAConfirmer))
         XCTAssertEqual(try cible("/etablissement/missions/abc"),
                        .web(.etablissement(URL(string: "https://jolene.app/etablissement/missions/abc")!)))
         XCTAssertEqual(try cible("/connexion"), .aucune, "connexion depuis un espace prêt : coordinateur de L1-T10")
@@ -446,8 +446,8 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(try cible("https://www.jolene.app/reset-password/?code=c&type=recovery#x"), .aucune)
 
         let racine = URL(string: "https://jolene.app/")!
-        for cible in [CibleNotification.accueil, .explorer, .missions, .revenus(section: .apercu), .monCompte, .mission(id: "m"), .centre,
-                      .preferences, .profil] {
+        for cible in [CibleNotification.accueil, .explorer, .missions, .revenus(section: .apercu),
+                      .revenus(section: .paiementsAConfirmer), .monCompte, .mission(id: "m"), .centre, .preferences, .profil] {
             XCTAssertTrue(cible.estPresentable(renvoiWebDisponible: false), "\(cible)")
         }
         XCTAssertFalse(CibleNotification.web(.safari(racine)).estPresentable(renvoiWebDisponible: false))
@@ -459,9 +459,10 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertTrue(CibleNotification.mission(id: "m").estPresentable(renvoiWebDisponible: false, depuisCentre: true))
         XCTAssertTrue(CibleNotification.preferences.estPresentable(renvoiWebDisponible: false, depuisCentre: true))
         XCTAssertTrue(CibleNotification.profil.estPresentable(renvoiWebDisponible: false, depuisCentre: true))
-        // Une section de Revenus autre que l'aperçu n'a pas de présentation dans l'espace avant sa tranche (T13) :
-        // elle n'est jamais réduite en silence à l'onglet (verrou, garde ci-dessous).
-        for section in SectionRevenus.allCases where section != .apercu {
+        // Une section de Revenus sans tranche livrée (factures, bulletins, avances : lot 4, D4) n'a pas de présentation
+        // dans l'espace : elle n'est jamais réduite en silence à l'onglet (verrou, garde ci-dessous). T13 a livré
+        // « Paiements à confirmer ».
+        for section in SectionRevenus.allCases where section != .apercu && section != .paiementsAConfirmer {
             XCTAssertFalse(CibleNotification.revenus(section: section).estPresentable(renvoiWebDisponible: true), "\(section)")
         }
     }
@@ -492,6 +493,7 @@ final class CentreNotificationsTests: XCTestCase {
         case revenusApercu, revenusFactures, revenusBulletins, revenusAvances, revenusPaiements
         case monCompte, profil, notifications, parametresNotifications
         case stripeConnect, stripeConnectSucces, stripeConnectRafraichir
+        case presences, presencesMission, documents, contrat, contratCertificat // L2-T10
         case safari, etablissement
 
         init(_ route: JoleneRoute) {
@@ -528,6 +530,11 @@ final class CentreNotificationsTests: XCTestCase {
                 case .succes?: self = .stripeConnectSucces
                 case .rafraichir?: self = .stripeConnectRafraichir
                 }
+            case .presences: self = .presences
+            case .presencesMission: self = .presencesMission
+            case .documents: self = .documents
+            case .contrat: self = .contrat
+            case .contratCertificat: self = .contratCertificat
             case .safari: self = .safari
             case .etablissement: self = .etablissement
             }
@@ -546,6 +553,9 @@ final class CentreNotificationsTests: XCTestCase {
         "/soignant/mon-compte", "/soignant/profil", "/soignant/notifications", "/soignant/parametres/notifications",
         "/soignant/stripe-connect", "/soignant/stripe-connect?success=true", "/soignant/stripe-connect?refresh=true",
         "/soignant/litiges", "/etablissement/missions/abc",
+        // L2-T10 : écrans de « Mon espace » du lot 2 (cible native sur l'onglet Profil).
+        "/soignant/presences?tab=historique&filtre=a_valider", "/soignant/presences/mission/m-1",
+        "/soignant/mes-documents?tab=contrats", "/contrat/c-1", "/contrat/c-1/certificat",
     ]
 
     /// Liste d'exclusion nommée et fermée : routes natives **sans présentation depuis un espace prêt par nature**

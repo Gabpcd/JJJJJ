@@ -1162,7 +1162,7 @@
     },
     {
       "name": "fn_confirmer_paiement_soignant",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "{ p_paiement_id: string }",
@@ -1191,7 +1191,7 @@
     },
     {
       "name": "fn_contester_paiement_soignant",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "{ p_motif: string; p_paiement_id: string }",

@@ -95,11 +95,17 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .profil:
             return true                                  // T9 — édition du profil (`ProfilEditionScreen`), alias `reputation`
         case .revenus(section: .paiementsAConfirmer):
-            return false                                 // T13 — paiements à confirmer
+            return true                                  // T13 — section « Paiements à confirmer » de RevenusScreen
         case .stripeConnect:
             return false                                 // T14a — Stripe Connect
         case .revenus(section: .factures), .revenus(section: .bulletins), .revenus(section: .avances):
             return false                                 // renvoi web assumé jusqu'au lot 4 (D4)
+        case .presences, .presencesMission:
+            return true                                  // L2-T10 — `PresencesScreen` (T4a), `DetailPresencesScreen` (T5a), « Mon espace » du Profil
+        case .documents:
+            return true                                  // L2-T10 — `MesDocumentsScreen` (T7), onglet Contrats natif (T9a), DPAE en renvoi dans l'onglet
+        case .contrat, .contratCertificat:
+            return true                                  // L2-T10 — `ContratScreen`, `CertificatRoute` (T9a), drapeau `ios_natif_contrats_actif`
         case .safari, .etablissement:
             return false
         }

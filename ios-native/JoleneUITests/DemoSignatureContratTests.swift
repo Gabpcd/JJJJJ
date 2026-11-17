@@ -202,7 +202,10 @@ final class DemoSignatureContratTests: JoleneUITestCase {
 
     // MARK: Étapes
 
-    /// Saisit le code dans le champ OTP UIKit (`OTPField`, `contract-otp`) après lui avoir donné le focus.
+    /// Saisit le code dans le champ OTP UIKit (`OTPField`, `contract-otp`) après lui avoir donné le focus, puis ferme le
+    /// pavé par « OK » : chaque appelant fait ensuite défiler jusqu'à « Signer », et la page ferme le pavé au glissement
+    /// (`.scrollDismissesKeyboard(.immediately)`), le geste qui a gelé le simulateur iPhone au run 43889328109
+    /// (DECISIONS_LOT2, « Gel iPhone CI — 16/11/2026 »).
     private func saisirCode(_ code: String, dans champ: XCUIElement, ecran: XCUIElement) {
         require("Le champ du code est rendu") { champ.exists }
         // Le champ remplace le bouton d'envoi : il peut se trouver sous le bord de l'écran, que `focus` ne fait pas défiler.
@@ -210,6 +213,8 @@ final class DemoSignatureContratTests: JoleneUITestCase {
         focus(champ, in: ecran)
         champ.typeText(code)
         require("Le code saisi est affiché") { (champ.value as? String) == code }
+        fermerLePaveNumerique()
+        XCTAssertEqual(champ.value as? String, code, "le code reste saisi après la fermeture du pavé")
     }
 
     /// Efface le code saisi : curseur placé en fin de texte (le texte est centré, la touche à droite du champ place le
@@ -240,8 +245,7 @@ final class DemoSignatureContratTests: JoleneUITestCase {
         let submit = element("login-submit")
         require("Le bouton de connexion est activé") { submit.isEnabled }
         if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
-        submit.tap()
-        require("La session est prête : la barre d'onglets est affichée", timeout: 30) { self.tabBarExists }
+        toucherSeConnecter(submit, "La session est prête : la barre d'onglets est affichée") { self.tabBarExists }
     }
 
     /// Profil › Mon espace › Mes contrats (même chemin que `DemoContratsTests`), puis la carte du contrat.

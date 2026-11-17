@@ -205,7 +205,8 @@
     du consentement GPS du Profil reste native : le texte de consentement promet le retrait « depuis votre profil »
     (correction 15), un coupe-circuit du pointage ne doit pas retirer ce chemin. XCUITest
     `DemoPointageEtatsTests.testDrapeauPresencesDesactiveRenvoieLaPageAuWebSansZoneDePointage` (trois formats) ;
-  - `ios_natif_contrats_actif` : **à la charge de T10** (liens du lot 2, qui route `/contrat/{id}` et
+  - `ios_natif_contrats_actif` : **à la charge de T10, fait par L2-T10** (« T10 — liens du lot 2 » ci-dessous ;
+    `DemoContratsTests.testCoupeCircuitDesContratsRenvoieLeLienEtLaListeAuWeb`) (liens du lot 2, qui route `/contrat/{id}` et
     `/contrat/{id}/certificat` et injecte le présentateur des renvois web) : `ContratsDestination` (liste, contrat,
     certificat), seul point de construction des écrans de contrat (Mon espace, onglet Contrats de Mes documents, « Voir
     le contrat » de la zone de pointage, liens), lit le drapeau ; à faux, renvoi web `/contrat/<id>` ou
@@ -1712,6 +1713,67 @@ Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
   (sentinelle « 0 requête ») sur des contrats fictifs ; un compte TEST sans admission de recette est renvoyé vers le web
   (décision 18). Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026.
 
+### T10 — liens du lot 2 (L2-T10, 16 novembre 2026, branche `lot2/l2-t10-v3`)
+
+Aucun B9, aucun HARD STOP, aucun texte affiché nouveau (les renvois réutilisent le texte du lot 0 et « Voir sur
+jolene.app »). Choix de la tranche, à relire par la revue fraîche :
+- **Table** (`LinkRouter`, `src/App.tsx` l.323-327, l.388, l.405-407, l.440-441) : `/soignant/presences` →
+  `.presences(onglet:filtre:)` (`?tab=` et `?filtre=` bruts, l'écran décide) ; `/soignant/presences/mission/:id` →
+  `.presencesMission(id:)` ; `/soignant/mes-documents` → `.documents(onglet:)` ; alias `Navigate` à cible fixe
+  `/soignant/documents` → onglet Justificatifs et `/soignant/contrats` → onglet Contrats (query du lien non reprise, comme
+  le web) ; `/contrat/:id` → `.contrat(id:)` (changement volontaire : plus `.safari`) ; `/contrat/:id/certificat` →
+  `.contratCertificat(id:)` ; `/soignant/dpae` et `/soignant/conformite` → Safari, nommés dans la table.
+- **Présentation** : les cinq cibles (`CibleNotification.presences`, `.detailPresences`, `.documents`, `.contrat`,
+  `.certificat`) s'empilent sur l'onglet **Profil** remis à sa racine, comme les entrées de « Mon espace » (décision 24),
+  qu'elles viennent d'un lien universel, d'un tap push, du centre de notifications ou de la ligne « présences d'une
+  mission » de Revenus (qui changeait donc d'onglet, comme `.mission` vers l'Accueil). Routes **par valeur**
+  (`MonEspaceRoute`, `Jolene/Screens/Profil/MonEspaceRoute.swift`) enregistrées sur les piles de l'Accueil et du Profil ;
+  les entrées de « Mon espace » et les deux points d'entrée de l'Accueil (widget « Aller pointer », oubli de départ)
+  deviennent des liens par valeur (revue B8 de la PR #1131, m3) ; les liens internes aux écrans du lot 2 restent des
+  `NavigationLink { destination }`, toujours au-dessus d'une route par valeur que le retour à la racine retire.
+  Revue B8 n°1 de L2-T10 (m1) : la route empilée par `MainTabView.presenter` porte un jeton neuf à chaque présentation
+  (`PresentationJetonnee<MonEspaceRoute>`, `JetonsDePresentation`, JoleneCore) ; sans lui, un lien vers la route déjà à la
+  base de la pile du Profil laissait le chemin égal (écran ni relu ni remis au premier plan, certificat empilé au-dessus
+  resté affiché). La destination lie aussi l'identité de l'écran au jeton (`.id(jeton)`) : à la même position de la pile,
+  SwiftUI servait la nouvelle valeur à l'écran déjà monté, état compris (constaté en XCUITest : onglet choisi conservé).
+  Les entrées par valeur du hub et de l'Accueil empilent la route nue.
+- **Routes forcées web** : un renvoi qui doit mener à la page web ne passe plus par `LinkRouter`, qui rendrait nil depuis
+  que le chemin est natif (même motif que `PresencesRenvois.recapitulatifFinancier`, revue de T5a M3) :
+  `PresencesRenvois.presences` (coupe-circuit des présences, suivi non vérifiable), `DocumentsModel.routeRenvoiWeb`
+  (coupe-circuit des documents, journal illisible), `ContratPresentation.renvoiContrat` et `renvoiListe` (coupe-circuit
+  des contrats). `PresencesRenvois.contrat`, sans appelant depuis T4b (« Voir le contrat » natif), est retiré. Revue B8
+  n°1 (m4) : le renvoi d'un coupe-circuit garde l'onglet du lien — `PresencesRenvois.presences(onglet:aValider:)`
+  (`?tab=` aux seules valeurs exactes du web, `?filtre=a_valider` s'il était posé) et
+  `DocumentsModel.routeRenvoiWeb(onglet:)` (onglet de l'écran, celui du lien) ; le suivi non vérifiable et le journal
+  illisible gardent leurs routes sans onglet (présences) ou sur Justificatifs (documents).
+- **D-FLAGS** : `ios_natif_contrats_actif` est lu par `ContratsDestination` (`PorteContrats`, fail-open), seul point de
+  construction des écrans de contrat ; à faux, renvoi web forcé (`contrats-desactive-renvoi`, `contrats-desactive-web`).
+  Revue B8 n°1 (m3) : porte à trois états (`PorteEcranNatif`, JoleneCore) — tant que le drapeau n'est pas lu, une vue
+  neutre de chargement (`contrats-porte-lecture`, aucun texte nouveau) remplace l'écran natif, qui ne lance plus ses
+  lectures réseau avant la décision ; drapeau absent ou illisible (la passerelle rend son défaut) et passerelle absente
+  restent fail-open. `ContratsDestination.liste` perd son paramètre `filtreInitial`, sans appelant (m7).
+- **Écarts consignés** : (1) `?statut=` de la liste des contrats n'est porté par aucun lien (l'alias le perd comme le
+  web, et aucun lien du web ne pose `/soignant/mes-documents?tab=contrats&statut=`) : la consigne T9a « `/soignant/contrats?statut=`
+  → `FiltreContrat.initial` » contredisait le `Navigate` du web et n'est pas appliquée ; (2) monde démo : les missions de
+  Revenus (`demo-missions-terminees.json`) n'existent pas dans celui des présences, leur détail natif dit « introuvable »
+  en démo (à aligner par l'exporteur des fixtures, T12 ou tranche suivante) ; revue B8 n°1 (m2) : la preuve de
+  `DemoRevenusTests` porte de nouveau sur la mission de la ligne, par l'identifiant de la route présentée, exposé en
+  DEBUG et en démo seulement comme valeur d'accessibilité de `presence-detail-screen` (`MonEspaceDestination`). Choix
+  plus simple que l'alignement des fixtures, qui ajouterait une mission au monde démo des présences, partagé par les
+  XCUITest des présences, du pointage et du détail des présences (l'écart (2) reste à aligner) ; (3) un onglet `?tab=`
+  inconnu des présences retombe sur l'onglet dérivé (écart de T4a inchangé).
+- **CI** (corrigé par la revue B8 n°1 de L2-T10, M1) : `DemoLiensLot2Tests` (sept liens à froid, plus le même lien
+  reçu deux fois de m1) tourne dans l'éclat « lot3-inscription ». La première version la rangeait dans « documents »
+  sur une prémisse fausse (« ~18 min, le moins chargé du lot 2 ») : au run de base 43400770161, « documents » mesurait
+  9,7 / 18,5 / 18,1 min (iPhone / iPad portrait / iPad paysage), et l'ajout (~5,5 à 8 min) lui aurait fait dépasser les
+  20 min de la décision 22. « lot3-inscription » mesurait 4,9 / 9,0 / 8,7 min au même run ; « lot3-revenus », moins
+  chargé encore, est écarté parce qu'une autre tranche en cours le charge ; un douzième éclat dépasserait le plafond de
+  360 min du job. `-only-testing`, classes exigées par le résumé et garde `check-rpc-contracts-lot3.node.mjs` suivent ;
+  le `-skip-testing` du socle est inchangé. Le coupe-circuit des contrats reste prouvé dans `DemoContratsTests` (éclat
+  « contrats ») et la pile du Profil dans `DemoRevenusTests` (éclat « lot3-revenus »). Durées à remesurer au premier
+  run ; si « lot3-inscription » dépasse 20 min, scinder le job UI par lot (commentaire du job), pas d'éclat
+  supplémentaire.
+
 
 ## En attente de Gabrielle
 
@@ -1831,3 +1893,116 @@ n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranc
 - Le web journalise le retrait du consentement GPS sous `GPS_CONSENTEMENT_ACTIVE` / `GPS_CONSENTEMENT_RETIRE`, absents
   du CHECK `journaux_audit_action_check` : son audit échoue en silence (la trace serveur `DONNEES_PERSO_MODIFICATION`
   existe).
+
+## Gel iPhone CI — 16/11/2026
+
+Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026. Branche `fix/ios-gel-iphone-ci`, depuis
+`main`. Aucun B9, aucun HARD STOP : aucun texte juridique n'est touché, « OK » est un libellé d'interface standard.
+
+### Diagnostic (run 43889328109, `main` à `7e451e7d`, iPhone 17, iOS 26.2)
+
+- Premier test en échec : `DemoPointageTests.testPrecisionReduiteNEnvoieAucunePositionEtAfficheLEncart`. Le test saisit un
+  code dans `pointage-code-<m>` (pavé numérique ouvert), puis `appuyerSurPointer` (`DemoPointageUITestCase.swift`) fait
+  glisser la page de 0,55 à 0,45 ; `PresencesScreen` porte `.scrollDismissesKeyboard(.immediately)`. Le gel commence
+  pendant ce geste, quand le clavier se ferme.
+- Pile du fil principal, identique dans deux `sample` pris à 76 s d'écart : `_UIUpdateCycleNotifyIdle` →
+  `CA::Transaction::commit` → `CA::Render::Message::send_message` → `mach_msg2_trap`. L'app attend le serveur de rendu du
+  simulateur ; aucune fonction Jolene n'est dans la pile.
+- Le service RTI de saisie disparaît 15 s après. Le simulateur ne relance plus l'app ensuite, et les éclats suivants sont
+  coupés à 30 min sans preuve (même scénario au run 42568134868, `REVUES_LOT2.md` : « Failed to get launch progress »,
+  éclats « documents » et « contrats » arrêtés à l'installation du runner).
+- L'iPad ne fait pas ce geste.
+- Conclusion : défaut hors de l'app (simulateur, serveur de rendu). Déclencheur probable : la fermeture du pavé numérique
+  pendant un défilement.
+
+### Décision
+
+1. **Résilience de la CI** (`.github/workflows/ios-swift-ci.yml`, `scripts/mobile/ios-ci-gel-simulateur.sh`). Au début
+   de chaque éclat qui suit le socle, `relancer-si-gel <éclat>` relit l'éclat précédent : issue de l'étape
+   (`steps.<id>.outcome`), code de sortie de xcodebuild et journal. Le simulateur est redémarré (`simctl shutdown`,
+   `boot`, `bootstatus -b`) dans trois cas :
+   - l'éclat est en échec et son journal contient « main thread busy », « failed to quiesce », « Failed to get launch
+     progress » ou « exceeded execution time allowance » (casse ignorée) ;
+   - l'étape précédente est interrompue ou en échec (délai de 30 min dépassé, sans code de sortie) ;
+   - xcodebuild a été tué (code 124, 130, 137 ou 143).
+
+   Un échec d'assertion ordinaire (code 65, journal sans marque) ne redémarre rien. Un éclat vert (code 0) non plus, même
+   si son journal garde une attente absorbée.
+
+   **L'éclat gelé reste en échec** : rien n'est masqué. Le résumé xcresult exige toujours les onze éclats verts, et aucun
+   test n'est relancé. Le redémarrage est annoncé par une annotation, une ligne du résumé du job et une trace
+   `relance-simulateur-avant-<éclat>.txt` dans l'artefact. Il ne fait jamais échouer l'étape.
+2. **Instrumentation** du veilleur des éclats presences et pointage (`veiller`), en remplacement du veilleur en ligne.
+   Mêmes marques de déclenchement qu'avant, plus les trois du redémarrage. Trois passes à 60 s d'écart, chacune avec :
+   - `sample` de l'app Jolene, de backboardd et de SpringBoard du simulateur (pid lu par
+     `simctl spawn <udid> launchctl list`, sinon `pgrep` sur le chemin du runtime) ;
+   - capture `simctl io <udid> screenshot`, bornée à 30 s ;
+   - journal du simulateur des 10 dernières minutes, filtré sur backboardd, SpringBoard, Jolene, UIKit et CoreAnimation
+     (passes 1 et 3, borné à 90 s) ;
+   - copie des `.ips` de moins d'une heure, de l'hôte et du simulateur ;
+   - `vm_stat`, `sysctl vm.swapusage` et `top -l 1`.
+
+   Les fichiers `gel-<éclat>-*` vont dans l'artefact. Chaque outil est borné, son échec est consigné, jamais propagé.
+   macOS n'a pas `timeout` : le script a sa propre borne (`borne`), compatible avec bash 3.2.
+3. **Bouton « OK » des pavés sans touche Entrée** (`BoutonClavierOK`, JoleneDesign, identifiant `clavier-ok`). Il ferme le
+   clavier sans défilement et porte un seul libellé, « OK ». Il n'apparaît que sur les claviers sans touche Entrée :
+   pavé numérique, décimal ou téléphonique. La barre SwiftUI (`boutonOKClavier(_:actif:)`) est conditionnée au focus du
+   champ : les deux zones de pointage d'un même écran n'empilent jamais deux boutons. Champs concernés :
+   - `NumericCodeField` (code de pointage) ;
+   - `OTPField` (code de signature, UIKit : barre d'accessoire, même libellé, même identifiant) ;
+   - `JoleneTextField` pour les natures téléphone, code, montant, entier, NIR, SIRET et code postal (téléphone de la
+     complétion et du profil, taux minimum des filtres) ;
+   - RPPS de la complétion et du profil.
+
+   Le comportement de l'app ne change pas autrement : un défilement ferme toujours le pavé
+   (`.scrollDismissesKeyboard`). Dans les XCUITest, `fermerLePaveNumerique()` (`UITestSupport`) touche `clavier-ok`, puis
+   attend la disparition du clavier, avant tout défilement. Il exige un seul bouton, au libellé « OK ». Il est appelé
+   par :
+   - `appuyerSurPointer`, qui ne fait plus glisser la page pavé ouvert ;
+   - `saisir`, si un pavé est resté ouvert ;
+   - `testHorsLigneDesactiveLePointageSansAucunEnvoi`, avant son défilement ;
+   - `saisirCode` de `DemoSignatureContratTests` (la page du contrat porte aussi
+     `.scrollDismissesKeyboard(.immediately)`) ;
+   - `focus`, quand un pavé numérique recouvre le champ à saisir (sinon le glissement reste celui d'avant).
+
+   Texte opérationnel hors web : « OK » (`BoutonClavierOK.libelle`), non juridique, gardé par `BoutonClavierOKTests`.
+
+### Budget de temps de la CI
+
+- Le redémarrage se fait **dans** l'éclat suivant. Il est borné à 2 min (`JOLENE_RELANCE_BORNE_S`, 120 s) et mesuré à
+  16 s en local (iPhone 16, iOS 18.6). Aucune étape ni minute n'est ajoutée au plafond du job.
+- Plafond du job : 25 + 11 × 30 = 355 min sur `main`. Avec l'étape de 2 min du `Package.resolved` de `feat/ios-vague5`
+  (L3-T15, m4), on arrive à 357 min, sous les 360 min de GitHub une fois les deux branches réunies.
+- Un éclat qui suit un gel garde au moins 28 min pour ses tests. Au run 42568134868, l'éclat le plus long mesurait
+  21,9 min (« pointage » sur iPhone). Le veilleur tourne en tâche de fond pendant xcodebuild, sans délai propre.
+
+### Gardes et vérifications
+
+- `tests/node/ios-swift-ci-eclats.node.mjs` (job « Cœur » de la CI iOS) vérifie la structure du workflow : chaque éclat
+  après le socle reçoit l'issue et le code de l'éclat précédent, et le contrôle du gel précède son xcodebuild. Il vérifie
+  aussi que le veilleur des éclats presences et pointage est lancé puis arrêté, que la borne de 120 s est en place et que
+  le script figure dans les filtres de chemins.
+- Le même fichier exécute le script avec des outils simulés, sans simulateur ni réseau :
+  - chaque marque, une étape interrompue ou un xcodebuild tué redémarre le simulateur ;
+  - un éclat vert, un échec ordinaire ou un éclat sauté ne redémarre rien ;
+  - un redémarrage bloqué est coupé à sa borne ;
+  - le veilleur produit ses relevés, et un veilleur dont chaque outil échoue rend 0.
+- `BoutonClavierOKTests` (JoleneDesignTests, niveau 1) vérifie le libellé, l'identifiant et les claviers concernés.
+  Il vérifie aussi la nature de saisie de `JoleneTextField`, la barre UIKit, et le champ OTP rendu, dont « OK » rend le
+  focus.
+- XCUITest : `DemoPointageTests`, `DemoPointageEtatsTests` et `DemoSignatureContratTests`, au travers de
+  `fermerLePaveNumerique()`. Ils ne couvrent ni le téléphone, ni le taux, ni le RPPS : aucun XCUITest ne saisit dans
+  ces champs. Pour eux, la preuve reste de niveau 1 (natures de saisie).
+- Vérifications locales du 16/11/2026 (Xcode 16.4, simulateur dédié iPhone 16, iOS 18.6, portrait) :
+  - `ios-swift-ci-eclats` : 14/14 ;
+  - « Garde de livraison mobile » de `validate-pr.yml` : 245/245 ;
+  - `JoleneDesignTests` : 83/83, dont `BoutonClavierOKTests` 5/5 ;
+  - `DemoPointageTests` : 10/10 en 252 s, dont `testPrecisionReduiteNEnvoieAucunePositionEtAfficheLEncart` ;
+  - `DemoPointageEtatsTests` et `DemoSignatureContratTests` : 7/7 en 236 s ;
+  - script sur un vrai simulateur, avec le bash 3.2 de macOS : relevés du veilleur produits, redémarrage en 16 s.
+- Fusion simulée avec `origin/feat/ios-vague5` (`git merge-tree`) : aucun conflit. Sur l'arbre fusionné, les gardes
+  restent vertes (`ios-swift-ci-eclats` 15/15, garde de livraison mobile) et la somme des délais d'étapes est de
+  357 min.
+- Reste à prouver en CI : un run complet de la branche sur les trois formats, dont l'iPhone 17 en iOS 26.2. Aucun
+  workflow n'est déclenché par la tranche. Si un gel se reproduit malgré le bouton, les relevés de backboardd et de
+  SpringBoard serviront à instruire un rapport du défaut du simulateur.

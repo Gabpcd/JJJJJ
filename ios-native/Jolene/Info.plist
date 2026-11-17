@@ -51,6 +51,8 @@
 	<string>$(JOLENE_SUPABASE_URL)</string>
 	<key>JoleneSupabasePublishableKey</key>
 	<string>$(JOLENE_SUPABASE_PUBLISHABLE_KEY)</string>
+	<key>JoleneSentryDSN</key>
+	<string>$(JOLENE_SENTRY_DSN)</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Jolene utilise votre position, à votre demande, pour valider un pointage ou localiser votre profil ou votre établissement.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

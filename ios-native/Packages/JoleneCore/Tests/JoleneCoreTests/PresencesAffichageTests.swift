@@ -162,11 +162,14 @@ final class PresencesAffichageTests: XCTestCase {
 
     // MARK: - Renvois web
 
+    /// L2-T10 : le renvoi du contrat (`PresencesRenvois.contrat`) est retiré — « Voir le contrat » ouvre le contrat natif
+    /// et `/contrat/:id` est une route native (le routeur ne rend plus de renvoi web) ; la page des présences est une
+    /// route forcée web (`LinksRouterLot2Tests.testRenvoisWebForcesSurviventAuRoutageNatif`).
     func testRenvoisWebResolusParLeRouteurSansURLEnDur() throws {
-        let contrat = try XCTUnwrap(PresencesRenvois.contrat(id: "c-1"))
-        XCTAssertEqual(contrat.externalURL?.absoluteString, "https://jolene.app/contrat/c-1")
-        XCTAssertFalse(contrat.isNative, "contrat natif à T9a : renvoi web d'ici là")
+        XCTAssertNil(AccueilPresentation.renvoiWeb("/contrat/c-1"), "contrat natif depuis L2-T10 : aucun renvoi web résolu")
         XCTAssertEqual(PresencesRenvois.litiges?.externalURL?.absoluteString, "https://jolene.app/soignant/litiges")
+        XCTAssertEqual(PresencesRenvois.presences?.externalURL?.absoluteString, "https://jolene.app/soignant/presences")
+        XCTAssertNil(AccueilPresentation.renvoiWeb("/soignant/presences"), "page native depuis L2-T10 : renvoi forcé")
     }
 
     /// Récapitulatif financier du détail des présences (décision 11 : non porté, renvoi web jusqu'au lot 3) : route

@@ -48,8 +48,7 @@ final class DemoConsultationTests: JoleneUITestCase {
         if app.keyboards.firstMatch.exists, !visible(submit) {
             scrollTo(submit, in: element("login-scroll"))
         }
-        submit.tap()
-        require("La session est prête : la barre d'onglets est affichée", timeout: 30) {
+        toucherSeConnecter(submit, "La session est prête : la barre d'onglets est affichée") {
             self.tabBarExists && self.containerVisible(self.element("accueil-screen"))
         }
         XCTAssertFalse(element("login-error").exists, "Aucune erreur de connexion en démo")

@@ -4,7 +4,7 @@ import Combine
 /// Modèle de l'onglet Revenus (lot 3, T12, B9 ; lecture seule), port de l'aperçu `MesGainsApercuContent`
 /// (`src/pages/MesGains.tsx` l.64-157) restreint au périmètre du lot 3 (D4) : totaux serveur, paiement rapide, missions
 /// terminées avec leur montant et l'état de la dernière déclaration. Aucun KPI calculé côté client, aucune action de
-/// paiement (T13, T14a, T14b).
+/// paiement ici : les paiements déclarés ont leur modèle (`PaiementsDeclaresModel`, T13) ; T14a et T14b à venir.
 ///
 /// - Trois sections indépendantes, lues en parallèle par `gateways.revenus` de l'epoch de la session, chacune bornée à
 ///   `SessionController.resolutionTimeout`, avec son état : l'échec de l'une n'efface jamais les autres (le web : trois
@@ -160,6 +160,13 @@ public final class RevenusModel: ObservableObject {
 
     /// « Réessayer » du bandeau d'erreur : la page demandée en dernier.
     public func reessayer() async {
+        await lireMissions(page: pageDemandee)
+    }
+
+    /// Lot 3, T13 : après une confirmation ou une contestation (`PaiementsDeclaresModel.miseAJour`), relit la page
+    /// demandée en dernier, comme `onUpdate` → `reloadKey` du web (`MesGains.tsx` l.383, effet l.86-157 dépendant de
+    /// `page` et `reloadKey`) : l'état de toutes les lignes affichées suit alors les déclarations relues (m2).
+    public func relireApresDeclaration() async {
         await lireMissions(page: pageDemandee)
     }
 

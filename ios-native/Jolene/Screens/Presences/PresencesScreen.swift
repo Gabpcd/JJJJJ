@@ -21,9 +21,10 @@ import JoleneDesign
 ///
 /// Coupe-circuit D-FLAGS `ios_natif_presences_actif` (seconde revue fraîche de T4b, m3 ; fail-open, comme
 /// `ios_natif_documents_actif` dans `MesDocumentsScreen`) : lu à l'apparition ; à faux, la page entière (onglets et zones de
-/// pointage) devient un renvoi web `/soignant/presences` (`presences-desactive-renvoi`, bouton `presences-desactive-web`
-/// seulement avec le présentateur des renvois web de T10 : aucun bouton sans effet). La ligne du consentement du Profil
-/// reste native (retrait promis par le texte de consentement, correction 15).
+/// pointage) devient un renvoi web `/soignant/presences`, avec l'onglet et le filtre du lien (`?tab=`, `?filtre=a_valider`,
+/// revue B8 n°1 de L2-T10, m4 ; `presences-desactive-renvoi`, bouton `presences-desactive-web` seulement avec le
+/// présentateur des renvois web de T10 : aucun bouton sans effet). La ligne du consentement du Profil reste native
+/// (retrait promis par le texte de consentement, correction 15).
 struct PresencesScreen: View {
     @StateObject private var model: PresencesModel
     @StateObject private var consentement: ConsentementGpsModel
@@ -63,12 +64,14 @@ struct PresencesScreen: View {
         return await gateways.flags.ecranActif(.presences)
     }
 
-    /// Renvoi web de la page (drapeau à faux) : texte du lot 0, bouton seulement si un présentateur est injecté.
+    /// Renvoi web de la page (drapeau à faux) : texte du lot 0, bouton seulement si un présentateur est injecté ; la page
+    /// web s'ouvre sur l'onglet et le filtre du lien (m4).
     private var renvoiDesactive: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: JoleneSpacing.md) {
                 InlineNotice(LibellesPresences.Liste.ecranNonDisponible, tone: .info, identifier: "presences-desactive-renvoi")
-                if let presentateurRenvoiWeb, let route = PresencesRenvois.presences {
+                if let presentateurRenvoiWeb,
+                   let route = PresencesRenvois.presences(onglet: model.parametreOnglet, aValider: model.aValider) {
                     JoleneButton(LibellesPresences.Pointage.voirSurJolene, style: .secondary) { presentateurRenvoiWeb.presenter(route) }
                         .accessibilityIdentifier("presences-desactive-web")
                 }
@@ -114,7 +117,8 @@ struct PresencesScreen: View {
             .frame(maxWidth: .infinity)
         }
         .refreshable { await model.load() }
-        // T4b : le pavé numérique n'a pas de touche Entrée ; un défilement le ferme et découvre le bouton de pointage.
+        // T4b : le pavé numérique n'a pas de touche Entrée ; un défilement le ferme et découvre le bouton de pointage. Le
+        // bouton « OK » du pavé (`BoutonClavierOK`, `clavier-ok`) le ferme sans défilement (« Gel iPhone CI — 16/11/2026 »).
         .scrollDismissesKeyboard(.immediately)
         .accessibilityIdentifier("presences-screen")
         .background(JoleneColor.lavender.ignoresSafeArea())

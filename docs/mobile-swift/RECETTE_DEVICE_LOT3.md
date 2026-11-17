@@ -89,7 +89,7 @@ mémorisé pour jolene.app ; lien non réécrit par un traceur SMTP ; build appa
 
 | Étape | Attendu | Observé |
 |---|---|---|
-| Lancement avec `-JOLENE_SENTRY_CRASH_TEST` (DEBUG) puis relance | événement reçu dans `jolene-ios`, release `app.jolene@2.0.0+25`, environnement `staging` | — |
+| Lancement **sans débogueur** avec `-JOLENE_SENTRY_CRASH_TEST` (DEBUG, DSN passé à `xcodebuild`, jamais commité ; `xcrun simctl launch` ou `xcrun devicectl device process launch`, `SENTRY_IOS.md` §6), crash deux secondes après le démarrage, puis relance depuis l'écran d'accueil | événement reçu dans `jolene-ios`, release `app.jolene@2.0.0+25`, environnement `staging` | — |
 | Contenu de l'événement | aucune PII : ni email, ni jeton, ni `token_hash`, ni IBAN, ni capture d'écran, ni breadcrumb réseau | — |
 
 ## 6. Profil, compte et thème sombre

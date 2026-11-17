@@ -274,7 +274,9 @@ tranches qui la mettent en œuvre (§3 du blueprint).
 - **XCUITest « contrat à signer » (m6)** : `DemoPushTests.testTapContratASignerVersLeWebDuContrat`
   (`CONTRAT_A_SIGNER:contrat_id=demo-contrat-001` → `safari https://jolene.app/contrat/demo-contrat-001`, renvoi web
   tant que l'écran contrats du lot 2 n'est pas intégré). Le libellé `push-tap-cible` n'est exposé qu'en build DEBUG
-  **et** en démo (m8).
+  **et** en démo (m8). **Basculé par L2-T10** (liens du lot 2, `LOT2_PLAN.md` §3 T10 ; revue B8 de la PR #1131, m7) :
+  `/contrat/:id` est natif, le test devient `DemoPushTests.testTapContratASignerOuvreLeContratNatif` (`contrat-screen`
+  sur l'onglet Profil, `deeplink-route` = `contrat demo-contrat-001`).
 - **Pré-prompt** : `MainTabView` (surcouche) ; compteur `jolene.sessionCount` et marque `jolene.pushPrePrompt` en
   `UserDefaults` (staging/production), en mémoire vive en démo (chaque lancement démo est une 1re session) ;
   `-JOLENE_SESSION_COUNT <n>` (DEBUG) impose le numéro de session sans persistance — `StagingConnexionTests` le passe
@@ -1457,7 +1459,8 @@ faux au regard du web (M1) ou ajouté.
   `revenus-mission-ouvrir-<id>`), nommé comme le `aria-label` du web (« Voir mission … », `MesGains.tsx` l.703 ; le
   web : `role="button"`, `tabIndex`, Entrée/Espace, l.701-706) : atteignable par VoiceOver, le Contrôle vocal et le
   clavier. L'action nommée posée sur le conteneur `contain` (jamais focalisé) est retirée ; le tap de la ligne et les
-  identifiants internes sont inchangés. XCUITest : `testMissionOuvreSesPresencesSurLeWeb` touche aussi le bouton.
+  identifiants internes sont inchangés. XCUITest : `testMissionOuvreSesPresencesSurLeWeb` touche aussi le bouton
+  (renommé `testMissionOuvreLeDetailNatifDeSesPresences` par L2-T10 : le détail des présences d'une mission est natif).
   Aucun texte affiché nouveau (libellé vocalisé = `aria-label` web).
 - **m6** : `SuiviVersementsConnect` consigné (écart 9, T14a) et dans `PARITE_SOIGNANT.md`.
 - **m7 — sources.** `PageStripeConnect.tsx` l.104 → l.106 (et conditions d'affichage citées) ; « web l.92 » → l.93 ;
@@ -1597,6 +1600,205 @@ sans changer aucune règle ni aucun texte affiché :
   correctifs ci-dessus ; corrections proposées dans `REVUES_LOT3.md` (section d'intégration de la vague 4), à
   livrer avec une nouvelle recette des trois formats avant tout merge du lot.
 
+## T13 — paiements déclarés : confirmer, contester (branche `lot3/l3-t13-v3`, 16/11/2026 ; B9, jamais mergée sans go)
+
+- **Livré.** Section « Paiements à confirmer » de l'onglet Revenus (`Jolene/Screens/Revenus/PaiementsDeclaresSection.swift`,
+  `revenus-paiements-declares`), port de `src/components/BandeauPaiementDeclare.tsx`, placée au-dessus des paiements
+  rapides (consigne de T12, ordre du web `MesGains.tsx` l.382-427). Cœur : `Revenus/PaiementsDeclares.swift` (textes,
+  décodeurs des colonnes l.97, l.122, l.132, l.137, assemblage, règle de relecture `PaiementsDeclaresRelecture`,
+  présentation de la carte), `Revenus/PaiementsDeclaresModel.swift` ; démo `Demo/DemoPaiementsGateway.swift` (serveur
+  simulé, fixture `demo-paiements-declares.json`, variante `JOLENE_DEMO_PAIEMENTS=refus`), relu aussi par l'onglet
+  (`DemoRevenusGateway(paiementsDeclares:)`) ; Supabase `Revenus/SupabasePaiementsGateway.swift`. RPC passées en
+  `consommee` : `fn_confirmer_paiement_soignant`, `fn_contester_paiement_soignant`.
+- **Verrou levé (TJ7).** B3 (#1118) est sur la base : « Contester » est ouvert. Contrat vérifié sur la migration
+  `20261102205808_contestation_paiement_soignant.sql` et sur le dump `supabase/schema/public.sql` (l.25741-25839, corps
+  identiques ; huit `error_code` ; GRANT `authenticated` l.82235) et par la garde `check-rpc-contracts-lot3.node.mjs`.
+  **Définition live relue : condition de TJ7 levée** (revue fraîche B8 n°1, m7). La tranche n'avait aucun accès au
+  backend ; le coordinateur a relu la production en lecture seule le 16/11/2026 (aucune écriture, aucun appel depuis la
+  tranche) :
+  - `fn_contester_paiement_soignant(uuid,text)` : `md5(prosrc)` `368f41ca6e0157cd48ebbf6a638cecae`, `SECURITY DEFINER`,
+    `search_path=public` ; `EXECUTE` refusé à `anon`, accordé à `authenticated` et `service_role` ;
+  - `fn_confirmer_paiement_soignant(uuid)` : `md5(prosrc)` `b4483c528bfcbecb2fc84f161a93b84e`, `SECURITY DEFINER`,
+    `search_path=public, pg_temp` ; mêmes droits ;
+  - migration `20261102205808` (B3) inscrite au registre `supabase_migrations.schema_migrations` ;
+  - `notifications_type_check` : `md5` `9abaa9884a7cba5a880244fb4a877d8c`, avec `SYSTEM` (notification à
+    l'administrateur, dump l.25830-25835) et `LITIGE_OUVERT` (établissement, `trg_notifier_creation_litige`) ;
+  - index `uq_litige_mission_type_ouvert_legacy` identique au dump (l.75346) ;
+  - triggers `BEFORE INSERT` sur `litiges` : `dec_litige_48h` et `trg_litige_mapping_categorie`, et eux seuls ;
+  - inventaire `SECURITY DEFINER` conforme.
+  Conforme à la fiche : « Contester » reste ouvert (TJ7). Une dérive ultérieure de la définition live referme
+  « Contester » sans texte nouveau (TJ7) ; la garde `check-rpc-contracts-lot3.node.mjs` suit le dump, pas la production.
+- **Règles.** Une seule mutation à la fois (`enCours`, double tap sans effet, toutes les actions désactivées jusqu'à la
+  relecture) ; « Paiement confirmé ✅ » / « Contestation envoyée » seulement après relecture de la ligne
+  (`CONFIRME` + `confirme_par_soignant`, `CONTESTE` + `conteste`), sinon « Erreur lors du traitement » ; refus serveur
+  `error` verbatim (dont « Paiement déjà confirmé », « Un litige de ce type est déjà ouvert pour cette mission. ») ;
+  23505 non restituée par B3 → `SupabaseErrorMapping` (repli du web), jamais un succès ; délai dépassé → message et
+  relecture, jamais un renvoi ; liste relue après toute issue (aucun retrait local d'office), puis état des missions relu
+  (`relireApresDeclaration`, `onUpdate` → `reloadKey` du web) ; motif non blanc obligatoire, borné à 500 scalaires
+  Unicode, envoyé tel que saisi ; repli web `'Contesté par le soignant'` jamais envoyé. Ligne `litiges` non relue par
+  l'app : la preuve d'une contestation est `success:true` de B3 + relecture `CONTESTE` (revue fraîche B8 n°1, m1). B3
+  insère le litige dans le même sous-bloc que l'UPDATE `CONTESTE` (dump l.25791-25824) et ne répond `success` qu'avec
+  son `litige_id` (l.25837) : le gateway Supabase exige `litige_id` non vide, sinon erreur de contrat, jamais un succès
+  (`SupabasePaiementsGatewayTests.testSuccesSansLitigeIdEstUneErreurDeContratMemeAvecRelectureCONTESTE`). Une ligne
+  relue `CONTESTE` seule ne prouve pas le litige : ce statut s'écrit aussi sans litige de B3 (UPDATE direct du soignant
+  ou de l'établissement sous `pol_paie_soig_update`, l.79489, que `fn_protect_paiement_soignant` admet, l.50607-50622 ;
+  contestation de facture par `fn_ouvrir_litige_rate_limited`, l.46765). Relecture `litiges` réservée à la preuve
+  STAGING (T16).
+- **Routes.** `DestinationLien.ecranNatifLivre(.revenus(section: .paiementsAConfirmer))` passe à `true` ;
+  `CibleNotification.revenus(.paiementsAConfirmer)` présentable ; `MainTabView.presenter` sélectionne Revenus et fait
+  défiler jusqu'à la section (`sectionRevenus`, ancre `revenus-ancre-paiements-declares`). Tap push `PAIEMENT_RECU`
+  (correction 15, cas reporté de T5) : section native. `PAIEMENT_RECLAME` y mène aussi (revue fraîche B8 n°1, m3) :
+  même chemin `/soignant/mes-gains?tab=paiements` pour un soignant (`PushRouting.path`, `case "PAIEMENT_RECU",
+  "PAIEMENT_RECLAME"`, port de `navigationPathForEvent`, `src/lib/pushNative.ts`), donc même section native. Tests de
+  routage ajustés : les 32 vecteurs push de la famille `?tab=paiements` (vecteur golden `push-routing`, 16
+  `PAIEMENT_RECU` + 16 `PAIEMENT_RECLAME`) passent du renvoi web au natif : 493 natifs, 397 renvois.
+- **Textes (HARD STOP n°4, délégué, TJ7/TJ8).** Verbatim du web, épinglés à leur ligne
+  (`PaiementsDeclaresTests.testChaqueTexteRepriseDuWebEstVerbatimASaLigne`) : « Motif de contestation : » l.51,
+  « Envoyer la contestation » l.62, « Annuler » l.64, « Confirmer la réception » l.397, « Contester » l.407, « Paiement
+  confirmé ✅ » et « Contestation envoyée » l.195, « Erreur lors du traitement » l.200, « Paiements à confirmer
+  indisponibles » l.208, « Impossible de charger les paiements à confirmer. » l.170, « Réessayer » l.211,
+  « Établissement » l.161, « Mission : » l.264, « Touchez pour voir le détail · Confirmez ou contestez » l.268, libellés
+  du détail l.282-374 et méthodes l.71-77. Vouvoyés (non juridiques) : l.55 « Décrivez pourquoi vous contestez ce
+  paiement... » (TJ7, qui le nomme ; décision 9 du lot 1) ; l.259 « déclare vous avoir payé » (décision 9 du lot 1,
+  TJ8 : texte non juridique, vouvoiement ; TJ7 ne nomme que l.55 ; revue fraîche B8 n°1, m2). Refus du serveur simulé
+  en démo : textes du dump, verbatim. **Aucun texte nouveau, aucun texte juridique** ; aucune mention de la portée d'une
+  confirmation ou d'une contestation (garde `testAucunTexteJuridiqueAjoute`). Aucune décision juridique n'a été
+  nécessaire.
+- **Écarts au web (non juridiques, consignés).**
+  1. Refus serveur affiché verbatim (`error`) là où le web affiche toujours « Erreur lors du traitement » (l.199-200)
+     (TJ7) ; erreur de lecture : message de `JoleneError` (jamais `error.message` brut, l.170 ; PRINCIPES §3).
+  2. Succès après relecture et liste relue ; le web annonce le succès dès la réponse et retire la carte localement
+     (l.195-196).
+  3. Une mutation à la fois pour toute la section ; le web désactive seulement la carte en cours (`processing`, l.392).
+  4. Motif borné à 500 scalaires Unicode (borne du serveur, `char_length`) ; le web à 500 unités UTF-16
+     (`maxLength`, l.58).
+  5. Heures des présences à l'heure de Paris (le web : heure locale de l'appareil, identique en France) ; éléments
+     d'une ligne de présence séparés par « · » (le web : `span` en ligne).
+  6. L'état déplié n'est pas vocalisé (le web : `aria-expanded`, l.253) : il faudrait un texte nouveau ; le contenu
+     déplié est lu dans l'ordre.
+  7. Défilement de l'onglet refermant le clavier (`scrollDismissesKeyboard(.immediately)`) : le motif est la seule
+     saisie de l'onglet.
+  8. « Déclarations de salaire par mission » et « Voir les paiements à confirmer » (`MesGains.tsx` l.386-423) restent non
+     portés (écart 1 de T12).
+- **CI UI.** `DemoPaiementsTests` (4 tests) rangé dans l'éclat `lot3-revenus` (domaine T12-T14b), sauté par le socle ;
+  aucun nouvel éclat (onze au plus).
+
+### T13 — corrections de la revue fraîche B8 n°1 (verdict CLÔTURABLE, 0 bloquant, 0 majeur, 7 mineurs ; 16/11/2026)
+
+m1 (preuve de la contestation), m2 (source du vouvoiement de l.259), m3 (`PAIEMENT_RECLAME`) et m7 (définition live)
+sont reportés dans les puces ci-dessus. Les autres :
+
+- **m4 — déclaration démo admise par le serveur.** `demo-paiement-004` était un `DECLARE` sans facture sur la mission
+  libérale `demo-terminee-002`, ligne que le serveur refuse depuis `20261001122318`
+  (`trg_paiement_liberal_facture` : `LIBERAL_FACTURE_REQUISE`). Option retenue : **lier une facture cohérente**
+  (`demo-facture-honoraires-002`, `FACTURE` `EMISE` de la même mission, des mêmes parties, 256 € TTC = montant
+  déclaré ; `montant_du_reference` 256 et `source_montant_du` `FACTURE_HONORAIRES`, valeurs que pose le trigger),
+  exportée dans `demo-missions-terminees.json` (`factures_honoraires`, non décodée par l'app : factures en renvoi web,
+  D4). L'option « mission salariée » est écartée : aucune mission salariée de la démo ne peut porter une seconde
+  déclaration (missions 1 et 4 : `DECLARE` ou `CONFIRME` déjà présents, « Paiement déjà déclaré pour cette mission »,
+  `fn_declarer_paiement_soignant_internal_20260801` ; mission 3 : `CONTRAT_NON_FIGE`), et une mission ajoutée
+  changerait l'onglet (T12). `export-demo-fixtures.mjs` vérifie désormais chaque déclaration démo contre ces règles
+  (`verifierDeclarationsDemo`, l'export échoue sinon ; vérifié sur l'ancienne ligne : `LIBERAL_FACTURE_REQUISE`).
+  Affichage inchangé : `demo-paiements-declares.json` identique (colonnes de l.97), mission 2 toujours « Paiement suivi
+  dans Factures » (T12, régime libéral).
+- **m5 — en-tête de la carte d'une seule source.** `CartePaiementDeclare` expose `prefixe` (« 💰 {nom} déclare vous
+  avoir payé » et le séparateur `{' '}` de l.259) et `montant` ; `titre` (libellé d'accessibilité) est leur
+  concaténation ; la vue rend `Text(verbatim: prefixe) + Text(verbatim: montant)` en couleur, sans recomposer la chaîne.
+- **m6 — défilement prouvé sur iPhone.** `DemoPaiementsTests.testTapPushPaiementRecuOuvreLesPaiementsDeclares` exige
+  en plus, sur iPhone, que l'en-tête de l'onglet (`revenus-sous-titre`) soit sorti du cadre utile (au-dessus du bas des
+  barres de navigation) : la section, déjà proche du haut, était visible même sans défilement. Sur iPad, l'assertion
+  reste la visibilité de la première carte.
+
+## T15 — Sentry Cocoa (branche `lot3/l3-t15-v3`, 16/11/2026)
+
+Mise en œuvre de D21. Mode d'emploi, réglages et recette : `docs/mobile-swift/SENTRY_IOS.md`. T15 n'est pas B9
+(D18) : la tranche ne touche ni paiement, ni authentification, ni RLS. Le DSN, le projet `jolene-ios` et la lecture
+de l'événement restent à Gabrielle (§6.5).
+
+- **Version** : `sentry-cocoa` **9.32.0** (`exactVersion`, révision `4e1e4ba9`). C'est la dernière version publiée
+  depuis au moins deux semaines (29/10/2026). Son binaire est compilé avec Swift 6.1.2, donc lisible par Xcode 16.4 en
+  local et par Xcode 26.4.1 en CI. Elle corrige le démarrage depuis `App.init`, qui pouvait produire de faux app hangs
+  (#8988). Produit `Sentry` (xcframework statique), importé par la cible app seule.
+- **Écart au blueprint, plus strict** : `enableNetworkTracking = false`, `tracePropagationTargets = []` et relecture
+  de session à 0. Le SDK n'instrumente donc pas les requêtes et n'envoie aucun en-tête `sentry-trace` ni `baggage` à
+  Supabase, à `api-adresse.data.gouv.fr` ou à Stripe.
+- **Démarrage** : jamais en démo, jamais sans DSN `https` bien formé, jamais pour un environnement refusé par la garde
+  ni sans release lisible dans le bundle. Dans ces cas, aucun adaptateur n'est construit. La lecture de
+  l'environnement est celle du conteneur (`AppContainer.environnementDeLancement`, extrait sans changement de
+  comportement), faite **avant** lui dans `JoleneApp.init`.
+- **Session** : identifiant seul, posé au `.ready` d'une nouvelle identité ; une revalidation ne le repose pas. Un
+  espace bloqué ne le pose pas (le blueprint dit « sur `.ready` »). (Corrigé, revue B8 n°1, M2.) Il n'existe que pendant
+  un espace prêt : retiré par toute publication de `.blocked` ou de `.signedOut`, fin transitoire comprise, et avant
+  `signIn` et `ouvrirIdentiteInscription` (section suivante).
+- **Nettoyage** (`CrashScrubber`) : il va au-delà de la liste du blueprint. Sont aussi masqués `refresh_token` (§2.6),
+  les jetons `Bearer` et les JWT, et les formes encodées et JSON. Sont retirés le nom de l'appareil, la requête et le
+  nom du serveur ; l'utilisateur est réduit à son identifiant. Les fils d'Ariane `http` sont rejetés.
+- **Crash de test** : `-JOLENE_SENTRY_CRASH_TEST`, compilé en DEBUG seulement. Il ne s'exécute que si Sentry a
+  démarré, une fois, deux secondes après le lancement, et doit être lancé sans débogueur.
+- **Livraison** : `ios-native-testflight.yml` lit le secret **facultatif** `SENTRY_DSN_IOS`, dans l'étape d'archive
+  seulement (`JOLENE_SENTRY_DSN`). Absent, le build part sans Sentry, sans échec. Les xcconfig versionnés laissent
+  `JOLENE_SENTRY_DSN` vide (gardes Swift et node).
+- **Manifeste de confidentialité** : celui de Sentry est embarqué
+  (`Frameworks/Sentry.framework/PrivacyInfo.xcprivacy`). Ses déclarations sont déjà couvertes par celui de l'app (lot
+  0), qui n'est pas modifié.
+- **Coût CI** : SPM télécharge les sept xcframeworks du paquet (environ 3,3 Go). Le cache `spm-xcodebuild-…` les
+  absorbe après le premier run de chaque clé `Package.resolved`.
+
+### T15 — corrections de la revue fraîche B8 n°1 (verdict A_CORRIGER, 16/11/2026)
+
+Tests d'abord : commit `test(ios-native): L3-T15 — tests de la revue B8 n°1 (rouges)`, rouge sur `9bdccbc9` (preuves :
+`REVUES_LOT3.md`, section L3-T15). Mode d'emploi mis à jour : `SENTRY_IOS.md` §1 à §7 et §9.
+
+- **M1 — mécanisme de l'exception.** Sentry 9.32.0 range les `crash_info_messages` dans `exceptions[].mechanism.data`
+  (`SentryCrashReportConverter.m` l.501-511, révision `4e1e4ba9`) : il s'agit des messages du runtime Swift, dont le texte
+  d'un `fatalError`. Ce dictionnaire passe désormais par `CrashScrubber.dictionnaire`, et `mechanism.desc` par
+  `CrashScrubber.texte`. Le type de l'exception et `event.logger` sont nettoyés eux aussi.
+- **M2 — identifiant d'un autre compte.** Il ne reste jamais posé hors d'un espace prêt. `.blocked` le retire (le
+  suivi `identitePubliee` est inchangé), `.signedOut` aussi, quelle qu'en soit la cause, et `signIn` comme
+  `ouvrirIdentiteInscription` le retirent avant d'ouvrir une identité. C'est le même point d'appel que
+  `finIdentiteWeb`. **Au-delà de la proposition du relecteur** : la fin transitoire le retire aussi. Depuis un espace
+  prêt, le contrôleur ne publie une fin transitoire qu'avec une autre identité (`.session(B)` dont le profil est
+  illisible, connexion), car une revalidation de la même identité est silencieuse et garde `.ready`. « Le conserver sur
+  une fin transitoire » aurait donc attribué à A les crashs survenus pendant la session de B. La revalidation hors
+  ligne de A garde l'espace prêt, et donc l'identifiant (test inchangé).
+- **m1 — coût borné.** Les expressions sont compilées une fois (`static let regles`, repli fermé si l'une ne compile pas).
+  Un texte est tronqué au-delà de 8 192 caractères (`…[tronqué]`). L'adresse e-mail est cherchée à partir de son
+  arobase, avec une partie locale lue à rebours sur 64 caractères au plus. Les noms sensibles commencent par leur
+  initiale (les préfixes `refresh_`, `provider_` restent hors de la correspondance), ce qui laisse le moteur sauter les
+  autres positions. Les bornes sont des classes ASCII et non `\b`, cinq fois plus lent dès qu'un texte n'est plus ASCII.
+  Seuil du test : 100 ms pour 8 000 caractères. On garde le plus court de trois passages, ce qui écarte la flakiness
+  d'une préemption passagère. Plus d'un ordre de grandeur sépare le seuil des mesures, faites en Debug sur MacBook :
+  de 0,7 à 8,6 ms en `swift test` macOS, de 1,1 à 3,3 ms sur le simulateur iPhone 16 (iOS 18.6).
+- **m2 — faux négatifs.** Sont désormais couverts : la famille des jetons par suffixe (`provider_refresh_token`,
+  `provider_token`, `token`, camelCase `refreshToken`, `tokenHash`, `accessToken`), `password`, `mot_de_passe`, le JSON
+  échappé, le double encodage (`%253F`, `%253D`, `%2540`), les descriptions Swift (`Optional("…")` compris), toute valeur
+  d'une clé sensible (tableau, dictionnaire, nombre), et l'IBAN à espaces insécables (U+00A0, U+202F) ou à tirets.
+  **Seule exception** : un nombre sous la clé exacte `code` est conservé, car c'est un code d'erreur NSError ou HTTP
+  (test existant). Les identifiants techniques restent lisibles (`error_code`, `status_code`, `barcode`, `token_type`,
+  `codeEtablissement`), comme les UUID qui commencent par deux lettres et deux chiffres : l'ancienne règle IBAN masquait
+  déjà la fin d'un tel UUID, et ce masquage excessif est corrigé.
+- **m3 — sélection des champs, garde statique plutôt que déplacement.** L'app n'a pas de cible de tests unitaires
+  (`project.yml` : `Jolene` et `JoleneUITests` seulement). Déplacer la sélection dans JoleneCore aurait demandé un modèle
+  miroir de cinq types Sentry, et laissé la correspondance entre ce modèle et Sentry, dans la cible app, sans test : le
+  défaut M1 aurait pu se reproduire là. La garde statique (`CrashReportingTests`) est plus simple et couvre ce risque :
+  - elle recense **toutes** les propriétés publiques d'`Event`, `SentryMessage`, `Exception`, `Mechanism` et
+    `Breadcrumb` de 9.32.0, chacune traitée (ligne exacte attendue) ou conservée (raison écrite) ;
+  - elle refuse toute affectation non recensée dans `CrashReporting.swift` ;
+  - elle rougit à toute montée de version de Sentry tant que le recensement n'est pas refait.
+  Chaque ligne traitée applique une règle pure de `CrashScrubber`, elle-même testée.
+- **m4 — `Package.resolved` figé en CI.** Une étape suit `build-for-testing`, qui est la résolution SPM : elle lance
+  `git diff --exit-code` sur `ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`. Son
+  délai est de 2 min, hors éclats ; le plafond du job reste tenu (25 + 2 + 330 = 357 ≤ 360 min) et les délais d'éclats ne
+  changent pas. La garde node est dans `ios-swift-ci-eclats.node.mjs`. **Non prouvé localement** : Xcode 26.4.1 pourrait
+  réécrire `originHash` autrement qu'Xcode 16.4. Le premier run CI le dira, et le remède est écrit dans le message
+  d'erreur.
+- **m5 — DSN local en ligne de commande seulement**, jamais dans un fichier : `Staging.xcconfig` est versionnée.
+  `SENTRY_IOS.md` §5 et §6 donnent la commande `xcodebuild` ; une garde node interdit au document de proposer un
+  xcconfig.
+- **m6 — DSN à mot de passe refusé** (`composants.password != nil`), avec son test. L'hôte n'est **pas** restreint à une
+  région : Gabrielle confirme d'abord la région de données de l'organisation `jolene-z6`, la région UE étant
+  recommandée pour des données de santé (§6.5, `SENTRY_IOS.md` §5 et §7). La restriction suivra.
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -1611,7 +1813,9 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   `lot3/l3-t8-v2` poussée (section T8 ci-dessus), décisions juridiques déléguées T8-J1 à T8-J5.
 - **T12** — revenus en lecture (paiements, escrow) ; branche `lot3/l3-t12-v2` poussée (section T12 ci-dessus), lecture
   seule, aucune action de paiement.
-- **T13** — paiements déclarés (confirmation ; contestation après B3).
+- **T13** — paiements déclarés (confirmation ; contestation ouverte après B3) ; branche `lot3/l3-t13-v3` poussée
+  (section T13 ci-dessus), revue fraîche B8 n°1 CLÔTURABLE (mineurs traités), définitions live relues le 16/11/2026 ;
+  go humain requis avant merge.
 - **T14a** — Stripe Connect.
 - **T14b** — IBAN (données bancaires).
 - **T16** — dispatch STAGING (secrets STAGING, suppression des comptes jetables, bascule transactionnelle de la
@@ -2259,7 +2463,12 @@ bloquent ni les merges du lot 3 ni la recette interne (build Debug installé par
   « secure password change » ; validation de la reformulation du critère d'inscription (« PKCE échangé » → « lien
   `token_hash` vérifié dans l'app »).
 - **§6.5 Sentry** : créer le projet `jolene-ios` (org `jolene-z6`), fournir le DSN, lire l'événement de crash de test ;
-  jeton dSYM local si la symbolication est voulue.
+  jeton dSYM local si la symbolication est voulue. (T15, 16/11/2026) Le DSN se dépose dans le secret de dépôt GitHub
+  **`SENTRY_DSN_IOS`**, facultatif : sans lui, TestFlight part sans Sentry. Pour la recette locale du crash de test, il
+  est passé à `xcodebuild` et jamais commité. Côté projet, activer « Prevent Storing of IP Addresses ». Mode d'emploi :
+  `docs/mobile-swift/SENTRY_IOS.md` §5 à §7. (Revue B8 n°1 de T15, m6) Confirmer d'abord la **région de données** de
+  l'organisation `jolene-z6`, la région UE étant recommandée pour des données de santé ; la restriction de l'hôte du DSN
+  à cette région suivra.
 - **§6.6 Go B9** : B3, T7, T8, T12, T13, T14a, T14b, dispatch de T16, la PR backend de l'export RGPD (TJ4), et les
   signalements de la section B9 ; go au merge seulement, les décisions juridiques étant prises par délégation.
   (T8, 09/11/2026) Go de merge de `lot3/l3-t8-v2` ; la preuve STAGING de la complétion (ligne `soignants` relue après

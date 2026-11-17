@@ -12,7 +12,8 @@ import XCTest
 /// `contrat-certificat` (+ `-<signature>`), `contrat-certificat-ouvrir`, `certificat-screen`, `certificat-signatures-<signature>`,
 /// `certificat-empreinte`, `certificat-export`,
 /// `contrat-signatures` (+ `-etablissement`, `-soignant`), `contrat-zone-signature`, `contrat-signature-otp`, `contrat-otp-envoyer`, `contrat-renvoi-web`, `contrat-deja-signe`,
-/// `contrat-cdd-a-preparer`, `contrat-contenu-indisponible`, `contrat-pied-de-page`.
+/// `contrat-cdd-a-preparer`, `contrat-contenu-indisponible`, `contrat-pied-de-page` ; coupe-circuit `ios_natif_contrats_actif`
+/// (L2-T10) : `contrats-desactive-renvoi`, `contrats-desactive-web`.
 final class DemoContratsTests: JoleneUITestCase {
     /// `TextesWeb.CompteARebours.texte` à 62 h (contrat créé 10 h avant l'horloge démo).
     static let compteARebours = "Signature à finaliser sous 62h 00m 00s"
@@ -176,6 +177,38 @@ final class DemoContratsTests: JoleneUITestCase {
         record("\(proofPrefix)-contrat-cdd-a-preparer")
     }
 
+    /// Coupe-circuit `ios_natif_contrats_actif` à faux (D-FLAGS de `DECISIONS_LOT2.md`, à la charge de L2-T10 ; surcharge
+    /// DEBUG `-JOLENE_FLAG_…`) : `ContratsDestination`, seul point de construction des écrans de contrat, remplace l'écran
+    /// par son renvoi web (texte du lot 0, « Voir sur jolene.app »). Lien `/contrat/<id>` → page web du contrat, jamais
+    /// l'écran natif ; puis Profil › Mes contrats → onglet Contrats de « Mes documents » sur le web. Aucune requête réseau.
+    func testCoupeCircuitDesContratsRenvoieLeLienEtLaListeAuWeb() throws {
+        launchDemo(extraArguments: ["-JOLENE_FLAG_ios_natif_contrats_actif", "false",
+                                    "-JOLENE_OPEN_URL", "https://jolene.app/contrat/demo-contrat-001"])
+        signInDemo()
+        let renvoi = element("contrats-desactive-renvoi")
+        require("Le lien du contrat mène au renvoi du contrat désactivé", timeout: 30) { renvoi.exists }
+        requireAbsence("Jamais l'écran natif du contrat") { self.element("contrat-titre").exists }
+        let bouton = element("contrats-desactive-web")
+        require("« Voir sur jolene.app » est proposé") { self.visible(bouton) && bouton.isEnabled }
+        XCTAssertEqual(bouton.label, "Voir sur jolene.app")
+        record("\(proofPrefix)-contrats-desactives-lien")
+        bouton.tap()
+        liensRenvoiWebAffiche("https://jolene.app/contrat/demo-contrat-001")
+        liensFermerRenvoiWeb()
+        require("Le renvoi du contrat est de retour") { renvoi.exists }
+        goBack()
+
+        openContrats(attendreListe: false)
+        require("« Mes contrats » mène au renvoi de la liste désactivée", timeout: 30) { renvoi.exists }
+        requireAbsence("Jamais la liste native") { self.element("contrats-liste").exists }
+        tap("contrats-desactive-web")
+        liensRenvoiWebAffiche("https://jolene.app/soignant/mes-documents?tab=contrats")
+        record("\(proofPrefix)-contrats-desactives-liste")
+        liensFermerRenvoiWeb()
+        goBack()
+        assertNoNetworkRequest()
+    }
+
     // MARK: Étapes
 
     private func signInDemo() {
@@ -192,11 +225,11 @@ final class DemoContratsTests: JoleneUITestCase {
         let submit = element("login-submit")
         require("Le bouton de connexion est activé") { submit.isEnabled }
         if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
-        submit.tap()
-        require("La session est prête : la barre d'onglets est affichée", timeout: 30) { self.tabBarExists }
+        toucherSeConnecter(submit, "La session est prête : la barre d'onglets est affichée") { self.tabBarExists }
     }
 
-    private func openContrats() {
+    /// `attendreListe: false` (coupe-circuit à faux, L2-T10) : la liste native n'est pas attendue, son renvoi la remplace.
+    private func openContrats(attendreListe: Bool = true) {
         tabButton("tab-profil", label: "Profil").tap()
         require("La liste du profil est affichée") { self.containerVisible(self.element("profile-list")) }
         // « Mes contrats » est dans « Mon espace », sous « Application » (intégration de T4a) : une cellule hors écran
@@ -204,6 +237,7 @@ final class DemoContratsTests: JoleneUITestCase {
         let entree = element("profil-contrats")
         if !visible(entree) { scrollTo(entree, in: element("profile-list")) }
         tap("profil-contrats")
+        guard attendreListe else { return }
         require("La liste des contrats est affichée") { self.containerVisible(self.element("contrats-liste")) }
     }
 

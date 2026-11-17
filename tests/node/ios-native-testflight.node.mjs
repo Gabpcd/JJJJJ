@@ -381,14 +381,85 @@ test('le workflow ne se déclenche qu\'à la main, depuis main, un envoi à la f
   assert.match(workflow, /^permissions:\n {2}contents: read\n\n/m);
 });
 
-test('le workflow n\'utilise que les secrets iOS déjà exigés par prepare-ci-signing.mjs', () => {
+test('le workflow n\'utilise que les secrets iOS déjà exigés par prepare-ci-signing.mjs, plus le DSN Sentry facultatif', () => {
   // Liste de référence lue dans la source existante (branche iOS), jamais recopiée ici.
   const signing = readFileSync(join(root, 'scripts/mobile/prepare-ci-signing.mjs'), 'utf8');
   const branche = signing.slice(signing.indexOf("platform === 'ios'"));
   const attendus = [...new Set([...branche.matchAll(/'((?:IOS|ASC)_[A-Z0-9_]+)'/g)].map((m) => m[1]))].sort();
   assert.equal(attendus.length, 6);
+  // Lot 3, T15 : SENTRY_DSN_IOS est lu en plus, jamais exigé (test suivant) ; aucun autre secret.
+  assert.ok(!attendus.includes('SENTRY_DSN_IOS'), 'le DSN Sentry ne doit pas devenir un secret de signature exigé');
   const utilises = [...new Set([...workflow.matchAll(/secrets\.(\w+)/g)].map((m) => m[1]))].sort();
-  assert.deepEqual(utilises, attendus);
+  assert.deepEqual(utilises, [...attendus, 'SENTRY_DSN_IOS'].sort());
+});
+
+test('le DSN Sentry (lot 3, T15) vient du secret facultatif SENTRY_DSN_IOS, transmis à l\'archive seule, jamais exigé ni affiché', () => {
+  // Une seule lecture du secret, dans l'environnement de l'étape d'archive (docs/mobile-swift/SENTRY_IOS.md).
+  assert.equal([...workflow.matchAll(/secrets\.SENTRY_DSN_IOS\b/g)].length, 1);
+  const debut = workflow.indexOf('      - name: Archive Release signée\n');
+  assert.ok(debut >= 0, 'étape d\'archive absente');
+  const fin = workflow.indexOf('\n      - name: ', debut + 1);
+  const archive = workflow.slice(debut, fin);
+  assert.match(archive, /^ {8}env:\n(?: {10}#.*\n)* {10}SENTRY_DSN_IOS: \$\{\{ secrets\.SENTRY_DSN_IOS \}\}\n/m);
+  // Valeur vide si le secret manque : réglage xcodebuild vide, Sentry désactivé dans l'app, aucun échec.
+  assert.match(archive, /^ {12}JOLENE_SENTRY_DSN="\$\{SENTRY_DSN_IOS:-\}" \\$/m);
+  const ailleurs = workflow.slice(0, debut) + workflow.slice(fin);
+  assert.doesNotMatch(ailleurs, /SENTRY_DSN_IOS|JOLENE_SENTRY_DSN/, 'le DSN ne sert qu\'à l\'archive');
+  // Jamais exigé (aucun test d'absence qui ferait échouer l'envoi), jamais affiché.
+  assert.doesNotMatch(workflow, /\[\[? +-[nz] +"?\$\{?SENTRY_DSN_IOS|SENTRY_DSN_IOS:\?|SENTRY_DSN_IOS[^\n]*exit 1/);
+  assert.doesNotMatch(workflow, /(?:echo|printf)[^\n]*\$\{?(?:SENTRY_DSN_IOS|JOLENE_SENTRY_DSN)/);
+});
+
+test('le DSN Sentry n\'est jamais versionné : Info.plist le lit du réglage, les xcconfig le laissent vide', () => {
+  const files = loadSources(root);
+  assert.equal(parsePlist(files.infoPlist).JoleneSentryDSN, '$(JOLENE_SENTRY_DSN)');
+  const staging = readFileSync(join(root, 'ios-native/Config/Staging.xcconfig'), 'utf8');
+  const reglages = { ...parseXcconfig(files.baseXcconfig), ...parseXcconfig(staging), ...parseXcconfig(files.productionXcconfig) };
+  assert.equal(reglages.JOLENE_SENTRY_DSN, '', 'Base.xcconfig définit JOLENE_SENTRY_DSN vide, aucun xcconfig ne le remplit');
+  for (const texte of [files.baseXcconfig, staging, files.productionXcconfig]) {
+    assert.doesNotMatch(texte, /sentry\.io|^JOLENE_SENTRY_DSN *= *\S/im);
+  }
+});
+
+test('SENTRY_IOS.md : DSN local en ligne de commande seulement, jamais dans un xcconfig versionné ; région à confirmer', () => {
+  // Revue fraîche B8 n°1 de L3-T15, m5 : `Config/Staging.xcconfig` est versionnée (comme Base et Production) ; une
+  // consigne « ajouter temporairement la ligne » finit tôt ou tard dans un commit. m6 : la restriction d'hôte du DSN
+  // attend la région de données de l'organisation Sentry, confirmée par Gabrielle.
+  const doc = readFileSync(join(root, 'docs/mobile-swift/SENTRY_IOS.md'), 'utf8');
+  const versionnes = ['Base', 'Staging', 'Production'].map((nom) => `ios-native/Config/${nom}.xcconfig`);
+  for (const chemin of versionnes) assert.ok(readFileSync(join(root, chemin), 'utf8').length > 0, `${chemin} absent`);
+  assert.doesNotMatch(doc, /^\s*JOLENE_SENTRY_DSN *= *https/m, 'aucune ligne xcconfig portant un DSN dans la doc');
+  assert.doesNotMatch(doc, /ajouter[^\n]*(?:Staging|Production|Base)\.xcconfig/i, 'aucune consigne d\'écrire le DSN dans un xcconfig');
+  assert.match(doc, /xcodebuild[^\n`]*JOLENE_SENTRY_DSN='https:\/\/…'/, 'commande xcodebuild avec le DSN en argument');
+  assert.match(doc, /jamais dans un fichier/i);
+  assert.match(doc, /région de données/i);
+});
+
+test('l\'archive lit le Package.resolved vérifié par ios-swift-ci.yml, sous la même toolchain, sans jamais le réécrire', () => {
+  // Revue B8 de la vague 5, M1 : le Package.resolved versionné est celui qu'écrit Xcode 26.4.1 (SwiftPM 6.2), qui élague
+  // opentelemetry-swift-core et swift-atomics là où Xcode 16.4 les épingle (SENTRY_IOS.md §1). ios-swift-ci.yml
+  // vérifie ce fichier ; l'archive le lit avec -onlyUsePackageVersionsFromResolvedFile. Une autre toolchain ici livrerait
+  // un graphe que la CI n'a pas vérifié, ou ferait échouer la résolution sur un pin manquant.
+  const ci = readFileSync(join(root, '.github/workflows/ios-swift-ci.yml'), 'utf8');
+  for (const cle of ['JOLENE_XCODE_APP', 'JOLENE_XCODE_VERSION_ATTENDUE', 'JOLENE_XCODE_BUILD_ATTENDU']) {
+    const valeur = (texte) => new RegExp(`^ {2}${cle}: (.+)$`, 'm').exec(texte)?.[1];
+    assert.ok(valeur(workflow), `${cle} absente du workflow TestFlight`);
+    assert.equal(valeur(workflow), valeur(ci), `${cle} : TestFlight et ios-swift-ci.yml divergent`);
+  }
+  const resolutions = workflow.split('\n      - name: ').filter((etape) => /^ {10}xcodebuild (?:-showBuildSettings|archive)\b/m.test(etape));
+  assert.equal(resolutions.length, 2, 'réglages Release et archive : les deux appels qui résolvent les paquets');
+  for (const etape of resolutions) {
+    assert.match(etape, / -onlyUsePackageVersionsFromResolvedFile \\\n/, `${etape.split('\n')[0]} : Package.resolved lu sans réécriture`);
+  }
+  assert.doesNotMatch(workflow, /-resolvePackageDependencies|-disableAutomaticPackageResolution/, 'aucune résolution à part');
+  const cle = (texte) => /\n {10}key: (spm-xcodebuild-[^\n]+)\n/.exec(texte)?.[1];
+  assert.ok(cle(workflow)?.includes("hashFiles('ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'"));
+  assert.equal(cle(workflow), cle(ci), 'cache SPM : même clé que celui qu\'alimente ios-swift-ci.yml');
+  const resolu = JSON.parse(readFileSync(join(root, 'ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'), 'utf8'));
+  assert.equal(resolu.pins.find((pin) => pin.identity === 'kscrash'), undefined,
+    'Package.resolved de Xcode 26.4.1 (kscrash jamais épinglé) : c\'est lui que lit -onlyUsePackageVersionsFromResolvedFile à l\'archive');
+  assert.equal(resolu.originHash, '97a49726c2293404c4b2d9ccada02485783926893cc361503715ca54c01809ce',
+    'même résolution que la CI (artefact package-resolved du run 43959073553)');
 });
 
 // Toute soumission, livraison de fiche ou distribution externe ; `default_platform(:ios)` rend
