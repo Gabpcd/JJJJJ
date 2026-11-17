@@ -60,7 +60,7 @@ final class ProfilVerbatimTests: XCTestCase {
 
     func testExceptionsMetierDeLEnregistrementTraduitesCommeLeWebOuVerbatimServeur() throws {
         // Définitions live relues le 08/11/2026 : `chk_telephone_format` (23514), `soignants_numero_rpps_key` (23505),
-        // `dec_verifier_age_minimum` (P0001, `public.sql` l.3893).
+        // `dec_verifier_age_minimum` (P0001, `public.sql` l.4070).
         XCTAssertEqual(ProfilEdition.exceptionsMetier, ["23514", "23505", "P0001"])
         XCTAssertEqual(ProfilEdition.messageExceptionMetier(
             sqlstate: "23505", message: #"duplicate key value violates unique constraint "soignants_numero_rpps_key""#),
@@ -76,7 +76,7 @@ final class ProfilVerbatimTests: XCTestCase {
         XCTAssertEqual(ProfilEdition.messageExceptionMetier(sqlstate: "P0001", message: "  "), T.enregistrementEchec)
         // Source serveur du message verbatim (dump versionné, identique à la définition live).
         let schema = try Self.sourceDepot("supabase/schema/public.sql").components(separatedBy: "\n")
-        XCTAssertTrue(schema[3893 - 1].contains("RAISE EXCEPTION '\(age)'"), "public.sql l.3893")
+        XCTAssertTrue(schema[4070 - 1].contains("RAISE EXCEPTION '\(age)'"), "public.sql l.4070")
         // Aucun nom de contrainte ni texte anglais affiché.
         for sqlstate in ["23505", "23514"] {
             let texte = ProfilEdition.messageExceptionMetier(sqlstate: sqlstate, message: "violates constraint chk_x")

@@ -1,9 +1,15 @@
 -- Fixture du seul banc visibilite-etablissement-permission-isolated.test.sql.
--- Corps LIVE (production, md5(prosrc) relus en lecture seule le 02/11/2026,
--- identiques à supabase/schema/public.sql) des gardes d'identité et des trois
--- RPC AVANT la migration B5b, propriétaire et ACL compris. Aucune donnée.
--- Regénération : extraire les mêmes blocs de public.sql ; le test Node
--- tests/node/visibilite-etablissement-permission.node.mjs compare chaque corps.
+-- Corps LIVE (production, md5(prosrc) relus en lecture seule le 02/11/2026)
+-- des gardes d'identité et des trois RPC AVANT la migration B5b, propriétaire
+-- et ACL compris. Aucune donnée.
+-- État historique figé : B5b est déployée (08/11/2026, #1119) et, depuis la
+-- re-baseline #1121, supabase/schema/public.sql porte les corps de la migration
+-- pour les trois RPC (vérité de prod). Ne pas réaligner ces trois corps sur le
+-- dump : le banc rejoue la vraie migration sur cet état « avant » et son
+-- préflight refuse toute autre empreinte. Les six gardes restent identiques au
+-- dump ; le test Node tests/node/visibilite-etablissement-permission.node.mjs
+-- compare chaque corps (fixture = LIVE d'avant, dump = migration).
+-- Numéros « l. » ci-dessous : dump de l'époque (avant #1121).
 
 -- fn_compte_auth_actif — supabase/schema/public.sql l.23877-23896, md5(prosrc) 8246c4c1f1b0a8053adb176a06c96766
 CREATE OR REPLACE FUNCTION "public"."fn_compte_auth_actif"() RETURNS boolean

@@ -14,8 +14,10 @@ Phase PostgreSQL 17 (base éphémère vide) : vraie chaîne de migrations des de
 RPC (20260903194000 → 20261017165819 : MD5, ACL et inventaire égaux au LIVE),
 témoins du défaut sur les deux RPC, refus atomique si une seule source a dérivé,
 puis migration B1 entière : réponses réduites aux clés de corrélation, rotation
-et HMAC stocké conservés, code relu par l'établissement seul via
-fn_etat_pointage_mission (définition du dump), exceptions inchangées, journal
+et HMAC stocké conservés, code relu via fn_etat_pointage_mission (définition
+du dump) par les seuls membres de l'établissement habilités « pointage »
+(B5b : fn_a_permission_etablissement, définition du dump ; un membre
+LECTURE_SEULE garde l'état sans le code), exceptions inchangées, journal
 d'audit de la fin rétroactive inchangé, ACL et inventaire préservés, rejeu
 refusé.
 
@@ -235,6 +237,7 @@ M = 'b1000000-0000-4000-8000-000000000003'      # membre actif de l'établisseme
 E = 'b1000000-0000-4000-8000-000000000004'      # établissement
 P = 'b1000000-0000-4000-8000-000000000005'      # mission
 A = 'b1000000-0000-4000-8000-000000000006'      # propriétaire de l'établissement
+L = 'b1000000-0000-4000-8000-000000000007'      # membre actif LECTURE_SEULE (sans la permission « pointage »)
 INCONNUE = 'b1000000-0000-4000-8000-0000000000ff'
 C0 = '246810'
 SCANNER = 'public.fn_scanner_code_pointage(text,jsonb)'
@@ -292,9 +295,13 @@ CREATE TABLE private.security_definer_inventory(
 -- Simplification assumée : aucun administrateur plateforme dans ce banc.
 CREATE FUNCTION public.est_admin_valide() RETURNS boolean LANGUAGE sql STABLE AS $admin$ SELECT false $admin$;
 """)
-# Définitions du dump (re-baseliné #1097), jamais recopiées à la main.
+# Définitions du dump (re-baseliné #1121), jamais recopiées à la main. Depuis
+# B5b (#1119), fn_etat_pointage_mission ne sert le code qu'avec la permission
+# « pointage » : fn_a_permission_etablissement est chargée telle qu'en
+# production (elle ne dépend que d'est_admin et de fn_role_etablissement_courant).
 for nom in ['fn_arrondir_quart_heure', 'est_admin', 'mon_etablissement_id', 'fn_compte_auth_actif',
-            'fn_role_etablissement_courant', 'est_admin_etablissement', 'fn_etat_pointage_mission']:
+            'fn_role_etablissement_courant', 'est_admin_etablissement', 'fn_a_permission_etablissement',
+            'fn_etat_pointage_mission']:
     sql(ddl_dump(nom))
 sql("""
 REVOKE ALL ON FUNCTION public.fn_etat_pointage_mission(uuid) FROM PUBLIC;
@@ -343,10 +350,12 @@ assert len(avant_fin['inventaire']) == 1 and avant_fin['inventaire'][0][:3] == [
 
 sql(f"""
 INSERT INTO auth.users VALUES ('{S}', '{{"role":"SOIGNANT"}}', NULL, NULL), ('{O}', '{{"role":"SOIGNANT"}}', NULL, NULL),
-  ('{M}', '{{"role":"ETABLISSEMENT"}}', NULL, NULL), ('{A}', '{{"role":"ADMIN_ETABLISSEMENT"}}', NULL, NULL);
+  ('{M}', '{{"role":"ETABLISSEMENT"}}', NULL, NULL), ('{A}', '{{"role":"ADMIN_ETABLISSEMENT"}}', NULL, NULL),
+  ('{L}', '{{"role":"ETABLISSEMENT"}}', NULL, NULL);
 INSERT INTO public.soignants VALUES ('{S}', NULL), ('{O}', NULL);
 INSERT INTO public.etablissements VALUES ('{E}', NULL);
-INSERT INTO public.membres_etablissement VALUES ('{M}', '{E}', 'POINTAGE_ONLY', true), ('{A}', '{E}', 'PROPRIETAIRE', true);
+INSERT INTO public.membres_etablissement VALUES ('{M}', '{E}', 'POINTAGE_ONLY', true), ('{A}', '{E}', 'PROPRIETAIRE', true),
+  ('{L}', '{E}', 'LECTURE_SEULE', true);
 INSERT INTO public.missions(id, etablissement_id, soignant_assigne_id, statut, intitule, code_pointage_actif,
   prochain_type_scan, nb_scans)
 VALUES ('{P}', '{E}', '{S}', 'ASSIGNEE', 'Mission témoin B1', '{C0}', 'OUVERTURE', 0);
@@ -356,6 +365,12 @@ VALUES ('{P}', now() - interval '30 minutes', now() + interval '8 hours', 1, 'PR
 """)
 assert sql(as_user(A, "SELECT public.est_admin_etablissement()::text || '|' || public.mon_etablissement_id();")) == f'true|{E}'
 assert sql(as_user(M, "SELECT public.est_admin_etablissement()::text || '|' || public.mon_etablissement_id();")) == f'false|{E}'
+# Permission « pointage » (B5b) : POINTAGE_ONLY et PROPRIETAIRE l'ont, LECTURE_SEULE
+# est bien membre actif de l'établissement mais ne l'a pas (témoin non vide).
+POINTAGE = f"SELECT public.fn_role_etablissement_courant('{E}') || '|' || public.fn_a_permission_etablissement('pointage', '{E}')::text;"
+assert sql(as_user(M, POINTAGE)) == 'POINTAGE_ONLY|true' and sql(as_user(A, POINTAGE)) == 'PROPRIETAIRE|true'
+assert sql(as_user(L, POINTAGE)) == 'LECTURE_SEULE|false'
+assert sql(as_user(L, "SELECT public.mon_etablissement_id();")) == E
 SECRET_HMAC = "DO $hmac$ BEGIN PERFORM set_config('app.settings.hmac_secret', md5(random()::text), false); END $hmac$;"
 CODE_ET_HMAC = f"""RESET ROLE;
 SELECT jsonb_build_object('code', m.code_pointage_actif, 'hmac', m.code_pointage_hmac,
@@ -461,6 +476,11 @@ etab = lire_etat(M)
 assert etab['est_etab'] is True and etab['code_pointage_actif'] == C1 and etab['prochain_type_scan'] == 'FERMETURE'
 soignant = lire_etat(S)
 assert soignant['est_etab'] is not True and soignant['code_pointage_actif'] is None and soignant['segment_ouvert'] is True
+# B5b : le membre LECTURE_SEULE lit l'état de la mission de son établissement, jamais le code.
+lecture_seule = lire_etat(L)
+assert lecture_seule['est_etab'] is True and lecture_seule['code_pointage_actif'] is None
+assert {k: v for k, v in lecture_seule.items() if k != 'code_pointage_actif'} == {
+    k: v for k, v in etab.items() if k != 'code_pointage_actif'}, 'LECTURE_SEULE_ETAT_DIFFERENT'
 
 # Refus inchangés, sans mutation.
 empreinte = sql(ETAT_TABLES)
@@ -529,6 +549,7 @@ assert sql("SELECT string_agg(type_acteur || '|' || action || '|' || (details->>
            "FROM public.journaux_audit") == 'SOIGNANT|POINTAGE|FIN_RETROACTIVE|Oubli de scan'
 assert sql("SELECT count(*) FROM public.journaux_audit WHERE details::text LIKE '%nouveau%'") == '0'
 assert lire_etat(M)['code_pointage_actif'] == C4 and lire_etat(S)['code_pointage_actif'] is None
+assert lire_etat(L)['code_pointage_actif'] is None
 
 # Fin rétroactive déclarée par le propriétaire de l'établissement (bouton de
 # AffichageCodeRotatifEtab, qui ne lit que `error` puis relit l'état) : même réponse
@@ -573,6 +594,7 @@ print(json.dumps({**statique, 'postgres': 17,
                                    'fn_declarer_fin_retroactive': sorted(CLES_FIN)},
                   'rotation_conservee': True, 'hmac_stocke_non_renvoye': True,
                   'code_relu_par_etablissement': True, 'code_jamais_lu_par_soignant_via_rpc': True,
+                  'code_refuse_au_membre_lecture_seule': True,
                   'audit_fin_retroactive_inchange': ['SOIGNANT', 'ADMIN_ETABLISSEMENT'],
                   'refus_inchanges': {'fn_scanner_code_pointage': ['P0002', '42501', '23514', 'anon 42501'],
                                       'fn_declarer_fin_retroactive': ['P0002 sans segment', '42501 autre soignant',

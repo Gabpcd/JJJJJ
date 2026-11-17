@@ -504,7 +504,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", 
 - **Statut natif** : consommée lot 2 (T3 : `SupabasePointageGateway.etat` ; `{error}` lu avant le décodage et levé en `JoleneError(.unknown, <message serveur verbatim>)`, « Non authentifié » → `.unauthorized`).
 - **Usage prévu** : état du pointage d'une mission, relu toutes les 15 s quand le bloc est visible
   (`PointageRotatifSoignant.tsx` l.64-72) et après chaque scan (règle « aucun succès fabriqué »).
-- **Signature SQL** (`supabase/schema/public.sql` l.35194) :
+- **Signature SQL** (`supabase/schema/public.sql` l.35578) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_etat_pointage_mission"("p_mission_id" "uuid") RETURNS "jsonb"
@@ -515,28 +515,33 @@ CREATE OR REPLACE FUNCTION "public"."fn_etat_pointage_mission"("p_mission_id" "u
 - **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_etat_pointage_mission(uuid)` — Mixte tenant / admin : la fonction distingue en interne soignant, établissement et admin ; appel avec le JWT utilisateur.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : absente (types.ts en retard sur le schéma).
-- **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}` (l.35211) ; `{error:'Accès interdit'}`
-  (l.35218) ; succès `{statut, intitule, prochain_type_scan, nb_scans, segment_ouvert, segments, code_pointage_actif, est_etab}`
-  (l.35229-35239) : `statut`, `intitule`, `prochain_type_scan` (`OUVERTURE`/`FERMETURE`), `nb_scans`,
+- **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}` (l.35596) ; `{error:'Accès interdit'}`
+  (l.35605) ; succès `{statut, intitule, prochain_type_scan, nb_scans, segment_ouvert, segments, code_pointage_actif, est_etab}`
+  (l.35622-35632) : `statut`, `intitule`, `prochain_type_scan` (`OUVERTURE`/`FERMETURE`), `nb_scans`,
   `segment_ouvert` (`COALESCE(…, false)`, jamais nul), `segments` (`[{id, debut, fin}]`, créneaux `EFFECTIF` triés
-  par début), `code_pointage_actif` (non nul pour l'établissement seulement, l.35237), `est_etab`. Décodeur en
-  liste blanche : **`code_pointage_actif` jamais décodé** côté soignant, même présent. `{error}` → refus verbatim
-  (parité `PointageRotatifSoignant.tsx` l.81-92).
+  par début), `code_pointage_actif` (non nul seulement pour un membre de l'établissement de la mission habilité au
+  pointage, l.35630 ; voir ci-dessous), `est_etab`. Décodeur en liste blanche : **`code_pointage_actif` jamais
+  décodé** côté soignant, même présent. `{error}` → refus verbatim (parité `PointageRotatifSoignant.tsx` l.81-92).
+- **Visibilité du code par permission (B5b, #1119, déployée le 8 novembre 2026, dump re-baseliné #1121).**
+  `v_peut_voir_code` vaut `false` par défaut (l.35586) et n'est levé, quand `v_is_etab IS TRUE`, que par
+  `v_peut_voir_code := public.fn_a_permission_etablissement('pointage', v_mission.etablissement_id) IS TRUE`
+  (l.35610-35612) ; la règle `pointage` de `fn_a_permission_etablissement` (l.5101) couvre PROPRIETAIRE,
+  ADMIN_GROUPE, RH et POINTAGE_ONLY (administrateur plateforme : `true`), pas LECTURE_SEULE, qui garde l'état sans
+  le code. Garde `tests/node/check-rpc-contracts.node.mjs` (aucun retour à `CASE WHEN v_is_etab`).
 - **est_etab vaut null pour tout compte sans établissement (soignant assigné compris), jamais false ; non décodé côté soignant.**
-  `v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id()` (l.35214) : `est_admin()` rend
-  un booléen non nul (`est_admin_valide`, `COALESCE(EXISTS …)`, l.4852), `mon_etablissement_id()` vaut NULL hors
-  établissement (l.67139), donc `false OR NULL` = NULL, renvoyé tel quel (`'est_etab', v_is_etab`, l.35238) : JSON
-  `null`. Seul un compte d'un **autre** établissement reçoit `false` (il passe la garde quand
-  `soignant_assigne_id` est NULL). `est_etab` n'est jamais décodé côté soignant (à défaut, `Bool?` ignoré) : un
+  `v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id()` (l.35599) : `est_admin()` rend
+  un booléen non nul (`est_admin_valide`, `COALESCE(EXISTS …)`, l.5029), `mon_etablissement_id()` vaut NULL hors
+  établissement (l.67572), donc `false OR NULL` = NULL, renvoyé tel quel (`'est_etab', v_is_etab`, l.35631) : JSON
+  `null`. Depuis B5b, un compte d'un **autre** établissement est refusé (« Accès interdit ») sauf s'il est
+  lui-même le soignant assigné. `est_etab` n'est jamais décodé côté soignant (à défaut, `Bool?` ignoré) : un
   décodage en `Bool` non optionnel échouerait sur toutes les réponses réelles, alors qu'un stub `false` passerait.
   Stubs et fixtures de T3 : `est_etab: null` (`DECISIONS_LOT2.md`, « Consignes aux tranches suivantes ») ; garde
-  `tests/node/check-rpc-contracts.node.mjs` sur l.35214 et l.35238, et aucune fixture `est_etab: false`.
-- **Écart constaté (hors lot 2, B9 RLS/auth)** : la garde d'accès (l.35214-35219) est en logique ternaire.
-  Pour un utilisateur sans établissement, `mon_etablissement_id()` vaut NULL, donc `v_is_etab` vaut NULL et
-  `NOT v_is_etab AND NOT v_is_soignant` vaut NULL : le refus « Accès interdit » n'est jamais renvoyé à un
-  soignant **non assigné**, qui lit statut, intitulé et segments (le code reste masqué). Constat sur le dump
-  `public.sql` (#1097), traité par l'audit des gardes NULL du 3 novembre 2026 (B9 : renvoi « Gardes NULL » de
-  `DECISIONS_LOT2.md` › En attente de Gabrielle) ; le natif n'appelle la RPC que pour ses missions et n'en dépend pas.
+  `tests/node/check-rpc-contracts.node.mjs` sur l.35599 et l.35631, et aucune fixture `est_etab: false`.
+- **Écart clos par B5b (#1119)** : la garde d'accès (l.35599-35606) était en logique ternaire
+  (`NOT v_is_etab AND NOT v_is_soignant` valait NULL pour un compte sans établissement non assigné, qui lisait
+  statut, intitulé et segments ; constat sur le dump #1097). Elle est désormais
+  `IF NOT COALESCE(v_is_etab, false) AND NOT COALESCE(v_is_soignant, false)` : un NULL vaut refus. Le natif
+  n'appelle la RPC que pour ses missions et n'en dépendait pas.
 - **Preuve STAGING** : T11 (relecture après OUVERTURE et FERMETURE).
 
 ## fn_envoyer_otp_signature
