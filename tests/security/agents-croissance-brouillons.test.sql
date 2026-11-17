@@ -535,6 +535,71 @@ BEGIN
      OR (SELECT sequence_etape FROM public.sales_contacts WHERE id = v_contact_mss) <> 1 THEN
     RAISE EXCEPTION 'MSSanté : rejet non persisté ou séquence CRM avancée malgré le refus';
   END IF;
+
+  -- 10. Apicrypt (20261117060000) : messagerie de santé sécurisée et fermée,
+  -- dont les adresses MSSanté sont publiées en interop-mssante.apicrypt.org.
+  -- Même règle unique (fn_growth_email_mssante), donc même prédicat, même
+  -- agent et même expiration ; témoins créés ici et comptés.
+
+  -- 10.a Règle : apicrypt.org et ses sous-domaines, casse et blancs de bord
+  -- ignorés ; les faux amis restent joignables.
+  SELECT count(*) INTO v_n
+  FROM (VALUES
+    ('prenom.nom@interop-mssante.apicrypt.org', true),
+    (' Prenom.Nom@INTEROP-MSSANTE.APICRYPT.ORG ', true),
+    ('dr.recette@medical64.apicrypt.org', true),
+    (E'contact@apicrypt.org\n', true),
+    ('contact@pasapicrypt.org', false),
+    ('contact@recette-pasapicrypt.org', false),
+    ('contact@apicrypt.org.exemple.com', false),
+    ('contact@apicrypt-org.fr', false),
+    ('apicrypt.org@gmail.com', false)
+  ) AS t(email, attendu)
+  WHERE private.fn_growth_email_mssante(t.email) IS NOT DISTINCT FROM t.attendu;
+  IF v_n <> 9 THEN
+    RAISE EXCEPTION 'Apicrypt : fn_growth_email_mssante juste sur % cas sur 9', v_n;
+  END IF;
+
+  -- 10.b Prédicat unique : motif MSSANTE pour une adresse interop-mssante,
+  -- aucun motif pour un faux ami.
+  IF private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', 'ZZGROW050', 'direction@interop-mssante.apicrypt.org', NULL, NULL) IS DISTINCT FROM 'MSSANTE'
+     OR private.fn_growth_destinataire_bloque('PUBLIC', NULL, ' Dr.Recette@Medical64.Apicrypt.Org ', NULL, NULL) IS DISTINCT FROM 'MSSANTE'
+     OR private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', 'ZZGROW050', 'contact@pasapicrypt.org', NULL, NULL) IS NOT NULL THEN
+    RAISE EXCEPTION 'Apicrypt : prédicat fn_growth_destinataire_bloque inexact (motif MSSANTE, faux ami joignable)';
+  END IF;
+
+  -- 10.c Agent : le prospect interop-mssante n'est pas retenu, le faux ami l'est.
+  INSERT INTO public.prospects_etablissements (finess, nom, type_jolene, email, ville, departement, statut_sourcing)
+  VALUES
+    ('ZZGROW051', 'EHPAD Recette Apicrypt', 'EHPAD', 'direction@interop-mssante.apicrypt.org', 'Recetteville', 'ZZ', 'A_QUALIFIER'),
+    ('ZZGROW052', 'EHPAD Recette Faux ami Apicrypt', 'EHPAD', 'contact@pasapicrypt.org', 'Recetteville', 'ZZ', 'A_QUALIFIER');
+  v_res := private.fn_growth_agent_prospection();
+  IF EXISTS (SELECT 1 FROM public.growth_brouillons WHERE cible_id = 'ZZGROW051') THEN
+    RAISE EXCEPTION 'Apicrypt : une adresse interop-mssante.apicrypt.org a été retenue par l''agent — %', v_res;
+  END IF;
+  IF (SELECT count(*) FROM public.growth_brouillons
+      WHERE cible_type = 'PROSPECT_ETABLISSEMENT' AND cible_id = 'ZZGROW052'
+        AND statut = 'BROUILLON' AND sequence_etape = 1) <> 1 THEN
+    RAISE EXCEPTION 'Apicrypt : le faux ami pasapicrypt.org doit être retenu — %', v_res;
+  END IF;
+
+  -- 10.d Expiration : la fonction de la migration expire un brouillon Apicrypt
+  -- en file, avec le motif et la clé libérée, sans toucher au faux ami.
+  INSERT INTO public.growth_brouillons (agent, canal, cible_type, cible_id, destinataire_email,
+    sequence_etape, corps, statut, valide_le, motif_rejet, idempotence_key, maj_le)
+  VALUES ('PROSPECTION_ETABLISSEMENT', 'EMAIL', 'PROSPECT_ETABLISSEMENT', 'ZZGROW053',
+    'accueil@interop-mssante.apicrypt.org', 1, 'Recette', 'BROUILLON', NULL, NULL, 'recette-apicrypt:ZZGROW053',
+    now() - interval '1 day');
+  v_n := private.fn_growth_expirer_brouillons_mssante();
+  IF v_n < 1
+     OR (SELECT count(*) FROM public.growth_brouillons
+         WHERE cible_id = 'ZZGROW053' AND statut = 'EXPIRE' AND maj_le = now()
+           AND motif_rejet = private.fn_growth_motif_expiration_mssante()
+           AND idempotence_key = 'recette-apicrypt:ZZGROW053:expire:' || id) <> 1
+     OR (SELECT count(*) FROM public.growth_brouillons
+         WHERE cible_id = 'ZZGROW052' AND statut = 'BROUILLON' AND motif_rejet IS NULL) <> 1 THEN
+    RAISE EXCEPTION 'Apicrypt : le brouillon interop-mssante doit expirer avec le motif et libérer sa clé, le faux ami rester en file (% ligne(s))', v_n;
+  END IF;
 END;
 $test$;
 ROLLBACK;
