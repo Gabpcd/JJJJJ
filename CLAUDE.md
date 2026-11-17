@@ -88,6 +88,7 @@ un composant réel mais **pas celui rendu au pointage**) :
 3. **Si CI rouge sur main** : commit hotfix IMMÉDIATEMENT
 4. **`npx tsc -b` local AVANT push** : reproduit le check CI
 5. **Subagents Write/Edit** : après chaque subagent qui touche TS/TSX, faire un `npx tsc -b`
+6. **Fichiers relus par les tests Swift** : tout fichier hors `ios-native/` lu par un test Swift figure aux filtres `pull_request` et `push` de `ios-swift-ci.yml` (garde `check-sources-web-ios-ci.mjs` dans validate-pr, incident #1137)
 
 ### Protocole de merge — checks requis, revue fraîche, tiering (Lots 19+)
 

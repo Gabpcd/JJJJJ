@@ -69,7 +69,10 @@ jobs:
         # check-rpc-contracts-lot3.node.mjs : contrats et documents du lot 3 (T0, LOT3_PLAN.md).
         # ios-native-testflight.node.mjs : gardes et numérotation du TestFlight interne de l'app Swift
         # (docs/mobile-swift/TESTFLIGHT.md).
-        run: node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs tests/node/textes-juridiques-ios.node.mjs tests/node/lecture-notes-ios.node.mjs tests/node/check-rpc-contracts-lot3.node.mjs tests/node/ios-native-testflight.node.mjs
+        # sources-web-ios-ci.node.mjs (incident #1137) : tout fichier hors ios-native/ relu par un test Swift
+        # (littéral de chemin, annotations d'un fichier Swift relu) figure aux filtres pull_request et push de
+        # ios-swift-ci.yml ; sinon une PR web qui le décale ne relance pas la CI iOS et casse main en silence.
+        run: node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs tests/node/textes-juridiques-ios.node.mjs tests/node/lecture-notes-ios.node.mjs tests/node/check-rpc-contracts-lot3.node.mjs tests/node/ios-native-testflight.node.mjs tests/node/sources-web-ios-ci.node.mjs
 
       - name: Gardes de la recette financière isolée
         run: node --test tests/node/recette-escrow-safety.node.mjs
