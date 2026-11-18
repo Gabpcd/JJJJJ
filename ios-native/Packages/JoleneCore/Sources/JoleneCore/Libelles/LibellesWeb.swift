@@ -287,25 +287,25 @@ public enum LibellesWeb {
     }
 
     /// Panneau de contestation (`PanneauContestation.tsx`) : en-tête (l.262) et formulaire
-    /// d'ouverture (l.361-392). Libellés de statut : `TextesWeb.Contestation`. Aucun texte de délai
+    /// d'ouverture (l.360-391). Libellés de statut : `TextesWeb.Contestation`. Aucun texte de délai
     /// (Q9, tranchée par délégation le 8 novembre 2026 : la fenêtre est décidée par le serveur).
     public enum Contestation {
         // source: src/components/PanneauContestation.tsx:262
         public static let titre = "Contestation"
 
-        // source: src/components/PanneauContestation.tsx:366
+        // source: src/components/PanneauContestation.tsx:365
         public static let contester = "Contester cette présence"
 
-        // source: src/components/PanneauContestation.tsx:376
+        // source: src/components/PanneauContestation.tsx:375
         public static let placeholderSoignant = "Les heures validées ne correspondent pas à ma présence réelle…"
 
-        // source: src/components/PanneauContestation.tsx:387
+        // source: src/components/PanneauContestation.tsx:386
         public static let envoi = "Envoi…"
 
-        // source: src/components/PanneauContestation.tsx:387
+        // source: src/components/PanneauContestation.tsx:386
         public static let envoyer = "Envoyer la contestation"
 
-        // source: src/components/PanneauContestation.tsx:390
+        // source: src/components/PanneauContestation.tsx:389
         public static let annuler = "Annuler"
     }
 

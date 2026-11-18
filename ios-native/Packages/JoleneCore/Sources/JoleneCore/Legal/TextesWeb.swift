@@ -178,12 +178,13 @@ public enum TextesWeb {
     /// (`STATUT_CONFIG` l.48-62), listés par le blueprint. Titre et formulaire : `LibellesWeb.Contestation`.
     ///
     /// Aucun texte de délai (LOT2_PLAN v2 §1.2, correction 14, §7 Q9 ; Q9 tranchée par délégation,
-    /// DECISIONS_LOT2 « Décisions déléguées du 8 novembre 2026 ») : les textes de délai du
-    /// panneau (« 72h pour répondre », « l'admin plateforme tranchera », « Vous avez 72 h après la
-    /// validation pour contester… ») contredisent le serveur (`parametres_litiges.delai_contestation_pointage_h`,
-    /// 48 h par défaut ; escalade vers `EN_MEDIATION`). Ils ne sont pas repris : la garde Node les
-    /// refuse (`ANCRES_Q9`), comme tout texte qui associe contestation ou litige et délai. La fenêtre
-    /// est décidée par `fn_fenetre_contestation_ouverte` ; un refus du serveur s'affiche tel quel.
+    /// DECISIONS_LOT2 « Décisions déléguées du 8 novembre 2026 », D12) : les textes de délai du
+    /// panneau contredisaient le serveur (`parametres_litiges.delai_contestation_pointage_h`, 48 h par
+    /// défaut ; escalade vers `EN_MEDIATION`). Le web a retiré « 72h pour répondre » et « l'admin
+    /// plateforme tranchera » (D12 point 3) ; « Vous avez 72 h après la validation pour contester. »
+    /// reste sur le web. Aucun n'est repris : la garde Node les refuse (`ANCRES_Q9`, `RETIRES_Q9`),
+    /// comme tout texte qui associe contestation ou litige et délai. La fenêtre est décidée par
+    /// `fn_fenetre_contestation_ouverte` ; un refus du serveur s'affiche tel quel.
     public enum Contestation {
         // source: src/components/PanneauContestation.tsx:49 [libellé]
         public static let statutOuvert = "Ouvert"

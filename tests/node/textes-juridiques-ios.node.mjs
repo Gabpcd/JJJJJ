@@ -11,6 +11,7 @@ import {
   LIBELLES_SWIFT,
   MOTIFS_Q9,
   NATURES,
+  RETIRES_Q9,
   ROOT,
   TEXTES_SWIFT,
   ZONES_RENDU_JSON,
@@ -482,36 +483,48 @@ test('TL : --corriger-lignes suit les décalages (textes, libellés, objets, ens
 test('TL : verrou Q9 — aucun texte de délai de contestation, localisé par son texte', () => {
   const panneau = 'src/components/PanneauContestation.tsx';
   const unites = lireWeb(panneau).unites;
-  // Les trois textes de délai existent aujourd'hui (sinon le web a bougé : la garde rougit).
-  for (const motif of MOTIFS_Q9) assert.ok(unites.some(u => motif.test(u.valeur)), `${motif} introuvable`);
-  assert.ok(ANCRES_Q9.every(a => a.fichier === panneau));
-  // Aucune constante ne couvre un de ces textes.
+  // D12 point 3 : seule l'ancre « Vous avez 72 h après la validation pour contester. » reste sur le web
+  // (sinon le web a bougé : la garde rougit) ; les textes retirés n'y figurent plus.
+  for (const { motif } of ANCRES_Q9) assert.ok(unites.some(u => motif.test(u.valeur)), `${motif} introuvable`);
+  for (const { motif } of RETIRES_Q9) assert.ok(!unites.some(u => motif.test(u.valeur)), `${motif} encore affiché`);
+  assert.ok([...ANCRES_Q9, ...RETIRES_Q9].every(a => a.fichier === panneau));
+  assert.equal(MOTIFS_Q9.length, ANCRES_Q9.length + RETIRES_Q9.length);
+  assert.ok(MOTIFS_Q9.some(m => m.test('72h pour répondre')) && MOTIFS_Q9.some(m => m.test("l'admin plateforme tranchera")));
+  // Aucune constante ne couvre un texte d'ancre.
   for (const u of unites.filter(x => MOTIFS_Q9.some(m => m.test(x.valeur)))) {
     assert.ok(!constantes.some(c => c.source.fichier === panneau && c.source.debut <= u.bloc.fin && c.source.fin >= u.bloc.debut),
       `l.${u.debut} repris`);
   }
   const ancre = 'public enum Contestation {\n';
-  const ligne347 = unites.find(u => /72\s?h pour répondre/.test(u.valeur)).debut;
+  const ligneAncre = unites.find(u => /après la validation pour contester/.test(u.valeur)).debut;
   // Constante annotée dans un bloc verrouillé (texte pourtant verbatim).
-  let r = verifier({ swiftSource: ajout(ancre, `        // source: ${panneau}:${ligne347} [juridique]\n        public static let delai = "72h pour répondre"\n`) });
+  let r = verifier({ swiftSource: ajout(ancre, `        // source: ${panneau}:${ligneAncre} [juridique]\n        public static let delai = "Vous avez 72 h après la validation pour contester."\n`) });
   assert.ok(r.erreurs.some(e => e.includes('Contestation.delai') && e.includes('Q9')), JSON.stringify(r.erreurs));
-  // Même texte annoncé ailleurs : le verrou porte aussi sur la valeur.
-  r = verifier({ swiftSource: ajout(ancre, `        // source: ${panneau}:366 [juridique]\n        public static let delai = "Vous avez 72 h après la validation pour contester. Sans résolution sous 72 h, l'admin plateforme tranchera."\n`) });
+  // Texte retiré du web par D12, annoncé ailleurs : toujours refusé côté natif.
+  r = verifier({ swiftSource: ajout(ancre, `        // source: ${panneau}:262 [juridique]\n        public static let delai = "72h pour répondre"\n`) });
+  assert.ok(r.erreurs.some(e => e.includes('Contestation.delai') && e.includes('Q9')), JSON.stringify(r.erreurs));
+  r = verifier({ swiftSource: ajout(ancre, `        // source: ${panneau}:365 [juridique]\n        public static let delai = "Sans résolution sous 72 h, l'admin plateforme tranchera."\n`) });
   assert.ok(r.erreurs.some(e => e.includes('Contestation.delai') && e.includes('Q9')), JSON.stringify(r.erreurs));
   // Délai de contestation reformulé ailleurs, dans un autre groupe et dans LibellesWeb.swift.
-  r = verifier({ swiftSource: ajout('public enum Presences {\n', `        // source: ${panneau}:366 [juridique]\n        public static let delai = "48 h pour contester"\n`) });
+  r = verifier({ swiftSource: ajout('public enum Presences {\n', `        // source: ${panneau}:365 [juridique]\n        public static let delai = "48 h pour contester"\n`) });
   assert.ok(r.erreurs.some(e => e.includes('TextesWeb.Presences.delai') && e.includes('Q9')), JSON.stringify(r.erreurs));
-  r = verifier({ libellesSource: ajout('public enum Presences {\n', `        // source: ${panneau}:366\n        public static let delai = "Délai du litige dépassé"\n`, libelles) });
+  r = verifier({ libellesSource: ajout('public enum Presences {\n', `        // source: ${panneau}:365\n        public static let delai = "Délai du litige dépassé"\n`, libelles) });
   assert.ok(r.erreurs.some(e => e.includes('LibellesWeb.Presences.delai') && e.includes('Q9')), JSON.stringify(r.erreurs));
   // Un texte de délai déplacé dans le web reste verrouillé, sans rougir (localisé par son texte).
-  const decale = read(panneau).replace('Discussion en cours —', '\nDiscussion en cours —');
+  const decale = read(panneau).replace('Vous avez 72 h après', '\nVous avez 72 h après');
   assert.notEqual(decale, read(panneau));
   r = verifier({ lireWeb: lireAvec(panneau, decale) });
   assert.deepEqual(r.erreurs, []);
   // Un texte de délai disparu fait rougir la garde : Q9 est à relire.
-  const retire = read(panneau).replace('72h pour répondre', 'réponse attendue');
+  const retire = read(panneau).replace('Vous avez 72 h après la validation pour contester.', 'Contestation possible.');
+  assert.notEqual(retire, read(panneau));
   r = verifier({ lireWeb: lireAvec(panneau, retire) });
   assert.ok(r.erreurs.some(e => e.startsWith('ANCRES_Q9') && e.includes('relire Q9')), JSON.stringify(r.erreurs));
+  // Un texte retiré par D12 qui revient sur le web fait rougir la garde (HARD STOP n°4).
+  const retabli = read(panneau).replace('Discussion en cours.', "Discussion en cours — si pas de résolution sous 72h, l'admin plateforme tranchera.");
+  assert.notEqual(retabli, read(panneau));
+  r = verifier({ lireWeb: lireAvec(panneau, retabli) });
+  assert.ok(r.erreurs.some(e => e.startsWith('RETIRES_Q9') && e.includes('HARD STOP')), JSON.stringify(r.erreurs));
 });
 
 test('TL : MESSAGES_ERREUR, les codes bloquants et les libellés de statut sont repris en entier', () => {

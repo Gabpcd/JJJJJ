@@ -989,9 +989,16 @@ test('CONTRATS fn_fenetre_contestation_ouverte : délai lu au serveur (défaut 4
   for (const temoin of ['delai_contestation_pointage_h', '48 h', 'INVOKER', 'valide_le', 'fail-closed', 'HARD STOP']) {
     assert.ok(fiche.includes(temoin), `fiche fenêtre de contestation : ${temoin} absent`);
   }
-  // Le web garde une constante client de 72 h (écart consigné, décision 9) : la fiche le dit.
-  assert.ok(read('src/components/PanneauContestation.tsx').includes('const DELAI_CONTESTATION_MS = 72 * 60 * 60 * 1000;'));
-  assert.ok(fiche.includes('DELAI_CONTESTATION_MS'));
+  // D12 point 3 : le web lit aussi la fenêtre au serveur (plus de constante client de 72 h), par le même appel que le
+  // natif ; la fiche le dit.
+  const panneau = read('src/components/PanneauContestation.tsx');
+  assert.ok(!panneau.includes('DELAI_CONTESTATION_MS'), 'PanneauContestation : constante client de délai revenue');
+  assert.ok(!/\d+\s*\*\s*60\s*\*\s*60\s*\*\s*1000/.test(panneau), 'PanneauContestation : durée de fenêtre en dur');
+  assert.ok(panneau.includes('useFenetreContestationOuverte(missionId, presenceValideeLe)'));
+  const hook = read('src/hooks/useFenetreContestationOuverte.ts');
+  assert.match(hook, /supabase\.rpc\('fn_fenetre_contestation_ouverte', \{\s+p_type_litige: 'DESACCORD_HEURES_POINTAGE',\s+p_mission_id: missionId,\s+\}\)/);
+  assert.ok(hook.includes('setOuverte(!error && data === true)'), 'fenêtre web : fail-closed absent');
+  assert.ok(fiche.includes('DELAI_CONTESTATION_MS') && fiche.includes('useFenetreContestationOuverte'));
 });
 
 test('Web : le système ① reste mort (sinon la décision 1 du lot 2 est à revoir)', () => {

@@ -759,11 +759,13 @@ CREATE OR REPLACE FUNCTION "public"."fn_presences_detail_mission"("p_mission_id"
 - **Usage prévu** : décider l'affichage du bouton « contester » d'une présence validée avec le **même prédicat que
   le refus serveur** : appel `{p_type_litige:'DESACCORD_HEURES_POINTAGE', p_mission_id}` ; le bouton exige en plus
   `valide_le` non nul et aucun litige existant (parité `PanneauContestation.tsx` l.103-108). Erreur → bouton
-  masqué (fail-closed). Aucune constante de délai dans le Swift : le web garde `DELAI_CONTESTATION_MS` = 72 h
-  (`PanneauContestation.tsx` l.46), le serveur lit `parametres_litiges.delai_contestation_pointage_h`, défaut 48 h
-  (l.36600) — divergence tranchée par délégation le 8 novembre 2026 (HARD STOP n°4, `DECISIONS_LOT2.md` D12) : valeur
-  cible 72 h par une PR de paramétrage B9 hors lot (le défaut 48 h du code ne change pas), aucun texte de délai
-  affiché par le natif.
+  masqué (fail-closed). Aucune constante de délai dans le Swift ni dans le web : le serveur lit
+  `parametres_litiges.delai_contestation_pointage_h`, défaut 48 h (l.36600). Divergence tranchée par délégation le
+  8 novembre 2026 (HARD STOP n°4, `DECISIONS_LOT2.md` D12) : valeur cible 72 h par une PR de paramétrage B9 hors lot
+  (le défaut 48 h du code ne change pas), aucun texte de délai affiché par le natif ; côté web (D12 point 3), la
+  constante client `DELAI_CONTESTATION_MS` (72 h) est remplacée par le même appel, fail-closed
+  (`useFenetreContestationOuverte`, `src/hooks/useFenetreContestationOuverte.ts`), et les textes « 72h pour
+  répondre » et « l'admin plateforme tranchera » sont retirés.
 - **Signature SQL** (`supabase/schema/public.sql` l.36578) :
 
 ```sql
