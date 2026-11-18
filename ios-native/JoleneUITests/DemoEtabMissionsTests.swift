@@ -42,15 +42,14 @@ final class DemoEtabMissionsTests: JoleneUITestCase {
         XCTAssertFalse(element("placeholder-etab-detail-mission").exists, "écran de T5, jamais le provisoire")
         let candidatures = element("etab-mission-lien-candidatures")
         scrollTo(candidatures, in: detail)
-        XCTAssertEqual(candidatures.value as? String, "https://jolene.app/etablissement/missions/demo-etab-m03",
-                       "T6 non livrée : lien vers la page web")
+        XCTAssertNotEqual(candidatures.value as? String, "https://jolene.app/etablissement/missions/demo-etab-m03",
+                          "T6 livrée : écran natif, plus la page web")
         record("\(proofPrefix)-etab-mission-m3")
         candidatures.tap()
-        let renvoi = element("renvoi-web-demo")
-        require("Le lien non livré est servi par le renvoi web") { self.containerVisible(renvoi) }
-        XCTAssertEqual(element("renvoi-web-url").label, "https://jolene.app/etablissement/missions/demo-etab-m03")
-        tap("renvoi-web-fermer")
-        require("Le renvoi web est fermé, le détail reste affiché") { !renvoi.exists && self.containerVisible(detail) }
+        require("Le lien livré ouvre l'écran natif des candidatures (T6)") {
+            self.containerVisible(self.element("etab-candidatures-screen"))
+        }
+        XCTAssertFalse(element("renvoi-web-demo").exists)
     }
 
     func testLectureSeuleSansCandidaturesNiContratNiActionsDeGestion() throws {
@@ -75,6 +74,14 @@ final class DemoEtabMissionsTests: JoleneUITestCase {
             XCTAssertFalse(element(absent).exists, "\(absent) : masqué sans sa permission (§2.7)")
         }
         record("\(proofPrefix)-etab-mission-lecture-seule")
+        // T11 non livrée : le lien du message est servi par le renvoi web (double démo).
+        XCTAssertEqual(message.value as? String, "https://jolene.app/etablissement/messagerie")
+        message.tap()
+        let renvoi = element("renvoi-web-demo")
+        require("Le lien non livré est servi par le renvoi web") { self.containerVisible(renvoi) }
+        XCTAssertEqual(element("renvoi-web-url").label, "https://jolene.app/etablissement/messagerie")
+        tap("renvoi-web-fermer")
+        require("Le renvoi web est fermé, le détail reste affiché") { !renvoi.exists && self.containerVisible(detail) }
     }
 
     // MARK: Étapes

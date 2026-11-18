@@ -132,7 +132,8 @@ final class EtabRouteTests: XCTestCase {
         // Aucune destination livrée avant sa tranche (une ligne par tranche dans `EtabDestination.ecranLivre`) : T5 a
         // livré le détail de mission.
         XCTAssertTrue(EtabDestination.detailMission(id: "m").ecranLivre, "T5")
-        for destination: EtabDestination in [.candidatures(missionId: "m"), .pointage(missionId: "m"),
+        XCTAssertTrue(EtabDestination.candidatures(missionId: "m").ecranLivre, "T6")
+        for destination: EtabDestination in [.pointage(missionId: "m"),
                                              .presencesMission(missionId: "m"), .publication, .contrat(id: "c"),
                                              .conversation(id: "k")] {
             XCTAssertFalse(destination.ecranLivre, destination.tranche)
