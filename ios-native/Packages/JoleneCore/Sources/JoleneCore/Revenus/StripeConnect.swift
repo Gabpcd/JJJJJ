@@ -75,9 +75,10 @@ extension StatutConnect {
 
 /// Textes de l'écran (HARD STOP n°4, TJ8 ; `DECISIONS_LOT3.md`, « T14a-J1 »). Règle **par carte** : une carte qui porte un
 /// texte à portée contractuelle (qui verse, quand, quels frais, droit de recevoir des paiements, mode d'exercice) est
-/// reprise **verbatim**, tutoiement compris, en entier ; les autres textes (en-tête, chargement en échec, étapes de
-/// l'inscription Stripe, raccourcis) passent au vouvoiement (décision 9 du lot 1). Chaque texte verbatim est épinglé à
-/// sa ligne web par `StripeConnectTests.testTextesVerbatimASaLigneWeb`.
+/// reprise **verbatim**, tutoiement compris, en entier, depuis `TextesWeb.StripeConnect` (garde requise
+/// `check-textes-juridiques-ios`, égalité au caractère près ; revue B8 de #1144, m1) ; les autres textes (en-tête,
+/// chargement en échec, étapes de l'inscription Stripe, raccourcis) passent au vouvoiement (décision 9 du lot 1). Les
+/// autres textes repris du web sont épinglés à leur ligne, à l'égalité, par `StripeConnectTests.testTextesVerbatimASaLigneWeb`.
 public enum StripeConnectTextes {
     // En-tête et chargement (non juridiques, vouvoyés).
     public static let titre = "Paiements"                                                       // source: l.185
@@ -91,29 +92,26 @@ public enum StripeConnectTextes {
         "Le statut de votre compte de paiement ne peut pas être vérifié pour le moment. Réessayez dans quelques instants." // vouvoyé de l.65
 
     // Mode salarié (verbatim : qui verse le salaire, rôle du bulletin, restriction du mode d'exercice).
-    public static let salarieTitre = "Mode salarié"                                             // source: l.208
-    public static let salarieTexte = "En tant que salarié(e), ton salaire est versé directement par l'établissement employeur. Le bulletin de paie détaille le montant dû ; il ne prouve pas que le virement a été reçu." // source: l.210
-    public static let salarieEtapesTitre = "Comment ça fonctionne :"                            // source: l.216
+    public static let salarieTitre = TextesWeb.StripeConnect.salarieTitre
+    public static let salarieTexte = TextesWeb.StripeConnect.salarieTexte
+    public static let salarieEtapesTitre = TextesWeb.StripeConnect.salarieEtapesTitre
     public static let salarieEtapes = [
-        "Tu effectues ta mission et pointes tes présences",                                     // source: l.220
-        "L'établissement valide tes heures et déclare le paiement",                             // source: l.224
-        "Tu confirmes la réception dans Mes gains",                                             // source: l.228
-        "Le bulletin de paie est généré par l'établissement",                                   // source: l.232
+        TextesWeb.StripeConnect.salarieEtapeMission, TextesWeb.StripeConnect.salarieEtapeValidation,
+        TextesWeb.StripeConnect.salarieEtapeConfirmation, TextesWeb.StripeConnect.salarieEtapeBulletin,
     ]
-    public static let salarieInfoTitre = "Paiement direct via Stripe Connect"                   // source: l.289
-    public static let salarieInfoTexte = "Les soignants en exercice libéral peuvent recevoir leurs honoraires directement sur leur compte bancaire via Stripe Connect. Passe en libéral pour débloquer cette fonctionnalité." // source: l.291-292
+    public static let salarieInfoTitre = TextesWeb.StripeConnect.salarieInfoTitre
+    public static let salarieInfoTexte = TextesWeb.StripeConnect.salarieInfoTexte
 
     // Compte de test (verbatim, sans tutoiement).
-    public static let compteTestTitre = "Stripe désactivé sur ce compte de test"                // source: l.307
-    public static let compteTestTexte = "Aucun compte bancaire ni paiement réel ne sera créé depuis les données de démonstration. Le parcours Stripe se vérifie en environnement de recette avec Stripe en mode test." // source: l.309
+    public static let compteTestTitre = TextesWeb.StripeConnect.compteTestTitre
+    public static let compteTestTexte = TextesWeb.StripeConnect.compteTestTexte
 
     // NON_DEMANDE (verbatim : cycle de règlement, sécurité, frais).
-    public static let nonDemandeTitre = "Reçois tes honoraires directement"                     // source: l.328
-    public static let nonDemandeTexte = "Connecte ton compte bancaire via Stripe pour recevoir les règlements de tes missions selon le cycle indiqué sur chacune d'elles." // source: l.330
+    public static let nonDemandeTitre = TextesWeb.StripeConnect.nonDemandeTitre
+    public static let nonDemandeTexte = TextesWeb.StripeConnect.nonDemandeTexte
     public static let nonDemandeAvantages = [
-        "Virements automatiques pour les périodes facturées",                                   // source: l.333
-        "Sécurisé par Stripe (certifié PCI DSS)",                                               // source: l.334
-        "Aucun frais pour le soignant",                                                         // source: l.335
+        TextesWeb.StripeConnect.nonDemandeVirements, TextesWeb.StripeConnect.nonDemandeSecurite,
+        TextesWeb.StripeConnect.nonDemandeFrais,
     ]
     public static let connecter = "Connecter mon compte bancaire"                               // source: l.339
 
@@ -134,8 +132,8 @@ public enum StripeConnectTextes {
     public static let completerProfil = "Compléter mon profil Stripe"                           // source: l.455
 
     // SUPPRIME (verbatim : droit de recevoir des paiements Connect).
-    public static let supprimeTitre = "Compte Stripe supprimé"                                  // source: l.466
-    public static let supprimeTexte = "Ton compte Stripe Connect a été supprimé (clôture manuelle, fraude détectée par Stripe, ou décision admin plateforme). Tu ne peux plus recevoir de paiements Connect jusqu'à la création d'un nouveau compte." // source: l.468-470
+    public static let supprimeTitre = TextesWeb.StripeConnect.supprimeTitre
+    public static let supprimeTexte = TextesWeb.StripeConnect.supprimeTexte
     public static let recommencer = "Recommencer l'onboarding"                                  // source: l.476
 
     // REJETE (étape de la vérification Stripe, vouvoyée ; « Contacter le support » non porté : modale web sans équivalent).

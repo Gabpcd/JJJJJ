@@ -258,12 +258,14 @@ struct MainTabView: View {
             selection = .profil
             cheminProfil = NavigationPath()
             cheminProfil.append(jetonsMonEspace.presenter(route))
-        case .stripeConnect(let retour):
-            // Lot 3, T14a : empilé sur le Profil remis à sa racine, comme les entrées de « Mon espace » ; un retour de
-            // Stripe relit le statut avec `force=true` (le flux hébergé encore ouvert est fermé par le coordinateur).
+        case .stripeConnect:
+            // Lot 3, T14a : empilé sur le Profil remis à sa racine, comme les entrées de « Mon espace ». Revue B8 de #1144,
+            // m2 : relecture `force=true` quel que soit le chemin (lien, tap push, ligne du centre, retour de Stripe ou
+            // non) — un flux hébergé encore ouvert est fermé par le coordinateur, et l'écran retiré emporte sa relecture
+            // forcée : celui qui est affiché doit la refaire (cache serveur de 5 min contourné, un `accounts.retrieve`).
             selection = .profil
             cheminProfil = NavigationPath()
-            cheminProfil.append(jetonsMonEspace.presenter(StripeConnectRoute(force: retour != nil)))
+            cheminProfil.append(jetonsMonEspace.presenter(StripeConnectRoute(force: true)))
         case .web(let route):
             presentateurRenvoiWeb?.presenter(route)
         case .aucune:
@@ -271,10 +273,16 @@ struct MainTabView: View {
         }
     }
 
-    /// Lot 3, T14a : écran Stripe Connect ; ses raccourcis passent par `presenter` (cible de l'espace).
+    /// Lot 3, T14a : écran Stripe Connect. Revue B8 de #1144, m3 : ses raccourcis vers « Mon espace » (Mes présences, Mes
+    /// contrats) s'empilent au-dessus de lui, sans remettre le Profil à sa racine — « Retour » ramène à l'écran Stripe,
+    /// comme le retour du navigateur après un `<Link>` du web ; les autres (Mes gains, renvois web) passent par `presenter`.
     private func stripeConnect(_ route: StripeConnectRoute) -> some View {
         StripeConnectScreen(session: session, snapshot: snapshot, flux: container.fluxExterne, force: route.force) { cible in
-            presenter(cible, depuisCentre: false)
+            if let monEspace = MonEspaceRoute(cible) {
+                cheminProfil.append(jetonsMonEspace.presenter(monEspace))
+            } else {
+                presenter(cible, depuisCentre: false)
+            }
         }
     }
 }

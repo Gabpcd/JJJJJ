@@ -1904,7 +1904,11 @@ Tests d'abord : commit `test(ios-native): L3-T15 — tests de la revue B8 n°1 (
   affiché (`DeepLinkCoordinator.fermerFluxExterne`).
 - **Routes.** `DestinationLien.ecranNatifLivre(.stripeConnect)` passe à `true` ; `CibleNotification.stripeConnect(retour:)`
   (onglet Profil, présentable) ; `MainTabView.presenter` remet le Profil à sa racine et empile `StripeConnectRoute`
-  jetonnée (`force` vrai pour un retour). Les 6 vecteurs push de la famille `/soignant/stripe-connect` passent au natif :
+  jetonnée, toujours avec `force` vrai (revue B8 de #1144, m2 : un lien, un tap ou une ligne du centre qui ferme le flux
+  hébergé retire l'écran qui faisait la relecture forcée ; l'écran affiché la refait, quel que soit le chemin) ; l'entrée
+  du hub lit sans `force` (cache serveur, comme le web hors retour). Raccourcis « Mes présences » et « Mes contrats »
+  (revue B8 de #1144, m3) : empilés au-dessus de l'écran Stripe, sans remise à zéro du Profil — « Retour » y ramène,
+  comme le retour du navigateur après un `<Link>` du web. Les 6 vecteurs push de la famille `/soignant/stripe-connect` passent au natif :
   626 natifs, 264 renvois. `DemoLiensLot3Tests` (route non livrée, renvoi puis refus de réinitialisation) prend la série
   de missions (`/soignant/missions/serie/:id`, renvoi web jusqu'au lot 4) à la place de Stripe Connect.
 - **Écarts (non juridiques, consignés).**
@@ -1926,10 +1930,15 @@ Tests d'abord : commit `test(ios-native): L3-T15 — tests de la revue B8 n°1 (
   9. Pas de fixture `demo-stripe-status.json` exportée (blueprint §2.7) : les variantes démo (`-JOLENE_DEMO_STRIPE
      NON_DEMANDE|EN_COURS|COMPLET|SUSPENDU|REJETE|SUPPRIME|TEST|SALARIE`) sont construites par la même règle
      `StatutConnect.lire` ; le serveur simulé ne rend `COMPLET` après l'onboarding qu'à une lecture forcée (cache de 5 min).
+  10. (revue B8 de #1144, m5) « Mandat de facturation » (même section « Paiements & facturation » du hub web, pour un
+      libéral, `MonCompteSoignant.tsx` l.69) n'est pas porté : aucune entrée au hub natif, la page reste web
+      (`/soignant/mandat-facturation`, lot 4, renvoi web, `PARITE_SOIGNANT.md`).
 - **Tests.** Niveau 1 : `StripeConnectTests` (statut, compte de test et salarié sans appel d'edge,
   `TEST_ACCOUNT_PAYMENT_DISABLED`, toute issue du flux → `force=true`, textes verbatim) et
   `SupabaseStripeConnectGatewayTests` (`Origin`, `POST`, `?force=true`, 403 `ORIGINE_NON_AUTORISEE` et
-  `TEST_ACCOUNT_PAYMENT_DISABLED`, refus « libéral », `COMPLET` sans drapeaux) ; gardes ajustées (`DestinationLienTests`,
+  `TEST_ACCOUNT_PAYMENT_DISABLED`, refus « libéral », `COMPLET` sans drapeaux ; revue B8 de #1144, m4 : lecture de
+  l'exercice `soignants(type_exercice, statut_liberal, est_compte_test)` sans aucun appel d'edge, ligne absente en erreur,
+  401 de l'onboarding en session expirée, 503 `TEST_ACCOUNT_CLASSIFICATION_UNAVAILABLE` au repli du web) ; gardes ajustées (`DestinationLienTests`,
   `DeepLinkIntentTests`, `CentreNotificationsTests`, `DemoWorldTests`, `Lot3PortsTests`). Niveau 2 : `DemoStripeTests`
   (deux tests, éclat `lot3-revenus`, vérifié par la CI seulement). STAGING (compte test, D5-R) et appareil iOS ≥ 17.4 :
   T16, T17.
@@ -1941,8 +1950,17 @@ Tests d'abord : commit `test(ios-native): L3-T15 — tests de la revue B8 n°1 (
   restriction du mode d'exercice (l.289-292), droit de recevoir des paiements Connect (compte supprimé, l.468-470), compte
   de test (l.307-309) — est reprise **verbatim**, tutoiement compris, en entier. Les autres textes (en-tête l.187,
   chargement en échec l.65 et l.172, étapes de l'inscription Stripe l.352, l.450, l.499-501, sous-titres des raccourcis
-  l.247 et l.280) passent au vouvoiement (décision 9 du lot 1). Titres et libellés de boutons : verbatim. Épinglés par
-  `StripeConnectTests.testTextesVerbatimASaLigneWeb`.
+  l.247 et l.280) passent au vouvoiement (décision 9 du lot 1). Titres et libellés de boutons : verbatim.
+- **Garde des cinq cartes contractuelles** (revue B8 de #1144, m1 ; décision prise par délégation, transmise par le
+  coordinateur) : leurs textes — mode salarié (l.208-232) et son encadré (l.289-292), NON_DEMANDE (l.328-335), compte de
+  test (l.307-309), compte supprimé (l.466-470) — sont dans `Legal/TextesWeb.swift` (`TextesWeb.StripeConnect`, nature
+  `[juridique]`, l.228 en deux fragments assemblés par `salarieEtapeConfirmation`, zone de rendu ancrée dans
+  `scripts/mobile/textes-web-ios-rendus.json`), sous la garde requise `check-textes-juridiques-ios` (étape « Garde de
+  livraison mobile » du check « Typecheck + build ») : égalité au caractère près avec le web, comme les autres textes
+  HARD STOP. `StripeConnectTextes` y renvoie. Les autres textes repris du web (titres, boutons, avis, raccourcis) sont
+  épinglés par `StripeConnectTests.testTextesVerbatimASaLigneWeb` à l'**égalité** avec un texte affiché de leur ligne
+  (plus une simple inclusion). La justification antérieure « garde absente de la base du lot 3 » ne vaut plus depuis
+  #1131 pour les textes de cette tranche.
 - **« Aucun frais pour le soignant » (l.335)**, relu contre la définition du dépôt d'`escrow-debit-echeance` : destination
   charge, `amount` = honoraires + commission, `application_fee_amount: commissionCents` (index.ts l.343-352 ;
   `docs/flux-monetaire-escrow.md` l.13-22) ; la commission s'ajoute au débit de l'établissement, les honoraires arrivent
