@@ -82,6 +82,9 @@ struct MainTabView: View {
     @State private var sectionRevenus: SectionRevenus = .apercu
     /// Notifications lues dans le centre (jeton de péremption du compteur de l'Accueil).
     @State private var lecturesCentre = 0
+    /// Lot 4, T1c (revue B8 de #1159, m1) : demandes de la vue Swipe d'Explorer (cible `.secondaire(.swipe)`), lues par
+    /// `vueSwipe(model:)` dans `contexteSecondaire` (T3b), comme `presentationsMissions` pour Mes missions.
+    @State private var demandesVueSwipe = 0
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
 
     init(container: AppContainer, session: SessionStore, snapshot: SessionSnapshot) {
@@ -301,9 +304,11 @@ struct MainTabView: View {
             cheminProfil = NavigationPath()
             cheminProfil.append(jetonsMonEspace.presenter(StripeConnectRoute(force: true)))
         case .secondaire(.swipe):
-            // Lot 4, T1c : le swipe est une vue d'Explorer (T3b, `vueSwipe`), jamais un écran empilé.
+            // Lot 4, T1c : le swipe est une vue d'Explorer (T3b, `vueSwipe`), jamais un écran empilé ; l'intention « vue
+            // Swipe » est transmise par le jeton `demandesVueSwipe` (revue B8 de #1159, m1).
             selection = .explorer
             cheminExplorer = NavigationPath()
+            demandesVueSwipe += 1
         case .secondaire(let ecran):
             // Lot 4, T1c : écran secondaire livré, empilé sur le Profil remis à sa racine (jeton neuf, comme « Mon espace ») ;
             // son coupe-circuit est lu par `SecondaryRouter`.
@@ -319,9 +324,9 @@ struct MainTabView: View {
 
     /// Lot 4, T1c : contexte des écrans secondaires de cet espace (`SecondaryRouter`, emplacements des tranches).
     private var contexteSecondaire: ContexteSecondaire {
-        ContexteSecondaire(container: container, session: session, snapshot: snapshot) { cible in
-            presenter(cible, depuisCentre: false)
-        }
+        ContexteSecondaire(container: container, session: session, snapshot: snapshot,
+                           ouvrir: { cible in presenter(cible, depuisCentre: false) },
+                           demandesVueSwipe: demandesVueSwipe)
     }
 
     /// Lot 3, T14a : écran Stripe Connect. Revue B8 de #1144, m3 : ses raccourcis vers « Mon espace » (Mes présences, Mes

@@ -5,7 +5,7 @@ import Foundation
 /// l'abonnement Realtime (`RealtimePort`, `UnwiredRealtimePort` jusqu'à T7a) sont appelés par l'app depuis L4-T1c
 /// (`DeepLinkCoordinator` → `ParrainageApplicateur`, `JoleneApp` → `RealtimeLifecycle`), mais ne font rien tant que
 /// leur tranche n'a pas livré. L'app ne passe que par ces deux entrées (garde node « m6 » de
-/// `tests/node/check-rpc-contracts-lot4.node.mjs`) ; `VerrousLot4Tests` lie chaque verrou à l'état du port dans
+/// `tests/node/check-rpc-contracts-lot4.node.mjs`) ; `SecondairesLot4Tests` lie chaque verrou à l'état du port dans
 /// `DemoWorldTests.portsEnAttenteLot4` : livrer la capture sans câbler le port (ou l'inverse) rougit la suite.
 public enum VerrousLot4 {
     /// Capture et application du code de parrainage branchées : vrai seulement quand T6 a livré `ParrainageCapture`.

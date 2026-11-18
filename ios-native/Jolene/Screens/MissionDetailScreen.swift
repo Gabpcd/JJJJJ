@@ -86,6 +86,9 @@ struct MissionDetailScreen: View {
                 if let service = mission.record.service { detailRow("Service", value: service, identifier: "mission-detail-service") }
                 if let contrat = mission.record.typeContratRecherche { detailRow("Contrat recherché", value: contrat, identifier: "mission-detail-contrat") }
                 detailRow("Profession requise", value: mission.record.professionRequise, identifier: "mission-detail-profession")
+                // L4-T1c : « Ne plus travailler ensemble » puis « Signaler », au bas du bloc de l'établissement comme le web
+                // (`DetailMissionSoignant.tsx` l.1160-1183, T11 et T7b) ; rien avant leurs tranches.
+                ActionsEtablissementMission(mission: mission)
             }
             // Lot 1 (T4a) : carte en lecture seule, sur les coordonnées serveur de l'établissement.
             if let point = CarteMission.point(pour: mission) { MissionMapView(point: point) }
@@ -125,7 +128,9 @@ struct MissionDetailScreen: View {
             CandidatureSection(mission: mission, session: session, snapshot: snapshot) { await model.load() }
             entreePresences(mission)
             AnnulationSection(mission: mission, session: session, snapshot: snapshot) { await model.load() } // L1-T7
-            MissionActionsSection(mission: mission) // L4-T1c : actions du lot 4 (T7b, T11), rien avant leurs tranches
+            // L4-T1c : fil de discussion avec l'établissement après « Annuler ma participation », comme le web
+            // (`DetailMissionSoignant.tsx` l.1550-1558, T7b) ; rien avant sa tranche.
+            MissionContactButton(mission: mission)
         }
         .padding(JoleneSpacing.lg)
         .frame(maxWidth: 640)

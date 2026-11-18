@@ -85,14 +85,15 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.geocodage is ApiAdresseGeocodage)
     }
 
-    /// L4-T1c, verrou m6 (revue B8 de #1146) : aucun abonnement Realtime ni capture de parrainage dans le monde Supabase
-    /// tant que leurs ports restent non câblés (T7a, T6) ; jumelle de `SecondairesLot4Tests` côté démo.
+    /// L4-T1c, verrou m6 (revue B8 de #1146) : état attendu **écrit en dur** du monde Supabase avant T6 et T7a (revue B8
+    /// de #1159, m5 : plus de comparaison de deux calculs de `is UnwiredPort`). T7a, qui câble `SupabaseLot4.realtime`,
+    /// et T6, qui livre `ParrainageCapture` et `SupabaseLot4.parrainage`, inversent chacune leurs deux attentes ici.
     func testAbonnementRealtimeVerrouilleAvantT7a() {
         let gateways = SupabaseGateways.make(client: TestClient.make())
-        XCTAssertEqual(VerrousLot4.abonnementRealtimePermis(gateways.realtime), !gateways.unwiredPorts.contains("realtime"),
-                       "abonnement permis si et seulement si le port realtime est câblé")
-        XCTAssertEqual(VerrousLot4.parrainageBranche, !gateways.unwiredPorts.contains("parrainage"),
-                       "capture du parrainage branchée si et seulement si le port parrainage est câblé")
+        XCTAssertTrue(gateways.realtime is UnwiredRealtimePort, "avant T7a : port Realtime Supabase non câblé")
+        XCTAssertFalse(VerrousLot4.abonnementRealtimePermis(gateways.realtime), "avant T7a : aucun abonnement Realtime")
+        XCTAssertTrue(gateways.parrainage is UnwiredParrainagePort, "avant T6 : port parrainage Supabase non câblé")
+        XCTAssertFalse(VerrousLot4.parrainageBranche, "avant T6 : aucune capture ni application du code de parrainage")
     }
 
     /// Lot 2 (T1) : `câblerLot2(_:client:)` est le seul point d'assignation des cinq ports du lot 2 du

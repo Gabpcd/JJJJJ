@@ -1,5 +1,6 @@
 import SwiftUI
 import JoleneCore
+import JoleneDesign
 
 /// Route empilée d'un écran secondaire du lot 4 (L4-T1c, `docs/mobile-swift/LOT4_PLAN.md` §2.1, §3 T1c), par valeur
 /// comme `MonEspaceRoute` : entrées du hub (`ActiviteSoignantSection`, route nue) et cibles des liens, des taps push et
@@ -16,6 +17,10 @@ struct ContexteSecondaire {
     let snapshot: SessionSnapshot
     /// Présente une cible de l'espace (`MainTabView.presenter`) : lien d'un écran vers un autre écran, renvoi web.
     let ouvrir: (CibleNotification) -> Void
+    /// Demandes de la vue Swipe d'Explorer (jeton de présentation, comme `presentationsMissions`) : un lien, un tap ou une
+    /// cible `.secondaire(.swipe)` l'incrémente ; T3b le lit dans `vueSwipe(model:)` (`.onChange`) pour afficher la vue
+    /// Swipe, sans retoucher `MainTabView` (revue B8 de #1159, m1).
+    let demandesVueSwipe: Int
 }
 
 private struct ContexteSecondaireKey: EnvironmentKey {
@@ -47,22 +52,35 @@ extension View {
 }
 
 /// Aiguillage `EcranSecondaire` → écran (switch exhaustif, une ligne par écran). Seul point de construction des écrans
-/// du lot 4 : il lit le coupe-circuit `ios_natif_<ecran>_actif` (B0-bis, D18 ; fail-open, décision 15 du lot 1) et sert
-/// `RenvoiWebScreen` quand il est coupé. Chaque écran est un stub (`<Ecran>Screen.swift`, un fichier par écran sous
-/// `Screens/Secondaires/`) remplacé par sa tranche, qui passe aussi sa ligne de `DestinationLien.ecranNatifLivre` : un
-/// écran non livré n'est jamais atteint (sa destination reste le renvoi web canonique) et ce fichier n'est plus
-/// modifié après T1c.
+/// du lot 4 : porte à trois états (`PorteEcranNatif`, motif de L2-T10, revue B8 de #1159, M2) — tant que le coupe-circuit
+/// `ios_natif_<ecran>_actif` n'est pas lu, une vue neutre (`secondaire-porte-lecture`), ni écran natif ni `.task` de
+/// l'écran ; lu à vrai, absent ou illisible (fail-open, D18 et décision 15 du lot 1), l'écran natif ; lu à faux,
+/// `RenvoiWebScreen`. Chaque écran est un stub (`<Ecran>Screen.swift`, un fichier par écran sous `Screens/Secondaires/`)
+/// remplacé par sa tranche, qui passe aussi sa ligne de `DestinationLien.ecranNatifLivre` : un écran non livré n'est
+/// jamais atteint (sa destination reste le renvoi web canonique) et ce fichier n'est plus modifié après T1c.
 struct SecondaryRouter: View {
     let ecran: EcranSecondaire
     let contexte: ContexteSecondaire
-    /// Coupe-circuit de l'écran, fail-open tant qu'il n'est pas lu.
-    @State private var ecranActif = true
+    /// Coupe-circuit de l'écran : `.lecture` tant qu'il n'est pas lu.
+    @State private var porte = PorteEcranNatif(drapeau: nil)
 
     var body: some View {
         Group {
-            if ecranActif { ecranNatif } else { RenvoiWebScreen(ecran: ecran) }
+            switch porte {
+            case .lecture: lecture
+            case .natif: ecranNatif
+            case .renvoiWeb: RenvoiWebScreen(ecran: ecran)
+            }
         }
-        .task(id: ecran) { ecranActif = await drapeau() }
+        .task { porte = await lire() }
+    }
+
+    /// Vue neutre pendant la lecture du drapeau : aucun texte, aucune lecture de l'écran lancée.
+    private var lecture: some View {
+        ProgressView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(JoleneColor.lavender.ignoresSafeArea())
+            .accessibilityIdentifier("secondaire-porte-lecture")
     }
 
     @ViewBuilder
@@ -86,8 +104,7 @@ struct SecondaryRouter: View {
         }
     }
 
-    private func drapeau() async -> Bool {
-        guard let gateways = await contexte.session.controller.gateways(for: contexte.snapshot.epoch) else { return true }
-        return await gateways.flags.ecranActif(ecran)
+    private func lire() async -> PorteEcranNatif {
+        await PorteEcranNatif.lire(ecran, flags: contexte.session.controller.gateways(for: contexte.snapshot.epoch)?.flags)
     }
 }
