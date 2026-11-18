@@ -490,6 +490,15 @@
         "</a>",
         ". Elles précisent les situations concernées, les durées applicables et le calcul des frais de recrutement."
       ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.StripeConnect.salarieEtapeConfirmation"
+      ],
+      "source": "src/pages/PageStripeConnect.tsx:228",
+      "code": [
+        "<span>Tu confirmes la réception dans <strong>Mes gains</strong></span>"
+      ]
     }
   ],
   "rendus": [
@@ -877,6 +886,11 @@
       "fonction": "TextesWeb.CandidaturesEtablissement.cgvMention",
       "appel": "cgvMention",
       "rendu": "Avant d’accepter un candidat, consultez les conditions de non-contournement et de recrutement direct — CGV art. 8. Elles précisent les situations concernées, les durées applicables et le calcul des frais de recrutement."
+    },
+    {
+      "fonction": "TextesWeb.StripeConnect.salarieEtapeConfirmation",
+      "appel": "salarieEtapeConfirmation",
+      "rendu": "Tu confirmes la réception dans Mes gains"
     }
   ]
 }

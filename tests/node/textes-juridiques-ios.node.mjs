@@ -138,6 +138,7 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
     'src/pages/DocumentsSoignant.tsx',
     'src/pages/ListeContrats.tsx', // T4a (titre « Mes contrats ») et T9a (liste des contrats)
     'src/pages/MesDocuments.tsx',
+    'src/pages/PageStripeConnect.tsx', // L3-T14a (revue B8 de #1144, m1) : cartes contractuelles de Stripe Connect
     'src/pages/PresencesSoignant.tsx',
   ].concat(lot5).sort());
 });
