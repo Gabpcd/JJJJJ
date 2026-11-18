@@ -81,8 +81,8 @@ public enum IbanRules {
 /// `docs/mobile-swift/DECISIONS_LOT3.md` (section T14b). Non portés (TJ6, TJ8) : l.280 (destinataires de l'IBAN,
 /// inexact) et l.308 (« L'ancien IBAN est conservé dans ton historique… », inexact : voir le mémo).
 public enum IbanTextes {
-    /// `MonCompteSoignant.tsx` l.65 (section du hub) et l.73 (entrée).
-    public static let sectionHub = "Paiements & facturation"
+    /// `MonCompteSoignant.tsx` l.73 (entrée). Le titre de la section du hub (l.65), partagé avec T14a, est
+    /// `StripeConnectTextes.sectionHub` seul (intégration vague A, revue B8 de #1144 : un seul titre).
     public static let entreeHub = "Coordonnées bancaires"
     /// l.277.
     public static let titre = "Coordonnées bancaires"
