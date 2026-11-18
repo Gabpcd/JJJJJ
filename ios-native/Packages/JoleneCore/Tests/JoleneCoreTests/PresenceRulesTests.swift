@@ -87,7 +87,9 @@ final class PresenceRulesTests: XCTestCase {
 
 /// Garde de non-idempotence de `ConfirmationPresenceModel` (revue B8 de T6c, M1) : un seul appel au port pour un double
 /// toucher, bloc « confirmée » dès la date relue par la gateway (même si la mission relue ne la porte pas encore), bouton
-/// jamais réactivé après un succès ; repli web pour toute erreur (m3).
+/// jamais réactivé après un succès ; repli web pour un refus sans message et une erreur d'envoi (m3) ; issue incertaine
+/// (succès serveur non relu, délai dépassé) sans aucun nouvel envoi avant une relecture qui conclut (revue B8 delta de
+/// #1157, M1).
 @MainActor
 final class ConfirmationPresenceModelTests: XCTestCase {
     private struct EchecTransport: Error {}
@@ -111,10 +113,53 @@ final class ConfirmationPresenceModelTests: XCTestCase {
 
     private static let dateRelue = "2026-11-02T00:00:00.000Z"
 
-    private func modele(_ port: PortEspion) async throws -> (ConfirmationPresenceModel, MissionRecord) {
+    /// Port lent : répond après `delai` secondes (au-delà du délai de `bounded`, le serveur « a pu écrire »).
+    private final class PortLent: PresencePort, @unchecked Sendable {
+        private let lock = NSLock()
+        private var nombre = 0
+        var appels: Int { lock.withLock { nombre } }
+
+        func confirmerPresence(missionId: String, context: MissionReadContext) async throws -> PresenceOutcome {
+            lock.withLock { nombre += 1 }
+            try await Task.sleep(nanoseconds: 10_000_000_000)
+            return .confirmee(presenceConfirmeeLe: "2026-11-02T00:00:00.000Z")
+        }
+    }
+
+    /// Lecture de la mission en échec (`mission(id:)`), le reste délégué : la relecture d'une issue incertaine ne conclut pas.
+    private struct MissionsEnPanne: MissionsPort {
+        let base: MissionsPort
+        func profile(userId: String) async throws -> SoignantProfile? { try await base.profile(userId: userId) }
+        func listMissions(context: MissionReadContext, filters: MissionFilters) async throws -> [Mission] {
+            try await base.listMissions(context: context, filters: filters)
+        }
+        func mission(id: String, context: MissionReadContext) async throws -> Mission? {
+            throw JoleneError(.network, "Le service ne répond pas.")
+        }
+    }
+
+    /// Mission relue portant la date écrite par le serveur (`date`), ou relue sans date (`nil`).
+    private struct MissionsRelues: MissionsPort {
+        let base: MissionsPort
+        let date: String?
+        func profile(userId: String) async throws -> SoignantProfile? { try await base.profile(userId: userId) }
+        func listMissions(context: MissionReadContext, filters: MissionFilters) async throws -> [Mission] {
+            try await base.listMissions(context: context, filters: filters)
+        }
+        func mission(id: String, context: MissionReadContext) async throws -> Mission? {
+            var relue = try await base.mission(id: id, context: context)
+            relue?.record.presenceConfirmeeLe = date
+            return relue
+        }
+    }
+
+    private func modele(_ port: any PresencePort, missions: ((MissionsPort) -> MissionsPort)? = nil,
+                        delai: TimeInterval = SessionController.defaultResolutionTimeout) async throws
+        -> (ConfirmationPresenceModel, MissionRecord) {
         var gateways = DemoWorld.gateways()
         gateways.presence = port
-        let controller = SessionController(gateways: gateways)
+        if let missions { gateways.missions = missions(gateways.missions) }
+        let controller = SessionController(gateways: gateways, resolutionTimeout: delai)
         let state = await controller.signIn(email: DemoWorld.context.email ?? "", password: "demonstration")
         let snapshot = try XCTUnwrap(state.snapshot, "session démo prête attendue, obtenu \(state)")
         let model = ConfirmationPresenceModel(missionId: DemoPresenceGateway.idMissionJ1, controller: controller, snapshot: snapshot)
@@ -158,5 +203,65 @@ final class ConfirmationPresenceModelTests: XCTestCase {
         let (inconnu, _) = try await modele(autre)
         _ = await inconnu.confirmer()
         XCTAssertEqual(inconnu.issue, .refus("Confirmation impossible."))
+    }
+
+    // MARK: - Issue incertaine (revue B8 delta de #1157, M1)
+
+    /// `{success:true}` puis relecture en échec : texte de relecture, jamais « Confirmation impossible. », et aucun second
+    /// appel au port sur un nouvel appui tant qu'aucune relecture n'a conclu (« Actualiser » ne renvoie rien).
+    func testEnvoyeeNonRelueAucunNouvelEnvoiTantQuAucuneRelectureNAConclu() async throws {
+        let port = PortEspion(.success(.envoyeeNonRelue(message: PresenceRules.Textes.envoyeeNonRelue)))
+        let (model, mission) = try await modele(port, missions: { MissionsEnPanne(base: $0) })
+        let relire = await model.confirmer()
+        XCTAssertTrue(relire, "l'écran relit la mission")
+        XCTAssertEqual(model.issue, .incertaine(PresenceRules.Textes.envoyeeNonRelue))
+        XCTAssertNotEqual(model.issue, .refus("Confirmation impossible."))
+        XCTAssertTrue(model.relectureRequise, "« Actualiser » à la place du bouton")
+        XCTAssertEqual(model.bloc(mission), .aConfirmer)
+        let encore = await model.confirmer()
+        XCTAssertFalse(encore, "aucun nouvel envoi avant une relecture qui conclut")
+        XCTAssertEqual(port.appels, 1)
+        _ = await model.relire()
+        XCTAssertTrue(model.relectureRequise, "relecture en échec : l'issue reste incertaine")
+        XCTAssertEqual(model.issue, .incertaine(PresenceRules.Textes.envoyeeNonRelue))
+        _ = await model.confirmer()
+        XCTAssertEqual(port.appels, 1, "toujours un seul appel")
+    }
+
+    /// Délai dépassé de `bounded` : le serveur a pu écrire ; même issue incertaine, aucun second appel.
+    func testDelaiDepasseEstUneIssueIncertaineSansNouvelEnvoi() async throws {
+        let port = PortLent()
+        let (model, _) = try await modele(port, missions: { MissionsEnPanne(base: $0) }, delai: 1)
+        _ = await model.confirmer()
+        XCTAssertEqual(model.issue, .incertaine(PresenceRules.Textes.envoyeeNonRelue), "jamais un échec annoncé après un délai")
+        XCTAssertTrue(model.relectureRequise)
+        let encore = await model.confirmer()
+        XCTAssertFalse(encore)
+        XCTAssertEqual(port.appels, 1)
+    }
+
+    /// La relecture conclut : date relue → confirmée, bouton masqué ; relue sans la date → l'envoi redevient possible
+    /// (la relecture prouve que la confirmation n'a pas été enregistrée, PRINCIPES §4).
+    func testRelectureConcluanteLeveLIncertitude() async throws {
+        let incertaine = PresenceOutcome.envoyeeNonRelue(message: PresenceRules.Textes.envoyeeNonRelue)
+        let port = PortEspion(.success(incertaine))
+        let (confirmee, mission) = try await modele(port, missions: { MissionsRelues(base: $0, date: Self.dateRelue) })
+        _ = await confirmee.confirmer()
+        XCTAssertEqual(confirmee.issue, .confirmee)
+        XCTAssertFalse(confirmee.relectureRequise)
+        XCTAssertEqual(confirmee.presenceRelue, Self.dateRelue)
+        XCTAssertEqual(confirmee.bloc(mission), .confirmee)
+        let encore = await confirmee.confirmer()
+        XCTAssertFalse(encore)
+        XCTAssertEqual(port.appels, 1)
+
+        let nonEnregistree = PortEspion(.success(incertaine))
+        let (sansDate, missionSansDate) = try await modele(nonEnregistree, missions: { MissionsRelues(base: $0, date: nil) })
+        _ = await sansDate.confirmer()
+        XCTAssertFalse(sansDate.relectureRequise, "relecture concluante : la confirmation n'a pas été enregistrée")
+        XCTAssertEqual(sansDate.issue, .refus("Confirmation impossible."))
+        XCTAssertEqual(sansDate.bloc(missionSansDate), .aConfirmer)
+        _ = await sansDate.confirmer()
+        XCTAssertEqual(nonEnregistree.appels, 2, "nouvel envoi permis après une relecture qui conclut")
     }
 }

@@ -170,7 +170,7 @@ final class AnnulationRulesTests: XCTestCase {
         XCTAssertEqual(AnnulationRules.Motif.changementAvis.libelle, "🤔 Changement d'avis")
     }
 
-    /// Décision 21 (`LOT1_PLAN.md` §7) : « 🏥 Urgence médicale » n'est pas proposé (`docs/CONFORMITE.md` §1.4), sans texte
+    /// Décision 4 amendée (`LOT1_PLAN.md` §7) : « 🏥 Urgence médicale » n'est pas proposé (`docs/CONFORMITE.md` §1.4), sans texte
     /// de remplacement ; les cinq autres motifs du web restent, dans leur ordre. Le serveur l'admet encore.
     func testUrgenceMedicaleNonProposee() {
         XCTAssertEqual(AnnulationRules.Motif.allCases.map(\.rawValue),

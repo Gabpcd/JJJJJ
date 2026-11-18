@@ -180,9 +180,12 @@ public final class CandidatureModel: ObservableObject {
         }
     }
 
-    /// Message affiché pour une erreur (`nil` : annulation, rien à montrer).
-    private static func message(_ error: Error) -> String? {
-        if let verrou = error as? CandidatureVerrou { return verrou.errorDescription }
+    /// Message affiché pour une erreur (`nil` : annulation, rien à montrer). Revue B8 delta de #1150 (m2), intégration de
+    /// la vague B : le verrou de la proposition non libérale garde sa référence au plan (`CandidatureVerrou.errorDescription`,
+    /// journaux et tests : « un gap connu reste verrouillé ») ; l'écran affiche le texte opérationnel de T6b
+    /// (`LibellesCandidature.propositionWeb`), jamais un chemin du dépôt.
+    static func message(_ error: Error) -> String? {
+        if error is CandidatureVerrou { return LibellesCandidature.propositionWeb }
         if let jolene = error as? JoleneError {
             return jolene.kind == .cancelled ? nil : jolene.message
         }
