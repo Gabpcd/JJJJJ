@@ -1172,17 +1172,16 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "j
   `23503` → message générique, aucun détail technique.
 - **Retrait** : `DELETE …?mission_id=eq.<id>&soignant_id=eq.<uid>` avec `Prefer: return=minimal`, puis relecture.
 - **Second magasin (décision 8 du lot 1 amendée le 18/11/2026, revue B8 de T4b, M2)** : chaque lecture relit aussi
-  `GET /rest/v1/parcours_inscription?select=donnees&user_id=eq.<uid>&limit=1` (RLS `parcours_inscription_proprietaire`,
-  l.78669 : propriétaire et compte actif ; `GRANT SELECT` l.86801) et prend `donnees.missionsSauvegardees` (chaînes
-  seulement, comme `chargerFavorisInscription`) ; les missions absentes de la table sont relues par
+  `GET /rest/v1/parcours_inscription?select=missionsSauvegardees:donnees->missionsSauvegardees&user_id=eq.<uid>&limit=1` (RLS `parcours_inscription_proprietaire`,
+  l.78669 : propriétaire et compte actif ; `GRANT SELECT` l.86801) et ne lit que `donnees->missionsSauvegardees` (pas le brouillon
+  entier ; chaînes seulement, comme `chargerFavorisInscription`) ; les missions absentes de la table sont relues par
   `GET /rest/v1/missions?select=id,intitule,debut_le,fin_le,duree_heures,nb_creneaux,statut&id=in.(…)` (RLS des missions,
   lots de 50, UUID seulement). Fusion sans doublon comme `MesFavorisSoignant.tsx` l.43-53 (`FavorisRegles.fusion`) ;
   l'étoile est allumée si l'un des deux magasins contient la mission (`BoutonSauvegarderMission.tsx` l.36-44). Le
   retrait appelle d'abord `fn_modifier_favori_inscription(p_actif := false)` si la mission figure dans ce magasin
-  (fiche suivante), puis supprime la ligne de la table. L'ajout n'écrit que la table, comme le web. Le web lit les
-  aperçus par `fn_explorer_missions_inscription` (contrat de l'onboarding, paginé par 100, sans filtre par identifiant) :
-  le natif lit `missions` par identifiants, sous la même RLS que la jointure de la table (écart de transport, même
-  affichage : seules les missions `OUVERTE` à début futur sont listées).
+  (fiche suivante), puis supprime la ligne de la table. L'ajout n'écrit que la table, comme le web. Seules les missions
+  `OUVERTE` à début futur sont listées. **Écart de filtre, à signer** (revue B8 delta de #1149, m1) : le web lit ces aperçus par `fn_explorer_missions_inscription` (`public.sql` l.36471, SECURITY DEFINER, hors RLS : mission `OUVERTE`, à début futur, non assignée, `fn_mission_publique` non nul l.43178 — établissement non supprimé, hors compte test, `VERIFIE`, autorisé à publier, autre qu'une officine, intitulé hors « [ »), le natif dans `missions` sous RLS (`pol_mission_select` l.79805 : `OUVERTE` et `NOT fn_est_exclu` ; restrictives `missions_internat_restrictive` l.78572, `missions_masquer_etabs_test` l.78576, compte actif l.79189), comme la jointure de la table et l'Explorer natif. Les filtres diffèrent dans les deux sens : **le web liste, le natif masque** une mission dont l'établissement a exclu la soignante (`fn_est_exclu`) ou incompatible avec un interne ou un médecin à spécialité confirmée (`fn_mission_visible_internat`) — l'étoile reste allumée, la mission n'est pas listée et ne peut pas être retirée en natif, alors que le web la liste avec « Retirer » ; **le natif liste, le web masque** un favori d'inscription dont l'établissement a depuis été supprimé, n'est plus vérifié ou ne peut plus publier. Aucun cas ne donne accès à une ligne non autorisée par la RLS ; écart à signer
+  (`PARITE_SOIGNANT.md`, écart (6) de `/soignant/mes-favoris`).
 
 ## fn_modifier_favori_inscription
 

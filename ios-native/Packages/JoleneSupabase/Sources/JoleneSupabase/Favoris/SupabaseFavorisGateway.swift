@@ -12,7 +12,7 @@ import Supabase
 ///
 /// Favoris de l'inscription progressive (décision 8 du lot 1 amendée le 18/11/2026, revue B8 de T4b, M2), comme le web
 /// (`MesFavorisSoignant.tsx` l.43-53, `BoutonSauvegarderMission.tsx` l.36-44 et l.61-64) : chaque lecture relit
-/// aussi `parcours_inscription.donnees.missionsSauvegardees` (SELECT seul, RLS `parcours_inscription_proprietaire`
+/// aussi `parcours_inscription.donnees->missionsSauvegardees` (SELECT de cette seule clé, RLS `parcours_inscription_proprietaire`
 /// l.78669 : propriétaire et compte actif ; GRANT SELECT l.86801), puis les aperçus des missions absentes de la table
 /// (`missions` sous RLS, mêmes colonnes que la jointure), et fusionne les deux magasins sans doublon
 /// (`FavorisRegles.fusion`). Le retrait vide les deux : `fn_modifier_favori_inscription(p_actif := false)`
@@ -39,7 +39,8 @@ public struct SupabaseFavorisGateway: FavorisPort {
     public static let codeConflitUnique = "23505"
     /// Magasin des favoris de l'inscription progressive (décision 8 du lot 1 amendée le 18/11/2026).
     public static let tableParcours = "parcours_inscription"
-    public static let colonnesParcours = "donnees"
+    /// Seule la clé utile du brouillon est lue (revue B8 delta de #1149, m4) : alias PostgREST de la clé JSON.
+    public static let colonnesParcours = "\(FavorisRegles.cleFavorisInscription):donnees->\(FavorisRegles.cleFavorisInscription)"
     /// Aperçus des favoris de l'inscription : mêmes colonnes que la jointure de `selectSauvegardees`.
     public static let tableMissions = "missions"
     public static let colonnesApercu = "id,intitule,debut_le,fin_le,duree_heures,nb_creneaux,statut"
@@ -101,7 +102,8 @@ public struct SupabaseFavorisGateway: FavorisPort {
         } catch {
             throw SupabaseErrorMapping.map(error, fallback: Self.lectureMissionsFallback)
         }
-        return FavorisRegles.idsInscription(lignes.first?[Self.colonnesParcours])
+        // La ligne porte la seule clé `missionsSauvegardees` : même lecture que `donnees` complet.
+        return FavorisRegles.idsInscription(lignes.first)
     }
 
     /// Aperçus des missions de l'inscription sous RLS, par lots. Seuls les UUID sont demandés (le SQL n'écrit que
