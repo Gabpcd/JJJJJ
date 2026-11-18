@@ -193,7 +193,8 @@ public final class AnnulationModel: ObservableObject {
             // session (`soignant_assigne_id` nul ou autre, ligne lue) = annulation relue ; sinon le refus s'affiche tel quel.
             if case .refusee = outcome {
                 let missions = gateways.missions
-                let relue = try await bounded(timeout: controller.resolutionTimeout) {
+                // Revue B8 de #1158 (m4) : une relecture en échec ne masque pas le refus du serveur, affiché tel quel.
+                let relue = try? await bounded(timeout: controller.resolutionTimeout) {
                     try await missions.mission(id: id, context: context)
                 }
                 if let relue, AnnulationRules.missionAnnuleeRelue(soignantAssigneId: relue.record.soignantAssigneId,

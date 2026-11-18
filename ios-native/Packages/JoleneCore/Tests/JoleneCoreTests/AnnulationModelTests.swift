@@ -268,4 +268,34 @@ final class AnnulationModelTests: XCTestCase {
         XCTAssertEqual(model.issue, .annulee(message: "Participation annulée. Ton score sera mis à jour."))
         XCTAssertNil(model.entree)
     }
+
+    /// Lecture de la mission en échec (`mission(id:)`), le reste délégué.
+    private struct MissionsEnPanne: MissionsPort {
+        let base: MissionsPort
+        func profile(userId: String) async throws -> SoignantProfile? { try await base.profile(userId: userId) }
+        func listMissions(context: MissionReadContext, filters: MissionFilters) async throws -> [Mission] {
+            try await base.listMissions(context: context, filters: filters)
+        }
+        func mission(id: String, context: MissionReadContext) async throws -> Mission? {
+            throw JoleneError(.network, "Le service ne répond pas.")
+        }
+    }
+
+    /// Revue B8 de #1158 (m4) : si la relecture qui suit un refus échoue, le refus du serveur s'affiche tel quel, jamais
+    /// l'erreur réseau de la relecture.
+    func testRefusPuisRelectureEnEchecAfficheLeRefusDuServeur() async throws {
+        var gateways = DemoWorld.gateways()
+        gateways.missions = MissionsEnPanne(base: gateways.missions)
+        let controller = SessionController(gateways: gateways)
+        let etat = await controller.signIn(email: "demonstration@example.invalid", password: "demonstration")
+        let snapshot = try XCTUnwrap(etat.snapshot)
+        let lue = try await DemoMissionsGateway().mission(id: "demo-assignee-001", context: snapshot.context)
+        let avant = try XCTUnwrap(lue)
+        // Annulation déjà faite côté serveur simulé : le nouvel essai est refusé, la relecture échoue.
+        _ = try await gateways.candidature.annulerMission(id: "demo-assignee-001", motif: nil, context: snapshot.context)
+        let model = AnnulationModel(missionId: "demo-assignee-001", controller: controller, snapshot: snapshot)
+        await model.charger(avant)
+        await model.annulerMission()
+        XCTAssertEqual(model.issue, .erreur(message: "Cette mission ne vous est pas assignée"))
+    }
 }
