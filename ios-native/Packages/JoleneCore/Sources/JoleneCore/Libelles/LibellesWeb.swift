@@ -1105,6 +1105,71 @@ public enum LibellesWeb {
         public static let pointerMonDepart = "Pointer mon départ maintenant"
     }
 
+    /// Candidature du détail de mission (lot 1, T6b ; revue B8 m7) : libellés repris tels quels de
+    /// `DetailMissionSoignant.tsx`, `RecapitulatifCandidatureDialog.tsx`, `ChoixContratDialog.tsx` et `CarteProposition.tsx`.
+    /// Textes vouvoyés et assemblages : `LibellesCandidature` ; phrases d'engagement : `TextesWeb.Candidature` (HARD STOP).
+    public enum Candidature {
+        // source: src/pages/DetailMissionSoignant.tsx:1356
+        public static let postuler = "📨 Vérifier et postuler"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1356
+        public static let postulerEnCours = "Envoi en cours…"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1370
+        public static let accepter = "★ Accepter cette mission"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1370
+        public static let accepterEnCours = "Acceptation en cours…"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1340
+        public static let messageLibelle = "Message à l'établissement (optionnel)"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1386
+        public static let envoyee = "✅ Candidature envoyée — En attente de réponse"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1395
+        public static let validerDocuments = "📄 Valider mes documents (2 min)"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1542
+        public static let dejaAttribuee = "Cette mission a déjà été attribuée"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1544
+        public static let voirAutresMissions = "Voir d'autres missions →"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1331
+        public static let completerProfil = "Compléter mon profil pour postuler"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1625
+        public static let recapEnvoyer = "Envoyer ma candidature"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1625
+        public static let recapAccepter = "Accepter tous ces créneaux"
+
+        // source: src/components/planning/RecapitulatifCandidatureDialog.tsx:59
+        public static let recapAnnuler = "Annuler"
+
+        // source: src/components/ChoixContratDialog.tsx:44
+        public static let choixTitre = "Choisissez votre mode de contrat"
+
+        // source: src/components/ChoixContratDialog.tsx:46
+        public static let choixDescription = "Cette mission accepte les deux types de contrat. Sélectionnez celui qui correspond à votre situation."
+
+        // source: src/components/ChoixContratDialog.tsx:85
+        public static let choixConfirmer = "Confirmer"
+
+        // source: src/components/CarteProposition.tsx:347
+        public static let propositionAccepter = "✅ Accepter"
+
+        // source: src/components/CarteProposition.tsx:350
+        public static let propositionRefuser = "❌ Refuser"
+
+        // source: src/components/CarteProposition.tsx:309
+        public static let propositionRefuseeTitre = "Mission déclinée"
+
+        // source: src/components/CarteProposition.tsx:309
+        public static let propositionRefuseeTexte = "La proposition a été refusée."
+    }
+
     /// Points d'entrée du détail d'une mission vers les présences (`DetailMissionSoignant.tsx` l.1477-1494, lot 2 T5a).
     public enum DetailMission {
         // source: src/pages/DetailMissionSoignant.tsx:1483
@@ -1394,5 +1459,25 @@ public enum LibellesWeb {
         .init(cle: "OubliDepart.pointerMonDepart", texte: OubliDepart.pointerMonDepart),
         .init(cle: "DetailMission.presencesEtPointage", texte: DetailMission.presencesEtPointage),
         .init(cle: "DetailMission.heuresPointees", texte: DetailMission.heuresPointees),
+        .init(cle: "Candidature.postuler", texte: Candidature.postuler),
+        .init(cle: "Candidature.postulerEnCours", texte: Candidature.postulerEnCours),
+        .init(cle: "Candidature.accepter", texte: Candidature.accepter),
+        .init(cle: "Candidature.accepterEnCours", texte: Candidature.accepterEnCours),
+        .init(cle: "Candidature.messageLibelle", texte: Candidature.messageLibelle),
+        .init(cle: "Candidature.envoyee", texte: Candidature.envoyee),
+        .init(cle: "Candidature.validerDocuments", texte: Candidature.validerDocuments),
+        .init(cle: "Candidature.dejaAttribuee", texte: Candidature.dejaAttribuee),
+        .init(cle: "Candidature.voirAutresMissions", texte: Candidature.voirAutresMissions),
+        .init(cle: "Candidature.completerProfil", texte: Candidature.completerProfil),
+        .init(cle: "Candidature.recapEnvoyer", texte: Candidature.recapEnvoyer),
+        .init(cle: "Candidature.recapAccepter", texte: Candidature.recapAccepter),
+        .init(cle: "Candidature.recapAnnuler", texte: Candidature.recapAnnuler),
+        .init(cle: "Candidature.choixTitre", texte: Candidature.choixTitre),
+        .init(cle: "Candidature.choixDescription", texte: Candidature.choixDescription),
+        .init(cle: "Candidature.choixConfirmer", texte: Candidature.choixConfirmer),
+        .init(cle: "Candidature.propositionAccepter", texte: Candidature.propositionAccepter),
+        .init(cle: "Candidature.propositionRefuser", texte: Candidature.propositionRefuser),
+        .init(cle: "Candidature.propositionRefuseeTitre", texte: Candidature.propositionRefuseeTitre),
+        .init(cle: "Candidature.propositionRefuseeTexte", texte: Candidature.propositionRefuseeTexte),
     ]
 }
