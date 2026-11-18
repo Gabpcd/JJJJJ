@@ -111,7 +111,8 @@ final class Lot3PortsTests: XCTestCase {
         // Fusion des lots 2 et 3 : l'action du lot 2 (`RGPD_CONSENTEMENT_DONNE`, `Lot2PortsTests`) précède celles du lot 3.
         XCTAssertEqual(AuditAction.allCases.map(\.rawValue),
                        ["MISSION_ASSIGNATION", "RGPD_CONSENTEMENT_DONNE",
-                        "DONNEES_PERSO_CONSULTATION", "DONNEES_PERSO_MODIFICATION", "RGPD_EXPORT_DONNEES"])
+                        "DONNEES_PERSO_CONSULTATION", "DONNEES_PERSO_MODIFICATION", "RGPD_EXPORT_DONNEES",
+                        "PRESENCE_CONTESTATION"]) // L2-T5b (revue B8, m5)
         XCTAssertEqual(AuditAction.donneesPersoConsultation.rawValue, "DONNEES_PERSO_CONSULTATION")
         XCTAssertEqual(AuditAction.donneesPersoModification.rawValue, "DONNEES_PERSO_MODIFICATION")
         XCTAssertEqual(AuditAction.rgpdExportDonnees.rawValue, "RGPD_EXPORT_DONNEES")

@@ -184,6 +184,9 @@ public enum AuditAction: String, CaseIterable, Sendable {
     case donneesPersoConsultation = "DONNEES_PERSO_CONSULTATION"
     case donneesPersoModification = "DONNEES_PERSO_MODIFICATION"
     case rgpdExportDonnees = "RGPD_EXPORT_DONNEES"
+    /// Lot 2 (T5b, revue B8 m5) : contestation d'une présence (parité `PanneauContestation.tsx` l.134-139), détails
+    /// minimisés (longueur du motif, litige ; décision m2 de `DECISIONS_LOT2.md`).
+    case presenceContestation = "PRESENCE_CONTESTATION"
 }
 
 /// Issue d'une écriture d'audit best-effort. `nonEnregistre` (`{success:false}`) n'est pas une
