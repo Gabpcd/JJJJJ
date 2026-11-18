@@ -185,6 +185,19 @@ Aucune ne change une décision du §7 ni une règle juridique ; elles fixent ce 
 11. **D24** : durée du job UI non mesurée par la tranche (aucun test UI lancé localement, consigne disque) ; à
     relever sur le premier run CI qui inclut `DemoEtabSessionTests`.
 
+## Report sur `main` et tranche T2b (18/11/2026)
+
+1. **Espace fermé hors démo** (fail-closed, ajout du report) : `OuvertureEspaceEtablissement.pour(mode:)` — démo
+   ouvert, staging et production fermés. Fermé, un rôle établissement reçoit `.blocked(.unsupportedRole(<rôle>))`,
+   le refus d'avant le lot 5, sans appel établissement (`SessionControllerEtablissementTests`). Motif : les drapeaux
+   D14 valent 1 et sont lus fail-open ; ils ne masquent donc pas une coquille encore provisoire. T13 ouvre STAGING,
+   T14 ouvre la production ; chaque ouverture est une ligne de `pour(mode:)` et un test.
+2. **T2b, choix par espace** : la table établissement (`LinkRouter.etablissementDestination`) ne sert que l'espace
+   établissement ouvert ; l'espace soignant garde sa table (lien établissement → renvoi web). `/contrat/{id}` mène au
+   contrat de l'espace courant ; tant que T10 n'est pas livrée, renvoi web dans l'espace établissement.
+3. **T2b, écrans livrés** : `EtabDestination.ecranLivre`, une ligne par tranche (T5-T11), toutes à `false` ; chaque
+   tranche passe sa ligne à `true` avec sa ligne de `EtabDestinations.swift` et ajuste `EtabRouteTests`.
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.

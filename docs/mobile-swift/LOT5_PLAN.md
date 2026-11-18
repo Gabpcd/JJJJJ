@@ -1,5 +1,45 @@
 # Blueprint du lot 5 — app iOS Swift native Jolene : établissement terrain (v2 — contre-relecture adversariale du 2026-11-02 ; corrections marquées « (corrigé v2) »)
 
+## Écarts avec ce plan au report sur `main` (18/11/2026, branche `feat/ios-lot5-v2`)
+
+Le blueprint ci-dessous est celui du 02/11, inchangé ; ses `l.N` renvoient au dump et au web de cette date. T0, T1, T2a
+et T3 ont été écrits sur `feat/ios-lot5` (base `feat/ios-lot1` + TL du lot 2) puis reportés sur `main` `c13062d1`,
+où les lots 1, 2 et 3 sont mergés (#1110, #1131, #1130, #1133). Écarts relevés :
+
+1. **Espace établissement fermé hors démo** (ajout, non prévu) : les drapeaux D14 valent 1 et sont lus fail-open, ils
+   coupent un écran, jamais l'espace. `OuvertureEspaceEtablissement` (`Session/EspaceResolution.swift`) ouvre l'espace
+   en démo seulement ; en staging et en production, un compte établissement reçoit le refus d'avant le lot 5
+   (`.unsupportedRole`, « Espace non disponible »), sans aucun appel établissement. À ouvrir en STAGING par T13, en
+   production par T14 (décision consignée dans `DECISIONS_LOT5.md`).
+2. **TL du lot 2 sur `main`** : chaque `// source:` porte une nature (`[juridique|libellé|fragment]`), les libellés
+   HARD STOP sont listés dans `EXIGES`, chaque assemblage a une zone de rendu et un rendu asserté par
+   `TextesWebTests` : les quatre textes du lot 5 (§2.9) suivent ce format ; mention OTP art. 1366-1367 repérée par son
+   texte (`ContratMission.tsx` l.745).
+3. **Correction 1** (`fn_generer_qr_mission`) : sa fiche a fusionné, au lot 2, dans « Interdit côté natif : système de
+   pointage ① » de `CONTRATS_RPC_SOIGNANT.md`, qui la consigne déjà ; la garde de T0 lit cette fiche.
+4. **`RPCResponse`** : `executer` est interne depuis le lot 3 (`exceptionsMetier`) ; l'interception du lot 5 y est un
+   paramètre `interceptions` à défaut (comportement inchangé) ; l'accesseur du SQLSTATE d'un refus intercepté
+   s'appelle `sqlstateIntercepte` (`sqlstate` existe déjà au lot 3).
+5. **`Gateways`** : les lots 2 et 3 câblent par `câblerLot2/3` ; `etablissement` est assigné après eux dans les deux
+   mondes (signature inchangée).
+6. **`DrapeauxLancement`** (porté par T2a en attendant L1-T9) retiré : `main` lit `-JOLENE_FLAG_<cle>` par
+   `DemoFlagsGateway.surcharges(arguments:)`.
+7. **`SessionStore`** de `main` (lot 3 : publications `appliquer`, push, rapport de crash, navigateur intégré) :
+   `.readyEtablissement` est une identité publiée (fin subie, identifiant de crash) mais n'appelle jamais
+   `push.surReady` — le push établissement n'est pas servi avant sa tranche (dépendance lot 3 du §« Dépendances »).
+8. **Ligne App.tsx** de `PARITE_ETABLISSEMENT.md` recalées sur `main` (47 routes, cibles inchangées).
+9. **T2b** : `DeepLinkCoordinatorTests` prouve la décision dans `AiguillageLiens` (JoleneCore) — la cible app n'a pas
+   de tests unitaires ; `DemoEtabLiensTests` (XCUITest) l'exécute, en CI seulement. Ajouts à la table : query portée
+   brute (`?statut=`, `?periode=`, `?tab=`, `?conv=`) ; liste des contrats sans cible tant que T10 n'a pas choisi son
+   point d'ancrage (aucun onglet « Contrats », D13). Un écran empilé dont la tranche n'est pas livrée
+   (`EtabDestination.ecranLivre`, tout à `false`) est un renvoi web, jamais un écran provisoire ; un onglet (écran
+   provisoire compris) est présenté. Sans espace, un lien établissement n'est mémorisé que si l'espace est ouvrable.
+10. **T3** livrée (golden `planning-derive`, `PlanningExactEtab`, `CodeRotatifRules`) ; `SynthesePresence` vient du
+    lot 2 (`JoleneCore/Pointage/SynthesePresence.swift`), non reporté.
+11. **B5a** déjà sur `main` (migration D-FLAGS #1111, sept clés) ; **B5b** non faite. Les classes XCUITest du lot 5
+    tournent dans l'éclat socle de `ios-swift-ci.yml` (aucun éclat de lot 5) ; revue fraîche B8 de T2a et de T2b à
+    faire.
+
 > Préparé le 2026-11-02, en lecture seule, sur `main` `d1b0f39c` (#1106, socle lot 0) et les branches de fondation du lot 1 non encore mergées : `origin/feat/ios-native-lot1-t1-fondation` (HEAD `d246a062` : ports additifs, `Gateways` étendu, `RPCResponse`, `Bounded`, audit, drapeaux), `origin/feat/ios-native-lot1-t1b-design` (`528c49b1` : `ConfirmationSheet`, `FilterChip`, `SlotList`, `StickyActionBar`, `InlineNotice`, `SkeletonBlock`, `SectionHeader`, style `destructive`), `origin/feat/ios-native-lot1-t2-golden-planning` (`bda09c20` : exporteur golden à hook `@/lib`, `CompletudePlanning`, `CreneauxConfirmes`, `SelectionSerieCandidat`).
 > (corrigé v2) Base réelle du lot 1 : la branche d'intégration `origin/feat/ios-lot1` (`c509224a`) fusionne T0 (`feat/ios-lot1-t0-contrats-docs` : `RPC_SUIVIES` étendu à `fn_ecrire_audit_safe`, `fn_param_bool`, `fn_maj_activite_soignant`…, absents de `main` comme de `d246a062`), T1, T1b et T2, et remplace le doublon temporaire par `public typealias CreneauConfirmePayload = CreneauConfirme` (`Models/Lot1Results.swift` l.26). Le lot 5 part de ce que cette branche aura mergé sur `main`, pas des trois branches isolées. Les plans des lots 2 et 4 (`LOT2_PLAN.md`, `LOT4_PLAN.md`, scratchpad) ont été relus pour les dépendances. PRINCIPES §3 « lot 5 » : l.46-47 sur `main`, l.56-57 sur la branche d'intégration.
 > Périmètre : `docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 5 » (l.212-221). Règles : `docs/mobile-swift/PRINCIPES.md` (§2 amendé par T1 lot 1), `docs/mobile-swift/DECISIONS_LOT0.md`, `LOT1_DECISIONS.md`, `CLAUDE.md` (HARD STOP n°4, B9, « mergé ≠ livré », état dérivé, visibilité centralisée, zéro règle juridique en dur).
