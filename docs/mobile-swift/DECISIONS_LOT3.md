@@ -1799,6 +1799,82 @@ Tests d'abord : commit `test(ios-native): L3-T15 — tests de la revue B8 n°1 (
   région : Gabrielle confirme d'abord la région de données de l'organisation `jolene-z6`, la région UE étant
   recommandée pour des données de santé (§6.5, `SENTRY_IOS.md` §5 et §7). La restriction suivra.
 
+## T14a — Stripe Connect (branche `lot3/l3-t14a`, 18/11/2026 ; B9, jamais mergée sans go)
+
+- **Livré.** Écran `/soignant/stripe-connect` natif (`Jolene/Screens/Revenus/StripeConnectScreen.swift`, port de
+  `src/pages/PageStripeConnect.tsx`), empilé sur l'onglet Profil : entrée « Paiements & facturation › Compte de paiement
+  (Stripe) » du hub (`PaiementsEntreeSection`, règle web `estLiberal` de `MonCompteSoignant.tsx` l.45-48 : `LIBERAL`,
+  `MIXTE` ou `statut_liberal = 'ACTIF'`), lien `/soignant/stripe-connect` (retour `?success=true` / `?refresh=true`
+  compris), tap push et ligne du centre. Cœur : `Revenus/StripeConnect.swift` (`ExerciceConnect`, `StatutConnect.lire`,
+  textes, raccourcis), `Revenus/StripeConnectModel.swift` ; port `StripeConnectPort` complété de `exercice(context:)` ;
+  démo `Demo/DemoStripeConnectGateway.swift` (+ `DemoExternalFlow`) ; Supabase
+  `Revenus/SupabaseStripeConnectGateway.swift` (edges existantes `stripe-connect-status` et `stripe-connect-onboard`,
+  aucune nouvelle edge, aucune migration) ; flux hébergé `Jolene/Composition/ExternalFlowPresenter.swift` (port système
+  `ExternalFlowPort`, une ligne d'`AppContainer`).
+- **Règles.** Exercice (`soignants.type_exercice, statut_liberal, est_compte_test`) lu avant tout appel d'edge : salarié
+  → mode salarié, compte de test → « Stripe désactivé sur ce compte de test », **sans appel d'edge** ; lecture en échec →
+  « Profil de paiement indisponible » + « Réessayer ». Statut : `POST stripe-connect-status`, `?force=true` au retour de
+  Stripe, sur « Actualiser » et après **toute** issue du flux hébergé (correction 17) ; six statuts du CHECK, `COMPLET`
+  admis seulement avec `onboarding_complete`, `charges_enabled` et `payouts_enabled` à `true`, sinon « Statut de paiement
+  indisponible ». Onboarding : `POST stripe-connect-onboard` avec `Origin: https://jolene.app` (D6) ; 200 `{success:true,
+  url}` (https) → flux hébergé ; `ORIGINE_NON_AUTORISEE` → erreur de contrat ; `TEST_ACCOUNT_PAYMENT_DISABLED` → écran du
+  compte de test ; refus « libéral » → avis du web l.143 ; autre refus → texte serveur. Une action à la fois ; jamais un
+  nouveau lien sans tap (`?refresh=true` compris). Flux (D7) : `ASWebAuthenticationSession` éphémère à rappel
+  `.https(host: "jolene.app", path: "/soignant/stripe-connect")` dès iOS 17.4, renvoi `.safari` du coordinateur des liens
+  en dessous (fermeture de la feuille = issue) ; une navigation par lien ou par tap et une fin d'identité ferment le flux
+  affiché (`DeepLinkCoordinator.fermerFluxExterne`).
+- **Routes.** `DestinationLien.ecranNatifLivre(.stripeConnect)` passe à `true` ; `CibleNotification.stripeConnect(retour:)`
+  (onglet Profil, présentable) ; `MainTabView.presenter` remet le Profil à sa racine et empile `StripeConnectRoute`
+  jetonnée (`force` vrai pour un retour). Les 6 vecteurs push de la famille `/soignant/stripe-connect` passent au natif :
+  626 natifs, 264 renvois. `DemoLiensLot3Tests` (route non livrée, renvoi puis refus de réinitialisation) prend la série
+  de missions (`/soignant/missions/serie/:id`, renvoi web jusqu'au lot 4) à la place de Stripe Connect.
+- **Écarts (non juridiques, consignés).**
+  1. Blueprint §3 T14a : « `COMPLET` sans les trois drapeaux → `EN_COURS` ». Le web live (l.53-56) lève une erreur ; le
+     natif le suit (statut indisponible).
+  2. Cartes des revenus d'un compte connecté et leur note (l.387-417) non portées : l'onglet Revenus les sert déjà (mêmes
+     totaux serveur, T12) ; raccourci « Mes gains » vers l'onglet.
+  3. « Derniers versements Stripe » (`SuiviVersementsConnect`, l.418) non porté (écart 9 de T12 reste ouvert).
+  4. « Contacter le support » (l.478-485, l.512-515) et « Besoin d'aide ? » (l.190-196) non portés : modale web
+     `ModalContacterJolene` sans équivalent natif (même manque que T11).
+  5. Section « Paiements & facturation » du hub placée après « Mes données (RGPD) » (le web la place sous « Mon profil ») :
+     montée une fois l'exercice lu, elle ne décale aucune section au-dessus (XCUITest du hub) ; écart d'ordre assumé comme
+     le bloc du lot 0.
+  6. Compte de test : le web appelle quand même `stripe-connect-status` puis masque tout (l.106-111, l.302) ; le natif ne
+     l'appelle pas (blueprint).
+  7. Refus serveur de l'onboarding affiché verbatim ; le web affiche toujours « Erreur lors de la connexion à Stripe.
+     Veuillez réessayer. » (l.146), qui reste le repli du natif.
+  8. `?refresh=true` : relecture forcée (le web relit sans `force`) ; aucun lien demandé sans tap.
+  9. Pas de fixture `demo-stripe-status.json` exportée (blueprint §2.7) : les variantes démo (`-JOLENE_DEMO_STRIPE
+     NON_DEMANDE|EN_COURS|COMPLET|SUSPENDU|REJETE|SUPPRIME|TEST|SALARIE`) sont construites par la même règle
+     `StatutConnect.lire` ; le serveur simulé ne rend `COMPLET` après l'onboarding qu'à une lecture forcée (cache de 5 min).
+- **Tests.** Niveau 1 : `StripeConnectTests` (statut, compte de test et salarié sans appel d'edge,
+  `TEST_ACCOUNT_PAYMENT_DISABLED`, toute issue du flux → `force=true`, textes verbatim) et
+  `SupabaseStripeConnectGatewayTests` (`Origin`, `POST`, `?force=true`, 403 `ORIGINE_NON_AUTORISEE` et
+  `TEST_ACCOUNT_PAYMENT_DISABLED`, refus « libéral », `COMPLET` sans drapeaux) ; gardes ajustées (`DestinationLienTests`,
+  `DeepLinkIntentTests`, `CentreNotificationsTests`, `DemoWorldTests`, `Lot3PortsTests`). Niveau 2 : `DemoStripeTests`
+  (deux tests, éclat `lot3-revenus`, vérifié par la CI seulement). STAGING (compte test, D5-R) et appareil iOS ≥ 17.4 :
+  T16, T17.
+
+### T14a-J1 — Textes de `/soignant/stripe-connect` (HARD STOP n°4, TJ8)
+
+- **Règle par carte.** Une carte qui porte un texte à portée contractuelle — qui verse (mode salarié, l.210 et étapes
+  l.220-232), quand et à quel coût (« Connecte ton compte bancaire… selon le cycle indiqué » l.330, avantages l.333-335),
+  restriction du mode d'exercice (l.289-292), droit de recevoir des paiements Connect (compte supprimé, l.468-470), compte
+  de test (l.307-309) — est reprise **verbatim**, tutoiement compris, en entier. Les autres textes (en-tête l.187,
+  chargement en échec l.65 et l.172, étapes de l'inscription Stripe l.352, l.450, l.499-501, sous-titres des raccourcis
+  l.247 et l.280) passent au vouvoiement (décision 9 du lot 1). Titres et libellés de boutons : verbatim. Épinglés par
+  `StripeConnectTests.testTextesVerbatimASaLigneWeb`.
+- **« Aucun frais pour le soignant » (l.335)**, relu contre la définition du dépôt d'`escrow-debit-echeance` : destination
+  charge, `amount` = honoraires + commission, `application_fee_amount: commissionCents` (index.ts l.343-352 ;
+  `docs/flux-monetaire-escrow.md` l.13-22) ; la commission s'ajoute au débit de l'établissement, les honoraires arrivent
+  entiers sur le compte connecté du soignant. Exact ; verbatim maintenu (le test épingle `application_fee_amount`).
+- « Virements automatiques pour les périodes facturées » (l.333) : description du produit (versement déclenché par le
+  système, `payouts.schedule = manual` côté Stripe) ; « Sécurisé par Stripe (certifié PCI DSS) » (l.334) : affirmation du
+  web reprise telle quelle. Aucun texte inexact au sens de TJ8 ; aucun texte nouveau juridique ; aucune règle de mode
+  d'exercice en dur (l'éligibilité reste celle du serveur, l'écran ne fait que choisir sa carte).
+- Force des sources : choix de conformité Jolene (web de production, edge du dépôt). Aucun arrêt ni avis cité.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026 ; le **go B9 au merge** reste requis.
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -1816,7 +1892,8 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 - **T13** — paiements déclarés (confirmation ; contestation ouverte après B3) ; branche `lot3/l3-t13-v3` poussée
   (section T13 ci-dessus), revue fraîche B8 n°1 CLÔTURABLE (mineurs traités), définitions live relues le 16/11/2026 ;
   go humain requis avant merge.
-- **T14a** — Stripe Connect.
+- **T14a** — Stripe Connect ; branche `lot3/l3-t14a` poussée (section T14a ci-dessus), textes tranchés (T14a-J1) ;
+  go humain requis avant merge.
 - **T14b** — IBAN (données bancaires).
 - **T16** — dispatch STAGING (secrets STAGING, suppression des comptes jetables, bascule transactionnelle de la
   cohorte D5-R).
@@ -1856,7 +1933,7 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 - Tranchés par leur tranche selon TJ8 (intégration du lot 3, 9 novembre 2026) : avertissement d'exclusivité et libellés
   de mode d'exercice (T8, T8-J2 et T8-J3), libellés escrow et note « net estimé » (T12, « T12 — textes de l'onglet
   Revenus »). À trancher par leur tranche, selon les règles TJ6 à TJ8 : textes de la contestation de paiement (T13,
-  TJ7 : verrou caduc depuis B3), textes Stripe (T14a), messages des sept `error_code` IBAN qui arrivent sans `error`
+  TJ7 : verrou caduc depuis B3), textes Stripe (T14a, tranchés : « T14a-J1 »), messages des sept `error_code` IBAN qui arrivent sans `error`
   (T14b, TJ6).
 - Non portés, renvoi web libellé : type d'exercice et attestation de cumul d'activité (art. L1222-5,
   `ProfilSoignant.tsx` l.252-256, l.274-278, correction 8).
