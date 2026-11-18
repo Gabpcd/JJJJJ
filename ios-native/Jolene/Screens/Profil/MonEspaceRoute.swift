@@ -43,6 +43,8 @@ enum MonEspaceRoute: Hashable {
         case .certificat(let contratId): self = .certificat(contratId: contratId)
         case .accueil, .explorer, .missions, .revenus, .monCompte, .mission, .centre, .preferences, .profil, .web, .aucune:
             return nil
+        case .favoris: // L1-T4b : onglet Explorer
+            return nil
         }
     }
 }

@@ -494,6 +494,7 @@ final class CentreNotificationsTests: XCTestCase {
         case monCompte, profil, notifications, parametresNotifications
         case stripeConnect, stripeConnectSucces, stripeConnectRafraichir
         case presences, presencesMission, documents, contrat, contratCertificat // L2-T10
+        case favoris // L1-T4b
         case safari, etablissement
 
         init(_ route: JoleneRoute) {
@@ -510,6 +511,7 @@ final class CentreNotificationsTests: XCTestCase {
             case .accueil: self = .accueil
             case .explorer: self = .explorer
             case .missions: self = .missions
+            case .favoris: self = .favoris
             case .missionDetail: self = .missionDetail
             case .serieDetail: self = .serieDetail
             case .revenus(let section):
@@ -556,6 +558,8 @@ final class CentreNotificationsTests: XCTestCase {
         // L2-T10 : écrans de « Mon espace » du lot 2 (cible native sur l'onglet Profil).
         "/soignant/presences?tab=historique&filtre=a_valider", "/soignant/presences/mission/m-1",
         "/soignant/mes-documents?tab=contrats", "/contrat/c-1", "/contrat/c-1/certificat",
+        // L1-T4b : « Mes favoris » (cible native sur l'onglet Explorer).
+        "/soignant/mes-favoris",
     ]
 
     /// Liste d'exclusion nommée et fermée : routes natives **sans présentation depuis un espace prêt par nature**

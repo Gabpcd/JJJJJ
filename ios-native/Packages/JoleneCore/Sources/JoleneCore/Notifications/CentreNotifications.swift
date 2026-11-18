@@ -83,6 +83,9 @@ public enum CibleNotification: Equatable, Sendable {
     case explorer
     /// Onglet Mes missions (`/soignant/missions`).
     case missions
+    /// « Mes favoris » (`/soignant/mes-favoris`, L1-T4b), empilé sur l'onglet Explorer remis à sa racine, comme
+    /// l'étoile de la barre d'Explorer (`explorer-favoris-ouvrir`).
+    case favoris
     /// Onglet Revenus et sa section (`?tab=`) : la racine (`.apercu`) et, depuis T13, « Paiements à confirmer »
     /// (`.paiementsAConfirmer`, push `PAIEMENT_RECU`, correction 15 : l'onglet s'ouvre sur la section
     /// `revenus-paiements-declares`) ; les autres sections restent des renvois web (D4) et ne sont jamais réduites en
@@ -134,6 +137,7 @@ public enum CibleNotification: Equatable, Sendable {
         case .accueil: self = .accueil
         case .explorer: self = .explorer
         case .missions: self = .missions
+        case .favoris: self = .favoris // L1-T4b
         case .revenus(let section): self = .revenus(section: section)
         case .monCompte: self = .monCompte
         case .missionDetail(let id): self = .mission(id: id)
@@ -167,6 +171,7 @@ public enum CibleNotification: Equatable, Sendable {
         case .accueil, .mission, .centre: return .accueil
         case .explorer: return .explorer
         case .missions: return .missions
+        case .favoris: return .explorer // L1-T4b
         case .revenus: return .revenus
         case .monCompte, .preferences, .profil: return .profil
         case .presences, .detailPresences, .documents, .contrat, .certificat: return .profil // « Mon espace » (L2-T10)
@@ -183,6 +188,7 @@ public enum CibleNotification: Equatable, Sendable {
         case .accueil, .explorer, .missions, .monCompte, .mission, .preferences, .profil: return true
         // L2-T10 : écrans du lot 2 ; leur coupe-circuit (D-FLAGS) est lu par l'écran, qui devient alors un renvoi web.
         case .presences, .detailPresences, .documents, .contrat, .certificat: return true
+        case .favoris: return true // L1-T4b : `MesFavorisScreen`
         case .revenus(let section): return section == .apercu || section == .paiementsAConfirmer
         case .centre: return !depuisCentre
         case .web: return renvoiWebDisponible

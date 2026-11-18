@@ -59,6 +59,7 @@ extension JoleneRoute: CustomStringConvertible, CustomDebugStringConvertible {
         case .accueil: return "accueil"
         case .explorer: return "explorer"
         case .missions: return "missions"
+        case .favoris: return "favoris"                         // L1-T4b
         case .missionDetail: return "missionDetail(id masqué)"
         case .serieDetail: return "serieDetail(id masqué)"
         case .revenus(let section): return "revenus(\(section.rawValue))"
