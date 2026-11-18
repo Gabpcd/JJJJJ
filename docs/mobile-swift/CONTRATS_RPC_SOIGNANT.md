@@ -2468,9 +2468,10 @@ T10 bulletins, T11 pool urgence et exclusions), et une RPC partagée avec le lot
 `fn_ouvrir_litige_rate_limited` (`RPC_PARTAGEES_LOT4`, précision 10 des décisions) : une seule entrée dans
 `RPC_SUIVIES`, celle du T0 du lot 2 (`lot: 2`) quand il est fusionné, `a_venir`, `lot: 4` à défaut ; une
 seule fiche, dont la sous-section « Usage du lot 4 » porte l'usage `AUTRE`. Le décompte de l'en-tête
-(vingt-sept RPC) couvre les lots 0 et 1 ; ces quarante-deux s'y ajoutent. Écart assumé à la règle
-« statut passé en `consommee` par la PR qui câble la gateway » : les statuts du lot 4 passent en `consommee`
-**en une fois par T15** (onze tranches parallèles ne modifient jamais le même tableau). Fiches propres au lot :
+(vingt-sept RPC) couvre les lots 0 et 1 ; ces quarante-deux s'y ajoutent. Règle « statut passé en `consommee`
+par la PR qui câble la gateway » appliquée au lot 4 depuis L4-T3a (consigne du 18/11/2026 ; le T0 prévoyait un
+passage en une fois par T15) : chaque tranche met à jour sa ligne ci-dessous et sa fiche, liste tenue par
+`LOT4_CONSOMMEES` (`tests/node/check-rpc-contracts-lot4.node.mjs`). Fiches propres au lot :
 « lecture des exceptions », actions `SWIPE_LIKE` / `URGENCE`, edges `messagerie-validate` et
 `copies-bulletins`, Realtime, double-aveugle et surcharges du litige, en fin de section.
 

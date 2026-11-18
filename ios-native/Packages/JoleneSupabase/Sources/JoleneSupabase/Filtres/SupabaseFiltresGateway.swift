@@ -14,6 +14,8 @@ import Supabase
 ///   obligatoire ; `p_filtres` = les sept clés camelCase d'Explorer, nombres entiers sans décimale ; des critères que
 ///   le validateur serveur refuserait (`FiltresSauvegardesEncodage.estValide`) ne partent jamais (`.contract`) ;
 /// - `fn_modifier_filtre_sauvegarde(p_id, p_nom, p_alerte_active, p_frequence_alerte)` — `filtres` non modifiable ;
+///   `p_nom` / `p_frequence_alerte` omis quand ils sont `nil` (`DEFAULT NULL`, valeur serveur conservée par
+///   `COALESCE`) : la cloche n'envoie que `p_id` et `p_alerte_active`, comme le web (l.99-101) ;
 /// - `fn_supprimer_filtre_sauvegarde(p_id)`.
 /// Réponses des mutations : `{success:true}` (et `id` à la création) puis relecture de la liste (`IssueFiltre.relue`) ;
 /// refus `{error}` en HTTP 200 restitué verbatim (`IssueFiltre.refusee`), sauf « Non authentifié » → session expirée ;
@@ -62,15 +64,12 @@ public struct SupabaseFiltresGateway: FiltresSauvegardesPort {
         return try await muter(Self.rpcCreer, params: params, fallback: FiltresTextes.alerteCreationImpossible, context: context)
     }
 
-    public func modifier(id: String, nom: String, alerte: Bool, frequence: FrequenceAlerte,
+    public func modifier(id: String, nom: String?, alerte: Bool, frequence: FrequenceAlerte?,
                          context: MissionReadContext) async throws -> IssueFiltre {
         try MissionQuery.validate(context: context)
-        let params: JSONObject = [
-            "p_id": .string(id),
-            "p_nom": .string(nom),
-            "p_alerte_active": .bool(alerte),
-            "p_frequence_alerte": .string(frequence.rawValue),
-        ]
+        var params: JSONObject = ["p_id": .string(id), "p_alerte_active": .bool(alerte)]
+        if let nom { params["p_nom"] = .string(nom) }
+        if let frequence { params["p_frequence_alerte"] = .string(frequence.rawValue) }
         return try await muter(Self.rpcModifier, params: params, fallback: FiltresTextes.erreurMiseAJour, context: context)
     }
 

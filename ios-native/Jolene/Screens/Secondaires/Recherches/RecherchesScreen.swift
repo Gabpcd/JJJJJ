@@ -133,13 +133,15 @@ struct RecherchesScreen: View {
                 }
                 Spacer(minLength: 0)
                 HStack(spacing: 0) {
+                    // Cloche : `p_alerte_active` seul (revue B8 de #1167, m2), fréquence serveur conservée.
+                    icone(recherche.alerteActive ? "bell.fill" : "bell.slash",
+                          libelle: recherche.alerteActive ? FiltresTextes.desactiverAlertes : FiltresTextes.activerAlertes,
+                          identifiant: "recherche-alerte-\(recherche.id)", desactive: occupe) {
+                        Task { await model.basculerAlerte(recherche) }
+                    }
+                    .accessibilityValue(recherche.alerteActive ? "Activées" : "Désactivées")
+                    // « Modifier » envoie la fréquence choisie : proposé seulement si celle du serveur est lisible.
                     if recherche.frequence != nil {
-                        icone(recherche.alerteActive ? "bell.fill" : "bell.slash",
-                              libelle: recherche.alerteActive ? FiltresTextes.desactiverAlertes : FiltresTextes.activerAlertes,
-                              identifiant: "recherche-alerte-\(recherche.id)", desactive: occupe) {
-                            Task { await model.basculerAlerte(recherche) }
-                        }
-                        .accessibilityValue(recherche.alerteActive ? "Activées" : "Désactivées")
                         icone("pencil", libelle: FiltresTextes.modifier, identifiant: "recherche-renommer-\(recherche.id)",
                               desactive: occupe) {
                             model.effacerMessages()

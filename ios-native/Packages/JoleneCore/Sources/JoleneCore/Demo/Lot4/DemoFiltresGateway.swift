@@ -58,15 +58,16 @@ actor DemoFiltresStore {
                                          misAJour: horloge)]
     }
 
-    func modifier(id: String, nom: String, alerte: Bool, frequence: FrequenceAlerte) {
+    /// `COALESCE` de la RPC : un paramètre `nil` laisse la valeur en place.
+    func modifier(id: String, nom: String?, alerte: Bool, frequence: FrequenceAlerte?) {
         horloge += 1
         let maintenant = horloge
         lignes = (lignes ?? []).map { ligne in
             guard ligne.recherche.id == id else { return ligne }
             var modifiee = ligne
-            modifiee.recherche.nom = nom
+            if let nom { modifiee.recherche.nom = nom }
             modifiee.recherche.alerteActive = alerte
-            modifiee.recherche.frequence = frequence
+            if let frequence { modifiee.recherche.frequence = frequence }
             modifiee.misAJour = maintenant
             return modifiee
         }
@@ -117,17 +118,17 @@ public struct DemoFiltresGateway: FiltresSauvegardesPort {
         return .relue(try await lister(context: context))
     }
 
-    public func modifier(id: String, nom: String, alerte: Bool, frequence: FrequenceAlerte,
+    public func modifier(id: String, nom: String?, alerte: Bool, frequence: FrequenceAlerte?,
                          context: MissionReadContext) async throws -> IssueFiltre {
         try check(context)
         try await initialiser()
         guard await store.existe(id) else { return .refusee(message: Self.introuvable) }
-        guard Self.nomValide(nom) else { return .refusee(message: Self.nomInvalide) }
+        if let nom, !Self.nomValide(nom) { return .refusee(message: Self.nomInvalide) }
         if alerte, let ligne = await store.liste().first(where: { $0.id == id }),
            !FiltresSauvegardesEncodage.estValide(ligne.filtres) {
             return .refusee(message: Self.criteresInvalides)
         }
-        guard await !store.contient(nom: nom, sauf: id) else { return .refusee(message: Self.nomEnDouble) }
+        if let nom, await store.contient(nom: nom, sauf: id) { return .refusee(message: Self.nomEnDouble) }
         await store.modifier(id: id, nom: nom, alerte: alerte, frequence: frequence)
         return .relue(try await lister(context: context))
     }

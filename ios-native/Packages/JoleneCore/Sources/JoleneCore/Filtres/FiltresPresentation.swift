@@ -6,7 +6,8 @@ import Foundation
 /// textes tutoyés du web passent au vouvoiement (décision 9 du lot 1, liste `vouvoiements`) ; les refus serveur sont
 /// affichés tels quels (`IssueFiltre.refusee`). Valeurs serveur (nombre de résultats, horodatage) affichées telles
 /// quelles. Textes sans équivalent web : `nonConfirmee`, `alerteNonConfirmee` (relecture qui ne confirme pas,
-/// PRINCIPES §3) et `alerteActiveSansFrequence`.
+/// PRINCIPES §3), `alerteActiveSansFrequence`, `alerteExisteDeja` et `alerteActiveePour` (alerte existante jamais
+/// réécrite, revue B8 de #1167, M1), `etablissementNonRepris` (revue B8 de #1167, m1).
 public enum FiltresTextes {
     // source: PageRecherchesSauvegardees.tsx l.57 (`usePageTitle`)
     public static let titre = "Mes recherches sauvegardées"
@@ -80,17 +81,35 @@ public enum FiltresTextes {
     public static let alerteActivationImpossible = "Impossible d'activer l'alerte"
     public static let alerteCreationImpossible = "Impossible de créer l'alerte"
     public static let alerteEnregistrementImpossible = "Impossible d’enregistrer l’alerte. Réessayez."
-    // source: l.203 (vouvoyé), l.216
-    public static let alerteDejaActive = "Votre alerte est active : les nouvelles missions seront vérifiées toutes les heures."
+    // source: l.216 (création : alerte toutes les heures)
     public static let alerteCreee = "Alerte créée : les nouvelles missions seront vérifiées toutes les heures."
     /// Relecture qui ne montre pas l'alerte active (PRINCIPES §3).
     public static let alerteNonConfirmee = "L’alerte n’a pas pu être confirmée. Réessayez."
 
-    /// Description de la confirmation (l.644-659), vouvoyée ; profession absente : seconde variante du web.
-    public static func alerteRapideDescription(profession: String?, rayonKm: Double) -> String {
+    /// Recherche identique dont l'alerte est déjà active : rien n'est écrit, sa fréquence réelle est annoncée (le web dit
+    /// « vérifiées toutes les heures » quelle que soit la fréquence, l.203).
+    public static func alerteExisteDeja(frequence: FrequenceAlerte?) -> String {
+        guard let frequence else { return "Une alerte existe déjà pour cette recherche." }
+        return "Une alerte existe déjà pour cette recherche (\(FiltresPresentation.rythme(frequence)))."
+    }
+
+    /// Recherche identique sans alerte, activée à sa fréquence enregistrée.
+    public static func alerteActiveePour(frequence: FrequenceAlerte?) -> String {
+        guard let frequence else { return "Alerte activée pour cette recherche." }
+        return "Alerte activée pour cette recherche (\(FiltresPresentation.rythme(frequence)))."
+    }
+
+    /// Filtre établissement d'Explorer (`?etablissement=`) : refusé par le validateur serveur (clé hors liste), jamais
+    /// repris par l'alerte — annoncé dans la confirmation (revue B8 de #1167, m1).
+    public static let etablissementNonRepris = "Le filtre établissement n’est pas repris : l’alerte porte sur tous les établissements."
+
+    /// Description de la confirmation (l.644-659), vouvoyée ; profession absente : seconde variante du web ; filtre
+    /// établissement actif : `etablissementNonRepris` ajouté.
+    public static func alerteRapideDescription(profession: String?, rayonKm: Double, filtreEtablissement: Bool = false) -> String {
         let rayon = MissionPresentation.nombreJavaScript(rayonKm)
         let mission = profession.map { "une mission \($0) correspondant à vos critères" } ?? "une mission correspondant à vos critères"
-        return "Les nouvelles missions sont vérifiées toutes les heures. Vous recevrez un email si \(mission) (rayon \(rayon) km) est publiée. Vous pourrez modifier ou désactiver cette alerte à tout moment depuis « Mes recherches sauvegardées »."
+        let texte = "Les nouvelles missions sont vérifiées toutes les heures. Vous recevrez un email si \(mission) (rayon \(rayon) km) est publiée. Vous pourrez modifier ou désactiver cette alerte à tout moment depuis « Mes recherches sauvegardées »."
+        return filtreEtablissement ? texte + " " + etablissementNonRepris : texte
     }
 
     // source: RechercheMissions.tsx l.157 (toast d'application d'une recherche dans Explorer)
@@ -98,7 +117,6 @@ public enum FiltresTextes {
 
     /// Textes tutoyés du web et leur forme vouvoyée (décision 9 du lot 1 ; aucun n'est juridique).
     public static let vouvoiements: [(web: String, natif: String)] = [
-        ("Ton alerte est active : les nouvelles missions seront vérifiées toutes les heures.", alerteDejaActive),
         ("Les nouvelles missions sont vérifiées toutes les heures. Tu recevras un email si une mission correspondant à tes critères (rayon 50 km) est publiée. Tu pourras modifier ou désactiver cette alerte à tout moment depuis « Mes recherches sauvegardées ».",
          alerteRapideDescription(profession: nil, rayonKm: 50)),
     ]
@@ -112,6 +130,15 @@ public enum FiltresPresentation {
         case .immediate: return "Toutes les heures"
         case .quotidienne: return "Quotidien"
         case .hebdomadaire: return "Hebdomadaire"
+        }
+    }
+
+    /// Rythme d'une alerte dans les messages de l'alerte rapide : « toutes les heures », « chaque jour », « chaque semaine ».
+    public static func rythme(_ frequence: FrequenceAlerte) -> String {
+        switch frequence {
+        case .immediate: return "toutes les heures"
+        case .quotidienne: return "chaque jour"
+        case .hebdomadaire: return "chaque semaine"
         }
     }
 

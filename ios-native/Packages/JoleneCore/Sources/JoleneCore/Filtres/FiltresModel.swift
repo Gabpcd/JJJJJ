@@ -75,14 +75,14 @@ public final class FiltresModel: ObservableObject {
 
     // MARK: - Mutations
 
-    /// Cloche de la ligne (l.98-108) : bascule l'alerte, fréquence et nom inchangés.
+    /// Cloche de la ligne (l.98-108) : `p_alerte_active` seul, comme le web ; nom et fréquence restent ceux du serveur
+    /// (un renommage fait ailleurs entre-temps n'est jamais écrasé).
     public func basculerAlerte(_ recherche: FiltreSauvegarde) async {
-        guard let frequence = recherche.frequence else { return }
         let cible = !recherche.alerteActive
         _ = await muter(recherche.id, succes: cible ? FiltresTextes.alerteActivee : FiltresTextes.alerteDesactivee,
                         repli: FiltresTextes.erreurMiseAJour,
                         confirme: { liste in liste.first { $0.id == recherche.id }?.alerteActive == cible }) { port, context in
-            try await port.modifier(id: recherche.id, nom: recherche.nom, alerte: cible, frequence: frequence, context: context)
+            try await port.modifier(id: recherche.id, nom: nil, alerte: cible, frequence: nil, context: context)
         }
     }
 

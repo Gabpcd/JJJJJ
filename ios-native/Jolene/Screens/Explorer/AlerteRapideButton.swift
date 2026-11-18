@@ -14,9 +14,11 @@ extension View {
 /// - bouton de la barre « Me prévenir des prochaines missions » (`explorer-alerte-rapide`, cloche), affiché seulement
 ///   si le coupe-circuit `ios_natif_recherches_actif` est lu vrai, absent ou illisible (fail-open, D18) ; il ouvre la
 ///   confirmation du web (`RechercheMissions.tsx` l.639-670, vouvoyée) puis `AlerteRapideModel.activer` sur les critères
-///   courants d'Explorer (réactivation d'une recherche strictement identique, sinon création). Écart : le web n'offre
-///   l'action que dans l'état vide, la fin du paquet de swipe et `?alerte=1` ; l'emplacement de T1c est la barre
-///   d'Explorer, toujours visible, le seul que la tranche peut poser sans modifier l'écran partagé ;
+///   courants d'Explorer (une alerte existante n'est jamais réécrite, une recherche identique sans alerte est activée à
+///   sa fréquence, sinon création). Avec un filtre établissement actif, la confirmation dit qu'il n'est pas repris (le
+///   validateur serveur refuse la clé). Écart consigné (`LOT4_PLAN.md`, écart n°14) : le web n'offre l'action que dans
+///   l'état vide, la fin du paquet de swipe et `?alerte=1` ; l'emplacement de T1c est la barre d'Explorer, toujours
+///   visible, le seul que la tranche peut poser sans modifier l'écran partagé ;
 /// - recherche déposée par « Aller à la recherche » (`BoiteRechercheExplorer`) : critères appliqués
 ///   (`FiltresSauvegardesEncodage.explorer`), puis « Filtres « nom » appliqués » (toast du web, ici avis refermable).
 /// Identifiants : `explorer-alerte-rapide` ; feuille `alerte-rapide` (`-confirm`, `-cancel`, `alerte-rapide-erreur`) ;
@@ -119,7 +121,9 @@ private struct AlerteRapideActive: ViewModifier {
             title: FiltresTextes.alerteRapideTitre,
             message: FiltresTextes.alerteRapideDescription(
                 profession: FiltresPresentation.professionAlerte(filtres: missions.filtres, profile: missions.profile),
-                rayonKm: missions.filtres.rayonKm),
+                rayonKm: missions.filtres.rayonKm,
+                // Filtre établissement (`?etablissement=`) : refusé par le validateur serveur, jamais repris ; dit ici.
+                filtreEtablissement: missions.filtres.etablissementId != nil),
             confirmTitle: FiltresTextes.alerteRapideActiver,
             cancelTitle: FiltresTextes.alerteRapideAnnuler,
             identifier: "alerte-rapide")

@@ -153,6 +153,14 @@ final class SupabaseFiltresGatewayTests: XCTestCase {
         XCTAssertEqual(params["p_frequence_alerte"] as? String, "HEBDOMADAIRE")
         XCTAssertNil(params["p_filtres"], "filtres non modifiables")
 
+        // Cloche (revue B8 de #1167, m2) : `p_alerte_active` seul, comme le web ; nom et fréquence gardés par COALESCE.
+        registry.reset()
+        registry.add("POST", modifier, respond: .json(200, #"{"success":true}"#))
+        registry.add("POST", lister, respond: .json(200, Self.listeJSON))
+        _ = try await gateway().modifier(id: "7f0c8a0e-1111-4b1c-9e0a-7f3c1d2e5a66", nom: nil, alerte: true, frequence: nil,
+                                         context: TestClient.context)
+        XCTAssertEqual(Set(try corps(modifier).keys), ["p_id", "p_alerte_active"])
+
         registry.reset()
         registry.add("POST", modifier, respond: .json(200, #"{"error":"Filtre introuvable"}"#))
         let introuvable = try await gateway().modifier(id: "x", nom: "x", alerte: true, frequence: .immediate, context: TestClient.context)

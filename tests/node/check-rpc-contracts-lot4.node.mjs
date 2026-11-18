@@ -104,10 +104,9 @@ const LOT4_TOUTES = [...LOT4, ...LOT4_PARTAGEES];
 // synthèse du lot 1). Hors des 41 RPC propres du blueprint (`LOT4_PLAN.md` §3 T0 ne la cite pas) ; son
 // sort au lot 4 (consommée ou retirée de RPC_SUIVIES) relève de T15 (DECISIONS_LOT4.md, précision 11).
 const LOT4_RECLASSEES = ['fn_suggestions_missions_pour_soignant'];
-// Câblées par une tranche d'écran livrée (statut `consommee`, synthèse « consommée lot 4 (Tn) », fiche « consommée (lot 4,
-// Tn) par `<gateway>` ») : RPC → [tranche, gateway Swift qui l'appelle]. Le blueprint prévoyait le passage en une fois à
-// T15 ; la consigne de livraison du 18/11/2026 (« passe-les en `consommee` ») le fait tranche par tranche, chaque tranche
-// ajoutant ici ses RPC.
+// Câblées par une tranche livrée (statut `consommee`, synthèse « consommée lot 4 (Tn) », fiche « consommée (lot 4,
+// Tn) par `<gateway>` ») : RPC → [tranche, gateway Swift qui l'appelle]. Règle des lots 1 à 3, rétablie au lot 4 sur
+// consigne du 18/11/2026 (le T0 prévoyait un passage en une fois par T15) ; chaque tranche ajoute ici ses RPC.
 const GATEWAY_FILTRES = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Filtres/SupabaseFiltresGateway.swift';
 const LOT4_CONSOMMEES = new Map([
   ['fn_lister_mes_filtres_sauvegardes', ['T4', GATEWAY_FILTRES]],
@@ -231,7 +230,7 @@ function corpsConfrontes(schema, name) {
 
 const CONTRATS_DOC = 'docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md';
 
-test('Lot 4 — RPC_SUIVIES : 41 RPC propres au lot 4 en a_venir lot 4, dans l ordre des tranches, et 1 partagée', () => {
+test('Lot 4 — RPC_SUIVIES : 41 RPC propres au lot 4 en lot 4 (a_venir, ou consommee par leur tranche), dans l ordre des tranches, et 1 partagée', () => {
   assert.equal(LOT4.length, 41);
   assert.equal(new Set(LOT4_TOUTES).size, 42);
   assert.deepEqual([...contratsLot4.RPC_PARTAGEES_LOT4], LOT4_PARTAGEES);
