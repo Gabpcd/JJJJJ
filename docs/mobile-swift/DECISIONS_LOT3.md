@@ -1723,16 +1723,21 @@ sont reportés dans les puces ci-dessus. Les autres :
 - **Règles (D20, TJ6).** Succès strict : `success == true` puis relecture `fn_consulter_mon_iban` avec IBAN renseigné,
   `iban_verifie == true` et les quatre derniers caractères de l'IBAN envoyé, sinon « Une erreur est survenue. Veuillez
   réessayer. », jamais « IBAN enregistré » ; `success:false` → refus traduit par code (sous-section ci-dessous) ;
-  `NON_AUTHENTIFIE` → session expirée (« Vérifier ma session ») ; `PROFIL_INTROUVABLE` → erreur de contrat au message
-  générique. Une demande à la fois ; état relu après tout refus ou toute erreur (un délai dépassé ne prouve rien) ;
-  jamais de renvoi. IBAN vidé du champ dès l'envoi, quelle que soit l'issue ; jamais journalisé (aucun `print`, aucun
-  journal) ni persisté (aucun stockage) ; champ `privacySensitive`, clavier ASCII en majuscules sans autocorrection ni
-  suggestion (`JoleneInputKind.iban`). `CrashScrubber` (T15) masque déjà les IBAN (compacts, groupés, espaces
+  `NON_AUTHENTIFIE` → session expirée (« Session à vérifier », « Vérifier ma session ») ; `PROFIL_INTROUVABLE` → erreur
+  de contrat au message générique. Une demande à la fois ; une lecture en vol pendant l'envoi est invalidée ; état relu
+  après tout refus ou toute erreur (un délai dépassé ne prouve rien) ; jamais de renvoi. IBAN vidé du champ dès l'envoi,
+  quelle que soit l'issue ; jamais journalisé (aucun `print`, aucun journal) ni persisté (aucun stockage) ; champ
+  `privacySensitive` (masqué sous la rédaction `.privacy` : widgets, écran verrouillé ; ni l'instantané du sélecteur
+  d'apps ni les captures d'écran), clavier ASCII en majuscules sans autocorrection ni suggestion (`JoleneInputKind.iban`). `CrashScrubber` (T15) masque déjà les IBAN (compacts, groupés, espaces
   insécables, tirets) et les clés `iban` / `p_iban` : aucun motif à ajouter.
 - **Définition live.** Contrat relu sur le dump `supabase/schema/public.sql` (re-baseline #1121) : `fn_consulter_mon_iban`
   l.25923-25969, `fn_enregistrer_mon_iban` l.32684-32741, `fn_lier_iban_verifie_document` l.39848-39965, GRANT
-  `authenticated` l.82619 et l.83050. La tranche n'a aucun accès au backend : la relecture de la production
-  (`pg_get_functiondef`, droits) reste à faire avant le merge, comme pour T13.
+  `authenticated` l.82619 et l.83050. **Définition live relue le 18/11/2026** par la revue fraîche B8 n°1 de #1142
+  (production, lecture seule : `pg_get_functiondef`, `prosrc`, `proacl` ; aucune écriture, aucun appel depuis la
+  tranche) : corps identiques au dump pour `fn_consulter_mon_iban`, `fn_enregistrer_mon_iban`,
+  `fn_lier_iban_verifie_document` et `fn_iban_est_valide` (`md5(prosrc)` `a3434f6e…`, `11c12178…`, `f6d6f787…`,
+  `13f70432…`) ; `SECURITY DEFINER`, `search_path = pg_catalog, public`, propriétaire `postgres` ; `EXECUTE` à
+  `authenticated` et `service_role` sur les deux RPC, refusé à `anon` ; les deux dépendances réservées à `service_role`.
 - **Écarts au web (non juridiques).**
   1. Pas de faux succès : le web annonce « IBAN enregistré » quand le refus ne porte que `error_code` (l.259-262, D20).
   2. Le web ne vide le champ IBAN qu'au succès (l.270) ; le natif le vide à chaque envoi (blueprint §3 T14b).
@@ -1769,6 +1774,19 @@ Règle TJ6 appliquée code par code (`IbanPresentation.refus`, épinglé par
     « Une pièce d'identité vérifiée à vos nom et prénom est requise : téléversez-la depuis Mes documents. »
 - Aucun texte juridique ajouté ; aucune décision juridique n'a été nécessaire.
 - décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### T14b — corrections de la revue fraîche B8 n°1 (verdict A_CORRIGER, 18/11/2026)
+
+- **M1** — avertissements de concurrence stricte (CI Swift 6.2) : le port scripté d'`IbanTests` ne prend plus son
+  verrou à travers un contexte `async` (`withLock` dans des fonctions synchrones).
+- **m2** — état `iban_renseigne && !iban_verifie` couvert au niveau du modèle, sur la variante démo `non-verifie`.
+- **m4** — `enregistrer()` invalide toute lecture en vol (`generation`, en tête et au retour du port) ; test de la course.
+- **m5** — identifiants distincts : `iban-rib-requis-documents` (état non vérifié), `iban-refus-documents` (refus).
+- **m6** — portée de `privacySensitive` précisée (commentaire seulement).
+- **m7** — titre « Session à vérifier » sur l'erreur de session expirée (TJ6, règle 2).
+- **m8** — parité, définition live et nom de l'étape CI mis à jour.
+- **Suivis non traités ici** : m1 (aucun test de changement d'epoch pendant une lecture ou un envoi : la phrase de
+  `DemoIbanTests` ne le revendique plus) ; m3 (le champ vidé n'est constaté qu'après l'appel, pas pendant).
 
 ## T15 — Sentry Cocoa (branche `lot3/l3-t15-v3`, 16/11/2026)
 
@@ -1878,8 +1896,8 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   (section T13 ci-dessus), revue fraîche B8 n°1 CLÔTURABLE (mineurs traités), définitions live relues le 16/11/2026 ;
   go humain requis avant merge.
 - **T14a** — Stripe Connect.
-- **T14b** — IBAN (données bancaires) ; branche `lot3/l3-t14b` poussée (section T14b ci-dessus), définition live à
-  relire avant le merge ; go humain requis avant merge.
+- **T14b** — IBAN (données bancaires) ; branche `lot3/l3-t14b` poussée (section T14b ci-dessus), revue fraîche B8 n°1
+  traitée, définition live relue le 18/11/2026 ; go humain requis avant merge.
 - **T16** — dispatch STAGING (secrets STAGING, suppression des comptes jetables, bascule transactionnelle de la
   cohorte D5-R).
 - **PR web « destinataire du géocodage inverse » (légal exposé ; À PRÉPARER, hors du chantier iOS)** — suite de la

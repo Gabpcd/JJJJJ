@@ -970,7 +970,7 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-profil-photo.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot3-profil-photo) : code $code"
-      - name: test-without-building — éclat lot3-revenus (XCUITest onglet Revenus, paiements déclarés) (${{ matrix.format }})
+      - name: test-without-building — éclat lot3-revenus (XCUITest onglet Revenus, paiements déclarés, IBAN) (${{ matrix.format }})
         id: tests_lot3_revenus
         if: always() && steps.build.outcome == 'success'
         timeout-minutes: 30

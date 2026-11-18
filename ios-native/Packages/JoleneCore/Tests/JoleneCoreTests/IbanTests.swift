@@ -119,7 +119,8 @@ final class IbanTests: XCTestCase {
     // MARK: - Modèle
 
     private struct PretAuth: AuthPort {
-        func restoreSession() async throws -> AuthenticatedUser? { utilisateurIban }
+        var utilisateur = utilisateurIban
+        func restoreSession() async throws -> AuthenticatedUser? { utilisateur }
         func signIn(email: String, password: String) async throws -> AuthenticatedUser { throw nonScripte }
         func signOut() async throws {}
     }
@@ -130,31 +131,48 @@ final class IbanTests: XCTestCase {
         func mission(id: String, context: MissionReadContext) async throws -> Mission? { nil }
     }
 
-    /// Port scripté : files de réponses, journal des appels (sans l'IBAN : seul le fait de l'appel est noté).
+    /// Port scripté : files de réponses, journal des appels (sans l'IBAN : seul le fait de l'appel est noté). Verrou
+    /// pris dans des fonctions synchrones seulement (`withLock`), jamais à travers un `await` (concurrence stricte).
+    /// `lectureRetenue` : la lecture de rang donné (0 = première) attend l'ouverture de sa barrière, une fois sa
+    /// réponse déjà tirée de la file (réponse « partie avant l'écriture »).
     private final class ScriptedIban: IbanPort, @unchecked Sendable {
         private let lock = NSLock()
         private var lectures: [Result<ConsultationIban, Error>]
         private var envois: [Result<ResultatIban, Error>]
         private var journal: [String] = []
+        private var rangLecture = 0
+        private let lectureRetenue: (rang: Int, barriere: Gate)?
 
-        init(lectures: [Result<ConsultationIban, Error>], envois: [Result<ResultatIban, Error>] = []) {
-            self.lectures = lectures; self.envois = envois
+        init(lectures: [Result<ConsultationIban, Error>], envois: [Result<ResultatIban, Error>] = [],
+             lectureRetenue: (rang: Int, barriere: Gate)? = nil) {
+            self.lectures = lectures; self.envois = envois; self.lectureRetenue = lectureRetenue
         }
 
-        var appels: [String] { lock.lock(); defer { lock.unlock() }; return journal }
+        var appels: [String] { lock.withLock { journal } }
+
+        private func noter(_ appel: String) { lock.withLock { journal.append(appel) } }
 
         private func suivante<V>(_ file: inout [Result<V, Error>]) -> Result<V, Error> {
-            lock.lock(); defer { lock.unlock() }
-            return file.isEmpty ? .failure(nonScripte) : file.removeFirst()
+            lock.withLock { file.isEmpty ? .failure(nonScripte) : file.removeFirst() }
+        }
+
+        /// Rang de la lecture et réponse tirée, sous le verrou.
+        private func tirerLecture() -> (Int, Result<ConsultationIban, Error>) {
+            lock.withLock {
+                defer { rangLecture += 1 }
+                return (rangLecture, lectures.isEmpty ? .failure(nonScripte) : lectures.removeFirst())
+            }
         }
 
         func consulter(context: MissionReadContext) async throws -> ConsultationIban {
-            lock.lock(); journal.append("consulter"); lock.unlock()
-            return try suivante(&lectures).get()
+            noter("consulter")
+            let (rang, reponse) = tirerLecture()
+            if let lectureRetenue, lectureRetenue.rang == rang { await lectureRetenue.barriere.wait() }
+            return try reponse.get()
         }
 
         func enregistrer(iban: String, titulaire: String, context: MissionReadContext) async throws -> ResultatIban {
-            lock.lock(); journal.append("enregistrer \(iban.count) « \(titulaire) »"); lock.unlock()
+            noter("enregistrer \(iban.count) « \(titulaire) »")
             return try suivante(&envois).get()
         }
     }
@@ -163,8 +181,10 @@ final class IbanTests: XCTestCase {
     private static let verifie = ConsultationIban(ibanRenseigne: true, ibanVerifie: true, verificationRequise: false,
                                                   ibanLast4: "0189", ibanTitulaire: "Camille Démo")
 
-    private func modele(_ port: ScriptedIban) async throws -> IbanModel {
-        var gateways = Gateways(auth: PretAuth(), role: NeutralRole(), missions: PretMissions(), clock: FixedClock(DemoWorld.fixedNow))
+    /// `utilisateur` : `DemoWorld.user` pour un port démo (qui refuse tout autre contexte, `.demoOnly`).
+    private func modele(_ port: IbanPort, utilisateur: AuthenticatedUser = utilisateurIban) async throws -> IbanModel {
+        var gateways = Gateways(auth: PretAuth(utilisateur: utilisateur), role: NeutralRole(), missions: PretMissions(),
+                                clock: FixedClock(DemoWorld.fixedNow))
         gateways.iban = port
         let store = SessionStore(controller: SessionController(gateways: gateways,
                                                                resolutionTimeout: SessionController.defaultResolutionTimeout))
@@ -224,6 +244,47 @@ final class IbanTests: XCTestCase {
         XCTAssertTrue(model.sessionExpiree)
         XCTAssertEqual(model.iban, "")
         XCTAssertEqual(port.appels.filter { $0.hasPrefix("enregistrer") }.count, 1, "jamais renvoyé")
+    }
+
+    /// État `iban_renseigne && !iban_verifie` (variante démo `non-verifie`, revue B8 de #1142, m2) : « RIB vérifié
+    /// requis » et « Téléverser mon RIB », jamais l'IBAN masqué ni « IBAN enregistré » ; libellés de mise à jour.
+    func testRenseigneNonVerifieAfficheRibRequisSansIbanMasque() async throws {
+        let model = try await modele(DemoIbanGateway(scenario: .nonVerifie), utilisateur: DemoWorld.user)
+        await model.charger()
+        XCTAssertTrue(model.afficheRibRequis)
+        XCTAssertFalse(model.afficheEnregistre)
+        XCTAssertNil(model.masque, "IBAN non vérifié : jamais affiché comme enregistré")
+        XCTAssertNil(model.ligneTitulaire)
+        XCTAssertEqual(model.libelleChamp, "Modifier l'IBAN")
+        XCTAssertEqual(model.libelleBouton, "Mettre à jour")
+        XCTAssertEqual(model.consultation?.verificationRequise, true)
+        // Le RIB démo vérifié lève l'état : relecture vérifiée, « RIB vérifié requis » disparaît.
+        model.iban = Self.exemple
+        model.titulaire = "Camille Démo"
+        await model.enregistrer()
+        XCTAssertEqual(model.issue, .enregistre)
+        XCTAssertFalse(model.afficheRibRequis)
+        XCTAssertEqual(model.masque, "•••• •••• •••• •••• •••• 0189")
+    }
+
+    /// Course `.task` × envoi (revue B8 de #1142, m4) : une lecture partie avant l'enregistrement et revenue après lui
+    /// (réponse d'avant l'écriture) est ignorée ; l'état relu après le succès reste affiché.
+    func testLectureEnVolAvantLEnvoiNEcrasePasLEtatRelu() async throws {
+        let barriere = Gate()
+        let port = ScriptedIban(lectures: [.success(Self.aucun), .success(Self.aucun)],
+                                envois: [.success(.enregistre(Self.verifie))], lectureRetenue: (rang: 1, barriere: barriere))
+        let model = try await modele(port)
+        await model.charger()
+        let lecture = Task { await model.charger() }
+        while port.appels.filter({ $0 == "consulter" }).count < 2 { await Task.yield() }
+        model.iban = Self.exemple
+        model.titulaire = "Camille Démo"
+        await model.enregistrer()
+        XCTAssertEqual(model.consultation, Self.verifie)
+        await barriere.open()
+        await lecture.value
+        XCTAssertEqual(model.consultation, Self.verifie, "réponse d'une lecture antérieure à l'envoi : ignorée")
+        XCTAssertEqual(model.issue, .enregistre)
     }
 
     // MARK: - Textes
