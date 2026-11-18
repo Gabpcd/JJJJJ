@@ -804,6 +804,21 @@ public enum TextesWeb {
         }
     }
 
+    /// Phrases d'engagement de la candidature (lot 1, T6b ; revue B8 P2, décision par délégation du coordinateur) :
+    /// reprises à l'identique du web, tutoiement compris (HARD STOP n°4 : aucun texte nouveau, validation de Gabrielle
+    /// requise). Récapitulatif : candidature retirable (POSTULER), acceptation immédiate (ACCEPTER, PROPOSITION) ;
+    /// mention sous « ★ Accepter cette mission ».
+    public enum Candidature {
+        // source: src/components/planning/RecapitulatifCandidatureDialog.tsx:53 [juridique]
+        public static let engagementCandidature = "En confirmant, tu t’engages sur ces dates et horaires exacts. Une candidature peut être retirée tant qu’elle n’est pas acceptée."
+
+        // source: src/components/planning/RecapitulatifCandidatureDialog.tsx:54 [juridique]
+        public static let engagementAcceptation = "En confirmant, tu acceptes immédiatement tous ces créneaux. Après attribution, toute annulation suit les règles de la mission."
+
+        // source: src/pages/DetailMissionSoignant.tsx:1373 [juridique]
+        public static let mentionAccepter = "En acceptant, tu t'engages à être présent(e) aux dates et horaires indiqués."
+    }
+
     /// Tous les textes, pour les tests (la garde Node vérifie que la liste est complète et exacte).
     public static let catalogue: [EntreeTexteWeb] = [
         .init(cle: "ConsentementGps.titre", texte: ConsentementGps.titre),
@@ -956,5 +971,8 @@ public enum TextesWeb {
         .init(cle: "StripeConnect.nonDemandeFrais", texte: StripeConnect.nonDemandeFrais),
         .init(cle: "StripeConnect.supprimeTitre", texte: StripeConnect.supprimeTitre),
         .init(cle: "StripeConnect.supprimeTexte", texte: StripeConnect.supprimeTexte),
+        .init(cle: "Candidature.engagementCandidature", texte: Candidature.engagementCandidature),
+        .init(cle: "Candidature.engagementAcceptation", texte: Candidature.engagementAcceptation),
+        .init(cle: "Candidature.mentionAccepter", texte: Candidature.mentionAccepter),
     ]
 }

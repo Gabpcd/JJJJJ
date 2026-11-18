@@ -73,6 +73,10 @@ final class TextesWebTests: XCTestCase {
             "TextesWeb.StripeConnect.nonDemandeTitre",
             "TextesWeb.StripeConnect.nonDemandeTexte",
             "TextesWeb.StripeConnect.supprimeTexte",
+            // L1-T6b (revue B8 P2) : phrases d'engagement de la candidature, reprises à l'identique (HARD STOP n°4).
+            "TextesWeb.Candidature.engagementCandidature",
+            "TextesWeb.Candidature.engagementAcceptation",
+            "TextesWeb.Candidature.mentionAccepter",
         ]
         let marques: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
         for entree in Self.tousLesTextes {

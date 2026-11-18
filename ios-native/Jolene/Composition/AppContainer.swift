@@ -343,10 +343,8 @@ final class AppContainer: ObservableObject {
         if processEnvironment["JOLENE_FORCE_PREFERENCES_ECHEC"] == "1" {
             gateways.preferences = DemoPreferencesEchecGateway() // lot 3, T6
         }
-        if let variante = varianteProfil {
-            gateways.profil = DemoProfilGateway(variante: variante) // lot 3, T9
-            gateways.avatar = DemoWorld.avatar(profil: gateways.profil) // lot 3, T10 : même ligne que la variante
-        }
+        // Lot 3, T9 et T10 : la variante du profil (`varianteProfil`) est posée par `DemoWorld.gateways` sur la ligne démo
+        // unique (`gateways.profil`, avatar et projection du lot 1 compris, T6b revue B8 M1).
         if let scenario = ScenarioAvatarDemo(arguments: arguments) {
             gateways.avatar = DemoWorld.avatar(profil: gateways.profil, scenario: scenario) // lot 3, T10
         }
