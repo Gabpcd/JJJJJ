@@ -102,7 +102,7 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_ecrire_audit_safe` | à venir | 1 (T1/T6a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_supprimer_compte_rate_limited` | à venir | 1 (T8, via edge `delete-account`) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_param_bool` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_confirmer_presence_mission` | à venir | 1 (T6c) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_confirmer_presence_mission` | consommée lot 1 (T6c) | 1 (T6c) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_scanner_code_pointage` | consommée lot 2 (T3) | 2 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_etat_pointage_mission` | consommée lot 2 (T3) | 2 (T3) | MIXTE_TENANT_ADMIN | authenticated, service_role | absente |
 | `fn_envoyer_otp_signature` | consommée lot 2 (T8) | 2 (T8 gateway, T9b écran `SignatureOtpView`) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -1267,7 +1267,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_param_bool"("p_cle" "text", "p_defaut" b
 
 ## fn_confirmer_presence_mission
 
-- **Statut natif** : à venir (lot 1, T6c ; décision 16).
+- **Statut natif** : consommée lot 1 (T6c ; décision 16) — `SupabasePresenceGateway.confirmerPresence` (une forme de
+  réponse ci-dessous = un test de `SupabasePresenceGatewayTests`), relecture `missions.presence_confirmee_le` ;
+  règle d'affichage `PresenceRules.bloc` ; écran `ConfirmationPresenceBloc` du détail ; démo `DemoPresenceGateway`.
 - **Usage prévu** : Bloc « Confirme ta présence » d'une mission `ASSIGNEE` au soignant dont le début est à
   moins de 48 h (`PresenceRules.blocDu(mission:, now:)`, seuil 48 h en dur comme le web
   `DetailMissionSoignant.tsx` l.1414-1417, alors que le cron lit `confirmation_j1_max_h` = 36 h : écart

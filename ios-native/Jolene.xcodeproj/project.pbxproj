@@ -113,6 +113,7 @@
 		CE5147BA934E8BAC00B16A39 /* StockageAppareil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7E2A5C1F0BCB93E044A7ED /* StockageAppareil.swift */; };
 		D1A49193A61DE1121538F634 /* PrePromptPushScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F524C6906946AF70D55B8DD /* PrePromptPushScreen.swift */; };
 		D2C858B7CC96D57DB6CC5E78 /* PresentateurRenvoiWeb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0747FCCBC21B648A9985AA76 /* PresentateurRenvoiWeb.swift */; };
+		D2D4AECD2C40F45F63E795D6 /* DemoConfirmationPresenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA71E0003DC5AB43E8D021FB /* DemoConfirmationPresenceTests.swift */; };
 		D30E0483E34614D542AA0B1B /* DemoPresencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5BA9A6A615BF5E995AB8630 /* DemoPresencesTests.swift */; };
 		D3C7C3722CF27996A3A3CA9F /* JoleneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C216B466C241777BFC4541 /* JoleneApp.swift */; };
 		D6660F00D0873D85C55297FB /* PresenceAVenirRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 798D89ACB654F41113D150AC /* PresenceAVenirRow.swift */; };
@@ -130,6 +131,7 @@
 		F434EACB7D1CB0171357C23B /* NotationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF79B346E72A8A27CEEB32E5 /* NotationSheet.swift */; };
 		F5C6A799F28E1EE9C19F980C /* ContratsDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01E2478001F6F24CF2412D0 /* ContratsDestination.swift */; };
 		F76422A8F858F85FC8AF2063 /* ShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38258808A1C110F764DA2B97 /* ShareSheet.swift */; };
+		FA4DA29A46F76F2819750FCA /* ConfirmationPresenceBloc.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A6DB1119171741216617824 /* ConfirmationPresenceBloc.swift */; };
 		FAEDA57C217B1DE476251CF5 /* AppareilEnvironnement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B157B0FB088245CF6215DE4 /* AppareilEnvironnement.swift */; };
 		FF4867F1CDD9CA89D9CDFA66 /* PaiementsDeclaresSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B24FDF8D33F676E7EA256C9 /* PaiementsDeclaresSection.swift */; };
 /* End PBXBuildFile section */
@@ -187,6 +189,7 @@
 		65406E8F54F9DFF36EF8782E /* JoleneSupabase */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JoleneSupabase; path = Packages/JoleneSupabase; sourceTree = SOURCE_ROOT; };
 		65672A4D60960C1448C0894D /* RevenusScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevenusScreen.swift; sourceTree = "<group>"; };
 		676FE905DF85E7AE14260D5C /* ConfirmationInscriptionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationInscriptionScreen.swift; sourceTree = "<group>"; };
+		6A6DB1119171741216617824 /* ConfirmationPresenceBloc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationPresenceBloc.swift; sourceTree = "<group>"; };
 		6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StagingConnexionTests.swift; sourceTree = "<group>"; };
 		6F98E168F9C28FBB06551D7B /* Production.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Production.xcconfig; sourceTree = "<group>"; };
 		705899DA6E3B27D41139A5A3 /* CrashReporting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReporting.swift; sourceTree = "<group>"; };
@@ -225,6 +228,7 @@
 		A24F006640FB3D9605D893FA /* EnvironmentBlockedScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentBlockedScreen.swift; sourceTree = "<group>"; };
 		A633219A5D169F90CE80EA99 /* DemoPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPreferencesTests.swift; sourceTree = "<group>"; };
 		A82414C2B39FC0B682E516B6 /* Jolene.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Jolene.entitlements; sourceTree = "<group>"; };
+		AA71E0003DC5AB43E8D021FB /* DemoConfirmationPresenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoConfirmationPresenceTests.swift; sourceTree = "<group>"; };
 		ACC4653075CBE00DD3130FD3 /* LoginScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginScreen.swift; sourceTree = "<group>"; };
 		ACE59294CC622F36A3F8C949 /* DemoRevenusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoRevenusTests.swift; sourceTree = "<group>"; };
 		AE5CC776B1AC0C006081807A /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
@@ -304,6 +308,7 @@
 			isa = PBXGroup;
 			children = (
 				08B275800A27DAAE2F130715 /* CandidatureSection.swift */,
+				6A6DB1119171741216617824 /* ConfirmationPresenceBloc.swift */,
 			);
 			path = Candidature;
 			sourceTree = "<group>";
@@ -572,6 +577,7 @@
 				98317DBE720E6BEB75883241 /* DemoCompletionInscriptionTests.swift */,
 				FD20E54361DC36A3FDE82ABE /* DemoCompteLot3Tests.swift */,
 				95F239F5C89642EA9DEEAE04 /* DemoCompteTests.swift */,
+				AA71E0003DC5AB43E8D021FB /* DemoConfirmationPresenceTests.swift */,
 				07388306B298067BAF72F868 /* DemoConsultationTests.swift */,
 				58E44CB4507BB6F0010EAE04 /* DemoContratsTests.swift */,
 				79F35431F3E15876E9570306 /* DemoDocumentsTests.swift */,
@@ -729,6 +735,7 @@
 				DA1C3DDBEDD68FE971327EF4 /* CompteSections.swift in Sources */,
 				AA33BE43A88764C0D2AEC169 /* CompteSupprimeScreen.swift in Sources */,
 				9DE4879FA571EB99B73E9496 /* ConfirmationInscriptionScreen.swift in Sources */,
+				FA4DA29A46F76F2819750FCA /* ConfirmationPresenceBloc.swift in Sources */,
 				5CE7FB62EB256D49B5BB2692 /* ConsentementGpsRow.swift in Sources */,
 				57EB1E7C965A1080346E62E0 /* ConsentementGpsSheet.swift in Sources */,
 				BEF9046E8D194E5FF2A90FD3 /* ContratReaderView.swift in Sources */,
@@ -809,6 +816,7 @@
 				997CBDFDA40AD985E5EE59AD /* DemoCompletionInscriptionTests.swift in Sources */,
 				BBBCDD81089C3FBE6AF5FBDD /* DemoCompteLot3Tests.swift in Sources */,
 				1B95D14A610032E076A08B5C /* DemoCompteTests.swift in Sources */,
+				D2D4AECD2C40F45F63E795D6 /* DemoConfirmationPresenceTests.swift in Sources */,
 				8F1F3B7AC29459F237E608AE /* DemoConsultationTests.swift in Sources */,
 				73A10EC601A7C8B4CEFF8D30 /* DemoContratsTests.swift in Sources */,
 				8F36BAC7C752737B387653F5 /* DemoDocumentsTests.swift in Sources */,

@@ -82,7 +82,7 @@ export const RPC_SUIVIES = [
   { name: 'fn_ecrire_audit_safe', statut: 'a_venir', lot: 1 },
   { name: 'fn_supprimer_compte_rate_limited', statut: 'a_venir', lot: 1 },
   { name: 'fn_param_bool', statut: 'a_venir', lot: 1 },
-  { name: 'fn_confirmer_presence_mission', statut: 'a_venir', lot: 1 },
+  { name: 'fn_confirmer_presence_mission', statut: 'consommee', lot: 1 }, // T6c : SupabasePresenceGateway
   { name: 'fn_scanner_code_pointage', statut: 'consommee', lot: 2 }, // T3 : SupabasePointageGateway
   { name: 'fn_etat_pointage_mission', statut: 'consommee', lot: 2 }, // T3 : SupabasePointageGateway
   { name: 'fn_envoyer_otp_signature', statut: 'consommee', lot: 2 }, // T8 : SupabaseContratsGateway

@@ -54,15 +54,22 @@ public enum DemoWorld {
         // dont la projection du lot 1 est relue à chaque `profile(userId:)` : une modification du profil (téléphone…)
         // lève le soft-gate au retour sur le détail, comme en production.
         let profilDemo = varianteProfil.map { DemoProfilGateway(variante: $0) } ?? DemoProfilGateway()
+        let profil: @Sendable () async throws -> SoignantProfile = { try await profilDemo.projectionLot1(context.profile) }
+        // T6c : la confirmation de présence lit la mission servie (attribution de session comprise) et pose
+        // `presence_confirmee_le` dans son acteur ; le détail la relit par la surcouche `presences`.
+        let lecturePresence = DemoMissionsGateway(profil: profil, missionsAttribuees: { await candidature.missionsAttribuees() })
+        let presence = DemoPresenceGateway(clock: FixedClock(fixedNow), mission: { id in
+            try await lecturePresence.mission(id: id, context: context)?.record
+        })
         var gateways = Gateways(
             auth: DemoAuthGateway(),
             role: DemoRoleGateway(),
-            missions: DemoMissionsGateway(profil: { try await profilDemo.projectionLot1(context.profile) },
-                                          missionsAttribuees: { await candidature.missionsAttribuees() }),
+            missions: DemoMissionsGateway(profil: profil, missionsAttribuees: { await candidature.missionsAttribuees() },
+                                          presences: { await presence.surcouche($0) }),
             clock: FixedClock(fixedNow),
             dashboard: DemoDashboardGateway(clock: FixedClock(fixedNow)),
             candidature: candidature,                   // T6a (annulations : T7)
-            presence: UnwiredPresencePort(),            // T6c
+            presence: presence,                         // T6c
             favoris: UnwiredFavorisPort(),              // T4b
             mesMissions: DemoMesMissionsGateway(clock: FixedClock(fixedNow),
                                                 candidaturesDeSession: { await candidature.candidaturesDeSession() }),
@@ -187,14 +194,21 @@ public struct DemoMissionsGateway: MissionsPort {
     /// Profil fictif servi à la session, relu à chaque appel (T6b : projection de la ligne démo du lot 3, variante DEBUG
     /// `JOLENE_DEMO_PROFIL` comprise).
     private let profil: @Sendable () async throws -> SoignantProfile
+    /// T6c : présence confirmée pendant la session (`DemoPresenceGateway.surcouche`), appliquée à chaque détail relu :
+    /// l'écran relit ce que le monde démo a écrit, jamais une date posée localement.
+    private let presences: @Sendable (MissionRecord) async -> MissionRecord
 
     public init(missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
+        // T6c : mission de recette de la confirmation de présence, ouverte par lien seulement (hors listes).
         try DemoFixtures.loadDashboard().missionsAssignees + DemoFixtures.loadMesMissions().passees.map(\.mission)
+            + (DemoPresenceGateway.missionJ1().map { [$0] } ?? [])
     }, profil: @escaping @Sendable () async throws -> SoignantProfile = { DemoWorld.context.profile },
-       missionsAttribuees: @escaping @Sendable () async -> Set<String> = { [] }) {
+       missionsAttribuees: @escaping @Sendable () async -> Set<String> = { [] },
+       presences: @escaping @Sendable (MissionRecord) async -> MissionRecord = { $0 }) {
         self.missionsAssignees = missionsAssignees
         self.profil = profil
         self.missionsAttribuees = missionsAttribuees
+        self.presences = presences
     }
 
     public func profile(userId: String) async throws -> SoignantProfile? {
@@ -218,10 +232,12 @@ public struct DemoMissionsGateway: MissionsPort {
                 fixture.record.statut = CandidatureRules.statutAssignee
                 fixture.record.soignantAssigneId = DemoWorld.context.userId
             }
+            fixture.record = await presences(fixture.record)
             return enrich(fixture, context: context, etablissements: etablissements)
         }
         // T3 : les missions ASSIGNEE du tableau de bord démo s'ouvrent en détail, sans entrer dans Explorer.
-        guard let fixture = try missionsAssignees().first(where: { $0.record.id == id }) else { return nil }
+        guard var fixture = try missionsAssignees().first(where: { $0.record.id == id }) else { return nil }
+        fixture.record = await presences(fixture.record)
         return enrich(fixture, context: context, etablissements: etablissements)
     }
 

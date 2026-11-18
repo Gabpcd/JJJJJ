@@ -145,6 +145,11 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
 // blueprint, relues dans le dépôt le 2 novembre 2026, restent en commentaire) : un décalage de
 // lignes du web ne touche pas cette table. Tous sont dans TextesWeb.swift (HARD STOP).
 const EXIGES = {
+  // Confirmation de présence J-1 (lot 1, T6c, LOT1_PLAN §3 T6c, HARD STOP n°4) : DetailMissionSoignant.tsx l.1426-1438.
+  'src/pages/DetailMissionSoignant.tsx': [
+    'ConfirmationPresence.bouton', 'ConfirmationPresence.confirmation', 'ConfirmationPresence.etatConfirme',
+    'ConfirmationPresence.repliRefus',
+  ],
   // Consentement GPS : ConsentementGPS.tsx l.25-65 (titre, description, deux listes, l.50, boutons).
   'src/components/ConsentementGPS.tsx': [
     'ConsentementGps.titre', 'ConsentementGps.description', 'ConsentementGps.ceQueNousFaisonsTitre',

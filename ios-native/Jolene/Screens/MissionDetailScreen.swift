@@ -107,6 +107,8 @@ struct MissionDetailScreen: View {
             }
             // Lot 1, T6b : candidature (POSTULER, ACCEPTER, proposition), état relu côté serveur.
             CandidatureSection(mission: mission, session: session, snapshot: snapshot) { await model.load() }
+            // Lot 1, T6c : confirmation de présence J-1 (cible du push `RAPPEL_MISSION`), état relu.
+            ConfirmationPresenceBloc(mission: mission, session: session, snapshot: snapshot) { await model.load() }
         }
         .padding(JoleneSpacing.lg)
         .frame(maxWidth: 640)
