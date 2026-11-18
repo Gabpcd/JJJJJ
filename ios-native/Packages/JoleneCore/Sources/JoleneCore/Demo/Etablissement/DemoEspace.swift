@@ -76,8 +76,11 @@ public extension DemoWorld {
     /// Ports du monde démo pour l'espace demandé (surcharge additive ; `gateways()` et
     /// `gateways(drapeaux:)` du lot 0 et du lot 1 sont inchangés). Dans l'espace établissement, auth,
     /// rôle et ports établissement partagent la même session démo (une seule identité, comme un JWT).
-    static func gateways(espace: DemoEspace, drapeaux: [String: Bool] = [:]) -> Gateways {
-        var gateways = DemoWorld.gateways(drapeaux: drapeaux)
+    /// Intégration de la vague B (lot 1, T6b) : `varianteProfil` (`JOLENE_DEMO_PROFIL`) est transmise au monde
+    /// soignant (`DemoWorld.gateways(drapeaux:varianteProfil:)`), nil par défaut.
+    static func gateways(espace: DemoEspace, drapeaux: [String: Bool] = [:],
+                         varianteProfil: VarianteProfilDemo? = nil) -> Gateways {
+        var gateways = DemoWorld.gateways(drapeaux: drapeaux, varianteProfil: varianteProfil)
         guard case let .etablissement(configuration) = espace else { return gateways }
         let auth = DemoAuthGateway(compte: { email in try DemoEspace.compte(email: email, configuration: configuration) })
         let identite: @Sendable () async -> String? = { try? await auth.restoreSession()?.id }
