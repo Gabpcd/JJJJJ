@@ -42,6 +42,10 @@ import JoleneSupabase
 /// Lot 3, T15 : rapport de crash (`CrashReporting`, démarré par `JoleneApp` avant le conteneur sur la même lecture de
 /// l'environnement, `environnementDeLancement`) remis à la session en staging et en production seulement (identifiant
 /// utilisateur) ; jamais en démo.
+///
+/// Lot 1, T5 : recette des états de Mes missions démo, `JOLENE_FORCE_MES_MISSIONS_ECHEC=1|session`,
+/// `JOLENE_FORCE_MES_MISSIONS_VIDE=1` et `JOLENE_DEMO_MES_MISSIONS_PAGE=<1…50>` (`DemoMesMissionsSurcharges`,
+/// JoleneCore) ; `JOLENE_FORCE_CALENDRIER_REFUS=1` : accès au calendrier démo refusé (`calendrierRefusDemo`).
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -85,6 +89,9 @@ final class AppContainer: ObservableObject {
     /// ou lecture impossible avec `-JOLENE_DEMO_AVATAR illisible`, DEBUG) ; nil en staging et en production (feuilles
     /// système réelles).
     let selectionAvatarDemo: SelectionPhotoAvatar?
+    /// Lot 1, T5 : refus simulé de l'accès au calendrier démo (surcharge DEBUG
+    /// `JOLENE_FORCE_CALENDRIER_REFUS`), toujours faux en Release et hors démo.
+    let calendrierRefusDemo: Bool
     #if DEBUG
     let networkSentinel: NetworkSentinel.Monitor?
     #endif
@@ -102,6 +109,11 @@ final class AppContainer: ObservableObject {
         let environment = Self.environnementDeLancement(arguments: arguments, processEnvironment: processEnvironment,
                                                         info: info)
         self.environment = environment
+        #if DEBUG
+        calendrierRefusDemo = environment.mode == .demo && processEnvironment[CalendrierAppareilDemo.variableRefus] == "1"
+        #else
+        calendrierRefusDemo = false
+        #endif
         let boite = NotificationCenterDelegate.shared.boite
         tapsPush = boite
         // Revue B8 de T3b, M1 : le coordinateur est aussi le port `FinIdentiteWebPort` de la session (fermeture du renvoi
@@ -263,6 +275,8 @@ final class AppContainer: ObservableObject {
     /// (`DemoRevenusEchecGateway`, `DemoRevenusTests.testErreurPuisReprise`) ; lot 3, T13 : `JOLENE_DEMO_PAIEMENTS=refus`
     /// rejoue les refus serveur des paiements déclarés (`DemoPaiementsGateway.Scenario.refus`,
     /// `DemoPaiementsTests.testRefusServeurVerbatimJamaisUnSucces`).
+    /// Lot 1, T5 : surcharges de Mes missions (`DemoMesMissionsSurcharges`) : échec forcé, session expirée, listes vides
+    /// ou taille de page réduite (`DemoMesMissionsTests`).
     /// Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
@@ -326,6 +340,10 @@ final class AppContainer: ObservableObject {
             let paiements = DemoPaiementsGateway(scenario: scenario)
             gateways.paiements = paiements
             gateways.revenus = DemoRevenusGateway(paiementsDeclares: paiements)
+        }
+        // Lot 1, T5 : échec forcé, session expirée, listes vides ou taille de page réduite (`DemoMesMissionsTests`).
+        if let mesMissions = DemoMesMissionsSurcharges.port(environment: processEnvironment, clock: gateways.clock) {
+            gateways.mesMissions = mesMissions
         }
         return gateways
         #else

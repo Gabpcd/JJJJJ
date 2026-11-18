@@ -159,7 +159,7 @@ final class DemoPushTests: JoleneUITestCase {
         launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", "MISSION_ANNULEE_ETAB"])
         signInDemo()
         require("L'onglet Mes missions est ouvert (`/soignant/missions`)", timeout: 30) {
-            self.visible(self.element("placeholder-missions"))
+            self.containerVisible(self.element("mes-missions-screen")) // lot 1, T5 : écran natif
         }
         XCTAssertEqual(element("deeplink-route").label, "missions")
         record("\(proofPrefix)-push-tap-mes-missions")

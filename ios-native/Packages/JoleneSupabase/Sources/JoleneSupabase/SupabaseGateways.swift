@@ -43,7 +43,7 @@ public enum SupabaseGateways {
             candidature: UnwiredCandidaturePort(),      // T6a, T7
             presence: UnwiredPresencePort(),            // T6c
             favoris: UnwiredFavorisPort(),              // T4b
-            mesMissions: UnwiredMesMissionsPort(),      // T5
+            mesMissions: SupabaseMesMissionsGateway(client: client, clock: clock, enrich: enrich),
             compte: SupabaseAccountGateway(client: client),
             audit: SupabaseAuditGateway(client: client),
             flags: SupabaseFlagsGateway(client: client),

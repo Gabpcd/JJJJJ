@@ -108,8 +108,7 @@ struct MainTabView: View {
             .accessibilityIdentifier("tab-explorer")
 
             NavigationStack {
-                PlaceholderScreen(titre: "Mes missions", identifier: "placeholder-missions",
-                                  description: "Candidatures, missions à venir et passées arrivent au lot 1.")
+                MesMissionsScreen(session: session, snapshot: snapshot) { selection = $0 }
             }
             .tabItem { Label("Mes missions", systemImage: "list.clipboard") }
             .tag(Tab.missions)
@@ -151,6 +150,8 @@ struct MainTabView: View {
         .environment(\.appareil, container.appareil)
         .environment(\.fabriqueZonePointage, container.fabriqueZonePointage)
         .onDisappear { FichierContratTemporaire.effacerTout() } // lot 2 T9a : copies de contrats effacées au changement d'epoch
+        // Lot 1, T5 : ajout au calendrier (Accueil et Mes missions), une instance par session prête.
+        .ajoutCalendrier(container: container, userId: snapshot.user.id)
         // Fond de carte (`carteTuiles`) : injecté à la racine par `RootView` (revue T4a), hérité ici.
         // Lot 3, T5 : pré-prompt (surcouche modale) et issue de l'activation.
         .overlay {

@@ -47,6 +47,7 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.flags is SupabaseFlagsGateway)
         XCTAssertTrue(gateways.compte is SupabaseAccountGateway)
         XCTAssertTrue(gateways.push is SupabasePushGateway, "lot 3, T4 : enregistrement et désactivation du token APNs")
+        XCTAssertTrue(gateways.mesMissions is SupabaseMesMissionsGateway)
     }
 
     /// Aucune liste propre à ce monde : les ports encore stubs côté Supabase doivent être
@@ -65,6 +66,7 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(supabase.contains("flags"), "T1 câble les drapeaux")
         XCTAssertFalse(supabase.contains("dashboard"), "T3 câble le tableau de bord")
         XCTAssertFalse(supabase.contains("compte"), "T8 câble la suppression de compte")
+        XCTAssertFalse(supabase.contains("mesMissions"), "T5 câble Mes missions")
         XCTAssertFalse(supabase.contains("pointage"), "lot 2 T3 câble le pointage")
         XCTAssertFalse(supabase.contains("contrats"), "lot 2, T8 câble les contrats")
         XCTAssertFalse(supabase.contains("notation"), "lot 2, T5a câble la notation")

@@ -47,7 +47,10 @@ public protocol FavorisPort: Sendable {
     func basculerEtablissement(id: String, actif: Bool, context: MissionReadContext) async throws -> [EtablissementFavori]
 }
 
-/// Mes missions : candidatures, à venir, passées (pages de `MissionsPage.taille`) — tranche T5.
+/// Mes missions : candidatures, à venir, passées — tranche T5. `aVenir` et `passees` lisent de façon
+/// **cumulative**, comme le web (« M1 », `range(0, (page + 1) * MissionsPage.taille - 1)`) : la page
+/// `page` rend les lignes des pages 0…`page` d'un seul tenant, et `aSuivre` vaut vrai si la lecture
+/// est pleine (`(page + 1) * taille` lignes).
 public protocol MesMissionsPort: Sendable {
     func candidatures(context: MissionReadContext) async throws -> [CandidatureRecord]
     func aVenir(context: MissionReadContext, page: Int) async throws -> MissionsPage
