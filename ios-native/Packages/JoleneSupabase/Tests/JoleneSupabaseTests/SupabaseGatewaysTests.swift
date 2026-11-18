@@ -85,6 +85,16 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.geocodage is ApiAdresseGeocodage)
     }
 
+    /// L4-T1c, verrou m6 (revue B8 de #1146) : aucun abonnement Realtime ni capture de parrainage dans le monde Supabase
+    /// tant que leurs ports restent non câblés (T7a, T6) ; jumelle de `SecondairesLot4Tests` côté démo.
+    func testAbonnementRealtimeVerrouilleAvantT7a() {
+        let gateways = SupabaseGateways.make(client: TestClient.make())
+        XCTAssertEqual(VerrousLot4.abonnementRealtimePermis(gateways.realtime), !gateways.unwiredPorts.contains("realtime"),
+                       "abonnement permis si et seulement si le port realtime est câblé")
+        XCTAssertEqual(VerrousLot4.parrainageBranche, !gateways.unwiredPorts.contains("parrainage"),
+                       "capture du parrainage branchée si et seulement si le port parrainage est câblé")
+    }
+
     /// Lot 2 (T1) : `câblerLot2(_:client:)` est le seul point d'assignation des cinq ports du lot 2 du
     /// monde Supabase ; tant que leurs tranches ne sont pas livrées, chacun est un stub nommé.
     func testCablerLot2AssigneLesStubsDuLot2() {
