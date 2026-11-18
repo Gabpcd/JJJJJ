@@ -133,8 +133,8 @@ final class EtabRouteTests: XCTestCase {
         // livré le détail de mission.
         XCTAssertTrue(EtabDestination.detailMission(id: "m").ecranLivre, "T5")
         XCTAssertTrue(EtabDestination.candidatures(missionId: "m").ecranLivre, "T6")
-        for destination: EtabDestination in [.pointage(missionId: "m"),
-                                             .presencesMission(missionId: "m"), .publication, .contrat(id: "c"),
+        XCTAssertTrue(EtabDestination.pointage(missionId: "m").ecranLivre, "T7")
+        for destination: EtabDestination in [.presencesMission(missionId: "m"), .publication, .contrat(id: "c"),
                                              .conversation(id: "k")] {
             XCTAssertFalse(destination.ecranLivre, destination.tranche)
         }

@@ -179,7 +179,10 @@ final class EtabMissionTests: XCTestCase {
                        "candidatures masquées sans la permission")
 
         let assignee = EtabMissionDetail(mission: mission(statut: "ASSIGNEE", soignant: "s-1"), creneaux: [], soignantAssigneId: "s-1")
-        XCTAssertEqual(EtabMissionsPresentation.liens(assignee, permissions: tout).map(\.cle), [.pointage, .contrat, .message])
+        let liensAssignee = EtabMissionsPresentation.liens(assignee, permissions: tout)
+        XCTAssertEqual(liensAssignee.map(\.cle), [.pointage, .contrat, .message])
+        XCTAssertEqual(liensAssignee.first?.cible, .ecran(.pointage(missionId: "m-1")), "T7 livrée : écran natif du code de pointage")
+        XCTAssertEqual(liensAssignee.first?.titre, "Code de pointage")
         XCTAssertEqual(EtabMissionsPresentation.liens(assignee, permissions: PermissionsEtab(accordees: [.lecture, .lecturePaiement]))
             .map(\.cle), [.message], "LECTURE_SEULE : ni pointage ni contrat")
         XCTAssertEqual(EtabMissionsPresentation.liens(assignee, permissions: PermissionsEtab(accordees: [.lecture, .pointage]))
