@@ -7,19 +7,26 @@ import Supabase
 /// - POSTULER, ACCEPTER, PROPOSITION : `fn_confirmer_action_planning_v1(p_mission_id, p_action,
 ///   p_creneaux_confirmes, p_message, p_choix_contrat, p_candidature_id)` (`public.sql` l.24525), avec
 ///   `p_creneaux_confirmes` = planning exact affiché (`CreneauxConfirmes.pourAction`, T2). Formes de réponse
-///   de la fiche `CONTRATS_RPC_SOIGNANT.md`, lues dans l'ordre normatif du §2.4 : `choix_requis` → `code`
-///   (planning à reconfirmer, ou refus verbatim) → documents requis avec `error` → `success:true` → `error`
-///   seul → sinon `.contract`. Exceptions PostgREST lues avant `SupabaseErrorMapping` : `[CODE DU TRAVAIL]`
-///   restituée mot pour mot (`.refusee(code: CODE_DU_TRAVAIL)`, HARD STOP n°4), `0 rows` / `déjà prise` →
-///   `.missionDejaAttribuee` (modale « mission perdue » du web), toute autre → message générique.
+///   de la fiche `CONTRATS_RPC_SOIGNANT.md`, lues dans l'ordre normatif du §2.4 : mission sortie de l'état
+///   `OUVERTE` (messages exacts, `.missionDejaAttribuee`) → `choix_requis` → `code` (planning à reconfirmer,
+///   ou refus verbatim) → documents requis avec `error` → refus drapeauté sans code (`.refusee(code: nil)`) →
+///   `success:true` → `error` seul → sinon `.contract`. Exception PostgREST `[CODE DU TRAVAIL]` restituée mot
+///   pour mot (`.refusee(code: CODE_DU_TRAVAIL)`, HARD STOP n°4) ; toute autre exception → message générique.
+/// - PROPOSITION verrouillée hors `LIBERAL` (revue B8 de T6a, M1, décision par délégation) : le web fait
+///   compléter l'attestation hebdomadaire des heures avant d'accepter (`CarteProposition.tsx` l.154-256), non
+///   portée au lot 1. `choixContrat` porte, pour PROPOSITION, le contrat de la proposition relu par l'écran
+///   (`CandidatureRules.contratProposition`) : non `LIBERAL` → `CandidatureVerrou.renvoiWeb`, **aucune
+///   requête** ; déclaré `LIBERAL` → contrat relu au serveur (candidature et mission) avant tout envoi, et
+///   `p_choix_contrat` envoyé à null comme le web. Gap consigné dans `LOT1_PLAN.md` §3 T6b et §7.
 /// - Un succès n'est annoncé qu'après relecture (PRINCIPES §3) : POSTULER relit la candidature créée
 ///   (`candidature_id`, statut en attente, même mission) ; ACCEPTER et PROPOSITION relisent la mission
 ///   (`ASSIGNEE`, `soignant_assigne_id` = session) puis écrivent l'audit `MISSION_ASSIGNATION` comme le web
 ///   (best-effort, décision 5 : son échec n'invalide jamais le succès relu). Une relecture qui ne confirme
-///   pas est une erreur, jamais un succès ; aucun renvoi automatique (un délai ne prouve rien).
-/// - Refus d'une proposition : `fn_repondre_proposition(p_candidature_id, p_accepter := false)`, puis
-///   relecture `REFUSEE`. L'acceptation passe par `PROPOSITION` (comme `CarteProposition.tsx` l.268-279).
-/// - Annulations : tranche T7, refusées explicitement d'ici là (gap verrouillé).
+///   pas, ou qui échoue (réseau compris), est une erreur au message `relectureMessage`, jamais un succès ;
+///   aucun renvoi automatique (un délai ne prouve rien).
+/// - Refus d'une proposition : `fn_repondre_proposition(p_candidature_id, p_accepter := false)` (l.54035),
+///   puis relecture `REFUSEE`. Non verrouillé : le web ne demande aucune attestation pour refuser.
+/// - SWIPE_LIKE / URGENCE (lot 4) et annulations (T7) : refusés explicitement en citant leur tranche.
 public struct SupabaseCandidatureGateway: CandidaturePort {
     public static let confirmerRPC = "fn_confirmer_action_planning_v1"
     public static let repondreRPC = "fn_repondre_proposition"
@@ -27,6 +34,8 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
     public static let candidatureColumns = SupabaseMesMissionsGateway.candidatureColumns
     /// Colonnes de la mission relue après ACCEPTER / PROPOSITION (preuve et détails d'audit).
     public static let attributionColumns = "id,statut,soignant_assigne_id,intitule,debut_le,fin_le,etablissement_id"
+    /// Colonnes du contrat d'une proposition (`type_contrat_choisi ?? type_contrat_recherche`).
+    public static let contratColumns = "id,type_contrat_recherche"
 
     public static let fallbackMessage = "Impossible de traiter votre réponse à cette mission. Réessayez."
     /// Le serveur a répondu mais la relecture ne le confirme pas : rien n'est renvoyé automatiquement.
@@ -49,31 +58,37 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
         try MissionQuery.validate(context: context)
         // Lot 1 : trois actions. SWIPE_LIKE et URGENCE (lot 4) ont leur propre relecture : refusées ici.
         guard action == .postuler || action == .accepter || action == .proposition else {
-            throw JoleneError(.contract, "Action \(action.rawValue) non servie au lot 1.")
+            throw CandidatureRules.actionHorsLot1(action)
         }
         guard let mission = Self.uuid(missionId) else { throw JoleneError(.contract, Self.identifiantInvalideMessage) }
         var proposition: String?
         if action == .proposition {
             guard let id = candidatureId.flatMap(Self.uuid) else { throw JoleneError(.contract, Self.identifiantInvalideMessage) }
+            // Verrou de l'attestation hebdomadaire (M1) : contrat déclaré non libéral → aucune requête.
+            guard !CandidatureRules.propositionVerrouillee(contrat: choixContrat) else {
+                throw CandidatureVerrou.renvoiWeb(chemin: CandidatureVerrou.cheminProposition)
+            }
             proposition = id
         }
         // Fail-closed : un planning non exact n'est jamais envoyé (`CreneauxConfirmes` rend nil, l'écran bloque).
         guard !creneaux.isEmpty else { throw JoleneError(.contract, Self.planningRequisMessage) }
+        if let proposition {
+            // Contrat relu au serveur, lecture seule : une déclaration libérale erronée ne contourne pas le verrou.
+            try await verifierContratLiberal(candidatureId: proposition, missionId: mission, context: context)
+        }
 
         let params: JSONObject = [
             "p_mission_id": .string(mission),
             "p_action": .string(action.rawValue),
             "p_creneaux_confirmes": .array(creneaux.map { .object(["debut": .string($0.debut), "fin": .string($0.fin)]) }),
             "p_message": Self.texteOuNul(message),
-            "p_choix_contrat": Self.texteOuNul(choixContrat),
+            // PROPOSITION : null comme le web (`CarteProposition.tsx` l.274) ; le contrat déclaré ne sert qu'au verrou.
+            "p_choix_contrat": proposition == nil ? Self.texteOuNul(choixContrat) : .null,
             "p_candidature_id": proposition.map(AnyJSON.string) ?? .null,
         ]
-        let reponse: RPCResponse
-        switch try await Self.executer({ try await client.rpc(Self.confirmerRPC, params: params).execute().value }) {
-        case .missionDejaAttribuee:
-            return .missionDejaAttribuee
-        case let .corps(corps):
-            reponse = corps
+        let reponse = try await RPCResponse.appeler(client, Self.confirmerRPC, params: params, fallback: Self.fallbackMessage)
+        if let erreur = reponse.erreur, reponse.code == nil, !reponse.choixRequis, CandidatureRules.estMissionDejaAttribuee(erreur) {
+            return .missionDejaAttribuee(message: erreur)
         }
         if let refus = reponse.issueCandidatureRefusee(fallback: Self.fallbackMessage) { return refus }
         try reponse.leverSiErreur(fallback: Self.fallbackMessage)
@@ -155,24 +170,43 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
 
     // MARK: - Interne
 
-    /// Issue du transport de `fn_confirmer_action_planning_v1`.
-    enum Transport {
-        case corps(RPCResponse)
-        case missionDejaAttribuee
+    /// Contrat relu d'une proposition déclarée libérale : la proposition (PROPOSEE, de cette mission) et le
+    /// contrat recherché de la mission. Non `LIBERAL` → verrou, sans aucun envoi ; proposition illisible → le
+    /// serveur tranchera (« Proposition introuvable. »), la lecture ne remplace pas ses contrôles.
+    private func verifierContratLiberal(candidatureId: String, missionId: String, context: MissionReadContext) async throws {
+        struct ContratMission: Decodable {
+            var id: String
+            var typeContratRecherche: String?
+            enum CodingKeys: String, CodingKey { case id, typeContratRecherche = "type_contrat_recherche" }
+        }
+        let candidature = try await lire(fallback: Self.fallbackMessage) { () async throws -> [CandidatureRecord] in
+            try await client.from("candidatures").select(Self.candidatureColumns)
+                .eq("id", value: candidatureId).eq("soignant_id", value: context.userId).limit(1).execute().value
+        }.first
+        let mission = try await lire(fallback: Self.fallbackMessage) { () async throws -> [ContratMission] in
+            try await client.from("missions").select(Self.contratColumns).eq("id", value: missionId).limit(1).execute().value
+        }.first
+        let contrat = CandidatureRules.contratProposition(typeContratChoisi: candidature?.typeContratChoisi,
+                                                          typeContratRecherche: mission?.typeContratRecherche)
+        guard !CandidatureRules.propositionVerrouillee(contrat: contrat) else {
+            throw CandidatureVerrou.renvoiWeb(chemin: CandidatureVerrou.cheminProposition)
+        }
     }
 
-    /// Une seule requête, aucun renvoi. Ordre du web (`DetailMissionSoignant.tsx` l.804-810) : Code du
-    /// travail, puis mission déjà prise, puis `SupabaseErrorMapping` (message générique).
-    static func executer(_ requete: () async throws -> AnyJSON) async throws -> Transport {
+    /// Lecture PostgREST ; erreurs traduites par `SupabaseErrorMapping` avec `fallback`.
+    private func lire<T>(fallback: String, _ requete: () async throws -> T) async throws -> T {
         do {
-            return .corps(RPCResponse(try await requete()))
-        } catch let erreur as PostgrestError where RPCResponse.estRefusCodeDuTravail(erreur.message) {
-            return .corps(RPCResponse.refusCodeDuTravail(erreur.message))
-        } catch let erreur as PostgrestError where CandidatureRules.estMissionDejaAttribuee(erreur.message) {
-            return .missionDejaAttribuee
+            return try await requete()
         } catch {
-            throw SupabaseErrorMapping.map(error, fallback: fallbackMessage)
+            throw SupabaseErrorMapping.map(error, fallback: fallback)
         }
+    }
+
+    /// Erreur d'une relecture après une écriture acceptée (revue B8 de T6a, m3) : la nature de l'erreur est
+    /// gardée (réseau, session expirée…), le message dit toujours que la réponse est partie et qu'il faut
+    /// vérifier Mes missions avant de réessayer.
+    private static func erreurRelecture(_ error: any Error) -> JoleneError {
+        JoleneError(SupabaseErrorMapping.map(error, fallback: relectureMessage).kind, relectureMessage)
     }
 
     private func relireCandidature(id: String, context: MissionReadContext) async throws -> CandidatureRecord? {
@@ -186,7 +220,7 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
                 .execute()
                 .value
         } catch {
-            throw SupabaseErrorMapping.map(error, fallback: Self.relectureMessage)
+            throw Self.erreurRelecture(error)
         }
         return lignes.first
     }
@@ -220,14 +254,14 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
                 .execute()
                 .value
         } catch {
-            throw SupabaseErrorMapping.map(error, fallback: Self.relectureMessage)
+            throw Self.erreurRelecture(error)
         }
         return lignes.first
     }
 
-    /// `MISSION_ASSIGNATION` comme le web (l.824-836) : `p_details = {intitule, etablissement, debut, fin}`,
-    /// établissement par `fn_etablissements_safe` (jamais `fn_etablissement_public`). Best-effort : toute
-    /// erreur est avalée (l'attribution relue reste un succès, `AuditPort`).
+    /// `MISSION_ASSIGNATION` comme le web (`DetailMissionSoignant.tsx` l.824-836) : `p_details = {intitule,
+    /// etablissement, debut, fin}`, établissement par `fn_etablissements_safe` (jamais `fn_etablissement_public`).
+    /// Best-effort : toute erreur est avalée (l'attribution relue reste un succès, `AuditPort`).
     private func auditerAssignation(_ mission: Attribution, context: MissionReadContext) async {
         var details: [String: String] = [:]
         if let intitule = mission.intitule { details["intitule"] = intitule }

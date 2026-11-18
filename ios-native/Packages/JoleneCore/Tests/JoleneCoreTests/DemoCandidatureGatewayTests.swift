@@ -78,18 +78,37 @@ final class DemoCandidatureGatewayTests: XCTestCase {
         XCTAssertNil(contrat)
     }
 
-    func testAccepterAttribueLaMissionPuisLaRendIndisponible() async throws {
-        let gateway = DemoCandidatureGateway()
-        let issue = try await gateway.confirmer(action: .accepter, missionId: "demo-mission-001",
-                                                creneaux: try creneaux("demo-mission-001"), message: nil, choixContrat: nil,
-                                                candidatureId: nil, context: context)
+    func testAccepterAttribueLaMissionRelueAssigneeEtRetireeDExplorer() async throws {
+        let gateways = DemoWorld.gateways()
+        let issue = try await gateways.candidature.confirmer(action: .accepter, missionId: "demo-mission-001",
+                                                             creneaux: try creneaux("demo-mission-001"), message: nil,
+                                                             choixContrat: nil, candidatureId: nil, context: context)
         XCTAssertEqual(issue, .confirmed(candidatureId: nil, contratId: "demo-contrat-demo-mission-001"))
-        let contrat = await gateway.contratAttribue(missionId: "demo-mission-001")
-        XCTAssertEqual(contrat, "demo-contrat-demo-mission-001")
-        let encore = try await gateway.confirmer(action: .accepter, missionId: "demo-mission-001",
-                                                 creneaux: try creneaux("demo-mission-001"), message: nil, choixContrat: nil,
-                                                 candidatureId: nil, context: context)
-        XCTAssertEqual(encore, .refusee(code: nil, message: "Cette mission n'est plus disponible.", documentsRequisPour: nil))
+        // Revue B8, m5 : le détail démo relit la mission ASSIGNEE au profil fictif, Explorer ne la liste plus.
+        let relue = try await gateways.missions.mission(id: "demo-mission-001", context: context)
+        XCTAssertEqual(relue?.record.statut, "ASSIGNEE")
+        XCTAssertEqual(relue?.record.soignantAssigneId, context.userId)
+        let explorer = try await gateways.missions.listMissions(context: context, filters: MissionFilters())
+        XCTAssertFalse(explorer.contains { $0.id == "demo-mission-001" })
+        // Course : une seconde action sur la mission attribuée → message serveur exact de la forme 3.
+        let encore = try await gateways.candidature.confirmer(action: .accepter, missionId: "demo-mission-001",
+                                                              creneaux: try creneaux("demo-mission-001"), message: nil,
+                                                              choixContrat: nil, candidatureId: nil, context: context)
+        XCTAssertEqual(encore, .missionDejaAttribuee(message: "Cette mission n'est plus disponible."))
+    }
+
+    func testPostulerResoutLeContratAvantDeChercherUnDoublon() async throws {
+        // Ordre de `fn_postuler_mission` (revue B8, m5) : `choix_requis` avant « Vous avez déjà postulé ».
+        var mission = try fixture("demo-mission-014")
+        mission.record.typeContratRecherche = "TOUS"
+        let source = mission
+        let existante = CandidatureRecord(id: "c-ancienne", missionId: "demo-mission-014", statut: "EN_ATTENTE", message: nil,
+                                          typeContratChoisi: nil, creeLe: "2026-11-01T10:00:00.000Z")
+        let gateway = DemoCandidatureGateway(missions: { [source] }, candidaturesInitiales: { [existante] })
+        let issue = try await gateway.confirmer(action: .postuler, missionId: "demo-mission-014",
+                                                creneaux: try creneaux("demo-mission-014"), message: nil, choixContrat: nil,
+                                                candidatureId: nil, context: context)
+        XCTAssertEqual(issue, .choixRequis(DemoCandidatureGateway.Textes.choixContrat))
     }
 
     func testAccepterUneMissionEnModeCandidatureRefuseVerbatim() async throws {
@@ -102,22 +121,46 @@ final class DemoCandidatureGatewayTests: XCTestCase {
         XCTAssertEqual(refus, JoleneError(.unknown, "Cette mission nécessite une candidature"))
     }
 
-    func testPropositionDeLAccueilAccepteePuisRelue() async throws {
+    func testPropositionSalarieeDeLAccueilVerrouilleeSansRienEcrire() async throws {
+        // Revue B8, M1 : l'attestation hebdomadaire du web n'est pas portée ; la proposition salariée part sur le web.
         let gateway = DemoCandidatureGateway()
         let avant = try await gateway.candidature(missionId: "demo-mission-011", context: context)
         XCTAssertEqual(avant?.id, "demo-proposition-001")
         XCTAssertEqual(avant?.statut, "PROPOSEE")
-        let issue = try await gateway.confirmer(action: .proposition, missionId: "demo-mission-011",
-                                                creneaux: try creneaux("demo-mission-011"), message: nil, choixContrat: nil,
+        for declare in [nil, "SALARIE", "LIBERAL"] as [String?] {
+            do {
+                _ = try await gateway.confirmer(action: .proposition, missionId: "demo-mission-011",
+                                                creneaux: try creneaux("demo-mission-011"), message: nil, choixContrat: declare,
                                                 candidatureId: "demo-proposition-001", context: context)
-        XCTAssertEqual(issue, .confirmed(candidatureId: "demo-proposition-001", contratId: "demo-contrat-demo-mission-011"))
+                XCTFail("proposition salariée acceptée en natif (déclaré \(declare ?? "nil"))")
+            } catch let verrou as CandidatureVerrou {
+                XCTAssertEqual(verrou, .renvoiWeb(chemin: "/soignant/tableau-de-bord"), "déclaré LIBERAL à tort : contrat relu SALARIE")
+            }
+        }
         let apres = try await gateway.candidature(missionId: "demo-mission-011", context: context)
+        XCTAssertEqual(apres?.statut, "PROPOSEE", "rien n'est écrit")
+        let contrat = await gateway.contratAttribue(missionId: "demo-mission-011")
+        XCTAssertNil(contrat)
+    }
+
+    func testPropositionLiberaleAccepteePuisRelue() async throws {
+        var mission = try fixture("demo-mission-003") // LIBERAL
+        XCTAssertEqual(mission.record.typeContratRecherche, "LIBERAL")
+        mission.record.modeAttribution = "PREMIER_ARRIVE"
+        let source = mission
+        let proposee = CandidatureRecord(id: "p-liberale", missionId: "demo-mission-003", statut: "PROPOSEE", message: nil,
+                                         typeContratChoisi: nil, creeLe: "2026-11-01T23:30:00.000Z")
+        let gateway = DemoCandidatureGateway(missions: { [source] }, candidaturesInitiales: { [proposee] })
+        let issue = try await gateway.confirmer(action: .proposition, missionId: "demo-mission-003",
+                                                creneaux: try creneaux("demo-mission-003"), message: nil, choixContrat: "LIBERAL",
+                                                candidatureId: "p-liberale", context: context)
+        XCTAssertEqual(issue, .confirmed(candidatureId: "p-liberale", contratId: "demo-contrat-demo-mission-003"))
+        let apres = try await gateway.candidature(missionId: "demo-mission-003", context: context)
         XCTAssertEqual(apres?.statut, "ACCEPTEE")
-        let autre = try await DemoCandidatureGateway().confirmer(action: .proposition, missionId: "demo-mission-011",
-                                                                 creneaux: try creneaux("demo-mission-011"), message: nil,
-                                                                 choixContrat: nil, candidatureId: "demo-candidature-001",
-                                                                 context: context)
-        XCTAssertEqual(autre, .refusee(code: nil, message: "Proposition introuvable.", documentsRequisPour: nil))
+        let introuvable = try await DemoCandidatureGateway(missions: { [source] }, candidaturesInitiales: { [] })
+            .confirmer(action: .proposition, missionId: "demo-mission-003", creneaux: try creneaux("demo-mission-003"),
+                       message: nil, choixContrat: "LIBERAL", candidatureId: "p-liberale", context: context)
+        XCTAssertEqual(introuvable, .refusee(code: nil, message: "Proposition introuvable.", documentsRequisPour: nil))
     }
 
     func testPropositionRefuseePuisExpireeApresDeuxHeures() async throws {
