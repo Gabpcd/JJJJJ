@@ -140,7 +140,7 @@ private struct EtabFixture {
         return gateways
     }
 
-    func controller() -> SessionController { SessionController(gateways: gateways(), resolutionTimeout: timeout) }
+    func controller() -> SessionController { SessionController(gateways: gateways(), resolutionTimeout: timeout, espaceEtablissement: .ouvert) }
 }
 
 // MARK: - Tests
@@ -238,10 +238,38 @@ final class SessionControllerEtablissementTests: XCTestCase {
         XCTAssertEqual(state, .blocked(.unsupportedRole("ADMIN_PLATEFORME")))
     }
 
+    // MARK: Espace fermé hors démo (report sur main, 18/11/2026)
+
+    /// Défaut du contrôleur (staging, production) : le compte établissement reçoit le refus d'avant le lot 5,
+    /// sans aucun appel établissement (ni permissions, ni profil, ni drapeaux).
+    func testEspaceFermeParDefautRendLeRefusDAvantLeLot5SansAppelEtablissement() async {
+        let fixture = EtabFixture()
+        let state = await SessionController(gateways: fixture.gateways()).start()
+        XCTAssertEqual(state, .blocked(.unsupportedRole("ADMIN_ETABLISSEMENT")))
+        XCTAssertEqual(state, .blocked(MobileAccess.validate(user: utilisateurEtab(), role: "ADMIN_ETABLISSEMENT")),
+                       "même refus que MobileAccess.validate (main avant le lot 5)")
+        let appels = await fixture.log.entries
+        XCTAssertFalse(appels.contains { $0.hasPrefix("permissions(") || $0 == "profil" }, "appels : \(appels)")
+    }
+
+    func testEspaceFermeRefuseAussiLeCompteLegacy() async {
+        let legacy = utilisateurEtab("etab-legacy", role: "ETABLISSEMENT")
+        let fixture = EtabFixture(restored: legacy, roles: [.success(RoleResult(role: "ETABLISSEMENT", etablissementId: nil))])
+        let state = await SessionController(gateways: fixture.gateways(), espaceEtablissement: .ferme).start()
+        guard case .blocked(.unsupportedRole) = state else { return XCTFail("obtenu \(state)") }
+        XCTAssertNil(state.snapshotEtablissement)
+    }
+
+    func testOuvertureParModeDeLancement() {
+        XCTAssertEqual(OuvertureEspaceEtablissement.pour(mode: .demo), .ouvert)
+        XCTAssertEqual(OuvertureEspaceEtablissement.pour(mode: .staging), .ferme)
+        XCTAssertEqual(OuvertureEspaceEtablissement.pour(mode: .production), .ferme)
+    }
+
     func testPortSessionNonCableNOuvreJamaisLEspace() async {
         var gateways = EtabFixture().gateways()
         gateways.etablissement = .nonCable
-        let state = await SessionController(gateways: gateways).start()
+        let state = await SessionController(gateways: gateways, espaceEtablissement: .ouvert).start()
         XCTAssertEqual(state, .signedOut(message: SessionController.sessionCheckFailedMessage),
                        "sans fn_mes_permissions_etab, aucun espace établissement ouvert")
     }
