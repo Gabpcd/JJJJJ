@@ -3,7 +3,7 @@ import XCTest
 @testable import JoleneCore
 
 /// Candidature du monde démo (lot 1, T6a) : mêmes contrôles et mêmes textes que le serveur, relecture dans
-/// l'acteur, candidatures de session visibles dans Mes missions, annulations verrouillées jusqu'à T7.
+/// l'acteur, candidatures de session visibles dans Mes missions ; annulations (T7) dans l'ordre et avec les textes du serveur.
 final class DemoCandidatureGatewayTests: XCTestCase {
     private let context = DemoWorld.context
 
@@ -193,18 +193,86 @@ final class DemoCandidatureGatewayTests: XCTestCase {
         XCTAssertEqual(rejoue, .confirmed(candidatureId: nil, contratId: "demo-contrat-demo-mission-001"))
     }
 
-    func testAutreUtilisateurRefuseEtAnnulationsVerrouilleesJusquaT7() async throws {
+    func testAutreUtilisateurRefuse() async throws {
         let gateway = DemoCandidatureGateway()
         var autre = context
         autre.userId = "autre"
         autre.profile.id = "autre"
         let demo = await erreur { _ = try await gateway.candidature(missionId: "demo-mission-011", context: autre) }
         XCTAssertEqual(demo?.kind, .demoOnly)
-        let annulation = await erreur {
-            _ = try await gateway.annulerCandidature(id: "demo-candidature-001", motif: "AUTRE", texte: String(repeating: "x", count: 20),
-                                                     justificatifPath: nil, context: self.context)
+        let annulation = await erreur { _ = try await gateway.annulerMission(id: "demo-assignee-001", motif: nil, context: autre) }
+        XCTAssertEqual(annulation?.kind, .demoOnly)
+    }
+
+    // MARK: - Annulations (T7)
+
+    private let explication = "Train supprimé ce matin, aucun autre trajet possible."
+
+    func testToutesLesMissionsAssigneesDemarrentAPlusDe24h() throws {
+        // Le serveur rendrait 0 point pour chacune (`neutre_delai_long`, pénalité de mission nulle) : la démo ne
+        // simule aucun barème.
+        for fixture in try DemoFixtures.loadDashboard().missionsAssignees {
+            let debut = try DateHeureParis.instantJolene(fixture.record.debutLe)
+            XCTAssertGreaterThan(debut.timeIntervalSince(DemoWorld.fixedNow), 24 * 3600, fixture.record.id)
+            XCTAssertEqual(fixture.record.soignantAssigneId, DemoWorld.context.userId)
         }
-        XCTAssertEqual(annulation?.kind, .contract)
-        XCTAssertTrue(annulation?.message.contains("T7") == true, annulation?.message ?? "")
+    }
+
+    func testCandidatureRetenueAnnuleeRelueAvecSonJustificatif() async throws {
+        let gateway = DemoCandidatureGateway()
+        let relue = try await gateway.candidature(missionId: "demo-assignee-003", context: context)
+        XCTAssertEqual(relue, DemoCandidatureGateway.candidatureRetenue)
+        let chemin = "demo-soignant/annulations-candidature/demo-candidature-retenue-003/1793577600000_billet.pdf"
+        let issue = try await gateway.annulerCandidature(id: "demo-candidature-retenue-003", motif: "PROBLEME_TRANSPORT",
+                                                         texte: explication, justificatifPath: chemin, context: context)
+        XCTAssertEqual(issue, .annulee(points: 0, libre: true, contestable: false))
+        let apres = try await gateway.candidature(missionId: "demo-assignee-003", context: context)
+        XCTAssertEqual(apres?.statut, "ANNULEE")
+        let transmis = await gateway.justificatifTransmis(candidatureId: "demo-candidature-retenue-003")
+        XCTAssertEqual(transmis, chemin)
+        let annulee = await gateway.missionAnnulee("demo-assignee-003")
+        XCTAssertTrue(annulee)
+        // Seconde annulation : refus du serveur, verbatim.
+        let encore = try await gateway.annulerCandidature(id: "demo-candidature-retenue-003", motif: "AUTRE", texte: explication,
+                                                          justificatifPath: nil, context: context)
+        XCTAssertEqual(encore, .refusee(code: "STATUT_INVALIDE", message: "Candidature pas dans un état annulable (statut : ANNULEE)"))
+    }
+
+    func testCandidatureEnAttenteRetireeSansImpact() async throws {
+        let gateway = DemoCandidatureGateway()
+        let issue = try await gateway.annulerCandidature(id: "demo-candidature-001", motif: "CHANGEMENT_AVIS", texte: explication,
+                                                         justificatifPath: nil, context: context)
+        XCTAssertEqual(issue, .annulee(points: 0, libre: true, contestable: nil), "`{libre:true, points:0}` sans `contestable`")
+        let mesMissions = try await DemoMesMissionsGateway(candidaturesDeSession: { await gateway.candidaturesDeSession() })
+            .candidatures(context: context)
+        XCTAssertFalse(mesMissions.contains { $0.id == "demo-candidature-001" }, "la candidature retirée quitte Mes missions")
+    }
+
+    func testRefusDeLAnnulationDansLOrdreDuServeur() async throws {
+        let gateway = DemoCandidatureGateway()
+        let motif = try await gateway.annulerCandidature(id: "demo-candidature-001", motif: "FLEMME", texte: explication,
+                                                         justificatifPath: nil, context: context)
+        XCTAssertEqual(motif, .refusee(code: "MOTIF_INVALIDE", message: DemoCandidatureGateway.Textes.motifInvalide))
+        let texte = try await gateway.annulerCandidature(id: "demo-candidature-001", motif: "AUTRE", texte: "  court  ",
+                                                         justificatifPath: nil, context: context)
+        XCTAssertEqual(texte, .refusee(code: "TEXTE_REQUIS", message: "Texte libre obligatoire (min 10 caractères)"))
+        let absente = try await gateway.annulerCandidature(id: "inconnue", motif: "AUTRE", texte: explication,
+                                                           justificatifPath: nil, context: context)
+        XCTAssertEqual(absente, .refusee(code: "CANDIDATURE_INTROUVABLE", message: "Candidature introuvable"))
+        let proposition = try await gateway.annulerCandidature(id: "demo-proposition-001", motif: "AUTRE", texte: explication,
+                                                               justificatifPath: nil, context: context)
+        XCTAssertEqual(proposition, .refusee(code: "STATUT_INVALIDE", message: "Candidature pas dans un état annulable (statut : PROPOSEE)"))
+    }
+
+    func testMissionAssigneeAnnuleeUneSeuleFois() async throws {
+        let gateway = DemoCandidatureGateway()
+        let issue = try await gateway.annulerMission(id: "demo-assignee-001", motif: nil, context: context)
+        XCTAssertEqual(issue, .annulee(points: 0, libre: nil, contestable: nil), "`penalite_score` nul à plus de 24 h")
+        let encore = try await gateway.annulerMission(id: "demo-assignee-001", motif: nil, context: context)
+        XCTAssertEqual(encore, .refusee(code: nil, message: "Cette mission ne vous est pas assignée"))
+        let ouverte = try await gateway.annulerMission(id: "demo-mission-001", motif: nil, context: context)
+        XCTAssertEqual(ouverte, .refusee(code: nil, message: "Cette mission ne vous est pas assignée"))
+        let inconnue = try await gateway.annulerMission(id: "demo-inconnue", motif: nil, context: context)
+        XCTAssertEqual(inconnue, .refusee(code: nil, message: "Mission introuvable"))
     }
 }

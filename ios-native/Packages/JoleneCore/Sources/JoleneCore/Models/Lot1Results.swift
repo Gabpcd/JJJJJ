@@ -186,6 +186,9 @@ public enum AuditAction: String, CaseIterable, Sendable {
     /// Lot 2 (T5b, revue B8 m5) : contestation d'une présence (parité `PanneauContestation.tsx` l.134-139), détails
     /// minimisés (longueur du motif, litige ; décision m2 de `DECISIONS_LOT2.md`).
     case presenceContestation = "PRESENCE_CONTESTATION"
+    /// Lot 1, T7 : annulation sans candidature (`fn_annuler_mission_soignant`), comme le web (`DetailMissionSoignant.tsx`
+    /// l.903-914) ; valeur du CHECK `journaux_audit_action_check`.
+    case missionAnnulation = "MISSION_ANNULATION"
 }
 
 /// Issue d'une écriture d'audit best-effort. `nonEnregistre` (`{success:false}`) n'est pas une

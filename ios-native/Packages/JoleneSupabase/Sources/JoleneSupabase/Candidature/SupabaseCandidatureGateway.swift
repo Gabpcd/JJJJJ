@@ -26,10 +26,22 @@ import Supabase
 ///   aucun renvoi automatique (un délai ne prouve rien).
 /// - Refus d'une proposition : `fn_repondre_proposition(p_candidature_id, p_accepter := false)` (l.54035),
 ///   puis relecture `REFUSEE`. Non verrouillé : le web ne demande aucune attestation pour refuser.
-/// - SWIPE_LIKE / URGENCE (lot 4) et annulations (T7) : refusés explicitement en citant leur tranche.
+/// - SWIPE_LIKE / URGENCE (lot 4) : refusés explicitement en citant leur tranche.
+/// - Annulations (T7) : `fn_annuler_candidature_soignant(p_candidature_id, p_motif_categorie, p_texte_libre,
+///   p_justificatif_storage_path)` (`public.sql` l.17925 ; refus `{success:false, error_code, error}` → `.refusee`,
+///   message serveur verbatim) puis relecture de la candidature `ANNULEE` ; `fn_annuler_mission_soignant(p_mission_id)`
+///   (l.18739 ; refus `{error}` seul → `.refusee`) puis relecture de la mission (plus attribuée au soignant) et audit
+///   `MISSION_ANNULATION` comme le web (l.903-914, best-effort). Conséquences (`points`, `libre`, `contestable`,
+///   `penalite_score`) rendues telles quelles : aucun barème côté client (décision 4).
 public struct SupabaseCandidatureGateway: CandidaturePort {
     public static let confirmerRPC = "fn_confirmer_action_planning_v1"
     public static let repondreRPC = "fn_repondre_proposition"
+    public static let annulerCandidatureRPC = "fn_annuler_candidature_soignant"
+    public static let annulerMissionRPC = "fn_annuler_mission_soignant"
+    /// Détails de l'audit client de l'annulation sans candidature (web l.910), jamais affichés.
+    public static let motifAuditAnnulation = "Annulation volontaire par le soignant"
+    /// Le serveur a répondu mais la relecture ne montre pas l'annulation : rien n'est renvoyé automatiquement.
+    public static let relectureAnnulationMessage = "Votre annulation a été envoyée mais n'a pas pu être relue. Vérifiez Mes missions avant de réessayer."
     /// Colonnes de la ligne `candidatures` relue (mêmes que Mes missions, T5).
     public static let candidatureColumns = SupabaseMesMissionsGateway.candidatureColumns
     /// Colonnes de la mission relue après ACCEPTER / PROPOSITION (preuve et détails d'audit).
@@ -161,11 +173,56 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
 
     public func annulerCandidature(id: String, motif: String, texte: String, justificatifPath: String?,
                                    context: MissionReadContext) async throws -> AnnulationOutcome {
-        throw UnwiredPorts.erreur(port: "annulation", tranche: "T7")
+        try MissionQuery.validate(context: context)
+        guard let candidature = Self.uuid(id) else { throw JoleneError(.contract, Self.identifiantInvalideMessage) }
+        if let justificatifPath {
+            // Seul un chemin de reçu de cette candidature et de cet utilisateur est transmis.
+            guard RecuJustificatif.cheminValide(justificatifPath, userId: context.userId, candidatureId: id)
+                    || RecuJustificatif.cheminValide(justificatifPath, userId: context.userId, candidatureId: candidature) else {
+                throw JoleneError(.contract, "Chemin de justificatif invalide.")
+            }
+        }
+        let params: JSONObject = [
+            "p_candidature_id": .string(candidature),
+            "p_motif_categorie": .string(motif),
+            "p_texte_libre": .string(texte),
+            "p_justificatif_storage_path": justificatifPath.map(AnyJSON.string) ?? .null,
+        ]
+        let reponse = try await RPCResponse.appeler(client, Self.annulerCandidatureRPC, params: params,
+                                                    fallback: LibellesAnnulation.erreurAnnulation)
+        // « Non authentifié » (`NON_AUTHENTIFIE`) → session expirée ; `{error}` sans drapeau → `.unknown` verbatim.
+        try reponse.leverSiErreur(fallback: LibellesAnnulation.erreurAnnulation)
+        if reponse.estRefus {
+            return .refusee(code: reponse.codeErreur, message: reponse.erreur ?? LibellesAnnulation.erreurAnnulation)
+        }
+        guard reponse.success == true else { throw JoleneError(.contract, SupabaseErrorMapping.contractMessage) }
+        guard AnnulationRules.candidatureAnnuleeRelue(try await relireCandidature(id: candidature, context: context), id: candidature) else {
+            throw JoleneError(.contract, Self.relectureAnnulationMessage)
+        }
+        return .annulee(points: reponse.int("points"), libre: reponse.bool("libre"), contestable: reponse.bool("contestable"))
     }
 
     public func annulerMission(id: String, motif: String?, context: MissionReadContext) async throws -> AnnulationOutcome {
-        throw UnwiredPorts.erreur(port: "annulation", tranche: "T7")
+        try MissionQuery.validate(context: context)
+        guard let mission = Self.uuid(id) else { throw JoleneError(.contract, Self.identifiantInvalideMessage) }
+        var params: JSONObject = ["p_mission_id": .string(mission)]
+        if let motif, !motif.isEmpty { params["p_motif"] = .string(motif) }
+        let reponse = try await RPCResponse.appeler(client, Self.annulerMissionRPC, params: params,
+                                                    fallback: LibellesAnnulation.erreurAnnulation)
+        // Refus `{error}` seuls (l.18749-18756), affichés verbatim comme le web (`toast.error(data.error)`).
+        if let erreur = reponse.erreur {
+            if RPCResponse.estNonAuthentifie(erreur) { throw JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage) }
+            return .refusee(code: nil, message: erreur)
+        }
+        guard reponse.success == true else { throw JoleneError(.contract, SupabaseErrorMapping.contractMessage) }
+        let relue = try await relireAttribution(missionId: mission)
+        guard AnnulationRules.missionAnnuleeRelue(statut: relue?.statut, soignantAssigneId: relue?.soignantAssigneId,
+                                                  userId: context.userId, ligneLue: relue != nil) else {
+            throw JoleneError(.contract, Self.relectureAnnulationMessage)
+        }
+        _ = try? await audit.ecrire(action: .missionAnnulation, typeRessource: "mission", idRessource: mission,
+                                    details: ["motif": Self.motifAuditAnnulation], context: context)
+        return .annulee(points: reponse.int("penalite_score"), libre: nil, contestable: nil)
     }
 
     // MARK: - Interne

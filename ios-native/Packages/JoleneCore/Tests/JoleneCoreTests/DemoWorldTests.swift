@@ -203,8 +203,8 @@ final class DemoWorldTests: XCTestCase {
     /// T12 (blueprint §2.2) : liste vide, soit aucun nom du lot 1 dans `unwiredPorts` des deux
     /// mondes (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`) — jamais
     /// `unwiredPorts.isEmpty`, qui nomme aussi les ports des lots 2 et 3 tant que ces lots sont ouverts.
-    /// Câblés depuis : T4b `favoris`, T5 `mesMissions`, T6a `candidature`, T6c `presence`.
-    static let portsEnAttenteLot1 = ["recovery", "justificatifs"]
+    /// Câblés depuis : T4b `favoris`, T5 `mesMissions`, T6a `candidature`, T6c `presence`, T7 `justificatifs`.
+    static let portsEnAttenteLot1 = ["recovery"]
 
     /// Lot 2 (T1) — ports du lot 2 que leur tranche n'a pas encore câblés : SOURCE UNIQUE de la liste
     /// (blueprint lot 2 §2.2). Chaque tranche (T3 pointage, T5a notation, T5b contestation, T6 documents,
@@ -261,6 +261,7 @@ final class DemoWorldTests: XCTestCase {
         XCTAssertTrue(gateways.favoris is DemoFavorisGateway, "T4b câble les favoris")
         XCTAssertTrue(gateways.mesMissions is DemoMesMissionsGateway, "T5 câble Mes missions")
         XCTAssertTrue(gateways.candidature is DemoCandidatureGateway, "T6a câble la candidature")
+        XCTAssertTrue(gateways.justificatifs is DemoJustificatifStorage, "T7 câble les justificatifs d'annulation")
         XCTAssertTrue(gateways.pointage is DemoPointageGateway, "lot 2 T3 câble le pointage")
         XCTAssertTrue(gateways.preferences is DemoPreferencesGateway, "lot 3, T6 câble les préférences de notifications")
         XCTAssertEqual(DemoWorld.gateways(drapeaux: [:]).unwiredPorts,

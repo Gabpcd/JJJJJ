@@ -72,15 +72,15 @@ export const RPC_SUIVIES = [
   { name: 'fn_dashboard_soignant_complet', statut: 'consommee', lot: 1 }, // T3 : SupabaseDashboardGateway
   { name: 'fn_confirmer_action_planning_v1', statut: 'consommee', lot: 1 }, // T6a : SupabaseCandidatureGateway
   { name: 'fn_suggestions_missions_pour_soignant', statut: 'a_venir', lot: 4 }, // reclassée (revue B8 de T3)
-  { name: 'fn_annuler_candidature_soignant', statut: 'a_venir', lot: 1 },
-  { name: 'fn_annuler_mission_soignant', statut: 'a_venir', lot: 1 },
+  { name: 'fn_annuler_candidature_soignant', statut: 'consommee', lot: 1 }, // T7 : SupabaseCandidatureGateway
+  { name: 'fn_annuler_mission_soignant', statut: 'consommee', lot: 1 }, // T7 : SupabaseCandidatureGateway
   { name: 'fn_repondre_proposition', statut: 'consommee', lot: 1 }, // T6a : SupabaseCandidatureGateway (refus seulement)
   { name: 'fn_toggle_favori_etablissement', statut: 'consommee', lot: 1 }, // T4b : SupabaseFavorisGateway (retrait seulement)
   { name: 'fn_mes_favoris_etablissements', statut: 'consommee', lot: 1 }, // T4b : SupabaseFavorisGateway
   { name: 'fn_modifier_favori_inscription', statut: 'consommee', lot: 1 }, // T4b (décision 8 amendée le 18/11/2026) : retrait des favoris de l'inscription
   { name: 'fn_audit_connexion', statut: 'a_venir', lot: 1 },
   { name: 'fn_maj_activite_soignant', statut: 'a_venir', lot: 1 },
-  { name: 'fn_ecrire_audit_safe', statut: 'a_venir', lot: 1 },
+  { name: 'fn_ecrire_audit_safe', statut: 'consommee', lot: 1 }, // T1 SupabaseAuditGateway ; T6a MISSION_ASSIGNATION, T7 MISSION_ANNULATION
   { name: 'fn_supprimer_compte_rate_limited', statut: 'a_venir', lot: 1 },
   { name: 'fn_param_bool', statut: 'a_venir', lot: 1 },
   { name: 'fn_confirmer_presence_mission', statut: 'consommee', lot: 1 }, // T6c : SupabasePresenceGateway

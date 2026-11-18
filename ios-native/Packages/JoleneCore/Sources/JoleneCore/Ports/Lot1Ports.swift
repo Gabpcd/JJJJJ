@@ -119,10 +119,25 @@ public protocol RecoveryPort: Sendable {
     func signOutAfterRecovery() async throws
 }
 
-/// Justificatif d'annulation (bucket `justificatifs`) — tranche T7. Rend le chemin Storage
-/// (`<uid>/annulations-candidature/<candidatureId>/<ts>_<nom>`), précédé d'un reçu Keychain.
+/// Justificatif d'annulation (bucket `justificatifs`) — tranche T7. Le chemin Storage
+/// (`<uid>/annulations-candidature/<candidatureId>/<ms>_<nom>`) est celui du reçu `RecuJustificatif`, journalisé
+/// AVANT le dépôt (PRINCIPES §4) : le port dépose sous ce chemin (`upsert: false`) et relit sa présence (HEAD) pour
+/// réconcilier un dépôt incertain, sans jamais redéposer.
 public protocol JustificatifStoragePort: Sendable {
-    func upload(data: Data, fileName: String, candidatureId: String, userId: String) async throws -> String
+    func deposer(chemin: String, octets: Data, mime: MimeDocument, context: MissionReadContext) async throws -> IssueDepotJustificatif
+    func existe(chemin: String, context: MissionReadContext) async throws -> Bool
+}
+
+/// Issue d'un dépôt de justificatif. Session refusée : `JoleneError(.unauthorized)` levée.
+public enum IssueDepotJustificatif: Equatable, Sendable {
+    /// Objet déposé (réponse 2xx).
+    case depose
+    /// La requête n'est jamais partie (hôte injoignable) : rien n'est déposé.
+    case nonEnvoye
+    /// Refus certain du stockage (4xx hors 401 et 409) : rien n'est déposé.
+    case refuse(statut: Int)
+    /// Réponse perdue ou ambiguë (409 compris) : réconciliation par `existe(chemin:context:)`.
+    case incertain
 }
 
 // MARK: - Ports « non câblés »
@@ -236,7 +251,10 @@ public struct UnwiredRecoveryPort: RecoveryPort, UnwiredPort {
 
 public struct UnwiredJustificatifStoragePort: JustificatifStoragePort, UnwiredPort {
     public init() {}
-    public func upload(data: Data, fileName: String, candidatureId: String, userId: String) async throws -> String {
+    public func deposer(chemin: String, octets: Data, mime: MimeDocument, context: MissionReadContext) async throws -> IssueDepotJustificatif {
+        throw UnwiredPorts.erreur(port: "justificatifs", tranche: "T7")
+    }
+    public func existe(chemin: String, context: MissionReadContext) async throws -> Bool {
         throw UnwiredPorts.erreur(port: "justificatifs", tranche: "T7")
     }
 }

@@ -428,11 +428,130 @@ final class SupabaseCandidatureGatewayTests: XCTestCase {
         XCTAssertNil(aucune)
     }
 
-    func testAnnulationsVerrouilleesJusquaT7() async throws {
+    // MARK: - Annulations (T7) : une forme de réponse de la fiche = un test
+
+    private let annulerCandidature = "/rest/v1/rpc/fn_annuler_candidature_soignant"
+    private let annulerMission = "/rest/v1/rpc/fn_annuler_mission_soignant"
+    private let explication = "Train supprimé ce matin, aucun autre trajet possible."
+    private var cheminJustificatif: String {
+        "\(TestClient.userId)/annulations-candidature/\(candidatureId)/1793577600000_billet.pdf"
+    }
+
+    private func annuler(chemin: String? = nil) async throws -> AnnulationOutcome {
+        try await gateway().annulerCandidature(id: candidatureId, motif: "PROBLEME_TRANSPORT", texte: explication,
+                                               justificatifPath: chemin, context: TestClient.context)
+    }
+
+    func testCandidatureEnAttenteRetireeSansImpactRelue() async throws {
+        registry.add("POST", annulerCandidature, respond: .json(200, #"{"success":true,"libre":true,"points":0,"message":"Candidature retirée sans impact"}"#))
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("ANNULEE")))
+        let issue = try await annuler()
+        XCTAssertEqual(issue, .annulee(points: 0, libre: true, contestable: nil))
+        let envoye = try corps(annulerCandidature)
+        XCTAssertEqual(envoye["p_candidature_id"] as? String, candidatureId)
+        XCTAssertEqual(envoye["p_motif_categorie"] as? String, "PROBLEME_TRANSPORT")
+        XCTAssertEqual(envoye["p_texte_libre"] as? String, explication)
+        XCTAssertTrue(envoye["p_justificatif_storage_path"] is NSNull, "aucun justificatif : null")
+        let relecture = try XCTUnwrap(registry.requests(to: "/rest/v1/candidatures").first)
+        XCTAssertEqual(relecture.query("id"), "eq.\(candidatureId)")
+        XCTAssertEqual(relecture.query("soignant_id"), "eq.\(TestClient.userId)")
+        XCTAssertEqual(registry.requests(to: annulerCandidature).count, 1, "une seule requête")
+    }
+
+    func testCandidatureAccepteePenaliteServeurEtJustificatifTransmis() async throws {
+        registry.add("POST", annulerCandidature, respond: .json(200, #"{"success":true,"libre":false,"points":-5,"motif_score":"ANNULATION_12_24H","event_score_id":"0a0a0a0a-1b1b-4c2c-8d3d-4e4e4e4e4e4e","contestable":true,"signalement_admin":false}"#))
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("ANNULEE")))
+        let issue = try await annuler(chemin: cheminJustificatif)
+        XCTAssertEqual(issue, .annulee(points: -5, libre: false, contestable: true), "valeurs serveur, aucun barème client")
+        XCTAssertEqual(try corps(annulerCandidature)["p_justificatif_storage_path"] as? String, cheminJustificatif)
+        XCTAssertEqual(TextesWeb.Annulation.succesCandidature(points: -5), "Candidature annulée. Score impacté : -5 pts.")
+    }
+
+    func testRefusStructuresVerbatim() async throws {
+        let refus: [(String, String)] = [
+            ("STATUT_INVALIDE", "Candidature pas dans un état annulable (statut : ANNULEE)"),
+            ("TEXTE_REQUIS", "Texte libre obligatoire (min 10 caractères)"),
+            ("MOTIF_INVALIDE", "Motif requis (URGENCE_PERSONNELLE, URGENCE_MEDICALE, DEUIL, PROBLEME_TRANSPORT, CHANGEMENT_AVIS, AUTRE)"),
+            ("CANDIDATURE_INTROUVABLE", "Candidature introuvable"),
+            ("NON_AUTORISE", "Vous n'êtes pas le soignant de cette candidature"),
+            ("MISSION_INTROUVABLE", "Mission introuvable"),
+        ]
+        for (code, message) in refus {
+            registry.reset()
+            registry.add("POST", annulerCandidature, respond: .json(200, #"{"success":false,"error_code":"\#(code)","error":"\#(message)"}"#))
+            let issue = try await annuler()
+            XCTAssertEqual(issue, .refusee(code: code, message: message), code)
+            XCTAssertTrue(registry.requests(to: "/rest/v1/candidatures").isEmpty, "\(code) : aucune relecture d'un refus")
+        }
+    }
+
+    func testNonAuthentifieSessionExpiree() async throws {
+        registry.add("POST", annulerCandidature, respond: .json(200, #"{"success":false,"error_code":"NON_AUTHENTIFIE","error":"Non authentifié"}"#))
+        let refus = await erreur { _ = try await self.annuler() }
+        XCTAssertEqual(refus?.kind, .unauthorized)
+    }
+
+    func testSuccesSansRelectureAnnuleeEstUneErreur() async throws {
+        registry.add("POST", annulerCandidature, respond: .json(200, #"{"success":true,"libre":true,"points":0}"#))
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("ACCEPTEE")))
+        let refus = await erreur { _ = try await self.annuler() }
+        XCTAssertEqual(refus, JoleneError(.contract, SupabaseCandidatureGateway.relectureAnnulationMessage))
+        registry.reset()
+        registry.add("POST", annulerCandidature, respond: .json(200, "{}"))
+        let vide = await erreur { _ = try await self.annuler() }
+        XCTAssertEqual(vide?.kind, .contract, "réponse inattendue : jamais un succès")
+    }
+
+    func testCheminDeJustificatifEtrangerRefuseSansAppel() async throws {
         let refus = await erreur {
-            _ = try await self.gateway().annulerMission(id: self.missionId, motif: nil, context: TestClient.context)
+            _ = try await self.annuler(chemin: "autre/annulations-candidature/\(self.candidatureId)/1_a.pdf")
         }
         XCTAssertEqual(refus?.kind, .contract)
-        XCTAssertTrue(refus?.message.contains("T7") == true)
+        XCTAssertTrue(registry.requests.isEmpty)
+    }
+
+    func testMissionSansCandidatureRelueAuditeeCommeLeWeb() async throws {
+        registry.add("POST", annulerMission, respond: .json(200, #"{"success":true,"annulation_tardive":true,"penalite_score":-8}"#))
+        registry.add("GET", "/rest/v1/missions", respond: .json(200, attributionJSON(statut: "OUVERTE", soignant: "")
+            .replacingOccurrences(of: #""soignant_assigne_id":"""#, with: #""soignant_assigne_id":null"#)))
+        registry.add("POST", audit, respond: .json(200, #"{"success":true,"id":"0a0a0a0a-1b1b-4c2c-8d3d-4e4e4e4e4e4e"}"#))
+        let issue = try await gateway().annulerMission(id: missionId, motif: nil, context: TestClient.context)
+        XCTAssertEqual(issue, .annulee(points: -8, libre: nil, contestable: nil))
+        let envoye = try corps(annulerMission)
+        XCTAssertEqual(envoye["p_mission_id"] as? String, missionId)
+        XCTAssertNil(envoye["p_motif"], "aucun motif, comme le web (l.892)")
+        let ecrit = try corps(audit)
+        XCTAssertEqual(ecrit["p_action"] as? String, "MISSION_ANNULATION")
+        XCTAssertEqual(ecrit["p_type_ressource"] as? String, "mission")
+        XCTAssertEqual(ecrit["p_id_ressource"] as? String, missionId)
+        XCTAssertEqual(ecrit["p_details"] as? [String: String], ["motif": "Annulation volontaire par le soignant"])
+    }
+
+    func testMissionRefusErrorSeulVerbatimSansAudit() async throws {
+        for message in ["Mission introuvable", "Cette mission ne vous est pas assignée",
+                        "Annulation impossible dans cet état. Si la mission est en cours, ouvrez un litige."] {
+            registry.reset()
+            registry.add("POST", annulerMission, respond: .json(200, #"{"error":"\#(message)"}"#))
+            let issue = try await gateway().annulerMission(id: missionId, motif: nil, context: TestClient.context)
+            XCTAssertEqual(issue, .refusee(code: nil, message: message))
+            XCTAssertTrue(registry.requests(to: audit).isEmpty)
+            XCTAssertTrue(registry.requests(to: "/rest/v1/missions").isEmpty)
+        }
+    }
+
+    func testMissionEncoreAttribueeApresSuccesEstUneErreurSansAudit() async throws {
+        registry.add("POST", annulerMission, respond: .json(200, #"{"success":true,"annulation_tardive":false,"penalite_score":0}"#))
+        registry.add("GET", "/rest/v1/missions", respond: .json(200, attributionJSON()))
+        let refus = await erreur { _ = try await self.gateway().annulerMission(id: self.missionId, motif: nil, context: TestClient.context) }
+        XCTAssertEqual(refus, JoleneError(.contract, SupabaseCandidatureGateway.relectureAnnulationMessage))
+        XCTAssertTrue(registry.requests(to: audit).isEmpty)
+    }
+
+    func testMissionAuditEnEchecSansEffetSurLeSucces() async throws {
+        registry.add("POST", annulerMission, respond: .json(200, #"{"success":true,"annulation_tardive":false,"penalite_score":0}"#))
+        registry.add("GET", "/rest/v1/missions", respond: .json(200, "[]"))
+        registry.add("POST", audit, respond: .json(200, #"{"success":false,"error":"Non authentifié"}"#))
+        let issue = try await gateway().annulerMission(id: missionId, motif: nil, context: TestClient.context)
+        XCTAssertEqual(issue, .annulee(points: 0, libre: nil, contestable: nil), "ligne invisible : plus attribuée au soignant")
     }
 }
