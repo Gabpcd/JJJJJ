@@ -27,6 +27,8 @@ struct MesFavorisScreen: View {
     /// « Voir les missions ouvertes » : Explorer filtré sur l'établissement, puis retour à la liste.
     let voirMissions: (EtablissementFavori) -> Void
     @State private var aRetirer: EtablissementFavori?
+    /// Retour à la liste d'Explorer après « Voir les missions ouvertes » (écran empilé par `FavorisRoute`).
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ScrollView {
@@ -167,8 +169,11 @@ struct MesFavorisScreen: View {
             }
             HStack(spacing: JoleneSpacing.sm) {
                 if FavorisPresentation.afficheVoirMissions(etablissement.nbMissionsOuvertes) {
-                    JoleneButton(FavorisPresentation.voirMissions, style: .secondary) { voirMissions(etablissement) }
-                        .accessibilityIdentifier("favori-etab-missions-\(etablissement.id)")
+                    JoleneButton(FavorisPresentation.voirMissions, style: .secondary) {
+                        voirMissions(etablissement)
+                        dismiss()
+                    }
+                    .accessibilityIdentifier("favori-etab-missions-\(etablissement.id)")
                 }
                 Spacer(minLength: 0)
                 boutonTexte(FavorisPresentation.retirer, identifiant: "favori-etab-retirer-\(etablissement.id)",

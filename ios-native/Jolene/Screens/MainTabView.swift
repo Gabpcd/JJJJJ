@@ -216,6 +216,12 @@ struct MainTabView: View {
             cheminExplorer = NavigationPath()
         case .missions:
             selection = .missions
+        case .favoris:
+            // L1-T4b : « Mes favoris » empilé sur Explorer remis à sa racine, comme l'étoile de sa barre
+            // (`MissionsListScreen`, destination `FavorisRoute`).
+            selection = .explorer
+            cheminExplorer = NavigationPath()
+            cheminExplorer.append(FavorisRoute())
         case .revenus(let section):
             // Présentables (garde de `estPresentable`) : la racine (`.apercu`, T12) et « Paiements à confirmer »
             // (`.paiementsAConfirmer`, T13 : l'onglet défile jusqu'à `revenus-paiements-declares`) ; lot 3, T12 : la pile

@@ -499,6 +499,7 @@ final class CentreNotificationsTests: XCTestCase {
         case stripeConnect, stripeConnectSucces, stripeConnectRafraichir
         case presences, presencesMission, documents, contrat, contratCertificat // L2-T10
         case secondaire // L4-T1 : écrans secondaires du lot 4 (`EcranSecondaire`)
+        case favoris // L1-T4b
         case safari, etablissement
 
         init(_ route: JoleneRoute) {
@@ -515,6 +516,7 @@ final class CentreNotificationsTests: XCTestCase {
             case .accueil: self = .accueil
             case .explorer: self = .explorer
             case .missions: self = .missions
+            case .favoris: self = .favoris
             case .missionDetail: self = .missionDetail
             case .serieDetail: self = .serieDetail
             case .revenus(let section):
@@ -564,6 +566,8 @@ final class CentreNotificationsTests: XCTestCase {
         "/soignant/mes-documents?tab=contrats", "/contrat/c-1", "/contrat/c-1/certificat",
         // L4-T1 : écrans secondaires (renvoi web, ou repli natif du swipe et du score) ; `/soignant/dpae` : renvoi web.
         "/soignant/disponibilites", "/soignant/swipe-missions", "/soignant/score", "/soignant/dpae",
+        // L1-T4b : « Mes favoris » (cible native sur l'onglet Explorer).
+        "/soignant/mes-favoris",
     ]
 
     /// Liste d'exclusion nommée et fermée : routes natives **sans présentation depuis un espace prêt par nature**

@@ -53,6 +53,8 @@ public enum DeepLinkIntent: Equatable, Sendable, CustomStringConvertible, Custom
              .notifications, .parametresNotifications, .stripeConnect, .safari, .etablissement,
              .presences, .presencesMission, .documents, .contrat, .contratCertificat, .secondaire:
             self = .espace(lien)
+        case .favoris: // L1-T4b : « Mes favoris », empilé sur l'onglet Explorer
+            self = .espace(lien)
         }
     }
 
