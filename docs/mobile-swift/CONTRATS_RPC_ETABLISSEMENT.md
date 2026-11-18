@@ -48,7 +48,7 @@ Règles de l'espace établissement (`LOT5_PLAN.md` §2.2-§2.8) :
 | `fn_soignant_pour_etablissement` | consommée (T5) | 5 (T5) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | aucune |
 | `fn_lire_candidatures_mission_habilitee` | consommée (T6) | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée | `42501` |
 | `fn_traiter_candidature_planning_v1` | consommée (T6) | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente | `P0001` ×3, `42501` ×3 (RBAC) |
-| `fn_contrat_signe_pour_pointage` | à venir | 5 (T7) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | absente | `42501` |
+| `fn_contrat_signe_pour_pointage` | consommée (T7) | 5 (T7) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | absente | `42501` |
 | `fn_valider_presence` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501`, `23503`, `P0001` ×4 |
 | `fn_valider_presences_lot` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501`, `23503`, `P0001` ×4 |
 | `fn_contester_presence` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501` |
@@ -312,7 +312,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_cand
 
 ## fn_contrat_signe_pour_pointage
 
-- **Statut natif** : à venir (lot 5, T7 code rotatif).
+- **Statut natif** : consommée (lot 5, T7 : `SupabaseEtabPointageGateway.contratSigne`, uuid canonique exigé avant
+  réseau ; réponse booléenne exigée, toute autre forme → « État de signature indisponible. » comme le web l.158 ;
+  appelée seulement avec la permission `pointage`, relue avec le planning à l'ouverture puis toutes les 60 s).
 - **Usage** : savoir si le contrat de la mission est `SIGNE_COMPLET` sans accès au contrat (POINTAGE_ONLY) ; relu
   toutes les 60 s par l'écran de pointage.
 - **Signature SQL** (`supabase/schema/public.sql` l.25865) :
@@ -572,9 +574,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_conversation"("p_autre_id" "uuid
 
 - **Fiche principale** : `CONTRATS_RPC_SOIGNANT.md` (lot 2).
 - **Usage établissement** (T7 polling 5 s écran visible et scène active, D23 ; T8 relecture `segment_ouvert`) :
-  `code_pointage_actif` est servi à **tout** membre (`v_is_etab`, l.35165, l.35188, correction 4) : il n'est affiché
-  que si `permissions.pointage` ; `{error:'Mission introuvable'|'Accès interdit'}` → erreur. B5b (B9) propose de
-  le restreindre côté serveur.
+  consommée par `SupabaseEtabPointageGateway.etat` (T7). Le dump re-baseliné ne sert plus `code_pointage_actif`
+  qu'aux membres habilités au pointage (`v_peut_voir_code`, l.35609-35612 : la restriction B5b est en place côté
+  serveur) ; le natif garde en plus le filtre `permissions.pointage` (aucune lecture sans elle, comme le web
+  l.102-115). `{error:'Mission introuvable'|'Accès interdit'}` (l.35596, l.35605) → bloc « Code de pointage
+  indisponible » avec le message serveur verbatim, aucune autre clé retenue ; décodage en liste blanche
+  (`CodeRotatifRules.Etat`), aucune clé de la réponse du scanner lue.
 
 ## fn_envoyer_otp_signature
 

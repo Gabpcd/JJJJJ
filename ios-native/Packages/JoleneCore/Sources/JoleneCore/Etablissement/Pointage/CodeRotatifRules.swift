@@ -10,9 +10,9 @@ import Foundation
 /// EN_COURS, planning complet, contrat signé par les deux parties, dans la fenêtre du créneau
 /// (15 minutes avant son début) ; un segment déjà ouvert garde toujours le code de sortie. En
 /// plus du web, et avant toute autre règle, le natif masque le code à un membre sans la
-/// permission `pointage` (blueprint lot 5 §2.7 : `fn_etat_pointage_mission` le renvoie à tout
-/// membre, correction 4). Le code change à chaque scan (correction 18) : la valeur affichée est
-/// toujours celle de la dernière lecture, jamais une valeur calculée.
+/// permission `pointage` (blueprint lot 5 §2.7 ; le serveur ne sert plus le code qu'à ces membres
+/// depuis B5b, et le web filtre lui aussi, l.102-114). Le code change à chaque scan (correction 18) :
+/// la valeur affichée est toujours celle de la dernière lecture, jamais une valeur calculée.
 ///
 /// Écart assumé : là où le web lève sur une date illisible (rendu interrompu), le port échoue
 /// fermé (aucun créneau associé, libellé brut).
@@ -193,8 +193,16 @@ public enum CodeRotatifRules {
     public static let detailTousTermines = "Tous les créneaux planifiés sont terminés."
     // source: src/components/pointage/AffichageCodeRotatifEtab.tsx:318
     public static let titreSegments = "Pointages enregistrés"
-    /// Texte natif (blueprint lot 5 §2.7), sans équivalent web : le web ne filtre pas par permission.
-    public static let messageReservePointage = "Code réservé aux membres habilités au pointage"
+    /// Le web filtre désormais par la permission `pointage` (l.102-114) : son texte remplace le texte natif du
+    /// blueprint (§2.7, « Code réservé aux membres habilités au pointage »).
+    // source: src/components/pointage/AffichageCodeRotatifEtab.tsx:110
+    public static let messageReservePointage = "Le code de pointage est réservé aux membres disposant du droit de pointage pour cet établissement."
+    // source: src/components/pointage/AffichageCodeRotatifEtab.tsx:107
+    public static let titreCodePointage = "Code de pointage"
+    // source: src/components/pointage/AffichageCodeRotatifEtab.tsx:205
+    public static let messageChargement = "Chargement du code de pointage…"
+    // source: src/components/pointage/AffichageCodeRotatifEtab.tsx:215
+    public static let libelleReessayer = "Réessayer"
 
     /// Statuts de mission pour lesquels un code est affiché (web l.182).
     public static let statutsAffiches: Set<String> = ["ASSIGNEE", "EN_COURS"]

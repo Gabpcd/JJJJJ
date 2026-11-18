@@ -2737,7 +2737,7 @@
     },
     {
       "name": "fn_contrat_signe_pour_pointage",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": null,
       "sql": [

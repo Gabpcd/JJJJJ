@@ -293,6 +293,56 @@ du web repris, refus serveur verbatim, quelques textes natifs de navigation).
    `DemoEtabCandidaturesTests` (deux tests) dans l'éclat « presences », jamais dans le socle (garde
    `ios-swift-ci-eclats`). Non exécuté localement (aucun simulateur) : preuve CI.
 
+## Précisions relevées par la tranche T7 (pointage terrain, 18/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; aucun texte juridique n'est ajouté (libellés d'interface
+du web repris, refus serveur verbatim, quelques textes natifs de navigation).
+
+1. **Code lu au serveur, jamais calculé.** `code_pointage_actif` de `fn_etat_pointage_mission`, relu à chaque tic ; aucun
+   secret ni code suivant côté client (aucune clé de la réponse du scanner n'est lue, garde
+   `scripts/ci/scanner-code-sans-code-suivant-pg17.py`). Une valeur qui n'est pas exactement six chiffres ASCII
+   (`PayloadQR.codePointage`, règle du scanner natif du lot 2) n'est jamais présentée : « Code momentanément
+   indisponible », plus strict que le web.
+2. **Cadence (D23).** 5 s, écran visible et scène active seulement (tâche de l'écran relancée à chaque changement de
+   `scenePhase`, annulée à la disparition ; première lecture immédiate au retour) ; planning et signature relus à
+   l'ouverture puis toutes les 60 s, et à chaque tic tant qu'ils n'ont pas pu être lus ; attente découpée en tics de
+   15 s qui réévaluent l'affichage sans réponse nouvelle (web l.119-123). Seul le monde démo change la cadence
+   (`EtabPointagePort.cadenceLecture`, `-JOLENE_POLL_INTERVAL <s>`, entre 1 s et 5 s exclus) ; le port Supabase garde 5 s.
+3. **Erreurs.** Les deux premiers échecs consécutifs gardent la dernière lecture (le web les absorbe par trois relances) ;
+   au troisième, le code est retiré (bloc « Code de pointage indisponible » avec le message de l'erreur,
+   `etab-pointage-indisponible`, « Réessayer ») et la cadence passe à 30 s ; une lecture réussie rétablit 5 s. Un refus
+   jsonb (`{error:'Mission introuvable'|'Accès interdit'}`) est affiché verbatim, sans aucune autre clé. Signature : le
+   42501 de la liste blanche vaut `false` (fiche) ; planning illisible : code d'arrivée masqué (fail-closed, web l.231-255).
+4. **B5b déjà côté serveur.** Le dump re-baseliné ne sert le code qu'aux membres habilités au pointage, et le web filtre
+   aussi par la permission (l.102-115) : sans elle, aucune lecture ni polling ; le texte de `.reservePointage` devient
+   celui du web (l.110) au lieu du texte natif du blueprint (§2.7, non juridique).
+5. **Écran sans veille.** `IdleTimerController` vit dans `JoleneCore/Etablissement/Pointage/` (testé par `swift test` :
+   la cible app n'a pas de tests unitaires), l'app ne porte que l'adaptateur `ReglageVeilleApplication`
+   (`Jolene/Composition/VeilleEcran.swift`, `UIApplication.isIdleTimerDisabled`). Demandes comptées par demandeur,
+   valeur d'avant la première demande rétablie à la dernière libération. La veille est désactivée tant qu'un code est
+   présenté (écran du code ou plein écran) sur un écran visible d'une scène active — lecture de « pendant l'affichage »,
+   plus large que le plein écran seul du blueprint ; rétablie à la disparition, en arrière-plan et dès que le code est
+   masqué (le plein écran se ferme alors de lui-même).
+6. **Plein écran dans la même vue.** `FullScreenCodeView` (JoleneDesign) remplace le contenu de l'écran, barres de
+   navigation et d'onglets masquées, plutôt qu'un `fullScreenCover` : une seule tâche de lecture, aucune course entre la
+   disparition de l'écran et l'apparition de la couverture. QR de `QRCodeImage` (lot 4 : correction M, sans lissage) au
+   plus grand, 70 % du petit côté, en portrait comme en paysage.
+7. **D4/D5.** Le QR encode `code_pointage_actif` relu ; `DemoEtabPointageTests` le décode par `CIDetector` (le décodeur
+   de `PayloadQRTests` du lot 2 et des tests de `QRCodeImage` du lot 4) sur la capture de l'élément, en la valeur
+   affichée, avant puis après le scan démo. Le critère réécrit attend toujours la validation de Gabrielle (§6.9) ; la
+   comparaison `sha256` à la valeur SQL relève de T13 (STAGING).
+8. **Monde démo.** `demo-etab-pointage.json` (`scripts/mobile/demo-etab-pointage.mjs`) **dérive** horaires et statuts de
+   `demo-etab-missions.json` : M4 rejoue `123456` deux lectures puis l'état relu après le scan d'arrivée (`EN_COURS`,
+   segment ouvert, `100002`) ; M5 sans contrat signé ; M6 hors créneau, premier créneau pointé. Écart démo assumé : le
+   statut `EN_COURS` rejoué de M4 n'est pas reporté sur la gateway des missions (le détail reste « Assignée »).
+9. **Non porté** : « Clôturer le segment » (fin rétroactive, `fn_declarer_fin_retroactive`), présences T8 (B9).
+10. **`EtabDestination.pointage.ecranLivre = true`** : le lien « Code de pointage » du détail ouvre l'écran natif.
+    XCUITest `DemoEtabPointageTests` (deux tests) dans l'éclat « lot3-profil-photo », jamais dans le socle (gardes
+    `ios-swift-ci-eclats`, `check-rpc-contracts-lot3`). Non exécuté localement (aucun simulateur) : preuve CI.
+11. **Textes natifs ajoutés (non juridiques)** : « Afficher en plein écran », « Fermer », « QR du code de pointage »,
+    « Aucun code de pointage n’est à présenter pour cette mission. », « Le planning de cette mission n'a pas pu être
+    relu. », « Impossible de charger le planning détaillé. Réessayez. ».
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.

@@ -23,6 +23,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { matricePermissionsEtablissement, SOURCES } from './check-rpc-contracts.mjs';
 import { buildDemoEtabMissions } from './demo-etab-missions.mjs';
+import { buildDemoEtabPointage } from './demo-etab-pointage.mjs';
 
 export const FIXED_NOW = '2026-11-02T00:00:00.000Z';
 export const MISSION_COUNT = 30;
@@ -1153,6 +1154,14 @@ export function buildDemoEtabMissionsFixture(now = new Date(FIXED_NOW)) {
   });
 }
 
+/**
+ * Lot 5, T7 : pointage terrain de l'établissement démo (`demo-etab-pointage.mjs`), dérivé des missions démo (créneaux
+ * et statuts de `demo-etab-missions.json`) : une seule source pour les horaires.
+ */
+export function buildDemoEtabPointageFixture(now = new Date(FIXED_NOW)) {
+  return buildDemoEtabPointage({ now, missions: buildDemoEtabMissionsFixture(now) });
+}
+
 export async function buildFixtures() {
   const contrats = buildDemoContrats(await chargerMoteurContrat());
   return {
@@ -1178,6 +1187,7 @@ export async function buildFixtures() {
     'demo-favoris.json': buildDemoFavoris(), // lot 1, T4b
     'demo-mes-missions.json': buildDemoMesMissions(), // lot 1, T5
     'demo-etab-missions.json': buildDemoEtabMissionsFixture(), // lot 5, T5
+    'demo-etab-pointage.json': buildDemoEtabPointageFixture(), // lot 5, T7
   };
 }
 

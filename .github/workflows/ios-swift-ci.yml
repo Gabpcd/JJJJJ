@@ -657,6 +657,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoEtabLiensTests \
             -skip-testing:JoleneUITests/DemoEtabMissionsTests \
             -skip-testing:JoleneUITests/DemoEtabCandidaturesTests \
+            -skip-testing:JoleneUITests/DemoEtabPointageTests \
             -skip-testing:JoleneUITests/DemoMesMissionsTests \
             -skip-testing:JoleneUITests/DemoCandidatureTests \
             -skip-testing:JoleneUITests/DemoConfirmationPresenceTests \
@@ -1021,8 +1022,10 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-inscription.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot3-inscription) : code $code"
-      - name: test-without-building — éclat lot3-profil-photo (XCUITest photo et position du profil ; session établissement du lot 5) (${{ matrix.format }})
+      - name: test-without-building — éclat lot3-profil-photo (XCUITest photo et position du profil ; session et pointage établissement du lot 5) (${{ matrix.format }})
         id: tests_lot3_profil_photo
+        # L5-T7 : DemoEtabPointageTests (deux tests, code de pointage établissement) rejoint la session établissement ici
+        # plutôt que dans « presences », qui porte déjà trois classes établissement (aucun douzième éclat).
         if: always() && steps.build.outcome == 'success'
         timeout-minutes: 30
         env:
@@ -1048,6 +1051,7 @@ jobs:
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoPhotoPositionTests \
             -only-testing:JoleneUITests/DemoEtabSessionTests \
+            -only-testing:JoleneUITests/DemoEtabPointageTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1141,7 +1145,7 @@ jobs:
               { nom: "lot3-push", code: process.env.CODE_LOT3_PUSH, classes: ["DemoPushTests"] },
               { nom: "lot3-notifications", code: process.env.CODE_LOT3_NOTIFICATIONS, classes: ["DemoNotificationsTests", "DemoPreferencesTests", "DemoProfilTests"] },
               { nom: "lot3-inscription", code: process.env.CODE_LOT3_INSCRIPTION, classes: ["DemoInscriptionTests", "DemoCompletionInscriptionTests", "DemoLiensLot2Tests"] },
-              { nom: "lot3-profil-photo", code: process.env.CODE_LOT3_PROFIL_PHOTO, classes: ["DemoPhotoPositionTests", "DemoEtabSessionTests"] },
+              { nom: "lot3-profil-photo", code: process.env.CODE_LOT3_PROFIL_PHOTO, classes: ["DemoPhotoPositionTests", "DemoEtabSessionTests", "DemoEtabPointageTests"] },
               { nom: "lot3-revenus", code: process.env.CODE_LOT3_REVENUS, classes: ["DemoRevenusTests", "DemoPaiementsTests", "DemoIbanTests", "DemoStripeTests"] },
             ];
             let total = 0, passed = 0, failed = 0, skipped = 0, log = "";
