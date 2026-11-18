@@ -19,7 +19,7 @@ import Supabase
 ///
 /// **Sans** l'embed `etablissements(...)` du web : `pol_etab_select` interdit ce SELECT au soignant.
 /// Les noms viennent **exclusivement** de `fn_etablissements_safe` (même cohorte, mission assignée au
-/// soignant ou OUVERTE de l'établissement, `public.sql` l.35073-35095) ; en échec, comme
+/// soignant ou OUVERTE de l'établissement, `public.sql` l.35477-35530) ; en échec, comme
 /// `fetchEtablissementsSafe` du web qui ignore l'erreur, repli d'affichage « Établissement » (une
 /// session expirée est propagée). Créneaux PREVISIONNEL hors pause par le pager du lot 0 (compte exact,
 /// intégrité) ; en échec, l'onglet est en erreur, comme le web (« Impossible de charger les missions et

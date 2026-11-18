@@ -79,7 +79,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .confirmerInscription:
             return true                                  // T7 — `ConfirmationInscriptionScreen` (hors espace : `BoiteLiensInscription`)
         case .missions:
-            return true                                  // onglet Mes missions : placeholder jusqu'à L1-T5
+            return true                                  // onglet Mes missions natif (L1-T5)
         case .favoris:
             return true                                  // L1-T4b — `MesFavorisScreen`, empilé sur l'onglet Explorer
         case .serieDetail:
