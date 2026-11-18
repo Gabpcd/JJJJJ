@@ -203,8 +203,8 @@ final class DemoWorldTests: XCTestCase {
     /// T12 (blueprint §2.2) : liste vide, soit aucun nom du lot 1 dans `unwiredPorts` des deux
     /// mondes (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`) — jamais
     /// `unwiredPorts.isEmpty`, qui nomme aussi les ports des lots 2 et 3 tant que ces lots sont ouverts.
-    static let portsEnAttenteLot1 = ["presence", // T4b : `favoris` câblé ; T5 : `mesMissions` câblé ; T6a : `candidature`
-                                     "recovery", "justificatifs"]
+    /// Câblés depuis : T4b `favoris`, T5 `mesMissions`, T6a `candidature`, T6c `presence`.
+    static let portsEnAttenteLot1 = ["recovery", "justificatifs"]
 
     /// Lot 2 (T1) — ports du lot 2 que leur tranche n'a pas encore câblés : SOURCE UNIQUE de la liste
     /// (blueprint lot 2 §2.2). Chaque tranche (T3 pointage, T5a notation, T5b contestation, T6 documents,

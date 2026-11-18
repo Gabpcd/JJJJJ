@@ -486,7 +486,7 @@
     },
     {
       "name": "fn_confirmer_presence_mission",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "{ p_mission_id: string }",
