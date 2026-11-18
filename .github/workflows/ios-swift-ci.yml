@@ -14,6 +14,8 @@ on:
       - 'ios-native/**'
       - 'scripts/mobile/export-golden-vectors.mjs'
       - 'scripts/mobile/export-demo-fixtures.mjs'
+      # Lot 4, T1c : fixtures démo du lot 4, un module par domaine, assemblées par export-demo-fixtures.mjs (job « Cœur »).
+      - 'scripts/mobile/demo-fixtures/**'
       # Lot 2, T8 : originaux démo rendus par le moteur serveur (export-demo-fixtures.mjs).
       - 'supabase/functions/_shared/cdd-employeur.ts'
       - 'supabase/functions/generate-contrat-mission-pdf/index.ts'
@@ -132,12 +134,20 @@ on:
       - 'supabase/functions/escrow-debit-echeance/index.ts'
       - 'supabase/functions/stripe-connect-onboard/index.ts'
       - 'supabase/migrations/20260714084802_synchroniser_regles_profil_exercice.sql'
+      # Lot 4, T1c : règles extraites par la PR web W0, portées en Swift avec vecteurs golden par T2
+      # (export-golden-vectors.mjs) ; sans elles au filtre, une modification d'un module ne relancerait pas la CI iOS.
+      - 'src/lib/alertes-recherche-missions.ts'
+      - 'src/lib/filtre-paquet-swipe.ts'
+      - 'src/lib/raisons-score-matching.ts'
+      - 'src/lib/statut-litige-regles.ts'
   push:
     branches: [main]
     paths:
       - 'ios-native/**'
       - 'scripts/mobile/export-golden-vectors.mjs'
       - 'scripts/mobile/export-demo-fixtures.mjs'
+      # Lot 4, T1c : fixtures démo du lot 4, un module par domaine, assemblées par export-demo-fixtures.mjs (job « Cœur »).
+      - 'scripts/mobile/demo-fixtures/**'
       # Lot 2, T8 : originaux démo rendus par le moteur serveur (export-demo-fixtures.mjs).
       - 'supabase/functions/_shared/cdd-employeur.ts'
       - 'supabase/functions/generate-contrat-mission-pdf/index.ts'
@@ -256,6 +266,12 @@ on:
       - 'supabase/functions/escrow-debit-echeance/index.ts'
       - 'supabase/functions/stripe-connect-onboard/index.ts'
       - 'supabase/migrations/20260714084802_synchroniser_regles_profil_exercice.sql'
+      # Lot 4, T1c : règles extraites par la PR web W0, portées en Swift avec vecteurs golden par T2
+      # (export-golden-vectors.mjs) ; sans elles au filtre, une modification d'un module ne relancerait pas la CI iOS.
+      - 'src/lib/alertes-recherche-missions.ts'
+      - 'src/lib/filtre-paquet-swipe.ts'
+      - 'src/lib/raisons-score-matching.ts'
+      - 'src/lib/statut-litige-regles.ts'
   workflow_dispatch:
 
 permissions:
