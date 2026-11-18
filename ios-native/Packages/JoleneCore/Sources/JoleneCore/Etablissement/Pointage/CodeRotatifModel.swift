@@ -54,6 +54,10 @@ public final class CodeRotatifModel: ObservableObject {
     private var actif = false
     /// Avance à chaque `suivre()` et `desactiver()` : une lecture commencée avant ne publie plus rien.
     private var generation = 0
+    /// Génération de la lecture en vol (intégration de la vague C, revue B8 de #1166, m3) : une seule lecture à la fois
+    /// par génération. « Réessayer » ne part pas pendant une lecture du suivi (ni l'inverse) : une même panne ne compte
+    /// jamais deux échecs consécutifs d'un coup, et des taps répétés ne multiplient pas les appels.
+    private var lectureEnVol: Int?
 
     public init(missionId: String, controller: SessionController, snapshot: EtablissementSessionSnapshot,
                 attendre: @escaping @Sendable (TimeInterval) async -> Void = { await CodeRotatifModel.attendreReellement($0) }) {
@@ -100,9 +104,14 @@ public final class CodeRotatifModel: ObservableObject {
                 depuisPlanning += pas
                 reevaluer(maintenant: x.horloge.now())
             }
+            // « Réessayer » déjà en vol pour cette génération : sa réponse tient lieu de lecture de ce tic.
+            guard lectureEnVol != jeton else { continue }
             await lire(x, jeton, planningAussi: !planningLu || depuisPlanning >= Self.periodePlanning)
         }
     }
+
+    /// Vrai pendant une lecture de la génération courante (suivi ou « Réessayer »).
+    public var lectureEnCours: Bool { lectureEnVol == generation }
 
     /// Écran disparu ou scène inactive : la boucle s'arrête, toute réponse encore en vol est ignorée.
     public func desactiver() {
@@ -112,7 +121,7 @@ public final class CodeRotatifModel: ObservableObject {
 
     /// « Réessayer » : relit l'état, le planning et la signature sans attendre le tic suivant.
     public func reessayer() async {
-        guard autorise, actif else { return }
+        guard autorise, actif, !lectureEnCours else { return }
         let jeton = generation
         guard let x = await contexte(), estCourant(jeton) else { return }
         await lire(x, jeton, planningAussi: true)
@@ -151,6 +160,8 @@ public final class CodeRotatifModel: ObservableObject {
     }
 
     private func lire(_ x: Contexte, _ jeton: Int, planningAussi: Bool) async {
+        lectureEnVol = jeton
+        defer { if lectureEnVol == jeton { lectureEnVol = nil } }
         let port = x.port, context = x.context, id = missionId
         async let etatLu = Self.capturer(x.delai) { try await port.etat(missionId: id, context: context) }
         async let planningRelu = Self.lirePlanning(planningAussi ? x : nil, missionId: id)

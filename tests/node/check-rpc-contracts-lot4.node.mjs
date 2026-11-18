@@ -863,6 +863,10 @@ test('Lot 4 T1c — ios-swift-ci.yml : modules de fixtures et règles W0 aux deu
     for (const chemin of attendus) {
       assert.ok(motifs[evenement].some(m => correspond(m, chemin)), `${evenement} : ${chemin} hors du filtre`);
     }
+    // Intégration de la vague C (revues B8 de #1159, m9, et #1161, m7) : T1c et T2 posaient les quatre règles W0 dans
+    // deux blocs ; une seule occurrence par motif et par filtre.
+    const doublons = motifs[evenement].filter((m, i, tous) => tous.indexOf(m) !== i);
+    assert.deepEqual(doublons, [], `${evenement} : motifs en double dans le filtre de chemins`);
   }
   for (const chemin of attendus.slice(2)) assert.ok(fsLot4.existsSync(join(root, chemin)), `${chemin} absent du dépôt`);
 });

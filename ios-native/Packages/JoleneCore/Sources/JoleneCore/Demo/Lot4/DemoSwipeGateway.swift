@@ -10,7 +10,7 @@ extension DemoLot4 {
 }
 
 extension DemoFixtures {
-    /// `demo-swipe.json` (`scripts/mobile/export-demo-fixtures.mjs`, `buildDemoSwipe`) : corps de
+    /// `demo-swipe.json` (`scripts/mobile/demo-fixtures/swipe.mjs`, `buildDemoSwipe`) : corps de
     /// `fn_obtenir_missions_swipe` pour douze missions ouvertes de `demo-missions.json`, dont le planning reste celui de
     /// `demo-missions.json` (même source que la validation de `DemoCandidatureGateway`).
     public struct SwipeFile: Decodable, Sendable {

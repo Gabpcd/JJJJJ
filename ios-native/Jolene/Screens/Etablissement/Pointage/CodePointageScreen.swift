@@ -69,14 +69,22 @@ struct CodePointageScreen: View {
         .onDisappear {
             visible = false
             model.desactiver()
-            appliquerVeille()
+            // Libération explicite (intégration de la vague C, revue B8 de #1166, m1) : jamais déduite de l'état dérivé
+            // `veilleDesactivee` relu juste après l'écriture de `visible`.
+            libererVeille()
         }
+        // Scène inactive (arrière-plan, centre de contrôle) : libération explicite, au même titre que la disparition.
+        .onChange(of: sceneActive) { active in if active { appliquerVeille() } else { libererVeille() } }
         .onChange(of: veilleDesactivee) { _ in appliquerVeille() }
         .onChange(of: model.codePresente == nil) { masque in if masque { pleinEcran = false } }
     }
 
     private func appliquerVeille() {
         VeilleEcran.controleur.appliquer(veilleDesactivee: veilleDesactivee, demandeur: demandeurVeille)
+    }
+
+    private func libererVeille() {
+        VeilleEcran.controleur.retablirVeille(demandeur: demandeurVeille)
     }
 
     private func consigne(_ code: CodeRotatifRules.CodeVisible) -> String {

@@ -576,6 +576,23 @@ test('AppContainer câble l ouverture de l espace établissement sur le mode de 
     /espaceEtablissement: OuvertureEspaceEtablissement = \.ferme\)/, 'aiguillage fermé par défaut');
 });
 
+test('T7 : la veille de l écran du code de pointage est libérée explicitement (disparition, scène inactive)', () => {
+  // Intégration de la vague C (revue B8 de #1166, m1) : la cible app n'a pas de tests unitaires et le XCUITest ne voit
+  // pas le minuteur de veille. La libération ne doit pas dépendre de l'état dérivé `veilleDesactivee` relu juste après
+  // l'écriture de `visible` : `onDisappear` et le passage de la scène à inactive appellent `retablirVeille` eux-mêmes.
+  const source = read('ios-native/Jolene/Screens/Etablissement/Pointage/CodePointageScreen.swift')
+    .split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
+  const bloc = (debut) => {
+    const i = source.indexOf(debut);
+    assert.ok(i >= 0, `${debut} absent de CodePointageScreen.swift`);
+    return source.slice(i, source.indexOf('\n        .', i + debut.length));
+  };
+  assert.match(bloc('.onDisappear {'), /libererVeille\(\)/, 'onDisappear : libération explicite de la veille');
+  assert.match(bloc('.onChange(of: sceneActive)'), /else \{ libererVeille\(\) \}/, 'scène inactive : libération explicite');
+  assert.match(source, /private func libererVeille\(\) \{\s*VeilleEcran\.controleur\.retablirVeille\(demandeur: demandeurVeille\)\s*\}/,
+    'libererVeille : retablirVeille du contrôleur unique, pour le demandeur de cet écran');
+});
+
 test('textes du lot 5 jamais affichés avant la validation de Gabrielle (HARD STOP n°4, m4)', () => {
   // `CandidaturesEtablissement` (T6), `BlocageEtablissement` (T4), `PublicationEtablissement` (T9) : textes repris
   // verbatim, écrans soumis à la validation de Gabrielle (LOT5_PLAN §6.4). Tant qu'elle n'est pas consignée dans

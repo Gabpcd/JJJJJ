@@ -67,7 +67,9 @@ on:
       # Importé par preferencesModesExercice.ts, donc chargé par export-golden-vectors.mjs (revue B8 de #1139).
       - 'src/lib/typesContrat.ts'
       # Lot 4, T2 : règles portées en Swift avec vecteurs golden (MesDisponibilites.tsx figure plus bas, T1b) ;
-      # avecDelai.ts et uuid.ts sont importés par copiesBulletins.ts, donc chargés par l'export.
+      # avecDelai.ts et uuid.ts sont importés par copiesBulletins.ts, donc chargés par l'export. Les quatre règles
+      # extraites par la PR web W0 étaient aussi posées par T1c dans un second bloc : une seule occurrence par filtre
+      # depuis l'intégration de la vague C (revues B8 de #1159, m9, et #1161, m7).
       - 'src/lib/alertes-recherche-missions.ts'
       - 'src/lib/raisons-score-matching.ts'
       - 'src/lib/filtre-paquet-swipe.ts'
@@ -143,12 +145,6 @@ on:
       - 'supabase/functions/escrow-debit-echeance/index.ts'
       - 'supabase/functions/stripe-connect-onboard/index.ts'
       - 'supabase/migrations/20260714084802_synchroniser_regles_profil_exercice.sql'
-      # Lot 4, T1c : règles extraites par la PR web W0, portées en Swift avec vecteurs golden par T2
-      # (export-golden-vectors.mjs) ; sans elles au filtre, une modification d'un module ne relancerait pas la CI iOS.
-      - 'src/lib/alertes-recherche-missions.ts'
-      - 'src/lib/filtre-paquet-swipe.ts'
-      - 'src/lib/raisons-score-matching.ts'
-      - 'src/lib/statut-litige-regles.ts'
   push:
     branches: [main]
     paths:
@@ -208,7 +204,9 @@ on:
       # Importé par preferencesModesExercice.ts, donc chargé par export-golden-vectors.mjs (revue B8 de #1139).
       - 'src/lib/typesContrat.ts'
       # Lot 4, T2 : règles portées en Swift avec vecteurs golden (MesDisponibilites.tsx figure plus bas, T1b) ;
-      # avecDelai.ts et uuid.ts sont importés par copiesBulletins.ts, donc chargés par l'export.
+      # avecDelai.ts et uuid.ts sont importés par copiesBulletins.ts, donc chargés par l'export. Les quatre règles
+      # extraites par la PR web W0 étaient aussi posées par T1c dans un second bloc : une seule occurrence par filtre
+      # depuis l'intégration de la vague C (revues B8 de #1159, m9, et #1161, m7).
       - 'src/lib/alertes-recherche-missions.ts'
       - 'src/lib/raisons-score-matching.ts'
       - 'src/lib/filtre-paquet-swipe.ts'
@@ -284,12 +282,6 @@ on:
       - 'supabase/functions/escrow-debit-echeance/index.ts'
       - 'supabase/functions/stripe-connect-onboard/index.ts'
       - 'supabase/migrations/20260714084802_synchroniser_regles_profil_exercice.sql'
-      # Lot 4, T1c : règles extraites par la PR web W0, portées en Swift avec vecteurs golden par T2
-      # (export-golden-vectors.mjs) ; sans elles au filtre, une modification d'un module ne relancerait pas la CI iOS.
-      - 'src/lib/alertes-recherche-missions.ts'
-      - 'src/lib/filtre-paquet-swipe.ts'
-      - 'src/lib/raisons-score-matching.ts'
-      - 'src/lib/statut-litige-regles.ts'
   workflow_dispatch:
 
 permissions:

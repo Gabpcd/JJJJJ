@@ -41,8 +41,10 @@ preuves des tranches).
   l'affichage du code, absents du web ; « Le soignant n'a pas pu scanner sa sortie ? Clôturer le segment » (fin
   rétroactive, `fn_declarer_fin_retroactive`) **non porté** : présences, T8 (B9). Une valeur servie qui n'est pas six
   chiffres n'est jamais présentée (le web l'afficherait).
-- Accueil : « présences à valider » sans compteur jusqu'à T8, « évaluations à faire » en lien web sans compteur
-  (aucune source serveur, correction 20) ; aucun graphique ni montant (D15).
+- Accueil : « Valider les présences » sans compteur jusqu'à T8, « Évaluer vos soignants » en lien web sans compteur
+  (aucune source serveur, correction 20 ; libellés neutres, le web affiche des compteurs) ; aucun graphique ni montant
+  (D15). « Planning à confirmer » suit `CompletudePlanning` comme la liste des missions, et non le critère local du
+  web (`DashboardEtablissement.tsx` l.354-363) : intégration de la vague C, `DECISIONS_LOT5.md`.
 - Acceptation native limitée aux missions `SALARIE` hors `MEDECIN` (D25) ; étudiant aide-soignant (cadre étudiant),
   mission `TOUS`/`LIBERAL` ou `MEDECIN` : « Accepter sur jolene.app » ; le refus reste natif.
 - Membre de plusieurs établissements : servi sur l'établissement choisi par `mon_etablissement_id()`, comme le web ;

@@ -200,6 +200,28 @@ final class CodeRotatifModelTests: XCTestCase {
         XCTAssertEqual(b.model.erreursConsecutives, 0)
     }
 
+    /// Intégration de la vague C (revue B8 de #1166, m3) : « Réessayer » pendant une lecture du suivi ne lance aucune
+    /// lecture parallèle (une panne ne compte qu'un échec) ; hors lecture en vol, il relit immédiatement.
+    func testReessayerVerrouillePendantUneLectureEnVol() async throws {
+        let b = try await banc([etat("123456"), .echec], arret: 2)
+        let model = b.model
+        await b.port.surLecture { rang in if rang == 2 { await model.reessayer() } }
+        await model.suivre()
+        var lectures = await b.port.lecturesEtat
+        XCTAssertEqual(lectures, 2, "« Réessayer » pendant la lecture du tic : aucun appel de plus")
+        XCTAssertEqual(model.erreursConsecutives, 1, "une seule panne, un seul échec compté")
+        XCTAssertEqual(model.codePresente?.valeur, "123456", "un échec garde la dernière lecture")
+
+        let libre = try await banc([etat("123456"), etat("100002")], arret: 1)
+        let modele = libre.model
+        await libre.minuterie.configurer(arret: 1, instantane: { await modele.reessayer(); return "" },
+                                         surArret: { await modele.desactiver() })
+        await modele.suivre()
+        lectures = await libre.port.lecturesEtat
+        XCTAssertEqual(lectures, 2, "hors lecture en vol, « Réessayer » relit sans attendre le tic")
+        XCTAssertEqual(modele.codePresente?.valeur, "100002")
+    }
+
     func testPremiereLectureEnEchecAfficheIndisponibleSansAttendre() async throws {
         let b = try await banc([.echec], arret: 1)
         await b.model.suivre()

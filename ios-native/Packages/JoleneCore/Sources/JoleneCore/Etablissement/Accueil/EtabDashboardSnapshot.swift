@@ -114,7 +114,8 @@ public struct EtabOccurrencePlanning: Equatable, Sendable, Identifiable {
 }
 
 /// Planning des 31 prochains jours (`SectionPlanning`, web) : occurrences triées par début et missions dont le
-/// planning détaillé est incomplet (« à confirmer », `DashboardEtablissement.tsx` l.354-363).
+/// planning détaillé n'est pas exact au sens de `CompletudePlanning` (« à confirmer », `DashboardEtablissement.tsx`
+/// l.354-363 ; même prédicat que la liste et le détail des missions).
 public struct EtabPlanningAVenir: Equatable, Sendable {
     public var occurrences: [EtabOccurrencePlanning]
     public var missionsSansPlanning: [EtabMissionPlanifiee]
@@ -149,12 +150,12 @@ public enum EtabPlanningAccueil {
         let debutMs = DisponibilitePointage.temps(maintenant)
         let finMs = DisponibilitePointage.temps(finFenetre(maintenant))
 
-        // Planning incomplet : nombre attendu illisible ou nul, nombre reçu différent, ou créneau sans fin (l.354-363).
-        let sansPlanning = missions.filter { mission in
-            let recus = parMission[mission.id] ?? []
-            guard let attendus = mission.nbCreneaux, attendus > 0 else { return true }
-            return recus.count != attendus || recus.contains { ($0.fin ?? "").isEmpty }
-        }
+        // Planning « à confirmer » : un seul prédicat, `CompletudePlanning` (source contractuelle), le même que la liste et
+        // le détail des missions et que l'espace soignant (principe « État dérivé » ; intégration de la vague C, revue B8
+        // de #1160, m4). Écart au critère local du web (`DashboardEtablissement.tsx` l.354-363, nombre reçu égal à
+        // `nb_creneaux` et fin renseignée) : bornes lisibles et `fin > debut` exigées, repli ponctuel accepté quand
+        // `nb_creneaux` vaut 0 ou manque, comme `analyserCompletudePlanningMission`.
+        let sansPlanning = missions.filter { !planningExact($0, creneaux: parMission[$0.id] ?? []) }
 
         var occurrences: [EtabOccurrencePlanning] = []
         for mission in missions {
@@ -172,5 +173,12 @@ public enum EtabPlanningAccueil {
         }
         let triees = DisponibilitePointage.triStable(occurrences, croissant: true) { DisponibilitePointage.temps($0.debut) }
         return EtabPlanningAVenir(occurrences: triees, missionsSansPlanning: sansPlanning)
+    }
+
+    /// Planning exact d'une mission de l'Accueil : `CompletudePlanning.analyser`, sans autre critère.
+    public static func planningExact(_ mission: EtabMissionPlanifiee, creneaux: [MissionSlot]) -> Bool {
+        CompletudePlanning.analyser(MissionAvecPlanningAttendu(id: mission.id, debutLe: mission.debutLe, finLe: mission.finLe,
+                                                               nbCreneaux: mission.nbCreneaux),
+                                    creneaux: creneaux).complet
     }
 }

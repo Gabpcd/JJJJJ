@@ -77,13 +77,16 @@ public struct SupabaseEtabMissionsGateway: EtabMissionsPort {
 
     public func mission(id: String, context: EtablissementReadContext) async throws -> EtabMissionDetail? {
         try context.verifier()
-        guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        // Uuid canonique exigé avant tout appel (intégration de la vague C, revue B8 de #1162, m4) : un lien
+        // `/etablissement/missions/abc` est « Mission introuvable », jamais un refus 22P02 de PostgREST affiché
+        // « Impossible de charger la mission » avec « Réessayer » en boucle. Même règle que `soignant(id:)`.
+        guard let uuid = SupabaseAuditGateway.uuid(id) else { return nil }
         // Relecture sous le JWT courant : l'état de navigation n'est jamais une autorisation.
         let ligne: EtabMissionResume?
         do {
             ligne = try await client.from("missions")
                 .select(Self.missionSelect)
-                .eq("id", value: id)
+                .eq("id", value: uuid)
                 .eq("etablissement_id", value: context.etablissementId)
                 .maybeSingle()
                 .execute()
@@ -92,20 +95,21 @@ public struct SupabaseEtabMissionsGateway: EtabMissionsPort {
             throw SupabaseErrorMapping.map(error, fallback: Self.missionFallback)
         }
         guard let ligne else { return nil }
-        guard ligne.id == id, ligne.etablissementId == context.etablissementId else {
+        guard ligne.id.lowercased() == uuid, ligne.etablissementId == context.etablissementId else {
             throw JoleneError(.contract, "La mission retournée ne correspond pas à la demande.")
         }
+        let missionLue = ligne.id
         var erreurPlanning: String?
         var creneaux: [MissionSlot] = []
         do {
-            creneaux = try await self.creneaux(missionIds: [id])[id] ?? []
+            creneaux = try await self.creneaux(missionIds: [missionLue])[missionLue] ?? []
         } catch let erreur as JoleneError where erreur.kind != .cancelled {
             // Lecture secondaire (web l.555) : la mission reste affichée, le planning est « indisponible ».
             erreurPlanning = erreur.message
         }
         var enAttente: Int?
         if context.permissions.candidatures, ligne.statut == "OUVERTE", ligne.modeAttribution == "CANDIDATURE" {
-            enAttente = await nombreCandidaturesEnAttente(missionId: id)
+            enAttente = await nombreCandidaturesEnAttente(missionId: missionLue)
         }
         return EtabMissionDetail(mission: ligne, creneaux: creneaux, soignantAssigneId: ligne.soignantAssigneId,
                                  candidaturesEnAttente: enAttente, erreurPlanning: erreurPlanning)

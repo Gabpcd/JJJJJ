@@ -34,8 +34,9 @@ final class SupabaseEtabCandidaturesGatewayTests: XCTestCase {
         #"{"code":"\#(sqlstate)","details":null,"hint":null,"message":"\#(message)"}"#
     }
 
-    private func lectureJSON(mission: String? = nil, etablissement: String? = nil) -> String {
-        #"{"mission":{"id":"\#(mission ?? missionId)","intitule":"Nuit","etablissement_id":"\#(etablissement ?? etab)","statut":"OUVERTE","mode_attribution":"CANDIDATURE","nb_creneaux":1,"profession_requise":"IDE"},"creneaux":[{"id":"c-1","mission_id":"\#(missionId)","debut":"\#(debutMicro)","fin":"\#(fin)","est_pause":false,"type_creneau":"PREVISIONNEL"}],"candidatures":[{"id":"\#(candidatureId)","soignant_id":"s-1","message":null,"statut":"EN_ATTENTE","cree_le":"2026-11-01T08:00:00+00:00","soignant":{"id":"s-1","prenom":"Camille","nom":"D.","nom_anonymise":true,"profession":"IDE","est_etudiant":false,"note_moyenne":4.9}}]}"#
+    private func lectureJSON(mission: String? = nil, etablissement: String? = nil, sansEtablissement: Bool = false) -> String {
+        let cleEtablissement = sansEtablissement ? "" : #""etablissement_id":"\#(etablissement ?? etab)","#
+        return #"{"mission":{"id":"\#(mission ?? missionId)","intitule":"Nuit",\#(cleEtablissement)"statut":"OUVERTE","mode_attribution":"CANDIDATURE","nb_creneaux":1,"profession_requise":"IDE"},"creneaux":[{"id":"c-1","mission_id":"\#(missionId)","debut":"\#(debutMicro)","fin":"\#(fin)","est_pause":false,"type_creneau":"PREVISIONNEL"}],"candidatures":[{"id":"\#(candidatureId)","soignant_id":"s-1","message":null,"statut":"EN_ATTENTE","cree_le":"2026-11-01T08:00:00+00:00","soignant":{"id":"s-1","prenom":"Camille","nom":"D.","nom_anonymise":true,"profession":"IDE","est_etudiant":false,"note_moyenne":4.9}}]}"#
     }
 
     private func stubPerimetre(contrat: String = "SALARIE", profession: String = "IDE") {
@@ -74,6 +75,12 @@ final class SupabaseEtabCandidaturesGatewayTests: XCTestCase {
         registry.add("POST", rpcLecture, respond: .json(200, lectureJSON(etablissement: "00000000-1111-4222-8333-444444444444")))
         let erreur = await echec { _ = try await self.gateway().lecture(missionId: self.missionId, context: self.contexte()) }
         XCTAssertEqual((erreur as? JoleneError)?.kind, .contract, "mission d'un autre établissement refusée")
+
+        // Intégration de la vague C (revue B8 de #1164, m2) : clé `etablissement_id` absente → refus (fail-closed).
+        registry.reset()
+        registry.add("POST", rpcLecture, respond: .json(200, lectureJSON(sansEtablissement: true)))
+        let sansCle = await echec { _ = try await self.gateway().lecture(missionId: self.missionId, context: self.contexte()) }
+        XCTAssertEqual((sansCle as? JoleneError)?.kind, .contract, "réponse sans établissement : jamais tenue pour la nôtre")
     }
 
     func testLectureRefusDeDroitJamaisSessionExpiree() async throws {

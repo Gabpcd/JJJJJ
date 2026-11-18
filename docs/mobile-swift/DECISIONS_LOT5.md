@@ -372,6 +372,32 @@ du web repris, refus serveur verbatim, quelques textes natifs de navigation).
     « Aucun code de pointage n’est à présenter pour cette mission. », « Le planning de cette mission n'a pas pu être
     relu. », « Impossible de charger le planning détaillé. Réessayez. ».
 
+## Précisions de l'intégration de la vague C (19/11/2026)
+
+Branche `integration/ios-vague-c` (T4 à T7 réunies avec le lot 4). Aucune ne change une décision du §7 ni une règle
+juridique ; aucun texte juridique n'est ajouté.
+
+1. **Action « candidatures » de l'Accueil** (revues B8 de #1160 et #1162, m1) : la mise à jour du filtre `?statut=` de la
+   liste des missions (`DemandeFiltreMissions`, T5) est faite par `EtablissementTabView.ouvrir(_ cible:)`, chemin commun
+   des liens et des actions de l'Accueil : `/etablissement/missions?statut=OUVERTE` ouvre Missions sur « Ouvertes »
+   (assertion `DemoEtabAccueilTests`).
+2. **Libellés neutres** (#1160, m3) : « Valider les présences » et « Évaluer vos soignants » remplacent « Présences à
+   valider » et « Soignants à évaluer », actions sans compteur (correction 20) dont le titre n'affirme plus un fait que
+   l'app ne connaît pas. Textes d'interface, non juridiques.
+3. **« Planning à confirmer » : un seul prédicat** (#1160, m4 ; principe « État dérivé ») : l'Accueil
+   (`EtabPlanningAccueil.planningExact`) utilise `CompletudePlanning.analyser`, comme la liste et le détail des missions,
+   le code de pointage et l'espace soignant. Écart assumé au critère local de `DashboardEtablissement.tsx` l.354-363 :
+   bornes lisibles et `fin > debut` exigées, repli ponctuel accepté quand `nb_creneaux` vaut 0 ou manque.
+4. **Liste des missions** (#1162, m2) : un changement de filtre repart de `.chargement` ; son échec rend `.echec`, jamais
+   l'ancienne liste sous la nouvelle pastille. Le même filtre relu garde sa liste (erreur de rafraîchissement seule).
+5. **Détail de mission** (#1162, m4 et m6) : uuid canonique exigé avant tout appel (`/etablissement/missions/abc` →
+   « Mission introuvable », aucune requête) ; la relecture du soignant a sa propre génération et n'abandonne plus une
+   relecture de la mission en vol (`rafraichissement` retombe à faux).
+6. **Candidatures** (#1164, m2) : une lecture habilitée sans `etablissement_id` est refusée (fail-closed).
+7. **Code de pointage** (#1166, m1 et m3) : la veille est libérée explicitement à la disparition et quand la scène
+   devient inactive (garde node `contrats-etablissement-ios`) ; « Réessayer » ne lance aucune lecture pendant une lecture
+   en vol de la même génération (et le tic du suivi saute la sienne pendant un « Réessayer »).
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.

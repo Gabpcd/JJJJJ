@@ -99,8 +99,9 @@
 >       dans `portsEnAttenteLot4`. Code de parrainage perdu avant T6 : écart consigné (`DECISIONS_LOT4.md`, précision 12).
 >     - **Fixtures** : `scripts/mobile/demo-fixtures/` contient treize modules vides, un par domaine, plus `lot4.mjs`
 >       (collision et nom hors motif refusés). Les fixtures des lots 0 à 3 ne sont pas redécoupées.
->     - **CI** : filtres de chemins de `ios-swift-ci.yml` (modules de fixtures, quatre règles W0 ; m9, à l'intégration :
->       dédoublonner ces quatre lignes avec celles que #1161 ajoute dans un autre bloc). Ni éclat UI du lot 4
+>     - **CI** : filtres de chemins de `ios-swift-ci.yml` (modules de fixtures, quatre règles W0 ; m9, fait à
+>       l'intégration de la vague C : une seule occurrence par motif, celle du bloc de T2, garde node « une occurrence par
+>       motif et par filtre »). Ni éclat UI du lot 4
 >       ni `-skip-testing:JoleneUITests/StagingLot4Tests` : aucune classe n'existe encore, et la garde des éclats exige
 >       des classes réelles. La première tranche qui livre un XCUITest crée l'éclat (job `ui-lot1` ou job du lot 4,
 >       D19). T1c n'ajoute pas de XCUITest (`DemoNavigationSecondaireTests` reporté : rien n'est navigable avant le
@@ -112,9 +113,10 @@
 >     `PreferencesMatching` est corrigé (nuit / jour / week-end / semaine, paramètres réels de
 >     `fn_initialiser_preferences_matching`, et non quatre poids de scoring). SWIPE_LIKE est déverrouillé dans
 >     `SupabaseCandidatureGateway` et `DemoCandidatureGateway` (le serveur sert l'action, relecture de la candidature) ;
->     URGENCE reste verrouillée (T11). Fixture `demo-swipe.json` produite par `export-demo-fixtures.mjs` (le découpage
->     `demo-fixtures/` de T1c n'est pas livré sur la base de T3a) ; `DemoLot4.cabler` reçoit une ligne (`swipe(gateways)`)
->     pour partager favoris et candidature du monde démo. Pas de carte démo « choix de contrat » ni « déjà swipée »
+>     URGENCE reste verrouillée (T11). Fixture `demo-swipe.json` produite par le module de domaine
+>     `scripts/mobile/demo-fixtures/swipe.mjs` (découpage de T1c ; T3a, livré sur une base sans ce découpage, l'écrivait
+>     dans `export-demo-fixtures.mjs`, déplacé à l'intégration de la vague C) ; `DemoLot4.cabler` reçoit une ligne
+>     (`swipe(gateways)`) pour partager favoris et candidature du monde démo. Pas de carte démo « choix de contrat » ni « déjà swipée »
 >     (aucune mission `TOUS` dans `demo-missions.json`) : à ajouter par T3b si l'XCUITest l'exige. Revue B8 de #1165 :
 >     - **m1** : `acces_refuse` et `profession_incompatible` écartent la carte pour la session (`SwipeRefus.horsPaquet`,
 >       `SwipeModel`), jamais remise en tête : `fn_enregistrer_swipe` les refuse avant d'écrire la ligne `swipes` et
@@ -128,9 +130,10 @@
 >       `CandidatureOutcome` (lot 1) ne porte pas aujourd'hui.
 >     - **m4** : la branche `auth_required` de SWIPE_LIKE (`SupabaseCandidatureGateway`) est défensive, inatteignable
 >       avec le wrapper live (« Accès réservé aux soignants authentifiés. », restitué verbatim) ; documentée et testée.
->     - **m2, à l'intégration avec T1c (#1159)** : déplacer `buildDemoSwipe` dans `scripts/mobile/demo-fixtures/swipe.mjs`
->       (module vide posé par T1c, règle « jamais `export-demo-fixtures.mjs` »), corriger la phrase sur le découpage
->       ci-dessus et renuméroter cet écart (le n° 12 est celui de T1c).
+>     - **m2, fait à l'intégration de la vague C** (`integration/ios-vague-c`) : `buildDemoSwipe` est dans
+>       `scripts/mobile/demo-fixtures/swipe.mjs` (module vide posé par T1c, règle « jamais `export-demo-fixtures.mjs` »),
+>       sortie identique (`export-demo-fixtures.mjs --check`) ; écart renuméroté n°13 (le n°12 est celui de T1c, le n°14
+>       celui de T4).
 > 14. **T4 livrée (18/11, #1167 ; le n°13 revient à T3a, #1165)** : `/soignant/parametres/recherches-sauvegardees` natif,
 >     ses quatre RPC passées en `consommee` (`LOT4_CONSOMMEES`). Écarts au web, tranchés par la revue B8 de #1167 :
 >     - **Alerte rapide toujours visible** : bouton « Me prévenir des prochaines missions » de la barre d'Explorer

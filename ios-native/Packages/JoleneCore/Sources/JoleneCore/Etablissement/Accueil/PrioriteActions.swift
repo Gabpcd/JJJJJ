@@ -38,7 +38,8 @@ public struct ActionPrioritaire: Equatable, Sendable, Identifiable {
 ///   `paiement` ; litiges et évaluations : `missions` (aucune clé serveur ne les vise ; choix d'affichage consigné
 ///   dans `DECISIONS_LOT5.md`, T4) ; messages : `lecture` ; blocage et vérification : tout membre, comme le bandeau du
 ///   web (l.555-570).
-/// - présences et évaluations n'ont pas de source serveur (correction 20) : action sans compteur, toujours listée.
+/// - présences et évaluations n'ont pas de source serveur (correction 20) : action sans compteur, toujours listée, sous
+///   un libellé neutre (« Valider les présences », « Évaluer vos soignants ») qui n'affirme aucun fait inconnu de l'app.
 ///
 /// Blocage et vérification : le titre de suspension (`TextesWeb.BlocageEtablissement`, `BandeauBlocageAuto.tsx` l.61)
 /// et le bandeau de vérification (l.564-565) attendent la validation HARD STOP n°4 de Gabrielle (§6.4, garde
@@ -56,11 +57,13 @@ public enum PrioriteActions {
         /// Sous-texte et bouton des candidatures (l.661-662).
         public static let candidaturesDetail = "Répondez vite — ils peuvent accepter ailleurs"
         public static let candidaturesCta = "Répondre"
-        public static let presencesTitre = "Présences à valider"
+        /// Présences et évaluations n'ont pas de compteur (correction 20) : libellés neutres, qui n'affirment pas qu'il
+        /// reste quelque chose à faire (intégration de la vague C, revue B8 de #1160, m3 ; texte d'interface, non juridique).
+        public static let presencesTitre = "Valider les présences"
         public static let presencesCta = "Voir"
         public static let litigesCta = "Gérer"
         public static let facturesCta = "Voir"
-        public static let evaluationsTitre = "Soignants à évaluer"
+        public static let evaluationsTitre = "Évaluer vos soignants"
         /// Bouton du web (l.682).
         public static let evaluationsCta = "Évaluer"
         public static let messagesCta = "Ouvrir"

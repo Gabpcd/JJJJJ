@@ -45,8 +45,10 @@ public struct SupabaseEtabCandidaturesGateway: EtabCandidaturesPort {
             throw JoleneError(.contract, SupabaseErrorMapping.contractMessage)
         }
         let lecture = try SupabaseEtabSessionGateway.decoder(LectureCandidaturesHabilitee.self, reponse)
-        guard lecture.missionId.lowercased() == uuid,
-              lecture.etablissementId.map({ $0.lowercased() == context.etablissementId.lowercased() }) ?? true else {
+        // Fail-closed (intégration de la vague C, revue B8 de #1164, m2) : une réponse sans `etablissement_id` n'est
+        // jamais tenue pour une mission de l'établissement confirmé.
+        guard lecture.missionId.lowercased() == uuid, let etablissementLu = lecture.etablissementId,
+              etablissementLu.lowercased() == context.etablissementId.lowercased() else {
             throw JoleneError(.contract, "La mission retournée ne correspond pas à la demande.")
         }
         return lecture

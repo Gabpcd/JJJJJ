@@ -61,10 +61,14 @@ public final class EtabMissionsModel: ObservableObject {
                                        candidaturesEnAttente: candidaturesEnAttente[mission.id])
     }
 
-    /// Sélectionne un filtre et relit sa première page (liste conservée pendant la relecture si affichée).
+    /// Sélectionne un filtre et relit sa première page. La liste affichée n'est conservée pendant la relecture que si le
+    /// filtre ne change pas (même pastille touchée, lien vers le filtre courant) : un nouveau filtre repart de
+    /// `.chargement`, et un échec rend `.echec` — jamais l'ancienne liste, ni son « N missions trouvées », sous la
+    /// nouvelle pastille (intégration de la vague C, revue B8 de #1162, m2).
     public func selectionner(_ filtre: EtabMissionsFiltre) async {
+        let change = filtre != self.filtre
         self.filtre = filtre
-        await lire(page: 0, suite: false)
+        await lire(page: 0, suite: false, conserverListe: !change)
     }
 
     /// Relit le filtre affiché avec les pages déjà chargées (apparition, tirer pour actualiser, « Réessayer »).
@@ -77,10 +81,15 @@ public final class EtabMissionsModel: ObservableObject {
         await lire(page: page + 1, suite: true)
     }
 
-    private func lire(page demandee: Int, suite: Bool) async {
+    private func lire(page demandee: Int, suite: Bool, conserverListe: Bool = true) async {
         generation += 1
         let courant = generation
-        let conserver = estChargee
+        let conserver = estChargee && (suite || conserverListe)
+        if !conserver, !suite {
+            // Liste d'un autre filtre : ni ses pages, ni ses compteurs de cartes ne valent pour le filtre demandé.
+            page = 0
+            aSuivre = false
+        }
         if suite {
             chargementSuite = true
             erreurSuite = nil
@@ -172,7 +181,12 @@ public final class EtabMissionDetailModel: ObservableObject {
 
     private let controller: SessionController
     private let snapshot: EtablissementSessionSnapshot
+    /// Lectures de la mission (`charger`).
     private var generation = 0
+    /// Lectures du soignant, génération propre à sa section (intégration de la vague C, revue B8 de #1162, m6) :
+    /// « Réessayer » du soignant n'abandonne jamais une relecture de la mission en vol, dont le `rafraichissement`
+    /// retombe donc toujours à faux.
+    private var generationSoignant = 0
 
     public init(missionId: String, controller: SessionController, snapshot: EtablissementSessionSnapshot) {
         self.missionId = missionId
@@ -211,33 +225,36 @@ public final class EtabMissionDetailModel: ObservableObject {
         guard await controller.epoch == snapshot.epoch, generation == courant else { return }
         guard let lu else {
             etat = .introuvable
+            generationSoignant += 1
             soignant = .aucun
             return
         }
         etat = .chargee(lu)
         guard let soignantId = lu.soignantAssigneId ?? lu.mission.soignantAssigneId, !soignantId.isEmpty else {
+            generationSoignant += 1
             soignant = .aucun
             return
         }
-        await lireSoignant(soignantId, port: port, context: context, generation: courant)
+        await lireSoignant(soignantId, port: port, context: context)
     }
 
-    /// Relit le seul soignant assigné (« Réessayer » de sa section).
+    /// Relit le seul soignant assigné (« Réessayer » de sa section), sans toucher à une relecture de la mission en vol.
     public func rechargerSoignant() async {
         guard let lu = detail, let soignantId = lu.soignantAssigneId ?? lu.mission.soignantAssigneId, !soignantId.isEmpty,
               let gateways = await controller.gateways(for: snapshot.epoch) else { return }
-        generation += 1
-        await lireSoignant(soignantId, port: gateways.etablissement.missions, context: snapshot.context, generation: generation)
+        await lireSoignant(soignantId, port: gateways.etablissement.missions, context: snapshot.context)
     }
 
-    private func lireSoignant(_ id: String, port: any EtabMissionsPort, context: EtablissementReadContext, generation courant: Int) async {
+    private func lireSoignant(_ id: String, port: any EtabMissionsPort, context: EtablissementReadContext) async {
+        generationSoignant += 1
+        let courant = generationSoignant
         if case .charge = soignant {} else { soignant = .chargement }
         do {
             let lu = try await bounded(timeout: controller.resolutionTimeout) { try await port.soignant(id: id, context: context) }
-            guard await controller.epoch == snapshot.epoch, generation == courant else { return }
+            guard await controller.epoch == snapshot.epoch, generationSoignant == courant else { return }
             soignant = lu.map(Soignant.charge) ?? .indisponible
         } catch {
-            guard await controller.epoch == snapshot.epoch, generation == courant, !Task.isCancelled else { return }
+            guard await controller.epoch == snapshot.epoch, generationSoignant == courant, !Task.isCancelled else { return }
             guard let message = Self.message(error) else { return }
             soignant = .echec(message)
         }

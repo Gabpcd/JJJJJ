@@ -32,8 +32,8 @@ public final class EtabAccueilModel: ObservableObject {
     @Published public private(set) var refreshError: String?
     @Published public private(set) var sessionExpired = false
     public private(set) var chargeLe: Date?
-    /// Horloge des gateways de la session (démo : horloge fixée), pour l'affichage du planning.
-    public private(set) var horloge: any ClockPort = SystemClock()
+    // Pas de propriété `horloge` (intégration de la vague C, revue B8 de #1160, m5) : aucune vue ne la lisait et les
+    // formats du planning ne dépendent pas de maintenant ; l'horloge des gateways sert seulement à `chargeLe`.
     /// Dernière écriture d'audit lancée (preuve des tests ; jamais attendue par l'écran).
     public private(set) var dernierAudit: Task<Void, Never>?
 
@@ -62,7 +62,6 @@ public final class EtabAccueilModel: ObservableObject {
 
         guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
         guard generation == courant else { return }
-        horloge = gateways.clock
         let port = gateways.etablissement.dashboard
         let audit = gateways.etablissement.audit
         let context = snapshot.context

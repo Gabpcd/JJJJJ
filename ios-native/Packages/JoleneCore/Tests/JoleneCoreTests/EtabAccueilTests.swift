@@ -60,8 +60,44 @@ final class EtabPlanningAccueilTests: XCTestCase {
         let planning = EtabPlanningAccueil.construire(missions: [ponctuelle, longue], creneaux: [], maintenant: maintenant)
         XCTAssertEqual(planning.occurrences.map(\.id), ["m-1:mission-ponctuelle-m-1"], "une mission longue n'est jamais étalée")
         XCTAssertEqual(EtabAccueilPresentation.horaire(planning.occurrences[0]), "mar. 3 nov. · 07:00 → 15:30 · 8,5h")
-        XCTAssertEqual(planning.missionsSansPlanning.map(\.id), ["m-1", "m-2"])
+        XCTAssertEqual(planning.missionsSansPlanning.map(\.id), ["m-2"],
+                       "repli ponctuel exact (CompletudePlanning) : la mission ponctuelle n'est pas « à confirmer »")
         XCTAssertEqual(EtabAccueilPresentation.periodePrevue(longue), "Période prévue : 3 nov. 2026 → 20 nov. 2026")
+    }
+
+    /// Intégration de la vague C (revue B8 de #1160, m4) : « planning à confirmer » est un seul prédicat,
+    /// `CompletudePlanning`, à l'Accueil comme sur la carte de la liste des missions (principe « État dérivé »).
+    func testPlanningAConfirmerMemeVerdictQueLaListeDesMissions() {
+        func creneau(_ id: String, _ mission: String, _ debut: String, _ fin: String?) -> MissionSlot {
+            MissionSlot(id: id, missionId: mission, debut: debut, fin: fin, estPause: false, typeCreneau: "PREVISIONNEL")
+        }
+        let cas: [(EtabMissionPlanifiee, [MissionSlot], Bool)] = [
+            // nb_creneaux = 0, aucune ligne, ≤ 24 h : repli ponctuel exact.
+            (EtabMissionPlanifiee(id: "p-0", intitule: "Ponctuelle", statut: "OUVERTE", debutLe: "2026-11-03T07:00:00+01:00",
+                                  finLe: "2026-11-03T15:00:00+01:00", nbCreneaux: 0), [], true),
+            // Nombre égal et fin renseignée, mais fin ≤ début : jamais exact (l'ancien critère local l'acceptait).
+            (EtabMissionPlanifiee(id: "p-1", intitule: "Inversée", statut: "OUVERTE", debutLe: "2026-11-04T07:00:00+01:00",
+                                  finLe: "2026-11-04T15:00:00+01:00", nbCreneaux: 1),
+             [creneau("c-1", "p-1", "2026-11-04T15:00:00+01:00", "2026-11-04T07:00:00+01:00")], false),
+            // Borne illisible : jamais exact.
+            (EtabMissionPlanifiee(id: "p-2", intitule: "Illisible", statut: "ASSIGNEE", debutLe: "2026-11-05T07:00:00+01:00",
+                                  finLe: "2026-11-05T15:00:00+01:00", nbCreneaux: 1),
+             [creneau("c-2", "p-2", "pas une date", "2026-11-05T15:00:00+01:00")], false),
+            // Exact.
+            (EtabMissionPlanifiee(id: "p-3", intitule: "Exacte", statut: "ASSIGNEE", debutLe: "2026-11-06T07:00:00+01:00",
+                                  finLe: "2026-11-06T15:00:00+01:00", nbCreneaux: 1),
+             [creneau("c-3", "p-3", "2026-11-06T07:00:00+01:00", "2026-11-06T15:00:00+01:00")], true),
+        ]
+        let planning = EtabPlanningAccueil.construire(missions: cas.map(\.0), creneaux: cas.flatMap(\.1), maintenant: maintenant)
+        XCTAssertEqual(planning.missionsSansPlanning.map(\.id), ["p-1", "p-2"])
+        for (mission, creneaux, exact) in cas {
+            XCTAssertEqual(EtabPlanningAccueil.planningExact(mission, creneaux: creneaux), exact, mission.id)
+            let resume = EtabMissionResume(id: mission.id, intitule: mission.intitule, statut: mission.statut,
+                                           debutLe: mission.debutLe, finLe: mission.finLe, nbCreneaux: mission.nbCreneaux,
+                                           etablissementId: "demo-etab-1")
+            XCTAssertEqual(EtabMissionsPresentation.carte(resume, creneaux: creneaux, candidaturesEnAttente: nil).planningAConfirmer,
+                           !exact, "\(mission.id) : même verdict sur la carte de la liste des missions")
+        }
     }
 
     func testFinLeLendemainEtDurees() {
@@ -140,6 +176,21 @@ final class PrioriteActionsTests: XCTestCase {
         XCTAssertEqual(PrioriteActions.Textes.litiges(2), "2 litiges en cours")
         XCTAssertEqual(PrioriteActions.Textes.messages(1), "1 message non lu")
         XCTAssertEqual(PrioriteActions.Textes.messages(2), "2 messages non lus")
+    }
+
+    /// Intégration de la vague C (revue B8 de #1160, m3) : présences et évaluations, sans compteur servi, portent un
+    /// libellé neutre qui n'affirme pas qu'il reste quelque chose à faire.
+    func testPresencesEtEvaluationsSansCompteurSousUnLibelleNeutre() throws {
+        let actions = PrioriteActions.liste(profil: profil, stats: stats, permissions: try permissions("PROPRIETAIRE"))
+        let presences = actions.first { $0.cle == .presences }
+        let evaluations = actions.first { $0.cle == .evaluations }
+        XCTAssertEqual(presences?.titre, "Valider les présences")
+        XCTAssertEqual(evaluations?.titre, "Évaluer vos soignants")
+        XCTAssertNil(presences?.compteur)
+        XCTAssertNil(evaluations?.compteur)
+        for titre in [presences?.titre, evaluations?.titre].compactMap({ $0 }) {
+            XCTAssertFalse(titre.contains(" à "), "« \(titre) » : jamais un constat « … à valider / à évaluer » sans compteur")
+        }
     }
 
     func testChaqueActionResolueParLaTableDesLiensDeLEspace() throws {

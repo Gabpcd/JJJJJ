@@ -8,7 +8,8 @@ import XCTest
 /// « lot3-profil-photo » de `ios-swift-ci.yml` (hors du socle, comme `DemoEtabSessionTests`).
 ///
 /// Ce que ces tests prouvent (niveau 2) : ordre et présence des actions par rôle, blocage en tête, sorties des actions
-/// (onglet Messages natif, litiges et facturation sur jolene.app). Règles, textes et formats : niveau 1
+/// (onglet Messages natif, Missions filtrées sur « Ouvertes » pour les candidatures, litiges et facturation sur
+/// jolene.app). Règles, textes et formats : niveau 1
 /// (`PrioriteActionsTests`, `EtabPlanningAccueilTests`, `EtabAccueilModelTests`).
 final class DemoEtabAccueilTests: JoleneUITestCase {
     private let espaceEtablissement = ["-JOLENE_DEMO_ESPACE", "etablissement"]
@@ -38,6 +39,23 @@ final class DemoEtabAccueilTests: JoleneUITestCase {
         }
         XCTAssertFalse(element("renvoi-web-demo").exists, "onglet natif : jamais un renvoi web")
         record("\(proofPrefix)-etab-accueil-messages")
+
+        // Intégration de la vague C (revues B8 de #1160 et #1162, m1) : l'action « candidatures »
+        // (`/etablissement/missions?statut=OUVERTE`) passe par `EtablissementTabView.ouvrir(_:)`, qui rejoue le filtre
+        // `?statut=` de la liste des missions, comme un lien : Missions s'ouvre sur « Ouvertes », jamais sur « Toutes ».
+        tabButton("tab-etab-accueil", label: "Accueil").tap()
+        ouvrirAccueil()
+        toucher("etab-action-candidatures-cta")
+        require("L'action « candidatures » ouvre Missions sur le filtre Ouvertes", timeout: 30) {
+            self.containerVisible(self.element("etab-missions-screen"))
+                && self.element("etab-missions-filtre-OUVERTE").isSelected
+        }
+        XCTAssertFalse(element("etab-missions-filtre-toutes").isSelected, "le filtre « Toutes » n'est pas sélectionné")
+        require("La liste relue est celle des missions ouvertes") {
+            self.element("etab-missions-count").label == "5 missions trouvées"
+        }
+        XCTAssertFalse(element("renvoi-web-demo").exists, "onglet natif : jamais un renvoi web")
+        record("\(proofPrefix)-etab-accueil-candidatures-ouvertes")
     }
 
     func testPointageSeulementPresencesEtMessages() throws {

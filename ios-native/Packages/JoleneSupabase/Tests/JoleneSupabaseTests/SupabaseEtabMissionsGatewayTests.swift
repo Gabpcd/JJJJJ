@@ -120,18 +120,30 @@ final class SupabaseEtabMissionsGatewayTests: XCTestCase {
     // MARK: - Détail
 
     func testDetailRelitLaMissionDeLEtablissementEtPortePlanningIndisponible() async throws {
-        registry.add("GET", "/rest/v1/missions", respond: .json(200, missionJSON("m-1")))
+        let missionId = "3c9e1d2a-5b6f-4a70-8b81-92a3b4c5d6e7"
+        registry.add("GET", "/rest/v1/missions", respond: .json(200, missionJSON(missionId)))
         registry.add("GET", "/rest/v1/mission_creneaux", respond: .json(200, "[]"))   // sans Content-Range : compte invérifiable
         registry.add("HEAD", "/rest/v1/candidatures", respond: .json(200, "", headers: ["Content-Range": "*/3"]))
-        let detailLu = try await gateway().mission(id: "m-1", context: contexte())
+        let detailLu = try await gateway().mission(id: missionId.uppercased(), context: contexte())
         let detail = try XCTUnwrap(detailLu)
-        XCTAssertEqual(detail.mission.id, "m-1")
+        XCTAssertEqual(detail.mission.id, missionId)
         XCTAssertEqual(detail.erreurPlanning, MissionSlotPager.countUnavailable.message, "lecture secondaire : mission conservée")
         XCTAssertEqual(detail.candidaturesEnAttente, 3)
         let lecture = try XCTUnwrap(registry.requests(to: "/rest/v1/missions").first)
-        XCTAssertEqual(lecture.query("id"), "eq.m-1")
+        XCTAssertEqual(lecture.query("id"), "eq.\(missionId)", "uuid canonique")
         XCTAssertEqual(lecture.query("etablissement_id"), "eq.\(etab)")
         XCTAssertEqual(lecture.header("Accept"), "application/vnd.pgrst.object+json")
+    }
+
+    /// Intégration de la vague C (revue B8 de #1162, m4) : un identifiant qui n'est pas un uuid (ou l'uuid nul) rend
+    /// « Mission introuvable » sans aucun appel, jamais une erreur réseau relancée en boucle.
+    func testDetailIdentifiantNonUuidIntrouvableAvantReseau() async throws {
+        for id in ["abc", "demo-etab-m01", "00000000-0000-0000-0000-000000000000", " "] {
+            let lu = try await gateway().mission(id: id, context: contexte())
+            XCTAssertNil(lu, "« \(id) » : introuvable")
+        }
+        XCTAssertTrue(registry.requests(to: "/rest/v1/missions").isEmpty, "aucune lecture PostgREST")
+        XCTAssertTrue(registry.requests(to: "/rest/v1/mission_creneaux").isEmpty)
     }
 
     // MARK: - Soignant

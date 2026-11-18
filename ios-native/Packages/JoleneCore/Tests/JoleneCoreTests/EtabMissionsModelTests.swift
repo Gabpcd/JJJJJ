@@ -58,7 +58,53 @@ final class EtabMissionsModelTests: XCTestCase {
         }
     }
 
-    private func pret(_ port: Script) async throws -> (SessionController, EtablissementSessionSnapshot) {
+    /// Port dont la deuxième lecture du détail reste en vol jusqu'à `liberer()` (revue B8 de #1162, m6).
+    private final class DetailRetenu: EtabMissionsPort, @unchecked Sendable {
+        private let lock = NSLock()
+        private var lectures = 0
+        private var attente: CheckedContinuation<Void, Never>?
+        private var libere = false
+        private let premier: EtabMissionDetail
+        private let second: EtabMissionDetail
+        private let lu: SoignantPourEtab
+
+        init(premier: EtabMissionDetail, second: EtabMissionDetail, soignant: SoignantPourEtab) {
+            self.premier = premier; self.second = second; lu = soignant
+        }
+
+        var enAttente: Bool { lock.withLock { attente != nil } }
+
+        func liberer() {
+            let suite: CheckedContinuation<Void, Never>? = lock.withLock {
+                libere = true
+                defer { attente = nil }
+                return attente
+            }
+            suite?.resume()
+        }
+
+        func missions(context: EtablissementReadContext, statut: String?, page: Int) async throws -> EtabMissionsPage {
+            throw PanneTest()
+        }
+
+        func mission(id: String, context: EtablissementReadContext) async throws -> EtabMissionDetail? {
+            let rang: Int = lock.withLock { lectures += 1; return lectures }
+            guard rang > 1 else { return premier }
+            await withCheckedContinuation { (suite: CheckedContinuation<Void, Never>) in
+                let deja: Bool = lock.withLock {
+                    if libere { return true }
+                    attente = suite
+                    return false
+                }
+                if deja { suite.resume() }
+            }
+            return second
+        }
+
+        func soignant(id: String, context: EtablissementReadContext) async throws -> SoignantPourEtab? { lu }
+    }
+
+    private func pret(_ port: any EtabMissionsPort) async throws -> (SessionController, EtablissementSessionSnapshot) {
         var gateways = DemoWorld.gateways(espace: .etablissement(.init()))
         gateways.etablissement.missions = port
         let controller = SessionController(gateways: gateways, espaceEtablissement: .ouvert)
@@ -136,6 +182,32 @@ final class EtabMissionsModelTests: XCTestCase {
         XCTAssertEqual(model.missions.map(\.id), ["m-1"])
     }
 
+    /// Intégration de la vague C (revue B8 de #1162, m2) : après l'échec d'un changement de filtre, la pastille du
+    /// nouveau filtre n'est jamais posée sur l'ancienne liste ; le même filtre relu garde la sienne.
+    func testEchecDUnChangementDeFiltreNAfficheJamaisLAncienneListe() async throws {
+        let port = Script([.page(page(["m-1", "m-2"], aSuivre: true)), .page(page(["m-1", "m-2"])),
+                           .echec(JoleneError(.network, "Réseau indisponible.")),
+                           .page(page(["m-3"])), .echec(JoleneError(.network, "Réseau indisponible."))])
+        let (controller, snapshot) = try await pret(port)
+        let model = EtabMissionsModel(controller: controller, snapshot: snapshot)
+        await model.charger()
+        await model.chargerPlus()
+        XCTAssertEqual(model.page, 1)
+        await model.selectionner(.ouvertes)
+        XCTAssertEqual(model.filtre, .ouvertes)
+        XCTAssertEqual(model.contenu, .echec("Réseau indisponible."), "nouveau filtre en échec : jamais l'ancienne liste")
+        XCTAssertTrue(model.missions.isEmpty)
+        XCTAssertNil(model.erreurRafraichissement)
+        XCTAssertFalse(model.rafraichissement)
+        await model.charger()
+        XCTAssertEqual(model.missions.map(\.id), ["m-3"], "« Réessayer » relit le nouveau filtre en première page")
+        await model.selectionner(.ouvertes)
+        XCTAssertEqual(model.missions.map(\.id), ["m-3"], "même filtre relu en échec : sa liste reste affichée")
+        XCTAssertEqual(model.erreurRafraichissement, "Réseau indisponible.")
+        XCTAssertEqual(port.appels, ["missions toutes 0", "missions toutes 1", "missions OUVERTE 0", "missions OUVERTE 0",
+                                     "missions OUVERTE 0"])
+    }
+
     // MARK: - Détail
 
     func testDetailPuisSoignantEnLectureSecondaire() async throws {
@@ -150,6 +222,37 @@ final class EtabMissionsModelTests: XCTestCase {
         await model.rechargerSoignant()
         XCTAssertEqual(model.soignant, .charge(soignant))
         XCTAssertEqual(port.appels, ["mission m-4", "soignant s-1", "soignant s-1"])
+    }
+
+    /// Intégration de la vague C (revue B8 de #1162, m6) : « Réessayer » du soignant pendant une relecture de la mission
+    /// ne l'abandonne plus ; sa réponse est publiée et `rafraichissement` retombe à faux.
+    func testRelectureDuSoignantNAbandonneJamaisLaRelectureDeLaMission() async throws {
+        let premier = EtabMissionDetail(mission: ligne("m-6", statut: "ASSIGNEE"), creneaux: [], soignantAssigneId: "s-1")
+        var relue = ligne("m-6", statut: "ASSIGNEE")
+        relue.intitule = "Mission m-6 relue"
+        let second = EtabMissionDetail(mission: relue, creneaux: [], soignantAssigneId: "s-1")
+        let soignant = SoignantPourEtab(id: "s-1", prenom: "Camille", nom: "Démo", profession: "IDE")
+        let port = DetailRetenu(premier: premier, second: second, soignant: soignant)
+        let (controller, snapshot) = try await pret(port)
+        let model = EtabMissionDetailModel(missionId: "m-6", controller: controller, snapshot: snapshot)
+        await model.charger()
+        XCTAssertEqual(model.detail, premier)
+
+        let relecture = Task { await model.charger() }
+        var tours = 0
+        while !port.enAttente, tours < 2_000 {
+            tours += 1
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+        XCTAssertTrue(port.enAttente, "la relecture de la mission est en vol")
+        XCTAssertTrue(model.rafraichissement)
+        await model.rechargerSoignant()
+        XCTAssertEqual(model.soignant, .charge(soignant))
+        port.liberer()
+        await relecture.value
+        XCTAssertEqual(model.detail, second, "la relecture en vol de la mission est publiée, jamais abandonnée")
+        XCTAssertFalse(model.rafraichissement, "rafraîchissement remis à faux")
+        XCTAssertEqual(model.soignant, .charge(soignant))
     }
 
     func testDetailIntrouvableSoignantSupprimeEtRelectureEnEchec() async throws {
