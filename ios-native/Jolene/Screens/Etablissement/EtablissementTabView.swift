@@ -12,21 +12,36 @@ import JoleneDesign
 /// Monté par `RootView` avec `.id(snapshot.epoch)` : une nouvelle identité ou un nouveau périmètre
 /// reconstruit tout l'espace ; une relecture des permissions à epoch constant le re-filtre sans le démonter.
 ///
+/// Liens (T2b) : à l'apparition, le coordinateur (`DeepLinkCoordinator.espaceEtablissementOuvert`) rejoue le lien reçu
+/// avant l'espace ; chaque demande de cet epoch (`demandeEtablissement`) sélectionne l'onglet, remet sa pile à la racine
+/// et y empile l'écran livré éventuel (`CibleEtablissement`), une seule fois.
+///
 /// Accessibilité : `.accessibilityIdentifier("tab-etab-*")` est porté par le CONTENU de l'onglet ; UIKit
 /// expose le bouton d'onglet avec le nom de l'image de son `Label` (`house`, `list.clipboard`,
 /// `checkmark.seal`, `bubble.left.and.bubble.right`, `person.crop.circle`). Ne pas renommer ces symboles
 /// sans mettre à jour `tabSymbols` dans `UITestSupport.swift`.
 struct EtablissementTabView: View {
-    enum Tab: Hashable { case accueil, missions, presences, messages, compte }
+    typealias Tab = CibleEtablissement.Onglet
 
     let container: AppContainer
     @ObservedObject var session: SessionStore
     let snapshot: EtablissementSessionSnapshot
+    /// Lot 5, T2b : coordinateur des liens (demandes de navigation de cet espace).
+    @ObservedObject private var liens: DeepLinkCoordinator
     @State private var selection: Tab = .accueil
+    /// Piles des onglets (T2b) : un lien remet la pile de son onglet à la racine avant d'empiler son écran.
+    @State private var chemins: [Tab: [EtabDestination]] = [:]
+
+    init(container: AppContainer, session: SessionStore, snapshot: EtablissementSessionSnapshot) {
+        self.container = container
+        self.session = session
+        self.snapshot = snapshot
+        self.liens = container.liens
+    }
 
     var body: some View {
         TabView(selection: $selection) {
-            NavigationStack {
+            NavigationStack(path: chemin(.accueil)) {
                 EtabAccueilRoot(session: session, snapshot: snapshot)
                     .destinationsEtablissement(snapshot: snapshot, session: session)
             }
@@ -35,7 +50,7 @@ struct EtablissementTabView: View {
             .tag(Tab.accueil)
             .accessibilityIdentifier("tab-etab-accueil")
 
-            NavigationStack {
+            NavigationStack(path: chemin(.missions)) {
                 EtabMissionsRoot(session: session, snapshot: snapshot)
                     .destinationsEtablissement(snapshot: snapshot, session: session)
             }
@@ -44,7 +59,7 @@ struct EtablissementTabView: View {
             .tag(Tab.missions)
             .accessibilityIdentifier("tab-etab-missions")
 
-            NavigationStack {
+            NavigationStack(path: chemin(.presences)) {
                 EtabPresencesRoot(session: session, snapshot: snapshot)
                     .destinationsEtablissement(snapshot: snapshot, session: session)
             }
@@ -53,7 +68,7 @@ struct EtablissementTabView: View {
             .tag(Tab.presences)
             .accessibilityIdentifier("tab-etab-presences")
 
-            NavigationStack {
+            NavigationStack(path: chemin(.messages)) {
                 EtabMessagesRoot(session: session, snapshot: snapshot)
                     .destinationsEtablissement(snapshot: snapshot, session: session)
             }
@@ -62,7 +77,7 @@ struct EtablissementTabView: View {
             .tag(Tab.messages)
             .accessibilityIdentifier("tab-etab-messages")
 
-            NavigationStack {
+            NavigationStack(path: chemin(.compte)) {
                 EtabCompteRoot(container: container, session: session, snapshot: snapshot)
                     .destinationsEtablissement(snapshot: snapshot, session: session)
             }
@@ -72,5 +87,24 @@ struct EtablissementTabView: View {
             .accessibilityIdentifier("tab-etab-compte")
         }
         .tint(JoleneColor.rose700)
+        // Lot 5, T2b : lien reçu avant l'espace rejoué une fois, puis chaque demande de cet epoch.
+        .onAppear {
+            liens.espaceEtablissementOuvert(snapshot)
+            executerDemande()
+        }
+        .onChange(of: liens.demandeEtablissement) { _ in executerDemande() }
+        .onDisappear { liens.espaceFerme(epoch: snapshot.epoch) }
+    }
+
+    private func chemin(_ onglet: Tab) -> Binding<[EtabDestination]> {
+        Binding(get: { chemins[onglet] ?? [] }, set: { chemins[onglet] = $0 })
+    }
+
+    /// Exécute la demande de navigation du coordinateur pour cet espace (epoch), une seule fois.
+    private func executerDemande() {
+        guard let demande = liens.demandeEtablissement, demande.epoch == snapshot.epoch else { return }
+        liens.demandeEtablissementTraitee(demande)
+        selection = demande.cible.onglet
+        chemins[demande.cible.onglet] = demande.cible.destination.map { [$0] } ?? []
     }
 }
