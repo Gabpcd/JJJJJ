@@ -34,16 +34,20 @@ public enum DemoWorld {
     /// (`DemoWorldTests.testAucunPortNonCable`).
     public static func gateways(drapeaux: [String: Bool]) -> Gateways {
         let auth = DemoAuthGateway()
+        // T6a : un seul acteur de candidature par monde ; ses candidatures de session sont relues par Mes missions
+        // (point de fusion de T5), si bien qu'une candidature posée apparaît dans l'onglet Candidatures.
+        let candidature = DemoCandidatureGateway(clock: FixedClock(fixedNow))
         var gateways = Gateways(
             auth: auth,
             role: DemoRoleGateway(),
             missions: DemoMissionsGateway(),
             clock: FixedClock(fixedNow),
             dashboard: DemoDashboardGateway(clock: FixedClock(fixedNow)),
-            candidature: UnwiredCandidaturePort(),      // T6a, T7
+            candidature: candidature,                   // T6a (annulations : T7)
             presence: UnwiredPresencePort(),            // T6c
             favoris: DemoFavorisGateway(clock: FixedClock(fixedNow)),
-            mesMissions: DemoMesMissionsGateway(clock: FixedClock(fixedNow)),
+            mesMissions: DemoMesMissionsGateway(clock: FixedClock(fixedNow),
+                                                candidaturesDeSession: { await candidature.candidaturesDeSession() }),
             compte: DemoAccountGateway(),
             audit: DemoAuditGateway(),
             flags: DemoFlagsGateway(surcharges: drapeaux),

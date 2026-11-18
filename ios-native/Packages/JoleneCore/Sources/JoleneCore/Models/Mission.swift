@@ -50,6 +50,14 @@ public struct SoignantProfile: Codable, Equatable, Sendable {
     public var typesContratAcceptes: String?
     public var typeExercice: String?
     public var tauxHoraireMinimum: Double?
+    // Lot 1, T6a (décision 3, `LOT1_PLAN.md` §2.6) : colonnes du soft-gate `peut_candidater`
+    // (`ProfilCompletion`), lues par le SELECT direct étendu (`MissionQuery.profileSelect`). Absentes ou
+    // NULL → nil ; jamais lues depuis `fn_mon_profil_soignant_complet` (lot 3).
+    public var prenom: String? = nil
+    public var nom: String? = nil
+    public var dateNaissance: String? = nil
+    public var telephone: String? = nil
+    public var rppsVerifie: Bool? = nil
 
     public init(id: String, profession: String, adresseLat: Double? = nil, adresseLng: Double? = nil,
                 rayonDeplacementKm: Double? = nil, tousDocumentsValides: Bool = false, typeContrat: String? = nil,
@@ -70,6 +78,9 @@ public struct SoignantProfile: Codable, Equatable, Sendable {
         case typesContratAcceptes = "types_contrat_acceptes"
         case typeExercice = "type_exercice"
         case tauxHoraireMinimum = "taux_horaire_minimum"
+        case prenom, nom, telephone
+        case dateNaissance = "date_naissance"
+        case rppsVerifie = "rpps_verifie"
     }
 
     /// Nullabilité réelle du schéma (`soignants.profession` et `tous_documents_valides` sont
@@ -87,6 +98,11 @@ public struct SoignantProfile: Codable, Equatable, Sendable {
         typesContratAcceptes = try c.decodeIfPresent(String.self, forKey: .typesContratAcceptes)
         typeExercice = try c.decodeIfPresent(String.self, forKey: .typeExercice)
         tauxHoraireMinimum = try c.decodeIfPresent(Double.self, forKey: .tauxHoraireMinimum)
+        prenom = try c.decodeIfPresent(String.self, forKey: .prenom)
+        nom = try c.decodeIfPresent(String.self, forKey: .nom)
+        dateNaissance = try c.decodeIfPresent(String.self, forKey: .dateNaissance)
+        telephone = try c.decodeIfPresent(String.self, forKey: .telephone)
+        rppsVerifie = try c.decodeIfPresent(Bool.self, forKey: .rppsVerifie)
     }
 }
 
@@ -164,6 +180,13 @@ public struct MissionRecord: Codable, Equatable, Sendable, Identifiable {
     public var boosteeLe: String?
     public var modeRemuneration: String?
     public var retrocessionPct: Double?
+    // Lot 1, T6a (`LOT1_PLAN.md` §3 T6a) : colonnes ajoutées à `MissionQuery.missionSelect`. Absentes ou
+    // NULL → nil. `modeAttribution` choisit l'action (`CandidatureRules.action`, défaut serveur
+    // `PREMIER_ARRIVE`) ; `soignantAssigneId` et `statut` prouvent une attribution relue ;
+    // `presenceConfirmeeLe` est lue par la confirmation de présence (T6c), jamais posée localement.
+    public var modeAttribution: String? = nil
+    public var presenceConfirmeeLe: String? = nil
+    public var soignantAssigneId: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, intitule, description, service, statut
@@ -186,6 +209,9 @@ public struct MissionRecord: Codable, Equatable, Sendable, Identifiable {
         case boosteeLe = "boostee_le"
         case modeRemuneration = "mode_remuneration"
         case retrocessionPct = "retrocession_pct"
+        case modeAttribution = "mode_attribution"
+        case presenceConfirmeeLe = "presence_confirmee_le"
+        case soignantAssigneId = "soignant_assigne_id"
     }
 
     /// Nullabilité réelle du schéma (`missions.est_urgente` et `statut` NULLables, `types.ts`) :
@@ -217,6 +243,9 @@ public struct MissionRecord: Codable, Equatable, Sendable, Identifiable {
         boosteeLe = try c.decodeIfPresent(String.self, forKey: .boosteeLe)
         modeRemuneration = try c.decodeIfPresent(String.self, forKey: .modeRemuneration)
         retrocessionPct = try c.decodeIfPresent(Double.self, forKey: .retrocessionPct)
+        modeAttribution = try c.decodeIfPresent(String.self, forKey: .modeAttribution)
+        presenceConfirmeeLe = try c.decodeIfPresent(String.self, forKey: .presenceConfirmeeLe)
+        soignantAssigneId = try c.decodeIfPresent(String.self, forKey: .soignantAssigneId)
     }
 
     public init(id: String, intitule: String, description: String?, service: String?, professionRequise: String,
