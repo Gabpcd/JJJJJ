@@ -104,6 +104,12 @@ const LOT4_TOUTES = [...LOT4, ...LOT4_PARTAGEES];
 const LOT4_RECLASSEES = ['fn_suggestions_missions_pour_soignant'];
 /** RPC suivies en `lot: 4` qui ne sont ni partagées ni reclassées : les 41 propres au lot. */
 const propresLot4 = rpcs => rpcs.filter(r => r.lot === 4 && !LOT4_PARTAGEES.includes(r.name) && !LOT4_RECLASSEES.includes(r.name));
+// RPC propres au lot 4 passées en `consommee` par la tranche qui câble leur gateway (règle des lots 1 à 3, rétablie par
+// L4-T3a sur consigne du 18/11/2026) : la fiche porte « consommée (lot 4, <tranche> ».
+const LOT4_CONSOMMEES = {
+  fn_obtenir_missions_swipe: 'T3a', fn_enregistrer_swipe: 'T3a', fn_retirer_candidature: 'T3a',
+  fn_initialiser_preferences_matching: 'T3a',
+};
 
 // RPC du lot 4 absentes de `types.ts` (ou illisibles par `extractTypesSignature`) : `types: null` accepté
 // (précédent du lot 1). `fn_ouvrir_litige_rate_limited` y figure (l.10147) mais en union de surcharges.
@@ -218,13 +224,17 @@ function corpsConfrontes(schema, name) {
 
 const CONTRATS_DOC = 'docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md';
 
-test('Lot 4 — RPC_SUIVIES : 41 RPC propres au lot 4 en a_venir lot 4, dans l ordre des tranches, et 1 partagée', () => {
+test('Lot 4 — RPC_SUIVIES : 41 RPC propres au lot 4 en lot 4 (a_venir, ou consommee par leur tranche), dans l ordre des tranches, et 1 partagée', () => {
   assert.equal(LOT4.length, 41);
   assert.equal(new Set(LOT4_TOUTES).size, 42);
   assert.deepEqual([...contratsLot4.RPC_PARTAGEES_LOT4], LOT4_PARTAGEES);
   assert.deepEqual(propresLot4(RPC_SUIVIES).map(r => r.name), LOT4);
-  // Les statuts propres au lot 4 ne bougent qu'en T0 (a_venir) et en T15 (consommee, en une fois) : LOT4_PLAN §3.
-  for (const name of LOT4) assert.deepEqual(byName.get(name), { name, statut: 'a_venir', lot: 4 });
+  // Un statut propre au lot 4 passe de `a_venir` (T0) à `consommee` dans la PR qui câble sa gateway (LOT4_CONSOMMEES).
+  for (const name of Object.keys(LOT4_CONSOMMEES)) assert.ok(LOT4.includes(name), `${name} : consommée hors des 41`);
+  for (const name of LOT4) {
+    const statut = LOT4_CONSOMMEES[name] ? 'consommee' : 'a_venir';
+    assert.deepEqual(byName.get(name), { name, statut, lot: 4 });
+  }
   // Reclassées par un lot antérieur : `a_venir`, `lot: 4`, jamais comptées parmi les 42, consignées dans la
   // synthèse du lot 4 et dans les décisions (précision 11), pour que T15 les statue.
   const synthese = section(read(CONTRATS_DOC), 'Lot 4 — synthèse');
@@ -344,7 +354,8 @@ test('Lot 4 — CONTRATS : chaque fiche cite toutes les réponses littérales, c
     // « Usage du lot 4 », déplacée telle quelle dans la fiche du lot 2 quand son T0 est fusionné.
     if (partagee) assert.equal(doc.split('\n').filter(l => l === `## ${name}`).length, 1, `${name} : fiche en double (fusion avec le T0 du lot 2 : voir sa fiche)`);
     const fiche = partagee ? sousSection(section(doc, `${name}\n`), 'Usage du lot 4') : section(doc, `${name}\n`);
-    const statut = partagee ? '- **Statut natif (lot 4)** : à venir (lot 4, T8)' : '- **Statut natif** : à venir (lot 4';
+    const statut = partagee ? '- **Statut natif (lot 4)** : à venir (lot 4, T8)'
+      : LOT4_CONSOMMEES[name] ? `- **Statut natif** : consommée (lot 4, ${LOT4_CONSOMMEES[name]}` : '- **Statut natif** : à venir (lot 4';
     assert.ok(fiche.includes(statut), `${name} : statut natif lot 4 absent`);
     for (const { body } of corpsConfrontes(schema, name)) {
       for (const message of messagesSql(body)) {

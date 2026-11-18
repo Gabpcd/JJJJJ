@@ -59,6 +59,18 @@
 >     est déplacée (précision 10). `fn_suggestions_missions_pour_soignant` reste `a_venir`, `lot: 4`, à statuer en T15.
 > 11. **Numéros de ligne** : le dump `supabase/schema/public.sql` a été re-baseliné depuis le 01/11 ; les « l.N » du
 >     blueprint sont décalés. Les gardes confrontent les contenus (messages, SQLSTATE), pas les lignes, et passent.
+> 12. **T3a (swipe Core + Supabase, 18/11)** : le dump porte déjà `'score', ms.score_global` (migration
+>     `20261102204820_score_matching_inconnu_null.sql`, #1114) ; T3a n'en dépend pas : `score: Int?`, valeur servie
+>     affichée telle quelle (`0` compris si le serveur le sert). Les quatre RPC du swipe passent en `consommee` dans la
+>     PR qui câble leur gateway (consigne du 18/11, `LOT4_CONSOMMEES` du test node), et non plus en une fois par T15.
+>     `PreferencesMatching` est corrigé (nuit / jour / week-end / semaine, paramètres réels de
+>     `fn_initialiser_preferences_matching`, et non quatre poids de scoring). SWIPE_LIKE est déverrouillé dans
+>     `SupabaseCandidatureGateway` et `DemoCandidatureGateway` (le serveur sert l'action, relecture de la candidature) ;
+>     URGENCE reste verrouillée (T11). `warning` et `docs_a_completer` du ❤️ ne sont pas portés par `CandidatureOutcome`
+>     (lot 1) : reste à T3b. Fixture `demo-swipe.json` produite par `export-demo-fixtures.mjs` (le découpage
+>     `demo-fixtures/` de T1c n'est pas livré) ; `DemoLot4.cabler` reçoit une ligne (`swipe(gateways)`) pour partager
+>     favoris et candidature du monde démo. Pas de carte démo « choix de contrat » ni « déjà swipée » (aucune mission
+>     `TOUS` dans `demo-missions.json`) : à ajouter par T3b si l'XCUITest l'exige.
 >
 > **§6 mis à jour au 18/11** : B0-bis fait (point 2) ; prérequis du point 1 complétés par le reliquat du lot 1
 > ci-dessus (T6a, T4b, T5, T6b, T6c) ; B1 toujours B9, non fait ; les autres points sont inchangés.

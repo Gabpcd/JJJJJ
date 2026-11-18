@@ -2468,9 +2468,10 @@ T10 bulletins, T11 pool urgence et exclusions), et une RPC partagée avec le lot
 `fn_ouvrir_litige_rate_limited` (`RPC_PARTAGEES_LOT4`, précision 10 des décisions) : une seule entrée dans
 `RPC_SUIVIES`, celle du T0 du lot 2 (`lot: 2`) quand il est fusionné, `a_venir`, `lot: 4` à défaut ; une
 seule fiche, dont la sous-section « Usage du lot 4 » porte l'usage `AUTRE`. Le décompte de l'en-tête
-(vingt-sept RPC) couvre les lots 0 et 1 ; ces quarante-deux s'y ajoutent. Écart assumé à la règle
-« statut passé en `consommee` par la PR qui câble la gateway » : les statuts du lot 4 passent en `consommee`
-**en une fois par T15** (onze tranches parallèles ne modifient jamais le même tableau). Fiches propres au lot :
+(vingt-sept RPC) couvre les lots 0 et 1 ; ces quarante-deux s'y ajoutent. Règle « statut passé en `consommee`
+par la PR qui câble la gateway » appliquée au lot 4 depuis L4-T3a (consigne du 18/11/2026 ; le T0 prévoyait un
+passage en une fois par T15) : chaque tranche met à jour sa ligne ci-dessous et sa fiche, liste tenue par
+`LOT4_CONSOMMEES` (`tests/node/check-rpc-contracts-lot4.node.mjs`). Fiches propres au lot :
 « lecture des exceptions », actions `SWIPE_LIKE` / `URGENCE`, edges `messagerie-validate` et
 `copies-bulletins`, Realtime, double-aveugle et surcharges du litige, en fin de section.
 
@@ -2509,10 +2510,10 @@ concernée à jour **dans la même PR**.
 
 | RPC | Statut natif | Lot | Classe manifeste | GRANT | types.ts |
 |---|---|---|---|---|---|
-| `fn_obtenir_missions_swipe` | à venir | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_enregistrer_swipe` | à venir | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_retirer_candidature` | à venir | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_initialiser_preferences_matching` | à venir | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_obtenir_missions_swipe` | consommée | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_enregistrer_swipe` | consommée | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_retirer_candidature` | consommée | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_initialiser_preferences_matching` | consommée | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_lister_mes_filtres_sauvegardes` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_creer_filtre_sauvegarde` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_modifier_filtre_sauvegarde` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -2596,7 +2597,8 @@ tableau.
   `ActionPlanning` reçoit `.swipeLike = "SWIPE_LIKE"` et `.urgence = "URGENCE"` en T1 (D2), avec
   `p_creneaux_confirmes` exact (`CreneauxConfirmes.pourAction`, golden du lot 1 T2). Les refus propres à la
   RPC (planning à reconfirmer, conflit, repos de 11 h) précèdent la délégation et sont décrits dans sa fiche.
-- **`SWIPE_LIKE`** (❤️, T3a) : délègue à `fn_enregistrer_swipe(p_mission_id, 'LIKE', p_choix_contrat)` ; la
+- **`SWIPE_LIKE`** (❤️, T3a, **consommée** : verrou levé dans `SupabaseCandidatureGateway` et `DemoCandidatureGateway`,
+  `URGENCE` reste verrouillée jusqu'à T11) : délègue à `fn_enregistrer_swipe(p_mission_id, 'LIKE', p_choix_contrat)` ; la
   réponse est celle de `fn_enregistrer_swipe` — `{ok:true, …, candidature_id, choix_contrat}`,
   **pas de `success`** — et ses refus `{ok:false, …}` (fiche `fn_enregistrer_swipe`). `choix_requis` →
   `ChoixContratSheet` → nouvel appel `SWIPE_LIKE` avec `p_choix_contrat` ; planning à reconfirmer → relecture
@@ -2618,7 +2620,7 @@ tableau.
 
 ## fn_obtenir_missions_swipe
 
-- **Statut natif** : à venir (lot 4, T3a).
+- **Statut natif** : consommée (lot 4, T3a) — `SupabaseSwipeGateway.paquet`.
 - **Usage prévu** : Paquet de la vue Swipe d'Explorer (`p_limit = 20`, borné 1-100 côté serveur) : missions `OUVERTE` à venir, éligibles (`fn_soignant_eligible_mission`), au taux minimum du soignant, jamais déjà swipées (`NOT EXISTS swipes`, l.46095-46096), cohorte TEST respectée (`est_compte_test`, l.46090) ; puis créneaux PREVISIONNEL hors pauses par `MissionSlotPager` (lot 0) et filtre du paquet (port de `VueSwipeMissions.tsx` l.373-392, golden T2). Relu à l'apparition et à la reprise après 60 s.
 - **Signature SQL** (`supabase/schema/public.sql` l.46023) :
 
@@ -2631,12 +2633,13 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_missions_swipe"("p_limit" intege
 - **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_obtenir_missions_swipe(integer)` — RPC utilisateur : identité `auth.uid()` lue en interne, appel avec le JWT du soignant.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: { p_limit?: number }` ; `Returns: Json`.
-- **Contrat de réponse** : succès `{missions:[{mission_id, intitule, profession_requise, etablissement_id, etablissement_nom, etablissement_ville, etablissement_code_postal, etablissement_logo_url, etablissement_score, taux_horaire_base, duree_heures, debut_le, fin_le, est_urgente, service, type_contrat_applique, type_contrat_recherche, nb_creneaux, total_brut, net_a_payer, net_estime, montant_ifm, montant_icp, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, score, breakdown, paiement_rapide, distance_km}]}` (l.46040-46084, l.46102) — **pas de `success`**. Non authentifié : `{missions:[], error:'auth_required'}` (l.46033, HTTP 200) → `.unauthorized`. Ordre `score + random()*13` (l.46039) : aucune assertion d'ordre, démo déterministe. `score` vaut `COALESCE(ms.score_global, 0)` (l.46067) : une mission sans ligne `matching_scores` affiche 0 aujourd'hui (correction 13) ; décodé `Int?` en prévision de B1 (B9, D5), valeur serveur affichée telle quelle. `breakdown` vaut `{}` par défaut (raisons « Pourquoi N ? », golden T2). Montants affichés tels quels ; `etablissement_nom` vient du payload, sans appel à `fn_etablissements_safe`.
+- **Contrat de réponse** : succès `{missions:[{mission_id, intitule, profession_requise, etablissement_id, etablissement_nom, etablissement_ville, etablissement_code_postal, etablissement_logo_url, etablissement_score, taux_horaire_base, duree_heures, debut_le, fin_le, est_urgente, service, type_contrat_applique, type_contrat_recherche, nb_creneaux, total_brut, net_a_payer, net_estime, montant_ifm, montant_icp, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, score, breakdown, paiement_rapide, distance_km}]}` (l.46040-46084, l.46102) — **pas de `success`**. Non authentifié : `{missions:[], error:'auth_required'}` (l.46033, HTTP 200) → `.unauthorized`. Ordre `score + random()*13` (l.46039) : aucune assertion d'ordre, démo déterministe. `score` vaut `ms.score_global` dans le dump re-baseliné (migration `20261102204820_score_matching_inconnu_null.sql`, B1, PR #1114 ; le tri garde `COALESCE(ms.score_global, 0)`) : `null` sans ligne `matching_scores` ; décodé `Int?` (D5), valeur serveur affichée telle quelle, `0` compris si le serveur le sert. `breakdown` vaut `{}` par défaut et porte des `null` et des textes (`distance_km`, `taux_median`, `error`, `filtre_dur_ko` de `fn_calculer_score_matching`) : décodage tolérant, raisons « Pourquoi N ? » par `RaisonsScore.raisons(json:)` sur le JSON brut (golden T2, revue B8 de #1161 m1). Le filtre du paquet lit `distance_km` du payload (arrondi serveur), jamais une distance recalculée (m2). Montants affichés tels quels ; `etablissement_nom` vient du payload, sans appel à `fn_etablissements_safe`.
 - **Exemple de réponse STAGING** : recommandé dans le run T14 (paquet non vide sur la fixture D4, égalité de `etablissement_nom` avec le nom de fixture), corps anonymisé.
 
 ## fn_enregistrer_swipe
 
-- **Statut natif** : à venir (lot 4, T3a).
+- **Statut natif** : consommée (lot 4, T3a) — `SupabaseSwipeGateway.enregistrer` (✕ / ⭐), et `LIKE` par
+  `SupabaseCandidatureGateway` (`SWIPE_LIKE`).
 - **Usage prévu** : ✕ (`DISLIKE`) et ⭐ (`FAVORI`) appelés directement ; ❤️ passe par `fn_confirmer_action_planning_v1(…, 'SWIPE_LIKE', …)`, qui délègue ici avec `'LIKE'` (fiche « Lot 4 — actions `SWIPE_LIKE` et `URGENCE` »). Jamais de `SUPER_LIKE` (réécrit en `FAVORI`, l.32771, D3). Une carte n'est retirée du paquet qu'après `ok:true`.
 - **Signature SQL** (`supabase/schema/public.sql` l.32753) :
 
@@ -2654,7 +2657,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_enregistrer_swipe"("p_mission_id" "uuid"
 
 ## fn_retirer_candidature
 
-- **Statut natif** : à venir (lot 4, T3a).
+- **Statut natif** : consommée (lot 4, T3a) — `SupabaseSwipeGateway.retirer`.
 - **Usage prévu** : « Annuler » du toast de 5 s qui suit un ❤️ (D4) : supprime la candidature `EN_ATTENTE`. La ligne `swipes` reste (immuable) : la carte n'est **jamais** remise dans le paquet, un nouveau `LIKE` répondrait `mission_deja_swipee` (correction 12). Seule RPC « pas avant le lot 4 » (`RPC_PAS_AVANT_LOT4`), suivie ici avec `lot: 4`.
 - **Signature SQL** (`supabase/schema/public.sql` l.54817) :
 
@@ -2672,7 +2675,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_retirer_candidature"("p_candidature_id" 
 
 ## fn_initialiser_preferences_matching
 
-- **Statut natif** : à venir (lot 4, T3a).
+- **Statut natif** : consommée (lot 4, T3a) — `SupabaseSwipeGateway.initialiserPreferences` (`PreferencesMatching`
+  nuit / jour / week-end / semaine, amorçage `depuisQuiz` du web).
 - **Usage prévu** : Quiz de préférences au premier contact (D6 : marqueur local par userId absent **et** aucun swipe en base), sans la question « dispo urgence » (D26, remplacée par un lien vers Pool urgence). Quatre préférences dans [0, 1].
 - **Signature SQL** (`supabase/schema/public.sql` l.38646) :
 

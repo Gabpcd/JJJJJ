@@ -119,13 +119,14 @@ export const RPC_SUIVIES = [
   { name: 'fn_mes_paiements_escrow', statut: 'consommee', lot: 3 }, // L3-T12 : SupabaseRevenusGateway
   // Lot 4 (`docs/mobile-swift/LOT4_PLAN.md` §3 T0, fiches « Lot 4 » de CONTRATS_RPC_SOIGNANT.md) : les
   // 41 RPC propres au lot, dans l'ordre des tranches ; la 42e, partagée avec le lot 2, est dans
-  // `RPC_PARTAGEES_LOT4` ci-dessous. Écart assumé (LOT4_PLAN §3) : ces statuts passent en `consommee` en
-  // une fois par T15, jamais par les onze tranches parallèles qui câblent les gateways.
+  // `RPC_PARTAGEES_LOT4` ci-dessous. Chaque tranche passe en `consommee` les RPC de la gateway qu'elle câble
+  // (règle des lots 1 à 3, rétablie par L4-T3a sur consigne du 18/11/2026 ; le T0 prévoyait un passage en une fois
+  // par T15) ; liste tenue par `LOT4_CONSOMMEES` de `tests/node/check-rpc-contracts-lot4.node.mjs`.
   // T3a — swipe
-  { name: 'fn_obtenir_missions_swipe', statut: 'a_venir', lot: 4 },
-  { name: 'fn_enregistrer_swipe', statut: 'a_venir', lot: 4 },
-  { name: 'fn_retirer_candidature', statut: 'a_venir', lot: 4 },
-  { name: 'fn_initialiser_preferences_matching', statut: 'a_venir', lot: 4 },
+  { name: 'fn_obtenir_missions_swipe', statut: 'consommee', lot: 4 }, // T3a : SupabaseSwipeGateway.paquet
+  { name: 'fn_enregistrer_swipe', statut: 'consommee', lot: 4 }, // T3a : SupabaseSwipeGateway.enregistrer (✕ / ⭐)
+  { name: 'fn_retirer_candidature', statut: 'consommee', lot: 4 }, // T3a : SupabaseSwipeGateway.retirer
+  { name: 'fn_initialiser_preferences_matching', statut: 'consommee', lot: 4 }, // T3a : SupabaseSwipeGateway (quiz)
   // T4 — filtres sauvegardés et alerte rapide
   { name: 'fn_lister_mes_filtres_sauvegardes', statut: 'a_venir', lot: 4 },
   { name: 'fn_creer_filtre_sauvegarde', statut: 'a_venir', lot: 4 },
