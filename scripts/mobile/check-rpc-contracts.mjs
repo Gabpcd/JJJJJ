@@ -70,11 +70,11 @@ export const RPC_SUIVIES = [
   { name: 'fn_etablissements_safe', statut: 'lot0', lot: 0 },
   { name: 'fn_mon_profil_soignant_complet', statut: 'consommee', lot: 3 }, // L3-T9 : SupabaseProfilGateway
   { name: 'fn_dashboard_soignant_complet', statut: 'consommee', lot: 1 }, // T3 : SupabaseDashboardGateway
-  { name: 'fn_confirmer_action_planning_v1', statut: 'a_venir', lot: 1 },
+  { name: 'fn_confirmer_action_planning_v1', statut: 'consommee', lot: 1 }, // T6a : SupabaseCandidatureGateway
   { name: 'fn_suggestions_missions_pour_soignant', statut: 'a_venir', lot: 4 }, // reclassée (revue B8 de T3)
   { name: 'fn_annuler_candidature_soignant', statut: 'a_venir', lot: 1 },
   { name: 'fn_annuler_mission_soignant', statut: 'a_venir', lot: 1 },
-  { name: 'fn_repondre_proposition', statut: 'a_venir', lot: 1 },
+  { name: 'fn_repondre_proposition', statut: 'consommee', lot: 1 }, // T6a : SupabaseCandidatureGateway (refus seulement)
   { name: 'fn_toggle_favori_etablissement', statut: 'consommee', lot: 1 }, // T4b : SupabaseFavorisGateway (retrait seulement)
   { name: 'fn_mes_favoris_etablissements', statut: 'consommee', lot: 1 }, // T4b : SupabaseFavorisGateway
   { name: 'fn_modifier_favori_inscription', statut: 'consommee', lot: 1 }, // T4b (décision 8 amendée le 18/11/2026) : retrait des favoris de l'inscription

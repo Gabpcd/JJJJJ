@@ -94,11 +94,11 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_etablissements_safe` | consommée lot 0 | 0 | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_mon_profil_soignant_complet` | consommée lot 3 (T9) | 3 (T9 ; reclassée, lot 1 v2 n°4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_dashboard_soignant_complet` | consommée lot 1 (T3) | 1 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_confirmer_action_planning_v1` | à venir | 1 (T6a) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (décision 6) | authenticated, service_role | absente |
+| `fn_confirmer_action_planning_v1` | consommée lot 1 (T6a) | 1 (T6a) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (décision 6) | authenticated, service_role | absente |
 | `fn_suggestions_missions_pour_soignant` | à venir | 4 (reclassée, revue B8 de T3 : non consommée par l'Accueil) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_annuler_candidature_soignant` | à venir | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_annuler_mission_soignant` | à venir | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_repondre_proposition` | à venir | 1 (T6a, refus seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_repondre_proposition` | consommée lot 1 (T6a, refus seulement) | 1 (T6a, refus seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_toggle_favori_etablissement` | consommée lot 1 (T4b, retrait seulement) | 1 (T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_mes_favoris_etablissements` | consommée lot 1 (T4b) | 1 (T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_modifier_favori_inscription` | consommée lot 1 (T4b, retrait seulement, décision 8 amendée) | 1 (T4b) | hors manifeste (SECURITY DEFINER, contrôle interne `auth.uid()` + `fn_compte_auth_actif`) | authenticated, service_role | absente |
@@ -291,7 +291,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_dashboard_soignant_complet"() RETURNS "j
 
 ## fn_confirmer_action_planning_v1
 
-- **Statut natif** : à venir (lot 1, T6a).
+- **Statut natif** : consommée lot 1 (T6a) — `SupabaseCandidatureGateway.confirmer` (POSTULER, ACCEPTER, PROPOSITION ;
+  une forme de réponse ci-dessous = un test de `SupabaseCandidatureGatewayTests`). Écran : T6b.
 - **Usage prévu** : Candidature (`POSTULER`, mode `CANDIDATURE`), acceptation directe (`ACCEPTER`, mode
   `PREMIER_ARRIVE`) et acceptation d'une proposition (`PROPOSITION`, `p_candidature_id` renseigné), avec
   `p_creneaux_confirmes` strictement égal au planning live (sérialisation ISO 8601 UTC `Z` sans fraction,
@@ -1072,7 +1073,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_annuler_mission_soignant"("p_mission_id"
 
 ## fn_repondre_proposition
 
-- **Statut natif** : à venir (lot 1, T6a — **refus uniquement**).
+- **Statut natif** : consommée lot 1 (T6a — **refus uniquement**) — `SupabaseCandidatureGateway.refuserProposition`,
+  relecture `REFUSEE` ; `{error}` (expirée, plus en attente) levé verbatim. Écran : T6b.
 - **Usage prévu** : Refus d'une proposition `PROPOSEE` depuis l'Accueil (`p_accepter = false`). L'acceptation
   passe par `fn_confirmer_action_planning_v1` (`PROPOSITION`, comme le web `CarteProposition.tsx` l.268-279) ;
   `p_accepter = true` n'est pas appelé par l'app au lot 1. Relecture : candidature (`REFUSEE`).
