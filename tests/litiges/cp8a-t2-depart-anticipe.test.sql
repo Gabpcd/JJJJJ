@@ -17,6 +17,11 @@
 \echo '== CP8a T2 — Départ anticipé (auto-création litige) =='
 
 BEGIN;
+-- Missions réelles pour le cron (private.fn_mission_est_reelle) : la définition live de
+-- trg_forcer_compte_test_prelaunch (20260925143334) force est_compte_test tant que
+-- inscriptions_publiques_actives <> 1 (0 sur une branche ou en staging, 1 en prod depuis le
+-- 27/09/2026). Posé dans la transaction, annulé par le ROLLBACK.
+UPDATE public.parametres_systeme SET valeur = 1 WHERE cle = 'inscriptions_publiques_actives';
 
 DO $$
 DECLARE
@@ -82,7 +87,7 @@ BEGIN
      AND type_litige = 'DEPART_ANTICIPE';
 
   IF NOT FOUND AND NOT v_reelle THEN
-    RAISE NOTICE '[T2] NON PROBANT — mission dérivée test (trg_forcer_compte_test_prelaunch force est_compte_test) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
+    RAISE NOTICE '[T2] NON PROBANT — mission dérivée test (est_compte_test posé par trg_forcer_compte_test_prelaunch : inscriptions_publiques_actives <> 1 ou session non backend) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
   ELSIF NOT FOUND THEN
     RAISE NOTICE '[T2] FAIL — aucun litige DEPART_ANTICIPE créé (result=%)', v_result;
   ELSIF v_litige.statut <> 'OUVERT' THEN

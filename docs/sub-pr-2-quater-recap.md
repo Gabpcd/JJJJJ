@@ -11,7 +11,7 @@
 CP-LITIGES Partie 1 concerne tout le cycle de vie d'un litige sur mission **ponctuelle** (non hebdomadaire) :
 
 - Ouverture (rate-limitée, fenêtres de contestation F1/F2/F3 selon type et statut facture).
-- Auto-création côté plateforme (présence ABSENT validée étab + > 48h sans litige).
+- Auto-création côté plateforme (présence ABSENT validée étab depuis plus de `delai_contestation_pointage_h`, 72 h depuis D12, sans litige).
 - Gel des factures liées (granulaire pour les litiges FINANCIER ciblés sur une facture_id, mission-wide pour PRESENCE / CONDITIONS / COMPORTEMENT).
 - Notifications asynchrones (push + email) pour les 2 parties + admin.
 - Escalade automatique (72h libéral / 5 jours ouvrés salarié, avec respect jours fériés FR).

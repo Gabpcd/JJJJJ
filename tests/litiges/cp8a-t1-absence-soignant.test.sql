@@ -13,10 +13,15 @@
 -- Cas limite T1-limite (D12, migration 20261118145614) : paramètre à 72 et
 -- présence validée il y a 60 h → aucun litige auto-créé, fenêtre de
 -- contestation DESACCORD_HEURES_POINTAGE encore ouverte (à 48, ce cas
--- créerait un litige et la fenêtre serait fermée). Le volet cron n'est
--- probant que sur une mission réelle : en prélancement,
--- trg_forcer_compte_test_prelaunch force est_compte_test et le cron ignore la
--- mission (message NON PROBANT, comme T1).
+-- créerait un litige et la fenêtre serait fermée). T1-fenetre : à
+-- delai + 1 h, la fenêtre de contestation doit être FERMÉE.
+--
+-- Volets cron : probants sur une mission réelle seulement. La définition live
+-- de trg_forcer_compte_test_prelaunch (20260925143334) pose est_compte_test
+-- tant que parametres_systeme.inscriptions_publiques_actives <> 1 (0 sur une
+-- branche Supabase ou en staging ; 1 en prod depuis le 27/09/2026). Le script
+-- pose donc ce paramètre à 1 dans la transaction (ROLLBACK) ; à défaut
+-- (session non backend), le message NON PROBANT le signale.
 --
 -- Tout le setup (étab, soignant, mission, présence, litige) est
 -- ROLLBACK en fin de script : pas de pollution base.
@@ -27,6 +32,11 @@
 \echo '== CP8a T1 — Absence soignant (auto-création litige) =='
 
 BEGIN;
+-- Missions réelles pour le cron (private.fn_mission_est_reelle) : la définition live de
+-- trg_forcer_compte_test_prelaunch (20260925143334) force est_compte_test tant que
+-- inscriptions_publiques_actives <> 1 (0 sur une branche ou en staging, 1 en prod depuis le
+-- 27/09/2026). Posé dans la transaction, annulé par le ROLLBACK.
+UPDATE public.parametres_systeme SET valeur = 1 WHERE cle = 'inscriptions_publiques_actives';
 
 DO $$
 DECLARE
@@ -42,6 +52,7 @@ DECLARE
                          WHERE pl.cle = 'delai_contestation_pointage_h');
   v_valide_le   TIMESTAMPTZ;
   v_reelle      BOOLEAN;
+  v_ouverte     BOOLEAN;
 BEGIN
   IF v_delai_h IS NULL THEN
     RAISE NOTICE '[T1] FAIL — paramètre delai_contestation_pointage_h absent';
@@ -92,7 +103,7 @@ BEGIN
      AND type_litige = 'ABSENCE_SOIGNANT';
 
   IF NOT FOUND AND NOT v_reelle THEN
-    RAISE NOTICE '[T1] NON PROBANT — mission dérivée test (trg_forcer_compte_test_prelaunch force est_compte_test) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
+    RAISE NOTICE '[T1] NON PROBANT — mission dérivée test (est_compte_test posé par trg_forcer_compte_test_prelaunch : inscriptions_publiques_actives <> 1 ou session non backend) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
   ELSIF NOT FOUND THEN
     RAISE NOTICE '[T1] FAIL — aucun litige créé (result=%)', v_result;
   ELSIF v_litige.statut <> 'OUVERT' THEN
@@ -103,6 +114,16 @@ BEGIN
   ELSE
     RAISE NOTICE '[T1] PASS — litige % créé (type=ABSENCE_SOIGNANT, statut=%, initie_par=%)',
       v_litige.id, v_litige.statut, v_litige.initie_par;
+  END IF;
+
+  -- T1-fenetre (revue B8, m3) : au-delà du délai, la contestation est fermée
+  -- (probant quel que soit est_compte_test : la fenêtre ne filtre pas les tests).
+  v_ouverte := public.fn_fenetre_contestation_ouverte(
+    'DESACCORD_HEURES_POINTAGE'::public.type_litige, v_mission_id, NULL);
+  IF v_ouverte IS DISTINCT FROM FALSE THEN
+    RAISE NOTICE '[T1-fenetre] FAIL — fenêtre % à delai + 1 h (% h) : attendu fermée', v_ouverte, v_delai_h + 1;
+  ELSE
+    RAISE NOTICE '[T1-fenetre] PASS — fenêtre fermée à delai + 1 h (% h)', v_delai_h + 1;
   END IF;
 
 EXCEPTION WHEN OTHERS THEN
@@ -175,7 +196,7 @@ BEGIN
   END IF;
 
   IF NOT v_reelle THEN
-    RAISE NOTICE '[T1-limite] NON PROBANT — mission dérivée test (trg_forcer_compte_test_prelaunch force est_compte_test) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
+    RAISE NOTICE '[T1-limite] NON PROBANT — mission dérivée test (est_compte_test posé par trg_forcer_compte_test_prelaunch : inscriptions_publiques_actives <> 1 ou session non backend) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
   ELSIF v_nb <> 0 THEN
     RAISE NOTICE '[T1-limite] FAIL — % litige(s) auto-créé(s) à 60 h (attendu 0 avec 72 h)', v_nb;
   ELSE

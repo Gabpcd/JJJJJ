@@ -22,6 +22,11 @@
 -- S1 — Cas A : ABSENCE_SOIGNANT
 -- ─────────────────────────────────────────────────────────────
 BEGIN;
+-- Missions réelles pour le cron (private.fn_mission_est_reelle) : la définition live de
+-- trg_forcer_compte_test_prelaunch (20260925143334) force est_compte_test tant que
+-- inscriptions_publiques_actives <> 1 (0 sur une branche ou en staging, 1 en prod depuis le
+-- 27/09/2026). Posé dans la transaction, annulé par le ROLLBACK.
+UPDATE public.parametres_systeme SET valeur = 1 WHERE cle = 'inscriptions_publiques_actives';
 DO $$
 DECLARE
   v_etab_id     UUID := gen_random_uuid();
@@ -58,7 +63,7 @@ BEGIN
    WHERE mission_id = v_mission_id AND type_litige = 'ABSENCE_SOIGNANT';
 
   IF NOT FOUND AND NOT v_reelle THEN
-    RAISE NOTICE '[S1] NON PROBANT — mission dérivée test (trg_forcer_compte_test_prelaunch force est_compte_test) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
+    RAISE NOTICE '[S1] NON PROBANT — mission dérivée test (est_compte_test posé par trg_forcer_compte_test_prelaunch : inscriptions_publiques_actives <> 1 ou session non backend) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
   ELSIF NOT FOUND THEN
     RAISE NOTICE '[S1] FAIL — aucun litige ABSENCE_SOIGNANT créé';
   ELSIF v_litige.statut <> 'OUVERT' OR v_litige.initie_par <> 'SYSTEME' THEN
@@ -75,6 +80,11 @@ ROLLBACK;
 -- S2 — Cas B : DEPART_ANTICIPE (4h sur 8h prévues)
 -- ─────────────────────────────────────────────────────────────
 BEGIN;
+-- Missions réelles pour le cron (private.fn_mission_est_reelle) : la définition live de
+-- trg_forcer_compte_test_prelaunch (20260925143334) force est_compte_test tant que
+-- inscriptions_publiques_actives <> 1 (0 sur une branche ou en staging, 1 en prod depuis le
+-- 27/09/2026). Posé dans la transaction, annulé par le ROLLBACK.
+UPDATE public.parametres_systeme SET valeur = 1 WHERE cle = 'inscriptions_publiques_actives';
 DO $$
 DECLARE
   v_etab_id     UUID := gen_random_uuid();
@@ -111,7 +121,7 @@ BEGIN
    WHERE mission_id = v_mission_id AND type_litige = 'DEPART_ANTICIPE';
 
   IF NOT FOUND AND NOT v_reelle THEN
-    RAISE NOTICE '[S2] NON PROBANT — mission dérivée test (trg_forcer_compte_test_prelaunch force est_compte_test) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
+    RAISE NOTICE '[S2] NON PROBANT — mission dérivée test (est_compte_test posé par trg_forcer_compte_test_prelaunch : inscriptions_publiques_actives <> 1 ou session non backend) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
   ELSIF NOT FOUND THEN
     RAISE NOTICE '[S2] FAIL — aucun litige DEPART_ANTICIPE créé';
   ELSIF v_litige.statut <> 'OUVERT' OR v_litige.initie_par <> 'SYSTEME' THEN
@@ -128,6 +138,11 @@ ROLLBACK;
 -- S3 — Anti-boucle : 2e appel sur même présence = 0 nouveau litige
 -- ─────────────────────────────────────────────────────────────
 BEGIN;
+-- Missions réelles pour le cron (private.fn_mission_est_reelle) : la définition live de
+-- trg_forcer_compte_test_prelaunch (20260925143334) force est_compte_test tant que
+-- inscriptions_publiques_actives <> 1 (0 sur une branche ou en staging, 1 en prod depuis le
+-- 27/09/2026). Posé dans la transaction, annulé par le ROLLBACK.
+UPDATE public.parametres_systeme SET valeur = 1 WHERE cle = 'inscriptions_publiques_actives';
 DO $$
 DECLARE
   v_etab_id     UUID := gen_random_uuid();
@@ -166,7 +181,7 @@ BEGIN
   SELECT COUNT(*) INTO v_nb_apres FROM public.litiges WHERE mission_id = v_mission_id;
 
   IF v_nb_avant = 0 AND NOT v_reelle THEN
-    RAISE NOTICE '[S3] NON PROBANT — mission dérivée test (trg_forcer_compte_test_prelaunch force est_compte_test) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
+    RAISE NOTICE '[S3] NON PROBANT — mission dérivée test (est_compte_test posé par trg_forcer_compte_test_prelaunch : inscriptions_publiques_actives <> 1 ou session non backend) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
   ELSIF v_nb_avant = 1 AND v_nb_apres = 1 THEN
     RAISE NOTICE '[S3] PASS — anti-boucle OK (1 litige après 2 appels)';
   ELSE
