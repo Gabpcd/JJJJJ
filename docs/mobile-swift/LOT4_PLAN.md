@@ -61,36 +61,46 @@
 >     blueprint sont décalés. Les gardes confrontent les contenus (messages, SQLSTATE), pas les lignes, et passent.
 > 12. **T1c livrée sur `integration/ios-vague-b` (18/11)**, avec pour règle « un écran non livré garde son renvoi web
 >     actuel » : rien de visible ne change avant la tranche de l'écran. Une tranche d'écran passe sa ligne de
->     `DestinationLien.ecranNatifLivre`, remplace son stub et retire son port de `portsEnAttenteLot4`, sans toucher de
->     fichier partagé. Écarts au §3 T1c :
+>     `DestinationLien.ecranNatifLivre` (une ligne `case .secondaire(.<ecran>)` par écran, revue B8 de #1159, m4),
+>     remplace son stub et retire son port de `portsEnAttenteLot4`, sans toucher de fichier partagé. Écarts au §3 T1c :
 >     - **Aiguillage** : `CibleNotification.secondaire(EcranSecondaire)` (JoleneCore) est construite pour un écran livré
 >       seulement. `MainTabView.presenter` l'empile sur le Profil (`SecondaireRoute`, `SecondaryRouter`), sauf le swipe,
->       qui ouvre Explorer. `.serieDetail` y mène par `.secondaire(.serie(id:))` quand T12 passe sa ligne.
->       `SecondaryRouter` lit le coupe-circuit et sert `RenvoiWebScreen` s'il est coupé (texte neutre du §3 T1c). Onze
->       stubs `Screens/Secondaires/<Ecran>/` ; le swipe n'en a pas, c'est une vue d'Explorer.
+>       qui ouvre Explorer et fait avancer le jeton `demandesVueSwipe` du contexte (intention « vue Swipe », lue par T3b ;
+>       m1). `.serieDetail` y mène par `.secondaire(.serie(id:))` quand T12 passe sa ligne. `SecondaryRouter` est une
+>       porte à trois états (`PorteEcranNatif`, motif de L2-T10 ; M2) : rien de l'écran n'est construit avant la réponse
+>       du coupe-circuit, fail-open (D18), et `RenvoiWebScreen` s'il est coupé (texte neutre du §3 T1c). Onze stubs
+>       `Screens/Secondaires/<Ecran>/` ; le swipe n'en a pas, c'est une vue d'Explorer.
 >     - **Emplacements invisibles** jusqu'à la livraison : bouton Messages (`boutonMessages()`, posé sur la racine des
->       cinq onglets, donc cinq lignes et non une), actions du détail de mission (`MissionActionsSection` et trois
->       boutons, un fichier chacun), Explorer (`vueSwipe(model:)` pour T3b, `alerteRapide(model:)` pour T4).
+>       cinq onglets, donc cinq lignes et non une), actions du détail de mission dans l'ordre du web (m2 :
+>       `ActionsEtablissementMission` au bas du bloc de l'établissement, exclusion puis signalement, `DetailMissionSoignant.tsx`
+>       l.1160-1183 ; `MissionContactButton` après l'annulation, l.1550-1558 ; un fichier par bouton), Explorer
+>       (`vueSwipe(model:)` pour T3b, `alerteRapide(model:)` pour T4).
 >       Explorer n'a aujourd'hui aucune commande Liste · Carte : T3b pose la commande Swipe · Liste · Carte dans son
 >       emplacement. Contexte `contexteSecondaire` injecté au-dessus des onglets.
 >     - **Hub** : `ActiviteSoignantSection` rend `EntreesHubLot4`, c'est-à-dire les sections du hub web
 >       (`MonCompteSoignant.tsx` l.92-110 : Recherches sauvegardées, Établissements exclus, Parrainage, Litiges &
 >       contestations), écrans livrés seulement. Le regroupement « Activité / Missions » du §3 T1c vient de la barre
 >       latérale web et n'est pas repris. Score, évaluations, pool urgence et disponibilités n'ont pas d'entrée dans le
->       hub web : ils sont atteints par lien, push ou centre, et leur point d'entrée reste à poser (T15).
+>       hub web : ils sont atteints par lien, push ou centre, et leur point d'entrée reste à poser (revue B8 de #1159,
+>       m3, laissé à l'intégration : emplacement « disponibilités » d'Explorer, `RechercheMissions.tsx` l.311, ou garde
+>       « écran livré ⇒ point d'entrée ou exemption listée » ; sinon T15).
 >       `RenvoisWebHubSection` (stub) reçoit « Documents & protection » en T13.
->     - **Sans objet** : `SafariHandoff` (écart n°1 : `RenvoiWebScreen` passe par `presentateurRenvoiWeb`, le double démo
->       du partage par `presentationPageWeb`) ; insertion dans `RevenusScreen.swift` (l'entrée `revenus-bulletins-web`
+>     - **Partage** (M1) : la feuille du lot 2 (`Composition/Media/ShareSheet.swift`, popover iPad, fermeture unique)
+>       reste la seule ; T1c lui ajoute `presenter(elements:)` pour T6, T10 garde `presenter(fichier:)`, et chacune pose
+>       son double démo si elle en a besoin. Aucun nom de fichier Swift en double dans la cible.
+>     - **Sans objet** : `SafariHandoff` (écart n°1 : `RenvoiWebScreen` passe par `presentateurRenvoiWeb`) ; insertion dans `RevenusScreen.swift` (l'entrée `revenus-bulletins-web`
 >       résout son lien par `DestinationLien` puis `CibleNotification` : T10 ne change que `DestinationLien`) ;
 >       `JoleneUITests/UITestSupport.swift` inchangé.
 >     - **m6** (revue B8 de #1146) : `ParrainageApplicateur` (appelé par `DeepLinkCoordinator` sur tout lien et à
 >       l'ouverture de l'espace) et `RealtimeLifecycle` (appelé par `JoleneApp`) ne passent que par `VerrousLot4`.
 >       `SecondairesLot4Tests`, `SupabaseGatewaysTests.testAbonnementRealtimeVerrouilleAvantT7a` et la garde node
 >       « m6 » de `check-rpc-contracts-lot4.node.mjs` échouent si une capture, un appel `fn_appliquer_parrainage` ou un
->       canal Realtime apparaît tant que le port reste dans `portsEnAttenteLot4`.
+>       canal Realtime (`realtimeV2`, `.channel(`, `.subscribe(`, présence, diffusion) apparaît tant que le port reste
+>       dans `portsEnAttenteLot4`. Code de parrainage perdu avant T6 : écart consigné (`DECISIONS_LOT4.md`, précision 12).
 >     - **Fixtures** : `scripts/mobile/demo-fixtures/` contient treize modules vides, un par domaine, plus `lot4.mjs`
 >       (collision et nom hors motif refusés). Les fixtures des lots 0 à 3 ne sont pas redécoupées.
->     - **CI** : filtres de chemins de `ios-swift-ci.yml` (modules de fixtures, quatre règles W0). Ni éclat UI du lot 4
+>     - **CI** : filtres de chemins de `ios-swift-ci.yml` (modules de fixtures, quatre règles W0 ; m9, à l'intégration :
+>       dédoublonner ces quatre lignes avec celles que #1161 ajoute dans un autre bloc). Ni éclat UI du lot 4
 >       ni `-skip-testing:JoleneUITests/StagingLot4Tests` : aucune classe n'existe encore, et la garde des éclats exige
 >       des classes réelles. La première tranche qui livre un XCUITest crée l'éclat (job `ui-lot1` ou job du lot 4,
 >       D19). T1c n'ajoute pas de XCUITest (`DemoNavigationSecondaireTests` reporté : rien n'est navigable avant le
