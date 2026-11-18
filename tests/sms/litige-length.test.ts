@@ -34,7 +34,9 @@ function buildLitigeSmsContent(
 ): string {
   switch (typeNotif) {
     case 'LITIGE_OUVERTURE':
-      return `un litige ${data.type_litige ?? ''} a été ouvert sur votre mission. Répondez sous 72h.`;
+      // Promesse chiffrée de délai retirée (20261118152150, suite D12) :
+      // l'escalade salariée se fait après 5 jours ouvrés, pas 72 h.
+      return `un litige ${data.type_litige ?? ''} a été ouvert sur votre mission.`;
     case 'REMBOURSEMENT_CONFIRME':
       return `remboursement de ${data.montant ?? '?'}€ effectué (avoir ${data.numero_avoir ?? ''}). Délai bancaire 2-5j.`;
     case 'LITIGE_RAPPEL_J1':
