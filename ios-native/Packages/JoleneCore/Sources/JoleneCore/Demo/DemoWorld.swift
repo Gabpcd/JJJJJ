@@ -58,7 +58,9 @@ public enum DemoWorld {
         let profil: @Sendable () async throws -> SoignantProfile = { try await profilDemo.projectionLot1(context.profile) }
         // T6c : la confirmation de présence lit la mission servie (attribution de session comprise) et pose
         // `presence_confirmee_le` dans son acteur ; le détail la relit par la surcouche `presences`.
-        let lecturePresence = DemoMissionsGateway(profil: profil, missionsAttribuees: { await candidature.missionsAttribuees() })
+        // Intégration de la vague B (T6c × T7) : une mission annulée pendant la session n'est plus confirmable.
+        let lecturePresence = DemoMissionsGateway(profil: profil, missionsAttribuees: { await candidature.missionsAttribuees() },
+                                                  missionsAnnulees: { await candidature.missionsAnnulees() })
         let presence = DemoPresenceGateway(clock: FixedClock(fixedNow), mission: { id in
             try await lecturePresence.mission(id: id, context: context)?.record
         })
@@ -66,14 +68,16 @@ public enum DemoWorld {
             auth: auth,
             role: DemoRoleGateway(),
             missions: DemoMissionsGateway(profil: profil, missionsAttribuees: { await candidature.missionsAttribuees() },
-                                          presences: { await presence.surcouche($0) }),
+                                          presences: { await presence.surcouche($0) },
+                                          missionsAnnulees: { await candidature.missionsAnnulees() }), // T7
             clock: FixedClock(fixedNow),
             dashboard: DemoDashboardGateway(clock: FixedClock(fixedNow)),
             candidature: candidature,                   // T6a (annulations : T7)
             presence: presence,                         // T6c
             favoris: DemoFavorisGateway(clock: FixedClock(fixedNow)),
             mesMissions: DemoMesMissionsGateway(clock: FixedClock(fixedNow),
-                                                candidaturesDeSession: { await candidature.candidaturesDeSession() }),
+                                                candidaturesDeSession: { await candidature.candidaturesDeSession() },
+                                                missionsAnnulees: { await candidature.missionsAnnulees() }), // T7
             compte: DemoAccountGateway(),
             audit: DemoAuditGateway(),
             flags: DemoFlagsGateway(surcharges: drapeaux),
@@ -215,6 +219,10 @@ public struct DemoMissionsGateway: MissionsPort {
     /// T6c : présence confirmée pendant la session (`DemoPresenceGateway.surcouche`), appliquée à chaque détail relu :
     /// l'écran relit ce que le monde démo a écrit, jamais une date posée localement.
     private let presences: @Sendable (MissionRecord) async -> MissionRecord
+    /// Lot 1, T7 (revue B8 de #1156, M1) : missions annulées par le profil fictif pendant la session
+    /// (`DemoCandidatureGateway.missionsAnnulees`) : servies comme le serveur les remet en ligne (`OUVERTE`, sans
+    /// soignant assigné), en détail comme dans Explorer.
+    private let missionsAnnulees: @Sendable () async -> Set<String>
 
     public init(missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
         // T6c : mission de recette de la confirmation de présence, ouverte par lien seulement (hors listes).
@@ -222,11 +230,21 @@ public struct DemoMissionsGateway: MissionsPort {
             + (DemoPresenceGateway.missionJ1().map { [$0] } ?? [])
     }, profil: @escaping @Sendable () async throws -> SoignantProfile = { DemoWorld.context.profile },
        missionsAttribuees: @escaping @Sendable () async -> Set<String> = { [] },
-       presences: @escaping @Sendable (MissionRecord) async -> MissionRecord = { $0 }) {
+       presences: @escaping @Sendable (MissionRecord) async -> MissionRecord = { $0 },
+       missionsAnnulees: @escaping @Sendable () async -> Set<String> = { [] }) {
         self.missionsAssignees = missionsAssignees
         self.profil = profil
         self.missionsAttribuees = missionsAttribuees
         self.presences = presences
+        self.missionsAnnulees = missionsAnnulees
+    }
+
+    /// Mission remise en ligne par une annulation (`fn_annuler_mission_soignant`, `fn_annuler_candidature_soignant`).
+    static func remiseEnLigne(_ fixture: DemoFixtures.MissionFixture) -> DemoFixtures.MissionFixture {
+        var ouverte = fixture
+        ouverte.record.statut = "OUVERTE"
+        ouverte.record.soignantAssigneId = nil
+        return ouverte
     }
 
     public func profile(userId: String) async throws -> SoignantProfile? {
@@ -237,7 +255,11 @@ public struct DemoMissionsGateway: MissionsPort {
         try check(context)
         let (missions, etablissements) = try chargerFixtures()
         let attribuees = await missionsAttribuees()
-        return MissionBusiness.filter(missions.filter { !attribuees.contains($0.record.id) }
+        let annulees = await missionsAnnulees()
+        // T7 : une mission assignée annulée pendant la session est remise en ligne, comme sur le serveur.
+        let remises = annulees.isEmpty ? []
+            : try missionsAssignees().filter { annulees.contains($0.record.id) }.map(Self.remiseEnLigne)
+        return MissionBusiness.filter((missions.filter { !attribuees.contains($0.record.id) } + remises)
                                         .map { enrich($0, context: context, etablissements: etablissements) },
                                       context: context, filters: filters)
     }
@@ -255,6 +277,10 @@ public struct DemoMissionsGateway: MissionsPort {
         }
         // T3 : les missions ASSIGNEE du tableau de bord démo s'ouvrent en détail, sans entrer dans Explorer.
         guard var fixture = try missionsAssignees().first(where: { $0.record.id == id }) else { return nil }
+        // T7 : annulée pendant la session → relue remise en ligne, jamais encore « assignée » (ni confirmée, T6c).
+        if await missionsAnnulees().contains(id) {
+            return enrich(Self.remiseEnLigne(fixture), context: context, etablissements: etablissements)
+        }
         fixture.record = await presences(fixture.record)
         return enrich(fixture, context: context, etablissements: etablissements)
     }

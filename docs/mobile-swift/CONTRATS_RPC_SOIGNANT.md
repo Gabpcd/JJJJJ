@@ -1035,7 +1035,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_upsert_token_push"("p_token" "text", "p_
   retrait d'une candidature `EN_ATTENTE` est servi par la gateway (`{libre:true, points:0}`) mais n'a aucun point d'entrée
   natif (le web n'en a pas sur le détail). Justificatif : reçu `RecuJustificatif` (domaine `justificatif`, `prepared →
   started → stored → rattache | non_rattache`, `not_sent`), dépôt `SupabaseJustificatifStorage` (`upsert: false`), dépôt
-  incertain réconcilié par HEAD, reçu `stored` repris sans second dépôt.
+  incertain réconcilié par HEAD, reçu `stored` repris sans second dépôt. Revue B8 de #1156 : `STATUT_INVALIDE` déclenche
+  une relecture de la candidature avant tout message (`ANNULEE` relue = annulation relue après une réponse perdue) ;
+  `URGENCE_MEDICALE` n'est jamais envoyé par l'app (décision 21 de `LOT1_PLAN.md` §7), bien que le serveur l'admette
+  et le stocke (`candidatures.motif_refus`, `evenements_score_soignant.details`, `journaux_audit`).
 - **Signature SQL** (`supabase/schema/public.sql` l.17541) :
 
 ```sql

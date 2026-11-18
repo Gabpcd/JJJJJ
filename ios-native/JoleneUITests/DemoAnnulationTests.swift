@@ -6,11 +6,14 @@ import XCTest
 /// Ce que ces tests prouvent (niveau 2), et seulement cela :
 /// - mission attribuée sans candidature (`demo-assignee-001`) : confirmation simple, sans message de pénalité (barème
 ///   client non porté, décision 4), puis « Participation annulée. Ton score sera mis à jour. » (verbatim web, HARD STOP
-///   n°4) après la relecture, et le bouton disparaît ;
-/// - candidature retenue (`demo-assignee-003`) : modale de candidature, textes du web verbatim (avertissement sur les
-///   données de santé, case des conséquences, notification de l'établissement), bouton inactif tant que motif,
-///   explication de 20 caractères et case ne sont pas remplis, justificatif choisi (sélecteur démo, PNG fictif) puis
-///   « Candidature annulée. » après la relecture, modale refermée.
+///   n°4) après la relecture, le bouton disparaît et la mission relue n'a plus d'entrée des présences ; reprise : Mes
+///   missions relue sans la mission, puis détail rouvert depuis Explorer (mission remise en ligne) sans bouton
+///   d'annulation ni annonce (revue B8 de #1156, M1) ;
+/// - candidature retenue (`demo-assignee-003`) : modale de candidature, cinq motifs sans « 🏥 Urgence médicale »
+///   (décision 21), textes du web verbatim (avertissement sur les données de santé, case des conséquences, notification
+///   de l'établissement), bouton inactif tant que motif, explication de 20 caractères et case ne sont pas remplis,
+///   justificatif choisi (sélecteur démo, PNG fictif) puis « Candidature annulée. » après la relecture, modale refermée,
+///   Mes missions relue sans la mission.
 /// Le reçu durable (journalisé avant le dépôt, 403 → `not_sent`, dépôt incertain réconcilié par HEAD, reprise sans second
 /// dépôt, journal illisible bloquant) est prouvé au niveau 1 (`AnnulationModelTests`, `RecuJustificatifTests`,
 /// `SupabaseJustificatifStorageTests`) ; la photothèque et Fichiers réels relèvent de l'appareil (niveau 5).
@@ -49,7 +52,26 @@ final class DemoAnnulationTests: JoleneUITestCase {
         XCTAssertTrue(succes.label.hasSuffix(Self.participationAnnulee), "texte verbatim du web : \(succes.label)")
         XCTAssertFalse(element("annulation-ouvrir").exists, "plus de bouton après l'annulation")
         XCTAssertFalse(element("annulation-mission-oui").exists)
+        // Revue B8 de #1156, M1 : la mission est relue (remise en ligne) ; rien de l'état « assignée » ne reste affiché.
+        require("La mission relue n'offre plus l'entrée des présences") { !self.element("mission-presences").exists }
         record("\(proofPrefix)-annulation-mission-annulee")
+
+        // Reprise : Mes missions relue (la mission quitte « À venir »), puis réouverture du détail depuis Explorer, où la
+        // mission est remise en ligne : ni bouton d'annulation, ni annonce, ni entrée des présences.
+        retourAMesMissions(sans: "demo-assignee-001")
+        tabButton("tab-explorer", label: "Explorer").tap()
+        let liste = element("missions-list")
+        let carte = element("mission-row-demo-assignee-001")
+        require("Explorer liste la mission remise en ligne", timeout: 30) { self.containerVisible(liste) && carte.exists }
+        scrollTo(carte, in: liste)
+        carte.tap()
+        let titre = element("mission-detail-title")
+        require("Le détail rouvert est rendu", timeout: 30) { self.containerVisible(self.element("mission-detail")) && titre.exists }
+        XCTAssertEqual(titre.label, "Démonstration · Mission assignée 1")
+        requireAbsence("Aucun bouton d'annulation à la réouverture") { self.element("annulation-ouvrir").exists }
+        XCTAssertFalse(element("annulation-succes").exists, "aucune annonce rejouée")
+        XCTAssertFalse(element("mission-presences").exists, "aucune entrée des présences")
+        record("\(proofPrefix)-annulation-mission-rouverte")
     }
 
     func testAnnulationCandidatureAvecJustificatifRelue() throws {
@@ -71,6 +93,10 @@ final class DemoAnnulationTests: JoleneUITestCase {
         let motif = element("annulation-motif-PROBLEME_TRANSPORT")
         scrollTo(motif, in: feuille)
         XCTAssertEqual(motif.label, "🚗 Problème de transport")
+        // Décision 21 (`LOT1_PLAN.md` §7, `docs/CONFORMITE.md` §1.4) : « 🏥 Urgence médicale » n'est pas proposé.
+        XCTAssertFalse(element("annulation-motif-URGENCE_MEDICALE").exists)
+        XCTAssertFalse(textContaining("Urgence médicale").exists)
+        XCTAssertTrue(element("annulation-motif-AUTRE").exists, "les autres motifs du web restent")
         motif.tap()
         require("Le motif est sélectionné") { motif.isSelected }
 
@@ -113,9 +139,23 @@ final class DemoAnnulationTests: JoleneUITestCase {
         XCTAssertTrue(succes.label.hasSuffix(Self.candidatureAnnulee), "0 point serveur : \(succes.label)")
         XCTAssertFalse(element("annulation-ouvrir").exists, "plus de bouton après l'annulation")
         record("\(proofPrefix)-annulation-candidature-annulee")
+        // Reprise (revue B8 de #1156, M1) : Mes missions relue, la mission retenue quitte « À venir ».
+        retourAMesMissions(sans: "demo-assignee-003")
     }
 
     // MARK: Étapes
+
+    /// Retour du détail à Mes missions, relue à son apparition : la mission annulée n'est plus « À venir ».
+    private func retourAMesMissions(sans id: String) {
+        let retour = app.navigationBars.buttons.firstMatch
+        require("Le bouton retour est disponible") { self.visible(retour) }
+        retour.tap()
+        require("Mes missions est relue sans la mission annulée", timeout: 30) {
+            self.containerVisible(self.element("mes-missions-screen")) && !self.element("mes-missions-loading").exists
+                && !self.element("mes-mission-\(id)").exists && self.element("mes-missions-scroll").exists
+        }
+        record("\(proofPrefix)-annulation-mes-missions-relue")
+    }
 
     private func signInDemo() {
         let scroll = element("login-scroll")

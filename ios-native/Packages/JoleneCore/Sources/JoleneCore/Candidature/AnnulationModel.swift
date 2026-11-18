@@ -104,7 +104,8 @@ public final class AnnulationModel: ObservableObject {
             return
         }
         guard let motif, !envoiEnCours else { return }
-        if case .bloquee = issue, fichier != nil || justificatifDejaDepose != nil { return }
+        // Journal illisible (revue B8 de #1156, m7) : aucune annulation depuis la modale, la voie est le web.
+        if case .bloquee = issue { return }
         guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
         envoiEnCours = true
         defer { envoiEnCours = false }
@@ -137,9 +138,19 @@ public final class AnnulationModel: ObservableObject {
         let texteEnvoye = AnnulationRules.texteNettoye(texte)
         let chemin = recu?.chemin
         do {
-            let outcome = try await bounded(timeout: controller.resolutionTimeout) {
+            var outcome = try await bounded(timeout: controller.resolutionTimeout) {
                 try await port.annulerCandidature(id: id, motif: motif.rawValue, texte: texteEnvoye, justificatifPath: chemin,
                                                   context: context)
+            }
+            // Revue B8 de #1156, m2 : après une réponse perdue, le nouvel essai rend `STATUT_INVALIDE` si le serveur avait
+            // déjà annulé. La candidature est relue avant tout message : `ANNULEE` relue = annulation relue (conséquences
+            // inconnues de l'app, donc « Candidature annulée. »), sinon le refus du serveur s'affiche tel quel.
+            if case let .refusee(code, _) = outcome, code == AnnulationRules.codeStatutInvalide {
+                let missionId = self.missionId
+                let relue = try await bounded(timeout: controller.resolutionTimeout) {
+                    try await port.candidature(missionId: missionId, context: context)
+                }
+                if AnnulationRules.candidatureAnnuleeRelue(relue, id: id) { outcome = .annulee(points: nil, libre: nil, contestable: nil) }
             }
             guard await controller.epoch == snapshot.epoch else { return }
             switch outcome {
