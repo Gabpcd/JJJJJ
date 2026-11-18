@@ -68,6 +68,13 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   `Appareil.localisation` (`LocalisationProfilAppareil`, JoleneCore), et l'implémentation isolée
   `LocalisationProfilProvisoire` est supprimée (garde `FusionLocalisationLot2Tests`) : un seul service de
   localisation dans l'app (`LocationService`).
+- Lot 4 (T1, `docs/mobile-swift/LOT4_PLAN.md` §2.2, décision D1) : treize champs additifs dans un bloc « Lot 4 »
+  du corps de `Gateways` (stubs de `Ports/Lot4Ports.swift`, même message `UnwiredPorts.erreur(port:tranche:lot:)`),
+  entrées ajoutées à `unwiredPorts` et liste attendue unique `DemoWorldTests.portsEnAttenteLot4` ; câblage par
+  fabriques de domaine, un fichier par domaine et par monde (`Demo/Lot4/Demo<Domaine>Gateway.swift`,
+  `Lot4/Supabase<Domaine>Factory.swift`), appelées une seule fois par `DemoLot4.cabler` et `SupabaseLot4.cabler` :
+  chaque tranche ne touche que sa fabrique et sa ligne de `portsEnAttenteLot4`. Le port des évaluations reçues est le
+  champ `evaluationsRecues` (aucun littéral Swift ne vaut exactement le nom d'une table de notations, garde-fou 18).
 
 ## 3. Aucun succès fabriqué
 
