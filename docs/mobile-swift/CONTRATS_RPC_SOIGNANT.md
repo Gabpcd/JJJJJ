@@ -1375,11 +1375,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_param_bool"("p_cle" "text", "p_defaut" b
   réponse ci-dessous = un test de `SupabasePresenceGatewayTests`), relecture `missions.presence_confirmee_le` ;
   règle d'affichage `PresenceRules.bloc` ; écran `ConfirmationPresenceBloc` du détail ; démo `DemoPresenceGateway`.
 - **Usage prévu** : Bloc « Confirme ta présence » d'une mission `ASSIGNEE` au soignant dont le début est à
-  moins de 48 h (`PresenceRules.blocDu(mission:, now:)`, seuil 48 h en dur comme le web
+  moins de 48 h (`PresenceRules.bloc(_:userId:maintenant:)`, seuil 48 h en dur comme le web
   `DetailMissionSoignant.tsx` l.1414-1417, alors que le cron lit `confirmation_j1_max_h` = 36 h : écart
   consigné hors lot). Cible du push `RAPPEL_MISSION` (`/soignant/missions/{id}`, `?relance=1` ignoré).
   Relecture obligatoire `mission(id:)` → `presence_confirmee_le` non nul ; **jamais de date posée localement**.
-- **Signature SQL** (`supabase/schema/public.sql` l.24608) :
+- **Signature SQL** (`supabase/schema/public.sql` l.24992) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_id" "uuid") RETURNS "jsonb"
@@ -1392,7 +1392,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
 - **Signature TypeScript** : `Args: { p_mission_id: string }` ; `Returns: Json`.
 - **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}` (inexistante ou non assignée au
   soignant) ; `{error:"Cette mission n'est plus active."}` (statut ∉ `ASSIGNEE, EN_COURS`) ; `{success:true}`.
-  Valeurs JSON réelles, à copier telles quelles dans les vecteurs Swift : le littéral SQL de la l.24617 double
+  Valeurs JSON réelles, à copier telles quelles dans les vecteurs Swift : le littéral SQL de la l.25001 double
   l'apostrophe (échappement SQL `''`), ce doublement n'existe pas dans la réponse.
   **Aucune idempotence ni fenêtre serveur** : chaque appel réécrit `presence_confirmee_le = NOW()` et insère
   une notification étab `SYSTEM` « Présence confirmée ✓ » → bouton désactivé pendant l'appel, masqué après
@@ -1406,9 +1406,15 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   l'accusé `{success:true}`**, l'issue reste incertaine — la RPC écrit `presence_confirmee_le = NOW()` sans condition
   avant de répondre (l.25003-25010) et rien ne la remet à NULL, une lecture sans la date ne prouve donc pas la
   non-réception (PRINCIPES §4) ; seule la réouverture de la mission recrée le bloc ; **après un délai dépassé sans
-  accusé**, la confirmation est tenue pour non enregistrée et l'envoi redevient possible. Mission relue qui n'est plus
-  attribuée au soignant : plus rien à confirmer. Relecture en échec → l'issue reste incertaine. Aucun nouvel appel tant
-  qu'une relecture n'a pas conclu.
+  accusé** (revue B8 delta de #1158, m7) : `bounded` annule la tâche locale, pas la requête déjà partie, et la RPC peut
+  encore valider côté PostgREST ; une relecture sans la date ne conclut « non enregistrée » que si elle a lieu **au moins
+  30 s après le début de l'appel expiré** (`ConfirmationPresenceModel.delaiAvantConclusion`, horloge des gateways) ;
+  avant, l'issue reste incertaine (« Actualiser »). Conclue, l'écran affiche le constat neutre « Votre confirmation n'a
+  pas été enregistrée. » (m8, hors HARD STOP) et l'envoi redevient possible. Mission relue qui n'est plus attribuée au
+  soignant : plus rien à confirmer ; après l'accusé, le verrou d'envoi reste posé jusqu'à la relecture de l'écran (m6).
+  Relecture en échec → l'issue reste incertaine. Aucun nouvel appel tant qu'une relecture n'a pas conclu. Risque résiduel
+  accepté : une RPC encore en vol plus de 30 s après son départ ; une erreur de transport autre qu'un délai reste
+  « Confirmation impossible. », comme le web.
 - **Preuve STAGING** : `missions.presence_confirmee_le` relu + `notifications` étab `SYSTEM` « Présence
   confirmée ✓ » relue (T11).
 - **Chaînes d'écran** (reprises à l'identique du web, `DetailMissionSoignant.tsx` l.1419-1438 ; cibles des
@@ -1418,7 +1424,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   « Confirmation impossible. » (refus sans message et erreur d'envoi seulement, jamais après un succès serveur). Titre et description du bloc, tutoyés sur le web, passent au vouvoiement
   (décision 9, `LOT1_PLAN.md` §3 T6c).
 - **Titre du push** (pas un texte d'écran) : « Ta mission demain — Je serai là ✓ » est le titre du push
-  serveur `RAPPEL_MISSION` (`fn_demander_confirmations_presence` l.29924/29934) ; aucune assertion d'écran ne le cherche.
+  serveur `RAPPEL_MISSION` (`fn_demander_confirmations_presence` l.30357/30367) ; aucune assertion d'écran ne le cherche.
 
 ## fn_desactiver_mon_token_push
 
