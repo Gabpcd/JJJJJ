@@ -114,7 +114,8 @@ final class AppContainer: ObservableObject {
         let inscription = BoiteLiensInscription()
         liensInscription = inscription
         let liens = DeepLinkCoordinator(taps: boite, inscription: inscription, estDemo: environment.mode == .demo,
-                                        effaceur: environment.mode == .demo ? nil : EffaceurDonneesSafari())
+                                        effaceur: environment.mode == .demo ? nil : EffaceurDonneesSafari(),
+                                        espaceEtablissement: .pour(mode: environment.mode)) // lot 5, T2b
         self.liens = liens
         theme = PreferenceThemeModel(stockage: environment.mode == .demo ? MemoireStockageAppareil() : UserDefaultsStockageAppareil())
         selectionAvatarDemo = environment.mode == .demo
