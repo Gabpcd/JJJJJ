@@ -693,6 +693,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoEtabSessionTests \
             -skip-testing:JoleneUITests/DemoEtabAccueilTests \
             -skip-testing:JoleneUITests/DemoEtabLiensTests \
+            -skip-testing:JoleneUITests/DemoEtabMissionsTests \
             -skip-testing:JoleneUITests/DemoMesMissionsTests \
             -skip-testing:JoleneUITests/DemoCandidatureTests \
             -skip-testing:JoleneUITests/DemoConfirmationPresenceTests \
@@ -718,6 +719,8 @@ jobs:
         # Lancé même si un éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
         # L1-T4b : DemoFavorisTests, rangée ici par #1149 faute de douzième éclat, tourne depuis l'intégration de la
         # vague B dans l'éclat « lot1-accueil-explorer » du job `ui-lot1` (favoris d'Explorer).
+        # L5-T5 : DemoEtabMissionsTests (deux tests, liste et détail des missions établissement) rejoint les liens
+        # établissement du lot 5, dans la place laissée par DemoFavorisTests (trois tests) : aucun douzième éclat.
         if: always() && steps.build.outcome == 'success'
         timeout-minutes: 30
         env:
@@ -752,6 +755,7 @@ jobs:
             -only-testing:JoleneUITests/DemoPresencesTests \
             -only-testing:JoleneUITests/DemoPointageEtatsTests \
             -only-testing:JoleneUITests/DemoEtabLiensTests \
+            -only-testing:JoleneUITests/DemoEtabMissionsTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1166,7 +1170,7 @@ jobs:
             // des éclats des lots 2 et 3 doivent toutes avoir démarré (un -only-testing mal nommé n exécute rien).
             const eclats = [
               { nom: "socle", code: process.env.CODE_SOCLE, classes: [] },
-              { nom: "presences", code: process.env.CODE_PRESENCES, classes: ["DemoPresencesTests", "DemoPointageEtatsTests", "DemoEtabLiensTests"] },
+              { nom: "presences", code: process.env.CODE_PRESENCES, classes: ["DemoPresencesTests", "DemoPointageEtatsTests", "DemoEtabLiensTests", "DemoEtabMissionsTests"] },
               { nom: "pointage", code: process.env.CODE_POINTAGE, classes: ["DemoPointageTests"] },
               { nom: "documents", code: process.env.CODE_DOCUMENTS, classes: ["DemoDocumentsTests", "DemoPresenceDetailTests"] },
               { nom: "contrats", code: process.env.CODE_CONTRATS, classes: ["DemoContratsTests", "DemoSignatureContratTests"] },

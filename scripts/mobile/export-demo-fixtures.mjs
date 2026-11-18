@@ -23,6 +23,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { matricePermissionsEtablissement, SOURCES } from './check-rpc-contracts.mjs';
 import { fixturesLot4 } from './demo-fixtures/lot4.mjs';
+import { buildDemoEtabMissions } from './demo-etab-missions.mjs';
 
 export const FIXED_NOW = '2026-11-02T00:00:00.000Z';
 export const MISSION_COUNT = 30;
@@ -1266,6 +1267,24 @@ export function buildDemoSwipe(now = new Date(FIXED_NOW), missions = buildDemoMi
   return { fixed_now: now.toISOString(), missions: lignes };
 }
 
+/**
+ * Lot 5, T5 : missions de l'établissement démo (`demo-etab-missions.mjs`). Le soignant assigné principal est le
+ * soignant fictif du monde soignant (`demo-soignant`), projeté sur les clés de `fn_soignant_pour_etablissement`
+ * décodées depuis son profil du tableau de bord démo : une seule identité par identifiant (état dérivé).
+ */
+export function buildDemoEtabMissionsFixture(now = new Date(FIXED_NOW)) {
+  const profil = buildDemoDashboard(now).dashboard.profil;
+  return buildDemoEtabMissions({
+    now,
+    etablissementId: DEMO_ETABLISSEMENTS[0].id,
+    soignantPrincipal: {
+      id: DEMO_PROFILE.user_id, prenom: profil.prenom, nom: profil.nom, nom_anonymise: false,
+      profession: profil.profession, telephone: profil.telephone, numero_rpps: profil.numero_rpps,
+      score_fiabilite: profil.score_fiabilite, total_missions_terminees: profil.total_missions_terminees,
+    },
+  });
+}
+
 export async function buildFixtures() {
   const contrats = buildDemoContrats(await chargerMoteurContrat());
   const fixtures = {
@@ -1292,6 +1311,7 @@ export async function buildFixtures() {
     'demo-favoris.json': buildDemoFavoris(), // lot 1, T4b
     'demo-mes-missions.json': buildDemoMesMissions(), // lot 1, T5
     'demo-swipe.json': buildDemoSwipe(), // lot 4, T3a
+    'demo-etab-missions.json': buildDemoEtabMissionsFixture(), // lot 5, T5
   };
   // Lot 4 (L4-T1c) : un module par domaine (scripts/mobile/demo-fixtures/), aucun fichier d'un lot antérieur réécrit.
   return { ...fixtures, ...fixturesLot4({ now: new Date(FIXED_NOW) }, fixtures) };

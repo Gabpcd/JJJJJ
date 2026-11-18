@@ -31,6 +31,8 @@ struct EtablissementTabView: View {
     @State private var selection: Tab = .accueil
     /// Piles des onglets (T2b) : un lien remet la pile de son onglet à la racine avant d'empiler son écran.
     @State private var chemins: [Tab: [EtabDestination]] = [:]
+    /// Lot 5, T5 : filtre `?statut=` d'un lien vers la liste des missions, rejoué par `EtabMissionsScreen`.
+    @State private var demandeMissions = DemandeFiltreMissions()
 
     init(container: AppContainer, session: SessionStore, snapshot: EtablissementSessionSnapshot) {
         self.container = container
@@ -51,7 +53,7 @@ struct EtablissementTabView: View {
             .accessibilityIdentifier("tab-etab-accueil")
 
             NavigationStack(path: chemin(.missions)) {
-                EtabMissionsRoot(session: session, snapshot: snapshot)
+                EtabMissionsRoot(session: session, snapshot: snapshot, demande: demandeMissions)
                     .destinationsEtablissement(snapshot: snapshot, session: session)
             }
             .ecranEtablissement(.missions, snapshot: snapshot, session: session)
@@ -108,9 +110,14 @@ struct EtablissementTabView: View {
     }
 
     /// Sélectionne l'onglet de `cible`, remet sa pile à la racine et y empile l'écran livré éventuel (liens, T2b ;
-    /// actions de l'Accueil, T4).
+    /// actions de l'Accueil, T4). La liste des missions sans écran empilé rejoue le filtre `?statut=` de la cible
+    /// (T5) : l'action « candidatures » de l'Accueil (`/etablissement/missions?statut=OUVERTE`) ouvre Missions sur
+    /// « Ouvertes », comme un lien (intégration vague C, revues B8 de #1160 et #1162, m1).
     private func ouvrir(_ cible: CibleEtablissement) {
         selection = cible.onglet
         chemins[cible.onglet] = cible.destination.map { [$0] } ?? []
+        if cible.onglet == .missions, cible.destination == nil {
+            demandeMissions = DemandeFiltreMissions(statut: cible.statut, jeton: demandeMissions.jeton + 1)
+        }
     }
 }

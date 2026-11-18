@@ -172,7 +172,9 @@ public enum PublicationOutcome: Equatable, Sendable {
 // MARK: - Missions (T5)
 
 /// Mission de l'établissement, colonnes sans montant (§2.8 : ni `taux_horaire_base`, ni `total_brut`,
-/// ni `net_a_payer`). Contrat minimal posé par T1, complété par T5.
+/// ni `net_a_payer`, ni `taux_rist_plafonne`, ni `rist_plafond_applique`). Contrat posé par T1, complété
+/// par T5 (colonnes de `ListeMissions.tsx` l.85 moins les montants, plus `type_contrat_recherche` et
+/// `mode_attribution`) ; décodage tolérant dans `Etablissement/Missions/EtabMission.swift`.
 public struct EtabMissionResume: Equatable, Sendable, Identifiable {
     public var id: String
     public var intitule: String
@@ -184,50 +186,97 @@ public struct EtabMissionResume: Equatable, Sendable, Identifiable {
     /// Lu avant toute acceptation (D25).
     public var typeContratRecherche: String?
     public var estUrgente: Bool?
+    /// Établissement de la ligne relue : comparé au contexte confirmé, jamais une valeur de filtre (T5).
+    public var etablissementId: String?
+    public var description: String?
+    public var service: String?
+    public var niveauUrgence: Int?
+    public var soignantAssigneId: String?
+    /// `CANDIDATURE` ou `PREMIER_ARRIVE` (aiguillage des candidatures, T5/T6).
+    public var modeAttribution: String?
+    public var creeLe: String?
 
     public init(id: String, intitule: String, statut: String? = nil, debutLe: String? = nil, finLe: String? = nil,
                 nbCreneaux: Int? = nil, professionRequise: String? = nil, typeContratRecherche: String? = nil,
-                estUrgente: Bool? = nil) {
+                estUrgente: Bool? = nil, etablissementId: String? = nil, description: String? = nil, service: String? = nil,
+                niveauUrgence: Int? = nil, soignantAssigneId: String? = nil, modeAttribution: String? = nil,
+                creeLe: String? = nil) {
         self.id = id; self.intitule = intitule; self.statut = statut; self.debutLe = debutLe; self.finLe = finLe
         self.nbCreneaux = nbCreneaux; self.professionRequise = professionRequise
         self.typeContratRecherche = typeContratRecherche; self.estUrgente = estUrgente
+        self.etablissementId = etablissementId; self.description = description; self.service = service
+        self.niveauUrgence = niveauUrgence; self.soignantAssigneId = soignantAssigneId
+        self.modeAttribution = modeAttribution; self.creeLe = creeLe
     }
 }
 
-/// Page de missions de l'établissement (pages de 50, comme `MissionsPage`).
+/// Page de missions de l'établissement (pages de 50, comme `MissionsPage`). Lecture **cumulative** comme
+/// « Mes missions » (T5) : la page `n` rend les missions 0…(n + 1) × 50 − 1 d'un seul tenant, la liste est
+/// remplacée, jamais complétée localement.
 public struct EtabMissionsPage: Equatable, Sendable {
     public static let taille = 50
 
     public var missions: [EtabMissionResume]
     public var page: Int
     public var aSuivre: Bool
+    /// Compteurs par statut de tout l'établissement (web l.161-166) ; `nil` si leur lecture a échoué
+    /// (rendu partiel : les pastilles s'affichent sans nombre, comme le web qui retombe à 0).
+    public var compteurs: EtabMissionsCompteurs?
+    /// Candidatures `EN_ATTENTE` par mission `OUVERTE` de la page (web l.120-138) ; vide sans la
+    /// permission `candidatures` (jamais lue) ou si la lecture a échoué.
+    public var candidaturesEnAttente: [String: Int]
+    /// Créneaux PREVISIONNEL hors pause relus par mission (pager exact du lot 0).
+    public var creneaux: [String: [MissionSlot]]
 
-    public init(missions: [EtabMissionResume], page: Int, aSuivre: Bool) {
-        self.missions = missions; self.page = page; self.aSuivre = aSuivre
+    public init(missions: [EtabMissionResume], page: Int, aSuivre: Bool, compteurs: EtabMissionsCompteurs? = nil,
+                candidaturesEnAttente: [String: Int] = [:], creneaux: [String: [MissionSlot]] = [:]) {
+        self.missions = missions; self.page = page; self.aSuivre = aSuivre; self.compteurs = compteurs
+        self.candidaturesEnAttente = candidaturesEnAttente; self.creneaux = creneaux
     }
 }
 
-/// Détail d'une mission de l'établissement (contrat minimal, complété par T5).
+/// Détail d'une mission de l'établissement (T5). Le planning est une lecture secondaire : son échec est
+/// porté par `erreurPlanning` (le web affiche « Planning détaillé momentanément indisponible »), la mission reste lue.
 public struct EtabMissionDetail: Equatable, Sendable {
     public var mission: EtabMissionResume
     public var creneaux: [MissionSlot]
     public var soignantAssigneId: String?
+    /// Candidatures `EN_ATTENTE` d'une mission `OUVERTE` en mode `CANDIDATURE` (web l.590-596) ; `nil`
+    /// sans la permission `candidatures`, hors de ce cas, ou si la lecture a échoué.
+    public var candidaturesEnAttente: Int?
+    /// Message de l'échec de lecture du planning, verbatim ; `nil` si le planning a été relu.
+    public var erreurPlanning: String?
 
-    public init(mission: EtabMissionResume, creneaux: [MissionSlot], soignantAssigneId: String?) {
+    public init(mission: EtabMissionResume, creneaux: [MissionSlot], soignantAssigneId: String?,
+                candidaturesEnAttente: Int? = nil, erreurPlanning: String? = nil) {
         self.mission = mission; self.creneaux = creneaux; self.soignantAssigneId = soignantAssigneId
+        self.candidaturesEnAttente = candidaturesEnAttente; self.erreurPlanning = erreurPlanning
     }
 }
 
 /// `fn_soignant_pour_etablissement` (l.57155), tel que servi : un `null` SQL (soignant supprimé) est
-/// rendu `nil` par le port (« Soignant indisponible »), jamais un profil vide. Contrat minimal (T5).
+/// rendu `nil` par le port (« Soignant indisponible »), jamais un profil vide. Complété par T5 avec ce
+/// que le détail du web affiche (l.1070-1130). **Jamais décodés** : `note_moyenne`, `nb_evaluations`
+/// (D8), `type_exercice` (le régime vient de la mission), `internat` (D10), `etudiant_details`, `bio`.
 public struct SoignantPourEtab: Equatable, Sendable, Identifiable {
     public var id: String
     public var prenom: String?
     public var nom: String?
     public var profession: String?
+    /// Vrai hors relation contractuelle : `nom` est alors l'initiale (« D. »).
+    public var nomAnonymise: Bool?
+    /// Servi seulement pour une mission du jour ou du lendemain (l.57194).
+    public var telephone: String?
+    public var numeroRpps: String?
+    public var scoreFiabilite: Int?
+    public var totalMissionsTerminees: Int?
 
-    public init(id: String, prenom: String?, nom: String?, profession: String?) {
+    public init(id: String, prenom: String?, nom: String?, profession: String?, nomAnonymise: Bool? = nil,
+                telephone: String? = nil, numeroRpps: String? = nil, scoreFiabilite: Int? = nil,
+                totalMissionsTerminees: Int? = nil) {
         self.id = id; self.prenom = prenom; self.nom = nom; self.profession = profession
+        self.nomAnonymise = nomAnonymise; self.telephone = telephone; self.numeroRpps = numeroRpps
+        self.scoreFiabilite = scoreFiabilite; self.totalMissionsTerminees = totalMissionsTerminees
     }
 }
 

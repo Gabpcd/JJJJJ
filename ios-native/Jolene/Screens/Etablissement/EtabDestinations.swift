@@ -25,8 +25,8 @@ struct EtabDestinationEcran: View {
 
     @ViewBuilder private var contenu: some View {
         switch destination {
-        case .detailMission:
-            provisoire("Mission", "Le détail de la mission arrive dans une prochaine version de l'application.") // T5
+        case let .detailMission(id):
+            EtabMissionDetailScreen(missionId: id, session: session, snapshot: snapshot) // T5
         case .candidatures:
             provisoire("Candidatures", "Les candidatures de la mission arrivent dans une prochaine version de l'application.") // T6
         case .pointage:

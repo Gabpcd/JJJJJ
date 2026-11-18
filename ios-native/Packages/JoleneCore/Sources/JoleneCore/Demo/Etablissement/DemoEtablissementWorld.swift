@@ -50,7 +50,7 @@ public enum DemoEtablissementWorld {
         EtablissementGateways(
             session: DemoEtabSessionGateway(configuration: configuration, identite: identite),
             dashboard: DemoEtabDashboardGateway(),        // T4
-            missions: UnwiredEtabMissionsPort(),          // T5
+            missions: DemoEtabMissionsGateway(),          // T5
             candidatures: UnwiredEtabCandidaturesPort(),  // T6
             pointage: UnwiredEtabPointagePort(),          // T7
             presences: UnwiredEtabPresencesPort(),        // T8
