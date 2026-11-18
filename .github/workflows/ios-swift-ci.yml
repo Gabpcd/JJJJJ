@@ -628,6 +628,7 @@ jobs:
             -skip-testing:JoleneUITests/StagingConnexionTests \
             -skip-testing:JoleneUITests/DemoPresencesTests \
             -skip-testing:JoleneUITests/DemoPointageEtatsTests \
+            -skip-testing:JoleneUITests/DemoFavorisTests \
             -skip-testing:JoleneUITests/DemoPointageTests \
             -skip-testing:JoleneUITests/DemoPresenceDetailTests \
             -skip-testing:JoleneUITests/DemoLiensLot2Tests \
@@ -664,6 +665,9 @@ jobs:
       - name: test-without-building — éclat presences (XCUITest Présences, états et reprise du pointage ; liens établissement du lot 5) (${{ matrix.format }})
         id: tests_presences
         # Lancé même si un éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
+        # L1-T4b : DemoFavorisTests (favoris d'Explorer, deux XCUITest) rangée ici, sans nouvel éclat (onze au plus) :
+        # éclat le moins chargé hors gel connu au run 44204757942 (8,9 / 11,5 / 11,6 min, iphone / ipad-portrait /
+        # ipad-landscape) ; le socle, éclat des lots 0 et 1, mesurait 22,4 min en paysage au même run (seuil de 20 min).
         if: always() && steps.build.outcome == 'success'
         timeout-minutes: 30
         env:
@@ -698,6 +702,7 @@ jobs:
             -only-testing:JoleneUITests/DemoPresencesTests \
             -only-testing:JoleneUITests/DemoPointageEtatsTests \
             -only-testing:JoleneUITests/DemoEtabLiensTests \
+            -only-testing:JoleneUITests/DemoFavorisTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1111,7 +1116,7 @@ jobs:
             // des éclats des lots 2 et 3 doivent toutes avoir démarré (un -only-testing mal nommé n exécute rien).
             const eclats = [
               { nom: "socle", code: process.env.CODE_SOCLE, classes: [] },
-              { nom: "presences", code: process.env.CODE_PRESENCES, classes: ["DemoPresencesTests", "DemoPointageEtatsTests", "DemoEtabLiensTests"] },
+              { nom: "presences", code: process.env.CODE_PRESENCES, classes: ["DemoPresencesTests", "DemoPointageEtatsTests", "DemoEtabLiensTests", "DemoFavorisTests"] },
               { nom: "pointage", code: process.env.CODE_POINTAGE, classes: ["DemoPointageTests"] },
               { nom: "documents", code: process.env.CODE_DOCUMENTS, classes: ["DemoDocumentsTests", "DemoPresenceDetailTests"] },
               { nom: "contrats", code: process.env.CODE_CONTRATS, classes: ["DemoContratsTests", "DemoSignatureContratTests"] },
