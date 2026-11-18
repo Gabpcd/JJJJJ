@@ -22,7 +22,9 @@ public protocol DashboardPort: Sendable {
 public protocol CandidaturePort: Sendable {
     /// POSTULER / ACCEPTER / PROPOSITION. `creneaux` est le planning exact confirmé à l'écran
     /// (`p_creneaux_confirmes`) ; un planning modifié depuis l'affichage est un refus
-    /// `planningAReconfirmer`, jamais un renvoi.
+    /// `planningAReconfirmer`, jamais un renvoi. PROPOSITION : `choixContrat` porte le contrat de la
+    /// proposition relu par l'écran (`CandidatureRules.contratProposition`) ; hors `LIBERAL`, l'appel lève
+    /// `CandidatureVerrou.renvoiWeb` sans rien envoyer (attestation hebdomadaire non portée, `LOT1_PLAN.md` §3 T6b).
     func confirmer(action: ActionPlanning, missionId: String, creneaux: [CreneauConfirmePayload], message: String?,
                    choixContrat: String?, candidatureId: String?, context: MissionReadContext) async throws -> CandidatureOutcome
     func refuserProposition(candidatureId: String, context: MissionReadContext) async throws

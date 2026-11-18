@@ -53,9 +53,12 @@ public struct SoignantProfile: Codable, Equatable, Sendable {
     // NULL → nil ; jamais lues depuis `fn_mon_profil_soignant_complet` (lot 3).
     public var prenom: String? = nil
     public var nom: String? = nil
-    public var dateNaissance: String? = nil
-    public var telephone: String? = nil
     public var rppsVerifie: Bool? = nil
+    /// Minimisation (revue B8 de T6a, m6) : `date_naissance` et `telephone` ne servent qu'à la complétude ;
+    /// seule leur présence est gardée (`!!valeur` du web : NULL ou vide → faux), jamais la valeur, qui
+    /// n'entre pas dans l'état de session. nil si la colonne n'a pas été lue. Jamais encodées.
+    public var dateNaissanceRenseignee: Bool? = nil
+    public var telephoneRenseigne: Bool? = nil
 
     public init(id: String, profession: String, adresseLat: Double? = nil, adresseLng: Double? = nil,
                 rayonDeplacementKm: Double? = nil, tousDocumentsValides: Bool = false, typeContrat: String? = nil,
@@ -76,9 +79,14 @@ public struct SoignantProfile: Codable, Equatable, Sendable {
         case typesContratAcceptes = "types_contrat_acceptes"
         case typeExercice = "type_exercice"
         case tauxHoraireMinimum = "taux_horaire_minimum"
-        case prenom, nom, telephone
-        case dateNaissance = "date_naissance"
+        case prenom, nom
         case rppsVerifie = "rpps_verifie"
+    }
+
+    /// Colonnes lues pour leur seule présence (hors `CodingKeys` : jamais encodées).
+    private enum ClesPresence: String, CodingKey {
+        case dateNaissance = "date_naissance"
+        case telephone
     }
 
     /// Nullabilité réelle du schéma (`soignants.profession` et `tous_documents_valides` sont
@@ -98,9 +106,16 @@ public struct SoignantProfile: Codable, Equatable, Sendable {
         tauxHoraireMinimum = try c.decodeIfPresent(Double.self, forKey: .tauxHoraireMinimum)
         prenom = try c.decodeIfPresent(String.self, forKey: .prenom)
         nom = try c.decodeIfPresent(String.self, forKey: .nom)
-        dateNaissance = try c.decodeIfPresent(String.self, forKey: .dateNaissance)
-        telephone = try c.decodeIfPresent(String.self, forKey: .telephone)
         rppsVerifie = try c.decodeIfPresent(Bool.self, forKey: .rppsVerifie)
+        let presence = try decoder.container(keyedBy: ClesPresence.self)
+        dateNaissanceRenseignee = try Self.renseigne(presence, .dateNaissance)
+        telephoneRenseigne = try Self.renseigne(presence, .telephone)
+    }
+
+    /// nil si la clé est absente ; sinon vrai pour un texte non vide (la valeur n'est pas conservée).
+    private static func renseigne(_ c: KeyedDecodingContainer<ClesPresence>, _ cle: ClesPresence) throws -> Bool? {
+        guard c.contains(cle) else { return nil }
+        return !(try c.decodeIfPresent(String.self, forKey: cle) ?? "").isEmpty
     }
 }
 

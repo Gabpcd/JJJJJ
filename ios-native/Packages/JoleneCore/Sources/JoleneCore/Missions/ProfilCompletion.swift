@@ -2,7 +2,8 @@ import Foundation
 
 /// Port de `calculerCompletionProfil` (`src/lib/profil-soignant.ts` l.32-153), soft-gate client de la
 /// candidature (décision 3, `LOT1_PLAN.md` §2.6). Source unique : le `SoignantProfile` relu par le SELECT
-/// direct étendu (`MissionQuery.profileSelect`) ; aucune donnée de `fn_mon_profil_soignant_complet`.
+/// direct étendu (`MissionQuery.profileSelect`) ; aucune donnée de `fn_mon_profil_soignant_complet`. Date de
+/// naissance et téléphone n'y sont lus que pour leur présence (`dateNaissanceRenseignee`, `telephoneRenseigne`).
 ///
 /// Obligatoires : prénom, nom, date de naissance, téléphone, et RPPS vérifié sauf pour les professions
 /// sans RPPS (`ProfessionsRpps.sansRpps`, `PROFESSIONS_SANS_RPPS` du web) ; une profession vide garde le
@@ -41,8 +42,8 @@ public struct ProfilCompletion: Equatable, Sendable {
         var items: [Item] = [
             Item(cle: "prenom", label: "Prénom", rempli: rempli(profil.prenom), obligatoire: true, ordre: 1),
             Item(cle: "nom", label: "Nom", rempli: rempli(profil.nom), obligatoire: true, ordre: 2),
-            Item(cle: "date_naissance", label: "Date de naissance", rempli: rempli(profil.dateNaissance), obligatoire: true, ordre: 3),
-            Item(cle: "telephone", label: "Téléphone", rempli: rempli(profil.telephone), obligatoire: true, ordre: 4),
+            Item(cle: "date_naissance", label: "Date de naissance", rempli: profil.dateNaissanceRenseignee == true, obligatoire: true, ordre: 3),
+            Item(cle: "telephone", label: "Téléphone", rempli: profil.telephoneRenseigne == true, obligatoire: true, ordre: 4),
         ]
         if !sansRpps {
             items.append(Item(cle: "rpps", label: "RPPS vérifié", rempli: profil.rppsVerifie == true, obligatoire: true, ordre: 5))
