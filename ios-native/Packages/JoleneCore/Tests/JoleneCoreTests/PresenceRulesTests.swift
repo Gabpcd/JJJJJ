@@ -153,6 +153,21 @@ final class ConfirmationPresenceModelTests: XCTestCase {
         }
     }
 
+    /// Mission relue remise en ligne (plus attribuée au soignant de la session).
+    private struct MissionsDesattribuees: MissionsPort {
+        let base: MissionsPort
+        func profile(userId: String) async throws -> SoignantProfile? { try await base.profile(userId: userId) }
+        func listMissions(context: MissionReadContext, filters: MissionFilters) async throws -> [Mission] {
+            try await base.listMissions(context: context, filters: filters)
+        }
+        func mission(id: String, context: MissionReadContext) async throws -> Mission? {
+            var relue = try await base.mission(id: id, context: context)
+            relue?.record.statut = "OUVERTE"
+            relue?.record.soignantAssigneId = nil
+            return relue
+        }
+    }
+
     private func modele(_ port: any PresencePort, missions: ((MissionsPort) -> MissionsPort)? = nil,
                         delai: TimeInterval = SessionController.defaultResolutionTimeout) async throws
         -> (ConfirmationPresenceModel, MissionRecord) {
@@ -240,9 +255,10 @@ final class ConfirmationPresenceModelTests: XCTestCase {
         XCTAssertEqual(port.appels, 1)
     }
 
-    /// La relecture conclut : date relue → confirmée, bouton masqué ; relue sans la date → l'envoi redevient possible
-    /// (la relecture prouve que la confirmation n'a pas été enregistrée, PRINCIPES §4).
-    func testRelectureConcluanteLeveLIncertitude() async throws {
+    /// Après l'accusé `{success:true}` : date relue → confirmée, bouton masqué ; relue sans la date → l'issue RESTE
+    /// incertaine (revue B8 de #1158, M1) : la RPC écrit la date sans condition avant de répondre, une lecture sans la date
+    /// ne prouve pas la non-réception (PRINCIPES §4). « Actualiser » ne conclut pas non plus ; un seul envoi en tout.
+    func testRelectureApresAccuseConfirmeOuResteIncertaine() async throws {
         let incertaine = PresenceOutcome.envoyeeNonRelue(message: PresenceRules.Textes.envoyeeNonRelue)
         let port = PortEspion(.success(incertaine))
         let (confirmee, mission) = try await modele(port, missions: { MissionsRelues(base: $0, date: Self.dateRelue) })
@@ -255,13 +271,42 @@ final class ConfirmationPresenceModelTests: XCTestCase {
         XCTAssertFalse(encore)
         XCTAssertEqual(port.appels, 1)
 
-        let nonEnregistree = PortEspion(.success(incertaine))
-        let (sansDate, missionSansDate) = try await modele(nonEnregistree, missions: { MissionsRelues(base: $0, date: nil) })
+        let accuse = PortEspion(.success(incertaine))
+        let (sansDate, missionSansDate) = try await modele(accuse, missions: { MissionsRelues(base: $0, date: nil) })
         _ = await sansDate.confirmer()
-        XCTAssertFalse(sansDate.relectureRequise, "relecture concluante : la confirmation n'a pas été enregistrée")
-        XCTAssertEqual(sansDate.issue, .refus("Confirmation impossible."))
+        XCTAssertTrue(sansDate.relectureRequise, "après l'accusé, une relecture sans la date ne conclut pas")
+        XCTAssertEqual(sansDate.issue, .incertaine(PresenceRules.Textes.envoyeeNonRelue))
+        XCTAssertNotEqual(sansDate.issue, .refus("Confirmation impossible."))
         XCTAssertEqual(sansDate.bloc(missionSansDate), .aConfirmer)
-        _ = await sansDate.confirmer()
-        XCTAssertEqual(nonEnregistree.appels, 2, "nouvel envoi permis après une relecture qui conclut")
+        let relue = await sansDate.relire()
+        XCTAssertTrue(relue)
+        XCTAssertTrue(sansDate.relectureRequise, "« Actualiser » sans la date : toujours incertaine")
+        XCTAssertEqual(sansDate.issue, .incertaine(PresenceRules.Textes.envoyeeNonRelue))
+        let encore2 = await sansDate.confirmer()
+        XCTAssertFalse(encore2, "aucun envoi")
+        XCTAssertEqual(accuse.appels, 1, "un seul appel à l'envoi")
+    }
+
+    /// Délai dépassé SANS accusé, puis mission relue sans la date : la confirmation n'a pas été enregistrée, l'envoi
+    /// redevient possible (même convention que `ProfilEditionModel` après un délai sans écriture côté serveur).
+    func testDelaiDepassePuisRelectureSansDateRendLEnvoiPossible() async throws {
+        let port = PortLent()
+        let (model, mission) = try await modele(port, missions: { MissionsRelues(base: $0, date: nil) }, delai: 1)
+        _ = await model.confirmer()
+        XCTAssertFalse(model.relectureRequise, "délai sans accusé, relue sans la date : non enregistrée")
+        XCTAssertNil(model.issue, "aucun message d'échec ni d'incertitude : le bouton revient")
+        XCTAssertEqual(model.bloc(mission), .aConfirmer)
+        XCTAssertEqual(port.appels, 1)
+        _ = await model.confirmer()
+        XCTAssertEqual(port.appels, 2, "nouvel envoi permis")
+    }
+
+    /// Mission relue qui n'est plus attribuée au soignant : plus rien à confirmer, l'incertitude est levée.
+    func testRelectureDUneMissionPlusAttribueeLeveLIncertitude() async throws {
+        let port = PortEspion(.success(.envoyeeNonRelue(message: PresenceRules.Textes.envoyeeNonRelue)))
+        let (model, _) = try await modele(port, missions: { MissionsDesattribuees(base: $0) })
+        _ = await model.confirmer()
+        XCTAssertFalse(model.relectureRequise)
+        XCTAssertNil(model.issue)
     }
 }
