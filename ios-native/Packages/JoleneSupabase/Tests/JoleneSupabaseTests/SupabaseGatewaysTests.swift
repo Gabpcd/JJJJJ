@@ -68,6 +68,7 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(supabase.contains("pointage"), "lot 2 T3 câble le pointage")
         XCTAssertFalse(supabase.contains("contrats"), "lot 2, T8 câble les contrats")
         XCTAssertFalse(supabase.contains("notation"), "lot 2, T5a câble la notation")
+        XCTAssertFalse(supabase.contains("contestation"), "lot 2, T5b câble la contestation")
         XCTAssertFalse(supabase.contains("push"), "lot 3, T4 câble le push")
         XCTAssertFalse(supabase.contains("notifications"), "lot 3, T5 câble le centre de notifications")
         XCTAssertFalse(supabase.contains("profil"), "lot 3, T9 câble le profil")
@@ -92,13 +93,13 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(gateways.unwiredPorts.contains("pointage"), "témoin posé")
         SupabaseGateways.câblerLot2(&gateways, client: TestClient.make())
         XCTAssertTrue(gateways.pointage is SupabasePointageGateway, "T3 câble le pointage")
-        XCTAssertTrue(gateways.contestation is UnwiredContestationPort, "T5b")
+        XCTAssertTrue(gateways.contestation is SupabaseContestationGateway, "T5b câble la contestation")
         XCTAssertTrue(gateways.notation is SupabaseNotationGateway, "T5a câble la notation")
         XCTAssertTrue(gateways.documents is SupabaseDocumentsGateway, "T6 câble les justificatifs")
         XCTAssertTrue(gateways.contrats is SupabaseContratsGateway, "T8 câble les contrats")
         // Fusion des lots 2 et 3 : le bloc du lot 3 suit celui du lot 2 dans `unwiredPorts` ; seuls les noms du lot 2 comptent.
         XCTAssertEqual(gateways.unwiredPorts.filter(["pointage", "contestation", "notation", "documents", "contrats"].contains),
-                       ["contestation"])
+                       [], "lot 2 : les cinq ports sont câblés (T5b en dernier)")
         XCTAssertFalse(gateways.unwiredPorts.contains("notation"))
         XCTAssertFalse(gateways.unwiredPorts.contains("pointage"))
         XCTAssertFalse(gateways.unwiredPorts.contains("documents"))
