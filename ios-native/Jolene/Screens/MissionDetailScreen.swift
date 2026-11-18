@@ -73,6 +73,8 @@ struct MissionDetailScreen: View {
                 AvisLectureEtoiles(favoris: favoris, session: session, contexte: .detail(missionId: mission.id),
                                    identifier: "mission-detail-favoris-lecture")
             }
+            // Lot 1, T6c : confirmation de présence J-1, en haut du détail (cible du push `RAPPEL_MISSION`, revue B8 m1).
+            ConfirmationPresenceBloc(mission: mission, session: session, snapshot: snapshot) { await model.load() }
             card {
                 detailRow("Établissement", value: mission.etablissement?.nom ?? "Établissement", identifier: "mission-detail-etablissement")
                 if let lieu = lieu(mission) { detailRow("Adresse", value: lieu, identifier: "mission-detail-lieu") }
@@ -118,8 +120,6 @@ struct MissionDetailScreen: View {
             }
             // Lot 1, T6b : candidature (POSTULER, ACCEPTER, proposition), état relu côté serveur.
             CandidatureSection(mission: mission, session: session, snapshot: snapshot) { await model.load() }
-            // Lot 1, T6c : confirmation de présence J-1 (cible du push `RAPPEL_MISSION`), état relu.
-            ConfirmationPresenceBloc(mission: mission, session: session, snapshot: snapshot) { await model.load() }
         }
         .padding(JoleneSpacing.lg)
         .frame(maxWidth: 640)
