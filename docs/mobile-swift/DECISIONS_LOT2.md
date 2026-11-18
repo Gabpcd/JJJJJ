@@ -161,6 +161,13 @@
     `DemoPresenceDetailTests` dans un seul éclat de domaine). Durées par format : section « Recette CI » de `REVUES_LOT2.md`.
     Fusion du lot 3 (13 novembre 2026) : `DemoPresenceDetailTests` passe de « presences » à « documents » (« presences »
     atteignait 28,7 min de tests en paysage et dépassait ses 30 min sur les trois formats au run 43349573460).
+    Intégration de la vague B du lot 1 (18 novembre 2026) : le job `ui` ayant atteint son plafond de onze éclats, les
+    XCUITest du lot 1 tournent dans un job par format, `ui-lot1` (« UI lot 1 — <format> », même mécanique : un
+    build-for-testing, la vérification du Package.resolved, des éclats bornés à 30 min, le résumé et le redémarrage après
+    gel). Éclats : « lot1-missions » (`DemoMesMissionsTests`, `DemoCandidatureTests`, `DemoConfirmationPresenceTests`,
+    `DemoAnnulationTests`) et « lot1-accueil-explorer » (`DemoAccueilTests`, `DemoExplorerTests`, `DemoFavorisTests`,
+    sortie de « presences »). Le socle, qui mesurait 14,6 / 17,3 / 22,4 min au run 44204757942, les saute tous : environ
+    5 / 5 / 8 min attendues, plus `DemoContestationTests`. Durées des éclats du lot 1 à reporter au premier run vert.
 23. **Journal de reçus : celui du lot 1 T7 est réutilisé** ; si T1 du lot 2 démarrait avant son intégration, T1
     livrerait le journal générique et T7 le consommerait sans changer son API. Ordonnancement retenu : T1 attendait
     l'intégration de T7 et démarrait dans la vague 1 du lot 2, pas dans la vague 0.

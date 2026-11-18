@@ -439,7 +439,8 @@ jobs:
     # plafond ≥ somme des éclats + 15 min = 345 ; check-rpc-contracts-lot3 : plafond ≥ 30 × 11 + 20 = 350). Durées
     # mesurées très en dessous de leurs délais (lot 2 seul : environ 1 h 20 ; lot 3 seul : environ 1 h 35, socle compris) :
     # le délai d'un éclat tombe avant celui du job sauf si presque tous les éclats atteignent leurs 30 min. Au-delà de
-    # onze éclats, scinder le job (un job par lot) plutôt que d'ajouter un éclat.
+    # onze éclats, scinder le job (un job par lot) plutôt que d'ajouter un éclat : c'est fait pour le lot 1 (job
+    # `ui-lot1`, « UI lot 1 — <format> », intégration de la vague B du 18/11/2026), qui reçoit ses XCUITest.
     # Gel iPhone (DECISIONS_LOT2, « Gel iPhone CI — 16/11/2026 ») : après un éclat gelé ou hors délai, le simulateur est
     # redémarré au début de l'éclat suivant, borné à 2 min dans ses 30 min (scripts/mobile/ios-ci-gel-simulateur.sh) :
     # aucune étape ni minute ajoutée au plafond.
@@ -597,7 +598,12 @@ jobs:
       # au-delà de 30 min en iPad paysage. Plafond de onze éclats atteint : DemoEtabSessionTests (5) rejoint
       # « lot3-profil-photo » (7 / 7 / 12 min) et DemoEtabLiensTests (5) rejoint « presences » (8 / 11 / 11 min), chacun
       # estimé sous 20 min (décision 22), plutôt que les dix dans un seul éclat.
-      - name: test-without-building — éclat socle (JoleneCoreTests, JoleneDesignTests, XCUITest lots 0 et 1) (${{ matrix.format }})
+      # Lot 1 (intégration de la vague B, 18/11/2026) : ses XCUITest tournent dans le job `ui-lot1`, jamais dans le socle.
+      # Le socle mesurait 14,6 / 17,3 / 22,4 min (iphone / ipad-portrait / ipad-landscape) au run 44204757942, dont
+      # DemoAccueilTests (3,5 / 3,5 / 5,0 min) et DemoExplorerTests (5,8 / 8,5 / 9,6 min) : sans eux, environ 5 / 5 / 8 min
+      # mesurées, plus DemoContestationTests (lot 2, T5b, une seule méthode), sous 20 min. DemoFavorisTests sort de
+      # « presences » pour le même job. Garde : tests/node/ios-swift-ci-eclats.node.mjs.
+      - name: test-without-building — éclat socle (JoleneCoreTests, JoleneDesignTests, XCUITest hors éclat — lot 0, compte, contestation) (${{ matrix.format }})
         id: tests
         # Même condition que les dix autres éclats (revue B8 de la vague 5, m1) : une dérive du Package.resolved (étape
         # précédente) ne masque plus JoleneCoreTests, JoleneDesignTests ni les XCUITest des lots 0 et 1.
@@ -628,7 +634,6 @@ jobs:
             -skip-testing:JoleneUITests/StagingConnexionTests \
             -skip-testing:JoleneUITests/DemoPresencesTests \
             -skip-testing:JoleneUITests/DemoPointageEtatsTests \
-            -skip-testing:JoleneUITests/DemoFavorisTests \
             -skip-testing:JoleneUITests/DemoPointageTests \
             -skip-testing:JoleneUITests/DemoPresenceDetailTests \
             -skip-testing:JoleneUITests/DemoLiensLot2Tests \
@@ -650,6 +655,13 @@ jobs:
             -skip-testing:JoleneUITests/DemoStripeTests \
             -skip-testing:JoleneUITests/DemoEtabSessionTests \
             -skip-testing:JoleneUITests/DemoEtabLiensTests \
+            -skip-testing:JoleneUITests/DemoMesMissionsTests \
+            -skip-testing:JoleneUITests/DemoCandidatureTests \
+            -skip-testing:JoleneUITests/DemoConfirmationPresenceTests \
+            -skip-testing:JoleneUITests/DemoAnnulationTests \
+            -skip-testing:JoleneUITests/DemoAccueilTests \
+            -skip-testing:JoleneUITests/DemoExplorerTests \
+            -skip-testing:JoleneUITests/DemoFavorisTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -665,9 +677,8 @@ jobs:
       - name: test-without-building — éclat presences (XCUITest Présences, états et reprise du pointage ; liens établissement du lot 5) (${{ matrix.format }})
         id: tests_presences
         # Lancé même si un éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
-        # L1-T4b : DemoFavorisTests (favoris d'Explorer, trois XCUITest) rangée ici, sans nouvel éclat (onze au plus) :
-        # éclat le moins chargé hors gel connu au run 44204757942 (8,9 / 11,5 / 11,6 min, iphone / ipad-portrait /
-        # ipad-landscape) ; le socle, éclat des lots 0 et 1, mesurait 22,4 min en paysage au même run (seuil de 20 min).
+        # L1-T4b : DemoFavorisTests, rangée ici par #1149 faute de douzième éclat, tourne depuis l'intégration de la
+        # vague B dans l'éclat « lot1-accueil-explorer » du job `ui-lot1` (favoris d'Explorer).
         if: always() && steps.build.outcome == 'success'
         timeout-minutes: 30
         env:
@@ -702,7 +713,6 @@ jobs:
             -only-testing:JoleneUITests/DemoPresencesTests \
             -only-testing:JoleneUITests/DemoPointageEtatsTests \
             -only-testing:JoleneUITests/DemoEtabLiensTests \
-            -only-testing:JoleneUITests/DemoFavorisTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1116,7 +1126,7 @@ jobs:
             // des éclats des lots 2 et 3 doivent toutes avoir démarré (un -only-testing mal nommé n exécute rien).
             const eclats = [
               { nom: "socle", code: process.env.CODE_SOCLE, classes: [] },
-              { nom: "presences", code: process.env.CODE_PRESENCES, classes: ["DemoPresencesTests", "DemoPointageEtatsTests", "DemoEtabLiensTests", "DemoFavorisTests"] },
+              { nom: "presences", code: process.env.CODE_PRESENCES, classes: ["DemoPresencesTests", "DemoPointageEtatsTests", "DemoEtabLiensTests"] },
               { nom: "pointage", code: process.env.CODE_POINTAGE, classes: ["DemoPointageTests"] },
               { nom: "documents", code: process.env.CODE_DOCUMENTS, classes: ["DemoDocumentsTests", "DemoPresenceDetailTests"] },
               { nom: "contrats", code: process.env.CODE_CONTRATS, classes: ["DemoContratsTests", "DemoSignatureContratTests"] },
@@ -1291,6 +1301,413 @@ jobs:
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-profil-photo.xcresult
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-revenus.xcresult
             ios-native/test-results/${{ matrix.format }}/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Éteindre le simulateur
+        if: always()
+        run: xcrun simctl shutdown all || true
+
+  ui-lot1:
+    name: UI lot 1 — ${{ matrix.format }}
+    runs-on: macos-26
+    # Intégration de la vague B du lot 1 (18/11/2026) : le job `ui` a atteint son plafond de onze éclats (commentaire de
+    # son en-tête) et son socle frôlait sa limite (22,4 min en iPad paysage au run 44204757942, seuil de 20 min de la
+    # décision 22 de DECISIONS_LOT2). Les XCUITest du lot 1 tournent ici, en parallèle du job `ui`, avec la même mécanique :
+    # un build-for-testing par format, la même vérification du Package.resolved, des éclats -only-testing bornés à
+    # 30 min, le résumé xcresult (aucun succès fabriqué), le relevé des attentes bloquées et le redémarrage du simulateur
+    # après un éclat gelé (scripts/mobile/ios-ci-gel-simulateur.sh, borné à 2 min dans l'éclat suivant : aucune étape ni
+    # minute ajoutée au plafond). Ce job n'exécute ni JoleneCoreTests ni JoleneDesignTests (socle du job `ui`). Job hors
+    # checks requis de la branche, comme `ui`. Plafond : 25 (build) + 1 + 1 (Package.resolved) + 2 × 30 (éclats) = 87 min,
+    # marge de préparation comprise sous 120 min. Gardes : tests/node/ios-swift-ci-eclats.node.mjs.
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { format: iphone, famille: iphone, orientation: portrait }
+          - { format: ipad-portrait, famille: ipad, orientation: portrait }
+          - { format: ipad-landscape, famille: ipad, orientation: landscape }
+    env:
+      JOLENE_UI_FORMAT: ${{ matrix.format }}
+      JOLENE_UI_FAMILLE: ${{ matrix.famille }}
+      JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+      JOLENE_UI_OUTPUT: ${{ github.workspace }}/ios-native/test-results/lot1-${{ matrix.format }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Sélectionner Xcode 26.4.1 sans repli
+        run: |
+          sudo xcode-select -s "$JOLENE_XCODE_APP/Contents/Developer"
+          version="$(xcodebuild -version)"
+          echo "$version"
+          [ "$(echo "$version" | sed -n 1p)" = "$JOLENE_XCODE_VERSION_ATTENDUE" ] || { echo "::error::Xcode attendu : $JOLENE_XCODE_VERSION_ATTENDUE"; exit 1; }
+          echo "$version" | grep -q "$JOLENE_XCODE_BUILD_ATTENDU" || { echo "::error::Build Xcode attendu : $JOLENE_XCODE_BUILD_ATTENDU"; exit 1; }
+      - name: Choisir le simulateur iOS 26.2 (iPhone 17 ou iPad (A16)) sans installer de SDK
+        id: simulateur
+        run: |
+          runtimes="$(xcrun simctl list runtimes --json)"
+          devices="$(xcrun simctl list devices available --json)"
+          # Réutilise la politique du pilote (mobile-native/scripts/ios-ci-toolchain.mjs) sans la modifier.
+          udid="$(RUNTIMES="$runtimes" DEVICES="$devices" node --input-type=module -e '
+            import { selectIosCiSimulator } from "./mobile-native/scripts/ios-ci-toolchain.mjs";
+            const { device } = selectIosCiSimulator(JSON.parse(process.env.RUNTIMES).runtimes, JSON.parse(process.env.DEVICES).devices, process.env.JOLENE_UI_FAMILLE);
+            process.stdout.write(device.udid);
+          ')"
+          echo "Simulateur retenu : $udid ($JOLENE_UI_FAMILLE, iOS $JOLENE_IOS_RUNTIME)"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl shutdown all || true
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
+      - name: Cache des paquets SPM clonés par xcodebuild
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ runner.temp }}/spm-cloned
+          key: spm-xcodebuild-${{ runner.os }}-xcode26.4.1-${{ hashFiles('ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'ios-native/Packages/*/Package.swift') }}
+          restore-keys: |
+            spm-xcodebuild-${{ runner.os }}-xcode26.4.1-
+      - name: build-for-testing (scheme Jolene, sans signature) — une fois par job
+        id: build
+        # Délai propre au build (seconde revue fraîche de T4b, m6) : un build bloqué s'arrête ici, pas au
+        # plafond du job (premier run vert : quelques minutes ; marge large).
+        timeout-minutes: 25
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+        run: |
+          mkdir -p "$JOLENE_UI_OUTPUT"
+          debut=$(date +%s)
+          set +e
+          xcodebuild build-for-testing \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/build-for-testing.log" 2>&1
+          code=$?
+          set -e
+          duree=$(( $(date +%s) - debut ))
+          grep -E "error: |warning: .*(JOLENE|Jolene)|\*\* TEST BUILD" "$JOLENE_UI_OUTPUT/build-for-testing.log" | tail -n 40 || true
+          echo "duree_build_s=$duree" >> "$GITHUB_OUTPUT"
+          echo "Durée build-for-testing : ${duree}s (mesure pour la porte go/no-go, docs/mobile-swift/PORTE_LOT0.md)"
+          grep -q "TEST BUILD SUCCEEDED" "$JOLENE_UI_OUTPUT/build-for-testing.log" || { echo "::error::build-for-testing a échoué (code $code). Voir build-for-testing.log dans l'artefact."; exit 1; }
+      - name: Package.resolved de l'app inchangé après la résolution SPM
+        id: package_resolved
+        # Revue fraîche B8 n°1 de L3-T15, m4 : build-for-testing résout les paquets (Sentry Cocoa et supabase-swift en
+        # version exacte, dépendances transitives épinglées). Un Package.resolved réécrit voudrait dire que la CI a testé
+        # un graphe que le dépôt ne décrit pas ; l'étape échoue toujours dans ce cas (jamais de continue-on-error).
+        # Revue B8 de la vague 5, M1 : la référence est le fichier qu'écrit Xcode 26.4.1 (SwiftPM 6.2), celui du TestFlight
+        # (`-onlyUsePackageVersionsFromResolvedFile`, ios-native-testflight.yml). SwiftPM 6.2 y élague
+        # opentelemetry-swift-core et swift-atomics (trait OpenTelemetry de supabase-swift, désactivé), qu'Xcode 16.4
+        # épingle ; aucun des deux n'épingle KSCrash (SENTRY_IOS.md §1). Diagnostic sans relancer ni attendre la fin du job : le diff est imprimé ici, le fichier
+        # résolu et ce diff sont copiés dans $JOLENE_UI_OUTPUT/package-resolved/, puis publiés aussitôt par l'étape
+        # suivante dans l'artefact « package-resolved-lot1-<format>-<sha> », lisible pendant que les éclats tournent.
+        # **Correctif : committer tel quel le Package.resolved de cet artefact** (ou corriger project.yml si une version a
+        # changé), puis relancer la CI. Délai de 1 min, plus 1 min pour l'artefact, hors éclats : le plafond du job reste
+        # tenu (25 + 1 + 1 + 2 × 30 = 87 ≤ 120 pour ce job). Garde : tests/node/ios-swift-ci-eclats.node.mjs.
+        timeout-minutes: 1
+        run: |
+          fichier=ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          if ! git diff --exit-code -- "$fichier"; then
+            diagnostic="$JOLENE_UI_OUTPUT/package-resolved"
+            mkdir -p "$diagnostic"
+            git diff -- "$fichier" > "$diagnostic/Package.resolved.diff" || true
+            if [ -f "$fichier" ]; then cp "$fichier" "$diagnostic/Package.resolved"; else echo "Package.resolved absent après la résolution SPM." > "$diagnostic/Package.resolved.absent"; fi
+            { xcodebuild -version; echo "Commit testé : ${{ github.event.pull_request.head.sha || github.sha }}"; } > "$diagnostic/toolchain.txt" 2>&1 || true
+            echo "::error::Package.resolved de l'app réécrit par la résolution SPM d'Xcode 26.4.1 (diff ci-dessus). Correctif : committer tel quel le Package.resolved de l'artefact package-resolved-lot1-$JOLENE_UI_FORMAT-<sha> (ou corriger project.yml si une version a changé), puis relancer la CI (docs/mobile-swift/SENTRY_IOS.md §1)."
+            exit 1
+          fi
+      - name: Publier le Package.resolved résolu par la CI (diagnostic, sur échec seulement)
+        # Immédiatement après la vérification : l'artefact est lisible dès qu'elle échoue, même si le job est annulé ensuite
+        # (journaux perdus à l'annulation, run 43948577842). Il ne change jamais le statut : la vérification a déjà échoué.
+        if: failure() && steps.package_resolved.outcome == 'failure'
+        timeout-minutes: 1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: package-resolved-lot1-${{ matrix.format }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ios-native/test-results/lot1-${{ matrix.format }}/package-resolved/
+          retention-days: 7
+          if-no-files-found: warn
+      # Éclats du lot 1 (décision 22 de DECISIONS_LOT2 : un éclat par domaine, estimé sous 20 min, borné à 30 min ; chaque
+      # classe nommée par -only-testing dans un seul éclat de tout le workflow et sautée par le socle du job `ui`).
+      # « lot1-missions » : Mes missions (T5), candidature (T6b), confirmation de présence (T6c) et annulation (T7), le
+      # parcours d'une mission du soignant ; « lot1-accueil-explorer » : Accueil (T3), Explorer (T4a) et ses favoris (T4b,
+      # écran empilé sur l'onglet Explorer). Durées : DemoAccueilTests 3,5 / 3,5 / 5,0 min et DemoExplorerTests 5,8 / 8,5 /
+      # 9,6 min (iphone / ipad-portrait / ipad-landscape, socle du run 44204757942), DemoMesMissionsTests 8,2 / 7,3 /
+      # 7,9 min (run 41563081981) ; DemoFavorisTests (3 méthodes), DemoCandidatureTests (4), DemoConfirmationPresenceTests
+      # (2) et DemoAnnulationTests (2) n'ont encore aucune mesure (runs de leurs PR annulés ou en file), estimées à
+      # 4-6, 4-7, 1-2 et 4-6 min au prorata des classes mesurées. D'où environ 13-20 min pour « lot1-missions » et 13-21 min
+      # pour « lot1-accueil-explorer » en paysage : DemoFavorisTests n'est pas dans « lot1-missions », qui aurait atteint
+      # 21-26 min. À re-mesurer au premier run vert ; au-delà de 20 min, ouvrir un troisième éclat dans ce job.
+      - name: test-without-building — éclat lot1-missions (XCUITest Mes missions, candidature, confirmation de présence, annulation) (${{ matrix.format }})
+        id: tests_lot1_missions
+        # Même condition que les éclats du job `ui` : une dérive du Package.resolved ne masque pas les XCUITest du lot 1.
+        if: always() && steps.build.outcome == 'success'
+        # Délai propre à l'étape : un simulateur ou un runner xctest bloqué est interrompu ici, pas par le timeout du job.
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          # Variables lues par le runner XCUITest via ProcessInfo (préfixe TEST_RUNNER_ retiré par xcodebuild).
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+        run: |
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot1-missions.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoMesMissionsTests \
+            -only-testing:JoleneUITests/DemoCandidatureTests \
+            -only-testing:JoleneUITests/DemoConfirmationPresenceTests \
+            -only-testing:JoleneUITests/DemoAnnulationTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot1-missions.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot1-missions.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot1-missions) : code $code"
+      - name: test-without-building — éclat lot1-accueil-explorer (XCUITest Accueil, Explorer et favoris) (${{ matrix.format }})
+        id: tests_lot1_accueil_explorer
+        # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          # Variables lues par le runner XCUITest via ProcessInfo (préfixe TEST_RUNNER_ retiré par xcodebuild).
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: lot1-missions
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot1_missions.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot1_missions.outputs.code }}
+        run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot1-accueil-explorer || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot1-accueil-explorer)."
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot1-accueil-explorer.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoAccueilTests \
+            -only-testing:JoleneUITests/DemoExplorerTests \
+            -only-testing:JoleneUITests/DemoFavorisTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot1-accueil-explorer.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot1-accueil-explorer.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot1-accueil-explorer) : code $code"
+      - name: Résumé xcresult (assertions, pas de succès fabriqué)
+        if: always() && steps.build.outcome == 'success'
+        env:
+          CODE_LOT1_MISSIONS: ${{ steps.tests_lot1_missions.outputs.code }}
+          CODE_LOT1_ACCUEIL_EXPLORER: ${{ steps.tests_lot1_accueil_explorer.outputs.code }}
+        run: |
+          mkdir -p "$JOLENE_UI_OUTPUT/attachments"
+          for eclat in lot1-missions lot1-accueil-explorer; do
+            xcresult="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$eclat.xcresult"
+            [ -d "$xcresult" ] || { echo "::error::Bundle xcresult absent pour l'éclat $eclat : aucun test n'a produit de résultat."; exit 1; }
+            xcrun xcresulttool get test-results summary --path "$xcresult" > "$JOLENE_UI_OUTPUT/xctest-summary-$eclat.json"
+            xcrun xcresulttool export attachments --path "$xcresult" --output-path "$JOLENE_UI_OUTPUT/attachments/$eclat" || echo "Aucune pièce jointe exportable ($eclat)."
+          done
+          # shellcheck disable=SC2016
+          node --input-type=module -e '
+            import { readFileSync, readdirSync, existsSync, writeFileSync, appendFileSync } from "node:fs";
+            import { join } from "node:path";
+            import { readPngDimensions } from "./mobile-native/scripts/png-dimensions.mjs";
+            const out = process.env.JOLENE_UI_OUTPUT;
+            // Éclats du lot 1 : chacun doit être vert, avoir exécuté au moins un test, et chacune de ses classes doit avoir
+            // démarré (un -only-testing mal nommé n exécute rien).
+            const eclats = [
+              { nom: "lot1-missions", code: process.env.CODE_LOT1_MISSIONS, classes: ["DemoMesMissionsTests", "DemoCandidatureTests", "DemoConfirmationPresenceTests", "DemoAnnulationTests"] },
+              { nom: "lot1-accueil-explorer", code: process.env.CODE_LOT1_ACCUEIL_EXPLORER, classes: ["DemoAccueilTests", "DemoExplorerTests", "DemoFavorisTests"] },
+            ];
+            let total = 0, passed = 0, failed = 0, skipped = 0, log = "";
+            const lignes = [`### UI lot 1 — ${process.env.JOLENE_UI_FORMAT}`, ""];
+            const bundles = [];
+            const eclatsKo = [];
+            for (const e of eclats) {
+              const s = JSON.parse(readFileSync(join(out, `xctest-summary-${e.nom}.json`), "utf8"));
+              const t = s.totalTestCount ?? 0, p = s.passedTests ?? 0, f = s.failedTests ?? 0, k = s.skippedTests ?? 0;
+              total += t; passed += p; failed += f; skipped += k;
+              bundles.push(...(s.testTargets ?? s.testPlanConfigurations ?? []).map(x => x.name ?? x.testTargetName ?? "").filter(Boolean));
+              const journal = readFileSync(join(out, `test-without-building-${e.nom}.log`), "utf8");
+              log += journal;
+              const absentes = e.classes.filter(c => !new RegExp(`Test Suite \x27${c}\x27 started`).test(journal));
+              lignes.push(`- éclat ${e.nom} : xcodebuild code ${e.code || "absent"}, xcresult ${s.result} (${p} réussis, ${f} échoués, ${k} ignorés, ${t} au total)`);
+              if (absentes.length) lignes.push(`- éclat ${e.nom} : classes jamais démarrées : ${absentes.join(", ")}`);
+              if (!(e.code === "0" && s.result === "Passed" && t >= 1 && f === 0 && k === 0 && p === t && absentes.length === 0)) eclatsKo.push(e.nom);
+            }
+            lignes.push(`- résultat xcresult : ${eclatsKo.length ? "Failed" : "Passed"} (${passed} réussis, ${failed} échoués, ${skipped} ignorés, ${total} au total, éclats ${eclats.map(e => e.nom).join(" + ")})`,
+              `- cible exécutée sur le simulateur (destination ${process.env.JOLENE_UI_FORMAT}) : JoleneUITests (classes du lot 1 ; JoleneCoreTests et JoleneDesignTests : socle du job ui)`);
+            // La cible doit avoir tourné : un plan qui l oublie n est pas une preuve.
+            const attendus = ["JoleneUITests"];
+            const manquantes = attendus.filter(cible => !bundles.includes(cible) && !new RegExp(`Test Suite \x27${cible}[^\x27]*\x27 (started|passed)`).test(log));
+            if (manquantes.length) lignes.push(`- cibles sans aucun test exécuté : ${manquantes.join(", ")}`);
+            // Contrôle d orientation des captures (mobile-native/scripts/png-dimensions.mjs repris tel quel).
+            const attendu = process.env.JOLENE_UI_ORIENTATION;
+            const mauvaises = [];
+            const captures = [];
+            for (const e of eclats) {
+              const dossier = join(out, "attachments", e.nom);
+              const pngs = existsSync(dossier) ? readdirSync(dossier).filter(n => n.toLowerCase().endsWith(".png")) : [];
+              for (const name of pngs) {
+                const { width, height } = readPngDimensions(readFileSync(join(dossier, name)));
+                const portrait = width < height;
+                if ((attendu === "portrait") !== portrait) mauvaises.push(`${e.nom}/${name} ${width}x${height}`);
+                captures.push({ name: `${e.nom}/${name}`, width, height });
+              }
+            }
+            writeFileSync(join(out, "orientation.json"), JSON.stringify({ requested: attendu, captures, mauvaises }, null, 2));
+            lignes.push(`- captures PNG : ${captures.length} (orientation attendue ${attendu}${captures.length ? "" : " — aucune capture exportée : l orientation n est PAS prouvée par ce run"})`);
+            if (mauvaises.length) lignes.push(`- captures dans la mauvaise orientation : ${mauvaises.join(", ")}`);
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, lignes.join("\n") + "\n");
+            console.log(lignes.join("\n"));
+            const ok = eclatsKo.length === 0 && total >= 1 && failed === 0 && skipped === 0 && passed === total && mauvaises.length === 0 && manquantes.length === 0;
+            if (!ok) { console.error("::error::Tests simulateur du lot 1 non concluants (JoleneUITests) : voir le résumé ci-dessus et l artefact xcresult."); process.exit(1); }
+          '
+      - name: Durée de build dans le résumé (mesure porte go/no-go)
+        if: always() && steps.build.outcome == 'success'
+        env:
+          DUREE: ${{ steps.build.outputs.duree_build_s }}
+        run: |
+          echo "- durée build-for-testing : ${DUREE}s" >> "$GITHUB_STEP_SUMMARY"
+      - name: Attentes bloquées absorbées (relevé, n’échoue pas le job)
+        if: always() && steps.build.outcome == 'success'
+        # `require` (ios-native/JoleneUITests/UITestSupport.swift) joint `<préfixe>-attente-bloquee-
+        # <fichier>-<ligne>.txt` à chaque attente qui a mesuré du temps non décompté, réussie ou non.
+        # Un dépassement du budget de blocage fait déjà échouer le test ; les blocages ABSORBÉS sous
+        # le budget, eux, ne doivent pas passer inaperçus dans un job vert : ils sont relevés depuis
+        # le manifest.json de `xcresulttool export attachments` (étape « Résumé xcresult »), en
+        # section du résumé et en annotation sur la ligne de l’appelant (GitHub n’affiche que les
+        # 10 premières annotations d’une étape ; le tableau du résumé les liste toutes). Relevé
+        # d’information seulement : il ne décide jamais du statut du job (continue-on-error).
+        # Les rejeux de geste (`consignerRejeu`, ligne « Nature : geste rejoué ») partagent ce relevé
+        # par appelant mais sont annoncés comme rejeux, sans temps non décompté ni budget (revue B8 de
+        # la vague 5, 6ᵉ tour, m3). Une pièce jointe sans aucun champ lisible est annoncée comme telle.
+        # Intégration du lot 3, puis fusion des lots 2 et 3 : un manifest.json par éclat (`attachments/<éclat>/`, étape
+        # « Résumé xcresult », DECISIONS_LOT2 décision 22) ; la boucle reprend la liste des éclats de cette étape
+        # (variable ECLATS), un éclat sans manifest.json lisible étant signalé, jamais ignoré en silence.
+        continue-on-error: true
+        env:
+          ECLATS: lot1-missions lot1-accueil-explorer
+        run: |
+          # shellcheck disable=SC2016
+          node --input-type=module -e '
+            import { readFileSync, existsSync, appendFileSync } from "node:fs";
+            import { join } from "node:path";
+            const format = process.env.JOLENE_UI_FORMAT;
+            const racine = join(process.env.JOLENE_UI_OUTPUT, "attachments");
+            const eclats = (process.env.ECLATS ?? "").split(/\s+/).filter(Boolean);
+            // Échappements des commandes de workflow GitHub (message, puis propriétés) et des cellules Markdown.
+            const esc = v => String(v).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+            const prop = v => esc(v).replace(/:/g, "%3A").replace(/,/g, "%2C");
+            const cell = v => String(v).replace(/\|/g, "\\|").replace(/\s+/g, " ");
+            const lignes = ["", `#### Attentes bloquées absorbées — ${format}`, ""];
+            const bloquees = [];
+            let releves = 0;
+            for (const eclat of eclats) {
+              const attachments = join(racine, eclat);
+              const manifeste = join(attachments, "manifest.json");
+              let tests = null;
+              try { tests = JSON.parse(readFileSync(manifeste, "utf8")); } catch { tests = null; }
+              if (!Array.isArray(tests)) {
+                lignes.push(`- éclat ${eclat} : ${existsSync(manifeste) ? "manifest.json illisible" : "aucun manifest.json exporté"} : attentes bloquées NON relevées pour cet éclat`);
+                console.log(`::warning::Attentes bloquées non relevées (${format}, éclat ${eclat}) : manifest.json des pièces jointes absent ou illisible.`);
+                continue;
+              }
+              releves += 1;
+              for (const t of tests) for (const a of t.attachments ?? []) {
+                const nom = a.suggestedHumanReadableName ?? "";
+                if (!nom.includes("-attente-bloquee-")) continue;
+                let texte = "";
+                try { texte = readFileSync(join(attachments, a.exportedFileName ?? ""), "utf8"); } catch { texte = ""; }
+                const champ = libelle => texte.match(new RegExp(`^${libelle} : (.+)$`, "m"))?.[1].trim();
+                // Appelant : ligne « Appelant : Fichier.swift:N » du rapport, à défaut le nom de la pièce
+                // jointe (`<préfixe>-attente-bloquee-<Fichier>-<N>_<rang>_<UUID>.txt` une fois exportée).
+                const parRapport = (champ("Appelant") ?? "").match(/^(.+\.swift):(\d+)$/);
+                const parNom = nom.match(/-attente-bloquee-(.+)-(\d+)(?:_\d+_[0-9A-Fa-f-]+)?\.txt$/);
+                const rejeu = champ("Nature") === "geste rejoué";
+                bloquees.push({
+                  eclat,
+                  rejeu,
+                  illisible: !champ("Attente") && !champ("Issue"),
+                  test: t.testIdentifier ?? "?",
+                  fichier: parRapport?.[1] ?? (parNom ? `${parNom[1]}.swift` : null),
+                  ligne: parRapport?.[2] ?? parNom?.[2] ?? null,
+                  attente: champ("Attente") ?? "?",
+                  nonDecompte: rejeu ? "—" : (champ("Temps non décompté") ?? "").match(/^\d+(?:[,.]\d+)? s/)?.[0] ?? "?",
+                  budget: rejeu ? "—" : champ("Budget de blocage") ?? "?",
+                  issue: champ("Issue") ?? "?",
+                });
+              }
+            }
+            if (!releves) {
+              lignes.push("- aucun éclat relevé : attentes bloquées NON relevées par ce run");
+            } else if (!bloquees.length) {
+              lignes.push(`- aucune : aucun \`require\` n’a mesuré de temps non décompté (${releves} éclat(s) relevé(s) sur ${eclats.length})`);
+            } else {
+              const rejeux = bloquees.filter(b => b.rejeu && !b.illisible).length;
+              const illisibles = bloquees.filter(b => b.illisible).length;
+              const attentes = bloquees.length - rejeux - illisibles;
+              lignes.push("", `${attentes} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app), ${rejeux} geste(s) ont été rejoués${illisibles ? `, ${illisibles} trace(s) sont illisibles` : ""}. Relevé d’information : le job n’échoue pas pour cela.`, "",
+                "| Éclat | Test | Appelant | Attente | Non décompté | Budget de blocage | Issue |", "| --- | --- | --- | --- | --- | --- | --- |");
+              for (const b of bloquees) {
+                const appelant = b.fichier ? `${b.fichier}:${b.ligne}` : "?";
+                lignes.push(`| ${cell(b.eclat)} | ${cell(b.test)} | \`${cell(appelant)}\` | ${cell(b.attente)} | ${cell(b.nonDecompte)} | ${cell(b.budget)} | ${cell(b.issue)} |`);
+                const message = b.illisible
+                  ? `Trace d’attente illisible (${format}, éclat ${b.eclat}) : pièce jointe sans champ « Attente » ni « Issue » — ${b.test}`
+                  : b.rejeu
+                    ? `Geste rejoué (${format}, éclat ${b.eclat}) : « ${b.attente} », ${b.issue} — ${b.test}`
+                    : `Attente bloquée absorbée (${format}, éclat ${b.eclat}) : « ${b.attente} », ${b.nonDecompte} non décomptées (budget de blocage ${b.budget}), ${b.issue} — ${b.test}`;
+                const cible = b.fichier && b.ligne ? ` file=${prop(`ios-native/JoleneUITests/${b.fichier}`)},line=${prop(b.ligne)}` : "";
+                console.log(`::warning${cible}::${esc(message)}`);
+              }
+            }
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, lignes.join("\n") + "\n");
+            console.log(lignes.join("\n"));
+          '
+      - name: Conserver xcresult, captures et journaux
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-swift-ui-lot1-${{ matrix.format }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot1-missions.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot1-accueil-explorer.xcresult
+            ios-native/test-results/lot1-${{ matrix.format }}/
           retention-days: 7
           if-no-files-found: warn
       - name: Éteindre le simulateur
