@@ -145,9 +145,15 @@ test('RPC_SUIVIES : fn_suggestions_missions_pour_soignant est reclassée lot 4 (
   assert.ok(fiche.includes('à venir (lot 4)'), 'fiche : statut « à venir (lot 4) » attendu');
 });
 
-test('RPC_SUIVIES : aucune RPC interdite ou prématurée', () => {
-  for (const name of [...INTERDITES_NATIF, ...PAS_AVANT_LOT4]) {
+// Lot 4, T0 (LOT4_PLAN.md §3 T0) : une RPC « pas avant le lot 4 » peut être suivie, mais seulement
+// avec `lot >= 4` (même règle que `verifierExclusions`) ; une RPC « jamais » ne l'est jamais.
+test('RPC_SUIVIES : aucune RPC interdite, aucune RPC du lot 4 classée avant le lot 4', () => {
+  for (const name of INTERDITES_NATIF) {
     assert.ok(!byName.has(name), `${name} ne doit pas figurer dans RPC_SUIVIES`);
+  }
+  for (const name of PAS_AVANT_LOT4) {
+    const entry = byName.get(name);
+    assert.ok(!entry || (Number.isInteger(entry.lot) && entry.lot >= 4), `${name} suivie avant le lot 4 (lot ${entry?.lot})`);
   }
 });
 
@@ -598,9 +604,32 @@ function fichiersTexte(dir) {
 // Un gap connu reste verrouillé : un appel RPC écrit en dur dans le code Swift doit viser une
 // RPC sous contrat, jamais une RPC interdite côté natif ni une RPC du lot 4 avant son heure.
 // Lot 2 (T0) : le système de pointage ① a son propre message (décision 1 de DECISIONS_LOT2.md).
+/**
+ * Verdict sur un littéral `"fn_…"` du Swift au regard d'une liste de RPC suivies : `null` si l'appel est
+ * autorisé, sinon le motif. Une RPC « jamais » est toujours interdite ; une RPC « pas avant le lot 4 »
+ * n'est autorisée que suivie avec `lot >= 4` (règle de `verifierExclusions`, adaptée par le T0 du lot 4 :
+ * sans elle, le littéral `"fn_retirer_candidature"` de la tranche T3a rougirait la CI même suivi en lot 4).
+ */
+function verdictLitteralSwift(name, suivies) {
+  if (RPC_JAMAIS_SUIVIES.includes(name)) return 'interdite côté natif';
+  const entry = suivies.find(r => r.name === name);
+  if (RPC_PAS_AVANT_LOT4.includes(name) && !(entry && Number.isInteger(entry.lot) && entry.lot >= 4)) {
+    return 'interdite côté natif avant le lot 4';
+  }
+  return entry ? null : 'absente de RPC_SUIVIES';
+}
+
+test('verdictLitteralSwift : une RPC « pas avant le lot 4 » est admise à partir de lot: 4, jamais avant', () => {
+  const avec = lot => [{ name: 'fn_retirer_candidature', statut: 'a_venir', lot }];
+  assert.equal(verdictLitteralSwift('fn_retirer_candidature', avec(4)), null);
+  assert.equal(verdictLitteralSwift('fn_retirer_candidature', avec(5)), null);
+  assert.match(verdictLitteralSwift('fn_retirer_candidature', avec(3)), /avant le lot 4/);
+  assert.match(verdictLitteralSwift('fn_retirer_candidature', []), /avant le lot 4/);
+  assert.match(verdictLitteralSwift('fn_etablissement_public', [{ name: 'fn_etablissement_public', lot: 4 }]), /interdite/);
+  assert.match(verdictLitteralSwift('fn_inconnue', []), /absente/);
+});
+
 test('ios-native : tout littéral "fn_…" du Swift est une RPC suivie et autorisée', () => {
-  const suivies = new Set(RPC_SUIVIES.map(r => r.name));
-  const interdites = new Set([...RPC_JAMAIS_SUIVIES, ...RPC_PAS_AVANT_LOT4]);
   const systeme1 = new Set(contratsRpc.RPC_POINTAGE_SYSTEME_1 ?? []);
   assert.ok(systeme1.size > 0, 'RPC_POINTAGE_SYSTEME_1 non exportée par le script');
   const fautes = [];
@@ -609,8 +638,10 @@ test('ios-native : tout littéral "fn_…" du Swift est une RPC suivie et autori
     for (const m of src.matchAll(/"(fn_[a-z0-9_]+)"/g)) {
       const rel = file.slice(root.length + 1);
       if (systeme1.has(m[1])) fautes.push(`${rel} : ${m[1]} appartient au système de pointage ①, interdit côté natif (DECISIONS_LOT2.md, décision 1)`);
-      else if (interdites.has(m[1])) fautes.push(`${rel} : ${m[1]} interdite côté natif`);
-      else if (!suivies.has(m[1])) fautes.push(`${rel} : ${m[1]} absente de RPC_SUIVIES`);
+      else {
+        const verdict = verdictLitteralSwift(m[1], RPC_SUIVIES);
+        if (verdict) fautes.push(`${rel} : ${m[1]} ${verdict}`);
+      }
     }
   }
   assert.deepEqual(fautes, []);
