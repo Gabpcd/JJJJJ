@@ -92,14 +92,14 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_dashboard_soignant_complet` | consommée lot 1 (T3) | 1 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_confirmer_action_planning_v1` | consommée lot 1 (T6a) | 1 (T6a) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (décision 6) | authenticated, service_role | absente |
 | `fn_suggestions_missions_pour_soignant` | à venir | 4 (reclassée, revue B8 de T3 : non consommée par l'Accueil) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_annuler_candidature_soignant` | à venir | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_annuler_mission_soignant` | à venir | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_annuler_candidature_soignant` | consommée lot 1 (T7) | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_annuler_mission_soignant` | consommée lot 1 (T7) | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_repondre_proposition` | consommée lot 1 (T6a, refus seulement) | 1 (T6a, refus seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_toggle_favori_etablissement` | à venir | 1 (T4b, retrait seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_mes_favoris_etablissements` | à venir | 1 (T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_audit_connexion` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_maj_activite_soignant` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_ecrire_audit_safe` | à venir | 1 (T1/T6a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_ecrire_audit_safe` | consommée lot 1 (T1 gateway, T6a, T7) | 1 (T1/T6a/T7) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_supprimer_compte_rate_limited` | à venir | 1 (T8, via edge `delete-account`) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_param_bool` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_confirmer_presence_mission` | à venir | 1 (T6c) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -1012,11 +1012,17 @@ CREATE OR REPLACE FUNCTION "public"."fn_upsert_token_push"("p_token" "text", "p_
 
 ## fn_annuler_candidature_soignant
 
-- **Statut natif** : à venir (lot 1, T7).
+- **Statut natif** : consommée (lot 1, T7 : `SupabaseCandidatureGateway.annulerCandidature`, `AnnulationModel`, `AnnulationSheet`).
 - **Usage prévu** : Annulation d'une candidature `ACCEPTEE` ou `EN_ATTENTE` avec motif, texte libre et
   justificatif optionnel (bucket Storage `justificatifs`, chemin `<uid>/annulations-candidature/<candidatureId>/<ts>_<nom>`,
   précédé d'un reçu Keychain `prepared → started → …`, PRINCIPES §4). Relecture : candidature (`ANNULEE`)
   puis mission. Web : `src/components/soignant/ModaleAnnulationCandidature.tsx`.
+- **Livré (T7)** : relecture de la candidature seule (`ANNULEE`, posée dans la même transaction que la remise en ligne
+  de la mission) ; seule une candidature `ACCEPTEE` ouvre la modale, comme le web (`candidatureRec`, l.486-504) : le
+  retrait d'une candidature `EN_ATTENTE` est servi par la gateway (`{libre:true, points:0}`) mais n'a aucun point d'entrée
+  natif (le web n'en a pas sur le détail). Justificatif : reçu `RecuJustificatif` (domaine `justificatif`, `prepared →
+  started → stored → rattache | non_rattache`, `not_sent`), dépôt `SupabaseJustificatifStorage` (`upsert: false`), dépôt
+  incertain réconcilié par HEAD, reçu `stored` repris sans second dépôt.
 - **Signature SQL** (`supabase/schema/public.sql` l.17541) :
 
 ```sql
@@ -1041,7 +1047,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_annuler_candidature_soignant"("p_candida
 
 ## fn_annuler_mission_soignant
 
-- **Statut natif** : à venir (lot 1, T7).
+- **Statut natif** : consommée (lot 1, T7 : `SupabaseCandidatureGateway.annulerMission`, confirmation de `AnnulationSection`).
 - **Usage prévu** : Annulation d'une mission `ASSIGNEE` au soignant **sans ligne `candidatures`** (attribution
   directe) ; motif texte optionnel. Relecture `mission(id:)` (statut `OUVERTE`, `soignant_assigne_id` nul).
   Web : `DetailMissionSoignant.tsx` l.890-918 (suivi d'un `fn_ecrire_audit_safe` `MISSION_ANNULATION`
@@ -1182,7 +1188,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_maj_activite_soignant"() RETURNS "jsonb"
 
 ## fn_ecrire_audit_safe
 
-- **Statut natif** : à venir (lot 1, T1 gateway, T6a câblage ; décision 5).
+- **Statut natif** : consommée (lot 1 : T1 gateway `SupabaseAuditGateway`, T6a `MISSION_ASSIGNATION`, T7 `MISSION_ANNULATION` ; décision 5).
 - **Usage prévu** : `MISSION_ASSIGNATION` après `ACCEPTER` / `PROPOSITION` réussis et relus (parité web
   `DetailMissionSoignant.tsx` l.824-836 : `p_type_ressource = 'mission'`, `p_id_ressource = missionId`,
   `p_details = {intitule, etablissement, debut, fin}`) ; `MISSION_ANNULATION` après `fn_annuler_mission_soignant`

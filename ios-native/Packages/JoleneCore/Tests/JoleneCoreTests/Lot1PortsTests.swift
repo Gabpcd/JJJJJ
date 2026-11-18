@@ -85,7 +85,10 @@ final class Lot1PortsTests: XCTestCase {
         await refuse("T10") { try await g.recovery.updatePassword("motdepasse") }
         await refuse("T10") { try await g.recovery.signOutAfterRecovery() }
         await refuse("T7") {
-            _ = try await g.justificatifs.upload(data: Data(), fileName: "a.pdf", candidatureId: "c", userId: c.userId)
+            _ = try await g.justificatifs.deposer(chemin: "c", octets: Data(), mime: .pdf, context: c)
+        }
+        await refuse("T7") {
+            _ = try await g.justificatifs.existe(chemin: "c", context: c)
         }
     }
 

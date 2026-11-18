@@ -216,6 +216,9 @@ public enum AuditAction: String, CaseIterable, Sendable {
     case donneesPersoConsultation = "DONNEES_PERSO_CONSULTATION"
     case donneesPersoModification = "DONNEES_PERSO_MODIFICATION"
     case rgpdExportDonnees = "RGPD_EXPORT_DONNEES"
+    /// Lot 1, T7 : annulation sans candidature (`fn_annuler_mission_soignant`), comme le web (`DetailMissionSoignant.tsx`
+    /// l.903-914) ; valeur du CHECK `journaux_audit_action_check`.
+    case missionAnnulation = "MISSION_ANNULATION"
 }
 
 /// Issue d'une écriture d'audit best-effort. `nonEnregistre` (`{success:false}`) n'est pas une

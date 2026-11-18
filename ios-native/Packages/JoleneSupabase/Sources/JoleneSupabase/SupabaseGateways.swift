@@ -48,7 +48,7 @@ public enum SupabaseGateways {
             audit: SupabaseAuditGateway(client: client),
             flags: SupabaseFlagsGateway(client: client),
             recovery: UnwiredRecoveryPort(),            // T10
-            justificatifs: UnwiredJustificatifStoragePort() // T7
+            justificatifs: SupabaseJustificatifStorage(client: client) // T7
         )
         câblerLot2(&gateways, client: client, clock: clock)
         câblerLot3(&gateways, client: client)

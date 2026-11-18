@@ -49,6 +49,7 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.push is SupabasePushGateway, "lot 3, T4 : enregistrement et désactivation du token APNs")
         XCTAssertTrue(gateways.mesMissions is SupabaseMesMissionsGateway)
         XCTAssertTrue(gateways.candidature is SupabaseCandidatureGateway, "T6a câble la candidature")
+        XCTAssertTrue(gateways.justificatifs is SupabaseJustificatifStorage, "T7 câble les justificatifs d'annulation")
     }
 
     /// Aucune liste propre à ce monde : les ports encore stubs côté Supabase doivent être

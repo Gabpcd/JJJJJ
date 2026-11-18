@@ -127,6 +127,7 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
     // notation.
     'src/components/pointage/PointageRotatifSoignant.tsx',
     'src/components/profil-soignant/SectionPreferences.tsx',
+    'src/components/soignant/ModaleAnnulationCandidature.tsx', // L1-T7 : annulation d'une candidature retenue
     'src/pages/CertificatSignaturePage.tsx',
     'src/pages/ContratMission.tsx',
     'src/pages/DetailMissionSoignant.tsx', // T5a : points d'entrée du détail d'une mission

@@ -685,6 +685,51 @@ public enum TextesWeb {
         }
     }
 
+    /// Annulation d'une participation (lot 1, T7, HARD STOP n°4 : textes de consentement, de données de santé, de
+    /// pénalité et de score repris verbatim du web, en attente de la validation de Gabrielle). Modale de candidature
+    /// (`ModaleAnnulationCandidature.tsx`) et confirmation sans candidature (`DetailMissionSoignant.tsx` l.891-917,
+    /// l.1630-1645). Le minuteur de rétractation et le message de pénalité de la confirmation (barèmes recopiés côté
+    /// client, contredits par le serveur, décision 4 de `LOT1_PLAN.md`) ne sont pas repris. Tutoiement du web conservé
+    /// verbatim : le vouvoiement passera d'abord par le web.
+    public enum Annulation {
+        // source: src/components/soignant/ModaleAnnulationCandidature.tsx:194 [juridique]
+        public static let justificatifLibelle = "Justificatif non médical (optionnel — PDF, image, max 5 Mo)"
+
+        // source: src/components/soignant/ModaleAnnulationCandidature.tsx:220 [juridique]
+        public static let avertissementDonneesSante = "N'envoyez aucun certificat médical ni document mentionnant un diagnostic ou une information de santé. Vous pouvez joindre uniquement une preuve non médicale, par exemple un billet de transport annulé ou une attestation employeur ne contenant aucune donnée de santé."
+
+        // source: src/components/soignant/ModaleAnnulationCandidature.tsx:234 [consentement]
+        public static let confirmationConsequences = "J'ai compris les conséquences (impact score le cas échéant) et je confirme l'annulation de ma candidature."
+
+        // source: src/components/soignant/ModaleAnnulationCandidature.tsx:240 [juridique]
+        public static let notificationEtablissement = "L'établissement sera notifié immédiatement. Si la pénalité vous semble injuste, vous pourrez la contester depuis votre page score."
+
+        // source: src/components/soignant/ModaleAnnulationCandidature.tsx:253 [consentement]
+        public static let confirmerAnnulation = "Confirmer l'annulation"
+
+        // source: src/components/soignant/ModaleAnnulationCandidature.tsx:131 [fragment]
+        public static let scoreImpacteDebut = "Candidature annulée. Score impacté :"
+
+        // source: src/components/soignant/ModaleAnnulationCandidature.tsx:131 [fragment]
+        public static let scoreImpacteFin = "pts."
+
+        // source: src/components/soignant/ModaleAnnulationCandidature.tsx:132 [juridique]
+        public static let candidatureAnnulee = "Candidature annulée."
+
+        // source: src/pages/DetailMissionSoignant.tsx:916 [juridique]
+        public static let participationAnnulee = "Participation annulée. Ton score sera mis à jour."
+
+        // source: src/pages/DetailMissionSoignant.tsx:1642 [consentement]
+        public static let ouiAnnuler = "Oui, annuler"
+
+        /// Issue d'une annulation de candidature relue (l.129-132) : `points` du serveur (`Number(result?.points ?? 0)`),
+        /// « Score impacté » seulement s'il est négatif, jamais calculé par l'app.
+        public static func succesCandidature(points: Int?) -> String {
+            guard let points, points < 0 else { return candidatureAnnulee }
+            return scoreImpacteDebut + " " + String(points) + " " + scoreImpacteFin
+        }
+    }
+
     /// Tous les textes, pour les tests (la garde Node vérifie que la liste est complète et exacte).
     public static let catalogue: [EntreeTexteWeb] = [
         .init(cle: "ConsentementGps.titre", texte: ConsentementGps.titre),
@@ -809,5 +854,15 @@ public enum TextesWeb {
         .init(cle: "Certificat.empreinteStorageAbsent", texte: Certificat.empreinteStorageAbsent),
         .init(cle: "Certificat.empreinteExplicationFin", texte: Certificat.empreinteExplicationFin),
         .init(cle: "Certificat.mentionPage", texte: Certificat.mentionPage),
+        .init(cle: "Annulation.justificatifLibelle", texte: Annulation.justificatifLibelle),
+        .init(cle: "Annulation.avertissementDonneesSante", texte: Annulation.avertissementDonneesSante),
+        .init(cle: "Annulation.confirmationConsequences", texte: Annulation.confirmationConsequences),
+        .init(cle: "Annulation.notificationEtablissement", texte: Annulation.notificationEtablissement),
+        .init(cle: "Annulation.confirmerAnnulation", texte: Annulation.confirmerAnnulation),
+        .init(cle: "Annulation.scoreImpacteDebut", texte: Annulation.scoreImpacteDebut),
+        .init(cle: "Annulation.scoreImpacteFin", texte: Annulation.scoreImpacteFin),
+        .init(cle: "Annulation.candidatureAnnulee", texte: Annulation.candidatureAnnulee),
+        .init(cle: "Annulation.participationAnnulee", texte: Annulation.participationAnnulee),
+        .init(cle: "Annulation.ouiAnnuler", texte: Annulation.ouiAnnuler),
     ]
 }

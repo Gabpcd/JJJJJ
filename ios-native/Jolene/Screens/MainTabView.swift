@@ -155,6 +155,7 @@ struct MainTabView: View {
         // Lot 2 T4b : capacités d'appareil et zone de pointage (point d'extension de T4a), au-dessus des onglets.
         .environment(\.appareil, container.appareil)
         .environment(\.fabriqueZonePointage, container.fabriqueZonePointage)
+        .environment(\.mediaDemo, container.mediaDemo) // L1-T7 : justificatif d'annulation (détail d'une mission)
         .onDisappear { FichierContratTemporaire.effacerTout() } // lot 2 T9a : copies de contrats effacées au changement d'epoch
         // Lot 1, T5 : ajout au calendrier (Accueil et Mes missions), une instance par session prête.
         .ajoutCalendrier(container: container, userId: snapshot.user.id)

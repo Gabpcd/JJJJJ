@@ -174,7 +174,7 @@
     },
     {
       "name": "fn_annuler_candidature_soignant",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "{ p_candidature_id: string; p_justificatif_storage_path?: string; p_motif_categorie: string; p_texte_libre: string }",
@@ -203,7 +203,7 @@
     },
     {
       "name": "fn_annuler_mission_soignant",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "{ p_mission_id: string; p_motif?: string }",
@@ -377,7 +377,7 @@
     },
     {
       "name": "fn_ecrire_audit_safe",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "{ p_acteur_id: string; p_action: string; p_cle_s3?: string; p_details?: Json; p_id_ressource: string; p_ip?: unknown; p_navigateur?: string; p_type_acteur: string; p_type_ressource: string }",
