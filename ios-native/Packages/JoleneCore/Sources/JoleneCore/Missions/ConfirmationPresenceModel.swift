@@ -13,10 +13,16 @@ import Foundation
 /// concluante (`PresenceOutcome.envoyeeNonRelue`) ou délai dépassé de `bounded` (le serveur a pu écrire). L'écran affiche
 /// alors le texte de relecture (`PresenceRules.Textes.envoyeeNonRelue`), jamais « Confirmation impossible. », et
 /// `relectureRequise` interdit tout nouvel envoi : le bouton cède la place à « Actualiser » (`relire()`), qui relit la
-/// mission. La relecture conclut — date relue : confirmée ; mission relue sans la date : la confirmation n'a pas été
-/// enregistrée, l'envoi redevient possible (PRINCIPES §4) — ou échoue, et l'issue reste incertaine. « Confirmation
-/// impossible. » reste le repli d'un refus sans message et d'une erreur d'envoi, comme le web (l.1426).
-/// Mêmes gardes d'epoch que `MissionDetailModel`.
+/// mission. Date relue : confirmée. Mission relue sans la date : tout dépend de l'origine de l'incertitude (revue B8 de
+/// #1158, M1) —
+/// - **après l'accusé** `{success:true}` : l'issue RESTE incertaine. Le serveur écrit `presence_confirmee_le = NOW()` sans
+///   condition avant de répondre (`public.sql` l.25003-25010) et rien ne la remet à NULL : une lecture sans la date est
+///   anormale, elle ne prouve pas la non-réception (PRINCIPES §4) ; seule la réouverture de la mission recrée le bloc ;
+/// - **après un délai dépassé sans accusé** : la relecture conclut « non enregistrée », l'envoi redevient possible, comme
+///   `ProfilEditionModel` après un délai sans écriture côté serveur.
+/// Une mission relue qui n'est plus attribuée au soignant ne laisse rien à confirmer. Une relecture en échec garde l'issue
+/// incertaine. « Confirmation impossible. » reste le repli d'un refus sans message et d'une erreur d'envoi, comme le web
+/// (l.1426), jamais après un succès serveur. Mêmes gardes d'epoch que `MissionDetailModel`.
 @MainActor
 public final class ConfirmationPresenceModel: ObservableObject {
     public enum Issue: Equatable, Sendable {
@@ -35,6 +41,11 @@ public final class ConfirmationPresenceModel: ObservableObject {
     @Published public private(set) var presenceRelue: String?
     /// Vrai tant qu'une confirmation a pu être reçue sans être relue : aucun envoi, seulement « Actualiser ».
     @Published public private(set) var relectureRequise = false
+
+    /// Origine de l'incertitude (revue B8 de #1158, M1) : seul un délai dépassé sans accusé permet de conclure « non
+    /// enregistrée » sur une relecture sans la date.
+    private enum OrigineIncertitude { case accuse, delaiSansAccuse }
+    private var origine: OrigineIncertitude?
 
     public let missionId: String
     private let controller: SessionController
@@ -85,6 +96,7 @@ public final class ConfirmationPresenceModel: ObservableObject {
                 issue = .refus(PresenceRules.messageRefus(message))
             case let .envoyeeNonRelue(message):
                 relectureRequise = true
+                origine = .accuse
                 issue = .incertaine(message)
                 await relireMission(gateways)
             }
@@ -95,6 +107,7 @@ public final class ConfirmationPresenceModel: ObservableObject {
             if Self.estDelaiDepasse(error) {
                 // Le serveur a pu écrire : jamais un échec annoncé (Bounded.swift, PRINCIPES §3-§4).
                 relectureRequise = true
+                origine = .delaiSansAccuse
                 issue = .incertaine(PresenceRules.Textes.envoyeeNonRelue)
                 await relireMission(gateways)
                 return true
@@ -126,21 +139,34 @@ public final class ConfirmationPresenceModel: ObservableObject {
                 try await missions.mission(id: id, context: context)
             }
             guard await controller.epoch == snapshot.epoch else { return }
-            if let record = relue?.record, let assigne = record.soignantAssigneId,
-               assigne.caseInsensitiveCompare(context.userId) == .orderedSame,
-               let date = record.presenceConfirmeeLe, !date.isEmpty {
-                presenceRelue = date
-                issue = .confirmee
-            } else {
-                // Relue sans la date (ou plus attribuée) : la confirmation n'a pas été enregistrée ; l'envoi redevient
-                // possible, avec le repli web d'un envoi sans effet.
-                issue = .refus(TextesWeb.ConfirmationPresence.repliRefus)
+            guard let record = relue?.record, let assigne = record.soignantAssigneId,
+                  assigne.caseInsensitiveCompare(context.userId) == .orderedSame else {
+                // Plus attribuée au soignant (ligne absente sous RLS comprise) : plus rien à confirmer.
+                conclure(issue: nil)
+                return
             }
-            relectureRequise = false
+            if let date = record.presenceConfirmeeLe, !date.isEmpty {
+                presenceRelue = date
+                conclure(issue: .confirmee)
+            } else if origine == .delaiSansAccuse {
+                // Délai dépassé sans accusé, mission relue sans la date : non enregistrée, l'envoi redevient possible.
+                conclure(issue: nil)
+            } else {
+                // Accusé reçu, mission relue sans la date : lecture anormale, jamais une preuve de non-réception
+                // (revue B8 de #1158, M1) ; l'issue reste incertaine, aucun envoi.
+                issue = .incertaine(PresenceRules.Textes.envoyeeNonRelue)
+            }
         } catch {
             guard await controller.epoch == snapshot.epoch, !Self.estAnnulation(error) else { return }
             issue = .incertaine(PresenceRules.Textes.envoyeeNonRelue)
         }
+    }
+
+    /// Relecture concluante : l'incertitude est levée.
+    private func conclure(issue nouvelle: Issue?) {
+        issue = nouvelle
+        relectureRequise = false
+        origine = nil
     }
 
     private static func estAnnulation(_ error: Error) -> Bool {

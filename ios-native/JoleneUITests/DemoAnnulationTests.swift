@@ -4,7 +4,8 @@ import XCTest
 /// « Annuler ma participation ». Aucune requête réseau.
 ///
 /// Ce que ces tests prouvent (niveau 2), et seulement cela :
-/// - mission attribuée sans candidature (`demo-assignee-001`) : confirmation simple, sans message de pénalité (barème
+/// - mission attribuée sans candidature (`demo-assignee-001`) : « ✅ Vous êtes assigné(e) » au-dessus du bouton, comme
+///   le web (revue B8 de #1158, m1) ; confirmation simple, sans message de pénalité (barème
 ///   client non porté, décision 4), puis « Participation annulée. Ton score sera mis à jour. » (verbatim web, HARD STOP
 ///   n°4) après la relecture, le bouton disparaît et la mission relue n'a plus d'entrée des présences ; reprise : Mes
 ///   missions relue sans la mission, puis détail rouvert depuis Explorer (mission remise en ligne) sans bouton
@@ -36,6 +37,13 @@ final class DemoAnnulationTests: JoleneUITestCase {
         let ouvrir = element("annulation-ouvrir")
         scrollTo(ouvrir, in: detail)
         XCTAssertEqual(ouvrir.label, "Annuler ma participation", "libellé du web (l.1521)")
+        // Revue B8 de #1158 (m1) : ordre du bloc « Actions » du web (`DetailMissionSoignant.tsx` l.1408-1410 puis
+        // l.1516-1523) — « ✅ Vous êtes assigné(e) » au-dessus de « Annuler ma participation ».
+        let assignee = element("candidature-assignee")
+        require("Le bloc d'actions affiche l'assignation", timeout: 30) { assignee.exists }
+        XCTAssertEqual(assignee.label, "✅ Vous êtes assigné(e) à cette mission")
+        XCTAssertLessThan(assignee.frame.minY, ouvrir.frame.minY,
+                          "« ✅ Vous êtes assigné(e) » au-dessus de « Annuler ma participation », comme le web")
         ouvrir.tap()
 
         let oui = element("annulation-mission-oui")

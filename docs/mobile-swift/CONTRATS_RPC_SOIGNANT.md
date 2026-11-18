@@ -1087,7 +1087,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_annuler_mission_soignant"("p_mission_id"
   delta de #1156, m1, intégration de la vague B) : après une réponse perdue, le nouvel essai est refusé (« Annulation
   impossible dans cet état… », mission déjà remise en ligne) ; `AnnulationModel.annulerMission` relit alors
   `mission(id:)` et annonce l'annulation si la mission relue n'est plus attribuée au soignant, comme `STATUT_INVALIDE`
-  côté candidature.
+  côté candidature ; si cette relecture échoue, le refus du serveur s'affiche tel quel (revue B8 de #1158, m4).
 - **Exemple de réponse STAGING** : à enregistrer en T11, corps JSON anonymisé.
 
 ## fn_repondre_proposition
@@ -1393,10 +1393,15 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   **Issue incertaine** (revue B8 delta de #1157, M1, intégration de la vague B) : `{success:true}` suivi d'une
   relecture vide, sans la date, d'un autre soignant ou en échec rend `PresenceOutcome.envoyeeNonRelue` (jamais une
   erreur) ; un délai dépassé de `bounded` est traité de même par `ConfirmationPresenceModel`. L'écran affiche
-  « Votre confirmation a été envoyée mais n'a pas pu être relue. Rouvrez la mission avant de réessayer. » (texte
+  « Votre confirmation a été envoyée mais n'a pas pu être relue. Actualisez pour la vérifier. » (texte
   opérationnel, sans équivalent web : le web n'a ni relecture ni délai) et remplace le bouton par « Actualiser »,
-  qui relit `mission(id:)` : date relue → confirmée ; mission relue sans la date → l'envoi redevient possible ;
-  relecture en échec → l'issue reste incertaine. Aucun nouvel appel tant qu'une relecture n'a pas conclu.
+  qui relit `mission(id:)`. Date relue → confirmée. Mission relue sans la date (revue B8 de #1158, M1) : **après
+  l'accusé `{success:true}`**, l'issue reste incertaine — la RPC écrit `presence_confirmee_le = NOW()` sans condition
+  avant de répondre (l.25003-25010) et rien ne la remet à NULL, une lecture sans la date ne prouve donc pas la
+  non-réception (PRINCIPES §4) ; seule la réouverture de la mission recrée le bloc ; **après un délai dépassé sans
+  accusé**, la confirmation est tenue pour non enregistrée et l'envoi redevient possible. Mission relue qui n'est plus
+  attribuée au soignant : plus rien à confirmer. Relecture en échec → l'issue reste incertaine. Aucun nouvel appel tant
+  qu'une relecture n'a pas conclu.
 - **Preuve STAGING** : `missions.presence_confirmee_le` relu + `notifications` étab `SYSTEM` « Présence
   confirmée ✓ » relue (T11).
 - **Chaînes d'écran** (reprises à l'identique du web, `DetailMissionSoignant.tsx` l.1419-1438 ; cibles des
