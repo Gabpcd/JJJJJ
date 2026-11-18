@@ -168,12 +168,23 @@ final class ConfirmationPresenceModelTests: XCTestCase {
         }
     }
 
+    /// Horloge des gateways réglable à la main (m7 : délai de grâce de 30 s après un appel expiré).
+    private final class HorlogeReglable: ClockPort, @unchecked Sendable {
+        private let lock = NSLock()
+        private var instant: Date
+        init(_ instant: Date) { self.instant = instant }
+        func now() -> Date { lock.withLock { instant } }
+        func avancer(_ secondes: TimeInterval) { lock.withLock { instant += secondes } }
+    }
+
     private func modele(_ port: any PresencePort, missions: ((MissionsPort) -> MissionsPort)? = nil,
-                        delai: TimeInterval = SessionController.defaultResolutionTimeout) async throws
+                        delai: TimeInterval = SessionController.defaultResolutionTimeout,
+                        horloge: ClockPort? = nil) async throws
         -> (ConfirmationPresenceModel, MissionRecord) {
         var gateways = DemoWorld.gateways()
         gateways.presence = port
         if let missions { gateways.missions = missions(gateways.missions) }
+        if let horloge { gateways.clock = horloge }
         let controller = SessionController(gateways: gateways, resolutionTimeout: delai)
         let state = await controller.signIn(email: DemoWorld.context.email ?? "", password: "demonstration")
         let snapshot = try XCTUnwrap(state.snapshot, "session démo prête attendue, obtenu \(state)")
@@ -287,24 +298,55 @@ final class ConfirmationPresenceModelTests: XCTestCase {
         XCTAssertEqual(accuse.appels, 1, "un seul appel à l'envoi")
     }
 
-    /// Délai dépassé SANS accusé, puis mission relue sans la date : la confirmation n'a pas été enregistrée, l'envoi
-    /// redevient possible (même convention que `ProfilEditionModel` après un délai sans écriture côté serveur).
-    func testDelaiDepassePuisRelectureSansDateRendLEnvoiPossible() async throws {
+    /// Délai dépassé SANS accusé, puis mission relue sans la date (revue B8 delta de #1158, m7 et m8) : la RPC a pu rester
+    /// en vol côté serveur. Avant 30 s depuis le début de l'appel expiré, l'issue reste incertaine (« Actualiser », aucun
+    /// envoi) ; à 30 s, une relecture sans la date conclut « non enregistrée », avec un constat neutre, et l'envoi
+    /// redevient possible. Horloge des gateways injectée, réglée à la main.
+    func testDelaiDepassePuisRelectureSansDateNeConclutQuApres30Secondes() async throws {
         let port = PortLent()
-        let (model, mission) = try await modele(port, missions: { MissionsRelues(base: $0, date: nil) }, delai: 1)
+        let horloge = HorlogeReglable(DemoWorld.fixedNow)
+        let (model, mission) = try await modele(port, missions: { MissionsRelues(base: $0, date: nil) }, delai: 1,
+                                                horloge: horloge)
+        XCTAssertEqual(ConfirmationPresenceModel.delaiAvantConclusion, 30)
         _ = await model.confirmer()
-        XCTAssertFalse(model.relectureRequise, "délai sans accusé, relue sans la date : non enregistrée")
-        XCTAssertNil(model.issue, "aucun message d'échec ni d'incertitude : le bouton revient")
+        XCTAssertTrue(model.relectureRequise, "relecture immédiate, sans la date : la RPC a pu rester en vol")
+        XCTAssertEqual(model.issue, .incertaine(PresenceRules.Textes.envoyeeNonRelue))
+        let tropTot = await model.confirmer()
+        XCTAssertFalse(tropTot, "aucun envoi avant une relecture qui conclut")
+        XCTAssertEqual(port.appels, 1)
+
+        horloge.avancer(29)
+        _ = await model.relire()
+        XCTAssertTrue(model.relectureRequise, "29 s après le début de l'appel : toujours incertaine")
+        XCTAssertEqual(model.issue, .incertaine(PresenceRules.Textes.envoyeeNonRelue))
+
+        horloge.avancer(1)
+        _ = await model.relire()
+        XCTAssertFalse(model.relectureRequise, "30 s après le début de l'appel, relue sans la date : non enregistrée")
+        XCTAssertEqual(model.issue, .nonEnregistree("Votre confirmation n'a pas été enregistrée."), "constat neutre (m8)")
+        XCTAssertEqual(PresenceRules.Textes.nonEnregistree, "Votre confirmation n'a pas été enregistrée.")
         XCTAssertEqual(model.bloc(mission), .aConfirmer)
         XCTAssertEqual(port.appels, 1)
         _ = await model.confirmer()
-        XCTAssertEqual(port.appels, 2, "nouvel envoi permis")
+        XCTAssertEqual(port.appels, 2, "nouvel envoi permis après la conclusion")
     }
 
-    /// Mission relue qui n'est plus attribuée au soignant : plus rien à confirmer, l'incertitude est levée.
-    func testRelectureDUneMissionPlusAttribueeLeveLIncertitude() async throws {
+    /// Après l'accusé, une relecture « mission plus attribuée » ne lève pas le verrou d'envoi (revue B8 delta de #1158,
+    /// m6) : aucun message, mais aucun second appel tant que l'écran n'a pas relu la mission.
+    func testApresAccuseMissionDesattribueeGardeLeVerrou() async throws {
         let port = PortEspion(.success(.envoyeeNonRelue(message: PresenceRules.Textes.envoyeeNonRelue)))
         let (model, _) = try await modele(port, missions: { MissionsDesattribuees(base: $0) })
+        _ = await model.confirmer()
+        XCTAssertTrue(model.relectureRequise, "verrou d'envoi gardé après l'accusé")
+        XCTAssertNil(model.issue, "plus rien à confirmer : aucun message")
+        let encore = await model.confirmer()
+        XCTAssertFalse(encore)
+        XCTAssertEqual(port.appels, 1)
+    }
+
+    /// Délai dépassé sans accusé, mission relue plus attribuée : plus rien à confirmer, l'incertitude est levée.
+    func testApresUnDelaiMissionDesattribueeLeveLIncertitude() async throws {
+        let (model, _) = try await modele(PortLent(), missions: { MissionsDesattribuees(base: $0) }, delai: 1)
         _ = await model.confirmer()
         XCTAssertFalse(model.relectureRequise)
         XCTAssertNil(model.issue)
