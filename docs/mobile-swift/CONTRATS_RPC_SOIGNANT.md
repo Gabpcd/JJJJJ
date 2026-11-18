@@ -133,8 +133,8 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_rgpd_exporter_rate_limited` | consommée lot 3 (T11) | 3 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_confirmer_paiement_soignant` | consommée lot 3 (T13) | 3 (T13) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_contester_paiement_soignant` | consommée lot 3 (T13) | 3 (T13) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
-| `fn_consulter_mon_iban` | à venir | 3 (T14b, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_enregistrer_mon_iban` | à venir | 3 (T14b, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_consulter_mon_iban` | consommée lot 3 (T14b) | 3 (T14b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_enregistrer_mon_iban` | consommée lot 3 (T14b) | 3 (T14b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_mes_revenus_connect` | consommée lot 3 (T12) | 3 (T12) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_mes_paiements_escrow` | consommée lot 3 (T12) | 3 (T12) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 
@@ -1720,7 +1720,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_contester_paiement_soignant"("p_paiement
 
 ## fn_consulter_mon_iban
 
-- **Statut natif** : à venir (lot 3, T14b) — **B9** (données bancaires, D18).
+- **Statut natif** : consommée (lot 3, T14b) par `JoleneSupabase/Revenus/SupabaseIbanGateway.swift` — **B9** (données bancaires, D18).
 - **Usage prévu** : Affichage `•••• {iban_last4}`, titulaire et état de vérification ; relue après
   `fn_enregistrer_mon_iban`.
 - **Signature SQL** (`supabase/schema/public.sql` l.25539) :
@@ -1742,7 +1742,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_consulter_mon_iban"() RETURNS "jsonb"
 
 ## fn_enregistrer_mon_iban
 
-- **Statut natif** : à venir (lot 3, T14b) — **B9** (données bancaires, D18).
+- **Statut natif** : consommée (lot 3, T14b) par `JoleneSupabase/Revenus/SupabaseIbanGateway.swift` — **B9** (données bancaires, D18).
 - **Usage prévu** : Confirmation de l'IBAN **du RIB vérifié** (règle serveur, correction 4) : contrôle mod 97 local
   avant envoi (`IbanRules`, port de `SectionPaiements.tsx` l.212-225) ; titulaire = « prénom nom » ou « nom prénom »
   normalisés (l.32273-32289) ; succès admis seulement sur `success == true` **puis** relecture `fn_consulter_mon_iban`

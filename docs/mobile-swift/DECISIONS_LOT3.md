@@ -1709,6 +1709,67 @@ sont reportés dans les puces ci-dessus. Les autres :
   barres de navigation) : la section, déjà proche du haut, était visible même sans défilement. Sur iPad, l'assertion
   reste la visibilité de la première carte.
 
+## T14b — IBAN du soignant (branche `lot3/l3-t14b`, 18/11/2026 ; B9, jamais mergée sans go)
+
+- **Livré.** Écran « Coordonnées bancaires » (`Jolene/Screens/Revenus/IbanScreen.swift`, `iban-screen`), empilé depuis
+  le hub (section « Paiements & facturation » › « Coordonnées bancaires », `MonCompteSoignant.tsx` l.65 et l.73,
+  `iban-ouvrir`, `IbanRoute` enregistrée par `ProfileScreen` ; aucune route ni lien universel). Cœur :
+  `Revenus/IbanRules.swift` (contrôle du web `validateIbanChecksum` l.212-225, l.248-249, l.337, l.366 ; textes ;
+  refus ; règle de relecture `IbanRelecture`), `Revenus/IbanModel.swift` ; démo `Demo/DemoIbanGateway.swift` (serveur
+  simulé : refus de `fn_enregistrer_mon_iban` et `fn_lier_iban_verifie_document` dans leur ordre, RIB démo portant le
+  seul IBAN d'exemple ISO 13616 ; variante `JOLENE_DEMO_IBAN=rib-requis|non-verifie`) ; Supabase
+  `Revenus/SupabaseIbanGateway.swift`. Aucune migration, aucun appel de `fn_lier_iban_verifie_document`
+  (service_role). RPC passées en `consommee` : `fn_consulter_mon_iban`, `fn_enregistrer_mon_iban`.
+- **Règles (D20, TJ6).** Succès strict : `success == true` puis relecture `fn_consulter_mon_iban` avec IBAN renseigné,
+  `iban_verifie == true` et les quatre derniers caractères de l'IBAN envoyé, sinon « Une erreur est survenue. Veuillez
+  réessayer. », jamais « IBAN enregistré » ; `success:false` → refus traduit par code (sous-section ci-dessous) ;
+  `NON_AUTHENTIFIE` → session expirée (« Vérifier ma session ») ; `PROFIL_INTROUVABLE` → erreur de contrat au message
+  générique. Une demande à la fois ; état relu après tout refus ou toute erreur (un délai dépassé ne prouve rien) ;
+  jamais de renvoi. IBAN vidé du champ dès l'envoi, quelle que soit l'issue ; jamais journalisé (aucun `print`, aucun
+  journal) ni persisté (aucun stockage) ; champ `privacySensitive`, clavier ASCII en majuscules sans autocorrection ni
+  suggestion (`JoleneInputKind.iban`). `CrashScrubber` (T15) masque déjà les IBAN (compacts, groupés, espaces
+  insécables, tirets) et les clés `iban` / `p_iban` : aucun motif à ajouter.
+- **Définition live.** Contrat relu sur le dump `supabase/schema/public.sql` (re-baseline #1121) : `fn_consulter_mon_iban`
+  l.25923-25969, `fn_enregistrer_mon_iban` l.32684-32741, `fn_lier_iban_verifie_document` l.39848-39965, GRANT
+  `authenticated` l.82619 et l.83050. La tranche n'a aucun accès au backend : la relecture de la production
+  (`pg_get_functiondef`, droits) reste à faire avant le merge, comme pour T13.
+- **Écarts au web (non juridiques).**
+  1. Pas de faux succès : le web annonce « IBAN enregistré » quand le refus ne porte que `error_code` (l.259-262, D20).
+  2. Le web ne vide le champ IBAN qu'au succès (l.270) ; le natif le vide à chaque envoi (blueprint §3 T14b).
+  3. Échec de la première lecture : erreur et « Réessayer » ; le web affiche alors le formulaire sans état (l.243).
+  4. Le contrôle local est celui du web (14 caractères au moins) ; le serveur en exige 15 (`fn_iban_est_valide`) : un
+     IBAN de 14 caractères part et revient `IBAN_INVALIDE` (« IBAN invalide »).
+  5. Écran empilé depuis le hub ; le web fait défiler le hub jusqu'à `SectionPaiements` (l.74, l.160-169).
+- **Non portés (TJ6, TJ8 : un texte du web inexact n'est ni affiché ni reformulé).** l.280 (destinataires, TJ6) ; l.308
+  « L'ancien IBAN est conservé dans ton historique, mais aucun nouveau versement ne peut l'utiliser sans un RIB courant
+  vérifié portant exactement le même IBAN et ton identité. », instruit contre `fn_consulter_mon_iban` comme TJ6 le
+  demande : l'état `iban_renseigne && !iban_verifie` ne garde pas l'IBAN « dans un historique » mais dans la colonne
+  courante `soignants.iban_virement` (l.25961), et il ne désigne pas toujours un « ancien » IBAN (un IBAN renseigné avant
+  la liaison au RIB vérifié l'est aussi) ; inexact, donc non porté. L'état garde son titre « RIB vérifié requis »
+  (l.306) et son action « Téléverser mon RIB » (l.316). PR web HARD STOP à préparer hors lot (avec l.280).
+- **CI UI.** `DemoIbanTests` rangé dans l'éclat `lot3-revenus` (domaine T12-T14b), sauté par le socle.
+
+### T14b — textes des refus IBAN (non juridiques)
+
+Règle TJ6 appliquée code par code (`IbanPresentation.refus`, épinglé par
+`IbanTests.testChaqueCodeAffichePasseParSaRegleJamaisIbanEnregistre`) :
+
+- `TITULAIRE_NON_CONCORDANT`, `RIB_VERIFIE_REQUIS` : `error` serveur verbatim (règle 1) ; `RIB_VERIFIE_REQUIS` sous le
+  titre « RIB vérifié requis » avec « Téléverser mon RIB ».
+- `IBAN_INVALIDE` : « IBAN invalide » (`SectionPaiements.tsx` l.339).
+- `RIB_COURANT_REQUIS`, `RIB_NON_CONCORDANT` : « Téléversez puis faites vérifier le RIB correspondant. » (`public.sql`
+  l.32735), titre « RIB vérifié requis » (l.306), action « Téléverser mon RIB » (l.316) vers les documents du lot 2.
+- `PROFIL_INTROUVABLE`, code inconnu : « Une erreur est survenue. Veuillez réessayer. » (`src/lib/erreurs.ts` l.532).
+- `NON_AUTHENTIFIE` : parcours de session du lot 1 (« Vérifier ma session »).
+- Textes nouveaux (règle 3 ; vouvoiement, une phrase, la seule condition vérifiée par le serveur et l'action de l'app,
+  action « Mes documents ») :
+  - `IDENTITE_VERIFIEE_REQUISE` (`identite_verifiee` et `coherence_identite = 'COHERENT'`, `public.sql`
+    l.39884-39889) : « Faites d'abord vérifier votre identité, cohérente avec votre profil, depuis Mes documents. »
+  - `IDENTITE_COURANTE_REQUISE` (pièce d'identité `VERIFIE` dont les noms extraits concordent, l.39891-39907) :
+    « Une pièce d'identité vérifiée à vos nom et prénom est requise : téléversez-la depuis Mes documents. »
+- Aucun texte juridique ajouté ; aucune décision juridique n'a été nécessaire.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
 ## T15 — Sentry Cocoa (branche `lot3/l3-t15-v3`, 16/11/2026)
 
 Mise en œuvre de D21. Mode d'emploi, réglages et recette : `docs/mobile-swift/SENTRY_IOS.md`. T15 n'est pas B9
@@ -1817,7 +1878,8 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
   (section T13 ci-dessus), revue fraîche B8 n°1 CLÔTURABLE (mineurs traités), définitions live relues le 16/11/2026 ;
   go humain requis avant merge.
 - **T14a** — Stripe Connect.
-- **T14b** — IBAN (données bancaires).
+- **T14b** — IBAN (données bancaires) ; branche `lot3/l3-t14b` poussée (section T14b ci-dessus), définition live à
+  relire avant le merge ; go humain requis avant merge.
 - **T16** — dispatch STAGING (secrets STAGING, suppression des comptes jetables, bascule transactionnelle de la
   cohorte D5-R).
 - **PR web « destinataire du géocodage inverse » (légal exposé ; À PRÉPARER, hors du chantier iOS)** — suite de la
