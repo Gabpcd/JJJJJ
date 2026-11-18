@@ -31,7 +31,7 @@ final class Lot4PortsTests: XCTestCase {
         var g = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
         g.swipe = SwipeTemoin()
         DemoLot4.cabler(&g)
-        XCTAssertTrue(g.swipe is UnwiredSwipePort, "T1 : fabrique démo du swipe = stub jusqu'à T3a")
+        XCTAssertTrue(g.swipe is DemoSwipeGateway, "T3a : fabrique démo du swipe câblée")
         XCTAssertEqual(g.unwiredPorts, Lot1PortsTests.portsLot1 + Lot2PortsTests.portsLot2 + Lot3PortsTests.portsLot3
                        + DemoWorldTests.portsEnAttenteLot4)
     }

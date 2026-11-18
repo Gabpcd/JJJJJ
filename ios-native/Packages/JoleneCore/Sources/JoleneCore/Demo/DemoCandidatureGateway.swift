@@ -15,7 +15,12 @@ import Foundation
 ///   portée, revue B8 de T6a M1) ; libérale : proposition `PROPOSEE` de moins de 2 h acceptée (`ACCEPTEE`) et
 ///   mission attribuée ; refus par `refuserProposition` (`REFUSEE`), expiration à 2 h comme `fn_repondre_proposition` ;
 /// - mission attribuée pendant la session → servie `ASSIGNEE` par `DemoMissionsGateway` et retirée d'Explorer ;
-/// - mission `TOUS` sans choix pour un profil `MIXTE` → `choixRequis` avec les options du serveur.
+/// - mission `TOUS` sans choix pour un profil `MIXTE` → `choixRequis` avec les options du serveur ;
+/// - SWIPE_LIKE (lot 4, T3a) → ordre de `fn_enregistrer_swipe` : candidature existante (« Vous avez déjà candidaté à
+///   cette mission »), choix de contrat, ligne `swipes` déjà posée (`mission_deja_swipee`, libellé `SwipeRefus`), puis
+///   candidature `EN_ATTENTE` de session relue et ligne `swipes` LIKE consignée (`missionsLikees`, lue par
+///   `DemoSwipeGateway`) ; le retrait (`retirerCandidature`) supprime la candidature `EN_ATTENTE` comme
+///   `fn_retirer_candidature`, la ligne `swipes` reste (correction 12). URGENCE reste refusée (T11).
 ///
 /// Annulations (T7) : mêmes contrôles, même ordre et mêmes textes que `fn_annuler_candidature_soignant`
 /// (motif, texte de 10 caractères, candidature, statut) et `fn_annuler_mission_soignant` (mission, attribution,
@@ -33,6 +38,10 @@ public actor DemoCandidatureGateway: CandidaturePort {
         public static let propositionIntrouvable = "Proposition introuvable."
         public static let propositionExpiree = "Cette proposition a expiré"
         public static let propositionPlusEnAttente = "Cette proposition n’est plus en attente"
+        /// `fn_enregistrer_swipe` (LIKE) et `fn_retirer_candidature` (T3a).
+        public static let dejaCandidate = "Vous avez déjà candidaté à cette mission"
+        public static let retraitIntrouvable = "Candidature introuvable"
+        public static let retraitDejaTraitee = "La candidature a déjà été traitée et ne peut plus être retirée ici."
         public static let choixContrat = [
             ChoixContratOption(value: "SALARIE", label: "Salarié (CDD / bulletin de paie)"),
             ChoixContratOption(value: "LIBERAL", label: "Libéral (note d'honoraires)"),
@@ -67,6 +76,9 @@ public actor DemoCandidatureGateway: CandidaturePort {
     /// Missions attribuées au profil fictif pendant la session : contrat démo par mission.
     private var attributions: [String: String] = [:]
     private var compteur = 0
+    /// T3a : missions likées pendant la session (lignes `swipes` LIKE, immuables) et candidatures retirées (supprimées).
+    private var likes: Set<String> = []
+    private var supprimees: Set<String> = []
     /// T7 : missions assignées (`demo-dashboard.json`), missions annulées et justificatifs transmis pendant la session.
     private let missionsAssignees: @Sendable () throws -> [DemoFixtures.MissionFixture]
     private var annulees: Set<String> = []
@@ -113,12 +125,29 @@ public actor DemoCandidatureGateway: CandidaturePort {
     /// Missions attribuées pendant la session, relues par `DemoMissionsGateway` (détail `ASSIGNEE`, hors d'Explorer).
     public func missionsAttribuees() -> Set<String> { Set(attributions.keys) }
 
+    /// T3a : missions likées pendant la session (lignes `swipes` LIKE), exclues du paquet par `DemoSwipeGateway`.
+    public func missionsLikees() -> Set<String> { likes }
+
+    /// T3a : `fn_retirer_candidature` (contrôles dans l'ordre du serveur), puis absence relue dans l'acteur. La ligne
+    /// `swipes` LIKE reste : la mission ne revient jamais au paquet (correction 12).
+    public func retirerCandidature(id: String, context: MissionReadContext) throws -> RetraitOutcome {
+        try Self.verifier(context)
+        guard let candidature = try toutes().first(where: { $0.id == id }) else {
+            return .refuse(message: Textes.retraitIntrouvable)
+        }
+        guard candidature.statut == "EN_ATTENTE" else { return .refuse(message: Textes.retraitDejaTraitee) }
+        supprimees.insert(id)
+        session.removeAll { $0.id == id }
+        guard try !toutes().contains(where: { $0.id == id }) else { throw JoleneError(.contract, Self.messageRelecture) }
+        return .retiree
+    }
+
     // MARK: - CandidaturePort
 
     public func confirmer(action: ActionPlanning, missionId: String, creneaux: [CreneauConfirmePayload], message: String?,
                           choixContrat: String?, candidatureId: String?, context: MissionReadContext) async throws -> CandidatureOutcome {
         try Self.verifier(context)
-        guard action == .postuler || action == .accepter || action == .proposition else {
+        guard action == .postuler || action == .accepter || action == .proposition || action == .swipeLike else {
             throw CandidatureRules.actionHorsLot1(action)
         }
         if action == .proposition {
@@ -137,6 +166,9 @@ public actor DemoCandidatureGateway: CandidaturePort {
         }
         if action == .proposition {
             return try accepterProposition(candidatureId: candidatureId, mission: fixture.record)
+        }
+        if action == .swipeLike {
+            return try aimer(fixture.record, choixContrat: choixContrat, context: context)
         }
         // Ordre des délégués : `fn_accepter_mission` refuse le mode candidature avant de résoudre le contrat ;
         // `fn_postuler_mission` résout le contrat (`choix_requis`) avant de chercher un doublon.
@@ -240,7 +272,30 @@ public actor DemoCandidatureGateway: CandidaturePort {
     /// seconde candidature sur la même mission, comme la contrainte `UNIQUE (mission_id, soignant_id)`.
     private func toutes() throws -> [CandidatureRecord] {
         var vues = Set<String>()
-        return (session + (try candidaturesInitiales())).filter { vues.insert($0.id).inserted }
+        return (session + (try candidaturesInitiales())).filter { !supprimees.contains($0.id) && vues.insert($0.id).inserted }
+    }
+
+    /// SWIPE_LIKE dans l'ordre de `fn_enregistrer_swipe` (après les contrôles de planning du wrapper), relu dans l'acteur.
+    private func aimer(_ mission: MissionRecord, choixContrat: String?, context: MissionReadContext) throws -> CandidatureOutcome {
+        if try toutes().contains(where: { $0.missionId == mission.id }) {
+            return .refusee(code: nil, message: Textes.dejaCandidate, documentsRequisPour: nil)
+        }
+        if mission.typeContratRecherche == "TOUS", context.profile.typeExercice == "MIXTE", (choixContrat ?? "").isEmpty {
+            return .choixRequis(Textes.choixContrat)
+        }
+        guard !likes.contains(mission.id) else {
+            let refus = SwipeRefus.traduire("mission_deja_swipee")
+            return .refusee(code: refus.code, message: refus.message, documentsRequisPour: nil)
+        }
+        likes.insert(mission.id)
+        compteur += 1
+        let id = "demo-candidature-swipe-\(compteur)"
+        session.insert(CandidatureRecord(id: id, missionId: mission.id, statut: "EN_ATTENTE", message: nil,
+                                         typeContratChoisi: choixContrat, creeLe: DateHeureParis.isoUTC(clock.now())), at: 0)
+        guard CandidatureRules.candidaturePoseeRelue(try candidatureCourante(missionId: mission.id), id: id, missionId: mission.id) else {
+            throw JoleneError(.contract, Self.messageRelecture)
+        }
+        return .confirmed(candidatureId: id, contratId: nil)
     }
 
     private func candidatureCourante(missionId: String) throws -> CandidatureRecord? {

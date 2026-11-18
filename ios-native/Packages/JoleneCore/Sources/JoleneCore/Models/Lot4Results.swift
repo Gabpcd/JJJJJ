@@ -9,51 +9,8 @@ import Foundation
 
 // MARK: - Swipe (T3a)
 
-/// Carte du paquet de `fn_obtenir_missions_swipe`. Complétée par T3a (clés l.46040-46085 du dump).
-public struct CarteSwipe: Equatable, Sendable, Identifiable {
-    public var id: String
-    public var mission: Mission
-    /// Valeur serveur : `nil` seulement après B1 (aujourd'hui `COALESCE(score_global, 0)`, correction 13).
-    public var score: Int?
-    public var breakdown: [String: Double]
-    public var etablissementNom: String?
-
-    public init(id: String, mission: Mission, score: Int?, breakdown: [String: Double] = [:], etablissementNom: String? = nil) {
-        self.id = id; self.mission = mission; self.score = score; self.breakdown = breakdown
-        self.etablissementNom = etablissementNom
-    }
-}
-
-/// Directions envoyées à `fn_enregistrer_swipe` hors candidature (le ❤️ passe par `CandidaturePort.confirmer(.swipeLike)`).
-public enum DirectionSwipe: String, Equatable, Sendable, CaseIterable {
-    case passer = "DISLIKE"
-    case favori = "FAVORI"
-}
-
-/// Issue de ✕ / ⭐ : la carte n'est retirée qu'après `enregistre` (`ok:true`).
-public enum SwipeOutcome: Equatable, Sendable {
-    case enregistre
-    /// `code` technique du serveur (`mission_deja_swipee`, `mission_indisponible`…), traduit par `SwipeRefus` (T3a).
-    case refuse(code: String?, message: String)
-}
-
-/// Issue du retrait après ❤️ (`fn_retirer_candidature`), prouvée par relecture : candidature absente.
-public enum RetraitOutcome: Equatable, Sendable {
-    case retiree
-    case refuse(message: String)
-}
-
-/// Préférences du quiz (`fn_initialiser_preferences_matching(numeric×4)`, bornes [0, 1]).
-public struct PreferencesMatching: Equatable, Sendable {
-    public var tarif: Double
-    public var distance: Double
-    public var etablissement: Double
-    public var urgence: Double
-
-    public init(tarif: Double, distance: Double, etablissement: Double, urgence: Double) {
-        self.tarif = tarif; self.distance = distance; self.etablissement = etablissement; self.urgence = urgence
-    }
-}
+// `CarteSwipe`, `DirectionSwipe`, `SwipeOutcome`, `RetraitOutcome` et `PreferencesMatching` : `Models/Swipe.swift`
+// (déplacés par T3a avec leur décodage tolérant, comme `Models/Favoris.swift` au lot 1).
 
 // MARK: - Filtres sauvegardés (T4)
 
