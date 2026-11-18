@@ -148,6 +148,7 @@ final class DestinationLienTests: XCTestCase {
             ("/soignant/notifications?utm_source=push#haut", .notifications),                    // lot 3, T5
             ("/soignant/profil?tab=principal", .profil),          // lot 3, T9 : édition du profil livrée
             ("/soignant/reputation", .profil),                    // lot 3, T9 : alias du profil
+            ("/soignant/mes-favoris?onglet=etablissements", .favoris), // lot 1, T4b : « Mes favoris »
         ]
         for (chemin, route) in cas {
             let d = try XCTUnwrap(lien("https://jolene.app" + chemin), chemin)
@@ -371,6 +372,7 @@ final class DestinationLienTests: XCTestCase {
             (.accueil, "accueil"),
             (.explorer, "explorer"),
             (.missions, "missions"),
+            (.favoris, "favoris"),                                      // L1-T4b
             (.missionDetail(id: "SECRET"), "missionDetail(id masqué)"),
             (.serieDetail(id: "SECRET"), "serieDetail(id masqué)"),
             (.revenus(section: .apercu), "revenus(apercu)"),
@@ -455,6 +457,7 @@ final class DestinationLienTests: XCTestCase {
             (.accueil, true, "lot 1"),
             (.explorer, true, "lot 1"),
             (.missions, true, "placeholder jusqu'à L1-T5"),
+            (.favoris, true, "L1-T4b : MesFavorisScreen, empilé sur l'onglet Explorer"),
             (.missionDetail(id: "m"), true, "lot 1"),
             (.serieDetail(id: "s"), false, "renvoi web, décision 11 du lot 1 ; lot 4"),
             (.revenus(section: .apercu), true, "T12 : RevenusScreen (onglet Revenus)"),

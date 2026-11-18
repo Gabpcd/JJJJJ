@@ -109,13 +109,12 @@ final class FavorisScenario: @unchecked Sendable {
     init(_ files: [String: [Reponse]] = [:]) { self.files = files }
 
     /// Appels reçus, dans l'ordre (ex. `sauvegarder(m-1)`).
-    var appels: [String] { lock.lock(); defer { lock.unlock() }; return journal }
+    var appels: [String] { lock.withLock { journal } }
 
     func nombre(_ prefixe: String) -> Int { appels.filter { $0.hasPrefix(prefixe) }.count }
 
     func ajouter(_ operation: String, _ reponse: Reponse) {
-        lock.lock(); defer { lock.unlock() }
-        files[operation, default: []].append(reponse)
+        lock.withLock { files[operation, default: []].append(reponse) }
     }
 
     func missions(_ appel: String) async throws -> [MissionSauvegardee] {
@@ -134,17 +133,18 @@ final class FavorisScenario: @unchecked Sendable {
 
     private func suivante(_ appel: String) -> Reponse {
         let operation = String(appel.prefix { $0 != "(" })
-        lock.lock(); defer { lock.unlock() }
-        journal.append(appel)
-        if var file = files[operation], !file.isEmpty {
-            let reponse = file.removeFirst()
-            files[operation] = file
-            return reponse
-        }
-        switch operation {
-        case "lire": return .missions([])
-        case "etablissements": return .etablissements([])
-        default: return .echec(nonScripte)
+        return lock.withLock { () -> Reponse in
+            journal.append(appel)
+            if var file = files[operation], !file.isEmpty {
+                let reponse = file.removeFirst()
+                files[operation] = file
+                return reponse
+            }
+            switch operation {
+            case "lire": return .missions([])
+            case "etablissements": return .etablissements([])
+            default: return .echec(nonScripte)
+            }
         }
     }
 
