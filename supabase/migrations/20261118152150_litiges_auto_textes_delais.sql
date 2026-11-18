@@ -41,6 +41,13 @@
 -- et service_role) sont conservés par CREATE OR REPLACE : aucun GRANT ni
 -- REVOKE. Aucune des deux fonctions n'est inscrite dans
 -- private.security_definer_inventory.
+-- Motif neutre (commit séparé, retirable seul ; choix à valider, revue B8 de
+--    #1145, m4) : motif ABSENCE_SOIGNANT, raisons d'audit et COMMENT ne disent
+--    plus « sans contestation » / « non contesté(e) », mais seulement ce que le
+--    serveur sait (absence signalée, présence validée depuis plus de N h). Le
+--    cron ne vérifie pas l'absence de contestation : l'anti-doublon ne cherche
+--    qu'un litige ouvert du même type, et une contestation
+--    DESACCORD_HEURES_POINTAGE n'empêche pas l'auto-création.
 --
 -- 0. Préflight fail-closed (CLAUDE.md, garde-fous 9.0 n°2) : md5(prosrc),
 --    attributs, propriétaire et ACL LIVE attendus, sinon la migration entière
@@ -146,7 +153,7 @@ BEGIN
        OR v_presence.heures_reelles = 0 THEN
       v_type_litige := 'ABSENCE_SOIGNANT';
       v_motif := format(
-        'Auto-création : soignant marqué absent sans contestation dans les %sh',
+        'Auto-création : absence signalée par l''établissement ; présence validée depuis plus de %sh',
         v_delai_pointage_h
       );
       v_notif_corps :=
@@ -226,12 +233,12 @@ BEGIN
         'raison', CASE v_type_litige
           WHEN 'ABSENCE_SOIGNANT' THEN
             format(
-              'Absence non contestée dans les %sh post-validation présence',
+              'Absence signalée, présence validée depuis plus de %sh',
               v_delai_pointage_h
             )
           WHEN 'DEPART_ANTICIPE' THEN
             format(
-              'Départ anticipé (< 80 %% heures prévues) non contesté dans les %sh',
+              'Départ anticipé (< 80 %% heures prévues), présence validée depuis plus de %sh',
               v_delai_pointage_h
             )
         END
@@ -398,7 +405,23 @@ END;
 $fn_litige_push_notification$;
 
 -- ── 3. Commentaire : le délai est celui du paramètre ────────────────────────
-COMMENT ON FUNCTION public.fn_auto_creation_litiges_presence() IS 'Cron : crée automatiquement des litiges ABSENCE_SOIGNANT (heures_reelles=0/NULL) et DEPART_ANTICIPE (< 80 % des heures prévues) pour les présences non contestées dans le délai parametres_litiges.delai_contestation_pointage_h post-validation étab. Anti-boucle via presences.litige_auto_cree_le. initie_par=SYSTEME. Retourne { litiges_crees, absence_soignant, depart_anticipe }. Cas DESACCORD_HEURES_POINTAGE non auto-détectable (schéma presences mono-colonne) — reste manuel via fn_ouvrir_litige_rate_limited.';
+COMMENT ON FUNCTION public.fn_auto_creation_litiges_presence() IS 'Cron : crée automatiquement des litiges ABSENCE_SOIGNANT (heures_reelles=0/NULL) et DEPART_ANTICIPE (< 80 % des heures prévues) pour les présences validées par l''étab depuis plus de parametres_litiges.delai_contestation_pointage_h heures (sans vérifier une contestation ouverte d''un autre type). Anti-boucle via presences.litige_auto_cree_le. initie_par=SYSTEME. Retourne { litiges_crees, absence_soignant, depart_anticipe }. Cas DESACCORD_HEURES_POINTAGE non auto-détectable (schéma presences mono-colonne) — reste manuel via fn_ouvrir_litige_rate_limited.';
+
+-- ── 3 bis. Motif neutre : aucune affirmation de contestation (m4) ──────────
+DO $litiges_textes_motif_neutre$
+DECLARE
+  v_src text := (SELECT p.prosrc FROM pg_catalog.pg_proc p
+                  WHERE p.oid = pg_catalog.to_regprocedure('public.fn_auto_creation_litiges_presence()'));
+BEGIN
+  IF v_src IS NULL
+    OR pg_catalog.strpos(v_src, 'sans contestation') > 0
+    OR pg_catalog.strpos(v_src, 'non contesté') > 0
+    OR pg_catalog.strpos(v_src, 'présence validée depuis plus de %sh') = 0
+  THEN
+    RAISE EXCEPTION 'LITIGES_TEXTES_DELAIS_POSTCONDITION_MOTIF_NEUTRE : public.fn_auto_creation_litiges_presence() affirme encore une absence de contestation que le cron ne vérifie pas.';
+  END IF;
+END
+$litiges_textes_motif_neutre$;
 
 -- ── 4. Post-condition : corps écrits, attributs et ACL inchangés ───────────
 DO $litiges_textes_delais_apres$
@@ -409,7 +432,7 @@ DECLARE
 BEGIN
   FOR v_attendu IN
     SELECT * FROM (VALUES
-      ('fn_auto_creation_litiges_presence()', '43e9244304a10b0206650e94f7e94153',
+      ('fn_auto_creation_litiges_presence()', '83a9fa523492e2dd7e587e28d7fea831',
        ARRAY['48h', 'Répondez sous']::text[]),
       ('fn_litige_push_notification(uuid,text,text,text,text,uuid,jsonb)', '8ae17c324682bbde0bbe64efa3d53608',
        ARRAY['Répondez sous 72h', 'Répondez sous 24h']::text[])
@@ -452,7 +475,7 @@ BEGIN
 
   IF pg_catalog.obj_description(
        pg_catalog.to_regprocedure('public.fn_auto_creation_litiges_presence()'), 'pg_proc')
-     IS DISTINCT FROM 'Cron : crée automatiquement des litiges ABSENCE_SOIGNANT (heures_reelles=0/NULL) et DEPART_ANTICIPE (< 80 % des heures prévues) pour les présences non contestées dans le délai parametres_litiges.delai_contestation_pointage_h post-validation étab. Anti-boucle via presences.litige_auto_cree_le. initie_par=SYSTEME. Retourne { litiges_crees, absence_soignant, depart_anticipe }. Cas DESACCORD_HEURES_POINTAGE non auto-détectable (schéma presences mono-colonne) — reste manuel via fn_ouvrir_litige_rate_limited.'
+     IS DISTINCT FROM 'Cron : crée automatiquement des litiges ABSENCE_SOIGNANT (heures_reelles=0/NULL) et DEPART_ANTICIPE (< 80 % des heures prévues) pour les présences validées par l''étab depuis plus de parametres_litiges.delai_contestation_pointage_h heures (sans vérifier une contestation ouverte d''un autre type). Anti-boucle via presences.litige_auto_cree_le. initie_par=SYSTEME. Retourne { litiges_crees, absence_soignant, depart_anticipe }. Cas DESACCORD_HEURES_POINTAGE non auto-détectable (schéma presences mono-colonne) — reste manuel via fn_ouvrir_litige_rate_limited.'
   THEN
     RAISE EXCEPTION 'LITIGES_TEXTES_DELAIS_POSTCONDITION_COMMENTAIRE';
   END IF;

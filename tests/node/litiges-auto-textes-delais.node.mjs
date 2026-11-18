@@ -52,7 +52,7 @@ const REMPLACEMENTS = {
       `      v_motif :=
         'Auto-création : soignant marqué absent sans contestation dans les 48h';`,
       `      v_motif := format(
-        'Auto-création : soignant marqué absent sans contestation dans les %sh',
+        'Auto-création : absence signalée par l''établissement ; présence validée depuis plus de %sh',
         v_delai_pointage_h
       );`,
     ],
@@ -75,12 +75,12 @@ const REMPLACEMENTS = {
             'Départ anticipé (< 80 % heures prévues) non contesté dans les 48h'`,
       `          WHEN 'ABSENCE_SOIGNANT' THEN
             format(
-              'Absence non contestée dans les %sh post-validation présence',
+              'Absence signalée, présence validée depuis plus de %sh',
               v_delai_pointage_h
             )
           WHEN 'DEPART_ANTICIPE' THEN
             format(
-              'Départ anticipé (< 80 %% heures prévues) non contesté dans les %sh',
+              'Départ anticipé (< 80 %% heures prévues), présence validée depuis plus de %sh',
               v_delai_pointage_h
             )`,
     ],
@@ -169,7 +169,23 @@ test('le délai affiché vient du paramètre qui filtre les présences, plus auc
   // Le motif du départ anticipé garde son format (heures effectuées / prévues).
   assert.ok(corps.includes("'Auto-création : départ anticipé (%sh effectuées sur %sh prévues, soit %s %%).'"));
   // « % » littéral échappé dans format() (sinon spécificateur invalide).
-  assert.ok(corps.includes("'Départ anticipé (< 80 %% heures prévues) non contesté dans les %sh'"));
+  assert.ok(corps.includes("'Départ anticipé (< 80 %% heures prévues), présence validée depuis plus de %sh'"));
+  // Revue B8 m4 : le cron ne vérifie pas l'absence de contestation (anti-doublon
+  // limité au même type_litige) ; aucun texte ne l'affirme.
+  assert.doesNotMatch(corps, /sans contestation|non contest/i);
+  assert.equal(occurrences(corps,
+    "'Auto-création : absence signalée par l''établissement ; présence validée depuis plus de %sh'"), 1);
+  assert.equal(occurrences(corps, "'Absence signalée, présence validée depuis plus de %sh'"), 1);
+  // Contrôle dédié en base, après le COMMENT et avant la post-condition générale
+  // (bloc propre au commit m4, pour que ce commit se retire seul).
+  const code = sansCommentaires(migration);
+  const bloc = code.slice(code.indexOf('DO $litiges_textes_motif_neutre$'), code.indexOf('$litiges_textes_motif_neutre$;'));
+  assert.ok(code.indexOf('COMMENT ON FUNCTION') < code.indexOf('DO $litiges_textes_motif_neutre$'));
+  assert.ok(code.indexOf('$litiges_textes_motif_neutre$;') < code.indexOf('DO $litiges_textes_delais_apres$'));
+  for (const attendu of ["strpos(v_src, 'sans contestation') > 0", "strpos(v_src, 'non contesté') > 0",
+    "strpos(v_src, 'présence validée depuis plus de %sh') = 0", "RAISE EXCEPTION 'LITIGES_TEXTES_DELAIS_POSTCONDITION_MOTIF_NEUTRE"]) {
+    assert.ok(bloc.includes(attendu), attendu);
+  }
 });
 
 test('SMS LITIGE_OUVERTURE et LITIGE_RAPPEL_J1 sans promesse chiffrée ; J3, J5 et remboursement inchangés', () => {
@@ -207,7 +223,8 @@ test('commentaire de fonction : nom du paramètre au lieu de « 48h »', () => {
   const code = sansCommentaires(migration);
   const ligne = code.split('\n').find(l => l.startsWith('COMMENT ON FUNCTION public.fn_auto_creation_litiges_presence() IS '));
   assert.ok(ligne, 'COMMENT ON FUNCTION absent');
-  assert.ok(ligne.includes('dans le délai parametres_litiges.delai_contestation_pointage_h post-validation étab'));
+  assert.ok(ligne.includes("pour les présences validées par l''étab depuis plus de parametres_litiges.delai_contestation_pointage_h heures (sans vérifier une contestation ouverte d''un autre type)"));
+  assert.doesNotMatch(ligne, /non contest/);
   assert.doesNotMatch(ligne, /48h/);
   assert.ok(code.includes("pg_catalog.obj_description(\n       pg_catalog.to_regprocedure('public.fn_auto_creation_litiges_presence()'), 'pg_proc')"));
 });
@@ -221,7 +238,8 @@ test('aucun GRANT ni REVOKE, deux redéfinitions seulement, ACL vérifiées avan
   assert.doesNotMatch(squelette, /\b(UPDATE|DELETE|INSERT|DROP|TRUNCATE|ALTER)\b/,
     'aucune écriture de données ni DDL hors des deux CREATE OR REPLACE et du COMMENT');
   const instructions = squelette.split(';').map(s => s.trim().split(/\s+/).slice(0, 2).join(' ')).filter(Boolean);
-  assert.deepEqual(instructions, ['SET LOCAL', "DO 'bloc'", 'CREATE OR', 'CREATE OR', 'COMMENT ON', "DO 'bloc'"]);
+  assert.deepEqual(instructions,
+    ['SET LOCAL', "DO 'bloc'", 'CREATE OR', 'CREATE OR', 'COMMENT ON', "DO 'bloc'", "DO 'bloc'"]);
   const definitions = [...squelette.matchAll(/CREATE OR REPLACE FUNCTION ([a-z_.]+)\(/g)].map(m => m[1]);
   assert.deepEqual(definitions, [AUTO, PUSH]);
   assert.equal(occurrences(code, "pg_catalog.has_function_privilege('authenticated', v_proc.oid, 'EXECUTE')"), 2);
@@ -233,7 +251,9 @@ test('banc psql : délai lu dans le paramètre, assertions sur motif, notificati
   assert.match(banc, /make_interval\(hours => v_delai \+ 1\)/);
   assert.doesNotMatch(banc, /INTERVAL '49 hours'/, 'aucun délai figé dans le banc');
   for (const attendu of [
-    "format('Auto-création : soignant marqué absent sans contestation dans les %sh', v_delai)",
+    "format('Auto-création : absence signalée par l''établissement ; présence validée depuis plus de %sh', v_delai)",
+    "format('Absence signalée, présence validée depuis plus de %sh', v_delai)",
+    "format('Départ anticipé (< 80 %% heures prévues), présence validée depuis plus de %sh', v_delai)",
     "'Votre établissement a signalé une absence.'",
     "'un litige ABSENCE_SOIGNANT a été ouvert sur votre mission.'",
   ]) {
