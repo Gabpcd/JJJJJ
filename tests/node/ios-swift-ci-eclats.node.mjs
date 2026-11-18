@@ -128,8 +128,9 @@ test('décision 22 : un éclat « contrats » porte DemoContratsTests et DemoSig
 // 22 min au run 44204757942) ; plafond de onze éclats atteint, ils sont répartis dans deux éclats légers.
 test('lot 5 : session et liens établissement hors du socle, chacun dans son éclat léger', () => {
   // L5-T5 : DemoEtabMissionsTests rejoint « presences » (place laissée par DemoFavorisTests, aucun douzième éclat).
+  // L5-T6 : DemoEtabCandidaturesTests (deux tests) rejoint aussi « presences ».
   const attendus = new Map([['DemoEtabSessionTests', 'lot3-profil-photo'], ['DemoEtabLiensTests', 'presences'],
-    ['DemoEtabMissionsTests', 'presences']]);
+    ['DemoEtabMissionsTests', 'presences'], ['DemoEtabCandidaturesTests', 'presences']]);
   for (const [classe, eclat] of attendus) {
     assert.ok(classes.includes(classe), `${classe} n est pas reconnue comme classe XCUITest`);
     const ou = domaines.filter(e => classesDe(e).includes(classe)).map(e => e.nom);

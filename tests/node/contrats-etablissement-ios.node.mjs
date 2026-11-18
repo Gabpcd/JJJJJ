@@ -57,6 +57,7 @@ const LOT5 = [
 const LOT5_CONSOMMEES = [
   'fn_mes_permissions_etab', 'fn_mon_etablissement_complet', // T1 : SupabaseEtabSessionGateway
   'fn_soignant_pour_etablissement', // T5 : SupabaseEtabMissionsGateway
+  'fn_lire_candidatures_mission_habilitee', 'fn_traiter_candidature_planning_v1', // T6 : SupabaseEtabCandidaturesGateway
 ];
 // Déjà suivies par un lot soignant, consommées aussi par l'établissement (annotation, jamais doublon).
 const PARTAGEES = [

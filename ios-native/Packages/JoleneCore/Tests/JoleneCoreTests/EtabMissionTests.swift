@@ -171,8 +171,9 @@ final class EtabMissionTests: XCTestCase {
         let ouverte = EtabMissionDetail(mission: mission(statut: "OUVERTE"), creneaux: [], soignantAssigneId: nil, candidaturesEnAttente: 3)
         let liensOuverte = EtabMissionsPresentation.liens(ouverte, permissions: tout)
         XCTAssertEqual(liensOuverte.map(\.cle), [.candidatures])
-        XCTAssertEqual(liensOuverte.first?.cible, .web(URL(string: "https://jolene.app/etablissement/missions/m-1")!),
-                       "T6 non livrée : page web, jamais un écran provisoire")
+        XCTAssertEqual(liensOuverte.first?.cible, .ecran(.candidatures(missionId: "m-1")),
+                       "T6 livrée : écran natif des candidatures")
+        XCTAssertEqual(liensOuverte.first?.titre, "Candidatures")
         XCTAssertEqual(liensOuverte.first?.detail, "3 candidatures en attente")
         XCTAssertEqual(EtabMissionsPresentation.liens(ouverte, permissions: PermissionsEtab(accordees: [.lecture])), [],
                        "candidatures masquées sans la permission")
