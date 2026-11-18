@@ -118,6 +118,6 @@ public extension RPCResponse {
     var estAccesRefuse: Bool { estRefus && code == RPCInterception.codeAccesRefuse }
     /// Refus métier intercepté (`RPCInterception.refusMetier`), texte serveur verbatim.
     var estRefusMetier: Bool { estRefus && code == RPCInterception.codeRefusMetier }
-    /// SQLSTATE d'un refus intercepté.
-    var sqlstate: String? { string("sqlstate") }
+    /// SQLSTATE d'un refus intercepté (nom distinct de `sqlstate`, refus restitués par `exceptionsMetier` du lot 3).
+    var sqlstateIntercepte: String? { string("sqlstate") }
 }

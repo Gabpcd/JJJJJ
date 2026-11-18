@@ -34,7 +34,7 @@ final class DemoEspaceTests: XCTestCase {
 
     func testEspaceSoignantIdentiqueAuMondeDuLot0() async throws {
         let gateways = DemoWorld.gateways(espace: .soignant)
-        XCTAssertEqual(gateways.unwiredPorts, DemoWorldTests.portsEnAttenteLot1)
+        XCTAssertEqual(gateways.unwiredPorts, DemoWorldTests.portsEnAttenteLot1 + DemoWorldTests.portsEnAttenteLot2 + DemoWorldTests.portsEnAttenteLot3)
         XCTAssertEqual(gateways.etablissement.unwiredPorts, DemoWorldTests.portsEnAttenteLot5)
         let user = try await gateways.auth.signIn(email: DemoEspace.emailEtablissement, password: motDePasse)
         XCTAssertEqual(user, DemoWorld.user, "monde soignant : tout email ouvre le compte soignant fictif")
@@ -51,7 +51,7 @@ final class DemoEspaceTests: XCTestCase {
 
     func testPortsDuMondeEtablissementCablesCommeLeMondeDuLot0() {
         let gateways = DemoWorld.gateways(espace: .etablissement(.init()))
-        XCTAssertEqual(gateways.unwiredPorts, DemoWorldTests.portsEnAttenteLot1)
+        XCTAssertEqual(gateways.unwiredPorts, DemoWorldTests.portsEnAttenteLot1 + DemoWorldTests.portsEnAttenteLot2 + DemoWorldTests.portsEnAttenteLot3)
         XCTAssertEqual(gateways.etablissement.unwiredPorts, DemoWorldTests.portsEnAttenteLot5)
         XCTAssertTrue(gateways.etablissement.session is DemoEtabSessionGateway)
         XCTAssertTrue(gateways.role is DemoRoleEspaceGateway)
