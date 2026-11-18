@@ -10,7 +10,7 @@ import XCTest
 /// - enregistrement → « IBAN enregistré » après relecture, IBAN affiché masqué (quatre derniers caractères), champ vidé ;
 /// - refus serveur `RIB_VERIFIE_REQUIS` (`JOLENE_DEMO_IBAN=rib-requis`) : message serveur verbatim sous « RIB vérifié
 ///   requis », action vers les documents, jamais « IBAN enregistré ».
-/// Les règles (codes sans `error`, relecture probante, epoch, session) sont prouvées au niveau 1 (`IbanTests`,
+/// Les règles (codes sans `error`, relecture probante, lecture en vol, session) sont prouvées au niveau 1 (`IbanTests`,
 /// `SupabaseIbanGatewayTests`).
 final class DemoIbanTests: JoleneUITestCase {
     private static let ibanFaux = "FR7630006000011234567890188"
@@ -65,7 +65,7 @@ final class DemoIbanTests: JoleneUITestCase {
         require("Le refus du serveur est affiché", timeout: 30) { erreur.exists }
         XCTAssertTrue(erreur.label.contains("RIB vérifié requis"), erreur.label)
         XCTAssertTrue(erreur.label.contains("Téléversez puis faites vérifier le RIB correspondant."), erreur.label)
-        XCTAssertTrue(element("iban-documents").exists, "« Téléverser mon RIB » (l.316)")
+        XCTAssertTrue(element("iban-refus-documents").exists, "« Téléverser mon RIB » (l.316)")
         XCTAssertFalse(element("iban-succes").exists, "jamais « IBAN enregistré » sur un refus")
         XCTAssertFalse(element("iban-actuel").exists)
         record("\(proofPrefix)-iban-rib-requis")

@@ -14,7 +14,8 @@ import Combine
 ///   est affiché par `IbanPresentation.refus` (TJ6), jamais comme un succès ;
 /// - après un refus ou une erreur, l'état est relu (un délai dépassé ne prouve pas que le serveur n'a pas agi) ; rien
 ///   n'est renvoyé automatiquement ;
-/// - session expirée : « Vérifier ma session » (libellés du lot 1, TJ6 règle 2) ;
+/// - une lecture en vol pendant l'envoi est invalidée (`generation`) : sa réponse n'écrase jamais l'état relu ;
+/// - session expirée : « Session à vérifier » et « Vérifier ma session » (libellés du lot 1, TJ6 règle 2) ;
 /// - toute réponse reçue pour un epoch périmé est ignorée.
 @MainActor
 public final class IbanModel: ObservableObject {
@@ -119,6 +120,10 @@ public final class IbanModel: ObservableObject {
         guard peutEnregistrer else { return }
         enCours = true
         defer { enCours = false }
+        // Revue B8 de #1142, m4 : une lecture en vol (`.task` relancé par la réapparition de l'écran) peut être partie
+        // avant l'écriture ; sa réponse ne doit jamais écraser l'état relu par l'envoi. Invalidée ici, et de nouveau au
+        // retour du port (lecture lancée pendant l'envoi).
+        generation += 1
         issue = nil
         let ibanEnvoye = IbanRules.nettoyer(iban)
         let titulaireEnvoye = IbanRules.titulaireNettoye(titulaire)
@@ -132,12 +137,14 @@ public final class IbanModel: ObservableObject {
                 try await port.enregistrer(iban: ibanEnvoye, titulaire: titulaireEnvoye, context: context)
             }
         } catch {
+            generation += 1
             guard await memeEpoch(), let message = Self.message(error) else { return }
             if (error as? JoleneError)?.kind == .unauthorized { sessionExpiree = true }
             publier(.erreur(message))
             await charger()
             return
         }
+        generation += 1
         guard await memeEpoch() else { return }
         sessionExpiree = false
         switch resultat {
