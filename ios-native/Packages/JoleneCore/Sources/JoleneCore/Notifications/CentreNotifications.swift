@@ -153,7 +153,7 @@ public enum CibleNotification: Equatable, Sendable {
             // (écran de connexion, aiguillage d'onboarding, `BoiteLiensInscription`), comme la connexion ; une page
             // non livrée serait déjà un `.safari` (`destination`) et n'arriverait pas ici.
             self = .aucune
-        case .serieDetail, .stripeConnect:
+        case .serieDetail, .stripeConnect, .secondaire:
             // Atteint seulement quand la ligne de `ecranNatifLivre` de l'écran est passée à `true` sans que sa
             // tranche ait ajouté sa cible (sinon `destination` est déjà un `.safari`) : repli sur le renvoi web
             // canonique, jamais un tap sans effet ; la garde de `CentreNotificationsTests` le signale.
