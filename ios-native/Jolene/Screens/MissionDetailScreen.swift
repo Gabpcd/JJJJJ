@@ -125,6 +125,7 @@ struct MissionDetailScreen: View {
             CandidatureSection(mission: mission, session: session, snapshot: snapshot) { await model.load() }
             entreePresences(mission)
             AnnulationSection(mission: mission, session: session, snapshot: snapshot) { await model.load() } // L1-T7
+            MissionActionsSection(mission: mission) // L4-T1c : actions du lot 4 (T7b, T11), rien avant leurs tranches
         }
         .padding(JoleneSpacing.lg)
         .frame(maxWidth: 640)

@@ -31,7 +31,9 @@ struct JoleneApp: App {
     /// (`ResumePolicy`, règle de `src/lib/nativeResume.ts`), la session est ré-exécutée.
     /// Lot 3, T4 : à chaque retour au premier plan d'un espace prêt, `PushCoordinator.surActive`
     /// (autorisation relue, rotation du token, enregistrement échoué retenté ; web `AuthContext.tsx` l.151-160).
+    /// Lot 4, T1c : appel unique du cycle de vie Realtime (`RealtimeLifecycle`, verrouillé jusqu'à T7a).
     private func handleScenePhase(_ phase: ScenePhase) {
+        container.realtime.scenePhase(phase)
         switch phase {
         case .background:
             backgroundedAt = container.clock.now()

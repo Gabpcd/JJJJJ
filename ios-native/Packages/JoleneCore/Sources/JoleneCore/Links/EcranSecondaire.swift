@@ -8,7 +8,9 @@ import Foundation
 ///
 /// Pas de cas `inscriptionSoignant(ref:)` : `/inscription/soignant` appartient au lot 3 (`.inscription`), la
 /// capture du code de parrainage est un effet de bord du coordinateur de liens (`ParrainageCapture`, T1c/T6).
-public enum EcranSecondaire: Equatable, Sendable {
+///
+/// `Hashable` (L4-T1c) : valeur de la route empilée `SecondaireRoute` de l'app (`SecondaryRouter`).
+public enum EcranSecondaire: Hashable, Sendable {
     /// Explorer en vue Swipe (`/soignant/swipe-missions`, `/soignant/recherche-missions?vue=swipe`) — T3a/T3b.
     case swipe
     /// Recherches sauvegardées (`/soignant/parametres/recherches-sauvegardees`) — T4.
@@ -39,7 +41,7 @@ public enum EcranSecondaire: Equatable, Sendable {
     case serie(id: String)
 
     /// Onglet de `/soignant/litiges` (`LitigesContestationsSoignant.tsx`, valeurs `litiges` et `reclamations`).
-    public enum OngletLitiges: String, Equatable, Sendable, CaseIterable {
+    public enum OngletLitiges: String, Hashable, Sendable, CaseIterable {
         case litiges, reclamations
 
         /// Lecture de `?tab=` (comparaison exacte) ; valeur inconnue ou absente → `nil` (onglet par défaut).
@@ -89,6 +91,55 @@ public enum EcranSecondaire: Equatable, Sendable {
         case .score: return .monCompte
         default: return nil
         }
+    }
+}
+
+public extension EcranSecondaire {
+    /// Lien web de l'écran (L4-T1c) : chemin de `src/App.tsx` lu par `LinkRouter` (query et identifiants compris,
+    /// encodés), servi par le renvoi web quand le coupe-circuit de l'écran est coupé (`RenvoiWebScreen`). Aller-retour
+    /// exact par `LinkRouter` (`EcranSecondaireLienWebTests`), sauf les bulletins (route `.revenus(section: .bulletins)`
+    /// gardée, `mes-gains?tab=bulletins&copie=`) et la série (route `.serieDetail(id:)` gardée).
+    var lienWeb: String {
+        switch self {
+        case .swipe: return "/soignant/swipe-missions"
+        case .recherches: return "/soignant/parametres/recherches-sauvegardees"
+        case .disponibilites: return "/soignant/disponibilites"
+        case .parrainage: return "/soignant/parrainage"
+        case let .litiges(onglet, litigeId):
+            return Self.lien("/soignant/litiges", [("tab", onglet?.rawValue), ("litige", litigeId)])
+        case .messagerie(let conversationId):
+            return Self.lien("/soignant/messagerie", [("conv", conversationId)])
+        case .bulletins(let copieId):
+            return Self.lien("/soignant/mes-gains", [("tab", "bulletins"), ("copie", copieId)])
+        case .evaluations: return "/soignant/evaluations"
+        case .score: return "/soignant/score"
+        case .poolUrgence: return "/soignant/pool-urgence"
+        case .exclusions: return "/soignant/exclusions"
+        case .serie(let id):
+            var permis = CharacterSet.urlPathAllowed
+            permis.remove("/")
+            return "/soignant/missions/serie/" + (id.addingPercentEncoding(withAllowedCharacters: permis) ?? id)
+        }
+    }
+
+    /// URL canonique du lien web (`https://jolene.app` + `lienWeb`, `JoleneLink.canonicalURL`).
+    var urlWeb: URL? { JoleneLink.canonicalURL(link: lienWeb) }
+
+    /// Écran natif livré : ligne de `DestinationLien.ecranNatifLivre` passée à `true` par sa tranche (T3b…T12). Tant
+    /// qu'elle vaut `false`, l'écran garde son renvoi web actuel et aucune entrée native ne le montre (`EntreesLot4`).
+    var estLivre: Bool {
+        switch self {
+        case .serie(let id): return DestinationLien.ecranNatifLivre(.serieDetail(id: id))
+        default: return DestinationLien.ecranNatifLivre(.secondaire(self))
+        }
+    }
+
+    private static func lien(_ chemin: String, _ parametres: [(String, String?)]) -> String {
+        var composants = URLComponents()
+        composants.path = chemin
+        let items = parametres.compactMap { nom, valeur in valeur.map { URLQueryItem(name: nom, value: $0) } }
+        composants.queryItems = items.isEmpty ? nil : items
+        return composants.percentEncodedPath + (composants.percentEncodedQuery.map { "?" + $0 } ?? "")
     }
 }
 
