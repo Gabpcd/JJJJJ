@@ -222,6 +222,24 @@ final class CodeRotatifModelTests: XCTestCase {
         XCTAssertEqual(modele.codePresente?.valeur, "100002")
     }
 
+    /// Revue B8 de #1168 (m1) : le verrou est posé avant la suspension de `contexte()`. Deux touchers lancés ensemble
+    /// pendant une attente du suivi ne donnent qu'une lecture, et une panne n'y compte qu'un échec.
+    func testDeuxReessayerSimultanesUneSeuleLecture() async throws {
+        let b = try await banc([etat("123456"), .echec], arret: 1)
+        let model = b.model
+        await b.minuterie.configurer(arret: 1, instantane: {
+            async let premier: Void = model.reessayer()
+            async let second: Void = model.reessayer()
+            _ = await (premier, second)
+            return ""
+        }, surArret: { await model.desactiver() })
+        await model.suivre()
+        let lectures = await b.port.lecturesEtat
+        XCTAssertEqual(lectures, 2, "première lecture du suivi, puis une seule lecture pour les deux touchers")
+        XCTAssertEqual(model.erreursConsecutives, 1, "une seule panne, un seul échec compté")
+        XCTAssertFalse(model.lectureEnCours, "réservation libérée après la lecture")
+    }
+
     func testPremiereLectureEnEchecAfficheIndisponibleSansAttendre() async throws {
         let b = try await banc([.echec], arret: 1)
         await b.model.suivre()

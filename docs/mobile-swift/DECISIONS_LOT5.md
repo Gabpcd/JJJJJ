@@ -394,9 +394,18 @@ juridique ; aucun texte juridique n'est ajouté.
    « Mission introuvable », aucune requête) ; la relecture du soignant a sa propre génération et n'abandonne plus une
    relecture de la mission en vol (`rafraichissement` retombe à faux).
 6. **Candidatures** (#1164, m2) : une lecture habilitée sans `etablissement_id` est refusée (fail-closed).
-7. **Code de pointage** (#1166, m1 et m3) : la veille est libérée explicitement à la disparition et quand la scène
-   devient inactive (garde node `contrats-etablissement-ios`) ; « Réessayer » ne lance aucune lecture pendant une lecture
-   en vol de la même génération (et le tic du suivi saute la sienne pendant un « Réessayer »).
+7. **Code de pointage** (#1166, m1 et m3 ; revue B8 de #1168, m1) : la veille est libérée explicitement à la
+   disparition et quand la scène devient inactive (garde node `contrats-etablissement-ios`). Une seule lecture à la fois
+   par génération : la réservation est posée de façon synchrone **avant** la première suspension (`contexte()`) par
+   « Réessayer » comme par le suivi (première lecture et tic). Un second toucher, le tic ou la première lecture qui la
+   trouvent posée ne lancent rien : deux lectures ne partent jamais en parallèle, et une panne ne compte qu'un échec
+   (`CodeRotatifModelTests.testReessayerVerrouillePendantUneLectureEnVol`, `testDeuxReessayerSimultanesUneSeuleLecture`).
+8. **Écart connu, veille sous une feuille** (revue B8 de #1168, m2) : une feuille présentée par-dessus
+   `CodePointageScreen` (par exemple le renvoi web du coordinateur après un tap sur une notification push) ne déclenche
+   pas `onDisappear`. La veille reste donc coupée tant que la feuille couvre le code ; elle est rétablie à la fermeture de
+   l'écran, en arrière-plan, quand la scène devient inactive ou quand le code est masqué. Aucun code natif ne le détecte
+   aujourd'hui (SwiftUI ne signale pas la couverture par une feuille d'un autre niveau) : ligne dédiée de
+   `RECETTE_DEVICE_LOT5.md` §1, à observer sur appareil avant T13.
 
 ## En attente de Gabrielle
 
