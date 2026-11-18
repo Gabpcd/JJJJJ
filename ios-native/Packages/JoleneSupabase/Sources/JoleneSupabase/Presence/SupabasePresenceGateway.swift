@@ -6,9 +6,10 @@ import Supabase
 /// soignant : `fn_confirmer_presence_mission(p_mission_id)` (`supabase/schema/public.sql` l.24992-25012).
 ///
 /// Formes de réponse (HTTP 200) : `{success:true}` ; `{error:'Mission introuvable'}` (mission d'un autre soignant ou
-/// invisible) ; `{error:"Cette mission n'est plus active."}` (statut hors `ASSIGNEE`/`EN_COURS`). Un `{error}` est un
-/// refus affiché verbatim (`.refusee`, HARD STOP n°4) ; « Non authentifié » → session expirée ; une exception
-/// PostgREST passe par `SupabaseErrorMapping` avec le repli web « Confirmation impossible. ».
+/// invisible, y compris sans session : `auth.uid()` NULL) ; `{error:"Cette mission n'est plus active."}` (statut hors
+/// `ASSIGNEE`/`EN_COURS`). Un `{error}` est un refus affiché verbatim (`.refusee`, HARD STOP n°4). Une session absente
+/// ou expirée est une erreur PostgREST (401, 42501 : `anon` n'a pas EXECUTE), traduite par `SupabaseErrorMapping` ;
+/// l'écran affiche alors le repli web « Confirmation impossible. » (`ConfirmationPresenceModel`, revue B8 m2-m3).
 ///
 /// Succès annoncé seulement après relecture de la mission (PRINCIPES §3) : `presence_confirmee_le` non nul sur la
 /// mission attribuée à la session. La RPC n'a **aucune idempotence** (chaque appel réécrit l'instant et notifie
@@ -34,10 +35,7 @@ public struct SupabasePresenceGateway: PresencePort {
         }
         let repli = TextesWeb.ConfirmationPresence.repliRefus
         let reponse = try await RPCResponse.appeler(client, Self.rpc, params: ["p_mission_id": .string(id)], fallback: repli)
-        if let erreur = reponse.erreur {
-            if RPCResponse.estNonAuthentifie(erreur) { throw JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage) }
-            return .refusee(message: PresenceRules.messageRefus(erreur))
-        }
+        if let erreur = reponse.erreur { return .refusee(message: PresenceRules.messageRefus(erreur)) }
         try reponse.leverSiErreur(fallback: repli)
         guard reponse.success == true else { throw JoleneError(.contract, SupabaseErrorMapping.contractMessage) }
 
