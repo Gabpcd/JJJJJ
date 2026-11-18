@@ -54,8 +54,11 @@ const LOT5 = [
   'fn_obtenir_conversation',
 ];
 // Chaque tranche qui câble une gateway passe sa RPC en `consommee` et l'ajoute ici (modèle LOT1_CONSOMMEES).
-const LOT5_CONSOMMEES = ['fn_mes_permissions_etab', 'fn_mon_etablissement_complet', // T1 : SupabaseEtabSessionGateway
-  'fn_stats_dashboard_etablissement']; // T4 : SupabaseEtabDashboardGateway
+const LOT5_CONSOMMEES = [
+  'fn_mes_permissions_etab', 'fn_mon_etablissement_complet', // T1 : SupabaseEtabSessionGateway
+  'fn_stats_dashboard_etablissement', // T4 : SupabaseEtabDashboardGateway
+  'fn_soignant_pour_etablissement', // T5 : SupabaseEtabMissionsGateway
+];
 // Déjà suivies par un lot soignant, consommées aussi par l'établissement (annotation, jamais doublon).
 const PARTAGEES = [
   'fn_get_my_role', 'fn_audit_connexion', 'fn_ecrire_audit_safe', 'fn_param_bool',
