@@ -17,8 +17,12 @@ import Foundation
 /// - mission attribuée pendant la session → servie `ASSIGNEE` par `DemoMissionsGateway` et retirée d'Explorer ;
 /// - mission `TOUS` sans choix pour un profil `MIXTE` → `choixRequis` avec les options du serveur.
 ///
-/// Les annulations restent verrouillées jusqu'à T7 (aucun état démo inventé). Refuse tout contexte qui
-/// n'est pas celui du profil fictif (`.demoOnly`).
+/// Annulations (T7) : mêmes contrôles, même ordre et mêmes textes que `fn_annuler_candidature_soignant`
+/// (motif, texte de 10 caractères, candidature, statut) et `fn_annuler_mission_soignant` (mission, attribution,
+/// statut) ; la candidature retenue de la mission assignée 3 (`candidatureRetenue`) ouvre la modale de candidature.
+/// Conséquences simulées : toutes les missions assignées démarrent plus de 24 h après l'horloge fixée
+/// (`DemoCandidatureGatewayTests`), si bien que le serveur rendrait 0 point (`neutre_delai_long`, pénalité de mission
+/// nulle) : aucun barème n'est simulé. Refuse tout contexte qui n'est pas celui du profil fictif (`.demoOnly`).
 public actor DemoCandidatureGateway: CandidaturePort {
     /// Textes serveur repris à l'identique (`supabase/schema/public.sql`).
     public enum Textes {
@@ -33,7 +37,24 @@ public actor DemoCandidatureGateway: CandidaturePort {
             ChoixContratOption(value: "SALARIE", label: "Salarié (CDD / bulletin de paie)"),
             ChoixContratOption(value: "LIBERAL", label: "Libéral (note d'honoraires)"),
         ]
+        // `fn_annuler_candidature_soignant` (T7).
+        public static let motifInvalide = "Motif requis (URGENCE_PERSONNELLE, URGENCE_MEDICALE, DEUIL, PROBLEME_TRANSPORT, CHANGEMENT_AVIS, AUTRE)"
+        public static let texteRequis = "Texte libre obligatoire (min 10 caractères)"
+        public static let candidatureIntrouvable = "Candidature introuvable"
+        public static func statutInvalide(_ statut: String) -> String {
+            "Candidature pas dans un état annulable (statut : \(statut))"
+        }
+        // `fn_annuler_mission_soignant` (T7).
+        public static let missionIntrouvable = "Mission introuvable"
+        public static let missionNonAssignee = "Cette mission ne vous est pas assignée"
+        public static let annulationImpossible = "Annulation impossible dans cet état. Si la mission est en cours, ouvrez un litige."
     }
+
+    /// Candidature retenue (`ACCEPTEE`) de la mission assignée 3 : la seule mission démo dont l'annulation ouvre la
+    /// modale de candidature (les autres, attribuées sans candidature, ouvrent la confirmation simple).
+    public static let candidatureRetenue = CandidatureRecord(id: "demo-candidature-retenue-003", missionId: "demo-assignee-003",
+                                                              statut: AnnulationRules.statutAcceptee, message: nil,
+                                                              typeContratChoisi: nil, creeLe: "2026-10-30T09:00:00.000Z")
 
     public static let codePlanningModifie = "PLANNING_MODIFIE_RECONFIRMER"
     public static let messageRelecture = "La candidature n'a pas pu être relue dans le monde de démonstration."
@@ -46,14 +67,28 @@ public actor DemoCandidatureGateway: CandidaturePort {
     /// Missions attribuées au profil fictif pendant la session : contrat démo par mission.
     private var attributions: [String: String] = [:]
     private var compteur = 0
+    /// T7 : missions assignées (`demo-dashboard.json`), missions annulées et justificatifs transmis pendant la session.
+    private let missionsAssignees: @Sendable () throws -> [DemoFixtures.MissionFixture]
+    private var annulees: Set<String> = []
+    private var justificatifs: [String: String] = [:]
 
     public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow),
                 missions: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = { try DemoFixtures.loadMissions().missions },
-                candidaturesInitiales: @escaping @Sendable () throws -> [CandidatureRecord] = DemoCandidatureGateway.candidaturesDesFixtures) {
+                candidaturesInitiales: @escaping @Sendable () throws -> [CandidatureRecord] = DemoCandidatureGateway.candidaturesDesFixtures,
+                missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
+                    try DemoFixtures.loadDashboard().missionsAssignees
+                }) {
         self.clock = clock
         self.missions = missions
         self.candidaturesInitiales = candidaturesInitiales
+        self.missionsAssignees = missionsAssignees
     }
+
+    /// Chemin du justificatif transmis avec l'annulation de cette candidature (relecture des tests).
+    public func justificatifTransmis(candidatureId: String) -> String? { justificatifs[candidatureId] }
+
+    /// Mission annulée par le profil fictif pendant la session.
+    public func missionAnnulee(_ missionId: String) -> Bool { annulees.contains(missionId) }
 
     /// Candidatures en attente de `demo-mes-missions.json` et proposition de l'Accueil (`demo-dashboard.json`).
     public static let candidaturesDesFixtures: @Sendable () throws -> [CandidatureRecord] = {
@@ -62,7 +97,7 @@ public actor DemoCandidatureGateway: CandidaturePort {
             CandidatureRecord(id: $0.id, missionId: $0.missionId, statut: CandidatureRules.statutProposee, message: nil,
                               typeContratChoisi: $0.typeContratChoisi, creeLe: $0.creeLe)
         }
-        return attente + propositions
+        return attente + propositions + [DemoCandidatureGateway.candidatureRetenue]
     }
 
     /// Candidatures de la session démo, lues par `DemoMesMissionsGateway` (point de fusion de T5).
@@ -138,13 +173,53 @@ public actor DemoCandidatureGateway: CandidaturePort {
         return try candidatureCourante(missionId: missionId)
     }
 
+    /// `fn_annuler_candidature_soignant` : contrôles dans l'ordre du serveur, puis `ANNULEE` relue dans l'acteur.
     public func annulerCandidature(id: String, motif: String, texte: String, justificatifPath: String?,
                                    context: MissionReadContext) async throws -> AnnulationOutcome {
-        throw UnwiredPorts.erreur(port: "annulation", tranche: "T7")
+        try Self.verifier(context)
+        guard AnnulationRules.Motif(rawValue: motif) != nil else {
+            return .refusee(code: "MOTIF_INVALIDE", message: Textes.motifInvalide)
+        }
+        guard texte.trimmingCharacters(in: CharacterSet(charactersIn: " ")).count >= AnnulationRules.texteMinimumServeur else {
+            return .refusee(code: "TEXTE_REQUIS", message: Textes.texteRequis)
+        }
+        guard let candidature = try toutes().first(where: { $0.id == id }) else {
+            return .refusee(code: "CANDIDATURE_INTROUVABLE", message: Textes.candidatureIntrouvable)
+        }
+        let statut = candidature.statut ?? ""
+        guard statut == AnnulationRules.statutAcceptee || statut == "EN_ATTENTE" else {
+            return .refusee(code: "STATUT_INVALIDE", message: Textes.statutInvalide(statut))
+        }
+        remplacer(candidature, statut: AnnulationRules.statutAnnulee)
+        if statut == AnnulationRules.statutAcceptee {
+            annulees.insert(candidature.missionId)
+            attributions[candidature.missionId] = nil
+            if let justificatifPath { justificatifs[id] = justificatifPath }
+        }
+        guard AnnulationRules.candidatureAnnuleeRelue(try toutes().first(where: { $0.id == id }), id: id) else {
+            throw JoleneError(.contract, Self.messageRelecture)
+        }
+        // EN_ATTENTE : `{libre:true, points:0}` sans `contestable` ; ACCEPTEE à plus de 24 h : 0 point, libre.
+        return statut == AnnulationRules.statutAcceptee
+            ? .annulee(points: 0, libre: true, contestable: false)
+            : .annulee(points: 0, libre: true, contestable: nil)
     }
 
+    /// `fn_annuler_mission_soignant` : mission assignée au profil fictif et `ASSIGNEE`, remise en ligne dans l'acteur.
     public func annulerMission(id: String, motif: String?, context: MissionReadContext) async throws -> AnnulationOutcome {
-        throw UnwiredPorts.erreur(port: "annulation", tranche: "T7")
+        try Self.verifier(context)
+        guard let fixture = try (missionsAssignees() + missions()).first(where: { $0.record.id == id }) else {
+            return .refusee(code: nil, message: Textes.missionIntrouvable)
+        }
+        let assignee = !annulees.contains(id)
+            && (attributions[id] != nil || fixture.record.soignantAssigneId == context.userId)
+        guard assignee else { return .refusee(code: nil, message: Textes.missionNonAssignee) }
+        guard attributions[id] != nil || fixture.record.statut == AnnulationRules.statutAssignee else {
+            return .refusee(code: nil, message: Textes.annulationImpossible)
+        }
+        annulees.insert(id)
+        attributions[id] = nil
+        return .annulee(points: 0, libre: nil, contestable: nil)
     }
 
     // MARK: - Interne

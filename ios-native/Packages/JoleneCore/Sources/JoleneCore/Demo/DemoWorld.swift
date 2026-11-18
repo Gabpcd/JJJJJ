@@ -78,7 +78,7 @@ public enum DemoWorld {
             audit: DemoAuditGateway(),
             flags: DemoFlagsGateway(surcharges: drapeaux),
             recovery: UnwiredRecoveryPort(),            // T10
-            justificatifs: UnwiredJustificatifStoragePort() // T7
+            justificatifs: DemoJustificatifStorage()    // T7
         )
         câblerLot2(&gateways)
         câblerLot3(&gateways, profil: profilDemo)

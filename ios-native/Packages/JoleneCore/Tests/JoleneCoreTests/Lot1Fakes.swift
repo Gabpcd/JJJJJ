@@ -235,7 +235,8 @@ struct FakeRecovery: RecoveryPort {
 }
 
 struct FakeJustificatifs: JustificatifStoragePort {
-    func upload(data: Data, fileName: String, candidatureId: String, userId: String) async throws -> String { throw nonScripte }
+    func deposer(chemin: String, octets: Data, mime: MimeDocument, context: MissionReadContext) async throws -> IssueDepotJustificatif { throw nonScripte }
+    func existe(chemin: String, context: MissionReadContext) async throws -> Bool { throw nonScripte }
 }
 
 enum Lot1Fakes {
