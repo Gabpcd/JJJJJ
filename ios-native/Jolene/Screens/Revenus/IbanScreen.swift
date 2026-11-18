@@ -7,17 +7,15 @@ import JoleneDesign
 /// route web (DECISIONS_LOT3 : l'IBAN est une sous-ligne de `/soignant/mon-compte`, sans lien universel).
 struct IbanRoute: Hashable {}
 
-/// Section « Paiements & facturation » du hub (`MonCompteSoignant.tsx` l.64-77), entrée « Coordonnées bancaires »
-/// (l.73) : le web fait défiler jusqu'à `SectionPaiements` (l.160-169), le natif empile l'écran. Les entrées Stripe et
-/// mandat de la même section web (l.67-70, libéral seulement) relèvent de T14a.
-struct IbanEntreeSection: View {
+/// Ligne « Coordonnées bancaires » (l.73) de la section unique « Paiements & facturation » du hub
+/// (`PaiementsFacturationSection`, `MonCompteSoignant.tsx` l.64-77), après la ligne Stripe de T14a quand elle est
+/// montée : le web fait défiler jusqu'à `SectionPaiements` (l.160-169), le natif empile l'écran.
+struct IbanEntreeLigne: View {
     var body: some View {
-        Section(IbanTextes.sectionHub) {
-            NavigationLink(value: IbanRoute()) {
-                Label(IbanTextes.entreeHub, systemImage: "building.columns")
-            }
-            .accessibilityIdentifier("iban-ouvrir")
+        NavigationLink(value: IbanRoute()) {
+            Label(IbanTextes.entreeHub, systemImage: "building.columns")
         }
+        .accessibilityIdentifier("iban-ouvrir")
     }
 }
 

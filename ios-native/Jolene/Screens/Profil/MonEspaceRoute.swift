@@ -41,7 +41,8 @@ enum MonEspaceRoute: Hashable {
         case .documents(let onglet): self = .documents(onglet: onglet)
         case .contrat(let id): self = .contrat(id: id)
         case .certificat(let contratId): self = .certificat(contratId: contratId)
-        case .accueil, .explorer, .missions, .revenus, .monCompte, .mission, .centre, .preferences, .profil, .web, .aucune:
+        case .accueil, .explorer, .missions, .revenus, .monCompte, .mission, .centre, .preferences, .profil, .stripeConnect,
+             .web, .aucune:
             return nil
         }
     }

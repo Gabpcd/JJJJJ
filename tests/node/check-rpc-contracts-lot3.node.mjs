@@ -815,7 +815,7 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
     // Lot 5 (revue B8 de #1147, m5) : la session établissement rejoint cet éclat léger, sans douzième éclat.
     ['lot3-profil-photo', ['DemoPhotoPositionTests', 'DemoEtabSessionTests']],
     // L3-T13 : les paiements déclarés rejoignent l'éclat de l'onglet Revenus (domaine T12-T14b), sans nouvel éclat.
-    ['lot3-revenus', ['DemoRevenusTests', 'DemoPaiementsTests', 'DemoIbanTests']],
+    ['lot3-revenus', ['DemoRevenusTests', 'DemoPaiementsTests', 'DemoIbanTests', 'DemoStripeTests']], // L3-T14b : IBAN ; L3-T14a : Stripe Connect
   ]);
   // Fusion des lots 2 et 3 : les éclats du lot 2 (`ios-swift-ci-eclats.node.mjs`, DECISIONS_LOT2 décision 22) suivent le
   // socle et précèdent ceux du lot 3, dans les étapes, la boucle des xcresult et la liste ECLATS du relevé.

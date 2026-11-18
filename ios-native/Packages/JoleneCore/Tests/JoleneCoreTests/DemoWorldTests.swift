@@ -218,8 +218,12 @@ final class DemoWorldTests: XCTestCase {
     /// (`DemoWorld`, `SupabaseGateways`) et le retire d'ici dans la même PR ;
     /// `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes. Liste vide à la
     /// clôture du lot 3.
-    static let portsEnAttenteLot3 = [// T9 : `profil` câblé ; T7 : `inscription` câblé, complété par T8 ; T11 : `motDePasse`, `exportRGPD` ; T10 : `avatar`, `geocodage`
-                                     "stripeConnect"] // T4 : `push` câblé (DemoPushGateway) ; T5 : `notifications` ; T6 : `preferences` câblé (DemoPreferencesGateway) ; T12 : `revenus` (DemoRevenusGateway) ; T13 : `paiements` (DemoPaiementsGateway) ; T14b : `iban` (DemoIbanGateway)
+    // T9 : `profil` câblé ; T7 : `inscription` câblé, complété par T8 ; T11 : `motDePasse`, `exportRGPD` ; T10 : `avatar`,
+    // `geocodage` ; T4 : `push` câblé (DemoPushGateway) ; T5 : `notifications` ; T6 : `preferences` câblé
+    // (DemoPreferencesGateway) ; T12 : `revenus` (DemoRevenusGateway) ; T13 : `paiements` (DemoPaiementsGateway) ;
+    // T14b : `iban` (DemoIbanGateway) ; T14a : `stripeConnect` câblé (DemoStripeConnectGateway). Type explicite : un `[]`
+    // sans type ne compile pas.
+    static let portsEnAttenteLot3: [String] = []
 
     /// Lot 4 (T1) — ports du lot 4 que leur tranche n'a pas encore câblés : SOURCE UNIQUE de la liste (blueprint
     /// lot 4 §2.2, décision D1). Chaque tranche remplace le corps de SA fabrique dans les deux mondes
@@ -291,7 +295,8 @@ final class DemoWorldTests: XCTestCase {
         gateways.push = FakePushRegistration()
         DemoWorld.câblerLot3(&gateways)
         XCTAssertTrue(gateways.push is DemoPushGateway, "T4 câble le push : le double est remplacé par la gateway démo")
-        XCTAssertTrue(gateways.stripeConnect is UnwiredStripeConnectPort, "T14a n'est pas livrée : stub nommé explicitement")
+        XCTAssertTrue(gateways.iban is DemoIbanGateway, "T14b câble l'IBAN démo")
+        XCTAssertTrue(gateways.stripeConnect is DemoStripeConnectGateway, "T14a câble Stripe Connect démo")
         XCTAssertEqual(gateways.unwiredPorts, Lot1PortsTests.portsLot1 + Lot2PortsTests.portsLot2 + Self.portsEnAttenteLot3 + Lot4PortsTests.portsLot4,
                        "câblerLot3 n'assigne que le bloc du lot 3")
         let monde = DemoWorld.gateways()
