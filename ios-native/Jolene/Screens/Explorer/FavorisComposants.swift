@@ -65,17 +65,26 @@ struct AvisLectureEtoiles: View {
 
 /// Erreur d'une action sur les favoris (étoile, retrait) ou d'une relecture, affichée là où l'action a
 /// eu lieu et annoncée à VoiceOver ; « Fermer » l'efface. Rien tant qu'aucune erreur de ce contexte n'est
-/// signalée (m4 : l'erreur de l'étoile du détail ne réapparaît pas sur la liste).
+/// signalée (m4 : l'erreur de l'étoile du détail ne réapparaît pas sur la liste). `verifierSession` (Explorer, détail) :
+/// une session à vérifier propose aussi « Vérifier ma session », qui revalide puis relit (revue B8 delta de #1149, m2) ;
+/// `nil` sur « Mes favoris », dont l'écran porte déjà ce bouton.
 struct AvisFavoris: View {
     @ObservedObject var favoris: FavorisModel
     let contexte: ContexteFavoris
     let identifier: String
+    var verifierSession: (@MainActor () async -> Void)? = nil
 
     var body: some View {
         if let message = favoris.erreur(pour: contexte) {
             HStack(alignment: .top, spacing: JoleneSpacing.sm) {
-                InlineNotice(message, tone: .error, identifier: identifier, announcesOnAppear: true,
-                             announcementID: favoris.tentatives)
+                VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
+                    InlineNotice(message, tone: .error, identifier: identifier, announcesOnAppear: true,
+                                 announcementID: favoris.tentatives)
+                    if favoris.sessionExpired, let verifierSession {
+                        JoleneButton("Vérifier ma session", style: .secondary) { Task { await verifierSession() } }
+                            .accessibilityIdentifier("\(identifier)-session")
+                    }
+                }
                 Button {
                     favoris.effacerErreur()
                 } label: {

@@ -145,7 +145,7 @@ final class DemoFavorisGatewayTests: XCTestCase {
         }
     }
 
-    /// Décision 21 du lot 1 (revue B8 de T4b, M2) : les favoris de l'inscription progressive sont fusionnés avec la
+    /// Décision 8 du lot 1, amendée le 18/11/2026 (revue B8 de T4b, M2) : les favoris de l'inscription progressive sont fusionnés avec la
     /// table, sans doublon, et le retrait vide les deux magasins (`fn_modifier_favori_inscription(false)` puis la table).
     func testFavorisDeLInscriptionFusionnesPuisRetiresDesDeuxMagasins() async throws {
         let gateway = DemoFavorisGateway(favorisInscription: ["demo-mission-005", "demo-mission-002", "mission-inconnue"])
