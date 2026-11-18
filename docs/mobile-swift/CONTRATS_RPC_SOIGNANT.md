@@ -101,6 +101,7 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_repondre_proposition` | à venir | 1 (T6a, refus seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_toggle_favori_etablissement` | consommée lot 1 (T4b, retrait seulement) | 1 (T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_mes_favoris_etablissements` | consommée lot 1 (T4b) | 1 (T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_modifier_favori_inscription` | consommée lot 1 (T4b, retrait seulement, décision 8 amendée) | 1 (T4b) | hors manifeste (SECURITY DEFINER, contrôle interne `auth.uid()` + `fn_compte_auth_actif`) | authenticated, service_role | absente |
 | `fn_audit_connexion` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_maj_activite_soignant` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_ecrire_audit_safe` | à venir | 1 (T1/T6a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
@@ -1107,7 +1108,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_repondre_proposition"("p_candidature_id"
 - **Interprétation** (`RPCResponse`) : « Non authentifié » (avec `success:false`) → `.unauthorized` ; autre
   refus `{success:false, error}` → `.unknown`, message verbatim, aucune relecture par la gateway (le modèle
   relit) ; corps sans `success:true` → `.contract` ; erreur PostgREST (uuid invalide…) → message générique.
-- **Signature SQL** (`supabase/schema/public.sql` l.61480) :
+- **Signature SQL** (`supabase/schema/public.sql` l.61945) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_toggle_favori_etablissement"("p_etablissement_id" "uuid", "p_actif" boolean) RETURNS "jsonb"
@@ -1136,7 +1137,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_toggle_favori_etablissement"("p_etabliss
   **noms** par `fn_etablissements_safe(p_ids)` (règle ci-dessous) : en échec de transport, de serveur ou de
   contrat, le nom de la RPC reste (lecture complémentaire) ; session expirée et annulation propagées.
   Tests : `SupabaseFavorisGatewayTests`.
-- **Signature SQL** (`supabase/schema/public.sql` l.41835) :
+- **Signature SQL** (`supabase/schema/public.sql` l.42281) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "jsonb"
@@ -1150,7 +1151,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "j
 - **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` **ou** un tableau (pas d'objet enveloppe) :
   `[{etablissement_id, nom, ville, logo_url, type_etablissement, nb_missions_ouvertes, cree_le}]` trié par
   `cree_le DESC`, `[]` si aucun favori. Le décodeur doit accepter les deux formes (objet d'erreur / tableau).
-  Note : la RPC fait un **JOIN interne** sur `etablissements` (l.41859), sans filtre de cohorte TEST ni de
+  Note : la RPC fait un **JOIN interne** sur `etablissements` (l.42305), sans filtre de cohorte TEST ni de
   `supprime_le` : un favori dont l'établissement n'existe plus est absent du tableau (jamais présent avec
   un `nom` nul). Le nom affiché reste celui de `fn_etablissements_safe` quand la ligne existe (règle « nom
   d'établissement », `LOT1_PLAN.md` §2.6).
@@ -1161,15 +1162,53 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "j
 - **Statut natif** : consommé (lot 1, T4b) par `SupabaseFavorisGateway` (`missionsSauvegardees`,
   `sauvegarder`, `retirer`), comme `BoutonSauvegarderMission.tsx` et `MesFavorisSoignant.tsx`.
 - **Lecture** : `GET /rest/v1/missions_sauvegardees?select=id,mission_id,cree_le,missions(id,intitule,debut_le,fin_le,duree_heures,nb_creneaux,statut)&soignant_id=eq.<uid>&order=cree_le.desc`
-  (RLS `missions_sauvegardees_select`, l.78149 ; restrictive `pol_compte_auth_actif_restrictive`, l.78751).
+  (RLS `missions_sauvegardees_select`, l.78591 ; restrictive `pol_compte_auth_actif_restrictive`, l.79193).
   Jointure `missions` nulle (RLS des missions) : la ligne garde l'étoile allumée, la mission n'est pas
   listée. « Mes favoris » ne liste que les missions `OUVERTE` à début futur (filtre du web,
   `FavorisRegles.missionsAffichees`) ; montants non lus (non affichés par le web).
 - **Sauvegarde** : `POST` `{mission_id, soignant_id: <uid>}` avec `Prefer: return=minimal`, puis relecture ;
-  conflit UNIQUE `23505` (`missions_sauvegardees_soignant_id_mission_id_key`, l.73127) = déjà sauvegardée,
+  conflit UNIQUE `23505` (`missions_sauvegardees_soignant_id_mission_id_key`, l.73531) = déjà sauvegardée,
   la relecture fait foi, sans erreur ; `42501` (RLS / compte non actif) → `.unauthorized` ; clé étrangère
   `23503` → message générique, aucun détail technique.
 - **Retrait** : `DELETE …?mission_id=eq.<id>&soignant_id=eq.<uid>` avec `Prefer: return=minimal`, puis relecture.
+- **Second magasin (décision 8 du lot 1 amendée le 18/11/2026, revue B8 de T4b, M2)** : chaque lecture relit aussi
+  `GET /rest/v1/parcours_inscription?select=donnees&user_id=eq.<uid>&limit=1` (RLS `parcours_inscription_proprietaire`,
+  l.78669 : propriétaire et compte actif ; `GRANT SELECT` l.86801) et prend `donnees.missionsSauvegardees` (chaînes
+  seulement, comme `chargerFavorisInscription`) ; les missions absentes de la table sont relues par
+  `GET /rest/v1/missions?select=id,intitule,debut_le,fin_le,duree_heures,nb_creneaux,statut&id=in.(…)` (RLS des missions,
+  lots de 50, UUID seulement). Fusion sans doublon comme `MesFavorisSoignant.tsx` l.43-53 (`FavorisRegles.fusion`) ;
+  l'étoile est allumée si l'un des deux magasins contient la mission (`BoutonSauvegarderMission.tsx` l.36-44). Le
+  retrait appelle d'abord `fn_modifier_favori_inscription(p_actif := false)` si la mission figure dans ce magasin
+  (fiche suivante), puis supprime la ligne de la table. L'ajout n'écrit que la table, comme le web. Le web lit les
+  aperçus par `fn_explorer_missions_inscription` (contrat de l'onboarding, paginé par 100, sans filtre par identifiant) :
+  le natif lit `missions` par identifiants, sous la même RLS que la jointure de la table (écart de transport, même
+  affichage : seules les missions `OUVERTE` à début futur sont listées).
+
+## fn_modifier_favori_inscription
+
+- **Statut natif** : consommée (lot 1, T4b, décision 8 amendée le 18/11/2026 — **retrait uniquement**, `p_actif = false`) par
+  `JoleneSupabase/Favoris/SupabaseFavorisGateway.swift` (`FavorisPort.retirer`), comme `BoutonSauvegarderMission.tsx`
+  l.61-64 et `MesFavorisSoignant.tsx` (`retirerMission`) : appelée seulement si la mission figure dans
+  `parcours_inscription.donnees.missionsSauvegardees`, avant la suppression de la ligne `missions_sauvegardees`.
+  L'ajout (`p_actif = true`) n'est utilisé par le web que pendant l'inscription progressive (hors espace natif) : non
+  porté.
+- **Signature SQL** (`supabase/schema/public.sql` l.43500) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_modifier_favori_inscription"("p_mission_id" "uuid", "p_actif" boolean) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+```
+
+- **Classe d'authentification** : hors manifeste ; contrôle interne `auth.uid() IS NULL OR NOT fn_compte_auth_actif()` →
+  `42501` « Session invalide. », parcours `SOIGNANT` absent → `42501` « Espace soignant requis. » (les deux →
+  `.unauthorized`, session à vérifier).
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"` (l.84070-84072).
+- **Signature TypeScript** : absente de `types.ts` (appel `as any` côté web) ; contrat tenu par `public.sql`.
+- **Contrat de réponse** : `RETURNS void` (PostgREST sans corps, `RPCResponse.appelerSansCorps`) ; `22023`
+  (« Favori invalide. ») restitué verbatim, `.unknown` ; toute autre erreur → message générique du retrait. Une seule
+  requête, aucun renvoi : le modèle relit.
+- **Exemple de réponse STAGING** : à enregistrer en T11.
 - **Règles** : une seule requête par mutation, aucun renvoi ; le modèle n'annonce un succès que si la liste
   relue le confirme, relit après un délai dépassé ou une coupure (`FavorisModelTests`).
 
@@ -2088,7 +2127,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_paiements_escrow"() RETURNS "jsonb"
   « Établissement » conservé, mais toute assertion STAGING porte sur l'**égalité** avec le nom de fixture.
   `fn_dashboard_soignant_complet.mes_missions.etab_nom` (LEFT JOIN sans filtre cohorte, l.27970 : nom nul si
   l'établissement manque) et `fn_mes_favoris_etablissements.nom` (JOIN interne sans filtre cohorte ni
-  `supprime_le`, l.41859 : un favori dont l'établissement n'existe plus disparaît de la liste au lieu d'y
+  `supprime_le`, l.42305 : un favori dont l'établissement n'existe plus disparaît de la liste au lieu d'y
   figurer avec un nom nul) ne servent que si la ligne safe manque ; une divergence est un bug de fixture.
 - **Garde** : `tests/node/check-rpc-contracts.node.mjs` échoue si `fn_etablissement_public` entre dans
   `RPC_SUIVIES` ; ce test tourne sur toute PR (étape « Garde de livraison mobile » de
