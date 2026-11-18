@@ -132,9 +132,10 @@ test('lot 5 : session et liens établissement hors du socle, chacun dans son éc
   // T4 : l'Accueil établissement rejoint l'éclat de la session établissement (aucun douzième éclat).
   // L5-T5 : DemoEtabMissionsTests rejoint « presences » (place laissée par DemoFavorisTests, aucun douzième éclat).
   // L5-T6 : DemoEtabCandidaturesTests (deux tests) rejoint aussi « presences ».
+  // L5-T7 : DemoEtabPointageTests (deux tests) rejoint « lot3-profil-photo », avec la session établissement.
   const attendus = new Map([['DemoEtabSessionTests', 'lot3-profil-photo'], ['DemoEtabLiensTests', 'presences'],
     ['DemoEtabAccueilTests', 'lot3-profil-photo'], ['DemoEtabMissionsTests', 'presences'],
-    ['DemoEtabCandidaturesTests', 'presences']]);
+    ['DemoEtabCandidaturesTests', 'presences'], ['DemoEtabPointageTests', 'lot3-profil-photo']]);
   for (const [classe, eclat] of attendus) {
     assert.ok(classes.includes(classe), `${classe} n est pas reconnue comme classe XCUITest`);
     const ou = domaines.filter(e => classesDe(e).includes(classe)).map(e => e.nom);
