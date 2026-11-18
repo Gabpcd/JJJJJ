@@ -14,8 +14,9 @@ import XCTest
 /// - un lien soignant reçu pour l'espace établissement est un renvoi web, jamais un écran soignant ;
 /// - dans l'espace soignant, un lien établissement est un renvoi web, jamais un onglet établissement.
 /// Les règles (table, alias, query, mémorisation, epoch, anti-boucle) sont prouvées au niveau 1 (`EtabRouteTests`,
-/// `DeepLinkCoordinatorTests`). Vérifié par la CI seulement (aucun simulateur en local). Le lien universel réel (AASA,
-/// tap depuis Mail) se prouve sur appareil (`RECETTE_DEVICE_LOT5.md`).
+/// `DeepLinkCoordinatorTests`). Vérifié par la CI seulement (aucun simulateur en local), dans l'éclat « presences » de
+/// `ios-swift-ci.yml` (revue B8 de #1147, m5 : hors du socle). Le lien universel réel (AASA, tap depuis Mail) se prouve
+/// sur appareil (`RECETTE_DEVICE_LOT5.md`).
 final class DemoEtabLiensTests: JoleneUITestCase {
     private let espaceEtablissement = ["-JOLENE_DEMO_ESPACE", "etablissement"]
 

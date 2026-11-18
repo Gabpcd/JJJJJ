@@ -889,3 +889,27 @@ test('validate-pr.yml : l’étape « Garde de livraison mobile » (check requis
     `run: n'exécute pas la garde TL : ${run}`);
   assert.ok(!/^\s+if: /m.test(bloc) && !bloc.includes('continue-on-error'), 'étape conditionnelle ou non bloquante');
 });
+
+// Revue B8 de #1147 (m4) : les dossiers du lot 5 (espace établissement) suivent la règle du lot 2 — aucun texte
+// juridique en dur hors TextesWeb.swift ; le plafond légal de 48 h (option « Salarié ») est une marque juridique.
+test('lot 5 : dossiers établissement sous la garde « aucun texte juridique en dur », plafond 48 h marqué', () => {
+  for (const chemin of [
+    'ios-native/Jolene/Screens/Etablissement/Accueil/EtabAccueilRoot.swift',
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Etablissement/EtabDestination.swift',
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Planning/PlanningDerive.swift',
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Links/EtabRoute.swift',
+    'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Etablissement/SupabaseEtabSessionGateway.swift',
+  ]) {
+    assert.ok(DOSSIERS_LOT2.some(d => chemin === d || chemin.startsWith(`${d}/`)), `${chemin} hors de la garde`);
+    assert.ok(existsSync(join(ROOT, chemin)), `${chemin} absent du dépôt`);
+  }
+  const fautes = textesJuridiquesHorsTL([
+    { chemin: 'ios-native/Jolene/Screens/Etablissement/Publication/Recap.swift',
+      contenu: 'Text("Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine")' },
+    { chemin: 'ios-native/Packages/JoleneCore/Sources/JoleneCore/Planning/Regles.swift', contenu: 'let m = "Maximum légal : 48 h par semaine"' },
+    { chemin: 'ios-native/Jolene/Screens/Etablissement/Accueil/Bandeau.swift',
+      contenu: 'Text(TextesWeb.PublicationEtablissement.optionSalarieDescription)' },
+  ]);
+  assert.equal(fautes.length, 2, JSON.stringify(fautes));
+  assert.deepEqual(textesJuridiquesHorsTLSurDisque(), [], 'dépôt conforme');
+});

@@ -8,13 +8,16 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   EXCEPTIONS,
+  LONGUEUR_TEXTE_JURIDIQUE,
   ROOT,
   SCHEMA,
+  TEXTES_WEB,
   estLivre,
   fautesLitteraux,
   litterauxSwift,
   main,
   migrationsMatrice,
+  textesJuridiquesDeTextesWeb,
   valeursInterdites,
 } from './check-litteraux-juridiques.mjs';
 
@@ -108,4 +111,26 @@ test('lecteur de littéraux Swift : échappements, interpolation, lignes', () =>
 
 test('dépôt conforme : aucun littéral juridique dans le Swift livré', () => {
   assert.equal(main([]), 0);
+});
+
+// Revue B8 de #1147 (m4) : les textes juridiques du lot 5 (titre de suspension, option « Salarié » au plafond de
+// 48 h/semaine) ne s'écrivent jamais en dur hors de TextesWeb.swift ; l'écran référence la constante.
+test('lot 5 : textes [juridique] de TextesWeb et plafond d heures refusés en dur hors TextesWeb.swift', () => {
+  const textesWebSource = readFileSync(join(ROOT, TEXTES_WEB), 'utf8');
+  const avecTextes = valeursInterdites({ schemaSource, migrations: migrationsMatrice(ROOT), textesWebSource });
+  const textes = textesJuridiquesDeTextesWeb(textesWebSource);
+  for (const t of ['Publication de missions suspendue', 'Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine']) {
+    assert.ok(textes.includes(t), `${t} : texte [juridique] attendu`);
+  }
+  assert.ok(textes.every(t => t.length >= LONGUEUR_TEXTE_JURIDIQUE), 'textes courts exclus de la sous-chaîne');
+  const ecran = 'ios-native/Jolene/Screens/Etablissement/Accueil/EtabAccueilRoot.swift';
+  const fautesLot5 = contenu => fautesLitteraux({ fichiers: [{ chemin: ecran, contenu }], interdits: avecTextes });
+  assert.equal(fautesLot5('Text("Publication de missions suspendue")').length, 1, 'titre de suspension recopié');
+  assert.equal(fautesLot5('Text("Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine")').length, 1);
+  assert.equal(fautesLot5('Text("Au plus 48 h par semaine")').length, 1, 'plafond d heures en dur');
+  assert.equal(fautesLot5('Text("plafond légal atteint")').length, 1);
+  assert.equal(fautesLot5('Text(TextesWeb.BlocageEtablissement.publicationSuspendue)').length, 0, 'référence à la constante');
+  assert.equal(fautesLot5('Text("Publication")').length, 0, 'aucune fausse alerte sur un mot');
+  assert.equal(fautesLitteraux({ fichiers: [{ chemin: TEXTES_WEB, contenu: textesWebSource }], interdits: avecTextes }).length, 0,
+    'TextesWeb.swift reste l exception');
 });
