@@ -320,8 +320,8 @@ final class DemoWorldTests: XCTestCase {
         XCTAssertTrue(gateways.etablissement.session is DemoEtabSessionGateway, "T1 câble la session établissement")
         XCTAssertTrue(gateways.etablissement.audit is DemoEtabAuditGateway, "T1 câble l'audit de consultation")
         XCTAssertEqual(DemoWorld.gateways(drapeaux: [:]).etablissement.unwiredPorts, Self.portsEnAttenteLot5)
-        XCTAssertEqual(gateways.unwiredPorts, Self.portsEnAttenteLot1 + Self.portsEnAttenteLot2 + Self.portsEnAttenteLot3,
-                       "le champ établissement n'altère pas la liste des lots 1 à 3")
+        XCTAssertEqual(gateways.unwiredPorts, Self.portsEnAttenteLot1 + Self.portsEnAttenteLot2 + Self.portsEnAttenteLot3
+                       + Self.portsEnAttenteLot4, "le champ établissement n'altère pas la liste des lots 1 à 4")
     }
 
     func testAuditDemoJournaliseEnMemoireSansReseau() async throws {

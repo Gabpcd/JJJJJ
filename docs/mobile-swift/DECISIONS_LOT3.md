@@ -1882,7 +1882,8 @@ Tests d'abord : commit `test(ios-native): L3-T15 — tests de la revue B8 n°1 (
 
 - **Livré.** Écran `/soignant/stripe-connect` natif (`Jolene/Screens/Revenus/StripeConnectScreen.swift`, port de
   `src/pages/PageStripeConnect.tsx`), empilé sur l'onglet Profil : entrée « Paiements & facturation › Compte de paiement
-  (Stripe) » du hub (`PaiementsEntreeSection`, règle web `estLiberal` de `MonCompteSoignant.tsx` l.45-48 : `LIBERAL`,
+  (Stripe) » du hub (`StripeConnectEntreeLigne` depuis l'intégration vague A, écart 5 ; règle web `estLiberal` de
+  `MonCompteSoignant.tsx` l.45-48 : `LIBERAL`,
   `MIXTE` ou `statut_liberal = 'ACTIF'`), lien `/soignant/stripe-connect` (retour `?success=true` / `?refresh=true`
   compris), tap push et ligne du centre. Cœur : `Revenus/StripeConnect.swift` (`ExerciceConnect`, `StatutConnect.lire`,
   textes, raccourcis), `Revenus/StripeConnectModel.swift` ; port `StripeConnectPort` complété de `exercice(context:)` ;
@@ -1919,9 +1920,13 @@ Tests d'abord : commit `test(ios-native): L3-T15 — tests de la revue B8 n°1 (
   3. « Derniers versements Stripe » (`SuiviVersementsConnect`, l.418) non porté (écart 9 de T12 reste ouvert).
   4. « Contacter le support » (l.478-485, l.512-515) et « Besoin d'aide ? » (l.190-196) non portés : modale web
      `ModalContacterJolene` sans équivalent natif (même manque que T11).
-  5. Section « Paiements & facturation » du hub placée après « Mes données (RGPD) » (le web la place sous « Mon profil ») :
-     montée une fois l'exercice lu, elle ne décale aucune section au-dessus (XCUITest du hub) ; écart d'ordre assumé comme
-     le bloc du lot 0.
+  5. ~~Section « Paiements & facturation » du hub placée après « Mes données (RGPD) » (le web la place sous « Mon profil »)~~.
+     **Levé à l'intégration vague A** (T14a + T14b, recette de la revue B8 de #1144) : une seule section
+     (`PaiementsFacturationSection` de `ProfileScreen`), juste après « Mon profil » comme le web l.64-77, lignes dans
+     l'ordre du web : « Compte de paiement (Stripe) » (`StripeConnectEntreeLigne`, ex-`PaiementsEntreeSection`, montée une
+     fois l'exercice lu) puis « Coordonnées bancaires » (`IbanEntreeLigne`, ex-`IbanEntreeSection` de T14b). La section
+     est toujours présente ; la ligne Stripe, qui arrive après la lecture, décale d'une ligne ce qui la suit (XCUITest du
+     hub à relire sur les trois formats). Titre unique : `StripeConnectTextes.sectionHub` (`IbanTextes.sectionHub` retiré).
   6. Compte de test : le web appelle quand même `stripe-connect-status` puis masque tout (l.106-111, l.302) ; le natif ne
      l'appelle pas (blueprint).
   7. Refus serveur de l'onboarding affiché verbatim ; le web affiche toujours « Erreur lors de la connexion à Stripe.

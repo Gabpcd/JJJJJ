@@ -299,7 +299,7 @@ public struct NotationRecue: Equatable, Sendable, Identifiable {
 }
 
 /// Issue de `fn_creer_reclamation_score` (`p_justificatif_storage_path` jamais envoyé, D10).
-public enum ContestationOutcome: Equatable, Sendable {
+public enum ReclamationScoreOutcome: Equatable, Sendable {
     case enregistree(reclamationId: String)
     /// `error_code` serveur (`TEXTE_REQUIS`, `NON_CONTESTABLE`…) et message verbatim.
     case refusee(code: String?, message: String)

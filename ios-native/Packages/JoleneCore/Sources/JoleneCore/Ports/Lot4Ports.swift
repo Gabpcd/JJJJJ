@@ -75,7 +75,7 @@ public protocol ScorePort: Sendable {
     func notationsRecues(limite: Int, context: MissionReadContext) async throws -> [NotationRecue]
     /// `p_evenement_type = 'SOIGNANT'`, sans justificatif (D10) ; `motif` = valeur du web (`ModaleReclamationScore.tsx`).
     func contester(evenementId: String, motif: String, texte: String,
-                   context: MissionReadContext) async throws -> ContestationOutcome
+                   context: MissionReadContext) async throws -> ReclamationScoreOutcome
 }
 
 /// Évaluations reçues (`fn_mes_notations_recues_avec_stats`, `fn_signaler_notation`) — T9. Seule source des notes
@@ -223,7 +223,7 @@ public struct UnwiredScorePort: ScorePort, UnwiredPort {
     public func evenements(limite: Int, context: MissionReadContext) async throws -> [EvenementScore] { throw erreur }
     public func notationsRecues(limite: Int, context: MissionReadContext) async throws -> [NotationRecue] { throw erreur }
     public func contester(evenementId: String, motif: String, texte: String,
-                          context: MissionReadContext) async throws -> ContestationOutcome { throw erreur }
+                          context: MissionReadContext) async throws -> ReclamationScoreOutcome { throw erreur }
 }
 
 public struct UnwiredEvaluationsPort: EvaluationsPort, UnwiredPort {

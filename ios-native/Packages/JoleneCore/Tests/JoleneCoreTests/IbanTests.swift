@@ -292,7 +292,7 @@ final class IbanTests: XCTestCase {
     /// Textes repris du web, verbatim à leur ligne (`\'` du JSX ramené à `'`).
     func testChaqueTexteRepriseDuWebEstVerbatimASaLigne() throws {
         let attendus: [(String, String, Int)] = [
-            (T.sectionHub, "src/pages/MonCompteSoignant.tsx", 65),
+            // Titre de la section (l.65) : `StripeConnectTextes.sectionHub` seul, épinglé par `StripeConnectTests`.
             (T.entreeHub, "src/pages/MonCompteSoignant.tsx", 73),
             (T.titre, Self.section, 277),
             (T.ibanEnregistre, Self.section, 262),
