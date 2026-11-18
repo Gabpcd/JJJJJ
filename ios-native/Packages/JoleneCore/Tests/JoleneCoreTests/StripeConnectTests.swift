@@ -171,43 +171,52 @@ final class StripeConnectTests: XCTestCase {
 
     // MARK: - Textes (HARD STOP n°4, T14a-J1)
 
-    /// Chaque texte repris du web est sur sa ligne (balises retirées, lignes jointes par une espace) : une PR web qui
-    /// change l'un d'eux rougit ce test.
+    /// Textes repris du web hors cartes contractuelles (celles-ci sont dans `TextesWeb.StripeConnect`, gardées au
+    /// caractère près par `check-textes-juridiques-ios` ; revue B8 de #1144, m1) : chacun ÉGALE un texte affiché de sa
+    /// ligne web (littéral entre apostrophes ou texte JSX entre balises), jamais une simple inclusion.
     func testTextesVerbatimASaLigneWeb() throws {
         let web = try CompteVerbatimTests.lignes("src/pages/PageStripeConnect.tsx")
-        func ligne(_ numero: Int) -> String {
-            web[numero - 1].replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
-                .trimmingCharacters(in: .whitespaces)
-        }
         typealias T = StripeConnectTextes
-        let cas: [(String, [Int])] = [
-            (T.titre, [185]), (T.profilIndisponible, [171]), (T.reessayer, [173]), (T.reessayer, [320]),
-            (T.statutIndisponible, [317]), (T.salarieTitre, [208]), (T.salarieTexte, [210]), (T.salarieEtapesTitre, [216]),
-            (T.salarieEtapes[0], [220]), (T.salarieEtapes[1], [224]), (T.salarieEtapes[2], [228]), (T.salarieEtapes[3], [232]),
-            (T.salarieInfoTitre, [289]), (T.salarieInfoTexte, [291, 292]), (T.compteTestTitre, [307]),
-            (T.compteTestTexte, [309]), (T.nonDemandeTitre, [328]), (T.nonDemandeTexte, [330]),
-            (T.nonDemandeAvantages[0], [333]), (T.nonDemandeAvantages[1], [334]), (T.nonDemandeAvantages[2], [335]),
-            (T.connecter, [339]), (T.enCoursTitre, [350]), (T.reprendreInscription, [358]), (T.actualiserStatut, [361]),
-            (T.completTitre, [374]), (T.actualiser, [382]), (T.suspenduTitre, [448]), (T.completerProfil, [455]),
-            (T.supprimeTitre, [466]), (T.supprimeTexte, [468, 469, 470]), (T.recommencer, [476]), (T.rejeteTitre, [497]),
-            (T.reprendreVerification, [510]), (T.avisCompteTest, [125]), (T.avisCompteTest, [138]),
-            (T.avisNonLiberal, [129]), (T.avisPasserEnLiberal, [143]), (T.erreurConnexionStripe, [146]),
-            (T.lienMesGains, [246]), (T.lienMesGains, [425]), (T.lienMesGainsLiberal, [426]), (T.lienPresences, [257]),
-            (T.lienPresencesDetail, [258]), (T.lienContrats, [268]), (T.lienContratsDetail, [269]),
-            (T.lienPasserEnLiberal, [279]), (T.lienCharges, [433]), (T.lienChargesDetail, [434]),
+        let cas: [(String, Int)] = [
+            (T.titre, 185), (T.profilIndisponible, 171), (T.reessayer, 173), (T.reessayer, 320),
+            (T.statutIndisponible, 317), (T.connecter, 339), (T.enCoursTitre, 350), (T.reprendreInscription, 358),
+            (T.actualiserStatut, 361), (T.completTitre, 374), (T.iban("{ibanLast4}"), 376), (T.actualiser, 382),
+            (T.suspenduTitre, 448), (T.completerProfil, 455), (T.recommencer, 476), (T.rejeteTitre, 497),
+            (T.motif("{motifRejet}"), 504), (T.reprendreVerification, 510), (T.avisCompteTest, 125),
+            (T.avisCompteTest, 138), (T.avisNonLiberal, 129), (T.avisPasserEnLiberal, 143), (T.erreurConnexionStripe, 146),
+            (T.lienMesGains, 246), (T.lienMesGains, 425), (T.lienMesGainsLiberal, 426), (T.lienPresences, 257),
+            (T.lienPresencesDetail, 258), (T.lienContrats, 268), (T.lienContratsDetail, 269),
+            (T.lienPasserEnLiberal, 279), (T.lienCharges, 433), (T.lienChargesDetail, 434),
         ]
-        for (texte, lignes) in cas {
-            let source = lignes.map(ligne).joined(separator: " ")
-            XCTAssertTrue(source.contains(texte), "« \(texte) » absent de PageStripeConnect.tsx l.\(lignes) : « \(source) »")
+        for (texte, numero) in cas {
+            let lus = Self.textesAffiches(web[numero - 1])
+            XCTAssertTrue(lus.contains(texte), "« \(texte) » n'égale aucun texte de PageStripeConnect.tsx l.\(numero) : \(lus)")
         }
-        XCTAssertTrue(ligne(376).contains("IBAN ****{ibanLast4}"), "l.376")
-        XCTAssertTrue(ligne(504).contains("Motif : {motifRejet}"), "l.504")
+        // Cartes contractuelles : les constantes de l'écran SONT celles de la garde requise.
+        XCTAssertEqual(T.nonDemandeAvantages.last, TextesWeb.StripeConnect.nonDemandeFrais)
+        XCTAssertEqual(T.salarieEtapes, [TextesWeb.StripeConnect.salarieEtapeMission, TextesWeb.StripeConnect.salarieEtapeValidation,
+                                         "Tu confirmes la réception dans Mes gains", TextesWeb.StripeConnect.salarieEtapeBulletin])
         let hub = try CompteVerbatimTests.lignes("src/pages/MonCompteSoignant.tsx")
-        XCTAssertTrue(hub[67].contains("'\(T.entreeHub)'"), "MonCompteSoignant.tsx l.68")
-        XCTAssertTrue(hub[64].contains("'\(T.sectionHub)'"), "MonCompteSoignant.tsx l.65")
-        // « Aucun frais pour le soignant » (l.335) relu contre le circuit live : commission en `application_fee_amount`,
+        XCTAssertTrue(Self.textesAffiches(hub[67]).contains(T.entreeHub), "MonCompteSoignant.tsx l.68")
+        XCTAssertTrue(Self.textesAffiches(hub[64]).contains(T.sectionHub), "MonCompteSoignant.tsx l.65")
+        // « Aucun frais pour le soignant » (l.335) relu contre le circuit du dépôt : commission en `application_fee_amount`,
         // ajoutée au débit de l'établissement (T14a-J1).
         let debit = try CompteVerbatimTests.source("supabase/functions/escrow-debit-echeance/index.ts")
         XCTAssertTrue(debit.contains("application_fee_amount: commissionCents,"))
+    }
+
+    /// Textes affichés d'une ligne TSX : littéraux entre apostrophes, textes JSX entre deux balises, texte après la
+    /// dernière balise, ou la ligne entière si elle n'en porte aucune ; bords coupés.
+    private static func textesAffiches(_ ligne: String) -> [String] {
+        let nette = ligne.trimmingCharacters(in: .whitespaces)
+        func captures(_ motif: String) -> [String] {
+            let regex = try! NSRegularExpression(pattern: motif)
+            let ns = nette as NSString
+            return regex.matches(in: nette, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range(at: 1)) }
+        }
+        var textes = captures("'([^']*)'") + captures(">([^<>]*)<")
+        if let fin = nette.lastIndex(of: ">"), !nette[fin...].contains("<") { textes.append(String(nette[nette.index(after: fin)...])) }
+        if !nette.contains("<"), !nette.contains(">") { textes.append(nette) }
+        return textes.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
 }

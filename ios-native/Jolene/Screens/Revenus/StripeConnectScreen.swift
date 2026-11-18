@@ -2,9 +2,10 @@ import SwiftUI
 import JoleneCore
 import JoleneDesign
 
-/// Route par valeur de l'écran Stripe Connect (lot 3, T14a), empilée sur l'onglet Profil : entrée du hub (`force` faux)
-/// ou cible d'un lien, d'un tap push ou du centre (`MainTabView.presenter`, jetonnée) ; `force` vrai pour un retour de
-/// Stripe (`?success=true`, `?refresh=true`) : relecture `force=true` (correction 17).
+/// Route par valeur de l'écran Stripe Connect (lot 3, T14a), empilée sur l'onglet Profil : entrée du hub (`force` faux :
+/// lecture du cache serveur, comme le web hors retour) ou cible d'un lien, d'un tap push ou du centre
+/// (`MainTabView.presenter`, jetonnée) ; `force` toujours vrai pour cette seconde voie (revue B8 de #1144, m2 : retour de
+/// Stripe ou fermeture du flux par la navigation, relecture `force=true`, correction 17).
 struct StripeConnectRoute: Hashable {
     let force: Bool
 }
@@ -14,8 +15,9 @@ struct StripeConnectRoute: Hashable {
 /// compte de test (`stripe-compte-test`), statut indisponible (`stripe-erreur`), et les six statuts
 /// (`stripe-statut-<STATUT>`). Onboarding hébergé par le flux externe (`ExternalFlowPort`, `ExternalFlowPresenter`) ;
 /// toute issue relit le statut avec `force=true`. Raccourcis (Mes gains, Mes présences, Mes contrats, Passer en libéral,
-/// Mes charges) par la cible de l'espace : écran natif s'il est livré, renvoi web sinon (seulement avec le présentateur
-/// `.safari` du coordinateur des liens : jamais un bouton sans effet).
+/// Mes charges) par la cible de l'espace : écran natif s'il est livré (Mes présences et Mes contrats empilés au-dessus de
+/// cet écran, revue B8 de #1144, m3), renvoi web sinon (seulement avec le présentateur `.safari` du coordinateur des
+/// liens : jamais un bouton sans effet).
 ///
 /// Non portés (écarts consignés, `DECISIONS_LOT3.md`, section T14a) : cartes des revenus d'un compte connecté (servies par
 /// l'onglet Revenus), « Derniers versements Stripe » (`SuiviVersementsConnect`), « Contacter le support » et « Besoin

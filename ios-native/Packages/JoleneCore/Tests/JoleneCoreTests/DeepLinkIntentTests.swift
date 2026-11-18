@@ -351,10 +351,10 @@ final class DeepLinkIntentTests: XCTestCase {
     func testRenvoiWebPresenteAussitotSansSessionEtJamaisMemorise() {
         let aiguillage = AiguillageLiens(taps: BoiteTapsPush())
         // Série de missions : renvoi web assumé (décision 11 du lot 1) ; Stripe Connect est natif depuis T14a.
-        let stripe = url("https://jolene.app/soignant/missions/serie/s1")
-        XCTAssertEqual(aiguillage.recevoir(url: stripe), .renvoiWeb(.safari(stripe)))
+        let serie = url("https://jolene.app/soignant/missions/serie/s1")
+        XCTAssertEqual(aiguillage.recevoir(url: serie), .renvoiWeb(.safari(serie)))
         XCTAssertFalse(aiguillage.aUnLienEnAttente)
-        aiguillage.renvoiWebPresente(.safari(stripe))
+        aiguillage.renvoiWebPresente(.safari(serie))
         aiguillage.renvoiWebFerme()
         XCTAssertNil(aiguillage.ouvrirEspace(snapshot(epoch: 1)), "déjà présenté : rien à rejouer")
         let etab = url("https://jolene.app/etablissement/missions/abc")
