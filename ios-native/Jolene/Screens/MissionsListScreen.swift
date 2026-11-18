@@ -34,16 +34,20 @@ import JoleneDesign
 /// Lot 1 (T4b) : étoile « sauvegarder » sur chaque carte (`favori-toggle-<id>`), « Mes favoris »
 /// (`explorer-favoris-ouvrir` → `MesFavorisScreen`), bandeau du filtre établissement retirable
 /// (`explorer-filtre-etablissement`) ; un seul `FavorisModel` pour la liste, le détail et l'écran.
+/// « Mes favoris » est une valeur de la pile d'Explorer (`FavorisRoute`) : l'étoile de la barre et le lien
+/// universel `/soignant/mes-favoris` (`MainTabView.presenter`, cible `.favoris`) ouvrent le même écran.
 struct MissionRoute: Hashable {
     let id: String
 }
+
+/// Lot 1 (T4b) : écran « Mes favoris » empilé sur l'onglet Explorer.
+struct FavorisRoute: Hashable {}
 
 struct MissionsListScreen: View {
     @StateObject private var model: MissionsListModel
     @StateObject private var favoris: FavorisModel
     @ObservedObject private var session: SessionStore
     @State private var feuilleFiltres = ExplorerFeuilleFiltres()
-    @State private var favorisOuverts = false
     private let controller: SessionController
     private let snapshot: SessionSnapshot
     /// Lot 2 T5a (revue fraîche, m6) : changement d'onglet transmis au détail d'une mission, pour que « Présences et
@@ -88,10 +92,10 @@ struct MissionsListScreen: View {
             MissionDetailScreen(route: route, initial: model.mission(id: route.id), session: session, snapshot: snapshot,
                                 ouvrirOnglet: ouvrirOnglet, favoris: favoris)
         }
-        .navigationDestination(isPresented: $favorisOuverts) {
+        .navigationDestination(for: FavorisRoute.self) { _ in
             MesFavorisScreen(favoris: favoris, session: session) { etablissement in
-                // Web : `/soignant/recherche-missions?etablissement=<id>`, filtres initiaux du profil.
-                favorisOuverts = false
+                // Web : `/soignant/recherche-missions?etablissement=<id>`, filtres initiaux du profil ; l'écran
+                // se retire ensuite de la pile (`MesFavorisScreen`).
                 Task { await model.appliquer(ExplorerFiltres.initiaux(profile: model.profile, etablissementId: etablissement.id)) }
             }
         }
@@ -115,9 +119,7 @@ struct MissionsListScreen: View {
     }
 
     private var boutonFavoris: some View {
-        Button {
-            favorisOuverts = true
-        } label: {
+        NavigationLink(value: FavorisRoute()) {
             Image(systemName: "star")
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())

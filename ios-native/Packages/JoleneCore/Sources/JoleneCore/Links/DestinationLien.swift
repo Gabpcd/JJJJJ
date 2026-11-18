@@ -80,6 +80,8 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
             return true                                  // T7 — `ConfirmationInscriptionScreen` (hors espace : `BoiteLiensInscription`)
         case .missions:
             return true                                  // onglet Mes missions : placeholder jusqu'à L1-T5
+        case .favoris:
+            return true                                  // L1-T4b — `MesFavorisScreen`, empilé sur l'onglet Explorer
         case .serieDetail:
             return false                                 // renvoi web assumé (décision 11 du lot 1) ; natif au lot 4
         case .revenus(section: .apercu):
