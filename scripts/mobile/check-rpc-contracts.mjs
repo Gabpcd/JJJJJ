@@ -112,8 +112,8 @@ export const RPC_SUIVIES = [
   { name: 'fn_rgpd_exporter_rate_limited', statut: 'consommee', lot: 3 }, // L3-T11 : SupabaseExportGateway
   { name: 'fn_confirmer_paiement_soignant', statut: 'consommee', lot: 3 }, // L3-T13 : SupabasePaiementsGateway
   { name: 'fn_contester_paiement_soignant', statut: 'consommee', lot: 3 }, // L3-T13 : SupabasePaiementsGateway (B3, #1118)
-  { name: 'fn_consulter_mon_iban', statut: 'a_venir', lot: 3 },
-  { name: 'fn_enregistrer_mon_iban', statut: 'a_venir', lot: 3 },
+  { name: 'fn_consulter_mon_iban', statut: 'consommee', lot: 3 }, // L3-T14b : SupabaseIbanGateway
+  { name: 'fn_enregistrer_mon_iban', statut: 'consommee', lot: 3 }, // L3-T14b : SupabaseIbanGateway
   { name: 'fn_mes_revenus_connect', statut: 'consommee', lot: 3 }, // L3-T12 : SupabaseRevenusGateway
   { name: 'fn_mes_paiements_escrow', statut: 'consommee', lot: 3 }, // L3-T12 : SupabaseRevenusGateway
   // Lot 4 (`docs/mobile-swift/LOT4_PLAN.md` §3 T0, fiches « Lot 4 » de CONTRATS_RPC_SOIGNANT.md) : les

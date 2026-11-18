@@ -5,6 +5,11 @@ import UIKit
 /// Chaque cas fixe clavier, autocomplétion iOS, capitalisation et touche Entrée.
 public enum JoleneInputKind: String, CaseIterable, Sendable {
     case email, telephone, otp, montant, entier, nir, siret, codePostal, recherche, nom, prenom, motDePasse, nouveauMotDePasse
+    /// Lot 3, T14b : IBAN (`SectionPaiements.tsx` l.327-335 : `autoComplete="off"`, `spellCheck={false}`) — clavier ASCII,
+    /// majuscules, ni autocorrection ni suggestion de remplissage.
+    case iban
+    /// Lot 3, T14b : nom complet du titulaire (`autoComplete="name"`, l.358).
+    case nomComplet
 }
 
 /// Touche Entrée (`enterKeyHint` web), indépendante de SwiftUI pour rester comparable en test.
@@ -62,6 +67,10 @@ public struct JoleneInputTraits: Equatable, Sendable {
             return .init(keyboard: .default, contentType: .password, autocapitalization: .none, autocorrection: false, submitLabel: .go, isSecure: true, maxLength: nil)
         case .nouveauMotDePasse:
             return .init(keyboard: .default, contentType: .newPassword, autocapitalization: .none, autocorrection: false, submitLabel: .next, isSecure: true, maxLength: nil)
+        case .iban:
+            return .init(keyboard: .asciiCapable, contentType: nil, autocapitalization: .allCharacters, autocorrection: false, submitLabel: .next, isSecure: false, maxLength: nil)
+        case .nomComplet:
+            return .init(keyboard: .default, contentType: .name, autocapitalization: .words, autocorrection: false, submitLabel: .done, isSecure: false, maxLength: nil)
         }
     }
 }

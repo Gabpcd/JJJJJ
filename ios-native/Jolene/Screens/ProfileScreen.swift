@@ -10,6 +10,8 @@ import JoleneDesign
 /// - lot 2, T4a (décision 24 du lot 2) : « Mon espace » (`EspaceSoignantSection` : Mes présences, Mes documents,
 ///   Mes contrats, consentement GPS), juste après « Application », comme au lot 2 ;
 /// - lot 3, T9 : « Mon profil » (`ProfilEntreeSection`, `profil-ouvrir`) ;
+/// - lot 3, T14b : « Paiements & facturation » › « Coordonnées bancaires » (`IbanEntreeSection`, `iban-ouvrir`,
+///   `IbanRoute` enregistrée ici) ;
 /// - « Réglages » : « Notifications » (T6, préférences, `profile-preferences-notifications`, hôte de la carte
 ///   d'autorisation de T4 : aucune seconde carte ici) et le thème Système / Clair / Sombre (T11, D16) ;
 /// - T11 : « Connexion & sécurité » (« Changer mon mot de passe », `compte-mdp-ouvrir` ; issue d'une demande dont
@@ -20,8 +22,7 @@ import JoleneDesign
 /// Entrées natives en liens par valeur (`ProfilEditionRoute`, `PreferencesNotificationsRoute` enregistrées par
 /// `MainTabView` ; `MotDePasseRoute` enregistrée ici, sur la liste et non dans ses lignes) ; celles de « Mon espace »
 /// (lot 2) en liens à destination. Entrées web : `JoleneRoute` puis `DestinationLien.destination`. Points d'extension
-/// (sans entrée tant que l'écran ou le présentateur manque) : paiements et Stripe (T14a), coordonnées bancaires
-/// (T14b), biométrie (L1-T9), centre de notifications (ouvert depuis l'Accueil, le hub web n'en a pas). Identifiant de
+/// (sans entrée tant que l'écran ou le présentateur manque) : paiements et Stripe (T14a), biométrie (L1-T9), centre de notifications (ouvert depuis l'Accueil, le hub web n'en a pas). Identifiant de
 /// la liste : `profile-list`.
 struct ProfileScreen: View {
     let container: AppContainer
@@ -82,6 +83,7 @@ struct ProfileScreen: View {
             // Une ligne par tranche (T4a présences, T7 documents, T9a contrats ; T4b consentement GPS).
             EspaceSoignantSection(session: session, snapshot: snapshot) // L2-T10 : liens par valeur (`MonEspaceRoute`)
             ProfilEntreeSection() // lot 3, T9 : « Mon profil » (`MonCompteSoignant.tsx` l.59)
+            IbanEntreeSection() // lot 3, T14b : « Paiements & facturation » › « Coordonnées bancaires » (l.65, l.73)
             Section(HubCompte.titreReglages) {
                 // Lot 3, T6 : « Notifications » (l.115) vers les préférences ; lien par valeur, `MainTabView` enregistre
                 // la destination et pousse le même écran par programme (ligne du centre, tap push).
@@ -119,6 +121,9 @@ struct ProfileScreen: View {
         .navigationTitle("Profil")
         .navigationDestination(for: MotDePasseRoute.self) { _ in
             MotDePasseScreen(model: motDePasse)
+        }
+        .navigationDestination(for: IbanRoute.self) { _ in
+            IbanScreen(session: session, snapshot: snapshot) // lot 3, T14b
         }
         // Export RGPD (revue B8, M1 et m3) : la feuille n'est présentée que hub à l'écran, une seule fois, par
         // UIKit (`FeuillePartageExport`, fin unique `completionWithItemsHandler`) ; un export abouti pendant qu'un
