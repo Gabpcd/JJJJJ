@@ -33,6 +33,8 @@ on:
       # Lot 5, T2a : sources relues par DemoEspaceTests (rôles d'équipe) et EtabFeatureFlagsTests (clés D-FLAGS).
       - 'src/pages/EquipeEtablissement.tsx'
       - 'supabase/migrations/20261102204450_drapeaux_ios_natif_lots_2_4_5.sql'
+      # Lot 5, T2b : matrice de parité relue par EtabRouteTests (47 routes, natif ou renvoi web).
+      - 'docs/mobile-swift/PARITE_ETABLISSEMENT.md'
       - 'src/lib/completude-planning-mission.ts'
       - 'src/lib/nativeLinks.ts'
       - 'src/lib/geo.ts'
@@ -142,6 +144,8 @@ on:
       # Lot 5, T2a : sources relues par DemoEspaceTests (rôles d'équipe) et EtabFeatureFlagsTests (clés D-FLAGS).
       - 'src/pages/EquipeEtablissement.tsx'
       - 'supabase/migrations/20261102204450_drapeaux_ios_natif_lots_2_4_5.sql'
+      # Lot 5, T2b : matrice de parité relue par EtabRouteTests (47 routes, natif ou renvoi web).
+      - 'docs/mobile-swift/PARITE_ETABLISSEMENT.md'
       - 'src/lib/completude-planning-mission.ts'
       - 'src/lib/nativeLinks.ts'
       - 'src/lib/geo.ts'

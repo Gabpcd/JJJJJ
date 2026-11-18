@@ -108,8 +108,23 @@ final class DemoEtabSessionTests: JoleneUITestCase {
 
     // MARK: Étapes
 
+    private func ouvrirOnglet(_ identifiant: String, label: String, contenu: String) {
+        tabButton(identifiant, label: label).tap()
+        require("L'onglet \(label) affiche son contenu") { self.containerVisible(self.element(contenu)) }
+    }
+
+    private func ouvrirCompte() {
+        tabButton("tab-etab-compte", label: "Compte").tap()
+        require("Le compte de l'établissement est affiché") {
+            self.containerVisible(self.element("etab-compte-list")) && self.element("etab-compte-nom").exists
+        }
+    }
+}
+
+/// Connexion démo de l'espace établissement, partagée par `DemoEtabSessionTests` (T2a) et `DemoEtabLiensTests` (T2b).
+extension JoleneUITestCase {
     /// Connexion démo avec `email` ; le champ est vidé s'il garde la saisie d'une connexion précédente.
-    private func connecter(email adresse: String) {
+    func connecter(email adresse: String) {
         let scroll = element("login-scroll")
         require("L'écran de connexion est affiché") { self.visible(scroll) }
         let email = element("login-email")
@@ -120,7 +135,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         email.typeText("\n")
         if !hasKeyboardFocus(password) { focus(password, in: scroll) }
         require("Le mot de passe a le focus clavier") { self.hasKeyboardFocus(password) }
-        password.typeText(Self.demoPassword)
+        password.typeText(JoleneUITestCase.demoPassword)
         let submit = element("login-submit")
         require("Le bouton de connexion est activé") { submit.isEnabled }
         if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
@@ -131,7 +146,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
     /// Efface la valeur saisie lors d'une connexion précédente : curseur amené à droite du texte, puis
     /// autant de retours arrière que de caractères ; un texte plus large que le champ peut laisser le
     /// curseur au milieu, d'où au plus trois passes (le reste, plus court, tient alors dans le champ).
-    private func viderChamp(_ champ: XCUIElement) {
+    func viderChamp(_ champ: XCUIElement) {
         func saisie() -> String {
             let valeur = (champ.value as? String) ?? ""
             return valeur == champ.placeholderValue ? "" : valeur
@@ -143,17 +158,5 @@ final class DemoEtabSessionTests: JoleneUITestCase {
             passes += 1
         }
         require("Le champ email est vide avant la saisie") { saisie().isEmpty }
-    }
-
-    private func ouvrirOnglet(_ identifiant: String, label: String, contenu: String) {
-        tabButton(identifiant, label: label).tap()
-        require("L'onglet \(label) affiche son contenu") { self.containerVisible(self.element(contenu)) }
-    }
-
-    private func ouvrirCompte() {
-        tabButton("tab-etab-compte", label: "Compte").tap()
-        require("Le compte de l'établissement est affiché") {
-            self.containerVisible(self.element("etab-compte-list")) && self.element("etab-compte-nom").exists
-        }
     }
 }
