@@ -8,11 +8,16 @@ import Foundation
 
 // MARK: - Candidature (T6a, T7)
 
-/// Actions de `fn_confirmer_action_planning_v1` servies au lot 1 (SWIPE_LIKE et URGENCE : lot 4).
+/// Actions de `fn_confirmer_action_planning_v1` : POSTULER, ACCEPTER et PROPOSITION au lot 1 ; SWIPE_LIKE (❤️ du
+/// swipe, relayé à `fn_enregistrer_swipe(…, 'LIKE', p_choix_contrat)`) et URGENCE (acceptation rapide du pool,
+/// `fn_accepter_mission_urgence(p_mission_id)`, qui ignore `p_choix_contrat` : un `choix_requis` n'y est jamais rejoué,
+/// correction 10) ajoutées par L4-T1 (décision D2 de `docs/mobile-swift/DECISIONS_LOT4.md`).
 public enum ActionPlanning: String, CaseIterable, Sendable {
     case postuler = "POSTULER"
     case accepter = "ACCEPTER"
     case proposition = "PROPOSITION"
+    case swipeLike = "SWIPE_LIKE"
+    case urgence = "URGENCE"
 }
 
 /// Élément de `p_creneaux_confirmes` : instants ISO 8601 du planning exact affiché. T6a le

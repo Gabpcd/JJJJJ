@@ -14,7 +14,8 @@ import Foundation
 /// | `/reset-password`                                 | `.resetPassword(credentials:)`    |
 /// | `/inscription/confirmer`                          | `.confirmerInscription(credentials:)` |
 /// | `/soignant/tableau-de-bord`                       | `.accueil`                        |
-/// | `/soignant/recherche-missions`, `/soignant/swipe-missions` | `.explorer`              |
+/// | `/soignant/recherche-missions` (sans `?vue=swipe`)  | `.explorer`                       |
+/// | `/soignant/swipe-missions`, `/soignant/recherche-missions?vue=swipe` (lot 4) | `.secondaire(.swipe)` (repli `.explorer`) |
 /// | `/soignant/missions` et alias (`mes-matches`, `planning`, `calendrier-sync`, `historique-missions`) | `.missions` |
 /// | `/soignant/missions/serie/{id}`                   | `.serieDetail(id:)`               |
 /// | `/soignant/missions/{id}`, `/mission/{id}`        | `.missionDetail(id:)`             |
@@ -22,7 +23,10 @@ import Foundation
 /// | `/soignant/mes-gains` (`?tab=` → section, lot 3)  | `.revenus(section:)`              |
 /// | alias `mes-factures-honoraires`, `mes-avances`, `bulletins-paie` (`Navigate`, l.395-397) | `.revenus(section: .factures / .avances / .bulletins)` |
 /// | `/soignant/profil`, `reputation` (lot 3)          | `.profil` (édition)               |
-/// | `/soignant/mon-compte`, `parametres`, `parametres-complet` ; `score`, `fiabilite`, `fiabilite-legacy` (page score au lot 4, écart assumé) | `.monCompte` (hub) |
+/// | `/soignant/mon-compte`, `parametres`, `parametres-complet`                    | `.monCompte` (hub) |
+/// | `/soignant/score`, `fiabilite`, `fiabilite-legacy` (lot 4)                    | `.secondaire(.score)` (repli `.monCompte`) |
+/// | `/soignant/disponibilites`, `parrainage`, `evaluations`, `pool-urgence`, `exclusions`, `parametres/recherches-sauvegardees` (lot 4) | `.secondaire(…)` |
+/// | `/soignant/messagerie` (`?conv=`), `/soignant/litiges` (`?tab=`, `?litige=` ou fragment `#<id>`), alias `reclamations` (lot 4) | `.secondaire(.messagerie / .litiges)` |
 /// | `/soignant/profil?tab=confidentialite` (export RGPD et suppression, portés par le hub depuis L3-T11) | `.monCompte` (hub) |
 /// | `/soignant/notifications` (lot 3)                 | `.notifications`                  |
 /// | `/soignant/parametres/notifications` (lot 3)      | `.parametresNotifications`        |
@@ -93,7 +97,11 @@ public enum LinkRouter {
         case "/inscription/reprendre": return .inscription(EtapeInscription(page: .reprendre, query: query))
         case "/inscription/completer": return .inscription(EtapeInscription(page: .completer, query: query))
         case "/soignant/tableau-de-bord": return .accueil
-        case "/soignant/recherche-missions", "/soignant/swipe-missions": return .explorer
+        // Lot 4, T1 : vue Swipe d'Explorer (`RedirectionSwipeMissions`, `src/App.tsx` l.258-260) ; repli `.explorer`
+        // tant que T3b ne l'a pas livrée (`EcranSecondaire.repliAvantLivraison`).
+        case "/soignant/recherche-missions":
+            return FormQuery(query).get("vue") == "swipe" ? .secondaire(.swipe) : .explorer
+        case "/soignant/swipe-missions": return .secondaire(.swipe)
         case "/soignant/missions", "/soignant/mes-matches", "/soignant/planning",
              "/soignant/calendrier-sync", "/soignant/historique-missions":
             return .missions
@@ -101,6 +109,8 @@ public enum LinkRouter {
         // Alias `Navigate` de `src/App.tsx` l.395-397 : l'onglet est fixé par la redirection.
         case "/soignant/mes-factures-honoraires": return .revenus(section: .factures)
         case "/soignant/mes-avances": return .revenus(section: .avances)
+        // Bulletins : route de Revenus gardée par L4-T1 ; T10 (copies officielles) passe sa destination à
+        // `.secondaire(.bulletins(copieId:))` en livrant l'écran (`DestinationLien`), sans toucher à cette table.
         case "/soignant/bulletins-paie": return .revenus(section: .bulletins)
         // Onglet « Confidentialité » du profil web (`ProfilSoignant.tsx` l.42-44, l.505-507 : export RGPD, suppression
         // de compte ; « Supprimer mon compte » du hub web, `MonCompteSoignant.tsx` l.135) : le hub natif, qui porte la
@@ -109,9 +119,25 @@ public enum LinkRouter {
         // Comparaison exacte de `?tab=`, comme le web ; l'alias `reputation` redirige sans query (`src/App.tsx` l.393).
         case "/soignant/profil": return FormQuery(query).get("tab") == "confidentialite" ? .monCompte : .profil
         case "/soignant/reputation": return .profil
-        case "/soignant/mon-compte", "/soignant/parametres", "/soignant/parametres-complet",
-             "/soignant/score", "/soignant/fiabilite", "/soignant/fiabilite-legacy":
+        case "/soignant/mon-compte", "/soignant/parametres", "/soignant/parametres-complet":
             return .monCompte
+        // Lot 4, T1 (`LOT4_PLAN.md` §3 T1) : écrans secondaires ; repli `.monCompte` pour le score tant que T9 ne
+        // l'a pas livré, page web canonique pour les autres (`DestinationLien.destination`).
+        case "/soignant/score", "/soignant/fiabilite", "/soignant/fiabilite-legacy": return .secondaire(.score)
+        case "/soignant/disponibilites": return .secondaire(.disponibilites)
+        case "/soignant/parrainage": return .secondaire(.parrainage)
+        case "/soignant/evaluations": return .secondaire(.evaluations)
+        case "/soignant/pool-urgence": return .secondaire(.poolUrgence)
+        case "/soignant/exclusions": return .secondaire(.exclusions)
+        case "/soignant/parametres/recherches-sauvegardees": return .secondaire(.recherches)
+        case "/soignant/messagerie": return .secondaire(.messagerie(conversationId: FormQuery(query).get("conv")))
+        // `?litige=` puis fragment `#<id>` (`LitigesSoignant.tsx` l.53-54, pushs `LITIGE_*` de `pushNative.ts` l.300-301).
+        case "/soignant/litiges":
+            let parametres = FormQuery(query)
+            let litige = parametres.get("litige").flatMap { $0.isEmpty ? nil : $0 } ?? identifier(fragment)
+            return .secondaire(.litiges(onglet: EcranSecondaire.OngletLitiges(tab: parametres.get("tab")), litigeId: litige))
+        // Alias `Navigate` de l.403 vers `/soignant/litiges?tab=reclamations`.
+        case "/soignant/reclamations": return .secondaire(.litiges(onglet: .reclamations, litigeId: nil))
         case "/soignant/notifications": return .notifications
         case "/soignant/parametres/notifications": return .parametresNotifications
         case "/soignant/stripe-connect": return .stripeConnect(retour: RetourConnect(query: query))

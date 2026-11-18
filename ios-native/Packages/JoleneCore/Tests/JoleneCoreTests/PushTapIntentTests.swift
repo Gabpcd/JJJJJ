@@ -69,8 +69,9 @@ final class PushTapIntentTests: XCTestCase {
             (["type_evenement": "MISSION_A_POURVOIR"], .explorer, .explorer),
             (["type_evenement": "MISSION_ANNULEE_ETAB"], .missions, .missions),
             (["type_evenement": "SYSTEM", "lien": "/soignant/notifications"], .notifications, .centre),
+            // L4-T1 : la page litiges a sa route (litige ciblé par le fragment), servie par le web jusqu'à T8.
             (["type_evenement": "LITIGE_OUVERT", "litige_id": "l1"],
-             .safari(url("https://jolene.app/soignant/litiges#l1")), .web(.safari(url("https://jolene.app/soignant/litiges#l1")))),
+             .secondaire(.litiges(onglet: nil, litigeId: "l1")), .web(.safari(url("https://jolene.app/soignant/litiges#l1")))),
             // L2-T10 : le contrat est natif (« Mon espace », onglet Profil), plus un renvoi web.
             (["type_evenement": "CONTRAT_A_SIGNER", "contrat_id": "c1"], .contrat(id: "c1"), .contrat(id: "c1")),
             (["type_evenement": "DPAE_RAPPEL"], .documents(onglet: "dpae"), .documents(onglet: .dpae)),

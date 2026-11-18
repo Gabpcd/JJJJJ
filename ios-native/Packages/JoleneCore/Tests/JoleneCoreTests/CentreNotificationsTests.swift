@@ -494,6 +494,7 @@ final class CentreNotificationsTests: XCTestCase {
         case monCompte, profil, notifications, parametresNotifications
         case stripeConnect, stripeConnectSucces, stripeConnectRafraichir
         case presences, presencesMission, documents, contrat, contratCertificat // L2-T10
+        case secondaire // L4-T1 : écrans secondaires du lot 4 (`EcranSecondaire`)
         case safari, etablissement
 
         init(_ route: JoleneRoute) {
@@ -535,6 +536,7 @@ final class CentreNotificationsTests: XCTestCase {
             case .documents: self = .documents
             case .contrat: self = .contrat
             case .contratCertificat: self = .contratCertificat
+            case .secondaire: self = .secondaire
             case .safari: self = .safari
             case .etablissement: self = .etablissement
             }
@@ -556,6 +558,8 @@ final class CentreNotificationsTests: XCTestCase {
         // L2-T10 : écrans de « Mon espace » du lot 2 (cible native sur l'onglet Profil).
         "/soignant/presences?tab=historique&filtre=a_valider", "/soignant/presences/mission/m-1",
         "/soignant/mes-documents?tab=contrats", "/contrat/c-1", "/contrat/c-1/certificat",
+        // L4-T1 : écrans secondaires (renvoi web, ou repli natif du swipe et du score) ; `/soignant/dpae` : renvoi web.
+        "/soignant/disponibilites", "/soignant/swipe-missions", "/soignant/score", "/soignant/dpae",
     ]
 
     /// Liste d'exclusion nommée et fermée : routes natives **sans présentation depuis un espace prêt par nature**
@@ -592,6 +596,13 @@ final class CentreNotificationsTests: XCTestCase {
                 continue
             }
             guard lien.route.isNative, DestinationLien.ecranNatifLivre(lien.route) else {
+                if lien.destination.externalURL == nil {
+                    // L4-T1 : repli natif d'un écran secondaire non livré (`EcranSecondaire.repliAvantLivraison` : swipe →
+                    // Explorer, score → hub), vers un écran lui-même livré et présentable.
+                    XCTAssertTrue(DestinationLien.ecranNatifLivre(lien.destination), chemin)
+                    XCTAssertTrue(cible.estPresentable(renvoiWebDisponible: false), "\(chemin) : repli \(cible)")
+                    continue
+                }
                 XCTAssertEqual(cible, .web(lien.destination), "\(chemin) : écran non livré, renvoi web canonique")
                 XCTAssertEqual(lien.destination.externalURL, lien.canonique, chemin)
                 continue

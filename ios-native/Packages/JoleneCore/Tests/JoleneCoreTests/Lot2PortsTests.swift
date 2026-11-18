@@ -17,7 +17,7 @@ final class Lot2PortsTests: XCTestCase {
     func testInitDuLot0LaisseLesPortsDuLot2NonCablesApresCeuxDuLot1() {
         let g = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
         // Fusion des lots 2 et 3 : le bloc du lot 3 (`Lot3PortsTests`) suit celui du lot 2.
-        XCTAssertEqual(g.unwiredPorts, Lot1PortsTests.portsLot1 + Self.portsLot2 + Lot3PortsTests.portsLot3,
+        XCTAssertEqual(g.unwiredPorts, Lot1PortsTests.portsLot1 + Self.portsLot2 + Lot3PortsTests.portsLot3 + Lot4PortsTests.portsLot4,
                        "lot 1 puis lot 2 (puis lot 3), ordre de déclaration")
         XCTAssertTrue(g.pointage is UnwiredPointagePort)
         XCTAssertTrue(g.contestation is UnwiredContestationPort)
@@ -28,7 +28,7 @@ final class Lot2PortsTests: XCTestCase {
 
     func testLeSecondInitDuLot1NeTouchePasAuBlocLot2() {
         let g = Lot1Fakes.gateways(clock: FixedClock(Date(timeIntervalSince1970: 1)))
-        XCTAssertEqual(g.unwiredPorts, Self.portsLot2 + Lot3PortsTests.portsLot3,
+        XCTAssertEqual(g.unwiredPorts, Self.portsLot2 + Lot3PortsTests.portsLot3 + Lot4PortsTests.portsLot4,
                        "le second init câble tout le lot 1, le lot 2 (puis le lot 3) s'assigne après")
     }
 
@@ -36,7 +36,7 @@ final class Lot2PortsTests: XCTestCase {
         var g = Lot1Fakes.gateways(clock: SystemClock())
         g.pointage = FauxPointage()
         g.contrats = FauxContrats()
-        XCTAssertEqual(g.unwiredPorts, Self.portsLot2.filter { $0 != "pointage" && $0 != "contrats" } + Lot3PortsTests.portsLot3)
+        XCTAssertEqual(g.unwiredPorts, Self.portsLot2.filter { $0 != "pointage" && $0 != "contrats" } + Lot3PortsTests.portsLot3 + Lot4PortsTests.portsLot4)
         XCTAssertTrue(g.pointage is FauxPointage)
         XCTAssertTrue(g.contrats is FauxContrats)
     }

@@ -51,6 +51,7 @@ public enum DemoWorld {
         )
         câblerLot2(&gateways)
         câblerLot3(&gateways)
+        DemoLot4.cabler(&gateways) // lot 4 : une fabrique par domaine (`Demo/Lot4/`)
         return gateways
     }
 
