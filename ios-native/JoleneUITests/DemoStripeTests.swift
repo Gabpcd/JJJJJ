@@ -20,9 +20,15 @@ final class DemoStripeTests: JoleneUITestCase {
         tabButton("tab-profil", label: "Profil").tap()
         let hub = element("profile-list")
         require("Le hub est affiché") { self.containerVisible(hub) }
-        // Section montée une fois l'exercice lu (profil MIXTE) ; cellule hors écran absente de l'arbre : défilement borné.
+        // Ligne Stripe montée une fois l'exercice lu (profil MIXTE), en tête de la section « Paiements & facturation »,
+        // juste au-dessus de « Coordonnées bancaires » (toujours montée) depuis l'intégration vague A (revue B8 de #1154,
+        // m2). Cellule hors écran absente de l'arbre : on amène d'abord `iban-ouvrir` à l'écran (il arrive par le bas,
+        // la ligne qui le précède est donc dans le cadre), on attend la lecture de l'exercice, puis on cherche la ligne
+        // Stripe vers le haut, sans jamais la dépasser vers le bas.
+        scrollTo(element("iban-ouvrir"), in: hub)
         let entree = element("profile-stripe-connect")
-        scrollTo(entree, in: hub)
+        _ = entree.waitForExistence(timeout: 15)
+        scrollTo(entree, in: hub, downward: false)
         XCTAssertEqual(entree.label, "Compte de paiement (Stripe)")
         entree.tap()
         let nonDemande = element("stripe-statut-NON_DEMANDE")

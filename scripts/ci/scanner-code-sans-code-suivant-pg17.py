@@ -85,7 +85,12 @@ FIN_ARGS_LIVE = "p_mission_id uuid, p_heure_fin timestamp with time zone, p_rais
 SCANNER_ARGS_LIVE = 'p_code text, p_metadata jsonb DEFAULT NULL::jsonb'
 # Gardes de contrat (elles vérifient l'absence ou la présence des clés dans le
 # dump), pas des lecteurs : seules exceptions du balayage des lecteurs.
-GARDES_NON_LECTRICES = {'scripts/ci/scanner-code-sans-code-suivant-pg17.py', 'tests/node/check-rpc-contracts.node.mjs'}
+# tests/node/contrats-etablissement-ios.node.mjs (lot 5, T0) ne lit pas le code
+# suivant : il exige que la fiche de fn_declarer_fin_retroactive de
+# CONTRATS_RPC_ETABLISSEMENT.md déclare `nouveau_code` non consigné (l.389,
+# assertion sur le texte de la doc ; le client Swift ne le décode jamais).
+GARDES_NON_LECTRICES = {'scripts/ci/scanner-code-sans-code-suivant-pg17.py', 'tests/node/check-rpc-contracts.node.mjs',
+                        'tests/node/contrats-etablissement-ios.node.mjs'}
 
 
 def md5(texte):

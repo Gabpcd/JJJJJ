@@ -322,10 +322,13 @@ final class IbanTests: XCTestCase {
             let brute = source[ligne - 1].replacingOccurrences(of: "\\'", with: "'")
             XCTAssertTrue(brute.contains(texte), "« \(texte) » absent de \(fichier) l.\(ligne)")
         }
-        // Non portés (TJ6, TJ8) : l.280 (destinataires) et l.308 (« historique ») ; témoins de leur ligne.
+        // Non portés (TJ6, TJ8) : l.280 (destinataires) et l.308 (« historique »), retirés du web par #1152 (HARD STOP
+        // n°4) ; témoins inversés comme `tests/node/check-rpc-contracts-lot3.node.mjs` : la phrase de l.280 s'arrête au
+        // parrainage, et aucune ligne ne dit plus « jamais partagé » ni « conservé dans ton historique ».
         let web = try CompteVerbatimTests.lignes(Self.section)
-        XCTAssertTrue(web[279].contains("Il n'est jamais partagé avec l'établissement"), "l.280")
-        XCTAssertTrue(web[307].contains("L'ancien IBAN est conservé dans ton historique"), "l.308")
+        XCTAssertTrue(web[279].contains("Ton IBAN est utilisé pour le versement de tes primes de parrainage."), "l.280")
+        XCTAssertFalse(web.contains { $0.contains("jamais partagé") }, "l.280 : « jamais partagé » retiré (#1152)")
+        XCTAssertFalse(web.contains { $0.contains("conservé dans ton historique") }, "l.308 : « historique » retiré (#1152)")
         let natifs = [T.titre, T.ibanEnregistre, T.ribVerifieRequis, T.ribCorrespondant, T.identiteVerifieeRequise,
                       T.identiteCouranteRequise, T.erreurGenerique]
         XCTAssertFalse(natifs.contains { $0.contains("partagé") || $0.contains("historique") || $0.contains("parrainage") })

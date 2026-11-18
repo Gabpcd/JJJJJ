@@ -229,7 +229,10 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
             numero += 1
             demande = DemandeNavigation(numero: numero, epoch: epoch, cible: cible, route: route)
         case let .naviguerEtablissement(cible, route, epoch)?:
-            // Lot 5, T2b : exécutée par `EtablissementTabView` de cet epoch (onglet, pile remise à sa racine).
+            // Lot 5, T2b : exécutée par `EtablissementTabView` de cet epoch (onglet, pile remise à sa racine). Le flux
+            // hébergé Stripe (T14a, espace soignant) est fermé comme pour `.naviguer` (revue B8 de #1154, m4) : sans effet
+            // aujourd'hui (un changement d'espace passe par `identiteTerminee`), mais toute navigation le ferme.
+            fermerFluxExterne?()
             fermerRenvoiWeb()
             numero += 1
             demandeEtablissement = DemandeNavigationEtablissement(numero: numero, epoch: epoch, cible: cible, route: route)
