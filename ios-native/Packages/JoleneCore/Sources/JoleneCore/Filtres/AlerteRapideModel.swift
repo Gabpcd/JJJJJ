@@ -4,14 +4,16 @@ import Combine
 /// « Créer une alerte » en un toucher depuis Explorer (L4-T4), port de `creerAlerteRapide` (`RechercheMissions.tsx`
 /// l.172-226) : relecture des recherches (`fn_lister_mes_filtres_sauvegardes`), `AlerteRecherche.preparer` (golden T2 :
 /// seule une recherche **strictement identique** est réutilisée, jamais une recherche de même nom), puis
-/// - recherche identique déjà en alerte toutes les heures : rien n'est écrit (message du web) ;
-/// - recherche identique sans alerte, ou en alerte quotidienne / hebdomadaire : `modifier(alerte: true, IMMEDIATE)` —
-///   écart assumé au web, qui laisse une alerte quotidienne en place tout en annonçant « vérifiées toutes les heures » :
-///   le natif aligne la fréquence sur la promesse de la confirmation ;
-/// - sinon : `creer(nom libre, critères d'Explorer, alerte, IMMEDIATE)`.
-/// Succès annoncé seulement si la liste relue montre la recherche en alerte toutes les heures (PRINCIPES §3) ; refus
-/// serveur verbatim ; appels bornés (décision 14 du lot 1) ; un second appui pendant l'appel est ignoré ; réponse d'un
-/// epoch périmé ignorée ; une annulation n'est jamais une erreur.
+/// - recherche identique dont l'alerte est déjà active, quelle que soit sa fréquence : **rien n'est écrit**, comme le web
+///   (l.193-201) ; le message dit sa fréquence réelle (`alerteExisteDeja`), jamais « toutes les heures » pour une alerte
+///   quotidienne ou hebdomadaire (revue B8 de #1167, M1 : la fréquence choisie par le soignant n'est jamais remplacée) ;
+/// - recherche identique sans alerte : `modifier(alerte: true)` seul, fréquence conservée (le web envoie aussi
+///   `IMMEDIATE`, qui écraserait le choix enregistré ; écart consigné, `LOT4_PLAN.md` écart n°14) ; message exact
+///   (`alerteActiveePour`) ;
+/// - sinon : `creer(nom libre, critères d'Explorer, alerte, IMMEDIATE)`, message du web.
+/// Succès annoncé seulement si la liste relue montre la recherche en alerte, à la fréquence attendue (PRINCIPES §3) ;
+/// refus serveur verbatim ; appels bornés (décision 14 du lot 1) ; un second appui pendant l'appel est ignoré ; réponse
+/// d'un epoch périmé ignorée ; une annulation n'est jamais une erreur.
 @MainActor
 public final class AlerteRapideModel: ObservableObject {
     public enum Issue: Equatable, Sendable {
@@ -57,15 +59,15 @@ public final class AlerteRapideModel: ObservableObject {
         guard await controller.epoch == snapshot.epoch else { return false }
         let preparation = AlerteRecherche.preparer(criteres: criteres, recherches: existantes, nomBase: nomBase)
 
-        if let deja = preparation.deja, deja.alerteActive, deja.frequence == .immediate {
-            return publier(.confirmee(FiltresTextes.alerteDejaActive))
+        if let deja = preparation.deja, deja.alerteActive {
+            return publier(.confirmee(FiltresTextes.alerteExisteDeja(frequence: deja.frequence)))
         }
         let repli = preparation.deja == nil ? FiltresTextes.alerteCreationImpossible : FiltresTextes.alerteActivationImpossible
         do {
             let resultat: IssueFiltre
             if let deja = preparation.deja {
                 resultat = try await bounded(timeout: timeout) {
-                    try await port.modifier(id: deja.id, nom: deja.nom, alerte: true, frequence: .immediate, context: context)
+                    try await port.modifier(id: deja.id, nom: nil, alerte: true, frequence: nil, context: context)
                 }
             } else {
                 let nom = preparation.nom
@@ -79,13 +81,15 @@ public final class AlerteRapideModel: ObservableObject {
                 return publier(.echec(message.isEmpty ? repli : message))
             case let .relue(lignes):
                 let cle = AlerteRecherche.cle(AlerteRecherche.valeur(criteres))
-                let confirmee = lignes.contains { ligne in
-                    ligne.alerteActive && ligne.frequence == .immediate
-                        && (preparation.deja.map { ligne.id == $0.id } ?? (ligne.nom == preparation.nom))
-                        && AlerteRecherche.cle(ligne.filtres) == cle
+                // Réactivation : la ligne de la recherche, fréquence inchangée ; création : la ligne du nom libre, horaire.
+                let relue = lignes.first { ligne in
+                    ligne.alerteActive && AlerteRecherche.cle(ligne.filtres) == cle
+                        && (preparation.deja.map { ligne.id == $0.id && ligne.frequence == $0.frequence }
+                            ?? (ligne.nom == preparation.nom && ligne.frequence == .immediate))
                 }
-                guard confirmee else { return publier(.echec(FiltresTextes.alerteNonConfirmee)) }
-                return publier(.confirmee(preparation.deja == nil ? FiltresTextes.alerteCreee : FiltresTextes.alerteDejaActive))
+                guard let relue else { return publier(.echec(FiltresTextes.alerteNonConfirmee)) }
+                return publier(.confirmee(preparation.deja == nil ? FiltresTextes.alerteCreee
+                                          : FiltresTextes.alerteActiveePour(frequence: relue.frequence)))
             }
         } catch {
             return await terminer(erreur: error, repli: FiltresTextes.alerteEnregistrementImpossible)

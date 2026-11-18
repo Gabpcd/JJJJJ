@@ -131,6 +131,26 @@
 >     - **m2, à l'intégration avec T1c (#1159)** : déplacer `buildDemoSwipe` dans `scripts/mobile/demo-fixtures/swipe.mjs`
 >       (module vide posé par T1c, règle « jamais `export-demo-fixtures.mjs` »), corriger la phrase sur le découpage
 >       ci-dessus et renuméroter cet écart (le n° 12 est celui de T1c).
+> 14. **T4 livrée (18/11, #1167 ; le n°13 revient à T3a, #1165)** : `/soignant/parametres/recherches-sauvegardees` natif,
+>     ses quatre RPC passées en `consommee` (`LOT4_CONSOMMEES`). Écarts au web, tranchés par la revue B8 de #1167 :
+>     - **Alerte rapide toujours visible** : bouton « Me prévenir des prochaines missions » de la barre d'Explorer
+>       (`AlerteRapideButton.swift`, emplacement `alerteRapide(model:)` de T1c), sous le coupe-circuit
+>       `ios_natif_recherches_actif`, chaque écriture après confirmation et relecture. Le web ne l'offre que dans l'état
+>       vide d'Explorer, la fin du paquet de swipe et `?alerte=1` ; `?alerte=1` n'est pas routé (`LinkRouter` mène
+>       `/soignant/recherche-missions` à `.explorer` sans requête). L'état vide et la fin du paquet restent à brancher
+>       (T3b pour le swipe ; l'état vide est dans `MissionsListScreen`, hors tranche).
+>     - **Alerte existante jamais réécrite** (M1) : recherche identique déjà en alerte, quelle que soit sa fréquence →
+>       aucune écriture, message exact « Une alerte existe déjà pour cette recherche (toutes les heures / chaque jour /
+>       chaque semaine). » (le web annonce « toutes les heures » même pour une alerte quotidienne). Recherche identique
+>       sans alerte → `p_alerte_active` seul, fréquence conservée (le web envoie aussi `IMMEDIATE`, qui écraserait le choix
+>       enregistré). Création : `IMMEDIATE`, comme le web.
+>     - **Cloche de la liste** (m2) : `p_alerte_active` seul, comme le web (`fn_modifier_filtre_sauvegarde` garde nom et
+>       fréquence par `COALESCE`) ; `FiltresSauvegardesPort.modifier` prend `nom` et `frequence` facultatifs (port de T1).
+>     - **Filtre établissement** (m1) : le validateur serveur refuse la clé `etablissementId` ; l'alerte ne le reprend pas
+>       (comme le web) et la confirmation le dit (`FiltresTextes.etablissementNonRepris`).
+>     - **Avis de succès refermables** à la place des toasts du web ; aucun ne disparaît sur minuterie.
+>     - **XCUITest** : `DemoFiltresTests` ouvre l'éclat `lot4` du job `ui-lot1` (D19) ; le paragraphe « CI » du n°12 ne
+>       vaut plus pour T4.
 >
 > **§6 mis à jour au 18/11** : B0-bis fait (point 2) ; prérequis du point 1 complétés par le reliquat du lot 1
 > ci-dessus (T6a, T4b, T5, T6b, T6c) ; B1 toujours B9, non fait ; les autres points sont inchangés.

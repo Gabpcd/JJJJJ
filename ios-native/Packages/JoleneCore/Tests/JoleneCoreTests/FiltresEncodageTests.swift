@@ -70,6 +70,13 @@ final class FiltresEncodageTests: XCTestCase {
         XCTAssertFalse(FiltresSauvegardesEncodage.estValide(avec("tauxMin", .chaine("1e3"))))
         XCTAssertFalse(FiltresSauvegardesEncodage.estValide(avec("rayonKm", .booleen(true))))
         XCTAssertTrue(FiltresSauvegardesEncodage.estValide(avec("tauxMin", .chaine("25.5"))))
+        // m4 : la borne de 20 caractères de `p->>k` vaut aussi pour un nombre JSON (forme décimale, sans exposant).
+        XCTAssertFalse(FiltresSauvegardesEncodage.estValide(avec("tauxMin", .nombre(0.000012345678901234567))), "23 caractères")
+        XCTAssertTrue(FiltresSauvegardesEncodage.estValide(avec("tauxMin", .nombre(0.30000000000000004))), "19 caractères")
+        XCTAssertTrue(FiltresSauvegardesEncodage.estValide(avec("rayonKm", .nombre(1e-7))))
+        XCTAssertEqual(FiltresSauvegardesEncodage.texteNumerique(1e-7), "0.0000001")
+        XCTAssertEqual(FiltresSauvegardesEncodage.texteNumerique(25), "25")
+        XCTAssertFalse(FiltresSauvegardesEncodage.estValide(avec("tauxMin", .chaine("0.000012345678901234567"))))
         XCTAssertTrue(FiltresSauvegardesEncodage.estValide(avec("typeContrat", .null)), "null vaut TOUS")
         XCTAssertTrue(FiltresSauvegardesEncodage.estValide(.objet([:])), "toutes les clés sont facultatives côté serveur")
         XCTAssertFalse(FiltresSauvegardesEncodage.estValide(.tableau([])))
@@ -153,6 +160,16 @@ final class FiltresEncodageTests: XCTestCase {
                        "Alerte missions")
         XCTAssertTrue(FiltresTextes.alerteRapideDescription(profession: "Infirmier", rayonKm: 50)
             .contains("une mission Infirmier correspondant à vos critères (rayon 50 km)"))
+        // m1 : un filtre établissement actif n'est jamais retiré sans le dire.
+        XCTAssertFalse(FiltresTextes.alerteRapideDescription(profession: nil, rayonKm: 50).contains(FiltresTextes.etablissementNonRepris))
+        XCTAssertTrue(FiltresTextes.alerteRapideDescription(profession: nil, rayonKm: 50, filtreEtablissement: true)
+            .hasSuffix(" " + FiltresTextes.etablissementNonRepris))
+        // M1 : messages exacts d'une alerte existante, jamais une promesse de fréquence.
+        XCTAssertEqual(FiltresTextes.alerteExisteDeja(frequence: .immediate), "Une alerte existe déjà pour cette recherche (toutes les heures).")
+        XCTAssertEqual(FiltresTextes.alerteExisteDeja(frequence: .quotidienne), "Une alerte existe déjà pour cette recherche (chaque jour).")
+        XCTAssertEqual(FiltresTextes.alerteExisteDeja(frequence: .hebdomadaire), "Une alerte existe déjà pour cette recherche (chaque semaine).")
+        XCTAssertEqual(FiltresTextes.alerteExisteDeja(frequence: nil), "Une alerte existe déjà pour cette recherche.")
+        XCTAssertEqual(FiltresTextes.alerteActiveePour(frequence: .hebdomadaire), "Alerte activée pour cette recherche (chaque semaine).")
     }
 
     /// Décision 9 du lot 1 : textes non juridiques au vouvoiement, jamais de tutoiement résiduel.

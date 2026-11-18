@@ -75,21 +75,34 @@ public enum FiltresSauvegardesEncodage {
         }
     }
 
-    /// `rayonKm` / `tauxMin` : absent ou `null` accepté ; sinon nombre ou texte de la forme `^[0-9]+([.][0-9]+)?$`,
-    /// 20 caractères au plus, au plus 10000. Un nombre JSON négatif, non fini ou au-delà de la borne est refusé.
+    /// `rayonKm` / `tauxMin` : absent ou `null` accepté ; sinon nombre ou texte dont la forme texte (`p->>k`) s'écrit
+    /// `^[0-9]+([.][0-9]+)?$` en 20 caractères au plus, et vaut au plus 10000 (revue B8 de #1167, m4 : la borne de
+    /// longueur vaut aussi pour un nombre JSON). Un nombre négatif, non fini ou au-delà de la borne est refusé.
     private static func numeriqueValide(_ valeur: ValeurJSON?) -> Bool {
         switch valeur {
         case nil, .null?:
             return true
         case .nombre(let nombre)?:
-            return nombre.isFinite && nombre >= 0 && nombre <= valeurNumeriqueMax
+            guard nombre.isFinite, nombre >= 0, nombre <= valeurNumeriqueMax else { return false }
+            return texteValide(texteNumerique(nombre))
         case .chaine(let texte)?:
-            guard texte.count <= 20, texte.range(of: #"^[0-9]+([.][0-9]+)?$"#, options: .regularExpression) != nil,
-                  let nombre = Double(texte) else { return false }
+            guard texteValide(texte), let nombre = Double(texte) else { return false }
             return nombre <= valeurNumeriqueMax
         default:
             return false
         }
+    }
+
+    private static func texteValide(_ texte: String) -> Bool {
+        texte.count <= 20 && texte.range(of: #"^[0-9]+([.][0-9]+)?$"#, options: .regularExpression) != nil
+    }
+
+    /// Texte d'un nombre JSON relu par `->>` : les chiffres envoyés (forme la plus courte, celle de `JSON.stringify`), sans
+    /// exposant (`numeric` de PostgreSQL l'écrit en notation décimale : `1e-7` → `0.0000001`).
+    static func texteNumerique(_ nombre: Double) -> String {
+        let texte = JSONJavaScript.nombre(nombre)
+        guard texte.contains("e"), let decimal = Decimal(string: texte) else { return texte }
+        return "\(decimal)"
     }
 
     /// Nom envoyé : espaces de bord retirés (`nom.trim()` du web) ; `nil` s'il est vide (« Nom requis »). La borne de

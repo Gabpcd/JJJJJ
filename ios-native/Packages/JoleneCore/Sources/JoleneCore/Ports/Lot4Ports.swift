@@ -31,7 +31,9 @@ public protocol FiltresSauvegardesPort: Sendable {
     func lister(context: MissionReadContext) async throws -> [FiltreSauvegarde]
     func creer(nom: String, filtres: FiltresAlerte, alerte: Bool, frequence: FrequenceAlerte,
                context: MissionReadContext) async throws -> IssueFiltre
-    func modifier(id: String, nom: String, alerte: Bool, frequence: FrequenceAlerte,
+    /// `nom` / `frequence` à `nil` : paramètre non envoyé, valeur serveur conservée (`COALESCE`, T4 ; la cloche n'envoie
+    /// que `p_alerte_active`, comme le web).
+    func modifier(id: String, nom: String?, alerte: Bool, frequence: FrequenceAlerte?,
                   context: MissionReadContext) async throws -> IssueFiltre
     func supprimer(id: String, context: MissionReadContext) async throws -> IssueFiltre
 }
@@ -173,7 +175,7 @@ public struct UnwiredFiltresSauvegardesPort: FiltresSauvegardesPort, UnwiredPort
     public func lister(context: MissionReadContext) async throws -> [FiltreSauvegarde] { throw erreur }
     public func creer(nom: String, filtres: FiltresAlerte, alerte: Bool, frequence: FrequenceAlerte,
                       context: MissionReadContext) async throws -> IssueFiltre { throw erreur }
-    public func modifier(id: String, nom: String, alerte: Bool, frequence: FrequenceAlerte,
+    public func modifier(id: String, nom: String?, alerte: Bool, frequence: FrequenceAlerte?,
                          context: MissionReadContext) async throws -> IssueFiltre { throw erreur }
     public func supprimer(id: String, context: MissionReadContext) async throws -> IssueFiltre { throw erreur }
 }

@@ -1356,7 +1356,7 @@ jobs:
     # checks requis de la branche, comme `ui`. Lot 4 (L4-T4, 18/11/2026) : la première tranche du lot 4 qui livre un
     # XCUITest y ouvre l'éclat « lot4 » (D19 de DECISIONS_LOT4 : job `ui-lot1` ou job propre au lot 4), plutôt qu'un
     # douzième éclat du job `ui`. Plafond : 25 (build) + 1 + 1 (Package.resolved) + 3 × 30 (éclats) = 117 min, plus
-    # 15 min de préparation : 135 min. Gardes : tests/node/ios-swift-ci-eclats.node.mjs.
+    # 15 min de préparation = 132 min, porté à 135 min (marge). Gardes : tests/node/ios-swift-ci-eclats.node.mjs.
     timeout-minutes: 135
     strategy:
       fail-fast: false

@@ -8,12 +8,12 @@ import XCTest
 final class FiltresModelTests: XCTestCase {
     /// Port témoin : lecture réelle du monde démo, mutation remplacée.
     private struct PortTemoin: FiltresSauvegardesPort {
-        let demo = DemoFiltresGateway()
+        var demo = DemoFiltresGateway()
         let mutation: @Sendable () throws -> IssueFiltre
         func lister(context: MissionReadContext) async throws -> [FiltreSauvegarde] { try await demo.lister(context: context) }
         func creer(nom: String, filtres: FiltresAlerte, alerte: Bool, frequence: FrequenceAlerte,
                    context: MissionReadContext) async throws -> IssueFiltre { try mutation() }
-        func modifier(id: String, nom: String, alerte: Bool, frequence: FrequenceAlerte,
+        func modifier(id: String, nom: String?, alerte: Bool, frequence: FrequenceAlerte?,
                       context: MissionReadContext) async throws -> IssueFiltre { try mutation() }
         func supprimer(id: String, context: MissionReadContext) async throws -> IssueFiltre { try mutation() }
     }
@@ -125,12 +125,13 @@ final class FiltresModelTests: XCTestCase {
 
         let reutilisee = await alerte.activer(filtres: filtres, profile: snapshot.context.profile)
         XCTAssertTrue(reutilisee)
-        XCTAssertEqual(alerte.issue, .confirmee(FiltresTextes.alerteDejaActive))
+        XCTAssertEqual(alerte.issue, .confirmee("Une alerte existe déjà pour cette recherche (toutes les heures)."))
         liste = try await port.lister(context: snapshot.context)
         XCTAssertEqual(liste.count, 3, "même recherche : réutilisée, jamais doublée")
     }
 
-    /// Recherche identique sans alerte (« Week-ends en CDD » de la fixture) : réactivée toutes les heures, sans création.
+    /// Recherche identique sans alerte (« Week-ends en CDD » de la fixture, quotidienne) : activée à sa fréquence
+    /// enregistrée, sans création (revue B8 de #1167, M1).
     func testAlerteRapideReactiveLaRechercheIdentique() async throws {
         let port = DemoFiltresGateway()
         let (controller, snapshot) = try await session(port)
@@ -141,12 +142,49 @@ final class FiltresModelTests: XCTestCase {
 
         let reactivee = await alerte.activer(filtres: filtres, profile: snapshot.context.profile)
         XCTAssertTrue(reactivee)
-        XCTAssertEqual(alerte.issue, .confirmee(FiltresTextes.alerteDejaActive))
+        XCTAssertEqual(alerte.issue, .confirmee("Alerte activée pour cette recherche (chaque jour)."))
         let liste = try await port.lister(context: snapshot.context)
         XCTAssertEqual(liste.count, 2)
         XCTAssertEqual(liste.first?.id, "demo-recherche-002")
         XCTAssertEqual(liste.first?.alerteActive, true)
-        XCTAssertEqual(liste.first?.frequence, .immediate, "fréquence alignée sur la promesse « toutes les heures »")
+        XCTAssertEqual(liste.first?.frequence, .quotidienne, "fréquence choisie par le soignant conservée")
+    }
+
+    /// Recherche identique dont l'alerte est déjà active en quotidienne ou hebdomadaire : aucune écriture, fréquence relue
+    /// inchangée, message exact (revue B8 de #1167, M1).
+    func testAlerteRapideNeReecritJamaisUneAlerteActive() async throws {
+        let profil = DemoWorld.context.profile
+        let filtres = ExplorerFiltres.initiaux(profile: profil)
+        let valeur = FiltresSauvegardesEncodage.valeur(FiltresSauvegardesEncodage.criteres(filtres))
+        for (frequence, attendu) in [(FrequenceAlerte.quotidienne, "Une alerte existe déjà pour cette recherche (chaque jour)."),
+                                     (.hebdomadaire, "Une alerte existe déjà pour cette recherche (chaque semaine).")] {
+            let demo = DemoFiltresGateway(initiales: [
+                FiltreSauvegarde(id: "identique", nom: "Ma recherche", filtres: valeur, alerteActive: true, frequence: frequence),
+            ])
+            let port = PortTemoin(demo: demo) { XCTFail("aucune écriture pour une alerte déjà active"); return .relue([]) }
+            let (controller, snapshot) = try await session(port)
+            let alerte = AlerteRapideModel(controller: controller, snapshot: snapshot)
+            let confirmee = await alerte.activer(filtres: filtres, profile: profil)
+            XCTAssertTrue(confirmee)
+            XCTAssertEqual(alerte.issue, .confirmee(attendu))
+            let relue = try await demo.lister(context: snapshot.context)
+            XCTAssertEqual(relue.map(\.frequence), [frequence], "fréquence relue inchangée")
+        }
+    }
+
+    /// Cloche : `p_alerte_active` seul ; un renommage fait ailleurs entre-temps n'est jamais écrasé (revue B8 de #1167, m2).
+    func testClocheNeRenvoiePasLeNomNiLaFrequenceLus() async throws {
+        let port = DemoFiltresGateway()
+        let model = try await modele(port)
+        let affichee = try XCTUnwrap(model.liste.recherches.last)
+        _ = try await port.modifier(id: affichee.id, nom: "Renommée ailleurs", alerte: false, frequence: .hebdomadaire,
+                                    context: DemoWorld.context)
+        await model.basculerAlerte(affichee)
+        let relue = try XCTUnwrap(model.liste.recherches.first { $0.id == affichee.id })
+        XCTAssertEqual(relue.nom, "Renommée ailleurs")
+        XCTAssertEqual(relue.frequence, .hebdomadaire)
+        XCTAssertTrue(relue.alerteActive)
+        XCTAssertEqual(model.confirmation, FiltresTextes.alerteActivee)
     }
 
     func testAlerteRapideRefusVerbatimEtLectureImpossible() async throws {
@@ -164,7 +202,7 @@ final class FiltresModelTests: XCTestCase {
             func lister(context: MissionReadContext) async throws -> [FiltreSauvegarde] { throw JoleneError(.network, "Connexion impossible.") }
             func creer(nom: String, filtres: FiltresAlerte, alerte: Bool, frequence: FrequenceAlerte,
                        context: MissionReadContext) async throws -> IssueFiltre { XCTFail("aucune écriture sans lecture"); return .relue([]) }
-            func modifier(id: String, nom: String, alerte: Bool, frequence: FrequenceAlerte,
+            func modifier(id: String, nom: String?, alerte: Bool, frequence: FrequenceAlerte?,
                           context: MissionReadContext) async throws -> IssueFiltre { XCTFail("aucune écriture sans lecture"); return .relue([]) }
             func supprimer(id: String, context: MissionReadContext) async throws -> IssueFiltre { .relue([]) }
         }

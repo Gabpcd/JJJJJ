@@ -60,7 +60,7 @@ final class DemoFiltresTests: JoleneUITestCase {
         record("\(proofPrefix)-alerte-rapide-creee")
         tap("explorer-avis-fermer")
         require("L'avis est refermé") { !self.element("alerte-confirmee").exists }
-        activerAlerteRapide(attendu: "Votre alerte est active")
+        activerAlerteRapide(attendu: "Une alerte existe déjà pour cette recherche (toutes les heures).")
 
         let ecran = ouvrirRecherches()
         XCTAssertEqual(elements(withPrefix: "recherche-appliquer-").count, 3, "une recherche créée, réutilisée ensuite : aucun doublon")
