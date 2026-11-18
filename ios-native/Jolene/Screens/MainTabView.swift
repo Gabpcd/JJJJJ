@@ -53,6 +53,12 @@ struct MainTabView: View {
     @State private var cheminAccueil = NavigationPath()
     /// Pile de l'onglet Explorer (revue B8 de T3b, m5) : un lien ou un tap vers Explorer revient à sa racine.
     @State private var cheminExplorer = NavigationPath()
+    /// Pile de l'onglet Mes missions (lot 1, T5, revue B8 de #1148, m1) : un lien ou un tap vers Mes missions la ramène
+    /// à sa racine, comme Explorer et Revenus.
+    @State private var cheminMissions = NavigationPath()
+    /// Présentations de Mes missions par un lien ou un tap (jeton de péremption) : la liste est relue, comme le web
+    /// relit `/soignant/missions` à chaque navigation.
+    @State private var presentationsMissions = 0
     /// Pile de l'onglet Profil (intégration du lot 3) : préférences de notifications et édition du profil.
     @State private var cheminProfil = NavigationPath()
     /// Jetons des écrans de « Mon espace » présentés sur le Profil (revue B8 n°1 de L2-T10, m1) : chaque présentation est
@@ -107,8 +113,8 @@ struct MainTabView: View {
             .tag(Tab.explorer)
             .accessibilityIdentifier("tab-explorer")
 
-            NavigationStack {
-                MesMissionsScreen(session: session, snapshot: snapshot) { selection = $0 }
+            NavigationStack(path: $cheminMissions) {
+                MesMissionsScreen(session: session, snapshot: snapshot, peremption: presentationsMissions) { selection = $0 }
             }
             .tabItem { Label("Mes missions", systemImage: "list.clipboard") }
             .tag(Tab.missions)
@@ -200,12 +206,17 @@ struct MainTabView: View {
             selection = .accueil
             cheminAccueil = NavigationPath()
         case .explorer:
-            // Revue B8 de T3b, m5 : un détail empilé sur Explorer est retiré (Mes missions n'a pas de pile ; celle de
-            // Revenus, lot 3, T12, est vidée de même ci-dessous).
+            // Revue B8 de T3b, m5 : un détail empilé sur Explorer est retiré (celles de Mes missions, lot 1, T5, et de
+            // Revenus, lot 3, T12, sont vidées de même ci-dessous).
             selection = .explorer
             cheminExplorer = NavigationPath()
         case .missions:
+            // Lot 1, T5 (revue B8 de #1148, m1) : la pile revient à sa racine et la liste est relue (jeton de péremption).
+            // L'onglet du lien (`?tab=`, `historique-missions`) n'est pas transmis par `CibleNotification.missions` :
+            // l'onglet affiché reste le dernier choisi (À venir à la première ouverture), consigné dans PARITE.
             selection = .missions
+            cheminMissions = NavigationPath()
+            presentationsMissions += 1
         case .revenus(let section):
             // Présentables (garde de `estPresentable`) : la racine (`.apercu`, T12) et « Paiements à confirmer »
             // (`.paiementsAConfirmer`, T13 : l'onglet défile jusqu'à `revenus-paiements-declares`) ; lot 3, T12 : la pile
