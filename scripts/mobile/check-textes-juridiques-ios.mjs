@@ -121,6 +121,23 @@ export const DOSSIERS_LOT2 = [
   'ios-native/Packages/JoleneCore/Sources/JoleneCore/Libelles/LibellesPresences.swift',
   // T5a : textes vouvoyés, formats et textes opérationnels du détail des présences, de la notation et des points d'entrée.
   'ios-native/Packages/JoleneCore/Sources/JoleneCore/Libelles/LibellesDetailPresences.swift',
+  // Lot 5 (revue B8 de #1147, m4) : espace établissement — règles pures, planning, démo, gateways, écrans, liens,
+  // session et fondation T1 ; même règle (aucun texte juridique en dur hors TextesWeb.swift).
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Etablissement',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Planning',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Demo/Etablissement',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Links/EtabRoute.swift',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Models/EtablissementContext.swift',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Models/EtablissementResults.swift',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Ports/Lot5Ports.swift',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Ports/EtablissementGateways.swift',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Session/EcransEtablissement.swift',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Session/EspaceResolution.swift',
+  'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Etablissement',
+  'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/RPC/ListesBlanchesEtablissement.swift',
+  'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/RPC/RPCResponse+Etablissement.swift',
+  'ios-native/Jolene/Screens/Etablissement',
+  'ios-native/Jolene/Composition/EtabFeatureFlags.swift',
 ];
 
 /**
@@ -136,6 +153,8 @@ export const MARQUES_JURIDIQUES = [
   /J['’]atteste/i, /sur l['’]honneur/i, /\bart(?:icle|\.)\s*L?\.?\s*\d/i,
   /(?<![-\w])consentement(?![-\w])/i, /géolocalisation/i, /signature électronique/i,
   /pointage sans (?:GPS|localisation)/i, /\b72\s?h\b/i,
+  // Lot 5 (revue B8 de #1147, m4) : plafond d'heures du droit du travail (option « Salarié », règle 48 h serveur).
+  /\b48\s?h\b/i, /plafond l[ée]gal/i,
   /\bpreuve (?:juridique|que)\b/i, /horodatage/i, /SHA-?256/i,
 ];
 

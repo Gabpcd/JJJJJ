@@ -36,9 +36,10 @@ où les lots 1, 2 et 3 sont mergés (#1110, #1131, #1130, #1133). Écarts relev�
    provisoire compris) est présenté. Sans espace, un lien établissement n'est mémorisé que si l'espace est ouvrable.
 10. **T3** livrée (golden `planning-derive`, `PlanningExactEtab`, `CodeRotatifRules`) ; `SynthesePresence` vient du
     lot 2 (`JoleneCore/Pointage/SynthesePresence.swift`), non reporté.
-11. **B5a** déjà sur `main` (migration D-FLAGS #1111, sept clés) ; **B5b** non faite. Les classes XCUITest du lot 5
-    tournent dans l'éclat socle de `ios-swift-ci.yml` (aucun éclat de lot 5) ; revue fraîche B8 de T2a et de T2b à
-    faire.
+11. **B5a** déjà sur `main` (migration D-FLAGS #1111, sept clés) ; **B5b** non faite. Plafond de onze éclats atteint :
+    `DemoEtabSessionTests` tourne dans « lot3-profil-photo » et `DemoEtabLiensTests` dans « presences » (revue B8 de
+    #1147, m5 ; garde `ios-swift-ci-eclats`), jamais dans le socle. Revue fraîche B8 de #1147 (T0-T2b) : CLÔTURABLE,
+    mineurs m1-m5 traités dans la PR.
 
 > Préparé le 2026-11-02, en lecture seule, sur `main` `d1b0f39c` (#1106, socle lot 0) et les branches de fondation du lot 1 non encore mergées : `origin/feat/ios-native-lot1-t1-fondation` (HEAD `d246a062` : ports additifs, `Gateways` étendu, `RPCResponse`, `Bounded`, audit, drapeaux), `origin/feat/ios-native-lot1-t1b-design` (`528c49b1` : `ConfirmationSheet`, `FilterChip`, `SlotList`, `StickyActionBar`, `InlineNotice`, `SkeletonBlock`, `SectionHeader`, style `destructive`), `origin/feat/ios-native-lot1-t2-golden-planning` (`bda09c20` : exporteur golden à hook `@/lib`, `CompletudePlanning`, `CreneauxConfirmes`, `SelectionSerieCandidat`).
 > (corrigé v2) Base réelle du lot 1 : la branche d'intégration `origin/feat/ios-lot1` (`c509224a`) fusionne T0 (`feat/ios-lot1-t0-contrats-docs` : `RPC_SUIVIES` étendu à `fn_ecrire_audit_safe`, `fn_param_bool`, `fn_maj_activite_soignant`…, absents de `main` comme de `d246a062`), T1, T1b et T2, et remplace le doublon temporaire par `public typealias CreneauConfirmePayload = CreneauConfirme` (`Models/Lot1Results.swift` l.26). Le lot 5 part de ce que cette branche aura mergé sur `main`, pas des trois branches isolées. Les plans des lots 2 et 4 (`LOT2_PLAN.md`, `LOT4_PLAN.md`, scratchpad) ont été relus pour les dépendances. PRINCIPES §3 « lot 5 » : l.46-47 sur `main`, l.56-57 sur la branche d'intégration.

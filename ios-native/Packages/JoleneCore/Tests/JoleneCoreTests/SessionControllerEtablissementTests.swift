@@ -80,6 +80,15 @@ struct ScriptedRole: RolePort {
     }
 }
 
+/// Port de drapeaux qui journalise chaque clé lue (`drapeau(<clé>)`), réponse fail-open.
+private struct DrapeauxJournalises: FlagsPort {
+    let log: CallLog
+    func ecranActif(cle: String, defaut: Bool) async -> Bool {
+        await log.record("drapeau(\(cle))")
+        return defaut
+    }
+}
+
 private struct ErreurReseauEtab: Error {}
 
 private let confirmeLe = Date(timeIntervalSince1970: 1_700_000_000)
@@ -140,7 +149,11 @@ private struct EtabFixture {
         return gateways
     }
 
-    func controller() -> SessionController { SessionController(gateways: gateways(), resolutionTimeout: timeout, espaceEtablissement: .ouvert) }
+    /// Configuration de production par défaut (revue B8 de #1147, m2) : espace FERMÉ ; les tests de l'espace ouvert (démo,
+    /// puis STAGING à T13 et production à T14) le demandent par `espace: .ouvert`.
+    func controller(espace: OuvertureEspaceEtablissement = .ferme) -> SessionController {
+        SessionController(gateways: gateways(), resolutionTimeout: timeout, espaceEtablissement: espace)
+    }
 }
 
 // MARK: - Tests
@@ -154,7 +167,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
 
     func testMembreConfirmeOuvreLEspaceEtablissement() async throws {
         let fixture = EtabFixture()
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         let state = await controller.start()
         guard case let .readyEtablissement(snapshot) = state else { return XCTFail("espace établissement attendu, obtenu \(state)") }
         XCTAssertTrue(state.isReady)
@@ -177,7 +190,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
 
     func testRepliSigneQuandLeRoleServeurEstIndisponible() async {
         let fixture = EtabFixture(restored: utilisateurEtab(etablissementId: "etab-1"), roles: [.failure(ErreurReseauEtab())])
-        let state = await fixture.controller().start()
+        let state = await fixture.controller(espace: .ouvert).start()
         XCTAssertEqual(state.snapshotEtablissement?.context.etablissementId, "etab-1",
                        "raccourci signé app_metadata, confirmé par fn_mes_permissions_etab : \(state)")
     }
@@ -186,7 +199,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
         let legacy = utilisateurEtab("etab-legacy", role: "ETABLISSEMENT")
         let fixture = EtabFixture(restored: legacy, roles: [.success(RoleResult(role: "ADMIN_ETABLISSEMENT"))],
                                   permissions: [permissions(etablissementId: "etab-legacy")], profils: [profil("etab-legacy")])
-        let state = await fixture.controller().start()
+        let state = await fixture.controller(espace: .ouvert).start()
         guard case let .readyEtablissement(snapshot) = state else { return XCTFail("legacy confirmé attendu, obtenu \(state)") }
         XCTAssertEqual(snapshot.context.etablissementId, "etab-legacy", "le serveur confirme etablissements.id = user.id")
         XCTAssertEqual(snapshot.context.roleEtab, .proprietaire)
@@ -196,7 +209,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
         let legacy = utilisateurEtab("etab-legacy", role: "ETABLISSEMENT")
         let fixture = EtabFixture(restored: legacy, roles: [.success(RoleResult(role: "ADMIN_ETABLISSEMENT"))],
                                   permissions: [permissions(role: nil, etablissementId: nil)])
-        let state = await fixture.controller().start()
+        let state = await fixture.controller(espace: .ouvert).start()
         XCTAssertEqual(state, .blocked(.unsupportedRole(SessionState.etabSansAccesCode)))
         let entries = await fixture.log.entries
         XCTAssertFalse(entries.contains("profil"), "aucun profil lu sans périmètre confirmé")
@@ -204,14 +217,14 @@ final class SessionControllerEtablissementTests: XCTestCase {
 
     func testMembreRevoqueEstBloqueSansAcces() async {
         let fixture = EtabFixture(permissions: [permissions(role: nil, etablissementId: nil, accordees: [])])
-        let state = await fixture.controller().start()
+        let state = await fixture.controller(espace: .ouvert).start()
         XCTAssertEqual(state, .blocked(.unsupportedRole(SessionState.etabSansAccesCode)))
         XCTAssertTrue(state.message?.contains("jolene.app") ?? false)
     }
 
     func testCandidatDivergentBloqueAvantToutProfil() async {
         let fixture = EtabFixture(permissions: [permissions(etablissementId: "etab-2")])
-        let state = await fixture.controller().start()
+        let state = await fixture.controller(espace: .ouvert).start()
         XCTAssertEqual(state, .blocked(.unsupportedRole(SessionState.etabScopeDivergentCode)))
         let entries = await fixture.log.entries
         XCTAssertFalse(entries.contains("profil"))
@@ -219,14 +232,14 @@ final class SessionControllerEtablissementTests: XCTestCase {
 
     func testProfilDUnAutreEtablissementEstUneDivergence() async {
         let fixture = EtabFixture(profils: [profil("etab-2")])
-        let state = await fixture.controller().start()
+        let state = await fixture.controller(espace: .ouvert).start()
         XCTAssertEqual(state, .blocked(.unsupportedRole(SessionState.etabScopeDivergentCode)),
                        "un profil d'un autre établissement n'est jamais un repli")
     }
 
     func testCompteInactifRenvoieALaConnexionSansPurge() async {
         let fixture = EtabFixture(permissions: [permissions(role: nil, etablissementId: nil, accordees: [], success: false)])
-        let state = await fixture.controller().start()
+        let state = await fixture.controller(espace: .ouvert).start()
         XCTAssertEqual(state, .signedOut(message: SessionController.sessionCheckFailedMessage))
         let signOuts = await fixture.log.signOutCount
         XCTAssertEqual(signOuts, 0)
@@ -234,30 +247,86 @@ final class SessionControllerEtablissementTests: XCTestCase {
 
     func testRoleEtablissementInconnuNOuvreJamaisLEspace() async {
         let fixture = EtabFixture(permissions: [permissions(role: .inconnu("ADMIN_PLATEFORME"), accordees: [])])
-        let state = await fixture.controller().start()
+        let state = await fixture.controller(espace: .ouvert).start()
         XCTAssertEqual(state, .blocked(.unsupportedRole("ADMIN_PLATEFORME")))
     }
 
-    // MARK: Espace fermé hors démo (report sur main, 18/11/2026)
+    // MARK: Espace fermé hors démo (report sur main ; revue B8 de #1147, m2)
 
-    /// Défaut du contrôleur (staging, production) : le compte établissement reçoit le refus d'avant le lot 5,
-    /// sans aucun appel établissement (ni permissions, ni profil, ni drapeaux).
+    /// Refus exact d'avant le lot 5 (`MobileAccess.validate`) et aucun appel établissement : ni permissions, ni profil.
+    /// Statique : appelée aussi depuis un test `@MainActor`, sans envoyer `self` d'un domaine d'isolation à l'autre.
+    private static func verifierRefusDAvantLeLot5(_ state: SessionState, log: CallLog, file: StaticString = #filePath,
+                                           line: UInt = #line) async {
+        XCTAssertEqual(state, .blocked(.unsupportedRole("ADMIN_ETABLISSEMENT")), file: file, line: line)
+        XCTAssertEqual(state, .blocked(MobileAccess.validate(user: utilisateurEtab(), role: "ADMIN_ETABLISSEMENT")),
+                       "même refus que MobileAccess.validate (main avant le lot 5)", file: file, line: line)
+        let appels = await log.entries
+        XCTAssertFalse(appels.contains { $0.hasPrefix("permissions(") || $0 == "profil" }, "appels : \(appels)",
+                       file: file, line: line)
+    }
+
+    /// Défaut du contrôleur (staging, production) : restauration.
     func testEspaceFermeParDefautRendLeRefusDAvantLeLot5SansAppelEtablissement() async {
         let fixture = EtabFixture()
         let state = await SessionController(gateways: fixture.gateways()).start()
-        XCTAssertEqual(state, .blocked(.unsupportedRole("ADMIN_ETABLISSEMENT")))
-        XCTAssertEqual(state, .blocked(MobileAccess.validate(user: utilisateurEtab(), role: "ADMIN_ETABLISSEMENT")),
-                       "même refus que MobileAccess.validate (main avant le lot 5)")
-        let appels = await fixture.log.entries
-        XCTAssertFalse(appels.contains { $0.hasPrefix("permissions(") || $0 == "profil" }, "appels : \(appels)")
+        await Self.verifierRefusDAvantLeLot5(state, log: fixture.log)
+    }
+
+    func testEspaceFermeConnexion() async {
+        let fixture = EtabFixture(restored: nil)
+        let controller = fixture.controller()
+        _ = await controller.start()
+        let state = await controller.signIn(email: "membre-1@example.invalid", password: "mot-de-passe")
+        await Self.verifierRefusDAvantLeLot5(state, log: fixture.log)
+    }
+
+    func testEspaceFermeRevalidationSilencieuseSoignantVersEtablissement() async {
+        var fixture = EtabFixture(restored: utilisateurEtab(role: "SOIGNANT"),
+                                  roles: [.success(RoleResult(role: "SOIGNANT")),
+                                          .success(RoleResult(role: "ADMIN_ETABLISSEMENT", etablissementId: "etab-1"))])
+        fixture.profilSoignant = SoignantProfile(id: "membre-1", profession: "IDE")
+        let controller = fixture.controller()
+        guard case .ready = await controller.start() else { return XCTFail("espace soignant attendu d'abord") }
+        let state = await controller.start() // reprise après 30 min : revalidation silencieuse, même identité
+        await Self.verifierRefusDAvantLeLot5(state, log: fixture.log)
+    }
+
+    func testEspaceFermeEvenementSessionDUnAutreUtilisateur() async {
+        var fixture = EtabFixture(restored: utilisateurEtab("soignant-1", role: "SOIGNANT"),
+                                  roles: [.success(RoleResult(role: "SOIGNANT")),
+                                          .success(RoleResult(role: "ADMIN_ETABLISSEMENT", etablissementId: "etab-1"))])
+        fixture.profilSoignant = SoignantProfile(id: "soignant-1", profession: "IDE")
+        let controller = fixture.controller()
+        guard case .ready = await controller.start() else { return XCTFail("espace soignant attendu d'abord") }
+        await fixture.auth.set(restored: utilisateurEtab(), restoreError: nil)
+        let state = await controller.handleAuthEvent(.session(userId: "membre-1"))
+        await Self.verifierRefusDAvantLeLot5(state, log: fixture.log)
     }
 
     func testEspaceFermeRefuseAussiLeCompteLegacy() async {
         let legacy = utilisateurEtab("etab-legacy", role: "ETABLISSEMENT")
         let fixture = EtabFixture(restored: legacy, roles: [.success(RoleResult(role: "ETABLISSEMENT", etablissementId: nil))])
-        let state = await SessionController(gateways: fixture.gateways(), espaceEtablissement: .ferme).start()
-        guard case .blocked(.unsupportedRole) = state else { return XCTFail("obtenu \(state)") }
+        let state = await fixture.controller().start()
+        await Self.verifierRefusDAvantLeLot5(state, log: fixture.log)
         XCTAssertNil(state.snapshotEtablissement)
+    }
+
+    /// `SessionStore` sur l'espace fermé : aucun drapeau `ios_natif_etab_*` lu, à la connexion comme à la reprise.
+    @MainActor
+    func testEspaceFermeLeStoreNeLitAucunDrapeauEtablissement() async {
+        let fixture = EtabFixture(restored: nil)
+        var gateways = fixture.gateways()
+        gateways.flags = DrapeauxJournalises(log: fixture.log)
+        let store = SessionStore(controller: SessionController(gateways: gateways))
+        await store.start()
+        await store.signIn(email: "membre-1@example.invalid", password: "mot-de-passe")
+        await Self.verifierRefusDAvantLeLot5(store.state, log: fixture.log)
+        await fixture.auth.set(restored: utilisateurEtab(), restoreError: nil) // session persistée, reprise
+        await store.start()
+        await Self.verifierRefusDAvantLeLot5(store.state, log: fixture.log)
+        let lus = await fixture.log.entries.filter { $0.hasPrefix("drapeau(") }
+        XCTAssertEqual(lus, [], "aucun drapeau lu pour un espace fermé")
+        XCTAssertNil(store.ecransEtablissement.epochCharge)
     }
 
     func testOuvertureParModeDeLancement() {
@@ -278,7 +347,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
 
     func testEchecReseauDesPermissionsSansPurgeDeLaSession() async {
         let fixture = EtabFixture(permissions: [.failure(ErreurReseauEtab())])
-        let state = await fixture.controller().start()
+        let state = await fixture.controller(espace: .ouvert).start()
         XCTAssertEqual(state, .signedOut(message: SessionController.sessionCheckFailedMessage))
         let signOuts = await fixture.log.signOutCount
         XCTAssertEqual(signOuts, 0, "une panne réseau ne purge pas la session persistée")
@@ -286,7 +355,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
 
     func testEchecReseauDuProfilSansPurgeDeLaSession() async {
         let fixture = EtabFixture(profils: [.failure(ErreurReseauEtab())])
-        let state = await fixture.controller().start()
+        let state = await fixture.controller(espace: .ouvert).start()
         XCTAssertEqual(state, .signedOut(message: SessionController.profileLoadFailedMessage))
     }
 
@@ -294,7 +363,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
         var fixture = EtabFixture()
         fixture.permissionsGate = Gate() // jamais ouverte
         fixture.timeout = 0.05
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         let state = await controller.start()
         XCTAssertEqual(state, .signedOut(message: SessionController.sessionCheckFailedMessage))
         let epoch = await controller.epoch
@@ -306,7 +375,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
         var fixture = EtabFixture()
         fixture.profilGate = Gate()
         fixture.timeout = 0.05
-        let state = await fixture.controller().start()
+        let state = await fixture.controller(espace: .ouvert).start()
         XCTAssertEqual(state, .signedOut(message: SessionController.profileLoadFailedMessage))
     }
 
@@ -314,7 +383,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
         var fixture = EtabFixture()
         let gate = Gate()
         fixture.permissionsGate = gate
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         let log = fixture.log
         let demarrage = Task { await controller.start() }
         await waitUntil { await log.entries.contains("permissions(nil)") }
@@ -333,7 +402,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
 
     func testRevalidationSilencieuseConserveLEspaceSurEchecTransitoire() async {
         let fixture = EtabFixture(permissions: [permissions(), .failure(ErreurReseauEtab())])
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         let premier = await controller.start()
         XCTAssertNotNil(premier.snapshotEtablissement)
         let epoch = await controller.epoch
@@ -348,7 +417,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
         let gate = Gate()
         fixture.permissionsGate = gate
         fixture.permissionsGateFromCall = 2
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         _ = await controller.start()
         let log = fixture.log
         let revalidation = Task { await controller.start() }
@@ -363,7 +432,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
     func testRevalidationRemplaceRoleEtPermissionsAEpochConstant() async {
         let fixture = EtabFixture(permissions: [permissions(role: .rh, accordees: [.missions, .candidatures, .pointage, .lecture]),
                                                 permissions(role: .lectureSeule, accordees: [.lecturePaiement, .lecture])])
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         let premier = await controller.start()
         let epoch = await controller.epoch
         let revalide = await controller.start()
@@ -379,7 +448,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
                                           .success(RoleResult(role: "ADMIN_ETABLISSEMENT", etablissementId: "etab-2"))],
                                   permissions: [permissions(etablissementId: "etab-1"), permissions(etablissementId: "etab-2")],
                                   profils: [profil("etab-1"), profil("etab-2")])
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         _ = await controller.start()
         let epoch = await controller.epoch
         let revalide = await controller.start()
@@ -395,7 +464,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
         var fixture = EtabFixture(roles: [.success(RoleResult(role: "ADMIN_ETABLISSEMENT", etablissementId: "etab-1")),
                                           .success(RoleResult(role: "SOIGNANT"))])
         fixture.profilSoignant = SoignantProfile(id: "membre-1", profession: "IDE")
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         _ = await controller.start()
         let epoch = await controller.epoch
         let revalide = await controller.start()
@@ -409,7 +478,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
 
     func testRevalidationQuiRetireLAccesAvanceLEpoch() async {
         let fixture = EtabFixture(permissions: [permissions(), permissions(role: nil, etablissementId: nil, accordees: [])])
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         _ = await controller.start()
         let epoch = await controller.epoch
         let revalide = await controller.start()
@@ -423,7 +492,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
     func testRelectureApresRefusRemplaceLesPermissionsUneSeuleFois() async {
         let fixture = EtabFixture(permissions: [permissions(role: .rh, accordees: [.missions, .candidatures, .pointage, .lecture]),
                                                 permissions(role: .pointageOnly, accordees: [.pointage, .lecture])])
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         let premier = await controller.start()
         let snapshot = try? XCTUnwrap(premier.snapshotEtablissement)
         let epoch = await controller.epoch
@@ -442,7 +511,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
 
     func testRelectureQuiChangeDEtablissementBloqueEtAvanceLEpoch() async {
         let fixture = EtabFixture(permissions: [permissions(etablissementId: "etab-1"), permissions(etablissementId: "etab-2")])
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         _ = await controller.start()
         let epoch = await controller.epoch
         let releve = await controller.refreshEtablissementScope(epoch: epoch)
@@ -455,7 +524,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
 
     func testRelectureMembreRevoqueBloqueEtAvanceLEpoch() async {
         let fixture = EtabFixture(permissions: [permissions(), permissions(role: nil, etablissementId: nil, accordees: [])])
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         _ = await controller.start()
         let epoch = await controller.epoch
         let releve = await controller.refreshEtablissementScope(epoch: epoch)
@@ -466,7 +535,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
 
     func testRelectureEnEchecTransitoireConserveLEspace() async {
         let fixture = EtabFixture(permissions: [permissions(), .failure(ErreurReseauEtab())])
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         let premier = await controller.start()
         let epoch = await controller.epoch
         let releve = await controller.refreshEtablissementScope(epoch: epoch)
@@ -477,7 +546,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
 
     func testRelecturePourUnEpochPerimeEstSansEffet() async {
         let fixture = EtabFixture()
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         let premier = await controller.start()
         let epoch = await controller.epoch
         let releve = await controller.refreshEtablissementScope(epoch: epoch - 1)
@@ -489,7 +558,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
     func testRelectureHorsEspaceEtablissementEstSansEffet() async {
         var fixture = EtabFixture(restored: utilisateurEtab(role: "SOIGNANT"), roles: [.success(RoleResult(role: "SOIGNANT"))])
         fixture.profilSoignant = SoignantProfile(id: "membre-1", profession: "IDE")
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         let premier = await controller.start()
         XCTAssertNotNil(premier.snapshot)
         let epoch = await controller.epoch
@@ -504,7 +573,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
         let gate = Gate()
         fixture.permissionsGate = gate
         fixture.permissionsGateFromCall = 2
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         _ = await controller.start()
         let epoch = await controller.epoch
         let log = fixture.log
@@ -523,7 +592,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
                                           .success(RoleResult(role: "SOIGNANT"))])
         fixture.signInResult = .success(utilisateurEtab("soignant-1", role: "SOIGNANT"))
         fixture.profilSoignant = SoignantProfile(id: "soignant-1", profession: "IDE")
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         let etab = await controller.start()
         let epochEtab = try? XCTUnwrap(etab.snapshotEtablissement?.epoch)
         _ = await controller.signOut()
@@ -539,7 +608,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
     func testStorePublieLaRelectureDesPermissions() async {
         let fixture = EtabFixture(permissions: [permissions(role: .proprietaire, accordees: [.lecture, .missions]),
                                                 permissions(role: .lectureSeule, accordees: [.lecturePaiement, .lecture])])
-        let store = SessionStore(controller: fixture.controller())
+        let store = SessionStore(controller: fixture.controller(espace: .ouvert))
         await store.start()
         XCTAssertEqual(store.state.snapshotEtablissement?.context.roleEtab, .proprietaire)
         await store.refreshEtablissementScope()
@@ -550,7 +619,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
     @MainActor
     func testStoreSansEspaceEtablissementNeRelitRien() async {
         let fixture = EtabFixture(restored: nil)
-        let store = SessionStore(controller: fixture.controller())
+        let store = SessionStore(controller: fixture.controller(espace: .ouvert))
         await store.start()
         await store.refreshEtablissementScope()
         XCTAssertEqual(store.state, .signedOut(message: nil))
@@ -563,7 +632,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
     @MainActor
     func testAucuneActiviteSoignantNiProfilSoignantPourUnEtablissement() async {
         let fixture = EtabFixture(restored: nil)
-        let store = SessionStore(controller: fixture.controller())
+        let store = SessionStore(controller: fixture.controller(espace: .ouvert))
         await store.start()
         await store.signIn(email: "membre-1@example.invalid", password: "mot-de-passe")
         XCTAssertNotNil(store.state.snapshotEtablissement)

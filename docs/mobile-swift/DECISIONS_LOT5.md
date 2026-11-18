@@ -197,6 +197,21 @@ Aucune ne change une décision du §7 ni une règle juridique ; elles fixent ce 
    contrat de l'espace courant ; tant que T10 n'est pas livrée, renvoi web dans l'espace établissement.
 3. **T2b, écrans livrés** : `EtabDestination.ecranLivre`, une ligne par tranche (T5-T11), toutes à `false` ; chaque
    tranche passe sa ligne à `true` avec sa ligne de `EtabDestinations.swift` et ajuste `EtabRouteTests`.
+4. **Revue B8 de #1147 (CLÔTURABLE), mineurs traités** :
+   - m1 : sans espace, seul un lien établissement à route **native** est mémorisé ; `/etab/invitation/{token}` et les
+     routes en renvoi web assumé restent présentés aussitôt (règle du lot 3). Limite consignée : un lien natif mémorisé
+     est perdu si la session s'arrête sur `.blocked` (même règle que les liens soignant) ; à revoir avant T13 ;
+   - m2 : fixtures de test fermées par défaut (configuration de production), assertions de `main` rétablies ; espace
+     fermé prouvé pour la restauration, `signIn`, la revalidation silencieuse, `.session(autre)` et le legacy (refus
+     exact, aucun appel établissement), et `SessionStore` ne lit aucun drapeau `ios_natif_etab_*` ;
+   - m3 : garde Node du câblage d'`AppContainer` (`.pour(mode: environment.mode)`), `ouvrirEspaceEtablissement`
+     ignoré quand l'espace est fermé ;
+   - m4 : dossiers du lot 5 sous la garde « aucun texte juridique en dur » (`DOSSIERS_LOT2`), marques `48 h` et
+     « plafond légal », textes `[juridique]` de TextesWeb refusés en sous-chaîne hors de TextesWeb.swift
+     (`check-litteraux-juridiques`), et verrou : aucun source livré ne référence `CandidaturesEtablissement`,
+     `BlocageEtablissement` ni `PublicationEtablissement` avant la validation de Gabrielle (liste `VALIDES` de
+     `contrats-etablissement-ios.node.mjs`) ;
+   - m5 : XCUITest du lot 5 hors du socle, répartis dans deux éclats légers.
 
 ## En attente de Gabrielle
 

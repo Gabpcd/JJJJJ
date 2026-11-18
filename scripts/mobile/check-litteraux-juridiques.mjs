@@ -14,7 +14,12 @@
  *     lisible depuis le job « Cœur ») ;
  *   - sous-chaîne `fn_mode_exercice`, `matrice_modes_exercice`, `notations_missions`,
  *     `evaluations_publiees` ;
- *   - `Légifrance`, `Code du travail` (casse ignorée), `art.` ou `article` suivi d'un numéro.
+ *   - `Légifrance`, `Code du travail` (casse ignorée), `art.` ou `article` suivi d'un numéro, un plafond
+ *     d'heures (`48 h`, « plafond légal » ; revue B8 de #1147, m4) ;
+ *   - sous-chaîne d'un texte `[juridique]` de `Legal/TextesWeb.swift` d'au moins `LONGUEUR_TEXTE_JURIDIQUE`
+ *     caractères (revue B8 de #1147, m4) : l'écran référence la constante, jamais une copie
+ *     (« Publication de missions suspendue », option « Salarié »…). Les textes plus courts (« Date / heure »)
+ *     sont trop communs pour une sous-chaîne ; leur fidélité reste gardée par `check-textes-juridiques-ios`.
  * Exceptions exactes (`EXCEPTIONS`) : `Legal/TextesWeb.swift` (TL du lot 2, textes verbatim gardés
  * par `tests/node/textes-juridiques-ios.node.mjs`) et la constante `RPCResponse.marqueurCodeDuTravail`
  * (lot 1). Les cibles de test (dossiers `*Tests`) rejouent verbatim des refus serveur et des textes de
@@ -52,7 +57,12 @@ const MOTIFS_INTERDITS = [
   { nom: 'Légifrance', re: /l[ée]gifrance/i },
   { nom: 'Code du travail', re: /code du travail/i },
   { nom: 'un article numéroté', re: /\bart(?:icle|\.)\s*L?\.?\s*\d/i },
+  { nom: 'un plafond légal d\'heures', re: /\b48\s?h\b|plafond l[ée]gal/i },
 ];
+
+export const TEXTES_WEB = 'ios-native/Packages/JoleneCore/Sources/JoleneCore/Legal/TextesWeb.swift';
+/** Longueur minimale d'un texte `[juridique]` cherché en sous-chaîne hors de TextesWeb.swift. */
+export const LONGUEUR_TEXTE_JURIDIQUE = 20;
 
 // ---------------------------------------------------------------------------------------------
 // SQL (dump et migrations)
@@ -130,13 +140,35 @@ export function migrationsMatrice(racine = ROOT) {
     .filter(m => m.contenu.includes('matrice_modes_exercice'));
 }
 
-/** Valeurs interdites : `exactes` (CHECK), `sousChaines` (noms, sources), `motifs` (expressions). */
-export function valeursInterdites({ schemaSource, migrations }) {
+/**
+ * Textes `[juridique]` de TextesWeb.swift : la constante qui suit chaque annotation `// source: … [juridique]`
+ * (commentaires `///` intercalés admis), d'au moins `LONGUEUR_TEXTE_JURIDIQUE` caractères.
+ */
+export function textesJuridiquesDeTextesWeb(source) {
+  const lignes = source.split('\n');
+  const textes = [];
+  lignes.forEach((ligne, i) => {
+    if (!/^\s*\/\/ source: .*\[juridique\]\s*$/.test(ligne)) return;
+    let j = i + 1;
+    while (j < lignes.length && /^\s*\/\//.test(lignes[j])) j++;
+    if (!/\bstatic let \w+\s*=\s*"/.test(lignes[j] ?? '')) return;
+    const valeur = litterauxSwift(lignes[j])[0]?.valeur;
+    if (valeur && valeur.length >= LONGUEUR_TEXTE_JURIDIQUE) textes.push(valeur);
+  });
+  return [...new Set(textes)];
+}
+
+/**
+ * Valeurs interdites : `exactes` (CHECK), `sousChaines` (noms, sources), `motifs` (expressions),
+ * `textesJuridiques` (textes `[juridique]` de TextesWeb.swift, lus dans `textesWebSource`).
+ */
+export function valeursInterdites({ schemaSource, migrations, textesWebSource = '' }) {
   const sources = [...migrations.flatMap(m => sourcesMatrice(m.contenu)), ...sourcesMatrice(schemaSource)];
   return {
     exactes: valeursCheckMatrice(schemaSource),
     sousChaines: [...new Set([...NOMS_INTERDITS, ...sources])],
     motifs: MOTIFS_INTERDITS,
+    textesJuridiques: textesJuridiquesDeTextesWeb(textesWebSource),
   };
 }
 
@@ -227,7 +259,10 @@ function raison(valeur, interdits) {
   const sous = interdits.sousChaines.find(s => valeur.includes(s));
   if (sous) return `« ${sous.length > 60 ? `${sous.slice(0, 57)}…` : sous} » (matrice des modes d'exercice ou lecture interdite)`;
   const motif = interdits.motifs.find(m => m.re.test(valeur));
-  return motif ? motif.nom : null;
+  if (motif) return motif.nom;
+  const texte = (interdits.textesJuridiques ?? []).find(t => valeur.includes(t));
+  return texte ? `le texte juridique « ${texte.length > 60 ? `${texte.slice(0, 57)}…` : texte} » de TextesWeb.swift `
+    + '(HARD STOP n°4 : référencer la constante, jamais la recopier)' : null;
 }
 
 /** Littéraux interdits des fichiers Swift livrés, une faute par littéral. */
@@ -264,6 +299,7 @@ export function main(argv = process.argv.slice(2), racine = ROOT) {
   const interdits = valeursInterdites({
     schemaSource: readFileSync(join(racine, SCHEMA), 'utf8'),
     migrations: migrationsMatrice(racine),
+    textesWebSource: readFileSync(join(racine, TEXTES_WEB), 'utf8'),
   });
   const chemins = fichiersSwift(racine, RACINE_SWIFT).filter(estLivre);
   const fichiers = chemins.map(chemin => ({ chemin, contenu: readFileSync(join(racine, chemin), 'utf8') }));
@@ -274,7 +310,8 @@ export function main(argv = process.argv.slice(2), racine = ROOT) {
   }
   if (!argv.includes('--silencieux')) {
     console.log(`✓ ${chemins.length} fichiers Swift livrés sans littéral juridique `
-      + `(${interdits.exactes.length} valeurs CHECK, ${interdits.sousChaines.length} sources et noms, ${interdits.motifs.length} motifs).`);
+      + `(${interdits.exactes.length} valeurs CHECK, ${interdits.sousChaines.length} sources et noms, ${interdits.motifs.length} motifs, `
+      + `${interdits.textesJuridiques.length} textes juridiques de TextesWeb).`);
   }
   return 0;
 }

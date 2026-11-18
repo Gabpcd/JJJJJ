@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -530,6 +530,60 @@ test('ios-swift-ci.yml : le job « Cœur » exécute la garde des littéraux jur
       assert.ok(bloc.includes(`- '${chemin}'`), `${evenement} : filtre ${chemin} absent`);
     }
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Espace établissement fermé hors démo et textes du lot 5 non affichés (revue B8 de #1147, m3 et m4)
+// ---------------------------------------------------------------------------------------------
+
+/** Fichiers Swift d'un dossier, récursivement (dossiers cachés et `.build` exclus). */
+function swiftSous(relatif) {
+  const plein = join(root, relatif);
+  return readdirSync(plein, { withFileTypes: true }).flatMap(e => {
+    if (e.name.startsWith('.')) return [];
+    const chemin = `${relatif}/${e.name}`;
+    if (e.isDirectory()) return swiftSous(chemin);
+    return e.name.endsWith('.swift') ? [chemin] : [];
+  });
+}
+
+test('AppContainer câble l ouverture de l espace établissement sur le mode de lancement (m3)', () => {
+  // La cible app n'a pas de tests unitaires et les XCUITest tournent en démo (espace ouvert) : un `.ouvert` posé dans le
+  // chemin staging/production passerait toute la CI. Le câblage est donc lu dans le source.
+  const app = read('ios-native/Jolene/Composition/AppContainer.swift');
+  const sansCommentaires = app.split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
+  const controleurs = [...sansCommentaires.matchAll(/SessionController\(([^)]*\)?[^)]*)\)/g)].map(m => m[1]);
+  assert.equal(controleurs.length, 2, `deux constructions du contrôleur attendues (démo, staging/production) : ${controleurs}`);
+  assert.deepEqual(controleurs.map(c => /espaceEtablissement: \.pour\(mode: ([^)]+)\)/.exec(c)?.[1]),
+    ['.demo', 'environment.mode'], 'SessionController(espaceEtablissement:) : .pour(mode: .demo) en démo, .pour(mode: environment.mode) sinon');
+  const coordinateur = /DeepLinkCoordinator\(([\s\S]*?)\)\s*(?:\n|$)/.exec(sansCommentaires)?.[1] ?? '';
+  assert.ok(coordinateur.includes('espaceEtablissement: .pour(mode: environment.mode)'),
+    'DeepLinkCoordinator(espaceEtablissement:) : .pour(mode: environment.mode)');
+  assert.ok(!/\.ouvert\b/.test(sansCommentaires), 'aucune ouverture forcée de l espace établissement dans AppContainer');
+  // La table elle-même : fermé hors démo, défaut fermé du contrôleur et de l'aiguillage.
+  const espace = read('ios-native/Packages/JoleneCore/Sources/JoleneCore/Session/EspaceResolution.swift');
+  assert.ok(espace.includes('case .demo: return .ouvert') && espace.includes('case .staging, .production: return .ferme'),
+    'OuvertureEspaceEtablissement.pour(mode:) : ouvert en démo seulement');
+  assert.match(read('ios-native/Packages/JoleneCore/Sources/JoleneCore/Session/SessionController.swift'),
+    /espaceEtablissement: OuvertureEspaceEtablissement = \.ferme\)/, 'contrôleur fermé par défaut');
+  assert.match(read('ios-native/Packages/JoleneCore/Sources/JoleneCore/Links/DeepLinkIntent.swift'),
+    /espaceEtablissement: OuvertureEspaceEtablissement = \.ferme\)/, 'aiguillage fermé par défaut');
+});
+
+test('textes du lot 5 jamais affichés avant la validation de Gabrielle (HARD STOP n°4, m4)', () => {
+  // `CandidaturesEtablissement` (T6), `BlocageEtablissement` (T4), `PublicationEtablissement` (T9) : textes repris
+  // verbatim, écrans soumis à la validation de Gabrielle (LOT5_PLAN §6.4). Tant qu'elle n'est pas consignée dans
+  // DECISIONS_LOT5.md, aucun source livré ne les référence hors de TextesWeb.swift (gap verrouillé, CLAUDE.md).
+  const enums = ['CandidaturesEtablissement', 'BlocageEtablissement', 'PublicationEtablissement'];
+  const VALIDES = []; // la tranche validée y ajoute son enum, avec la référence de la validation dans DECISIONS_LOT5.md
+  const referents = [];
+  for (const chemin of swiftSous('ios-native')) {
+    if (chemin === TEXTES_SWIFT || chemin.split('/').some(d => d.endsWith('Tests'))) continue;
+    const contenu = read(chemin).split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
+    for (const e of enums) if (!VALIDES.includes(e) && contenu.includes(e)) referents.push(`${chemin} → ${e}`);
+  }
+  assert.deepEqual(referents, [], 'texte du lot 5 affiché sans validation HARD STOP n°4 de Gabrielle');
+  for (const e of enums) assert.ok(read(TEXTES_SWIFT).includes(`public enum ${e} {`), `${e} absent de TextesWeb.swift`);
 });
 
 test('validate-pr.yml : l étape « Garde de livraison mobile » exécute ce test', () => {

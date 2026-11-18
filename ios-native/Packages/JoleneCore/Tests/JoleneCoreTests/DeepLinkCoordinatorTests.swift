@@ -134,6 +134,30 @@ final class DeepLinkCoordinatorTests: XCTestCase {
         XCTAssertFalse(aiguillage.aUnLienEnAttente)
     }
 
+    /// Revue B8 de #1147, m1 : un lien établissement sans route native (invitation d'équipe, renvoi web assumé) est
+    /// présenté aussitôt même quand l'espace est ouvrable — un invité sans compte, ou un compte bloqué, le voit.
+    func testLienEtablissementSansRouteNativeResteUnRenvoiImmediatMemeOuvrable() {
+        let aiguillage = AiguillageLiens(taps: BoiteTapsPush(), espaceEtablissement: .ouvert)
+        for chemin in ["https://jolene.app/etab/invitation/t", "https://jolene.app/etablissement/facturation",
+                       "https://jolene.app/etablissement/missions/m-1/modifier"] {
+            let lien = url(chemin)
+            XCTAssertEqual(aiguillage.recevoir(url: lien), .renvoiWeb(.etablissement(lien)), chemin)
+            XCTAssertFalse(aiguillage.aUnLienEnAttente, "\(chemin) : jamais mémorisé")
+        }
+    }
+
+    /// Revue B8 de #1147, m3 : espace fermé dans ce lancement, une ouverture d'espace établissement n'est pas suivie.
+    func testOuvertureDEspaceEtablissementIgnoreeQuandLEspaceEstFerme() {
+        let aiguillage = AiguillageLiens(taps: BoiteTapsPush()) // défaut : fermé
+        let soignantLien = url("https://jolene.app/soignant/mes-gains")
+        XCTAssertNil(aiguillage.recevoir(url: soignantLien), "lien soignant mémorisé")
+        XCTAssertNil(aiguillage.ouvrirEspaceEtablissement(etablissement(epoch: 2)), "aucune ouverture suivie")
+        XCTAssertTrue(aiguillage.aUnLienEnAttente, "le lien en attente reste à l'espace soignant")
+        let etab = url("https://jolene.app/etablissement/messagerie")
+        XCTAssertEqual(aiguillage.recevoir(url: etab), .renvoiWeb(.etablissement(etab)), "aucun espace établissement ouvert")
+        guard case .naviguer? = aiguillage.ouvrirEspace(soignant(epoch: 3)) else { return XCTFail("lien soignant rejoué") }
+    }
+
     func testFermetureDeLEspaceEtablissementParSonEpoch() {
         let aiguillage = AiguillageLiens(taps: BoiteTapsPush(), espaceEtablissement: .ouvert)
         _ = aiguillage.ouvrirEspaceEtablissement(etablissement(epoch: 7))
