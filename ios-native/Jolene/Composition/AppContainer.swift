@@ -87,6 +87,9 @@ final class AppContainer: ObservableObject {
     /// consommés hors de l'espace prêt ; alimentés par le coordinateur des liens (T3b, intégration du lot 3), lus par
     /// `RootView`.
     let liensInscription: BoiteLiensInscription
+    /// Lot 4, T4 : « Aller à la recherche » — recherche déposée par `RecherchesScreen` (Profil), appliquée par Explorer
+    /// (`AlerteRapideExplorer`), remise à son seul auteur.
+    let rechercheExplorer = BoiteRechercheExplorer()
     /// Lot 3, T11 : thème de l'app (D16), appliqué à la racine (`ThemeRacine`) ; par appareil (`UserDefaults`,
     /// clé `jolene.theme`) en staging et production, mémoire vive en démo (chaque lancement démo part de Système).
     let theme: PreferenceThemeModel
