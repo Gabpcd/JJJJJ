@@ -12,8 +12,9 @@ import Combine
 ///   `missions_sauvegardees` par la gateway), ❤️ `.confirmed` (candidature relue par `CandidaturePort`). Écart assumé
 ///   avec le web, qui retire la carte avant la réponse puis la remet ;
 /// - refus, délai dépassé ou coupure : message affiché, carte remise en tête, **aucun renvoi automatique** (un délai ne
-///   prouve rien) ; exception : un refus qui prouve que la carte ne reviendrait pas au paquet relu
-///   (`SwipeRefus.horsPaquet`, mission déjà attribuée) la retire après le message ;
+///   prouve rien) ; exception : un refus définitif pour cette mission (`SwipeRefus.horsPaquet`, dont `acces_refuse` et
+///   `profession_incompatible`, que le serveur resservirait ; mission déjà attribuée) la retire après le message et
+///   l'écarte des paquets relus de la session (revue B8 de #1165, m1) ;
 /// - ❤️ : `CandidaturePort.confirmer(.swipeLike)` avec le planning exact (`CreneauxConfirmes.pourAction`) ; choix de
 ///   contrat demandé → options exposées, l'action est rejouée avec l'option ; planning modifié → mission relue
 ///   (`MissionsPort.mission`), carte mise à jour, jamais renvoyée ;
@@ -74,6 +75,9 @@ public final class SwipeModel: ObservableObject {
     private let snapshot: SessionSnapshot
     private var luLe: Date?
     private var jetonLecture = 0
+    /// Missions écartées de la session par un refus définitif : jamais remises, même si un paquet relu les resservait
+    /// (`fn_obtenir_missions_swipe` ne filtre pas les exclusions, correctif backend B9 en suivi).
+    private var ecarteesDeLaSession: Set<String> = []
 
     public init(controller: SessionController, snapshot: SessionSnapshot) {
         self.controller = controller
@@ -98,7 +102,7 @@ public final class SwipeModel: ObservableObject {
         do {
             let lues = try await bounded(timeout: controller.resolutionTimeout) { try await port.paquet(context: context) }
             guard await courant(), jeton == jetonLecture else { return }
-            cartes = lues
+            cartes = lues.filter { !ecarteesDeLaSession.contains($0.id) }
             paquetLuNonVide = !lues.isEmpty
             etat = .pret
             luLe = gateways.clock.now()
@@ -202,7 +206,7 @@ public final class SwipeModel: ObservableObject {
                 await relireMission(missionId, gateways)
             case let .missionDejaAttribuee(texte):
                 message = texte
-                retirerCarte(missionId)
+                ecarter(missionId)
             }
         } catch {
             guard await courant() else { return }
@@ -291,7 +295,13 @@ public final class SwipeModel: ObservableObject {
     }
 
     private func retirerOuRemettre(_ missionId: String, horsPaquet: Bool) {
-        if horsPaquet { retirerCarte(missionId) } else { remettreEnTete(missionId) }
+        if horsPaquet { ecarter(missionId) } else { remettreEnTete(missionId) }
+    }
+
+    /// Refus définitif : retirée du paquet et des paquets relus de la session.
+    private func ecarter(_ missionId: String) {
+        ecarteesDeLaSession.insert(missionId)
+        retirerCarte(missionId)
     }
 
     private func remettreEnTete(_ missionId: String) {

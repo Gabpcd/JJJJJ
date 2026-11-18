@@ -142,7 +142,10 @@ final class SwipeDecodingTests: XCTestCase {
         XCTAssertEqual(redige.message, "Vous avez déjà candidaté à cette mission", "message serveur verbatim")
         XCTAssertEqual(SwipeRefus.traduire(nil).message, SwipeRefus.repli)
         XCTAssertTrue(SwipeRefus.estHorsPaquet("mission_indisponible"))
-        XCTAssertFalse(SwipeRefus.estHorsPaquet("acces_refuse"))
+        XCTAssertTrue(SwipeRefus.estHorsPaquet("acces_refuse"), "revue B8 de #1165, m1 : refus définitif pour la mission")
+        XCTAssertTrue(SwipeRefus.estHorsPaquet("profession_incompatible"))
+        XCTAssertFalse(SwipeRefus.estHorsPaquet("direction_invalide"))
+        XCTAssertFalse(SwipeRefus.estHorsPaquet("profil_introuvable"), "défaut de session, pas de la mission")
         XCTAssertFalse(SwipeRefus.estHorsPaquet(nil))
     }
 

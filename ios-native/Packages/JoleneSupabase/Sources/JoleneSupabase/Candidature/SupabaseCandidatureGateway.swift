@@ -134,6 +134,11 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
     /// SWIPE_LIKE (T3a) : refus du wrapper (accès, mission fermée, planning, conflit) puis de `fn_enregistrer_swipe`, dans
     /// l'ordre de `confirmer` ; succès `ok:true` (jamais `success`) relu par `candidature_id`.
     private func confirmerSwipeLike(_ reponse: RPCResponse, missionId: String, context: MissionReadContext) async throws -> CandidatureOutcome {
+        // Branche défensive, inatteignable avec le wrapper live (revue B8 de #1165, m4) : sans `auth.uid()`,
+        // `fn_confirmer_action_planning_v1` refuse d'abord par « Accès réservé aux soignants authentifiés. »
+        // (`success:false, ok:false`), restitué verbatim comme pour POSTULER au lot 1, et ne délègue jamais à
+        // `fn_enregistrer_swipe`. Gardée pour qu'un `auth_required` de la RPC déléguée, si le wrapper changeait, ne
+        // s'affiche jamais comme un code brut : session expirée, comme pour ✕ / ⭐ (`SupabaseSwipeGateway`).
         if reponse.erreur == PaquetSwipe.erreurNonAuthentifie {
             throw JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage)
         }

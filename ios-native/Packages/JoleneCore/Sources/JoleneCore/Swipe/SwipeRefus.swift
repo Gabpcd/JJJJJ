@@ -17,9 +17,15 @@ public enum SwipeRefus {
         "mission_deja_swipee": "Vous avez déjà répondu à cette mission.",
     ]
 
-    /// Codes qui prouvent que la carte ne reviendrait pas au paquet relu (mission sortie de `OUVERTE`, ou ligne `swipes`
-    /// déjà posée : `NOT EXISTS swipes`) : la carte quitte le paquet après le message, au lieu d'y rester bloquée.
-    public static let horsPaquet: Set<String> = ["mission_indisponible", "mission_deja_swipee"]
+    /// Refus définitifs pour cette mission : la carte quitte le paquet après le message et n'y revient pas de la session
+    /// (`SwipeModel` l'écarte aussi des paquets relus), au lieu d'y rester bloquée en tête.
+    /// - `mission_indisponible` (sortie de `OUVERTE`), `mission_deja_swipee` (ligne `swipes` posée) : le paquet relu ne la
+    ///   servirait plus ;
+    /// - `acces_refuse` (établissement qui a exclu le soignant), `profession_incompatible` : refusés par
+    ///   `fn_enregistrer_swipe` **avant** l'écriture de la ligne `swipes`, alors que `fn_obtenir_missions_swipe` ne filtre
+    ///   pas les exclusions (`fn_soignant_eligible_mission` n'appelle pas `fn_est_exclu`, revue B8 de #1165, m1) : le
+    ///   serveur la resservirait à chaque paquet. Correctif backend en suivi (B9, `LOT4_PLAN.md` écart de T3a).
+    public static let horsPaquet: Set<String> = ["mission_indisponible", "mission_deja_swipee", "acces_refuse", "profession_incompatible"]
 
     /// Repli quand le serveur ne dit rien de lisible.
     public static let repli = "Votre réponse à cette mission n'a pas pu être enregistrée. Réessayez."

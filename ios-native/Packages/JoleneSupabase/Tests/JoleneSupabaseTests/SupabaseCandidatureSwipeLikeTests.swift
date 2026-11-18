@@ -112,6 +112,13 @@ final class SupabaseCandidatureSwipeLikeTests: XCTestCase {
         let fermee = try await aimer()
         XCTAssertEqual(fermee, .missionDejaAttribuee(message: "Cette mission n'est plus disponible."))
         registry.reset()
+        // Forme live sans session (revue B8 de #1165, m4) : le wrapper refuse avant toute délégation, verbatim.
+        registry.reset()
+        reponse(#"{"success":false,"ok":false,"error":"Accès réservé aux soignants authentifiés."}"#)
+        let wrapper = try await aimer()
+        XCTAssertEqual(wrapper, .refusee(code: nil, message: "Accès réservé aux soignants authentifiés.", documentsRequisPour: nil))
+        // Branche défensive (inatteignable avec le wrapper live) : un `auth_required` délégué n'est jamais un code brut.
+        registry.reset()
         reponse(#"{"ok":false,"error":"auth_required"}"#)
         let session = await erreur { _ = try await self.aimer() }
         XCTAssertEqual(session?.kind, .unauthorized)
