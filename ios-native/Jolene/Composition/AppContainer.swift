@@ -46,6 +46,10 @@ import JoleneSupabase
 /// Lot 5 (T2a, D20) : DEBUG, démo seulement, `-JOLENE_DEMO_ESPACE etablissement` (+ `-JOLENE_DEMO_ROLE_ETAB`,
 /// `-JOLENE_DEMO_LEGACY 1`, `-JOLENE_DEMO_BLOCAGE 1`, `DemoEspaceLancement`) ouvre l'espace établissement fictif ;
 /// `-JOLENE_FLAG_<cle>` surcharge aussi les drapeaux `ios_natif_etab_*` (`DemoEtabSessionTests`).
+///
+/// Lot 1, T5 : recette des états de Mes missions démo, `JOLENE_FORCE_MES_MISSIONS_ECHEC=1|session`,
+/// `JOLENE_FORCE_MES_MISSIONS_VIDE=1` et `JOLENE_DEMO_MES_MISSIONS_PAGE=<1…50>` (`DemoMesMissionsSurcharges`,
+/// JoleneCore) ; `JOLENE_FORCE_CALENDRIER_REFUS=1` : accès au calendrier démo refusé (`calendrierRefusDemo`).
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -92,6 +96,9 @@ final class AppContainer: ObservableObject {
     /// Lot 3, T14a : flux hébergé de l'onboarding Stripe Connect — démo : `DemoExternalFlow` (retour simulé, sans feuille
     /// ni réseau) ; staging/production : `ExternalFlowPresenter` (ASWebAuthenticationSession ≥ 17.4, renvoi web sinon).
     let fluxExterne: ExternalFlowPort
+    /// Lot 1, T5 : refus simulé de l'accès au calendrier démo (surcharge DEBUG
+    /// `JOLENE_FORCE_CALENDRIER_REFUS`), toujours faux en Release et hors démo.
+    let calendrierRefusDemo: Bool
     #if DEBUG
     let networkSentinel: NetworkSentinel.Monitor?
     #endif
@@ -109,6 +116,11 @@ final class AppContainer: ObservableObject {
         let environment = Self.environnementDeLancement(arguments: arguments, processEnvironment: processEnvironment,
                                                         info: info)
         self.environment = environment
+        #if DEBUG
+        calendrierRefusDemo = environment.mode == .demo && processEnvironment[CalendrierAppareilDemo.variableRefus] == "1"
+        #else
+        calendrierRefusDemo = false
+        #endif
         let boite = NotificationCenterDelegate.shared.boite
         tapsPush = boite
         // Revue B8 de T3b, M1 : le coordinateur est aussi le port `FinIdentiteWebPort` de la session (fermeture du renvoi
@@ -282,6 +294,8 @@ final class AppContainer: ObservableObject {
     /// `DemoPaiementsTests.testRefusServeurVerbatimJamaisUnSucces`) ; lot 3, T14b : `JOLENE_DEMO_IBAN=<scenario>`
     /// (`DemoIbanGateway.Scenario` : `rib-requis`, `non-verifie`, `DemoIbanTests`) ; lot 3, T14a :
     /// `-JOLENE_DEMO_STRIPE <variante>` (`DemoStripeConnectGateway.Scenario`, `DemoStripeTests`).
+    /// Lot 1, T5 : surcharges de Mes missions (`DemoMesMissionsSurcharges`) : échec forcé, session expirée, listes vides
+    /// ou taille de page réduite (`DemoMesMissionsTests`).
     /// Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
@@ -354,6 +368,10 @@ final class AppContainer: ObservableObject {
         }
         // Lot 3, T14a : `-JOLENE_DEMO_STRIPE <statut|TEST|SALARIE>` (`DemoStripeTests`).
         gateways.stripeConnect = DemoStripeConnectGateway(scenario: DemoStripeConnectGateway.Scenario(arguments: arguments))
+        // Lot 1, T5 : échec forcé, session expirée, listes vides ou taille de page réduite (`DemoMesMissionsTests`).
+        if let mesMissions = DemoMesMissionsSurcharges.port(environment: processEnvironment, clock: gateways.clock) {
+            gateways.mesMissions = mesMissions
+        }
         return gateways
         #else
         return DemoWorld.gateways()
