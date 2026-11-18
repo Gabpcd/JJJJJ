@@ -26,7 +26,12 @@ import Supabase
 ///   aucun renvoi automatique (un délai ne prouve rien).
 /// - Refus d'une proposition : `fn_repondre_proposition(p_candidature_id, p_accepter := false)` (l.54035),
 ///   puis relecture `REFUSEE`. Non verrouillé : le web ne demande aucune attestation pour refuser.
-/// - SWIPE_LIKE / URGENCE (lot 4) : refusés explicitement en citant leur tranche.
+/// - SWIPE_LIKE (lot 4, T3a, verrou levé : `fn_confirmer_action_planning_v1` l'accepte, contrôle le planning puis délègue à
+///   `fn_enregistrer_swipe(p_mission_id, 'LIKE', p_choix_contrat)`) : succès `{ok:true, swipe_id, candidature_id, …}`
+///   **sans `success`**, annoncé après relecture de la candidature comme POSTULER ; refus `{ok:false, error}` à code
+///   technique traduit par `SwipeRefus`, message rédigé verbatim, `choix_requis` relayé ; `auth_required` →
+///   `.unauthorized`. `warning` et `docs_a_completer` ne sont pas portés par `CandidatureOutcome` (écran T3b).
+/// - URGENCE (lot 4, T11) : refusée explicitement en citant sa tranche (`CandidatureRules.actionHorsLot1`).
 /// - Annulations (T7) : `fn_annuler_candidature_soignant(p_candidature_id, p_motif_categorie, p_texte_libre,
 ///   p_justificatif_storage_path)` (`public.sql` l.17925 ; refus `{success:false, error_code, error}` → `.refusee`,
 ///   message serveur verbatim) puis relecture de la candidature `ANNULEE` ; `fn_annuler_mission_soignant(p_mission_id)`
@@ -68,8 +73,8 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
     public func confirmer(action: ActionPlanning, missionId: String, creneaux: [CreneauConfirmePayload], message: String?,
                           choixContrat: String?, candidatureId: String?, context: MissionReadContext) async throws -> CandidatureOutcome {
         try MissionQuery.validate(context: context)
-        // Lot 1 : trois actions. SWIPE_LIKE et URGENCE (lot 4) ont leur propre relecture : refusées ici.
-        guard action == .postuler || action == .accepter || action == .proposition else {
+        // Lot 1 : trois actions ; lot 4 (T3a) : SWIPE_LIKE, relu comme POSTULER. URGENCE (T11) reste refusée ici.
+        guard action == .postuler || action == .accepter || action == .proposition || action == .swipeLike else {
             throw CandidatureRules.actionHorsLot1(action)
         }
         guard let mission = Self.uuid(missionId) else { throw JoleneError(.contract, Self.identifiantInvalideMessage) }
@@ -99,6 +104,7 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
             "p_candidature_id": proposition.map(AnyJSON.string) ?? .null,
         ]
         let reponse = try await RPCResponse.appeler(client, Self.confirmerRPC, params: params, fallback: Self.fallbackMessage)
+        if action == .swipeLike { return try await confirmerSwipeLike(reponse, missionId: mission, context: context) }
         if let erreur = reponse.erreur, reponse.code == nil, !reponse.choixRequis, CandidatureRules.estMissionDejaAttribuee(erreur) {
             return .missionDejaAttribuee(message: erreur)
         }
@@ -123,6 +129,31 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
         }
         await auditerAssignation(relue, context: context)
         return .confirmed(candidatureId: proposition, contratId: contrat)
+    }
+
+    /// SWIPE_LIKE (T3a) : refus du wrapper (accès, mission fermée, planning, conflit) puis de `fn_enregistrer_swipe`, dans
+    /// l'ordre de `confirmer` ; succès `ok:true` (jamais `success`) relu par `candidature_id`.
+    private func confirmerSwipeLike(_ reponse: RPCResponse, missionId: String, context: MissionReadContext) async throws -> CandidatureOutcome {
+        if reponse.erreur == PaquetSwipe.erreurNonAuthentifie {
+            throw JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage)
+        }
+        if let erreur = reponse.erreur, reponse.code == nil, !reponse.choixRequis, CandidatureRules.estMissionDejaAttribuee(erreur) {
+            return .missionDejaAttribuee(message: erreur)
+        }
+        if let refus = reponse.issueCandidatureRefusee(fallback: Self.fallbackMessage) {
+            // Code technique de `fn_enregistrer_swipe` (`mission_deja_swipee`…) : libellé `SwipeRefus`, code conservé.
+            guard case .refusee(nil, let texte, let documents) = refus else { return refus }
+            let traduit = SwipeRefus.traduire(texte)
+            return .refusee(code: traduit.code, message: traduit.message, documentsRequisPour: documents)
+        }
+        try reponse.leverSiErreur(fallback: Self.fallbackMessage)
+        guard reponse.ok == true, reponse.erreur == nil else { throw JoleneError(.contract, SupabaseErrorMapping.contractMessage) }
+        let id = try reponse.requiredString("candidature_id")
+        let relue = try await relireCandidature(id: id, context: context)
+        guard CandidatureRules.candidaturePoseeRelue(relue, id: id, missionId: missionId) else {
+            throw JoleneError(.contract, Self.relectureMessage)
+        }
+        return .confirmed(candidatureId: id, contratId: nil)
     }
 
     // MARK: - Proposition refusée
