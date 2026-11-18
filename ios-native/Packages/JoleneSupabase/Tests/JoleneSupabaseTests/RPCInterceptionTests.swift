@@ -96,7 +96,7 @@ final class RPCInterceptionTests: XCTestCase {
         XCTAssertFalse(r.estRefusMetier)
         XCTAssertFalse(r.estSucces)
         XCTAssertEqual(r.code, RPCInterception.codeAccesRefuse)
-        XCTAssertEqual(r.sqlstate, "42501")
+        XCTAssertEqual(r.sqlstateIntercepte, "42501")
         XCTAssertEqual(r.erreur, message, "message serveur verbatim")
         XCTAssertFalse("\(r.raw)".contains("technique"), "le DETAIL n'est jamais repris")
         XCTAssertFalse("\(r.raw)".contains("indice"), "le HINT n'est jamais repris")
@@ -151,7 +151,7 @@ final class RPCInterceptionTests: XCTestCase {
             XCTAssertTrue(r.estRefusMetier, message)
             XCTAssertFalse(r.estAccesRefuse, message)
             XCTAssertEqual(r.code, RPCInterception.codeRefusMetier)
-            XCTAssertEqual(r.sqlstate, sqlstate)
+            XCTAssertEqual(r.sqlstateIntercepte, sqlstate)
             XCTAssertEqual(r.erreur, message)
         }
     }
@@ -161,7 +161,7 @@ final class RPCInterceptionTests: XCTestCase {
         let introuvable = "Mission 6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b introuvable ou dans un statut incompatible."
         let r = try await appeler(exception(500, sqlstate: "P0002", message: introuvable), interceptions: interceptions)
         XCTAssertEqual(r.erreur, introuvable, "le message instancié par le serveur est affiché tel quel")
-        XCTAssertEqual(r.sqlstate, "P0002")
+        XCTAssertEqual(r.sqlstateIntercepte, "P0002")
         let heures = "L'heure de fin (2026-11-02 10:00:00+01) doit être postérieure au début du créneau (2026-11-02 11:00:00+01)."
         let h = try await appeler(exception(400, sqlstate: "23514", message: heures), interceptions: interceptions)
         XCTAssertEqual(h.erreur, heures)

@@ -114,7 +114,7 @@ public enum NotationOutcome: Equatable, Sendable {
     case nonEnregistree(message: String?)
 }
 
-/// Issue d'une clôture rétroactive : `segment_ouvert == false` relu ; `nouveau_code` jamais décodé
+/// Issue d'une clôture rétroactive : `segment_ouvert == false` relu ; le code de pointage suivant de la réponse jamais décodé
 /// (correction 17).
 public enum ClotureOutcome: Equatable, Sendable {
     case cloturee
