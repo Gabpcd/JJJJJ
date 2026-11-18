@@ -314,7 +314,7 @@ final class DemoWorldTests: XCTestCase {
     /// liste (`docs/mobile-swift/LOT5_PLAN.md` §2.3), comme `portsEnAttenteLot1`. Chaque PR qui câble un
     /// port le câble dans les deux mondes et le retire d'ici ; `SupabaseGatewaysTests` compare
     /// `SupabaseGateways.make(client:).etablissement` au monde démo. Vide à T14.
-    static let portsEnAttenteLot5 = ["etablissement.dashboard", "etablissement.missions", "etablissement.candidatures",
+    static let portsEnAttenteLot5 = ["etablissement.missions", "etablissement.candidatures",
                                      "etablissement.pointage", "etablissement.presences", "etablissement.publication"]
 
     func testPortsEtabEnAttente() {
