@@ -88,7 +88,7 @@ public enum SupabaseGateways {
         gateways.exportRGPD = SupabaseExportGateway(client: client)        // T11
         gateways.revenus = SupabaseRevenusGateway(client: client)          // T12
         gateways.paiements = SupabasePaiementsGateway(client: client)      // T13
-        gateways.iban = UnwiredIbanPort()                                  // T14b
+        gateways.iban = SupabaseIbanGateway(client: client)                // T14b
         gateways.stripeConnect = UnwiredStripeConnectPort()                // T14a
     }
 

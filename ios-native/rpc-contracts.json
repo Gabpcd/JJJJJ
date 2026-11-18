@@ -1235,7 +1235,7 @@
     },
     {
       "name": "fn_consulter_mon_iban",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "never",
@@ -1264,7 +1264,7 @@
     },
     {
       "name": "fn_enregistrer_mon_iban",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 3,
       "types": {
         "args": "{ p_iban: string; p_titulaire: string }",
