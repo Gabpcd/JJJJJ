@@ -180,7 +180,11 @@ private struct Fixture {
         return gateways
     }
 
-    func controller() -> SessionController { SessionController(gateways: gateways(), resolutionTimeout: timeout, espaceEtablissement: .ouvert) }
+    /// Configuration de production (revue B8 de #1147, m2) : espace établissement FERMÉ par défaut ; seuls les tests qui
+    /// l'exigent passent `espace: .ouvert`.
+    func controller(espace: OuvertureEspaceEtablissement = .ferme) -> SessionController {
+        SessionController(gateways: gateways(), resolutionTimeout: timeout, espaceEtablissement: espace)
+    }
 }
 
 private let JoleneCoreTests_profileDefault = profile()
@@ -433,7 +437,7 @@ final class SessionControllerTests: XCTestCase {
         // on vérifie la règle via signIn vers une identité différente, qui est le même chemin.
         fixture.signInResult = .success(user("user-2"))
         fixture.profile = profile("user-2")
-        let controller2 = SessionController(gateways: fixture.gateways(), espaceEtablissement: .ouvert)
+        let controller2 = SessionController(gateways: fixture.gateways())
         _ = await controller2.start()
         let state = await controller2.signIn(email: "user-2@example.invalid", password: "secret-value")
         XCTAssertEqual(state.snapshot?.user.id, "user-2")
@@ -477,16 +481,29 @@ final class SessionControllerTests: XCTestCase {
         XCTAssertFalse(entries.contains { $0.contains("currentRole") }, "pas de résolution de rôle après un échec de connexion")
     }
 
-    /// Changé volontairement au lot 5 (T2a, correction 11) : le lot 0 bloquait l'établissement. Le serveur
-    /// gagne toujours, mais ouvre désormais l'espace établissement, confirmé par `fn_mes_permissions_etab`.
+    /// Espace établissement fermé (configuration de production avant la clôture du lot 5) : assertion de `main`
+    /// inchangée, le serveur gagne et l'établissement reçoit le refus d'avant le lot 5.
     func testServerRoleOverridesAppMetadataShortcut() async {
+        var fixture = Fixture()
+        fixture.restored = user(role: "SOIGNANT")
+        fixture.role = .success(RoleResult(role: "ADMIN_ETABLISSEMENT", etablissementId: "etab-9"))
+        let controller = fixture.controller()
+        let state = await controller.start()
+        XCTAssertEqual(state, .blocked(.unsupportedRole("ADMIN_ETABLISSEMENT")), "app_metadata disait SOIGNANT, le serveur gagne")
+        let entries = await fixture.log.entries
+        XCTAssertFalse(entries.contains { $0.hasPrefix("profile(") }, "aucun chargement de profil pour un rôle non servi")
+    }
+
+    /// Lot 5 (T2a, correction 11), espace ouvert (démo) : le serveur gagne et ouvre l'espace établissement, confirmé par
+    /// `fn_mes_permissions_etab`.
+    func testServerRoleOverridesAppMetadataShortcutEspaceOuvert() async {
         var fixture = Fixture()
         fixture.restored = user(role: "SOIGNANT")
         fixture.role = .success(RoleResult(role: "ADMIN_ETABLISSEMENT", etablissementId: "etab-9"))
         var etablissement = EtablissementGateways()
         etablissement.session = FakeEtabSession(etablissementId: "etab-9", log: fixture.log)
         fixture.etablissement = etablissement
-        let controller = fixture.controller()
+        let controller = fixture.controller(espace: .ouvert)
         let state = await controller.start()
         guard case let .readyEtablissement(snapshot) = state else {
             return XCTFail("app_metadata disait SOIGNANT, le serveur gagne : espace établissement attendu, obtenu \(state)")
@@ -539,14 +556,24 @@ final class SessionControllerTests: XCTestCase {
         XCTAssertEqual(entries, ["restoreSession"])
     }
 
-    /// Changé volontairement au lot 5 (T2a, correction 11) : `ADMIN_ETABLISSEMENT` est servi
-    /// (`SessionControllerEtablissementTests`) ; seuls les rôles d'administration restent bloqués.
+    /// Espace établissement fermé (production) : assertion de `main` inchangée. Espace ouvert : seuls les rôles
+    /// d'administration restent bloqués (`testRolesDAdministrationBloquesEspaceOuvert`).
     func testNonSoignantRoleIsBlocked() async {
-        for raw in ["ADMIN_PLATEFORME", "ADMIN_GROUPE"] {
+        for raw in ["ADMIN_PLATEFORME", "ADMIN_GROUPE", "ADMIN_ETABLISSEMENT"] {
             var fixture = Fixture()
             fixture.restored = user(role: raw)
             fixture.role = .success(RoleResult(role: raw))
             let state = await fixture.controller().start()
+            XCTAssertEqual(state, .blocked(.unsupportedRole(raw)))
+        }
+    }
+
+    func testRolesDAdministrationBloquesEspaceOuvert() async {
+        for raw in ["ADMIN_PLATEFORME", "ADMIN_GROUPE"] {
+            var fixture = Fixture()
+            fixture.restored = user(role: raw)
+            fixture.role = .success(RoleResult(role: raw))
+            let state = await fixture.controller(espace: .ouvert).start()
             XCTAssertEqual(state, .blocked(.unsupportedRole(raw)))
         }
     }

@@ -222,9 +222,12 @@ public final class AiguillageLiens {
             if let affiche = renvoiAffiche, affiche == lien.destination.externalURL { return nil }
             // Lot 5, T2b : dans l'espace établissement, un lien établissement peut mener à un écran natif.
             if let espaceEtablissement { return actionEtablissement(pour: lien, dans: espaceEtablissement) }
-            // Espace établissement ouvrable : un lien établissement reçu sans espace attend l'espace qui s'ouvre (dans
-            // l'espace soignant, il redevient le renvoi web de toujours).
-            if espace == nil, ouvertureEtablissement == .ouvert, case .etablissement = lien.route {
+            // Espace établissement ouvrable : un lien établissement à route NATIVE reçu sans espace attend l'espace qui
+            // s'ouvre (dans l'espace soignant, il redevient le renvoi web de toujours). Un lien sans cible native
+            // (`/etab/invitation/{token}`, routes en renvoi web assumé) reste présenté aussitôt, jamais mémorisé
+            // (règle du lot 3 ; revue B8 de #1147, m1) : un invité sans compte, ou un compte bloqué, le voit.
+            if espace == nil, ouvertureEtablissement == .ouvert, case .etablissement = lien.route,
+               LinkRouter.etablissementDestination(link: lien.canonique.absoluteString)?.route.isNative == true {
                 memoriser(lien)
                 return nil
             }
@@ -267,6 +270,9 @@ public final class AiguillageLiens {
     /// attente dans cet espace, une seule fois. Les taps push restent dans leur boîte (espace soignant, règle de L3-T5) :
     /// le push établissement n'est pas servi au lot 5 avant sa tranche.
     public func ouvrirEspaceEtablissement(_ snapshot: EtablissementSessionSnapshot) -> Action? {
+        // Défense en profondeur (revue B8 de #1147, m3) : espace fermé dans ce lancement, aucune ouverture n'est suivie
+        // (la session ne publie alors jamais `.readyEtablissement`) ; le lien en attente reste à l'espace soignant.
+        guard ouvertureEtablissement == .ouvert else { return nil }
         espaceEtablissement = snapshot
         espace = nil
         guard let lien = lienEnAttente else { return nil }

@@ -113,6 +113,21 @@ test('décision 22 : un éclat « contrats » porte DemoContratsTests et DemoSig
   }
 });
 
+// Revue B8 de #1147 (m5) : les dix XCUITest de l'espace établissement (lot 5) ne tournent pas dans le socle (14 / 17 /
+// 22 min au run 44204757942) ; plafond de onze éclats atteint, ils sont répartis dans deux éclats légers.
+test('lot 5 : session et liens établissement hors du socle, chacun dans son éclat léger', () => {
+  const attendus = new Map([['DemoEtabSessionTests', 'lot3-profil-photo'], ['DemoEtabLiensTests', 'presences']]);
+  for (const [classe, eclat] of attendus) {
+    assert.ok(classes.includes(classe), `${classe} n est pas reconnue comme classe XCUITest`);
+    const ou = domaines.filter(e => classesDe(e).includes(classe)).map(e => e.nom);
+    assert.deepEqual(ou, [eclat], `${classe} : éclat attendu ${eclat}`);
+    assert.ok(socle.sauf.includes(`JoleneUITests/${classe}`), `${classe} : non sauté par le socle`);
+  }
+  for (const c of classes.filter(n => n.startsWith('DemoEtab'))) {
+    assert.ok(attendus.has(c), `${c} : classe XCUITest du lot 5 sans éclat décidé (socle à 30 min)`);
+  }
+});
+
 test('décision 22 : les XCUITest du pointage (classe de base intermédiaire) sont reconnus et rangés dans un éclat', () => {
   for (const c of ['DemoPointageTests', 'DemoPointageEtatsTests', 'DemoPresenceDetailTests']) {
     assert.ok(classes.includes(c), `${c} n est pas reconnue comme classe XCUITest`);

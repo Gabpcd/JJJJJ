@@ -809,7 +809,8 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
     ['lot3-push', ['DemoPushTests']],
     ['lot3-notifications', ['DemoNotificationsTests', 'DemoPreferencesTests', 'DemoProfilTests']],
     ['lot3-inscription', ['DemoInscriptionTests', 'DemoCompletionInscriptionTests', 'DemoLiensLot2Tests']],
-    ['lot3-profil-photo', ['DemoPhotoPositionTests']],
+    // Lot 5 (revue B8 de #1147, m5) : la session établissement rejoint cet éclat léger, sans douzième éclat.
+    ['lot3-profil-photo', ['DemoPhotoPositionTests', 'DemoEtabSessionTests']],
     // L3-T13 : les paiements déclarés rejoignent l'éclat de l'onglet Revenus (domaine T12-T14b), sans nouvel éclat.
     ['lot3-revenus', ['DemoRevenusTests', 'DemoPaiementsTests']],
   ]);

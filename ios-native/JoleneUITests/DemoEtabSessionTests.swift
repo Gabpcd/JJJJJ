@@ -4,7 +4,8 @@ import XCTest
 /// par le serveur fictif, coquille à cinq onglets (Accueil · Missions · Présences · Messages · Compte,
 /// D13), drapeaux d'écran (D14), rôle d'équipe servi (aucune action sans la permission), compte legacy,
 /// et frontière d'epoch entre deux espaces dans la même session. Écrit pour iPhone, iPad portrait et
-/// iPad paysage (`JOLENE_UI_ORIENTATION`, helpers de `UITestSupport.swift`). Aucune requête réseau.
+/// iPad paysage (`JOLENE_UI_ORIENTATION`, helpers de `UITestSupport.swift`). Aucune requête réseau. Éclat
+/// « lot3-profil-photo » de `ios-swift-ci.yml` (revue B8 de #1147, m5 : hors du socle).
 ///
 /// Identifiants : `tab-etab-{accueil|missions|presences|messages|compte}`, `placeholder-etab-*`,
 /// `etab-missions-publier`, `etab-renvoi-web` (+ `-message`, `-ouvrir`), `etab-compte-list`,
