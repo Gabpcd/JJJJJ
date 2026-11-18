@@ -10,7 +10,8 @@
 //   * le délai du motif et de l'audit vient de la variable qui filtre les
 //     présences (paramètre delai_contestation_pointage_h), plus aucun
 //     « 48h » ni « Répondez sous 72h » en dur ;
-//   * le miroir SMS de tests/sms/litige-length.test.ts suit le SQL ;
+//   * l'email LITIGE_OUVERTURE ne promet plus « 72h » et le miroir SMS de
+//     tests/sms/litige-length.test.ts suit le SQL ;
 //   * aucun GRANT ni REVOKE, câblage CI présent.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -24,6 +25,7 @@ const MIGRATION = '20261118152150_litiges_auto_textes_delais.sql';
 const ORIGINE = '20260729121442_securiser_auth_et_crons_critiques.sql';
 const migration = read(`supabase/migrations/${MIGRATION}`);
 const origine = read(`supabase/migrations/${ORIGINE}`);
+const sendEmail = read('supabase/functions/send-email/index.ts');
 const miroirSms = read('tests/sms/litige-length.test.ts');
 const banc = read('tests/litiges/fix-textes-delais-auto-creation.test.sql');
 const workflow = read('.github/workflows/validate-pr.yml');
@@ -175,6 +177,15 @@ test('SMS LITIGE_OUVERTURE sans promesse chiffrée ; autres SMS inchangés (rapp
     /case 'LITIGE_OUVERTURE':[\s\S]*?return `un litige \$\{data\.type_litige \?\? ''\} a été ouvert sur votre mission\.`;/,
     'le miroir TS du SMS suit le SQL');
   assert.doesNotMatch(miroirSms, /Répondez sous 72h/);
+});
+
+test('email LITIGE_OUVERTURE : plus de « 72h » par défaut ni de délai d\'escalade', () => {
+  const debut = sendEmail.indexOf("case 'LITIGE_OUVERTURE':");
+  assert.ok(debut > 0);
+  const bloc = sendEmail.slice(debut, sendEmail.indexOf("case 'LITIGE_NOUVEAU_MESSAGE':", debut));
+  assert.doesNotMatch(bloc, /72h|72 h|delai_reponse_texte|escalade/i);
+  assert.match(bloc, /BUTTON\('Répondre au litige →'/);
+  assert.doesNotMatch(sendEmail, /delai_reponse_texte/);
 });
 
 test('commentaire de fonction : nom du paramètre au lieu de « 48h »', () => {
