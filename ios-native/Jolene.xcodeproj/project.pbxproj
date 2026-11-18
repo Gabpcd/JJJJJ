@@ -111,6 +111,7 @@
 		B83F10966AC51907CB483818 /* DemoIbanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EE8A937FD8CF8A5E89DC738 /* DemoIbanTests.swift */; };
 		BA3D823586A58A6220538174 /* LoginScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACC4653075CBE00DD3130FD3 /* LoginScreen.swift */; };
 		BBBCDD81089C3FBE6AF5FBDD /* DemoCompteLot3Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD20E54361DC36A3FDE82ABE /* DemoCompteLot3Tests.swift */; };
+		BC6B1F9BC32F87C2A8272E73 /* FabriqueEcransCandidature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EDEB03EA436C12A3ACE50D4 /* FabriqueEcransCandidature.swift */; };
 		BEC0542553A1B950D646B043 /* ProfilEntreeSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09BAAAFAB24F1E5ED2DB1EF3 /* ProfilEntreeSection.swift */; };
 		BEF9046E8D194E5FF2A90FD3 /* ContratReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D6A37369D110A146F3E4CAF /* ContratReaderView.swift */; };
 		C0F675E139EA54FE7CE00DBA /* MissionMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E8673ADB03568DA5632CFC /* MissionMapView.swift */; };
@@ -177,6 +178,7 @@
 		0A7E2A5C1F0BCB93E044A7ED /* StockageAppareil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockageAppareil.swift; sourceTree = "<group>"; };
 		0B24FDF8D33F676E7EA256C9 /* PaiementsDeclaresSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaiementsDeclaresSection.swift; sourceTree = "<group>"; };
 		0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkSentinel.swift; sourceTree = "<group>"; };
+		0EDEB03EA436C12A3ACE50D4 /* FabriqueEcransCandidature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FabriqueEcransCandidature.swift; sourceTree = "<group>"; };
 		135F5BCAF1CD11DA3434F20C /* EtabAccesRefuseScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EtabAccesRefuseScreen.swift; sourceTree = "<group>"; };
 		19D81B7401EDB83F0DF34E07 /* DemoPointageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPointageTests.swift; sourceTree = "<group>"; };
 		1A8E49868C321275FFB1BD6C /* Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Staging.xcconfig; sourceTree = "<group>"; };
@@ -448,6 +450,7 @@
 				B3F0A6856D66A3E37F08A0E7 /* DeepLinkCoordinator.swift */,
 				995ABFEB526D8EE5ED3AF378 /* EtabFeatureFlags.swift */,
 				1C966139F22808C571DD1437 /* ExternalFlowPresenter.swift */,
+				0EDEB03EA436C12A3ACE50D4 /* FabriqueEcransCandidature.swift */,
 				0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */,
 				F77D89390B0B48A7470C7E56 /* NotificationCenterDelegate.swift */,
 				0747FCCBC21B648A9985AA76 /* PresentateurRenvoiWeb.swift */,
@@ -866,6 +869,7 @@
 				F2871B998E1A56C66481C006 /* EtablissementTabView.swift in Sources */,
 				A90CAD5C43F42E1946238456 /* EtatNotificationsAppareilRow.swift in Sources */,
 				8E4EF3CC792C345645D5E227 /* ExternalFlowPresenter.swift in Sources */,
+				BC6B1F9BC32F87C2A8272E73 /* FabriqueEcransCandidature.swift in Sources */,
 				A452FBEA3A333A8B99A343E9 /* FavorisComposants.swift in Sources */,
 				EB4448BA06429EF4C7504957 /* FiltresSheet.swift in Sources */,
 				0AC7DD7A87882A216DAE706D /* HorsLigneBandeau.swift in Sources */,

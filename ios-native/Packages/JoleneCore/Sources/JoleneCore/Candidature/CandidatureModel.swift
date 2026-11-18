@@ -99,12 +99,13 @@ public final class CandidatureModel: ObservableObject {
         case let .proposition(candidatureId), let .propositionWeb(candidatureId): id = candidatureId
         default: return false
         }
+        // Revue B8 (m1) : `enCours` posé avant le premier `await`, un second toucher est ignoré.
+        enCours = true
+        defer { enCours = false }
         guard let gateways = await controller.gateways(for: snapshot.epoch) else { return false }
         let port = gateways.candidature
         let context = snapshot.context
-        enCours = true
         issue = nil
-        defer { enCours = false }
         do {
             try await bounded(timeout: controller.resolutionTimeout) { try await port.refuserProposition(candidatureId: id, context: context) }
             guard await controller.epoch == snapshot.epoch else { return false }
@@ -123,6 +124,9 @@ public final class CandidatureModel: ObservableObject {
 
     private func envoyer(_ action: ActionPlanning, mission: Mission, choixContrat: String?, candidatureId: String?) async -> Bool {
         guard !enCours else { return false }
+        // Revue B8 (m1) : `enCours` posé avant le premier `await`, un second toucher est ignoré.
+        enCours = true
+        defer { enCours = false }
         guard let creneaux = CreneauxConfirmes.pourAction(PlanningCandidatInput(mission: mission)) else {
             let planning = PlanningCandidatRules.construirePlanningCandidat(PlanningCandidatInput(mission: mission))
             issue = .erreur(planning.messageBlocage ?? PlanningCandidatRules.messagePlanningIncomplet)
@@ -133,9 +137,7 @@ public final class CandidatureModel: ObservableObject {
         let context = snapshot.context
         let texte = action == .postuler && !message.isEmpty ? message : nil
         let id = mission.id
-        enCours = true
         issue = nil
-        defer { enCours = false }
         let relire: Bool
         do {
             let outcome = try await bounded(timeout: controller.resolutionTimeout) {

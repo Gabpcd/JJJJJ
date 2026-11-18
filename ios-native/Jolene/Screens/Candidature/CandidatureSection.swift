@@ -17,6 +17,10 @@ struct CandidatureSection: View {
     @StateObject private var model: CandidatureModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
+    /// Revue B8 m3 : renvois web fermés ; à la fermeture du renvoi ouvert ici, candidature et mission sont relues.
+    @Environment(\.fermeturesRenvoiWeb) private var fermeturesRenvoiWeb
+    @Environment(\.fabriqueEcransCandidature) private var fabrique
+    @State private var retourWebAttendu: Int?
     @State private var recapOuvert = false
     @State private var actionRecap: ActionPlanning = .accepter
     @State private var choixSelectionne: String?
@@ -48,9 +52,26 @@ struct CandidatureSection: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("candidature-bloc")
         .task { await model.charger() }
+        .onChange(of: fermeturesRenvoiWeb) { fermetures in
+            guard let attendu = retourWebAttendu, fermetures > attendu else { return }
+            retourWebAttendu = nil
+            Task {
+                await model.charger()
+                await relireMission()
+            }
+        }
         .confirmationSheet(isPresented: $recapOuvert, recapConfiguration, isLoading: model.enCours,
                            isConfirmEnabled: planning.exact, onConfirm: confirmerRecap) {
-            SlotList(planning: planning, identifier: "candidature-recap-planning", libelle: MissionPresentation.creneau)
+            // Revue B8 m5 : lignes du planning candidat du web (année, « (lendemain) », durée).
+            SlotList(planning: planning, identifier: "candidature-recap-planning", libelle: MissionPresentation.creneauCandidat)
+            if planning.exact {
+                // HARD STOP n°4 (revue B8 P2) : phrase d'engagement reprise à l'identique (`TextesWeb.Candidature`).
+                Text(L.recapEngagement(actionRecap))
+                    .font(JoleneFont.caption)
+                    .foregroundStyle(JoleneColor.bubblegum)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("candidature-recap-engagement")
+            }
         }
         .sheet(isPresented: choixOuvert) { choixContrat }
     }
@@ -77,14 +98,26 @@ struct CandidatureSection: View {
         case let .propositionWeb(id):
             InlineNotice(L.propositionWeb, tone: .info, identifier: "proposition-web-\(id)-texte")
             if let presentateurRenvoiWeb {
-                JoleneButton(L.propositionWebAction) { presentateurRenvoiWeb.presenter(.safari(Self.tableauDeBordWeb)) }
+                JoleneButton(L.propositionWebAction) {
+                    retourWebAttendu = fermeturesRenvoiWeb
+                    presentateurRenvoiWeb.presenter(.safari(Self.tableauDeBordWeb))
+                }
                     .accessibilityIdentifier("proposition-web-\(id)")
             }
             boutonRefus(id)
         case .envoyee:
             ligneSucces(L.envoyee, identifier: "candidature-sent")
-            Text(model.profil?.tousDocumentsValides == true ? L.envoyeeProfil : L.envoyeeDocuments)
-                .font(JoleneFont.caption).foregroundStyle(JoleneColor.bubblegum)
+            if model.profil?.tousDocumentsValides == true {
+                Text(L.envoyeeProfil).font(JoleneFont.caption).foregroundStyle(JoleneColor.bubblegum)
+            } else {
+                Text(L.envoyeeDocuments).font(JoleneFont.caption).foregroundStyle(JoleneColor.bubblegum)
+                // Revue B8 m4 : « 📄 Valider mes documents (2 min) » vers « Mes documents » natif (lot 2).
+                if let fabrique {
+                    NavigationLink { fabrique.documents(session: session, snapshot: snapshot) } label: { libelleBouton(L.validerDocuments) }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("candidature-documents")
+                }
+            }
         case let .profilIncomplet(manquants):
             VStack(alignment: .leading, spacing: JoleneSpacing.xs) {
                 if !manquants.isEmpty {
@@ -97,10 +130,14 @@ struct CandidatureSection: View {
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("candidature-profil-incomplet")
             NavigationLink {
-                ProfilEditionScreen(session: session, snapshot: snapshot)
+                // Revue B8 m2 : mêmes injections que l'onglet Profil (localisation, photo démo).
+                if let fabrique {
+                    fabrique.editionProfil(session: session, snapshot: snapshot)
+                } else {
+                    ProfilEditionScreen(session: session, snapshot: snapshot)
+                }
             } label: {
-                Text(L.completerProfil).font(JoleneFont.button).foregroundStyle(JoleneColor.onGradient)
-                    .frame(maxWidth: .infinity, minHeight: 48).background(JoleneColor.heroGradient).clipShape(Capsule())
+                libelleBouton(L.completerProfil)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("candidature-profil-completer")
@@ -109,6 +146,7 @@ struct CandidatureSection: View {
             JoleneButton(action == .postuler ? L.postuler : L.accepter) {}
                 .disabled(true)
                 .accessibilityIdentifier("candidature-submit")
+            if action == .accepter { mentionAccepter }
         case .ouverte(.postuler):
             champMessage
             JoleneButton(model.enCours ? L.postulerEnCours : L.postuler, isLoading: model.enCours) { ouvrirRecap(.postuler) }
@@ -117,6 +155,7 @@ struct CandidatureSection: View {
         case let .ouverte(action):
             JoleneButton(model.enCours ? L.accepterEnCours : L.accepter, isLoading: model.enCours) { ouvrirRecap(action) }
                 .accessibilityIdentifier("candidature-submit")
+            mentionAccepter
         }
     }
 
@@ -150,6 +189,22 @@ struct CandidatureSection: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .accessibilityIdentifier("candidature-message-compteur")
         }
+    }
+
+    /// HARD STOP n°4 (revue B8 P2) : mention sous « ★ Accepter cette mission », reprise à l'identique du web (l.1373).
+    private var mentionAccepter: some View {
+        Text(TextesWeb.Candidature.mentionAccepter)
+            .font(JoleneFont.caption)
+            .foregroundStyle(JoleneColor.bubblegum)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .multilineTextAlignment(.center)
+            .accessibilityIdentifier("candidature-mention-accepter")
+    }
+
+    private func libelleBouton(_ titre: String) -> some View {
+        Text(titre).font(JoleneFont.button).foregroundStyle(JoleneColor.onGradient)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, minHeight: 48).background(JoleneColor.heroGradient).clipShape(Capsule())
     }
 
     private func ligneSucces(_ texte: String, identifier: String) -> some View {

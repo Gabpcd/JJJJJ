@@ -44,3 +44,29 @@ public extension MissionPresentation {
         return groupes.joined(separator: separateurMilliers)
     }
 }
+
+public extension MissionPresentation {
+    /// Ligne d'un créneau du planning candidat (récapitulatif d'engagement, T6b ; revue B8 m5), port du rendu de
+    /// `PlanningMissionCandidat.tsx` (l.27-31, l.80-85) en une ligne : jour avec l'année (`EEEE d MMMM yyyy`), heure de
+    /// début, fin (heure seule le même jour ; sinon jour, année et heure, suivis de « (lendemain) » pour le jour
+    /// suivant ; « fin à confirmer » sans fin), puis la durée « · X h » (`heuresPlanning`) quand elle est positive.
+    /// Le web pose le jour et les heures sur deux lignes : ici « , » les sépare.
+    static func creneauCandidat(_ slot: MissionSlot) -> String {
+        guard let debut = try? DateHeureParis.instantJolene(slot.debut) else { return slot.debut }
+        let jour = DateHeureParis.format(debut, "EEEE d MMMM yyyy")
+        let heure = DateHeureParis.format(debut, "HH'h'mm")
+        // source: src/components/planning/PlanningMissionCandidat.tsx:28 (« fin à confirmer »), :31 (« (lendemain) »)
+        var fin = "fin à confirmer"
+        var duree = 0.0
+        if let finIso = slot.fin, let finDate = try? DateHeureParis.instantJolene(finIso) {
+            if DateHeureParis.memeJour(debut, finDate) {
+                fin = DateHeureParis.format(finDate, "HH'h'mm")
+            } else {
+                let lendemain = DateHeureParis.cleJour(finDate) == DateHeureParis.cleJour(DateHeureParis.ajouterJoursCivils(debut, 1))
+                fin = DateHeureParis.format(finDate, "EEEE d MMMM yyyy · HH'h'mm") + (lendemain ? " (lendemain)" : "")
+            }
+            duree = max(0, finDate.timeIntervalSince(debut) / 3600)
+        }
+        return jour + ", " + heure + " → " + fin + (duree > 0 ? " · " + heuresPlanning(duree) + " h" : "")
+    }
+}
