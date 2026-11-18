@@ -30,6 +30,9 @@ on:
       - 'src/components/FormulaireRecurrence.tsx'
       - 'src/components/ListeCandidatures.tsx'
       - 'src/components/pointage/AffichageCodeRotatifEtab.tsx'
+      # Lot 5, T2a : sources relues par DemoEspaceTests (rôles d'équipe) et EtabFeatureFlagsTests (clés D-FLAGS).
+      - 'src/pages/EquipeEtablissement.tsx'
+      - 'supabase/migrations/20261102204450_drapeaux_ios_natif_lots_2_4_5.sql'
       - 'src/lib/completude-planning-mission.ts'
       - 'src/lib/nativeLinks.ts'
       - 'src/lib/geo.ts'
@@ -136,6 +139,9 @@ on:
       - 'src/components/FormulaireRecurrence.tsx'
       - 'src/components/ListeCandidatures.tsx'
       - 'src/components/pointage/AffichageCodeRotatifEtab.tsx'
+      # Lot 5, T2a : sources relues par DemoEspaceTests (rôles d'équipe) et EtabFeatureFlagsTests (clés D-FLAGS).
+      - 'src/pages/EquipeEtablissement.tsx'
+      - 'supabase/migrations/20261102204450_drapeaux_ios_natif_lots_2_4_5.sql'
       - 'src/lib/completude-planning-mission.ts'
       - 'src/lib/nativeLinks.ts'
       - 'src/lib/geo.ts'
