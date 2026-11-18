@@ -1200,7 +1200,7 @@ l'envoi avec le message serveur verbatim (`MessagesContestationServeur.motifLong
 
 | Constante | Texte | Source | Test |
 |---|---|---|---|
-| `LibellesDetailPresences.Contestation.erreurEnvoi` | « La contestation n'a pas pu être envoyée. Réessayez. » | repli d'une erreur de transport sans message lisible (le web affiche `extraireMessageErreur(err)`, `PanneauContestation.tsx` l.157), sur le modèle de `Notation.erreurEnregistrement` ; le formulaire reste ouvert après relecture du litige | — (repli de transport) |
+| `LibellesDetailPresences.Contestation.erreurEnvoi` | « La contestation n'a pas pu être envoyée. Réessayez. » | repli d'une erreur de transport sans message lisible (le web affiche `extraireMessageErreur(err)`, `PanneauContestation.tsx` l.157), sur le modèle de `Notation.erreurEnregistrement` ; la feuille reste ouverte avec ce message, « Envoyer » verrouillé pendant la relecture du litige (revue B8, M1) | `ContestationModelTests.testErreurReseauPuisRelectureEnEchecGardeLaFeuilleOuverteEtVerrouilleLEnvoi` |
 
 ## Textes opérationnels hors web (T9b)
 
@@ -1454,6 +1454,22 @@ Règles appliquées à chaque point :
      le retrait de l'appel client `fn_creer_notification` reste la proposition B9 ci-dessous ;
   4. **natif** : aucun texte de délai (verrou `ANCRES_Q9` maintenu dans la garde, motif mis à jour) ; bouton de
      contestation conditionné par le serveur (décision 9) ; go de T5b (D11).
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### D13 — T5b : audit `PRESENCE_CONTESTATION` sans le motif libre (revue B8 n°1 de #1143, m2, 18 novembre 2026)
+
+- **Faits** : le web recopie le motif libre de la contestation dans `journaux_audit.details`
+  (`PanneauContestation.tsx` l.134-139, motif brut non nettoyé) ; `journaux_audit` est immuable (`dec_audit_immuable`,
+  `dec_proteger_journaux_audit` : ni modification ni suppression, demande RGPD comprise) ; le motif est déjà conservé
+  dans `litiges.motif`, et le serveur audite déjà l'ouverture (`LITIGE_OUVERTURE`, sans motif). Un motif peut contenir
+  des données de santé ou le nom d'un tiers.
+- **Droit** : TEXTE — RGPD art. 5 §1 c) (minimisation) et e) (limitation de la conservation) ; art. 16 et 17
+  (rectification, effacement) inapplicables dans une table immuable. Force : **choix de conformité Jolene** (aucune
+  jurisprudence ni doctrine ministérielle invoquée).
+- **Décision** : côté natif, `p_details` de l'audit `PRESENCE_CONTESTATION` ne porte que `motif_longueur` (scalaires
+  Unicode du motif nettoyé) et `litige_id` — jamais le motif (`SupabaseContestationGateway.auditer`, test
+  `SupabaseContestationGatewayTests`). Le web fait encore la copie : **PR web de suivi à préparer** (retirer `motif` de
+  `p_details` dans `PanneauContestation.tsx`, mêmes deux clés).
 - décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
 
 ### T4b — consentement GPS et conservation des positions de pointage (L2-T4b, 8 et 9 novembre 2026)

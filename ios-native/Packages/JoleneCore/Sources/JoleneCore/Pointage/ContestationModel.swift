@@ -14,8 +14,10 @@ import Foundation
 /// - Motif borné à 500 scalaires comme la saisie du web (`slice(0, 500)`, l.374), nettoyé comme `sanitizeText`
 ///   (balises retirées, `trim`) ; sous 10 caractères nettoyés, le refus du serveur est affiché tel quel sans requête.
 /// - `envoyer()` : une seule requête ; `.ouverte` (litige créé ET relu par la gateway) → statut affiché, formulaire
-///   fermé ; `.refusee` → message serveur verbatim, formulaire ouvert ; erreur de transport → message du port, puis
-///   relecture (une contestation reçue malgré une réponse perdue apparaît par son statut, jamais par un renvoi).
+///   fermé ; `.refusee` → message serveur verbatim dans la feuille, puis dans le panneau, et le bouton n'est plus
+///   proposé (revue B8 de T5b, m3) ; erreur de transport ou délai dépassé → message du port dans la feuille restée
+///   ouverte, puis relecture du litige, « Envoyer » verrouillé jusqu'à sa fin : seul un litige relu change l'état (une
+///   contestation reçue malgré une réponse perdue apparaît par son statut, jamais par un renvoi ; revue B8, M1).
 @MainActor
 public final class ContestationModel: ObservableObject {
     public enum Etat: Equatable, Sendable {
@@ -24,6 +26,8 @@ public final class ContestationModel: ObservableObject {
         case masque
         /// Bouton « Contester cette présence ».
         case contestable
+        /// Refus du serveur à l'envoi, affiché tel quel ; plus de bouton jusqu'à la prochaine lecture.
+        case refusee(String)
         /// Litige relu : statut seul (réponse et clôture : renvoi web).
         case litige(LitigePresence)
     }
@@ -40,7 +44,6 @@ public final class ContestationModel: ObservableObject {
     @Published public private(set) var motif = ""
     @Published public private(set) var envoiEnCours = false
     @Published public private(set) var erreur: String?
-    @Published public private(set) var sessionExpired = false
 
     public let presenceId: String
     public let missionId: String
@@ -97,7 +100,6 @@ public final class ContestationModel: ObservableObject {
             appliquer(ouverte ? .contestable : .masque)
         } catch {
             guard await estCourant(courant), !Self.estAnnulation(error) else { return }
-            if (error as? JoleneError)?.kind == .unauthorized { sessionExpired = true }
             appliquer(.masque)
         }
     }
@@ -140,31 +142,41 @@ public final class ContestationModel: ObservableObject {
                 try await port.contester(missionId: mission, presenceId: presence, motif: nettoye, context: context)
             }
             guard await controller.epoch == snapshot.epoch else { return }
+            generation += 1 // une lecture en vol ne remplace pas l'issue de l'envoi
             switch issue {
             case let .ouverte(litige):
-                generation += 1 // une lecture en vol ne remplace pas le litige relu
-                formulaireOuvert = false
-                motif = ""
-                etat = .litige(litige)
+                appliquer(.litige(litige))
             case let .refusee(message):
                 erreur = message
+                etat = .refusee(message)
             }
         } catch {
             guard await controller.epoch == snapshot.epoch, !Self.estAnnulation(error) else { return }
             let jolene = error as? JoleneError
-            if jolene?.kind == .unauthorized { sessionExpired = true }
             erreur = Self.message(jolene?.message)
-            await reconcilier()
+            guard jolene?.kind != .unauthorized else { return } // session expirée : message seul, rien à relire
+            await reconcilier(port: port)
         }
     }
 
     // MARK: - Interne
 
-    /// Relecture après une erreur de transport : la contestation a pu être reçue (réponse perdue).
-    private func reconcilier() async {
-        guard !sessionExpired else { return }
-        envoiEnCours = false
-        await charger()
+    /// Relecture après une erreur de transport, « Envoyer » encore verrouillé (`envoiEnCours`) : la contestation a pu être
+    /// reçue (réponse perdue). Seul un litige relu change l'état ; une relecture vide ou en échec laisse la feuille ouverte,
+    /// avec l'erreur de l'envoi.
+    private func reconcilier(port: any ContestationPort) async {
+        let presence = presenceId, context = snapshot.context
+        let lu: LitigePresence?
+        do {
+            lu = try await bounded(timeout: controller.resolutionTimeout) {
+                try await port.litige(presenceId: presence, context: context)
+            }
+        } catch {
+            return
+        }
+        guard let lu, await controller.epoch == snapshot.epoch else { return }
+        generation += 1
+        appliquer(.litige(lu))
     }
 
     /// Un litige relu (après une réponse perdue compris) fait foi : le formulaire se ferme et l'erreur s'efface.
@@ -202,17 +214,23 @@ public final class ContestationModel: ObservableObject {
         return String(scalaires)
     }
 
+    /// Ouverture d'une balise selon l'analyseur HTML que suit DOMPurify : `<` suivi d'une lettre, de `/`, `!` ou `?` ;
+    /// tout autre `<` (« 7h<8h », « < 7h », « -> ») reste du texte (revue B8 de T5b, M2).
+    nonisolated public static let motifBalise = "<(?=[A-Za-z/!?])[^>]*>"
+
     /// `sanitizeText` (`src/lib/sanitize.ts` : DOMPurify sans balise autorisée, puis `trim`) : balises retirées, texte
-    /// conservé, espaces de bord retirés. Écart assumé : aucune entité HTML n'est produite (DOMPurify sérialise `&` en
-    /// `&amp;`, que le web enregistre puis affiche tel quel) ; le texte saisi est envoyé tel qu'il se lit.
+    /// conservé, espaces de bord retirés. Écarts assumés : aucune entité HTML n'est produite (DOMPurify sérialise `&` en
+    /// `&amp;`, que le web enregistre puis affiche tel quel) ; le contenu d'un `<script>` est gardé comme texte (DOMPurify
+    /// le retire) ; une balise jamais fermée reste du texte.
     nonisolated public static func nettoyer(_ texte: String) -> String {
-        texte.replacingOccurrences(of: "<[^>]*>", with: "", options: .regularExpression)
+        texte.replacingOccurrences(of: motifBalise, with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
 /// Refus de `fn_ouvrir_litige_rate_limited(uuid, type_litige, text)` repris mot pour mot (affichés tels quels, jamais
 /// reformulés) : borne du motif vérifiée avant l'envoi par `ContestationModel`, et refus simulés par le monde démo.
+/// Garde : `ContestationModelTests.testMessagesServeurPresentsDansLeDump` (chaque texte figure dans le dump versionné).
 public enum MessagesContestationServeur {
     // source: supabase/schema/public.sql:46863
     public static let motifLongueur = "Le motif doit contenir entre 10 et 2 000 caractères."
@@ -220,4 +238,6 @@ public enum MessagesContestationServeur {
     public static let dejaOuvert = "Un litige de ce type est déjà ouvert pour cette mission."
     // source: supabase/schema/public.sql:46976
     public static let fenetreFermee = "Fenêtre de contestation fermée pour ce type de litige. Contactez le support."
+
+    public static let tous = [motifLongueur, dejaOuvert, fenetreFermee]
 }

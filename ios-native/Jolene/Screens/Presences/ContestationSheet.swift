@@ -12,7 +12,9 @@ import JoleneDesign
 ///   clôture restent sur le web (lot 4) : « Voir ou signaler un litige » (`contestation-litiges-web`), rendu seulement avec
 ///   le présentateur des renvois web (jamais un bouton sans effet).
 /// - **Aucun texte de délai** (Q9, D12 : la garde `ANCRES_Q9` les refuse) : ni « 72h pour répondre », ni l'escalade, ni
-///   la fenêtre de 72 h du formulaire du web. Un refus du serveur s'affiche tel quel dans la feuille.
+///   la fenêtre de 72 h du formulaire du web. Un refus du serveur s'affiche tel quel dans la feuille (envoi désactivé),
+///   puis dans le panneau à la place du bouton (`contestation-refus-<presenceId>`). Une erreur de transport laisse la
+///   feuille ouverte avec son message, « Envoyer » verrouillé pendant la relecture du litige.
 struct ContestationPanneau: View {
     @StateObject private var model: ContestationModel
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
@@ -31,6 +33,9 @@ struct ContestationPanneau: View {
             case .contestable:
                 JoleneButton(LibellesWeb.Contestation.contester, style: .secondary) { model.ouvrirFormulaire() }
                     .accessibilityIdentifier("contestation-ouvrir-\(model.presenceId)")
+            case let .refusee(message):
+                // Refus du serveur à l'envoi, tel quel : plus de bouton jusqu'à la prochaine lecture (revue B8, m3).
+                InlineNotice(message, tone: .error, identifier: "contestation-refus-\(model.presenceId)")
             case let .litige(litige):
                 statut(litige)
             }
