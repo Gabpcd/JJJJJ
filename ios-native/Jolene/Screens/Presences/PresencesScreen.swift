@@ -13,8 +13,8 @@ import JoleneDesign
 /// verbatim, texte HARD STOP n°4 de TL en attente de la validation de Gabrielle) quand le lien le demande, puis les
 /// lignes. T4b : bandeaux hors ligne (`HorsLigneBandeau`) et sans GPS (`BandeauSansGpsView`) en tête, retour du
 /// consentement, services des zones de pointage (`ServicesPointage` : consentement GPS de la page, état du réseau suivi
-/// par `Appareil.reseau`, relecture de l'instantané après un pointage enregistré, m1). Exclus : notation (T5a),
-/// contestation (T5b).
+/// par `Appareil.reseau`, relecture de l'instantané après un pointage enregistré, m1). Exclus : notation (T5a).
+/// Contestation (T5b) : `ContestationPanneau` dans chaque `PresenceValideeRow`.
 ///
 /// Actions des états vides : onglets de l'app (les routes web `/soignant/missions` et `/soignant/planning` sont
 /// « Mes missions », `/soignant/recherche-missions` est Explorer, `LinkRouter`).
@@ -264,7 +264,8 @@ struct PresencesScreen: View {
                         .accessibilityAddTraits(.isHeader)
                 }
                 ForEach(validees) { presence in
-                    PresenceValideeRow(presence: presence, etablissement: model.instantane?.etablissement(de: presence))
+                    PresenceValideeRow(presence: presence, etablissement: model.instantane?.etablissement(de: presence),
+                                       session: session, snapshot: snapshot)
                 }
             }
             .padding(.top, JoleneSpacing.lg)
