@@ -145,7 +145,6 @@ final class DestinationLienTests: XCTestCase {
             ("/soignant/mes-gains?tab=inconnu", .revenus(section: .apercu)),
             ("/soignant/mon-compte", .monCompte),
             ("/soignant/parametres", .monCompte),
-            ("/soignant/score", .monCompte),
             ("/soignant/notifications?utm_source=push#haut", .notifications),                    // lot 3, T5
             ("/soignant/profil?tab=principal", .profil),          // lot 3, T9 : édition du profil livrée
             ("/soignant/reputation", .profil),                    // lot 3, T9 : alias du profil
@@ -160,9 +159,11 @@ final class DestinationLienTests: XCTestCase {
     }
 
     func testRenvoisWebEtEspaceEtablissementInchanges() throws {
+        // L4-T1 : la page litiges a sa route (`.secondaire(.litiges)`, fragment = litige ciblé), servie par le web
+        // tant que T8 ne l'a pas livrée.
         let litiges = try XCTUnwrap(lien("https://www.jolene.app/soignant/litiges#l%201"))
-        XCTAssertEqual(litiges.route, .safari(url("https://jolene.app/soignant/litiges#l%201")))
-        XCTAssertEqual(litiges.destination, litiges.route)
+        XCTAssertEqual(litiges.route, .secondaire(.litiges(onglet: nil, litigeId: "l 1")))
+        XCTAssertEqual(litiges.destination, .safari(url("https://jolene.app/soignant/litiges#l%201")))
         let etab = try XCTUnwrap(lien("https://jolene.app/etablissement/missions/abc"))
         XCTAssertEqual(etab.destination, .etablissement(url("https://jolene.app/etablissement/missions/abc")))
         let horsAASA = try XCTUnwrap(lien("https://jolene.app/aide/pro-sante-connect?x=1"))
@@ -223,6 +224,8 @@ final class DestinationLienTests: XCTestCase {
         case .documents: return "documents"                   // L2-T10
         case .contrat: return "contrat"                       // L2-T10
         case .contratCertificat: return "contratCertificat"   // L2-T10
+        case .secondaire(.litiges): return "secondaire(litiges)"           // L4-T1 (onglet litiges ou réclamations)
+        case .secondaire(let ecran): return "secondaire(\(ecran.nom.rawValue))" // L4-T1
         case .safari: return "safari"
         case .etablissement: return "etablissement"
         default: return "autre : \(route)"
@@ -261,7 +264,7 @@ final class DestinationLienTests: XCTestCase {
             "/soignant/stripe-connect": ("stripeConnect", "safari", 6),                      // T14a
             "/soignant/mes-gains?tab=paiements": ("revenus(paiements)", "revenus(paiements)", 32), // T13 (livrée)
             "/soignant/mes-gains?tab=factures": ("revenus(factures)", "safari", 21),         // lot 4 (D4)
-            "/soignant/litiges": ("safari", "safari", 46),
+            "/soignant/litiges": ("secondaire(litiges)", "safari", 46),                    // lot 4, T8
             "/soignant/mes-documents": ("documents", "documents", 30),                       // L2-T10 (contrats, dpae)
             "/etablissement/*": ("etablissement", "etablissement", 125),
             "/admin/*": ("safari", "safari", 47),

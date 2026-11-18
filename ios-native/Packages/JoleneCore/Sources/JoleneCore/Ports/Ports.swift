@@ -115,6 +115,26 @@ public struct Gateways: Sendable {
     public var iban: IbanPort = UnwiredIbanPort()                                              // T14b
     public var stripeConnect: StripeConnectPort = UnwiredStripeConnectPort()                   // T14a
 
+    // Lot 4 — ajout additif (PRINCIPES §2, blueprint `LOT4_PLAN.md` §2.2, décision D1) : même règle que les
+    // lots 1 à 3, stubs dans `Ports/Lot4Ports.swift` (message : « …livré par la tranche Tn du lot 4 »). Pas de
+    // troisième init : chaque monde assigne ces ports par `DemoLot4.cabler(_:)` / `SupabaseLot4.cabler(_:client:)`,
+    // une fabrique par domaine (un fichier chacune) ; liste attendue `DemoWorldTests.portsEnAttenteLot4`.
+    public var swipe: SwipePort = UnwiredSwipePort()                                           // T3a
+    public var filtres: FiltresSauvegardesPort = UnwiredFiltresSauvegardesPort()               // T4
+    public var disponibilites: DisponibilitesPort = UnwiredDisponibilitesPort()                // T5
+    public var parrainage: ParrainagePort = UnwiredParrainagePort()                            // T6
+    public var litiges: LitigesPort = UnwiredLitigesPort()                                     // T8
+    public var reclamations: ReclamationsPort = UnwiredReclamationsPort()                      // T8
+    public var messagerie: MessageriePort = UnwiredMessageriePort()                            // T7a
+    public var realtime: RealtimePort = UnwiredRealtimePort()                                  // T7a
+    public var bulletins: BulletinsPort = UnwiredBulletinsPort()                               // T10
+    // Nommé `evaluationsRecues` (et non `evaluations`) : son nom figure dans `unwiredPorts`, et aucun littéral
+    // Swift ne vaut exactement le nom d'une table de notations (garde-fou 18).
+    public var evaluationsRecues: EvaluationsPort = UnwiredEvaluationsPort()                   // T9
+    public var poolUrgence: PoolUrgencePort = UnwiredPoolUrgencePort()                         // T11
+    public var score: ScorePort = UnwiredScorePort()                                           // T9
+    public var exclusions: ExclusionsPort = UnwiredExclusionsPort()                            // T11
+
     public init(auth: AuthPort, role: RolePort, missions: MissionsPort, clock: ClockPort = SystemClock()) {
         self.auth = auth; self.role = role; self.missions = missions; self.clock = clock
     }
@@ -131,7 +151,7 @@ public struct Gateways: Sendable {
         self.audit = audit; self.flags = flags; self.recovery = recovery; self.justificatifs = justificatifs
     }
 
-    /// Noms des champs du lot 1, puis du lot 2, puis du lot 3, encore servis par un stub « non
+    /// Noms des champs du lot 1, puis du lot 2, du lot 3 et du lot 4, encore servis par un stub « non
     /// câblé », dans l'ordre de déclaration. Vide pour un monde complet.
     public var unwiredPorts: [String] {
         let ports: [(nom: String, port: Any)] = [
@@ -146,6 +166,11 @@ public struct Gateways: Sendable {
             ("inscription", inscription), ("profil", profil), ("avatar", avatar), ("geocodage", geocodage),
             ("motDePasse", motDePasse), ("exportRGPD", exportRGPD), ("revenus", revenus),
             ("paiements", paiements), ("iban", iban), ("stripeConnect", stripeConnect),
+            // Lot 4
+            ("swipe", swipe), ("filtres", filtres), ("disponibilites", disponibilites), ("parrainage", parrainage),
+            ("litiges", litiges), ("reclamations", reclamations), ("messagerie", messagerie), ("realtime", realtime),
+            ("bulletins", bulletins), ("evaluationsRecues", evaluationsRecues), ("poolUrgence", poolUrgence), ("score", score),
+            ("exclusions", exclusions),
         ]
         return ports.filter { $0.port is UnwiredPort }.map(\.nom)
     }

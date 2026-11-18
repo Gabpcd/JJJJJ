@@ -94,7 +94,7 @@ final class LinksRouterTests: XCTestCase {
 
     func testOngletsEtAlias() {
         XCTAssertEqual(route("https://jolene.app/soignant/recherche-missions?rayon=20"), .explorer)
-        XCTAssertEqual(route("https://jolene.app/soignant/swipe-missions"), .explorer)
+        XCTAssertEqual(route("https://jolene.app/soignant/swipe-missions"), .secondaire(.swipe), "lot 4, T1 (repli Explorer)")
         XCTAssertEqual(route("https://jolene.app/soignant/missions/"), .missions, "barre oblique finale ignorée")
         XCTAssertEqual(route("https://jolene.app/soignant/missions?tab=passees"), .missions)
         XCTAssertEqual(route("https://jolene.app/soignant/planning"), .missions)
@@ -103,7 +103,7 @@ final class LinksRouterTests: XCTestCase {
         XCTAssertEqual(route("https://jolene.app/soignant/bulletins-paie"), .revenus(section: .bulletins))
         XCTAssertEqual(route("https://jolene.app/soignant/profil"), .profil)
         XCTAssertEqual(route("https://jolene.app/soignant/mon-compte"), .monCompte, "hub séparé de l'édition (lot 3, T3)")
-        XCTAssertEqual(route("https://jolene.app/soignant/score"), .monCompte, "page score au lot 4 : hub en attendant")
+        XCTAssertEqual(route("https://jolene.app/soignant/score"), .secondaire(.score), "lot 4, T1 (repli hub)")
     }
 
     func testDetailsMissionEtSerie() {
@@ -131,7 +131,7 @@ final class LinksRouterTests: XCTestCase {
         XCTAssertEqual(LinkRouter.resolve(link: "https://app.jolene.app/soignant/mes-gains?tab=paiements"),
                        .revenus(section: .paiementsAConfirmer))
         XCTAssertEqual(LinkRouter.resolve(link: "/soignant/litiges#litige-id"),
-                       .safari(URL(string: "https://jolene.app/soignant/litiges#litige-id")!))
+                       .secondaire(.litiges(onglet: nil, litigeId: "litige-id")), "L4-T1 : route des litiges, fragment = litige")
         XCTAssertEqual(LinkRouter.resolve(link: "/"), .safari(URL(string: "https://jolene.app/")!))
         XCTAssertNil(LinkRouter.resolve(link: "https://evil.example/soignant/missions"))
         XCTAssertNil(LinkRouter.resolve(link: "soignant/missions"))
@@ -176,14 +176,11 @@ final class LinksRouterTests: XCTestCase {
             // Édition du profil (l.313) et son alias `reputation` (l.393).
             ("/soignant/profil", .profil),
             ("/soignant/reputation", .profil),
-            // Hub du compte (l.314) et ses alias (l.417-418) ; score et fiabilité (l.327, l.399-400) restent
-            // sur le hub tant que la page score est au lot 4.
+            // Hub du compte (l.314) et ses alias (l.417-418). Score et fiabilité (l.327, l.399-400) : route du lot 4
+            // depuis L4-T1 (`.secondaire(.score)`, repli sur le hub jusqu'à T9 ; `LinksRouterLot4Tests`).
             ("/soignant/mon-compte", .monCompte),
             ("/soignant/parametres", .monCompte),
             ("/soignant/parametres-complet", .monCompte),
-            ("/soignant/score", .monCompte),
-            ("/soignant/fiabilite", .monCompte),
-            ("/soignant/fiabilite-legacy", .monCompte),
         ]
         for (chemin, attendu) in table {
             XCTAssertEqual(route("https://jolene.app" + chemin), attendu, "Universal Link \(chemin)")
@@ -241,10 +238,12 @@ final class LinksRouterTests: XCTestCase {
     }
 
     func testCheminsSoignantSansEcranLot3RestentSafariAvecQueryEtFragment() {
-        for chemin in ["/soignant/notifications/abc", "/soignant/parametres/recherches-sauvegardees",
+        // L4-T1 : `/soignant/parametres/recherches-sauvegardees` et `/soignant/litiges` ont leur route du lot 4
+        // (`.secondaire`, renvoi web canonique jusqu'à leur tranche : `LinksRouterLot4Tests`).
+        for chemin in ["/soignant/notifications/abc",
                        // `/soignant/mes-documents?tab=contrats` en est sorti à L2-T10 (onglet Contrats natif) ; la page DPAE
                        // reste web (décision 16 du lot 2).
-                       "/soignant/litiges?tab=reclamations#l%201", "/soignant/dpae?tab=x#y",
+                       "/soignant/dpae?tab=x#y",
                        "/soignant/stripe-connect/retour", "/soignant/mes-gains/factures", "/soignant/Notifications"] {
             XCTAssertEqual(route("https://www.jolene.app" + chemin), .safari(URL(string: "https://jolene.app" + chemin)!), chemin)
         }

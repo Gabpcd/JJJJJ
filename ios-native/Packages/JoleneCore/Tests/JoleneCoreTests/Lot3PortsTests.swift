@@ -18,7 +18,7 @@ final class Lot3PortsTests: XCTestCase {
     func testInitDuLot0LaisseLesPortsDuLot3NonCablesApresCeuxDuLot1() {
         let g = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
         // Fusion des lots 2 et 3 : le bloc du lot 2 (`Lot2PortsTests`) précède celui du lot 3.
-        XCTAssertEqual(g.unwiredPorts, Lot1PortsTests.portsLot1 + Lot2PortsTests.portsLot2 + Self.portsLot3,
+        XCTAssertEqual(g.unwiredPorts, Lot1PortsTests.portsLot1 + Lot2PortsTests.portsLot2 + Self.portsLot3 + Lot4PortsTests.portsLot4,
                        "lot 1 (puis lot 2) puis lot 3, ordre de déclaration")
         XCTAssertTrue(g.push is UnwiredPushRegistrationPort)
         XCTAssertTrue(g.notifications is UnwiredNotificationsCenterPort)
@@ -37,7 +37,7 @@ final class Lot3PortsTests: XCTestCase {
 
     func testLeSecondInitDuLot1NeTouchePasAuBlocLot3() {
         let g = Lot1Fakes.gateways(clock: FixedClock(Date(timeIntervalSince1970: 1)))
-        XCTAssertEqual(g.unwiredPorts, Lot2PortsTests.portsLot2 + Self.portsLot3,
+        XCTAssertEqual(g.unwiredPorts, Lot2PortsTests.portsLot2 + Self.portsLot3 + Lot4PortsTests.portsLot4,
                        "le second init câble tout le lot 1, le lot 2 puis le lot 3 s'assignent après")
     }
 
@@ -45,7 +45,7 @@ final class Lot3PortsTests: XCTestCase {
         var g = Lot1Fakes.gateways(clock: SystemClock())
         g.push = FakePushRegistration()
         g.stripeConnect = FakeStripeConnect()
-        XCTAssertEqual(g.unwiredPorts, Lot2PortsTests.portsLot2 + Self.portsLot3.filter { $0 != "push" && $0 != "stripeConnect" })
+        XCTAssertEqual(g.unwiredPorts, Lot2PortsTests.portsLot2 + Self.portsLot3.filter { $0 != "push" && $0 != "stripeConnect" } + Lot4PortsTests.portsLot4)
         XCTAssertTrue(g.push is FakePushRegistration)
     }
 

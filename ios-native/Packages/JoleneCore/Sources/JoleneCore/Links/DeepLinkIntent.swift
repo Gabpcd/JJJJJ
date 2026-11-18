@@ -51,7 +51,7 @@ public enum DeepLinkIntent: Equatable, Sendable, CustomStringConvertible, Custom
             self = .horsEspace(lien)
         case .accueil, .explorer, .missions, .missionDetail, .serieDetail, .revenus, .monCompte, .profil,
              .notifications, .parametresNotifications, .stripeConnect, .safari, .etablissement,
-             .presences, .presencesMission, .documents, .contrat, .contratCertificat:
+             .presences, .presencesMission, .documents, .contrat, .contratCertificat, .secondaire:
             self = .espace(lien)
         }
     }

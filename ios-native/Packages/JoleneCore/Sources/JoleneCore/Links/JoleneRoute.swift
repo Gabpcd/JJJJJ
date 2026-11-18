@@ -60,6 +60,9 @@ public enum JoleneRoute: Equatable, Sendable {
     case contrat(id: String)
     /// Certificat des signatures d'un contrat (lot 2, T10) : `/contrat/:id/certificat` (l.441).
     case contratCertificat(id: String)
+    /// Écrans secondaires du lot 4 (L4-T1, `EcranSecondaire`) : page web canonique, ou repli natif
+    /// (`EcranSecondaire.repliAvantLivraison`), tant que la tranche de l'écran ne l'a pas livré.
+    case secondaire(EcranSecondaire)
     /// Chemin servi par Safari (`SFSafariViewController`) : `/admin/*`, `/groupe/*` et tout
     /// chemin sans écran natif.
     case safari(URL)

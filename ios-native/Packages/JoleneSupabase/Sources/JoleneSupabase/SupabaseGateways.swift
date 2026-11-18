@@ -52,6 +52,7 @@ public enum SupabaseGateways {
         )
         câblerLot2(&gateways, client: client, clock: clock)
         câblerLot3(&gateways, client: client)
+        SupabaseLot4.cabler(&gateways, client: client) // lot 4 : une fabrique par domaine (`Lot4/`)
         return gateways
     }
 
