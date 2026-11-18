@@ -112,11 +112,25 @@
 >     `PreferencesMatching` est corrigé (nuit / jour / week-end / semaine, paramètres réels de
 >     `fn_initialiser_preferences_matching`, et non quatre poids de scoring). SWIPE_LIKE est déverrouillé dans
 >     `SupabaseCandidatureGateway` et `DemoCandidatureGateway` (le serveur sert l'action, relecture de la candidature) ;
->     URGENCE reste verrouillée (T11). `warning` et `docs_a_completer` du ❤️ ne sont pas portés par `CandidatureOutcome`
->     (lot 1) : reste à T3b. Fixture `demo-swipe.json` produite par `export-demo-fixtures.mjs` (le découpage
->     `demo-fixtures/` de T1c n'est pas livré) ; `DemoLot4.cabler` reçoit une ligne (`swipe(gateways)`) pour partager
->     favoris et candidature du monde démo. Pas de carte démo « choix de contrat » ni « déjà swipée » (aucune mission
->     `TOUS` dans `demo-missions.json`) : à ajouter par T3b si l'XCUITest l'exige.
+>     URGENCE reste verrouillée (T11). Fixture `demo-swipe.json` produite par `export-demo-fixtures.mjs` (le découpage
+>     `demo-fixtures/` de T1c n'est pas livré sur la base de T3a) ; `DemoLot4.cabler` reçoit une ligne (`swipe(gateways)`)
+>     pour partager favoris et candidature du monde démo. Pas de carte démo « choix de contrat » ni « déjà swipée »
+>     (aucune mission `TOUS` dans `demo-missions.json`) : à ajouter par T3b si l'XCUITest l'exige. Revue B8 de #1165 :
+>     - **m1** : `acces_refuse` et `profession_incompatible` écartent la carte pour la session (`SwipeRefus.horsPaquet`,
+>       `SwipeModel`), jamais remise en tête : `fn_enregistrer_swipe` les refuse avant d'écrire la ligne `swipes` et
+>       `fn_obtenir_missions_swipe` resservirait la carte. **Suivi backend B9** (go de Gabrielle, redéfinition depuis la
+>       définition LIVE) : filtrer `fn_est_exclu` dans le paquet (`fn_soignant_eligible_mission` ne l'appelle pas ;
+>       même défaut côté web, latent tant que `exclusions` est vide, atteignable dès une exclusion, natif en T11).
+>     - **m3, à porter par T3b avant d'exposer le ❤️** (aucun code de l'app n'appelle `SwipeModel` aujourd'hui) :
+>       la feuille « première candidature » (HARD STOP n°4, texte verbatim de `VueSwipeMissions.tsx`) rendue
+>       obligatoire avant le premier `SwipeModel.candidater` par userId ; le `warning` de planning du ❤️ affiché comme
+>       le web (`VueSwipeMissions.tsx`, `toast.warning(result.warning)`) et `docs_a_completer`, que
+>       `CandidatureOutcome` (lot 1) ne porte pas aujourd'hui.
+>     - **m4** : la branche `auth_required` de SWIPE_LIKE (`SupabaseCandidatureGateway`) est défensive, inatteignable
+>       avec le wrapper live (« Accès réservé aux soignants authentifiés. », restitué verbatim) ; documentée et testée.
+>     - **m2, à l'intégration avec T1c (#1159)** : déplacer `buildDemoSwipe` dans `scripts/mobile/demo-fixtures/swipe.mjs`
+>       (module vide posé par T1c, règle « jamais `export-demo-fixtures.mjs` »), corriger la phrase sur le découpage
+>       ci-dessus et renuméroter cet écart (le n° 12 est celui de T1c).
 >
 > **§6 mis à jour au 18/11** : B0-bis fait (point 2) ; prérequis du point 1 complétés par le reliquat du lot 1
 > ci-dessus (T6a, T4b, T5, T6b, T6c) ; B1 toujours B9, non fait ; les autres points sont inchangés.

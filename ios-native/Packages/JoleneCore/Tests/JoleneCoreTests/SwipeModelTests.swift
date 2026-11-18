@@ -161,18 +161,48 @@ final class SwipeModelTests: XCTestCase {
     func testRefusRemetEnTeteSaufRefusHorsPaquet() async throws {
         let journal = Journal()
         let swipe = SwipeFactice(journal: journal, paquetLu: { [Self.carte("m-1"), Self.carte("m-2")] }, issue: { id, _ in
-            let code = id == "m-2" ? "acces_refuse" : "mission_deja_swipee"
+            let code = id == "m-2" ? "direction_invalide" : "mission_deja_swipee"
             let refus = SwipeRefus.traduire(code)
             return .refuse(code: refus.code, message: refus.message)
         })
         let (model, _) = try await pret(swipe: swipe)
         await model.charger()
         await model.passer("m-2")
-        XCTAssertEqual(model.message, SwipeRefus.libelles["acces_refuse"])
+        XCTAssertEqual(model.message, SwipeRefus.libelles["direction_invalide"])
         XCTAssertEqual(model.cartes.map(\.id), ["m-2", "m-1"], "carte refusée remise en tête")
         await model.passer("m-1")
         XCTAssertEqual(model.message, "Vous avez déjà répondu à cette mission.")
         XCTAssertEqual(model.cartes.map(\.id), ["m-2"], "ligne swipes déjà posée : la carte ne reviendrait pas")
+    }
+
+    /// Revue B8 de #1165, m1 : `acces_refuse` (établissement qui a exclu le soignant) et `profession_incompatible` sont
+    /// refusés avant l'écriture de la ligne `swipes`, et le paquet relu les resservirait (`fn_soignant_eligible_mission`
+    /// ne filtre pas `fn_est_exclu`) : la carte est écartée pour la session, jamais remise en tête.
+    func testAccesRefuseEtProfessionIncompatibleEcartentLaCartePourLaSession() async throws {
+        let journal = Journal()
+        let swipe = SwipeFactice(journal: journal, paquetLu: { [Self.carte("m-1"), Self.carte("m-2"), Self.carte("m-3")] },
+                                 issue: { _, _ in
+                                     let refus = SwipeRefus.traduire("acces_refuse")
+                                     return .refuse(code: refus.code, message: refus.message)
+                                 })
+        let candidature = CandidatureFactice(journal: journal) { _ in
+            let refus = SwipeRefus.traduire("profession_incompatible")
+            return .refusee(code: refus.code, message: refus.message, documentsRequisPour: nil)
+        }
+        let (model, _) = try await pret(swipe: swipe, candidature: candidature)
+        await model.charger()
+        await model.passer("m-2")
+        XCTAssertEqual(model.message, SwipeRefus.libelles["acces_refuse"])
+        XCTAssertEqual(model.cartes.map(\.id), ["m-1", "m-3"], "jamais remise en tête : elle bloquerait le paquet")
+        await model.candidater("m-3")
+        XCTAssertEqual(model.message, SwipeRefus.libelles["profession_incompatible"])
+        XCTAssertEqual(model.cartes.map(\.id), ["m-1"])
+
+        await model.charger()
+        XCTAssertEqual(model.cartes.map(\.id), ["m-1"], "le serveur les resert : écartées des paquets relus de la session")
+        XCTAssertTrue(model.paquetLuNonVide)
+        let lectures = await journal.nombre("paquet")
+        XCTAssertEqual(lectures, 2)
     }
 
     func testDelaiDepasseMessageCarteRemiseAucunRenvoi() async throws {
