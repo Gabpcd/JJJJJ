@@ -29,6 +29,12 @@
 -- 2. « Répondez sous 72h ... » retiré des deux notifications in-app (absence,
 --    départ anticipé) et du SMS LITIGE_OUVERTURE, sans nouveau délai ;
 -- 3. COMMENT ON FUNCTION : « 48h » remplacé par le nom du paramètre.
+-- Rappel J1 (commit séparé, retirable seul) : le SMS LITIGE_RAPPEL_J1
+--    « Répondez sous 24h pour éviter l'escalade. » devient « Répondez pour
+--    éviter l'escalade. » (texte déjà neutre de la notification in-app de
+--    fn_envoyer_rappels_litiges). Envoyé dès 24 h, alors que l'escalade a lieu
+--    à 72 h en libéral et après 5 jours ouvrés en salarié : la promesse
+--    « sous 24h » était fausse dans les deux régimes.
 -- Rien d'autre ne change : sélection, anti-boucle, insertion du litige,
 -- audit, destinataires, éligibilité SMS, file email. En-têtes, SECURITY
 -- DEFINER, search_path vide, propriétaire et ACL (EXECUTE réservé à postgres
@@ -370,7 +376,7 @@ BEGIN
         || COALESCE(p_email_data ->> 'numero_avoir', '')
         || '). Délai bancaire 2-5j.'
     WHEN 'LITIGE_RAPPEL_J1' THEN
-      'litige en attente depuis 1j. Répondez sous 24h pour éviter l''escalade.'
+      'litige en attente depuis 1j. Répondez pour éviter l''escalade.'
     WHEN 'LITIGE_RAPPEL_J3' THEN
       'litige en attente depuis 3j. Réponse urgente requise.'
     WHEN 'LITIGE_RAPPEL_J5' THEN
@@ -405,8 +411,8 @@ BEGIN
     SELECT * FROM (VALUES
       ('fn_auto_creation_litiges_presence()', '43e9244304a10b0206650e94f7e94153',
        ARRAY['48h', 'Répondez sous']::text[]),
-      ('fn_litige_push_notification(uuid,text,text,text,text,uuid,jsonb)', '1c06d468f9c4e92c449c3570016a3608',
-       ARRAY['Répondez sous 72h']::text[])
+      ('fn_litige_push_notification(uuid,text,text,text,text,uuid,jsonb)', '8ae17c324682bbde0bbe64efa3d53608',
+       ARRAY['Répondez sous 72h', 'Répondez sous 24h']::text[])
     ) AS t(signature, empreinte, interdits)
   LOOP
     SELECT p.oid, p.prosrc, p.prosecdef, p.provolatile::text AS volatilite,

@@ -10,6 +10,7 @@
 //   * le délai du motif et de l'audit vient de la variable qui filtre les
 //     présences (paramètre delai_contestation_pointage_h), plus aucun
 //     « 48h » ni « Répondez sous 72h » en dur ;
+//   * le SMS LITIGE_RAPPEL_J1 ne promet plus « sous 24h » ;
 //   * l'email LITIGE_OUVERTURE ne promet plus « 72h » et le miroir SMS de
 //     tests/sms/litige-length.test.ts suit le SQL ;
 //   * aucun GRANT ni REVOKE, câblage CI présent.
@@ -89,6 +90,10 @@ const REMPLACEMENTS = {
       `        || ' a été ouvert sur votre mission. Répondez sous 72h.'`,
       `        || ' a été ouvert sur votre mission.'`,
     ],
+    [
+      `      'litige en attente depuis 1j. Répondez sous 24h pour éviter l''escalade.'`,
+      `      'litige en attente depuis 1j. Répondez pour éviter l''escalade.'`,
+    ],
   ],
 };
 
@@ -167,16 +172,26 @@ test('le délai affiché vient du paramètre qui filtre les présences, plus auc
   assert.ok(corps.includes("'Départ anticipé (< 80 %% heures prévues) non contesté dans les %sh'"));
 });
 
-test('SMS LITIGE_OUVERTURE sans promesse chiffrée ; autres SMS inchangés (rappel J1 : point ouvert)', () => {
+test('SMS LITIGE_OUVERTURE et LITIGE_RAPPEL_J1 sans promesse chiffrée ; J3, J5 et remboursement inchangés', () => {
   const { corps } = definition(migration, PUSH);
-  assert.doesNotMatch(corps, /Répondez sous 72h/);
+  assert.doesNotMatch(corps, /Répondez sous \d+\s?h/);
   assert.equal(occurrences(corps, "|| ' a été ouvert sur votre mission.'"), 1);
-  // Rappel J1 hors périmètre (signalé dans la PR) : texte LIVE conservé tel quel.
-  assert.equal(occurrences(corps, "'litige en attente depuis 1j. Répondez sous 24h pour éviter l''escalade.'"), 1);
+  // Rappel J1 : même texte neutre que la notification in-app de fn_envoyer_rappels_litiges.
+  assert.equal(occurrences(corps, "'litige en attente depuis 1j. Répondez pour éviter l''escalade.'"), 1);
+  for (const inchange of [
+    "'litige en attente depuis 3j. Réponse urgente requise.'",
+    "'litige en attente depuis 5j ouvrés. Escalade imminente.'",
+    "|| '). Délai bancaire 2-5j.'",
+  ]) {
+    assert.equal(occurrences(corps, inchange), 1, inchange);
+  }
   assert.match(miroirSms,
     /case 'LITIGE_OUVERTURE':[\s\S]*?return `un litige \$\{data\.type_litige \?\? ''\} a été ouvert sur votre mission\.`;/,
-    'le miroir TS du SMS suit le SQL');
-  assert.doesNotMatch(miroirSms, /Répondez sous 72h/);
+    'le miroir TS du SMS LITIGE_OUVERTURE suit le SQL');
+  assert.match(miroirSms,
+    /case 'LITIGE_RAPPEL_J1':[\s\S]*?return `litige en attente depuis 1j\. Répondez pour éviter l'escalade\.`;/,
+    'le miroir TS du SMS LITIGE_RAPPEL_J1 suit le SQL');
+  assert.doesNotMatch(miroirSms, /Répondez sous \d+\s?h/);
 });
 
 test('email LITIGE_OUVERTURE : plus de « 72h » par défaut ni de délai d\'escalade', () => {

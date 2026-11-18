@@ -40,7 +40,9 @@ function buildLitigeSmsContent(
     case 'REMBOURSEMENT_CONFIRME':
       return `remboursement de ${data.montant ?? '?'}€ effectué (avoir ${data.numero_avoir ?? ''}). Délai bancaire 2-5j.`;
     case 'LITIGE_RAPPEL_J1':
-      return `litige en attente depuis 1j. Répondez sous 24h pour éviter l'escalade.`;
+      // Promesse chiffrée retirée (20261118152150) : envoyé dès 24 h, alors
+      // que l'escalade a lieu à 72 h (libéral) ou après 5 jours ouvrés (salarié).
+      return `litige en attente depuis 1j. Répondez pour éviter l'escalade.`;
     case 'LITIGE_RAPPEL_J3':
       return `litige en attente depuis 3j. Réponse urgente requise.`;
     case 'LITIGE_RAPPEL_J5':
