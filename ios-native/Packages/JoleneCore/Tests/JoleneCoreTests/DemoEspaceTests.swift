@@ -59,7 +59,7 @@ final class DemoEspaceTests: XCTestCase {
     }
 
     func testConnexionEtablissementOuvreLEspaceDemo() async throws {
-        let controller = SessionController(gateways: DemoWorld.gateways(espace: .etablissement(.init())))
+        let controller = SessionController(gateways: DemoWorld.gateways(espace: .etablissement(.init())), espaceEtablissement: .ouvert)
         _ = await controller.start()
         let state = await controller.signIn(email: "  \(DemoEspace.emailEtablissement)  ", password: motDePasse)
         let snapshot = try XCTUnwrap(state.snapshotEtablissement, "espace établissement attendu, obtenu \(state)")
@@ -75,7 +75,7 @@ final class DemoEspaceTests: XCTestCase {
     }
 
     func testCompteLegacyOuvreLeMemeEspaceEtLeMemeEtablissement() async throws {
-        let controller = SessionController(gateways: DemoWorld.gateways(espace: .etablissement(.init(legacy: true))))
+        let controller = SessionController(gateways: DemoWorld.gateways(espace: .etablissement(.init(legacy: true))), espaceEtablissement: .ouvert)
         _ = await controller.start()
         let state = await controller.signIn(email: DemoEspace.emailEtablissement, password: motDePasse)
         let snapshot = try XCTUnwrap(state.snapshotEtablissement, "legacy confirmé attendu, obtenu \(state)")
@@ -90,7 +90,7 @@ final class DemoEspaceTests: XCTestCase {
     func testRolesDEquipeDemoServisParLaFixture() async throws {
         let fichier = try DemoFixtures.loadPermissionsEtab()
         for role in RoleEtab.connus {
-            let controller = SessionController(gateways: DemoWorld.gateways(espace: .etablissement(.init(role: role))))
+            let controller = SessionController(gateways: DemoWorld.gateways(espace: .etablissement(.init(role: role))), espaceEtablissement: .ouvert)
             _ = await controller.start()
             let state = await controller.signIn(email: DemoEspace.emailEtablissement, password: motDePasse)
             let snapshot = try XCTUnwrap(state.snapshotEtablissement, "\(role.brut) : obtenu \(state)")
@@ -100,21 +100,21 @@ final class DemoEspaceTests: XCTestCase {
     }
 
     func testRoleDemoInconnuNOuvreJamaisLEspace() async {
-        let controller = SessionController(gateways: DemoWorld.gateways(espace: .etablissement(.init(role: .inconnu("ADMIN_PLATEFORME")))))
+        let controller = SessionController(gateways: DemoWorld.gateways(espace: .etablissement(.init(role: .inconnu("ADMIN_PLATEFORME")))), espaceEtablissement: .ouvert)
         _ = await controller.start()
         let state = await controller.signIn(email: DemoEspace.emailEtablissement, password: motDePasse)
         XCTAssertEqual(state, .blocked(.unsupportedRole("ADMIN_PLATEFORME")))
     }
 
     func testBlocageDemoPorteLHorodatageDeLaFixture() async throws {
-        let controller = SessionController(gateways: DemoWorld.gateways(espace: .etablissement(.init(blocage: true))))
+        let controller = SessionController(gateways: DemoWorld.gateways(espace: .etablissement(.init(blocage: true))), espaceEtablissement: .ouvert)
         _ = await controller.start()
         let state = await controller.signIn(email: DemoEspace.emailEtablissement, password: motDePasse)
         XCTAssertEqual(state.snapshotEtablissement?.etablissement.bloqueAutoLe, "2026-11-01T07:00:00.000Z")
     }
 
     func testEmailSoignantPuisEtablissementDansLaMemeSession() async throws {
-        let controller = SessionController(gateways: DemoWorld.gateways(espace: .etablissement(.init())))
+        let controller = SessionController(gateways: DemoWorld.gateways(espace: .etablissement(.init())), espaceEtablissement: .ouvert)
         _ = await controller.start()
         let soignant = await controller.signIn(email: DemoWorld.context.email ?? "", password: motDePasse)
         XCTAssertEqual(soignant.snapshot?.user, DemoWorld.user, "le compte soignant fictif reste joignable par son email")

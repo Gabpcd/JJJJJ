@@ -27,7 +27,7 @@ final class EtabFeatureFlagsTests: XCTestCase {
     private func sessionPrete(flags: FlagsPort) async throws -> (SessionController, EtablissementSessionSnapshot) {
         var gateways = DemoWorld.gateways(espace: .etablissement(.init()))
         gateways.flags = flags
-        let controller = SessionController(gateways: gateways)
+        let controller = SessionController(gateways: gateways, espaceEtablissement: .ouvert)
         _ = await controller.start()
         let state = await controller.signIn(email: DemoEspace.emailEtablissement, password: "demonstration")
         let snapshot = try XCTUnwrap(state.snapshotEtablissement, "espace établissement démo attendu, obtenu \(state)")
@@ -120,7 +120,7 @@ final class EtabFeatureFlagsTests: XCTestCase {
     func testStoreLitLesDrapeauxAvantDePublierLEspace() async throws {
         let gateways = DemoWorld.gateways(espace: .etablissement(.init()),
                                           drapeaux: [EcranNatifEtablissement.messages.cle: false])
-        let store = SessionStore(controller: SessionController(gateways: gateways))
+        let store = SessionStore(controller: SessionController(gateways: gateways, espaceEtablissement: .ouvert))
         await store.start()
         await store.signIn(email: DemoEspace.emailEtablissement, password: "demonstration")
         let snapshot = try XCTUnwrap(store.state.snapshotEtablissement, "obtenu \(store.state)")

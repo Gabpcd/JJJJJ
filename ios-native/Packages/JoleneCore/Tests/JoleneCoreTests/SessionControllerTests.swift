@@ -180,7 +180,7 @@ private struct Fixture {
         return gateways
     }
 
-    func controller() -> SessionController { SessionController(gateways: gateways(), resolutionTimeout: timeout) }
+    func controller() -> SessionController { SessionController(gateways: gateways(), resolutionTimeout: timeout, espaceEtablissement: .ouvert) }
 }
 
 private let JoleneCoreTests_profileDefault = profile()
@@ -433,7 +433,7 @@ final class SessionControllerTests: XCTestCase {
         // on vérifie la règle via signIn vers une identité différente, qui est le même chemin.
         fixture.signInResult = .success(user("user-2"))
         fixture.profile = profile("user-2")
-        let controller2 = SessionController(gateways: fixture.gateways())
+        let controller2 = SessionController(gateways: fixture.gateways(), espaceEtablissement: .ouvert)
         _ = await controller2.start()
         let state = await controller2.signIn(email: "user-2@example.invalid", password: "secret-value")
         XCTAssertEqual(state.snapshot?.user.id, "user-2")
