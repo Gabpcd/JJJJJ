@@ -25,11 +25,13 @@ public enum DemoEspace: Equatable, Sendable {
 /// `-JOLENE_DEMO_ROLE_ETAB <rôle>`, `-JOLENE_DEMO_LEGACY 1`, `-JOLENE_DEMO_BLOCAGE 1`), lus par
 /// `AppContainer` en mode démo seulement. Une valeur absente ou illisible garde l'espace du lot 0 ; les
 /// variantes sont ignorées sans `-JOLENE_DEMO_ESPACE etablissement`. `-JOLENE_POLL_INTERVAL` appartient à T7.
+/// T6 : `-JOLENE_DEMO_PLANNING_MODIFIE 1` (première acceptation répondue `PLANNING_MODIFIE_RECONFIRMER`).
 public enum DemoEspaceLancement {
     public static let argumentEspace = "-JOLENE_DEMO_ESPACE"
     public static let argumentRole = "-JOLENE_DEMO_ROLE_ETAB"
     public static let argumentLegacy = "-JOLENE_DEMO_LEGACY"
     public static let argumentBlocage = "-JOLENE_DEMO_BLOCAGE"
+    public static let argumentPlanningModifie = "-JOLENE_DEMO_PLANNING_MODIFIE"
 
     public static func espace(arguments: [String]) -> DemoEspace {
         guard valeur(argumentEspace, dans: arguments)?.lowercased() == "etablissement" else { return .soignant }
@@ -39,6 +41,7 @@ public enum DemoEspaceLancement {
         }
         configuration.legacy = valeur(argumentLegacy, dans: arguments) == "1"
         configuration.blocage = valeur(argumentBlocage, dans: arguments) == "1"
+        configuration.planningModifie = valeur(argumentPlanningModifie, dans: arguments) == "1"
         return .etablissement(configuration)
     }
 

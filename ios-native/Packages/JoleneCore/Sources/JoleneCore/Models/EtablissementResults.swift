@@ -55,33 +55,85 @@ public enum TraitementCandidatureOutcome: Equatable, Sendable {
     public static let prefixeCadreEtudiant = "CADRE_ETUDIANT_"
 }
 
-/// Lecture habilitée `fn_lire_candidatures_mission_habilitee` (l.39524) : contrat minimal posé par T1,
-/// complété par T6 (soignant à l'initiale, `nom_anonymise`, étudiant ; jamais `note_moyenne`).
+/// Lecture habilitée `fn_lire_candidatures_mission_habilitee` (`supabase/schema/public.sql` l.39970) : contrat
+/// posé par T1, complété par T6 (intitulé, établissement, mode d'attribution, profession requise ; candidat à
+/// l'initiale). Décodage tolérant dans `Etablissement/Candidatures/LectureCandidaturesHabilitee+Decodage.swift`.
+/// **Jamais décodés** : `note_moyenne`, `nb_evaluations` (D8), `internat` (D10), `type_exercice` (le régime vient de
+/// la mission), `etudiant_details`, `specialite_medicale`, `specialite_medicale_requise`, `accepte_internes`.
+/// `type_contrat_recherche` n'y figure pas : lu par T5 (`EtabMissionsPort.mission`, D25).
 public struct LectureCandidaturesHabilitee: Equatable, Sendable {
     public var missionId: String
     public var statutMission: String?
     public var nbCreneaux: Int?
-    /// Créneaux PREVISIONNEL hors pause, chaînes `debut`/`fin` telles que servies (D26).
+    /// Créneaux PREVISIONNEL hors pause, chaînes `debut`/`fin` telles que servies (D26), ordre serveur `debut, id`.
     public var creneaux: [MissionSlot]
     public var candidatures: [CandidatureHabilitee]
+    public var intitule: String?
+    /// Établissement de la mission relue : comparé au contexte confirmé, jamais une valeur de filtre.
+    public var etablissementId: String?
+    public var modeAttribution: String?
+    public var professionRequise: String?
 
     public init(missionId: String, statutMission: String?, nbCreneaux: Int?, creneaux: [MissionSlot],
-                candidatures: [CandidatureHabilitee]) {
+                candidatures: [CandidatureHabilitee], intitule: String? = nil, etablissementId: String? = nil,
+                modeAttribution: String? = nil, professionRequise: String? = nil) {
         self.missionId = missionId; self.statutMission = statutMission; self.nbCreneaux = nbCreneaux
-        self.creneaux = creneaux; self.candidatures = candidatures
+        self.creneaux = creneaux; self.candidatures = candidatures; self.intitule = intitule
+        self.etablissementId = etablissementId; self.modeAttribution = modeAttribution
+        self.professionRequise = professionRequise
     }
 }
 
-/// Élément `candidatures[]` de la lecture habilitée (contrat minimal, complété par T6).
+/// Élément `candidatures[]` de la lecture habilitée (ordre serveur `cree_le, id`).
 public struct CandidatureHabilitee: Equatable, Sendable, Identifiable {
     public var id: String
     public var soignantId: String?
     public var statut: String?
     public var creeLe: String?
+    /// Message du candidat, affiché tel quel.
+    public var message: String?
+    /// Soignant tel que servi (nom à l'initiale, `nom_anonymise:true`).
+    public var soignant: CandidatHabilite?
 
-    public init(id: String, soignantId: String?, statut: String?, creeLe: String?) {
+    public init(id: String, soignantId: String?, statut: String?, creeLe: String?, message: String? = nil,
+                soignant: CandidatHabilite? = nil) {
         self.id = id; self.soignantId = soignantId; self.statut = statut; self.creeLe = creeLe
+        self.message = message; self.soignant = soignant
     }
+}
+
+/// Objet `soignant` d'une candidature de la lecture habilitée (l.40017-40025), réduit à ce que l'écran affiche et à
+/// l'aiguillage du cadre étudiant (`est_etudiant`, `profession` : aiguillage seulement, le serveur décide,
+/// correction 19). Aucune note, aucun statut d'internat, aucun mode d'exercice.
+public struct CandidatHabilite: Equatable, Sendable, Identifiable {
+    public var id: String
+    public var prenom: String?
+    /// Initiale servie par le serveur (« D. »).
+    public var nom: String?
+    public var nomAnonymise: Bool?
+    public var profession: String?
+    public var estEtudiant: Bool?
+    public var scoreFiabilite: Int?
+    public var totalMissionsTerminees: Int?
+    public var tousDocumentsValides: Bool?
+
+    public init(id: String, prenom: String?, nom: String?, nomAnonymise: Bool? = nil, profession: String? = nil,
+                estEtudiant: Bool? = nil, scoreFiabilite: Int? = nil, totalMissionsTerminees: Int? = nil,
+                tousDocumentsValides: Bool? = nil) {
+        self.id = id; self.prenom = prenom; self.nom = nom; self.nomAnonymise = nomAnonymise
+        self.profession = profession; self.estEtudiant = estEtudiant; self.scoreFiabilite = scoreFiabilite
+        self.totalMissionsTerminees = totalMissionsTerminees; self.tousDocumentsValides = tousDocumentsValides
+    }
+}
+
+/// Refus de **droit** d'une lecture de l'espace établissement (42501 en liste blanche, D12 ; correction 5) :
+/// jamais « session expirée », jamais une déconnexion. `message` = texte serveur verbatim (ou message neutre du
+/// trigger RBAC). L'écran l'affiche puis relit les permissions une fois (`SessionStore.refreshEtablissementScope`).
+/// Les mutations rendent l'issue `.accesRefuse` de leur domaine ; cette erreur sert aux lectures (T6).
+public struct RefusAccesEtablissement: Error, Equatable, Sendable {
+    public var message: String
+
+    public init(message: String) { self.message = message }
 }
 
 // MARK: - Présences (T8, B9)
