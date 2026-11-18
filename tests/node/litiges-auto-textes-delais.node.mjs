@@ -242,6 +242,31 @@ test('banc psql : délai lu dans le paramètre, assertions sur motif, notificati
   assert.match(banc, /^ROLLBACK;$/m);
 });
 
+test('banc psql : refus explicite hors contexte isolé, missions réelles, volets NON PROBANT (revue B8 m2)', () => {
+  const code = sansCommentaires(banc);
+  const garde = code.indexOf("pg_catalog.to_regclass('cron.job') IS NULL");
+  const actif = code.indexOf("EXECUTE 'SELECT EXISTS (SELECT 1 FROM cron.job WHERE active)'");
+  const inscriptions = code.indexOf("UPDATE public.parametres_systeme SET valeur = 1 WHERE cle = 'inscriptions_publiques_actives';");
+  const premiereFixture = code.indexOf('INSERT INTO public.etablissements');
+  assert.ok(garde > 0 && actif > garde, 'pg_cron absent puis cron actif : deux refus distincts');
+  assert.ok(inscriptions > actif && inscriptions < premiereFixture, 'paramètre posé après la garde, avant les fixtures');
+  assert.ok(code.indexOf('BEGIN;') < inscriptions && inscriptions < code.indexOf('ROLLBACK;'), 'dans le BEGIN…ROLLBACK');
+  assert.equal(occurrences(code, "RAISE NOTICE '[CONTEXTE] REFUSÉ"), 2);
+  assert.doesNotMatch(code, /RAISE EXCEPTION/, 'un refus n\'est jamais rattrapé en FAIL');
+  for (const m of ['a', 'b', 'c']) {
+    assert.ok(code.includes(`v_reelle_${m} := private.fn_mission_est_reelle(v_mission_${m});`), `réalité de la mission ${m}`);
+  }
+  assert.ok(code.indexOf('v_reelle_c := private.fn_mission_est_reelle') < code.indexOf('v_result := public.fn_auto_creation_litiges_presence();'));
+  assert.equal(occurrences(code, "RAISE NOTICE '[A] %', c_non_probant;"), 1);
+  assert.equal(occurrences(code, "RAISE NOTICE '[B] %', c_non_probant;"), 1);
+  // [C] n'est PASS que sur une mission réelle (sinon « aucun litige » serait vrai à vide).
+  const debutC = code.indexOf('IF v_reelle_c IS NOT TRUE THEN');
+  assert.ok(debutC > 0, 'volet C gardé par la réalité de la mission');
+  const voletC = code.slice(debutC);
+  assert.ok(voletC.startsWith("IF v_reelle_c IS NOT TRUE THEN\n    RAISE NOTICE '[C] %', c_non_probant;"));
+  assert.ok(voletC.indexOf('[C] PASS') > voletC.indexOf('c_non_probant'), 'PASS seulement après la garde');
+});
+
 test('câblage CI : garde Node', () => {
   assert.match(workflow, /run: node --test tests\/node\/litiges-auto-textes-delais\.node\.mjs/);
 });

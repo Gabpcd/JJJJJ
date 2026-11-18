@@ -15,8 +15,8 @@
 --   de l'audit LITIGE_AUTO_CREATION ;
 -- * la même fonction notifie « Répondez sous 72h pour éviter l'escalade
 --   automatique. », et public.fn_litige_push_notification(...) envoie le SMS
---   LITIGE_OUVERTURE « ... Répondez sous 72h. » (litiges auto-créés et
---   manuels). Or public.fn_litiges_escalader_auto() escalade après
+--   LITIGE_OUVERTURE « ... Répondez sous 72h. » (seul appelant en LIVE : ce
+--   cron). Or public.fn_litiges_escalader_auto() escalade après
 --   delai_escalade_liberal_h (72) en libéral et après
 --   delai_escalade_salarie_jours_ouvres (5 jours ouvrés) en salarié : la
 --   promesse est fausse en salarié. C'est le défaut que D12 (point 3) retire
