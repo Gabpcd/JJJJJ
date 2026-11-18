@@ -97,7 +97,7 @@ public enum EcranSecondaire: Hashable, Sendable {
 public extension EcranSecondaire {
     /// Lien web de l'écran (L4-T1c) : chemin de `src/App.tsx` lu par `LinkRouter` (query et identifiants compris,
     /// encodés), servi par le renvoi web quand le coupe-circuit de l'écran est coupé (`RenvoiWebScreen`). Aller-retour
-    /// exact par `LinkRouter` (`EcranSecondaireLienWebTests`), sauf les bulletins (route `.revenus(section: .bulletins)`
+    /// exact par `LinkRouter` (`SecondairesLot4Tests.testLienWebAllerRetourParLinkRouter`), sauf les bulletins (route `.revenus(section: .bulletins)`
     /// gardée, `mes-gains?tab=bulletins&copie=`) et la série (route `.serieDetail(id:)` gardée).
     var lienWeb: String {
         switch self {
@@ -126,7 +126,7 @@ public extension EcranSecondaire {
     var urlWeb: URL? { JoleneLink.canonicalURL(link: lienWeb) }
 
     /// Écran natif livré : ligne de `DestinationLien.ecranNatifLivre` passée à `true` par sa tranche (T3b…T12). Tant
-    /// qu'elle vaut `false`, l'écran garde son renvoi web actuel et aucune entrée native ne le montre (`EntreesLot4`).
+    /// qu'elle vaut `false`, l'écran garde son renvoi web actuel et aucune entrée native ne le montre (`EntreesHubLot4`).
     var estLivre: Bool {
         switch self {
         case .serie(let id): return DestinationLien.ecranNatifLivre(.serieDetail(id: id))
@@ -147,5 +147,14 @@ public extension FlagsPort {
     /// Coupe-circuit d'un écran secondaire du lot 4 (`ios_natif_<nom>_actif`), défaut fail-open (décision 15 du lot 1).
     func ecranActif(_ ecran: EcranSecondaire) async -> Bool {
         await ecranActif(cle: ecran.cleDrapeau, defaut: FlagsPolicy.defautFailOpen)
+    }
+}
+
+public extension PorteEcranNatif {
+    /// Porte d'un écran secondaire du lot 4 (L4-T1c, revue B8 de #1159, M2) : même règle que les écrans du lot 2, l'écran
+    /// natif n'est construit qu'une fois son coupe-circuit lu (`SecondaryRouter`) ; sans drapeaux, fail-open (D18).
+    static func lire(_ ecran: EcranSecondaire, flags: (any FlagsPort)?) async -> PorteEcranNatif {
+        guard let flags else { return .natif }
+        return PorteEcranNatif(drapeau: await flags.ecranActif(ecran))
     }
 }

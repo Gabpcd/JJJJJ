@@ -794,8 +794,10 @@ test('Lot 4 T1c — m6 : aucun abonnement Realtime avant T7a (seul point : Realt
     .map(s => s.chemin).filter(c => c !== 'ios-native/Jolene/Composition/RealtimeLifecycle.swift');
   assert.deepEqual(lecteurs, [], 'port Realtime lu hors de RealtimeLifecycle');
   if (!portsEnAttenteLot4().includes('realtime')) return; // T7a livrée : sa gateway et ses tests prennent le relais
-  for (const appel of ['realtimeV2', 'postgresChange', 'subscribeWithError', 'removeAllChannels', '.messagesEntrants(', '.saisies(',
-    'fn_update_presence', 'fn_typing_start']) {
+  // Revue B8 de #1159, m6 : canaux du SDK ouverts sans `realtimeV2` (`client.channel(…)` puis `subscribe()`), présence et
+  // diffusion comprises.
+  for (const appel of ['realtimeV2', 'postgresChange', 'subscribeWithError', '.subscribe(', '.channel(', 'presenceChange',
+    'broadcastStream', '.track(', 'removeAllChannels', '.messagesEntrants(', '.saisies(', 'fn_update_presence', 'fn_typing_start']) {
     const ou = sources.filter(s => s.code.includes(appel)).map(s => s.chemin);
     assert.deepEqual(ou, [], `${appel} présent avant T7a (port realtime encore dans portsEnAttenteLot4)`);
   }

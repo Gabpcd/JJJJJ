@@ -78,6 +78,23 @@ final class SecondairesLot4Tests: XCTestCase {
         }
     }
 
+    // MARK: - Porte du coupe-circuit (revue B8 de #1159, M2)
+
+    /// `SecondaryRouter` ne construit l'écran natif qu'après la lecture de son drapeau : `.lecture` d'abord, puis natif
+    /// (vrai, absent : fail-open D18 ; sans drapeaux : fail-open) ou renvoi web (faux) ; l'onglet Réclamations a sa clé.
+    func testPorteDesEcransSecondairesLitLeDrapeauAvantLeMontage() async {
+        XCTAssertEqual(PorteEcranNatif(drapeau: nil), .lecture, "avant la lecture : ni écran natif ni renvoi")
+        let coupes = DemoFlagsGateway(surcharges: ["ios_natif_messagerie_actif": false, "ios_natif_reclamations_actif": false])
+        let messagerie = await PorteEcranNatif.lire(EcranSecondaire.messagerie(conversationId: "c1"), flags: coupes)
+        XCTAssertEqual(messagerie, .renvoiWeb)
+        let reclamations = await PorteEcranNatif.lire(EcranSecondaire.litiges(onglet: .reclamations, litigeId: nil), flags: coupes)
+        XCTAssertEqual(reclamations, .renvoiWeb)
+        let litiges = await PorteEcranNatif.lire(EcranSecondaire.litiges(onglet: nil, litigeId: nil), flags: coupes)
+        XCTAssertEqual(litiges, .natif, "drapeau absent : fail-open")
+        let sansDrapeaux = await PorteEcranNatif.lire(EcranSecondaire.parrainage, flags: nil)
+        XCTAssertEqual(sansDrapeaux, .natif, "sans drapeaux : fail-open")
+    }
+
     // MARK: - Lien web d'un écran
 
     func testLienWebAllerRetourParLinkRouter() throws {
