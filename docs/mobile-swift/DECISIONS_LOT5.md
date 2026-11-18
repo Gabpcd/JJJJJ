@@ -213,6 +213,35 @@ Aucune ne change une décision du §7 ni une règle juridique ; elles fixent ce 
      `contrats-etablissement-ios.node.mjs`) ;
    - m5 : XCUITest du lot 5 hors du socle, répartis dans deux éclats légers.
 
+## Précisions relevées par la tranche T4 (Accueil, 18/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; elles fixent ce que le blueprint laissait ouvert.
+
+1. **Titre de suspension et bandeau de vérification non affichés** (HARD STOP n°4, §6.4) : `TextesWeb.BlocageEtablissement`
+   reste hors des sources livrées (`VALIDES` vide dans `contrats-etablissement-ios.node.mjs`). En attendant la validation
+   d'écran de Gabrielle, les actions « blocage » et « vérification » portent des textes natifs de navigation, sans
+   qualification de l'état du compte (« Action requise sur jolene.app », « Vérification de l'établissement ») et mènent
+   aux pages web qui l'expliquent (`/etablissement/facturation`, `/etablissement/activer`). La validation remplacera ces
+   textes par les constantes verbatim et ajoutera `BlocageEtablissement` à `VALIDES`.
+2. **Litiges et évaluations sous `missions`** : aucune clé de `fn_mes_permissions_etab` ne vise ces deux pages web. Choix
+   d'affichage fail-closed (pas une règle) : membres qui gèrent les missions (PROPRIETAIRE, ADMIN_GROUPE, RH) ; un
+   POINTAGE_ONLY ou un LECTURE_SEULE ne les voit pas. Blocage et vérification restent visibles de tout membre, comme le
+   bandeau du web.
+3. **Factures à régler** : compteur seul (`nb_factures_impayees`, `${n} facture(s) à régler` du web), sous
+   `lecture_paiement` ∨ `paiement`, placé après les litiges ; aucun montant.
+4. **Actions résolues par la table des liens** : chaque action, « Publier une mission » et chaque ligne du planning portent
+   le chemin web du web ; `LinkRouter.etablissementDestination` décide (onglet de la coquille, écran livré, sinon renvoi
+   Safari). Publication (T9) et détail de mission (T5) sont donc des renvois web jusqu'à ce que leur tranche passe
+   `EtabDestination.ecranLivre` à `true` ; aucun écran provisoire n'est ouvert depuis l'Accueil.
+5. **Planning à venir** : port de `construireOccurrencesPlanning` (fenêtre de 31 jours, repli ponctuel ≤ 24 h, missions
+   « à confirmer ») en liste, sans vue mois/semaine ni nom de soignant ; dix occurrences affichées, le compteur garde le
+   total. Lecture PostgREST (`missions` + `mission_creneaux` par `MissionSlotPager`) ; son échec rend l'Accueil partiel.
+6. **Audit `DONNEES_PERSO_CONSULTATION`** écrit par `EtabAccueilModel` après chaque lecture réussie (les deux mondes),
+   jamais attendu par l'écran. Le profil (blocage, vérification) est celui de l'instantané de session (relu à la
+   revalidation 30 min) ; le serveur refuse de toute façon une publication bloquée.
+7. **XCUITest** `DemoEtabAccueilTests` (3 tests) dans l'éclat « lot3-profil-photo », avec `DemoEtabSessionTests` ; gardes
+   `ios-swift-ci-eclats.node.mjs` et `check-rpc-contracts-lot3.node.mjs` mises à jour, aucun douzième éclat.
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.

@@ -167,20 +167,7 @@ public enum PublicationOutcome: Equatable, Sendable {
     case blocageEtablissement(code: String, message: String)
 }
 
-// MARK: - Tableau de bord (T4)
-
-/// Tableau de bord établissement (`fn_stats_dashboard_etablissement`, l.57610) : contrat minimal posé
-/// par T1, complété par T4. Compteurs seulement, montants jamais décodés.
-public struct EtabDashboardSnapshot: Equatable, Sendable {
-    public var candidaturesEnAttente: Int?
-    public var messagesNonLus: Int?
-    public var litigesOuverts: Int?
-
-    public init(candidaturesEnAttente: Int? = nil, messagesNonLus: Int? = nil, litigesOuverts: Int? = nil) {
-        self.candidaturesEnAttente = candidaturesEnAttente; self.messagesNonLus = messagesNonLus
-        self.litigesOuverts = litigesOuverts
-    }
-}
+// MARK: - Tableau de bord (T4) : `Etablissement/Accueil/EtabDashboardSnapshot.swift`.
 
 // MARK: - Missions (T5)
 

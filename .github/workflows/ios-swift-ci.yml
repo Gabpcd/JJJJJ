@@ -632,6 +632,8 @@ jobs:
       # au-delà de 30 min en iPad paysage. Plafond de onze éclats atteint : DemoEtabSessionTests (5) rejoint
       # « lot3-profil-photo » (7 / 7 / 12 min) et DemoEtabLiensTests (5) rejoint « presences » (8 / 11 / 11 min), chacun
       # estimé sous 20 min (décision 22), plutôt que les dix dans un seul éclat.
+      # Lot 5, T4 : DemoEtabAccueilTests (3, Accueil établissement) rejoint « lot3-profil-photo », même éclat léger que la
+      # session établissement (environ 1 à 2 min par test : l'éclat reste sous 20 min), sans douzième éclat.
       # Lot 1 (intégration de la vague B, 18/11/2026) : ses XCUITest tournent dans le job `ui-lot1`, jamais dans le socle.
       # Le socle mesurait 14,6 / 17,3 / 22,4 min (iphone / ipad-portrait / ipad-landscape) au run 44204757942, dont
       # DemoAccueilTests (3,5 / 3,5 / 5,0 min) et DemoExplorerTests (5,8 / 8,5 / 9,6 min) : sans eux, environ 5 / 5 / 8 min
@@ -689,6 +691,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoIbanTests \
             -skip-testing:JoleneUITests/DemoStripeTests \
             -skip-testing:JoleneUITests/DemoEtabSessionTests \
+            -skip-testing:JoleneUITests/DemoEtabAccueilTests \
             -skip-testing:JoleneUITests/DemoEtabLiensTests \
             -skip-testing:JoleneUITests/DemoMesMissionsTests \
             -skip-testing:JoleneUITests/DemoCandidatureTests \
@@ -1077,6 +1080,7 @@ jobs:
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoPhotoPositionTests \
             -only-testing:JoleneUITests/DemoEtabSessionTests \
+            -only-testing:JoleneUITests/DemoEtabAccueilTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1170,7 +1174,7 @@ jobs:
               { nom: "lot3-push", code: process.env.CODE_LOT3_PUSH, classes: ["DemoPushTests"] },
               { nom: "lot3-notifications", code: process.env.CODE_LOT3_NOTIFICATIONS, classes: ["DemoNotificationsTests", "DemoPreferencesTests", "DemoProfilTests"] },
               { nom: "lot3-inscription", code: process.env.CODE_LOT3_INSCRIPTION, classes: ["DemoInscriptionTests", "DemoCompletionInscriptionTests", "DemoLiensLot2Tests"] },
-              { nom: "lot3-profil-photo", code: process.env.CODE_LOT3_PROFIL_PHOTO, classes: ["DemoPhotoPositionTests", "DemoEtabSessionTests"] },
+              { nom: "lot3-profil-photo", code: process.env.CODE_LOT3_PROFIL_PHOTO, classes: ["DemoPhotoPositionTests", "DemoEtabSessionTests", "DemoEtabAccueilTests"] },
               { nom: "lot3-revenus", code: process.env.CODE_LOT3_REVENUS, classes: ["DemoRevenusTests", "DemoPaiementsTests", "DemoIbanTests", "DemoStripeTests"] },
             ];
             let total = 0, passed = 0, failed = 0, skipped = 0, log = "";

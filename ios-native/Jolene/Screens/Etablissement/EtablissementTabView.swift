@@ -42,7 +42,7 @@ struct EtablissementTabView: View {
     var body: some View {
         TabView(selection: $selection) {
             NavigationStack(path: chemin(.accueil)) {
-                EtabAccueilRoot(session: session, snapshot: snapshot)
+                EtabAccueilRoot(session: session, snapshot: snapshot) { ouvrir($0) } // T4 : actions de l'Accueil
                     .destinationsEtablissement(snapshot: snapshot, session: session)
             }
             .ecranEtablissement(.accueil, snapshot: snapshot, session: session)
@@ -104,7 +104,13 @@ struct EtablissementTabView: View {
     private func executerDemande() {
         guard let demande = liens.demandeEtablissement, demande.epoch == snapshot.epoch else { return }
         liens.demandeEtablissementTraitee(demande)
-        selection = demande.cible.onglet
-        chemins[demande.cible.onglet] = demande.cible.destination.map { [$0] } ?? []
+        ouvrir(demande.cible)
+    }
+
+    /// Sélectionne l'onglet de `cible`, remet sa pile à la racine et y empile l'écran livré éventuel (liens, T2b ;
+    /// actions de l'Accueil, T4).
+    private func ouvrir(_ cible: CibleEtablissement) {
+        selection = cible.onglet
+        chemins[cible.onglet] = cible.destination.map { [$0] } ?? []
     }
 }

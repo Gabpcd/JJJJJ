@@ -44,7 +44,7 @@ Règles de l'espace établissement (`LOT5_PLAN.md` §2.2-§2.8) :
 |---|---|---|---|---|---|---|
 | `fn_mes_permissions_etab` | consommée (T1) | 5 (T1, T2) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | aucune |
 | `fn_mon_etablissement_complet` | consommée (T1) | 5 (T1, T2, T12) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | aucune |
-| `fn_stats_dashboard_etablissement` | à venir | 5 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | aucune |
+| `fn_stats_dashboard_etablissement` | consommée (T4) | 5 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | aucune |
 | `fn_soignant_pour_etablissement` | à venir | 5 (T5) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | aucune |
 | `fn_lire_candidatures_mission_habilitee` | à venir | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée | `42501` |
 | `fn_traiter_candidature_planning_v1` | à venir | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente | `P0001` ×3, `42501` ×3 (RBAC) |
@@ -58,7 +58,7 @@ Règles de l'espace établissement (`LOT5_PLAN.md` §2.2-§2.8) :
 | `fn_obtenir_conversation` | à venir | 5 (T11, port du lot 4) — partagée si le lot 4 la suit | MIXTE_TENANT_ADMIN | authenticated | déclarée | `28000`, `22023`, `42501` |
 | `fn_get_my_role` | consommée lot 0 — aussi établissement | 0 (lot 5 T2) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | — (fiche soignant) |
 | `fn_audit_connexion` | à venir — aussi établissement | 1 (lot 5 T2) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | — (fiche soignant) |
-| `fn_ecrire_audit_safe` | à venir — aussi établissement | 1 (lot 5 T4) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | — (fiche soignant) |
+| `fn_ecrire_audit_safe` | consommée lot 1 — aussi établissement (T4) | 1 (lot 5 T4) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | — (fiche soignant) |
 | `fn_param_bool` | à venir — aussi établissement | 1 (lot 5 T2) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente | — (fiche soignant) |
 | `fn_etat_pointage_mission` | à venir — aussi établissement | 2 (lot 5 T7, T8) | MIXTE_TENANT_ADMIN | authenticated, service_role | absente | — (fiche soignant) |
 | `fn_envoyer_otp_signature` | à venir — aussi établissement | 2 (lot 5 T10) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | — (fiche soignant) |
@@ -160,8 +160,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_mon_etablissement_complet"() RETURNS "js
 
 ## fn_stats_dashboard_etablissement
 
-- **Statut natif** : à venir (lot 5, T4 Accueil, actions prioritaires).
-- **Usage** : compteurs de l'Accueil, sans graphique ni montant (D15).
+- **Statut natif** : consommée (lot 5, T4 : `SupabaseEtabDashboardGateway.stats`, port `EtabDashboardPort` ; Accueil,
+  actions prioritaires).
+- **Usage** : compteurs de l'Accueil, sans graphique ni montant (D15). Le planning à venir de l'Accueil est lu à côté
+  en PostgREST (`missions` OUVERTE/ASSIGNEE/EN_COURS sur 31 jours, colonnes sans montant ni soignant, puis
+  `mission_creneaux` PREVISIONNEL hors pause par `MissionSlotPager`) ; son échec rend l'Accueil partiel, jamais en
+  échec.
 - **Signature SQL** (`supabase/schema/public.sql` l.57610) :
 
 ```sql
@@ -178,12 +182,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_stats_dashboard_etablissement"() RETURNS
   `missions_en_cours`, `missions_terminees`, `missions_terminees_ce_mois`, `soignants_ce_mois`,
   `commissions_cumulees`, `commissions_impayees`, `nb_factures_impayees`, `pool_urgence_count`, `messages_non_lus`,
   `missions_a_payer`, `litiges_ouverts`, `candidatures_en_attente`, `candidatures_recentes`,
-  `missions_assignees_detail`. Décodées par T4 (tolérantes, NULL toléré) : `candidatures_en_attente`,
-  `missions_assignees_detail[]` (`mission_id`, `intitule`, `debut_le`, `fin_le`, `soignant_nom` de la mission
-  assignée), `messages_non_lus`, `litiges_ouverts`, `nb_factures_impayees` (compteur seul, sous `lecture_paiement` ∨
-  `paiement`), `pool_urgence_count`, `a_deja_publie`. **Jamais décodées** : `commissions_cumulees`,
-  `commissions_impayees` (montants) et `candidatures_recentes` (noms complets servis à POINTAGE_ONLY, correction 4) ;
-  « présences à valider » et « évaluations » n'ont pas de clé (correction 20).
+  `missions_assignees_detail`. Décodées par T4 (`EtabDashboardStats.clesDecodees`, tolérantes : absente, nulle, négative ou
+  d'un autre type → nil) : `candidatures_en_attente`, `messages_non_lus`, `litiges_ouverts`, `nb_factures_impayees`
+  (compteur seul, sous `lecture_paiement` ∨ `paiement`), `a_deja_publie`. **Jamais décodées** : `commissions_cumulees`,
+  `commissions_impayees` (montants), `candidatures_recentes` et `missions_assignees_detail` (noms complets de
+  soignants, correction 4), et les compteurs que l'Accueil n'affiche pas (`pool_urgence_count`, `missions_*`,
+  `soignants_ce_mois`, `total_missions`) ; « présences à valider » et « évaluations » n'ont pas de clé (correction 20).
 - **Exceptions** : aucune levée par le corps (liste blanche vide).
 - **Relecture** : lecture seule ; rechargée si le dernier chargement date de plus de 60 s (parité `staleTime` web).
 
@@ -549,7 +553,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_conversation"("p_autre_id" "uuid
 - **Usage établissement** (T4, D19) : `DONNEES_PERSO_CONSULTATION` à l'ouverture de l'Accueil comme le web
   (`p_type_acteur 'ADMIN_ETABLISSEMENT'`, `p_type_ressource 'etablissement'`, `p_id_ressource = user.id`,
   `p_details {page}`), best-effort, par un port dédié (`EtabAuditPort`) ; aucun doublon des audits déjà écrits par le
-  serveur (`PRESENCE_VALIDATION`, `PRESENCE_CONTESTATION`, `PRESENCE_VALIDATION_LOT`).
+  serveur (`PRESENCE_VALIDATION`, `PRESENCE_CONTESTATION`, `PRESENCE_VALIDATION_LOT`). Câblé en T4 : écrit par
+  `EtabAccueilModel` après chaque lecture réussie de l'Accueil (`SupabaseEtabAuditGateway` de T1, `DemoEtabAuditGateway`
+  en démo), jamais attendu par l'écran ni affiché.
 
 ## fn_param_bool
 

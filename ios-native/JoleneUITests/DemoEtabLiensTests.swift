@@ -29,7 +29,7 @@ final class DemoEtabLiensTests: JoleneUITestCase {
             self.containerVisible(messages)
         }
         XCTAssertFalse(element("renvoi-web-demo").exists, "onglet natif : jamais un renvoi web")
-        XCTAssertFalse(element("placeholder-etab-accueil").exists, "l'onglet du lien remplace l'Accueil")
+        XCTAssertFalse(element("etab-accueil-screen").exists, "l'onglet du lien remplace l'Accueil")
         XCTAssertEqual(element("deeplink-route").label, "etab messagerie")
         record("\(proofPrefix)-etab-lien-messagerie")
     }
