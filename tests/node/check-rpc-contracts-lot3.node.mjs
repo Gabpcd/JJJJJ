@@ -871,7 +871,7 @@ test('PARITE_SOIGNANT.md : lignes du lot 3 (profil, revenus, notifications, Stri
     assert.ok(ligne(alias).includes("renvoi web assumé jusqu'au lot 4"), `${alias} : renvoi web assumé jusqu'au lot 4 attendu`);
   }
   for (const needle of [
-    '`/soignant/mes-gains` › Paiements à confirmer', '`/soignant/mes-gains` › IBAN', '`/soignant/mes-gains` › Missions terminées',
+    '`/soignant/mes-gains` › Paiements à confirmer', '`/soignant/mon-compte` › Coordonnées bancaires', '`/soignant/mes-gains` › Missions terminées',
     '`/soignant/mon-compte` › Mot de passe', '`/soignant/mon-compte` › Thème', '`/soignant/mon-compte` › Export RGPD',
     '`/soignant/profil` › Type d\'exercice', 'L1222-5',
   ]) assert.ok(parite.includes(needle), `PARITE : « ${needle} » absent`);

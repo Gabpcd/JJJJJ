@@ -24,10 +24,11 @@ struct IbanEntreeSection: View {
 /// « Coordonnées bancaires » (lot 3, T14b, B9 ; D20, TJ6), port de `SectionIbanPrime` (`SectionPaiements.tsx`
 /// l.227-376) : état relu (`fn_consulter_mon_iban`), IBAN masqué (quatre derniers caractères), saisie contrôlée (mod 97
 /// du web), titulaire, enregistrement confirmé par relecture. Clavier ASCII en majuscules, sans autocorrection ni
-/// suggestion ; champ masqué des captures système (`privacySensitive`) ; IBAN vidé dès l'envoi. Les toasts du web
+/// suggestion ; champ marqué `privacySensitive` (masqué sous la rédaction `.privacy` : widgets, écran verrouillé ; pas
+/// dans l'instantané du sélecteur d'apps ni dans les captures d'écran) ; IBAN vidé dès l'envoi. Les toasts du web
 /// deviennent des encarts annoncés. Identifiants : `iban-screen`, `iban-actuel`, `iban-actuel-titulaire`,
-/// `iban-rib-requis`, `iban-documents`, `iban-input`, `iban-valide`, `iban-invalide`, `iban-titulaire`,
-/// `iban-enregistrer`, `iban-succes`, `iban-erreur`, `iban-session-verifier`, `iban-reessayer`.
+/// `iban-rib-requis`, `iban-rib-requis-documents`, `iban-input`, `iban-valide`, `iban-invalide`, `iban-titulaire`,
+/// `iban-enregistrer`, `iban-succes`, `iban-erreur`, `iban-refus-documents`, `iban-session-verifier`, `iban-reessayer`.
 struct IbanScreen: View {
     @StateObject private var model: IbanModel
 
@@ -47,7 +48,9 @@ struct IbanScreen: View {
                         .padding(.vertical, JoleneSpacing.lg)
                         .accessibilityIdentifier("iban-chargement")
                 case .echec(let message):
-                    InlineNotice(message, tone: .error, identifier: "iban-erreur", announcesOnAppear: true,
+                    // Session expirée : titre « Session à vérifier » du lot 1 (TJ6, règle 2 ; `ProfilEditionScreen`).
+                    InlineNotice(message, title: model.sessionExpiree ? ProfilEdition.Textes.sessionAVerifier : nil,
+                                 tone: .error, identifier: "iban-erreur", announcesOnAppear: true,
                                  announcementID: model.annonces)
                     if model.sessionExpiree {
                         verifierSession
@@ -94,7 +97,7 @@ struct IbanScreen: View {
                     .font(JoleneFont.headline)
                     .foregroundStyle(JoleneColor.midnight)
                     .accessibilityIdentifier("iban-rib-requis")
-                lienDocuments(.televerserRib)
+                lienDocuments(.televerserRib, identifiant: "iban-rib-requis-documents")
             }
             .padding(JoleneSpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -111,10 +114,10 @@ struct IbanScreen: View {
         case .refus(let refus)?:
             InlineNotice(refus.message, title: refus.titre, tone: .error, identifier: "iban-erreur", announcesOnAppear: true,
                          announcementID: model.annonces)
-            if let action = refus.action { lienDocuments(action) }
+            if let action = refus.action { lienDocuments(action, identifiant: "iban-refus-documents") }
         case .erreur(let message)?:
-            InlineNotice(message, tone: .error, identifier: "iban-erreur", announcesOnAppear: true,
-                         announcementID: model.annonces)
+            InlineNotice(message, title: model.sessionExpiree ? ProfilEdition.Textes.sessionAVerifier : nil, tone: .error,
+                         identifier: "iban-erreur", announcesOnAppear: true, announcementID: model.annonces)
             if model.sessionExpiree { verifierSession }
         case nil:
             EmptyView()
@@ -158,13 +161,14 @@ struct IbanScreen: View {
     }
 
     /// « Téléverser mon RIB » (l.316) ou « Mes documents » : documents du lot 2 sur la même pile (`MonEspaceRoute`).
-    private func lienDocuments(_ action: RefusIbanAffiche.Action) -> some View {
+    /// Un identifiant par surface (état non vérifié, refus) : les deux peuvent être affichées ensemble (PRINCIPES §6).
+    private func lienDocuments(_ action: RefusIbanAffiche.Action, identifiant: String) -> some View {
         NavigationLink(value: MonEspaceRoute.documents(onglet: .justificatifs)) {
             Text(action == .televerserRib ? Textes.televerserRib : Textes.mesDocuments)
                 .font(JoleneFont.button)
                 .foregroundStyle(JoleneColor.rose700)
                 .frame(minHeight: 44, alignment: .leading)
         }
-        .accessibilityIdentifier("iban-documents")
+        .accessibilityIdentifier(identifiant)
     }
 }
