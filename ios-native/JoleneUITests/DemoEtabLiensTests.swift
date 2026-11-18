@@ -9,8 +9,9 @@ import XCTest
 /// Ce que ces tests prouvent (niveau 2), et seulement cela :
 /// - `/etablissement/messagerie` ouvre l'onglet Messages de la coquille établissement (écran provisoire), jamais un
 ///   renvoi web ; libellé DEBUG `deeplink-route` = « etab messagerie » ;
-/// - `/etablissement/missions/<id>` (détail, T5 non livrée) et `/contrat/<id>` (contrat établissement, T10 non livrée)
-///   sont des renvois web de leur URL canonique dans l'espace établissement — jamais le contrat soignant ;
+/// - `/etablissement/missions/<id>` ouvre le détail natif (T5) sur l'onglet Missions ; `/contrat/<id>` (contrat
+///   établissement, T10 non livrée) est un renvoi web de son URL canonique dans l'espace établissement — jamais le
+///   contrat soignant ;
 /// - un lien soignant reçu pour l'espace établissement est un renvoi web, jamais un écran soignant ;
 /// - dans l'espace soignant, un lien établissement est un renvoi web, jamais un onglet établissement.
 /// Les règles (table, alias, query, mémorisation, epoch, anti-boucle) sont prouvées au niveau 1 (`EtabRouteTests`,
@@ -34,14 +35,18 @@ final class DemoEtabLiensTests: JoleneUITestCase {
         record("\(proofPrefix)-etab-lien-messagerie")
     }
 
-    func testDetailDeMissionNonLivreEstUnRenvoiWebDansLEspaceEtablissement() throws {
-        let lien = "https://jolene.app/etablissement/missions/demo-mission-001?source=mail"
+    func testLienDetailDeMissionOuvreLeDetailNatifApresConnexion() throws {
+        let lien = "https://jolene.app/etablissement/missions/demo-etab-m04?source=mail"
         launchDemo(extraArguments: espaceEtablissement + ["-JOLENE_OPEN_URL", lien])
         aucunePresentationSurLaConnexion()
         connecter(email: DemoEtabSessionTests.emailEtablissement)
-        renvoiWeb(attendu: lien, "Le détail (T5 non livrée) est servi par le renvoi web")
+        let detail = element("etab-mission-detail")
+        require("Le détail natif (T5) est empilé sur l'onglet Missions par le lien", timeout: 30) { self.containerVisible(detail) }
+        require("La mission du lien est relue") { self.element("etab-mission-titre").label == "Démonstration · Nuit en cours" }
+        XCTAssertFalse(element("renvoi-web-demo").exists, "écran livré : jamais un renvoi web")
         XCTAssertFalse(element("placeholder-etab-detail-mission").exists, "aucun écran provisoire empilé par un lien")
-        record("\(proofPrefix)-etab-lien-detail-web")
+        XCTAssertEqual(element("deeplink-route").label, "etab missionDetail demo-etab-m04")
+        record("\(proofPrefix)-etab-lien-detail-natif")
     }
 
     func testContratDansLEspaceEtablissementNOuvreJamaisLeContratSoignant() throws {
