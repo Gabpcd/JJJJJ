@@ -21,15 +21,18 @@ struct MesMissionsScreen: View {
     @ObservedObject private var session: SessionStore
     private let snapshot: SessionSnapshot
     private let ouvrirOnglet: (MainTabView.Tab) -> Void
+    /// Jeton de péremption (`MainTabView.presentationsMissions`) : chaque lien ou tap qui présente l'onglet le relit.
+    private let peremption: Int
     @Environment(\.ajoutCalendrierMission) private var calendrier
     @State private var issueCalendrier: AjoutCalendrierIssue?
     /// Jeton d'annonce VoiceOver du bandeau : une même issue est réannoncée à chaque tap.
     @State private var tentativeCalendrier = 0
 
-    init(session: SessionStore, snapshot: SessionSnapshot, onglet: MesMissionsOnglet = .aVenir,
+    init(session: SessionStore, snapshot: SessionSnapshot, onglet: MesMissionsOnglet = .aVenir, peremption: Int = 0,
          ouvrirOnglet: @escaping (MainTabView.Tab) -> Void) {
         self.session = session
         self.snapshot = snapshot
+        self.peremption = peremption
         self.ouvrirOnglet = ouvrirOnglet
         _model = StateObject(wrappedValue: MesMissionsModel(controller: session.controller, snapshot: snapshot, onglet: onglet))
     }
@@ -87,8 +90,9 @@ struct MesMissionsScreen: View {
                                 ouvrirOnglet: ouvrirOnglet)
         }
         // Chaque apparition relit l'onglet affiché (liste conservée pendant la relecture), comme le web
-        // qui relit à chaque montage : une candidature posée ailleurs y figure au retour.
-        .task { await model.charger() }
+        // qui relit à chaque montage : une candidature posée ailleurs y figure au retour. Un lien ou un tap qui
+        // présente l'onglet fait avancer `peremption` : la liste est relue même si l'onglet était déjà affiché.
+        .task(id: peremption) { await model.charger() }
     }
 
     // MARK: - Onglets
