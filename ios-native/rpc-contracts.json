@@ -713,7 +713,7 @@
     },
     {
       "name": "fn_fenetre_contestation_ouverte",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": {
         "args": "{ p_facture_id?: string; p_mission_id: string; p_type_litige: Database[\"public\"][\"Enums\"][\"type_litige\"] }",
@@ -737,7 +737,7 @@
     },
     {
       "name": "fn_ouvrir_litige_rate_limited",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 2,
       "types": null,
       "sql": [

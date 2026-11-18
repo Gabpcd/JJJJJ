@@ -31,6 +31,9 @@ public final class DetailPresencesModel: ObservableObject {
     @Published public private(set) var sessionExpired = false
     @Published public private(set) var relanceEnCours = false
     @Published public private(set) var retourRelance: RetourRelance?
+    /// Première présence relue (`FicheDetailPresences.presence`) : support du panneau de contestation (T5b, `id` et
+    /// `valide_le`) ; nil sans présence ou tant que la fiche n'est pas lue.
+    @Published public private(set) var presence: PresenceControlee?
 
     public let missionId: String
     private let controller: SessionController
@@ -64,6 +67,7 @@ public final class DetailPresencesModel: ObservableObject {
                 etat = .introuvable
                 return
             }
+            presence = fiche.presence
             etat = .pret(PresentationDetailPresences.construire(mission: lue, creneaux: detail.creneaux, resume: detail.resume,
                                                                 presence: fiche.presence, maintenant: gateways.clock.now()))
         } catch {

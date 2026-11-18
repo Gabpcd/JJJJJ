@@ -755,7 +755,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_presences_detail_mission"("p_mission_id"
 
 ## fn_fenetre_contestation_ouverte
 
-- **Statut natif** : à venir (lot 2, T5b — HARD STOP n°4, décision 9).
+- **Statut natif** : consommée (lot 2, T5b — HARD STOP n°4, décision 9, D12) — `SupabaseContestationGateway.fenetreOuverte`, deux clés exactes, booléen nu sinon `.contract` (bouton masqué).
 - **Usage prévu** : décider l'affichage du bouton « contester » d'une présence validée avec le **même prédicat que
   le refus serveur** : appel `{p_type_litige:'DESACCORD_HEURES_POINTAGE', p_mission_id}` ; le bouton exige en plus
   `valide_le` non nul et aucun litige existant (parité `PanneauContestation.tsx` l.103-108). Erreur → bouton
@@ -782,7 +782,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_fenetre_contestation_ouverte"("p_type_li
 
 ## fn_ouvrir_litige_rate_limited
 
-- **Statut natif** : à venir (lot 2, T5b — HARD STOP n°4, décision 9 ; réponse et clôture : renvoi web, lot 4).
+- **Statut natif** : consommée (lot 2, T5b — HARD STOP n°4, décision 9, D12 ; réponse et clôture : renvoi web, lot 4) — `SupabaseContestationGateway.contester`, trois clés exactes, audit `PRESENCE_CONTESTATION`, relecture par `presence_id`, aucun `fn_creer_notification`.
 - **Usage prévu** : contester une présence validée. Appel par **trois clés exactes**
   `{p_mission_id, p_type_litige:'DESACCORD_HEURES_POINTAGE', p_motif}` (comme `PanneauContestation.tsx` l.127-131),
   pour que PostgREST retienne la surcharge canonique : sans `p_type_litige`, il choisirait en silence la surcharge à
