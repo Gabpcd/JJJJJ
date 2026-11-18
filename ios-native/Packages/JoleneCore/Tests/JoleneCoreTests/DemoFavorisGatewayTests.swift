@@ -30,7 +30,7 @@ final class DemoFavorisGatewayTests: XCTestCase {
         XCTAssertEqual(favori.nom, etablissement.nom)
         XCTAssertEqual(favori.ville, etablissement.adresseVille)
         XCTAssertEqual(favori.typeEtablissement, etablissement.type)
-        // `nb_missions_ouvertes` = count(*) OUVERTE ET debut_le > now de l'établissement (l.41850 du dump).
+        // `nb_missions_ouvertes` = count(*) OUVERTE ET debut_le > now de l'établissement (`public.sql` l.42297-42300).
         let ouvertes = missions.filter {
             $0.record.etablissementId == favori.id && $0.record.statut == "OUVERTE"
                 && (PlanningHorlogeParis.instant($0.record.debutLe) ?? .distantPast) > DemoWorld.fixedNow
@@ -143,5 +143,24 @@ final class DemoFavorisGatewayTests: XCTestCase {
                 XCTFail("\(nom) : type d'erreur inattendu : \(error)")
             }
         }
+    }
+
+    /// Décision 21 du lot 1 (revue B8 de T4b, M2) : les favoris de l'inscription progressive sont fusionnés avec la
+    /// table, sans doublon, et le retrait vide les deux magasins (`fn_modifier_favori_inscription(false)` puis la table).
+    func testFavorisDeLInscriptionFusionnesPuisRetiresDesDeuxMagasins() async throws {
+        let gateway = DemoFavorisGateway(favorisInscription: ["demo-mission-005", "demo-mission-002", "mission-inconnue"])
+
+        let lignes = try await gateway.missionsSauvegardees(context: contexte)
+        XCTAssertEqual(lignes.map(\.missionId), ["demo-mission-002", "demo-mission-005", "mission-inconnue"],
+                       "inscription d'abord, par début croissant ; doublon une seule fois, illisible ensuite")
+        XCTAssertEqual(lignes.first?.id, "demo-sauvegarde-001", "doublon : la ligne de la table")
+        XCTAssertEqual(lignes[1].mission?.id, "demo-mission-005", "aperçu relu dans les missions démo")
+        XCTAssertNil(lignes[2].mission)
+
+        let apresRetraitCommun = try await gateway.retirer(missionId: "demo-mission-002", context: contexte)
+        XCTAssertFalse(FavorisRegles.estSauvegardee("demo-mission-002", dans: apresRetraitCommun),
+                       "retirée de la table et de l'inscription : l'étoile s'éteint")
+        let apresRetraitInscription = try await gateway.retirer(missionId: "demo-mission-005", context: contexte)
+        XCTAssertEqual(apresRetraitInscription.map(\.missionId), ["mission-inconnue"])
     }
 }

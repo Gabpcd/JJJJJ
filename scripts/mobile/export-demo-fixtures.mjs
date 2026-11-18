@@ -238,7 +238,7 @@ export function buildDemoDashboard(now = new Date(FIXED_NOW), missions = buildDe
  * Favoris démo (lot 1, T4b) : une ligne `missions_sauvegardees` (demo-mission-002, sauvegardée la
  * veille de l'horloge fixée) avec sa jointure `missions(...)` sous la forme PostgREST de
  * `SupabaseFavorisGateway.selectSauvegardees`, et un élément de `fn_mes_favoris_etablissements`
- * (l.41835 du dump) pour l'établissement des Lilas : `nb_missions_ouvertes` = missions OUVERTE de
+ * (`public.sql` l.42281) pour l'établissement des Lilas : `nb_missions_ouvertes` = missions OUVERTE de
  * l'établissement dont `debut_le > now`, comme le SQL.
  */
 export function buildDemoFavoris(now = new Date(FIXED_NOW), missions = buildDemoMissions(now)) {

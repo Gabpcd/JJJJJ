@@ -6,38 +6,73 @@ import JoleneDesign
 /// `FavorisModel` pour la carte Explorer et le détail, l'état affiché est celui de la dernière relecture.
 /// Désactivée pendant l'appel (second appui ignoré) ; cible tactile de 44 pt ; style `.borderless` pour
 /// rester distincte du lien de la carte dans une `List`. Identifiant : `favori-toggle-<missionId>`, valeur
-/// vocalisée « Sauvegardée » / « Non sauvegardée ».
+/// vocalisée « Sauvegardée » / « Non sauvegardée », ou « État inconnu » (désactivée) tant que la liste n'est pas relue
+/// (revue B8 de T4b, m3 : jamais « Non sauvegardée » par défaut ; l'échec est annoncé par `AvisLectureEtoiles`).
+/// `contexte` : surface de l'étoile, où son erreur éventuelle est affichée (m4).
 struct BoutonFavoriMission: View {
     @ObservedObject var favoris: FavorisModel
     let missionId: String
+    let contexte: ContexteFavoris
 
     var body: some View {
-        let sauvegardee = favoris.estSauvegardee(missionId)
+        let etat = favoris.etoile(missionId)
         Button {
-            Task { await favoris.basculer(missionId: missionId) }
+            Task { await favoris.basculer(missionId: missionId, depuis: contexte) }
         } label: {
-            Image(systemName: sauvegardee ? "star.fill" : "star")
+            Image(systemName: etat == .sauvegardee ? "star.fill" : "star")
                 .font(JoleneFont.headline)
-                .foregroundStyle(sauvegardee ? JoleneColor.butter800 : JoleneColor.bubblegum)
+                .foregroundStyle(etat == .sauvegardee ? JoleneColor.butter800 : JoleneColor.bubblegum)
+                .opacity(etat == .inconnue ? 0.4 : 1)
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
-        .disabled(favoris.enCours(missionId: missionId))
-        .accessibilityLabel(FavorisPresentation.libelleEtoile(sauvegardee: sauvegardee))
-        .accessibilityValue(FavorisPresentation.valeurEtoile(sauvegardee: sauvegardee))
+        .disabled(etat == .inconnue || favoris.enCours(missionId: missionId))
+        .accessibilityLabel(FavorisPresentation.libelleEtoile(etat))
+        .accessibilityValue(FavorisPresentation.valeurEtoile(etat))
         .accessibilityIdentifier("favori-toggle-\(missionId)")
     }
 }
 
-/// Erreur d'une action sur les favoris (étoile, retrait) ou d'une relecture, affichée là où l'action a
-/// eu lieu et annoncée à VoiceOver ; « Fermer » l'efface. Rien tant qu'aucune erreur n'est signalée.
-struct AvisFavoris: View {
+/// Échec de la première lecture des étoiles (revue B8 de T4b, m3) : message de la lecture et « Réessayer », ou
+/// « Vérifier ma session » si la session est à vérifier (M1 : `verifierSession`, jamais une impasse). Rien sinon.
+struct AvisLectureEtoiles: View {
     @ObservedObject var favoris: FavorisModel
+    @ObservedObject var session: SessionStore
+    let contexte: ContexteFavoris
     let identifier: String
 
     var body: some View {
-        if let message = favoris.erreurAction {
+        if let message = favoris.echecLectureEtoiles {
+            VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
+                InlineNotice(message, tone: .error, identifier: identifier, announcesOnAppear: true,
+                             announcementID: favoris.tentatives)
+                if favoris.sessionExpired {
+                    JoleneButton("Vérifier ma session", style: .secondary) {
+                        Task { await favoris.verifierSession(session) }
+                    }
+                    .accessibilityIdentifier("\(identifier)-session")
+                } else {
+                    JoleneButton("Réessayer", style: .secondary) {
+                        Task { await favoris.chargerMissions(depuis: contexte) }
+                    }
+                    .accessibilityIdentifier("\(identifier)-reessayer")
+                }
+            }
+        }
+    }
+}
+
+/// Erreur d'une action sur les favoris (étoile, retrait) ou d'une relecture, affichée là où l'action a
+/// eu lieu et annoncée à VoiceOver ; « Fermer » l'efface. Rien tant qu'aucune erreur de ce contexte n'est
+/// signalée (m4 : l'erreur de l'étoile du détail ne réapparaît pas sur la liste).
+struct AvisFavoris: View {
+    @ObservedObject var favoris: FavorisModel
+    let contexte: ContexteFavoris
+    let identifier: String
+
+    var body: some View {
+        if let message = favoris.erreur(pour: contexte) {
             HStack(alignment: .top, spacing: JoleneSpacing.sm) {
                 InlineNotice(message, tone: .error, identifier: identifier, announcesOnAppear: true,
                              announcementID: favoris.tentatives)

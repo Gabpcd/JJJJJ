@@ -319,6 +319,27 @@
       ]
     },
     {
+      "name": "fn_modifier_favori_inscription",
+      "statut": "consommee",
+      "lot": 1,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_modifier_favori_inscription(\"p_mission_id\" \"uuid\", \"p_actif\" boolean)",
+          "returns": "\"void\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'pg_catalog', 'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": null
+    },
+    {
       "name": "fn_audit_connexion",
       "statut": "a_venir",
       "lot": 1,
