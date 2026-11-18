@@ -146,7 +146,7 @@ extension EtabDestination {
         switch self {
         case .detailMission: return true         // T5
         case .candidatures: return true          // T6
-        case .pointage: return false             // T7
+        case .pointage: return true              // T7
         case .presencesMission: return false     // T8
         case .publication: return false          // T9
         case .contrat: return false              // T10

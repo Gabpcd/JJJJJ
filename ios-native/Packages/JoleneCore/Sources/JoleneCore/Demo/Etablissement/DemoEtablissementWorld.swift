@@ -8,7 +8,7 @@ import Foundation
 ///
 /// L'établissement démo est le premier établissement fictif du monde soignant (`demo-etab-1`), vu de
 /// l'autre côté : un seul nom par identifiant. Les arguments de lancement DEBUG
-/// (`-JOLENE_DEMO_ROLE_ETAB`, `-JOLENE_DEMO_LEGACY`, `-JOLENE_DEMO_BLOCAGE`) sont analysés par l'app
+/// (`-JOLENE_DEMO_ROLE_ETAB`, `-JOLENE_DEMO_LEGACY`, `-JOLENE_DEMO_BLOCAGE`, `-JOLENE_POLL_INTERVAL`) sont analysés par l'app
 /// (T2) et traduits en `Configuration`.
 public enum DemoEtablissementWorld {
     public static let userId = "demo-etablissement"
@@ -24,9 +24,13 @@ public enum DemoEtablissementWorld {
         public var blocage: Bool
         /// Première acceptation répondue `PLANNING_MODIFIE_RECONFIRMER` (`-JOLENE_DEMO_PLANNING_MODIFIE 1`, T6).
         public var planningModifie: Bool
+        /// Cadence de relecture du code de pointage (`-JOLENE_POLL_INTERVAL <s>`, T7) ; `nil` = cadence nominale (D23).
+        public var cadencePointage: TimeInterval?
 
-        public init(role: RoleEtab = .proprietaire, legacy: Bool = false, blocage: Bool = false, planningModifie: Bool = false) {
+        public init(role: RoleEtab = .proprietaire, legacy: Bool = false, blocage: Bool = false, planningModifie: Bool = false,
+                    cadencePointage: TimeInterval? = nil) {
             self.role = role; self.legacy = legacy; self.blocage = blocage; self.planningModifie = planningModifie
+            self.cadencePointage = cadencePointage
         }
 
         /// Rôle servi par le serveur : un compte legacy est toujours propriétaire
@@ -49,14 +53,14 @@ public enum DemoEtablissementWorld {
     /// (`DemoWorldTests.portsEnAttenteLot5`).
     public static func gateways(configuration: Configuration = Configuration(),
                                 identite: @escaping @Sendable () async -> String?) -> EtablissementGateways {
-        // T6 : décisions de la session partagées par les missions et les candidatures (une seule source relue).
+        // T6 : décisions de la session partagées par les missions, les candidatures et le pointage (une seule source relue).
         let decisions = DemoEtabEtatCandidatures(planningModifie: configuration.planningModifie)
         return EtablissementGateways(
             session: DemoEtabSessionGateway(configuration: configuration, identite: identite),
             dashboard: DemoEtabDashboardGateway(),        // T4
             missions: DemoEtabMissionsGateway(etat: decisions), // T5
             candidatures: DemoEtabCandidaturesGateway(etat: decisions), // T6
-            pointage: UnwiredEtabPointagePort(),          // T7
+            pointage: DemoEtabPointageGateway(decisions: decisions, cadence: configuration.cadencePointage), // T7
             presences: UnwiredEtabPresencesPort(),        // T8
             publication: UnwiredEtabPublicationPort(),    // T9
             audit: DemoEtabAuditGateway()

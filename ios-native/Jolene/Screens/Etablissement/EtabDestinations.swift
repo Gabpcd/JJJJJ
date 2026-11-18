@@ -29,8 +29,8 @@ struct EtabDestinationEcran: View {
             EtabMissionDetailScreen(missionId: id, session: session, snapshot: snapshot) // T5
         case let .candidatures(missionId):
             CandidaturesEtabScreen(missionId: missionId, session: session, snapshot: snapshot) // T6
-        case .pointage:
-            provisoire("Pointage", "Le code de pointage arrive dans une prochaine version de l'application.") // T7
+        case let .pointage(missionId):
+            CodePointageScreen(missionId: missionId, session: session, snapshot: snapshot) // T7
         case .presencesMission:
             provisoire("Présences", "Les présences de la mission arrivent dans une prochaine version de l'application.") // T8
         case .contrat:

@@ -271,7 +271,7 @@ export const RPC_SUIVIES_ETABLISSEMENT = [
   { name: 'fn_soignant_pour_etablissement', statut: 'consommee', lot: 5 }, // T5 : SupabaseEtabMissionsGateway.soignant
   { name: 'fn_lire_candidatures_mission_habilitee', statut: 'consommee', lot: 5 }, // T6 : SupabaseEtabCandidaturesGateway.lecture
   { name: 'fn_traiter_candidature_planning_v1', statut: 'consommee', lot: 5 }, // T6 : SupabaseEtabCandidaturesGateway.accepter/refuser
-  { name: 'fn_contrat_signe_pour_pointage', statut: 'a_venir', lot: 5 },
+  { name: 'fn_contrat_signe_pour_pointage', statut: 'consommee', lot: 5 }, // T7 : SupabaseEtabPointageGateway.contratSigne
   { name: 'fn_valider_presence', statut: 'a_venir', lot: 5 },
   { name: 'fn_valider_presences_lot', statut: 'a_venir', lot: 5 },
   { name: 'fn_contester_presence', statut: 'a_venir', lot: 5 },

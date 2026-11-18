@@ -35,6 +35,12 @@ preuves des tranches).
   **non affichée** tant que Gabrielle ne l'a pas validée (HARD STOP n°4) : un lien de navigation neutre vers la page
   des CGV la remplace ; refus de paiement (`fn_trg_gate_assignation_paiement`) verbatim avec un renvoi vers la
   facturation web ; succès annoncé seulement après relecture (`ACCEPTEE` + mission `ASSIGNEE`, ou `REFUSEE`).
+- Code de pointage de `/etablissement/presences/mission/:id` (T7, destination `.pointage`, ouverte depuis le détail de
+  la mission ; la route web reste celle des présences, T8) : code et QR relus au serveur toutes les 5 s, écran visible et
+  scène active seulement, plein écran natif (code en grand, QR au plus grand) et écran maintenu allumé pendant
+  l'affichage du code, absents du web ; « Le soignant n'a pas pu scanner sa sortie ? Clôturer le segment » (fin
+  rétroactive, `fn_declarer_fin_retroactive`) **non porté** : présences, T8 (B9). Une valeur servie qui n'est pas six
+  chiffres n'est jamais présentée (le web l'afficherait).
 - Accueil : « présences à valider » sans compteur jusqu'à T8, « évaluations à faire » en lien web sans compteur
   (aucune source serveur, correction 20) ; aucun graphique ni montant (D15).
 - Acceptation native limitée aux missions `SALARIE` hors `MEDECIN` (D25) ; étudiant aide-soignant (cadre étudiant),

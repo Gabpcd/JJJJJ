@@ -47,9 +47,18 @@ public protocol EtabCandidaturesPort: Sendable {
 
 /// Pointage terrain : état (polling 5 s, D23), signature du contrat, planning — T7.
 public protocol EtabPointagePort: Sendable {
+    /// `fn_etat_pointage_mission` : un refus jsonb (`{error}`) est rendu dans `EtatPointageEtab.erreur`, jamais levé.
     func etat(missionId: String, context: EtablissementReadContext) async throws -> EtatPointageEtab
+    /// `fn_contrat_signe_pour_pointage` : le 42501 de la liste blanche vaut `false` (fail-closed, aucun code d'arrivée).
     func contratSigne(missionId: String, context: EtablissementReadContext) async throws -> Bool
     func planning(missionId: String, context: EtablissementReadContext) async throws -> PlanningMission
+    /// Cadence de relecture de l'état (D23 : `CodeRotatifModel.cadenceNominale`, parité web l.132). Seul le monde démo
+    /// la change (`-JOLENE_POLL_INTERVAL`, DEBUG) ; aucune valeur n'est lue d'ailleurs.
+    var cadenceLecture: TimeInterval { get }
+}
+
+public extension EtabPointagePort {
+    var cadenceLecture: TimeInterval { CodeRotatifModel.cadenceNominale }
 }
 
 /// Présences : liste, validation, lot, contestation, note, clôture rétroactive — T8 (**B9** : escrow).
