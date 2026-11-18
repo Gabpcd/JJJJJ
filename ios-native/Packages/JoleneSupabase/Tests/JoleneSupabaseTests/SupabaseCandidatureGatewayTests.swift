@@ -1,0 +1,357 @@
+import Foundation
+import JoleneCore
+import Supabase
+import XCTest
+@testable import JoleneSupabase
+
+/// Candidature du lot 1 (T6a) sur `fn_confirmer_action_planning_v1` et `fn_repondre_proposition` : une forme de
+/// réponse de la fiche `CONTRATS_RPC_SOIGNANT.md` = un test, dans l'ordre normatif du `LOT1_PLAN.md` §2.4.
+/// Messages serveur repris de `supabase/schema/public.sql`, affirmés mot pour mot (HARD STOP n°4) ; un succès
+/// n'est jamais annoncé sans relecture, et une relecture qui ne confirme pas est une erreur.
+final class SupabaseCandidatureGatewayTests: XCTestCase {
+    private let registry = StubRegistry.shared
+    private let missionId = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b"
+    private let candidatureId = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+    private let contratId = "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b"
+    private let rpc = "/rest/v1/rpc/fn_confirmer_action_planning_v1"
+    private let repondre = "/rest/v1/rpc/fn_repondre_proposition"
+    private let audit = "/rest/v1/rpc/fn_ecrire_audit_safe"
+    private let creneaux = [CreneauConfirme(debut: "2026-12-01T19:00:00Z", fin: "2026-12-02T07:00:00Z")]
+
+    override func setUp() {
+        super.setUp()
+        registry.reset()
+    }
+
+    private func gateway() -> SupabaseCandidatureGateway { SupabaseCandidatureGateway(client: TestClient.make()) }
+
+    private func confirmer(_ action: ActionPlanning, message: String? = nil, choix: String? = nil,
+                           candidature: String? = nil, creneaux: [CreneauConfirme]? = nil) async throws -> CandidatureOutcome {
+        try await gateway().confirmer(action: action, missionId: missionId, creneaux: creneaux ?? self.creneaux, message: message,
+                                      choixContrat: choix, candidatureId: candidature, context: TestClient.context)
+    }
+
+    private func erreur(_ operation: () async throws -> Void) async -> JoleneError? {
+        do {
+            try await operation()
+            return nil
+        } catch let error as JoleneError {
+            return error
+        } catch {
+            XCTFail("type d'erreur inattendu : \(error)")
+            return nil
+        }
+    }
+
+    private func reponse(_ json: String, statut: Int = 200) {
+        registry.add("POST", rpc, respond: .json(statut, json))
+    }
+
+    private func exception(_ sqlstate: String, _ message: String) -> String {
+        #"{"code":"\#(sqlstate)","details":null,"hint":null,"message":"\#(message)"}"#
+    }
+
+    private func candidatureJSON(_ statut: String, id: String? = nil) -> String {
+        #"[{"id":"\#(id ?? candidatureId)","statut":"\#(statut)","message":null,"type_contrat_choisi":null,"cree_le":"2026-11-02T00:00:00+00:00","mission_id":"\#(missionId)"}]"#
+    }
+
+    private func attributionJSON(statut: String = "ASSIGNEE", soignant: String = TestClient.userId) -> String {
+        #"[{"id":"\#(missionId)","statut":"\#(statut)","soignant_assigne_id":"\#(soignant)","intitule":"Remplacement IDE nuit","debut_le":"2026-12-01T19:00:00+00:00","fin_le":"2026-12-02T07:00:00+00:00","etablissement_id":"etab-1"}]"#
+    }
+
+    private func corps(_ path: String) throws -> [String: Any] {
+        try XCTUnwrap(registry.requests(to: path).first?.bodyJSON as? [String: Any], "aucun corps \(path)")
+    }
+
+    // MARK: - Succès relus (formes 8 et 9)
+
+    func testPostulerSuccesAvecDocumentsACompleterRelitLaCandidatureSansAudit() async throws {
+        // Forme 8 (l.48523-48530) : `documents_requis_pour` accompagne le succès, sans `error` : jamais un refus.
+        reponse(#"{"success":true,"candidature_id":"\#(candidatureId)","choix_contrat":"SALARIE","profession_requise":"IDE","docs_a_completer":true,"documents_requis_pour":"SALARIE"}"#)
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("EN_ATTENTE")))
+        let issue = try await confirmer(.postuler, message: "")
+        XCTAssertEqual(issue, .confirmed(candidatureId: candidatureId, contratId: nil))
+        let envoye = try corps(rpc)
+        XCTAssertEqual(envoye["p_mission_id"] as? String, missionId)
+        XCTAssertEqual(envoye["p_action"] as? String, "POSTULER")
+        XCTAssertTrue(envoye["p_message"] is NSNull, "message vide envoyé à null (`|| null` du web)")
+        XCTAssertTrue(envoye["p_choix_contrat"] is NSNull)
+        XCTAssertTrue(envoye["p_candidature_id"] is NSNull)
+        let planning = try XCTUnwrap(envoye["p_creneaux_confirmes"] as? [[String: String]])
+        XCTAssertEqual(planning, [["debut": "2026-12-01T19:00:00Z", "fin": "2026-12-02T07:00:00Z"]])
+        let relecture = try XCTUnwrap(registry.requests(to: "/rest/v1/candidatures").first)
+        XCTAssertEqual(relecture.query("select"), "id,statut,message,type_contrat_choisi,cree_le,mission_id")
+        XCTAssertEqual(relecture.query("id"), "eq.\(candidatureId)")
+        XCTAssertEqual(relecture.query("soignant_id"), "eq.\(TestClient.userId)")
+        XCTAssertTrue(registry.requests(to: audit).isEmpty, "décision 5 : aucune ligne d'audit sur POSTULER")
+        XCTAssertEqual(registry.requests(to: rpc).count, 1, "une seule requête, aucun renvoi")
+    }
+
+    func testPostulerRelectureQuiNeConfirmePasEstUneErreur() async throws {
+        reponse(#"{"success":true,"candidature_id":"\#(candidatureId)"}"#)
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, "[]"))
+        let vide = await erreur { _ = try await self.confirmer(.postuler) }
+        XCTAssertEqual(vide, JoleneError(.contract, SupabaseCandidatureGateway.relectureMessage))
+        registry.reset()
+        reponse(#"{"success":true,"candidature_id":"\#(candidatureId)"}"#)
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("ANNULEE")))
+        let annulee = await erreur { _ = try await self.confirmer(.postuler) }
+        XCTAssertEqual(annulee, JoleneError(.contract, SupabaseCandidatureGateway.relectureMessage))
+    }
+
+    func testPostulerSansIdentifiantDeCandidatureRefuseDeContrat() async throws {
+        reponse(#"{"success":true,"choix_contrat":"SALARIE"}"#)
+        let refus = await erreur { _ = try await self.confirmer(.postuler) }
+        XCTAssertEqual(refus?.kind, .contract)
+        XCTAssertTrue(registry.requests(to: "/rest/v1/candidatures").isEmpty)
+    }
+
+    func testAccepterSuccesRelitLAttributionPuisAuditeCommeLeWeb() async throws {
+        // Forme 9 (l.36902-36910 du dump d'origine).
+        reponse(#"{"success":true,"contrat_id":"\#(contratId)","contrat_numero":"C-1","choix_applique":"SALARIE","profession_requise":"IDE","type_paiement":"SALAIRE","mode_paiement":"VIREMENT"}"#)
+        registry.add("GET", "/rest/v1/missions", respond: .json(200, attributionJSON()))
+        registry.add("POST", "/rest/v1/rpc/fn_etablissements_safe", respond: .json(200, TestClient.etablissementJSON))
+        registry.add("POST", audit, respond: .json(200, #"{"success":true,"id":"0a0a0a0a-1b1b-4c2c-8d3d-4e4e4e4e4e4e"}"#))
+        let issue = try await confirmer(.accepter, choix: "SALARIE")
+        XCTAssertEqual(issue, .confirmed(candidatureId: nil, contratId: contratId))
+        XCTAssertEqual(try corps(rpc)["p_choix_contrat"] as? String, "SALARIE")
+        let relecture = try XCTUnwrap(registry.requests(to: "/rest/v1/missions").first)
+        XCTAssertEqual(relecture.query("select"), SupabaseCandidatureGateway.attributionColumns)
+        XCTAssertEqual(relecture.query("id"), "eq.\(missionId)")
+        let ecrit = try corps(audit)
+        XCTAssertEqual(ecrit["p_action"] as? String, "MISSION_ASSIGNATION")
+        XCTAssertEqual(ecrit["p_type_ressource"] as? String, "mission")
+        XCTAssertEqual(ecrit["p_id_ressource"] as? String, missionId)
+        XCTAssertEqual(ecrit["p_details"] as? [String: String], ["intitule": "Remplacement IDE nuit", "etablissement": "Clinique des Tests",
+                                                                 "debut": "2026-12-01T19:00:00+00:00", "fin": "2026-12-02T07:00:00+00:00"])
+    }
+
+    func testAuditEnEchecNInvalideJamaisLAttributionRelue() async throws {
+        reponse(#"{"success":true,"contrat_id":"\#(contratId)"}"#)
+        registry.add("GET", "/rest/v1/missions", respond: .json(200, attributionJSON()))
+        registry.add("POST", "/rest/v1/rpc/fn_etablissements_safe", respond: .networkFailure())
+        registry.add("POST", audit, respond: .json(500, exception("XX000", "panne")))
+        let issue = try await confirmer(.accepter)
+        XCTAssertEqual(issue, .confirmed(candidatureId: nil, contratId: contratId))
+        XCTAssertEqual(registry.requests(to: audit).count, 1, "audit tenté une fois, jamais renvoyé")
+        XCTAssertNil(try corps(audit)["p_details"].flatMap { ($0 as? [String: String])?["etablissement"] },
+                     "établissement illisible : détail omis, rien d'inventé")
+    }
+
+    func testAccepterRelectureAttribueeAUnAutreEstUneErreurSansAudit() async throws {
+        reponse(#"{"success":true,"contrat_id":"\#(contratId)"}"#)
+        registry.add("GET", "/rest/v1/missions", respond: .json(200, attributionJSON(soignant: "00000000-1111-4222-8333-444444444444")))
+        let refus = await erreur { _ = try await self.confirmer(.accepter) }
+        XCTAssertEqual(refus, JoleneError(.contract, SupabaseCandidatureGateway.relectureMessage))
+        XCTAssertTrue(registry.requests(to: audit).isEmpty)
+        registry.reset()
+        reponse(#"{"success":true,"contrat_id":"\#(contratId)"}"#)
+        registry.add("GET", "/rest/v1/missions", respond: .json(200, attributionJSON(statut: "OUVERTE")))
+        let ouverte = await erreur { _ = try await self.confirmer(.accepter) }
+        XCTAssertEqual(ouverte, JoleneError(.contract, SupabaseCandidatureGateway.relectureMessage))
+    }
+
+    func testPropositionAccepteeEnvoieLaCandidatureEtRelitLaMission() async throws {
+        reponse(#"{"success":true,"contrat_id":"\#(contratId)","message":"Proposition acceptée"}"#)
+        registry.add("GET", "/rest/v1/missions", respond: .json(200, attributionJSON()))
+        registry.add("POST", "/rest/v1/rpc/fn_etablissements_safe", respond: .json(200, TestClient.etablissementJSON))
+        registry.add("POST", audit, respond: .json(200, #"{"success":true}"#))
+        let issue = try await confirmer(.proposition, candidature: candidatureId.uppercased())
+        XCTAssertEqual(issue, .confirmed(candidatureId: candidatureId, contratId: contratId))
+        let envoye = try corps(rpc)
+        XCTAssertEqual(envoye["p_action"] as? String, "PROPOSITION")
+        XCTAssertEqual(envoye["p_candidature_id"] as? String, candidatureId, "uuid canonique")
+        XCTAssertEqual(registry.requests(to: audit).count, 1, "décision 5 : audit sur PROPOSITION aussi")
+    }
+
+    // MARK: - Garde locale (aucune requête)
+
+    func testGardeLocalePlanningVidePropositionSansCandidatureIdentifiantInvalide() async throws {
+        let vide = await erreur { _ = try await self.confirmer(.postuler, creneaux: []) }
+        XCTAssertEqual(vide, JoleneError(.contract, SupabaseCandidatureGateway.planningRequisMessage))
+        let sansCandidature = await erreur { _ = try await self.confirmer(.proposition) }
+        XCTAssertEqual(sansCandidature, JoleneError(.contract, SupabaseCandidatureGateway.identifiantInvalideMessage))
+        let invalide = await erreur {
+            _ = try await self.gateway().confirmer(action: .accepter, missionId: "m-1", creneaux: self.creneaux, message: nil,
+                                                   choixContrat: nil, candidatureId: nil, context: TestClient.context)
+        }
+        XCTAssertEqual(invalide, JoleneError(.contract, SupabaseCandidatureGateway.identifiantInvalideMessage))
+        XCTAssertTrue(registry.requests(to: rpc).isEmpty, "aucune requête")
+    }
+
+    // MARK: - Réponses des délégués sans clé `success` (formes 10 à 12)
+
+    func testChoixRequisSansSuccessDemandeLeChoix() async throws {
+        reponse(#"{"choix_requis":true,"error":"Choisissez votre mode de contrat.","options":[{"value":"SALARIE","label":"Salarié (CDD / bulletin de paie)"},{"value":"LIBERAL","label":"Libéral (note d'honoraires)"}]}"#)
+        let issue = try await confirmer(.postuler)
+        XCTAssertEqual(issue, .choixRequis([ChoixContratOption(value: "SALARIE", label: "Salarié (CDD / bulletin de paie)"),
+                                            ChoixContratOption(value: "LIBERAL", label: "Libéral (note d'honoraires)")]))
+        XCTAssertTrue(registry.requests(to: "/rest/v1/candidatures").isEmpty, "aucune relecture d'un refus")
+    }
+
+    func testDocumentsRequisRefusVerbatimAvecLeRegime() async throws {
+        let message = "Les documents requis pour candidater en libéral sont manquants ou expirés."
+        reponse(#"{"error":"\#(message)","documents_requis_pour":"LIBERAL","lien_documents":"/soignant/mes-documents"}"#)
+        let issue1 = try await confirmer(.postuler)
+        XCTAssertEqual(issue1, .refusee(code: nil, message: message, documentsRequisPour: "LIBERAL"))
+        registry.reset()
+        let salarie = "Les documents requis pour une mission salarie ne sont pas encore validés."
+        reponse(#"{"error":"\#(salarie)","documents_requis_pour":"SALARIE","lien_documents":"/soignant/mes-documents"}"#)
+        let issue2 = try await confirmer(.accepter)
+        XCTAssertEqual(issue2, .refusee(code: nil, message: salarie, documentsRequisPour: "SALARIE"))
+    }
+
+    func testPlafondHebdomadaireEtPlanningIncompletRefusVerbatimAvecCode() async throws {
+        let plafond = "Dépassement du plafond de 48 h pour la semaine du 30/11/2026 (40.0 h déjà planifiées + 12.0 h pour cette mission + 0.0 h ailleurs)."
+        reponse(#"{"error":"\#(plafond)","code":"PLAFOND_48H_HEBDO","semaine_du":"2026-11-30","heures_existantes":40,"heures_mission":12,"heures_externes":0,"total":52}"#)
+        let issue3 = try await confirmer(.accepter)
+        XCTAssertEqual(issue3, .refusee(code: "PLAFOND_48H_HEBDO", message: plafond, documentsRequisPour: nil))
+        registry.reset()
+        let incomplet = "Planning hebdomadaire incomplet : impossible de vérifier le plafond de 48 h."
+        reponse(#"{"error":"\#(incomplet)","code":"PLANNING_HEBDOMADAIRE_INDISPONIBLE","creneaux_valides":1,"creneaux_attendus":2}"#)
+        let incompletIssue = try await confirmer(.accepter)
+        XCTAssertEqual(incompletIssue, .refusee(code: "PLANNING_HEBDOMADAIRE_INDISPONIBLE", message: incomplet, documentsRequisPour: nil))
+    }
+
+    // MARK: - Refus propres à la RPC (formes 1 à 7)
+
+    func testPlanningAReconfirmerLesDeuxCodes() async throws {
+        let formes = [
+            ("PLANNING_A_RECONFIRMER", "Le planning confirmé n'est pas exploitable. Rechargez la mission avant de continuer."),
+            ("PLANNING_MODIFIE_RECONFIRMER", "Le planning a changé depuis son affichage. Vérifiez à nouveau toutes les dates et tous les horaires."),
+        ]
+        for (code, message) in formes {
+            registry.reset()
+            reponse(#"{"success":false,"ok":false,"code":"\#(code)","error":"\#(message)"}"#)
+            let issue4 = try await confirmer(.accepter)
+            XCTAssertEqual(issue4, .planningAReconfirmer(code: code, message: message), code)
+            XCTAssertEqual(registry.requests(to: rpc).count, 1, "\(code) : jamais renvoyée telle quelle")
+        }
+    }
+
+    func testConflitsDePlanningRefusVerbatim() async throws {
+        let formes = [
+            // `fn_conflit_planning_soignant` : textes du serveur (tutoiement compris), jamais reformulés.
+            ("CONFLIT_PLANNING", "Ce planning entre en conflit avec une mission déjà confirmée."),
+            ("REPOS_11H", "Repos insuffisant avec « Nuit Urgences » : 8.5 h au lieu de 11 h minimum."),
+            ("PLANNING_DETAILLE_INDISPONIBLE", "Le planning détaillé de cette mission doit être confirmé avant toute candidature."),
+            ("PLANNING_EXISTANT_INDISPONIBLE", "Le planning détaillé d'une mission déjà confirmée doit être vérifié avant cette candidature."),
+        ]
+        for (code, message) in formes {
+            registry.reset()
+            reponse(#"{"success":false,"ok":false,"code":"\#(code)","error":"\#(message)"}"#)
+            let issue5 = try await confirmer(.postuler)
+            XCTAssertEqual(issue5, .refusee(code: code, message: message, documentsRequisPour: nil), code)
+        }
+    }
+
+    func testRefusSansCodeDeLaRPCVerbatim() async throws {
+        for message in ["Accès réservé aux soignants authentifiés.", "Cette mission n'est plus disponible.", "Proposition introuvable."] {
+            registry.reset()
+            reponse(#"{"success":false,"ok":false,"error":"\#(message)"}"#)
+            let issue6 = try await confirmer(.postuler)
+            XCTAssertEqual(issue6, .refusee(code: nil, message: message, documentsRequisPour: nil), message)
+        }
+    }
+
+    // MARK: - `{error}` seul (forme 13) et réponse inattendue
+
+    func testErreurSeuleEnHTTP200LeveLeMessageServeur() async throws {
+        for message in ["Trop de candidatures en peu de temps. Réessayez plus tard.", "Vous avez déjà postulé à cette mission",
+                        "Cette proposition a expiré"] {
+            registry.reset()
+            reponse(#"{"error":"\#(message)"}"#)
+            let refus = await erreur { _ = try await self.confirmer(.postuler) }
+            XCTAssertEqual(refus, JoleneError(.unknown, message), message)
+        }
+        registry.reset()
+        reponse(#"{"error":"Non authentifié"}"#)
+        let session = await erreur { _ = try await self.confirmer(.accepter) }
+        XCTAssertEqual(session?.kind, .unauthorized)
+    }
+
+    func testReponseSansCleConnueEstUnRefusDeContrat() async throws {
+        reponse("{}")
+        let refus = await erreur { _ = try await self.confirmer(.accepter) }
+        XCTAssertEqual(refus?.kind, .contract)
+    }
+
+    // MARK: - Exceptions PostgREST (forme 14)
+
+    func testCodeDuTravailRestitueMotPourMotSansRelecture() async throws {
+        // HARD STOP n°4 : texte légal du trigger affiché à l'identique, préfixe compris.
+        let message = "[CODE DU TRAVAIL] Semaine du 30/11/2026 : 40.0h Jolene + 10.0h ailleurs = 50.0h total (max 48h, Art. L3121-20)"
+        reponse(exception("P0001", message), statut: 400)
+        let issue = try await confirmer(.accepter)
+        XCTAssertEqual(issue, .refusee(code: CandidatureOutcome.codeRefusCodeDuTravail, message: message, documentsRequisPour: nil))
+        XCTAssertTrue(registry.requests(to: "/rest/v1/missions").isEmpty)
+        XCTAssertTrue(registry.requests(to: audit).isEmpty)
+    }
+
+    func testMissionDejaPriseSansMessageTechnique() async throws {
+        for message in ["JSON object requested, multiple (or no) rows returned — The result contains 0 rows",
+                        "Cette mission est déjà prise"] {
+            registry.reset()
+            reponse(exception("PGRST116", message), statut: 406)
+            let issue7 = try await confirmer(.accepter)
+            XCTAssertEqual(issue7, .missionDejaAttribuee, message)
+            XCTAssertEqual(registry.requests(to: rpc).count, 1, "aucun renvoi")
+        }
+    }
+
+    func testAutreExceptionMessageGenerique() async throws {
+        reponse(exception("XX000", "relation interne introuvable"), statut: 500)
+        let refus = await erreur { _ = try await self.confirmer(.accepter) }
+        XCTAssertNotNil(refus)
+        XCTAssertFalse(refus?.message.contains("relation interne") == true, "jamais le message technique")
+    }
+
+    // MARK: - Refus d'une proposition
+
+    func testRefuserPropositionRelitREFUSEE() async throws {
+        registry.add("POST", repondre, respond: .json(200, #"{"success":true,"message":"Proposition refusée"}"#))
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("REFUSEE")))
+        try await gateway().refuserProposition(candidatureId: candidatureId, context: TestClient.context)
+        let envoye = try corps(repondre)
+        XCTAssertEqual(envoye["p_candidature_id"] as? String, candidatureId)
+        XCTAssertEqual(envoye["p_accepter"] as? Bool, false)
+        XCTAssertTrue(registry.requests(to: rpc).isEmpty, "le refus ne passe pas par la RPC de planning")
+    }
+
+    func testRefuserPropositionExpireeOuNonRelueEstUneErreur() async throws {
+        registry.add("POST", repondre, respond: .json(200, #"{"error":"Cette proposition a expiré"}"#))
+        let expiree = await erreur { try await self.gateway().refuserProposition(candidatureId: self.candidatureId, context: TestClient.context) }
+        XCTAssertEqual(expiree, JoleneError(.unknown, "Cette proposition a expiré"))
+        registry.reset()
+        registry.add("POST", repondre, respond: .json(200, #"{"success":true,"message":"Proposition refusée"}"#))
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("PROPOSEE")))
+        let nonRelue = await erreur { try await self.gateway().refuserProposition(candidatureId: self.candidatureId, context: TestClient.context) }
+        XCTAssertEqual(nonRelue, JoleneError(.contract, SupabaseCandidatureGateway.relectureMessage))
+    }
+
+    // MARK: - Lecture de la candidature d'une mission
+
+    func testCandidatureDeLaMissionRelueSousLaSession() async throws {
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("PROPOSEE")))
+        let lue = try await gateway().candidature(missionId: missionId, context: TestClient.context)
+        XCTAssertEqual(lue?.id, candidatureId)
+        XCTAssertEqual(lue?.statut, "PROPOSEE")
+        let requete = try XCTUnwrap(registry.requests(to: "/rest/v1/candidatures").first)
+        XCTAssertEqual(requete.query("mission_id"), "eq.\(missionId)")
+        XCTAssertEqual(requete.query("soignant_id"), "eq.\(TestClient.userId)")
+        XCTAssertEqual(requete.query("order"), "cree_le.desc.nullsfirst", "`order(cree_le, desc)` : NULLS FIRST de PostgreSQL")
+        XCTAssertEqual(requete.query("limit"), "1")
+        registry.reset()
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, "[]"))
+        let aucune = try await gateway().candidature(missionId: missionId, context: TestClient.context)
+        XCTAssertNil(aucune)
+    }
+
+    func testAnnulationsVerrouilleesJusquaT7() async throws {
+        let refus = await erreur {
+            _ = try await self.gateway().annulerMission(id: self.missionId, motif: nil, context: TestClient.context)
+        }
+        XCTAssertEqual(refus?.kind, .contract)
+        XCTAssertTrue(refus?.message.contains("T7") == true)
+    }
+}
