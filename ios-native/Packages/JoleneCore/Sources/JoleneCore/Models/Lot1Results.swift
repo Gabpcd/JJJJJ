@@ -49,6 +49,11 @@ public enum CandidatureOutcome: Equatable, Sendable {
     case refusee(code: String?, message: String, documentsRequisPour: String?)
     /// Le planning a changé : relire la mission et redemander une confirmation, jamais renvoyer.
     case planningAReconfirmer(code: String, message: String)
+    /// Mission attribuée à quelqu'un d'autre pendant l'action (exception PostgREST `0 rows` ou
+    /// `déjà prise`, T6a) : équivalent de la modale « mission perdue » du web
+    /// (`DetailMissionSoignant.tsx` l.807-808). Aucun message technique n'est conservé ; l'écran relit
+    /// la mission et ne renvoie jamais l'action.
+    case missionDejaAttribuee
 
     /// Code posé par le client sur un refus du Code du travail levé en exception par un trigger
     /// de `missions` (`dec_verifier_plafond_48h`, `dec_verifier_repos_11h`,

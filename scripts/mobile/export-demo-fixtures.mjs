@@ -104,6 +104,12 @@ export function buildDemoMissions(now = new Date(FIXED_NOW)) {
       boostee_le: null,
       mode_remuneration: 'HORAIRE',
       retrocession_pct: null,
+      // Lot 1, T6a : colonnes ajoutées à `MissionQuery.missionSelect`. Une mission sur cinq (004, 009, 014…) en
+      // mode candidature (POSTULER), les autres au défaut serveur `PREMIER_ARRIVE` (ACCEPTER) ; les deux
+      // candidatures en attente de `demo-mes-missions.json` portent sur des missions en mode candidature.
+      mode_attribution: index % 5 === 3 ? 'CANDIDATURE' : 'PREMIER_ARRIVE',
+      presence_confirmee_le: null,
+      soignant_assigne_id: null,
       creneaux,
     });
   }

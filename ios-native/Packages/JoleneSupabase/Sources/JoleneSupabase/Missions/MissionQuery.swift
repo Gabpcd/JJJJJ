@@ -5,7 +5,9 @@ import JoleneCore
 /// `mobile-native/src/data/supabaseGateway.ts` et `src/lib/profession-hierarchy.ts`.
 /// Aucune règle juridique ni montant n'est calculé ici : ce sont des projections serveur.
 public enum MissionQuery {
-    /// `MISSION_SELECT` du pilote, à l'identique (ordre inclus).
+    /// `MISSION_SELECT` du pilote (ordre inclus), suivi des trois colonnes du lot 1, T6a
+    /// (`mode_attribution`, `presence_confirmee_le`, `soignant_assigne_id` : action de candidature,
+    /// confirmation de présence, attribution relue). Écart assumé avec le pilote React Native.
     public static let missionSelect = [
         "id", "intitule", "description", "service", "profession_requise",
         "specialite_medicale_requise", "accepte_non_specialises", "debut_le", "fin_le",
@@ -13,10 +15,13 @@ public enum MissionQuery {
         "rist_plafond_applique", "total_brut", "net_a_payer", "est_urgente",
         "niveau_urgence", "statut", "etablissement_id", "type_contrat_recherche",
         "boostee_le", "mode_remuneration", "retrocession_pct",
+        "mode_attribution", "presence_confirmee_le", "soignant_assigne_id",
     ].joined(separator: ",")
 
-    /// `PROFILE_SELECT` du pilote.
-    public static let profileSelect = "id,profession,adresse_lat,adresse_lng,rayon_deplacement_km,tous_documents_valides,type_contrat,types_contrat_acceptes,type_exercice,taux_horaire_minimum"
+    /// `PROFILE_SELECT` du pilote, suivi des colonnes du soft-gate `peut_candidater` (lot 1, T6a,
+    /// décision 3 : `ProfilCompletion`, lisibles par `pol_soig_select`). Écart assumé et documenté avec
+    /// `PROFILE_SELECT` du pilote (`mobile-native/src/data/supabaseGateway.ts` l.15).
+    public static let profileSelect = "id,profession,adresse_lat,adresse_lng,rayon_deplacement_km,tous_documents_valides,type_contrat,types_contrat_acceptes,type_exercice,taux_horaire_minimum,prenom,nom,date_naissance,telephone,rpps_verifie"
 
     public static let slotSelect = "id,mission_id,debut,fin,est_pause,type_creneau"
     public static let missionLimit = 500
