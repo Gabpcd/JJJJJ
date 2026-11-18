@@ -44,9 +44,15 @@ final class SecondairesLot4Tests: XCTestCase {
 
     // MARK: - Cible d'un écran secondaire livré
 
-    func testAucunEcranDuLot4NestLivreParT1c() {
+    /// Écrans livrés par leur tranche (ligne de `DestinationLien.ecranNatifLivre` passée à `true`) ; tous les autres gardent
+    /// leur renvoi web actuel. Chaque tranche d'écran ajoute le sien ici.
+    static let livres: [EcranSecondaire] = [
+        .recherches, // T4
+    ]
+
+    func testSeulsLesEcransDesTranchesLivreesSontLivres() {
         for ecran in Self.tous {
-            XCTAssertFalse(ecran.estLivre, "\(ecran) : renvoi web actuel gardé jusqu'à sa tranche")
+            XCTAssertEqual(ecran.estLivre, Self.livres.contains(ecran), "\(ecran) : renvoi web actuel gardé jusqu'à sa tranche")
         }
     }
 
@@ -64,12 +70,16 @@ final class SecondairesLot4Tests: XCTestCase {
         XCTAssertEqual(serie, .secondaire(.serie(id: "s 1")), "T1c aiguille la série vers l'écran du lot 4 (T12)")
     }
 
-    /// Tant qu'aucun écran n'est livré, la cible d'un lien du lot 4 reste celle d'avant T1c : renvoi web canonique, ou
-    /// repli natif (swipe → Explorer, score → hub).
+    /// Tant que son écran n'est pas livré, la cible d'un lien du lot 4 reste celle d'avant T1c : renvoi web canonique, ou
+    /// repli natif (swipe → Explorer, score → hub) ; un écran livré a sa cible native.
     func testLiensDuLot4GardentLeurRenvoiWeb() throws {
         for ecran in Self.tous {
             let url = try XCTUnwrap(ecran.urlWeb, "\(ecran)")
             let lien = try XCTUnwrap(DestinationLien(url: url), "\(ecran)")
+            if Self.livres.contains(ecran) {
+                XCTAssertEqual(CibleNotification(lien), .secondaire(ecran), "\(ecran) : écran livré")
+                continue
+            }
             switch ecran {
             case .swipe: XCTAssertEqual(CibleNotification(lien), .explorer)
             case .score: XCTAssertEqual(CibleNotification(lien), .monCompte)
@@ -119,7 +129,11 @@ final class SecondairesLot4Tests: XCTestCase {
     // MARK: - Entrées du hub
 
     func testEntreesDuHubSuiventLeWebEtNeMontrentQueLesEcransLivres() {
-        XCTAssertEqual(EntreesHubLot4.sections(), [], "aucun écran livré : aucune entrée native, renvois web inchangés")
+        XCTAssertEqual(EntreesHubLot4.sections(), EntreesHubLot4.sections(livre: Self.livres.contains),
+                       "entrées natives des seuls écrans livrés, renvois web inchangés pour les autres")
+        XCTAssertEqual(EntreesHubLot4.sections(), [EntreesHubLot4.Section(titre: "Recherche & disponibilité", entrees: [
+            EntreesHubLot4.Entree(ecran: .recherches, libelle: "Recherches sauvegardées"),
+        ])], "T4 : « Recherches sauvegardées » dans « Recherche & disponibilité » (MonCompteSoignant.tsx l.94-96)")
         let toutes = EntreesHubLot4.sections(livre: { _ in true })
         XCTAssertEqual(toutes, EntreesHubLot4.sectionsWeb)
         XCTAssertEqual(toutes.map(\.titre), ["Recherche & disponibilité", nil, "Suivi"], "MonCompteSoignant.tsx l.94, l.107")

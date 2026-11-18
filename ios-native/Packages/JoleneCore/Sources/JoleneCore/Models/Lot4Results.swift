@@ -39,16 +39,23 @@ public struct FiltresAlerte: Equatable, Sendable {
     }
 }
 
-/// Ligne de `fn_lister_mes_filtres_sauvegardes` (audience `SOIGNANT_RECHERCHE_MISSIONS`).
+/// Ligne de `fn_lister_mes_filtres_sauvegardes` (audience `SOIGNANT_RECHERCHE_MISSIONS`), lue par
+/// `FiltresSauvegardesEncodage.liste` (T4).
 public struct FiltreSauvegarde: Equatable, Sendable, Identifiable {
     public var id: String
     public var nom: String
     public var filtres: ValeurJSON
     public var alerteActive: Bool
     public var frequence: FrequenceAlerte?
+    /// T4 : `dernier_check_le` (horodatage serveur), `nil` s'il est absent ou n'est pas un texte.
+    public var dernierCheckLe: String?
+    /// T4 : `nb_resultats_dernier_check` (valeur serveur), 0 s'il est absent ou illisible.
+    public var nbResultatsDernierCheck: Int
 
-    public init(id: String, nom: String, filtres: ValeurJSON, alerteActive: Bool, frequence: FrequenceAlerte?) {
+    public init(id: String, nom: String, filtres: ValeurJSON, alerteActive: Bool, frequence: FrequenceAlerte?,
+                dernierCheckLe: String? = nil, nbResultatsDernierCheck: Int = 0) {
         self.id = id; self.nom = nom; self.filtres = filtres; self.alerteActive = alerteActive; self.frequence = frequence
+        self.dernierCheckLe = dernierCheckLe; self.nbResultatsDernierCheck = nbResultatsDernierCheck
     }
 }
 
