@@ -111,16 +111,20 @@ struct MissionDetailScreen: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("mission-detail-creneaux")
-            entreePresences(mission)
-            AnnulationSection(mission: mission, session: session, snapshot: snapshot) { await model.load() } // L1-T7
             if let description = mission.record.description, !description.isEmpty {
                 card {
                     Text("Description").font(JoleneFont.headline).foregroundStyle(JoleneColor.midnight)
                     Text(description).font(JoleneFont.body).foregroundStyle(JoleneColor.midnight)
                 }
             }
+            // Bloc « Actions » dans l'ordre du web (`DetailMissionSoignant.tsx`, intégration de la vague B du lot 1) :
+            // candidature ou « ✅ Vous êtes assigné(e) » (l.1408-1410), puis « Présences et pointage » (l.1477-1494),
+            // puis « Annuler ma participation » (l.1516-1523). La confirmation de présence du web (l.1412-1439) est
+            // remontée en haut du détail (T6c, revue B8 m1, ci-dessus).
             // Lot 1, T6b : candidature (POSTULER, ACCEPTER, proposition), état relu côté serveur.
             CandidatureSection(mission: mission, session: session, snapshot: snapshot) { await model.load() }
+            entreePresences(mission)
+            AnnulationSection(mission: mission, session: session, snapshot: snapshot) { await model.load() } // L1-T7
         }
         .padding(JoleneSpacing.lg)
         .frame(maxWidth: 640)
