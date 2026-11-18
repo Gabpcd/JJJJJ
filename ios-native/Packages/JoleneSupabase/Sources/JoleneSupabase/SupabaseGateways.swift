@@ -64,7 +64,7 @@ public enum SupabaseGateways {
     /// `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes.
     static func câblerLot2(_ gateways: inout Gateways, client: SupabaseClient, clock: any ClockPort = SystemClock()) {
         gateways.pointage = SupabasePointageGateway(client: client, clock: gateways.clock) // T3
-        gateways.contestation = UnwiredContestationPort()          // T5b
+        gateways.contestation = SupabaseContestationGateway(client: client) // T5b
         gateways.notation = SupabaseNotationGateway(client: client) // T5a
         gateways.documents = SupabaseDocumentsGateway(client: client, clock: clock) // T6
         gateways.contrats = SupabaseContratsGateway(client: client, clock: gateways.clock) // T8

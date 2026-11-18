@@ -30,6 +30,15 @@ public enum LibellesDetailPresences {
         }
     }
 
+    /// Contestation d'une présence (T5b) : textes du web dans `LibellesWeb.Contestation` et `TextesWeb.Contestation`
+    /// (statuts) ; aucun texte de délai (Q9, D12).
+    public enum Contestation {
+        /// Texte opérationnel (inventorié, « Textes opérationnels hors web (T5b) ») : échec de transport sans message
+        /// lisible. Le web affiche `extraireMessageErreur(err)` (l.157) ; le formulaire reste ouvert, « Envoyer la
+        /// contestation » réessaie après relecture du litige.
+        public static let erreurEnvoi = "La contestation n'a pas pu être envoyée. Réessayez."
+    }
+
     /// Renvoi web du récapitulatif financier (montants calculés côté client sur le web, non portés : LOT2_PLAN §1.2) :
     /// libellé du lot 1, repris tel quel (`AccueilScreen`, « Voir sur jolene.app »).
     public static let voirSurLeWeb = "Voir sur jolene.app"
