@@ -18,7 +18,7 @@ public enum AnnulationRules {
     }
 
     /// Motifs PROPOSÉS par l'app, dans l'ordre du web (`MOTIFS`, `ModaleAnnulationCandidature.tsx` l.33-40), **sans
-    /// « 🏥 Urgence médicale »** (`URGENCE_MEDICALE`, l.35) : décision 21 de `LOT1_PLAN.md` §7, application de la décision
+    /// « 🏥 Urgence médicale »** (`URGENCE_MEDICALE`, l.35) : décision 4 amendée de `LOT1_PLAN.md` §7, application de la décision
     /// de Gabrielle du 09/07/2026 (`docs/CONFORMITE.md` §1.4, l.69-72 : un motif de santé générique n'est pas stocké, le
     /// seul fait d'être malade étant une donnée de santé, RGPD art. 9). Le serveur l'admet encore et l'écrit dans
     /// `candidatures`, `evenements_score_soignant` et `journaux_audit` (`motifsServeur`) : correction web et serveur dans

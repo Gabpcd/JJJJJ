@@ -184,8 +184,22 @@ public final class AnnulationModel: ObservableObject {
         let id = missionId
         let context = snapshot.context
         do {
-            let outcome = try await bounded(timeout: controller.resolutionTimeout) {
+            var outcome = try await bounded(timeout: controller.resolutionTimeout) {
                 try await port.annulerMission(id: id, motif: nil, context: context)
+            }
+            // Revue B8 delta de #1156 (m1), intégration de la vague B : après une réponse perdue, le nouvel essai est
+            // refusé (« Annulation impossible dans cet état… », la mission n'étant plus attribuée). Comme pour
+            // `STATUT_INVALIDE` côté candidature, la mission est relue avant tout message : relue sans le soignant de la
+            // session (`soignant_assigne_id` nul ou autre, ligne lue) = annulation relue ; sinon le refus s'affiche tel quel.
+            if case .refusee = outcome {
+                let missions = gateways.missions
+                let relue = try await bounded(timeout: controller.resolutionTimeout) {
+                    try await missions.mission(id: id, context: context)
+                }
+                if let relue, AnnulationRules.missionAnnuleeRelue(soignantAssigneId: relue.record.soignantAssigneId,
+                                                                   userId: context.userId, ligneLue: true) {
+                    outcome = .annulee(points: nil, libre: nil, contestable: nil)
+                }
             }
             guard await controller.epoch == snapshot.epoch else { return }
             switch outcome {

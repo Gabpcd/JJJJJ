@@ -299,7 +299,7 @@ final class DemoCandidatureGatewayTests: XCTestCase {
         let retenue = try await gateways.missions.mission(id: "demo-assignee-003", context: context)
         XCTAssertEqual(retenue?.record.statut, "OUVERTE")
         XCTAssertNil(retenue?.record.soignantAssigneId)
-        // Le serveur (simulé) admet encore « Urgence médicale », que l'app ne propose plus (décision 21).
+        // Le serveur (simulé) admet encore « Urgence médicale », que l'app ne propose plus (décision 4 amendée).
         let medical = try await DemoCandidatureGateway().annulerCandidature(id: "demo-candidature-001", motif: "URGENCE_MEDICALE",
                                                                             texte: explication, justificatifPath: nil, context: context)
         XCTAssertEqual(medical, .annulee(points: 0, libre: true, contestable: nil))

@@ -12,14 +12,16 @@ import Supabase
 /// l'écran affiche alors le repli web « Confirmation impossible. » (`ConfirmationPresenceModel`, revue B8 m2-m3).
 ///
 /// Succès annoncé seulement après relecture de la mission (PRINCIPES §3) : `presence_confirmee_le` non nul sur la
-/// mission attribuée à la session. La RPC n'a **aucune idempotence** (chaque appel réécrit l'instant et notifie
+/// mission attribuée à la session ; sinon, après `{success:true}`, issue incertaine `.envoyeeNonRelue` (revue B8 delta
+/// de #1157, M1). La RPC n'a **aucune idempotence** (chaque appel réécrit l'instant et notifie
 /// l'établissement, l.25003-25009) : une seule requête, jamais de renvoi automatique ; l'écran désactive le bouton
 /// pendant l'appel et le masque après relecture.
 public struct SupabasePresenceGateway: PresencePort {
     public static let rpc = "fn_confirmer_presence_mission"
     public static let relectureColumns = "id,statut,soignant_assigne_id,presence_confirmee_le"
-    /// Le serveur a répondu mais la relecture ne montre pas la confirmation : rien n'est renvoyé automatiquement.
-    public static let relectureMessage = "Votre confirmation a été envoyée mais n'a pas pu être relue. Rouvrez la mission avant de réessayer."
+    /// Le serveur a répondu mais la relecture ne montre pas la confirmation : rien n'est renvoyé automatiquement. Texte
+    /// porté par JoleneCore (`PresenceRules.Textes.envoyeeNonRelue`), aussi affiché après un délai dépassé.
+    public static let relectureMessage = PresenceRules.Textes.envoyeeNonRelue
     public static let identifiantInvalideMessage = "Identifiant de mission invalide."
 
     private let client: SupabaseClient
@@ -39,11 +41,20 @@ public struct SupabasePresenceGateway: PresencePort {
         try reponse.leverSiErreur(fallback: repli)
         guard reponse.success == true else { throw JoleneError(.contract, SupabaseErrorMapping.contractMessage) }
 
-        let relue = try await relire(id)
+        // Revue B8 delta de #1157 (M1), intégration de la vague B : le serveur a accepté. Une relecture en échec, vide ou
+        // sans la date rend l'issue INCERTAINE (`.envoyeeNonRelue`), jamais une erreur : l'écran ne propose alors qu'une
+        // relecture, aucun nouvel envoi (RPC non idempotente). Seule l'annulation de l'appelant reste une erreur.
+        let relue: Relecture?
+        do {
+            relue = try await relire(id)
+        } catch {
+            if error is CancellationError || (error as? JoleneError)?.kind == .cancelled { throw error }
+            return .envoyeeNonRelue(message: Self.relectureMessage)
+        }
         guard let relue, relue.id == id, let assigne = relue.soignantAssigneId,
               assigne.caseInsensitiveCompare(context.userId) == .orderedSame,
               let confirmee = relue.presenceConfirmeeLe, !confirmee.isEmpty else {
-            throw JoleneError(.contract, Self.relectureMessage)
+            return .envoyeeNonRelue(message: Self.relectureMessage)
         }
         return .confirmee(presenceConfirmeeLe: confirmee)
     }

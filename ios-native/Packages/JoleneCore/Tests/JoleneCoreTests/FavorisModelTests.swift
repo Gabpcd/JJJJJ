@@ -373,6 +373,29 @@ final class FavorisModelTests: XCTestCase {
         XCTAssertEqual(scenario.nombre("lire"), 2)
     }
 
+    /// Revue B8 delta de #1149 (m1), intégration de la vague B : « Vérifier ma session » touché sur le détail (ou sur
+    /// Explorer) relit les missions dans le contexte de cette surface ; l'échec de la relecture s'y affiche, jamais dans
+    /// le seul contexte de « Mes favoris », et les établissements ne sont pas relus.
+    func testVerifierSessionDepuisLeDetailRelitDansSonContexte() async throws {
+        let scenario = FavorisScenario([
+            "lire": [.missions([ligne("m-1")]), .echec(JoleneError(.network, "Le service ne répond pas."))],
+        ])
+        let (model, controller) = try await pret(scenario)
+        let session = SessionStore(controller: controller)
+        await session.refresh()
+        await model.chargerMissions(depuis: .explorer)
+        XCTAssertTrue(model.missions.estPrete)
+
+        await model.verifierSession(session, contexte: .detail(missionId: "m-1"))
+
+        XCTAssertEqual(model.erreur(pour: .detail(missionId: "m-1")), "Le service ne répond pas.", "échec affiché sur le détail")
+        XCTAssertNil(model.erreur(pour: .ecran), "rien dans le contexte de « Mes favoris »")
+        XCTAssertNil(model.erreur(pour: .explorer))
+        XCTAssertEqual(scenario.nombre("lire"), 2)
+        XCTAssertEqual(scenario.nombre("etablissements"), 0, "hors « Mes favoris », les établissements ne sont pas relus")
+        XCTAssertEqual(model.missions.elements.map(\.missionId), ["m-1"], "l'étoile garde l'état relu")
+    }
+
     /// M1 : une lecture réussie des établissements lève aussi « session à vérifier », comme celle des missions.
     func testLectureReussieDesEtablissementsLeveLaSessionAVerifier() async throws {
         let scenario = FavorisScenario(["etablissements": [

@@ -68,7 +68,7 @@ struct MissionDetailScreen: View {
             }
             if let favoris {
                 AvisFavoris(favoris: favoris, contexte: .detail(missionId: mission.id), identifier: "mission-detail-favoris-erreur") {
-                    await favoris.verifierSession(session)
+                    await favoris.verifierSession(session, contexte: .detail(missionId: mission.id))
                 }
                 AvisLectureEtoiles(favoris: favoris, session: session, contexte: .detail(missionId: mission.id),
                                    identifier: "mission-detail-favoris-lecture")

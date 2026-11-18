@@ -1044,7 +1044,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_upsert_token_push"("p_token" "text", "p_
   started → stored → rattache | non_rattache`, `not_sent`), dépôt `SupabaseJustificatifStorage` (`upsert: false`), dépôt
   incertain réconcilié par HEAD, reçu `stored` repris sans second dépôt. Revue B8 de #1156 : `STATUT_INVALIDE` déclenche
   une relecture de la candidature avant tout message (`ANNULEE` relue = annulation relue après une réponse perdue) ;
-  `URGENCE_MEDICALE` n'est jamais envoyé par l'app (décision 21 de `LOT1_PLAN.md` §7), bien que le serveur l'admette
+  `URGENCE_MEDICALE` n'est jamais envoyé par l'app (décision 4 amendée de `LOT1_PLAN.md` §7), bien que le serveur l'admette
   et le stocke (`candidatures.motif_refus`, `evenements_score_soignant.details`, `journaux_audit`).
 - **Signature SQL** (`supabase/schema/public.sql` l.17541) :
 
@@ -1090,7 +1090,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_annuler_mission_soignant"("p_mission_id"
   `{error:'Annulation impossible dans cet état. Si la mission est en cours, ouvrez un litige.'}` (statut ≠ `ASSIGNEE`) ;
   succès `{success:true, annulation_tardive:boolean, penalite_score: -8 | 0}` (tardive = `debut_le - now() < 24 h`).
   Effets serveur : mission remise `OUVERTE`, notification étab `SYSTEM`, audit `MISSION_ANNULEE_PAR_SOIGNANT`,
-  recalcul score si `est_urgente`. Messages `{error}` affichés verbatim.
+  recalcul score si `est_urgente`. Messages `{error}` affichés verbatim, après relecture de la mission (revue B8
+  delta de #1156, m1, intégration de la vague B) : après une réponse perdue, le nouvel essai est refusé (« Annulation
+  impossible dans cet état… », mission déjà remise en ligne) ; `AnnulationModel.annulerMission` relit alors
+  `mission(id:)` et annonce l'annulation si la mission relue n'est plus attribuée au soignant, comme `STATUT_INVALIDE`
+  côté candidature.
 - **Exemple de réponse STAGING** : à enregistrer en T11, corps JSON anonymisé.
 
 ## fn_repondre_proposition
@@ -1393,13 +1397,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   **Aucune idempotence ni fenêtre serveur** : chaque appel réécrit `presence_confirmee_le = NOW()` et insère
   une notification étab `SYSTEM` « Présence confirmée ✓ » → bouton désactivé pendant l'appel, masqué après
   relecture ; bloc limité à `ASSIGNEE` côté app (la RPC accepte aussi `EN_COURS`).
+  **Issue incertaine** (revue B8 delta de #1157, M1, intégration de la vague B) : `{success:true}` suivi d'une
+  relecture vide, sans la date, d'un autre soignant ou en échec rend `PresenceOutcome.envoyeeNonRelue` (jamais une
+  erreur) ; un délai dépassé de `bounded` est traité de même par `ConfirmationPresenceModel`. L'écran affiche
+  « Votre confirmation a été envoyée mais n'a pas pu être relue. Rouvrez la mission avant de réessayer. » (texte
+  opérationnel, sans équivalent web : le web n'a ni relecture ni délai) et remplace le bouton par « Actualiser »,
+  qui relit `mission(id:)` : date relue → confirmée ; mission relue sans la date → l'envoi redevient possible ;
+  relecture en échec → l'issue reste incertaine. Aucun nouvel appel tant qu'une relecture n'a pas conclu.
 - **Preuve STAGING** : `missions.presence_confirmee_le` relu + `notifications` étab `SYSTEM` « Présence
   confirmée ✓ » relue (T11).
 - **Chaînes d'écran** (reprises à l'identique du web, `DetailMissionSoignant.tsx` l.1419-1438 ; cibles des
   assertions XCUITest et de la recette) : bouton « ✓ Je confirme ma présence » ; confirmation après relecture
   « Présence confirmée — l'établissement est prévenu. ✓ » (toast web) ; état confirmé
   « ✓ Présence confirmée — l'établissement est prévenu » ; refus : `error` serveur verbatim, sinon
-  « Confirmation impossible. ». Titre et description du bloc, tutoyés sur le web, passent au vouvoiement
+  « Confirmation impossible. » (refus sans message et erreur d'envoi seulement, jamais après un succès serveur). Titre et description du bloc, tutoyés sur le web, passent au vouvoiement
   (décision 9, `LOT1_PLAN.md` §3 T6c).
 - **Titre du push** (pas un texte d'écran) : « Ta mission demain — Je serai là ✓ » est le titre du push
   serveur `RAPPEL_MISSION` (`fn_demander_confirmations_presence` l.29924/29934) ; aucune assertion d'écran ne le cherche.

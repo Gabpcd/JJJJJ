@@ -49,7 +49,7 @@ struct AvisLectureEtoiles: View {
                              announcementID: favoris.tentatives)
                 if favoris.sessionExpired {
                     JoleneButton("Vérifier ma session", style: .secondary) {
-                        Task { await favoris.verifierSession(session) }
+                        Task { await favoris.verifierSession(session, contexte: contexte) }
                     }
                     .accessibilityIdentifier("\(identifier)-session")
                 } else {

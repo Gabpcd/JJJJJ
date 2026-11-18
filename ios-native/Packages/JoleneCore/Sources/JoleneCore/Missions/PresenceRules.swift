@@ -24,6 +24,11 @@ public enum PresenceRules {
         public static let titre = "Confirmez votre présence"
         // source: src/pages/DetailMissionSoignant.tsx:1421 (vouvoyé : « confirme en 1 clic »)
         public static let description = "La mission démarre bientôt — confirmez en 1 clic pour rassurer l'établissement."
+        /// Issue incertaine (revue B8 delta de #1157, M1) : texte opérationnel sans équivalent web (le web n'a ni
+        /// relecture ni délai), hors HARD STOP. Après `{success:true}` sans relecture concluante, ou un délai dépassé.
+        public static let envoyeeNonRelue = "Votre confirmation a été envoyée mais n'a pas pu être relue. Rouvrez la mission avant de réessayer."
+        /// Relecture proposée à la place d'un nouvel envoi tant que l'issue reste incertaine.
+        public static let actualiser = "Actualiser"
     }
 
     public static func bloc(_ mission: MissionRecord, userId: String, maintenant: Date) -> Bloc {

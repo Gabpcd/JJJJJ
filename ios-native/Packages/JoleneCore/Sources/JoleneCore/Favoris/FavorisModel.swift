@@ -135,10 +135,20 @@ public final class FavorisModel: ObservableObject {
     /// relecture, une session encore valide (même epoch : `SessionStore.start` ne démonte pas un espace prêt) laisserait
     /// l'écran sur « session à vérifier », « Réessayer » masqué. Une session fermée ou une autre identité est reprise
     /// par la racine (`RootView`, `.id(epoch)`), sans lecture pour l'identité périmée.
-    public func verifierSession(_ session: SessionStore) async {
+    ///
+    /// Revue B8 delta de #1149 (m1), intégration de la vague B : `contexte` est la surface qui affiche l'avis (`.ecran`
+    /// pour « Mes favoris », qui relit les deux listes ; `.explorer` ou `.detail` pour l'étoile, qui relit les seules
+    /// missions dans ce contexte). Un échec de cette relecture s'affiche donc là où « Vérifier ma session » a été touché,
+    /// jamais dans le seul contexte de « Mes favoris ».
+    public func verifierSession(_ session: SessionStore, contexte: ContexteFavoris = .ecran) async {
         await session.start()
         guard session.state.snapshot?.epoch == snapshot.epoch else { return }
-        await charger()
+        guard contexte != .ecran else {
+            await charger()
+            return
+        }
+        effacerErreur()
+        await lireMissions(explicite: true, contexte: contexte)
     }
 
     // MARK: - Lectures
