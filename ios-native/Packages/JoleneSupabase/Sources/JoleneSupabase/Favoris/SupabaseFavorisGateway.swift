@@ -5,10 +5,20 @@ import Supabase
 /// `FavorisPort` (lot 1, T4b), port de `BoutonSauvegarderMission.tsx` et de `MesFavorisSoignant.tsx`.
 ///
 /// Missions : PostgREST direct sur `missions_sauvegardees` sous RLS (`soignant_id = auth.uid()` en
-/// lecture, insertion et suppression, l.78141-78149 du dump ; politique restrictive « compte actif »
-/// l.78751), avec la jointure `missions(...)` du web. L'insertion ne relit rien (`return=minimal`) :
+/// lecture, insertion et suppression, `public.sql` l.78583-78591 ; politique restrictive « compte actif »
+/// l.79193), avec la jointure `missions(...)` du web. L'insertion ne relit rien (`return=minimal`) :
 /// la liste est relue juste après ; un conflit UNIQUE (`23505`, mission déjà sauvegardée) est un état à
 /// relire, pas une erreur.
+///
+/// Favoris de l'inscription progressive (décision 8 du lot 1 amendée le 18/11/2026, revue B8 de T4b, M2), comme le web
+/// (`MesFavorisSoignant.tsx` l.43-53, `BoutonSauvegarderMission.tsx` l.36-44 et l.61-64) : chaque lecture relit
+/// aussi `parcours_inscription.donnees.missionsSauvegardees` (SELECT seul, RLS `parcours_inscription_proprietaire`
+/// l.78669 : propriétaire et compte actif ; GRANT SELECT l.86801), puis les aperçus des missions absentes de la table
+/// (`missions` sous RLS, mêmes colonnes que la jointure), et fusionne les deux magasins sans doublon
+/// (`FavorisRegles.fusion`). Le retrait vide les deux : `fn_modifier_favori_inscription(p_actif := false)`
+/// (l.43500, SECURITY DEFINER, GRANT `authenticated` l.84072) si la mission y figure, puis la ligne de la table.
+/// L'ajout n'écrit que la table, comme le web. Un échec de lecture de l'un des magasins fait échouer la lecture :
+/// jamais une liste partielle présentée comme complète.
 ///
 /// Établissements : `fn_mes_favoris_etablissements()` (tableau, ou `{error}` en HTTP 200) puis, comme le
 /// veut la fiche du contrat, le nom de `fn_etablissements_safe` quand la ligne existe (lecture
@@ -25,8 +35,19 @@ public struct SupabaseFavorisGateway: FavorisPort {
         "id,mission_id,cree_le,missions(id,intitule,debut_le,fin_le,duree_heures,nb_creneaux,statut)"
     public static let rpcListe = "fn_mes_favoris_etablissements"
     public static let rpcBascule = "fn_toggle_favori_etablissement"
-    /// `missions_sauvegardees_soignant_id_mission_id_key` (l.73127) : déjà sauvegardée.
+    /// `missions_sauvegardees_soignant_id_mission_id_key` (l.73531) : déjà sauvegardée.
     public static let codeConflitUnique = "23505"
+    /// Magasin des favoris de l'inscription progressive (décision 8 du lot 1 amendée le 18/11/2026).
+    public static let tableParcours = "parcours_inscription"
+    public static let colonnesParcours = "donnees"
+    /// Aperçus des favoris de l'inscription : mêmes colonnes que la jointure de `selectSauvegardees`.
+    public static let tableMissions = "missions"
+    public static let colonnesApercu = "id,intitule,debut_le,fin_le,duree_heures,nb_creneaux,statut"
+    public static let rpcRetraitInscription = "fn_modifier_favori_inscription"
+    /// SQLSTATE métier de `fn_modifier_favori_inscription` (« Favori invalide. », l.43500) : message restitué.
+    static let exceptionsRetraitInscription: Set<String> = ["22023"]
+    /// Identifiants par requête `in.(…)` (longueur d'URL bornée ; 200 favoris au plus côté SQL).
+    static let tailleLotApercus = 50
 
     public static let lectureMissionsFallback = "Vos missions sauvegardées n'ont pas pu être chargées. Réessayez."
     public static let sauvegardeFallback = "La mission n'a pas pu être sauvegardée. Réessayez."
@@ -42,8 +63,18 @@ public struct SupabaseFavorisGateway: FavorisPort {
 
     // MARK: - Missions sauvegardées
 
+    /// Deux magasins relus en parallèle (web : `Promise.all`), puis fusionnés (`FavorisRegles.fusion`).
     public func missionsSauvegardees(context: MissionReadContext) async throws -> [MissionSauvegardee] {
         try MissionQuery.validate(context: context)
+        async let table = lignesTable(context: context)
+        async let inscription = idsInscription(context: context)
+        let (lignes, ids) = try await (table, inscription)
+        let lues = Set(lignes.filter { $0.mission != nil }.map(\.missionId))
+        let apercus = try await apercus(ids: ids.filter { !lues.contains($0) })
+        return FavorisRegles.fusion(sauvegardees: lignes, inscription: ids, apercus: apercus)
+    }
+
+    private func lignesTable(context: MissionReadContext) async throws -> [MissionSauvegardee] {
         do {
             return try await client.from(Self.table)
                 .select(Self.selectSauvegardees)
@@ -54,6 +85,46 @@ public struct SupabaseFavorisGateway: FavorisPort {
         } catch {
             throw SupabaseErrorMapping.map(error, fallback: Self.lectureMissionsFallback)
         }
+    }
+
+    /// `parcours_inscription.donnees.missionsSauvegardees` du soignant (web : `chargerFavorisInscription`) ; aucune
+    /// ligne (inscription terminée sans parcours conservé) : aucun favori d'inscription.
+    private func idsInscription(context: MissionReadContext) async throws -> [String] {
+        let lignes: [ValeurJSON]
+        do {
+            lignes = try await client.from(Self.tableParcours)
+                .select(Self.colonnesParcours)
+                .eq("user_id", value: context.userId)
+                .limit(1)
+                .execute()
+                .value
+        } catch {
+            throw SupabaseErrorMapping.map(error, fallback: Self.lectureMissionsFallback)
+        }
+        return FavorisRegles.idsInscription(lignes.first?[Self.colonnesParcours])
+    }
+
+    /// Aperçus des missions de l'inscription sous RLS, par lots. Seuls les UUID sont demandés (le SQL n'écrit que
+    /// `p_mission_id::text`) : un identifiant d'une autre forme ne correspond à aucune mission, il reste sans aperçu
+    /// (étoile allumée, mission non listée) au lieu de faire échouer la requête (`22P02`).
+    private func apercus(ids: [String]) async throws -> [String: MissionSauvegardee.Apercu] {
+        let valides = ids.filter { UUID(uuidString: $0) != nil }
+        guard !valides.isEmpty else { return [:] }
+        var resultat: [String: MissionSauvegardee.Apercu] = [:]
+        do {
+            for debut in stride(from: 0, to: valides.count, by: Self.tailleLotApercus) {
+                let lot = Array(valides[debut..<min(debut + Self.tailleLotApercus, valides.count)])
+                let lus: [MissionSauvegardee.Apercu] = try await client.from(Self.tableMissions)
+                    .select(Self.colonnesApercu)
+                    .in("id", values: lot)
+                    .execute()
+                    .value
+                for apercu in lus where lot.contains(apercu.id) { resultat[apercu.id] = apercu }
+            }
+        } catch {
+            throw SupabaseErrorMapping.map(error, fallback: Self.lectureMissionsFallback)
+        }
+        return resultat
     }
 
     public func sauvegarder(missionId: String, context: MissionReadContext) async throws -> [MissionSauvegardee] {
@@ -71,9 +142,19 @@ public struct SupabaseFavorisGateway: FavorisPort {
         return try await missionsSauvegardees(context: context)
     }
 
+    /// Retrait des deux magasins, dans l'ordre du web : favori de l'inscription d'abord (seulement s'il y figure, comme
+    /// `chargerFavorisInscription().includes(missionId)`), puis la ligne de la table ; chaque refus remonte tel quel,
+    /// sans renvoi, et le modèle relit.
     public func retirer(missionId: String, context: MissionReadContext) async throws -> [MissionSauvegardee] {
         try MissionQuery.validate(context: context)
         let id = try Self.identifiant(missionId)
+        if try await idsInscription(context: context).contains(id) {
+            let issue = try await RPCResponse.appelerSansCorps(
+                client, Self.rpcRetraitInscription,
+                params: ["p_mission_id": .string(id), "p_actif": .bool(false)],
+                fallback: Self.retraitFallback, exceptionsMetier: Self.exceptionsRetraitInscription)
+            if case let .refus(reponse) = issue { throw JoleneError(.unknown, reponse.erreur ?? Self.retraitFallback) }
+        }
         do {
             try await client.from(Self.table)
                 .delete(returning: .minimal)

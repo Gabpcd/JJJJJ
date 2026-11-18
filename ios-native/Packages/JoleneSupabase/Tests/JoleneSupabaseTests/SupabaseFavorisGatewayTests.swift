@@ -5,7 +5,7 @@ import XCTest
 @testable import JoleneSupabase
 
 /// Favoris du lot 1 (T4b) : missions sauvegardées par PostgREST direct sur `missions_sauvegardees`
-/// (RLS `soignant_id = auth.uid()`, l.78141-78149 du dump), établissements par
+/// (RLS `soignant_id = auth.uid()`, `public.sql` l.78583-78591), établissements par
 /// `fn_mes_favoris_etablissements` (tableau, ou `{error}` en HTTP 200) et retrait par
 /// `fn_toggle_favori_etablissement(p_actif := false)` — jamais l'ajout (décision 8). Chaque mutation
 /// rend la liste relue ; le conflit UNIQUE est un état à relire, pas une erreur ; `{error}` n'est
@@ -16,6 +16,22 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
     private let listePath = "/rest/v1/rpc/fn_mes_favoris_etablissements"
     private let basculePath = "/rest/v1/rpc/fn_toggle_favori_etablissement"
     private let surPath = "/rest/v1/rpc/fn_etablissements_safe"
+    // Décision 21 du lot 1 (revue B8 de T4b, M2) : second magasin, celui de l'inscription progressive.
+    private let parcoursPath = "/rest/v1/parcours_inscription"
+    private let missionsPath = "/rest/v1/missions"
+    private let retraitInscriptionPath = "/rest/v1/rpc/fn_modifier_favori_inscription"
+
+    /// `parcours_inscription` du soignant : `nil` = aucune ligne, sinon ses favoris d'inscription.
+    private func stubParcours(_ ids: [String]? = nil) {
+        let corps: String
+        if let ids {
+            let liste = ids.map { "\"\($0)\"" }.joined(separator: ",")
+            corps = #"[{"donnees":{"etape":"completer","missionsSauvegardees":[\#(liste)]}}]"#
+        } else {
+            corps = "[]"
+        }
+        registry.add("GET", parcoursPath, respond: .json(200, corps))
+    }
 
     override func setUp() {
         super.setUp()
@@ -54,6 +70,7 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
     // MARK: - Missions sauvegardées
 
     func testLectureDesMissionsSauvegardeesAvecJointureEtOrdreDuWeb() async throws {
+        stubParcours()
         registry.add("GET", tablePath, respond: .json(200, """
         [\(Self.ligneJSON("s-1", mission: "m-1")), \(Self.ligneJSON("s-2", mission: "m-2", jointure: "null"))]
         """))
@@ -66,6 +83,11 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
                        "id,mission_id,cree_le,missions(id,intitule,debut_le,fin_le,duree_heures,nb_creneaux,statut)")
         XCTAssertEqual(requete.query("soignant_id"), "eq.\(TestClient.userId)")
         XCTAssertEqual(requete.query("order"), "cree_le.desc.nullslast", "web : .order('cree_le', { ascending: false })")
+        let parcours = try XCTUnwrap(registry.requests(to: parcoursPath).first, "second magasin toujours relu")
+        XCTAssertEqual(parcours.query("select"), "donnees")
+        XCTAssertEqual(parcours.query("user_id"), "eq.\(TestClient.userId)")
+        XCTAssertEqual(parcours.query("limit"), "1")
+        XCTAssertTrue(registry.requests(to: missionsPath).isEmpty, "aucun favori d'inscription : aucune lecture d'aperçu")
         XCTAssertTrue(registry.unmatched.isEmpty)
 
         XCTAssertEqual(lignes.map(\.missionId), ["m-1", "m-2"])
@@ -74,9 +96,11 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
     }
 
     func testLectureEnEchecTraduite() async {
+        stubParcours()
         registry.add("GET", tablePath, respond: .json(401, #"{"code":"PGRST301","message":"JWT expired","details":null,"hint":null}"#))
         await attendreErreur(.unauthorized) { _ = try await self.gateway().missionsSauvegardees(context: TestClient.context) }
         registry.reset()
+        stubParcours()
         registry.add("GET", tablePath, respond: .json(400, #"{"code":"PGRST200","message":"Could not find a relationship","details":null,"hint":null}"#))
         await attendreErreur(.contract, message: SupabaseErrorMapping.contractMessage) {
             _ = try await self.gateway().missionsSauvegardees(context: TestClient.context)
@@ -85,6 +109,7 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
     }
 
     func testSauvegarderInsereSansRetourPuisRelit() async throws {
+        stubParcours()
         registry.add("POST", tablePath, respond: .json(201, ""))
         registry.add("GET", tablePath, respond: .json(200, "[\(Self.ligneJSON("s-1", mission: "m-1"))]"))
 
@@ -101,6 +126,7 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
     }
 
     func testConflitUniqueRelitLEtatSansErreur() async throws {
+        stubParcours()
         registry.add("POST", tablePath, respond: .json(409, """
         {"code":"23505","details":"Key (soignant_id, mission_id) already exists.","hint":null,
          "message":"duplicate key value violates unique constraint \\"missions_sauvegardees_soignant_id_mission_id_key\\""}
@@ -114,7 +140,7 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
     }
 
     func testInsertionRefuseeSansRelecture() async {
-        // Compte non actif (politique restrictive l.78751) ou session d'un autre : 42501 → session à vérifier.
+        // Compte non actif (politique restrictive l.79193) ou session d'un autre : 42501 → session à vérifier.
         registry.add("POST", tablePath, respond: .json(403, #"{"code":"42501","message":"new row violates row-level security policy","details":null,"hint":null}"#))
         await attendreErreur(.unauthorized) { _ = try await self.gateway().sauvegarder(missionId: "m-1", context: TestClient.context) }
         XCTAssertTrue(registry.requests(to: tablePath).allSatisfy { $0.method == "POST" }, "aucune relecture après un refus")
@@ -133,6 +159,7 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
     }
 
     func testRetirerSupprimeLaLigneDuSoignantPuisRelit() async throws {
+        stubParcours(["autre-mission"])
         registry.add("DELETE", tablePath, respond: .json(204, ""))
         registry.add("GET", tablePath, respond: .json(200, "[]"))
 
@@ -143,7 +170,9 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
         XCTAssertEqual(suppression.query("soignant_id"), "eq.\(TestClient.userId)")
         XCTAssertTrue(suppression.header("Prefer")?.contains("return=minimal") == true)
         XCTAssertEqual(registry.requests(to: tablePath).map(\.method), ["DELETE", "GET"])
-        XCTAssertEqual(lignes, [])
+        XCTAssertTrue(registry.requests(to: retraitInscriptionPath).isEmpty,
+                      "absente des favoris de l'inscription : fn_modifier_favori_inscription n'est pas appelée (web : includes)")
+        XCTAssertEqual(lignes.map(\.missionId), ["autre-mission"], "le favori d'inscription restant est relu")
     }
 
     func testIdentifiantVideEtContexteIncoherentRefusesAvantToutAppel() async {
@@ -154,6 +183,85 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
         await attendreErreur(.unauthorized) { _ = try await self.gateway().missionsSauvegardees(context: incoherent) }
         await attendreErreur(.unauthorized) { _ = try await self.gateway().etablissementsFavoris(context: incoherent) }
         XCTAssertTrue(registry.requests.isEmpty, "aucune requête : \(registry.requests.map(\.path))")
+    }
+
+    // MARK: - Favoris de l'inscription progressive (décision 8 du lot 1 amendée le 18/11/2026, revue B8 de T4b, M2)
+
+    private let uuidInscription = "3f1c2a4e-9b7d-4c1e-8a2f-5d6e7f8a9b0c"
+
+    func testLectureFusionneLesFavorisDeLInscriptionSansDoublon() async throws {
+        stubParcours(["m-commune", uuidInscription, "pas-un-uuid", "m-commune"])
+        registry.add("GET", tablePath, respond: .json(200, "[\(Self.ligneJSON("s-1", mission: "m-1")), \(Self.ligneJSON("s-2", mission: "m-commune"))]"))
+        registry.add("GET", missionsPath, respond: .json(200, """
+        [{"id":"\(uuidInscription)","intitule":"Mission de l'inscription","debut_le":"2026-11-20T07:00:00+00:00",
+          "fin_le":"2026-11-20T15:00:00+00:00","duree_heures":8,"nb_creneaux":1,"statut":"OUVERTE"}]
+        """))
+
+        let lignes = try await gateway().missionsSauvegardees(context: TestClient.context)
+
+        let apercus = try XCTUnwrap(registry.requests(to: missionsPath).first)
+        XCTAssertEqual(apercus.query("select"), SupabaseFavorisGateway.colonnesApercu)
+        XCTAssertEqual(apercus.query("id"), "in.(\(uuidInscription))",
+                       "seules les missions absentes de la table, et seulement des UUID (jamais un 22P02)")
+        XCTAssertEqual(SupabaseFavorisGateway.colonnesApercu, "id,intitule,debut_le,fin_le,duree_heures,nb_creneaux,statut",
+                       "mêmes colonnes que la jointure de la table")
+        XCTAssertTrue(registry.unmatched.isEmpty)
+        XCTAssertEqual(lignes.map(\.missionId), [uuidInscription, "m-commune", "pas-un-uuid", "m-1"],
+                       "inscription d'abord (début croissant), puis la table ; doublon une seule fois")
+        XCTAssertEqual(lignes[1].id, "s-2", "doublon : la ligne de la table")
+        XCTAssertEqual(lignes[0].mission?.intitule, "Mission de l'inscription")
+        XCTAssertNil(lignes[2].mission, "identifiant sans mission : étoile allumée, jamais listé")
+    }
+
+    func testLectureDuParcoursEnEchecFaitEchouerLaLecture() async {
+        registry.add("GET", tablePath, respond: .json(200, "[\(Self.ligneJSON("s-1", mission: "m-1"))]"))
+        registry.add("GET", parcoursPath, respond: .json(400, #"{"code":"22P02","message":"invalid input syntax","details":null,"hint":null}"#))
+        await attendreErreur(.unknown, message: SupabaseFavorisGateway.lectureMissionsFallback) {
+            _ = try await self.gateway().missionsSauvegardees(context: TestClient.context)
+        }
+        // Aperçus illisibles : même règle, jamais une liste partielle présentée comme complète.
+        registry.reset()
+        stubParcours([uuidInscription])
+        registry.add("GET", tablePath, respond: .json(200, "[]"))
+        registry.add("GET", missionsPath, respond: .json(401, #"{"code":"PGRST301","message":"JWT expired","details":null,"hint":null}"#))
+        await attendreErreur(.unauthorized) { _ = try await self.gateway().missionsSauvegardees(context: TestClient.context) }
+    }
+
+    func testRetraitVideLesDeuxMagasinsDansLOrdreDuWeb() async throws {
+        stubParcours([uuidInscription])
+        registry.add("POST", retraitInscriptionPath, respond: .json(204, ""))
+        registry.add("DELETE", tablePath, respond: .json(204, ""))
+        registry.add("GET", tablePath, respond: .json(200, "[]"))
+        registry.add("GET", missionsPath, respond: .json(200, "[]"))
+
+        _ = try await gateway().retirer(missionId: uuidInscription, context: TestClient.context)
+
+        let appel = try XCTUnwrap(registry.requests(to: retraitInscriptionPath).first)
+        let corps = try XCTUnwrap(appel.bodyJSON as? [String: Any])
+        XCTAssertEqual(corps["p_mission_id"] as? String, uuidInscription)
+        XCTAssertEqual(corps["p_actif"] as? Bool, false, "retrait seulement, jamais p_actif = true")
+        XCTAssertEqual(corps.count, 2)
+        let chemins = registry.requests.map(\.path)
+        let rangRPC = try XCTUnwrap(chemins.firstIndex(of: retraitInscriptionPath))
+        let rangSuppression = try XCTUnwrap(registry.requests.firstIndex { $0.path == tablePath && $0.method == "DELETE" })
+        XCTAssertEqual(chemins.first, parcoursPath, "magasin de l'inscription relu d'abord (web : includes)")
+        XCTAssertLessThan(rangRPC, rangSuppression, "inscription d'abord, puis la table, comme BoutonSauvegarderMission.tsx")
+        XCTAssertEqual(registry.requests(to: retraitInscriptionPath).count, 1, "une seule requête, aucun renvoi")
+    }
+
+    func testRetraitDeLInscriptionRefuseSansToucherLaTable() async {
+        stubParcours([uuidInscription])
+        registry.add("POST", retraitInscriptionPath, respond: .json(400, #"{"code":"22023","message":"Favori invalide.","details":null,"hint":null}"#))
+        await attendreErreur(.unknown, message: "Favori invalide.") {
+            _ = try await self.gateway().retirer(missionId: self.uuidInscription, context: TestClient.context)
+        }
+        XCTAssertTrue(registry.requests(to: tablePath).isEmpty, "refus : rien d'autre n'est envoyé, le modèle relit")
+
+        registry.reset()
+        stubParcours([uuidInscription])
+        registry.add("POST", retraitInscriptionPath, respond: .json(403, #"{"code":"42501","message":"Session invalide.","details":null,"hint":null}"#))
+        await attendreErreur(.unauthorized) { _ = try await self.gateway().retirer(missionId: self.uuidInscription, context: TestClient.context) }
+        XCTAssertTrue(registry.requests(to: tablePath).isEmpty)
     }
 
     // MARK: - Établissements favoris
@@ -203,7 +311,7 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
     }
 
     func testFormesDErreurDeFnMesFavorisEtablissements() async {
-        // `{error}` en HTTP 200 (l.41843) : jamais un succès vide.
+        // `{error}` en HTTP 200 (l.42289) : jamais un succès vide.
         registry.add("POST", listePath, respond: .json(200, #"{"error":"Non authentifié"}"#))
         await attendreErreur(.unauthorized, message: SupabaseErrorMapping.unauthorizedMessage) {
             _ = try await self.gateway().etablissementsFavoris(context: TestClient.context)

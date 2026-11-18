@@ -347,4 +347,117 @@ final class FavorisModelTests: XCTestCase {
         XCTAssertTrue(resultat)
         XCTAssertEqual(scenario.nombre("basculer"), 1)
     }
+
+    // MARK: - Revue B8 de T4b (M1, m1, m3, m4)
+
+    /// M1 : « Vérifier ma session » revalide puis relit ; une session encore valide (même epoch) lève l'état « à
+    /// vérifier » et rend « Réessayer », au lieu de laisser l'écran sans issue.
+    func testVerifierSessionRelitQuandLaSessionResteValide() async throws {
+        let scenario = FavorisScenario([
+            "lire": [.echec(JoleneError(.unauthorized, "Votre session a expiré. Reconnectez-vous.")), .missions([ligne("m-1")])],
+            "etablissements": [.etablissements([etablissement("e-1")])],
+        ])
+        let (model, controller) = try await pret(scenario)
+        let session = SessionStore(controller: controller)
+        await session.refresh()
+        await model.chargerMissions()
+        XCTAssertTrue(model.sessionExpired)
+        XCTAssertEqual(model.missions, .echec("Votre session a expiré. Reconnectez-vous."))
+
+        await model.verifierSession(session)
+
+        XCTAssertNotNil(session.state.snapshot, "session encore valide : espace non démonté")
+        XCTAssertFalse(model.sessionExpired, "« Vérifier ma session » retiré, « Réessayer » rendu")
+        XCTAssertEqual(model.missions.elements.map(\.missionId), ["m-1"], "relecture réelle des deux listes")
+        XCTAssertEqual(model.etablissements, .prete([etablissement("e-1")]))
+        XCTAssertEqual(scenario.nombre("lire"), 2)
+    }
+
+    /// M1 : une lecture réussie des établissements lève aussi « session à vérifier », comme celle des missions.
+    func testLectureReussieDesEtablissementsLeveLaSessionAVerifier() async throws {
+        let scenario = FavorisScenario(["etablissements": [
+            .echec(JoleneError(.unauthorized, "Votre session a expiré. Reconnectez-vous.")),
+            .etablissements([etablissement("e-1")]),
+        ]])
+        let (model, _) = try await pret(scenario)
+        await model.chargerEtablissements()
+        XCTAssertTrue(model.sessionExpired)
+        await model.chargerEtablissements()
+        XCTAssertFalse(model.sessionExpired)
+        XCTAssertEqual(model.etablissements, .prete([etablissement("e-1")]))
+    }
+
+    /// m1 : étoile A puis étoile B ; la relecture de B, lue avant l'écriture de A, est publiée la première. A, confirmée
+    /// par sa propre relecture mais contredite par l'état publié, impose une relecture : jamais une écriture masquée.
+    func testMutationConfirmeeJamaisMasqueeParUnEtatLuAvantElle() async throws {
+        let barriereA = Gate()
+        let scenario = FavorisScenario([
+            "lire": [.missions([]), .missions([ligne("m-a"), ligne("m-b")])],
+            "sauvegarder": [.apres(barriereA, .missions([ligne("m-a"), ligne("m-b")])), .missions([ligne("m-b")])],
+        ])
+        let (model, _) = try await pret(scenario)
+        await model.chargerMissions()
+        let etoileA = Task { await model.basculer(missionId: "m-a") }
+        await waitUntil { scenario.nombre("sauvegarder") == 1 }
+        await model.basculer(missionId: "m-b")
+        XCTAssertEqual(model.missions.elements.map(\.missionId), ["m-b"], "relecture de B publiée, sans A")
+        await barriereA.open()
+        await etoileA.value
+
+        XCTAssertTrue(model.estSauvegardee("m-a"), "A n'est pas masquée par l'état lu avant elle")
+        XCTAssertTrue(model.estSauvegardee("m-b"))
+        XCTAssertEqual(scenario.nombre("lire"), 2, "une relecture de réconciliation, une seule")
+        XCTAssertNil(model.erreurAction)
+    }
+
+    /// m1 (contrôle) : quand l'état publié par l'opération plus récente confirme déjà la mutation, aucune relecture.
+    func testMutationDejaRefleteeParLEtatPublieSansRelecture() async throws {
+        let barriere = Gate()
+        let scenario = FavorisScenario([
+            "sauvegarder": [.apres(barriere, .missions([ligne("m-1")]))],
+            "lire": [.missions([ligne("m-1"), ligne("m-2")])],
+        ])
+        let (model, _) = try await pret(scenario)
+        let mutation = Task { await model.basculer(missionId: "m-1") }
+        await waitUntil { scenario.nombre("sauvegarder") == 1 }
+        await model.chargerMissions()
+        await barriere.open()
+        await mutation.value
+        XCTAssertEqual(scenario.nombre("lire"), 1)
+        XCTAssertEqual(model.missions.elements.map(\.missionId), ["m-1", "m-2"])
+    }
+
+    /// m3 : l'étoile est « inconnue » avant la première lecture et après son échec (jamais « Non sauvegardée »), et
+    /// l'échec est annoncé (`echecLectureEtoiles`) ; « Réessayer » relit.
+    func testEtoileInconnueTantQueLaListeNEstPasRelue() async throws {
+        let scenario = FavorisScenario(["lire": [.echec(JoleneError(.network, "Connexion impossible.")), .missions([ligne("m-1")])]])
+        let (model, _) = try await pret(scenario)
+        XCTAssertEqual(model.etoile("m-1"), .inconnue, "avant la première lecture")
+        XCTAssertNil(model.echecLectureEtoiles)
+
+        await model.chargerMissionsSiNecessaire()
+        XCTAssertEqual(model.etoile("m-2"), .inconnue, "après son échec")
+        XCTAssertEqual(model.echecLectureEtoiles, "Connexion impossible.")
+        XCTAssertNil(model.erreur(pour: .explorer), "l'échec d'une première lecture est porté par l'avis de lecture")
+
+        await model.chargerMissions(depuis: .explorer)
+        XCTAssertEqual(model.etoile("m-1"), .sauvegardee)
+        XCTAssertEqual(model.etoile("m-2"), .nonSauvegardee)
+        XCTAssertNil(model.echecLectureEtoiles)
+    }
+
+    /// m4 : l'erreur de l'étoile du détail n'est affichée que dans ce détail, jamais sur la liste au retour ni sur
+    /// l'écran « Mes favoris ».
+    func testErreurAfficheeDansSonSeulContexte() async throws {
+        let scenario = FavorisScenario(["lire": [.missions([]), .missions([])], "sauvegarder": [.echec(JoleneError(.unknown, "Refus."))]])
+        let (model, _) = try await pret(scenario)
+        await model.chargerMissions()
+        await model.basculer(missionId: "m-1", depuis: .detail(missionId: "m-1"))
+        XCTAssertEqual(model.erreur(pour: .detail(missionId: "m-1")), "Refus.")
+        XCTAssertNil(model.erreur(pour: .explorer), "la liste ne la reprend pas au retour")
+        XCTAssertNil(model.erreur(pour: .detail(missionId: "m-2")), "ni le détail d'une autre mission")
+        XCTAssertNil(model.erreur(pour: .ecran))
+        model.effacerErreur()
+        XCTAssertNil(model.erreur(pour: .detail(missionId: "m-1")))
+    }
 }

@@ -34,6 +34,7 @@ const LOT0 = ['fn_get_my_role', 'fn_etablissements_safe'];
 const LOT1_CONSOMMEES = [
   'fn_dashboard_soignant_complet', // T3
   'fn_toggle_favori_etablissement', 'fn_mes_favoris_etablissements', // T4b
+  'fn_modifier_favori_inscription', // T4b, décision 8 amendée le 18/11/2026 (revue B8, M2)
 ];
 // `fn_suggestions_missions_pour_soignant` en est sortie (revue B8 de T3) : reclassée lot 4.
 const LOT1 = [
@@ -44,6 +45,7 @@ const LOT1 = [
   'fn_repondre_proposition',
   'fn_toggle_favori_etablissement',
   'fn_mes_favoris_etablissements',
+  'fn_modifier_favori_inscription',
   'fn_audit_connexion',
   'fn_maj_activite_soignant',
   'fn_ecrire_audit_safe',
