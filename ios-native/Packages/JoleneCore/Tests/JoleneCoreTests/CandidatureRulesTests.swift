@@ -3,7 +3,7 @@ import XCTest
 @testable import JoleneCore
 
 /// Règles pures de la candidature (lot 1, T6a) : action selon `mode_attribution`, preuves de relecture,
-/// fenêtre d'une proposition, exception « mission déjà prise » du web.
+/// fenêtre et verrou d'une proposition, messages exacts d'une mission sortie de l'état OUVERTE.
 final class CandidatureRulesTests: XCTestCase {
     private func record(mode: String?) -> MissionRecord {
         var record = MissionRecord(id: "m-1", intitule: "Mission", description: nil, service: nil, professionRequise: "IDE",
@@ -83,15 +83,45 @@ final class CandidatureRulesTests: XCTestCase {
         XCTAssertFalse(CandidatureRules.refusRelu(nil, id: "c-1"))
     }
 
-    func testMissionDejaAttribueeCommeLeWeb() {
-        XCTAssertTrue(CandidatureRules.estMissionDejaAttribuee("JSON object requested, multiple (or no) rows returned — The result contains 0 rows"))
-        XCTAssertTrue(CandidatureRules.estMissionDejaAttribuee("Cette mission est déjà prise."))
-        XCTAssertFalse(CandidatureRules.estMissionDejaAttribuee("Déjà Prise"), "sensible à la casse, comme `includes`")
-        XCTAssertFalse(CandidatureRules.estMissionDejaAttribuee("[CODE DU TRAVAIL] Semaine du 02/11/2026 : 50h"))
+    func testMissionDejaAttribueeSurLesMessagesExactsDuServeur() {
+        // Revue B8 de T6a, m1 : la vraie course (forme 3, variante sans point des délégués, attribution concurrente).
+        XCTAssertTrue(CandidatureRules.estMissionDejaAttribuee("Cette mission n'est plus disponible."))
+        XCTAssertTrue(CandidatureRules.estMissionDejaAttribuee("Cette mission n'est plus disponible"))
+        XCTAssertTrue(CandidatureRules.estMissionDejaAttribuee("Cette mission vient d'être attribuée."))
+        // L'ancienne branche « 0 rows » / « déjà prise » du web est morte (aucune fonction live) et faisait des faux positifs.
+        XCTAssertFalse(CandidatureRules.estMissionDejaAttribuee("The result contains 0 rows"))
+        XCTAssertFalse(CandidatureRules.estMissionDejaAttribuee("10 rows"))
+        XCTAssertFalse(CandidatureRules.estMissionDejaAttribuee("Cette mission est déjà prise."))
+        XCTAssertFalse(CandidatureRules.estMissionDejaAttribuee("Cette mission n'est plus disponible. Réessayez"), "égalité exacte")
     }
 
     func testIssueMissionDejaAttribueeDistincteDesRefus() {
-        XCTAssertNotEqual(CandidatureOutcome.missionDejaAttribuee,
-                          CandidatureOutcome.refusee(code: nil, message: "", documentsRequisPour: nil))
+        XCTAssertNotEqual(CandidatureOutcome.missionDejaAttribuee(message: "Cette mission vient d'être attribuée."),
+                          CandidatureOutcome.refusee(code: nil, message: "Cette mission vient d'être attribuée.", documentsRequisPour: nil))
+    }
+
+    func testContratDeLaPropositionCommeLeWeb() {
+        XCTAssertEqual(CandidatureRules.contratProposition(typeContratChoisi: "LIBERAL", typeContratRecherche: "TOUS"), "LIBERAL")
+        XCTAssertEqual(CandidatureRules.contratProposition(typeContratChoisi: nil, typeContratRecherche: "SALARIE"), "SALARIE")
+        XCTAssertEqual(CandidatureRules.contratProposition(typeContratChoisi: "", typeContratRecherche: "LIBERAL"), "LIBERAL")
+        XCTAssertNil(CandidatureRules.contratProposition(typeContratChoisi: nil, typeContratRecherche: nil))
+    }
+
+    func testPropositionVerrouilleeHorsLiberal() {
+        // Revue B8 de T6a, M1 : l'attestation hebdomadaire du web n'est pas portée ; seul LIBERAL reste natif.
+        XCTAssertFalse(CandidatureRules.propositionVerrouillee(contrat: "LIBERAL"))
+        for contrat in ["SALARIE", "TOUS", "liberal", "", nil] as [String?] {
+            XCTAssertTrue(CandidatureRules.propositionVerrouillee(contrat: contrat), contrat ?? "nil")
+        }
+        XCTAssertEqual(CandidatureVerrou.cheminProposition, "/soignant/tableau-de-bord")
+        XCTAssertTrue(CandidatureVerrou.messageRenvoiWeb.contains("LOT1_PLAN"), "le message cite la doc du gap")
+        XCTAssertEqual(CandidatureVerrou.renvoiWeb(chemin: "/x").errorDescription, CandidatureVerrou.messageRenvoiWeb)
+    }
+
+    func testActionHorsLot1CiteSaDocEtSonLot() {
+        let erreur = CandidatureRules.actionHorsLot1(.postuler)
+        XCTAssertEqual(erreur.kind, .contract)
+        XCTAssertTrue(erreur.message.contains("LOT1_PLAN") && erreur.message.contains("§1.2"), erreur.message)
+        XCTAssertTrue(erreur.message.contains("lot 4"), erreur.message)
     }
 }

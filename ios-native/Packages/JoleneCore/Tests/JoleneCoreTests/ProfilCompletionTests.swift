@@ -10,8 +10,8 @@ final class ProfilCompletionTests: XCTestCase {
         var profil = SoignantProfile(id: "u-1", profession: "IDE", adresseLat: 48.8566, adresseLng: 2.3522)
         profil.prenom = "Marie"
         profil.nom = "Lefèvre"
-        profil.dateNaissance = "1990-01-01"
-        profil.telephone = "0612345678"
+        profil.dateNaissanceRenseignee = true // `1990-01-01` du test web
+        profil.telephoneRenseigne = true      // `0612345678` du test web
         profil.rppsVerifie = true
         return profil
     }
@@ -38,7 +38,7 @@ final class ProfilCompletionTests: XCTestCase {
 
     func testTelephoneAbsentBloque() {
         var profil = profilBase()
-        profil.telephone = nil
+        profil.telephoneRenseigne = false
         let resume = ProfilCompletion.calculer(profil)
         XCTAssertFalse(resume.peutCandidater)
         XCTAssertEqual(resume.obligatoiresManquants, ["telephone"])
@@ -96,9 +96,18 @@ final class ProfilCompletionTests: XCTestCase {
         """.utf8)
         let profil = try JSONDecoder().decode(SoignantProfile.self, from: json)
         XCTAssertEqual(profil.prenom, "Marie")
-        XCTAssertEqual(profil.dateNaissance, "1990-01-01")
-        XCTAssertNil(profil.telephone)
+        XCTAssertEqual(profil.dateNaissanceRenseignee, true)
+        XCTAssertEqual(profil.telephoneRenseigne, false, "NULL : non renseigné")
         XCTAssertEqual(profil.rppsVerifie, true)
         XCTAssertEqual(ProfilCompletion.calculer(profil).obligatoiresManquants, ["telephone"])
+        // Minimisation (revue B8, m6) : ni la date de naissance ni le téléphone ne sont gardés, ni réencodés.
+        let encode = String(decoding: try JSONEncoder().encode(profil), as: UTF8.self)
+        XCTAssertFalse(encode.contains("1990-01-01"), encode)
+        XCTAssertFalse(encode.contains("date_naissance"), encode)
+        XCTAssertFalse(encode.contains("telephone"), encode)
+        let sansColonnes = try JSONDecoder().decode(SoignantProfile.self, from: Data(#"{"id":"u-1","profession":"IDE"}"#.utf8))
+        XCTAssertNil(sansColonnes.dateNaissanceRenseignee, "colonne non lue : inconnu, pas faux")
+        let vide = try JSONDecoder().decode(SoignantProfile.self, from: Data(#"{"id":"u-1","profession":"IDE","telephone":""}"#.utf8))
+        XCTAssertEqual(vide.telephoneRenseigne, false, "`!!''` est faux")
     }
 }

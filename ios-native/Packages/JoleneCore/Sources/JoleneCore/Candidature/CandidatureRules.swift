@@ -56,10 +56,47 @@ public enum CandidatureRules {
         return cree >= maintenant.addingTimeInterval(-fenetreProposition)
     }
 
-    /// Exception PostgREST d'une mission prise entre l'affichage et l'action : le web ouvre la modale
-    /// « mission perdue » si le message contient `0 rows` ou `déjà prise` (`DetailMissionSoignant.tsx`
-    /// l.807, `includes`, sensible à la casse).
+    /// Messages serveur exacts d'une mission sortie de l'état `OUVERTE` entre l'affichage et l'action
+    /// (revue B8 de T6a, m1) : forme 3 de `fn_confirmer_action_planning_v1` (`public.sql` l.24561-24565,
+    /// verrou `FOR UPDATE`), sa variante sans point de `fn_accepter_mission` (l.5308) et de
+    /// `fn_finaliser_attribution_mission` (l.37171), et la course de l'attribution (l.37293). La branche
+    /// « `0 rows` / `déjà prise` » du web (`DetailMissionSoignant.tsx` l.807) n'est pas reprise : aucune
+    /// fonction live n'émet ces textes, et `contains("0 rows")` reconnaissait aussi « 10 rows ».
+    public static let messagesMissionDejaAttribuee: Set<String> = [
+        "Cette mission n'est plus disponible.",
+        "Cette mission n'est plus disponible",
+        "Cette mission vient d'être attribuée.",
+    ]
+
+    /// Égalité exacte (aucun `contains`) avec l'un des messages ci-dessus.
     public static func estMissionDejaAttribuee(_ message: String) -> Bool {
-        message.contains("0 rows") || message.contains("déjà prise")
+        messagesMissionDejaAttribuee.contains(message)
+    }
+
+    // MARK: - Proposition (verrou de l'attestation hebdomadaire)
+
+    public static let contratLiberal = "LIBERAL"
+
+    /// Contrat d'une proposition, comme le web : `type_contrat_choisi ?? type_contrat_recherche`
+    /// (`CarteProposition.tsx` l.89). Une chaîne vide compte comme absente.
+    public static func contratProposition(typeContratChoisi: String?, typeContratRecherche: String?) -> String? {
+        let choisi = typeContratChoisi.flatMap { $0.isEmpty ? nil : $0 }
+        return choisi ?? typeContratRecherche.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// Décision par délégation (revue B8 de T6a, M1) : tant que l'attestation hebdomadaire des heures du web
+    /// (`preparerAttestations`, `ModalAttestationHebdo`, table `attestations_heures_externes`) n'est pas portée,
+    /// toute proposition dont le contrat n'est pas `LIBERAL` (absent compris) est acceptée sur jolene.app
+    /// (`CandidatureVerrou.renvoiWeb`). Gap consigné dans `docs/mobile-swift/LOT1_PLAN.md` §3 T6b et §7.
+    public static func propositionVerrouillee(contrat: String?) -> Bool {
+        contrat != contratLiberal
+    }
+
+    // MARK: - Actions hors lot 1
+
+    /// Garde des actions de `fn_confirmer_action_planning_v1` non servies au lot 1 (SWIPE_LIKE, URGENCE) :
+    /// refus avant tout envoi, en citant le périmètre (`LOT1_PLAN.md` §1.2) et le lot qui les livre.
+    public static func actionHorsLot1(_ action: ActionPlanning) -> JoleneError {
+        JoleneError(.contract, "Action \(action.rawValue) hors du lot 1 (docs/mobile-swift/LOT1_PLAN.md §1.2) : livrée au lot 4 avec sa propre relecture.")
     }
 }

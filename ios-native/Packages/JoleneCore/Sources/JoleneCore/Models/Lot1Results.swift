@@ -49,11 +49,12 @@ public enum CandidatureOutcome: Equatable, Sendable {
     case refusee(code: String?, message: String, documentsRequisPour: String?)
     /// Le planning a changé : relire la mission et redemander une confirmation, jamais renvoyer.
     case planningAReconfirmer(code: String, message: String)
-    /// Mission attribuée à quelqu'un d'autre pendant l'action (exception PostgREST `0 rows` ou
-    /// `déjà prise`, T6a) : équivalent de la modale « mission perdue » du web
-    /// (`DetailMissionSoignant.tsx` l.807-808). Aucun message technique n'est conservé ; l'écran relit
-    /// la mission et ne renvoie jamais l'action.
-    case missionDejaAttribuee
+    /// Mission sortie de l'état `OUVERTE` entre l'affichage et l'action (course réelle, revue B8 de T6a,
+    /// m1) : refus « Cette mission n'est plus disponible. » de `fn_confirmer_action_planning_v1` (verrou
+    /// `FOR UPDATE`, forme 3), sa variante sans point des délégués, ou « Cette mission vient d'être
+    /// attribuée. » de `fn_finaliser_attribution_mission` (`CandidatureRules.messagesMissionDejaAttribuee`).
+    /// Message serveur conservé verbatim ; l'écran relit la mission et ne renvoie jamais l'action.
+    case missionDejaAttribuee(message: String)
 
     /// Code posé par le client sur un refus du Code du travail levé en exception par un trigger
     /// de `missions` (`dec_verifier_plafond_48h`, `dec_verifier_repos_11h`,
@@ -61,6 +62,21 @@ public enum CandidatureOutcome: Equatable, Sendable {
     /// ou 23514, sans code métier. Distinct de tout code jsonb du serveur, il permet à l'écran
     /// d'afficher le texte légal à part (le web ouvre une modale, `estBlocageCodeTravail`).
     public static let codeRefusCodeDuTravail = "CODE_DU_TRAVAIL"
+}
+
+/// Parcours de candidature non porté en natif, refusé **avant tout envoi** (« un gap connu reste
+/// verrouillé », CLAUDE.md) : l'écran renvoie vers jolene.app. Aucun texte juridique ici.
+public enum CandidatureVerrou: Error, Equatable, Sendable, LocalizedError {
+    /// Acceptation d'une proposition dont le contrat n'est pas `LIBERAL` : le web fait d'abord compléter
+    /// l'attestation hebdomadaire des heures (`CarteProposition.tsx` l.154-256), non portée au lot 1
+    /// (`docs/mobile-swift/LOT1_PLAN.md` §3 T6b et §7 décision 2 amendée). `chemin` : page web de la proposition.
+    case renvoiWeb(chemin: String)
+
+    /// Page web où la proposition s'accepte (carte de l'Accueil, `DashboardSoignant.tsx`).
+    public static let cheminProposition = "/soignant/tableau-de-bord"
+    public static let messageRenvoiWeb = "Pour accepter cette proposition, continuez sur jolene.app : cette étape n'est pas encore disponible dans l'application (docs/mobile-swift/LOT1_PLAN.md, T6b)."
+
+    public var errorDescription: String? { Self.messageRenvoiWeb }
 }
 
 /// Ligne `candidatures` relue sous RLS. Seuls `id` et `mission_id` conditionnent une action.
