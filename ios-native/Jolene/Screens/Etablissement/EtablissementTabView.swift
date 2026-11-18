@@ -31,6 +31,8 @@ struct EtablissementTabView: View {
     @State private var selection: Tab = .accueil
     /// Piles des onglets (T2b) : un lien remet la pile de son onglet à la racine avant d'empiler son écran.
     @State private var chemins: [Tab: [EtabDestination]] = [:]
+    /// Lot 5, T5 : filtre `?statut=` d'un lien vers la liste des missions, rejoué par `EtabMissionsScreen`.
+    @State private var demandeMissions = DemandeFiltreMissions()
 
     init(container: AppContainer, session: SessionStore, snapshot: EtablissementSessionSnapshot) {
         self.container = container
@@ -51,7 +53,7 @@ struct EtablissementTabView: View {
             .accessibilityIdentifier("tab-etab-accueil")
 
             NavigationStack(path: chemin(.missions)) {
-                EtabMissionsRoot(session: session, snapshot: snapshot)
+                EtabMissionsRoot(session: session, snapshot: snapshot, demande: demandeMissions)
                     .destinationsEtablissement(snapshot: snapshot, session: session)
             }
             .ecranEtablissement(.missions, snapshot: snapshot, session: session)
@@ -106,5 +108,8 @@ struct EtablissementTabView: View {
         liens.demandeEtablissementTraitee(demande)
         selection = demande.cible.onglet
         chemins[demande.cible.onglet] = demande.cible.destination.map { [$0] } ?? []
+        if demande.cible.onglet == .missions, demande.cible.destination == nil {
+            demandeMissions = DemandeFiltreMissions(statut: demande.cible.statut, jeton: demandeMissions.jeton + 1)
+        }
     }
 }

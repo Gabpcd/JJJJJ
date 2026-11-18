@@ -144,7 +144,7 @@ extension EtabDestination {
     /// de `EtabDestinations.swift`). Avant : le lien qui y mène est un renvoi web, jamais un écran provisoire empilé.
     public var ecranLivre: Bool {
         switch self {
-        case .detailMission: return false        // T5
+        case .detailMission: return true         // T5
         case .candidatures: return false         // T6
         case .pointage: return false             // T7
         case .presencesMission: return false     // T8

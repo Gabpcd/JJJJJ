@@ -213,6 +213,47 @@ Aucune ne change une décision du §7 ni une règle juridique ; elles fixent ce 
      `contrats-etablissement-ios.node.mjs`) ;
    - m5 : XCUITest du lot 5 hors du socle, répartis dans deux éclats légers.
 
+## Précisions relevées par la tranche T5 (missions : liste et détail, 18/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; aucun texte juridique n'est ajouté (libellés d'interface
+du web repris, refus serveur verbatim).
+
+1. **Contrats de domaine complétés en place** (`Models/EtablissementResults.swift`) : `EtabMissionResume`,
+   `EtabMissionsPage`, `EtabMissionDetail` et `SoignantPourEtab` reçoivent des champs optionnels à défaut (signatures
+   des protocoles et initialiseurs existants inchangés) ; décodage tolérant, filtres et compteurs dans
+   `Etablissement/Missions/EtabMission.swift`. Colonnes lues = `EtabMissionResume.clesDecodees`, sans aucun montant
+   (D15) ; `fn_soignant_pour_etablissement` réduite à `SoignantPourEtab.clesDecodees` (jamais `note_moyenne`,
+   `nb_evaluations`, `type_exercice`, `internat`).
+2. **Pages cumulatives** (comme « Mes missions » du lot 1) : la page `n` relit les lignes 0…(n + 1) × 50 − 1, ordre
+   `debut_le` décroissant puis `id` (pagination stable ; le web ne pagine pas côté serveur et trie sur `debut_le` seul).
+3. **Compteurs exacts** : `select=statut` par pages de 1 000 avec compte exact (le web s'arrête à la limite de lignes de
+   PostgREST) ; un échec laisse les pastilles **sans nombre**, jamais un « (0) » supposé ; les derniers compteurs relus
+   restent affichés.
+4. **Candidatures en attente** (pastille de carte, bandeau et lien du détail) lues seulement avec la permission
+   `candidatures` (fail-closed, §2.7) : plus strict que le web, où la RLS `lecture_candidatures` les sert aussi à
+   `LECTURE_SEULE`.
+5. **Planning** : complétude de `CompletudePlanning` (source contractuelle) sur la carte comme au détail ; un planning
+   non exact est « Planning détaillé à confirmer » (le web affiche sur la carte un repli ponctuel tiré de
+   `debut_le`/`fin_le` ; M3 de la démo). Au détail, l'échec de lecture du planning n'efface pas la mission
+   (« Planning détaillé momentanément indisponible : … », message serveur verbatim).
+6. **Liens du détail** : chaque lien pousse la destination du registre si sa tranche l'a livrée
+   (`EtabDestination.ecranLivre`), sinon ouvre la page web équivalente par le présentateur de renvoi (Safari, D16) :
+   candidatures (T6) → `/etablissement/missions/{id}`, code de pointage (T7) et présences (T8) →
+   `/etablissement/presences/mission/{id}`, contrat (T10) → `/etablissement/contrats` et message (T11) →
+   `/etablissement/messagerie` (identifiants de contrat et de conversation non lus avant leur tranche). Modifier,
+   dupliquer, annuler : renvois web sous la permission `missions` (RLS `pol_mission_update`). Sans présentateur,
+   aucun bouton de renvoi (règle du lot 3).
+7. **`EtabDestination.detailMission.ecranLivre = true`** : `/etablissement/missions/{id}` ouvre le détail natif
+   (`EtabRouteTests`, `DeepLinkCoordinatorTests`, `DemoEtabLiensTests` migrés) ; `?statut=` d'un lien vers la liste
+   sélectionne le filtre (insertion dans `EtablissementTabView`, jeton `DemandeFiltreMissions`) ; `?periode=mois`
+   n'est pas porté (renvoi implicite : liste complète).
+8. **Monde démo** : onze missions M1…M11 du §2.10 (`demo-etab-missions.json`, `scripts/mobile/demo-etab-missions.mjs`),
+   soignant assigné principal = le soignant fictif du monde soignant (`demo-soignant`, projeté depuis son profil démo :
+   une identité par identifiant) ; candidatures réduites à `mission_id`/`statut`/`cree_le`, compteurs **dérivés** par
+   la gateway (T6 complète ces lignes, sans second compteur).
+9. **XCUITest** `DemoEtabMissionsTests` (deux tests) dans l'éclat « presences » (place laissée par `DemoFavorisTests`),
+   jamais dans le socle (garde `ios-swift-ci-eclats`). Non exécuté localement (aucun simulateur) : preuve CI.
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.

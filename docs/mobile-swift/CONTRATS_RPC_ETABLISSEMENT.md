@@ -45,7 +45,7 @@ Règles de l'espace établissement (`LOT5_PLAN.md` §2.2-§2.8) :
 | `fn_mes_permissions_etab` | consommée (T1) | 5 (T1, T2) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | aucune |
 | `fn_mon_etablissement_complet` | consommée (T1) | 5 (T1, T2, T12) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | aucune |
 | `fn_stats_dashboard_etablissement` | à venir | 5 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | aucune |
-| `fn_soignant_pour_etablissement` | à venir | 5 (T5) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | aucune |
+| `fn_soignant_pour_etablissement` | consommée (T5) | 5 (T5) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | aucune |
 | `fn_lire_candidatures_mission_habilitee` | à venir | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée | `42501` |
 | `fn_traiter_candidature_planning_v1` | à venir | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente | `P0001` ×3, `42501` ×3 (RBAC) |
 | `fn_contrat_signe_pour_pointage` | à venir | 5 (T7) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | absente | `42501` |
@@ -189,8 +189,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_stats_dashboard_etablissement"() RETURNS
 
 ## fn_soignant_pour_etablissement
 
-- **Statut natif** : à venir (lot 5, T5 détail mission, soignant assigné).
+- **Statut natif** : consommée (lot 5, T5 : `SupabaseEtabMissionsGateway.soignant`, soignant assigné du détail de
+  mission ; uuid canonique exigé avant réseau, identifiant relu comparé à la demande).
 - **Usage** : profil d'un soignant vu par l'établissement courant, noms à l'initiale hors relation contractuelle.
+  Clés décodées (`SoignantPourEtab.clesDecodees`) : `id`, `prenom`, `nom`, `nom_anonymise`, `profession`, `telephone`,
+  `numero_rpps`, `score_fiabilite`, `total_missions_terminees`.
 - **Signature SQL** (`supabase/schema/public.sql` l.57155) :
 
 ```sql

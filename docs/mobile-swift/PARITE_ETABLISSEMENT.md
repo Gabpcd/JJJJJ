@@ -23,6 +23,12 @@ preuves des tranches).
   l'initiale), plus strict que `ListeCandidatures` en PostgREST (LECTURE_SEULE n'y accède pas). Surfaces du même
   écran non reprises, renvoyées au web : alerte « Risque de requalification en CDI au-delà de 150 jours » (D27),
   « Terminer la mission », litige, booster, garantie, soignants recommandés.
+- `/etablissement/missions` et `/etablissement/missions/:id` (T5) : ni montant (taux, net estimé, commission, Rist),
+  ni regroupement par série, ni recherche par intitulé, ni tri « candidatures d'abord », ni filtre `?periode=mois`,
+  ni pastille « Litige » lue dans `litiges`, ni nom du soignant sur la carte (`fn_mes_soignants_etablissement` non
+  appelée ; nom lu au détail par `fn_soignant_pour_etablissement`) ; pastille de candidatures réservée à la permission
+  `candidatures` ; planning non exact « à confirmer » sur la carte (le web y affiche un repli ponctuel). Republier,
+  dupliquer, modifier, annuler, terminer, évaluer : sur jolene.app.
 - Accueil : « présences à valider » sans compteur jusqu'à T8, « évaluations à faire » en lien web sans compteur
   (aucune source serveur, correction 20) ; aucun graphique ni montant (D15).
 - Acceptation native limitée aux missions `SALARIE` hors `MEDECIN` (D25) ; étudiant aide-soignant (cadre étudiant),

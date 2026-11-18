@@ -2619,7 +2619,7 @@
     },
     {
       "name": "fn_soignant_pour_etablissement",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": {
         "args": "{ p_soignant_id: string }",
