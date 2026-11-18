@@ -1,0 +1,866 @@
+[
+  {
+    "name": "estResolu/EN_DISCUSSION",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "EN_DISCUSSION"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/EN_MEDIATION",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "EN_MEDIATION"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/FERME",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "FERME"
+    },
+    "expected": true
+  },
+  {
+    "name": "estResolu/MEDIATION_EN_COURS",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "MEDIATION_EN_COURS"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/OUVERT",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "OUVERT"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/OUVERT_",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "OUVERT "
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/RESOLU",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "RESOLU"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/RESOLU_ACCORD_PARTIES",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "RESOLU_ACCORD_PARTIES"
+    },
+    "expected": true
+  },
+  {
+    "name": "estResolu/RESOLU_ADMIN",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "RESOLU_ADMIN"
+    },
+    "expected": true
+  },
+  {
+    "name": "estResolu/RESOLU_ETABLISSEMENT",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "RESOLU_ETABLISSEMENT"
+    },
+    "expected": true
+  },
+  {
+    "name": "estResolu/RESOLU_FAVEUR_ETAB",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "RESOLU_FAVEUR_ETAB"
+    },
+    "expected": true
+  },
+  {
+    "name": "estResolu/RESOLU_FAVEUR_SOIGNANT",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "RESOLU_FAVEUR_SOIGNANT"
+    },
+    "expected": true
+  },
+  {
+    "name": "estResolu/RESOLU_PARTAGE",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "RESOLU_PARTAGE"
+    },
+    "expected": true
+  },
+  {
+    "name": "estResolu/RESOLU_SOIGNANT",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "RESOLU_SOIGNANT"
+    },
+    "expected": true
+  },
+  {
+    "name": "estResolu/REVUE_ADMIN",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "REVUE_ADMIN"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/Résolu",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "Résolu"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/STATUT_FUTUR",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "STATUT_FUTUR"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/_OUVERT",
+    "input": {
+      "fonction": "estResolu",
+      "statut": " OUVERT"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/__proto__",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "__proto__"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/constructor",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "constructor"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/hasOwnProperty",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "hasOwnProperty"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/ouvert",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "ouvert"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/toString",
+    "input": {
+      "fonction": "estResolu",
+      "statut": "toString"
+    },
+    "expected": false
+  },
+  {
+    "name": "estResolu/vide",
+    "input": {
+      "fonction": "estResolu",
+      "statut": ""
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/EN_DISCUSSION",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "EN_DISCUSSION"
+    },
+    "expected": true
+  },
+  {
+    "name": "peutConfirmerAccord/EN_MEDIATION",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "EN_MEDIATION"
+    },
+    "expected": true
+  },
+  {
+    "name": "peutConfirmerAccord/FERME",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "FERME"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/MEDIATION_EN_COURS",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "MEDIATION_EN_COURS"
+    },
+    "expected": true
+  },
+  {
+    "name": "peutConfirmerAccord/OUVERT",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "OUVERT"
+    },
+    "expected": true
+  },
+  {
+    "name": "peutConfirmerAccord/OUVERT_",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "OUVERT "
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/RESOLU",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "RESOLU"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/RESOLU_ACCORD_PARTIES",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "RESOLU_ACCORD_PARTIES"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/RESOLU_ADMIN",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "RESOLU_ADMIN"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/RESOLU_ETABLISSEMENT",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "RESOLU_ETABLISSEMENT"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/RESOLU_FAVEUR_ETAB",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "RESOLU_FAVEUR_ETAB"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/RESOLU_FAVEUR_SOIGNANT",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "RESOLU_FAVEUR_SOIGNANT"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/RESOLU_PARTAGE",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "RESOLU_PARTAGE"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/RESOLU_SOIGNANT",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "RESOLU_SOIGNANT"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/REVUE_ADMIN",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "REVUE_ADMIN"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/Résolu",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "Résolu"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/STATUT_FUTUR",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "STATUT_FUTUR"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/_OUVERT",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": " OUVERT"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/__proto__",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "__proto__"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/constructor",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "constructor"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/hasOwnProperty",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "hasOwnProperty"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/ouvert",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "ouvert"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/toString",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": "toString"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutConfirmerAccord/vide",
+    "input": {
+      "fonction": "peutConfirmerAccord",
+      "statut": ""
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/EN_DISCUSSION",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "EN_DISCUSSION"
+    },
+    "expected": true
+  },
+  {
+    "name": "peutProposerMediation/EN_MEDIATION",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "EN_MEDIATION"
+    },
+    "expected": true
+  },
+  {
+    "name": "peutProposerMediation/FERME",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "FERME"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/MEDIATION_EN_COURS",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "MEDIATION_EN_COURS"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/OUVERT",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "OUVERT"
+    },
+    "expected": true
+  },
+  {
+    "name": "peutProposerMediation/OUVERT_",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "OUVERT "
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/RESOLU",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "RESOLU"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/RESOLU_ACCORD_PARTIES",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "RESOLU_ACCORD_PARTIES"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/RESOLU_ADMIN",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "RESOLU_ADMIN"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/RESOLU_ETABLISSEMENT",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "RESOLU_ETABLISSEMENT"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/RESOLU_FAVEUR_ETAB",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "RESOLU_FAVEUR_ETAB"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/RESOLU_FAVEUR_SOIGNANT",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "RESOLU_FAVEUR_SOIGNANT"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/RESOLU_PARTAGE",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "RESOLU_PARTAGE"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/RESOLU_SOIGNANT",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "RESOLU_SOIGNANT"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/REVUE_ADMIN",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "REVUE_ADMIN"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/Résolu",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "Résolu"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/STATUT_FUTUR",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "STATUT_FUTUR"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/_OUVERT",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": " OUVERT"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/__proto__",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "__proto__"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/constructor",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "constructor"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/hasOwnProperty",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "hasOwnProperty"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/ouvert",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "ouvert"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/toString",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": "toString"
+    },
+    "expected": false
+  },
+  {
+    "name": "peutProposerMediation/vide",
+    "input": {
+      "fonction": "peutProposerMediation",
+      "statut": ""
+    },
+    "expected": false
+  },
+  {
+    "name": "statutLitigeRegle/EN_DISCUSSION",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "EN_DISCUSSION"
+    },
+    "expected": {
+      "label": "En discussion",
+      "icone": "MessageSquare",
+      "groupe": "OUVERT"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/EN_MEDIATION",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "EN_MEDIATION"
+    },
+    "expected": {
+      "label": "Médiation",
+      "icone": "AlertTriangle",
+      "groupe": "MEDIATION"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/FERME",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "FERME"
+    },
+    "expected": {
+      "label": "Fermé",
+      "icone": "XCircle",
+      "groupe": "FERME"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/MEDIATION_EN_COURS",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "MEDIATION_EN_COURS"
+    },
+    "expected": {
+      "label": "Médiation en cours",
+      "icone": "Users",
+      "groupe": "MEDIATION"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/OUVERT",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "OUVERT"
+    },
+    "expected": {
+      "label": "Ouvert",
+      "icone": "Scale",
+      "groupe": "OUVERT"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/OUVERT_",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "OUVERT "
+    },
+    "expected": {
+      "label": "OUVERT ",
+      "icone": "Scale",
+      "groupe": "OUVERT"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/RESOLU",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "RESOLU"
+    },
+    "expected": {
+      "label": "RESOLU",
+      "icone": "Scale",
+      "groupe": "OUVERT"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/RESOLU_ACCORD_PARTIES",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "RESOLU_ACCORD_PARTIES"
+    },
+    "expected": {
+      "label": "Accord mutuel ✅",
+      "icone": "CheckCircle2",
+      "groupe": "RESOLU_ACCORD"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/RESOLU_ADMIN",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "RESOLU_ADMIN"
+    },
+    "expected": {
+      "label": "Résolu admin",
+      "icone": "Gavel",
+      "groupe": "FERME"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/RESOLU_ETABLISSEMENT",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "RESOLU_ETABLISSEMENT"
+    },
+    "expected": {
+      "label": "Résolu (étab)",
+      "icone": "CheckCircle2",
+      "groupe": "RESOLU_DECISION"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/RESOLU_FAVEUR_ETAB",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "RESOLU_FAVEUR_ETAB"
+    },
+    "expected": {
+      "label": "Tranché en faveur étab",
+      "icone": "Gavel",
+      "groupe": "RESOLU_DECISION"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/RESOLU_FAVEUR_SOIGNANT",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "RESOLU_FAVEUR_SOIGNANT"
+    },
+    "expected": {
+      "label": "Tranché en faveur soignant",
+      "icone": "Gavel",
+      "groupe": "RESOLU_DECISION"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/RESOLU_PARTAGE",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "RESOLU_PARTAGE"
+    },
+    "expected": {
+      "label": "Tranché : décision partagée",
+      "icone": "Gavel",
+      "groupe": "RESOLU_DECISION"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/RESOLU_SOIGNANT",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "RESOLU_SOIGNANT"
+    },
+    "expected": {
+      "label": "Résolu (soignant)",
+      "icone": "CheckCircle2",
+      "groupe": "RESOLU_DECISION"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/REVUE_ADMIN",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "REVUE_ADMIN"
+    },
+    "expected": {
+      "label": "Revue admin",
+      "icone": "Gavel",
+      "groupe": "ACTION_ATTENDUE"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/Résolu",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "Résolu"
+    },
+    "expected": {
+      "label": "Résolu",
+      "icone": "Scale",
+      "groupe": "OUVERT"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/STATUT_FUTUR",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "STATUT_FUTUR"
+    },
+    "expected": {
+      "label": "STATUT_FUTUR",
+      "icone": "Scale",
+      "groupe": "OUVERT"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/_OUVERT",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": " OUVERT"
+    },
+    "expected": {
+      "label": " OUVERT",
+      "icone": "Scale",
+      "groupe": "OUVERT"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/__proto__",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "__proto__"
+    },
+    "expected": {
+      "label": "__proto__",
+      "icone": "Scale",
+      "groupe": "OUVERT"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/constructor",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "constructor"
+    },
+    "expected": {
+      "label": "constructor",
+      "icone": "Scale",
+      "groupe": "OUVERT"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/hasOwnProperty",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "hasOwnProperty"
+    },
+    "expected": {
+      "label": "hasOwnProperty",
+      "icone": "Scale",
+      "groupe": "OUVERT"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/ouvert",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "ouvert"
+    },
+    "expected": {
+      "label": "ouvert",
+      "icone": "Scale",
+      "groupe": "OUVERT"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/toString",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": "toString"
+    },
+    "expected": {
+      "label": "toString",
+      "icone": "Scale",
+      "groupe": "OUVERT"
+    }
+  },
+  {
+    "name": "statutLitigeRegle/vide",
+    "input": {
+      "fonction": "statutLitigeRegle",
+      "statut": ""
+    },
+    "expected": {
+      "label": "",
+      "icone": "Scale",
+      "groupe": "OUVERT"
+    }
+  }
+]

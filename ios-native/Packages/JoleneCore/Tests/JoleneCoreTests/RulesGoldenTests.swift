@@ -105,7 +105,11 @@ enum Golden {
                            // Lot 3, T2 : routage push, compteur de sessions, montants et paiements, profil,
                            // modes d'exercice, listes RPPS.
                            "push-routing", "session-count", "mission-finance-display", "paiement-soignant-ui",
-                           "valider-profil-soignant", "preferences-modes-exercice", "professions-rpps"]
+                           "valider-profil-soignant", "preferences-modes-exercice", "professions-rpps",
+                           // Lot 4, T2 : raisons du score de matching, filtre du paquet de swipe, statut de litige,
+                           // alerte de recherche, grille des disponibilités, décodage strict des copies de bulletins.
+                           "raisons-score-matching", "filtre-paquet-swipe", "statut-litige", "alertes-recherche-missions",
+                           "semaines-disponibilites", "copie-bulletin-validation"]
     static let minimumTotal = 200
 
     struct FichierIntrouvable: Error, CustomStringConvertible {

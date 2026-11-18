@@ -1,0 +1,7463 @@
+[
+  {
+    "name": "liste/RAISONS_EPINGLEES",
+    "input": {
+      "fonction": "RAISONS_EPINGLEES"
+    },
+    "expected": [
+      "connaissance_etab",
+      "paiement_rapide"
+    ]
+  },
+  {
+    "name": "liste/RAISON_LABELS",
+    "input": {
+      "fonction": "RAISON_LABELS"
+    },
+    "expected": {
+      "distance": "proche de chez toi",
+      "tarif": "bien payée vs le marché",
+      "horaire": "à tes horaires préférés",
+      "etablissement": "établissement bien noté",
+      "urgence": "mission urgente",
+      "soignant_fiabilite": "ton profil correspond",
+      "connaissance_etab": "tu connais cet établissement",
+      "paiement_rapide": "paiement rapide ⚡"
+    }
+  },
+  {
+    "name": "raisonsScore/cas/epinglee-negative",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          -2
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/cas/epinglee-texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          "1"
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/cas/flottants-proches",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          0.3
+        ],
+        [
+          "tarif",
+          0.30000000000000004
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/cas/inconnues-seules",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "fiabilite",
+          50
+        ],
+        [
+          "inconnu",
+          99
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/cas/ordre-jsonb-v3",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          25
+        ],
+        [
+          "horaire",
+          15
+        ],
+        [
+          "urgence",
+          15
+        ],
+        [
+          "distance",
+          20
+        ],
+        [
+          "etablissement",
+          12
+        ],
+        [
+          "paiement_rapide",
+          3
+        ],
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          10
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/cas/toutes-les-cles",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ],
+        [
+          "horaire",
+          3
+        ],
+        [
+          "etablissement",
+          4
+        ],
+        [
+          "urgence",
+          5
+        ],
+        [
+          "soignant_fiabilite",
+          6
+        ],
+        [
+          "connaissance_etab",
+          7
+        ],
+        [
+          "paiement_rapide",
+          8
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/cas/toutes-les-cles-inversees",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          3
+        ],
+        [
+          "urgence",
+          4
+        ],
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "horaire",
+          6
+        ],
+        [
+          "tarif",
+          7
+        ],
+        [
+          "distance",
+          8
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/cas/une-seule-epinglee-et-rien",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          4
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/non-objet/faux",
+    "input": {
+      "fonction": "raisonsScore",
+      "breakdown": false
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/non-objet/nombre",
+    "input": {
+      "fonction": "raisonsScore",
+      "breakdown": 5
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/non-objet/tableau",
+    "input": {
+      "fonction": "raisonsScore",
+      "breakdown": [
+        1,
+        2
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/non-objet/texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "breakdown": "distance"
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/non-objet/texte-vide",
+    "input": {
+      "fonction": "raisonsScore",
+      "breakdown": ""
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/non-objet/vrai",
+    "input": {
+      "fonction": "raisonsScore",
+      "breakdown": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/non-objet/zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "breakdown": 0
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/distance/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "distance",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/distance/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/etablissement/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/etablissement/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/etablissement/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/horaire/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/horaire/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "paiement_rapide",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/paiement_rapide/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/paiement_rapide/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/soignant_fiabilite/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/soignant_fiabilite/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/tarif/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/tarif/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/urgence/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/urgence/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/connaissance_etab/urgence/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/distance/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/distance/connaissance_etab/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          2
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/distance/connaissance_etab/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/distance/etablissement/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/distance/etablissement/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          2
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/distance/etablissement/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/distance/horaire/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/distance/horaire/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          2
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/distance/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/distance/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "paiement_rapide",
+          2
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/distance/paiement_rapide/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          2
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/distance/paiement_rapide/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/distance/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/distance/soignant_fiabilite/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/distance/soignant_fiabilite/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/distance/tarif/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/distance/tarif/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          2
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/distance/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/distance/urgence/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ]
+      ]
+    },
+    "expected": "mission urgente · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/distance/urgence/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          2
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/distance/urgence/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/connaissance_etab/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/connaissance_etab/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/distance/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "distance",
+          2
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/distance/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/horaire/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/horaire/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "paiement_rapide",
+          2
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/paiement_rapide/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/paiement_rapide/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/soignant_fiabilite/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/soignant_fiabilite/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/tarif/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/tarif/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/urgence/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ]
+      ]
+    },
+    "expected": "mission urgente · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/urgence/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/etablissement/urgence/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/connaissance_etab/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          2
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/connaissance_etab/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/distance/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "distance",
+          2
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/distance/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          2
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/etablissement/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/etablissement/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          2
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/etablissement/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "paiement_rapide",
+          2
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/paiement_rapide/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          2
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/paiement_rapide/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/soignant_fiabilite/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/soignant_fiabilite/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/tarif/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/tarif/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          2
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/urgence/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ]
+      ]
+    },
+    "expected": "mission urgente · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/urgence/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          2
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/horaire/urgence/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/connaissance_etab/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          2
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/connaissance_etab/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/distance/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "distance",
+          2
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/distance/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          2
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/etablissement/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/etablissement/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          2
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/etablissement/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/horaire/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/horaire/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          2
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/soignant_fiabilite/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/soignant_fiabilite/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/tarif/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/tarif/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          2
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/urgence/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/urgence/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          2
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/paiement_rapide/urgence/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/connaissance_etab/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/connaissance_etab/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/distance/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "distance",
+          2
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/distance/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/etablissement/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/etablissement/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/etablissement/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/horaire/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/horaire/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "paiement_rapide",
+          2
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/paiement_rapide/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/paiement_rapide/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/tarif/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/tarif/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/urgence/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ]
+      ]
+    },
+    "expected": "mission urgente · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/urgence/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/soignant_fiabilite/urgence/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/connaissance_etab/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          2
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/connaissance_etab/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/distance/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "distance",
+          2
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/distance/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          2
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/etablissement/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/etablissement/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          2
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/etablissement/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/horaire/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/horaire/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          2
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "paiement_rapide",
+          2
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/paiement_rapide/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          2
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/paiement_rapide/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/soignant_fiabilite/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/soignant_fiabilite/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/urgence/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ]
+      ]
+    },
+    "expected": "mission urgente · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/urgence/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          2
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/tarif/urgence/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/connaissance_etab/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          2
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/connaissance_etab/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/distance/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "distance",
+          2
+        ]
+      ]
+    },
+    "expected": "proche de chez toi · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/distance/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          2
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "mission urgente · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "mission urgente · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/etablissement/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/etablissement/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          2
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "mission urgente · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/etablissement/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "mission urgente · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/horaire/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/horaire/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          2
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "mission urgente · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "mission urgente · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "paiement_rapide",
+          2
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/paiement_rapide/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          2
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/paiement_rapide/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/soignant_fiabilite/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "mission urgente · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/soignant_fiabilite/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "mission urgente · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/tarif/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · mission urgente"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/tarif/decroissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          2
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "mission urgente · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/paire/urgence/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "mission urgente · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/seule/Distance/cent",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "Distance",
+          100
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/Distance/demi",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "Distance",
+          0.5
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/Distance/infime",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "Distance",
+          1e-9
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/Distance/negatif",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "Distance",
+          -1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/Distance/null",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "Distance",
+          null
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/Distance/objet",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "Distance",
+          {
+            "v": 5
+          }
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/Distance/tableau",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "Distance",
+          [
+            5
+          ]
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/Distance/texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "Distance",
+          "5"
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/Distance/un",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "Distance",
+          1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/Distance/vrai",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "Distance",
+          true
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/Distance/zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "Distance",
+          0
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/connaissance_etab/cent",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          100
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement"
+  },
+  {
+    "name": "raisonsScore/seule/connaissance_etab/demi",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          0.5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement"
+  },
+  {
+    "name": "raisonsScore/seule/connaissance_etab/infime",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1e-9
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement"
+  },
+  {
+    "name": "raisonsScore/seule/connaissance_etab/negatif",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          -1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/connaissance_etab/null",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          null
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/connaissance_etab/objet",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          {
+            "v": 5
+          }
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/connaissance_etab/tableau",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          [
+            5
+          ]
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/connaissance_etab/texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          "5"
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/connaissance_etab/un",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement"
+  },
+  {
+    "name": "raisonsScore/seule/connaissance_etab/vrai",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          true
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/connaissance_etab/zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          0
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance /cent",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance ",
+          100
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance /demi",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance ",
+          0.5
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance /infime",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance ",
+          1e-9
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance /negatif",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance ",
+          -1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance /null",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance ",
+          null
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance /objet",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance ",
+          {
+            "v": 5
+          }
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance /tableau",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance ",
+          [
+            5
+          ]
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance /texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance ",
+          "5"
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance /un",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance ",
+          1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance /vrai",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance ",
+          true
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance /zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance ",
+          0
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance/cent",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          100
+        ]
+      ]
+    },
+    "expected": "proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/seule/distance/demi",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          0.5
+        ]
+      ]
+    },
+    "expected": "proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/seule/distance/infime",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1e-9
+        ]
+      ]
+    },
+    "expected": "proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/seule/distance/negatif",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          -1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance/null",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          null
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance/objet",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          {
+            "v": 5
+          }
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance/tableau",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          [
+            5
+          ]
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance/texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          "5"
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance/un",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ]
+      ]
+    },
+    "expected": "proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/seule/distance/vrai",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          true
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/distance/zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          0
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/etablissement/cent",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          100
+        ]
+      ]
+    },
+    "expected": "établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/seule/etablissement/demi",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          0.5
+        ]
+      ]
+    },
+    "expected": "établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/seule/etablissement/infime",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1e-9
+        ]
+      ]
+    },
+    "expected": "établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/seule/etablissement/negatif",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          -1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/etablissement/null",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          null
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/etablissement/objet",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          {
+            "v": 5
+          }
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/etablissement/tableau",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          [
+            5
+          ]
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/etablissement/texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          "5"
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/etablissement/un",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ]
+      ]
+    },
+    "expected": "établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/seule/etablissement/vrai",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          true
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/etablissement/zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          0
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/fiabilite/cent",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "fiabilite",
+          100
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/fiabilite/demi",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "fiabilite",
+          0.5
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/fiabilite/infime",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "fiabilite",
+          1e-9
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/fiabilite/negatif",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "fiabilite",
+          -1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/fiabilite/null",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "fiabilite",
+          null
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/fiabilite/objet",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "fiabilite",
+          {
+            "v": 5
+          }
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/fiabilite/tableau",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "fiabilite",
+          [
+            5
+          ]
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/fiabilite/texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "fiabilite",
+          "5"
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/fiabilite/un",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/fiabilite/vrai",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "fiabilite",
+          true
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/fiabilite/zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "fiabilite",
+          0
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/horaire/cent",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          100
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/seule/horaire/demi",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          0.5
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/seule/horaire/infime",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1e-9
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/seule/horaire/negatif",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          -1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/horaire/null",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          null
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/horaire/objet",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          {
+            "v": 5
+          }
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/horaire/tableau",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          [
+            5
+          ]
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/horaire/texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          "5"
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/horaire/un",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/seule/horaire/vrai",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          true
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/horaire/zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          0
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/paiement_rapide/cent",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          100
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/seule/paiement_rapide/demi",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          0.5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/seule/paiement_rapide/infime",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1e-9
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/seule/paiement_rapide/negatif",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          -1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/paiement_rapide/null",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          null
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/paiement_rapide/objet",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          {
+            "v": 5
+          }
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/paiement_rapide/tableau",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          [
+            5
+          ]
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/paiement_rapide/texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          "5"
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/paiement_rapide/un",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/seule/paiement_rapide/vrai",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          true
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/paiement_rapide/zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          0
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/score/cent",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "score",
+          100
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/score/demi",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "score",
+          0.5
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/score/infime",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "score",
+          1e-9
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/score/negatif",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "score",
+          -1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/score/null",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "score",
+          null
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/score/objet",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "score",
+          {
+            "v": 5
+          }
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/score/tableau",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "score",
+          [
+            5
+          ]
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/score/texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "score",
+          "5"
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/score/un",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "score",
+          1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/score/vrai",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "score",
+          true
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/score/zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "score",
+          0
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/soignant_fiabilite/cent",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          100
+        ]
+      ]
+    },
+    "expected": "ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/seule/soignant_fiabilite/demi",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          0.5
+        ]
+      ]
+    },
+    "expected": "ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/seule/soignant_fiabilite/infime",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1e-9
+        ]
+      ]
+    },
+    "expected": "ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/seule/soignant_fiabilite/negatif",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          -1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/soignant_fiabilite/null",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          null
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/soignant_fiabilite/objet",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          {
+            "v": 5
+          }
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/soignant_fiabilite/tableau",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          [
+            5
+          ]
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/soignant_fiabilite/texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          "5"
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/soignant_fiabilite/un",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ]
+      ]
+    },
+    "expected": "ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/seule/soignant_fiabilite/vrai",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          true
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/soignant_fiabilite/zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          0
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/tarif/cent",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          100
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/seule/tarif/demi",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          0.5
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/seule/tarif/infime",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1e-9
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/seule/tarif/negatif",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          -1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/tarif/null",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          null
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/tarif/objet",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          {
+            "v": 5
+          }
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/tarif/tableau",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          [
+            5
+          ]
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/tarif/texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          "5"
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/tarif/un",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/seule/tarif/vrai",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          true
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/tarif/zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          0
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/urgence/cent",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          100
+        ]
+      ]
+    },
+    "expected": "mission urgente"
+  },
+  {
+    "name": "raisonsScore/seule/urgence/demi",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          0.5
+        ]
+      ]
+    },
+    "expected": "mission urgente"
+  },
+  {
+    "name": "raisonsScore/seule/urgence/infime",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1e-9
+        ]
+      ]
+    },
+    "expected": "mission urgente"
+  },
+  {
+    "name": "raisonsScore/seule/urgence/negatif",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          -1
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/urgence/null",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          null
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/urgence/objet",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          {
+            "v": 5
+          }
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/urgence/tableau",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          [
+            5
+          ]
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/urgence/texte",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          "5"
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/urgence/un",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ]
+      ]
+    },
+    "expected": "mission urgente"
+  },
+  {
+    "name": "raisonsScore/seule/urgence/vrai",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          true
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/seule/urgence/zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          0
+        ]
+      ]
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/etablissement/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/etablissement/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/etablissement/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/horaire/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/horaire/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/soignant_fiabilite/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/soignant_fiabilite/etablissement/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/soignant_fiabilite/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/soignant_fiabilite/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/soignant_fiabilite/urgence/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/tarif/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/urgence/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/urgence/etablissement/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/urgence/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/connaissance_etab/urgence/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/connaissance_etab/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/etablissement/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/etablissement/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/etablissement/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          3
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/etablissement/urgence/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "urgence",
+          3
+        ]
+      ]
+    },
+    "expected": "mission urgente · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/horaire/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/horaire/etablissement/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ],
+        [
+          "etablissement",
+          3
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/horaire/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/horaire/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          3
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/horaire/urgence/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ],
+        [
+          "urgence",
+          3
+        ]
+      ]
+    },
+    "expected": "mission urgente · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/soignant_fiabilite/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/soignant_fiabilite/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/tarif/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/tarif/etablissement/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ],
+        [
+          "etablissement",
+          3
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/tarif/horaire/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ],
+        [
+          "horaire",
+          3
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/tarif/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/tarif/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          3
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/tarif/urgence/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "tarif",
+          2
+        ],
+        [
+          "urgence",
+          3
+        ]
+      ]
+    },
+    "expected": "mission urgente · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/urgence/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/urgence/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/distance/urgence/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          3
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/etablissement/connaissance_etab/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/triplet/etablissement/horaire/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/etablissement/horaire/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/etablissement/soignant_fiabilite/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/etablissement/soignant_fiabilite/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/etablissement/tarif/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/triplet/etablissement/urgence/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/etablissement/urgence/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/etablissement/urgence/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "etablissement",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          3
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/horaire/connaissance_etab/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/triplet/horaire/etablissement/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/horaire/etablissement/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/horaire/etablissement/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          3
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/horaire/etablissement/urgence/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "urgence",
+          3
+        ]
+      ]
+    },
+    "expected": "mission urgente · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/horaire/soignant_fiabilite/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/horaire/soignant_fiabilite/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/horaire/tarif/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/triplet/horaire/urgence/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/horaire/urgence/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/horaire/urgence/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "horaire",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          3
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/connaissance_etab/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/connaissance_etab/etablissement/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/connaissance_etab/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/connaissance_etab/soignant_fiabilite/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "soignant_fiabilite",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/connaissance_etab/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/connaissance_etab/urgence/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "connaissance_etab",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/etablissement/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/etablissement/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/etablissement/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/horaire/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/horaire/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/soignant_fiabilite/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/soignant_fiabilite/etablissement/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/soignant_fiabilite/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/soignant_fiabilite/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/soignant_fiabilite/urgence/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/tarif/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/urgence/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/urgence/etablissement/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/urgence/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/paiement_rapide/urgence/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/soignant_fiabilite/connaissance_etab/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/triplet/soignant_fiabilite/etablissement/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/soignant_fiabilite/etablissement/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/soignant_fiabilite/etablissement/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/soignant_fiabilite/horaire/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/soignant_fiabilite/horaire/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/soignant_fiabilite/tarif/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/triplet/soignant_fiabilite/urgence/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/soignant_fiabilite/urgence/etablissement/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/soignant_fiabilite/urgence/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/soignant_fiabilite/urgence/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          5
+        ],
+        [
+          "urgence",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/connaissance_etab/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/etablissement/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/etablissement/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/etablissement/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          3
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/etablissement/urgence/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "etablissement",
+          2
+        ],
+        [
+          "urgence",
+          3
+        ]
+      ]
+    },
+    "expected": "mission urgente · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/horaire/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/horaire/etablissement/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ],
+        [
+          "etablissement",
+          3
+        ]
+      ]
+    },
+    "expected": "établissement bien noté · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/horaire/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/horaire/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          3
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/horaire/urgence/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "horaire",
+          2
+        ],
+        [
+          "urgence",
+          3
+        ]
+      ]
+    },
+    "expected": "mission urgente · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/soignant_fiabilite/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/soignant_fiabilite/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/urgence/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/urgence/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/tarif/urgence/soignant_fiabilite/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          1
+        ],
+        [
+          "urgence",
+          2
+        ],
+        [
+          "soignant_fiabilite",
+          3
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · mission urgente"
+  },
+  {
+    "name": "raisonsScore/triplet/urgence/connaissance_etab/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "connaissance_etab",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/triplet/urgence/etablissement/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "mission urgente · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/urgence/etablissement/horaire/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ]
+      ]
+    },
+    "expected": "mission urgente · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/urgence/etablissement/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          5
+        ],
+        [
+          "etablissement",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "mission urgente · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/triplet/urgence/horaire/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "mission urgente · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/urgence/horaire/tarif/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          5
+        ],
+        [
+          "horaire",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ]
+      ]
+    },
+    "expected": "mission urgente · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/triplet/urgence/soignant_fiabilite/connaissance_etab/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "connaissance_etab",
+          3
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/urgence/soignant_fiabilite/paiement_rapide/croissant",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          1
+        ],
+        [
+          "soignant_fiabilite",
+          2
+        ],
+        [
+          "paiement_rapide",
+          3
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · ton profil correspond"
+  },
+  {
+    "name": "raisonsScore/triplet/urgence/tarif/distance/egalite",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "urgence",
+          5
+        ],
+        [
+          "tarif",
+          5
+        ],
+        [
+          "distance",
+          5
+        ]
+      ]
+    },
+    "expected": "mission urgente · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/vitest-absent",
+    "input": {
+      "fonction": "raisonsScore",
+      "absent": true
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/vitest-cles-inconnues",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "fiabilite",
+          50
+        ],
+        [
+          "inconnu",
+          99
+        ],
+        [
+          "distance",
+          0
+        ],
+        [
+          "tarif",
+          "30"
+        ],
+        [
+          "urgence",
+          -1
+        ],
+        [
+          "horaire",
+          5
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/vitest-egalite-ordre",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "tarif",
+          10
+        ],
+        [
+          "distance",
+          10
+        ],
+        [
+          "horaire",
+          10
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/vitest-epingle-connaissance",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          30
+        ],
+        [
+          "connaissance_etab",
+          5
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · proche de chez toi"
+  },
+  {
+    "name": "raisonsScore/vitest-epingle-ordre",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          1
+        ],
+        [
+          "distance",
+          40
+        ],
+        [
+          "connaissance_etab",
+          1
+        ]
+      ]
+    },
+    "expected": "tu connais cet établissement · paiement rapide ⚡"
+  },
+  {
+    "name": "raisonsScore/vitest-epingle-paiement",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "paiement_rapide",
+          2
+        ],
+        [
+          "tarif",
+          20
+        ],
+        [
+          "horaire",
+          10
+        ]
+      ]
+    },
+    "expected": "paiement rapide ⚡ · bien payée vs le marché"
+  },
+  {
+    "name": "raisonsScore/vitest-epinglees-a-zero",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "connaissance_etab",
+          0
+        ],
+        [
+          "paiement_rapide",
+          0
+        ],
+        [
+          "horaire",
+          3
+        ]
+      ]
+    },
+    "expected": "à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/vitest-fiabilite-v3",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "soignant_fiabilite",
+          12
+        ],
+        [
+          "etablissement",
+          4
+        ]
+      ]
+    },
+    "expected": "ton profil correspond · établissement bien noté"
+  },
+  {
+    "name": "raisonsScore/vitest-null",
+    "input": {
+      "fonction": "raisonsScore",
+      "breakdown": null
+    },
+    "expected": ""
+  },
+  {
+    "name": "raisonsScore/vitest-tri-points",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": [
+        [
+          "distance",
+          10
+        ],
+        [
+          "tarif",
+          25
+        ],
+        [
+          "horaire",
+          15
+        ],
+        [
+          "urgence",
+          5
+        ]
+      ]
+    },
+    "expected": "bien payée vs le marché · à tes horaires préférés"
+  },
+  {
+    "name": "raisonsScore/vitest-vide",
+    "input": {
+      "fonction": "raisonsScore",
+      "entrees": []
+    },
+    "expected": ""
+  }
+]
