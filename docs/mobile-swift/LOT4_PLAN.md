@@ -10,6 +10,59 @@
 > et `fn_ouvrir_litige_rate_limited`, déjà suivie par le T0 du lot 2 en `lot: 2`, est partagée (une entrée,
 > une fiche, sous-section « Usage du lot 4 »).
 
+> **Écarts constatés au portage sur `main` (18/11/2026, branche `feat/ios-lot4-v2` depuis `c13062d1`).** Le T0 et
+> le T1b, écrits les 2-3 novembre sur une base antérieure aux lots 2 et 3, sont reportés sur `main`, puis T1 est
+> livré. Faits de `main` qui précisent ou contredisent ce blueprint (ils priment sur le texte ci-dessous) :
+>
+> 1. **Coordinateur de liens livré** (lot 3 T3b, reliquat de L1-T10) : `Jolene/Composition/DeepLinkCoordinator.swift`,
+>    `DeepLinkIntent` / `AiguillageLiens` et `DestinationLien` (JoleneCore). Tout consommateur part de
+>    `DestinationLien.destination` : une route native dont l'écran n'est pas livré (`ecranNatifLivre == false`) est un
+>    renvoi web canonique, présenté par `PresentateurRenvoiWeb` (`SFSafariViewController`, jamais `openURL`). Il n'existe
+>    ni `ExternalFlowPresenter` ni `SafariHandoff` : T1c réutilise `PresentateurRenvoiWeb` et n'a plus à basculer des
+>    `UIApplication.open` (corrections du §2.1 et de T1c sur `.safari` sans objet).
+> 2. **`RPCResponse.executer` est interne depuis le lot 3 T1** et la surcharge `exceptionsMetier:` (SQLSTATE seul) vit
+>    dans `RPC/RPCResponse+ExceptionsMetier.swift` : la correction 15 est caduque. T1 ajoute
+>    `RPC/ExceptionsMetierLot4.swift` (`ExceptionsLot4`, couple SQLSTATE + message, règles par RPC dans
+>    `ExceptionsMetierLot4`, `28000` → session expirée) sans modifier `RPCResponse.swift`. `Edge/EdgeResponse.swift` du
+>    lot 3 T1 existe : réutilisé tel quel.
+> 3. **Lot 1 incomplet sur `main`** : `candidature` (T6a/T7), `presence` (T6c), `favoris` (T4b), `mesMissions` (T5),
+>    `recovery` (T10 reset) et `justificatifs` sont encore des stubs dans les deux mondes
+>    (`DemoWorldTests.portsEnAttenteLot1`) ; `SupabaseCandidatureGateway.swift` n'existe pas. T1 ajoute donc seulement
+>    `.swipeLike` et `.urgence` à `ActionPlanning` (D2) ; la relecture SWIPE_LIKE / URGENCE et ses tests vont à la
+>    tranche qui câble la candidature (lot 1 T6a, ou T3a / T11 s'ils passent avant). Les dépendances de T3a (lot 1 T4b,
+>    T6a), T3b (T6b) et T11 (T6a) ne sont pas remplies.
+> 4. **Câblage** : les lots 2 et 3 assignent leurs ports par `câblerLot2(_:)` / `câblerLot3(_:)` ; le lot 4 garde les
+>    fabriques de domaine du §2.2 (`DemoLot4.cabler`, `SupabaseLot4.cabler`, treize fichiers par monde) et la liste
+>    `DemoWorldTests.portsEnAttenteLot4`. Le champ des évaluations reçues s'appelle **`evaluationsRecues`** (et non
+>    `evaluations`) : son nom figure dans `unwiredPorts` et le garde-fou 18 interdit tout littéral Swift
+>    `"evaluations"`.
+> 5. **Routes** (T1) : `LinkRouter` donne `.secondaire(_)` aux écrans du lot 4 (swipe, recherches, disponibilités,
+>    parrainage, litiges avec `?tab=` / `?litige=` / fragment, alias `reclamations`, messagerie `?conv=`, évaluations,
+>    score et alias, pool urgence, exclusions). Ajout non prévu : le swipe et le score gardent jusqu'à T3b / T9 l'écran
+>    natif qu'ils ouvraient avant (Explorer, hub), par `EcranSecondaire.repliAvantLivraison` ; les autres restent des
+>    renvois web. Les bulletins gardent la route `.revenus(section: .bulletins)` : T10 en fera la destination de
+>    `.secondaire(.bulletins)` en livrant l'écran, sans toucher à la table. `/soignant/missions/serie/{id}` garde
+>    `.serieDetail`.
+> 6. **`StatusPill` livré par le lot 3** (« lot 4 : à réutiliser, pas à redéclarer ») : T1b n'en reporte pas de copie ;
+>    neuf composants nouveaux.
+> 7. **Garde #1137** (`tests/node/sources-web-ios-ci.node.mjs`, postérieure au blueprint) : tout fichier hors
+>    `ios-native/` relu par un test Swift doit figurer aux filtres `pull_request` et `push` de `ios-swift-ci.yml`.
+>    T1b y ajoute ses dix sources : T1c n'est plus la seule tranche qui modifie ce workflow, chaque tranche y ajoute les
+>    sources web que ses tests relisent.
+> 8. **Gardes node du lot 4** dans un fichier propre, `tests/node/check-rpc-contracts-lot4.node.mjs` (précédent du lot 3),
+>    lancé par « Garde de livraison mobile » de `validate-pr.yml` ; le test du lot 1 ne reçoit que `verdictLitteralSwift`.
+>    Le garde-fou 18 tolère l'unique assertion négative déjà exclue par la garde lexicale du lot 2
+>    (`tests/node/lecture-notes-ios.node.mjs`, `SupabaseNotationGatewayTests`).
+> 9. **B0-bis mergé** : les treize clés `ios_natif_*_actif` du lot 4 sont posées par
+>    `supabase/migrations/20261102204450_drapeaux_ios_natif_lots_2_4_5.sql` ; il ne reste rien à faire pour B0-bis.
+> 10. **`fn_ouvrir_litige_rate_limited`** : entrée et fiche du lot 2 sur `main` ; la sous-section « Usage du lot 4 » y
+>     est déplacée (précision 10). `fn_suggestions_missions_pour_soignant` reste `a_venir`, `lot: 4`, à statuer en T15.
+> 11. **Numéros de ligne** : le dump `supabase/schema/public.sql` a été re-baseliné depuis le 01/11 ; les « l.N » du
+>     blueprint sont décalés. Les gardes confrontent les contenus (messages, SQLSTATE), pas les lignes, et passent.
+>
+> **§6 mis à jour au 18/11** : B0-bis fait (point 2) ; prérequis du point 1 complétés par le reliquat du lot 1
+> ci-dessus (T6a, T4b, T5, T6b, T6c) ; B1 toujours B9, non fait ; les autres points sont inchangés.
+
 > Préparé le 2026-11-02 en **lecture seule** sur `main` (`d1b0f39c`) et sur les branches lot 1 non mergées `origin/feat/ios-native-lot1-t1-fondation` (`d246a062`), `origin/feat/ios-native-lot1-t1b-design` (`528c49b1`), `origin/feat/ios-native-lot1-t2-golden-planning` (`bda09c20`). (corrigé v2) Contre-relu le même jour contre la branche d'intégration `origin/feat/ios-lot1` (`c509224a` : T0 du lot 1 avec `check-rpc-contracts.mjs`, `tests/node/check-rpc-contracts.node.mjs`, `docs/mobile-swift/LOT1_PLAN.md`), `origin/lot1/t4a`, `origin/lot1/t8`, `origin/feat/b0-drapeaux-ios-natif` et les blueprints `LOT2_PLAN.md` / `LOT3_PLAN.md` ; `LOT1_DECISIONS.md` n'est versionné sur aucune branche : T0 le verse sous `docs/mobile-swift/` pour que les renvois « lot 1 décision n » soient vérifiables.
 > Périmètre : `docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 4 » (l.202-210). Règles : `docs/mobile-swift/PRINCIPES.md`, `DECISIONS_LOT0.md`, `PARITE_SOIGNANT.md`, blueprint et décisions du lot 1 (`LOT1_PLAN.md`, `LOT1_DECISIONS.md`), `CLAUDE.md` (HARD STOP n°4, B9, « mergé ≠ livré », état dérivé, filtre de visibilité centralisé, documents de santé).
 > Sauf mention, les lignes renvoient à `supabase/schema/public.sql` (dump prod re-baseliné le 01/11/2026). SDK lu dans le checkout supabase-swift 2.55.5 (`DerivedData/Jolene-*/SourcePackages/checkouts/supabase-swift`, tag `v2.55.5`).

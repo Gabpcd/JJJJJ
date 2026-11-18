@@ -2437,11 +2437,13 @@ Règle normative pour T1 et pour chaque gateway du lot 4 (`LOT4_PLAN.md` §2.4, 
 `SupabaseErrorMapping.map` perd `PostgrestError.message` : sans interception, un refus d'accès métier
 afficherait « Votre session a expiré », et un `FunctionsError.httpError(code:data:)` (SDK
 `Sources/Functions/Types.swift` l.10, traité par aucune branche de `SupabaseErrorMapping.map`) deviendrait le
-message générique. Les exceptions PostgREST sont donc lues **avant** `SupabaseErrorMapping.map`, dans
-`RPCResponse.swift` : la surcharge `appeler(…, exceptionsMetier:)` livrée par le lot 3 T1 est étendue par le
-lot 4 T1 au couple « SQLSTATE **et** message connu » (`executer` est `private` : un fichier d'extension ne
-peut pas s'intercaler) ; les corps des réponses edge sont décodés par `EdgeResponse` (lot 3 T1) avant tout
-mapping. `SupabaseErrorMapping.swift` reste inchangé.
+message générique. Les exceptions PostgREST sont donc lues **avant** `SupabaseErrorMapping.map`. Sur `main`,
+`RPCResponse.executer` est interne (et non plus privé) depuis le lot 3 T1, et la surcharge
+`appeler(…, exceptionsMetier:)` du lot 3 vit dans une extension (`RPCResponse+ExceptionsMetier.swift`, SQLSTATE
+seul) : le lot 4 T1 y ajoute, dans son propre fichier (`RPC/ExceptionsMetierLot4.swift`), la surcharge
+`appeler(…, exceptions: ExceptionsLot4)` au couple « SQLSTATE **et** message connu », avec une règle par RPC
+(`ExceptionsMetierLot4`) ; `RPCResponse.swift` n'est pas modifié. Les corps des réponses edge sont décodés par
+`EdgeResponse` (lot 3 T1) avant tout mapping. `SupabaseErrorMapping.swift` reste inchangé.
 
 | SQLSTATE / forme | Message (valeur exacte) | RPC émettrice (ligne du dump) | Traitement natif |
 |---|---|---|---|
