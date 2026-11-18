@@ -31,7 +31,21 @@ export const FIXTURES_DIR = join(
   ROOT, 'ios-native', 'Packages', 'JoleneCore', 'Sources', 'JoleneCore', 'Resources', 'fixtures',
 );
 
-/** Copie de DEMO_CONTEXT (demoGateway.ts). */
+/**
+ * Lot 1, T6b : identité démo unique (colonnes du soft-gate de la candidature, `ProfilCompletion`), partagée par la
+ * projection du lot 1 (`demo-profile.json`, `MissionsPort.profile`) et le profil complet du lot 3
+ * (`demo-profil-complet.json`) : les deux projections d'une même ligne `soignants` ne divergent jamais. Sans
+ * téléphone et RPPS non vérifié : le profil fictif n'est pas candidat par défaut (variante DEBUG `candidat`).
+ */
+export const DEMO_IDENTITE = {
+  prenom: 'Camille',
+  nom: 'Démo',
+  date_naissance: '1990-05-14',
+  telephone: null,
+  rpps_verifie: false,
+};
+
+/** Copie de DEMO_CONTEXT (demoGateway.ts), plus l'identité démo (T6b). */
 export const DEMO_PROFILE = {
   user_id: 'demo-soignant',
   email: 'demonstration@example.invalid',
@@ -46,6 +60,7 @@ export const DEMO_PROFILE = {
     types_contrat_acceptes: '["CDD","LIBERAL"]',
     type_exercice: 'MIXTE',
     taux_horaire_minimum: 0,
+    ...DEMO_IDENTITE,
   },
 };
 
@@ -774,8 +789,8 @@ export function buildDemoProfilComplet(now = new Date(FIXED_NOW)) {
   return {
     fixed_now: now.toISOString(),
     profil: {
-      id: p.id, prenom: 'Camille', nom: 'Démo', email: DEMO_PROFILE.email, telephone: null,
-      date_naissance: '1990-05-14', profession: p.profession, numero_rpps: null, rpps_verifie: false,
+      id: p.id, prenom: DEMO_IDENTITE.prenom, nom: DEMO_IDENTITE.nom, email: DEMO_PROFILE.email, telephone: DEMO_IDENTITE.telephone,
+      date_naissance: DEMO_IDENTITE.date_naissance, profession: p.profession, numero_rpps: null, rpps_verifie: DEMO_IDENTITE.rpps_verifie,
       type_contrat: p.type_contrat, type_exercice: p.type_exercice,
       adresse_lat: p.adresse_lat, adresse_lng: p.adresse_lng, rayon_deplacement_km: p.rayon_deplacement_km,
       bio: null, annees_experience: 4, specialites: [], types_contrat_acceptes: p.types_contrat_acceptes,

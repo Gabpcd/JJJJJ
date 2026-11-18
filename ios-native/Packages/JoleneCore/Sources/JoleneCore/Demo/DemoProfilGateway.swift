@@ -111,10 +111,19 @@ public struct DemoProfilGateway: ProfilPort {
 /// comme `JOLENE_FORCE_ACCUEIL_ECHEC`) ; jamais en Release.
 /// - `identite-verrouillee` : `rpps_verifie = true` (identité figée après le contrôle RPPS : prénom, nom, date
 ///   de naissance et RPPS en lecture seule) ; aucun numéro RPPS fictif n'est inventé ;
-/// - `sans-date-naissance` : `date_naissance = null` (bouton « Date de naissance », aucune date écrite sans choix).
+/// - `sans-date-naissance` : `date_naissance = null` (bouton « Date de naissance », aucune date écrite sans choix) ;
+/// - `candidat` (lot 1, T6b) : profil prêt à candidater (soft-gate `ProfilCompletion` vert) — `rpps_verifie = true`
+///   (identité figée, comme `identite-verrouillee`) et téléphone fictif `telephoneCandidat`, pour la recette des
+///   parcours POSTULER et ACCEPTER (`DemoCandidatureTests`) ; aucun numéro RPPS fictif inventé.
+/// Chaque variante s'applique aux deux projections du profil démo : la ligne du lot 3 (`appliquer(_: ValeurJSON)`)
+/// et le `SoignantProfile` du lot 1 (`appliquer(_: SoignantProfile)`, `DemoWorld.gateways(drapeaux:varianteProfil:)`).
 public enum VarianteProfilDemo: String, Sendable, CaseIterable {
     case identiteVerrouillee = "identite-verrouillee"
     case sansDateNaissance = "sans-date-naissance"
+    case candidat = "candidat"
+
+    /// Numéro de la tranche réservée aux œuvres de fiction par l'ARCEP (06 39 98 xx xx) : jamais un abonné réel.
+    public static let telephoneCandidat = "0639980000"
 
     public static let variableEnvironnement = "JOLENE_DEMO_PROFIL"
 
@@ -125,8 +134,24 @@ public enum VarianteProfilDemo: String, Sendable, CaseIterable {
         switch self {
         case .identiteVerrouillee: objet["rpps_verifie"] = .booleen(true)
         case .sansDateNaissance: objet["date_naissance"] = .null
+        case .candidat:
+            objet["rpps_verifie"] = .booleen(true)
+            objet["telephone"] = .chaine(Self.telephoneCandidat)
         }
         return .objet(objet)
+    }
+
+    /// Même variante sur la projection du lot 1 (colonnes du soft-gate de la candidature, réduites à leur présence).
+    public func appliquer(_ profil: SoignantProfile) -> SoignantProfile {
+        var modifie = profil
+        switch self {
+        case .identiteVerrouillee: modifie.rppsVerifie = true
+        case .sansDateNaissance: modifie.dateNaissanceRenseignee = false
+        case .candidat:
+            modifie.rppsVerifie = true
+            modifie.telephoneRenseigne = true
+        }
+        return modifie
     }
 }
 
