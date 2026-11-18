@@ -242,6 +242,15 @@ test('LOT1_PLAN.md versionné : §7 = décisions du 02/11/2026, plus aucune ques
     from += at + 1;
   }
   assert.ok(!/\n22\. \*\*/.test(decisions), 'décision 22 inattendue');
+  // Intégration de la vague B : la décision 21 est le motif « Urgence médicale » ; les précisions du 18/11/2026 (T4b, T6a)
+  // sont des amendements datés sous leur décision mère (2 et 8), jamais des numéros nouveaux.
+  assert.match(decisions, /\n21\. \*\*Motif « 🏥 Urgence médicale » non proposé en natif\*\*/, 'décision 21 : motif « Urgence médicale »');
+  const amendements = [...decisions.matchAll(/\n {4}- \*\*Amendement([^*]*)\*\*/g)].map(m => m[1]);
+  assert.ok(amendements.length >= 2, 'amendements des décisions 2 et 8 attendus');
+  for (const a of amendements) assert.match(a, /^ du \d{2}\/\d{2}\/\d{4} — \S/, `amendement non daté au format « du JJ/MM/AAAA — objet » : ${a}`);
+  const sous = n => decisions.slice(decisions.search(new RegExp(`\\n${n}\\. \\*\\*`)), decisions.search(new RegExp(`\\n${n + 1}\\. \\*\\*`)));
+  assert.match(sous(2), /\*\*Amendement du 18\/11\/2026 — proposition non libérale\*\*/, 'amendement T6a sous la décision 2');
+  assert.match(sous(8), /\*\*Amendement du 18\/11\/2026 — deux magasins de missions favorites\*\*/, 'amendement T4b sous la décision 8');
 });
 
 test('LOT1_PLAN.md : la recherche des décisions est bornée au §7 (le §6 numérote aussi 1. à 10.)', () => {
