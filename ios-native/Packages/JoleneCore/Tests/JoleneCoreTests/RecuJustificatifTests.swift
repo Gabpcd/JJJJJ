@@ -167,18 +167,31 @@ final class AnnulationRulesTests: XCTestCase {
         XCTAssertFalse(AnnulationRules.peutConfirmer(motif: .autre, texte: vingt, accepte: false))
         XCTAssertEqual(AnnulationRules.compteur("abc"), "3 / 20+")
         XCTAssertEqual(AnnulationRules.texteNettoye("\u{FEFF}  texte \n"), "texte", "`String.prototype.trim`")
-        XCTAssertEqual(AnnulationRules.Motif.allCases.map(\.rawValue),
-                       ["URGENCE_PERSONNELLE", "URGENCE_MEDICALE", "DEUIL", "PROBLEME_TRANSPORT", "CHANGEMENT_AVIS", "AUTRE"])
         XCTAssertEqual(AnnulationRules.Motif.changementAvis.libelle, "🤔 Changement d'avis")
+    }
+
+    /// Décision 21 (`LOT1_PLAN.md` §7) : « 🏥 Urgence médicale » n'est pas proposé (`docs/CONFORMITE.md` §1.4), sans texte
+    /// de remplacement ; les cinq autres motifs du web restent, dans leur ordre. Le serveur l'admet encore.
+    func testUrgenceMedicaleNonProposee() {
+        XCTAssertEqual(AnnulationRules.Motif.allCases.map(\.rawValue),
+                       ["URGENCE_PERSONNELLE", "DEUIL", "PROBLEME_TRANSPORT", "CHANGEMENT_AVIS", "AUTRE"])
+        XCTAssertNil(AnnulationRules.Motif(rawValue: "URGENCE_MEDICALE"))
+        XCTAssertFalse(AnnulationRules.Motif.allCases.map(\.libelle).contains { $0.contains("médicale") })
+        XCTAssertTrue(AnnulationRules.motifsServeur.contains("URGENCE_MEDICALE"), "le serveur l'admet encore (PR B9 séparée)")
+        XCTAssertTrue(Set(AnnulationRules.Motif.allCases.map(\.rawValue)).isSubset(of: AnnulationRules.motifsServeur))
+        XCTAssertFalse(LibellesWeb.catalogue.contains { $0.texte.contains("Urgence médicale") })
     }
 
     func testPreuvesDeRelecture() {
         XCTAssertTrue(AnnulationRules.candidatureAnnuleeRelue(candidature("ANNULEE"), id: "c-1"))
         XCTAssertFalse(AnnulationRules.candidatureAnnuleeRelue(candidature("ACCEPTEE"), id: "c-1"))
         XCTAssertFalse(AnnulationRules.candidatureAnnuleeRelue(nil, id: "c-1"))
-        XCTAssertTrue(AnnulationRules.missionAnnuleeRelue(statut: "OUVERTE", soignantAssigneId: nil, userId: "u", ligneLue: true))
-        XCTAssertFalse(AnnulationRules.missionAnnuleeRelue(statut: "ASSIGNEE", soignantAssigneId: "u", userId: "u", ligneLue: true))
-        XCTAssertTrue(AnnulationRules.missionAnnuleeRelue(statut: nil, soignantAssigneId: nil, userId: "u", ligneLue: false))
+        XCTAssertTrue(AnnulationRules.missionAnnuleeRelue(soignantAssigneId: nil, userId: "u", ligneLue: true))
+        XCTAssertTrue(AnnulationRules.missionAnnuleeRelue(soignantAssigneId: "autre", userId: "u", ligneLue: true))
+        XCTAssertFalse(AnnulationRules.missionAnnuleeRelue(soignantAssigneId: "u", userId: "u", ligneLue: true))
+        XCTAssertFalse(AnnulationRules.missionAnnuleeRelue(soignantAssigneId: "U", userId: "u", ligneLue: true),
+                       "une mission encore attribuée au soignant (EN_COURS compris) n'est jamais annulée")
+        XCTAssertTrue(AnnulationRules.missionAnnuleeRelue(soignantAssigneId: nil, userId: "u", ligneLue: false))
     }
 
     func testRenvoiWebDuDetailEnRouteForcee() {

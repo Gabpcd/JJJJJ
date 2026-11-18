@@ -112,7 +112,7 @@ struct MissionDetailScreen: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("mission-detail-creneaux")
             entreePresences(mission)
-            AnnulationSection(mission: mission, session: session, snapshot: snapshot) // L1-T7
+            AnnulationSection(mission: mission, session: session, snapshot: snapshot) { await model.load() } // L1-T7
             if let description = mission.record.description, !description.isEmpty {
                 card {
                     Text("Description").font(JoleneFont.headline).foregroundStyle(JoleneColor.midnight)

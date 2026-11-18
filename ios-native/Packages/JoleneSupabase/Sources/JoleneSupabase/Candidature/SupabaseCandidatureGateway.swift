@@ -216,7 +216,7 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
         }
         guard reponse.success == true else { throw JoleneError(.contract, SupabaseErrorMapping.contractMessage) }
         let relue = try await relireAttribution(missionId: mission)
-        guard AnnulationRules.missionAnnuleeRelue(statut: relue?.statut, soignantAssigneId: relue?.soignantAssigneId,
+        guard AnnulationRules.missionAnnuleeRelue(soignantAssigneId: relue?.soignantAssigneId,
                                                   userId: context.userId, ligneLue: relue != nil) else {
             throw JoleneError(.contract, Self.relectureAnnulationMessage)
         }

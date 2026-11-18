@@ -57,12 +57,17 @@ public struct DemoMesMissionsGateway: MesMissionsPort {
     private let clock: any ClockPort
     private let taillePage: Int
     private let candidaturesDeSession: @Sendable () async -> [CandidatureRecord]
+    /// Lot 1, T7 (revue B8 de #1156, M1) : missions annulées pendant la session, remises en ligne (`OUVERTE`, sans
+    /// soignant) comme sur le serveur, donc absentes d'« À venir » (`DemoCandidatureGateway.missionsAnnulees`).
+    private let missionsAnnulees: @Sendable () async -> Set<String>
 
     public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow), taillePage: Int = MissionsPage.taille,
-                candidaturesDeSession: @escaping @Sendable () async -> [CandidatureRecord] = { [] }) {
+                candidaturesDeSession: @escaping @Sendable () async -> [CandidatureRecord] = { [] },
+                missionsAnnulees: @escaping @Sendable () async -> Set<String> = { [] }) {
         self.clock = clock
         self.taillePage = max(1, taillePage)
         self.candidaturesDeSession = candidaturesDeSession
+        self.missionsAnnulees = missionsAnnulees
     }
 
     public func candidatures(context: MissionReadContext) async throws -> [CandidatureRecord] {
@@ -86,7 +91,9 @@ public struct DemoMesMissionsGateway: MesMissionsPort {
         try verifierContexteDemo(context)
         let maintenant = clock.now()
         let etablissements = try chargerEtablissements()
+        let annulees = await missionsAnnulees()
         let missions = try DemoFixtures.loadDashboard().missionsAssignees
+            .filter { !annulees.contains($0.record.id) } // T7 : remise en ligne, plus attribuée au soignant
             .filter { MesMissionsPresentation.statutsAVenir.contains($0.record.statut) }
             .filter { Self.instant($0.record.finLe) >= maintenant } // `gte('fin_le', maintenant)`
             .sorted { Self.avant($0.record, $1.record, croissant: true) }
