@@ -25,10 +25,71 @@ public enum FavorisRegles {
         }
     }
 
-    /// État de l'étoile : une ligne `missions_sauvegardees` existe pour la mission (web : `.maybeSingle()`),
-    /// qu'elle soit listée ou non dans « Mes favoris ».
+    /// État de l'étoile : une ligne existe pour la mission dans l'un des deux magasins (web : `.maybeSingle()` sur
+    /// `missions_sauvegardees`, ou identifiant présent dans les favoris de l'inscription, `BoutonSauvegarderMission.tsx`
+    /// l.36-44), qu'elle soit listée ou non dans « Mes favoris ».
     public static func estSauvegardee(_ missionId: String, dans lignes: [MissionSauvegardee]) -> Bool {
         !missionId.isEmpty && lignes.contains { $0.missionId == missionId }
+    }
+
+    // MARK: - Favoris de l'inscription progressive (décision 8 du lot 1 amendée le 18/11/2026, revue B8 de T4b, M2)
+
+    /// Clé de `parcours_inscription.donnees` qui porte les favoris posés pendant l'inscription progressive
+    /// (`src/lib/explorationInscription.ts`, `chargerFavorisInscription` ; écrite par `fn_modifier_favori_inscription`).
+    public static let cleFavorisInscription = "missionsSauvegardees"
+
+    /// Préfixe de l'identifiant d'une ligne venue du seul magasin de l'inscription (aucune ligne `missions_sauvegardees`) :
+    /// identité de liste seulement, jamais envoyée au serveur.
+    public static let prefixeLigneInscription = "parcours_inscription:"
+
+    /// Identifiants de `donnees.missionsSauvegardees` : chaînes seulement (web : `typeof id === 'string'`), sans doublon,
+    /// ordre conservé ; tout autre forme (clé absente, autre type) donne une liste vide, comme le web.
+    public static func idsInscription(_ donnees: ValeurJSON?) -> [String] {
+        guard case let .tableau(valeurs)? = donnees?[cleFavorisInscription] else { return [] }
+        var vus = Set<String>()
+        return valeurs.compactMap { valeur in
+            guard case let .chaine(id) = valeur, !id.isEmpty, vus.insert(id).inserted else { return nil }
+            return id
+        }
+    }
+
+    /// Fusion des deux magasins, comme `MesFavorisSoignant.tsx` l.43-53 (`new Map([...favorisInscription, ...ms])`) :
+    /// - les favoris de l'inscription d'abord, dans l'ordre de `fn_explorer_missions_inscription` (début croissant,
+    ///   puis identifiant ; une mission sans aperçu lisible ensuite, étoile allumée mais jamais listée) ;
+    /// - puis les lignes `missions_sauvegardees`, dans l'ordre serveur (`cree_le DESC`) ;
+    /// - une mission présente dans les deux garde la place de son favori d'inscription et la ligne de la table (son
+    ///   identifiant et sa date), comme la `Map` du web (place de la première clé, valeur de la dernière).
+    /// `apercus` : aperçus relus des missions de l'inscription (`missions` sous RLS) ; à défaut, celui de la jointure.
+    public static func fusion(sauvegardees: [MissionSauvegardee], inscription: [String],
+                              apercus: [String: MissionSauvegardee.Apercu]) -> [MissionSauvegardee] {
+        let jointures = Dictionary(sauvegardees.compactMap { ligne in ligne.mission.map { (ligne.missionId, $0) } },
+                                   uniquingKeysWith: { premier, _ in premier })
+        let entrees = inscription.enumerated().map { rang, id -> (rang: Int, debut: Date?, ligne: MissionSauvegardee) in
+            let apercu = apercus[id] ?? jointures[id]
+            let ligne = MissionSauvegardee(id: prefixeLigneInscription + id, missionId: id, creeLe: nil, mission: apercu)
+            return (rang, apercu?.debutLe.flatMap(PlanningHorlogeParis.instant), ligne)
+        }
+        let triees = entrees.sorted { a, b in
+            switch (a.debut, b.debut) {
+            case let (da?, db?): return da != db ? da < db : a.ligne.missionId < b.ligne.missionId
+            case (.some, nil): return true
+            case (nil, .some): return false
+            case (nil, nil): return a.rang < b.rang
+            }
+        }
+        var resultat = triees.map(\.ligne)
+        var places = Dictionary(resultat.enumerated().map { ($1.missionId, $0) }, uniquingKeysWith: { premier, _ in premier })
+        for ligne in sauvegardees {
+            if let place = places[ligne.missionId] {
+                var fusionnee = ligne
+                if fusionnee.mission == nil { fusionnee.mission = resultat[place].mission }
+                resultat[place] = fusionnee
+            } else {
+                places[ligne.missionId] = resultat.count
+                resultat.append(ligne)
+            }
+        }
+        return resultat
     }
 }
 
@@ -100,6 +161,27 @@ public enum FavorisPresentation {
     }
 
     public static func valeurEtoile(sauvegardee: Bool) -> String { sauvegardee ? "Sauvegardée" : "Non sauvegardée" }
+
+    /// Valeur vocalisée d'une étoile dont l'état n'est pas relu (revue B8 de T4b, m3) : jamais « Non sauvegardée ».
+    public static let valeurEtoileInconnue = "État inconnu"
+    /// Libellé d'une étoile dont l'état n'est pas relu (désactivée).
+    public static let libelleEtoileInconnue = "État de sauvegarde de la mission non disponible"
+
+    public static func libelleEtoile(_ etat: EtatEtoile) -> String {
+        switch etat {
+        case .inconnue: return libelleEtoileInconnue
+        case .sauvegardee: return libelleEtoile(sauvegardee: true)
+        case .nonSauvegardee: return libelleEtoile(sauvegardee: false)
+        }
+    }
+
+    public static func valeurEtoile(_ etat: EtatEtoile) -> String {
+        switch etat {
+        case .inconnue: return valeurEtoileInconnue
+        case .sauvegardee: return valeurEtoile(sauvegardee: true)
+        case .nonSauvegardee: return valeurEtoile(sauvegardee: false)
+        }
+    }
 
     /// Bandeau d'Explorer filtré par « Voir les missions ouvertes ».
     public static func libelleFiltreEtablissement(nom: String?) -> String {

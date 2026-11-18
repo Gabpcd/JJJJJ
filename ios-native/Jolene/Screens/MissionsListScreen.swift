@@ -67,7 +67,9 @@ struct MissionsListScreen: View {
         VStack(spacing: 0) {
             chipsRapides
             bandeauEtablissement
-            AvisFavoris(favoris: favoris, identifier: "favoris-action-erreur")
+            AvisFavoris(favoris: favoris, contexte: .explorer, identifier: "explorer-favoris-erreur")
+                .padding(.horizontal, JoleneSpacing.lg)
+            AvisLectureEtoiles(favoris: favoris, session: session, contexte: .explorer, identifier: "explorer-favoris-lecture")
                 .padding(.horizontal, JoleneSpacing.lg)
             contenu
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -259,7 +261,7 @@ struct MissionsListScreen: View {
                     .accessibilityIdentifier("mission-row-\(mission.id)")
                     // Lot 1 (T4b) : étoile hors du lien, cible propre (`.borderless`), en bas à droite de la carte.
                     .overlay(alignment: .bottomTrailing) {
-                        BoutonFavoriMission(favoris: favoris, missionId: mission.id)
+                        BoutonFavoriMission(favoris: favoris, missionId: mission.id, contexte: .explorer)
                             .padding(.trailing, JoleneSpacing.sm)
                             .padding(.bottom, JoleneSpacing.xs)
                     }

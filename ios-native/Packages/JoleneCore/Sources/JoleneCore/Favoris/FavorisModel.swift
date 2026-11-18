@@ -19,6 +19,25 @@ public enum FavorisListe<Element: Equatable & Sendable>: Equatable, Sendable {
     }
 }
 
+/// Surface où une action ou une lecture des favoris a eu lieu (revue B8 de T4b, m4) : son erreur n'est affichée que
+/// là, jamais sur une autre surface du même modèle (liste d'Explorer, détail d'une mission, écran « Mes favoris »).
+public enum ContexteFavoris: Equatable, Sendable {
+    /// Étoiles des cartes d'Explorer.
+    case explorer
+    /// Étoile du détail de cette mission (ouvert depuis Explorer).
+    case detail(missionId: String)
+    /// Écran « Mes favoris » (listes, « Retirer », feuille du retrait d'un établissement).
+    case ecran
+}
+
+/// État affiché par une étoile (revue B8 de T4b, m3) : inconnu tant que la liste n'est pas relue (première lecture en
+/// cours, ou en échec), jamais « Non sauvegardée » par défaut (PRINCIPES §2-§3 : aucun état plausible non relu).
+public enum EtatEtoile: Equatable, Sendable {
+    case inconnue
+    case sauvegardee
+    case nonSauvegardee
+}
+
 /// Modèle des favoris (lot 1, T4b), port de `MesFavorisSoignant.tsx` et de `BoutonSauvegarderMission.tsx`.
 /// Une seule instance par epoch, partagée par l'étoile des cartes Explorer, l'étoile du détail et l'écran
 /// « Mes favoris » : l'étoile suit toujours la dernière relecture (État dérivé, une seule source).
@@ -35,7 +54,12 @@ public enum FavorisListe<Element: Equatable & Sendable>: Equatable, Sendable {
 /// - un second appui sur la même étoile (ou le même retrait) pendant l'appel est ignoré ;
 /// - deux lectures qui se chevauchent : seule la dernière demandée publie ;
 /// - une annulation (vue qui disparaît) n'est jamais une erreur ;
-/// - établissements : retrait seulement (`actif = false`, décision 8).
+/// - établissements : retrait seulement (`actif = false`, décision 8) ;
+/// - deux magasins de missions, comme le web (décision 8 du lot 1 amendée le 18/11/2026) : la gateway fusionne `missions_sauvegardees` et
+///   les favoris de l'inscription progressive, et le retrait vide les deux ;
+/// - une mutation confirmée par sa relecture n'est jamais masquée par un état lu avant elle (revue B8, m1) : si une
+///   opération plus récente a publié un état qui la contredit, la liste est relue ;
+/// - toute lecture réussie lève « session à vérifier » ; « Vérifier ma session » revalide puis relit (`verifierSession`).
 @MainActor
 public final class FavorisModel: ObservableObject {
     public static let echecLectureMissions = "Vos missions sauvegardées n'ont pas pu être chargées. Vérifiez votre connexion puis réessayez."
@@ -51,6 +75,8 @@ public final class FavorisModel: ObservableObject {
     @Published public private(set) var etablissements: FavorisListe<EtablissementFavori> = .chargement
     /// Dernière erreur d'action ou de relecture d'une liste déjà affichée ; `nil` après un succès confirmé.
     @Published public private(set) var erreurAction: String?
+    /// Surface de `erreurAction` (m4) : chaque surface n'affiche que la sienne (`erreur(pour:)`).
+    @Published public private(set) var contexteErreur: ContexteFavoris?
     /// Nombre d'erreurs signalées : jeton d'annonce VoiceOver (`InlineNotice.announcementID`).
     @Published public private(set) var tentatives = 0
     @Published public private(set) var sessionExpired = false
@@ -74,6 +100,24 @@ public final class FavorisModel: ObservableObject {
         FavorisRegles.estSauvegardee(missionId, dans: missions.elements)
     }
 
+    /// État de l'étoile : inconnu tant que la liste n'est pas relue (m3).
+    public func etoile(_ missionId: String) -> EtatEtoile {
+        guard missions.estPrete else { return .inconnue }
+        return estSauvegardee(missionId) ? .sauvegardee : .nonSauvegardee
+    }
+
+    /// Message d'échec de la lecture des étoiles (première lecture en échec), `nil` sinon : affiché par la liste et
+    /// par le détail, avec « Réessayer » (`chargerMissions(depuis:)`).
+    public var echecLectureEtoiles: String? {
+        if case let .echec(message) = missions { return message }
+        return nil
+    }
+
+    /// Erreur à afficher sur une surface : celle de son contexte seulement (m4).
+    public func erreur(pour contexte: ContexteFavoris) -> String? {
+        contexteErreur == contexte ? erreurAction : nil
+    }
+
     /// Vrai pendant l'appel : l'étoile est désactivée.
     public func enCours(missionId: String) -> Bool { missionsEnCours.contains(missionId) }
 
@@ -81,20 +125,36 @@ public final class FavorisModel: ObservableObject {
 
     public func etablissement(id: String) -> EtablissementFavori? { etablissements.elements.first { $0.id == id } }
 
-    public func effacerErreur() { erreurAction = nil }
+    public func effacerErreur() {
+        erreurAction = nil
+        contexteErreur = nil
+    }
+
+    /// « Vérifier ma session » (session à vérifier) : revalide la session, puis relit les deux listes si elle est toujours
+    /// prête pour l'epoch de cet écran (revue B8 de T4b, M1 ; même règle que `AccueilModel.verifierSession`). Sans cette
+    /// relecture, une session encore valide (même epoch : `SessionStore.start` ne démonte pas un espace prêt) laisserait
+    /// l'écran sur « session à vérifier », « Réessayer » masqué. Une session fermée ou une autre identité est reprise
+    /// par la racine (`RootView`, `.id(epoch)`), sans lecture pour l'identité périmée.
+    public func verifierSession(_ session: SessionStore) async {
+        await session.start()
+        guard session.state.snapshot?.epoch == snapshot.epoch else { return }
+        await charger()
+    }
 
     // MARK: - Lectures
 
     /// Écran « Mes favoris » : relit les deux listes en parallèle (à chaque apparition, tirer pour actualiser).
     public func charger() async {
-        erreurAction = nil
-        async let lectureMissions: Void = lireMissions(explicite: true)
+        effacerErreur()
+        async let lectureMissions: Void = lireMissions(explicite: true, contexte: .ecran)
         async let lectureEtablissements: Void = lireEtablissements(explicite: true)
         _ = await (lectureMissions, lectureEtablissements)
     }
 
-    /// Relecture des missions sauvegardées (« Réessayer » de la section).
-    public func chargerMissions() async { await lireMissions(explicite: true) }
+    /// Relecture des missions sauvegardées (« Réessayer » de la section, ou de l'avis d'échec des étoiles).
+    public func chargerMissions(depuis contexte: ContexteFavoris = .ecran) async {
+        await lireMissions(explicite: true, contexte: contexte)
+    }
 
     /// Relecture des établissements suivis (« Réessayer » de la section).
     public func chargerEtablissements() async { await lireEtablissements(explicite: true) }
@@ -102,22 +162,23 @@ public final class FavorisModel: ObservableObject {
     /// Explorer : état des étoiles, lu une fois par epoch (les mutations rendent ensuite la liste relue).
     public func chargerMissionsSiNecessaire() async {
         guard !missions.estPrete else { return }
-        await lireMissions(explicite: true)
+        await lireMissions(explicite: true, contexte: .explorer)
     }
 
     // MARK: - Missions
 
-    /// Étoile : sauvegarde une mission non sauvegardée, retire une mission sauvegardée.
-    public func basculer(missionId: String) async {
-        await appliquer(missionId: missionId, sauvegarder: !estSauvegardee(missionId))
+    /// Étoile : sauvegarde une mission non sauvegardée, retire une mission sauvegardée. `depuis` : surface de l'étoile,
+    /// où son erreur éventuelle est affichée (m4).
+    public func basculer(missionId: String, depuis contexte: ContexteFavoris = .explorer) async {
+        await appliquer(missionId: missionId, sauvegarder: !estSauvegardee(missionId), contexte: contexte)
     }
 
     /// « Retirer » de l'écran « Mes favoris ».
     public func retirerMission(_ missionId: String) async {
-        await appliquer(missionId: missionId, sauvegarder: false)
+        await appliquer(missionId: missionId, sauvegarder: false, contexte: .ecran)
     }
 
-    private func appliquer(missionId: String, sauvegarder: Bool) async {
+    private func appliquer(missionId: String, sauvegarder: Bool, contexte: ContexteFavoris) async {
         guard !missionId.isEmpty, !missionsEnCours.contains(missionId) else { return }
         missionsEnCours.insert(missionId)
         defer { missionsEnCours.remove(missionId) }
@@ -133,21 +194,28 @@ public final class FavorisModel: ObservableObject {
                             : try await port.retirer(missionId: missionId, context: context)
             }
             guard await controller.epoch == snapshot.epoch else { return }
-            if revision == revisionMissions { publier(missions: lignes, maintenant: horloge.now()) }
+            let publiee = revision == revisionMissions
+            if publiee { publier(missions: lignes, maintenant: horloge.now()) }
             sessionExpired = false
             // Succès annoncé seulement si la relecture le confirme (PRINCIPES §3).
-            if FavorisRegles.estSauvegardee(missionId, dans: lignes) == sauvegarder {
-                erreurAction = nil
+            let confirmee = FavorisRegles.estSauvegardee(missionId, dans: lignes) == sauvegarder
+            if confirmee {
+                effacerErreur()
             } else {
-                signaler(sauvegarder ? Self.sauvegardeNonConfirmee : Self.retraitNonConfirme)
+                signaler(sauvegarder ? Self.sauvegardeNonConfirmee : Self.retraitNonConfirme, contexte: contexte)
+            }
+            // m1 : une opération plus récente a publié son état ; s'il contredit cette mutation confirmée (lu avant
+            // l'écriture) ou si aucune liste n'est relue, la liste est relue : jamais une écriture masquée.
+            if confirmee, !publiee, !missions.estPrete || estSauvegardee(missionId) != sauvegarder {
+                await lireMissions(explicite: false, contexte: contexte)
             }
         } catch {
             guard await controller.epoch == snapshot.epoch, !Task.isCancelled,
                   let issue = Self.message(pour: error, repli: Self.echecMutation) else { return }
             sessionExpired = issue.sessionExpiree
-            signaler(issue.message)
+            signaler(issue.message, contexte: contexte)
             // Le serveur a pu agir (délai, coupure) : relecture, jamais de renvoi.
-            if !issue.sessionExpiree { await lireMissions(explicite: false) }
+            if !issue.sessionExpiree { await lireMissions(explicite: false, contexte: contexte) }
         }
     }
 
@@ -173,16 +241,16 @@ public final class FavorisModel: ObservableObject {
             if revision == revisionEtablissements { etablissements = .prete(liste) }
             sessionExpired = false
             guard !liste.contains(where: { $0.id == etablissementId }) else {
-                signaler(Self.retraitNonConfirme)
+                signaler(Self.retraitNonConfirme, contexte: .ecran)
                 return false
             }
-            erreurAction = nil
+            effacerErreur()
             return true
         } catch {
             guard await controller.epoch == snapshot.epoch, !Task.isCancelled,
                   let issue = Self.message(pour: error, repli: Self.echecMutation) else { return false }
             sessionExpired = issue.sessionExpiree
-            signaler(issue.message)
+            signaler(issue.message, contexte: .ecran)
             if !issue.sessionExpiree { await lireEtablissements(explicite: false) }
             return false
         }
@@ -193,7 +261,7 @@ public final class FavorisModel: ObservableObject {
     /// `explicite` : lecture demandée par l'utilisateur ou par l'écran (son échec sur une liste affichée est
     /// signalé) ; sinon relecture de réconciliation après une mutation (son échec n'écrase pas le message
     /// de l'action).
-    private func lireMissions(explicite: Bool) async {
+    private func lireMissions(explicite: Bool, contexte: ContexteFavoris) async {
         revisionMissions += 1
         let revision = revisionMissions
         guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
@@ -212,7 +280,7 @@ public final class FavorisModel: ObservableObject {
                   let issue = Self.message(pour: error, repli: Self.echecLectureMissions) else { return }
             if issue.sessionExpiree { sessionExpired = true }
             if missions.estPrete {
-                if explicite { signaler(issue.message) }
+                if explicite { signaler(issue.message, contexte: contexte) }
             } else {
                 missions = .echec(issue.message)
             }
@@ -231,12 +299,13 @@ public final class FavorisModel: ObservableObject {
             }
             guard await controller.epoch == snapshot.epoch, revision == revisionEtablissements else { return }
             etablissements = .prete(liste)
+            sessionExpired = false // M1 : comme `lireMissions`, toute lecture réussie lève « session à vérifier »
         } catch {
             guard await controller.epoch == snapshot.epoch, revision == revisionEtablissements, !Task.isCancelled,
                   let issue = Self.message(pour: error, repli: Self.echecLectureEtablissements) else { return }
             if issue.sessionExpiree { sessionExpired = true }
             if etablissements.estPrete {
-                if explicite { signaler(issue.message) }
+                if explicite { signaler(issue.message, contexte: .ecran) }
             } else {
                 etablissements = .echec(issue.message)
             }
@@ -248,9 +317,10 @@ public final class FavorisModel: ObservableObject {
         missionsAffichees = FavorisRegles.missionsAffichees(lignes, maintenant: maintenant)
     }
 
-    private func signaler(_ message: String) {
+    private func signaler(_ message: String, contexte: ContexteFavoris) {
         tentatives += 1
         erreurAction = message
+        contexteErreur = contexte
     }
 
     /// Message affiché pour une erreur, `nil` pour une annulation (jamais présentée comme une erreur).
