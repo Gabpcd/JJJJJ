@@ -17,6 +17,11 @@
  * décision 22 du lot 3) et règles push, revenus, profil, session et RPPS ; les
  * `case` de `navigationPathForEvent` sont lus par le compilateur TypeScript
  * (`typescript`, dépendance de développement du dépôt), bornés au corps de la fonction.
+ * Lot 4, T2 : règles extraites par la PR web W0 (`raisons-score-matching.ts`,
+ * `filtre-paquet-swipe.ts`, `statut-litige-regles.ts`), `alertes-recherche-missions.ts`,
+ * copies de bulletins (`copiesBulletins.ts`, seconde exception nommée de modules inertes) et
+ * grille des disponibilités de `MesDisponibilites.tsx` (date-fns réel, calcul recopié sous
+ * garde d'extraits : la page n'est pas un module importable).
  *
  * Les vecteurs proviennent des tests vitest existants ET de grilles
  * systématiques (changements d'heure Europe/Paris, fins de mois, années
@@ -128,27 +133,53 @@ export async function resolve(specifier, context, nextResolve) {
 // Modules inertes de `pushNative.ts` : un export par nom réellement importé
 // (`fonction` lève à l'appel, `objet` à toute lecture de propriété, `valeur` à
 // toute conversion en texte ou en nombre).
+//
+// Seconde exception nommée (lot 4, T2) : `src/lib/copiesBulletins.ts` mêle les règles
+// pures `validerListeCopiesBulletins` et `copieBulletinTelechargeable` (décodage strict des
+// copies de bulletins, LOT4_PLAN §2.4) et les appels Supabase. Ses trois imports impurs
+// (`@supabase/supabase-js`, lu seulement par `instanceof` dans `pdfRefuseParServeur`, le
+// client Supabase et `@/lib/platform`) sont inertes ; `documentUpload`, `date-heure-paris`,
+// `avecDelai` et `uuid` restent réels (modules sans import, évalués sans effet). Le blueprint
+// prévoyait des vecteurs recopiés du test vitest, « module non importable par Node » : les
+// modules inertes le rendent importable, les vecteurs sortent donc de la fonction réelle.
 const PUSH_NATIVE = resolve(RACINE, 'src/lib/pushNative.ts');
-const MODULES_INERTES_PUSH = {
-  '@/integrations/supabase/client': { supabase: 'objet' },
-  './platform': { isNative: 'fonction' },
-  './logger': { logger: 'objet' },
-  './pushDeviceToken': { memoriserTokenPushAppareil: 'fonction' },
-  './nativeResume': { signalerNavigationNative: 'fonction' },
-  './navigationNotification': { OUVERTURE_NOTIFICATION: 'valeur' },
-};
-const IMPORTS_REELS_PUSH = ['./nativeLinks'];
-{
-  // Garde : si `pushNative.ts` change d'imports, l'exception nommée doit être revue.
-  const importsPush = [...readFileSync(PUSH_NATIVE, 'utf8').matchAll(/^import\s[^;]*?from\s+'([^']+)';/gm)].map((m) => m[1]).sort();
-  const attendus = [...Object.keys(MODULES_INERTES_PUSH), ...IMPORTS_REELS_PUSH].sort();
-  if (JSON.stringify(importsPush) !== JSON.stringify(attendus)) {
-    console.error(`export golden : imports de src/lib/pushNative.ts inattendus (${importsPush.join(', ')}) ; attendus : ${attendus.join(', ')}. Revoir MODULES_INERTES_PUSH (décision 22 du lot 3).`);
+const COPIES_BULLETINS = resolve(RACINE, 'src/lib/copiesBulletins.ts');
+const EXCEPTIONS_INERTES = [
+  {
+    fichier: PUSH_NATIVE,
+    reference: 'décision 22 du lot 3',
+    inertes: {
+      '@/integrations/supabase/client': { supabase: 'objet' },
+      './platform': { isNative: 'fonction' },
+      './logger': { logger: 'objet' },
+      './pushDeviceToken': { memoriserTokenPushAppareil: 'fonction' },
+      './nativeResume': { signalerNavigationNative: 'fonction' },
+      './navigationNotification': { OUVERTURE_NOTIFICATION: 'valeur' },
+    },
+    reels: ['./nativeLinks'],
+  },
+  {
+    fichier: COPIES_BULLETINS,
+    reference: 'L4-T2, LOT4_PLAN §3 T2',
+    inertes: {
+      '@supabase/supabase-js': { FunctionsHttpError: 'fonction' },
+      '@/integrations/supabase/client': { supabase: 'objet' },
+      '@/lib/platform': { isNative: 'fonction' },
+    },
+    reels: ['@/lib/documentUpload', '@/lib/date-heure-paris', '@/lib/avecDelai', '@/lib/uuid'],
+  },
+];
+for (const { fichier, reference, inertes, reels } of EXCEPTIONS_INERTES) {
+  // Garde : si le module change d'imports, l'exception nommée doit être revue.
+  const importsReels = [...readFileSync(fichier, 'utf8').matchAll(/^import\s[^;]*?from\s+'([^']+)';/gm)].map((m) => m[1]).sort();
+  const attendus = [...Object.keys(inertes), ...reels].sort();
+  if (JSON.stringify(importsReels) !== JSON.stringify(attendus)) {
+    console.error(`export golden : imports de ${fichier.slice(RACINE.length + 1)} inattendus (${importsReels.join(', ')}) ; attendus : ${attendus.join(', ')}. Revoir EXCEPTIONS_INERTES (${reference}).`);
     process.exit(2);
   }
 }
-function moduleInerte(specifier, exports) {
-  const leve = `throw new Error(${JSON.stringify(`export golden : « ${specifier} » est un module inerte de pushNative.ts, il ne doit pas être utilisé par une règle golden.`)});`;
+function moduleInerte(specifier, exports, parent) {
+  const leve = `throw new Error(${JSON.stringify(`export golden : « ${specifier} » est un module inerte de ${parent.slice(RACINE.length + 1).replace(/^src\/lib\//, '')}, il ne doit pas être utilisé par une règle golden.`)});`;
   const lignes = Object.entries(exports).map(([nom, genre]) => {
     if (genre === 'fonction') return `export function ${nom}() { ${leve} }`;
     if (genre === 'objet') return `export const ${nom} = new Proxy({}, { get() { ${leve} } });`;
@@ -161,11 +192,10 @@ register(`data:text/javascript,${encodeURIComponent(HOOK_RESOLUTION)}`, {
   parentURL: import.meta.url,
   data: {
     racineSrc: pathToFileURL(`${resolve(RACINE, 'src')}/`).href,
-    inertes: {
-      [pathToFileURL(PUSH_NATIVE).href]: Object.fromEntries(
-        Object.entries(MODULES_INERTES_PUSH).map(([specifier, exports]) => [specifier, moduleInerte(specifier, exports)]),
-      ),
-    },
+    inertes: Object.fromEntries(EXCEPTIONS_INERTES.map(({ fichier, inertes }) => [
+      pathToFileURL(fichier).href,
+      Object.fromEntries(Object.entries(inertes).map(([specifier, exports]) => [specifier, moduleInerte(specifier, exports, fichier)])),
+    ])),
   },
 });
 
@@ -199,6 +229,12 @@ const financeMission = await lib('missionFinanceDisplay.ts');
 const paiementUi = await lib('paiementSoignantUi.ts');
 const validationProfil = await lib('valider-profil-soignant.ts');
 const modesExercice = await lib('preferencesModesExercice.ts');
+// Lot 4, T2 : règles extraites par la PR web W0 (swipe, alerte, litiges) et copies de bulletins.
+const alertesRecherche = await lib('alertes-recherche-missions.ts');
+const raisonsScoreMatching = await lib('raisons-score-matching.ts');
+const filtrePaquetSwipe = await lib('filtre-paquet-swipe.ts');
+const statutLitigeRegles = await lib('statut-litige-regles.ts');
+const copiesBulletins = await lib('copiesBulletins.ts');
 // `constantes` (lot 2, T2) est aussi lu par le lot 3 (professions RPPS) : importé une seule fois ci-dessus.
 const SESSION_COUNT = resolve(RACINE, 'src/lib/session-count.ts');
 const ts = (await import('typescript')).default;
@@ -3486,6 +3522,738 @@ function vecteursProfessionsRpps() {
 }
 
 // ---------------------------------------------------------------------------
+// Lot 4, T2 (LOT4_PLAN §3 T2) : règles extraites par la PR web W0 et copies de bulletins.
+// ---------------------------------------------------------------------------
+const { format: formatDateFns, startOfWeek, addDays } = await import('date-fns');
+const { fr: localeFr } = await import('date-fns/locale');
+
+/**
+ * Garde d'un calcul recopié d'une page ou d'une fonction interne (non exportée) : le texte
+ * source doit contenir chaque extrait mot pour mot, sinon l'exporteur rejoue une règle que le
+ * web n'applique plus. L'export échoue alors (code 2) au lieu de produire des vecteurs périmés.
+ */
+function exigeExtraits(fichier, extraits, raison) {
+  const texte = readFileSync(resolve(RACINE, fichier), 'utf8');
+  const absents = extraits.filter((extrait) => !texte.includes(extrait));
+  if (absents.length > 0) {
+    console.error(`export golden : ${fichier} ne contient plus ${absents.map((e) => `« ${e} »`).join(', ')} (${raison}). Revoir l'export du lot 4.`);
+    process.exit(2);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Règle 23 : raisons-score-matching (src/lib/raisons-score-matching.ts)
+// ---------------------------------------------------------------------------
+/**
+ * Domaine : clés de breakdown propres, hors chaîne de prototype (écart connu documenté par W0 :
+ * une clé héritée d'`Object.prototype` passerait le filtre côté web ; le breakdown v3 n'en émet
+ * aucune) et hors clés « index de tableau » (que JavaScript réordonne). L'entrée porte des paires
+ * ordonnées (`entrees`) : l'ordre du breakdown départage les égalités et un objet JSON relu par
+ * Swift ne garde pas l'ordre de ses clés.
+ */
+function vecteursRaisonsScore() {
+  const c = new Collecteur('raisons-score-matching');
+  const LABELS = raisonsScoreMatching.RAISON_LABELS;
+  const CLES = Object.keys(LABELS);
+  c.ajoute('liste/RAISON_LABELS', { fonction: 'RAISON_LABELS' },
+    verifieVitest('raisons-score-matching', 'RAISON_LABELS', LABELS, {
+      distance: 'proche de chez toi', tarif: 'bien payée vs le marché', horaire: 'à tes horaires préférés',
+      etablissement: 'établissement bien noté', urgence: 'mission urgente', soignant_fiabilite: 'ton profil correspond',
+      connaissance_etab: 'tu connais cet établissement', paiement_rapide: 'paiement rapide ⚡',
+    }));
+  c.ajoute('liste/RAISONS_EPINGLEES', { fonction: 'RAISONS_EPINGLEES' },
+    verifieVitest('raisons-score-matching', 'RAISONS_EPINGLEES', raisonsScoreMatching.RAISONS_EPINGLEES, ['connaissance_etab', 'paiement_rapide']));
+
+  const raisons = (nom, entrees, vitest) => {
+    for (const [cle] of entrees) {
+      if (cle in Object.prototype || cle === '__proto__' || /^(0|[1-9]\d*)$/.test(cle)) {
+        throw new Error(`raisons-score-matching: « ${nom} » : clé « ${cle} » hors domaine golden.`);
+      }
+    }
+    const breakdown = Object.fromEntries(entrees);
+    if (JSON.stringify(Object.keys(breakdown)) !== JSON.stringify(entrees.map(([cle]) => cle))) {
+      throw new Error(`raisons-score-matching: « ${nom} » : clés dupliquées ou réordonnées.`);
+    }
+    const obtenu = raisonsScoreMatching.raisonsScore(breakdown);
+    if (vitest !== undefined) verifieVitest('raisons-score-matching', nom, obtenu, vitest);
+    c.ajoute(`raisonsScore/${nom}`, { fonction: 'raisonsScore', entrees }, obtenu);
+  };
+  const raisonsBrut = (nom, breakdown, vitest) => {
+    const obtenu = raisonsScoreMatching.raisonsScore(breakdown);
+    if (vitest !== undefined) verifieVitest('raisons-score-matching', nom, obtenu, vitest);
+    c.ajoute(`raisonsScore/${nom}`, breakdown === undefined ? { fonction: 'raisonsScore', absent: true } : { fonction: 'raisonsScore', breakdown }, obtenu);
+  };
+
+  // --- Issus de raisons-score-matching.test.ts -----------------------------------
+  raisons('vitest-tri-points', [['distance', 10], ['tarif', 25], ['horaire', 15], ['urgence', 5]], 'bien payée vs le marché · à tes horaires préférés');
+  raisons('vitest-epingle-connaissance', [['distance', 30], ['connaissance_etab', 5]], 'tu connais cet établissement · proche de chez toi');
+  raisons('vitest-epingle-ordre', [['paiement_rapide', 1], ['distance', 40], ['connaissance_etab', 1]], 'tu connais cet établissement · paiement rapide ⚡');
+  raisons('vitest-epingle-paiement', [['paiement_rapide', 2], ['tarif', 20], ['horaire', 10]], 'paiement rapide ⚡ · bien payée vs le marché');
+  raisons('vitest-epinglees-a-zero', [['connaissance_etab', 0], ['paiement_rapide', 0], ['horaire', 3]], 'à tes horaires préférés');
+  raisons('vitest-cles-inconnues', [['fiabilite', 50], ['inconnu', 99], ['distance', 0], ['tarif', '30'], ['urgence', -1], ['horaire', 5]], 'à tes horaires préférés');
+  raisons('vitest-fiabilite-v3', [['soignant_fiabilite', 12], ['etablissement', 4]], 'ton profil correspond · établissement bien noté');
+  raisons('vitest-egalite-ordre', [['tarif', 10], ['distance', 10], ['horaire', 10]], 'bien payée vs le marché · proche de chez toi');
+  raisons('vitest-vide', [], '');
+  raisonsBrut('vitest-null', null, '');
+  raisonsBrut('vitest-absent', undefined, '');
+
+  // --- Grille : une clé seule, valeurs JSON de tout type ----------------------------
+  const VALEURS = [['un', 1], ['zero', 0], ['negatif', -1], ['demi', 0.5], ['infime', 1e-9], ['cent', 100],
+    ['texte', '5'], ['vrai', true], ['null', null], ['tableau', [5]], ['objet', { v: 5 }]];
+  for (const cle of [...CLES, 'fiabilite', 'Distance', 'distance ', 'score']) {
+    for (const [nomValeur, valeur] of VALEURS) raisons(`seule/${cle}/${nomValeur}`, [[cle, valeur]]);
+  }
+  // --- Grille : paires ordonnées (épinglage, égalité, tri décroissant) ---------------
+  for (const a of CLES) {
+    for (const b of CLES) {
+      if (a === b) continue;
+      for (const [nomMotif, va, vb] of [['egalite', 1, 1], ['croissant', 1, 2], ['decroissant', 2, 1]]) {
+        raisons(`paire/${a}/${b}/${nomMotif}`, [[a, va], [b, vb]]);
+      }
+    }
+  }
+  // --- Grille : triplets (ordre canonique des libellés), deux motifs -----------------
+  for (let i = 0; i < CLES.length; i += 1) {
+    for (let j = i + 1; j < CLES.length; j += 1) {
+      for (let k = j + 1; k < CLES.length; k += 1) {
+        raisons(`triplet/${CLES[i]}/${CLES[j]}/${CLES[k]}/croissant`, [[CLES[i], 1], [CLES[j], 2], [CLES[k], 3]]);
+        raisons(`triplet/${CLES[k]}/${CLES[j]}/${CLES[i]}/egalite`, [[CLES[k], 5], [CLES[j], 5], [CLES[i], 5]]);
+      }
+    }
+  }
+  // --- Cas choisis ---------------------------------------------------------------------
+  raisons('cas/toutes-les-cles', CLES.map((cle, i) => [cle, i + 1]));
+  raisons('cas/toutes-les-cles-inversees', [...CLES].reverse().map((cle, i) => [cle, i + 1]));
+  raisons('cas/ordre-jsonb-v3', [['tarif', 25], ['horaire', 15], ['urgence', 15], ['distance', 20], ['etablissement', 12],
+    ['paiement_rapide', 3], ['connaissance_etab', 2], ['soignant_fiabilite', 10]]);
+  raisons('cas/flottants-proches', [['distance', 0.3], ['tarif', 0.30000000000000004]]);
+  raisons('cas/epinglee-negative', [['paiement_rapide', -2], ['distance', 1]]);
+  raisons('cas/epinglee-texte', [['connaissance_etab', '1'], ['tarif', 1]]);
+  raisons('cas/une-seule-epinglee-et-rien', [['paiement_rapide', 4]]);
+  raisons('cas/inconnues-seules', [['fiabilite', 50], ['inconnu', 99]]);
+  for (const [nom, breakdown] of [['texte', 'distance'], ['nombre', 5], ['vrai', true], ['faux', false], ['tableau', [1, 2]],
+    ['zero', 0], ['texte-vide', '']]) {
+    raisonsBrut(`non-objet/${nom}`, breakdown);
+  }
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 24 : filtre-paquet-swipe (src/lib/filtre-paquet-swipe.ts)
+// ---------------------------------------------------------------------------
+/**
+ * Domaine : chaînes de l'alphabet latin (casse par `toLowerCase`, comparaison par unités UTF-16 :
+ * une forme décomposée ne correspond pas à la forme composée). Les plannings restent dans le
+ * domaine de `planning-candidat` (missions ponctuelles, créneaux explicites, erreur de planning).
+ */
+function vecteursFiltrePaquetSwipe() {
+  const c = new Collecteur('filtre-paquet-swipe');
+  const offre = (missionId, extra = {}) => ({
+    mission_id: missionId,
+    profession_requise: 'IDE',
+    etablissement_ville: 'Paris',
+    etablissement_code_postal: '75016',
+    distance_km: 5,
+    taux_horaire_base: 30,
+    type_contrat_recherche: 'TOUS',
+    est_urgente: false,
+    // Mercredi 4 novembre 2026, 8 h → 16 h à Paris.
+    debut_le: '2026-11-04T07:00:00Z',
+    fin_le: '2026-11-04T15:00:00Z',
+    ...extra,
+  });
+  const filtre = (extra = {}) => ({
+    urgentesOnly: false, horaire: 'TOUS', profession: '', ville: '', rayonKm: 50, tauxMin: 0, typeContrat: 'TOUS', ...extra,
+  });
+  const correspond = (nom, requise, selection, compte, vitest) => {
+    const obtenu = filtrePaquetSwipe.missionCorrespondProfessionInscription(requise, selection, compte);
+    if (vitest !== undefined) verifieVitest('filtre-paquet-swipe', nom, obtenu, vitest);
+    c.ajoute(`missionCorrespondProfessionInscription/${nom}`, { fonction: 'missionCorrespondProfessionInscription', requise, selection, compte }, obtenu);
+  };
+  const passe = (nom, mission, filtreDeck, professionParcours, vitest) => {
+    const obtenu = filtrePaquetSwipe.missionPasseFiltrePaquet(mission, filtreDeck, professionParcours);
+    if (vitest !== undefined) verifieVitest('filtre-paquet-swipe', nom, obtenu, vitest);
+    c.ajoute(`missionPasseFiltrePaquet/${nom}`, { fonction: 'missionPasseFiltrePaquet', mission, filtre: filtreDeck, professionParcours }, obtenu);
+  };
+  const filtrer = (nom, paquet, filtreDeck, professionParcours, vitest) => {
+    const resultat = filtrePaquetSwipe.filtrerPaquetSwipe(paquet, filtreDeck, professionParcours);
+    if (filtreDeck == null && resultat !== paquet) throw new Error(`filtre-paquet-swipe: « ${nom} » : sans filtre, le paquet doit être rendu tel quel.`);
+    const obtenu = resultat.map((m) => m.mission_id);
+    if (vitest !== undefined) verifieVitest('filtre-paquet-swipe', nom, obtenu, vitest);
+    c.ajoute(`filtrerPaquetSwipe/${nom}`, { fonction: 'filtrerPaquetSwipe', paquet, filtre: filtreDeck, professionParcours }, obtenu);
+  };
+
+  // --- Issus de filtre-paquet-swipe.test.ts -----------------------------------------
+  filtrer('vitest-sans-filtre', [offre('a'), offre('b')], null, null, ['a', 'b']);
+  filtrer('vitest-sans-filtre-parcours', [offre('a'), offre('b')], null, 'IDE', ['a', 'b']);
+  filtrer('vitest-filtre-neutre-ordre', [offre('b'), offre('a'), offre('c')], filtre(), null, ['b', 'a', 'c']);
+  const paquetProfessions = [
+    offre('ide', { profession_requise: 'IDE' }), offre('iade', { profession_requise: 'IADE' }),
+    offre('ibode', { profession_requise: 'IBODE' }), offre('sf', { profession_requise: 'SAGE_FEMME' }),
+  ];
+  filtrer('vitest-profession-toutes', paquetProfessions, filtre(), null, ['ide', 'iade', 'ibode', 'sf']);
+  filtrer('vitest-profession-exacte', paquetProfessions, filtre({ profession: 'IDE' }), null, ['ide']);
+  filtrer('vitest-parcours-iade', paquetProfessions, filtre(), 'IADE', ['ide', 'iade']);
+  filtrer('vitest-parcours-ide', paquetProfessions, filtre(), 'IDE', ['ide']);
+  filtrer('vitest-parcours-choix-prime', paquetProfessions, filtre({ profession: 'SAGE_FEMME' }), 'IADE', ['sf']);
+  filtrer('vitest-parcours-sans-profession', paquetProfessions, filtre(), '', ['ide', 'iade', 'ibode', 'sf']);
+  correspond('vitest-ide-compte-iade', 'IDE', '', 'IADE', true);
+  correspond('vitest-iade-compte-ide', 'IADE', '', 'IDE', false);
+  correspond('vitest-choix-sf-mission-ide', 'IDE', 'SAGE_FEMME', 'IADE', false);
+  correspond('vitest-choix-sf-mission-sf', 'SAGE_FEMME', 'SAGE_FEMME', 'IADE', true);
+  correspond('vitest-compte-vide', 'KINE', '', '', true);
+  const paquetLieux = [
+    offre('paris', {}),
+    offre('lyon', { etablissement_ville: 'Lyon', etablissement_code_postal: '69003' }),
+    offre('sans-lieu', { etablissement_ville: null, etablissement_code_postal: null }),
+  ];
+  filtrer('vitest-ville-sous-chaine', paquetLieux, filtre({ ville: '  PAR ' }), null, ['paris']);
+  filtrer('vitest-ville-code-postal', paquetLieux, filtre({ ville: '690' }), null, ['lyon']);
+  filtrer('vitest-ville-pas-milieu-code-postal', paquetLieux, filtre({ ville: '016' }), null, []);
+  filtrer('vitest-ville-espaces', paquetLieux, filtre({ ville: '   ' }), null, ['paris', 'lyon', 'sans-lieu']);
+  filtrer('vitest-rayon', [offre('inconnue', { distance_km: null }), offre('limite', { distance_km: 10 }), offre('loin', { distance_km: 10.5 })],
+    filtre({ rayonKm: 10 }), null, ['inconnue', 'limite']);
+  const paquetTaux = [offre('absent', { taux_horaire_base: null }), offre('egal', { taux_horaire_base: 30 }), offre('dessous', { taux_horaire_base: 29.99 })];
+  filtrer('vitest-taux-ignore', paquetTaux, filtre({ tauxMin: 0 }), null, ['absent', 'egal', 'dessous']);
+  filtrer('vitest-taux-minimum', paquetTaux, filtre({ tauxMin: 30 }), null, ['egal']);
+  const paquetContrats = [offre('salarie', { type_contrat_recherche: 'SALARIE' }), offre('liberal', { type_contrat_recherche: 'LIBERAL' }),
+    offre('tous', { type_contrat_recherche: 'TOUS' })];
+  filtrer('vitest-contrat-cdd', paquetContrats, filtre({ typeContrat: 'CDD' }), null, ['salarie', 'tous']);
+  filtrer('vitest-contrat-liberal', paquetContrats, filtre({ typeContrat: 'LIBERAL' }), null, ['liberal', 'tous']);
+  filtrer('vitest-contrat-tous', paquetContrats, filtre({ typeContrat: 'TOUS' }), null, ['salarie', 'liberal', 'tous']);
+  filtrer('vitest-urgentes', [offre('normale'), offre('urgente', { est_urgente: true })], filtre({ urgentesOnly: true }), null, ['urgente']);
+  const jour = offre('jour');
+  // Samedi 7 novembre 2026, 21 h → dimanche 7 h à Paris.
+  const nuitWeekend = offre('nuit-weekend', { debut_le: '2026-11-07T20:00:00Z', fin_le: '2026-11-08T06:00:00Z' });
+  const inexacte = offre('inexacte', { erreur_planning: true });
+  const paquetHoraires = [jour, nuitWeekend, inexacte];
+  filtrer('vitest-horaire-tous', paquetHoraires, filtre({ horaire: 'TOUS' }), null, ['jour', 'nuit-weekend', 'inexacte']);
+  filtrer('vitest-horaire-jour', paquetHoraires, filtre({ horaire: 'JOUR' }), null, ['jour']);
+  filtrer('vitest-horaire-nuit', paquetHoraires, filtre({ horaire: 'NUIT' }), null, ['nuit-weekend']);
+  filtrer('vitest-horaire-weekend', paquetHoraires, filtre({ horaire: 'WEEKEND' }), null, ['nuit-weekend']);
+  passe('vitest-inexacte-nuit', inexacte, filtre({ horaire: 'NUIT' }), null, false);
+  filtrer('vitest-cumul', [
+    offre('ok', { est_urgente: true, distance_km: 3, taux_horaire_base: 40 }),
+    offre('pas-urgente', { distance_km: 3, taux_horaire_base: 40 }),
+    offre('trop-loin', { est_urgente: true, distance_km: 30, taux_horaire_base: 40 }),
+  ], filtre({ urgentesOnly: true, rayonKm: 10, tauxMin: 35, ville: 'paris' }), null, ['ok']);
+
+  // --- Grille : profession × sélection × compte (exploration avant inscription) ------
+  for (const requise of ['IDE', 'IADE', 'IBODE', 'SAGE_FEMME', 'MEDECIN', null]) {
+    for (const selection of ['', 'IDE', 'IADE', 'SAGE_FEMME']) {
+      for (const compte of ['', 'IDE', 'IADE', 'IBODE', 'SAGE_FEMME', 'MEDECIN']) {
+        correspond(`grille/${requise ?? 'null'}/${selection || 'vide'}/${compte || 'vide'}`, requise, selection, compte);
+      }
+    }
+  }
+  // --- Grille : profession du filtre × parcours ---------------------------------------
+  for (const requise of ['IDE', 'IADE', 'IBODE', 'SAGE_FEMME', null]) {
+    for (const profession of ['', 'IDE', 'IADE']) {
+      for (const parcours of [null, '', 'IDE', 'IADE', 'IBODE']) {
+        const nom = `profession/${requise ?? 'null'}/${profession || 'vide'}/${parcours === null ? 'hors-parcours' : parcours || 'vide'}`;
+        passe(nom, offre(nom, { profession_requise: requise }), filtre({ profession }), parcours);
+      }
+    }
+  }
+  // --- Grille : ville et code postal --------------------------------------------------
+  const LIEUX = [['paris', 'Paris', '75016'], ['lyon', 'Lyon', '69003'], ['saint-etienne', 'Saint-Étienne', '42000'],
+    ['l-hay', "L'Haÿ-les-Roses", '94240'], ['evry', 'ÉVRY-COURCOURONNES', '91000'], ['sans-lieu', null, null],
+    ['vides', '', ''], ['ville-seule', 'Paris', null], ['code-seul', null, '75001']];
+  const VILLES = [['vide', ''], ['espaces', '   '], ['par', 'par'], ['par-espaces-majuscules', ' PAR '], ['paris-majuscules', 'PARIS'],
+    ['code-750', '750'], ['code-milieu-016', '016'], ['lyon', 'lyon'], ['saint-e-accent', 'saint-é'], ['saint-e-majuscule', 'SAINT-É'],
+    ['etienne-compose', 'étienne'], ['etienne-majuscule', 'ÉTIENNE'], ['etienne-decompose', 'e\u0301tienne'],
+    ['etienne-sans-accent', 'etienne'], ['hay-trema', 'haÿ'], ['apostrophe', "l'haÿ"], ['evry-accent', 'évry'],
+    ['evry-sans-accent', 'evry'], ['chiffre-9', '9'], ['tabulation-saut', '\tparis\n'], ['insecable', '\u00a0paris\u00a0'],
+    ['bom', '\ufeffparis'], ['tiret', '-']];
+  for (const [nomLieu, ville, codePostal] of LIEUX) {
+    for (const [nomVille, villeFiltre] of VILLES) {
+      const nom = `ville/${nomLieu}/${nomVille}`;
+      passe(nom, offre(nom, { etablissement_ville: ville, etablissement_code_postal: codePostal }), filtre({ ville: villeFiltre }), null);
+    }
+  }
+  // --- Grille : rayon -------------------------------------------------------------------
+  for (const [nomDistance, distance] of [['null', null], ['zero', 0], ['9-99', 9.99], ['10', 10], ['10-0001', 10.0001], ['50', 50], ['51', 51]]) {
+    for (const rayonKm of [0, 10, 50, 100]) {
+      const nom = `rayon/${nomDistance}/${rayonKm}`;
+      passe(nom, offre(nom, { distance_km: distance }), filtre({ rayonKm }), null);
+    }
+  }
+  // --- Grille : taux minimum --------------------------------------------------------------
+  for (const [nomTaux, taux] of [['null', null], ['zero', 0], ['29-99', 29.99], ['30', 30], ['30-01', 30.01], ['100', 100]]) {
+    for (const tauxMin of [0, 30, 35.5]) {
+      const nom = `taux/${nomTaux}/${tauxMin}`;
+      passe(nom, offre(nom, { taux_horaire_base: taux }), filtre({ tauxMin }), null);
+    }
+  }
+  // --- Grille : type de contrat -----------------------------------------------------------
+  for (const contratMission of ['TOUS', 'SALARIE', 'LIBERAL', 'CDD', 'MIXTE', null]) {
+    for (const typeContrat of ['TOUS', 'CDD', 'LIBERAL', 'SALARIE', '']) {
+      const nom = `contrat/${contratMission ?? 'null'}/${typeContrat || 'vide'}`;
+      passe(nom, offre(nom, { type_contrat_recherche: contratMission }), filtre({ typeContrat }), null);
+    }
+  }
+  // --- Grille : urgence ---------------------------------------------------------------------
+  for (const estUrgente of [true, false]) {
+    for (const urgentesOnly of [true, false]) {
+      const nom = `urgence/${estUrgente ? 'urgente' : 'normale'}/${urgentesOnly ? 'urgentes-seulement' : 'toutes'}`;
+      passe(nom, offre(nom, { est_urgente: estUrgente }), filtre({ urgentesOnly }), null);
+    }
+  }
+  // --- Grille : horaires (planning exact, nuit, week-end, créneaux explicites) ---------------
+  const creneau = (debut, fin, extra = {}) => ({ debut, fin, est_pause: false, type_creneau: 'PREVISIONNEL', ...extra });
+  const PLANNINGS = [
+    ['jour-semaine', {}],
+    ['nuit-weekend', { debut_le: '2026-11-07T20:00:00Z', fin_le: '2026-11-08T06:00:00Z' }],
+    ['nuit-semaine', { debut_le: '2026-11-04T20:00:00Z', fin_le: '2026-11-05T05:00:00Z' }],
+    ['samedi-jour', { debut_le: '2026-11-07T08:00:00Z', fin_le: '2026-11-07T16:00:00Z' }],
+    ['erreur-planning', { erreur_planning: true }],
+    ['deux-creneaux-jour', { nb_creneaux: 2, debut_le: '2026-11-04T07:00:00Z', fin_le: '2026-11-05T15:00:00Z',
+      creneaux_planifies: [creneau('2026-11-04T07:00:00Z', '2026-11-04T15:00:00Z'), creneau('2026-11-05T07:00:00Z', '2026-11-05T15:00:00Z')] }],
+    ['deux-creneaux-dont-nuit', { nb_creneaux: 2, debut_le: '2026-11-04T07:00:00Z', fin_le: '2026-11-06T05:00:00Z',
+      creneaux_planifies: [creneau('2026-11-04T07:00:00Z', '2026-11-04T15:00:00Z'), creneau('2026-11-05T20:00:00Z', '2026-11-06T05:00:00Z')] }],
+    ['planning-incomplet', { nb_creneaux: 3, debut_le: '2026-11-04T07:00:00Z', fin_le: '2026-11-06T15:00:00Z',
+      creneaux_planifies: [creneau('2026-11-04T07:00:00Z', '2026-11-04T15:00:00Z')] }],
+    ['changement-heure', { debut_le: '2026-10-24T20:00:00Z', fin_le: '2026-10-25T06:00:00Z' }],
+  ];
+  for (const [nomPlanning, planning] of PLANNINGS) {
+    for (const horaire of ['TOUS', 'JOUR', 'NUIT', 'WEEKEND']) {
+      const nom = `horaire/${nomPlanning}/${horaire.toLowerCase()}`;
+      passe(nom, offre(nom, planning), filtre({ horaire }), null);
+    }
+  }
+  // --- Paquets : ordre conservé, cumul ----------------------------------------------------
+  filtrer('paquet/vide', [], filtre(), null, []);
+  filtrer('paquet/vide-sans-filtre', [], null, null, []);
+  filtrer('paquet/cumul-parcours', [
+    offre('ide-proche', { profession_requise: 'IDE', distance_km: 2 }),
+    offre('iade-loin', { profession_requise: 'IADE', distance_km: 60 }),
+    offre('iade-proche-liberal', { profession_requise: 'IADE', distance_km: 2, type_contrat_recherche: 'LIBERAL' }),
+    offre('sf-proche', { profession_requise: 'SAGE_FEMME', distance_km: 2 }),
+    offre('ide-lyon', { profession_requise: 'IDE', etablissement_ville: 'Lyon', etablissement_code_postal: '69003' }),
+  ], filtre({ typeContrat: 'CDD', ville: 'Paris' }), 'IADE');
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 25 : statut-litige (src/lib/statut-litige-regles.ts)
+// ---------------------------------------------------------------------------
+/** Libellé, icône nommée et groupe (les classes Tailwind ne sont pas portées), prédicats. */
+function vecteursStatutLitige() {
+  const c = new Collecteur('statut-litige');
+  const TABLE = [
+    ['OUVERT', 'Ouvert', 'Scale', 'OUVERT'], ['EN_DISCUSSION', 'En discussion', 'MessageSquare', 'OUVERT'],
+    ['EN_MEDIATION', 'Médiation', 'AlertTriangle', 'MEDIATION'], ['MEDIATION_EN_COURS', 'Médiation en cours', 'Users', 'MEDIATION'],
+    ['REVUE_ADMIN', 'Revue admin', 'Gavel', 'ACTION_ATTENDUE'], ['RESOLU_ACCORD_PARTIES', 'Accord mutuel ✅', 'CheckCircle2', 'RESOLU_ACCORD'],
+    ['RESOLU_FAVEUR_SOIGNANT', 'Tranché en faveur soignant', 'Gavel', 'RESOLU_DECISION'],
+    ['RESOLU_FAVEUR_ETAB', 'Tranché en faveur étab', 'Gavel', 'RESOLU_DECISION'],
+    ['RESOLU_PARTAGE', 'Tranché : décision partagée', 'Gavel', 'RESOLU_DECISION'],
+    ['RESOLU_SOIGNANT', 'Résolu (soignant)', 'CheckCircle2', 'RESOLU_DECISION'],
+    ['RESOLU_ETABLISSEMENT', 'Résolu (étab)', 'CheckCircle2', 'RESOLU_DECISION'],
+    ['RESOLU_ADMIN', 'Résolu admin', 'Gavel', 'FERME'], ['FERME', 'Fermé', 'XCircle', 'FERME'],
+  ];
+  const regle = (statut) => {
+    const { label, icone, groupe } = statutLitigeRegles.statutLitigeRegle(statut);
+    return { label, icone, groupe };
+  };
+  for (const [statut, label, icone, groupe] of TABLE) {
+    verifieVitest('statut-litige', `vitest-${statut}`, regle(statut), { label, icone, groupe });
+  }
+  verifieVitest('statut-litige', 'vitest-inconnu', regle('STATUT_FUTUR'), { label: 'STATUT_FUTUR', icone: 'Scale', groupe: 'OUVERT' });
+  const statuts = [...TABLE.map(([statut]) => statut), 'STATUT_FUTUR', '', 'ouvert', ' OUVERT', 'OUVERT ', 'RESOLU', 'Résolu',
+    'constructor', 'toString', '__proto__', 'hasOwnProperty'];
+  for (const statut of statuts) {
+    const nom = statut === '' ? 'vide' : statut.replace(/ /g, '_');
+    c.ajoute(`statutLitigeRegle/${nom}`, { fonction: 'statutLitigeRegle', statut }, regle(statut));
+    for (const predicat of ['estResolu', 'peutProposerMediation', 'peutConfirmerAccord']) {
+      c.ajoute(`${predicat}/${nom}`, { fonction: predicat, statut }, statutLitigeRegles[predicat](statut));
+    }
+  }
+  const vrais = (predicat) => statuts.filter((statut) => statutLitigeRegles[predicat](statut));
+  verifieVitest('statut-litige', 'vitest-estResolu', vrais('estResolu'), ['RESOLU_ACCORD_PARTIES', 'RESOLU_FAVEUR_SOIGNANT',
+    'RESOLU_FAVEUR_ETAB', 'RESOLU_PARTAGE', 'RESOLU_SOIGNANT', 'RESOLU_ETABLISSEMENT', 'RESOLU_ADMIN', 'FERME']);
+  verifieVitest('statut-litige', 'vitest-peutProposerMediation', vrais('peutProposerMediation'), ['OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION']);
+  verifieVitest('statut-litige', 'vitest-peutConfirmerAccord', vrais('peutConfirmerAccord'), ['OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS']);
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 26 : alertes-recherche-missions (src/lib/alertes-recherche-missions.ts)
+// ---------------------------------------------------------------------------
+/**
+ * `preparerAlerteMissions` (recherche équivalente à réutiliser, nom libre) et la clé de
+ * comparaison qu'elle applique (fonction interne `cle`, recopiée sous garde d'extrait). Domaine de
+ * `cleComparaison` : clés dont l'ordre `localeCompare` coïncide avec l'ordre des unités UTF-16 (le
+ * port Swift trie par unités UTF-16 ; deux objets aux mêmes clés restent comparés à l'identique) et
+ * objets imbriqués d'au plus une clé (un objet JSON relu par Swift ne garde pas l'ordre de ses clés).
+ * Le nom est tronqué à 90 unités UTF-16 : aucune troncature ne coupe une paire de substitution.
+ */
+function vecteursAlertesRecherche() {
+  const c = new Collecteur('alertes-recherche-missions');
+  const EXTRAIT_CLE = 'const cle = (valeur: Record<string, unknown>) => JSON.stringify(Object.fromEntries(Object.entries(valeur).sort(([a], [b]) => a.localeCompare(b))));';
+  exigeExtraits('src/lib/alertes-recherche-missions.ts', [EXTRAIT_CLE, 'cle(recherche.filtres ?? {}) === cle({ ...criteres })'],
+    'clé de comparaison recopiée par cleComparaison');
+  const cle = (valeur) => JSON.stringify(Object.fromEntries(Object.entries(valeur).sort(([a], [b]) => a.localeCompare(b))));
+  const criteres = { profession: '', rayonKm: 25, tauxMin: 30, typeContrat: 'CDD', urgentesOnly: true, horaire: 'NUIT', villeRecherche: 'Paris' };
+
+  const preparer = (nom, criteresVecteur, recherches, nomBase, vitest) => {
+    if (!Number.isInteger(criteresVecteur.rayonKm)) throw new Error(`alertes-recherche-missions: « ${nom} » : rayonKm entier attendu (FiltresAlerte.rayonKm).`);
+    if (new Set(recherches.map((r) => r.id)).size !== recherches.length) throw new Error(`alertes-recherche-missions: « ${nom} » : identifiants dupliqués.`);
+    const tronque = nomBase.slice(0, 90);
+    if (/[\ud800-\udbff]$/.test(tronque) && nomBase.length > 90) throw new Error(`alertes-recherche-missions: « ${nom} » : la troncature coupe une paire de substitution (hors domaine).`);
+    const resultat = alertesRecherche.preparerAlerteMissions(criteresVecteur, recherches, nomBase);
+    const obtenu = { dejaId: resultat.deja?.id ?? null, nom: resultat.nom, filtres: resultat.filtres };
+    if (vitest !== undefined) verifieVitest('alertes-recherche-missions', nom, obtenu, vitest, true);
+    c.ajoute(`preparerAlerteMissions/${nom}`, { fonction: 'preparerAlerteMissions', criteres: criteresVecteur, recherches, nomBase }, obtenu);
+  };
+  const recherche = (id, filtres, extra = {}) => ({ id, nom: `Recherche ${id}`, alerte_active: false, filtres, ...extra });
+
+  // --- Issus de alertes-recherche-missions.test.ts -----------------------------------
+  preparer('vitest-sept-filtres', criteres, [], 'Alerte missions IADE', { dejaId: null, nom: 'Alerte missions IADE', filtres: criteres });
+  const ancien = { id: 'a', nom: 'Alerte missions', alerte_active: false, filtres: { profession: 'IDE', rayonKm: 100 } };
+  preparer('vitest-meme-nom-autre-rayon', criteres, [ancien, { ...ancien, id: 'b', nom: 'Alerte missions (2)' }], 'Alerte missions',
+    { dejaId: null, nom: 'Alerte missions (3)', filtres: criteres });
+  preparer('vitest-equivalente-autre-ordre', criteres, [{ id: 'exacte', nom: 'Ma recherche', alerte_active: false,
+    filtres: { villeRecherche: 'Paris', horaire: 'NUIT', urgentesOnly: true, typeContrat: 'CDD', tauxMin: 30, rayonKm: 25, profession: '' } }],
+  'Alerte missions', { dejaId: 'exacte' });
+
+  // --- Équivalence des filtres ------------------------------------------------------------
+  const ordreJsonb = (objet) => Object.fromEntries(Object.entries(objet).sort(([a], [b]) => (Buffer.byteLength(a) - Buffer.byteLength(b)) || (a < b ? -1 : a > b ? 1 : 0)));
+  const VARIANTES = [
+    ['identique', { ...criteres }],
+    ['ordre-inverse', Object.fromEntries(Object.entries(criteres).reverse())],
+    ['ordre-jsonb', ordreJsonb(criteres)],
+    ['rayon-texte', { ...criteres, rayonKm: '25' }],
+    ['taux-proche', { ...criteres, tauxMin: 30.000000000000004 }],
+    ['taux-texte', { ...criteres, tauxMin: '30' }],
+    ['urgentes-texte', { ...criteres, urgentesOnly: 'true' }],
+    ['urgentes-nombre', { ...criteres, urgentesOnly: 1 }],
+    ['cle-en-plus-null', { ...criteres, etablissementId: null }],
+    ['cle-en-plus-ville', { ...criteres, ville: 'Paris' }],
+    ['cle-manquante', Object.fromEntries(Object.entries(criteres).filter(([k]) => k !== 'villeRecherche'))],
+    ['profession-null', { ...criteres, profession: null }],
+    ['ville-casse', { ...criteres, villeRecherche: 'paris' }],
+    ['ville-espace-final', { ...criteres, villeRecherche: 'Paris ' }],
+    ['horaire-imbrique', { ...criteres, horaire: { valeur: 'NUIT' } }],
+    ['horaire-tableau', { ...criteres, horaire: ['NUIT'] }],
+    ['vide', {}],
+    ['null', null],
+    ['tableau', [1, 2]],
+    ['texte', 'Paris'],
+    ['nombre', 25],
+  ];
+  for (const [nomVariante, filtres] of VARIANTES) {
+    for (const alerteActive of [false, true]) {
+      preparer(`equivalence/${nomVariante}/${alerteActive ? 'active' : 'inactive'}`, criteres,
+        [recherche(`r-${nomVariante}-${alerteActive}`, filtres, { alerte_active: alerteActive })], 'Alerte missions');
+    }
+  }
+  preparer('equivalence/filtres-absents', criteres, [{ id: 'sans-filtres', nom: 'Sans filtres', alerte_active: false }], 'Alerte missions');
+  const criteresAccents = { ...criteres, villeRecherche: 'Saint-Étienne' };
+  preparer('equivalence/ville-composee', criteresAccents, [recherche('nfc', { ...criteresAccents })], 'Alerte missions');
+  preparer('equivalence/ville-decomposee', criteresAccents, [recherche('nfd', { ...criteresAccents, villeRecherche: 'Saint-E\u0301tienne' })], 'Alerte missions');
+  const criteresTexte = { ...criteres, profession: 'IDE', villeRecherche: 'L\'Haÿ-les-Roses "centre"\\\n\u2028😀' };
+  preparer('equivalence/echappements', criteresTexte, [recherche('echappements', { ...criteresTexte })], 'Alerte missions');
+  const criteresDecimaux = { ...criteres, rayonKm: 0, tauxMin: 0.1 + 0.2 };
+  preparer('equivalence/decimaux', criteresDecimaux, [recherche('dec', { ...criteresDecimaux, tauxMin: 0.30000000000000004 })], 'Alerte missions');
+  preparer('equivalence/decimaux-arrondis', criteresDecimaux, [recherche('arrondi', { ...criteresDecimaux, tauxMin: 0.3 })], 'Alerte missions');
+  preparer('equivalence/premiere-retenue', criteres, [
+    recherche('autre', { ...criteres, rayonKm: 50 }), recherche('premiere', { ...criteres }), recherche('seconde', ordreJsonb(criteres)),
+  ], 'Alerte missions');
+  preparer('equivalence/nom-different-meme-filtres', criteres, [{ id: 'renommee', nom: 'Autre nom', alerte_active: true, filtres: { ...criteres } }], 'Alerte missions');
+  for (const [nomCritere, extra] of [['profession-ide', { profession: 'IDE' }], ['rayon-zero', { rayonKm: 0 }], ['rayon-grand', { rayonKm: 200 }],
+    ['taux-zero', { tauxMin: 0 }], ['taux-decimal', { tauxMin: 32.5 }], ['contrat-tous', { typeContrat: 'TOUS' }], ['contrat-liberal', { typeContrat: 'LIBERAL' }],
+    ['urgentes-non', { urgentesOnly: false }], ['horaire-tous', { horaire: 'TOUS' }], ['ville-vide', { villeRecherche: '' }]]) {
+    const variante = { ...criteres, ...extra };
+    preparer(`criteres/${nomCritere}/meme`, variante, [recherche(`${nomCritere}-meme`, { ...variante })], 'Alerte missions');
+    preparer(`criteres/${nomCritere}/base`, variante, [recherche(`${nomCritere}-base`, { ...criteres })], 'Alerte missions');
+  }
+
+  // --- Nom libre ---------------------------------------------------------------------------
+  const avecNoms = (noms) => noms.map((nomRecherche, i) => ({ id: `n${i}`, nom: nomRecherche, alerte_active: false, filtres: { profession: 'IDE' } }));
+  preparer('nom/libre', criteres, avecNoms(['Autre']), 'Alerte missions');
+  preparer('nom/pris', criteres, avecNoms(['Alerte missions']), 'Alerte missions');
+  preparer('nom/trou-dans-la-suite', criteres, avecNoms(['Alerte missions', 'Alerte missions (3)']), 'Alerte missions');
+  preparer('nom/suite-longue', criteres, avecNoms(['Alerte missions', 'Alerte missions (2)', 'Alerte missions (3)', 'Alerte missions (4)']), 'Alerte missions');
+  preparer('nom/seulement-suffixe', criteres, avecNoms(['Alerte missions (2)']), 'Alerte missions');
+  preparer('nom/casse', criteres, avecNoms(['alerte missions']), 'Alerte missions');
+  preparer('nom/espace-final', criteres, avecNoms(['Alerte missions ']), 'Alerte missions');
+  // Identifiant distinct : deux entrées qui ne diffèrent que par la normalisation Unicode seraient
+  // confondues par le contrôle de doublons Swift (égalité canonique des `String`).
+  preparer('nom/decompose-vs-compose', criteres, [{ id: 'nfd', nom: 'Cafe\u0301 du soir', alerte_active: false, filtres: { profession: 'IDE' } }], 'Café du soir');
+  preparer('nom/compose-pris', criteres, avecNoms(['Café du soir']), 'Café du soir');
+  preparer('nom/vide', criteres, avecNoms(['']), '');
+  preparer('nom/vide-libre', criteres, [], '');
+  const long95 = `Alerte missions ${'IDE '.repeat(20)}`.slice(0, 95);
+  const exactement90 = 'É'.repeat(90);
+  preparer('nom/long-95-libre', criteres, [], long95);
+  preparer('nom/long-95-tronque-pris', criteres, avecNoms([long95.slice(0, 90)]), long95);
+  preparer('nom/long-95-complet-pris', criteres, avecNoms([long95]), long95);
+  preparer('nom/exactement-90', criteres, avecNoms([exactement90]), exactement90);
+  preparer('nom/91-unites', criteres, [], `${exactement90}x`);
+  preparer('nom/emoji-avant-limite', criteres, avecNoms([`${'a'.repeat(86)}😀😀`]), `${'a'.repeat(86)}😀😀`);
+  preparer('nom/emoji-apres-limite', criteres, [], `${'a'.repeat(90)}😀`);
+
+  // --- Clé de comparaison (JSON.stringify trié) -----------------------------------------------
+  const cleVecteur = (nom, valeur) => {
+    if (valeur !== null && typeof valeur === 'object' && !Array.isArray(valeur)) {
+      const cles = Object.keys(valeur);
+      const parUnites = [...cles].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      const parLocale = [...cles].sort((a, b) => a.localeCompare(b));
+      if (JSON.stringify(parUnites) !== JSON.stringify(parLocale)) throw new Error(`alertes-recherche-missions: « ${nom} » : ordre localeCompare ≠ ordre UTF-16 (hors domaine).`);
+      for (const v of Object.values(valeur)) {
+        if (v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length > 1) throw new Error(`alertes-recherche-missions: « ${nom} » : objet imbriqué à plusieurs clés (hors domaine).`);
+      }
+    }
+    c.ajoute(`cleComparaison/${nom}`, { fonction: 'cleComparaison', valeur }, cle(valeur));
+  };
+  cleVecteur('criteres', criteres);
+  cleVecteur('vide', {});
+  cleVecteur('imbrique-une-cle', { horaire: { valeur: 'NUIT' }, rayonKm: 25 });
+  cleVecteur('tableau-valeur', { horaire: ['NUIT', 'JOUR', 3, null, true] });
+  for (const [nomNombre, nombre] of [['zero', 0], ['un', 1], ['vingt-cinq', 25], ['decimal', 30.5], ['dixieme', 0.1], ['somme-flottante', 0.1 + 0.2],
+    ['1e21', 1e21], ['1e20', 1e20], ['1e-7', 1e-7], ['1e-6', 0.000001], ['123e-20', 123e-20], ['grand-arrondi', 123456789012345680000],
+    ['min-positif', 5e-324], ['max', 1.7976931348623157e308], ['negatif', -3.25], ['2-puissance-53', 2 ** 53], ['2-puissance-53-plus-2', 2 ** 53 + 2],
+    ['cent', 100], ['tiers', 1 / 3], ['1-5e-10', 1.5e-10], ['negatif-petit', -1e-7], ['1e300', 1e300]]) {
+    cleVecteur(`nombre/${nomNombre}`, { rayonKm: nombre });
+  }
+  for (const [nomTexte, texte] of [['vide', ''], ['simple', 'Paris'], ['accent', 'é'], ['decompose', 'e\u0301'], ['guillemet', '"'],
+    ['barre-inverse', '\\'], ['saut', '\n'], ['nul', '\u0000'], ['controle-1f', '\u001f'], ['controle-10', '\u0010'], ['suppr', '\u007f'],
+    ['separateur-ligne', '\u2028'], ['separateur-paragraphe', '\u2029'], ['emoji', '😀'], ['barre', 'a/b'], ['tabulation', '\t'],
+    ['retour-arriere', '\b'], ['saut-page', '\f'], ['retour-chariot', '\r'], ['chevrons', '<script>'], ['insecable', '\u00a0'], ['bom', '\ufeff']]) {
+    // `profession` porte le nom du cas : « é » composé et décomposé restent deux entrées distinctes
+    // pour le contrôle de doublons Swift (égalité canonique des `String`).
+    cleVecteur(`texte/${nomTexte}`, { profession: nomTexte, villeRecherche: texte });
+  }
+  for (const [nomBooleen, valeur] of [['vrai', true], ['faux', false], ['null', null]]) cleVecteur(`valeur/${nomBooleen}`, { urgentesOnly: valeur });
+  cleVecteur('cles-hors-criteres', { a: 1, b_c: 2, z: 3, ville: 'Paris' });
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 27 : semaines-disponibilites (grille de src/pages/MesDisponibilites.tsx)
+// ---------------------------------------------------------------------------
+/**
+ * La grille est calculée dans la page (aucun module à importer) : l'exporteur rejoue les mêmes appels
+ * date-fns, sous garde d'extraits, dans le fuseau Europe/Paris du processus, et vérifie à la main les
+ * semaines des changements d'heure (2026-10-25, 2027-03-28) avant d'écrire les vecteurs.
+ */
+function vecteursSemainesDisponibilites() {
+  const c = new Collecteur('semaines-disponibilites');
+  exigeExtraits('src/pages/MesDisponibilites.tsx', [
+    "import { format, addDays, startOfWeek } from 'date-fns';",
+    'const debut = startOfWeek(new Date(), { weekStartsOn: 1 });',
+    'return Array.from({ length: 4 }, (_, s) =>',
+    'Array.from({ length: 7 }, (_, j) => addDays(debut, s * 7 + j)),',
+    ".gte('jour', format(new Date(), 'yyyy-MM-dd'));",
+    "const aujourdHui = format(new Date(), 'yyyy-MM-dd');",
+    "const jour = format(jourDate, 'yyyy-MM-dd');",
+    'const passe = jour < aujourdHui;',
+    "Semaine du {format(semaine[0], 'd MMMM', { locale: fr })}",
+    "{format(jourDate, 'EEEE d MMM', { locale: fr })}",
+    "{jour === aujourdHui && (",
+  ], 'grille des disponibilités recopiée par semainesDisponibilites');
+  const grille = (maintenant) => {
+    const debut = startOfWeek(maintenant, { weekStartsOn: 1 });
+    const semaines = Array.from({ length: 4 }, (_, s) => Array.from({ length: 7 }, (_, j) => addDays(debut, s * 7 + j)));
+    const aujourdHui = formatDateFns(maintenant, 'yyyy-MM-dd');
+    return {
+      aujourdHui,
+      semaines: semaines.map((semaine) => ({
+        entete: `Semaine du ${formatDateFns(semaine[0], 'd MMMM', { locale: localeFr })}`,
+        jours: semaine.map((jourDate) => {
+          const jour = formatDateFns(jourDate, 'yyyy-MM-dd');
+          return { jour, passe: jour < aujourdHui, estAujourdhui: jour === aujourdHui, libelle: formatDateFns(jourDate, 'EEEE d MMM', { locale: localeFr }) };
+        }),
+      })),
+    };
+  };
+  const vecteur = (nom, instant, attendu) => {
+    const obtenu = grille(new Date(instant));
+    if (attendu) {
+      const premier = obtenu.semaines[0].jours[0].jour;
+      const dernier = obtenu.semaines[3].jours[6].jour;
+      verifieVitest('semaines-disponibilites', nom, { aujourdHui: obtenu.aujourdHui, premier, dernier }, attendu);
+    }
+    c.ajoute(`semainesDisponibilites/${nom}`, { fonction: 'semainesDisponibilites', maintenant: instant }, obtenu);
+  };
+  // --- Écrits à la main : changements d'heure et bascule de minuit à Paris -------------------
+  vecteur('main/2026-10-25-dimanche-midi', '2026-10-25T12:00:00.000Z', { aujourdHui: '2026-10-25', premier: '2026-10-19', dernier: '2026-11-15' });
+  vecteur('main/2026-10-25-avant-bascule', '2026-10-25T00:59:59.999Z', { aujourdHui: '2026-10-25', premier: '2026-10-19', dernier: '2026-11-15' });
+  vecteur('main/2026-10-25-apres-bascule', '2026-10-25T01:00:00.000Z', { aujourdHui: '2026-10-25', premier: '2026-10-19', dernier: '2026-11-15' });
+  vecteur('main/2026-10-25-dernier-instant-dimanche', '2026-10-25T22:59:59.999Z', { aujourdHui: '2026-10-25', premier: '2026-10-19', dernier: '2026-11-15' });
+  vecteur('main/2026-10-26-minuit-lundi', '2026-10-25T23:00:00.000Z', { aujourdHui: '2026-10-26', premier: '2026-10-26', dernier: '2026-11-22' });
+  vecteur('main/2027-03-28-avant-bascule', '2027-03-28T00:59:59.999Z', { aujourdHui: '2027-03-28', premier: '2027-03-22', dernier: '2027-04-18' });
+  vecteur('main/2027-03-28-apres-bascule', '2027-03-28T01:00:00.000Z', { aujourdHui: '2027-03-28', premier: '2027-03-22', dernier: '2027-04-18' });
+  vecteur('main/2027-03-28-dernier-instant-dimanche', '2027-03-28T21:59:59.999Z', { aujourdHui: '2027-03-28', premier: '2027-03-22', dernier: '2027-04-18' });
+  vecteur('main/2027-03-29-minuit-lundi', '2027-03-28T22:00:00.000Z', { aujourdHui: '2027-03-29', premier: '2027-03-29', dernier: '2027-04-25' });
+  vecteur('main/horloge-demo', '2026-11-02T00:00:00.000Z', { aujourdHui: '2026-11-02', premier: '2026-11-02', dernier: '2026-11-29' });
+  vecteur('main/dimanche-soir-utc-lundi-paris', '2026-11-01T23:30:00.000Z', { aujourdHui: '2026-11-02', premier: '2026-11-02', dernier: '2026-11-29' });
+  vecteur('main/grille-traverse-octobre', '2026-10-05T10:00:00.000Z', { aujourdHui: '2026-10-05', premier: '2026-10-05', dernier: '2026-11-01' });
+  vecteur('main/grille-traverse-mars', '2027-03-10T10:00:00.000Z', { aujourdHui: '2027-03-10', premier: '2027-03-08', dernier: '2027-04-04' });
+  vecteur('main/nouvel-an-paris', '2026-12-31T23:30:00.000Z', { aujourdHui: '2027-01-01', premier: '2026-12-28', dernier: '2027-01-24' });
+  vecteur('main/bissextile', '2028-02-28T12:00:00.000Z', { aujourdHui: '2028-02-28', premier: '2028-02-28', dernier: '2028-03-26' });
+  // --- Grille : chaque jour d'une semaine, minuit et dernière milliseconde à Paris -------------
+  for (let jour = 2; jour <= 8; jour += 1) {
+    const iso = `2026-11-${pad2(jour)}`;
+    vecteur(`semaine/${iso}/minuit`, new Date(`${iso}T00:00:00+01:00`).toISOString());
+    vecteur(`semaine/${iso}/midi`, new Date(`${iso}T12:00:00+01:00`).toISOString());
+    vecteur(`semaine/${iso}/fin`, new Date(new Date(`${iso}T00:00:00+01:00`).getTime() + 86_400_000 - 1).toISOString());
+  }
+  // --- Grille : fins de mois et d'année, années bissextiles --------------------------------------
+  for (const iso of ['2026-01-31T12:00:00.000Z', '2026-02-28T12:00:00.000Z', '2026-03-29T00:30:00.000Z', '2026-03-29T01:30:00.000Z',
+    '2026-04-30T21:59:59.999Z', '2026-06-30T22:00:00.000Z', '2026-08-31T12:00:00.000Z', '2026-12-27T22:59:59.999Z', '2026-12-27T23:00:00.000Z',
+    '2027-02-28T12:00:00.000Z', '2027-10-31T00:30:00.000Z', '2027-10-31T01:30:00.000Z', '2027-12-31T12:00:00.000Z', '2028-02-29T12:00:00.000Z',
+    '2028-12-31T12:00:00.000Z', '2030-01-01T00:00:00.000Z']) {
+    vecteur(`dates/${iso}`, iso);
+  }
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 28 : copie-bulletin-validation (src/lib/copiesBulletins.ts)
+// ---------------------------------------------------------------------------
+/**
+ * Décodage strict de `fn_lister_copies_bulletins` (`validerListeCopiesBulletins`) et
+ * `copieBulletinTelechargeable`. Domaine (le port Swift est plus strict au-delà, échec fermé) :
+ * `publie_le` au format date-heure ISO d'ECMAScript (`T` majuscule, secondes et fraction
+ * facultatives, `Z` ou `±HH:MM`) ou refusé par `Date.parse` — le repli permissif de V8 (espace,
+ * `t` minuscule, `+0000`, chiffres non ASCII…) est hors domaine ; `statut` jamais un tableau
+ * (`String(['PUBLIEE'])` passerait côté web). Le serveur (`jsonb_build_object`) n'émet ni l'un ni l'autre.
+ */
+function vecteursCopieBulletinValidation() {
+  const c = new Collecteur('copie-bulletin-validation');
+  const ISO_ECMASCRIPT = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
+  // Réplique JavaScript du contrôle Swift (`CopieBulletinValidation.instantLisible`) : doit coïncider
+  // avec `Date.parse` sur tout le domaine ISO (garde ci-dessous sur les vecteurs et une grille).
+  const instantLisibleSwift = (s) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-](\d{2}):(\d{2}))?)?$/.exec(s);
+    if (!m) return false;
+    const [, , mois, jour, heure, minute, seconde, fraction, , dh, dm] = m;
+    if (+mois < 1 || +mois > 12 || +jour < 1 || +jour > 31) return false;
+    if (heure === undefined) return true;
+    if (+heure > 24 || +minute > 59 || +(seconde ?? 0) > 59) return false;
+    if (+heure === 24 && (+minute !== 0 || +(seconde ?? 0) !== 0 || /[1-9]/.test(fraction ?? ''))) return false;
+    if (dh !== undefined && (+dh > 23 || +dm > 59)) return false;
+    return true;
+  };
+  const verifieDomaineInstant = (nom, valeur) => {
+    if (typeof valeur !== 'string') return;
+    const lisible = !Number.isNaN(Date.parse(valeur));
+    if (!ISO_ECMASCRIPT.test(valeur) && lisible) throw new Error(`copie-bulletin-validation: « ${nom} » : « ${valeur} » est lu par le repli V8 de Date.parse (hors domaine).`);
+    if (instantLisibleSwift(valeur) !== lisible) throw new Error(`copie-bulletin-validation: « ${nom} » : le contrôle Swift de « ${valeur} » ne suit pas Date.parse.`);
+  };
+  for (const annee of ['2026', '0000', '2028']) {
+    for (const mois of ['00', '01', '02', '12', '13']) {
+      for (const jour of ['00', '01', '29', '30', '31', '32']) {
+        for (const suffixe of ['', 'T00:00', 'T24:00:00Z', 'T24:00:00.000Z', 'T24:00:00.001Z', 'T23:59:59.999+23:59', 'T12:60:00Z',
+          'T12:00:60Z', 'T25:00:00Z', 'T12:00:00+24:00', 'T12:00:00-12:60', 'T12:00:00.5', 'T09:30+01:00']) {
+          verifieDomaineInstant('grille-instants', `${annee}-${mois}-${jour}${suffixe}`);
+        }
+      }
+    }
+  }
+
+  const uuid = (n) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const copie = {
+    id: uuid(1), etablissement_id: uuid(2), soignant_id: uuid(3), etablissement_nom: 'Employeur de test',
+    soignant_nom: 'Test', soignant_prenom: 'Salarié', periode_debut: '2026-09-01', periode_fin: '2026-09-30',
+    statut: 'PUBLIEE', publie_le: '2026-09-29T12:00:00Z', remplace_id: null, version: 1,
+    motif_remplacement: null, mission_ids: [uuid(4)], taille_octets: 256, sha256: 'a'.repeat(64), signalee: false,
+  };
+  const valider = (nom, data, vitest) => {
+    if (Array.isArray(data)) {
+      for (const ligne of data) {
+        if (ligne && typeof ligne === 'object' && !Array.isArray(ligne)) {
+          if (Array.isArray(ligne.statut)) throw new Error(`copie-bulletin-validation: « ${nom} » : statut tableau hors domaine.`);
+          verifieDomaineInstant(nom, ligne.publie_le);
+        }
+      }
+    }
+    let obtenu;
+    try {
+      obtenu = { valide: true, ids: copiesBulletins.validerListeCopiesBulletins(data).map((ligne) => ligne.id) };
+    } catch (erreur) {
+      if (!(erreur instanceof Error) || erreur.constructor !== Error) throw new Error(`copie-bulletin-validation: « ${nom} » lève ${erreur?.name} : hors domaine.`);
+      obtenu = { erreur: erreur.message };
+    }
+    if (vitest !== undefined) verifieVitest('copie-bulletin-validation', nom, obtenu, vitest);
+    c.ajoute(`validerListeCopiesBulletins/${nom}`, { fonction: 'validerListeCopiesBulletins', data }, obtenu);
+  };
+  const REFUS = { erreur: 'La liste des copies ne peut pas être vérifiée. Réessayez.' };
+  const sans = (cle) => Object.fromEntries(Object.entries(copie).filter(([k]) => k !== cle));
+
+  // --- Issus de copiesBulletins.test.ts --------------------------------------------------------
+  valider('vitest-liste-vide', [], { valide: true, ids: [] });
+  valider('vitest-document-complet', [copie], { valide: true, ids: [copie.id] });
+  for (const [nom, reponse] of [['null', null], ['objet', {}], ['element-null', [null]], ['statut-PAYE', [{ ...copie, statut: 'PAYE' }]],
+    ['missions-vides', [{ ...copie, mission_ids: [] }]], ['mission-autre', [{ ...copie, mission_ids: ['autre'] }]], ['version-0', [{ ...copie, version: 0 }]],
+    ['taille-texte', [{ ...copie, taille_octets: '256' }]], ['taille-10485761', [{ ...copie, taille_octets: 10485761 }]],
+    ['sha-non-verifiable', [{ ...copie, sha256: 'non-verifiable' }]], ['periode-inconnue', [{ ...copie, periode_debut: 'date inconnue' }]],
+    ['publie-null', [{ ...copie, publie_le: null }]], ['periode-inversee', [{ ...copie, periode_fin: '2026-08-01' }]]]) {
+    valider(`vitest-refus-${nom}`, reponse, REFUS);
+  }
+
+  // --- Grille : une mutation de champ à la fois ---------------------------------------------------
+  const MUTATIONS = {
+    id: [['majuscules', uuid(1).toUpperCase().replace('10000000', 'ABCDEF00')], ['nil', '00000000-0000-0000-0000-000000000000'], ['null', null],
+      ['autre', 'autre'], ['accolades', `{${uuid(1)}}`], ['court', uuid(1).slice(1)], ['non-hexa', uuid(1).replace('1', 'g')], ['nombre', 1],
+      ['saut-final', `${uuid(1)}\n`], ['sans-tirets', uuid(1).replace(/-/g, '')]],
+    etablissement_id: [['majuscules', uuid(2).toUpperCase()], ['null', null], ['vide', '']],
+    soignant_id: [['null', null], ['espace', ` ${uuid(3)}`]],
+    etablissement_nom: [['vide', ''], ['null', null], ['nombre', 3]],
+    soignant_nom: [['vide', ''], ['null', null]],
+    soignant_prenom: [['vide', ''], ['null', null], ['booleen', true]],
+    periode_debut: [['bissextile-faux', '2026-02-29'], ['fevrier-28', '2026-02-28'], ['an-zero', '0000-01-01'], ['an-zero-bissextile', '0000-02-29'],
+      ['mois-13', '2026-13-01'], ['mois-00', '2026-00-10'], ['jour-00', '2026-01-00'], ['avril-31', '2026-04-31'], ['1900-bissextile', '1900-02-29'],
+      ['2000-bissextile', '2000-02-29'], ['un-chiffre', '2026-9-01'], ['compact', '20260901'], ['avec-heure', '2026-09-01T00:00:00Z'],
+      ['espace-tete', ' 2026-09-01'], ['saut-final', '2026-09-01\n'], ['chiffres-arabes', '٢٠٢٦-09-01'], ['nombre', 20260901], ['egale-fin', '2026-09-30']],
+    periode_fin: [['9999', '9999-12-31'], ['avant-debut', '2026-08-31'], ['egale-debut', '2026-09-01'], ['fevrier-30', '2026-02-30'], ['null', null]],
+    publie_le: [['utc', '2026-09-29T12:00:00Z'], ['microsecondes', '2026-09-29T12:00:00.123456+00:00'], ['date-seule', '2026-09-29'],
+      ['sans-secondes', '2026-09-29T12:00'], ['sans-fuseau', '2026-09-29T12:00:00'], ['decalage-negatif', '2026-09-29T12:00:00-05:30'],
+      ['minuit-24h', '2026-09-29T24:00:00Z'], ['24h-plus-une-seconde', '2026-09-29T24:00:01Z'], ['25h', '2026-09-29T25:00:00Z'],
+      ['minute-60', '2026-09-29T12:60:00Z'], ['fevrier-30', '2026-02-30T12:00:00Z'], ['fevrier-32', '2026-02-32T12:00:00Z'],
+      ['decalage-24h', '2026-09-29T12:00:00+24:00'], ['decalage-23h59', '2026-09-29T12:00:00+23:59'], ['decalage-minute-60', '2026-09-29T12:00:00+12:60'],
+      ['vide', ''], ['texte', 'date inconnue'], ['nombre', 0], ['heure-seule', '2026-09-29T12'], ['fraction-vide', '2026-09-29T12:00:00.Z'],
+      ['mois-13', '2026-13-01T00:00:00Z'], ['mois-00', '2026-00-01'], ['demi-seconde-decalee', '2026-09-29T12:00:00.5+01:00'],
+      ['fraction-longue', '2026-09-29T12:00:00.1234567890123Z'], ['epoque', '1970-01-01T00:00:00Z']],
+    statut: [['REMPLACEE', 'REMPLACEE'], ['RETIREE', 'RETIREE'], ['RESERVEE', 'RESERVEE'], ['minuscules', 'publiee'], ['null', null], ['nombre', 1], ['vide', '']],
+    version: [['deux', 2], ['negatif', -1], ['decimal', 1.5], ['texte', '1'], ['null', null], ['max-sur', 9007199254740991], ['au-dela-sur', 9007199254740992]],
+    taille_octets: [['un', 1], ['max', 10485760], ['zero', 0], ['decimal', 255.5], ['null', null], ['negatif', -256]],
+    sha256: [['majuscules', 'A'.repeat(64)], ['63', 'a'.repeat(63)], ['65', 'a'.repeat(65)], ['non-hexa', 'g'.repeat(64)], ['null', null],
+      ['saut-final', `${'a'.repeat(64)}\n`], ['hexa-mixte', '0123456789abcdef'.repeat(4)]],
+    mission_ids: [['deux', [uuid(4), uuid(5)]], ['avec-null', [uuid(4), null]], ['texte', uuid(4)], ['null', null], ['majuscules', [uuid(4).toUpperCase()]],
+      ['objet', { 0: uuid(4) }]],
+    signalee: [['vrai', true], ['texte', 'false'], ['zero', 0], ['null', null]],
+    remplace_id: [['uuid', uuid(9)], ['vide', ''], ['autre', 'autre'], ['majuscules', uuid(9).toUpperCase()]],
+    motif_remplacement: [['CONTENU', 'CONTENU'], ['AUTRE', 'AUTRE'], ['DESTINATAIRE', 'DESTINATAIRE'], ['minuscules', 'contenu'], ['vide', '']],
+  };
+  for (const [champ, valeurs] of Object.entries(MUTATIONS)) {
+    for (const [nomValeur, valeur] of valeurs) valider(`champ/${champ}/${nomValeur}`, [{ ...copie, [champ]: valeur }]);
+    valider(`champ/${champ}/absent`, [sans(champ)]);
+  }
+  // --- Grille : forme de la liste et des lignes ------------------------------------------------------
+  for (const [nom, data] of [['texte', 'liste'], ['nombre', 1], ['vrai', true], ['element-tableau', [[]]], ['element-nombre', [1]],
+    ['element-texte', ['x']], ['element-vrai', [true]], ['element-objet-vide', [{}]]]) {
+    valider(`forme/${nom}`, data);
+  }
+  valider('forme/deux-copies', [copie, { ...copie, id: uuid(11), statut: 'REMPLACEE', version: 2, remplace_id: uuid(1), motif_remplacement: 'CONTENU' }]);
+  valider('forme/deuxieme-invalide', [copie, { ...copie, id: uuid(12), sha256: 'b'.repeat(63) }]);
+  valider('forme/cles-en-plus', [{ ...copie, cle_inconnue: 'x', autre: { y: 1 } }]);
+
+  // --- copieBulletinTelechargeable --------------------------------------------------------------------
+  const telechargeable = (nom, statut, vitest) => {
+    const obtenu = copiesBulletins.copieBulletinTelechargeable({ statut });
+    if (vitest !== undefined) verifieVitest('copie-bulletin-validation', nom, obtenu, vitest);
+    c.ajoute(`copieBulletinTelechargeable/${nom}`, { fonction: 'copieBulletinTelechargeable', statut }, obtenu);
+  };
+  telechargeable('PUBLIEE', 'PUBLIEE', true);
+  telechargeable('REMPLACEE', 'REMPLACEE', true);
+  telechargeable('RETIREE', 'RETIREE', false);
+  for (const statut of ['RESERVEE', 'publiee', '', 'PUBLIEE ']) telechargeable(statut === '' ? 'vide' : statut.replace(/ /g, '_'), statut);
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
 // Écriture
 // ---------------------------------------------------------------------------
 const fichiers = {
@@ -3516,6 +4284,13 @@ const fichiers = {
   'valider-profil-soignant.json': vecteursValidationProfil(),
   'preferences-modes-exercice.json': vecteursModesExercice(),
   'professions-rpps.json': vecteursProfessionsRpps(),
+  // Lot 4, T2 : règles extraites par la PR web W0, grille des disponibilités, copies de bulletins.
+  'raisons-score-matching.json': vecteursRaisonsScore(),
+  'filtre-paquet-swipe.json': vecteursFiltrePaquetSwipe(),
+  'statut-litige.json': vecteursStatutLitige(),
+  'alertes-recherche-missions.json': vecteursAlertesRecherche(),
+  'semaines-disponibilites.json': vecteursSemainesDisponibilites(),
+  'copie-bulletin-validation.json': vecteursCopieBulletinValidation(),
 };
 
 let total = 0;

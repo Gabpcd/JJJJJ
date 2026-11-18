@@ -66,6 +66,15 @@ on:
       - 'src/lib/preferencesModesExercice.ts'
       # Importé par preferencesModesExercice.ts, donc chargé par export-golden-vectors.mjs (revue B8 de #1139).
       - 'src/lib/typesContrat.ts'
+      # Lot 4, T2 : règles portées en Swift avec vecteurs golden (MesDisponibilites.tsx figure plus bas, T1b) ;
+      # avecDelai.ts et uuid.ts sont importés par copiesBulletins.ts, donc chargés par l'export.
+      - 'src/lib/alertes-recherche-missions.ts'
+      - 'src/lib/raisons-score-matching.ts'
+      - 'src/lib/filtre-paquet-swipe.ts'
+      - 'src/lib/statut-litige-regles.ts'
+      - 'src/lib/copiesBulletins.ts'
+      - 'src/lib/avecDelai.ts'
+      - 'src/lib/uuid.ts'
       # Lot 3, T8 : sources web relues ligne à ligne par CompletionVerbatimTests (annotations de
       # CompletionProfil.swift, hors garde check-textes-juridiques-ios) — incident #1137 du 17/11.
       - 'src/pages/InscriptionSoignant.tsx'
@@ -198,6 +207,15 @@ on:
       - 'src/lib/preferencesModesExercice.ts'
       # Importé par preferencesModesExercice.ts, donc chargé par export-golden-vectors.mjs (revue B8 de #1139).
       - 'src/lib/typesContrat.ts'
+      # Lot 4, T2 : règles portées en Swift avec vecteurs golden (MesDisponibilites.tsx figure plus bas, T1b) ;
+      # avecDelai.ts et uuid.ts sont importés par copiesBulletins.ts, donc chargés par l'export.
+      - 'src/lib/alertes-recherche-missions.ts'
+      - 'src/lib/raisons-score-matching.ts'
+      - 'src/lib/filtre-paquet-swipe.ts'
+      - 'src/lib/statut-litige-regles.ts'
+      - 'src/lib/copiesBulletins.ts'
+      - 'src/lib/avecDelai.ts'
+      - 'src/lib/uuid.ts'
       # Lot 3, T8 : sources web relues ligne à ligne par CompletionVerbatimTests (annotations de
       # CompletionProfil.swift, hors garde check-textes-juridiques-ios) — incident #1137 du 17/11.
       - 'src/pages/InscriptionSoignant.tsx'
