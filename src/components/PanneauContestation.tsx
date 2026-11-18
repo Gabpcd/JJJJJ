@@ -9,6 +9,7 @@ import { sanitizeText } from '@/lib/sanitize';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { toast } from 'sonner';
+import { useFenetreContestationOuverte } from '@/hooks/useFenetreContestationOuverte';
 
 interface Litige {
   id: string;
@@ -40,10 +41,9 @@ interface Props {
   onUpdate?: () => void;
 }
 
-// Lot 13 : fenêtre de contestation alignée sur la spec (72 h, comme
-// l'auto-validation) — l'ancienne valeur 48 h créait un écart avec le
-// wording produit et la CGU §4.6.
-const DELAI_CONTESTATION_MS = 72 * 60 * 60 * 1000;
+// Fenêtre de contestation lue au serveur (fn_fenetre_contestation_ouverte,
+// paramètre delai_contestation_pointage_h) : aucune constante de délai côté
+// client (DECISIONS_LOT2 D12, HARD STOP n°4).
 
 const STATUT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   OUVERT: { label: 'Ouvert', icon: <AlertTriangle className="h-3.5 w-3.5" />, color: 'text-warning' },
@@ -100,11 +100,11 @@ export function PanneauContestation({
 
   useEffect(() => { charger(); }, [charger]);
 
-  const dansFenetre = presenceValideeLe
-    ? (Date.now() - new Date(presenceValideeLe).getTime()) < DELAI_CONTESTATION_MS
-    : false;
+  // Présence validée et fenêtre ouverte selon le serveur ; erreur → fermée
+  // (fail-closed, comme le natif).
+  const dansFenetre = useFenetreContestationOuverte(missionId, presenceValideeLe);
 
-  // Les deux rôles peuvent contester dans la fenêtre (72 h) si aucun litige.
+  // Les deux rôles peuvent contester dans la fenêtre si aucun litige.
   const peutContester = dansFenetre && !litige;
 
   // Les actions suivent exclusivement les statuts admis par la base.
@@ -131,12 +131,12 @@ export function PanneauContestation({
       });
       if (error) throw error;
       if (litigeResult?.error) throw new Error(litigeResult.error);
-
+      // D13 (DECISIONS_LOT2 ; RGPD art. 5 §1 c et e) : journaux_audit est immuable, le motif libre n'y est jamais copié (il reste dans litiges.motif) ; longueur du motif envoyé (points de code, en chaîne) et litige, mêmes clés que le natif.
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: roleActeur,
         p_action: 'PRESENCE_CONTESTATION', p_type_ressource: 'presence',
         p_id_ressource: presenceId, p_cle_s3: null,
-        p_details: { motif: motif.trim(), mission_id: missionId, initie_par: role },
+        p_details: { motif_longueur: String([...sanitizeText(motif.trim())].length), litige_id: litigeResult?.litige_id ?? null },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
 
@@ -344,14 +344,13 @@ export function PanneauContestation({
               <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
                 <Clock className="h-3.5 w-3.5" />
                 En attente de la réponse {autreRoleLabel === 'soignant' ? 'du soignant' : "de l'établissement"}…
-                <span className="ml-auto text-[11px]">72h pour répondre</span>
               </div>
             )}
 
             {litige.statut === 'EN_DISCUSSION' && !estResolu && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground bg-primary/5 rounded-lg px-3 py-2">
                 <MessageSquare className="h-3.5 w-3.5 text-primary" />
-                Discussion en cours — si pas de résolution sous 72h, l'admin plateforme tranchera.
+                Discussion en cours.
               </div>
             )}
           </div>
@@ -391,7 +390,7 @@ export function PanneauContestation({
               </button>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Vous avez 72 h après la validation pour contester. Sans résolution sous 72 h, l'admin plateforme tranchera.
+              Vous avez 72 h après la validation pour contester.
             </p>
           </div>
         )}

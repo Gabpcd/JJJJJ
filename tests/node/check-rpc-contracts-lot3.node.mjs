@@ -748,7 +748,8 @@ test('DECISIONS_LOT3.md : décisions déléguées du 8 novembre 2026 (L3-TJ) —
   ficheContient(tj6, 'TJ6', codesSansError.map(c => `\`${c}\``), 'error_code');
   ficheContient(tj6, 'TJ6', ['SectionPaiements.tsx', 'l.280', 'fn_consulter_rib_soignant_internal_20260801', 'partages_rib'], 'élément');
   const paiements = read('src/components/profil-soignant/SectionPaiements.tsx').split('\n');
-  assert.ok(paiements[280 - 1].includes("Il n'est jamais partagé avec l'établissement."), 'témoin web : l.280 de SectionPaiements.tsx');
+  assert.ok(paiements[280 - 1].includes('Ton IBAN est utilisé pour le versement de tes primes de parrainage.')
+    && !paiements.some(l => l.includes('jamais partagé')), 'témoin web : l.280 sans « jamais partagé » (HARD STOP n°4, TJ6)');
   // Revue fraîche B8 de L3-TJ (majeur 1) : `RIB_COURANT_REQUIS` et `RIB_NON_CONCORDANT` reprennent le texte serveur du
   // refus voisin `RIB_VERIFIE_REQUIS`, exact dans les deux cas ; jamais le texte de l.308, qui décrit l'état
   // `iban_renseigne && !iban_verifie` (« l'ancien IBAN… ») : un refus sort avant l'UPDATE, l'IBAN en place reste.
@@ -762,7 +763,7 @@ test('DECISIONS_LOT3.md : décisions déléguées du 8 novembre 2026 (L3-TJ) —
   }
   assert.ok(paiements[302 - 1].includes('current?.iban_renseigne && !current.iban_verifie'), 'témoin web : état du texte de l.308');
   assert.ok(paiements[306 - 1].includes('RIB vérifié requis'), 'témoin web : titre l.306');
-  assert.ok(paiements[308 - 1].includes("L'ancien IBAN est conservé dans ton historique"), 'témoin web : texte l.308');
+  assert.ok(!paiements.some(l => l.includes('conservé dans ton historique')), 'témoin web : texte de l.308 retiré (HARD STOP n°4)');
   assert.ok(paiements[316 - 1].includes('Téléverser mon RIB'), 'témoin web : action l.316');
   const regle2 = tj6.slice(tj6.indexOf('\n  2. '), tj6.indexOf('\n  3. '));
   assert.ok(regle2.length > 0, 'TJ6 : règle 2 introuvable');

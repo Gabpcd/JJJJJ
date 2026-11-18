@@ -15,7 +15,7 @@ Deux edge functions assurent le fonctionnement asynchrone du système de litiges
 
 Appelle en séquence les 4 RPCs `SECURITY DEFINER` :
 
-1. **`fn_auto_creation_litiges_presence()`** — scan des présences marquées `ABSENT` (heures réelles nulles + motif_litige renseigné) validées étab depuis plus de 48h sans litige existant. Crée un litige `ABSENCE_SOIGNANT` initié par l'étab, statut `OUVERT`.
+1. **`fn_auto_creation_litiges_presence()`** — scan des présences marquées `ABSENT` (heures réelles nulles + motif_litige renseigné) validées étab depuis plus de `delai_contestation_pointage_h` (72 h, 48 h avant D12) sans litige existant. Crée un litige `ABSENCE_SOIGNANT` initié par l'étab, statut `OUVERT`.
 
 2. **`fn_envoyer_rappels_litiges()`** — pour chaque litige `OUVERT` ou `EN_DISCUSSION` sans réponse :
    - À J+1h : rappel court "1 jour"
@@ -99,9 +99,12 @@ Les erreurs par RPC sont capturées individuellement (ne stoppent pas le pipelin
 | `delai_escalade_liberal_h`              | 72     | Délai avant escalade soignant libéral     |
 | `delai_escalade_salarie_jours_ouvres`   | 5      | Délai avant escalade soignant salarié     |
 | `delai_mediation_alerte_prioritaire_j`  | 7      | Délai avant alerte EN_MEDIATION prolongée |
-| `delai_contestation_pointage_h`         | 48     | Fenêtre avant auto-création absence       |
+| `delai_contestation_pointage_h`         | 72     | Fenêtre avant auto-création absence       |
 
 Modifiables uniquement par admin via `UPDATE parametres_litiges`.
+
+`delai_contestation_pointage_h` : semé à 48, porté à 72 par `20261118145614_delai_contestation_pointage_72h.sql`
+(DECISIONS_LOT2 D12) ; c'est aussi la fenêtre de contestation de `fn_fenetre_contestation_ouverte` (défaut 48 dans le code).
 
 ## process-stripe-refunds — CP-STRIPE-5 (actif)
 

@@ -4,7 +4,8 @@
 -- Prérequis : migrations CP-LITIGES 1 → 7b appliquées.
 -- Usage : psql "$DB_URL" -f tests/litiges/cp8a-t2-depart-anticipe.test.sql
 --
--- Scénario : mission 8h prévues, présence validée par étab il y a 48h,
+-- Scénario : mission 8h prévues, présence validée par étab il y a plus de
+-- delai_contestation_pointage_h (72 h depuis D12 ; âge DÉRIVÉ du paramètre lu),
 -- heures_reelles=4 (moitié effectuée) → fn_auto_creation_litiges_presence()
 -- doit créer un litige type=DEPART_ANTICIPE, statut=OUVERT.
 --
@@ -16,6 +17,11 @@
 \echo '== CP8a T2 — Départ anticipé (auto-création litige) =='
 
 BEGIN;
+-- Missions réelles pour le cron (private.fn_mission_est_reelle) : la définition live de
+-- trg_forcer_compte_test_prelaunch (20260925143334) force est_compte_test tant que
+-- inscriptions_publiques_actives <> 1 (0 sur une branche ou en staging, 1 en prod depuis le
+-- 27/09/2026). Posé dans la transaction, annulé par le ROLLBACK.
+UPDATE public.parametres_systeme SET valeur = 1 WHERE cle = 'inscriptions_publiques_actives';
 
 DO $$
 DECLARE
@@ -25,7 +31,19 @@ DECLARE
   v_presence_id UUID := gen_random_uuid();
   v_litige      RECORD;
   v_result      JSONB;
+  -- Âge de validation DÉRIVÉ du paramètre lu (CLAUDE.md « État dérivé », D12) :
+  -- une heure au-delà de la fenêtre delai_contestation_pointage_h.
+  v_delai_h     INT := (SELECT pl.valeur::int FROM public.parametres_litiges pl
+                         WHERE pl.cle = 'delai_contestation_pointage_h');
+  v_valide_le   TIMESTAMPTZ;
+  v_reelle      BOOLEAN;
 BEGIN
+  IF v_delai_h IS NULL THEN
+    RAISE NOTICE '[T2] FAIL — paramètre delai_contestation_pointage_h absent';
+    RETURN;
+  END IF;
+  v_valide_le := NOW() - make_interval(hours => v_delai_h + 1);
+
   INSERT INTO public.etablissements (
     id, nom, siret, type, adresse_rue, adresse_ville, adresse_code_postal, email_contact
   ) VALUES (
@@ -46,7 +64,7 @@ BEGIN
     statut, soignant_assigne_id
   ) VALUES (
     v_mission_id, v_etab_id, 'CP8A_TEST_T2_Mission', 'IDE',
-    NOW() - INTERVAL '3 days', NOW() - INTERVAL '2 days 16 hours',
+    v_valide_le - INTERVAL '23 hours', v_valide_le - INTERVAL '15 hours',
     8, 25, 'TERMINEE', v_soignant_id
   );
 
@@ -56,10 +74,11 @@ BEGIN
     heures_reelles, motif_litige, depart_anticipe_min
   ) VALUES (
     v_presence_id, v_mission_id, v_soignant_id,
-    TRUE, NOW() - INTERVAL '49 hours',
+    TRUE, v_valide_le,
     4, 'Soignant est parti en milieu de garde sans prévenir', 240
   );
 
+  v_reelle := private.fn_mission_est_reelle(v_mission_id);
   v_result := public.fn_auto_creation_litiges_presence();
 
   SELECT * INTO v_litige
@@ -67,7 +86,9 @@ BEGIN
    WHERE mission_id = v_mission_id
      AND type_litige = 'DEPART_ANTICIPE';
 
-  IF NOT FOUND THEN
+  IF NOT FOUND AND NOT v_reelle THEN
+    RAISE NOTICE '[T2] NON PROBANT — mission dérivée test (est_compte_test posé par trg_forcer_compte_test_prelaunch : inscriptions_publiques_actives <> 1 ou session non backend) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
+  ELSIF NOT FOUND THEN
     RAISE NOTICE '[T2] FAIL — aucun litige DEPART_ANTICIPE créé (result=%)', v_result;
   ELSIF v_litige.statut <> 'OUVERT' THEN
     RAISE NOTICE '[T2] FAIL — statut=% au lieu de OUVERT', v_litige.statut;

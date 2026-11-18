@@ -676,7 +676,6 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
             <span style="color:#334155;">📅 ${data.date_mission || ''}</span>
           `)}
           ${INFO_BOX(`<strong>Motif :</strong> ${data.motif || 'Non précisé'}`)}
-          <p style="color:#334155;">Vous disposez de <strong>${data.delai_reponse_texte || '72h'}</strong> pour répondre avant escalade automatique.</p>
           ${BUTTON('Répondre au litige →', `${APP_URL}${data.url_litige || '/soignant/litiges'}`)}
           ${SECURITY_NOTE}
         `),

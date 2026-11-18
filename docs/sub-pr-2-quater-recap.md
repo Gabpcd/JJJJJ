@@ -11,7 +11,7 @@
 CP-LITIGES Partie 1 concerne tout le cycle de vie d'un litige sur mission **ponctuelle** (non hebdomadaire) :
 
 - Ouverture (rate-limitée, fenêtres de contestation F1/F2/F3 selon type et statut facture).
-- Auto-création côté plateforme (présence ABSENT validée étab + > 48h sans litige).
+- Auto-création côté plateforme (présence ABSENT validée étab depuis plus de `delai_contestation_pointage_h`, 72 h depuis D12, sans litige).
 - Gel des factures liées (granulaire pour les litiges FINANCIER ciblés sur une facture_id, mission-wide pour PRESENCE / CONDITIONS / COMPORTEMENT).
 - Notifications asynchrones (push + email) pour les 2 parties + admin.
 - Escalade automatique (72h libéral / 5 jours ouvrés salarié, avec respect jours fériés FR).
@@ -60,7 +60,7 @@ Tous les tests sont idempotents (`BEGIN … ROLLBACK`), isolés (`gen_random_uui
 
 | Test | Fichier                                                  | Scénario                                                         |
 | ---- | -------------------------------------------------------- | ----------------------------------------------------------------- |
-| T1   | `cp8a-t1-absence-soignant.test.sql`                      | Auto-création ABSENCE_SOIGNANT à partir d'une présence ABSENT >48h. |
+| T1   | `cp8a-t1-absence-soignant.test.sql`                      | Auto-création ABSENCE_SOIGNANT à partir d'une présence ABSENT validée depuis plus de `delai_contestation_pointage_h` (âge dérivé du paramètre, 72 h depuis D12) ; cas limite 60 h. |
 | T2   | `cp8a-t2-depart-anticipe.test.sql`                       | Auto-création cas B (départ anticipé > seuil).                    |
 | T3   | `cp8a-t3-desaccord-heures.test.sql`                      | Flow manuel soignant DESACCORD_HEURES_POINTAGE.                    |
 | T4   | `cp8a-t4-retard-important.test.sql`                      | Auto-création cas C (retard > seuil) initié étab.                  |
