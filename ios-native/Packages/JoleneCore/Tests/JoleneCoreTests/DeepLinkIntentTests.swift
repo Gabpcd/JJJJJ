@@ -246,6 +246,8 @@ final class DeepLinkIntentTests: XCTestCase {
                 renvois += 1
             case .refusReinitialisation?:
                 XCTAssertEqual(intention, .reinitialisationRefusee, chemin)
+            case .naviguerEtablissement?:
+                XCTFail("\(chemin) : navigation établissement dans l'espace soignant (lot 5, T2b)")
             case .inscription(let destination)?:
                 XCTAssertEqual(intention, .horsEspace(destination), "\(chemin) : présenté hors de l'espace (T7)")
             case nil:
