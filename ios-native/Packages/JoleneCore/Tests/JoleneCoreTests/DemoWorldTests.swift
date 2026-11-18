@@ -231,7 +231,6 @@ final class DemoWorldTests: XCTestCase {
     /// la même PR ; `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes. Vide en T15.
     static let portsEnAttenteLot4 = [
         "swipe",             // T3a
-        "filtres",           // T4
         "disponibilites",    // T5
         "parrainage",        // T6
         "litiges",           // T8

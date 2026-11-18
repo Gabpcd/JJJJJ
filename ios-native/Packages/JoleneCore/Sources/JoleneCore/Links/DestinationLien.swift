@@ -115,7 +115,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .secondaire(.swipe):
             return false                                 // T3b — vue Swipe d'Explorer (repli `.explorer` jusque-là)
         case .secondaire(.recherches):
-            return false                                 // T4 — recherches sauvegardées
+            return true                                  // T4 — `RecherchesScreen` (hub « Recherche & disponibilité »), alerte rapide d'Explorer
         case .secondaire(.disponibilites):
             return false                                 // T5 — disponibilités
         case .secondaire(.parrainage):

@@ -1,0 +1,45 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "filtres_sauvegardes": [
+    {
+      "id": "demo-recherche-001",
+      "nom": "Nuits autour de Paris",
+      "audience": "SOIGNANT_RECHERCHE_MISSIONS",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 30,
+        "tauxMin": 0,
+        "typeContrat": "TOUS",
+        "urgentesOnly": false,
+        "horaire": "NUIT",
+        "villeRecherche": ""
+      },
+      "alerte_active": true,
+      "frequence_alerte": "IMMEDIATE",
+      "dernier_check_le": "2026-11-01T18:00:00.000Z",
+      "nb_resultats_dernier_check": 3,
+      "cree_le": "2026-10-24T00:00:00.000Z",
+      "mis_a_jour_le": "2026-10-31T00:00:00.000Z"
+    },
+    {
+      "id": "demo-recherche-002",
+      "nom": "Week-ends en CDD",
+      "audience": "SOIGNANT_RECHERCHE_MISSIONS",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 50,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": false,
+        "horaire": "WEEKEND",
+        "villeRecherche": ""
+      },
+      "alerte_active": false,
+      "frequence_alerte": "QUOTIDIENNE",
+      "dernier_check_le": "2026-10-29T00:00:00.000Z",
+      "nb_resultats_dernier_check": 0,
+      "cree_le": "2026-10-21T00:00:00.000Z",
+      "mis_a_jour_le": "2026-10-29T00:00:00.000Z"
+    }
+  ]
+}
