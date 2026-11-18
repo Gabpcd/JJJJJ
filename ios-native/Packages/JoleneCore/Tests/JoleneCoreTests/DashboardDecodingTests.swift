@@ -25,8 +25,9 @@ final class DashboardDecodingTests: XCTestCase {
         XCTAssertNil(corps.erreur)
         XCTAssertEqual(corps.profil?.prenom, "Camille")
         XCTAssertEqual(corps.profil?.tousDocumentsValides, false)
-        XCTAssertEqual(corps.mesMissions.map(\.id), ["demo-assignee-001", "demo-assignee-002"])
-        XCTAssertEqual(corps.mesMissions.map(\.statut), ["ASSIGNEE", "ASSIGNEE"])
+        // `mes_missions` : ORDER BY debut_le LIMIT 3 (public.sql, `fn_dashboard_soignant_complet`).
+        XCTAssertEqual(corps.mesMissions.map(\.id), ["demo-assignee-001", "demo-assignee-002", "demo-assignee-003"])
+        XCTAssertEqual(corps.mesMissions.map(\.statut), ["ASSIGNEE", "ASSIGNEE", "ASSIGNEE"])
         XCTAssertEqual(corps.missionsOuvertes.map(\.id), ["demo-mission-001", "demo-mission-002", "demo-mission-003"])
         XCTAssertEqual(corps.propositions.map(\.id), ["demo-proposition-001"])
         XCTAssertEqual(corps.propositions.first?.mission.id, "demo-mission-011")
@@ -36,8 +37,14 @@ final class DashboardDecodingTests: XCTestCase {
         XCTAssertEqual(corps.gainsMoisNbMissions, 1)
         XCTAssertEqual(corps.missionsOublieesCount, 0)
         XCTAssertEqual(corps.notifsNonLues, 2)
-        XCTAssertEqual(fichier.missionsAssignees.map(\.record.id), corps.mesMissions.map(\.id))
+        // Dix missions ASSIGNEE (revue B8 de T5, 2e passe : la liste « À venir » de Mes missions dépasse
+        // la hauteur de l'écran) ; le tableau de bord en garde les trois premières, comme le serveur.
+        XCTAssertEqual(fichier.missionsAssignees.map(\.record.id), (1...10).map { String(format: "demo-assignee-%03d", $0) })
+        XCTAssertEqual(Array(fichier.missionsAssignees.prefix(3)).map(\.record.id), corps.mesMissions.map(\.id))
         XCTAssertTrue(fichier.missionsAssignees.allSatisfy { $0.record.statut == "ASSIGNEE" })
+        let debuts = fichier.missionsAssignees.compactMap { PlanningHorlogeParis.instant($0.record.debutLe) }
+        XCTAssertEqual(debuts, debuts.sorted(), "ordre `debut_le` croissant : les trois premières sont les prochaines")
+        XCTAssertEqual(debuts.count, 10)
         XCTAssertEqual(fichier.gainsMissions.map(\.id), ["demo-terminee-001"])
 
         // Les missions ouvertes du tableau de bord sont les trois premières missions démo (ORDER BY
