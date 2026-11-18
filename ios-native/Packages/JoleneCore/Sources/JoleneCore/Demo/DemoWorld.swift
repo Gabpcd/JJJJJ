@@ -92,7 +92,7 @@ public enum DemoWorld {
         gateways.revenus = DemoRevenusGateway(paiementsDeclares: paiements)
         gateways.paiements = paiements                                     // T13
         gateways.iban = DemoIbanGateway()                                  // T14b
-        gateways.stripeConnect = UnwiredStripeConnectPort()                // T14a
+        gateways.stripeConnect = DemoStripeConnectGateway()                // T14a
     }
 }
 

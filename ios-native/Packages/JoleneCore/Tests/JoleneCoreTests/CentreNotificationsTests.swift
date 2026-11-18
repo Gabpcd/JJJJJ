@@ -434,6 +434,10 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(try cible("/soignant/mes-gains?tab=factures"),
                        .web(.safari(URL(string: "https://jolene.app/soignant/mes-gains?tab=factures")!)))
         XCTAssertEqual(try cible("/soignant/mes-gains?tab=paiements"), .revenus(section: .paiementsAConfirmer))
+        // T14a : Stripe Connect natif, retour de Stripe compris (empilé sur le Profil).
+        XCTAssertEqual(try cible("/soignant/stripe-connect"), .stripeConnect(retour: nil))
+        XCTAssertEqual(try cible("/soignant/stripe-connect?success=true"), .stripeConnect(retour: .succes))
+        XCTAssertEqual(CibleNotification.stripeConnect(retour: nil).onglet, .profil)
         XCTAssertEqual(try cible("/etablissement/missions/abc"),
                        .web(.etablissement(URL(string: "https://jolene.app/etablissement/missions/abc")!)))
         XCTAssertEqual(try cible("/connexion"), .aucune, "connexion depuis un espace prêt : coordinateur de L1-T10")

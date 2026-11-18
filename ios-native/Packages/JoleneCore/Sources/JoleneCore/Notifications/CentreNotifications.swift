@@ -113,6 +113,10 @@ public enum CibleNotification: Equatable, Sendable {
     case contrat(id: String)
     /// certificat des signatures d'un contrat (`/contrat/:id/certificat`).
     case certificat(contratId: String)
+    /// Lot 3, T14a — écran Stripe Connect (`/soignant/stripe-connect`, entrée « Compte de paiement (Stripe) » du hub),
+    /// empilé sur l'onglet Profil remis à sa racine ; le retour de Stripe (`?success=true`, `?refresh=true`) le relit
+    /// avec `force=true` (correction 17), jamais un succès en soi.
+    case stripeConnect(retour: RetourConnect?)
     /// Renvoi web (`.safari` ou `.etablissement`), présenté par le présentateur de renvoi web s'il est injecté
     /// (coordinateur des liens, L3-T3b) ; reset `token_hash`/implicit compris, tant que son écran natif n'est pas
     /// livré.
@@ -145,6 +149,7 @@ public enum CibleNotification: Equatable, Sendable {
         case .documents(let onglet): self = .documents(onglet: OngletDocuments(parametre: onglet))
         case .contrat(let id): self = .contrat(id: id)
         case .contratCertificat(let id): self = .certificat(contratId: id)
+        case .stripeConnect(let retour): self = .stripeConnect(retour: retour) // T14a
         case .safari, .etablissement: self = .web(destination)
         case .connexion, .resetPassword, .confirmerInscription:
             self = .aucune
@@ -153,7 +158,7 @@ public enum CibleNotification: Equatable, Sendable {
             // (écran de connexion, aiguillage d'onboarding, `BoiteLiensInscription`), comme la connexion ; une page
             // non livrée serait déjà un `.safari` (`destination`) et n'arriverait pas ici.
             self = .aucune
-        case .serieDetail, .stripeConnect, .secondaire:
+        case .serieDetail, .secondaire:
             // Atteint seulement quand la ligne de `ecranNatifLivre` de l'écran est passée à `true` sans que sa
             // tranche ait ajouté sa cible (sinon `destination` est déjà un `.safari`) : repli sur le renvoi web
             // canonique, jamais un tap sans effet ; la garde de `CentreNotificationsTests` le signale.
@@ -170,6 +175,7 @@ public enum CibleNotification: Equatable, Sendable {
         case .revenus: return .revenus
         case .monCompte, .preferences, .profil: return .profil
         case .presences, .detailPresences, .documents, .contrat, .certificat: return .profil // « Mon espace » (L2-T10)
+        case .stripeConnect: return .profil // T14a : entrée du hub
         case .web, .aucune: return nil
         }
     }
@@ -183,6 +189,7 @@ public enum CibleNotification: Equatable, Sendable {
         case .accueil, .explorer, .missions, .monCompte, .mission, .preferences, .profil: return true
         // L2-T10 : écrans du lot 2 ; leur coupe-circuit (D-FLAGS) est lu par l'écran, qui devient alors un renvoi web.
         case .presences, .detailPresences, .documents, .contrat, .certificat: return true
+        case .stripeConnect: return true // T14a
         case .revenus(let section): return section == .apercu || section == .paiementsAConfirmer
         case .centre: return !depuisCentre
         case .web: return renvoiWebDisponible

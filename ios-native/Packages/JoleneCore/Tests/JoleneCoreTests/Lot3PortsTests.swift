@@ -92,6 +92,7 @@ final class Lot3PortsTests: XCTestCase {
         await refuse("T13") { _ = try await g.paiements.contester(id: "p-1", motif: "Montant erroné", context: c) }
         await refuse("T14b") { _ = try await g.iban.consulter(context: c) }
         await refuse("T14b") { _ = try await g.iban.enregistrer(iban: "FR7630006000011234567890189", titulaire: "A B", context: c) }
+        await refuse("T14a") { _ = try await g.stripeConnect.exercice(context: c) }
         await refuse("T14a") { _ = try await g.stripeConnect.statut(force: true, context: c) }
         await refuse("T14a") { _ = try await g.stripeConnect.lienOnboarding(context: c) }
     }
@@ -235,6 +236,7 @@ struct FakePushRegistration: PushRegistrationPort {
 }
 
 struct FakeStripeConnect: StripeConnectPort {
+    func exercice(context: MissionReadContext) async throws -> ExerciceConnect { ExerciceConnect(typeExercice: "LIBERAL") }
     func statut(force: Bool, context: MissionReadContext) async throws -> StatutConnect {
         StatutConnect(statut: .nonDemande, onboardingComplete: false, chargesEnabled: false, payoutsEnabled: false)
     }

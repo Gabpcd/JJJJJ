@@ -100,7 +100,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .revenus(section: .paiementsAConfirmer):
             return true                                  // T13 — section « Paiements à confirmer » de RevenusScreen
         case .stripeConnect:
-            return false                                 // T14a — Stripe Connect
+            return true                                  // T14a — `StripeConnectScreen`, empilé sur l'onglet Profil (retour de Stripe compris)
         case .revenus(section: .factures), .revenus(section: .bulletins), .revenus(section: .avances):
             return false                                 // renvoi web assumé jusqu'au lot 4 (D4)
         case .presences, .presencesMission:

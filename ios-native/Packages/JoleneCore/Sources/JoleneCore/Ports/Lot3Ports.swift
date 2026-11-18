@@ -136,8 +136,11 @@ public protocol IbanPort: Sendable {
     func enregistrer(iban: String, titulaire: String, context: MissionReadContext) async throws -> ResultatIban
 }
 
-/// Stripe Connect (`stripe-connect-status`, `stripe-connect-onboard`) — tranche T14a.
+/// Stripe Connect (`soignants`, `stripe-connect-status`, `stripe-connect-onboard`) — tranche T14a.
 public protocol StripeConnectPort: Sendable {
+    /// `soignants.type_exercice, statut_liberal, est_compte_test`, lus **avant** tout appel d'edge
+    /// (`PageStripeConnect.tsx` l.94-111) : compte de test ou salarié → aucun appel d'edge.
+    func exercice(context: MissionReadContext) async throws -> ExerciceConnect
     /// `force` : contourne le cache serveur de 5 min (`?force=true`) au retour de Stripe et sur « Actualiser ».
     func statut(force: Bool, context: MissionReadContext) async throws -> StatutConnect
     func lienOnboarding(context: MissionReadContext) async throws -> ResultatLienConnect
@@ -281,6 +284,7 @@ public struct UnwiredIbanPort: IbanPort, UnwiredPort {
 public struct UnwiredStripeConnectPort: StripeConnectPort, UnwiredPort {
     public init() {}
     private var erreur: JoleneError { Lot3.erreur("Stripe Connect", "T14a") }
+    public func exercice(context: MissionReadContext) async throws -> ExerciceConnect { throw erreur }
     public func statut(force: Bool, context: MissionReadContext) async throws -> StatutConnect { throw erreur }
     public func lienOnboarding(context: MissionReadContext) async throws -> ResultatLienConnect { throw erreur }
 }
