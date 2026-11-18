@@ -104,6 +104,17 @@ const LOT4_TOUTES = [...LOT4, ...LOT4_PARTAGEES];
 // synthèse du lot 1). Hors des 41 RPC propres du blueprint (`LOT4_PLAN.md` §3 T0 ne la cite pas) ; son
 // sort au lot 4 (consommée ou retirée de RPC_SUIVIES) relève de T15 (DECISIONS_LOT4.md, précision 11).
 const LOT4_RECLASSEES = ['fn_suggestions_missions_pour_soignant'];
+// Câblées par une tranche d'écran livrée (statut `consommee`, synthèse « consommée lot 4 (Tn) », fiche « consommée (lot 4,
+// Tn) par `<gateway>` ») : RPC → [tranche, gateway Swift qui l'appelle]. Le blueprint prévoyait le passage en une fois à
+// T15 ; la consigne de livraison du 18/11/2026 (« passe-les en `consommee` ») le fait tranche par tranche, chaque tranche
+// ajoutant ici ses RPC.
+const GATEWAY_FILTRES = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Filtres/SupabaseFiltresGateway.swift';
+const LOT4_CONSOMMEES = new Map([
+  ['fn_lister_mes_filtres_sauvegardes', ['T4', GATEWAY_FILTRES]],
+  ['fn_creer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
+  ['fn_modifier_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
+  ['fn_supprimer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
+]);
 /** RPC suivies en `lot: 4` qui ne sont ni partagées ni reclassées : les 41 propres au lot. */
 const propresLot4 = rpcs => rpcs.filter(r => r.lot === 4 && !LOT4_PARTAGEES.includes(r.name) && !LOT4_RECLASSEES.includes(r.name));
 
@@ -225,8 +236,21 @@ test('Lot 4 — RPC_SUIVIES : 41 RPC propres au lot 4 en a_venir lot 4, dans l o
   assert.equal(new Set(LOT4_TOUTES).size, 42);
   assert.deepEqual([...contratsLot4.RPC_PARTAGEES_LOT4], LOT4_PARTAGEES);
   assert.deepEqual(propresLot4(RPC_SUIVIES).map(r => r.name), LOT4);
-  // Les statuts propres au lot 4 ne bougent qu'en T0 (a_venir) et en T15 (consommee, en une fois) : LOT4_PLAN §3.
-  for (const name of LOT4) assert.deepEqual(byName.get(name), { name, statut: 'a_venir', lot: 4 });
+  // Statuts propres au lot 4 : `a_venir` depuis T0, `consommee` dès la tranche qui câble la gateway (LOT4_CONSOMMEES).
+  for (const name of LOT4) {
+    const statut = LOT4_CONSOMMEES.has(name) ? 'consommee' : 'a_venir';
+    assert.deepEqual(byName.get(name), { name, statut, lot: 4 }, `${name} : statut attendu ${statut}`);
+  }
+  // Une RPC consommée est appelée par sa gateway (littéral), régénérée dans rpc-contracts.json et classée dans la synthèse.
+  const contrats = new Map(JSON.parse(read('ios-native/rpc-contracts.json')).rpcs.map(r => [r.name, r]));
+  const lignesSynthese = section(read(CONTRATS_DOC), 'Lot 4 — synthèse').split('\n');
+  for (const [name, [tranche, gateway]] of LOT4_CONSOMMEES) {
+    assert.ok(LOT4.includes(name), `${name} : consommée hors des 41 RPC du lot 4`);
+    assert.equal(contrats.get(name)?.statut, 'consommee', `${name} : rpc-contracts.json non régénéré (--update)`);
+    assert.ok(read(gateway).includes(`"${name}"`), `${name} : littéral absent de ${gateway}`);
+    const ligne = lignesSynthese.find(l => l.startsWith(`| \`${name}\` |`));
+    assert.ok(ligne?.includes(`| consommée lot 4 (${tranche}) | 4 (${tranche}) |`), `synthèse : ${name} doit être « consommée lot 4 (${tranche}) »`);
+  }
   // Reclassées par un lot antérieur : `a_venir`, `lot: 4`, jamais comptées parmi les 42, consignées dans la
   // synthèse du lot 4 et dans les décisions (précision 11), pour que T15 les statue.
   const synthese = section(read(CONTRATS_DOC), 'Lot 4 — synthèse');
@@ -346,8 +370,11 @@ test('Lot 4 — CONTRATS : chaque fiche cite toutes les réponses littérales, c
     // « Usage du lot 4 », déplacée telle quelle dans la fiche du lot 2 quand son T0 est fusionné.
     if (partagee) assert.equal(doc.split('\n').filter(l => l === `## ${name}`).length, 1, `${name} : fiche en double (fusion avec le T0 du lot 2 : voir sa fiche)`);
     const fiche = partagee ? sousSection(section(doc, `${name}\n`), 'Usage du lot 4') : section(doc, `${name}\n`);
-    const statut = partagee ? '- **Statut natif (lot 4)** : à venir (lot 4, T8)' : '- **Statut natif** : à venir (lot 4';
-    assert.ok(fiche.includes(statut), `${name} : statut natif lot 4 absent`);
+    const consommee = LOT4_CONSOMMEES.get(name);
+    const statut = partagee ? '- **Statut natif (lot 4)** : à venir (lot 4, T8)'
+      : consommee ? `- **Statut natif** : consommée (lot 4, ${consommee[0]}) par \`${consommee[1].split('/Sources/')[1]}\``
+        : '- **Statut natif** : à venir (lot 4';
+    assert.ok(fiche.includes(statut), `${name} : statut natif lot 4 absent (${statut})`);
     for (const { body } of corpsConfrontes(schema, name)) {
       for (const message of messagesSql(body)) {
         total++;

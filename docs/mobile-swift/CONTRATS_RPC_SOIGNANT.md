@@ -2513,10 +2513,10 @@ concernée à jour **dans la même PR**.
 | `fn_enregistrer_swipe` | à venir | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_retirer_candidature` | à venir | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_initialiser_preferences_matching` | à venir | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_lister_mes_filtres_sauvegardes` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_creer_filtre_sauvegarde` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_modifier_filtre_sauvegarde` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_supprimer_filtre_sauvegarde` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_lister_mes_filtres_sauvegardes` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_creer_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_modifier_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_supprimer_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_definir_disponibilite` | à venir | 4 (T5) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_obtenir_mes_parrainages` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_appliquer_parrainage` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -2690,7 +2690,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_initialiser_preferences_matching"("p_pre
 
 ## fn_lister_mes_filtres_sauvegardes
 
-- **Statut natif** : à venir (lot 4, T4).
+- **Statut natif** : consommée (lot 4, T4) par `JoleneSupabase/Filtres/SupabaseFiltresGateway.swift`, appelée par `FiltresModel` (liste, relecture après chaque mutation) et `AlerteRapideModel` (JoleneCore).
 - **Usage prévu** : Liste de `/soignant/parametres/recherches-sauvegardees` et relecture après chaque mutation ; toujours `p_audience = 'SOIGNANT_RECHERCHE_MISSIONS'`.
 - **Signature SQL** (`supabase/schema/public.sql` l.39947) :
 
@@ -2708,7 +2708,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_lister_mes_filtres_sauvegardes"("p_audie
 
 ## fn_creer_filtre_sauvegarde
 
-- **Statut natif** : à venir (lot 4, T4).
+- **Statut natif** : consommée (lot 4, T4) par `JoleneSupabase/Filtres/SupabaseFiltresGateway.swift`, appelée par `AlerteRapideModel` (JoleneCore, alerte rapide d'Explorer).
 - **Usage prévu** : Sauvegarde d'une recherche et « Créer une alerte » 1-tap depuis Explorer. `p_audience` est obligatoire (aucun défaut) : toujours `'SOIGNANT_RECHERCHE_MISSIONS'`. `p_filtres` en **camelCase**, les sept clés `profession, rayonKm, tauxMin, typeContrat, urgentesOnly, horaire, villeRecherche` toujours présentes avec les valeurs par défaut du web (forme `CriteresAlerteMissions`, `src/lib/alertes-recherche-missions.ts` l.1-9 ; validateur `private.fn_filtres_recherche_missions_valides`, migration `20260925093121`) : `MissionFilters.ville` → `villeRecherche`, `etablissementId` retiré, nombres entiers écrits sans `.0`, `typeContrat ∈ {TOUS, CDD, LIBERAL}`, `horaire ∈ {TOUS, JOUR, NUIT, WEEKEND}`. Avant création, une recherche strictement identique (clé `JSON.stringify` triée, `AlerteRecherche`, golden T2) est réactivée plutôt que dupliquée.
 - **Signature SQL** (`supabase/schema/public.sql` l.26466) :
 
@@ -2726,7 +2726,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_creer_filtre_sauvegarde"("p_nom" "text",
 
 ## fn_modifier_filtre_sauvegarde
 
-- **Statut natif** : à venir (lot 4, T4).
+- **Statut natif** : consommée (lot 4, T4) par `JoleneSupabase/Filtres/SupabaseFiltresGateway.swift`, appelée par `FiltresModel` (cloche, « Modifier ») et `AlerteRapideModel` (réactivation d'une recherche identique), JoleneCore.
 - **Usage prévu** : Renommage, bascule de l'alerte et fréquence (`IMMEDIATE`, `QUOTIDIENNE`, `HEBDOMADAIRE`) ; `filtres` n'est pas modifiable (absent de la signature). Un paramètre `NULL` laisse la valeur inchangée (`COALESCE`).
 - **Signature SQL** (`supabase/schema/public.sql` l.43089) :
 
@@ -2744,7 +2744,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_modifier_filtre_sauvegarde"("p_id" "uuid
 
 ## fn_supprimer_filtre_sauvegarde
 
-- **Statut natif** : à venir (lot 4, T4).
+- **Statut natif** : consommée (lot 4, T4) par `JoleneSupabase/Filtres/SupabaseFiltresGateway.swift`, appelée par `FiltresModel` (JoleneCore).
 - **Usage prévu** : Suppression d’une recherche sauvegardée.
 - **Signature SQL** (`supabase/schema/public.sql` l.59994) :
 

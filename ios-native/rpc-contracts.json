@@ -1479,7 +1479,7 @@
     },
     {
       "name": "fn_lister_mes_filtres_sauvegardes",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_audience?: Database[\"public\"][\"Enums\"][\"filtre_audience\"] }",
@@ -1508,7 +1508,7 @@
     },
     {
       "name": "fn_creer_filtre_sauvegarde",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_alerte_active?: boolean; p_audience: Database[\"public\"][\"Enums\"][\"filtre_audience\"]; p_filtres: Json; p_frequence_alerte?: Database[\"public\"][\"Enums\"][\"filtre_frequence_alerte\"]; p_nom: string }",
@@ -1537,7 +1537,7 @@
     },
     {
       "name": "fn_modifier_filtre_sauvegarde",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_alerte_active?: boolean; p_frequence_alerte?: Database[\"public\"][\"Enums\"][\"filtre_frequence_alerte\"]; p_id: string; p_nom?: string }",
@@ -1566,7 +1566,7 @@
     },
     {
       "name": "fn_supprimer_filtre_sauvegarde",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_id: string }",

@@ -127,10 +127,10 @@ export const RPC_SUIVIES = [
   { name: 'fn_retirer_candidature', statut: 'a_venir', lot: 4 },
   { name: 'fn_initialiser_preferences_matching', statut: 'a_venir', lot: 4 },
   // T4 — filtres sauvegardés et alerte rapide
-  { name: 'fn_lister_mes_filtres_sauvegardes', statut: 'a_venir', lot: 4 },
-  { name: 'fn_creer_filtre_sauvegarde', statut: 'a_venir', lot: 4 },
-  { name: 'fn_modifier_filtre_sauvegarde', statut: 'a_venir', lot: 4 },
-  { name: 'fn_supprimer_filtre_sauvegarde', statut: 'a_venir', lot: 4 },
+  { name: 'fn_lister_mes_filtres_sauvegardes', statut: 'consommee', lot: 4 }, // L4-T4 : SupabaseFiltresGateway
+  { name: 'fn_creer_filtre_sauvegarde', statut: 'consommee', lot: 4 }, // L4-T4 : SupabaseFiltresGateway (alerte rapide)
+  { name: 'fn_modifier_filtre_sauvegarde', statut: 'consommee', lot: 4 }, // L4-T4 : SupabaseFiltresGateway
+  { name: 'fn_supprimer_filtre_sauvegarde', statut: 'consommee', lot: 4 }, // L4-T4 : SupabaseFiltresGateway
   // T5 — disponibilités
   { name: 'fn_definir_disponibilite', statut: 'a_venir', lot: 4 },
   // T6 — parrainage

@@ -618,7 +618,8 @@ jobs:
       # Le socle mesurait 14,6 / 17,3 / 22,4 min (iphone / ipad-portrait / ipad-landscape) au run 44204757942, dont
       # DemoAccueilTests (3,5 / 3,5 / 5,0 min) et DemoExplorerTests (5,8 / 8,5 / 9,6 min) : sans eux, environ 5 / 5 / 8 min
       # mesurées, plus DemoContestationTests (lot 2, T5b, une seule méthode), sous 20 min. DemoFavorisTests sort de
-      # « presences » pour le même job. Garde : tests/node/ios-swift-ci-eclats.node.mjs.
+      # « presences » pour le même job. Lot 4 (L4-T4, 18/11/2026) : ses XCUITest tournent dans l'éclat « lot4 » du job
+      # `ui-lot1`, jamais dans le socle. Garde : tests/node/ios-swift-ci-eclats.node.mjs.
       - name: test-without-building — éclat socle (JoleneCoreTests, JoleneDesignTests, XCUITest hors éclat — lot 0, compte, contestation) (${{ matrix.format }})
         id: tests
         # Même condition que les dix autres éclats (revue B8 de la vague 5, m1) : une dérive du Package.resolved (étape
@@ -678,6 +679,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoAccueilTests \
             -skip-testing:JoleneUITests/DemoExplorerTests \
             -skip-testing:JoleneUITests/DemoFavorisTests \
+            -skip-testing:JoleneUITests/DemoFiltresTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1333,9 +1335,11 @@ jobs:
     # 30 min, le résumé xcresult (aucun succès fabriqué), le relevé des attentes bloquées et le redémarrage du simulateur
     # après un éclat gelé (scripts/mobile/ios-ci-gel-simulateur.sh, borné à 2 min dans l'éclat suivant : aucune étape ni
     # minute ajoutée au plafond). Ce job n'exécute ni JoleneCoreTests ni JoleneDesignTests (socle du job `ui`). Job hors
-    # checks requis de la branche, comme `ui`. Plafond : 25 (build) + 1 + 1 (Package.resolved) + 2 × 30 (éclats) = 87 min,
-    # marge de préparation comprise sous 120 min. Gardes : tests/node/ios-swift-ci-eclats.node.mjs.
-    timeout-minutes: 120
+    # checks requis de la branche, comme `ui`. Lot 4 (L4-T4, 18/11/2026) : la première tranche du lot 4 qui livre un
+    # XCUITest y ouvre l'éclat « lot4 » (D19 de DECISIONS_LOT4 : job `ui-lot1` ou job propre au lot 4), plutôt qu'un
+    # douzième éclat du job `ui`. Plafond : 25 (build) + 1 + 1 (Package.resolved) + 3 × 30 (éclats) = 117 min, plus
+    # 15 min de préparation : 135 min. Gardes : tests/node/ios-swift-ci-eclats.node.mjs.
+    timeout-minutes: 135
     strategy:
       fail-fast: false
       matrix:
@@ -1545,14 +1549,58 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot1-accueil-explorer.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot1-accueil-explorer) : code $code"
+      # « lot4 » : écrans secondaires du lot 4 (L4-T4 : recherches sauvegardées et alerte rapide d'Explorer, deux méthodes,
+      # estimées à 3-6 min au prorata de DemoFavorisTests) ; chaque tranche du lot 4 y range sa classe démo tant que l'éclat
+      # reste estimé sous 20 min (décision 22), sinon ouvre un éclat voisin dans ce job.
+      - name: test-without-building — éclat lot4 (XCUITest des écrans secondaires du lot 4 — recherches sauvegardées) (${{ matrix.format }})
+        id: tests_lot4
+        # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          # Variables lues par le runner XCUITest via ProcessInfo (préfixe TEST_RUNNER_ retiré par xcodebuild).
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: lot1-accueil-explorer
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot1_accueil_explorer.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot1_accueil_explorer.outputs.code }}
+        run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot4 || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot4)."
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot4.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoFiltresTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot4.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot4.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot4) : code $code"
       - name: Résumé xcresult (assertions, pas de succès fabriqué)
         if: always() && steps.build.outcome == 'success'
         env:
           CODE_LOT1_MISSIONS: ${{ steps.tests_lot1_missions.outputs.code }}
           CODE_LOT1_ACCUEIL_EXPLORER: ${{ steps.tests_lot1_accueil_explorer.outputs.code }}
+          CODE_LOT4: ${{ steps.tests_lot4.outputs.code }}
         run: |
           mkdir -p "$JOLENE_UI_OUTPUT/attachments"
-          for eclat in lot1-missions lot1-accueil-explorer; do
+          for eclat in lot1-missions lot1-accueil-explorer lot4; do
             xcresult="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$eclat.xcresult"
             [ -d "$xcresult" ] || { echo "::error::Bundle xcresult absent pour l'éclat $eclat : aucun test n'a produit de résultat."; exit 1; }
             xcrun xcresulttool get test-results summary --path "$xcresult" > "$JOLENE_UI_OUTPUT/xctest-summary-$eclat.json"
@@ -1569,6 +1617,7 @@ jobs:
             const eclats = [
               { nom: "lot1-missions", code: process.env.CODE_LOT1_MISSIONS, classes: ["DemoMesMissionsTests", "DemoCandidatureTests", "DemoConfirmationPresenceTests", "DemoAnnulationTests"] },
               { nom: "lot1-accueil-explorer", code: process.env.CODE_LOT1_ACCUEIL_EXPLORER, classes: ["DemoAccueilTests", "DemoExplorerTests", "DemoFavorisTests"] },
+              { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests"] },
             ];
             let total = 0, passed = 0, failed = 0, skipped = 0, log = "";
             const lignes = [`### UI lot 1 — ${process.env.JOLENE_UI_FORMAT}`, ""];
@@ -1638,7 +1687,7 @@ jobs:
         # (variable ECLATS), un éclat sans manifest.json lisible étant signalé, jamais ignoré en silence.
         continue-on-error: true
         env:
-          ECLATS: lot1-missions lot1-accueil-explorer
+          ECLATS: lot1-missions lot1-accueil-explorer lot4
         run: |
           # shellcheck disable=SC2016
           node --input-type=module -e '
@@ -1723,6 +1772,7 @@ jobs:
           path: |
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot1-missions.xcresult
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot1-accueil-explorer.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot4.xcresult
             ios-native/test-results/lot1-${{ matrix.format }}/
           retention-days: 7
           if-no-files-found: warn
