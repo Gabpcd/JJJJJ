@@ -779,6 +779,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_fenetre_contestation_ouverte"("p_type_li
 - **Contrat de réponse (HTTP 200)** : un booléen nu. `SECURITE_DANGER`, `NON_PAIEMENT`, `AUTRE` → toujours vrai
   (l.36596) ; `DESACCORD_HEURES_POINTAGE` → vrai si aucune présence n'est validée (l.36621), sinon
   `valide_le + delai_contestation_pointage_h > now()` (défaut 48 h, l.36600-36622).
+- **Valeur en vigueur** : `delai_contestation_pointage_h` = **72** (heures) une fois mergée la migration
+  `20261118145614_delai_contestation_pointage_72h.sql` (`INSERT … ON CONFLICT (cle) DO UPDATE`, D12 point 2, B9 :
+  go explicite de Gabrielle au merge) ; valeur relue en production le 18/11/2026 avant cette migration : 48. Le même
+  paramètre fixe le délai de `fn_auto_creation_litiges_presence` (litiges `ABSENCE_SOIGNANT` / `DEPART_ANTICIPE`
+  créés après la fermeture de la fenêtre). Le défaut 48 h du code (`COALESCE`) ne change pas.
 
 ## fn_ouvrir_litige_rate_limited
 
