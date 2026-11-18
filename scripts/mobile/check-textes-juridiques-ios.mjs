@@ -144,19 +144,30 @@ export const MARQUES_JURIDIQUES = [
  * 8 novembre 2026 », Q9) : les textes de délai du panneau de contestation contredisent le serveur
  * (`delai_contestation_pointage_h`, 48 h par défaut ; escalade vers `EN_MEDIATION`). Q9 est tranchée
  * par délégation : le natif n'affiche aucun texte de délai (la fenêtre est décidée par
- * `fn_fenetre_contestation_ouverte`), y compris après l'alignement du paramètre serveur sur 72 h,
- * tant que le web n'a pas corrigé ces textes. Chaque ancre est retrouvée par son texte (où qu'il soit
- * dans le fichier) ; aucune constante ne pointe dans son bloc JSX ni n'en reprend un texte. Une ancre
- * disparue fait rougir la garde : le web a changé, Q9 est à relire.
+ * `fn_fenetre_contestation_ouverte`), y compris après l'alignement du paramètre serveur sur 72 h
+ * (D12 point 4). Chaque ancre est retrouvée par son texte (où qu'il soit dans le fichier) ; aucune
+ * constante ne pointe dans son bloc JSX ni n'en reprend un texte. Une ancre disparue fait rougir la
+ * garde : le web a changé, Q9 est à relire.
+ *
+ * D12 point 3 (PR web HARD STOP n°4) : le web a retiré « 72h pour répondre » et « l'admin plateforme
+ * tranchera » (faux en salarié : escalade vers `EN_MEDIATION` après `delai_escalade_*`) et lit la
+ * fenêtre au serveur. Seule reste l'ancre « Vous avez 72 h après la validation pour contester. »,
+ * exacte une fois `delai_contestation_pointage_h` à 72 (D12 point 2). Les textes retirés restent
+ * refusés côté natif (`RETIRES_Q9`) et ne doivent pas revenir sur le panneau web : leur retour fait
+ * rougir la garde (nouveau texte juridique exposé, HARD STOP n°4).
  */
 export const ANCRES_Q9 = [
-  { fichier: 'src/components/PanneauContestation.tsx', motif: /72\s?h pour répondre/i },
-  { fichier: 'src/components/PanneauContestation.tsx', motif: /admin plateforme tranchera/i },
   { fichier: 'src/components/PanneauContestation.tsx', motif: /après la validation pour contester/i },
 ];
 
+/** Textes de délai retirés du panneau par D12 point 3 : refusés côté natif, absents du web. */
+export const RETIRES_Q9 = [
+  { fichier: 'src/components/PanneauContestation.tsx', motif: /72\s?h pour répondre/i },
+  { fichier: 'src/components/PanneauContestation.tsx', motif: /admin plateforme tranchera/i },
+];
+
 /** Motifs des textes de délai de contestation, refusés quelle que soit la source annoncée. */
-export const MOTIFS_Q9 = ANCRES_Q9.map(a => a.motif);
+export const MOTIFS_Q9 = [...ANCRES_Q9, ...RETIRES_Q9].map(a => a.motif);
 
 /** Toute constante qui associe contestation ou litige et délai est refusée, quel que soit son groupe. */
 export const DELAI_CONTESTATION = {
@@ -826,6 +837,14 @@ export function verifierTextes({ swiftSource, libellesSource, zonesRendu, lireWe
         + `(LOT2_PLAN §7 Q9) puis mettre à jour ANCRES_Q9 (${SCRIPT}) et ${TEST_NODE}`);
     }
     for (const u of unites) blocsQ9.push({ fichier: ancre.fichier, ...u.bloc });
+  }
+  for (const retire of RETIRES_Q9) {
+    const web = lireWeb(retire.fichier);
+    if (!web) { erreurs.push(`RETIRES_Q9 : ${retire.fichier} introuvable`); continue; }
+    for (const u of web.unites.filter(x => retire.motif.test(x.valeur))) {
+      erreurs.push(`RETIRES_Q9 : ${retire.fichier} l.${u.debut} affiche de nouveau un texte ${retire.motif}, retiré par `
+        + 'DECISIONS_LOT2 D12 point 3 : nouveau texte juridique exposé (HARD STOP n°4), relire Q9 avant de le rétablir');
+    }
   }
   for (const b of blocsQ9) {
     for (const u of lireWeb(b.fichier).unites) {
