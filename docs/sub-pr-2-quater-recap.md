@@ -60,7 +60,7 @@ Tous les tests sont idempotents (`BEGIN … ROLLBACK`), isolés (`gen_random_uui
 
 | Test | Fichier                                                  | Scénario                                                         |
 | ---- | -------------------------------------------------------- | ----------------------------------------------------------------- |
-| T1   | `cp8a-t1-absence-soignant.test.sql`                      | Auto-création ABSENCE_SOIGNANT à partir d'une présence ABSENT >48h. |
+| T1   | `cp8a-t1-absence-soignant.test.sql`                      | Auto-création ABSENCE_SOIGNANT à partir d'une présence ABSENT validée depuis plus de `delai_contestation_pointage_h` (âge dérivé du paramètre, 72 h depuis D12) ; cas limite 60 h. |
 | T2   | `cp8a-t2-depart-anticipe.test.sql`                       | Auto-création cas B (départ anticipé > seuil).                    |
 | T3   | `cp8a-t3-desaccord-heures.test.sql`                      | Flow manuel soignant DESACCORD_HEURES_POINTAGE.                    |
 | T4   | `cp8a-t4-retard-important.test.sql`                      | Auto-création cas C (retard > seuil) initié étab.                  |
