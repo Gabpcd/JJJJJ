@@ -128,6 +128,56 @@ final class CandidatureEcranTests: XCTestCase {
         XCTAssertEqual(model.etat(m), .profilIncomplet(manquants: ["Téléphone", "RPPS vérifié"]))
     }
 
+    /// Revue B8 (M1) : le soft-gate relit la ligne démo que l'édition du profil (lot 3) réécrit — jamais une copie figée.
+    func testModifierLeProfilPuisRelireLeveLeSoftGate() async throws {
+        let (model, gateways) = try await modele("demo-mission-013", variante: .identiteVerrouillee)
+        let m = try await relue("demo-mission-013", gateways, profil: DemoWorld.context.profile)
+        XCTAssertEqual(model.etat(m), .profilIncomplet(manquants: ["Téléphone"]), "RPPS vérifié, téléphone absent")
+        _ = try await gateways.profil.modifier(ModificationProfil(telephone: VarianteProfilDemo.telephoneCandidat),
+                                               context: DemoWorld.context)
+        let projection = try await gateways.missions.profile(userId: userId)
+        XCTAssertEqual(projection?.telephoneRenseigne, true, "projection du lot 1 relue dans le même magasin")
+        await model.charger()
+        XCTAssertEqual(model.etat(m), .ouverte(.accepter), "soft-gate levé au retour sur le détail")
+    }
+
+    /// Revue B8 (m1) : `enCours` est posé avant tout `await` : un double toucher n'envoie qu'une action.
+    func testDoubleToucherNEnvoieQuUneAction() async throws {
+        let (model, gateways) = try await modele("demo-mission-013")
+        let m = try await relue("demo-mission-013", gateways, profil: profilCandidat)
+        async let premier = model.confirmer(m)
+        async let second = model.confirmer(m)
+        let issues = await [premier, second]
+        XCTAssertEqual(issues.filter { $0 }.count, 1, "un seul envoi")
+        XCTAssertNil(model.issue, "sans la garde, le second envoi afficherait « Cette mission n'est plus disponible. »")
+
+        let (refus, gatewaysRefus) = try await modele("demo-mission-011")
+        let proposee = try await relue("demo-mission-011", gatewaysRefus, profil: profilCandidat)
+        async let r1 = refus.refuserProposition(proposee)
+        async let r2 = refus.refuserProposition(proposee)
+        let refus1 = await [r1, r2]
+        XCTAssertEqual(refus1.filter { $0 }.count, 1)
+        XCTAssertEqual(refus.issue, .propositionRefusee, "pas d'erreur « plus en attente » après le refus relu")
+    }
+
+    /// Revue B8 (m5) : lignes du récapitulatif comme `PlanningMissionCandidat.tsx` (année, « (lendemain) », durée).
+    func testLignesDuRecapitulatifCommeLeWeb() {
+        let jour = MissionSlot(debut: "2026-11-03T07:00:00.000Z", fin: "2026-11-03T15:00:00.000Z", estPause: false, typeCreneau: "PREVISIONNEL")
+        XCTAssertEqual(MissionPresentation.creneauCandidat(jour), "mardi 3 novembre 2026, 08h00 → 16h00 · 8 h")
+        let nuit = MissionSlot(debut: "2026-11-06T20:00:00.000Z", fin: "2026-11-07T06:30:00.000Z", estPause: false, typeCreneau: "PREVISIONNEL")
+        XCTAssertEqual(MissionPresentation.creneauCandidat(nuit), "vendredi 6 novembre 2026, 21h00 → samedi 7 novembre 2026 · 07h30 (lendemain) · 10,5 h")
+        let sansFin = MissionSlot(debut: "2026-11-03T07:00:00.000Z", fin: nil, estPause: false, typeCreneau: "PREVISIONNEL")
+        XCTAssertEqual(MissionPresentation.creneauCandidat(sansFin), "mardi 3 novembre 2026, 08h00 → fin à confirmer")
+    }
+
+    /// Revue B8 (P2) : phrase d'engagement du récapitulatif, reprise à l'identique selon l'action.
+    func testPhraseDEngagementSelonLAction() {
+        XCTAssertEqual(LibellesCandidature.recapEngagement(.postuler), TextesWeb.Candidature.engagementCandidature)
+        XCTAssertEqual(LibellesCandidature.recapEngagement(.accepter), TextesWeb.Candidature.engagementAcceptation)
+        XCTAssertEqual(LibellesCandidature.recapEngagement(.proposition), TextesWeb.Candidature.engagementAcceptation)
+        XCTAssertTrue(TextesWeb.Candidature.engagementAcceptation.hasPrefix("En confirmant, tu acceptes immédiatement"))
+    }
+
     func testRefusDePropositionRelu() async throws {
         let (model, gateways) = try await modele("demo-mission-011")
         let m = try await relue("demo-mission-011", gateways, profil: profilCandidat)

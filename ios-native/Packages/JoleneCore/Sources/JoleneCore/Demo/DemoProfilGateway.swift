@@ -97,6 +97,21 @@ public struct DemoProfilGateway: ProfilPort {
         }
     }
 
+    /// Lot 1, T6b (revue B8, M1) : projection du lot 1 (`MissionsPort.profile`, soft-gate de la candidature) dérivée de
+    /// la ligne que `modifier` réécrit, jamais d'une copie figée au lancement (principe « État dérivé ») : `base` (le
+    /// profil de session : profession, adresse, contrats) reçoit les cinq colonnes du soft-gate relues dans ce magasin,
+    /// date de naissance et téléphone réduits à leur présence (minimisation de T6a).
+    public func projectionLot1(_ base: SoignantProfile) async throws -> SoignantProfile {
+        let complet = try Self.relire(try await store.lire(), userId: base.id)
+        var profil = base
+        profil.prenom = complet.prenom
+        profil.nom = complet.nom
+        profil.dateNaissanceRenseignee = !(complet.dateNaissance ?? "").isEmpty
+        profil.telephoneRenseigne = !(complet.telephone ?? "").isEmpty
+        profil.rppsVerifie = complet.rppsVerifie
+        return profil
+    }
+
     private static func relire(_ ligne: [String: ValeurJSON], userId: String) throws -> ProfilComplet {
         do {
             return try ProfilComplet.depuis(.objet(ligne), userId: userId)

@@ -50,11 +50,15 @@ public enum DemoWorld {
         // T6a : un seul acteur de candidature par monde ; ses candidatures de session sont relues par Mes missions
         // (point de fusion de T5), si bien qu'une candidature posée apparaît dans l'onglet Candidatures.
         let candidature = DemoCandidatureGateway(clock: FixedClock(fixedNow))
-        let profil = varianteProfil?.appliquer(context.profile) ?? context.profile
+        // T6b (revue B8, M1) : une seule ligne `soignants` démo, celle du lot 3 (`DemoProfilStore`, variante comprise),
+        // dont la projection du lot 1 est relue à chaque `profile(userId:)` : une modification du profil (téléphone…)
+        // lève le soft-gate au retour sur le détail, comme en production.
+        let profilDemo = varianteProfil.map { DemoProfilGateway(variante: $0) } ?? DemoProfilGateway()
         var gateways = Gateways(
             auth: DemoAuthGateway(),
             role: DemoRoleGateway(),
-            missions: DemoMissionsGateway(profil: profil, missionsAttribuees: { await candidature.missionsAttribuees() }),
+            missions: DemoMissionsGateway(profil: { try await profilDemo.projectionLot1(context.profile) },
+                                          missionsAttribuees: { await candidature.missionsAttribuees() }),
             clock: FixedClock(fixedNow),
             dashboard: DemoDashboardGateway(clock: FixedClock(fixedNow)),
             candidature: candidature,                   // T6a (annulations : T7)
@@ -69,7 +73,7 @@ public enum DemoWorld {
             justificatifs: UnwiredJustificatifStoragePort() // T7
         )
         câblerLot2(&gateways)
-        câblerLot3(&gateways)
+        câblerLot3(&gateways, profil: profilDemo)
         return gateways
     }
 
@@ -90,13 +94,13 @@ public enum DemoWorld {
     /// démo, après l'init du lot 1 (aucun troisième init). Chaque tranche y remplace son stub par sa
     /// gateway démo dans la même PR qu'au monde Supabase (`SupabaseGateways.câblerLot3`) et retire
     /// le port de `DemoWorldTests.portsEnAttenteLot3`.
-    static func câblerLot3(_ gateways: inout Gateways) {
+    static func câblerLot3(_ gateways: inout Gateways, profil: DemoProfilGateway = DemoProfilGateway()) {
         gateways.push = DemoPushGateway()                                  // T4
         gateways.notifications = DemoNotificationsGateway()                // T5
         gateways.preferences = DemoPreferencesGateway()                    // T6
         // T7 (compte, confirmation, parcours) ; T8 (brouillon, modes d'exercice, `register-soignant` simulée).
         gateways.inscription = DemoInscriptionGateway(auth: gateways.auth as? DemoAuthGateway ?? DemoAuthGateway())
-        gateways.profil = DemoProfilGateway()                              // T9
+        gateways.profil = profil                                           // T9 (même ligne que `missions.profile`, T6b)
         gateways.avatar = DemoWorld.avatar(profil: gateways.profil)       // T10 (même ligne démo que `profil`)
         gateways.geocodage = DemoGeocodage()                               // T10
         gateways.motDePasse = DemoMotDePasseGateway()                      // T11
@@ -180,12 +184,13 @@ public struct DemoMissionsGateway: MissionsPort {
     /// Lot 1, T6a (revue B8, m5) : missions ouvertes attribuées au profil fictif pendant la session
     /// (`DemoCandidatureGateway.missionsAttribuees`) : servies `ASSIGNEE` en détail, retirées d'Explorer.
     private let missionsAttribuees: @Sendable () async -> Set<String>
-    /// Profil fictif servi à la session (variante DEBUG `JOLENE_DEMO_PROFIL` comprise, T6b).
-    private let profil: SoignantProfile
+    /// Profil fictif servi à la session, relu à chaque appel (T6b : projection de la ligne démo du lot 3, variante DEBUG
+    /// `JOLENE_DEMO_PROFIL` comprise).
+    private let profil: @Sendable () async throws -> SoignantProfile
 
     public init(missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
         try DemoFixtures.loadDashboard().missionsAssignees + DemoFixtures.loadMesMissions().passees.map(\.mission)
-    }, profil: SoignantProfile = DemoWorld.context.profile,
+    }, profil: @escaping @Sendable () async throws -> SoignantProfile = { DemoWorld.context.profile },
        missionsAttribuees: @escaping @Sendable () async -> Set<String> = { [] }) {
         self.missionsAssignees = missionsAssignees
         self.profil = profil
@@ -193,7 +198,7 @@ public struct DemoMissionsGateway: MissionsPort {
     }
 
     public func profile(userId: String) async throws -> SoignantProfile? {
-        userId == DemoWorld.context.userId ? profil : nil
+        userId == DemoWorld.context.userId ? try await profil() : nil
     }
 
     public func listMissions(context: MissionReadContext, filters: MissionFilters) async throws -> [Mission] {
