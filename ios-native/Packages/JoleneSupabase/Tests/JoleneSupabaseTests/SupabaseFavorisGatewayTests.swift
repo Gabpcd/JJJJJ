@@ -16,7 +16,7 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
     private let listePath = "/rest/v1/rpc/fn_mes_favoris_etablissements"
     private let basculePath = "/rest/v1/rpc/fn_toggle_favori_etablissement"
     private let surPath = "/rest/v1/rpc/fn_etablissements_safe"
-    // Décision 21 du lot 1 (revue B8 de T4b, M2) : second magasin, celui de l'inscription progressive.
+    // Décision 8 du lot 1, amendée le 18/11/2026 (revue B8 de T4b, M2) : second magasin, celui de l'inscription progressive.
     private let parcoursPath = "/rest/v1/parcours_inscription"
     private let missionsPath = "/rest/v1/missions"
     private let retraitInscriptionPath = "/rest/v1/rpc/fn_modifier_favori_inscription"
@@ -26,7 +26,7 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
         let corps: String
         if let ids {
             let liste = ids.map { "\"\($0)\"" }.joined(separator: ",")
-            corps = #"[{"donnees":{"etape":"completer","missionsSauvegardees":[\#(liste)]}}]"#
+            corps = #"[{"missionsSauvegardees":[\#(liste)]}]"#
         } else {
             corps = "[]"
         }
@@ -84,7 +84,8 @@ final class SupabaseFavorisGatewayTests: XCTestCase {
         XCTAssertEqual(requete.query("soignant_id"), "eq.\(TestClient.userId)")
         XCTAssertEqual(requete.query("order"), "cree_le.desc.nullslast", "web : .order('cree_le', { ascending: false })")
         let parcours = try XCTUnwrap(registry.requests(to: parcoursPath).first, "second magasin toujours relu")
-        XCTAssertEqual(parcours.query("select"), "donnees")
+        XCTAssertEqual(parcours.query("select"), "missionsSauvegardees:donnees->missionsSauvegardees",
+                       "seule la clé utile du brouillon est lue, jamais tout `donnees`")
         XCTAssertEqual(parcours.query("user_id"), "eq.\(TestClient.userId)")
         XCTAssertEqual(parcours.query("limit"), "1")
         XCTAssertTrue(registry.requests(to: missionsPath).isEmpty, "aucun favori d'inscription : aucune lecture d'aperçu")
