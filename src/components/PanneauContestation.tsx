@@ -131,12 +131,12 @@ export function PanneauContestation({
       });
       if (error) throw error;
       if (litigeResult?.error) throw new Error(litigeResult.error);
-
+      // D13 (DECISIONS_LOT2 ; RGPD art. 5 §1 c et e) : journaux_audit est immuable, le motif libre n'y est jamais copié (il reste dans litiges.motif) ; longueur du motif envoyé (points de code, en chaîne) et litige, mêmes clés que le natif.
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: roleActeur,
         p_action: 'PRESENCE_CONTESTATION', p_type_ressource: 'presence',
         p_id_ressource: presenceId, p_cle_s3: null,
-        p_details: { motif: motif.trim(), mission_id: missionId, initie_par: role },
+        p_details: { motif_longueur: String([...sanitizeText(motif.trim())].length), litige_id: litigeResult?.litige_id ?? null },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
 
