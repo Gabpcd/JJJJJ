@@ -10,7 +10,7 @@ public enum SupabaseEtablissementGateways {
     public static func make(client: SupabaseClient) -> EtablissementGateways {
         EtablissementGateways(
             session: SupabaseEtabSessionGateway(client: client),
-            dashboard: UnwiredEtabDashboardPort(),        // T4
+            dashboard: SupabaseEtabDashboardGateway(client: client), // T4
             missions: UnwiredEtabMissionsPort(),          // T5
             candidatures: UnwiredEtabCandidaturesPort(),  // T6
             pointage: UnwiredEtabPointagePort(),          // T7

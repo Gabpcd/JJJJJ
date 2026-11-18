@@ -49,7 +49,7 @@ public enum DemoEtablissementWorld {
                                 identite: @escaping @Sendable () async -> String?) -> EtablissementGateways {
         EtablissementGateways(
             session: DemoEtabSessionGateway(configuration: configuration, identite: identite),
-            dashboard: UnwiredEtabDashboardPort(),        // T4
+            dashboard: DemoEtabDashboardGateway(),        // T4
             missions: UnwiredEtabMissionsPort(),          // T5
             candidatures: UnwiredEtabCandidaturesPort(),  // T6
             pointage: UnwiredEtabPointagePort(),          // T7

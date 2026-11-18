@@ -59,6 +59,7 @@
 		539F98A1CDDE1B4A50A5520A /* EtabAccueilRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB037B6DC9373563FA2BE58E /* EtabAccueilRoot.swift */; };
 		55081F4F43971CF1AF949846 /* ResumePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F564268833C084BE055A9D3 /* ResumePolicy.swift */; };
 		569D0A50E8E40A9BD2C2AEE2 /* DemoContestationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04CA57C9521E949A293EC81B /* DemoContestationTests.swift */; };
+		56B205A2BDCBD1414E3E22A2 /* EtabAccueilScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C95A8207C47813BEFB7A091 /* EtabAccueilScreen.swift */; };
 		57EB1E7C965A1080346E62E0 /* ConsentementGpsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 609E02934A0709463B2930B2 /* ConsentementGpsSheet.swift */; };
 		590ACEABB2CA11949CFDC137 /* DemoRevenusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE59294CC622F36A3F8C949 /* DemoRevenusTests.swift */; };
 		597A15CFF0510976EC042D4A /* QuickLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75863F7AF6F7B4939160AE90 /* QuickLookView.swift */; };
@@ -68,6 +69,7 @@
 		5E46487082E601A0075BF63C /* CrashReporting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705899DA6E3B27D41139A5A3 /* CrashReporting.swift */; };
 		618DCEFB2E7DF8FD3AC1FF28 /* BlocPointageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC682D167D3736C3877FC191 /* BlocPointageView.swift */; };
 		634E2F09A431203F99161794 /* SuppressionCompteScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D38838D39EB705DD25FE585 /* SuppressionCompteScreen.swift */; };
+		69C302538E906B38743E4734 /* DemoEtabAccueilTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53752834705D94DFD957860D /* DemoEtabAccueilTests.swift */; };
 		6A2FA992EC44B425AB4036F2 /* AccueilLignes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C1F510DF2473734BC92D4D /* AccueilLignes.swift */; };
 		6AA522B07A66D8B2627EE45E /* StripeConnectScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB607B818EDB33896E655605 /* StripeConnectScreen.swift */; };
 		6AD94C7C2C0E66A224827616 /* PointageCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F45DE21AF53796F64DB403 /* PointageCodeView.swift */; };
@@ -216,8 +218,10 @@
 		405F092111FF9950EBBC1D2B /* PreferencesScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesScreen.swift; sourceTree = "<group>"; };
 		40F45DE21AF53796F64DB403 /* PointageCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointageCodeView.swift; sourceTree = "<group>"; };
 		41D47AC775A9BD1F3BA87C34 /* JoleneUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = JoleneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4C95A8207C47813BEFB7A091 /* EtabAccueilScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EtabAccueilScreen.swift; sourceTree = "<group>"; };
 		4D6A37369D110A146F3E4CAF /* ContratReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContratReaderView.swift; sourceTree = "<group>"; };
 		4DDC6420C51347BB07F1FE2A /* DemoQRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoQRScannerView.swift; sourceTree = "<group>"; };
+		53752834705D94DFD957860D /* DemoEtabAccueilTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoEtabAccueilTests.swift; sourceTree = "<group>"; };
 		54FD5A2A491C046BB3B80DAC /* DemoExplorerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoExplorerTests.swift; sourceTree = "<group>"; };
 		571DC69677D4A6FCD64E00CA /* TeleversementSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeleversementSheet.swift; sourceTree = "<group>"; };
 		57522BC17747DB1695651ECD /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
@@ -571,6 +575,7 @@
 			isa = PBXGroup;
 			children = (
 				BB037B6DC9373563FA2BE58E /* EtabAccueilRoot.swift */,
+				4C95A8207C47813BEFB7A091 /* EtabAccueilScreen.swift */,
 			);
 			path = Accueil;
 			sourceTree = "<group>";
@@ -699,6 +704,7 @@
 				04CA57C9521E949A293EC81B /* DemoContestationTests.swift */,
 				58E44CB4507BB6F0010EAE04 /* DemoContratsTests.swift */,
 				79F35431F3E15876E9570306 /* DemoDocumentsTests.swift */,
+				53752834705D94DFD957860D /* DemoEtabAccueilTests.swift */,
 				CC8EAC8C6EA29C51BFB9C6AF /* DemoEtabLiensTests.swift */,
 				DD5F969B97A2D9B96C614046 /* DemoEtabSessionTests.swift */,
 				54FD5A2A491C046BB3B80DAC /* DemoExplorerTests.swift */,
@@ -878,6 +884,7 @@
 				E6280C8222492A9DC631F47D /* EspaceSoignantSection.swift in Sources */,
 				483D1900C7F71DE26E9F2116 /* EtabAccesRefuseScreen.swift in Sources */,
 				539F98A1CDDE1B4A50A5520A /* EtabAccueilRoot.swift in Sources */,
+				56B205A2BDCBD1414E3E22A2 /* EtabAccueilScreen.swift in Sources */,
 				02B61E0DD243CB739CE8AB51 /* EtabCompteRoot.swift in Sources */,
 				EEAEB441327190A692E25825 /* EtabDestinations.swift in Sources */,
 				1A4A68BE9DE0383CA78CFEB1 /* EtabFeatureFlags.swift in Sources */,
@@ -963,6 +970,7 @@
 				569D0A50E8E40A9BD2C2AEE2 /* DemoContestationTests.swift in Sources */,
 				73A10EC601A7C8B4CEFF8D30 /* DemoContratsTests.swift in Sources */,
 				8F36BAC7C752737B387653F5 /* DemoDocumentsTests.swift in Sources */,
+				69C302538E906B38743E4734 /* DemoEtabAccueilTests.swift in Sources */,
 				06A46CBD8144AE2B0FC62F6D /* DemoEtabLiensTests.swift in Sources */,
 				B0613EF56E48A98C317BDEC0 /* DemoEtabSessionTests.swift in Sources */,
 				F06D11FE9236C6488B87AE69 /* DemoExplorerTests.swift in Sources */,

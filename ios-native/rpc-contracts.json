@@ -2589,7 +2589,7 @@
     },
     {
       "name": "fn_stats_dashboard_etablissement",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": {
         "args": "never",

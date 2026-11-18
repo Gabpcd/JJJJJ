@@ -777,6 +777,65 @@ export function buildDemoEtabPermissions(schemaSource = readFileSync(join(ROOT, 
   };
 }
 
+/**
+ * Accueil établissement démo (lot 5, T4 ; LOT5_PLAN §2.10) : `stats` = corps exact de
+ * `fn_stats_dashboard_etablissement` (18 clés lues dans le dump, montants à 0, aucun nom de soignant : listes
+ * vides), 3 candidatures en attente, 2 messages non lus, 1 litige ouvert ; `missions` et `creneaux` = lectures
+ * PostgREST du planning à venir (`missions` OUVERTE/ASSIGNEE/EN_COURS, `mission_creneaux` PREVISIONNEL hors pause),
+ * avec une nuit en cours à l'horloge fixée, une mission en cours, une mission ouverte de trois jours et une
+ * mission au planning incomplet (deux créneaux attendus, un seul enregistré).
+ */
+export function buildDemoEtabDashboard(schemaSource = readFileSync(join(ROOT, SOURCES.schema), 'utf8'), now = new Date(FIXED_NOW)) {
+  const corps = corpsStatsDashboardEtablissement(schemaSource);
+  const valeurs = {
+    a_deja_publie: true, total_missions: 6, missions_ouvertes: 2, missions_assignees: 1, missions_en_cours: 1,
+    missions_terminees: 2, missions_terminees_ce_mois: 0, soignants_ce_mois: 2, commissions_cumulees: 0,
+    commissions_impayees: 0, nb_factures_impayees: 0, pool_urgence_count: 0, messages_non_lus: 2, missions_a_payer: 0,
+    litiges_ouverts: 1, candidatures_en_attente: 3, candidatures_recentes: [], missions_assignees_detail: [],
+  };
+  const cles = [...corps.matchAll(/^\s{8}'([a-z_]+)',/gm)].map((m) => m[1]);
+  if (cles.length !== 18 || cles.some((cle) => !(cle in valeurs)) || Object.keys(valeurs).length !== cles.length) {
+    throw new Error(`fn_stats_dashboard_etablissement : clés du dump inattendues (${cles.join(', ')})`);
+  }
+  const stats = Object.fromEntries(cles.map((cle) => [cle, valeurs[cle]]));
+  const iso = (jours, heure) => instantDemo(now, jours, heure).toISOString();
+  const mission = (id, intitule, statut, debut, fin, nbCreneaux) => ({
+    id, intitule, statut, debut_le: debut, fin_le: fin, nb_creneaux: nbCreneaux,
+  });
+  const creneau = (id, missionId, debut, fin) => ({
+    id, mission_id: missionId, debut, fin, est_pause: false, type_creneau: 'PREVISIONNEL',
+  });
+  return {
+    fixed_now: now.toISOString(),
+    source: `${SOURCES.schema} — fn_stats_dashboard_etablissement`,
+    stats,
+    missions: [
+      mission('demo-etab-mission-nuit', 'Démonstration · Nuit en médecine', 'ASSIGNEE', iso(-1, 23), iso(0, 7), 1),
+      mission('demo-etab-mission-en-cours', 'Démonstration · Mission en cours', 'EN_COURS', iso(-2, 6), iso(1, 14), 3),
+      mission('demo-etab-mission-ouverte', 'Démonstration · Soins de suite', 'OUVERTE', iso(1, 6), iso(3, 18), 3),
+      mission('demo-etab-mission-incomplete', 'Démonstration · Planning à confirmer', 'OUVERTE', iso(5, 6), iso(6, 14), 2),
+    ],
+    creneaux: [
+      creneau('demo-etab-creneau-nuit', 'demo-etab-mission-nuit', iso(-1, 23), iso(0, 7)),
+      creneau('demo-etab-creneau-en-cours-1', 'demo-etab-mission-en-cours', iso(-2, 6), iso(-2, 14)),
+      creneau('demo-etab-creneau-en-cours-2', 'demo-etab-mission-en-cours', iso(0, 6), iso(0, 14)),
+      creneau('demo-etab-creneau-en-cours-3', 'demo-etab-mission-en-cours', iso(1, 6), iso(1, 14)),
+      creneau('demo-etab-creneau-ouverte-1', 'demo-etab-mission-ouverte', iso(1, 6), iso(1, 18)),
+      creneau('demo-etab-creneau-ouverte-2', 'demo-etab-mission-ouverte', iso(2, 6), iso(2, 18)),
+      creneau('demo-etab-creneau-ouverte-3', 'demo-etab-mission-ouverte', iso(3, 6), iso(3, 18)),
+      creneau('demo-etab-creneau-incomplete-1', 'demo-etab-mission-incomplete', iso(5, 6), iso(5, 14)),
+    ],
+  };
+}
+
+/** Corps SQL de `fn_stats_dashboard_etablissement` dans le dump, à partir de son `jsonb_build_object` final. */
+function corpsStatsDashboardEtablissement(schemaSource) {
+  const debut = schemaSource.indexOf('CREATE OR REPLACE FUNCTION "public"."fn_stats_dashboard_etablissement"()');
+  if (debut < 0) throw new Error('fn_stats_dashboard_etablissement absente du dump');
+  const fin = schemaSource.indexOf('$$;', debut);
+  const corps = schemaSource.slice(debut, fin);
+  return corps.slice(corps.indexOf('SELECT jsonb_build_object('));
+}
 
 /**
  * Profil complet démo (lot 3, T9) : réponse de `fn_mon_profil_soignant_complet` (colonnes du dump
@@ -1156,6 +1215,7 @@ export async function buildFixtures() {
     'demo-paiements-declares.json': buildDemoPaiementsDeclares(), // lot 3, T13
     'demo-etablissement.json': buildDemoEtablissement(),
     'demo-etab-permissions.json': buildDemoEtabPermissions(),
+    'demo-etab-dashboard.json': buildDemoEtabDashboard(), // lot 5, T4
     'demo-favoris.json': buildDemoFavoris(), // lot 1, T4b
     'demo-mes-missions.json': buildDemoMesMissions(), // lot 1, T5
   };

@@ -266,7 +266,7 @@ export function verifierExclusions(suivies) {
 export const RPC_SUIVIES_ETABLISSEMENT = [
   { name: 'fn_mes_permissions_etab', statut: 'consommee', lot: 5 }, // T1 : SupabaseEtabSessionGateway.permissions
   { name: 'fn_mon_etablissement_complet', statut: 'consommee', lot: 5 }, // T1 : SupabaseEtabSessionGateway.profil
-  { name: 'fn_stats_dashboard_etablissement', statut: 'a_venir', lot: 5 },
+  { name: 'fn_stats_dashboard_etablissement', statut: 'consommee', lot: 5 }, // T4 : SupabaseEtabDashboardGateway.stats
   { name: 'fn_soignant_pour_etablissement', statut: 'a_venir', lot: 5 },
   { name: 'fn_lire_candidatures_mission_habilitee', statut: 'a_venir', lot: 5 },
   { name: 'fn_traiter_candidature_planning_v1', statut: 'a_venir', lot: 5 },

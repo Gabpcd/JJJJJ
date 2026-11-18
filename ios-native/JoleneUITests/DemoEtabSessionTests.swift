@@ -7,7 +7,7 @@ import XCTest
 /// iPad paysage (`JOLENE_UI_ORIENTATION`, helpers de `UITestSupport.swift`). Aucune requête réseau. Éclat
 /// « lot3-profil-photo » de `ios-swift-ci.yml` (revue B8 de #1147, m5 : hors du socle).
 ///
-/// Identifiants : `tab-etab-{accueil|missions|presences|messages|compte}`, `placeholder-etab-*`,
+/// Identifiants : `tab-etab-{accueil|missions|presences|messages|compte}`, `etab-accueil-screen` (T4), `placeholder-etab-*`,
 /// `etab-missions-publier`, `etab-renvoi-web` (+ `-message`, `-ouvrir`), `etab-compte-list`,
 /// `etab-compte-{nom|role|email}`, `logout-button`, `network-sentinel`. Les écrans provisoires
 /// (`placeholder-etab-*`) sont remplacés par la tranche de leur domaine, qui migre ces assertions.
@@ -24,7 +24,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         launchDemo(extraArguments: espaceEtablissement)
         connecter(email: Self.emailEtablissement)
         XCTAssertEqual(tabLabels, Self.ongletsEtablissement, "barre d'onglets de l'espace établissement (D13)")
-        require("L'Accueil établissement est affiché") { self.containerVisible(self.element("placeholder-etab-accueil")) }
+        require("L'Accueil établissement est affiché") { self.containerVisible(self.element("etab-accueil-screen")) }
         XCTAssertFalse(element("tab-accueil").exists, "aucun onglet soignant dans l'espace établissement")
         record("\(proofPrefix)-etab-accueil")
 
@@ -85,7 +85,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         XCTAssertEqual(ouvrir.value as? String, "https://jolene.app/etablissement/presences", "URL du renvoi routée")
         record("\(proofPrefix)-etab-renvoi-presences")
 
-        ouvrirOnglet("tab-etab-accueil", label: "Accueil", contenu: "placeholder-etab-accueil")
+        ouvrirOnglet("tab-etab-accueil", label: "Accueil", contenu: "etab-accueil-screen")
         XCTAssertFalse(element("etab-renvoi-web").exists, "seul l'onglet coupé est renvoyé au web")
     }
 
@@ -103,7 +103,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         connecter(email: Self.demoEmail)
         XCTAssertEqual(tabLabels, Self.ongletsSoignant, "nouvelle identité, nouvel espace : onglets soignant")
         XCTAssertFalse(element("tab-etab-accueil").exists)
-        XCTAssertFalse(element("placeholder-etab-accueil").exists, "aucun écran établissement conservé (epoch)")
+        XCTAssertFalse(element("etab-accueil-screen").exists, "aucun écran établissement conservé (epoch)")
         record("\(proofPrefix)-etab-puis-soignant")
     }
 
