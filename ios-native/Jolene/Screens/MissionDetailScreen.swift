@@ -64,9 +64,13 @@ struct MissionDetailScreen: View {
                     .accessibilityIdentifier("mission-detail-title")
                 Spacer(minLength: JoleneSpacing.sm)
                 if mission.record.estUrgente { JoleneBadge("Urgente", tone: .warning) }
-                if let favoris { BoutonFavoriMission(favoris: favoris, missionId: mission.id) }
+                if let favoris { BoutonFavoriMission(favoris: favoris, missionId: mission.id, contexte: .detail(missionId: mission.id)) }
             }
-            if let favoris { AvisFavoris(favoris: favoris, identifier: "favoris-action-erreur") }
+            if let favoris {
+                AvisFavoris(favoris: favoris, contexte: .detail(missionId: mission.id), identifier: "mission-detail-favoris-erreur")
+                AvisLectureEtoiles(favoris: favoris, session: session, contexte: .detail(missionId: mission.id),
+                                   identifier: "mission-detail-favoris-lecture")
+            }
             card {
                 detailRow("Établissement", value: mission.etablissement?.nom ?? "Établissement", identifier: "mission-detail-etablissement")
                 if let lieu = lieu(mission) { detailRow("Adresse", value: lieu, identifier: "mission-detail-lieu") }

@@ -34,10 +34,11 @@ struct MesFavorisScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: JoleneSpacing.xl) {
                 if aRetirer == nil {
-                    AvisFavoris(favoris: favoris, identifier: "favoris-action-erreur")
+                    AvisFavoris(favoris: favoris, contexte: .ecran, identifier: "favoris-action-erreur")
                 }
                 if favoris.sessionExpired {
-                    JoleneButton("Vérifier ma session", style: .secondary) { Task { await session.start() } }
+                    // M1 : revalide puis relit ; une session encore valide lève l'état « à vérifier ».
+                    JoleneButton("Vérifier ma session", style: .secondary) { Task { await favoris.verifierSession(session) } }
                         .accessibilityIdentifier("favoris-session-check")
                 }
                 sectionMissions
@@ -56,7 +57,7 @@ struct MesFavorisScreen: View {
         .task { await favoris.charger() }
         .confirmationSheet(isPresented: retraitPresente, configurationRetrait, isLoading: retraitEnCours,
                            onConfirm: confirmerRetrait) {
-            AvisFavoris(favoris: favoris, identifier: "favori-etab-retrait-erreur")
+            AvisFavoris(favoris: favoris, contexte: .ecran, identifier: "favori-etab-retrait-erreur")
         }
     }
 

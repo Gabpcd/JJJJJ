@@ -121,6 +121,28 @@ final class DemoFavorisTests: JoleneUITestCase {
         verifierAucuneRequete()
     }
 
+    /// Revue B8 de T4b, m2 : lien universel `/soignant/mes-favoris` reçu au lancement (`-JOLENE_OPEN_URL`, avant la
+    /// connexion, comme `DemoLiensLot3Tests`), rejoué après `.ready` : « Mes favoris » empilé sur Explorer remis à sa
+    /// racine (`CibleNotification.favoris`, `FavorisRoute`), alors que l'onglet n'a jamais été affiché (destination
+    /// déclarée sur la racine d'Explorer) ; jamais un renvoi web. Retour : la liste d'Explorer.
+    func testLienUniverselOuvreMesFavoris() throws {
+        launchDemo(extraArguments: ["-JOLENE_OPEN_URL", "https://jolene.app/soignant/mes-favoris"])
+        seConnecter()
+        require("« Mes favoris » est ouvert après `.ready`", timeout: 30) {
+            self.containerVisible(self.element("favoris-screen")) && self.element("favori-etab-demo-etab-2").exists
+        }
+        XCTAssertEqual(element("deeplink-route").label, "favoris", "route présentée par le coordinateur des liens")
+        XCTAssertFalse(element("renvoi-web-demo").exists, "écran natif livré (L1-T4b) : jamais un renvoi web")
+        record("\(proofPrefix)-favoris-lien-universel")
+
+        let back = app.navigationBars.buttons.firstMatch
+        require("Le bouton retour est disponible") { self.visible(back) }
+        back.tap()
+        attendreCompteur(Attendus.total, timeout: 30)
+        XCTAssertFalse(element("favoris-screen").exists, "retour à la racine d'Explorer")
+        verifierAucuneRequete()
+    }
+
     // MARK: Étapes
 
     /// Conteneur de défilement : la `ScrollView` portant l'identifiant, sinon la première correspondance.
@@ -132,6 +154,13 @@ final class DemoFavorisTests: JoleneUITestCase {
     /// Connexion démo puis onglet Explorer à 30 missions.
     private func ouvrirExplorer() {
         launchDemo()
+        seConnecter()
+        tabButton("tab-explorer", label: "Explorer").tap()
+        attendreCompteur(Attendus.total, timeout: 30)
+    }
+
+    /// Connexion démo jusqu'à la barre d'onglets.
+    private func seConnecter() {
         let scroll = element("login-scroll")
         require("L'écran de connexion est affiché") { self.visible(scroll) }
         let email = element("login-email")
@@ -146,9 +175,6 @@ final class DemoFavorisTests: JoleneUITestCase {
         require("Le bouton de connexion est activé") { submit.isEnabled }
         if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
         toucherSeConnecter(submit, "La session est prête : la barre d'onglets est affichée") { self.tabBarExists }
-
-        tabButton("tab-explorer", label: "Explorer").tap()
-        attendreCompteur(Attendus.total, timeout: 30)
     }
 
     private func ouvrirFavoris() {

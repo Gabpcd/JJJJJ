@@ -189,4 +189,61 @@ final class FavorisReglesTests: XCTestCase {
         XCTAssertEqual(apercu.statut, "OUVERTE")
         XCTAssertEqual(apercu.horaires, mission.record.horaires)
     }
+
+    // MARK: - Favoris de l'inscription progressive (décision 8 du lot 1 amendée le 18/11/2026, revue B8 de T4b, M2)
+
+    func testIdsDeLInscriptionChainesSeulementSansDoublon() throws {
+        let donnees = try decode(ValeurJSON.self, #"{"missionsSauvegardees":["m-1",2,"m-2","m-1",null,"",{"id":"m-3"}],"autre":true}"#)
+        XCTAssertEqual(FavorisRegles.idsInscription(donnees), ["m-1", "m-2"], "web : typeof id === 'string'")
+        XCTAssertEqual(FavorisRegles.idsInscription(try decode(ValeurJSON.self, #"{"missionsSauvegardees":"m-1"}"#)), [])
+        XCTAssertEqual(FavorisRegles.idsInscription(try decode(ValeurJSON.self, "{}")), [])
+        XCTAssertEqual(FavorisRegles.idsInscription(nil), [], "aucun parcours : aucun favori d'inscription")
+    }
+
+    /// `MesFavorisSoignant.tsx` l.43-53 : `new Map([...favorisInscription, ...ms])` — favoris de l'inscription d'abord
+    /// (début croissant, ordre de `fn_explorer_missions_inscription`), puis la table (ordre serveur) ; un doublon garde
+    /// la place de l'inscription et la ligne de la table.
+    func testFusionDesDeuxMagasinsSansDoublonDansLOrdreDuWeb() {
+        let table = [
+            ligne("m-table-recente", apercu("m-table-recente")),
+            ligne("m-commune", nil),
+            ligne("m-table-ancienne", apercu("m-table-ancienne")),
+        ]
+        let apercus = [
+            "m-insc-tard": apercu("m-insc-tard", debut: "2026-11-20T07:00:00.000Z"),
+            "m-insc-tot": apercu("m-insc-tot", debut: "2026-11-05T07:00:00.000Z"),
+            "m-commune": apercu("m-commune", debut: "2026-11-12T07:00:00.000Z"),
+        ]
+        let fusion = FavorisRegles.fusion(sauvegardees: table, inscription: ["m-insc-tard", "m-illisible", "m-commune", "m-insc-tot"],
+                                          apercus: apercus)
+
+        XCTAssertEqual(fusion.map(\.missionId),
+                       ["m-insc-tot", "m-commune", "m-insc-tard", "m-illisible", "m-table-recente", "m-table-ancienne"])
+        let commune = fusion[1]
+        XCTAssertEqual(commune.id, "s-m-commune", "ligne de la table (identifiant, date)")
+        XCTAssertEqual(commune.mission?.id, "m-commune", "aperçu relu quand la jointure de la table est masquée")
+        XCTAssertEqual(fusion[0].id, FavorisRegles.prefixeLigneInscription + "m-insc-tot")
+        XCTAssertNil(fusion[0].creeLe)
+        XCTAssertNil(fusion[3].mission, "favori d'inscription illisible : étoile allumée, jamais listé")
+        XCTAssertTrue(FavorisRegles.estSauvegardee("m-illisible", dans: fusion), "web : l'étoile lit les identifiants")
+        XCTAssertEqual(Set(fusion.map(\.missionId)).count, fusion.count, "aucun doublon")
+        XCTAssertEqual(FavorisRegles.missionsAffichees(fusion, maintenant: maintenant).map(\.missionId),
+                       ["m-insc-tot", "m-commune", "m-insc-tard", "m-table-recente", "m-table-ancienne"])
+    }
+
+    func testFusionSansFavoriDInscriptionRendLaTableTelleQuelle() {
+        let table = [ligne("m-1", apercu("m-1")), ligne("m-2", nil)]
+        XCTAssertEqual(FavorisRegles.fusion(sauvegardees: table, inscription: [], apercus: [:]), table)
+    }
+
+    // MARK: - Étoile non relue (revue B8 de T4b, m3)
+
+    func testEtoileInconnueNeDitJamaisNonSauvegardee() {
+        XCTAssertEqual(FavorisPresentation.valeurEtoile(.inconnue), "État inconnu")
+        XCTAssertEqual(FavorisPresentation.valeurEtoile(.sauvegardee), "Sauvegardée")
+        XCTAssertEqual(FavorisPresentation.valeurEtoile(.nonSauvegardee), "Non sauvegardée")
+        XCTAssertEqual(FavorisPresentation.libelleEtoile(.inconnue), FavorisPresentation.libelleEtoileInconnue)
+        XCTAssertEqual(FavorisPresentation.libelleEtoile(.sauvegardee), "Retirer de mes missions sauvegardées")
+        XCTAssertEqual(FavorisPresentation.libelleEtoile(.nonSauvegardee), "Sauvegarder cette mission")
+    }
 }
