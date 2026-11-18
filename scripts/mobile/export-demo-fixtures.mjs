@@ -22,6 +22,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { matricePermissionsEtablissement, SOURCES } from './check-rpc-contracts.mjs';
+import { fixturesLot4 } from './demo-fixtures/lot4.mjs';
 
 export const FIXED_NOW = '2026-11-02T00:00:00.000Z';
 export const MISSION_COUNT = 30;
@@ -1136,7 +1137,7 @@ export function buildDemoMesMissions(now = new Date(FIXED_NOW), missions = build
 
 export async function buildFixtures() {
   const contrats = buildDemoContrats(await chargerMoteurContrat());
-  return {
+  const fixtures = {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
     'demo-etablissements.json': { fixed_now: FIXED_NOW, etablissements: DEMO_ETABLISSEMENTS },
     'demo-profile.json': { fixed_now: FIXED_NOW, ...DEMO_PROFILE },
@@ -1159,6 +1160,8 @@ export async function buildFixtures() {
     'demo-favoris.json': buildDemoFavoris(), // lot 1, T4b
     'demo-mes-missions.json': buildDemoMesMissions(), // lot 1, T5
   };
+  // Lot 4 (L4-T1c) : un module par domaine (scripts/mobile/demo-fixtures/), aucun fichier d'un lot antérieur réécrit.
+  return { ...fixtures, ...fixturesLot4({ now: new Date(FIXED_NOW) }, fixtures) };
 }
 
 /** JSON indenté, ou texte brut tel quel pour un original de contrat (`{ brut }`, octets hachés). */
