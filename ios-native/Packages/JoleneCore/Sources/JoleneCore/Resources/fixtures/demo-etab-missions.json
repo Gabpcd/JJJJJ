@@ -303,36 +303,48 @@
     {
       "id": "demo-etab-m01-cand-1",
       "mission_id": "demo-etab-m01",
+      "soignant_id": "demo-soignant",
+      "message": "Disponible sur l’ensemble du créneau, message fictif de démonstration.",
       "statut": "EN_ATTENTE",
       "cree_le": "2026-10-31T18:00:00.000Z"
     },
     {
       "id": "demo-etab-m01-cand-2",
       "mission_id": "demo-etab-m01",
+      "soignant_id": "demo-soignant-etab-2",
+      "message": null,
       "statut": "EN_ATTENTE",
       "cree_le": "2026-11-01T04:00:00.000Z"
     },
     {
       "id": "demo-etab-m01-cand-3",
       "mission_id": "demo-etab-m01",
+      "soignant_id": "demo-soignant-etab-3",
+      "message": null,
       "statut": "EN_ATTENTE",
       "cree_le": "2026-11-01T19:00:00.000Z"
     },
     {
       "id": "demo-etab-m03-cand-1",
       "mission_id": "demo-etab-m03",
+      "soignant_id": "demo-soignant-etab-2",
+      "message": null,
       "statut": "EN_ATTENTE",
       "cree_le": "2026-11-01T12:00:00.000Z"
     },
     {
       "id": "demo-etab-m09-cand-1",
       "mission_id": "demo-etab-m09",
+      "soignant_id": "demo-soignant",
+      "message": null,
       "statut": "EN_ATTENTE",
       "cree_le": "2026-11-01T15:00:00.000Z"
     },
     {
       "id": "demo-etab-m10-cand-1",
       "mission_id": "demo-etab-m10",
+      "soignant_id": "demo-soignant-etab-2",
+      "message": null,
       "statut": "EN_ATTENTE",
       "cree_le": "2026-11-01T20:00:00.000Z"
     }
@@ -359,6 +371,52 @@
       "numero_rpps": null,
       "score_fiabilite": 74,
       "total_missions_terminees": 6
+    },
+    {
+      "id": "demo-soignant-etab-3",
+      "prenom": "Lou",
+      "nom": "Exemple",
+      "nom_anonymise": false,
+      "profession": "AS",
+      "telephone": null,
+      "numero_rpps": null,
+      "score_fiabilite": null,
+      "total_missions_terminees": 0
+    }
+  ],
+  "candidats": [
+    {
+      "id": "demo-soignant",
+      "prenom": "Camille",
+      "nom": "D.",
+      "nom_anonymise": true,
+      "profession": "IDE",
+      "est_etudiant": false,
+      "score_fiabilite": null,
+      "total_missions_terminees": 1,
+      "tous_documents_valides": true
+    },
+    {
+      "id": "demo-soignant-etab-2",
+      "prenom": "Alex",
+      "nom": "F.",
+      "nom_anonymise": true,
+      "profession": "AS",
+      "est_etudiant": false,
+      "score_fiabilite": 74,
+      "total_missions_terminees": 6,
+      "tous_documents_valides": true
+    },
+    {
+      "id": "demo-soignant-etab-3",
+      "prenom": "Lou",
+      "nom": "E.",
+      "nom_anonymise": true,
+      "profession": "AS",
+      "est_etudiant": true,
+      "score_fiabilite": null,
+      "total_missions_terminees": 0,
+      "tous_documents_valides": false
     }
   ]
 }

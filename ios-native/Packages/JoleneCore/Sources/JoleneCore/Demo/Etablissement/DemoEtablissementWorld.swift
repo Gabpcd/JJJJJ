@@ -22,9 +22,11 @@ public enum DemoEtablissementWorld {
         public var legacy: Bool
         /// Établissement bloqué automatiquement (`bloque_auto_le` posé).
         public var blocage: Bool
+        /// Première acceptation répondue `PLANNING_MODIFIE_RECONFIRMER` (`-JOLENE_DEMO_PLANNING_MODIFIE 1`, T6).
+        public var planningModifie: Bool
 
-        public init(role: RoleEtab = .proprietaire, legacy: Bool = false, blocage: Bool = false) {
-            self.role = role; self.legacy = legacy; self.blocage = blocage
+        public init(role: RoleEtab = .proprietaire, legacy: Bool = false, blocage: Bool = false, planningModifie: Bool = false) {
+            self.role = role; self.legacy = legacy; self.blocage = blocage; self.planningModifie = planningModifie
         }
 
         /// Rôle servi par le serveur : un compte legacy est toujours propriétaire
@@ -47,11 +49,13 @@ public enum DemoEtablissementWorld {
     /// (`DemoWorldTests.portsEnAttenteLot5`).
     public static func gateways(configuration: Configuration = Configuration(),
                                 identite: @escaping @Sendable () async -> String?) -> EtablissementGateways {
-        EtablissementGateways(
+        // T6 : décisions de la session partagées par les missions et les candidatures (une seule source relue).
+        let decisions = DemoEtabEtatCandidatures(planningModifie: configuration.planningModifie)
+        return EtablissementGateways(
             session: DemoEtabSessionGateway(configuration: configuration, identite: identite),
             dashboard: UnwiredEtabDashboardPort(),        // T4
-            missions: DemoEtabMissionsGateway(),          // T5
-            candidatures: UnwiredEtabCandidaturesPort(),  // T6
+            missions: DemoEtabMissionsGateway(etat: decisions), // T5
+            candidatures: DemoEtabCandidaturesGateway(etat: decisions), // T6
             pointage: UnwiredEtabPointagePort(),          // T7
             presences: UnwiredEtabPresencesPort(),        // T8
             publication: UnwiredEtabPublicationPort(),    // T9

@@ -2649,7 +2649,7 @@
     },
     {
       "name": "fn_lire_candidatures_mission_habilitee",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": {
         "args": "{ p_mission_id: string }",
@@ -2679,7 +2679,7 @@
     },
     {
       "name": "fn_traiter_candidature_planning_v1",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": null,
       "sql": [

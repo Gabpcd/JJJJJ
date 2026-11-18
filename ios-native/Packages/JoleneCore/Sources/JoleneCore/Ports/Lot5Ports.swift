@@ -37,6 +37,7 @@ public protocol EtabMissionsPort: Sendable {
 
 /// Candidatures : lecture habilitée, acceptation (périmètre D25), refus — T6.
 public protocol EtabCandidaturesPort: Sendable {
+    /// Refus de droit (42501 de la liste blanche) : lève `RefusAccesEtablissement`, jamais une erreur de session (T6).
     func lecture(missionId: String, context: EtablissementReadContext) async throws -> LectureCandidaturesHabilitee
     /// `creneauxConfirmes` : chaînes `debut`/`fin` relues telles quelles (D26, voie `lus`), jamais `pourAction`.
     func accepter(candidatureId: String, creneauxConfirmes: [CreneauConfirmePayload],

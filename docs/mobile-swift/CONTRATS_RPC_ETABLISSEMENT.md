@@ -46,8 +46,8 @@ Règles de l'espace établissement (`LOT5_PLAN.md` §2.2-§2.8) :
 | `fn_mon_etablissement_complet` | consommée (T1) | 5 (T1, T2, T12) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | aucune |
 | `fn_stats_dashboard_etablissement` | à venir | 5 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | aucune |
 | `fn_soignant_pour_etablissement` | consommée (T5) | 5 (T5) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | aucune |
-| `fn_lire_candidatures_mission_habilitee` | à venir | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée | `42501` |
-| `fn_traiter_candidature_planning_v1` | à venir | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente | `P0001` ×3, `42501` ×3 (RBAC) |
+| `fn_lire_candidatures_mission_habilitee` | consommée (T6) | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée | `42501` |
+| `fn_traiter_candidature_planning_v1` | consommée (T6) | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente | `P0001` ×3, `42501` ×3 (RBAC) |
 | `fn_contrat_signe_pour_pointage` | à venir | 5 (T7) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | absente | `42501` |
 | `fn_valider_presence` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501`, `23503`, `P0001` ×4 |
 | `fn_valider_presences_lot` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501`, `23503`, `P0001` ×4 |
@@ -216,7 +216,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_soignant_pour_etablissement"("p_soignant
 
 ## fn_lire_candidatures_mission_habilitee
 
-- **Statut natif** : à venir (lot 5, T6).
+- **Statut natif** : consommée (lot 5, T6 : `SupabaseEtabCandidaturesGateway.lecture`, uuid canonique exigé avant
+  réseau ; mission relue comparée à la demande et à l'établissement confirmé ; 42501 de la liste blanche →
+  `RefusAccesEtablissement`, jamais « session expirée » ; décodage tolérant
+  `LectureCandidaturesHabilitee+Decodage.swift`, jamais `note_moyenne`, `nb_evaluations`, `internat`, `type_exercice`,
+  `etudiant_details`, `specialite_medicale`).
 - **Usage** : lecture habilitée des candidatures d'une mission (un appel, cohorte TEST filtrée, adhésion
   vérifiée, noms à l'initiale) ; écart assumé et plus strict que le web monté (`DetailMission.tsx` →
   `ListeCandidatures` en PostgREST, correction 15), consigné dans `PARITE_ETABLISSEMENT.md`.
@@ -247,7 +251,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_lire_candidatures_mission_habilitee"("p_
 
 ## fn_traiter_candidature_planning_v1
 
-- **Statut natif** : à venir (lot 5, T6 ; hors B9 sous condition D25).
+- **Statut natif** : consommée (lot 5, T6 : `SupabaseEtabCandidaturesGateway.accepter` / `.refuser` ; hors B9 sous
+  condition D25). Avant toute acceptation, la candidature puis sa mission (`id, etablissement_id,
+  type_contrat_recherche, profession_requise`, établissement confirmé) sont relues sous RLS : hors `SALARIE` ou
+  `MEDECIN` → `.renvoiWeb`, aucun appel RPC ; ligne illisible → aucun envoi (fail-closed). Issue jamais tenue pour
+  confirmée : `CandidaturesEtabModel` relit la lecture habilitée (`ACCEPTEE` + `ASSIGNEE`, ou `REFUSEE`).
 - **Usage** : acceptation (missions `SALARIE` hors `MEDECIN` seulement, refus local avant réseau sinon, D25) et
   refus d'une candidature. Acceptation : `p_decision 'ACCEPTEE'`, `p_creneaux_confirmes` = **chaînes `debut`/`fin`
   relues telles quelles** (D26), `p_motif` NULL. Refus : `p_decision 'REFUSEE'`, `p_creneaux_confirmes` NULL,

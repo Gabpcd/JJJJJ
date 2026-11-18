@@ -29,6 +29,12 @@ preuves des tranches).
   appelée ; nom lu au détail par `fn_soignant_pour_etablissement`) ; pastille de candidatures réservée à la permission
   `candidatures` ; planning non exact « à confirmer » sur la carte (le web y affiche un repli ponctuel). Republier,
   dupliquer, modifier, annuler, terminer, évaluer : sur jolene.app.
+- Candidatures de `/etablissement/missions/:id` (T6, destination `.candidatures`) : ni badge « hors profession »,
+  ni statut d'internat, ni régime d'exercice du profil, ni note moyenne, ni détail d'étudiant, ni popover du score
+  (D8, D10) ; pas de case du cadre étudiant (étudiant aide-soignant → « Accepter sur jolene.app ») ; mention CGV art. 8
+  **non affichée** tant que Gabrielle ne l'a pas validée (HARD STOP n°4) : un lien de navigation neutre vers la page
+  des CGV la remplace ; refus de paiement (`fn_trg_gate_assignation_paiement`) verbatim avec un renvoi vers la
+  facturation web ; succès annoncé seulement après relecture (`ACCEPTEE` + mission `ASSIGNEE`, ou `REFUSEE`).
 - Accueil : « présences à valider » sans compteur jusqu'à T8, « évaluations à faire » en lien web sans compteur
   (aucune source serveur, correction 20) ; aucun graphique ni montant (D15).
 - Acceptation native limitée aux missions `SALARIE` hors `MEDECIN` (D25) ; étudiant aide-soignant (cadre étudiant),

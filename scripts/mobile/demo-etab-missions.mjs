@@ -10,10 +10,13 @@
  *   M9 OUVERTE « tous profils » et M10 OUVERTE `MEDECIN` (acceptation renvoyée au web, D25), M11 TERMINEE sans
  *   pointage (T8).
  * Lignes `missions` réduites aux colonnes décodées par `EtabMissionResume` (aucun montant, D15) ; créneaux
- * PREVISIONNEL de `mission_creneaux` ; candidatures réduites à ce que lit la liste (`mission_id`, `statut`,
- * `cree_le`) : les compteurs en sont **dérivés** par la gateway démo, jamais saisis (T6 complète ces lignes) ;
- * soignants réduits aux clés décodées de `fn_soignant_pour_etablissement` (jamais `note_moyenne`,
- * `nb_evaluations`, `type_exercice`, `internat`). Aucune donnée réelle.
+ * PREVISIONNEL de `mission_creneaux` ; candidatures (`mission_id`, `soignant_id`, `message`, `statut`, `cree_le`) :
+ * les compteurs en sont **dérivés** par la gateway démo, jamais saisis ; soignants réduits aux clés décodées de
+ * `fn_soignant_pour_etablissement` (jamais `note_moyenne`, `nb_evaluations`, `type_exercice`, `internat`).
+ * T6 : `candidats` = les mêmes soignants vus par la lecture habilitée `fn_lire_candidatures_mission_habilitee`
+ * (nom réduit à l'initiale, `nom_anonymise: true`), **dérivés** de `soignants` (une identité par identifiant) avec
+ * les seules clés que l'écran lit en plus (`est_etudiant`, `tous_documents_valides`). M1 : trois candidats, dont une
+ * étudiante aide-soignante (acceptation renvoyée au web, D10). Aucune donnée réelle.
  */
 
 /** Instant UTC `jours` jours après `now`, à `heure`:00 UTC. */
@@ -85,18 +88,53 @@ export function buildDemoEtabMissions({ now, etablissementId, soignantPrincipal 
   // Ordre du web : `debut_le` décroissant (l.88).
   missions.sort((a, b) => b.debut_le.localeCompare(a.debut_le) || a.id.localeCompare(b.id));
 
-  const candidature = (missionId, rang, heuresAvant) => ({
+  // T6 : étudiante aide-soignante (cadre étudiant : acceptation renvoyée au web, D10).
+  const soignant3 = {
+    id: 'demo-soignant-etab-3',
+    prenom: 'Lou',
+    nom: 'Exemple',
+    nom_anonymise: false,
+    profession: 'AS',
+    telephone: null,
+    numero_rpps: null,
+    score_fiabilite: null,
+    total_missions_terminees: 0,
+  };
+  const s3 = soignant3.id;
+  const candidature = (missionId, rang, soignantId, heuresAvant, message = null) => ({
     id: `${missionId}-cand-${rang}`,
     mission_id: missionId,
+    soignant_id: soignantId,
+    message,
     statut: 'EN_ATTENTE',
     cree_le: new Date(now.getTime() - heuresAvant * 3_600_000).toISOString(),
   });
   const candidatures = [
-    candidature('demo-etab-m01', 1, 30), candidature('demo-etab-m01', 2, 20), candidature('demo-etab-m01', 3, 5),
-    candidature('demo-etab-m03', 1, 12),
-    candidature('demo-etab-m09', 1, 9),
-    candidature('demo-etab-m10', 1, 4),
+    candidature('demo-etab-m01', 1, s1, 30, 'Disponible sur l’ensemble du créneau, message fictif de démonstration.'),
+    candidature('demo-etab-m01', 2, s2, 20),
+    candidature('demo-etab-m01', 3, s3, 5),
+    candidature('demo-etab-m03', 1, s2, 12),
+    candidature('demo-etab-m09', 1, s1, 9),
+    candidature('demo-etab-m10', 1, s2, 4),
   ];
+  const soignants = [soignantPrincipal, soignant2, soignant3];
+  // Lecture habilitée : nom à l'initiale (`left(nom, 1) || '.'`, l.40019), drapeau d'anonymisation toujours vrai.
+  const extra = {
+    [s1]: { est_etudiant: false, tous_documents_valides: true },
+    [s2]: { est_etudiant: false, tous_documents_valides: true },
+    [s3]: { est_etudiant: true, tous_documents_valides: false },
+  };
+  const candidats = soignants.map(s => ({
+    id: s.id,
+    prenom: s.prenom,
+    nom: `${(s.nom ?? '').slice(0, 1)}.`,
+    nom_anonymise: true,
+    profession: s.profession,
+    est_etudiant: extra[s.id].est_etudiant,
+    score_fiabilite: s.score_fiabilite,
+    total_missions_terminees: s.total_missions_terminees,
+    tous_documents_valides: extra[s.id].tous_documents_valides,
+  }));
 
   return {
     fixed_now: now.toISOString(),
@@ -104,6 +142,7 @@ export function buildDemoEtabMissions({ now, etablissementId, soignantPrincipal 
     missions,
     creneaux,
     candidatures,
-    soignants: [soignantPrincipal, soignant2],
+    soignants,
+    candidats,
   };
 }

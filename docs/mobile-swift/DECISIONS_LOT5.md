@@ -254,6 +254,45 @@ du web repris, refus serveur verbatim).
 9. **XCUITest** `DemoEtabMissionsTests` (deux tests) dans l'éclat « presences » (place laissée par `DemoFavorisTests`),
    jamais dans le socle (garde `ios-swift-ci-eclats`). Non exécuté localement (aucun simulateur) : preuve CI.
 
+## Précisions relevées par la tranche T6 (candidatures, 18/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; aucun texte juridique n'est ajouté (libellés d'interface
+du web repris, refus serveur verbatim, quelques textes natifs de navigation).
+
+1. **Mention CGV art. 8 non affichée (HARD STOP n°4).** `TextesWeb.CandidaturesEtablissement` reste verrouillée
+   (`VALIDES` vide dans `contrats-etablissement-ios.node.mjs`) : l'écran montre un lien de navigation neutre,
+   « Conditions générales de vente sur jolene.app » (`https://jolene.app/cgv#art8`, ancre du web l.394), sans résumer
+   les clauses. Après la validation d'écran de Gabrielle : la mention verbatim remplace ce lien (identifiant
+   `etab-candidatures-cgv`) et `CandidaturesEtablissement` entre dans `VALIDES`.
+2. **D25 gardé deux fois.** Le modèle aiguille avant tout appel (contrat recherché relu par `EtabMissionsPort.mission`,
+   profession de la lecture habilitée, étudiant aide-soignant) ; la gateway Supabase relit en plus, sous RLS, la
+   candidature puis sa mission (`id, etablissement_id, type_contrat_recherche, profession_requise`) juste avant l'appel :
+   hors `SALARIE` ou `MEDECIN` → `.renvoiWeb`, aucun appel RPC ; ligne illisible → aucun envoi. La signature du port
+   (T1) est inchangée. T6 reste hors B9 : `fn_traiter_candidature_planning_v1` n'est jamais appelée pour une mission où
+   un escrow est possible.
+3. **Refus de droit des lectures** : nouvelle erreur `RefusAccesEtablissement` (message serveur verbatim) pour la lecture
+   habilitée (42501 de la liste blanche) ; les mutations gardent l'issue `.accesRefuse`. L'écran relit le périmètre une
+   fois (`SessionStore.refreshEtablissementScope`), jamais une déconnexion. `JoleneError.Kind` non étendu.
+4. **Issue jamais tenue pour confirmée** : toute issue (succès, délai, transport, `{error}` sans drapeau) est suivie
+   d'une relecture ; succès = `ACCEPTEE` + mission `ASSIGNEE`, ou `REFUSEE`. `PLANNING_*_RECONFIRMER` relit et remplace
+   le récapitulatif avec le message serveur, sans renvoi automatique. « Cette candidature a déjà été traitée. » est
+   affiché tel quel après relecture.
+5. **Textes natifs ajoutés (non juridiques)** : « Accepter sur jolene.app », « L'acceptation de cette candidature se fait
+   sur jolene.app, où une nouvelle connexion peut vous être demandée. » (D16), « Voir sur jolene.app » (facturation),
+   « Conditions générales de vente sur jolene.app », « La décision n'a pas pu être confirmée par une relecture.
+   Vérifiez les candidatures avant de recommencer. », « Cette candidature n'est plus en attente. ».
+6. **Statut des candidatures traitées** : parité du web (l.524), tout statut autre qu'`ACCEPTEE` s'affiche « ❌ Refusée ».
+7. **Monde démo** : candidatures de `demo-etab-missions.json` complétées (`soignant_id`, `message`) et `candidats` (la
+   lecture habilitée des mêmes soignants, nom à l'initiale) **dérivés** de `soignants` par le générateur ; troisième
+   soignant fictif (étudiante aide-soignante) ; `DemoEtabEtatCandidatures` partage les décisions de la session entre les
+   gateways démo des missions et des candidatures (mission acceptée relue `ASSIGNEE` des deux côtés) ;
+   `-JOLENE_DEMO_PLANNING_MODIFIE 1` (première acceptation à reconfirmer). L'étudiante est renvoyée au web par
+   l'aiguillage (la démo ne reproduit pas le texte serveur `CADRE_ETUDIANT_A_CONFIRMER`).
+8. **`EtabDestination.candidatures.ecranLivre = true`** ; `DemoEtabMissionsTests` migré (le lien du détail ouvre l'écran
+   natif ; la preuve du renvoi web d'un lien non livré passe au lien de message, T11). XCUITest
+   `DemoEtabCandidaturesTests` (deux tests) dans l'éclat « presences », jamais dans le socle (garde
+   `ios-swift-ci-eclats`). Non exécuté localement (aucun simulateur) : preuve CI.
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.

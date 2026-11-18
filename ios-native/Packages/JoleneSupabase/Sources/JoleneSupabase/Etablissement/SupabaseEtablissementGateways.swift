@@ -12,7 +12,7 @@ public enum SupabaseEtablissementGateways {
             session: SupabaseEtabSessionGateway(client: client),
             dashboard: UnwiredEtabDashboardPort(),        // T4
             missions: SupabaseEtabMissionsGateway(client: client), // T5
-            candidatures: UnwiredEtabCandidaturesPort(),  // T6
+            candidatures: SupabaseEtabCandidaturesGateway(client: client), // T6
             pointage: UnwiredEtabPointagePort(),          // T7
             presences: UnwiredEtabPresencesPort(),        // T8
             publication: UnwiredEtabPublicationPort(),    // T9
