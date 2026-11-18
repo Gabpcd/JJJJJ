@@ -51,9 +51,15 @@ public actor SessionController {
         let absencesConfirmees: Int
     }
 
-    public init(gateways: Gateways, resolutionTimeout: TimeInterval = SessionController.defaultResolutionTimeout) {
+    /// Espace établissement : fermé par défaut (fail-closed), ouvert par `AppContainer` en démo seulement
+    /// (`OuvertureEspaceEtablissement.pour(mode:)`) tant que le lot 5 n'est pas clos.
+    private let ouvertureEtablissement: OuvertureEspaceEtablissement
+
+    public init(gateways: Gateways, resolutionTimeout: TimeInterval = SessionController.defaultResolutionTimeout,
+                espaceEtablissement: OuvertureEspaceEtablissement = .ferme) {
         self.configured = gateways
         self.resolutionTimeout = resolutionTimeout
+        self.ouvertureEtablissement = espaceEtablissement
     }
 
     public var state: SessionState { currentState }
@@ -324,6 +330,8 @@ public actor SessionController {
         case .soignant: break
         case .etablissement:
             guard let role else { return .blocked(.unsupportedRole(nil)) }
+            // Espace fermé (staging, production avant la clôture du lot 5) : refus d'avant le lot 5, aucun appel.
+            guard ouvertureEtablissement == .ouvert else { return .blocked(.unsupportedRole(role.role)) }
             return await resolveEtablissement(user: user, role: role, gateways: gateways, epoch: expected, quiet: quiet)
         case let .bloque(access): return .blocked(access)
         }

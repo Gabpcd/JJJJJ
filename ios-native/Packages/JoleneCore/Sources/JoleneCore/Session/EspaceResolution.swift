@@ -56,3 +56,24 @@ public enum EspaceResolution {
         return .confirme(etablissementId: etablissementId, role: role, permissions: reponse.permissions)
     }
 }
+
+/// Ouverture de l'espace établissement natif tant que le lot 5 n'est pas clos (report sur main du
+/// 18/11/2026). Les drapeaux `ios_natif_etab_*_actif` (D14, migration D-FLAGS) valent 1 et sont lus
+/// fail-open : ils coupent un écran, jamais l'espace entier. Sans ce verrou, un compte établissement
+/// réel ouvrirait en staging ou en production une coquille d'onglets provisoires. Fermé, l'espace rend
+/// exactement le refus d'avant le lot 5 (`MobileAccess.validate` : `.unsupportedRole(<rôle>)`, écran
+/// « Espace non disponible », renvoi jolene.app), sans aucun appel établissement.
+public enum OuvertureEspaceEtablissement: Equatable, Sendable {
+    case ouvert
+    case ferme
+
+    /// Démo : ouvert (recette XCUITest `-JOLENE_DEMO_ESPACE etablissement`). Staging et production :
+    /// fermé jusqu'à la tranche qui l'ouvre (T13 pour la recette STAGING, T14 pour la production),
+    /// changement consigné dans `DECISIONS_LOT5.md`.
+    public static func pour(mode: JoleneMode) -> OuvertureEspaceEtablissement {
+        switch mode {
+        case .demo: return .ouvert
+        case .staging, .production: return .ferme
+        }
+    }
+}

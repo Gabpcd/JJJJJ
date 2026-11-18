@@ -168,7 +168,8 @@ final class AppContainer: ObservableObject {
             mediaDemo = DemoMediaPicker(source: .png)
             #endif
             clock = gateways.clock
-            let controller = SessionController(gateways: gateways)
+            // Lot 5 : espace établissement ouvert en démo seulement (`OuvertureEspaceEtablissement`).
+            let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: .demo))
             let permission = DemoPushPermission(etat: Self.autorisationPushDemo(arguments: arguments))
             let coordinator = PushCoordinator(controller: controller, permission: permission,
                                               registrar: DemoPushRegistrar(), memoire: MemoirePushTokenStore())
@@ -189,7 +190,8 @@ final class AppContainer: ObservableObject {
             do {
                 let gateways = try SupabaseGateways.make(environment: environment)
                 clock = gateways.clock
-                let controller = SessionController(gateways: gateways)
+                // Lot 5 : espace établissement fermé jusqu'à la clôture du lot (`OuvertureEspaceEtablissement`).
+                let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: environment.mode))
                 let (permission, registrar) = Self.appareilPush(mode: environment.mode, arguments: arguments)
                 let coordinator = PushCoordinator(controller: controller, permission: permission,
                                                   registrar: registrar, memoire: KeychainPushTokenStore())
