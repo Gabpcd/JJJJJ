@@ -66,6 +66,9 @@ final class AppContainer: ObservableObject {
     let tapsPush: BoiteTapsPush
     /// Lot 3, T3b : coordinateur des liens universels et des taps push (`DeepLinkCoordinator`).
     let liens: DeepLinkCoordinator
+    /// Lot 4, T1c : cycle de vie Realtime de la messagerie, appelé par `JoleneApp` à chaque phase de scène (stub
+    /// verrouillé jusqu'à T7a, `RealtimeLifecycle`).
+    private(set) lazy var realtime: RealtimeLifecycle = RealtimeLifecycle(session: self.session)
     /// Lot 3, T5 : contexte du pré-prompt pour ce lancement (nil si l'environnement est refusé).
     private(set) var prePrompt: ContextePrePromptPush?
     /// Lot 1, T8 : avis de fin de compte partagé entre l'écran de suppression et la racine.
@@ -128,9 +131,14 @@ final class AppContainer: ObservableObject {
         // d'inscription dans `liensInscription`, que `RootView` présente hors de l'espace.
         let inscription = BoiteLiensInscription()
         liensInscription = inscription
+        // Lot 4, T1c : capture du parrainage (stub verrouillé jusqu'à T6) ; stockage par appareil hors démo, mémoire
+        // vive en démo (chaque lancement démo part sans capture).
+        let parrainage = ParrainageApplicateur(stockage: environment.mode == .demo ? MemoireStockageAppareil()
+                                                                                   : UserDefaultsStockageAppareil())
         let liens = DeepLinkCoordinator(taps: boite, inscription: inscription, estDemo: environment.mode == .demo,
                                         effaceur: environment.mode == .demo ? nil : EffaceurDonneesSafari(),
-                                        espaceEtablissement: .pour(mode: environment.mode)) // lot 5, T2b
+                                        espaceEtablissement: .pour(mode: environment.mode), // lot 5, T2b
+                                        parrainage: parrainage)
         self.liens = liens
         if environment.mode == .demo {
             fluxExterne = DemoExternalFlow()
@@ -193,6 +201,7 @@ final class AppContainer: ObservableObject {
             clock = gateways.clock
             // Lot 5 : espace établissement ouvert en démo seulement (`OuvertureEspaceEtablissement`).
             let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: .demo))
+            parrainage.controleur = controller // lot 4, T1c
             let permission = DemoPushPermission(etat: Self.autorisationPushDemo(arguments: arguments))
             let coordinator = PushCoordinator(controller: controller, permission: permission,
                                               registrar: DemoPushRegistrar(), memoire: MemoirePushTokenStore())
@@ -215,6 +224,7 @@ final class AppContainer: ObservableObject {
                 clock = gateways.clock
                 // Lot 5 : espace établissement fermé jusqu'à la clôture du lot (`OuvertureEspaceEtablissement`).
                 let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: environment.mode))
+                parrainage.controleur = controller // lot 4, T1c
                 let (permission, registrar) = Self.appareilPush(mode: environment.mode, arguments: arguments)
                 let coordinator = PushCoordinator(controller: controller, permission: permission,
                                                   registrar: registrar, memoire: KeychainPushTokenStore())

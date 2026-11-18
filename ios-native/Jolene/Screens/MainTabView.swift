@@ -39,7 +39,11 @@ import JoleneDesign
 ///   certificat) : routes par valeur `MonEspaceRoute`, enregistrées sur les piles de l'Accueil (widget « Aller pointer »,
 ///   oubli de départ) et du Profil (entrées de « Mon espace ») ; une cible de lien, de tap push, du centre ou de la ligne
 ///   « présences d'une mission » de Revenus s'empile sur le Profil remis à sa racine, avec un jeton de présentation
-///   (`PresentationJetonnee`, revue B8 n°1 de L2-T10, m1) : le même lien deux fois change le chemin, l'écran est relu.
+///   (`PresentationJetonnee`, revue B8 n°1 de L2-T10, m1) : le même lien deux fois change le chemin, l'écran est relu ;
+/// - (lot 4, T1c) écrans secondaires (`SecondaryRouter`, route `SecondaireRoute`) empilés sur le Profil, cible
+///   `CibleNotification.secondaire` d'un écran **livré** (le swipe ouvre Explorer) ; contexte `contexteSecondaire` injecté
+///   au-dessus des onglets ; bouton Messages (`boutonMessages`, stub jusqu'à T7b) sur la racine de chaque onglet. Un
+///   écran non livré garde son renvoi web actuel : rien de visible ne change avant sa tranche.
 struct MainTabView: View {
     /// Onglets de l'espace : enum dédié de JoleneCore (revue L3-T5, m9), jamais les drapeaux `EcranNatif`.
     typealias Tab = OngletEspace
@@ -94,6 +98,7 @@ struct MainTabView: View {
         TabView(selection: $selection) {
             NavigationStack(path: $cheminAccueil) {
                 AccueilScreen(session: session, snapshot: snapshot, peremption: lecturesCentre) { selection = $0 }
+                    .boutonMessages() // lot 4, T1c (stub jusqu'à T7b)
                     .navigationDestination(for: CentreNotificationsRoute.self) { _ in
                         NotificationsScreen(session: session, snapshot: snapshot, taps: taps,
                                             surLecture: { lecturesCentre += 1 }) { cible in
@@ -110,6 +115,7 @@ struct MainTabView: View {
             NavigationStack(path: $cheminExplorer) {
                 // Lot 2 T5a (revue fraîche, m6) : changement d'onglet transmis au détail d'une mission.
                 MissionsListScreen(session: session, snapshot: snapshot) { selection = $0 }
+                    .boutonMessages() // lot 4, T1c (stub jusqu'à T7b)
             }
             .tabItem { Label("Explorer", systemImage: "magnifyingglass") }
             .tag(Tab.explorer)
@@ -117,6 +123,7 @@ struct MainTabView: View {
 
             NavigationStack(path: $cheminMissions) {
                 MesMissionsScreen(session: session, snapshot: snapshot, peremption: presentationsMissions) { selection = $0 }
+                    .boutonMessages() // lot 4, T1c (stub jusqu'à T7b)
             }
             .tabItem { Label("Mes missions", systemImage: "list.clipboard") }
             .tag(Tab.missions)
@@ -130,6 +137,7 @@ struct MainTabView: View {
                               section: sectionRevenus) { cible in
                     presenter(cible, depuisCentre: false)
                 }
+                .boutonMessages() // lot 4, T1c (stub jusqu'à T7b)
             }
             .tabItem { Label("Revenus", systemImage: "banknote") }
             .tag(Tab.revenus)
@@ -137,6 +145,9 @@ struct MainTabView: View {
 
             NavigationStack(path: $cheminProfil) {
                 ProfileScreen(container: container, session: session, snapshot: snapshot) { selection = $0 }
+                    .boutonMessages() // lot 4, T1c (stub jusqu'à T7b)
+                    // Lot 4, T1c : écrans secondaires — entrées du hub (écrans livrés), liens, taps et centre.
+                    .destinationsSecondaires(contexteSecondaire)
                     .navigationDestination(for: PreferencesNotificationsRoute.self) { _ in
                         PreferencesScreen(session: session, snapshot: snapshot, push: container.push,
                                           permission: container.pushPermission)
@@ -169,6 +180,8 @@ struct MainTabView: View {
         // Lot 1, T6b (revue B8 m2, m4) : profil et documents ouverts depuis le bloc de candidature du détail.
         .environment(\.fabriqueEcransCandidature, FabriqueEcransCandidatureNative(container: container))
         .environment(\.mediaDemo, container.mediaDemo) // L1-T7 : justificatif d'annulation (détail d'une mission)
+        // Lot 4, T1c : contexte des écrans secondaires (emplacements du détail de mission, d'Explorer et de la barre).
+        .environment(\.contexteSecondaire, contexteSecondaire)
         .onDisappear { FichierContratTemporaire.effacerTout() } // lot 2 T9a : copies de contrats effacées au changement d'epoch
         // Lot 1, T5 : ajout au calendrier (Accueil et Mes missions), une instance par session prête.
         .ajoutCalendrier(container: container, userId: snapshot.user.id)
@@ -287,10 +300,27 @@ struct MainTabView: View {
             selection = .profil
             cheminProfil = NavigationPath()
             cheminProfil.append(jetonsMonEspace.presenter(StripeConnectRoute(force: true)))
+        case .secondaire(.swipe):
+            // Lot 4, T1c : le swipe est une vue d'Explorer (T3b, `vueSwipe`), jamais un écran empilé.
+            selection = .explorer
+            cheminExplorer = NavigationPath()
+        case .secondaire(let ecran):
+            // Lot 4, T1c : écran secondaire livré, empilé sur le Profil remis à sa racine (jeton neuf, comme « Mon espace ») ;
+            // son coupe-circuit est lu par `SecondaryRouter`.
+            selection = .profil
+            cheminProfil = NavigationPath()
+            cheminProfil.append(jetonsMonEspace.presenter(SecondaireRoute(ecran: ecran)))
         case .web(let route):
             presentateurRenvoiWeb?.presenter(route)
         case .aucune:
             return
+        }
+    }
+
+    /// Lot 4, T1c : contexte des écrans secondaires de cet espace (`SecondaryRouter`, emplacements des tranches).
+    private var contexteSecondaire: ContexteSecondaire {
+        ContexteSecondaire(container: container, session: session, snapshot: snapshot) { cible in
+            presenter(cible, depuisCentre: false)
         }
     }
 

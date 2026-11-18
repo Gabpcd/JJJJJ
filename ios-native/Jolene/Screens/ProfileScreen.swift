@@ -92,6 +92,10 @@ struct ProfileScreen: View {
             // « Coordonnées bancaires » (l.73). Toujours présente ; la ligne Stripe, montée une fois l'exercice lu, décale
             // d'une ligne ce qui la suit.
             PaiementsFacturationSection(entreeStripe: entreeStripe)
+            // Lot 4, T1c : renvois web assumés (T13) puis écrans secondaires livrés, dans l'ordre du hub web ; rien avant
+            // leurs tranches.
+            RenvoisWebHubSection(session: session, snapshot: snapshot)
+            ActiviteSoignantSection()
             Section(HubCompte.titreReglages) {
                 // Lot 3, T6 : « Notifications » (l.115) vers les préférences ; lien par valeur, `MainTabView` enregistre
                 // la destination et pousse le même écran par programme (ligne du centre, tap push).

@@ -77,6 +77,9 @@ struct MissionsListScreen: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(JoleneColor.lavender.ignoresSafeArea())
+        // Lot 4, T1c : emplacements de la vue Swipe (T3b) et de l'alerte rapide (T4), sans effet avant leurs tranches.
+        .vueSwipe(model: model)
+        .alerteRapide(model: model)
         .navigationTitle("Explorer")
         // Titre en ligne : la rangée de chips (défilement horizontal) précède la liste, un grand
         // titre ne se replierait pas au défilement de la liste.

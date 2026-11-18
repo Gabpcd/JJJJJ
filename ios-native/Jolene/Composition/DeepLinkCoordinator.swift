@@ -46,6 +46,12 @@ import JoleneDesign
 /// STAGING où elles seraient réelles, revue L3-T5 m8). Il remplace `push-tap-cible` de L3-T5 (consigne de T5) ; et
 /// `-JOLENE_OPEN_URL_SUIVANT` (lien remis par le double du renvoi, `renvoi-web-lien-suivant`, revue B8 de T3b, m1).
 ///
+/// Lot 4, T1c (`LOT4_PLAN.md` §2.5) : tout lien universel reçu passe d'abord par la capture du code de parrainage
+/// (`ParrainageApplicateur.capturer(depuis:)`), et l'ouverture de l'espace prêt par son application
+/// (`appliquerSiCapture(_:)`) ; les deux sont verrouillées jusqu'à T6 (`VerrousLot4`, revue B8 de #1146, m6), qui
+/// n'implémente que `ParrainageApplicateur`. La destination d'un lien n'en dépend jamais (`/inscription/soignant` reste
+/// celle du lot 3).
+///
 /// Limite connue : la feuille et l'alerte sont présentées par la racine ; tant qu'une autre feuille est ouverte (filtres
 /// d'Explorer), elles ne s'affichent pas par-dessus (une seule feuille par niveau en SwiftUI). Aucun état ne reste
 /// collé : le même lien est redemandé sous un nouvel item, un refus suivant est un nouvel item (`PresentationsRacine`).
@@ -79,6 +85,8 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
     @Published private(set) var lienSuivantDemo: URL?
 
     let estDemo: Bool
+    /// Lot 4, T1c : capture et application du code de parrainage (stub verrouillé jusqu'à T6).
+    let parrainage: ParrainageApplicateur
     private let aiguillage: AiguillageLiens
     /// Liens d'inscription consommés hors de l'espace (intégration de T7) : déposés ici, présentés par `RootView`.
     private let inscription: BoiteLiensInscription
@@ -95,9 +103,10 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
 
     /// `espaceEtablissement` (lot 5, T2b) : même ouverture que la session (`OuvertureEspaceEtablissement.pour(mode:)`).
     init(taps: BoiteTapsPush, inscription: BoiteLiensInscription, estDemo: Bool, effaceur: EffaceurDonneesWeb?,
-         espaceEtablissement: OuvertureEspaceEtablissement = .ferme) {
+         espaceEtablissement: OuvertureEspaceEtablissement = .ferme, parrainage: ParrainageApplicateur? = nil) {
         self.estDemo = estDemo
         self.inscription = inscription
+        self.parrainage = parrainage ?? ParrainageApplicateur(stockage: MemoireStockageAppareil())
         self.effaceur = estDemo ? nil : effaceur
         aiguillage = AiguillageLiens(taps: taps, espaceEtablissement: espaceEtablissement)
     }
@@ -106,6 +115,7 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
 
     /// Lien universel (`onOpenURL`, `onContinueUserActivity`).
     func recevoir(url: URL) {
+        parrainage.capturer(depuis: url) // lot 4, T1c : verrouillé jusqu'à T6
         executer(aiguillage.recevoir(url: url))
     }
 
@@ -143,6 +153,7 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
 
     /// Apparition de l'espace prêt : rejoue l'intention en attente (lien ou tap) pour cet epoch.
     func espaceOuvert(_ snapshot: SessionSnapshot) {
+        parrainage.appliquerSiCapture(snapshot) // lot 4, T1c : verrouillé jusqu'à T6
         executer(aiguillage.ouvrirEspace(snapshot))
     }
 
