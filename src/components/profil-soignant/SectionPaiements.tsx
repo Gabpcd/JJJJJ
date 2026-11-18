@@ -277,7 +277,7 @@ function SectionIbanPrime() {
         <Landmark className="h-4 w-4 text-primary" /> Coordonnées bancaires
       </h2>
       <p className="text-xs text-muted-foreground mb-4">
-        Ton IBAN est utilisé pour le versement de tes primes de parrainage. Il n'est jamais partagé avec l'établissement.
+        Ton IBAN est utilisé pour le versement de tes primes de parrainage.
       </p>
 
       {loading ? (
@@ -304,9 +304,9 @@ function SectionIbanPrime() {
               <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-foreground">RIB vérifié requis</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  L'ancien IBAN est conservé dans ton historique, mais aucun nouveau versement ne peut l'utiliser sans un RIB courant vérifié portant exactement le même IBAN et ton identité.
-                </p>
+                {/* HARD STOP n°4 : aucune explication sous ce titre. L'IBAN n'a pas d'historique : il ne vit que dans la
+                    colonne courante soignants.iban_virement (fn_lier_iban_verifie_document, fn_consulter_mon_iban). Tout
+                    texte ajouté ici doit décrire exactement le serveur et attendre la validation HARD STOP n°4. */}
                 <BoutonY2K
                   variant="secondary"
                   size="sm"
