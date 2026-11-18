@@ -30,6 +30,10 @@ import JoleneDesign
 ///   (`SFSafariViewController.DataStore.default.clearWebsiteData`, iOS 16) ; un renvoi demandé pendant l'effacement
 ///   est différé jusqu'à sa fin. En démo, aucun effacement (le double n'a ni réseau ni données).
 ///
+/// Lot 5, T2b (choix par espace, `AiguillageLiens`) : dans l'espace établissement, `demandeEtablissement` (onglet de la
+/// coquille, écran empilé livré) est exécutée par `EtablissementTabView` de son epoch ; un lien soignant ou un écran
+/// établissement non livré y est un renvoi web ; dans l'espace soignant, un lien établissement reste un renvoi web.
+///
 /// L'anti-boucle (« un `.safari` issu de l'app n'est jamais rejoué comme lien universel ») et le libellé DEBUG
 /// `deeplink-route` ne sont posés qu'à la présentation effective (revue B8 de T3b, m1 et m7) : apparition du contenu
 /// de la feuille pour un renvoi, exécution par l'espace (`demandeTraitee`) pour une navigation.
@@ -53,7 +57,17 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
         let route: JoleneRoute
     }
 
+    /// Lot 5, T2b : navigation demandée à l'espace établissement de `epoch` (onglet, écran empilé livré).
+    struct DemandeNavigationEtablissement: Equatable {
+        let numero: Int
+        let epoch: Int
+        let cible: CibleEtablissement
+        /// Route de l'espace établissement (libellé DEBUG `deeplink-route`, posé quand l'espace exécute la demande).
+        let route: EtabRoute
+    }
+
     @Published private(set) var demande: DemandeNavigation?
+    @Published private(set) var demandeEtablissement: DemandeNavigationEtablissement?
     /// Feuille du renvoi web et alerte du refus (`PresentationsRacine`, niveau 1).
     @Published private(set) var presentations = PresentationsRacine()
     /// Libellé DEBUG de la dernière route présentée (`deeplink-route`), démo seulement.
@@ -72,11 +86,13 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
     private var lienAuLancement: URL?
     private var racineAffichee = false
 
-    init(taps: BoiteTapsPush, inscription: BoiteLiensInscription, estDemo: Bool, effaceur: EffaceurDonneesWeb?) {
+    /// `espaceEtablissement` (lot 5, T2b) : même ouverture que la session (`OuvertureEspaceEtablissement.pour(mode:)`).
+    init(taps: BoiteTapsPush, inscription: BoiteLiensInscription, estDemo: Bool, effaceur: EffaceurDonneesWeb?,
+         espaceEtablissement: OuvertureEspaceEtablissement = .ferme) {
         self.estDemo = estDemo
         self.inscription = inscription
         self.effaceur = estDemo ? nil : effaceur
-        aiguillage = AiguillageLiens(taps: taps)
+        aiguillage = AiguillageLiens(taps: taps, espaceEtablissement: espaceEtablissement)
     }
 
     // MARK: Points d'entrée
@@ -123,10 +139,16 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
         executer(aiguillage.ouvrirEspace(snapshot))
     }
 
+    /// Lot 5, T2b : apparition de l'espace établissement (`EtablissementTabView`) : rejoue le lien en attente.
+    func espaceEtablissementOuvert(_ snapshot: EtablissementSessionSnapshot) {
+        executer(aiguillage.ouvrirEspaceEtablissement(snapshot))
+    }
+
     /// Disparition de l'espace de cet epoch : une demande non exécutée est abandonnée.
     func espaceFerme(epoch: Int) {
         aiguillage.fermerEspace(epoch: epoch)
         if demande?.epoch == epoch { demande = nil }
+        if demandeEtablissement?.epoch == epoch { demandeEtablissement = nil }
     }
 
     /// La demande a été exécutée par l'espace (une seule fois) : sa route est alors effectivement présentée.
@@ -134,6 +156,15 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
         guard demande == traitee else { return }
         demande = nil
         noter(traitee.route)
+    }
+
+    /// Lot 5, T2b : la demande a été exécutée par l'espace établissement (une seule fois).
+    func demandeEtablissementTraitee(_ traitee: DemandeNavigationEtablissement) {
+        guard demandeEtablissement == traitee else { return }
+        demandeEtablissement = nil
+        #if DEBUG
+        if estDemo { derniereRoute = traitee.route.libelleDebug }
+        #endif
     }
 
     // MARK: Présentateur `.safari`
@@ -188,6 +219,11 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
             fermerRenvoiWeb()
             numero += 1
             demande = DemandeNavigation(numero: numero, epoch: epoch, cible: cible, route: route)
+        case let .naviguerEtablissement(cible, route, epoch)?:
+            // Lot 5, T2b : exécutée par `EtablissementTabView` de cet epoch (onglet, pile remise à sa racine).
+            fermerRenvoiWeb()
+            numero += 1
+            demandeEtablissement = DemandeNavigationEtablissement(numero: numero, epoch: epoch, cible: cible, route: route)
         case .renvoiWeb(let route)?:
             presenter(route)
         case .refusReinitialisation?:
