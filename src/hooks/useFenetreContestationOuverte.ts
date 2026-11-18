@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { capturerErreurSentry } from '@/lib/sentry';
 
 /**
  * Fenêtre de contestation d'une présence validée, décidée par le serveur
@@ -10,9 +11,11 @@ import { supabase } from '@/integrations/supabase/client';
  * « État dérivé »).
  *
  * Fail-closed : fermée tant que la réponse n'est pas là, sur erreur, ou sur toute
- * réponse autre que `true`. Une présence non validée n'est jamais contestable
- * (le serveur répondrait vrai faute de présence validée : la précondition reste
- * côté client, comme le natif).
+ * réponse autre que `true`. Une erreur, un rejet ou une réponse non booléenne
+ * sont remontés à Sentry : un fail-closed muet (grant retiré, 42501) retirerait le
+ * canal de contestation à tous sans alerte. Une présence non validée n'est jamais
+ * contestable (le serveur répondrait vrai faute de présence validée : la
+ * précondition reste côté client, comme le natif).
  */
 export function useFenetreContestationOuverte(
   missionId: string,
@@ -31,9 +34,21 @@ export function useFenetreContestationOuverte(
           p_type_litige: 'DESACCORD_HEURES_POINTAGE',
           p_mission_id: missionId,
         });
-        if (actif) setOuverte(!error && data === true);
-      } catch {
-        if (actif) setOuverte(false);
+        if (!actif) return;
+        if (error) {
+          capturerErreurSentry(error, 'useFenetreContestationOuverte', 'fenetre_contestation');
+        } else if (typeof data !== 'boolean') {
+          capturerErreurSentry(
+            new Error(`réponse non booléenne : ${JSON.stringify(data)}`),
+            'useFenetreContestationOuverte',
+            'fenetre_contestation',
+          );
+        }
+        setOuverte(!error && data === true);
+      } catch (err) {
+        if (!actif) return;
+        capturerErreurSentry(err, 'useFenetreContestationOuverte', 'fenetre_contestation');
+        setOuverte(false);
       }
     })();
     return () => { actif = false; };

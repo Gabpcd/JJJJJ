@@ -998,6 +998,7 @@ test('CONTRATS fn_fenetre_contestation_ouverte : délai lu au serveur (défaut 4
   const hook = read('src/hooks/useFenetreContestationOuverte.ts');
   assert.match(hook, /supabase\.rpc\('fn_fenetre_contestation_ouverte', \{\s+p_type_litige: 'DESACCORD_HEURES_POINTAGE',\s+p_mission_id: missionId,\s+\}\)/);
   assert.ok(hook.includes('setOuverte(!error && data === true)'), 'fenêtre web : fail-closed absent');
+  assert.ok((hook.match(/capturerErreurSentry\(/g) || []).length >= 3, 'fenêtre web : fail-closed muet (Sentry absent)');
   assert.ok(fiche.includes('DELAI_CONTESTATION_MS') && fiche.includes('useFenetreContestationOuverte'));
 });
 
