@@ -105,10 +105,8 @@ struct MissionDetailScreen: View {
                     Text(description).font(JoleneFont.body).foregroundStyle(JoleneColor.midnight)
                 }
             }
-            Text("Candidature disponible au lot 1.")
-                .font(JoleneFont.caption)
-                .foregroundStyle(JoleneColor.bubblegum)
-                .accessibilityIdentifier("placeholder-candidature")
+            // Lot 1, T6b : candidature (POSTULER, ACCEPTER, proposition), état relu côté serveur.
+            CandidatureSection(mission: mission, session: session, snapshot: snapshot) { await model.load() }
         }
         .padding(JoleneSpacing.lg)
         .frame(maxWidth: 640)

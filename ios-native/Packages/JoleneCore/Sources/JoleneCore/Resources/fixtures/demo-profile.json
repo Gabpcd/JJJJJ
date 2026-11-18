@@ -12,6 +12,11 @@
     "type_contrat": "CDD",
     "types_contrat_acceptes": "[\"CDD\",\"LIBERAL\"]",
     "type_exercice": "MIXTE",
-    "taux_horaire_minimum": 0
+    "taux_horaire_minimum": 0,
+    "prenom": "Camille",
+    "nom": "Démo",
+    "date_naissance": "1990-05-14",
+    "telephone": null,
+    "rpps_verifie": false
   }
 }

@@ -61,7 +61,7 @@ final class DemoProfilGatewayTests: XCTestCase {
     func testVariantesDeRecetteDuProfilDemo() async throws {
         // `JOLENE_DEMO_PROFIL` (DEBUG, `AppContainer`) : une seule clé de la fixture change par variante.
         XCTAssertEqual(VarianteProfilDemo.variableEnvironnement, "JOLENE_DEMO_PROFIL")
-        XCTAssertEqual(VarianteProfilDemo.allCases.map(\.rawValue), ["identite-verrouillee", "sans-date-naissance"])
+        XCTAssertEqual(VarianteProfilDemo.allCases.map(\.rawValue), ["identite-verrouillee", "sans-date-naissance", "candidat"])
         let base = try await DemoProfilGateway().profil(context: contexte)
         var verrouille = try await DemoProfilGateway(variante: .identiteVerrouillee).profil(context: contexte)
         XCTAssertTrue(verrouille.identiteVerrouillee)

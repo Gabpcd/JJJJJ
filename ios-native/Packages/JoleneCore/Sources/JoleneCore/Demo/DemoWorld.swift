@@ -8,14 +8,21 @@ public enum DemoWorld {
     /// 03/11/2026 et le 02/12/2026.
     public static let fixedNow: Date = Date(timeIntervalSince1970: 1_793_577_600)
 
-    /// Copie de `DEMO_CONTEXT` (demoGateway.ts) ; `demo-profile.json` doit lui être égal.
-    public static let context = MissionReadContext(
-        userId: "demo-soignant",
-        email: "demonstration@example.invalid",
-        profile: SoignantProfile(id: "demo-soignant", profession: "IDE", adresseLat: 48.8566, adresseLng: 2.3522,
-                                 rayonDeplacementKm: 50, tousDocumentsValides: false, typeContrat: "CDD",
-                                 typesContratAcceptes: "[\"CDD\",\"LIBERAL\"]", typeExercice: "MIXTE", tauxHoraireMinimum: 0)
-    )
+    /// Copie de `DEMO_CONTEXT` (demoGateway.ts) ; `demo-profile.json` doit lui être égal. Lot 1, T6b : les cinq
+    /// colonnes du soft-gate (`ProfilCompletion`) sont celles de l'identité démo unique de l'exporteur
+    /// (`DEMO_IDENTITE`, aussi dans `demo-profil-complet.json`) : sans téléphone, RPPS non vérifié. Date de naissance
+    /// et téléphone réduits à leur présence (minimisation, revue B8 de T6a m6), comme après décodage du fichier.
+    public static let context: MissionReadContext = {
+        var profile = SoignantProfile(id: "demo-soignant", profession: "IDE", adresseLat: 48.8566, adresseLng: 2.3522,
+                                      rayonDeplacementKm: 50, tousDocumentsValides: false, typeContrat: "CDD",
+                                      typesContratAcceptes: "[\"CDD\",\"LIBERAL\"]", typeExercice: "MIXTE", tauxHoraireMinimum: 0)
+        profile.prenom = "Camille"
+        profile.nom = "Démo"
+        profile.dateNaissanceRenseignee = true
+        profile.telephoneRenseigne = false
+        profile.rppsVerifie = false
+        return MissionReadContext(userId: "demo-soignant", email: "demonstration@example.invalid", profile: profile)
+    }()
 
     /// Utilisateur confirmé renvoyé par `DemoAuthGateway.signIn`.
     public static let user = AuthenticatedUser(id: context.userId, email: context.email, emailConfirmedAt: fixedNow,
@@ -33,13 +40,21 @@ public enum DemoWorld {
     /// câblé ici dans la même PR que sa tranche ; un port encore stub y est nommé explicitement
     /// (`DemoWorldTests.testAucunPortNonCable`).
     public static func gateways(drapeaux: [String: Bool]) -> Gateways {
+        gateways(drapeaux: drapeaux, varianteProfil: nil)
+    }
+
+    /// T6b : `varianteProfil` (DEBUG, `JOLENE_DEMO_PROFIL`, lue par `AppContainer`) s'applique aussi à la projection
+    /// du lot 1 (`MissionsPort.profile`, soft-gate de la candidature), pour que les deux projections du profil démo
+    /// restent identiques sous chaque variante (le lot 3 l'applique à `DemoProfilGateway`).
+    public static func gateways(drapeaux: [String: Bool], varianteProfil: VarianteProfilDemo?) -> Gateways {
         // T6a : un seul acteur de candidature par monde ; ses candidatures de session sont relues par Mes missions
         // (point de fusion de T5), si bien qu'une candidature posée apparaît dans l'onglet Candidatures.
         let candidature = DemoCandidatureGateway(clock: FixedClock(fixedNow))
+        let profil = varianteProfil?.appliquer(context.profile) ?? context.profile
         var gateways = Gateways(
             auth: DemoAuthGateway(),
             role: DemoRoleGateway(),
-            missions: DemoMissionsGateway(missionsAttribuees: { await candidature.missionsAttribuees() }),
+            missions: DemoMissionsGateway(profil: profil, missionsAttribuees: { await candidature.missionsAttribuees() }),
             clock: FixedClock(fixedNow),
             dashboard: DemoDashboardGateway(clock: FixedClock(fixedNow)),
             candidature: candidature,                   // T6a (annulations : T7)
@@ -165,16 +180,20 @@ public struct DemoMissionsGateway: MissionsPort {
     /// Lot 1, T6a (revue B8, m5) : missions ouvertes attribuées au profil fictif pendant la session
     /// (`DemoCandidatureGateway.missionsAttribuees`) : servies `ASSIGNEE` en détail, retirées d'Explorer.
     private let missionsAttribuees: @Sendable () async -> Set<String>
+    /// Profil fictif servi à la session (variante DEBUG `JOLENE_DEMO_PROFIL` comprise, T6b).
+    private let profil: SoignantProfile
 
     public init(missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
         try DemoFixtures.loadDashboard().missionsAssignees + DemoFixtures.loadMesMissions().passees.map(\.mission)
-    }, missionsAttribuees: @escaping @Sendable () async -> Set<String> = { [] }) {
+    }, profil: SoignantProfile = DemoWorld.context.profile,
+       missionsAttribuees: @escaping @Sendable () async -> Set<String> = { [] }) {
         self.missionsAssignees = missionsAssignees
+        self.profil = profil
         self.missionsAttribuees = missionsAttribuees
     }
 
     public func profile(userId: String) async throws -> SoignantProfile? {
-        userId == DemoWorld.context.userId ? DemoWorld.context.profile : nil
+        userId == DemoWorld.context.userId ? profil : nil
     }
 
     public func listMissions(context: MissionReadContext, filters: MissionFilters) async throws -> [Mission] {

@@ -280,7 +280,10 @@ final class AppContainer: ObservableObject {
     /// Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
-        var gateways = DemoWorld.gateways(drapeaux: DemoFlagsGateway.surcharges(arguments: arguments))
+        // Lot 1, T6b : la variante du profil démo (`JOLENE_DEMO_PROFIL`) vaut aussi pour le soft-gate de la candidature
+        // (projection du lot 1) ; `candidat` rend le profil fictif candidat (`DemoCandidatureTests`).
+        let varianteProfil = processEnvironment[VarianteProfilDemo.variableEnvironnement].flatMap(VarianteProfilDemo.init(rawValue:))
+        var gateways = DemoWorld.gateways(drapeaux: DemoFlagsGateway.surcharges(arguments: arguments), varianteProfil: varianteProfil)
         // Lot 2 T4b : `-JOLENE_DEMO_SCENARIO scan-incertain` (premier scan appliqué, réponse perdue, réconciliation) ;
         // seconde revue fraîche (m2) : `session-expiree-scan`, `session-expiree-consentement` (pointage et authentification
         // démo liés : « Vérifier ma session » revalide), `consentement-echec`.
@@ -318,7 +321,7 @@ final class AppContainer: ObservableObject {
         if processEnvironment["JOLENE_FORCE_PREFERENCES_ECHEC"] == "1" {
             gateways.preferences = DemoPreferencesEchecGateway() // lot 3, T6
         }
-        if let variante = processEnvironment[VarianteProfilDemo.variableEnvironnement].flatMap(VarianteProfilDemo.init(rawValue:)) {
+        if let variante = varianteProfil {
             gateways.profil = DemoProfilGateway(variante: variante) // lot 3, T9
             gateways.avatar = DemoWorld.avatar(profil: gateways.profil) // lot 3, T10 : même ligne que la variante
         }
