@@ -37,6 +37,7 @@ const LOT1_CONSOMMEES = [
   'fn_modifier_favori_inscription', // T4b, décision 8 amendée le 18/11/2026 (revue B8, M2)
   'fn_confirmer_action_planning_v1', 'fn_repondre_proposition', // T6a
   'fn_confirmer_presence_mission', // T6c
+  'fn_annuler_candidature_soignant', 'fn_annuler_mission_soignant', 'fn_ecrire_audit_safe', // T7
 ];
 // `fn_suggestions_missions_pour_soignant` en est sortie (revue B8 de T3) : reclassée lot 4.
 const LOT1 = [

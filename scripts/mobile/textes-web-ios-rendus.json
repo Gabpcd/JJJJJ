@@ -499,6 +499,18 @@
       "code": [
         "<span>Tu confirmes la réception dans <strong>Mes gains</strong></span>"
       ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.Annulation.succesCandidature"
+      ],
+      "source": "src/components/soignant/ModaleAnnulationCandidature.tsx:129-132",
+      "code": [
+        "const points = Number(result?.points ?? 0);",
+        "const msg = points < 0",
+        "? `Candidature annulée. Score impacté : ${points} pts.`",
+        ": 'Candidature annulée.';"
+      ]
     }
   ],
   "rendus": [
@@ -661,6 +673,16 @@
       "fonction": "TextesWeb.Certificat.explicationEmpreinte",
       "appel": "explicationEmpreinte(storagePath: nil)",
       "rendu": "SHA-256 du contrat figé au moment de la signature. Si vous recalculez le hash du contenu HTML stocké (storage_path : —), vous devez retrouver cette empreinte — c'est la preuve que le document n'a pas été modifié depuis la signature."
+    },
+    {
+      "fonction": "TextesWeb.Annulation.succesCandidature",
+      "appel": "succesCandidature(points: -5)",
+      "rendu": "Candidature annulée. Score impacté : -5 pts."
+    },
+    {
+      "fonction": "TextesWeb.Annulation.succesCandidature",
+      "appel": "succesCandidature(points: 0)",
+      "rendu": "Candidature annulée."
     },
     {
       "fonction": "LibellesWeb.Presences.messageRelance",
