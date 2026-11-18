@@ -19,8 +19,8 @@ import XCTest
 /// `SupabaseJustificatifStorageTests`) ; la photothèque et Fichiers réels relèvent de l'appareil (niveau 5).
 ///
 /// Formats : iPhone, iPad portrait, iPad paysage ; chaque contrôle est amené à l'écran par un défilement borné
-/// (`scrollTo`) avant d'être touché (PRINCIPES §6). Classe non rangée dans un éclat existant : la PR d'intégration de la
-/// vague B du lot 1 crée l'éclat `lot1-missions` qui la reçoit (d'ici là, l'éclat socle la lance par défaut).
+/// (`scrollTo`) avant d'être touché (PRINCIPES §6). Éclat `lot1-missions` du job « UI lot 1 » de `ios-swift-ci.yml`
+/// (intégration de la vague B du lot 1), hors du socle.
 final class DemoAnnulationTests: JoleneUITestCase {
     static let participationAnnulee = "Participation annulée. Ton score sera mis à jour."
     static let candidatureAnnulee = "Candidature annulée."
