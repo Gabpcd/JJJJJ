@@ -12,7 +12,8 @@
 --
 -- Scénarios (fixture de cp8a-t1/t2, horodatages dérivés du paramètre) :
 --   A. présence absente validée il y a (délai + 1) h → litige ABSENCE_SOIGNANT,
---      motif « … dans les <délai>h », notification sans « Répondez sous »,
+--      motif « … présence validée depuis plus de <délai>h » (aucune affirmation
+--      « sans contestation », revue B8 m4), notification sans « Répondez sous »,
 --      SMS LITIGE_OUVERTURE sans « Répondez sous 72h », raison d'audit dérivée ;
 --   B. départ anticipé (4 h sur 8) validé il y a (délai + 1) h → notification
 --      sans promesse, raison d'audit dérivée ;
@@ -139,7 +140,7 @@ BEGIN
     RAISE NOTICE '[A] FAIL — aucun litige ABSENCE_SOIGNANT (result=%)', v_result;
   ELSE
     IF v_litige_a.motif IS DISTINCT FROM
-       format('Auto-création : soignant marqué absent sans contestation dans les %sh', v_delai) THEN
+       format('Auto-création : absence signalée par l''établissement ; présence validée depuis plus de %sh', v_delai) THEN
       RAISE NOTICE '[A] FAIL — motif=%', v_litige_a.motif;
     ELSE
       RAISE NOTICE '[A] PASS — motif dérivé : %', v_litige_a.motif;
@@ -168,7 +169,7 @@ BEGIN
       FROM public.journaux_audit j
      WHERE j.action = 'LITIGE_AUTO_CREATION' AND j.id_ressource = v_litige_a.id;
     IF v_raison IS DISTINCT FROM
-       format('Absence non contestée dans les %sh post-validation présence', v_delai) THEN
+       format('Absence signalée, présence validée depuis plus de %sh', v_delai) THEN
       RAISE NOTICE '[A-audit] FAIL — raison=%', v_raison;
     ELSE
       RAISE NOTICE '[A-audit] PASS — %', v_raison;
@@ -193,7 +194,7 @@ BEGIN
     IF v_corps IS DISTINCT FROM 'Votre établissement a signalé un départ anticipé.' THEN
       RAISE NOTICE '[B-notif] FAIL — corps=%', v_corps;
     ELSIF v_raison IS DISTINCT FROM
-          format('Départ anticipé (< 80 %% heures prévues) non contesté dans les %sh', v_delai) THEN
+          format('Départ anticipé (< 80 %% heures prévues), présence validée depuis plus de %sh', v_delai) THEN
       RAISE NOTICE '[B-audit] FAIL — raison=%', v_raison;
     ELSE
       RAISE NOTICE '[B] PASS — % / %', v_corps, v_raison;
