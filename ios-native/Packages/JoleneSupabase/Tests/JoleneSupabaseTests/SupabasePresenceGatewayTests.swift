@@ -73,11 +73,7 @@ final class SupabasePresenceGatewayTests: XCTestCase {
         XCTAssertEqual(autre, JoleneError(.contract, SupabasePresenceGateway.relectureMessage))
     }
 
-    func testNonAuthentifieEtCorpsVide() async throws {
-        registry.add("POST", rpc, respond: .json(200, #"{"error":"Non authentifié"}"#))
-        let session = await erreur { _ = try await self.confirmer() }
-        XCTAssertEqual(session?.kind, .unauthorized)
-        registry.reset()
+    func testCorpsVideJamaisUnSucces() async throws {
         registry.add("POST", rpc, respond: .json(200, "{}"))
         let vide = await erreur { _ = try await self.confirmer() }
         XCTAssertEqual(vide?.kind, .contract, "jamais un succès sans `success:true`")

@@ -84,3 +84,79 @@ final class PresenceRulesTests: XCTestCase {
         }
     }
 }
+
+/// Garde de non-idempotence de `ConfirmationPresenceModel` (revue B8 de T6c, M1) : un seul appel au port pour un double
+/// toucher, bloc « confirmée » dès la date relue par la gateway (même si la mission relue ne la porte pas encore), bouton
+/// jamais réactivé après un succès ; repli web pour toute erreur (m3).
+@MainActor
+final class ConfirmationPresenceModelTests: XCTestCase {
+    private struct EchecTransport: Error {}
+
+    /// Port espion : compte les appels et répond après un court délai (deux appels se chevaucheraient).
+    private final class PortEspion: PresencePort, @unchecked Sendable {
+        private let lock = NSLock()
+        private var nombre = 0
+        private let reponse: Result<PresenceOutcome, Error>
+
+        init(_ reponse: Result<PresenceOutcome, Error>) { self.reponse = reponse }
+
+        var appels: Int { lock.withLock { nombre } }
+
+        func confirmerPresence(missionId: String, context: MissionReadContext) async throws -> PresenceOutcome {
+            lock.withLock { nombre += 1 }
+            try await Task.sleep(nanoseconds: 50_000_000)
+            return try reponse.get()
+        }
+    }
+
+    private static let dateRelue = "2026-11-02T00:00:00.000Z"
+
+    private func modele(_ port: PortEspion) async throws -> (ConfirmationPresenceModel, MissionRecord) {
+        var gateways = DemoWorld.gateways()
+        gateways.presence = port
+        let controller = SessionController(gateways: gateways)
+        let state = await controller.signIn(email: DemoWorld.context.email ?? "", password: "demonstration")
+        let snapshot = try XCTUnwrap(state.snapshot, "session démo prête attendue, obtenu \(state)")
+        let model = ConfirmationPresenceModel(missionId: DemoPresenceGateway.idMissionJ1, controller: controller, snapshot: snapshot)
+        await model.charger()
+        let record = try XCTUnwrap(try DemoPresenceGateway.missionJ1()).record
+        return (model, record)
+    }
+
+    func testDoubleToucherUnSeulAppelEtBoutonJamaisReactive() async throws {
+        let port = PortEspion(.success(.confirmee(presenceConfirmeeLe: Self.dateRelue)))
+        let (model, mission) = try await modele(port)
+        XCTAssertEqual(model.bloc(mission), .aConfirmer)
+        async let premier = model.confirmer()
+        async let second = model.confirmer()
+        let issues = await [premier, second]
+        XCTAssertEqual(port.appels, 1, "RPC non idempotente : un seul appel pour deux touchers")
+        XCTAssertEqual(issues.filter { $0 }.count, 1)
+        XCTAssertEqual(model.issue, .confirmee)
+        // Relecture de la mission en échec ou en retard : la mission affichée n'a pas la date, le bloc est quand même confirmé.
+        XCTAssertNil(mission.presenceConfirmeeLe)
+        XCTAssertEqual(model.bloc(mission), .confirmee, "bouton masqué sans attendre la relecture de la mission")
+        XCTAssertFalse(model.enCours)
+        let encore = await model.confirmer()
+        XCTAssertFalse(encore, "aucun nouvel appel après un succès relu")
+        XCTAssertEqual(port.appels, 1)
+    }
+
+    func testRefusEtErreurDeTransportGardentLeBouton() async throws {
+        let refus = PortEspion(.success(.refusee(message: "Cette mission n'est plus active.")))
+        let (model, mission) = try await modele(refus)
+        _ = await model.confirmer()
+        XCTAssertEqual(model.issue, .refus("Cette mission n'est plus active."), "refus serveur verbatim")
+        XCTAssertEqual(model.bloc(mission), .aConfirmer)
+
+        let panne = PortEspion(.failure(JoleneError(.network, "Le service ne répond pas.")))
+        let (enPanne, missionPanne) = try await modele(panne)
+        _ = await enPanne.confirmer()
+        XCTAssertEqual(enPanne.issue, .refus("Confirmation impossible."), "repli web pour toute erreur (`error || data?.error`)")
+        XCTAssertEqual(enPanne.bloc(missionPanne), .aConfirmer)
+        let autre = PortEspion(.failure(EchecTransport()))
+        let (inconnu, _) = try await modele(autre)
+        _ = await inconnu.confirmer()
+        XCTAssertEqual(inconnu.issue, .refus("Confirmation impossible."))
+    }
+}
