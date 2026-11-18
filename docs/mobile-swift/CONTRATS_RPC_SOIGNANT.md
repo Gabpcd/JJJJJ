@@ -2517,14 +2517,14 @@ concernée à jour **dans la même PR**.
 
 | RPC | Statut natif | Lot | Classe manifeste | GRANT | types.ts |
 |---|---|---|---|---|---|
-| `fn_obtenir_missions_swipe` | consommée | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_enregistrer_swipe` | consommée | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_retirer_candidature` | consommée | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_initialiser_preferences_matching` | consommée | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_lister_mes_filtres_sauvegardes` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_creer_filtre_sauvegarde` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_modifier_filtre_sauvegarde` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_supprimer_filtre_sauvegarde` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_obtenir_missions_swipe` | consommée lot 4 (T3a) | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_enregistrer_swipe` | consommée lot 4 (T3a) | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_retirer_candidature` | consommée lot 4 (T3a) | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_initialiser_preferences_matching` | consommée lot 4 (T3a) | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_lister_mes_filtres_sauvegardes` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_creer_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_modifier_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_supprimer_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_definir_disponibilite` | à venir | 4 (T5) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_obtenir_mes_parrainages` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_appliquer_parrainage` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -2627,7 +2627,7 @@ tableau.
 
 ## fn_obtenir_missions_swipe
 
-- **Statut natif** : consommée (lot 4, T3a) — `SupabaseSwipeGateway.paquet`.
+- **Statut natif** : consommée (lot 4, T3a) par `JoleneSupabase/Swipe/SupabaseSwipeGateway.swift` — `SupabaseSwipeGateway.paquet`.
 - **Usage prévu** : Paquet de la vue Swipe d'Explorer (`p_limit = 20`, borné 1-100 côté serveur) : missions `OUVERTE` à venir, éligibles (`fn_soignant_eligible_mission`), au taux minimum du soignant, jamais déjà swipées (`NOT EXISTS swipes`, l.46095-46096), cohorte TEST respectée (`est_compte_test`, l.46090) ; puis créneaux PREVISIONNEL hors pauses par `MissionSlotPager` (lot 0) et filtre du paquet (port de `VueSwipeMissions.tsx` l.373-392, golden T2). Relu à l'apparition et à la reprise après 60 s.
 - **Signature SQL** (`supabase/schema/public.sql` l.46023) :
 
@@ -2645,7 +2645,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_missions_swipe"("p_limit" intege
 
 ## fn_enregistrer_swipe
 
-- **Statut natif** : consommée (lot 4, T3a) — `SupabaseSwipeGateway.enregistrer` (✕ / ⭐), et `LIKE` par
+- **Statut natif** : consommée (lot 4, T3a) par `JoleneSupabase/Swipe/SupabaseSwipeGateway.swift` — `SupabaseSwipeGateway.enregistrer` (✕ / ⭐), et `LIKE` par
   `SupabaseCandidatureGateway` (`SWIPE_LIKE`).
 - **Usage prévu** : ✕ (`DISLIKE`) et ⭐ (`FAVORI`) appelés directement ; ❤️ passe par `fn_confirmer_action_planning_v1(…, 'SWIPE_LIKE', …)`, qui délègue ici avec `'LIKE'` (fiche « Lot 4 — actions `SWIPE_LIKE` et `URGENCE` »). Jamais de `SUPER_LIKE` (réécrit en `FAVORI`, l.32771, D3). Une carte n'est retirée du paquet qu'après `ok:true`.
 - **Signature SQL** (`supabase/schema/public.sql` l.32753) :
@@ -2664,7 +2664,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_enregistrer_swipe"("p_mission_id" "uuid"
 
 ## fn_retirer_candidature
 
-- **Statut natif** : consommée (lot 4, T3a) — `SupabaseSwipeGateway.retirer`.
+- **Statut natif** : consommée (lot 4, T3a) par `JoleneSupabase/Swipe/SupabaseSwipeGateway.swift` — `SupabaseSwipeGateway.retirer`.
 - **Usage prévu** : « Annuler » du toast de 5 s qui suit un ❤️ (D4) : supprime la candidature `EN_ATTENTE`. La ligne `swipes` reste (immuable) : la carte n'est **jamais** remise dans le paquet, un nouveau `LIKE` répondrait `mission_deja_swipee` (correction 12). Seule RPC « pas avant le lot 4 » (`RPC_PAS_AVANT_LOT4`), suivie ici avec `lot: 4`.
 - **Signature SQL** (`supabase/schema/public.sql` l.54817) :
 
@@ -2682,7 +2682,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_retirer_candidature"("p_candidature_id" 
 
 ## fn_initialiser_preferences_matching
 
-- **Statut natif** : consommée (lot 4, T3a) — `SupabaseSwipeGateway.initialiserPreferences` (`PreferencesMatching`
+- **Statut natif** : consommée (lot 4, T3a) par `JoleneSupabase/Swipe/SupabaseSwipeGateway.swift` — `SupabaseSwipeGateway.initialiserPreferences` (`PreferencesMatching`
   nuit / jour / week-end / semaine, amorçage `depuisQuiz` du web).
 - **Usage prévu** : Quiz de préférences au premier contact (D6 : marqueur local par userId absent **et** aucun swipe en base), sans la question « dispo urgence » (D26, remplacée par un lien vers Pool urgence). Quatre préférences dans [0, 1].
 - **Signature SQL** (`supabase/schema/public.sql` l.38646) :
@@ -2701,7 +2701,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_initialiser_preferences_matching"("p_pre
 
 ## fn_lister_mes_filtres_sauvegardes
 
-- **Statut natif** : à venir (lot 4, T4).
+- **Statut natif** : consommée (lot 4, T4) par `JoleneSupabase/Filtres/SupabaseFiltresGateway.swift`, appelée par `FiltresModel` (liste, relecture après chaque mutation) et `AlerteRapideModel` (JoleneCore).
 - **Usage prévu** : Liste de `/soignant/parametres/recherches-sauvegardees` et relecture après chaque mutation ; toujours `p_audience = 'SOIGNANT_RECHERCHE_MISSIONS'`.
 - **Signature SQL** (`supabase/schema/public.sql` l.39947) :
 
@@ -2719,7 +2719,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_lister_mes_filtres_sauvegardes"("p_audie
 
 ## fn_creer_filtre_sauvegarde
 
-- **Statut natif** : à venir (lot 4, T4).
+- **Statut natif** : consommée (lot 4, T4) par `JoleneSupabase/Filtres/SupabaseFiltresGateway.swift`, appelée par `AlerteRapideModel` (JoleneCore, alerte rapide d'Explorer).
 - **Usage prévu** : Sauvegarde d'une recherche et « Créer une alerte » 1-tap depuis Explorer. `p_audience` est obligatoire (aucun défaut) : toujours `'SOIGNANT_RECHERCHE_MISSIONS'`. `p_filtres` en **camelCase**, les sept clés `profession, rayonKm, tauxMin, typeContrat, urgentesOnly, horaire, villeRecherche` toujours présentes avec les valeurs par défaut du web (forme `CriteresAlerteMissions`, `src/lib/alertes-recherche-missions.ts` l.1-9 ; validateur `private.fn_filtres_recherche_missions_valides`, migration `20260925093121`) : `MissionFilters.ville` → `villeRecherche`, `etablissementId` retiré, nombres entiers écrits sans `.0`, `typeContrat ∈ {TOUS, CDD, LIBERAL}`, `horaire ∈ {TOUS, JOUR, NUIT, WEEKEND}`. Avant création, une recherche strictement identique (clé `JSON.stringify` triée, `AlerteRecherche`, golden T2) est réactivée plutôt que dupliquée.
 - **Signature SQL** (`supabase/schema/public.sql` l.26466) :
 
@@ -2737,7 +2737,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_creer_filtre_sauvegarde"("p_nom" "text",
 
 ## fn_modifier_filtre_sauvegarde
 
-- **Statut natif** : à venir (lot 4, T4).
+- **Statut natif** : consommée (lot 4, T4) par `JoleneSupabase/Filtres/SupabaseFiltresGateway.swift`, appelée par `FiltresModel` (cloche, « Modifier ») et `AlerteRapideModel` (réactivation d'une recherche identique), JoleneCore.
 - **Usage prévu** : Renommage, bascule de l'alerte et fréquence (`IMMEDIATE`, `QUOTIDIENNE`, `HEBDOMADAIRE`) ; `filtres` n'est pas modifiable (absent de la signature). Un paramètre `NULL` laisse la valeur inchangée (`COALESCE`).
 - **Signature SQL** (`supabase/schema/public.sql` l.43089) :
 
@@ -2755,7 +2755,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_modifier_filtre_sauvegarde"("p_id" "uuid
 
 ## fn_supprimer_filtre_sauvegarde
 
-- **Statut natif** : à venir (lot 4, T4).
+- **Statut natif** : consommée (lot 4, T4) par `JoleneSupabase/Filtres/SupabaseFiltresGateway.swift`, appelée par `FiltresModel` (JoleneCore).
 - **Usage prévu** : Suppression d’une recherche sauvegardée.
 - **Signature SQL** (`supabase/schema/public.sql` l.59994) :
 

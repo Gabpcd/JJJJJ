@@ -106,6 +106,8 @@ const parResumeLot1 = eclatsDuResume(jobLot1);
 const ECLATS_LOT1 = new Map([
   ['lot1-missions', ['DemoMesMissionsTests', 'DemoCandidatureTests', 'DemoConfirmationPresenceTests', 'DemoAnnulationTests']],
   ['lot1-accueil-explorer', ['DemoAccueilTests', 'DemoExplorerTests', 'DemoFavorisTests']],
+  // Lot 4 (L4-T4) : première tranche du lot 4 à livrer un XCUITest ; ses classes démo rejoignent cet éclat du job (D19).
+  ['lot4', ['DemoFiltresTests']],
 ]);
 
 // À l'intégration du 9 novembre 2026, l'éclat « lot2 » n'existe plus : L2-T4b l'a découpé par domaine (« presences »,
