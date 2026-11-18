@@ -18,10 +18,14 @@ import Foundation
 /// - **après l'accusé** `{success:true}` : l'issue RESTE incertaine. Le serveur écrit `presence_confirmee_le = NOW()` sans
 ///   condition avant de répondre (`public.sql` l.25003-25010) et rien ne la remet à NULL : une lecture sans la date est
 ///   anormale, elle ne prouve pas la non-réception (PRINCIPES §4) ; seule la réouverture de la mission recrée le bloc ;
-/// - **après un délai dépassé sans accusé** : la relecture conclut « non enregistrée », l'envoi redevient possible, comme
-///   `ProfilEditionModel` après un délai sans écriture côté serveur.
-/// Une mission relue qui n'est plus attribuée au soignant ne laisse rien à confirmer. Une relecture en échec garde l'issue
-/// incertaine. « Confirmation impossible. » reste le repli d'un refus sans message et d'une erreur d'envoi, comme le web
+/// - **après un délai dépassé sans accusé** : `bounded` annule la tâche locale, pas la requête déjà partie ; la RPC peut
+///   encore valider après le délai. Une relecture sans la date ne conclut « non enregistrée » que si elle a lieu au moins
+///   `delaiAvantConclusion` (30 s) après le début de l'appel expiré (revue B8 delta de #1158, m7) ; avant, l'issue reste
+///   incertaine (« Actualiser »). Conclue, l'écran l'annonce sans promesse (`PresenceRules.Textes.nonEnregistree`, m8) et
+///   l'envoi redevient possible.
+/// Une mission relue qui n'est plus attribuée au soignant ne laisse rien à confirmer ; après l'accusé, le verrou d'envoi
+/// est pourtant gardé tant que l'écran n'a pas relu la mission (m6 : le bloc est alors masqué, ou « Actualiser »
+/// réapparaît). Une relecture en échec garde l'issue incertaine. « Confirmation impossible. » reste le repli d'un refus sans message et d'une erreur d'envoi, comme le web
 /// (l.1426), jamais après un succès serveur. Mêmes gardes d'epoch que `MissionDetailModel`.
 @MainActor
 public final class ConfirmationPresenceModel: ObservableObject {
@@ -32,7 +36,14 @@ public final class ConfirmationPresenceModel: ObservableObject {
         case refus(String)
         /// Envoyée sans relecture concluante : texte de relecture, aucun nouvel envoi avant `relire()`.
         case incertaine(String)
+        /// Délai dépassé sans accusé, puis relue sans la date au moins 30 s après le début de l'appel : constat neutre
+        /// (`PresenceRules.Textes.nonEnregistree`), l'envoi redevient possible.
+        case nonEnregistree(String)
     }
+
+    /// Délai minimal entre le début d'un appel expiré (sans accusé) et une relecture sans la date qui peut conclure « non
+    /// enregistrée » (revue B8 delta de #1158, m7) : au-delà, une RPC encore en vol côté PostgREST a eu le temps de valider.
+    public static let delaiAvantConclusion: TimeInterval = 30
 
     @Published public private(set) var enCours = false
     @Published public private(set) var issue: Issue?
@@ -46,6 +57,8 @@ public final class ConfirmationPresenceModel: ObservableObject {
     /// enregistrée » sur une relecture sans la date.
     private enum OrigineIncertitude { case accuse, delaiSansAccuse }
     private var origine: OrigineIncertitude?
+    /// Début (horloge des gateways) du dernier appel `confirmerPresence` : base du délai de `delaiAvantConclusion`.
+    private var debutAppel: Date?
 
     public let missionId: String
     private let controller: SessionController
@@ -83,6 +96,7 @@ public final class ConfirmationPresenceModel: ObservableObject {
         let id = missionId
         let context = snapshot.context
         issue = nil
+        debutAppel = gateways.clock.now()
         do {
             let outcome = try await bounded(timeout: controller.resolutionTimeout) {
                 try await port.confirmerPresence(missionId: id, context: context)
@@ -141,16 +155,28 @@ public final class ConfirmationPresenceModel: ObservableObject {
             guard await controller.epoch == snapshot.epoch else { return }
             guard let record = relue?.record, let assigne = record.soignantAssigneId,
                   assigne.caseInsensitiveCompare(context.userId) == .orderedSame else {
-                // Plus attribuée au soignant (ligne absente sous RLS comprise) : plus rien à confirmer.
-                conclure(issue: nil)
+                // Plus attribuée au soignant (ligne absente sous RLS comprise) : plus rien à confirmer. Après l'accusé,
+                // le verrou d'envoi reste posé tant que l'écran n'a pas relu la mission (m6) : le bloc sera masqué, ou
+                // « Actualiser » réapparaîtra si la mission relue par l'écran est encore assignée.
+                if origine == .accuse {
+                    issue = nil
+                } else {
+                    conclure(issue: nil)
+                }
                 return
             }
             if let date = record.presenceConfirmeeLe, !date.isEmpty {
                 presenceRelue = date
                 conclure(issue: .confirmee)
             } else if origine == .delaiSansAccuse {
-                // Délai dépassé sans accusé, mission relue sans la date : non enregistrée, l'envoi redevient possible.
-                conclure(issue: nil)
+                // Délai dépassé sans accusé, mission relue sans la date : non enregistrée seulement si la relecture a lieu
+                // au moins `delaiAvantConclusion` après le début de l'appel expiré (m7) ; avant, l'issue reste incertaine.
+                let ecoule = debutAppel.map { gateways.clock.now().timeIntervalSince($0) } ?? 0
+                if ecoule >= Self.delaiAvantConclusion {
+                    conclure(issue: .nonEnregistree(PresenceRules.Textes.nonEnregistree))
+                } else {
+                    issue = .incertaine(PresenceRules.Textes.envoyeeNonRelue)
+                }
             } else {
                 // Accusé reçu, mission relue sans la date : lecture anormale, jamais une preuve de non-réception
                 // (revue B8 de #1158, M1) ; l'issue reste incertaine, aucun envoi.

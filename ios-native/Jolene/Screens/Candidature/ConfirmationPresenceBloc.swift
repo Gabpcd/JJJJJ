@@ -75,6 +75,9 @@ struct ConfirmationPresenceBloc: View {
                 if model.bloc(mission.record) != .confirmee {
                     InlineNotice(message, tone: .warning, identifier: "presence-incertaine", announcesOnAppear: true)
                 }
+            case let .nonEnregistree(message)?:
+                // Revue B8 delta de #1158 (m8) : constat neutre, le bouton d'envoi est revenu.
+                InlineNotice(message, tone: .info, identifier: "presence-non-enregistree", announcesOnAppear: true)
             case nil:
                 EmptyView()
             }

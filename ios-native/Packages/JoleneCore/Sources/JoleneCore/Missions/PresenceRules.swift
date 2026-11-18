@@ -28,6 +28,9 @@ public enum PresenceRules {
         /// relecture ni délai), hors HARD STOP. Après `{success:true}` sans relecture concluante, ou un délai dépassé. Il
         /// renvoie au bouton « Actualiser » affiché sur place (revue B8 de #1158, m3), sans promettre de nouvel envoi.
         public static let envoyeeNonRelue = "Votre confirmation a été envoyée mais n'a pas pu être relue. Actualisez pour la vérifier."
+        /// Constat neutre (revue B8 delta de #1158, m8), hors HARD STOP : délai dépassé sans accusé, puis mission relue sans
+        /// la date au moins 30 s après le début de l'appel ; le bouton d'envoi revient, sans promesse.
+        public static let nonEnregistree = "Votre confirmation n'a pas été enregistrée."
         /// Relecture proposée à la place d'un nouvel envoi tant que l'issue reste incertaine.
         public static let actualiser = "Actualiser"
     }
