@@ -1780,8 +1780,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_enregistrer_mon_iban"("p_iban" "text", "
 ## fn_mes_revenus_connect
 
 - **Statut natif** : consommée (lot 3, T12) par `JoleneSupabase/Revenus/SupabaseRevenusGateway.swift` (`totaux`),
-  appelée par le modèle de l'onglet Revenus (`JoleneCore/Revenus/RevenusModel.swift`) ; T14a la réutilisera pour l'écran
-  Stripe Connect — **B9** (paiements, D18 : PR préparée, jamais mergée sans le go de Gabrielle). Définition live relue
+  appelée par le modèle de l'onglet Revenus (`JoleneCore/Revenus/RevenusModel.swift`) ; T14a ne la rappelle pas (l'écran
+  Stripe Connect renvoie à l'onglet Revenus pour les totaux, écart consigné dans `DECISIONS_LOT3.md`, section T14a) — **B9** (paiements, D18 : PR préparée, jamais mergée sans le go de Gabrielle). Définition live relue
   en lecture seule le 09/11/2026 (`pg_get_functiondef`) : identique au dump ; GRANT EXECUTE `authenticated` vérifié.
 - **Usage** : totaux serveur de l'onglet Revenus (« Ce mois », « Total réglé », « Autres paiements en attente » et la
   note du web, `PageStripeConnect.tsx` l.392-417), affichés tels quels, jamais recalculés (D4) ; aucun KPI calculé côté
@@ -1960,7 +1960,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_paiements_escrow"() RETURNS "jsonb"
 
 ## Edge `stripe-connect-status` (lot 3)
 
-- **Statut natif** : à venir (lot 3, T14a) — **B9** (Stripe, D18).
+- **Statut natif** : consommée (lot 3, T14a) par `JoleneSupabase/Revenus/SupabaseStripeConnectGateway.swift` (`statut`),
+  règle de lecture `StatutConnect.lire` (`JoleneCore/Revenus/StripeConnect.swift`) — **B9** (Stripe, D18 : PR préparée,
+  jamais mergée sans le go de Gabrielle).
 - **Transport** : `POST` seulement (l.30 : toute autre méthode → **405**), corps vide, Bearer utilisateur
   (`verifyUserOrServiceRole`, service_role refusé) ; `verify_jwt = false` (`supabase/config.toml` l.102-103). Cache
   serveur de **5 min** (`CACHE_TTL_MS`, l.13, l.78-110) contourné par `?force=true` (l.80) :
@@ -1989,7 +1991,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_paiements_escrow"() RETURNS "jsonb"
 
 ## Edge `stripe-connect-onboard` (lot 3)
 
-- **Statut natif** : à venir (lot 3, T14a) — **B9** (Stripe, D18).
+- **Statut natif** : consommée (lot 3, T14a) par `JoleneSupabase/Revenus/SupabaseStripeConnectGateway.swift`
+  (`lienOnboarding`, en-tête `Origin: https://jolene.app`), flux hébergé `Jolene/Composition/ExternalFlowPresenter.swift`
+  — **B9** (Stripe, D18 : PR préparée, jamais mergée sans le go de Gabrielle).
 - **Transport** : `POST` (la fonction ne contrôle pas la méthode ; l'app n'envoie que `POST`), Bearer utilisateur,
   **en-tête `Origin: https://jolene.app` obligatoire** (correction 1, D6) : `getTrustedStripeReturnOrigin`
   (l.21-32) rend `null` si `Origin` est absente — un client URLSession n'en envoie pas — ou non reconnue par
