@@ -5,12 +5,14 @@ import JoleneDesign
 /// Ligne de la section « Présences validées récemment » de l'onglet Aujourd'hui (`PresencesSoignant.tsx` l.616-650) :
 /// intitulé, établissement (`m?.etablissements?.nom`, sans repli, l.629), badge « Validée », date de validation.
 ///
-/// Point d'extension T5b : le panneau de contestation (`PanneauContestation`, l.637-646) se monte sous la date, dans
-/// cette ligne (`ContestationSheet`, identifiants `contestation-ouvrir-<presenceId>`…). Il attend le go HARD STOP n°4 de
-/// Gabrielle (délai de contestation, Q9) : rien n'est rendu ici d'ici là.
+/// T5b : le panneau de contestation (`PanneauContestation`, l.637-646) se monte sous la date (`ContestationPanneau`,
+/// identifiants `contestation-ouvrir-<presenceId>`, `contestation-statut-<presenceId>`…) ; bouton décidé par le serveur,
+/// aucun texte de délai (HARD STOP n°4, Q9, D12). Sans `mission_id` lisible, rien n'est monté.
 struct PresenceValideeRow: View {
     let presence: PresenceLue
     let etablissement: EtablissementSummary?
+    let session: SessionStore
+    let snapshot: SessionSnapshot
 
     var body: some View {
         VStack(alignment: .leading, spacing: JoleneSpacing.xs) {
@@ -35,6 +37,11 @@ struct PresenceValideeRow: View {
                 Text(date)
                     .font(JoleneFont.caption)
                     .foregroundStyle(JoleneColor.bubblegum)
+            }
+            if let missionId = presence.missionId {
+                ContestationPanneau(presenceId: presence.id, missionId: missionId, valideLe: presence.valideLe,
+                                    session: session, snapshot: snapshot)
+                    .id(presence.id + (presence.valideLe ?? ""))
             }
         }
         .padding(JoleneSpacing.md)

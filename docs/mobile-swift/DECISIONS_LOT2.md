@@ -1190,6 +1190,18 @@ Repris d'écrans natifs déjà livrés, sans texte nouveau : « Session à véri
 (lot 0, repli de la session expirée sans message) et `LibellesPresences.Liste.erreurTitre` (« Impossible de charger vos
 présences », T4a) pour l'échec de lecture du détail.
 
+## Textes opérationnels hors web (T5b)
+
+Aucun texte de délai (Q9, D12). Libellés du panneau repris tels quels du web : `LibellesWeb.Contestation` (titre,
+« Contester cette présence », placeholder soignant, « Envoi… », « Envoyer la contestation », « Annuler ») et
+`TextesWeb.Contestation` (statuts de `STATUT_CONFIG`, TL) ; renvoi « Voir ou signaler un litige »
+(`LibellesWeb.LignePresence`, T4a). Refus du serveur affichés tels quels ; la borne de 10 caractères est vérifiée avant
+l'envoi avec le message serveur verbatim (`MessagesContestationServeur.motifLongueur`, `public.sql` l.46863).
+
+| Constante | Texte | Source | Test |
+|---|---|---|---|
+| `LibellesDetailPresences.Contestation.erreurEnvoi` | « La contestation n'a pas pu être envoyée. Réessayez. » | repli d'une erreur de transport sans message lisible (le web affiche `extraireMessageErreur(err)`, `PanneauContestation.tsx` l.157), sur le modèle de `Notation.erreurEnregistrement` ; le formulaire reste ouvert après relecture du litige | — (repli de transport) |
+
 ## Textes opérationnels hors web (T9b)
 
 Aucun texte nouveau ; tous sont repris tels quels d'écrans ou de modules déjà livrés :
