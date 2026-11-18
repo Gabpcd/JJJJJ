@@ -84,6 +84,7 @@ on:
       - 'src/components/SectionBio.tsx'
       - 'src/components/gains/PaiementsEscrowAVenir.tsx'
       - 'src/components/profil-soignant/SectionConfidentialite.tsx'
+      - 'src/components/profil-soignant/SectionPaiements.tsx'
       - 'src/components/profil-soignant/SectionPreferences.tsx'
       - 'src/components/profil-soignant/SectionProfilPrincipal.tsx'
       - 'src/components/soignant/ChangementMotDePasse.tsx'
@@ -182,6 +183,7 @@ on:
       - 'src/components/SectionBio.tsx'
       - 'src/components/gains/PaiementsEscrowAVenir.tsx'
       - 'src/components/profil-soignant/SectionConfidentialite.tsx'
+      - 'src/components/profil-soignant/SectionPaiements.tsx'
       - 'src/components/profil-soignant/SectionPreferences.tsx'
       - 'src/components/profil-soignant/SectionProfilPrincipal.tsx'
       - 'src/components/soignant/ChangementMotDePasse.tsx'
@@ -530,7 +532,8 @@ jobs:
       # douzième éclat (plafond du job) ; « lot3-profil-photo » (L3-T10) : photo et position du profil, rangée à part
       # parce que « lot3-notifications » (15 min sur iphone au run 42541548740) aurait dépassé 20 min ; « lot3-revenus »
       # (L3-T12) : onglet Revenus, domaine des tranches T12, T13, T14a et T14b ; L3-T13 y range DemoPaiementsTests
-      # (paiements déclarés, quatre tests), sans nouvel éclat (onze au plus).
+      # (paiements déclarés, quatre tests), L3-T14b DemoIbanTests (coordonnées bancaires, deux tests), sans nouvel
+      # éclat (onze au plus).
       - name: test-without-building — éclat socle (JoleneCoreTests, JoleneDesignTests, XCUITest lots 0 et 1) (${{ matrix.format }})
         id: tests
         # Même condition que les dix autres éclats (revue B8 de la vague 5, m1) : une dérive du Package.resolved (étape
@@ -579,6 +582,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoPhotoPositionTests \
             -skip-testing:JoleneUITests/DemoRevenusTests \
             -skip-testing:JoleneUITests/DemoPaiementsTests \
+            -skip-testing:JoleneUITests/DemoIbanTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -993,6 +997,7 @@ jobs:
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoRevenusTests \
             -only-testing:JoleneUITests/DemoPaiementsTests \
+            -only-testing:JoleneUITests/DemoIbanTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1046,7 +1051,7 @@ jobs:
               { nom: "lot3-notifications", code: process.env.CODE_LOT3_NOTIFICATIONS, classes: ["DemoNotificationsTests", "DemoPreferencesTests", "DemoProfilTests"] },
               { nom: "lot3-inscription", code: process.env.CODE_LOT3_INSCRIPTION, classes: ["DemoInscriptionTests", "DemoCompletionInscriptionTests", "DemoLiensLot2Tests"] },
               { nom: "lot3-profil-photo", code: process.env.CODE_LOT3_PROFIL_PHOTO, classes: ["DemoPhotoPositionTests"] },
-              { nom: "lot3-revenus", code: process.env.CODE_LOT3_REVENUS, classes: ["DemoRevenusTests", "DemoPaiementsTests"] },
+              { nom: "lot3-revenus", code: process.env.CODE_LOT3_REVENUS, classes: ["DemoRevenusTests", "DemoPaiementsTests", "DemoIbanTests"] },
             ];
             let total = 0, passed = 0, failed = 0, skipped = 0, log = "";
             const lignes = [`### UI — ${process.env.JOLENE_UI_FORMAT}`, ""];

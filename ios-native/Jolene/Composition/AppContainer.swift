@@ -262,7 +262,8 @@ final class AppContainer: ObservableObject {
     /// lot 3, T12 : `JOLENE_FORCE_REVENUS_ECHEC=1` fait échouer la première lecture des missions terminées
     /// (`DemoRevenusEchecGateway`, `DemoRevenusTests.testErreurPuisReprise`) ; lot 3, T13 : `JOLENE_DEMO_PAIEMENTS=refus`
     /// rejoue les refus serveur des paiements déclarés (`DemoPaiementsGateway.Scenario.refus`,
-    /// `DemoPaiementsTests.testRefusServeurVerbatimJamaisUnSucces`).
+    /// `DemoPaiementsTests.testRefusServeurVerbatimJamaisUnSucces`) ; lot 3, T14b : `JOLENE_DEMO_IBAN=<scenario>`
+    /// (`DemoIbanGateway.Scenario` : `rib-requis`, `non-verifie`, `DemoIbanTests`).
     /// Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
@@ -326,6 +327,10 @@ final class AppContainer: ObservableObject {
             let paiements = DemoPaiementsGateway(scenario: scenario)
             gateways.paiements = paiements
             gateways.revenus = DemoRevenusGateway(paiementsDeclares: paiements)
+        }
+        if let scenario = processEnvironment[DemoIbanGateway.variableEnvironnement].flatMap(DemoIbanGateway.Scenario.init),
+           scenario != .normal {
+            gateways.iban = DemoIbanGateway(scenario: scenario) // lot 3, T14b
         }
         return gateways
         #else
