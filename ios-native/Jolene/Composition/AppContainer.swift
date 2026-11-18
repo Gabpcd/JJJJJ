@@ -85,6 +85,9 @@ final class AppContainer: ObservableObject {
     /// ou lecture impossible avec `-JOLENE_DEMO_AVATAR illisible`, DEBUG) ; nil en staging et en production (feuilles
     /// système réelles).
     let selectionAvatarDemo: SelectionPhotoAvatar?
+    /// Lot 3, T14a : flux hébergé de l'onboarding Stripe Connect — démo : `DemoExternalFlow` (retour simulé, sans feuille
+    /// ni réseau) ; staging/production : `ExternalFlowPresenter` (ASWebAuthenticationSession ≥ 17.4, renvoi web sinon).
+    let fluxExterne: ExternalFlowPort
     #if DEBUG
     let networkSentinel: NetworkSentinel.Monitor?
     #endif
@@ -112,6 +115,13 @@ final class AppContainer: ObservableObject {
         let liens = DeepLinkCoordinator(taps: boite, inscription: inscription, estDemo: environment.mode == .demo,
                                         effaceur: environment.mode == .demo ? nil : EffaceurDonneesSafari())
         self.liens = liens
+        if environment.mode == .demo {
+            fluxExterne = DemoExternalFlow()
+        } else {
+            let presentateur = ExternalFlowPresenter(coordinateur: liens)
+            liens.fermerFluxExterne = { [weak presentateur] in presentateur?.fermer() }
+            fluxExterne = presentateur
+        }
         theme = PreferenceThemeModel(stockage: environment.mode == .demo ? MemoireStockageAppareil() : UserDefaultsStockageAppareil())
         selectionAvatarDemo = environment.mode == .demo
             ? DemoFixtures.selectionAvatarDemo(scenario: Self.scenarioAvatarDemo(arguments: arguments)) : nil
@@ -262,7 +272,8 @@ final class AppContainer: ObservableObject {
     /// lot 3, T12 : `JOLENE_FORCE_REVENUS_ECHEC=1` fait échouer la première lecture des missions terminées
     /// (`DemoRevenusEchecGateway`, `DemoRevenusTests.testErreurPuisReprise`) ; lot 3, T13 : `JOLENE_DEMO_PAIEMENTS=refus`
     /// rejoue les refus serveur des paiements déclarés (`DemoPaiementsGateway.Scenario.refus`,
-    /// `DemoPaiementsTests.testRefusServeurVerbatimJamaisUnSucces`).
+    /// `DemoPaiementsTests.testRefusServeurVerbatimJamaisUnSucces`) ; lot 3, T14a : `-JOLENE_DEMO_STRIPE <variante>`
+    /// (`DemoStripeConnectGateway.Scenario`, `DemoStripeTests`).
     /// Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
@@ -327,6 +338,8 @@ final class AppContainer: ObservableObject {
             gateways.paiements = paiements
             gateways.revenus = DemoRevenusGateway(paiementsDeclares: paiements)
         }
+        // Lot 3, T14a : `-JOLENE_DEMO_STRIPE <statut|TEST|SALARIE>` (`DemoStripeTests`).
+        gateways.stripeConnect = DemoStripeConnectGateway(scenario: DemoStripeConnectGateway.Scenario(arguments: arguments))
         return gateways
         #else
         return DemoWorld.gateways()

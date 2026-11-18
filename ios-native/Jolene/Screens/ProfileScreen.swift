@@ -19,10 +19,11 @@ import JoleneDesign
 /// - lot 1, T8 : « Suppression de compte », dernière section.
 /// Entrées natives en liens par valeur (`ProfilEditionRoute`, `PreferencesNotificationsRoute` enregistrées par
 /// `MainTabView` ; `MotDePasseRoute` enregistrée ici, sur la liste et non dans ses lignes) ; celles de « Mon espace »
-/// (lot 2) en liens à destination. Entrées web : `JoleneRoute` puis `DestinationLien.destination`. Points d'extension
-/// (sans entrée tant que l'écran ou le présentateur manque) : paiements et Stripe (T14a), coordonnées bancaires
-/// (T14b), biométrie (L1-T9), centre de notifications (ouvert depuis l'Accueil, le hub web n'en a pas). Identifiant de
-/// la liste : `profile-list`.
+/// (lot 2) en liens à destination. Entrées web : `JoleneRoute` puis `DestinationLien.destination`. Lot 3, T14a :
+/// « Paiements & facturation › Compte de paiement (Stripe) » (`PaiementsEntreeSection`, règle web `estLiberal`). Points
+/// d'extension (sans entrée tant que l'écran ou le présentateur manque) : coordonnées bancaires (T14b), biométrie
+/// (L1-T9), centre de notifications (ouvert depuis l'Accueil, le hub web n'en a pas). Identifiant de la liste :
+/// `profile-list`.
 struct ProfileScreen: View {
     let container: AppContainer
     @ObservedObject var session: SessionStore
@@ -37,6 +38,8 @@ struct ProfileScreen: View {
     /// demande ne perde pas l'issue (annoncée ici, `compte-mdp-issue-hub`).
     @StateObject private var motDePasse: MotDePasseModel
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
+    /// Lot 3, T14a : entrée « Compte de paiement (Stripe) », montrée selon l'exercice lu (`PaiementsEntreeSection`).
+    @State private var entreeStripe = false
 
     init(container: AppContainer, session: SessionStore, snapshot: SessionSnapshot,
          ouvrirOnglet: @escaping (MainTabView.Tab) -> Void = { _ in }) {
@@ -107,6 +110,9 @@ struct ProfileScreen: View {
                 }
             }
             ExportRGPDSection(model: export, exposerResidus: container.isDemo) // lot 3, T11
+            // Lot 3, T14a : « Paiements & facturation » (`MonCompteSoignant.tsx` l.64-68), après l'export : montée une fois
+            // l'exercice lu, elle ne décale aucune section au-dessus d'elle (écart d'ordre assumé, comme le bloc du lot 0).
+            if entreeStripe { PaiementsEntreeSection() }
             if let presentateurRenvoiWeb {
                 AideEtLegalSection(presentateur: presentateurRenvoiWeb) // lot 3, T11 (présentateur de L3-T3b)
             }
@@ -120,6 +126,8 @@ struct ProfileScreen: View {
         .navigationDestination(for: MotDePasseRoute.self) { _ in
             MotDePasseScreen(model: motDePasse)
         }
+        // Lot 3, T14a : exercice relu à chaque apparition du hub (entrée Stripe selon la règle web `estLiberal`).
+        .task { entreeStripe = await PaiementsEntreeSection.estVisible(session: session, snapshot: snapshot) }
         // Export RGPD (revue B8, M1 et m3) : la feuille n'est présentée que hub à l'écran, une seule fois, par
         // UIKit (`FeuillePartageExport`, fin unique `completionWithItemsHandler`) ; un export abouti pendant qu'un
         // autre onglet ou un écran empilé est affiché attend le retour du hub.

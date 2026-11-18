@@ -86,7 +86,7 @@ public enum SupabaseGateways {
         gateways.revenus = SupabaseRevenusGateway(client: client)          // T12
         gateways.paiements = SupabasePaiementsGateway(client: client)      // T13
         gateways.iban = UnwiredIbanPort()                                  // T14b
-        gateways.stripeConnect = UnwiredStripeConnectPort()                // T14a
+        gateways.stripeConnect = SupabaseStripeConnectGateway(client: client) // T14a
     }
 
     /// Construction du client : options vérifiées dans `SupabaseClientOptions` de 2.55.5

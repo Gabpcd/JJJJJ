@@ -15,22 +15,22 @@ final class DestinationLienTests: XCTestCase {
 
     private func url(_ s: String) -> URL { URL(string: s)! }
 
-    // MARK: Écrans du lot 3 pas encore livrés
+    // MARK: Écrans du lot 3 livrés depuis T13
 
-    func testRoutesLot3SansEcranRenvoyeesVersSafariCanonique() throws {
-        let cas: [(lien: String, route: JoleneRoute, canonique: String)] = [
-            ("https://jolene.app/soignant/stripe-connect?success=true", .stripeConnect(retour: .succes),
-             "https://jolene.app/soignant/stripe-connect?success=true"),                                            // T14a
-            ("https://jolene.app/soignant/stripe-connect?refresh=true", .stripeConnect(retour: .rafraichir),
-             "https://jolene.app/soignant/stripe-connect?refresh=true"),                                            // T14a
+    /// T14a : Stripe Connect est livré (`StripeConnectScreen`, empilé sur le Profil) ; le retour de Stripe
+    /// (`?success=true`, `?refresh=true`) mène à l'écran natif, jamais un renvoi web.
+    func testStripeConnectLivreEnNatif() throws {
+        let cas: [(lien: String, route: JoleneRoute)] = [
+            ("https://jolene.app/soignant/stripe-connect", .stripeConnect(retour: nil)),
+            ("https://jolene.app/soignant/stripe-connect?success=true", .stripeConnect(retour: .succes)),
+            ("https://www.jolene.app/soignant/stripe-connect?refresh=true", .stripeConnect(retour: .rafraichir)),
         ]
         for c in cas {
             let d = try XCTUnwrap(lien(c.lien), c.lien)
             XCTAssertEqual(d.route, c.route, c.lien)
-            XCTAssertTrue(d.route.isNative, "\(c.lien) : la route reste native dans la table")
-            XCTAssertFalse(DestinationLien.ecranNatifLivre(d.route), c.lien)
-            XCTAssertEqual(d.destination, .safari(url(c.canonique)), c.lien)
-            XCTAssertEqual(d.canonique, url(c.canonique), c.lien)
+            XCTAssertTrue(DestinationLien.ecranNatifLivre(d.route), c.lien)
+            XCTAssertEqual(d.destination, c.route, c.lien)
+            XCTAssertNil(d.destination.externalURL, c.lien)
         }
     }
 
@@ -258,7 +258,7 @@ final class DestinationLienTests: XCTestCase {
             "/soignant/recherche-missions": ("explorer", "explorer", 24),
             "/soignant/notifications": ("notifications", "notifications", 6),                // T5
             "/soignant/profil": ("profil", "profil", 7),                                     // T9 (livrée)
-            "/soignant/stripe-connect": ("stripeConnect", "safari", 6),                      // T14a
+            "/soignant/stripe-connect": ("stripeConnect", "stripeConnect", 6),               // T14a (livrée)
             "/soignant/mes-gains?tab=paiements": ("revenus(paiements)", "revenus(paiements)", 32), // T13 (livrée)
             "/soignant/mes-gains?tab=factures": ("revenus(factures)", "safari", 21),         // lot 4 (D4)
             "/soignant/litiges": ("safari", "safari", 46),
@@ -294,9 +294,9 @@ final class DestinationLienTests: XCTestCase {
             }
         }
         XCTAssertEqual(decomptes, attendus.mapValues { $0.nombre }, "décomptes par famille")
-        XCTAssertEqual(natifs, 620, "destinations natives (T5 : +6, centre de notifications ; T9 : +7, profil ; "
-                       + "T13 : +32, paiements à confirmer ; L2-T10 : +127, contrats et Mes documents)")
-        XCTAssertEqual(renvois, 270, "renvois web (T13 : −32 ; L2-T10 : −127)")
+        XCTAssertEqual(natifs, 626, "destinations natives (T5 : +6, centre de notifications ; T9 : +7, profil ; "
+                       + "T13 : +32, paiements à confirmer ; L2-T10 : +127, contrats et Mes documents ; T14a : +6, Stripe Connect)")
+        XCTAssertEqual(renvois, 264, "renvois web (T13 : −32 ; L2-T10 : −127 ; T14a : −6)")
     }
 
     // MARK: Description masquée (PRINCIPES §7 : ni identifiant ni jeton dans les logs)
@@ -463,8 +463,8 @@ final class DestinationLienTests: XCTestCase {
             (.inscription(EtapeInscription(page: .completer, query: nil)), true, "T8 : CompletionProfilScreen, hors espace"),
             (.profil, true, "T9 : ProfilEditionScreen"),
             (.revenus(section: .paiementsAConfirmer), true, "T13 : section de RevenusScreen"),
-            (.stripeConnect(retour: nil), false, "T14a"),
-            (.stripeConnect(retour: .succes), false, "T14a"),
+            (.stripeConnect(retour: nil), true, "T14a : StripeConnectScreen, empilé sur le Profil"),
+            (.stripeConnect(retour: .succes), true, "T14a : retour de Stripe, statut relu avec force=true"),
             (.revenus(section: .factures), false, "lot 4"),
             (.revenus(section: .bulletins), false, "lot 4"),
             (.revenus(section: .avances), false, "lot 4"),

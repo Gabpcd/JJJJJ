@@ -37,6 +37,7 @@
 		45BF2836A6AF8ECDBEB42B16 /* RecusJustificatifs.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAB84E5DAE9D6DA747E6BC3E /* RecusJustificatifs.swift */; };
 		496EB218D427D36B5164DC14 /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B12ED2CF03F5935EB224B9A /* AppContainer.swift */; };
 		4BB07F8A188E0551BB6B7248 /* AjoutCalendrierMission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92467ECFCEBFFC4A3024CA6F /* AjoutCalendrierMission.swift */; };
+		4C0250FC1A73E3696D06F8BD /* DemoStripeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2F50AD5618266E19F848E4 /* DemoStripeTests.swift */; };
 		4CB0366CDA13BFA04A0DB949 /* DemoProfilTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D65489D1594FDE00944062B4 /* DemoProfilTests.swift */; };
 		500CEC9A4702D20CC64834A1 /* ScannerQRSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8871ADB5FEB42857BD704D4 /* ScannerQRSheet.swift */; };
 		505CD3F8AEBA761A5D1B4F6E /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EAAB6AC67F4599A2D37E82B /* LocationService.swift */; };
@@ -53,6 +54,7 @@
 		618DCEFB2E7DF8FD3AC1FF28 /* BlocPointageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC682D167D3736C3877FC191 /* BlocPointageView.swift */; };
 		634E2F09A431203F99161794 /* SuppressionCompteScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D38838D39EB705DD25FE585 /* SuppressionCompteScreen.swift */; };
 		6A2FA992EC44B425AB4036F2 /* AccueilLignes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C1F510DF2473734BC92D4D /* AccueilLignes.swift */; };
+		6AA522B07A66D8B2627EE45E /* StripeConnectScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB607B818EDB33896E655605 /* StripeConnectScreen.swift */; };
 		6AD94C7C2C0E66A224827616 /* PointageCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F45DE21AF53796F64DB403 /* PointageCodeView.swift */; };
 		70E18B80A0AC5A74ED210F8A /* MotDePasseScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3280662B63B64903F06565E /* MotDePasseScreen.swift */; };
 		71865F0B8B547EF1368F2E85 /* DemoPaiementsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC04E94F225BA576C0E48395 /* DemoPaiementsTests.swift */; };
@@ -67,6 +69,7 @@
 		7F8EA7B0286941AA785F1B95 /* TeleversementSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 571DC69677D4A6FCD64E00CA /* TeleversementSheet.swift */; };
 		8879BD3DACD1FE62F3EE32AE /* ContratsListeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0E6A36259D6A1E27D25A43B /* ContratsListeView.swift */; };
 		8D7D962ADDA6BAC05F1D3E5B /* InscriptionRapideScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60699FAD6300F1A017021FE2 /* InscriptionRapideScreen.swift */; };
+		8E4EF3CC792C345645D5E227 /* ExternalFlowPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C966139F22808C571DD1437 /* ExternalFlowPresenter.swift */; };
 		8F1F3B7AC29459F237E608AE /* DemoConsultationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07388306B298067BAF72F868 /* DemoConsultationTests.swift */; };
 		8F36BAC7C752737B387653F5 /* DemoDocumentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F35431F3E15876E9570306 /* DemoDocumentsTests.swift */; };
 		8FF2D016E024DEC2B0131A7E /* EnvironmentGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8934442A0F8427B109291C /* EnvironmentGuardTests.swift */; };
@@ -148,6 +151,8 @@
 		19D81B7401EDB83F0DF34E07 /* DemoPointageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPointageTests.swift; sourceTree = "<group>"; };
 		1A8E49868C321275FFB1BD6C /* Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Staging.xcconfig; sourceTree = "<group>"; };
 		1B12ED2CF03F5935EB224B9A /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
+		1C966139F22808C571DD1437 /* ExternalFlowPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalFlowPresenter.swift; sourceTree = "<group>"; };
+		1D2F50AD5618266E19F848E4 /* DemoStripeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoStripeTests.swift; sourceTree = "<group>"; };
 		1D38838D39EB705DD25FE585 /* SuppressionCompteScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuppressionCompteScreen.swift; sourceTree = "<group>"; };
 		203C8D21FE903234A40E8313 /* AdresseProfilSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdresseProfilSection.swift; sourceTree = "<group>"; };
 		211FCF61D550AD7AA0184F99 /* CompteSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompteSections.swift; sourceTree = "<group>"; };
@@ -223,6 +228,7 @@
 		B43E8DC20E74CFD2FACC575F /* PushAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushAppDelegate.swift; sourceTree = "<group>"; };
 		B5BA9A6A615BF5E995AB8630 /* DemoPresencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPresencesTests.swift; sourceTree = "<group>"; };
 		B5C216B466C241777BFC4541 /* JoleneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JoleneApp.swift; sourceTree = "<group>"; };
+		BB607B818EDB33896E655605 /* StripeConnectScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StripeConnectScreen.swift; sourceTree = "<group>"; };
 		BC02477F281FF67E5AB428C0 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
 		C069379F42D5DFB47D39A4B5 /* JustificatifsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JustificatifsView.swift; sourceTree = "<group>"; };
 		C0E6A36259D6A1E27D25A43B /* ContratsListeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContratsListeView.swift; sourceTree = "<group>"; };
@@ -348,6 +354,7 @@
 				4D6A37369D110A146F3E4CAF /* ContratReaderView.swift */,
 				705899DA6E3B27D41139A5A3 /* CrashReporting.swift */,
 				B3F0A6856D66A3E37F08A0E7 /* DeepLinkCoordinator.swift */,
+				1C966139F22808C571DD1437 /* ExternalFlowPresenter.swift */,
 				0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */,
 				F77D89390B0B48A7470C7E56 /* NotificationCenterDelegate.swift */,
 				0747FCCBC21B648A9985AA76 /* PresentateurRenvoiWeb.swift */,
@@ -491,6 +498,7 @@
 			children = (
 				0B24FDF8D33F676E7EA256C9 /* PaiementsDeclaresSection.swift */,
 				65672A4D60960C1448C0894D /* RevenusScreen.swift */,
+				BB607B818EDB33896E655605 /* StripeConnectScreen.swift */,
 			);
 			path = Revenus;
 			sourceTree = "<group>";
@@ -556,6 +564,7 @@
 				D53B5D8BDE7DBB54BF682E49 /* DemoPushTests.swift */,
 				ACE59294CC622F36A3F8C949 /* DemoRevenusTests.swift */,
 				F5BB49CC7ACE637676B78FAA /* DemoSignatureContratTests.swift */,
+				1D2F50AD5618266E19F848E4 /* DemoStripeTests.swift */,
 				CA8934442A0F8427B109291C /* EnvironmentGuardTests.swift */,
 				93102A0DE4E91874C7B756C9 /* PasDeDefilement.swift */,
 				E1E527A9BA6B3A31C47A4F66 /* RequireWait.swift */,
@@ -705,6 +714,7 @@
 				B3446B6871D7FBE2076E8D6B /* EnvironmentBlockedScreen.swift in Sources */,
 				E6280C8222492A9DC631F47D /* EspaceSoignantSection.swift in Sources */,
 				A90CAD5C43F42E1946238456 /* EtatNotificationsAppareilRow.swift in Sources */,
+				8E4EF3CC792C345645D5E227 /* ExternalFlowPresenter.swift in Sources */,
 				EB4448BA06429EF4C7504957 /* FiltresSheet.swift in Sources */,
 				0AC7DD7A87882A216DAE706D /* HorsLigneBandeau.swift in Sources */,
 				8D7D962ADDA6BAC05F1D3E5B /* InscriptionRapideScreen.swift in Sources */,
@@ -752,6 +762,7 @@
 				F76422A8F858F85FC8AF2063 /* ShareSheet.swift in Sources */,
 				D8724D42840055518E70154B /* SignatureOtpView.swift in Sources */,
 				CE5147BA934E8BAC00B16A39 /* StockageAppareil.swift in Sources */,
+				6AA522B07A66D8B2627EE45E /* StripeConnectScreen.swift in Sources */,
 				634E2F09A431203F99161794 /* SuppressionCompteScreen.swift in Sources */,
 				7F8EA7B0286941AA785F1B95 /* TeleversementSheet.swift in Sources */,
 				DFBE1117A955925C07671E66 /* ThemePreference.swift in Sources */,
@@ -786,6 +797,7 @@
 				E8D148067CBC8F1EEAB9AFCD /* DemoPushTests.swift in Sources */,
 				590ACEABB2CA11949CFDC137 /* DemoRevenusTests.swift in Sources */,
 				30D7D9C0C1AAB3F339472622 /* DemoSignatureContratTests.swift in Sources */,
+				4C0250FC1A73E3696D06F8BD /* DemoStripeTests.swift in Sources */,
 				8FF2D016E024DEC2B0131A7E /* EnvironmentGuardTests.swift in Sources */,
 				C9174C1A83636B1168C76334 /* PasDeDefilement.swift in Sources */,
 				532D43C9A52E76371B8A4F41 /* RequireWait.swift in Sources */,
