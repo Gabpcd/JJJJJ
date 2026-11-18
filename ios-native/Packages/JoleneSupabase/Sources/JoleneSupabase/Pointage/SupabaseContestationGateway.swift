@@ -14,16 +14,19 @@ import Supabase
 ///   (l.127-131) : PostgREST retient la surcharge canonique `(uuid, type_litige, text)` ; sans `p_type_litige` il
 ///   choisirait la surcharge à deux clés (litige `AUTRE`, fenêtre toujours ouverte). Une seule requête POST (jamais
 ///   rejouée par le SDK). `{error}` → `.refusee` verbatim (« Non authentifié » → `.unauthorized`) ; succès
-///   `{success:true, litige_id}` → audit `PRESENCE_CONTESTATION` best-effort (`fn_ecrire_audit_safe`, CHECK
-///   `journaux_audit_action_check`, parité l.134-139), puis relecture du litige par `presence_id` (le serveur rattache
-///   la dernière présence de la mission, `public.sql` l.46985-46990 : à défaut, relecture par `id`). `.ouverte` n'est
-///   rendu qu'avec le litige relu. **Aucun** appel `fn_creer_notification` (`RPC_JAMAIS_SUIVIES`) : le trigger
-///   `trg_notifier_creation_litige` notifie déjà l'établissement.
+///   `{success:true, litige_id}` → audit `PRESENCE_CONTESTATION` best-effort (`SupabaseAuditGateway.ecrire`, action
+///   `AuditAction.presenceContestation` sous la garde du CHECK), puis relecture du litige par `presence_id` (le serveur
+///   rattache la dernière présence de la mission, `public.sql` l.46981-46984 : à défaut, relecture par `id`).
+///   `.ouverte` n'est rendu qu'avec le litige relu ; toute autre réponse sans `{error}` (`success` sans `litige_id`
+///   compris, revue B8 de T5b, m7) lève `.contract`, et le modèle relit. **Aucun** appel `fn_creer_notification`
+///   (`RPC_JAMAIS_SUIVIES`) : le trigger `trg_notifier_creation_litige` notifie déjà l'établissement.
+/// - Audit minimisé (décision m2 de la revue B8 de T5b, `DECISIONS_LOT2.md`) : `p_details` ne porte que la longueur du
+///   motif et l'identifiant du litige, jamais le motif libre (déjà dans `litiges.motif`, table rectifiable) : RGPD
+///   art. 5 §1 c) et e), `journaux_audit` étant immuable (art. 16 et 17 inapplicables). Le web copie encore le motif.
 public struct SupabaseContestationGateway: ContestationPort {
     public static let rpcOuverture = "fn_ouvrir_litige_rate_limited"
     public static let rpcFenetre = "fn_fenetre_contestation_ouverte"
-    public static let auditRPC = "fn_ecrire_audit_safe"
-    public static let actionAudit = "PRESENCE_CONTESTATION"
+    public static let typeRessourceAudit = "presence"
     /// Colonnes de `litiges` lues (jamais `select=*`).
     public static let colonnes = "id,statut,presence_id,mission_id,type_litige,cree_le"
 
@@ -35,7 +38,7 @@ public struct SupabaseContestationGateway: ContestationPort {
 
     public func litige(presenceId: String, context: MissionReadContext) async throws -> LitigePresence? {
         try MissionQuery.validate(context: context)
-        return try await lire { $0.eq("presence_id", value: presenceId) }
+        return try await lire(fallback: PointageQuery.fallbackDetail) { $0.eq("presence_id", value: presenceId) }
     }
 
     public func fenetreOuverte(missionId: String, context: MissionReadContext) async throws -> Bool {
@@ -69,14 +72,15 @@ public struct SupabaseContestationGateway: ContestationPort {
             }
             return .refusee(message: erreur)
         }
+        // Réponse hors contrat : le litige a pu être créé, le modèle relit (jamais un refus définitif supposé).
         guard reponse.success == true, let litigeId = reponse.string("litige_id"), !litigeId.isEmpty else {
-            return .refusee(message: fallback)
+            throw JoleneError(.contract, SupabaseErrorMapping.contractMessage)
         }
-        await auditer(presenceId: presenceId, missionId: missionId, motif: nettoye, context: context)
-        if let relu = try await lire({ $0.eq("presence_id", value: presenceId) }), relu.id == litigeId {
+        await auditer(presenceId: presenceId, litigeId: litigeId, motif: nettoye, context: context)
+        if let relu = try await lire(fallback: fallback, { $0.eq("presence_id", value: presenceId) }), relu.id == litigeId {
             return .ouverte(relu)
         }
-        if let relu = try await lire({ $0.eq("id", value: litigeId) }) {
+        if let relu = try await lire(fallback: fallback, { $0.eq("id", value: litigeId) }) {
             return .ouverte(relu)
         }
         // Litige annoncé mais jamais relu : aucun succès fabriqué (PRINCIPES §3) ; le modèle relit ensuite.
@@ -85,8 +89,9 @@ public struct SupabaseContestationGateway: ContestationPort {
 
     // MARK: - Interne
 
-    /// Dernier litige (par `cree_le` décroissant) du filtre donné.
-    private func lire(_ filtre: (PostgrestFilterBuilder) -> PostgrestFilterBuilder) async throws -> LitigePresence? {
+    /// Dernier litige (par `cree_le` décroissant) du filtre donné ; `fallback` : message d'une erreur sans texte lisible.
+    private func lire(fallback: String,
+                      _ filtre: (PostgrestFilterBuilder) -> PostgrestFilterBuilder) async throws -> LitigePresence? {
         do {
             let lignes: [LitigePresence] = try await filtre(client.from("litiges").select(Self.colonnes))
                 .order("cree_le", ascending: false, nullsFirst: true) // = `order=cree_le.desc` du web (défaut PostgREST)
@@ -94,29 +99,17 @@ public struct SupabaseContestationGateway: ContestationPort {
                 .execute().value
             return lignes.first
         } catch {
-            throw SupabaseErrorMapping.map(error, fallback: PointageQuery.fallbackDetail)
+            throw SupabaseErrorMapping.map(error, fallback: fallback)
         }
     }
 
-    /// Audit client du web (`fn_ecrire_audit_safe`, l.134-139), best-effort : jamais d'uuid invalide dans
-    /// `p_id_ressource` (refusé avant tout appel), échec avalé (la contestation est enregistrée par le serveur).
-    private func auditer(presenceId: String, missionId: String, motif: String, context: MissionReadContext) async {
-        guard let acteur = SupabaseAuditGateway.uuid(context.userId), let ressource = SupabaseAuditGateway.uuid(presenceId) else {
-            return
-        }
-        let params: JSONObject = [
-            "p_acteur_id": .string(acteur),
-            "p_type_acteur": .string(SupabaseAuditGateway.typeActeur),
-            "p_action": .string(Self.actionAudit),
-            "p_type_ressource": .string("presence"),
-            "p_id_ressource": .string(ressource),
-            "p_details": .object([
-                "motif": .string(motif),
-                "mission_id": .string(missionId),
-                "initie_par": .string(SupabaseAuditGateway.typeActeur),
-            ]),
-            "p_navigateur": .string(SupabaseAuditGateway.navigateur),
-        ]
-        _ = try? await RPCResponse.appeler(client, Self.auditRPC, params: params, fallback: SupabaseAuditGateway.fallbackMessage)
+    /// Audit client du web (`fn_ecrire_audit_safe`, l.134-139) par `SupabaseAuditGateway.ecrire` (uuid validés avant
+    /// tout appel), best-effort : un échec est avalé, la contestation est enregistrée par le serveur. Détails minimisés.
+    private func auditer(presenceId: String, litigeId: String, motif: String, context: MissionReadContext) async {
+        let details = ["motif_longueur": String(motif.unicodeScalars.count), "litige_id": litigeId]
+        _ = try? await SupabaseAuditGateway(client: client).ecrire(action: .presenceContestation,
+                                                                   typeRessource: Self.typeRessourceAudit,
+                                                                   idRessource: presenceId, details: details,
+                                                                   context: context)
     }
 }

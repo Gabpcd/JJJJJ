@@ -33,7 +33,8 @@ final class SupabaseContestationGatewayTests: XCTestCase {
         """))
 
         let issue = try await gateway().contester(missionId: mission, presenceId: presence,
-                                                  motif: " <b>Heures</b> validées fausses ", context: TestClient.context)
+                                                  motif: " <b>Arrivée</b> 7h<8h prévues, départ 19h -> 2h non comptées ",
+                                                  context: TestClient.context)
         guard case let .ouverte(litige) = issue else { return XCTFail("contestation ouverte attendue, obtenu \(issue)") }
         XCTAssertEqual(litige.id, "l-1")
         XCTAssertEqual(litige.statut, "OUVERT")
@@ -44,13 +45,19 @@ final class SupabaseContestationGatewayTests: XCTestCase {
         XCTAssertEqual(Set(corps.keys), ["p_mission_id", "p_type_litige", "p_motif"], "trois clés exactes (surcharge canonique)")
         XCTAssertEqual(corps["p_type_litige"] as? String, "DESACCORD_HEURES_POINTAGE")
         XCTAssertEqual(corps["p_mission_id"] as? String, mission)
-        XCTAssertEqual(corps["p_motif"] as? String, "Heures validées fausses", "motif nettoyé comme sanitizeText")
+        XCTAssertEqual(corps["p_motif"] as? String, "Arrivée 7h<8h prévues, départ 19h -> 2h non comptées",
+                       "balises retirées, « <8h » et « -> » gardés (sanitizeText ; revue B8, M2)")
 
         let audit = try XCTUnwrap(registry.requests(to: rpcAudit).first?.bodyJSON as? [String: Any])
         XCTAssertEqual(audit["p_action"] as? String, "PRESENCE_CONTESTATION")
         XCTAssertEqual(audit["p_type_ressource"] as? String, "presence")
         XCTAssertEqual(audit["p_id_ressource"] as? String, presence)
         XCTAssertEqual(audit["p_type_acteur"] as? String, "SOIGNANT")
+        // Décision m2 (RGPD art. 5 §1 c et e, `journaux_audit` immuable) : jamais le motif libre, sa longueur et le litige.
+        let details = try XCTUnwrap(audit["p_details"] as? [String: String])
+        XCTAssertEqual(details, ["motif_longueur": "52", "litige_id": "l-1"])
+        let corpsAudit = String(data: try XCTUnwrap(registry.requests(to: rpcAudit).first?.body), encoding: .utf8) ?? ""
+        XCTAssertFalse(corpsAudit.contains("prévues"), "aucun fragment du motif dans l'audit")
 
         let lecture = try XCTUnwrap(registry.requests(to: litiges).first)
         XCTAssertEqual(lecture.query("presence_id"), "eq.\(presence)", "relecture par presence_id")
@@ -85,6 +92,20 @@ final class SupabaseContestationGatewayTests: XCTestCase {
         } catch let erreur as JoleneError {
             XCTAssertEqual(erreur.kind, .unauthorized)
         }
+    }
+
+    func testSuccesSansIdentifiantDeLitigeEstHorsContratSansRefusSuppose() async throws {
+        // Revue B8, m7 : le litige a pu être créé ; `.contract` fait relire le modèle (jamais `.refusee`).
+        registry.add("POST", rpcOuverture, respond: .json(200, #"{"success":true}"#))
+        do {
+            _ = try await gateway().contester(missionId: mission, presenceId: presence, motif: "Les heures sont fausses.",
+                                              context: TestClient.context)
+            XCTFail("réponse hors contrat attendue")
+        } catch let erreur as JoleneError {
+            XCTAssertEqual(erreur.kind, .contract)
+        }
+        XCTAssertEqual(registry.requests(to: rpcOuverture).count, 1, "aucun renvoi")
+        XCTAssertTrue(registry.requests(to: rpcAudit).isEmpty, "aucun audit sans litige identifié")
     }
 
     func testLitigeRattacheAUneAutrePresenceReluParSonIdentifiant() async throws {
