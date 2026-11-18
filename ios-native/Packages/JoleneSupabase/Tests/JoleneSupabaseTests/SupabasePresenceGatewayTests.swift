@@ -61,16 +61,26 @@ final class SupabasePresenceGatewayTests: XCTestCase {
         }
     }
 
-    func testRelectureSansDateOuDUnAutreSoignantEstUneErreur() async throws {
-        registry.add("POST", rpc, respond: .json(200, #"{"success":true}"#))
-        registry.add("GET", "/rest/v1/missions", respond: .json(200, relecture(nil)))
-        let sansDate = await erreur { _ = try await self.confirmer() }
-        XCTAssertEqual(sansDate, JoleneError(.contract, SupabasePresenceGateway.relectureMessage))
+    /// Revue B8 delta de #1157 (M1), intégration de la vague B : après `{success:true}`, une relecture sans la date, d'un
+    /// autre soignant, vide ou en échec est une issue INCERTAINE (`.envoyeeNonRelue`), jamais une erreur ni un refus ;
+    /// une seule requête RPC dans tous les cas.
+    func testSuccesSansRelectureConcluanteEstUneIssueIncertaine() async throws {
+        let incertaine = PresenceOutcome.envoyeeNonRelue(message: SupabasePresenceGateway.relectureMessage)
+        XCTAssertEqual(SupabasePresenceGateway.relectureMessage, PresenceRules.Textes.envoyeeNonRelue)
+        for reponse in [relecture(nil), relecture("2026-11-02T10:00:00+00:00", soignant: "autre"), "[]"] {
+            registry.reset()
+            registry.add("POST", rpc, respond: .json(200, #"{"success":true}"#))
+            registry.add("GET", "/rest/v1/missions", respond: .json(200, reponse))
+            let issue = try await confirmer()
+            XCTAssertEqual(issue, incertaine, reponse)
+            XCTAssertEqual(registry.requests(to: rpc).count, 1, "aucun renvoi")
+        }
         registry.reset()
         registry.add("POST", rpc, respond: .json(200, #"{"success":true}"#))
-        registry.add("GET", "/rest/v1/missions", respond: .json(200, relecture("2026-11-02T10:00:00+00:00", soignant: "autre")))
-        let autre = await erreur { _ = try await self.confirmer() }
-        XCTAssertEqual(autre, JoleneError(.contract, SupabasePresenceGateway.relectureMessage))
+        registry.add("GET", "/rest/v1/missions", respond: .json(500, #"{"message":"panne"}"#))
+        let enPanne = try await confirmer()
+        XCTAssertEqual(enPanne, incertaine, "relecture en échec après un succès serveur : incertaine")
+        XCTAssertEqual(registry.requests(to: rpc).count, 1)
     }
 
     func testCorpsVideJamaisUnSucces() async throws {

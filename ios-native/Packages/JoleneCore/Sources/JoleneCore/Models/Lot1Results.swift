@@ -74,6 +74,8 @@ public enum CandidatureVerrou: Error, Equatable, Sendable, LocalizedError {
 
     /// Page web où la proposition s'accepte (carte de l'Accueil, `DashboardSoignant.tsx`).
     public static let cheminProposition = "/soignant/tableau-de-bord"
+    /// Message de l'erreur, pour les journaux et les tests (référence au plan exigée par « un gap connu reste verrouillé »).
+    /// Jamais affiché tel quel : l'écran montre `LibellesCandidature.propositionWeb` (revue B8 delta de #1150, m2).
     public static let messageRenvoiWeb = "Pour accepter cette proposition, continuez sur jolene.app : cette étape n'est pas encore disponible dans l'application (docs/mobile-swift/LOT1_PLAN.md, T6b)."
 
     public var errorDescription: String? { Self.messageRenvoiWeb }
@@ -117,6 +119,10 @@ public enum PresenceOutcome: Equatable, Sendable {
     /// `presence_confirmee_le` relu non nul (valeur serveur, jamais posée localement).
     case confirmee(presenceConfirmeeLe: String)
     case refusee(message: String)
+    /// Revue B8 delta de #1157 (M1), intégration de la vague B : `{success:true}` reçu, mais la relecture n'a pas montré
+    /// `presence_confirmee_le` (relecture vide, d'un autre soignant, ou en échec). Issue INCERTAINE, jamais un refus : la
+    /// RPC n'est pas idempotente, rien n'est renvoyé avant qu'une relecture ait conclu (PRINCIPES §4).
+    case envoyeeNonRelue(message: String)
 }
 
 // MARK: - Tableau de bord (T3)

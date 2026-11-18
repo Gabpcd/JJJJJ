@@ -10,7 +10,7 @@ import XCTest
 ///   missions relue sans la mission, puis détail rouvert depuis Explorer (mission remise en ligne) sans bouton
 ///   d'annulation ni annonce (revue B8 de #1156, M1) ;
 /// - candidature retenue (`demo-assignee-003`) : modale de candidature, cinq motifs sans « 🏥 Urgence médicale »
-///   (décision 21), textes du web verbatim (avertissement sur les données de santé, case des conséquences, notification
+///   (décision 4 amendée), textes du web verbatim (avertissement sur les données de santé, case des conséquences, notification
 ///   de l'établissement), bouton inactif tant que motif, explication de 20 caractères et case ne sont pas remplis,
 ///   justificatif choisi (sélecteur démo, PNG fictif) puis « Candidature annulée. » après la relecture, modale refermée,
 ///   Mes missions relue sans la mission.
@@ -93,7 +93,7 @@ final class DemoAnnulationTests: JoleneUITestCase {
         let motif = element("annulation-motif-PROBLEME_TRANSPORT")
         scrollTo(motif, in: feuille)
         XCTAssertEqual(motif.label, "🚗 Problème de transport")
-        // Décision 21 (`LOT1_PLAN.md` §7, `docs/CONFORMITE.md` §1.4) : « 🏥 Urgence médicale » n'est pas proposé.
+        // Décision 4 amendée (`LOT1_PLAN.md` §7, `docs/CONFORMITE.md` §1.4) : « 🏥 Urgence médicale » n'est pas proposé.
         XCTAssertFalse(element("annulation-motif-URGENCE_MEDICALE").exists)
         XCTAssertFalse(textContaining("Urgence médicale").exists)
         XCTAssertTrue(element("annulation-motif-AUTRE").exists, "les autres motifs du web restent")

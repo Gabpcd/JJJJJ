@@ -68,7 +68,7 @@ struct MissionsListScreen: View {
             chipsRapides
             bandeauEtablissement
             AvisFavoris(favoris: favoris, contexte: .explorer, identifier: "explorer-favoris-erreur") {
-                await favoris.verifierSession(session)
+                await favoris.verifierSession(session, contexte: .explorer)
             }
                 .padding(.horizontal, JoleneSpacing.lg)
             AvisLectureEtoiles(favoris: favoris, session: session, contexte: .explorer, identifier: "explorer-favoris-lecture")

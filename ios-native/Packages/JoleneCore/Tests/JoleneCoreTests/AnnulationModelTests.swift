@@ -247,4 +247,25 @@ final class AnnulationModelTests: XCTestCase {
         await model.annulerMission()
         XCTAssertEqual(model.issue, .erreur(message: "Cette mission ne vous est pas assignée"))
     }
+
+    /// Revue B8 delta de #1156 (m1), intégration de la vague B : l'annulation sans candidature a abouti côté serveur mais
+    /// sa réponse s'est perdue ; le nouvel essai est refusé. La mission est relue avant tout message : remise en ligne
+    /// (sans le soignant de la session), c'est une annulation relue, jamais un refus qui oriente vers un litige.
+    func testRefusApresReponsePerdueRelitLaMissionEtAnnonceLAnnulation() async throws {
+        let gateways = DemoWorld.gateways() // candidature et missions du même monde démo : l'annulation est relue
+        let controller = SessionController(gateways: gateways)
+        let etat = await controller.signIn(email: "demonstration@example.invalid", password: "demonstration")
+        let snapshot = try XCTUnwrap(etat.snapshot)
+        let lue = try await gateways.missions.mission(id: "demo-assignee-001", context: snapshot.context)
+        let avant = try XCTUnwrap(lue)
+        XCTAssertTrue(AnnulationRules.annulable(avant.record, userId: snapshot.context.userId))
+        // Réponse perdue : le serveur simulé a annulé, l'écran ne l'a pas su.
+        _ = try await gateways.candidature.annulerMission(id: "demo-assignee-001", motif: nil, context: snapshot.context)
+        let model = AnnulationModel(missionId: "demo-assignee-001", controller: controller, snapshot: snapshot)
+        await model.charger(avant)
+        XCTAssertNotNil(model.entree, "l'écran affiche encore la mission assignée")
+        await model.annulerMission()
+        XCTAssertEqual(model.issue, .annulee(message: "Participation annulée. Ton score sera mis à jour."))
+        XCTAssertNil(model.entree)
+    }
 }

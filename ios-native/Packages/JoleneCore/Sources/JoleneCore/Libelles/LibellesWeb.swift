@@ -1181,7 +1181,7 @@ public enum LibellesWeb {
 
     /// Annulation d'une participation (lot 1, T7) : libellés non juridiques de `ModaleAnnulationCandidature.tsx` et du
     /// détail d'une mission. Textes de consentement, de santé et de score : `TextesWeb.Annulation` (HARD STOP n°4).
-    /// « 🏥 Urgence médicale » (l.35) n'est pas repris : décision 21 de `LOT1_PLAN.md` §7.
+    /// « 🏥 Urgence médicale » (l.35) n'est pas repris : décision 4 amendée de `LOT1_PLAN.md` §7.
     public enum Annulation {
         // source: src/pages/DetailMissionSoignant.tsx:1521
         public static let annulerMaParticipation = "Annuler ma participation"

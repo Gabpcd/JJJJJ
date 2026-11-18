@@ -118,6 +118,16 @@ final class CandidatureRulesTests: XCTestCase {
         XCTAssertEqual(CandidatureVerrou.renvoiWeb(chemin: "/x").errorDescription, CandidatureVerrou.messageRenvoiWeb)
     }
 
+    /// Revue B8 delta de #1150 (m2), intégration de la vague B : l'écran n'affiche jamais le chemin du dépôt porté par le
+    /// message du verrou ; il montre le texte opérationnel de T6b.
+    @MainActor
+    func testVerrouAfficheLeTexteDeLEcranSansCheminDuDepot() {
+        let affiche = CandidatureModel.message(CandidatureVerrou.renvoiWeb(chemin: CandidatureVerrou.cheminProposition))
+        XCTAssertEqual(affiche, LibellesCandidature.propositionWeb)
+        XCTAssertFalse(affiche?.contains("docs/") ?? true, "aucun chemin du dépôt à l'écran")
+        XCTAssertFalse(affiche?.contains("LOT1_PLAN") ?? true)
+    }
+
     func testActionHorsLot1CiteSaDocEtSonLot() {
         let erreur = CandidatureRules.actionHorsLot1(.postuler)
         XCTAssertEqual(erreur.kind, .contract)
