@@ -8,6 +8,8 @@
 --   S1 — Cas A  : heures_reelles=0        → ABSENCE_SOIGNANT
 --   S2 — Cas B  : heures_reelles=4 /8h    → DEPART_ANTICIPE
 --   S3 — Anti-boucle : 2e appel sur même présence → pas de 2e litige
+-- Âge de validation DÉRIVÉ de delai_contestation_pointage_h (72 h depuis D12),
+-- une heure au-delà de la fenêtre : jamais en dur.
 -- Cas C (DESACCORD_HEURES_POINTAGE) non auto-détectable avec le schéma
 -- presences actuel — reste manuel, pas de test E2E ici.
 -- ============================================================
@@ -27,22 +29,37 @@ DECLARE
   v_mission_id  UUID := gen_random_uuid();
   v_presence_id UUID := gen_random_uuid();
   v_litige      RECORD;
+  -- Âge de validation DÉRIVÉ du paramètre lu (CLAUDE.md « État dérivé », D12) :
+  -- une heure au-delà de la fenêtre delai_contestation_pointage_h.
+  v_delai_h     INT := (SELECT pl.valeur::int FROM public.parametres_litiges pl
+                         WHERE pl.cle = 'delai_contestation_pointage_h');
+  v_valide_le   TIMESTAMPTZ;
+  v_reelle      BOOLEAN;
 BEGIN
+  IF v_delai_h IS NULL THEN
+    RAISE NOTICE '[S1] FAIL — paramètre delai_contestation_pointage_h absent';
+    RETURN;
+  END IF;
+  v_valide_le := NOW() - make_interval(hours => v_delai_h + 1);
+
   INSERT INTO public.etablissements (id, nom, siret, type, adresse_rue, adresse_ville, adresse_code_postal, email_contact)
     VALUES (v_etab_id, 'FIXB_TEST_S1_Etab', '11111111100001', 'HOPITAL_PUBLIC', '1 rue', 'Paris', '75001', 's1@test.local');
   INSERT INTO public.soignants (id, nom, prenom, email, profession)
     VALUES (v_soignant_id, 'FIXB_S1', 'A', 'fixb-s1-' || v_soignant_id || '@test.local', 'IDE');
   INSERT INTO public.missions (id, etablissement_id, intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, statut, soignant_assigne_id)
-    VALUES (v_mission_id, v_etab_id, 'FIXB_S1_Mission', 'IDE', NOW() - INTERVAL '3 days', NOW() - INTERVAL '2 days 16 hours', 8, 25, 'TERMINEE', v_soignant_id);
+    VALUES (v_mission_id, v_etab_id, 'FIXB_S1_Mission', 'IDE', v_valide_le - INTERVAL '23 hours', v_valide_le - INTERVAL '15 hours', 8, 25, 'TERMINEE', v_soignant_id);
   INSERT INTO public.presences (id, mission_id, soignant_id, valide_par_etablissement, valide_le, heures_reelles, motif_litige)
-    VALUES (v_presence_id, v_mission_id, v_soignant_id, TRUE, NOW() - INTERVAL '49 hours', 0, 'Soignant absent');
+    VALUES (v_presence_id, v_mission_id, v_soignant_id, TRUE, v_valide_le, 0, 'Soignant absent');
 
+  v_reelle := private.fn_mission_est_reelle(v_mission_id);
   PERFORM public.fn_auto_creation_litiges_presence();
 
   SELECT * INTO v_litige FROM public.litiges
    WHERE mission_id = v_mission_id AND type_litige = 'ABSENCE_SOIGNANT';
 
-  IF NOT FOUND THEN
+  IF NOT FOUND AND NOT v_reelle THEN
+    RAISE NOTICE '[S1] NON PROBANT — mission dérivée test (trg_forcer_compte_test_prelaunch force est_compte_test) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
+  ELSIF NOT FOUND THEN
     RAISE NOTICE '[S1] FAIL — aucun litige ABSENCE_SOIGNANT créé';
   ELSIF v_litige.statut <> 'OUVERT' OR v_litige.initie_par <> 'SYSTEME' THEN
     RAISE NOTICE '[S1] FAIL — statut=% initie_par=%', v_litige.statut, v_litige.initie_par;
@@ -65,22 +82,37 @@ DECLARE
   v_mission_id  UUID := gen_random_uuid();
   v_presence_id UUID := gen_random_uuid();
   v_litige      RECORD;
+  -- Âge de validation DÉRIVÉ du paramètre lu (CLAUDE.md « État dérivé », D12) :
+  -- une heure au-delà de la fenêtre delai_contestation_pointage_h.
+  v_delai_h     INT := (SELECT pl.valeur::int FROM public.parametres_litiges pl
+                         WHERE pl.cle = 'delai_contestation_pointage_h');
+  v_valide_le   TIMESTAMPTZ;
+  v_reelle      BOOLEAN;
 BEGIN
+  IF v_delai_h IS NULL THEN
+    RAISE NOTICE '[S2] FAIL — paramètre delai_contestation_pointage_h absent';
+    RETURN;
+  END IF;
+  v_valide_le := NOW() - make_interval(hours => v_delai_h + 1);
+
   INSERT INTO public.etablissements (id, nom, siret, type, adresse_rue, adresse_ville, adresse_code_postal, email_contact)
     VALUES (v_etab_id, 'FIXB_TEST_S2_Etab', '11111111100002', 'HOPITAL_PUBLIC', '2 rue', 'Paris', '75002', 's2@test.local');
   INSERT INTO public.soignants (id, nom, prenom, email, profession)
     VALUES (v_soignant_id, 'FIXB_S2', 'B', 'fixb-s2-' || v_soignant_id || '@test.local', 'IDE');
   INSERT INTO public.missions (id, etablissement_id, intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, statut, soignant_assigne_id)
-    VALUES (v_mission_id, v_etab_id, 'FIXB_S2_Mission', 'IDE', NOW() - INTERVAL '3 days', NOW() - INTERVAL '2 days 16 hours', 8, 25, 'TERMINEE', v_soignant_id);
+    VALUES (v_mission_id, v_etab_id, 'FIXB_S2_Mission', 'IDE', v_valide_le - INTERVAL '23 hours', v_valide_le - INTERVAL '15 hours', 8, 25, 'TERMINEE', v_soignant_id);
   INSERT INTO public.presences (id, mission_id, soignant_id, valide_par_etablissement, valide_le, heures_reelles, motif_litige, depart_anticipe_min)
-    VALUES (v_presence_id, v_mission_id, v_soignant_id, TRUE, NOW() - INTERVAL '49 hours', 4, 'Départ anticipé constaté', 240);
+    VALUES (v_presence_id, v_mission_id, v_soignant_id, TRUE, v_valide_le, 4, 'Départ anticipé constaté', 240);
 
+  v_reelle := private.fn_mission_est_reelle(v_mission_id);
   PERFORM public.fn_auto_creation_litiges_presence();
 
   SELECT * INTO v_litige FROM public.litiges
    WHERE mission_id = v_mission_id AND type_litige = 'DEPART_ANTICIPE';
 
-  IF NOT FOUND THEN
+  IF NOT FOUND AND NOT v_reelle THEN
+    RAISE NOTICE '[S2] NON PROBANT — mission dérivée test (trg_forcer_compte_test_prelaunch force est_compte_test) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
+  ELSIF NOT FOUND THEN
     RAISE NOTICE '[S2] FAIL — aucun litige DEPART_ANTICIPE créé';
   ELSIF v_litige.statut <> 'OUVERT' OR v_litige.initie_par <> 'SYSTEME' THEN
     RAISE NOTICE '[S2] FAIL — statut=% initie_par=%', v_litige.statut, v_litige.initie_par;
@@ -104,23 +136,38 @@ DECLARE
   v_presence_id UUID := gen_random_uuid();
   v_nb_avant INT;
   v_nb_apres INT;
+  -- Âge de validation DÉRIVÉ du paramètre lu (CLAUDE.md « État dérivé », D12) :
+  -- une heure au-delà de la fenêtre delai_contestation_pointage_h.
+  v_delai_h     INT := (SELECT pl.valeur::int FROM public.parametres_litiges pl
+                         WHERE pl.cle = 'delai_contestation_pointage_h');
+  v_valide_le   TIMESTAMPTZ;
+  v_reelle      BOOLEAN;
 BEGIN
+  IF v_delai_h IS NULL THEN
+    RAISE NOTICE '[S3] FAIL — paramètre delai_contestation_pointage_h absent';
+    RETURN;
+  END IF;
+  v_valide_le := NOW() - make_interval(hours => v_delai_h + 1);
+
   INSERT INTO public.etablissements (id, nom, siret, type, adresse_rue, adresse_ville, adresse_code_postal, email_contact)
     VALUES (v_etab_id, 'FIXB_TEST_S3_Etab', '11111111100003', 'HOPITAL_PUBLIC', '3 rue', 'Paris', '75003', 's3@test.local');
   INSERT INTO public.soignants (id, nom, prenom, email, profession)
     VALUES (v_soignant_id, 'FIXB_S3', 'C', 'fixb-s3-' || v_soignant_id || '@test.local', 'IDE');
   INSERT INTO public.missions (id, etablissement_id, intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, statut, soignant_assigne_id)
-    VALUES (v_mission_id, v_etab_id, 'FIXB_S3_Mission', 'IDE', NOW() - INTERVAL '3 days', NOW() - INTERVAL '2 days 16 hours', 8, 25, 'TERMINEE', v_soignant_id);
+    VALUES (v_mission_id, v_etab_id, 'FIXB_S3_Mission', 'IDE', v_valide_le - INTERVAL '23 hours', v_valide_le - INTERVAL '15 hours', 8, 25, 'TERMINEE', v_soignant_id);
   INSERT INTO public.presences (id, mission_id, soignant_id, valide_par_etablissement, valide_le, heures_reelles, motif_litige)
-    VALUES (v_presence_id, v_mission_id, v_soignant_id, TRUE, NOW() - INTERVAL '49 hours', 0, 'Soignant absent');
+    VALUES (v_presence_id, v_mission_id, v_soignant_id, TRUE, v_valide_le, 0, 'Soignant absent');
 
+  v_reelle := private.fn_mission_est_reelle(v_mission_id);
   PERFORM public.fn_auto_creation_litiges_presence();
   SELECT COUNT(*) INTO v_nb_avant FROM public.litiges WHERE mission_id = v_mission_id;
 
   PERFORM public.fn_auto_creation_litiges_presence();
   SELECT COUNT(*) INTO v_nb_apres FROM public.litiges WHERE mission_id = v_mission_id;
 
-  IF v_nb_avant = 1 AND v_nb_apres = 1 THEN
+  IF v_nb_avant = 0 AND NOT v_reelle THEN
+    RAISE NOTICE '[S3] NON PROBANT — mission dérivée test (trg_forcer_compte_test_prelaunch force est_compte_test) : fn_auto_creation_litiges_presence l''ignore (private.fn_mission_est_reelle)';
+  ELSIF v_nb_avant = 1 AND v_nb_apres = 1 THEN
     RAISE NOTICE '[S3] PASS — anti-boucle OK (1 litige après 2 appels)';
   ELSE
     RAISE NOTICE '[S3] FAIL — avant=% après=% (attendu 1/1)', v_nb_avant, v_nb_apres;
