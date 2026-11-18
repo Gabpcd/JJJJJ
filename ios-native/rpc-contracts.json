@@ -1369,7 +1369,7 @@
     },
     {
       "name": "fn_obtenir_missions_swipe",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_limit?: number }",
@@ -1398,7 +1398,7 @@
     },
     {
       "name": "fn_enregistrer_swipe",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_direction: string; p_mission_id: string }",
@@ -1427,7 +1427,7 @@
     },
     {
       "name": "fn_retirer_candidature",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": null,
       "sql": [
@@ -1453,7 +1453,7 @@
     },
     {
       "name": "fn_initialiser_preferences_matching",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": null,
       "sql": [
