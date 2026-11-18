@@ -191,6 +191,9 @@ final class AnnulationModelTests: XCTestCase {
         XCTAssertEqual(model.issue, .bloquee(message: LibellesAnnulation.suiviIllisible))
         await model.annulerCandidature(id: candidatureId, motif: .autre, texte: explication, accepte: true, fichier: fichierPdf)
         XCTAssertEqual(model.issue, .bloquee(message: LibellesAnnulation.suiviIllisible))
+        // Revue B8 de #1156, m7 : même sans justificatif, rien ne part depuis la modale ; la voie est le web.
+        await model.annulerCandidature(id: candidatureId, motif: .autre, texte: explication, accepte: true, fichier: nil)
+        XCTAssertEqual(model.issue, .bloquee(message: LibellesAnnulation.suiviIllisible))
         let depots = await espion.depots
         XCTAssertTrue(depots.isEmpty)
         let relue = try await candidature.candidature(missionId: "demo-assignee-003", context: DemoWorld.context)
@@ -198,12 +201,38 @@ final class AnnulationModelTests: XCTestCase {
         XCTAssertEqual(try magasin.lire(cle), Data("illisible".utf8), "le reçu n'est jamais réécrit")
     }
 
-    func testRefusServeurVerbatimApresAnnulation() async throws {
-        let (model, candidature, _) = try await pret()
-        _ = try await candidature.annulerCandidature(id: candidatureId, motif: "AUTRE", texte: explication, justificatifPath: nil,
-                                                     context: DemoWorld.context)
+    /// Revue B8 de #1156, m2 : réponse perdue alors que le serveur avait annulé ; le nouvel essai rend `STATUT_INVALIDE`,
+    /// la candidature est relue `ANNULEE` avant tout message : annulation relue, reçu `stored` rattaché, aucun nouveau dépôt.
+    func testStatutInvalideRelueAnnuleeAnnonceLAnnulation() async throws {
+        let espion = EspionJustificatifs()
+        let magasin = MagasinRecusEnMemoire()
+        let (model, candidature, _) = try await pret(espion: espion, magasin: magasin)
+        let fichier = FichierChoisi(nom: "billet.pdf", mime: .pdf, tailleOctets: 4)
+        var recu = try RecuJustificatif.preparer(userId: DemoWorld.context.userId, candidatureId: candidatureId, fichier: fichier,
+                                                 horodatageMs: 1)
+        try await journal(magasin).ecrire(recu)
+        recu = try recu.demarrer()
+        try await journal(magasin).ecrire(recu)
+        recu = try recu.stocker()
+        try await journal(magasin).ecrire(recu)
+        _ = try await candidature.annulerCandidature(id: candidatureId, motif: "AUTRE", texte: explication,
+                                                     justificatifPath: recu.chemin, context: DemoWorld.context)
+        await model.preparerJustificatif(candidatureId: candidatureId)
+        XCTAssertEqual(model.justificatifDejaDepose, "billet.pdf")
         await model.annulerCandidature(id: candidatureId, motif: .autre, texte: explication, accepte: true, fichier: nil)
-        XCTAssertEqual(model.issue, .erreur(message: "Candidature pas dans un état annulable (statut : ANNULEE)"))
+        XCTAssertEqual(model.issue, .annulee(message: "Candidature annulée."))
+        XCTAssertNil(model.entree)
+        let depots = await espion.depots
+        XCTAssertTrue(depots.isEmpty, "aucun nouveau dépôt")
+        let restant = try await journal(magasin).lire(userId: DemoWorld.context.userId)
+        XCTAssertNil(restant, "reçu clos puis effacé")
+    }
+
+    func testStatutInvalideNonAnnuleeResteUnRefusVerbatim() async throws {
+        // Proposition de l'Accueil, `PROPOSEE` : refus `STATUT_INVALIDE` relu non annulé → message du serveur tel quel.
+        let (model, _, _) = try await pret()
+        await model.annulerCandidature(id: "demo-proposition-001", motif: .autre, texte: explication, accepte: true, fichier: nil)
+        XCTAssertEqual(model.issue, .erreur(message: "Candidature pas dans un état annulable (statut : PROPOSEE)"))
     }
 
     func testAnnulationSansCandidatureMessageDuWeb() async throws {

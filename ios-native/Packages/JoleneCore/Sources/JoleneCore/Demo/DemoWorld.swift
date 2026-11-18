@@ -39,14 +39,16 @@ public enum DemoWorld {
         var gateways = Gateways(
             auth: DemoAuthGateway(),
             role: DemoRoleGateway(),
-            missions: DemoMissionsGateway(missionsAttribuees: { await candidature.missionsAttribuees() }),
+            missions: DemoMissionsGateway(missionsAttribuees: { await candidature.missionsAttribuees() },
+                                          missionsAnnulees: { await candidature.missionsAnnulees() }), // T7
             clock: FixedClock(fixedNow),
             dashboard: DemoDashboardGateway(clock: FixedClock(fixedNow)),
             candidature: candidature,                   // T6a (annulations : T7)
             presence: UnwiredPresencePort(),            // T6c
             favoris: UnwiredFavorisPort(),              // T4b
             mesMissions: DemoMesMissionsGateway(clock: FixedClock(fixedNow),
-                                                candidaturesDeSession: { await candidature.candidaturesDeSession() }),
+                                                candidaturesDeSession: { await candidature.candidaturesDeSession() },
+                                                missionsAnnulees: { await candidature.missionsAnnulees() }), // T7
             compte: DemoAccountGateway(),
             audit: DemoAuditGateway(),
             flags: DemoFlagsGateway(surcharges: drapeaux),
@@ -165,12 +167,26 @@ public struct DemoMissionsGateway: MissionsPort {
     /// Lot 1, T6a (revue B8, m5) : missions ouvertes attribuées au profil fictif pendant la session
     /// (`DemoCandidatureGateway.missionsAttribuees`) : servies `ASSIGNEE` en détail, retirées d'Explorer.
     private let missionsAttribuees: @Sendable () async -> Set<String>
+    /// Lot 1, T7 (revue B8 de #1156, M1) : missions annulées par le profil fictif pendant la session
+    /// (`DemoCandidatureGateway.missionsAnnulees`) : servies comme le serveur les remet en ligne (`OUVERTE`, sans
+    /// soignant assigné), en détail comme dans Explorer.
+    private let missionsAnnulees: @Sendable () async -> Set<String>
 
     public init(missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
         try DemoFixtures.loadDashboard().missionsAssignees + DemoFixtures.loadMesMissions().passees.map(\.mission)
-    }, missionsAttribuees: @escaping @Sendable () async -> Set<String> = { [] }) {
+    }, missionsAttribuees: @escaping @Sendable () async -> Set<String> = { [] },
+                missionsAnnulees: @escaping @Sendable () async -> Set<String> = { [] }) {
         self.missionsAssignees = missionsAssignees
         self.missionsAttribuees = missionsAttribuees
+        self.missionsAnnulees = missionsAnnulees
+    }
+
+    /// Mission remise en ligne par une annulation (`fn_annuler_mission_soignant`, `fn_annuler_candidature_soignant`).
+    static func remiseEnLigne(_ fixture: DemoFixtures.MissionFixture) -> DemoFixtures.MissionFixture {
+        var ouverte = fixture
+        ouverte.record.statut = "OUVERTE"
+        ouverte.record.soignantAssigneId = nil
+        return ouverte
     }
 
     public func profile(userId: String) async throws -> SoignantProfile? {
@@ -181,7 +197,11 @@ public struct DemoMissionsGateway: MissionsPort {
         try check(context)
         let (missions, etablissements) = try chargerFixtures()
         let attribuees = await missionsAttribuees()
-        return MissionBusiness.filter(missions.filter { !attribuees.contains($0.record.id) }
+        let annulees = await missionsAnnulees()
+        // T7 : une mission assignée annulée pendant la session est remise en ligne, comme sur le serveur.
+        let remises = annulees.isEmpty ? []
+            : try missionsAssignees().filter { annulees.contains($0.record.id) }.map(Self.remiseEnLigne)
+        return MissionBusiness.filter((missions.filter { !attribuees.contains($0.record.id) } + remises)
                                         .map { enrich($0, context: context, etablissements: etablissements) },
                                       context: context, filters: filters)
     }
@@ -198,6 +218,10 @@ public struct DemoMissionsGateway: MissionsPort {
         }
         // T3 : les missions ASSIGNEE du tableau de bord démo s'ouvrent en détail, sans entrer dans Explorer.
         guard let fixture = try missionsAssignees().first(where: { $0.record.id == id }) else { return nil }
+        // T7 : annulée pendant la session → relue remise en ligne, jamais encore « assignée ».
+        if await missionsAnnulees().contains(id) {
+            return enrich(Self.remiseEnLigne(fixture), context: context, etablissements: etablissements)
+        }
         return enrich(fixture, context: context, etablissements: etablissements)
     }
 

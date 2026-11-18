@@ -275,4 +275,33 @@ final class DemoCandidatureGatewayTests: XCTestCase {
         let inconnue = try await gateway.annulerMission(id: "demo-inconnue", motif: nil, context: context)
         XCTAssertEqual(inconnue, .refusee(code: nil, message: "Mission introuvable"))
     }
+
+    /// Revue B8 de #1156, M1 : le monde démo suit les annulations comme le serveur (mission remise en ligne) — détail relu
+    /// `OUVERTE` sans soignant, absente d'« À venir », de nouveau listée dans Explorer (chemin de réouverture du XCUITest).
+    func testMondeDemoSuitLAnnulation() async throws {
+        let gateways = DemoWorld.gateways()
+        let avant = try await gateways.missions.mission(id: "demo-assignee-001", context: context)
+        XCTAssertEqual(avant?.record.statut, "ASSIGNEE")
+        let issue = try await gateways.candidature.annulerMission(id: "demo-assignee-001", motif: nil, context: context)
+        XCTAssertEqual(issue, .annulee(points: 0, libre: nil, contestable: nil))
+        let relue = try await gateways.missions.mission(id: "demo-assignee-001", context: context)
+        XCTAssertEqual(relue?.record.statut, "OUVERTE")
+        XCTAssertNil(relue?.record.soignantAssigneId)
+        let aVenir = try await gateways.mesMissions.aVenir(context: context, page: 0)
+        XCTAssertFalse(aVenir.missions.contains { $0.id == "demo-assignee-001" })
+        XCTAssertTrue(aVenir.missions.contains { $0.id == "demo-assignee-002" }, "les autres missions restent")
+        let explorer = try await gateways.missions.listMissions(context: context, filters: MissionFilters())
+        XCTAssertTrue(explorer.contains { $0.id == "demo-assignee-001" }, "remise en ligne")
+        XCTAssertFalse(explorer.contains { $0.id == "demo-assignee-002" }, "une mission encore assignée reste hors d'Explorer")
+        // La candidature retenue suit le même chemin.
+        _ = try await gateways.candidature.annulerCandidature(id: "demo-candidature-retenue-003", motif: "AUTRE", texte: explication,
+                                                              justificatifPath: nil, context: context)
+        let retenue = try await gateways.missions.mission(id: "demo-assignee-003", context: context)
+        XCTAssertEqual(retenue?.record.statut, "OUVERTE")
+        XCTAssertNil(retenue?.record.soignantAssigneId)
+        // Le serveur (simulé) admet encore « Urgence médicale », que l'app ne propose plus (décision 21).
+        let medical = try await DemoCandidatureGateway().annulerCandidature(id: "demo-candidature-001", motif: "URGENCE_MEDICALE",
+                                                                            texte: explication, justificatifPath: nil, context: context)
+        XCTAssertEqual(medical, .annulee(points: 0, libre: true, contestable: nil))
+    }
 }

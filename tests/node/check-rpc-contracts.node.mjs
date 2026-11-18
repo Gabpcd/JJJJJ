@@ -219,14 +219,15 @@ test('LOT1_PLAN.md versionné : §7 = décisions du 02/11/2026, plus aucune ques
   assert.ok(!plan.includes('## 7. Questions ouvertes'), 'la section « Questions ouvertes » subsiste');
   const decisions = decisionsDu(plan);
   assert.ok(!decisions.includes('\n## '), 'le §7 doit rester la dernière section du plan');
-  // Les 19 questions ouvertes du blueprint v2 + la question 20 (exception PRINCIPES §2), dans l'ordre.
+  // Les 19 questions ouvertes du blueprint v2 + la question 20 (exception PRINCIPES §2), dans l'ordre, puis la décision 21
+  // (motif « Urgence médicale » non proposé en natif, T7, revue B8 de #1156 du 18/11/2026, application de CONFORMITE §1.4).
   let from = 0;
-  for (let i = 1; i <= 20; i++) {
+  for (let i = 1; i <= 21; i++) {
     const at = decisions.slice(from).search(new RegExp(`\\n${i}\\. \\*\\*`));
     assert.ok(at >= 0, `décision ${i} absente du §7 (ou hors ordre)`);
     from += at + 1;
   }
-  assert.ok(!/\n21\. \*\*/.test(decisions), 'décision 21 inattendue');
+  assert.ok(!/\n22\. \*\*/.test(decisions), 'décision 22 inattendue');
 });
 
 test('LOT1_PLAN.md : la recherche des décisions est bornée au §7 (le §6 numérote aussi 1. à 10.)', () => {
