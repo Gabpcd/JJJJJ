@@ -406,10 +406,15 @@ Règles : merge sériel sur `main` protégé ; une PR UI n'est ouverte qu'après
 > est celle des questions ouvertes d'origine : toute référence « §7 Qn » du présent document
 > renvoie à la décision n ci-dessous. Ce mémo fait foi ; les tranches §3 s'exécutent sans
 > nouvelle validation intermédiaire, hors catégories B9 et HARD STOP n°4 de `CLAUDE.md`.
+>
+> Ajouts postérieurs (revues B8 du 18/11/2026, consolidés à l'intégration de la vague B) : une décision qui précise
+> une décision existante est inscrite sous celle-ci comme **amendement daté** (décisions 2 et 8) ; seule une décision
+> sans décision mère reçoit un numéro nouveau, à la suite (décision 21). Les numéros 1 à 20 restent ceux des questions
+> d'origine. Aucun ajout ne vaut validation d'un texte HARD STOP n°4.
 
 1. **Biométrie** : verrou applicatif `LAContext` devant `restoreSession`, item Keychain inchangé, désactivé en démo et si non enrôlé. Pas de `SecAccessControl`.
 2. **Conformité Code du travail** : `BlocConformite` non porté ; refus serveur `[CODE DU TRAVAIL]` affiché verbatim.
-    - **Amendement (18/11/2026, décision prise par délégation, revue B8 de T6a, M1) — proposition non libérale** : tant que l'attestation hebdomadaire des heures du web n'est pas portée en natif, `confirmer(.proposition)` est verrouillé pour toute proposition non `LIBERAL` (`CandidatureVerrou.renvoiWeb`, aucune requête, renvoi web vers la proposition) ; refus de proposition et ACCEPTER restent natifs. Détail : §3 T6b. Aucun texte juridique nouveau ; le wording de l'attestation est HARD STOP n°4.
+    - **Amendement du 18/11/2026 — proposition non libérale** (revue B8 de T6a, M1 ; décision prise par délégation du coordinateur, PR #1150) : tant que l'attestation hebdomadaire des heures du web n'est pas portée en natif, `confirmer(.proposition)` est verrouillé pour toute proposition non `LIBERAL` (`CandidatureVerrou.renvoiWeb`, aucune requête, renvoi web vers la proposition) ; refus de proposition et ACCEPTER restent natifs. Détail : §3 T6b. Aucun texte juridique nouveau ; le wording de l'attestation est HARD STOP n°4.
 3. **Gating profil** : `peut_candidater` porté depuis le SELECT direct étendu (`profileSelect` + colonnes `prenom, nom, date_naissance, telephone, rpps_verifie, profession`), une seule source ; soignant incomplet → renvoi web Safari `/soignant/profil` (écran profil natif = lot 3). Écart avec `PROFILE_SELECT` du pilote RN assumé et documenté.
 4. **Annulation** : `fn_annuler_candidature_soignant` + `fn_annuler_mission_soignant`, justificatif inclus avec journal de reçus Keychain ; seuil texte 20 caractères (parité web) ; aucun barème de pénalité côté client ; les écarts web/serveur (-25/-15/-8 vs -8 ; `est_urgente` vs `est_asap`) ne sont PAS corrigés dans le lot 1 : consignés comme point ouvert (PR backend séparée, hors lot).
 5. **Audit** : connexion/déconnexion via `fn_audit_connexion('CONNEXION'|'DECONNEXION')` + `fn_maj_activite_soignant()` comme le web (le plan §5 l.173 de `docs/PLAN_APP_NATIVE_SWIFT.md` est amendé en conséquence) ; candidature : `fn_ecrire_audit_safe` `MISSION_ASSIGNATION` sur ACCEPTER/PROPOSITION comme le web, pas de ligne supplémentaire sur POSTULER ; e-mails MISSION_ACCEPTEE_* : inchangés (serveur), rien côté app.
@@ -434,7 +439,7 @@ Règles : merge sériel sur `main` protégé ; une PR UI n'est ouverte qu'après
 18. **Calendrier** : EventKit, un événement par créneau PREVISIONNEL, bouton dans Mes missions › À venir et sur l'Accueil. Précision (revue B8 de T0) : dédoublonnage par journal local des créneaux ajoutés, l'accès en écriture seule d'iOS 17+ ne permettant aucune relecture (§3 T5).
 19. **Ordre** : Accueil d'abord (T3) puis candidature ; porte lot 0 (connexion STAGING 6.2) levée par Gabrielle en parallèle de la semaine 1, sans bloquer T1 ; les acteurs A/B de la cohorte lot 0 restent sans profil `soignants`.
 20. **Exception PRINCIPES §2** (question 20 du blueprint, même mandat) : modification additive du corps de `Gateways` (`Ports.swift` l.68-77) validée, inscrite dans `PRINCIPES.md` l.31-33 par la PR T1.
-21. **Motif « 🏥 Urgence médicale » non proposé en natif** (T7, revue B8 de #1156, 18/11/2026).
+21. **Motif « 🏥 Urgence médicale » non proposé en natif** (T7, revue B8 de #1156, 18/11/2026 ; décision prise par délégation du coordinateur, sans décision mère).
     - **Source** : application de la décision de Gabrielle du 09/07/2026, `docs/CONFORMITE.md` §1.4, l.69-72. Un motif de santé générique n'est pas stocké : « le seul fait d'être malade est déjà une donnée de santé (RGPD art. 9) ».
     - **Ce que fait l'app** : la modale d'annulation propose les cinq autres motifs du web (`ModaleAnnulationCandidature.tsx` l.33-40, sauf l.35), sans texte de remplacement. `AnnulationRules.Motif` n'a pas de cas `URGENCE_MEDICALE`.
     - **Écart assumé avec le web**, consigné dans `PARITE_SOIGNANT.md`.
