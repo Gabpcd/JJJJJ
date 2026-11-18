@@ -90,7 +90,7 @@ Conséquences vérifiées : les 5 sites `Gateways(` (`DemoWorld.swift` l.29, `Su
 | Port | Méthodes | Relecture après mutation |
 |---|---|---|
 | `DashboardPort` | `dashboard(context:) -> DashboardSnapshot` | lecture seule |
-| `CandidaturePort` | `confirmer(action:, missionId:, creneaux: [CreneauConfirme], message:, choixContrat:, candidatureId:) -> CandidatureOutcome` ; `refuserProposition(candidatureId:)` ; `candidature(missionId:, context:) -> CandidatureRecord?` ; `annulerCandidature(id:, motif:, texte:, justificatifPath:) -> AnnulationOutcome` ; `annulerMission(id:, motif:) -> AnnulationOutcome` | POSTULER : relire `candidatures` (id retourné) ; ACCEPTER/PROPOSITION : relire `mission(id:)` (statut ASSIGNEE, `soignant_assigne_id == userId`) ; annulation : relire candidature (ANNULEE) et mission |
+| `CandidaturePort` | `confirmer(action:, missionId:, creneaux: [CreneauConfirme], message:, choixContrat:, candidatureId:) -> CandidatureOutcome` ; `refuserProposition(candidatureId:)` ; `candidature(missionId:, context:) -> CandidatureRecord?` ; `annulerCandidature(id:, motif:, texte:, justificatifPath:) -> AnnulationOutcome` ; `annulerMission(id:, motif:) -> AnnulationOutcome` | POSTULER : relire `candidatures` (id retourné) ; ACCEPTER/PROPOSITION : relire `mission(id:)` (statut ASSIGNEE, `soignant_assigne_id == userId`) ; annulation (livrée par T7) : relire la candidature (`ANNULEE`, posée dans la même transaction que la remise en ligne de la mission) ; sans candidature : relire la mission (`soignant_assigne_id ≠ userId` ; une ligne absente sous RLS le prouve aussi) |
 | `PresencePort` (**v2**) | `confirmerPresence(missionId:) -> PresenceOutcome` (`{success:true}` / `{error}` HTTP 200) | relire `mission(id:)` → `presence_confirmee_le` non nul ; jamais de date posée localement (le web le fait l.1428) |
 | `FavorisPort` | `missionsSauvegardees(context:)`, `sauvegarder(missionId:)`, `retirer(missionId:)`, `etablissementsFavoris()`, `basculerEtablissement(id:, actif:)` | relire `missions_sauvegardees` / `fn_mes_favoris_etablissements` |
 | `MesMissionsPort` | `candidatures(context:)`, `aVenir(context:, page:)`, `passees(context:, page:)` | lecture seule |
@@ -98,7 +98,7 @@ Conséquences vérifiées : les 5 sites `Gateways(` (`DemoWorld.swift` l.29, `Su
 | `AuditPort` | `connexion()`, `deconnexion()`, `activite()`, `ecrire(action:, typeRessource:, idRessource:, details:)` — best-effort | aucune ; `{success:false}` journalisé en DEBUG seulement |
 | `FlagsPort` | `ecranActif(cle:, defaut:) -> Bool` (`fn_param_bool`), appelé **avec session** (pas de GRANT `anon`) | — |
 | `RecoveryPort` | `requestReset(email:)`, `openRecoverySession(_ credentials: AuthCallbackCredentials) -> RecoveryOutcome`, `updatePassword(_:)`, `signOutAfterRecovery()` | voir §2.5 : la preuve « recovery » est serveur pour `token_hash` et implicit, applicative (marqueur) ou refus pour `.pkce` |
-| `JustificatifStoragePort` | `upload(data:, fileName:, candidatureId:, userId:) -> String` (`<uid>/annulations-candidature/<candidatureId>/<ts>_<nom>`) | précédé d'un reçu Keychain `prepared → started → …` (PRINCIPES §4) |
+| `JustificatifStoragePort` | `deposer(chemin:, octets:, mime:, context:) -> IssueDepotJustificatif` et `existe(chemin:, context:) -> Bool` (livré par T7 : le chemin `<uid>/annulations-candidature/<candidatureId>/<ms>_<nom>` est porté par le reçu `RecuJustificatif`, journalisé avant le dépôt ; un dépôt incertain est réconcilié par HEAD, jamais redéposé) | précédé d'un reçu Keychain `prepared → started → …` (PRINCIPES §4) |
 | `BiometricPort` | `availability()`, `authenticate(reason:) async -> BiometricResult` | — ; démo `.unavailable` |
 
 `JoleneError.Kind` n'est pas étendu (enum public, `switch` exhaustifs dans les tests) : les refus métier structurés passent par des enums de résultat (`CandidatureOutcome.{confirmed(candidatureId:, contratId:), choixRequis([ChoixContratOption]), refusee(code:, message:, documentsRequisPour:), planningAReconfirmer(code:, message:)}`, discriminés selon §2.4, `PresenceOutcome`, `AnnulationOutcome`, `DeleteAccountOutcome`, `RecoveryOutcome`), les erreurs de transport par `JoleneError`.
@@ -266,7 +266,7 @@ Taille cible ≤ 1 500 lignes Swift par PR (hors fixtures JSON). Chaque PR : tes
 
 ### T6b — Candidature, UI + démo + XCUITest (~900 lignes)
 
-- **Fichiers** : `Jolene/Screens/Candidature/RecapitulatifCandidatureSheet.swift`, `ChoixContratSheet.swift`, `Jolene/Screens/MissionDetailScreen.swift` (remplace `placeholder-candidature` l.95-98 : `StickyActionBar`, message ≤ 300, ids `candidature-submit`, `candidature-sent`, `candidature-error`, `candidature-planning-blocked`, `candidature-profil-incomplet` (renvoi web `/soignant/profil` via Safari, lot 3), « Annuler ma participation » si ASSIGNEE et `soignant_assigne_id == userId`, propositions `proposition-accepter-{id}` / `proposition-refuser-{id}`), `JoleneUITests/DemoCandidatureTests.swift`.
+- **Fichiers** : `Jolene/Screens/Candidature/RecapitulatifCandidatureSheet.swift`, `ChoixContratSheet.swift`, `Jolene/Screens/MissionDetailScreen.swift` (remplace `placeholder-candidature` l.95-98 : `StickyActionBar`, message ≤ 300, ids `candidature-submit`, `candidature-sent`, `candidature-error`, `candidature-planning-blocked`, `candidature-profil-incomplet` (renvoi web `/soignant/profil` via Safari, lot 3), « Annuler ma participation » livré par T7 et non par T6b (`AnnulationSection`, insérée dans le détail ; T6b n'ajoute aucun bouton d'annulation), propositions `proposition-accepter-{id}` / `proposition-refuser-{id}`), `JoleneUITests/DemoCandidatureTests.swift`.
 - **Tests d'abord** : XCUITest : POSTULER → « Candidature envoyée » → Mes missions › Candidatures ; ACCEPTER (PREMIER_ARRIVE) → ASSIGNEE relu ; choix de contrat → sheet → rejoué ; planning non exact → CTA désactivé ; `PLANNING_MODIFIE_RECONFIRMER` → message + relecture.
 - **Point de fusion T3 (propositions de l'Accueil)** : la carte `accueil-proposition-{id}` (fenêtre de 2 h) ouvre aujourd'hui le détail de la mission par `MissionRoute`, qui ne transporte que l'identifiant de mission, pas celui de la candidature PROPOSEE, et le détail ne permet pas encore de répondre. T6b : le détail **relit la candidature côté serveur** (`CandidaturePort.candidature(missionId:)`, statut PROPOSEE, `soignant_id = auth.uid()`, expiration) pour afficher `proposition-accepter-{id}` / `proposition-refuser-{id}`, jamais un identifiant transporté par la route ; XCUITest `DemoCandidatureTests` : Accueil → `accueil-proposition-demo-proposition-001` → détail → `proposition-accepter-…` → mission ASSIGNEE relue.
 - **Critère** : `/soignant/missions/:id` (candidature), `/soignant/recherche-missions` (candidature) → natif. Série (`/soignant/missions/serie/:id`) : liste + acceptation unitaire (boucle `DetailSerieSoignant.tsx` l.295-302) si T2 fournit `SelectionSerieCandidat` ; sinon « renvoi web » (§7 Q11). **Dépendances** : T6a, T3.
@@ -281,10 +281,22 @@ Taille cible ≤ 1 500 lignes Swift par PR (hors fixtures JSON). Chaque PR : tes
 
 ### T7 — Annulation avec justificatif + journal de reçus (~1 300 lignes)
 
-- **Fichiers** : `JoleneCore/Receipts/ReceiptJournal.swift`, `JoleneSupabase/Keychain/KeychainReceiptStore.swift` (service `app.jolene.receipts`), `JoleneSupabase/Storage/SupabaseJustificatifStorage.swift` (bucket `justificatifs`, `upsert:false`, ≤ 5 Mo, PDF/JPEG/PNG/WebP), `SupabaseCandidatureGateway.swift` (`annulerCandidature`, `annulerMission` + relectures), `JoleneCore/Candidature/AnnulationRules.swift` (motifs `URGENCE_PERSONNELLE … AUTRE`, texte ≥ 20 côté client comme le web l.100, serveur 10), `Jolene/Screens/Candidature/AnnulationSheet.swift` (ids `annulation-*`, avertissement « N'envoyez aucun certificat médical… » verbatim), `JoleneUITests/DemoAnnulationTests.swift`.
+- **Fichiers** : `JoleneCore/Receipts/ReceiptJournal.swift`, `JoleneSupabase/Keychain/KeychainReceiptStore.swift` (service `app.jolene.receipts`), `JoleneSupabase/Storage/SupabaseJustificatifStorage.swift` (bucket `justificatifs`, `upsert:false`, ≤ 5 Mo, PDF/JPEG/PNG/WebP), `SupabaseCandidatureGateway.swift` (`annulerCandidature`, `annulerMission` + relectures), `JoleneCore/Candidature/AnnulationRules.swift` (motifs `URGENCE_PERSONNELLE … AUTRE` **sans `URGENCE_MEDICALE`**, décision 21 ; texte ≥ 20 côté client comme le web l.100, serveur 10), `Jolene/Screens/Candidature/AnnulationSheet.swift` (ids `annulation-*`, avertissement « N'envoyez aucun certificat médical… » verbatim), `JoleneUITests/DemoAnnulationTests.swift`.
 - **Pénalités** : aucun barème côté client (écart web/serveur avéré : `DetailMissionSoignant.tsx` l.1638-1640 -25/-15/-8 vs `fn_annuler_mission_soignant` -8 seulement si < 24 h ; `AnnulationCandidatureTimer` lit `est_urgente`, le serveur `est_asap`). Après confirmation : `points`/`libre`/`contestable` serveur.
 - **Tests d'abord** : `ReceiptJournalTests`, `SupabaseJustificatifStorageTests` (403 → `not_sent`), gateway (EN_ATTENTE `libre:true`, ACCEPTEE `points:-5`, `STATUT_INVALIDE`, `TEXTE_REQUIS`), XCUITest.
 - **Critère** : STAGING « annulation relue ». **HARD STOP** : wording pénalité/rétractation verbatim ou validation (§7 Q4). **Dépendances** : T6a.
+- **Livré (#1156, revue B8 du 18/11/2026)** :
+  - après une annulation relue, le détail relit sa mission (le web quitte le détail, l.917 et l.1656) ; le monde démo remet la mission en ligne (détail `OUVERTE`, absente d'« À venir », listée dans Explorer) ;
+  - « 🏥 Urgence médicale » n'est pas proposé (décision 21) ;
+  - `STATUT_INVALIDE` déclenche une relecture de la candidature avant tout message ;
+  - journal illisible : modale bloquée, renvoi jolene.app ;
+  - libellés repris tels quels sous la garde des textes (`LibellesWeb.Annulation`).
+- **Suivis non corrigés (revue B8)** :
+  - m1 : objet orphelin quand le serveur ne rattache pas le chemin (`points` = 0) ;
+  - m3 : HEAD 400 lu « absent » par supabase-swift (hérité du lot 2) ;
+  - m4 : pas de registre des envois en vol à l'échelle du processus ;
+  - nit : l'audit `MISSION_ANNULATION` n'est écrit qu'après relecture ;
+  - l'Accueil démo (fixture) liste encore une mission annulée pendant la session.
 
 ### T8 — Compte : suppression (Apple 5.1.1) (~700 lignes)
 
@@ -422,6 +434,11 @@ Règles : merge sériel sur `main` protégé ; une PR UI n'est ouverte qu'après
 18. **Calendrier** : EventKit, un événement par créneau PREVISIONNEL, bouton dans Mes missions › À venir et sur l'Accueil. Précision (revue B8 de T0) : dédoublonnage par journal local des créneaux ajoutés, l'accès en écriture seule d'iOS 17+ ne permettant aucune relecture (§3 T5).
 19. **Ordre** : Accueil d'abord (T3) puis candidature ; porte lot 0 (connexion STAGING 6.2) levée par Gabrielle en parallèle de la semaine 1, sans bloquer T1 ; les acteurs A/B de la cohorte lot 0 restent sans profil `soignants`.
 20. **Exception PRINCIPES §2** (question 20 du blueprint, même mandat) : modification additive du corps de `Gateways` (`Ports.swift` l.68-77) validée, inscrite dans `PRINCIPES.md` l.31-33 par la PR T1.
+21. **Motif « 🏥 Urgence médicale » non proposé en natif** (T7, revue B8 de #1156, 18/11/2026).
+    - **Source** : application de la décision de Gabrielle du 09/07/2026, `docs/CONFORMITE.md` §1.4, l.69-72. Un motif de santé générique n'est pas stocké : « le seul fait d'être malade est déjà une donnée de santé (RGPD art. 9) ».
+    - **Ce que fait l'app** : la modale d'annulation propose les cinq autres motifs du web (`ModaleAnnulationCandidature.tsx` l.33-40, sauf l.35), sans texte de remplacement. `AnnulationRules.Motif` n'a pas de cas `URGENCE_MEDICALE`.
+    - **Écart assumé avec le web**, consigné dans `PARITE_SOIGNANT.md`.
+    - **Hors chantier iOS** : le web propose encore ce motif, et `fn_annuler_candidature_soignant` l'écrit dans `candidatures.motif_refus` (`public.sql` l.18012), dans `evenements_score_soignant.details` et dans `journaux_audit`, qui est immuable (l.17986, l.18060, l.18091). Le retirer côté web et serveur relève d'une PR B9 / HARD STOP séparée.
 
 Dépendent de Gabrielle (ne bloquent pas la semaine 1) : voir §6 — signature porte lot 0, `JOLENE_NATIVE_AUTH_REVIEWED_SHA` = `d1b0f39c`, secrets T11, Apple Distribution + TestFlight, iPhone physique, modèle d'e-mail reset, go B0 (accordé par le mandat général car aucune catégorie B9), wording HARD STOP, clé APNs.
 

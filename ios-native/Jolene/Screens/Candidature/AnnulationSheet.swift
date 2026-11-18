@@ -24,6 +24,8 @@ struct AnnulationSheet: View {
     let mission: Mission
     @ObservedObject var model: AnnulationModel
     let mediaDemo: DemoMediaPicker?
+    /// Renvoi web d'un journal illisible, présenté par la section une fois la modale fermée ; nil : aucun bouton.
+    var ouvrirSurLeWeb: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
 
     @State private var motif: AnnulationRules.Motif?
@@ -240,7 +242,15 @@ struct AnnulationSheet: View {
         case let .erreur(message), let .sessionExpiree(message):
             InlineNotice(message, tone: .error, identifier: "annulation-erreur", announcesOnAppear: true)
         case let .bloquee(message):
+            // Revue B8 de #1156, m7 : l'avis renvoie vers jolene.app et la confirmation est désactivée.
             InlineNotice(message, tone: .warning, identifier: "annulation-erreur", announcesOnAppear: true)
+            if let ouvrirSurLeWeb {
+                JoleneButton(L.ouvrirSurLeWeb, style: .secondary) {
+                    ouvrirSurLeWeb()
+                    dismiss()
+                }
+                .accessibilityIdentifier("annulation-renvoi-web")
+            }
         case .annulee, .none:
             EmptyView()
         }
@@ -253,7 +263,7 @@ struct AnnulationSheet: View {
                 .accessibilityIdentifier("annulation-garder")
             JoleneButton(T.confirmerAnnulation, style: .destructive, isLoading: model.envoiEnCours) { confirmer() }
                 .disabled(!AnnulationRules.peutConfirmer(motif: motif, texte: texte, accepte: accepte)
-                          || model.envoiEnCours || preparation)
+                          || model.envoiEnCours || preparation || justificatifBloque)
                 .accessibilityIdentifier("annulation-confirmer")
         }
         .padding(.top, JoleneSpacing.sm)

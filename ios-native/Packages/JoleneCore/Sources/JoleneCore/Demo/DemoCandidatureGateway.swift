@@ -90,6 +90,10 @@ public actor DemoCandidatureGateway: CandidaturePort {
     /// Mission annulée par le profil fictif pendant la session.
     public func missionAnnulee(_ missionId: String) -> Bool { annulees.contains(missionId) }
 
+    /// Missions annulées par le profil fictif pendant la session, relues par `DemoMissionsGateway` (servies `OUVERTE`,
+    /// non attribuées, comme la remise en ligne du serveur) et par Mes missions (hors « À venir ») : revue B8 de #1156, M1.
+    public func missionsAnnulees() -> Set<String> { annulees }
+
     /// Candidatures en attente de `demo-mes-missions.json` et proposition de l'Accueil (`demo-dashboard.json`).
     public static let candidaturesDesFixtures: @Sendable () throws -> [CandidatureRecord] = {
         let attente = try DemoFixtures.loadMesMissions().candidatures
@@ -177,7 +181,7 @@ public actor DemoCandidatureGateway: CandidaturePort {
     public func annulerCandidature(id: String, motif: String, texte: String, justificatifPath: String?,
                                    context: MissionReadContext) async throws -> AnnulationOutcome {
         try Self.verifier(context)
-        guard AnnulationRules.Motif(rawValue: motif) != nil else {
+        guard AnnulationRules.motifsServeur.contains(motif) else {
             return .refusee(code: "MOTIF_INVALIDE", message: Textes.motifInvalide)
         }
         guard texte.trimmingCharacters(in: CharacterSet(charactersIn: " ")).count >= AnnulationRules.texteMinimumServeur else {
@@ -188,7 +192,7 @@ public actor DemoCandidatureGateway: CandidaturePort {
         }
         let statut = candidature.statut ?? ""
         guard statut == AnnulationRules.statutAcceptee || statut == "EN_ATTENTE" else {
-            return .refusee(code: "STATUT_INVALIDE", message: Textes.statutInvalide(statut))
+            return .refusee(code: AnnulationRules.codeStatutInvalide, message: Textes.statutInvalide(statut))
         }
         remplacer(candidature, statut: AnnulationRules.statutAnnulee)
         if statut == AnnulationRules.statutAcceptee {
@@ -287,6 +291,7 @@ public actor DemoCandidatureGateway: CandidaturePort {
     private func attribuerPuisRelire(_ missionId: String) throws -> String {
         let contrat = "demo-contrat-\(missionId)"
         attributions[missionId] = contrat
+        annulees.remove(missionId) // une mission remise en ligne puis reprise n'est plus annulée
         guard attributions[missionId] == contrat else { throw JoleneError(.contract, Self.messageRelecture) }
         return contrat
     }

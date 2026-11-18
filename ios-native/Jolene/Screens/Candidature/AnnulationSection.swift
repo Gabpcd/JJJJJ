@@ -22,10 +22,18 @@ struct AnnulationSection: View {
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
     @State private var confirmationOuverte = false
     @State private var feuille: DemandeAnnulation?
+    /// Journal illisible (revue B8 de #1156, m7) : la modale demande le renvoi web, présenté une fois la modale fermée
+    /// (une seule feuille par niveau).
+    @State private var renvoiApresFermeture = false
+    /// Relecture de la mission de l'écran après une annulation relue (revue B8 de #1156, M1) : rien de l'état « assignée »
+    /// ne reste affiché (le web quitte le détail, `DetailMissionSoignant.tsx` l.917 et l.1656).
+    private let relireMission: (@MainActor @Sendable () async -> Void)?
 
-    init(mission: Mission, session: SessionStore, snapshot: SessionSnapshot) {
+    init(mission: Mission, session: SessionStore, snapshot: SessionSnapshot,
+         relireMission: (@MainActor @Sendable () async -> Void)? = nil) {
         self.mission = mission
         self.session = session
+        self.relireMission = relireMission
         _model = StateObject(wrappedValue: AnnulationModel(missionId: mission.id, controller: session.controller, snapshot: snapshot))
     }
 
@@ -62,9 +70,29 @@ struct AnnulationSection: View {
             model.recus = appareil?.recus
             await model.charger(mission)
         }
-        .sheet(item: $feuille, onDismiss: { model.effacerIssue() }) { demande in
-            AnnulationSheet(candidatureId: demande.candidatureId, mission: mission, model: model, mediaDemo: mediaDemo)
+        .onChange(of: model.issue) { issue in
+            guard case .annulee = issue else { return }
+            Task { await relireMission?() }
         }
+        .sheet(item: $feuille, onDismiss: apresFermeture) { demande in
+            AnnulationSheet(candidatureId: demande.candidatureId, mission: mission, model: model, mediaDemo: mediaDemo,
+                            ouvrirSurLeWeb: demandeRenvoi)
+        }
+    }
+
+    private var routeWeb: JoleneRoute? { AnnulationRules.routeRenvoiWeb(missionId: mission.id) }
+
+    /// Renvoi web demandé par la modale (journal illisible) ; nil sans présentateur : jamais un bouton sans effet.
+    private var demandeRenvoi: (() -> Void)? {
+        guard routeWeb != nil, presentateurRenvoiWeb != nil else { return nil }
+        return { renvoiApresFermeture = true }
+    }
+
+    private func apresFermeture() {
+        model.effacerIssue()
+        guard renvoiApresFermeture else { return }
+        renvoiApresFermeture = false
+        if let presentateurRenvoiWeb, let routeWeb { presentateurRenvoiWeb.presenter(routeWeb) }
     }
 
     // MARK: - Confirmation sans candidature
