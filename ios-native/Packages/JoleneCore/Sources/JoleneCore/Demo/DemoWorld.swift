@@ -40,7 +40,7 @@ public enum DemoWorld {
         var gateways = Gateways(
             auth: auth,
             role: DemoRoleGateway(),
-            missions: DemoMissionsGateway(),
+            missions: DemoMissionsGateway(missionsAttribuees: { await candidature.missionsAttribuees() }),
             clock: FixedClock(fixedNow),
             dashboard: DemoDashboardGateway(clock: FixedClock(fixedNow)),
             candidature: candidature,                   // T6a (annulations : T7)
@@ -180,11 +180,15 @@ public struct DemoMissionsGateway: MissionsPort {
     /// identifiant absent de `demo-missions.json` : une fixture illisible ne casse jamais le détail
     /// Explorer.
     private let missionsAssignees: @Sendable () throws -> [DemoFixtures.MissionFixture]
+    /// Lot 1, T6a (revue B8, m5) : missions ouvertes attribuées au profil fictif pendant la session
+    /// (`DemoCandidatureGateway.missionsAttribuees`) : servies `ASSIGNEE` en détail, retirées d'Explorer.
+    private let missionsAttribuees: @Sendable () async -> Set<String>
 
     public init(missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
         try DemoFixtures.loadDashboard().missionsAssignees + DemoFixtures.loadMesMissions().passees.map(\.mission)
-    }) {
+    }, missionsAttribuees: @escaping @Sendable () async -> Set<String> = { [] }) {
         self.missionsAssignees = missionsAssignees
+        self.missionsAttribuees = missionsAttribuees
     }
 
     public func profile(userId: String) async throws -> SoignantProfile? {
@@ -194,14 +198,20 @@ public struct DemoMissionsGateway: MissionsPort {
     public func listMissions(context: MissionReadContext, filters: MissionFilters) async throws -> [Mission] {
         try check(context)
         let (missions, etablissements) = try chargerFixtures()
-        return MissionBusiness.filter(missions.map { enrich($0, context: context, etablissements: etablissements) },
+        let attribuees = await missionsAttribuees()
+        return MissionBusiness.filter(missions.filter { !attribuees.contains($0.record.id) }
+                                        .map { enrich($0, context: context, etablissements: etablissements) },
                                       context: context, filters: filters)
     }
 
     public func mission(id: String, context: MissionReadContext) async throws -> Mission? {
         try check(context)
         let (missions, etablissements) = try chargerFixtures()
-        if let fixture = missions.first(where: { $0.record.id == id }) {
+        if var fixture = missions.first(where: { $0.record.id == id }) {
+            if await missionsAttribuees().contains(id) {
+                fixture.record.statut = CandidatureRules.statutAssignee
+                fixture.record.soignantAssigneId = DemoWorld.context.userId
+            }
             return enrich(fixture, context: context, etablissements: etablissements)
         }
         // T3 : les missions ASSIGNEE du tableau de bord démo s'ouvrent en détail, sans entrer dans Explorer.

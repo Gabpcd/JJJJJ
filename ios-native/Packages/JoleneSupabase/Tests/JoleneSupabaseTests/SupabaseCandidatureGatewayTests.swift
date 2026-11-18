@@ -51,8 +51,19 @@ final class SupabaseCandidatureGatewayTests: XCTestCase {
         #"{"code":"\#(sqlstate)","details":null,"hint":null,"message":"\#(message)"}"#
     }
 
-    private func candidatureJSON(_ statut: String, id: String? = nil) -> String {
-        #"[{"id":"\#(id ?? candidatureId)","statut":"\#(statut)","message":null,"type_contrat_choisi":null,"cree_le":"2026-11-02T00:00:00+00:00","mission_id":"\#(missionId)"}]"#
+    private func candidatureJSON(_ statut: String, id: String? = nil, contrat: String? = nil) -> String {
+        let choisi = contrat.map { #""\#($0)""# } ?? "null"
+        return #"[{"id":"\#(id ?? candidatureId)","statut":"\#(statut)","message":null,"type_contrat_choisi":\#(choisi),"cree_le":"2026-11-02T00:00:00+00:00","mission_id":"\#(missionId)"}]"#
+    }
+
+    /// Lecture du contrat d'une proposition (`contratColumns`), distincte de la relecture de l'attribution.
+    private func stubContratMission(_ contrat: String) {
+        registry.add("GET", "/rest/v1/missions", where: { $0.query("select") == SupabaseCandidatureGateway.contratColumns },
+                     respond: .json(200, #"[{"id":"\#(missionId)","type_contrat_recherche":"\#(contrat)"}]"#))
+    }
+
+    private func toutesLesRequetes() -> Int {
+        [rpc, repondre, audit, "/rest/v1/candidatures", "/rest/v1/missions"].map { registry.requests(to: $0).count }.reduce(0, +)
     }
 
     private func attributionJSON(statut: String = "ASSIGNEE", soignant: String = TestClient.userId) -> String {
@@ -66,7 +77,7 @@ final class SupabaseCandidatureGatewayTests: XCTestCase {
     // MARK: - Succès relus (formes 8 et 9)
 
     func testPostulerSuccesAvecDocumentsACompleterRelitLaCandidatureSansAudit() async throws {
-        // Forme 8 (l.48523-48530) : `documents_requis_pour` accompagne le succès, sans `error` : jamais un refus.
+        // Forme 8 (`public.sql` l.48519-48526) : `documents_requis_pour` accompagne le succès, sans `error` : jamais un refus.
         reponse(#"{"success":true,"candidature_id":"\#(candidatureId)","choix_contrat":"SALARIE","profession_requise":"IDE","docs_a_completer":true,"documents_requis_pour":"SALARIE"}"#)
         registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("EN_ATTENTE")))
         let issue = try await confirmer(.postuler, message: "")
@@ -107,13 +118,14 @@ final class SupabaseCandidatureGatewayTests: XCTestCase {
     }
 
     func testAccepterSuccesRelitLAttributionPuisAuditeCommeLeWeb() async throws {
-        // Forme 9 (l.36902-36910 du dump d'origine).
+        // Forme 9 (`public.sql` l.37344-37352).
         reponse(#"{"success":true,"contrat_id":"\#(contratId)","contrat_numero":"C-1","choix_applique":"SALARIE","profession_requise":"IDE","type_paiement":"SALAIRE","mode_paiement":"VIREMENT"}"#)
         registry.add("GET", "/rest/v1/missions", respond: .json(200, attributionJSON()))
         registry.add("POST", "/rest/v1/rpc/fn_etablissements_safe", respond: .json(200, TestClient.etablissementJSON))
         registry.add("POST", audit, respond: .json(200, #"{"success":true,"id":"0a0a0a0a-1b1b-4c2c-8d3d-4e4e4e4e4e4e"}"#))
         let issue = try await confirmer(.accepter, choix: "SALARIE")
         XCTAssertEqual(issue, .confirmed(candidatureId: nil, contratId: contratId))
+        XCTAssertTrue(registry.requests(to: "/rest/v1/candidatures").isEmpty, "ACCEPTER : aucun verrou de proposition")
         XCTAssertEqual(try corps(rpc)["p_choix_contrat"] as? String, "SALARIE")
         let relecture = try XCTUnwrap(registry.requests(to: "/rest/v1/missions").first)
         XCTAssertEqual(relecture.query("select"), SupabaseCandidatureGateway.attributionColumns)
@@ -151,17 +163,55 @@ final class SupabaseCandidatureGatewayTests: XCTestCase {
         XCTAssertEqual(ouverte, JoleneError(.contract, SupabaseCandidatureGateway.relectureMessage))
     }
 
-    func testPropositionAccepteeEnvoieLaCandidatureEtRelitLaMission() async throws {
+    func testPropositionLiberaleContratReluPuisEnvoyeeEtRelue() async throws {
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("PROPOSEE", contrat: "LIBERAL")))
+        stubContratMission("TOUS")
         reponse(#"{"success":true,"contrat_id":"\#(contratId)","message":"Proposition acceptée"}"#)
-        registry.add("GET", "/rest/v1/missions", respond: .json(200, attributionJSON()))
+        registry.add("GET", "/rest/v1/missions", where: { $0.query("select") == SupabaseCandidatureGateway.attributionColumns },
+                     respond: .json(200, attributionJSON()))
         registry.add("POST", "/rest/v1/rpc/fn_etablissements_safe", respond: .json(200, TestClient.etablissementJSON))
         registry.add("POST", audit, respond: .json(200, #"{"success":true}"#))
-        let issue = try await confirmer(.proposition, candidature: candidatureId.uppercased())
+        let issue = try await confirmer(.proposition, choix: "LIBERAL", candidature: candidatureId.uppercased())
         XCTAssertEqual(issue, .confirmed(candidatureId: candidatureId, contratId: contratId))
         let envoye = try corps(rpc)
         XCTAssertEqual(envoye["p_action"] as? String, "PROPOSITION")
         XCTAssertEqual(envoye["p_candidature_id"] as? String, candidatureId, "uuid canonique")
+        XCTAssertTrue(envoye["p_choix_contrat"] is NSNull, "null comme le web : le contrat déclaré ne sert qu'au verrou")
+        let lecture = try XCTUnwrap(registry.requests(to: "/rest/v1/candidatures").first)
+        XCTAssertEqual(lecture.query("id"), "eq.\(candidatureId)")
+        XCTAssertEqual(lecture.query("soignant_id"), "eq.\(TestClient.userId)")
         XCTAssertEqual(registry.requests(to: audit).count, 1, "décision 5 : audit sur PROPOSITION aussi")
+    }
+
+    // MARK: - Verrou de l'attestation hebdomadaire (revue B8 de T6a, M1)
+
+    func testPropositionNonLiberaleVerrouilleeSansAucuneRequete() async throws {
+        for declare in [nil, "SALARIE", "TOUS", ""] as [String?] {
+            registry.reset()
+            do {
+                _ = try await confirmer(.proposition, choix: declare, candidature: candidatureId)
+                XCTFail("proposition \(declare ?? "nil") envoyée sans l'attestation hebdomadaire")
+            } catch let verrou as CandidatureVerrou {
+                XCTAssertEqual(verrou, .renvoiWeb(chemin: CandidatureVerrou.cheminProposition))
+            }
+            XCTAssertEqual(toutesLesRequetes(), 0, "\(declare ?? "nil") : aucune requête, ni lecture ni RPC")
+        }
+    }
+
+    func testPropositionDeclareeLiberaleMaisReluesSalarieeVerrouilleeSansRPC() async throws {
+        for (choisi, recherche) in [(nil, "SALARIE"), ("SALARIE", "TOUS"), (nil, "TOUS")] as [(String?, String)] {
+            registry.reset()
+            registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("PROPOSEE", contrat: choisi)))
+            stubContratMission(recherche)
+            do {
+                _ = try await confirmer(.proposition, choix: "LIBERAL", candidature: candidatureId)
+                XCTFail("contrat relu \(choisi ?? recherche) : jamais envoyé")
+            } catch let verrou as CandidatureVerrou {
+                XCTAssertEqual(verrou, .renvoiWeb(chemin: CandidatureVerrou.cheminProposition))
+            }
+            XCTAssertTrue(registry.requests(to: rpc).isEmpty, "aucune RPC")
+            XCTAssertTrue(registry.requests(to: audit).isEmpty)
+        }
     }
 
     // MARK: - Garde locale (aucune requête)
@@ -246,7 +296,8 @@ final class SupabaseCandidatureGatewayTests: XCTestCase {
     }
 
     func testRefusSansCodeDeLaRPCVerbatim() async throws {
-        for message in ["Accès réservé aux soignants authentifiés.", "Cette mission n'est plus disponible.", "Proposition introuvable."] {
+        // §2.4 règle 5 (aligné sur le code, revue B8 m2) : refus drapeauté sans code → `.refusee(code: nil)`, verbatim.
+        for message in ["Accès réservé aux soignants authentifiés.", "Action de candidature invalide.", "Proposition introuvable."] {
             registry.reset()
             reponse(#"{"success":false,"ok":false,"error":"\#(message)"}"#)
             let issue6 = try await confirmer(.postuler)
@@ -288,15 +339,45 @@ final class SupabaseCandidatureGatewayTests: XCTestCase {
         XCTAssertTrue(registry.requests(to: audit).isEmpty)
     }
 
-    func testMissionDejaPriseSansMessageTechnique() async throws {
-        for message in ["JSON object requested, multiple (or no) rows returned — The result contains 0 rows",
-                        "Cette mission est déjà prise"] {
+    func testMissionSortieDeLEtatOuverteSurLesMessagesExacts() async throws {
+        // Revue B8 de T6a, m1 : la vraie course (forme 3 sous verrou `FOR UPDATE`, délégués, attribution concurrente).
+        let formes = [
+            #"{"success":false,"ok":false,"error":"Cette mission n'est plus disponible."}"#,
+            #"{"error":"Cette mission n'est plus disponible"}"#,
+            #"{"error":"Cette mission vient d'être attribuée."}"#,
+        ]
+        let messages = ["Cette mission n'est plus disponible.", "Cette mission n'est plus disponible",
+                        "Cette mission vient d'être attribuée."]
+        for (forme, message) in zip(formes, messages) {
             registry.reset()
-            reponse(exception("PGRST116", message), statut: 406)
+            reponse(forme)
             let issue7 = try await confirmer(.accepter)
-            XCTAssertEqual(issue7, .missionDejaAttribuee, message)
+            XCTAssertEqual(issue7, .missionDejaAttribuee(message: message), forme)
             XCTAssertEqual(registry.requests(to: rpc).count, 1, "aucun renvoi")
+            XCTAssertTrue(registry.requests(to: "/rest/v1/missions").isEmpty, "aucune relecture de succès")
         }
+    }
+
+    func testAncienneBrancheZeroRowsNeReconnaitPlusRien() async throws {
+        reponse(exception("PGRST116", "The result contains 10 rows"), statut: 406)
+        let refus = await erreur { _ = try await self.confirmer(.accepter) }
+        XCTAssertNotNil(refus, "exception → erreur générique, jamais `.missionDejaAttribuee`")
+        XCTAssertFalse(refus?.message.contains("rows") == true, "jamais le message technique")
+    }
+
+    func testErreurDeTransportPendantLaRelectureDitQueLaReponseEstPartie() async throws {
+        // Revue B8 de T6a, m3 : nature gardée (réseau), message de relecture, jamais « connexion impossible » seul.
+        reponse(#"{"success":true,"candidature_id":"\#(candidatureId)"}"#)
+        registry.add("GET", "/rest/v1/candidatures", respond: .networkFailure())
+        let postuler = await erreur { _ = try await self.confirmer(.postuler) }
+        XCTAssertEqual(postuler, JoleneError(.network, SupabaseCandidatureGateway.relectureMessage))
+        registry.reset()
+        reponse(#"{"success":true,"contrat_id":"\#(contratId)"}"#)
+        registry.add("GET", "/rest/v1/missions", respond: .networkFailure())
+        let accepter = await erreur { _ = try await self.confirmer(.accepter) }
+        XCTAssertEqual(accepter, JoleneError(.network, SupabaseCandidatureGateway.relectureMessage))
+        XCTAssertTrue(registry.requests(to: audit).isEmpty, "aucun audit sans relecture")
+        XCTAssertEqual(registry.requests(to: rpc).count, 1, "aucun renvoi")
     }
 
     func testAutreExceptionMessageGenerique() async throws {

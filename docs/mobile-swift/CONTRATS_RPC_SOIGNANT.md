@@ -300,78 +300,84 @@ CREATE OR REPLACE FUNCTION "public"."fn_dashboard_soignant_complet"() RETURNS "j
   `mission(id:)` (`ASSIGNEE`, `soignant_assigne_id == userId`) pour ACCEPTER/PROPOSITION. L'annulation
   **ne passe pas** par cette RPC (voir `fn_annuler_candidature_soignant` / `fn_annuler_mission_soignant`).
 - **Formes de réponse** (HTTP 200) à décoder par `RPCResponse`, une forme = un test dans T6a. Valeurs JSON
-  réelles (apostrophes simples, pas l'échappement `''` du littéral SQL), relues dans le corps l.24141-24318.
+  réelles (apostrophes simples, pas l'échappement `''` du littéral SQL), relues dans le corps l.24525-24702.
   - **Refus propres à cette RPC** : toujours `success:false, ok:false, error` ; les refus de planning portent
     en plus la clé `code` (jamais `error_code` : ni ce corps ni `fn_conflit_planning_soignant` ne la posent, le
     décodeur lit `code` et ne se rabat pas sur `error_code`).
-    1. `{success:false, ok:false, error:'Accès réservé aux soignants authentifiés.'}` — l.24153-24157 :
+    1. `{success:false, ok:false, error:'Accès réservé aux soignants authentifiés.'}` — l.24537-24541 :
        `auth.uid()` nul ou `est_soignant()` faux.
-    2. `{success:false, ok:false, error:'Action de candidature invalide.'}` — l.24162-24168 : `p_action` hors
+    2. `{success:false, ok:false, error:'Action de candidature invalide.'}` — l.24546-24552 : `p_action` hors
        `POSTULER, ACCEPTER, SWIPE_LIKE, URGENCE, PROPOSITION`.
-    3. `{success:false, ok:false, error:"Cette mission n'est plus disponible."}` — l.24177-24181 : mission absente
-       ou statut ≠ `OUVERTE`.
+    3. `{success:false, ok:false, error:"Cette mission n'est plus disponible."}` — l.24561-24565 : mission absente
+       ou statut ≠ `OUVERTE` (course réelle sous `FOR UPDATE`) → `.missionDejaAttribuee(message:)` (revue B8 de T6a, m1 ;
+       égalité exacte, `CandidatureRules.messagesMissionDejaAttribuee`).
     4. `{success:false, ok:false, code:'PLANNING_A_RECONFIRMER', error:"Le planning confirmé n'est pas exploitable. Rechargez la mission avant de continuer."}`
-       — l.24195-24200 : `fn_valider_creneaux_mission_json` refuse `p_creneaux_confirmes` → relire la mission et
+       — l.24579-24584 : `fn_valider_creneaux_mission_json` refuse `p_creneaux_confirmes` → relire la mission et
        reconstruire `CreneauxConfirmes`, jamais renvoyer la même charge.
     5. `{success:false, ok:false, code:'PLANNING_MODIFIE_RECONFIRMER', error:'Le planning a changé depuis son affichage. Vérifiez à nouveau toutes les dates et tous les horaires.'}`
-       — l.24237-24248 : nombre ou contenu des créneaux différent du planning live → relire et redemander,
+       — l.24621-24632 : nombre ou contenu des créneaux différent du planning live → relire et redemander,
        jamais renvoyer.
-    6. Conflit avec une mission déjà confirmée — l.24256-24264 :
+    6. Conflit avec une mission déjà confirmée — l.24640-24648 :
        `{success:false, ok:false, code: COALESCE(v_conflit->>'code', 'CONFLIT_PLANNING'), error: COALESCE(v_conflit->>'message', 'Ce planning entre en conflit avec une mission déjà confirmée.')}`.
-       `code` vaut `'PLANNING_DETAILLE_INDISPONIBLE'` (l.24787), `'PLANNING_EXISTANT_INDISPONIBLE'` (l.24828),
-       `'REPOS_11H'` (l.24923) ou, sans code dans `fn_conflit_planning_soignant` (chevauchement, l.24859),
+       `code` vaut `'PLANNING_DETAILLE_INDISPONIBLE'` (l.25171), `'PLANNING_EXISTANT_INDISPONIBLE'` (l.25212),
+       `'REPOS_11H'` (l.25307) ou, sans code dans `fn_conflit_planning_soignant` (chevauchement, l.25243),
        `'CONFLIT_PLANNING'`. Le message vient du serveur (tutoiement « Tu es déjà confirmé(e) sur … » pour le
        chevauchement) et s'affiche verbatim (HARD STOP n°4).
-    7. `{success:false, ok:false, error:'Proposition introuvable.'}` — l.24295-24306 : `PROPOSITION` sans
+    7. `{success:false, ok:false, error:'Proposition introuvable.'}` — l.24679-24690 : `PROPOSITION` sans
        `p_candidature_id`, ou candidature qui n'est pas `PROPOSEE`, au soignant et pour cette mission.
   - **Réponses des délégués**, renvoyées telles quelles une fois les contrôles passés : `POSTULER` →
-    `fn_postuler_mission_rate_limited` (l.48080) → `fn_postuler_mission` (l.47889) ; `ACCEPTER` →
-    `fn_accepter_mission` (l.5120) → `fn_finaliser_attribution_mission` (l.36703) ; `PROPOSITION` →
-    `fn_repondre_proposition(p_candidature_id, true)` (l.53577) → `fn_finaliser_attribution_mission`. Hors
+    `fn_postuler_mission_rate_limited` (l.48538) → `fn_postuler_mission` (l.48347) ; `ACCEPTER` →
+    `fn_accepter_mission` (l.5297) → `fn_finaliser_attribution_mission` (l.37145) ; `PROPOSITION` →
+    `fn_repondre_proposition(p_candidature_id, true)` (l.54035) → `fn_finaliser_attribution_mission`. Hors
     succès, **aucune ne porte de clé `success`** : le décodeur les discrimine par clés, dans l'ordre normatif
     du `LOT1_PLAN.md` §2.4 (`choix_requis` → `code` → `documents_requis_pour` avec `error` → `success:true` →
     `error` seul → sinon `.contract`).
     8. Succès POSTULER : `{success:true, candidature_id, choix_contrat, profession_requise, docs_a_completer, documents_requis_pour}`
-       — l.48061-48068. `documents_requis_pour` y vaut le contrat retenu (`v_choix`) et `docs_a_completer`
+       — l.48519-48526. `documents_requis_pour` y vaut le contrat retenu (`v_choix`) et `docs_a_completer`
        signale des documents encore à valider : sans `error`, ce n'est **pas** un refus. Relecture `candidatures`.
     9. Succès ACCEPTER : `{success:true, contrat_id, contrat_numero, choix_applique, profession_requise, type_paiement, mode_paiement}`
-       — l.36902-36910 ; PROPOSITION : la même réponse + `message:'Proposition acceptée'` (l.53670). Relecture
+       — l.37344-37352 ; PROPOSITION : la même réponse + `message:'Proposition acceptée'` (l.54128). Relecture
        `mission(id:)`.
-    10. Choix de contrat, sans clé `success` (`v_resolution - 'ok'`, l.47970 et l.36753 ; réponse de
-        `fn_resoudre_contrat_mission` l.54551-54565) :
+    10. Choix de contrat, sans clé `success` (`v_resolution - 'ok'`, l.48428 et l.37195 ; réponse de
+        `fn_resoudre_contrat_mission` l.55009-55023) :
         `{choix_requis:true, error:'Choisissez votre mode de contrat.', options:[{value:'SALARIE', label:'Salarié (CDD / bulletin de paie)'}, {value:'LIBERAL', label:"Libéral (note d'honoraires)"}]}`
         → sheet de choix de contrat, action rejouée avec `p_choix_contrat` (le rate-limit a déjà compté l'appel).
     11. Documents manquants, sans clé `success` → `.refusee(documentsRequisPour:)`, renvoi web vers les
         documents au lot 1 : POSTULER libéral
         `{error:'Les documents requis pour candidater en libéral sont manquants ou expirés.', documents_requis_pour:'LIBERAL', lien_documents:'/soignant/mes-documents'}`
-        (l.47991-47996) ; ACCEPTER / PROPOSITION
+        (l.48449-48454) ; ACCEPTER / PROPOSITION
         `{error:'Les documents requis pour une mission <salarie|liberal> ne sont pas encore validés.', documents_requis_pour:<contrat retenu>, lien_documents:'/soignant/mes-documents'}`
-        (l.36758-36763, `lower(v_choix)` dans le message).
+        (l.37200-37205, `lower(v_choix)` dans le message).
     12. Plafond hebdomadaire (ACCEPTER / PROPOSITION), sans clé `success` → `.refusee(code:, message verbatim)`
         (HARD STOP n°4) :
         `{error:'Planning hebdomadaire incomplet : impossible de vérifier le plafond de 48 h.', code:'PLANNING_HEBDOMADAIRE_INDISPONIBLE', creneaux_valides, creneaux_attendus}`
-        (l.36788-36793) ;
+        (l.37230-37235) ;
         `{error:'Dépassement du plafond de 48 h pour la semaine du <JJ/MM/AAAA> (… h déjà planifiées + … h pour cette mission + … h ailleurs).', code:'PLAFOND_48H_HEBDO', semaine_du, heures_existantes, heures_mission, heures_externes, total}`
-        (l.36812-36824).
+        (l.37254-37266).
     13. `{error}` seul → `JoleneError` (`.unauthorized` pour « Non authentifié », sinon `.unknown`, message
         verbatim) : rate-limit `{error:'Trop de candidatures en peu de temps. Réessayez plus tard.'}` renvoyé en
-        **HTTP 200**, pas en 429 (l.48092 ; 20 candidatures/h, consommé même en `choix_requis`) ;
-        `'Vous avez déjà postulé à cette mission'` (l.47982) ; profession incompatible ; exclusion
-        (`'Accès refusé.'`, `'Accès refusé pour cette mission.'`) ; `"Cette mission n'est plus disponible"` et
-        `'Cette mission nécessite une candidature'` (`fn_accepter_mission`) ; `"Cette mission vient d'être attribuée."`
-        (l.36851) ; refus de `fn_resoudre_contrat_mission` hors `choix_requis` ; refus de `fn_repondre_proposition`
+        **HTTP 200**, pas en 429 (l.48550 ; 20 candidatures/h, consommé même en `choix_requis`) ;
+        `'Vous avez déjà postulé à cette mission'` (l.48440) ; profession incompatible ; exclusion
+        (`'Accès refusé.'`, `'Accès refusé pour cette mission.'`) ; `'Cette mission nécessite une candidature'`
+        (`fn_accepter_mission`) ; `"Cette mission n'est plus disponible"` (sans point, l.5308 et l.37171) et
+        `"Cette mission vient d'être attribuée."` (l.37293), seules exceptions à cette règle : `.missionDejaAttribuee(message:)` ; refus de `fn_resoudre_contrat_mission` hors `choix_requis` ; refus de `fn_repondre_proposition`
         (`'Cette proposition a expiré'`, `'Cette proposition n’est plus en attente'`, …).
     14. Exceptions PostgREST, lues sur `PostgrestError.message` **avant** `SupabaseErrorMapping.map` (qui ne
         garde pas le message) : `[CODE DU TRAVAIL] …` (triggers `dec_verifier_plafond_48h`, `dec_verifier_repos_11h`,
         `dec_verifier_moyenne_44h_12_semaines`, `dec_verifier_repos_hebdo_35h`, levés par l'`UPDATE missions` de
         `fn_finaliser_attribution_mission`) → `.refusee(code: 'CODE_DU_TRAVAIL', message verbatim)` (HARD STOP n°4 :
-        aucun texte juridique reformulé ni avalé) ; `0 rows` / `déjà prise` → issue « mission déjà attribuée »
-        avec relecture, sans message technique (modale « mission perdue » du web, l.804-810) ; toute autre
-        exception → `SupabaseErrorMapping`.
+        aucun texte juridique reformulé ni avalé) ; toute autre exception → `SupabaseErrorMapping` (message générique ;
+        par exemple « Cette mission est déjà assignée à un autre soignant. » de `dec_anti_double_assignation`). La branche
+        `0 rows` / `déjà prise` du web (l.804-810) n'est pas reprise (revue B8 de T6a, m1) : aucune fonction live n'émet ces
+        textes (PGRST116 porte « 0 rows » dans `details`), et `contains("0 rows")` reconnaissait « 10 rows ».
+    15. **Verrou natif (revue B8 de T6a, M1, décision 2 amendée de `LOT1_PLAN.md`)** : `PROPOSITION` dont le contrat n'est pas
+        `LIBERAL` → `CandidatureVerrou.renvoiWeb` **avant tout appel** (attestation hebdomadaire des heures du web non
+        portée, `LOT1_PLAN.md` §3 T6b) ; contrat déclaré libéral → relu (`candidatures`, `missions.type_contrat_recherche`)
+        avant l'envoi, `p_choix_contrat` à null comme le web.
 - **Classement manuel (décision 6, `LOT1_PLAN.md` §7)** : `RPC_UTILISATEUR_AUTH_INTERNE` — SECURITY DEFINER,
-  `search_path` vide, GRANT `authenticated`, identité lue via `auth.uid()` dans le corps (l.24141-24318 du dump) ;
+  `search_path` vide, GRANT `authenticated`, identité lue via `auth.uid()` dans le corps (l.24525-24702 du dump) ;
   manifeste non régénéré, `rpc-contracts.json` garde `manifeste: null`.
-- **Signature SQL** (`supabase/schema/public.sql` l.24141) :
+- **Signature SQL** (`supabase/schema/public.sql` l.24525) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_confirmer_action_planning_v1"("p_mission_id" "uuid", "p_action" "text", "p_creneaux_confirmes" "jsonb", "p_message" "text" DEFAULT NULL::"text", "p_choix_contrat" "text" DEFAULT NULL::"text", "p_candidature_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
@@ -1078,7 +1084,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_annuler_mission_soignant"("p_mission_id"
 - **Usage prévu** : Refus d'une proposition `PROPOSEE` depuis l'Accueil (`p_accepter = false`). L'acceptation
   passe par `fn_confirmer_action_planning_v1` (`PROPOSITION`, comme le web `CarteProposition.tsx` l.268-279) ;
   `p_accepter = true` n'est pas appelé par l'app au lot 1. Relecture : candidature (`REFUSEE`).
-- **Signature SQL** (`supabase/schema/public.sql` l.53577) :
+- **Signature SQL** (`supabase/schema/public.sql` l.54035) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_accepter" boolean) RETURNS "jsonb"

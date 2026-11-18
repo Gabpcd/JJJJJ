@@ -3,15 +3,18 @@ import Foundation
 /// Candidature du monde démo (lot 1, T6a, `LOT1_PLAN.md` §2.7) : aucun réseau, horloge fixée, état en
 /// mémoire pour la session démo (rien n'est persisté entre deux lancements). Mêmes contrôles et mêmes
 /// textes que `fn_confirmer_action_planning_v1` et ses délégués, dans le même ordre (mission ouverte,
-/// planning confirmé identique au planning live, puis l'action) ; chaque mutation est relue dans l'acteur
-/// avant d'annoncer un succès, comme la gateway Supabase relit le serveur.
+/// planning confirmé identique au planning live, puis l'action, dans l'ordre des délégués) ; chaque mutation
+/// (candidature, attribution, proposition) est relue dans l'acteur avant d'annoncer un succès, comme la gateway
+/// Supabase relit le serveur.
 ///
 /// - POSTULER → candidature `EN_ATTENTE` de session, visible dans Mes missions (`candidaturesDeSession`,
 ///   point de fusion de `DemoMesMissionsGateway`) ; une seconde candidature sur la même mission est
 ///   refusée (« Vous avez déjà postulé à cette mission », comme le serveur) ;
 /// - ACCEPTER → mission attribuée au profil fictif et contrat démo ; refusé en mode candidature ;
-/// - PROPOSITION → proposition `PROPOSEE` de moins de 2 h acceptée (`ACCEPTEE`) et mission attribuée ;
-///   refus par `refuserProposition` (`REFUSEE`), expiration à 2 h comme `fn_repondre_proposition` ;
+/// - PROPOSITION → verrouillée hors `LIBERAL` (`CandidatureVerrou.renvoiWeb`, attestation hebdomadaire non
+///   portée, revue B8 de T6a M1) ; libérale : proposition `PROPOSEE` de moins de 2 h acceptée (`ACCEPTEE`) et
+///   mission attribuée ; refus par `refuserProposition` (`REFUSEE`), expiration à 2 h comme `fn_repondre_proposition` ;
+/// - mission attribuée pendant la session → servie `ASSIGNEE` par `DemoMissionsGateway` et retirée d'Explorer ;
 /// - mission `TOUS` sans choix pour un profil `MIXTE` → `choixRequis` avec les options du serveur.
 ///
 /// Les annulations restent verrouillées jusqu'à T7 (aucun état démo inventé). Refuse tout contexte qui
@@ -68,36 +71,47 @@ public actor DemoCandidatureGateway: CandidaturePort {
     /// Mission attribuée au profil fictif pendant la session (relecture des tests et des écrans).
     public func contratAttribue(missionId: String) -> String? { attributions[missionId] }
 
+    /// Missions attribuées pendant la session, relues par `DemoMissionsGateway` (détail `ASSIGNEE`, hors d'Explorer).
+    public func missionsAttribuees() -> Set<String> { Set(attributions.keys) }
+
     // MARK: - CandidaturePort
 
     public func confirmer(action: ActionPlanning, missionId: String, creneaux: [CreneauConfirmePayload], message: String?,
                           choixContrat: String?, candidatureId: String?, context: MissionReadContext) async throws -> CandidatureOutcome {
         try Self.verifier(context)
         guard action == .postuler || action == .accepter || action == .proposition else {
-            throw JoleneError(.contract, "Action \(action.rawValue) non servie au lot 1.")
+            throw CandidatureRules.actionHorsLot1(action)
+        }
+        if action == .proposition {
+            // Verrou de l'attestation hebdomadaire (revue B8 de T6a, M1) : contrat déclaré, puis relu dans les fixtures.
+            guard !CandidatureRules.propositionVerrouillee(contrat: choixContrat) else {
+                throw CandidatureVerrou.renvoiWeb(chemin: CandidatureVerrou.cheminProposition)
+            }
         }
         guard let fixture = try missions().first(where: { $0.record.id == missionId }),
               fixture.record.statut == "OUVERTE", attributions[missionId] == nil else {
-            return .refusee(code: nil, message: Textes.missionIndisponible, documentsRequisPour: nil)
+            return .missionDejaAttribuee(message: Textes.missionIndisponible)
         }
         let attendus = CreneauxConfirmes.pourAction(PlanningCandidatInput(record: fixture.record, creneaux: fixture.creneaux))
         guard let attendus, !attendus.isEmpty, attendus.count == creneaux.count, Set(attendus) == Set(creneaux) else {
             return .planningAReconfirmer(code: Self.codePlanningModifie, message: Textes.planningModifie)
         }
         if action == .proposition {
-            return try accepterProposition(candidatureId: candidatureId, missionId: missionId)
+            return try accepterProposition(candidatureId: candidatureId, mission: fixture.record)
         }
+        // Ordre des délégués : `fn_accepter_mission` refuse le mode candidature avant de résoudre le contrat ;
+        // `fn_postuler_mission` résout le contrat (`choix_requis`) avant de chercher un doublon.
         if action == .accepter, fixture.record.modeAttribution == CandidatureRules.modeCandidature {
             throw JoleneError(.unknown, Textes.candidatureRequise)
-        }
-        if action == .postuler, try toutes().contains(where: { $0.missionId == missionId }) {
-            throw JoleneError(.unknown, Textes.dejaPostule)
         }
         if fixture.record.typeContratRecherche == "TOUS", context.profile.typeExercice == "MIXTE",
            (choixContrat ?? "").isEmpty {
             return .choixRequis(Textes.choixContrat)
         }
         if action == .postuler {
+            if try toutes().contains(where: { $0.missionId == missionId }) {
+                throw JoleneError(.unknown, Textes.dejaPostule)
+            }
             compteur += 1
             let id = "demo-candidature-session-\(compteur)"
             session.insert(CandidatureRecord(id: id, missionId: missionId, statut: "EN_ATTENTE", message: message,
@@ -107,8 +121,7 @@ public actor DemoCandidatureGateway: CandidaturePort {
             }
             return .confirmed(candidatureId: id, contratId: nil)
         }
-        let contrat = attribuer(missionId)
-        return .confirmed(candidatureId: nil, contratId: contrat)
+        return .confirmed(candidatureId: nil, contratId: try attribuerPuisRelire(missionId))
     }
 
     public func refuserProposition(candidatureId: String, context: MissionReadContext) async throws {
@@ -167,14 +180,24 @@ public actor DemoCandidatureGateway: CandidaturePort {
         return proposition
     }
 
-    private func accepterProposition(candidatureId: String?, missionId: String) throws -> CandidatureOutcome {
+    private func accepterProposition(candidatureId: String?, mission: MissionRecord) throws -> CandidatureOutcome {
         guard let candidatureId, let proposition = try toutes().first(where: { $0.id == candidatureId }),
-              proposition.missionId == missionId, proposition.statut == CandidatureRules.statutProposee else {
+              proposition.missionId == mission.id, proposition.statut == CandidatureRules.statutProposee else {
             return .refusee(code: nil, message: Textes.propositionIntrouvable, documentsRequisPour: nil)
+        }
+        // Contrat relu (`type_contrat_choisi ?? type_contrat_recherche`) : un contrat déclaré LIBERAL à tort reste verrouillé.
+        let contrat = CandidatureRules.contratProposition(typeContratChoisi: proposition.typeContratChoisi,
+                                                          typeContratRecherche: mission.typeContratRecherche)
+        guard !CandidatureRules.propositionVerrouillee(contrat: contrat) else {
+            throw CandidatureVerrou.renvoiWeb(chemin: CandidatureVerrou.cheminProposition)
         }
         _ = try propositionOuverte(candidatureId)
         remplacer(proposition, statut: "ACCEPTEE")
-        return .confirmed(candidatureId: candidatureId, contratId: attribuer(missionId))
+        let contratId = try attribuerPuisRelire(mission.id)
+        guard try toutes().first(where: { $0.id == candidatureId })?.statut == "ACCEPTEE" else {
+            throw JoleneError(.contract, Self.messageRelecture)
+        }
+        return .confirmed(candidatureId: candidatureId, contratId: contratId)
     }
 
     private func remplacer(_ candidature: CandidatureRecord, statut: String) {
@@ -184,9 +207,12 @@ public actor DemoCandidatureGateway: CandidaturePort {
         session.insert(modifiee, at: 0)
     }
 
-    private func attribuer(_ missionId: String) -> String {
+    /// Attribue la mission au profil fictif, puis la relit comme la gateway Supabase (`ASSIGNEE` au soignant de la
+    /// session) : `DemoMissionsGateway` la sert désormais `ASSIGNEE` (`missionsAttribuees`).
+    private func attribuerPuisRelire(_ missionId: String) throws -> String {
         let contrat = "demo-contrat-\(missionId)"
         attributions[missionId] = contrat
+        guard attributions[missionId] == contrat else { throw JoleneError(.contract, Self.messageRelecture) }
         return contrat
     }
 }
