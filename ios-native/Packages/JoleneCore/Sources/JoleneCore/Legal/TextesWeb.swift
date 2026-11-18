@@ -819,6 +819,24 @@ public enum TextesWeb {
         public static let mentionAccepter = "En acceptant, tu t'engages à être présent(e) aux dates et horaires indiqués."
     }
 
+    /// Confirmation de présence J-1 du détail de mission (lot 1, T6c, `LOT1_PLAN.md` §3 T6c ; HARD STOP n°4 : chaînes
+    /// reprises à l'identique du web, `DetailMissionSoignant.tsx` l.1419-1438). Bouton du bloc, confirmation affichée
+    /// après relecture (toast web, ici notice), état « confirmée » et repli d'un refus sans message serveur. Le titre et
+    /// la description du bloc, tutoyés sur le web, sont vouvoyés hors de ce fichier (décision 9 : `PresenceRules.Textes`).
+    public enum ConfirmationPresence {
+        // source: src/pages/DetailMissionSoignant.tsx:1432 [libellé]
+        public static let bouton = "✓ Je confirme ma présence"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1427 [libellé]
+        public static let confirmation = "Présence confirmée — l'établissement est prévenu. ✓"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1438 [libellé]
+        public static let etatConfirme = "✓ Présence confirmée — l'établissement est prévenu"
+
+        // source: src/pages/DetailMissionSoignant.tsx:1426 [libellé]
+        public static let repliRefus = "Confirmation impossible."
+    }
+
     /// Tous les textes, pour les tests (la garde Node vérifie que la liste est complète et exacte).
     public static let catalogue: [EntreeTexteWeb] = [
         .init(cle: "ConsentementGps.titre", texte: ConsentementGps.titre),
@@ -974,5 +992,9 @@ public enum TextesWeb {
         .init(cle: "Candidature.engagementCandidature", texte: Candidature.engagementCandidature),
         .init(cle: "Candidature.engagementAcceptation", texte: Candidature.engagementAcceptation),
         .init(cle: "Candidature.mentionAccepter", texte: Candidature.mentionAccepter),
+        .init(cle: "ConfirmationPresence.bouton", texte: ConfirmationPresence.bouton),
+        .init(cle: "ConfirmationPresence.confirmation", texte: ConfirmationPresence.confirmation),
+        .init(cle: "ConfirmationPresence.etatConfirme", texte: ConfirmationPresence.etatConfirme),
+        .init(cle: "ConfirmationPresence.repliRefus", texte: ConfirmationPresence.repliRefus),
     ]
 }
