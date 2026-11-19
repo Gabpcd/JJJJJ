@@ -69,9 +69,17 @@ final class DemoAnnulationTests: JoleneUITestCase {
         retourAMesMissions(sans: "demo-assignee-001")
         tabButton("tab-explorer", label: "Explorer").tap()
         let liste = element("missions-list")
+        let compteur = element("missions-count")
+        // 30 missions ouvertes de la démo (`DemoExplorerTests.Attendus.total`) + la mission remise en ligne. Sa ligne n'est
+        // pas encore créée : la liste est paresseuse, et la mission est rangée onzième (même distance que les dix missions
+        // de son établissement, servie après elles, `DemoMissionsGateway.listMissions`), sous le bas de l'écran sur les
+        // trois formats (sept lignes créées en iPad portrait, run 44425019039). Elle n'existe qu'une fois amenée à l'écran.
+        require("Explorer compte la mission remise en ligne", timeout: 30) {
+            self.containerVisible(liste) && compteur.exists && compteur.label == "31 missions"
+        }
         let carte = element("mission-row-demo-assignee-001")
-        require("Explorer liste la mission remise en ligne", timeout: 30) { self.containerVisible(liste) && carte.exists }
         scrollTo(carte, in: liste)
+        require("Explorer liste la mission remise en ligne") { self.visible(carte) }
         carte.tap()
         let titre = element("mission-detail-title")
         require("Le détail rouvert est rendu", timeout: 30) { self.containerVisible(self.element("mission-detail")) && titre.exists }
