@@ -137,7 +137,9 @@
 > 14. **T4 livrée (18/11, #1167 ; le n°13 revient à T3a, #1165)** : `/soignant/parametres/recherches-sauvegardees` natif,
 >     ses quatre RPC passées en `consommee` (`LOT4_CONSOMMEES`). Écarts au web, tranchés par la revue B8 de #1167 :
 >     - **Alerte rapide toujours visible** : bouton « Me prévenir des prochaines missions » de la barre d'Explorer
->       (`AlerteRapideButton.swift`, emplacement `alerteRapide(model:)` de T1c), sous le coupe-circuit
+>       (`AlerteRapideButton.swift`, emplacement `alerteRapide(model:)` de T1c ; à gauche de la barre sur tous les
+>       formats depuis l'intégration de la vague C : à droite, la barre d'onglets du haut de l'iPad la reléguait dans le
+>       menu « Plus », et la droite reste à « Filtres »), sous le coupe-circuit
 >       `ios_natif_recherches_actif`, chaque écriture après confirmation et relecture. Le web ne l'offre que dans l'état
 >       vide d'Explorer, la fin du paquet de swipe et `?alerte=1` ; `?alerte=1` n'est pas routé (`LinkRouter` mène
 >       `/soignant/recherche-missions` à `.explorer` sans requête). L'état vide et la fin du paquet restent à brancher

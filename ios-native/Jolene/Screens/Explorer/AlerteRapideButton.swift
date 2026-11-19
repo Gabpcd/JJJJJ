@@ -23,6 +23,13 @@ extension View {
 ///   (`FiltresSauvegardesEncodage.explorer`), puis « Filtres « nom » appliqués » (toast du web, ici avis refermable).
 /// Identifiants : `explorer-alerte-rapide` ; feuille `alerte-rapide` (`-confirm`, `-cancel`, `alerte-rapide-erreur`) ;
 /// avis `alerte-confirmee`, `explorer-recherche-appliquee`, fermeture `explorer-avis-fermer`.
+///
+/// Emplacement de la cloche (intégration de la vague C) : à GAUCHE de la barre de navigation, sur tous les formats
+/// (`ExplorerActions` dans `MissionsListScreen.swift`). À droite, la barre d'onglets du haut de l'iPad ne laissait la
+/// place qu'à « Mes favoris » : « Filtres » et la cloche passaient dans le menu « Plus » (iPad portrait, run
+/// 44425019039). Pas dans la rangée de chips : l'avis ci-dessous (`safeAreaInset`) la déplace en se refermant, et le
+/// second toucher de DemoFiltresTests (cloche touchée juste après « Fermer ») s'y perdait en iPad paysage (2 échecs sur
+/// 5 exécutions locales, contre 0 sur 4 avec la cloche dans la barre).
 struct AlerteRapideExplorer: ViewModifier {
     @ObservedObject var model: MissionsListModel
     @Environment(\.contexteSecondaire) private var contexte
@@ -61,7 +68,8 @@ private struct AlerteRapideActive: ViewModifier {
         content
             .safeAreaInset(edge: .top, spacing: 0) { bandeau }
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
+                // À gauche : la droite de la barre est réservée à « Filtres » (voir l'en-tête).
+                ToolbarItem(placement: .navigationBarLeading) {
                     if porte == .natif { bouton }
                 }
             }

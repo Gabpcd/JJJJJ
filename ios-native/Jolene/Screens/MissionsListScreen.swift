@@ -34,8 +34,18 @@ import JoleneDesign
 /// Lot 1 (T4b) : étoile « sauvegarder » sur chaque carte (`favori-toggle-<id>`), « Mes favoris »
 /// (`explorer-favoris-ouvrir` → `MesFavorisScreen`), bandeau du filtre établissement retirable
 /// (`explorer-filtre-etablissement`) ; un seul `FavorisModel` pour la liste, le détail et l'écran.
-/// « Mes favoris » est une valeur de la pile d'Explorer (`FavorisRoute`) : l'étoile de la barre et le lien
+/// « Mes favoris » est une valeur de la pile d'Explorer (`FavorisRoute`) : l'étoile d'Explorer et le lien
 /// universel `/soignant/mes-favoris` (`MainTabView.presenter`, cible `.favoris`) ouvrent le même écran.
+///
+/// Emplacement des actions d'Explorer (« Filtres », « Mes favoris », alerte rapide `explorer-alerte-rapide`) : « Filtres »
+/// reste seul à droite de la barre de navigation, et la cloche à gauche (zone vide à la racine d'Explorer), sur tous les
+/// formats. En largeur régulière (iPad, portrait comme paysage), la barre d'onglets du haut occupe le centre de la barre
+/// de navigation : à 820 pt de large (iPad portrait, run 44425019039), il ne restait à droite que 162 pt, et « Filtres »
+/// et la cloche passaient dans le menu « Plus » (`OverflowBarButtonItem`) ; à gauche, la même largeur ne tient qu'une
+/// action avec marge : l'étoile y est donc posée en tête de la rangée de chips, hors de son défilement, qui a toute la
+/// largeur de l'écran. En largeur compacte (iPhone, iPad en partage d'écran), la barre d'onglets est en bas : l'étoile
+/// rejoint la cloche à gauche de la barre, et le titre reste centré entre une action à droite et deux à gauche, au lieu
+/// de trois à droite.
 struct MissionRoute: Hashable {
     let id: String
 }
@@ -48,6 +58,8 @@ struct MissionsListScreen: View {
     @StateObject private var favoris: FavorisModel
     @ObservedObject private var session: SessionStore
     @State private var feuilleFiltres = ExplorerFeuilleFiltres()
+    /// Largeur régulière : étoile en tête de la rangée de chips ; compacte : à gauche de la barre de navigation.
+    @Environment(\.horizontalSizeClass) private var classeLargeur
     private let controller: SessionController
     private let snapshot: SessionSnapshot
     /// Lot 2 T5a (revue fraîche, m6) : changement d'onglet transmis au détail d'une mission, pour que « Présences et
@@ -85,7 +97,10 @@ struct MissionsListScreen: View {
         // titre ne se replierait pas au défilement de la liste.
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) { boutonFavoris }
+            // « Filtres » seul à droite ; « Mes favoris » à gauche en largeur compacte, dans la rangée de chips sinon.
+            if !ExplorerActions.dansLaRangeeDeChips(classeLargeur) {
+                ToolbarItem(placement: .navigationBarLeading) { boutonFavoris }
+            }
             ToolbarItem(placement: .primaryAction) { boutonFiltres }
         }
         .sheet(item: $feuilleFiltres.ouverture, onDismiss: {
@@ -114,11 +129,20 @@ struct MissionsListScreen: View {
 
     // MARK: Filtres
 
+    /// Chips rapides ; en largeur régulière, « Mes favoris » en tête de la rangée, hors du défilement des chips (sous la
+    /// cloche, à gauche de la barre de navigation).
     private var chipsRapides: some View {
-        FilterChipRow(identifier: "explorer-chips") {
-            ForEach(ExplorerFiltres.chipsRapides) { chip in
-                FilterChip(chip.titre, isSelected: model.filtres.estActif(chip), identifier: chip.identifiant) {
-                    Task { await model.basculer(chip) }
+        HStack(spacing: 0) {
+            if ExplorerActions.dansLaRangeeDeChips(classeLargeur) {
+                boutonFavoris
+                    .modifier(ExplorerActions.Pastille())
+                    .padding(.leading, JoleneSpacing.lg)
+            }
+            FilterChipRow(identifier: "explorer-chips") {
+                ForEach(ExplorerFiltres.chipsRapides) { chip in
+                    FilterChip(chip.titre, isSelected: model.filtres.estActif(chip), identifier: chip.identifiant) {
+                        Task { await model.basculer(chip) }
+                    }
                 }
             }
         }
@@ -308,5 +332,24 @@ struct MissionsListScreen: View {
             remuneration: MissionPresentation.remuneration(mission),
             estUrgente: mission.record.estUrgente,
             typeContrat: mission.record.typeContratRecherche)
+    }
+}
+
+/// Emplacement de « Mes favoris » selon la largeur (voir `MissionRoute`) : « Filtres » reste seul à droite de la barre
+/// de navigation, la cloche de l'alerte rapide (`alerteRapide(model:)`) à gauche, sur tous les formats.
+enum ExplorerActions {
+    /// Largeur régulière : rangée de chips (la barre d'onglets du haut prend le centre de la barre de navigation, et sa
+    /// gauche ne tient que la cloche avec marge). Largeur compacte ou inconnue : gauche de la barre, à côté de la cloche.
+    static func dansLaRangeeDeChips(_ classeLargeur: UserInterfaceSizeClass?) -> Bool {
+        classeLargeur == .regular
+    }
+
+    /// Bouton d'icône de la rangée de chips : cible de 44 pt (portée par le bouton), fond et bordure d'une chip inactive.
+    struct Pastille: ViewModifier {
+        func body(content: Content) -> some View {
+            content
+                .background(Circle().fill(JoleneColor.cloud))
+                .overlay(Circle().strokeBorder(JoleneColor.rose100, lineWidth: 1))
+        }
     }
 }
