@@ -105,10 +105,11 @@ final class DemoCompteTests: JoleneUITestCase {
         require("La liste du profil est affichée") { self.containerVisible(list) }
         // Toujours deux glissements vers le bas : la dernière section remonte au-dessus de la barre
         // d'onglets (iPhone) même quand elle semblait déjà dans le cadre de la liste ; sans effet
-        // quand tout le contenu tient à l'écran. Puis au plus quatre de plus tant qu'elle n'est pas atteignable.
+        // quand tout le contenu tient à l'écran. Puis au plus six de plus tant que le bouton n'est pas atteignable et
+        // entier au-dessus de la barre d'onglets (`auDessusDeLaBarreDOnglets`).
         for _ in 0..<2 { drag(list, fromY: 0.8, toY: 0.3) }
         var glissements = 0
-        while !visible(ouvrir) && glissements < 4 {
+        while !auDessusDeLaBarreDOnglets(ouvrir) && glissements < 6 {
             drag(list, fromY: 0.8, toY: 0.3)
             glissements += 1
         }
@@ -127,5 +128,16 @@ final class DemoCompteTests: JoleneUITestCase {
         XCTAssertTrue(element("compte-supprimer-confirm").exists)
         XCTAssertTrue(element("compte-supprimer-cancel").exists)
         record("\(proofPrefix)-compte-ecran")
+    }
+
+    /// Bouton atteignable ET entier au-dessus de la barre d'onglets basse (iPhone). Sous iOS 26, la barre flotte
+    /// au-dessus de la liste : un bouton dont seule une frange dépasse est déclaré atteignable, mais le toucher calculé
+    /// tombe sur la barre (run 44398503180 : toucher à y = 790,9 pour une barre à y = 791, onglet Accueil ouvert à la
+    /// place de l'écran de confirmation), la liste allongée à la vague A (IBAN, Stripe Connect) laissant le bouton au
+    /// ras de la barre après les deux premiers glissements. Sans barre basse (iPad), la seule atteignabilité compte.
+    private func auDessusDeLaBarreDOnglets(_ bouton: XCUIElement) -> Bool {
+        guard visible(bouton) else { return false }
+        let barre = app.tabBars.firstMatch
+        return !barre.exists || bouton.frame.maxY <= barre.frame.minY
     }
 }

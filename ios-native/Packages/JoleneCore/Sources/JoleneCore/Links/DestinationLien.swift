@@ -79,7 +79,9 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .confirmerInscription:
             return true                                  // T7 — `ConfirmationInscriptionScreen` (hors espace : `BoiteLiensInscription`)
         case .missions:
-            return true                                  // onglet Mes missions : placeholder jusqu'à L1-T5
+            return true                                  // onglet Mes missions natif (L1-T5)
+        case .favoris:
+            return true                                  // L1-T4b — `MesFavorisScreen`, empilé sur l'onglet Explorer
         case .serieDetail:
             return false                                 // renvoi web assumé (décision 11 du lot 1) ; natif au lot 4
         case .revenus(section: .apercu):
@@ -109,8 +111,31 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
             return true                                  // L2-T10 — `MesDocumentsScreen` (T7), onglet Contrats natif (T9a), DPAE en renvoi dans l'onglet
         case .contrat, .contratCertificat:
             return true                                  // L2-T10 — `ContratScreen`, `CertificatRoute` (T9a), drapeau `ios_natif_contrats_actif`
-        case .secondaire:
-            return false                                 // lot 4 — une ligne par écran, passée à `true` par sa tranche (T3b…T12)
+        // Lot 4 — une ligne par écran, passée à `true` par sa seule tranche (L4-T1c, revue B8 de #1159, m4).
+        case .secondaire(.swipe):
+            return false                                 // T3b — vue Swipe d'Explorer (repli `.explorer` jusque-là)
+        case .secondaire(.recherches):
+            return true                                  // T4 — `RecherchesScreen` (hub « Recherche & disponibilité »), alerte rapide d'Explorer
+        case .secondaire(.disponibilites):
+            return false                                 // T5 — disponibilités
+        case .secondaire(.parrainage):
+            return false                                 // T6 — parrainage
+        case .secondaire(.messagerie):
+            return false                                 // T7b — messagerie
+        case .secondaire(.litiges):
+            return false                                 // T8 — litiges et réclamations (deux onglets, deux coupe-circuits)
+        case .secondaire(.evaluations):
+            return false                                 // T9 — évaluations reçues
+        case .secondaire(.score):
+            return false                                 // T9 — mon score (repli `.monCompte` jusque-là)
+        case .secondaire(.bulletins):
+            return false                                 // T10 — copies officielles (avec la destination de `.revenus(.bulletins)`)
+        case .secondaire(.poolUrgence):
+            return false                                 // T11 — pool urgence
+        case .secondaire(.exclusions):
+            return false                                 // T11 — établissements exclus
+        case .secondaire(.serie):
+            return false                                 // T12 — jamais routée ainsi (`LinkRouter` rend `.serieDetail`, ligne ci-dessus)
         case .safari, .etablissement:
             return false
         }

@@ -70,19 +70,20 @@ export const RPC_SUIVIES = [
   { name: 'fn_etablissements_safe', statut: 'lot0', lot: 0 },
   { name: 'fn_mon_profil_soignant_complet', statut: 'consommee', lot: 3 }, // L3-T9 : SupabaseProfilGateway
   { name: 'fn_dashboard_soignant_complet', statut: 'consommee', lot: 1 }, // T3 : SupabaseDashboardGateway
-  { name: 'fn_confirmer_action_planning_v1', statut: 'a_venir', lot: 1 },
+  { name: 'fn_confirmer_action_planning_v1', statut: 'consommee', lot: 1 }, // T6a : SupabaseCandidatureGateway
   { name: 'fn_suggestions_missions_pour_soignant', statut: 'a_venir', lot: 4 }, // reclassée (revue B8 de T3)
-  { name: 'fn_annuler_candidature_soignant', statut: 'a_venir', lot: 1 },
-  { name: 'fn_annuler_mission_soignant', statut: 'a_venir', lot: 1 },
-  { name: 'fn_repondre_proposition', statut: 'a_venir', lot: 1 },
-  { name: 'fn_toggle_favori_etablissement', statut: 'a_venir', lot: 1 },
-  { name: 'fn_mes_favoris_etablissements', statut: 'a_venir', lot: 1 },
+  { name: 'fn_annuler_candidature_soignant', statut: 'consommee', lot: 1 }, // T7 : SupabaseCandidatureGateway
+  { name: 'fn_annuler_mission_soignant', statut: 'consommee', lot: 1 }, // T7 : SupabaseCandidatureGateway
+  { name: 'fn_repondre_proposition', statut: 'consommee', lot: 1 }, // T6a : SupabaseCandidatureGateway (refus seulement)
+  { name: 'fn_toggle_favori_etablissement', statut: 'consommee', lot: 1 }, // T4b : SupabaseFavorisGateway (retrait seulement)
+  { name: 'fn_mes_favoris_etablissements', statut: 'consommee', lot: 1 }, // T4b : SupabaseFavorisGateway
+  { name: 'fn_modifier_favori_inscription', statut: 'consommee', lot: 1 }, // T4b (décision 8 amendée le 18/11/2026) : retrait des favoris de l'inscription
   { name: 'fn_audit_connexion', statut: 'a_venir', lot: 1 },
   { name: 'fn_maj_activite_soignant', statut: 'a_venir', lot: 1 },
-  { name: 'fn_ecrire_audit_safe', statut: 'a_venir', lot: 1 },
+  { name: 'fn_ecrire_audit_safe', statut: 'consommee', lot: 1 }, // T1 SupabaseAuditGateway ; T6a MISSION_ASSIGNATION, T7 MISSION_ANNULATION
   { name: 'fn_supprimer_compte_rate_limited', statut: 'a_venir', lot: 1 },
   { name: 'fn_param_bool', statut: 'a_venir', lot: 1 },
-  { name: 'fn_confirmer_presence_mission', statut: 'a_venir', lot: 1 },
+  { name: 'fn_confirmer_presence_mission', statut: 'consommee', lot: 1 }, // T6c : SupabasePresenceGateway
   { name: 'fn_scanner_code_pointage', statut: 'consommee', lot: 2 }, // T3 : SupabasePointageGateway
   { name: 'fn_etat_pointage_mission', statut: 'consommee', lot: 2 }, // T3 : SupabasePointageGateway
   { name: 'fn_envoyer_otp_signature', statut: 'consommee', lot: 2 }, // T8 : SupabaseContratsGateway
@@ -118,18 +119,19 @@ export const RPC_SUIVIES = [
   { name: 'fn_mes_paiements_escrow', statut: 'consommee', lot: 3 }, // L3-T12 : SupabaseRevenusGateway
   // Lot 4 (`docs/mobile-swift/LOT4_PLAN.md` §3 T0, fiches « Lot 4 » de CONTRATS_RPC_SOIGNANT.md) : les
   // 41 RPC propres au lot, dans l'ordre des tranches ; la 42e, partagée avec le lot 2, est dans
-  // `RPC_PARTAGEES_LOT4` ci-dessous. Écart assumé (LOT4_PLAN §3) : ces statuts passent en `consommee` en
-  // une fois par T15, jamais par les onze tranches parallèles qui câblent les gateways.
+  // `RPC_PARTAGEES_LOT4` ci-dessous. Chaque tranche passe en `consommee` les RPC de la gateway qu'elle câble
+  // (règle des lots 1 à 3, rétablie par L4-T3a sur consigne du 18/11/2026 ; le T0 prévoyait un passage en une fois
+  // par T15) ; liste tenue par `LOT4_CONSOMMEES` de `tests/node/check-rpc-contracts-lot4.node.mjs`.
   // T3a — swipe
-  { name: 'fn_obtenir_missions_swipe', statut: 'a_venir', lot: 4 },
-  { name: 'fn_enregistrer_swipe', statut: 'a_venir', lot: 4 },
-  { name: 'fn_retirer_candidature', statut: 'a_venir', lot: 4 },
-  { name: 'fn_initialiser_preferences_matching', statut: 'a_venir', lot: 4 },
+  { name: 'fn_obtenir_missions_swipe', statut: 'consommee', lot: 4 }, // T3a : SupabaseSwipeGateway.paquet
+  { name: 'fn_enregistrer_swipe', statut: 'consommee', lot: 4 }, // T3a : SupabaseSwipeGateway.enregistrer (✕ / ⭐)
+  { name: 'fn_retirer_candidature', statut: 'consommee', lot: 4 }, // T3a : SupabaseSwipeGateway.retirer
+  { name: 'fn_initialiser_preferences_matching', statut: 'consommee', lot: 4 }, // T3a : SupabaseSwipeGateway (quiz)
   // T4 — filtres sauvegardés et alerte rapide
-  { name: 'fn_lister_mes_filtres_sauvegardes', statut: 'a_venir', lot: 4 },
-  { name: 'fn_creer_filtre_sauvegarde', statut: 'a_venir', lot: 4 },
-  { name: 'fn_modifier_filtre_sauvegarde', statut: 'a_venir', lot: 4 },
-  { name: 'fn_supprimer_filtre_sauvegarde', statut: 'a_venir', lot: 4 },
+  { name: 'fn_lister_mes_filtres_sauvegardes', statut: 'consommee', lot: 4 }, // L4-T4 : SupabaseFiltresGateway
+  { name: 'fn_creer_filtre_sauvegarde', statut: 'consommee', lot: 4 }, // L4-T4 : SupabaseFiltresGateway (alerte rapide)
+  { name: 'fn_modifier_filtre_sauvegarde', statut: 'consommee', lot: 4 }, // L4-T4 : SupabaseFiltresGateway
+  { name: 'fn_supprimer_filtre_sauvegarde', statut: 'consommee', lot: 4 }, // L4-T4 : SupabaseFiltresGateway
   // T5 — disponibilités
   { name: 'fn_definir_disponibilite', statut: 'a_venir', lot: 4 },
   // T6 — parrainage
@@ -265,11 +267,11 @@ export function verifierExclusions(suivies) {
 export const RPC_SUIVIES_ETABLISSEMENT = [
   { name: 'fn_mes_permissions_etab', statut: 'consommee', lot: 5 }, // T1 : SupabaseEtabSessionGateway.permissions
   { name: 'fn_mon_etablissement_complet', statut: 'consommee', lot: 5 }, // T1 : SupabaseEtabSessionGateway.profil
-  { name: 'fn_stats_dashboard_etablissement', statut: 'a_venir', lot: 5 },
-  { name: 'fn_soignant_pour_etablissement', statut: 'a_venir', lot: 5 },
-  { name: 'fn_lire_candidatures_mission_habilitee', statut: 'a_venir', lot: 5 },
-  { name: 'fn_traiter_candidature_planning_v1', statut: 'a_venir', lot: 5 },
-  { name: 'fn_contrat_signe_pour_pointage', statut: 'a_venir', lot: 5 },
+  { name: 'fn_stats_dashboard_etablissement', statut: 'consommee', lot: 5 }, // T4 : SupabaseEtabDashboardGateway.stats
+  { name: 'fn_soignant_pour_etablissement', statut: 'consommee', lot: 5 }, // T5 : SupabaseEtabMissionsGateway.soignant
+  { name: 'fn_lire_candidatures_mission_habilitee', statut: 'consommee', lot: 5 }, // T6 : SupabaseEtabCandidaturesGateway.lecture
+  { name: 'fn_traiter_candidature_planning_v1', statut: 'consommee', lot: 5 }, // T6 : SupabaseEtabCandidaturesGateway.accepter/refuser
+  { name: 'fn_contrat_signe_pour_pointage', statut: 'consommee', lot: 5 }, // T7 : SupabaseEtabPointageGateway.contratSigne
   { name: 'fn_valider_presence', statut: 'a_venir', lot: 5 },
   { name: 'fn_valider_presences_lot', statut: 'a_venir', lot: 5 },
   { name: 'fn_contester_presence', statut: 'a_venir', lot: 5 },

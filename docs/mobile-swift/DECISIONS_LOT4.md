@@ -144,6 +144,17 @@ les règles générales.
    des 41 RPC propres (`LOT4_RECLASSEES` de `tests/node/check-rpc-contracts.node.mjs`), sans fiche confrontée
    au SQL du lot 4 (sa fiche reste celle du lot 1). Son sort au lot 4, consommée par une tranche ou retirée de
    `RPC_SUIVIES`, est statué en T15 avec les autres statuts.
+12. **Code de parrainage d'un lien universel perdu avant T6** (revue B8 de #1159, m7 ; décision sur mandat,
+   18 novembre). Un lien `https://jolene.app/inscription/soignant?ref=<code>` (ou tout lien qui porte `?ref=` ou
+   `?parrain=`) ouvert alors que l'app est installée arrive dans l'app : `/inscription/soignant` y est natif depuis
+   le lot 3, qui ne lit pas le code. Le crochet posé par L4-T1c (`ParrainageApplicateur.capturer(depuis:)`, appelé
+   par `DeepLinkCoordinator` sur tout lien) ne capture rien tant que T6 n'a pas livré `ParrainageCapture`
+   (`VerrousLot4.codeParrainageACapturer` rend `nil`, figé par `SecondairesLot4Tests` et la garde node m6) : le
+   code est donc ignoré, comme avant T1c. **Décision : écart consigné, pas de renvoi web.** Renvoyer vers le web
+   tout lien qui porte un code changerait le parcours d'inscription natif du lot 3 (création du compte sur le web,
+   reconnexion dans l'app) pour couvrir un manque que T6 ferme ; la tranche parallèle T6 lève l'écart. Le filleul
+   n'est pas bloqué : il s'inscrit, et le parrainage ne lui est pas rattaché. Ce cas reste à vérifier sur appareil
+   en T15 (`RECETTE_DEVICE_LOT4.md`, lien ouvert depuis Messages et WhatsApp), après T6.
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 4 », l.202-210)
 

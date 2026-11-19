@@ -1,0 +1,4937 @@
+[
+  {
+    "name": "copieBulletinTelechargeable/PUBLIEE",
+    "input": {
+      "fonction": "copieBulletinTelechargeable",
+      "statut": "PUBLIEE"
+    },
+    "expected": true
+  },
+  {
+    "name": "copieBulletinTelechargeable/PUBLIEE_",
+    "input": {
+      "fonction": "copieBulletinTelechargeable",
+      "statut": "PUBLIEE "
+    },
+    "expected": false
+  },
+  {
+    "name": "copieBulletinTelechargeable/REMPLACEE",
+    "input": {
+      "fonction": "copieBulletinTelechargeable",
+      "statut": "REMPLACEE"
+    },
+    "expected": true
+  },
+  {
+    "name": "copieBulletinTelechargeable/RESERVEE",
+    "input": {
+      "fonction": "copieBulletinTelechargeable",
+      "statut": "RESERVEE"
+    },
+    "expected": false
+  },
+  {
+    "name": "copieBulletinTelechargeable/RETIREE",
+    "input": {
+      "fonction": "copieBulletinTelechargeable",
+      "statut": "RETIREE"
+    },
+    "expected": false
+  },
+  {
+    "name": "copieBulletinTelechargeable/publiee",
+    "input": {
+      "fonction": "copieBulletinTelechargeable",
+      "statut": "publiee"
+    },
+    "expected": false
+  },
+  {
+    "name": "copieBulletinTelechargeable/vide",
+    "input": {
+      "fonction": "copieBulletinTelechargeable",
+      "statut": ""
+    },
+    "expected": false
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/etablissement_id/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/etablissement_id/null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": null,
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/etablissement_id/vide",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/etablissement_nom/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/etablissement_nom/nombre",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": 3,
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/etablissement_nom/null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": null,
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/etablissement_nom/vide",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/id/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/id/accolades",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "{10000000-0000-4000-8000-000000000001}",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/id/autre",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "autre",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/id/court",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "0000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/id/majuscules",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "ABCDEF00-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "ABCDEF00-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/id/nil",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "00000000-0000-0000-0000-000000000000",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "00000000-0000-0000-0000-000000000000"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/id/nombre",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": 1,
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/id/non-hexa",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "g0000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/id/null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": null,
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/id/sans-tirets",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000000040008000000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/id/saut-final",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001\n",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/mission_ids/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/mission_ids/avec-null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004",
+            null
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/mission_ids/deux",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004",
+            "10000000-0000-4000-8000-000000000005"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/mission_ids/null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": null,
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/mission_ids/objet",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": {
+            "0": "10000000-0000-4000-8000-000000000004"
+          },
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/mission_ids/texte",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": "10000000-0000-4000-8000-000000000004",
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/motif_remplacement/AUTRE",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": "AUTRE",
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/motif_remplacement/CONTENU",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": "CONTENU",
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/motif_remplacement/DESTINATAIRE",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": "DESTINATAIRE",
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/motif_remplacement/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/motif_remplacement/minuscules",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": "contenu",
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/motif_remplacement/vide",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": "",
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/1900-bissextile",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "1900-02-29",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/2000-bissextile",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2000-02-29",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/an-zero",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "0000-01-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/an-zero-bissextile",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "0000-02-29",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/avec-heure",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01T00:00:00Z",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/avril-31",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-04-31",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/bissextile-faux",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-02-29",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/chiffres-arabes",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "٢٠٢٦-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/compact",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "20260901",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/egale-fin",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-30",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/espace-tete",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": " 2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/fevrier-28",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-02-28",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/jour-00",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-01-00",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/mois-00",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-00-10",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/mois-13",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-13-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/nombre",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": 20260901,
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/saut-final",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01\n",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_debut/un-chiffre",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-9-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_fin/9999",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "9999-12-31",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_fin/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_fin/avant-debut",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-08-31",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_fin/egale-debut",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-01",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_fin/fevrier-30",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-02-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/periode_fin/null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": null,
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/24h-plus-une-seconde",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T24:00:01Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/25h",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T25:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/date-seule",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/decalage-23h59",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00+23:59",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/decalage-24h",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00+24:00",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/decalage-minute-60",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00+12:60",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/decalage-negatif",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00-05:30",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/demi-seconde-decalee",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00.5+01:00",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/epoque",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "1970-01-01T00:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/fevrier-30",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-02-30T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/fevrier-32",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-02-32T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/fraction-longue",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00.1234567890123Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/fraction-vide",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00.Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/heure-seule",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/microsecondes",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00.123456+00:00",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/minuit-24h",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T24:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/minute-60",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:60:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/mois-00",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-00-01",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/mois-13",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-13-01T00:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/nombre",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": 0,
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/sans-fuseau",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/sans-secondes",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/texte",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "date inconnue",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/publie_le/vide",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/remplace_id/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/remplace_id/autre",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": "autre",
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/remplace_id/uuid",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": "10000000-0000-4000-8000-000000000009",
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/remplace_id/vide",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": "",
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/sha256/63",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/sha256/65",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/sha256/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/sha256/hexa-mixte",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/sha256/majuscules",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/sha256/non-hexa",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/sha256/null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": null,
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/sha256/saut-final",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/signalee/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/signalee/null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": null
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/signalee/texte",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": "false"
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/signalee/vrai",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": true
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/signalee/zero",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": 0
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/soignant_id/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/soignant_id/espace",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": " 10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/soignant_id/null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": null,
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/soignant_nom/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/soignant_nom/null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": null,
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/soignant_nom/vide",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/soignant_prenom/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/soignant_prenom/booleen",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": true,
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/soignant_prenom/null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": null,
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/soignant_prenom/vide",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/statut/REMPLACEE",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "REMPLACEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/statut/RESERVEE",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "RESERVEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/statut/RETIREE",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "RETIREE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/statut/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/statut/minuscules",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "publiee",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/statut/nombre",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": 1,
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/statut/null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": null,
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/statut/vide",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/taille_octets/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/taille_octets/decimal",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 255.5,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/taille_octets/max",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 10485760,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/taille_octets/negatif",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": -256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/taille_octets/null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": null,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/taille_octets/un",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 1,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/taille_octets/zero",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 0,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/version/absent",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/version/au-dela-sur",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 9007199254740992,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/version/decimal",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1.5,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/version/deux",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 2,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/version/max-sur",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 9007199254740991,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/version/negatif",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": -1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/version/null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": null,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/champ/version/texte",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": "1",
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/forme/cles-en-plus",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false,
+          "cle_inconnue": "x",
+          "autre": {
+            "y": 1
+          }
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/forme/deux-copies",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000011",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "REMPLACEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": "10000000-0000-4000-8000-000000000001",
+          "version": 2,
+          "motif_remplacement": "CONTENU",
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001",
+        "10000000-0000-4000-8000-000000000011"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/forme/deuxieme-invalide",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000012",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/forme/element-nombre",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        1
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/forme/element-objet-vide",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {}
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/forme/element-tableau",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        []
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/forme/element-texte",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        "x"
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/forme/element-vrai",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        true
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/forme/nombre",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": 1
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/forme/texte",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": "liste"
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/forme/vrai",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": true
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-document-complet",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "valide": true,
+      "ids": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-liste-vide",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": []
+    },
+    "expected": {
+      "valide": true,
+      "ids": []
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-refus-element-null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        null
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-refus-mission-autre",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "autre"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-refus-missions-vides",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-refus-null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": null
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-refus-objet",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": {}
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-refus-periode-inconnue",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "date inconnue",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-refus-periode-inversee",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-08-01",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-refus-publie-null",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": null,
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-refus-sha-non-verifiable",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "non-verifiable",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-refus-statut-PAYE",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PAYE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-refus-taille-10485761",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 10485761,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-refus-taille-texte",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 1,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": "256",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  },
+  {
+    "name": "validerListeCopiesBulletins/vitest-refus-version-0",
+    "input": {
+      "fonction": "validerListeCopiesBulletins",
+      "data": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "etablissement_id": "10000000-0000-4000-8000-000000000002",
+          "soignant_id": "10000000-0000-4000-8000-000000000003",
+          "etablissement_nom": "Employeur de test",
+          "soignant_nom": "Test",
+          "soignant_prenom": "Salarié",
+          "periode_debut": "2026-09-01",
+          "periode_fin": "2026-09-30",
+          "statut": "PUBLIEE",
+          "publie_le": "2026-09-29T12:00:00Z",
+          "remplace_id": null,
+          "version": 0,
+          "motif_remplacement": null,
+          "mission_ids": [
+            "10000000-0000-4000-8000-000000000004"
+          ],
+          "taille_octets": 256,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signalee": false
+        }
+      ]
+    },
+    "expected": {
+      "erreur": "La liste des copies ne peut pas être vérifiée. Réessayez."
+    }
+  }
+]

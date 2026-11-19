@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Gel iPhone de la CI iOS (docs/mobile-swift/DECISIONS_LOT2.md, section « Gel iPhone CI — 16/11/2026 » ; run
-# 43889328109) : outils des éclats XCUITest du job `ui` de `.github/workflows/ios-swift-ci.yml`. Le fil principal de
-# l'app y attend le serveur de rendu du simulateur (`CA::Render::Message::send_message`, aucune fonction Jolene) ; le
+# 43889328109) : outils des éclats XCUITest des jobs `ui` et `ui-lot1` de `.github/workflows/ios-swift-ci.yml`. Le fil
+# principal de l'app y attend le serveur de rendu du simulateur (`CA::Render::Message::send_message`, aucune fonction Jolene) ; le
 # simulateur ne relance plus l'app ensuite et les éclats suivants mouraient à 30 min sans preuve.
 #
-#   relancer-si-gel <éclat>     Au début de chaque éclat qui suit le socle. Si l'éclat précédent a gelé ou dépassé son
-#                               délai, redémarre le simulateur (`simctl shutdown`, `boot`, `bootstatus -b`) en 2 min au
+#   relancer-si-gel <éclat>     Au début de chaque éclat qui suit le premier de son job (socle, lot1-missions). Si
+#                               l'éclat précédent a gelé ou dépassé son délai, redémarre le simulateur (`simctl shutdown`,
+#                               `boot`, `bootstatus -b`) en 2 min au
 #                               plus (`JOLENE_RELANCE_BORNE_S`, 120 par défaut), dans les 30 min de l'éclat courant, pour
 #                               qu'il s'exécute et garde ses preuves. Gel ou dépassement : éclat précédent en échec dont
 #                               le journal contient « main thread busy », « failed to quiesce », « Failed to get launch

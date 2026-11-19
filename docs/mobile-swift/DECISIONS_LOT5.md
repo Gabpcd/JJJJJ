@@ -213,6 +213,200 @@ Aucune ne change une décision du §7 ni une règle juridique ; elles fixent ce 
      `contrats-etablissement-ios.node.mjs`) ;
    - m5 : XCUITest du lot 5 hors du socle, répartis dans deux éclats légers.
 
+## Précisions relevées par la tranche T4 (Accueil, 18/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; elles fixent ce que le blueprint laissait ouvert.
+
+1. **Titre de suspension et bandeau de vérification non affichés** (HARD STOP n°4, §6.4) : `TextesWeb.BlocageEtablissement`
+   reste hors des sources livrées (`VALIDES` vide dans `contrats-etablissement-ios.node.mjs`). En attendant la validation
+   d'écran de Gabrielle, les actions « blocage » et « vérification » portent des textes natifs de navigation, sans
+   qualification de l'état du compte (« Action requise sur jolene.app », « Vérification de l'établissement ») et mènent
+   aux pages web qui l'expliquent (`/etablissement/facturation`, `/etablissement/activer`). La validation remplacera ces
+   textes par les constantes verbatim et ajoutera `BlocageEtablissement` à `VALIDES`.
+2. **Litiges et évaluations sous `missions`** : aucune clé de `fn_mes_permissions_etab` ne vise ces deux pages web. Choix
+   d'affichage fail-closed (pas une règle) : membres qui gèrent les missions (PROPRIETAIRE, ADMIN_GROUPE, RH) ; un
+   POINTAGE_ONLY ou un LECTURE_SEULE ne les voit pas. Blocage et vérification restent visibles de tout membre, comme le
+   bandeau du web.
+3. **Factures à régler** : compteur seul (`nb_factures_impayees`, `${n} facture(s) à régler` du web), sous
+   `lecture_paiement` ∨ `paiement`, placé après les litiges ; aucun montant.
+4. **Actions résolues par la table des liens** : chaque action, « Publier une mission » et chaque ligne du planning portent
+   le chemin web du web ; `LinkRouter.etablissementDestination` décide (onglet de la coquille, écran livré, sinon renvoi
+   Safari). Publication (T9) et détail de mission (T5) sont donc des renvois web jusqu'à ce que leur tranche passe
+   `EtabDestination.ecranLivre` à `true` ; aucun écran provisoire n'est ouvert depuis l'Accueil.
+5. **Planning à venir** : port de `construireOccurrencesPlanning` (fenêtre de 31 jours, repli ponctuel ≤ 24 h, missions
+   « à confirmer ») en liste, sans vue mois/semaine ni nom de soignant ; dix occurrences affichées, le compteur garde le
+   total. Lecture PostgREST (`missions` + `mission_creneaux` par `MissionSlotPager`) ; son échec rend l'Accueil partiel.
+6. **Audit `DONNEES_PERSO_CONSULTATION`** écrit par `EtabAccueilModel` après chaque lecture réussie (les deux mondes),
+   jamais attendu par l'écran. Le profil (blocage, vérification) est celui de l'instantané de session (relu à la
+   revalidation 30 min) ; le serveur refuse de toute façon une publication bloquée.
+7. **XCUITest** `DemoEtabAccueilTests` (3 tests) dans l'éclat « lot3-profil-photo », avec `DemoEtabSessionTests` ; gardes
+   `ios-swift-ci-eclats.node.mjs` et `check-rpc-contracts-lot3.node.mjs` mises à jour, aucun douzième éclat.
+
+## Précisions relevées par la tranche T5 (missions : liste et détail, 18/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; aucun texte juridique n'est ajouté (libellés d'interface
+du web repris, refus serveur verbatim).
+
+1. **Contrats de domaine complétés en place** (`Models/EtablissementResults.swift`) : `EtabMissionResume`,
+   `EtabMissionsPage`, `EtabMissionDetail` et `SoignantPourEtab` reçoivent des champs optionnels à défaut (signatures
+   des protocoles et initialiseurs existants inchangés) ; décodage tolérant, filtres et compteurs dans
+   `Etablissement/Missions/EtabMission.swift`. Colonnes lues = `EtabMissionResume.clesDecodees`, sans aucun montant
+   (D15) ; `fn_soignant_pour_etablissement` réduite à `SoignantPourEtab.clesDecodees` (jamais `note_moyenne`,
+   `nb_evaluations`, `type_exercice`, `internat`).
+2. **Pages cumulatives** (comme « Mes missions » du lot 1) : la page `n` relit les lignes 0…(n + 1) × 50 − 1, ordre
+   `debut_le` décroissant puis `id` (pagination stable ; le web ne pagine pas côté serveur et trie sur `debut_le` seul).
+3. **Compteurs exacts** : `select=statut` par pages de 1 000 avec compte exact (le web s'arrête à la limite de lignes de
+   PostgREST) ; un échec laisse les pastilles **sans nombre**, jamais un « (0) » supposé ; les derniers compteurs relus
+   restent affichés.
+4. **Candidatures en attente** (pastille de carte, bandeau et lien du détail) lues seulement avec la permission
+   `candidatures` (fail-closed, §2.7) : plus strict que le web, où la RLS `lecture_candidatures` les sert aussi à
+   `LECTURE_SEULE`.
+5. **Planning** : complétude de `CompletudePlanning` (source contractuelle) sur la carte comme au détail ; un planning
+   non exact est « Planning détaillé à confirmer » (le web affiche sur la carte un repli ponctuel tiré de
+   `debut_le`/`fin_le` ; M3 de la démo). Au détail, l'échec de lecture du planning n'efface pas la mission
+   (« Planning détaillé momentanément indisponible : … », message serveur verbatim).
+6. **Liens du détail** : chaque lien pousse la destination du registre si sa tranche l'a livrée
+   (`EtabDestination.ecranLivre`), sinon ouvre la page web équivalente par le présentateur de renvoi (Safari, D16) :
+   candidatures (T6) → `/etablissement/missions/{id}`, code de pointage (T7) et présences (T8) →
+   `/etablissement/presences/mission/{id}`, contrat (T10) → `/etablissement/contrats` et message (T11) →
+   `/etablissement/messagerie` (identifiants de contrat et de conversation non lus avant leur tranche). Modifier,
+   dupliquer, annuler : renvois web sous la permission `missions` (RLS `pol_mission_update`). Sans présentateur,
+   aucun bouton de renvoi (règle du lot 3).
+7. **`EtabDestination.detailMission.ecranLivre = true`** : `/etablissement/missions/{id}` ouvre le détail natif
+   (`EtabRouteTests`, `DeepLinkCoordinatorTests`, `DemoEtabLiensTests` migrés) ; `?statut=` d'un lien vers la liste
+   sélectionne le filtre (insertion dans `EtablissementTabView`, jeton `DemandeFiltreMissions`) ; `?periode=mois`
+   n'est pas porté (renvoi implicite : liste complète).
+8. **Monde démo** : onze missions M1…M11 du §2.10 (`demo-etab-missions.json`, `scripts/mobile/demo-etab-missions.mjs`),
+   soignant assigné principal = le soignant fictif du monde soignant (`demo-soignant`, projeté depuis son profil démo :
+   une identité par identifiant) ; candidatures réduites à `mission_id`/`statut`/`cree_le`, compteurs **dérivés** par
+   la gateway (T6 complète ces lignes, sans second compteur).
+9. **XCUITest** `DemoEtabMissionsTests` (deux tests) dans l'éclat « presences » (place laissée par `DemoFavorisTests`),
+   jamais dans le socle (garde `ios-swift-ci-eclats`). Non exécuté localement (aucun simulateur) : preuve CI.
+
+## Précisions relevées par la tranche T6 (candidatures, 18/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; aucun texte juridique n'est ajouté (libellés d'interface
+du web repris, refus serveur verbatim, quelques textes natifs de navigation).
+
+1. **Mention CGV art. 8 non affichée (HARD STOP n°4).** `TextesWeb.CandidaturesEtablissement` reste verrouillée
+   (`VALIDES` vide dans `contrats-etablissement-ios.node.mjs`) : l'écran montre un lien de navigation neutre,
+   « Conditions générales de vente sur jolene.app » (`https://jolene.app/cgv#art8`, ancre du web l.394), sans résumer
+   les clauses. Après la validation d'écran de Gabrielle : la mention verbatim remplace ce lien (identifiant
+   `etab-candidatures-cgv`) et `CandidaturesEtablissement` entre dans `VALIDES`.
+2. **D25 gardé deux fois.** Le modèle aiguille avant tout appel (contrat recherché relu par `EtabMissionsPort.mission`,
+   profession de la lecture habilitée, étudiant aide-soignant) ; la gateway Supabase relit en plus, sous RLS, la
+   candidature puis sa mission (`id, etablissement_id, type_contrat_recherche, profession_requise`) juste avant l'appel :
+   hors `SALARIE` ou `MEDECIN` → `.renvoiWeb`, aucun appel RPC ; ligne illisible → aucun envoi. La signature du port
+   (T1) est inchangée. T6 reste hors B9 : `fn_traiter_candidature_planning_v1` n'est jamais appelée pour une mission où
+   un escrow est possible.
+3. **Refus de droit des lectures** : nouvelle erreur `RefusAccesEtablissement` (message serveur verbatim) pour la lecture
+   habilitée (42501 de la liste blanche) ; les mutations gardent l'issue `.accesRefuse`. L'écran relit le périmètre une
+   fois (`SessionStore.refreshEtablissementScope`), jamais une déconnexion. `JoleneError.Kind` non étendu.
+4. **Issue jamais tenue pour confirmée** : toute issue (succès, délai, transport, `{error}` sans drapeau) est suivie
+   d'une relecture ; succès = `ACCEPTEE` + mission `ASSIGNEE`, ou `REFUSEE`. `PLANNING_*_RECONFIRMER` relit et remplace
+   le récapitulatif avec le message serveur, sans renvoi automatique. « Cette candidature a déjà été traitée. » est
+   affiché tel quel après relecture.
+5. **Textes natifs ajoutés (non juridiques)** : « Accepter sur jolene.app », « L'acceptation de cette candidature se fait
+   sur jolene.app, où une nouvelle connexion peut vous être demandée. » (D16), « Voir sur jolene.app » (facturation),
+   « Conditions générales de vente sur jolene.app », « La décision n'a pas pu être confirmée par une relecture.
+   Vérifiez les candidatures avant de recommencer. », « Cette candidature n'est plus en attente. ».
+6. **Statut des candidatures traitées** : parité du web (l.524), tout statut autre qu'`ACCEPTEE` s'affiche « ❌ Refusée ».
+7. **Monde démo** : candidatures de `demo-etab-missions.json` complétées (`soignant_id`, `message`) et `candidats` (la
+   lecture habilitée des mêmes soignants, nom à l'initiale) **dérivés** de `soignants` par le générateur ; troisième
+   soignant fictif (étudiante aide-soignante) ; `DemoEtabEtatCandidatures` partage les décisions de la session entre les
+   gateways démo des missions et des candidatures (mission acceptée relue `ASSIGNEE` des deux côtés) ;
+   `-JOLENE_DEMO_PLANNING_MODIFIE 1` (première acceptation à reconfirmer). L'étudiante est renvoyée au web par
+   l'aiguillage (la démo ne reproduit pas le texte serveur `CADRE_ETUDIANT_A_CONFIRMER`).
+8. **`EtabDestination.candidatures.ecranLivre = true`** ; `DemoEtabMissionsTests` migré (le lien du détail ouvre l'écran
+   natif ; la preuve du renvoi web d'un lien non livré passe au lien de message, T11). XCUITest
+   `DemoEtabCandidaturesTests` (deux tests) dans l'éclat « presences », jamais dans le socle (garde
+   `ios-swift-ci-eclats`). Non exécuté localement (aucun simulateur) : preuve CI.
+
+## Précisions relevées par la tranche T7 (pointage terrain, 18/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; aucun texte juridique n'est ajouté (libellés d'interface
+du web repris, refus serveur verbatim, quelques textes natifs de navigation).
+
+1. **Code lu au serveur, jamais calculé.** `code_pointage_actif` de `fn_etat_pointage_mission`, relu à chaque tic ; aucun
+   secret ni code suivant côté client (aucune clé de la réponse du scanner n'est lue, garde
+   `scripts/ci/scanner-code-sans-code-suivant-pg17.py`). Une valeur qui n'est pas exactement six chiffres ASCII
+   (`PayloadQR.codePointage`, règle du scanner natif du lot 2) n'est jamais présentée : « Code momentanément
+   indisponible », plus strict que le web.
+2. **Cadence (D23).** 5 s, écran visible et scène active seulement (tâche de l'écran relancée à chaque changement de
+   `scenePhase`, annulée à la disparition ; première lecture immédiate au retour) ; planning et signature relus à
+   l'ouverture puis toutes les 60 s, et à chaque tic tant qu'ils n'ont pas pu être lus ; attente découpée en tics de
+   15 s qui réévaluent l'affichage sans réponse nouvelle (web l.119-123). Seul le monde démo change la cadence
+   (`EtabPointagePort.cadenceLecture`, `-JOLENE_POLL_INTERVAL <s>`, entre 1 s et 5 s exclus) ; le port Supabase garde 5 s.
+3. **Erreurs.** Les deux premiers échecs consécutifs gardent la dernière lecture (le web les absorbe par trois relances) ;
+   au troisième, le code est retiré (bloc « Code de pointage indisponible » avec le message de l'erreur,
+   `etab-pointage-indisponible`, « Réessayer ») et la cadence passe à 30 s ; une lecture réussie rétablit 5 s. Un refus
+   jsonb (`{error:'Mission introuvable'|'Accès interdit'}`) est affiché verbatim, sans aucune autre clé. Signature : le
+   42501 de la liste blanche vaut `false` (fiche) ; planning illisible : code d'arrivée masqué (fail-closed, web l.231-255).
+4. **B5b déjà côté serveur.** Le dump re-baseliné ne sert le code qu'aux membres habilités au pointage, et le web filtre
+   aussi par la permission (l.102-115) : sans elle, aucune lecture ni polling ; le texte de `.reservePointage` devient
+   celui du web (l.110) au lieu du texte natif du blueprint (§2.7, non juridique).
+5. **Écran sans veille.** `IdleTimerController` vit dans `JoleneCore/Etablissement/Pointage/` (testé par `swift test` :
+   la cible app n'a pas de tests unitaires), l'app ne porte que l'adaptateur `ReglageVeilleApplication`
+   (`Jolene/Composition/VeilleEcran.swift`, `UIApplication.isIdleTimerDisabled`). Demandes comptées par demandeur,
+   valeur d'avant la première demande rétablie à la dernière libération. La veille est désactivée tant qu'un code est
+   présenté (écran du code ou plein écran) sur un écran visible d'une scène active — lecture de « pendant l'affichage »,
+   plus large que le plein écran seul du blueprint ; rétablie à la disparition, en arrière-plan et dès que le code est
+   masqué (le plein écran se ferme alors de lui-même).
+6. **Plein écran dans la même vue.** `FullScreenCodeView` (JoleneDesign) remplace le contenu de l'écran, barres de
+   navigation et d'onglets masquées, plutôt qu'un `fullScreenCover` : une seule tâche de lecture, aucune course entre la
+   disparition de l'écran et l'apparition de la couverture. QR de `QRCodeImage` (lot 4 : correction M, sans lissage) au
+   plus grand, 70 % du petit côté, en portrait comme en paysage.
+7. **D4/D5.** Le QR encode `code_pointage_actif` relu ; `DemoEtabPointageTests` le décode par `CIDetector` (le décodeur
+   de `PayloadQRTests` du lot 2 et des tests de `QRCodeImage` du lot 4) sur la capture de l'élément, en la valeur
+   affichée, avant puis après le scan démo. Le critère réécrit attend toujours la validation de Gabrielle (§6.9) ; la
+   comparaison `sha256` à la valeur SQL relève de T13 (STAGING).
+8. **Monde démo.** `demo-etab-pointage.json` (`scripts/mobile/demo-etab-pointage.mjs`) **dérive** horaires et statuts de
+   `demo-etab-missions.json` : M4 rejoue `123456` deux lectures puis l'état relu après le scan d'arrivée (`EN_COURS`,
+   segment ouvert, `100002`) ; M5 sans contrat signé ; M6 hors créneau, premier créneau pointé. Écart démo assumé : le
+   statut `EN_COURS` rejoué de M4 n'est pas reporté sur la gateway des missions (le détail reste « Assignée »).
+9. **Non porté** : « Clôturer le segment » (fin rétroactive, `fn_declarer_fin_retroactive`), présences T8 (B9).
+10. **`EtabDestination.pointage.ecranLivre = true`** : le lien « Code de pointage » du détail ouvre l'écran natif.
+    XCUITest `DemoEtabPointageTests` (deux tests) dans l'éclat « lot3-profil-photo », jamais dans le socle (gardes
+    `ios-swift-ci-eclats`, `check-rpc-contracts-lot3`). Non exécuté localement (aucun simulateur) : preuve CI.
+11. **Textes natifs ajoutés (non juridiques)** : « Afficher en plein écran », « Fermer », « QR du code de pointage »,
+    « Aucun code de pointage n’est à présenter pour cette mission. », « Le planning de cette mission n'a pas pu être
+    relu. », « Impossible de charger le planning détaillé. Réessayez. ».
+
+## Précisions de l'intégration de la vague C (19/11/2026)
+
+Branche `integration/ios-vague-c` (T4 à T7 réunies avec le lot 4). Aucune ne change une décision du §7 ni une règle
+juridique ; aucun texte juridique n'est ajouté.
+
+1. **Action « candidatures » de l'Accueil** (revues B8 de #1160 et #1162, m1) : la mise à jour du filtre `?statut=` de la
+   liste des missions (`DemandeFiltreMissions`, T5) est faite par `EtablissementTabView.ouvrir(_ cible:)`, chemin commun
+   des liens et des actions de l'Accueil : `/etablissement/missions?statut=OUVERTE` ouvre Missions sur « Ouvertes »
+   (assertion `DemoEtabAccueilTests`).
+2. **Libellés neutres** (#1160, m3) : « Valider les présences » et « Évaluer vos soignants » remplacent « Présences à
+   valider » et « Soignants à évaluer », actions sans compteur (correction 20) dont le titre n'affirme plus un fait que
+   l'app ne connaît pas. Textes d'interface, non juridiques.
+3. **« Planning à confirmer » : un seul prédicat** (#1160, m4 ; principe « État dérivé ») : l'Accueil
+   (`EtabPlanningAccueil.planningExact`) utilise `CompletudePlanning.analyser`, comme la liste et le détail des missions,
+   le code de pointage et l'espace soignant. Écart assumé au critère local de `DashboardEtablissement.tsx` l.354-363 :
+   bornes lisibles et `fin > debut` exigées, repli ponctuel accepté quand `nb_creneaux` vaut 0 ou manque.
+4. **Liste des missions** (#1162, m2) : un changement de filtre repart de `.chargement` ; son échec rend `.echec`, jamais
+   l'ancienne liste sous la nouvelle pastille. Le même filtre relu garde sa liste (erreur de rafraîchissement seule).
+5. **Détail de mission** (#1162, m4 et m6) : uuid canonique exigé avant tout appel (`/etablissement/missions/abc` →
+   « Mission introuvable », aucune requête) ; la relecture du soignant a sa propre génération et n'abandonne plus une
+   relecture de la mission en vol (`rafraichissement` retombe à faux).
+6. **Candidatures** (#1164, m2) : une lecture habilitée sans `etablissement_id` est refusée (fail-closed).
+7. **Code de pointage** (#1166, m1 et m3 ; revue B8 de #1168, m1) : la veille est libérée explicitement à la
+   disparition et quand la scène devient inactive (garde node `contrats-etablissement-ios`). Une seule lecture à la fois
+   par génération : la réservation est posée de façon synchrone **avant** la première suspension (`contexte()`) par
+   « Réessayer » comme par le suivi (première lecture et tic). Un second toucher, le tic ou la première lecture qui la
+   trouvent posée ne lancent rien : deux lectures ne partent jamais en parallèle, et une panne ne compte qu'un échec
+   (`CodeRotatifModelTests.testReessayerVerrouillePendantUneLectureEnVol`, `testDeuxReessayerSimultanesUneSeuleLecture`).
+8. **Écart connu, veille sous une feuille** (revue B8 de #1168, m2) : une feuille présentée par-dessus
+   `CodePointageScreen` (par exemple le renvoi web du coordinateur après un tap sur une notification push) ne déclenche
+   pas `onDisappear`. La veille reste donc coupée tant que la feuille couvre le code ; elle est rétablie à la fermeture de
+   l'écran, en arrière-plan, quand la scène devient inactive ou quand le code est masqué. Aucun code natif ne le détecte
+   aujourd'hui (SwiftUI ne signale pas la couverture par une feuille d'un autre niveau) : ligne dédiée de
+   `RECETTE_DEVICE_LOT5.md` §1, à observer sur appareil avant T13.
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.

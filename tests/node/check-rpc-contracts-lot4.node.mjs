@@ -7,6 +7,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import * as contratsLot4 from '../../scripts/mobile/check-rpc-contracts.mjs';
+import { correspond, motifsDuFiltre } from '../../scripts/mobile/check-sources-web-ios-ci.mjs';
+import { DOMAINES_LOT4, fixturesLot4 } from '../../scripts/mobile/demo-fixtures/lot4.mjs';
 import {
   CONTRACTS_PATH,
   RPC_SUIVIES,
@@ -102,6 +104,23 @@ const LOT4_TOUTES = [...LOT4, ...LOT4_PARTAGEES];
 // synthèse du lot 1). Hors des 41 RPC propres du blueprint (`LOT4_PLAN.md` §3 T0 ne la cite pas) ; son
 // sort au lot 4 (consommée ou retirée de RPC_SUIVIES) relève de T15 (DECISIONS_LOT4.md, précision 11).
 const LOT4_RECLASSEES = ['fn_suggestions_missions_pour_soignant'];
+// Câblées par une tranche livrée (statut `consommee`, synthèse « consommée lot 4 (Tn) », fiche « consommée (lot 4,
+// Tn) par `<gateway>` ») : RPC → [tranche, gateway Swift qui l'appelle]. Règle des lots 1 à 3, rétablie au lot 4 sur
+// consigne du 18/11/2026 (le T0 prévoyait un passage en une fois par T15) ; chaque tranche ajoute ici ses RPC. Forme
+// réunie à l'intégration de la vague C (revues B8 de #1165 et #1167) : la `Map` de T4, la plus stricte, porte aussi les
+// quatre RPC du swipe de T3a.
+const GATEWAY_SWIPE = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Swipe/SupabaseSwipeGateway.swift';
+const GATEWAY_FILTRES = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Filtres/SupabaseFiltresGateway.swift';
+const LOT4_CONSOMMEES = new Map([
+  ['fn_obtenir_missions_swipe', ['T3a', GATEWAY_SWIPE]],
+  ['fn_enregistrer_swipe', ['T3a', GATEWAY_SWIPE]],
+  ['fn_retirer_candidature', ['T3a', GATEWAY_SWIPE]],
+  ['fn_initialiser_preferences_matching', ['T3a', GATEWAY_SWIPE]],
+  ['fn_lister_mes_filtres_sauvegardes', ['T4', GATEWAY_FILTRES]],
+  ['fn_creer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
+  ['fn_modifier_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
+  ['fn_supprimer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
+]);
 /** RPC suivies en `lot: 4` qui ne sont ni partagées ni reclassées : les 41 propres au lot. */
 const propresLot4 = rpcs => rpcs.filter(r => r.lot === 4 && !LOT4_PARTAGEES.includes(r.name) && !LOT4_RECLASSEES.includes(r.name));
 
@@ -218,13 +237,26 @@ function corpsConfrontes(schema, name) {
 
 const CONTRATS_DOC = 'docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md';
 
-test('Lot 4 — RPC_SUIVIES : 41 RPC propres au lot 4 en a_venir lot 4, dans l ordre des tranches, et 1 partagée', () => {
+test('Lot 4 — RPC_SUIVIES : 41 RPC propres au lot 4 en lot 4 (a_venir, ou consommee par leur tranche), dans l ordre des tranches, et 1 partagée', () => {
   assert.equal(LOT4.length, 41);
   assert.equal(new Set(LOT4_TOUTES).size, 42);
   assert.deepEqual([...contratsLot4.RPC_PARTAGEES_LOT4], LOT4_PARTAGEES);
   assert.deepEqual(propresLot4(RPC_SUIVIES).map(r => r.name), LOT4);
-  // Les statuts propres au lot 4 ne bougent qu'en T0 (a_venir) et en T15 (consommee, en une fois) : LOT4_PLAN §3.
-  for (const name of LOT4) assert.deepEqual(byName.get(name), { name, statut: 'a_venir', lot: 4 });
+  // Statuts propres au lot 4 : `a_venir` depuis T0, `consommee` dès la tranche qui câble la gateway (LOT4_CONSOMMEES).
+  for (const name of LOT4) {
+    const statut = LOT4_CONSOMMEES.has(name) ? 'consommee' : 'a_venir';
+    assert.deepEqual(byName.get(name), { name, statut, lot: 4 }, `${name} : statut attendu ${statut}`);
+  }
+  // Une RPC consommée est appelée par sa gateway (littéral), régénérée dans rpc-contracts.json et classée dans la synthèse.
+  const contrats = new Map(JSON.parse(read('ios-native/rpc-contracts.json')).rpcs.map(r => [r.name, r]));
+  const lignesSynthese = section(read(CONTRATS_DOC), 'Lot 4 — synthèse').split('\n');
+  for (const [name, [tranche, gateway]] of LOT4_CONSOMMEES) {
+    assert.ok(LOT4.includes(name), `${name} : consommée hors des 41 RPC du lot 4`);
+    assert.equal(contrats.get(name)?.statut, 'consommee', `${name} : rpc-contracts.json non régénéré (--update)`);
+    assert.ok(read(gateway).includes(`"${name}"`), `${name} : littéral absent de ${gateway}`);
+    const ligne = lignesSynthese.find(l => l.startsWith(`| \`${name}\` |`));
+    assert.ok(ligne?.includes(`| consommée lot 4 (${tranche}) | 4 (${tranche}) |`), `synthèse : ${name} doit être « consommée lot 4 (${tranche}) »`);
+  }
   // Reclassées par un lot antérieur : `a_venir`, `lot: 4`, jamais comptées parmi les 42, consignées dans la
   // synthèse du lot 4 et dans les décisions (précision 11), pour que T15 les statue.
   const synthese = section(read(CONTRATS_DOC), 'Lot 4 — synthèse');
@@ -344,8 +376,11 @@ test('Lot 4 — CONTRATS : chaque fiche cite toutes les réponses littérales, c
     // « Usage du lot 4 », déplacée telle quelle dans la fiche du lot 2 quand son T0 est fusionné.
     if (partagee) assert.equal(doc.split('\n').filter(l => l === `## ${name}`).length, 1, `${name} : fiche en double (fusion avec le T0 du lot 2 : voir sa fiche)`);
     const fiche = partagee ? sousSection(section(doc, `${name}\n`), 'Usage du lot 4') : section(doc, `${name}\n`);
-    const statut = partagee ? '- **Statut natif (lot 4)** : à venir (lot 4, T8)' : '- **Statut natif** : à venir (lot 4';
-    assert.ok(fiche.includes(statut), `${name} : statut natif lot 4 absent`);
+    const consommee = LOT4_CONSOMMEES.get(name);
+    const statut = partagee ? '- **Statut natif (lot 4)** : à venir (lot 4, T8)'
+      : consommee ? `- **Statut natif** : consommée (lot 4, ${consommee[0]}) par \`${consommee[1].split('/Sources/')[1]}\``
+        : '- **Statut natif** : à venir (lot 4';
+    assert.ok(fiche.includes(statut), `${name} : statut natif lot 4 absent (${statut})`);
     for (const { body } of corpsConfrontes(schema, name)) {
       for (const message of messagesSql(body)) {
         total++;
@@ -707,4 +742,131 @@ test('Lot 4 — LOT4_PLAN.md versionné, squelettes RECETTE_DEVICE_LOT4 et BETA_
   for (const attendu of ['bloquant', 'non bloquant', '14 jours', '400 sessions', '99,5 %', 'Beta App Review']) {
     assert.ok(beta.includes(attendu), `BETA_LOT4.md : ${attendu} absent`);
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// Lot 4, tranche T1c (docs/mobile-swift/LOT4_PLAN.md §3 T1c) : coquille app des écrans secondaires et CI.
+// Garde « m6 » de la revue B8 de #1146 : la capture du parrainage et le cycle de vie Realtime sont appelés par l'app
+// depuis T1c, mais ne passent que par les verrous de JoleneCore (`VerrousLot4`) ; tant que leur port figure dans
+// `DemoWorldTests.portsEnAttenteLot4`, aucun appel réel (capture, RPC, canal Realtime) n'existe dans le Swift livré.
+// Jumelles Swift : `SecondairesLot4Tests` (JoleneCore) et `SupabaseGatewaysTests.testAbonnementRealtimeVerrouilleAvantT7a`.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+// Code Swift sans ses commentaires (ligne, documentation, bloc), chaînes gardées : seuls les appels comptent.
+function codeSwift(texte) {
+  return texte
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map(ligne => {
+      let guillemets = 0;
+      for (let i = 0; i < ligne.length - 1; i += 1) {
+        if (ligne[i] === '"' && ligne[i - 1] !== '\\') guillemets += 1;
+        if (ligne[i] === '/' && ligne[i + 1] === '/' && guillemets % 2 === 0) return ligne.slice(0, i);
+      }
+      return ligne;
+    })
+    .join('\n');
+}
+
+/** Sources Swift livrées (app et paquets, hors tests), code seul, chemin depuis la racine du dépôt. */
+function sourcesSwiftLivrees() {
+  const dossiers = ['ios-native/Jolene', 'ios-native/Packages/JoleneCore/Sources', 'ios-native/Packages/JoleneSupabase/Sources',
+    'ios-native/Packages/JoleneDesign/Sources'];
+  return dossiers.flatMap(d => swiftFiles(join(root, d)))
+    .map(f => ({ chemin: f.slice(root.length + 1), code: codeSwift(readFileSync(f, 'utf8')) }));
+}
+
+/** Ports du lot 4 encore non câblés : `DemoWorldTests.portsEnAttenteLot4`, lu dans le test Swift. */
+function portsEnAttenteLot4() {
+  const tests = read('ios-native/Packages/JoleneCore/Tests/JoleneCoreTests/DemoWorldTests.swift');
+  const bloc = /static let portsEnAttenteLot4 = \[([\s\S]*?)\]/.exec(tests);
+  assert.ok(bloc, 'DemoWorldTests.portsEnAttenteLot4 introuvable');
+  return [...bloc[1].matchAll(/"(\w+)"/g)].map(m => m[1]);
+}
+
+const occurrences = (code, motif) => code.split(motif).length - 1;
+
+test('Lot 4 T1c — m6 : codeSwift retire commentaires et doc, garde le code et les chaînes (témoins)', () => {
+  assert.equal(codeSwift('let a = 1 // ParrainageCapture.code(\n/// realtimeV2\n/* postgresChange */ b()').trim(),
+    'let a = 1 \n\n b()');
+  assert.equal(codeSwift('let u = "https://x//y" // c').trim(), 'let u = "https://x//y"');
+});
+
+test('Lot 4 T1c — m6 : capture du parrainage verrouillée avant T6 (seul chemin : VerrousLot4)', () => {
+  const sources = sourcesSwiftLivrees();
+  const verrou = 'ios-native/Packages/JoleneCore/Sources/JoleneCore/Secondaires/VerrousLot4.swift';
+  const appelsCapture = sources.filter(s => s.code.includes('ParrainageCapture.code(')).map(s => s.chemin);
+  assert.deepEqual(appelsCapture, [verrou], 'ParrainageCapture.code(depuis:) appelé hors de VerrousLot4');
+  const applicateur = sources.find(s => s.chemin === 'ios-native/Jolene/Composition/ParrainageApplicateur.swift');
+  assert.ok(applicateur, 'ParrainageApplicateur.swift absent');
+  assert.ok(applicateur.code.includes('VerrousLot4.codeParrainageACapturer(depuis: url)'), 'capture hors verrou');
+  assert.ok(applicateur.code.includes('guard VerrousLot4.parrainageBranche else { return }'), 'application hors verrou');
+  // Branchements posés une fois par T1c : tout lien universel, puis l'ouverture de l'espace prêt.
+  const coordinateur = sources.find(s => s.chemin === 'ios-native/Jolene/Composition/DeepLinkCoordinator.swift').code;
+  assert.equal(occurrences(coordinateur, 'parrainage.capturer(depuis: url)'), 1, 'capture : un seul appel, dans recevoir(url:)');
+  assert.equal(occurrences(coordinateur, 'parrainage.appliquerSiCapture(snapshot)'), 1, 'application : un seul appel, dans espaceOuvert');
+  if (!portsEnAttenteLot4().includes('parrainage')) return; // T6 livrée : ses propres tests prennent le relais
+  const capture = read('ios-native/Packages/JoleneCore/Sources/JoleneCore/Rules/ParrainageCapture.swift');
+  assert.match(capture, /public static let estLivree = false\n/, 'estLivree doit rester false tant que le port parrainage attend T6');
+  const rpc = sources.filter(s => s.code.includes('"fn_appliquer_parrainage"')).map(s => s.chemin);
+  assert.deepEqual(rpc, [], 'fn_appliquer_parrainage appelée avant T6');
+  const applicable = sources.filter(s => s.code.includes('ParrainageCapture.estApplicable(')).map(s => s.chemin);
+  assert.deepEqual(applicable, [], 'fenêtre de 30 jours consultée avant T6');
+});
+
+test('Lot 4 T1c — m6 : aucun abonnement Realtime avant T7a (seul point : RealtimeLifecycle, verrouillé)', () => {
+  const sources = sourcesSwiftLivrees();
+  const cycle = sources.find(s => s.chemin === 'ios-native/Jolene/Composition/RealtimeLifecycle.swift');
+  assert.ok(cycle, 'RealtimeLifecycle.swift absent');
+  assert.ok(cycle.code.includes('VerrousLot4.abonnementRealtimePermis(gateways.realtime)'), 'cycle Realtime hors verrou');
+  const app = sources.find(s => s.chemin === 'ios-native/Jolene/JoleneApp.swift').code;
+  assert.equal(occurrences(app, 'container.realtime.scenePhase(phase)'), 1, 'cycle Realtime : un seul appel, dans JoleneApp');
+  // Dans l'app, le port Realtime n'est lu que par le cycle de vie (l'appel de JoleneApp vise le cycle, pas le port).
+  const lecteurs = sources.filter(s => s.chemin.startsWith('ios-native/Jolene/')
+    && /\.realtime\.|gateways\.realtime\b/.test(s.code.replaceAll('container.realtime.scenePhase(phase)', '')))
+    .map(s => s.chemin).filter(c => c !== 'ios-native/Jolene/Composition/RealtimeLifecycle.swift');
+  assert.deepEqual(lecteurs, [], 'port Realtime lu hors de RealtimeLifecycle');
+  if (!portsEnAttenteLot4().includes('realtime')) return; // T7a livrée : sa gateway et ses tests prennent le relais
+  // Revue B8 de #1159, m6 : canaux du SDK ouverts sans `realtimeV2` (`client.channel(…)` puis `subscribe()`), présence et
+  // diffusion comprises.
+  for (const appel of ['realtimeV2', 'postgresChange', 'subscribeWithError', '.subscribe(', '.channel(', 'presenceChange',
+    'broadcastStream', '.track(', 'removeAllChannels', '.messagesEntrants(', '.saisies(', 'fn_update_presence', 'fn_typing_start']) {
+    const ou = sources.filter(s => s.code.includes(appel)).map(s => s.chemin);
+    assert.deepEqual(ou, [], `${appel} présent avant T7a (port realtime encore dans portsEnAttenteLot4)`);
+  }
+});
+
+test('Lot 4 T1c — fixtures démo : un module par domaine, collisions et noms hors motif refusés', async () => {
+  const dossier = join(root, 'scripts/mobile/demo-fixtures');
+  const modules = readdirSync(dossier).filter(f => f.endsWith('.mjs') && f !== 'lot4.mjs').map(f => f.replace(/\.mjs$/, '')).sort();
+  assert.deepEqual(DOMAINES_LOT4.map(([nom]) => nom).sort(), modules, 'DOMAINES_LOT4 ≠ modules du dossier');
+  assert.equal(modules.length, 13);
+  for (const [nom, module] of DOMAINES_LOT4) assert.equal(typeof module.fixtures, 'function', `${nom} : fixtures() absente`);
+  const contexte = { now: new Date('2026-11-02T00:00:00.000Z') };
+  const domaine = (nom, sortie) => [nom, { fixtures: () => sortie }];
+  assert.deepEqual(fixturesLot4(contexte, {}, [domaine('a', { 'demo-a.json': 1 }), domaine('b', {})]), { 'demo-a.json': 1 });
+  assert.throws(() => fixturesLot4(contexte, { 'demo-missions.json': {} }, [domaine('swipe', { 'demo-missions.json': [] })]),
+    /swipe.*déjà écrit par un lot antérieur/);
+  assert.throws(() => fixturesLot4(contexte, {}, [domaine('a', { 'demo-x.json': 1 }), domaine('b', { 'demo-x.json': 2 })]),
+    /\(b\).*déjà écrit par le domaine a/);
+  assert.throws(() => fixturesLot4(contexte, {}, [domaine('a', { 'missions.json': 1 })]), /hors du motif/);
+  const exporteur = read('scripts/mobile/export-demo-fixtures.mjs');
+  assert.ok(exporteur.includes("...fixturesLot4({ now: new Date(FIXED_NOW) }, fixtures)"), 'exporteur : modules du lot 4 non assemblés');
+});
+
+test('Lot 4 T1c — ios-swift-ci.yml : modules de fixtures et règles W0 aux deux filtres de chemins', () => {
+  const motifs = motifsDuFiltre(read('.github/workflows/ios-swift-ci.yml'));
+  const attendus = ['scripts/mobile/demo-fixtures/lot4.mjs', 'scripts/mobile/demo-fixtures/swipe.mjs',
+    'src/lib/alertes-recherche-missions.ts', 'src/lib/filtre-paquet-swipe.ts', 'src/lib/raisons-score-matching.ts',
+    'src/lib/statut-litige-regles.ts'];
+  for (const evenement of ['pull_request', 'push']) {
+    for (const chemin of attendus) {
+      assert.ok(motifs[evenement].some(m => correspond(m, chemin)), `${evenement} : ${chemin} hors du filtre`);
+    }
+    // Intégration de la vague C (revues B8 de #1159, m9, et #1161, m7) : T1c et T2 posaient les quatre règles W0 dans
+    // deux blocs ; une seule occurrence par motif et par filtre.
+    const doublons = motifs[evenement].filter((m, i, tous) => tous.indexOf(m) !== i);
+    assert.deepEqual(doublons, [], `${evenement} : motifs en double dans le filtre de chemins`);
+  }
+  for (const chemin of attendus.slice(2)) assert.ok(fsLot4.existsSync(join(root, chemin)), `${chemin} absent du dépôt`);
 });

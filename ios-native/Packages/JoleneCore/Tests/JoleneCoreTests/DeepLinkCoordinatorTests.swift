@@ -73,7 +73,11 @@ final class DeepLinkCoordinatorTests: XCTestCase {
         let aiguillage = AiguillageLiens(taps: BoiteTapsPush(), espaceEtablissement: .ouvert)
         _ = aiguillage.ouvrirEspaceEtablissement(etablissement(epoch: 7))
         let detail = url("https://jolene.app/etablissement/missions/m-1?source=mail")
-        XCTAssertEqual(aiguillage.recevoir(url: detail), .renvoiWeb(.etablissement(detail)), "T5 non livrée")
+        XCTAssertEqual(aiguillage.recevoir(url: detail),
+                       .naviguerEtablissement(CibleEtablissement(onglet: .missions, destination: .detailMission(id: "m-1")),
+                                              route: .missionDetail(id: "m-1"), epoch: 7), "T5 livrée : détail natif")
+        let publication = url("https://jolene.app/etablissement/missions/creer?source=mail")
+        XCTAssertEqual(aiguillage.recevoir(url: publication), .renvoiWeb(.etablissement(publication)), "T9 non livrée")
         let soignantLien = url("https://jolene.app/soignant/missions/m-1")
         XCTAssertEqual(aiguillage.recevoir(url: soignantLien), .renvoiWeb(.safari(soignantLien)),
                        "un lien soignant n'ouvre jamais l'espace soignant depuis l'espace établissement")

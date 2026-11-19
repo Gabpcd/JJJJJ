@@ -17,6 +17,7 @@ import Foundation
 /// | `/soignant/recherche-missions` (sans `?vue=swipe`)  | `.explorer`                       |
 /// | `/soignant/swipe-missions`, `/soignant/recherche-missions?vue=swipe` (lot 4) | `.secondaire(.swipe)` (repli `.explorer`) |
 /// | `/soignant/missions` et alias (`mes-matches`, `planning`, `calendrier-sync`, `historique-missions`) | `.missions` |
+/// | `/soignant/mes-favoris` (lot 1, T4b)              | `.favoris`                        |
 /// | `/soignant/missions/serie/{id}`                   | `.serieDetail(id:)`               |
 /// | `/soignant/missions/{id}`, `/mission/{id}`        | `.missionDetail(id:)`             |
 /// | `/inscription/soignant`, `/inscription/reprendre`, `/inscription/completer` (lot 3) | `.inscription(EtapeInscription)`, query conservée |
@@ -105,6 +106,7 @@ public enum LinkRouter {
         case "/soignant/missions", "/soignant/mes-matches", "/soignant/planning",
              "/soignant/calendrier-sync", "/soignant/historique-missions":
             return .missions
+        case "/soignant/mes-favoris": return .favoris
         case "/soignant/mes-gains": return .revenus(section: SectionRevenus(tab: FormQuery(query).get("tab")))
         // Alias `Navigate` de `src/App.tsx` l.395-397 : l'onglet est fixé par la redirection.
         case "/soignant/mes-factures-honoraires": return .revenus(section: .factures)

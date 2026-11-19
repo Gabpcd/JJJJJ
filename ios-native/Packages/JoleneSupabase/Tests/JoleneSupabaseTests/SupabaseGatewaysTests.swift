@@ -46,7 +46,11 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.audit is SupabaseAuditGateway)
         XCTAssertTrue(gateways.flags is SupabaseFlagsGateway)
         XCTAssertTrue(gateways.compte is SupabaseAccountGateway)
+        XCTAssertTrue(gateways.favoris is SupabaseFavorisGateway)
         XCTAssertTrue(gateways.push is SupabasePushGateway, "lot 3, T4 : enregistrement et désactivation du token APNs")
+        XCTAssertTrue(gateways.mesMissions is SupabaseMesMissionsGateway)
+        XCTAssertTrue(gateways.candidature is SupabaseCandidatureGateway, "T6a câble la candidature")
+        XCTAssertTrue(gateways.justificatifs is SupabaseJustificatifStorage, "T7 câble les justificatifs d'annulation")
     }
 
     /// Aucune liste propre à ce monde : les ports encore stubs côté Supabase doivent être
@@ -65,6 +69,9 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(supabase.contains("flags"), "T1 câble les drapeaux")
         XCTAssertFalse(supabase.contains("dashboard"), "T3 câble le tableau de bord")
         XCTAssertFalse(supabase.contains("compte"), "T8 câble la suppression de compte")
+        XCTAssertFalse(supabase.contains("favoris"), "T4b câble les favoris")
+        XCTAssertFalse(supabase.contains("mesMissions"), "T5 câble Mes missions")
+        XCTAssertFalse(supabase.contains("candidature"), "T6a câble la candidature")
         XCTAssertFalse(supabase.contains("pointage"), "lot 2 T3 câble le pointage")
         XCTAssertFalse(supabase.contains("contrats"), "lot 2, T8 câble les contrats")
         XCTAssertFalse(supabase.contains("notation"), "lot 2, T5a câble la notation")
@@ -76,6 +83,17 @@ final class SupabaseGatewaysTests: XCTestCase {
         let gateways = SupabaseGateways.make(client: TestClient.make())
         XCTAssertTrue(gateways.avatar is EnvoiAvatar, "reçu durable et relecture d'`EnvoiAvatar` sur Supabase Storage")
         XCTAssertTrue(gateways.geocodage is ApiAdresseGeocodage)
+    }
+
+    /// L4-T1c, verrou m6 (revue B8 de #1146) : état attendu **écrit en dur** du monde Supabase avant T6 et T7a (revue B8
+    /// de #1159, m5 : plus de comparaison de deux calculs de `is UnwiredPort`). T7a, qui câble `SupabaseLot4.realtime`,
+    /// et T6, qui livre `ParrainageCapture` et `SupabaseLot4.parrainage`, inversent chacune leurs deux attentes ici.
+    func testAbonnementRealtimeVerrouilleAvantT7a() {
+        let gateways = SupabaseGateways.make(client: TestClient.make())
+        XCTAssertTrue(gateways.realtime is UnwiredRealtimePort, "avant T7a : port Realtime Supabase non câblé")
+        XCTAssertFalse(VerrousLot4.abonnementRealtimePermis(gateways.realtime), "avant T7a : aucun abonnement Realtime")
+        XCTAssertTrue(gateways.parrainage is UnwiredParrainagePort, "avant T6 : port parrainage Supabase non câblé")
+        XCTAssertFalse(VerrousLot4.parrainageBranche, "avant T6 : aucune capture ni application du code de parrainage")
     }
 
     /// Lot 2 (T1) : `câblerLot2(_:client:)` est le seul point d'assignation des cinq ports du lot 2 du

@@ -54,7 +54,13 @@ const LOT5 = [
   'fn_obtenir_conversation',
 ];
 // Chaque tranche qui câble une gateway passe sa RPC en `consommee` et l'ajoute ici (modèle LOT1_CONSOMMEES).
-const LOT5_CONSOMMEES = ['fn_mes_permissions_etab', 'fn_mon_etablissement_complet']; // T1 : SupabaseEtabSessionGateway
+const LOT5_CONSOMMEES = [
+  'fn_mes_permissions_etab', 'fn_mon_etablissement_complet', // T1 : SupabaseEtabSessionGateway
+  'fn_stats_dashboard_etablissement', // T4 : SupabaseEtabDashboardGateway
+  'fn_soignant_pour_etablissement', // T5 : SupabaseEtabMissionsGateway
+  'fn_lire_candidatures_mission_habilitee', 'fn_traiter_candidature_planning_v1', // T6 : SupabaseEtabCandidaturesGateway
+  'fn_contrat_signe_pour_pointage', // T7 : SupabaseEtabPointageGateway
+];
 // Déjà suivies par un lot soignant, consommées aussi par l'établissement (annotation, jamais doublon).
 const PARTAGEES = [
   'fn_get_my_role', 'fn_audit_connexion', 'fn_ecrire_audit_safe', 'fn_param_bool',
@@ -568,6 +574,23 @@ test('AppContainer câble l ouverture de l espace établissement sur le mode de 
     /espaceEtablissement: OuvertureEspaceEtablissement = \.ferme\)/, 'contrôleur fermé par défaut');
   assert.match(read('ios-native/Packages/JoleneCore/Sources/JoleneCore/Links/DeepLinkIntent.swift'),
     /espaceEtablissement: OuvertureEspaceEtablissement = \.ferme\)/, 'aiguillage fermé par défaut');
+});
+
+test('T7 : la veille de l écran du code de pointage est libérée explicitement (disparition, scène inactive)', () => {
+  // Intégration de la vague C (revue B8 de #1166, m1) : la cible app n'a pas de tests unitaires et le XCUITest ne voit
+  // pas le minuteur de veille. La libération ne doit pas dépendre de l'état dérivé `veilleDesactivee` relu juste après
+  // l'écriture de `visible` : `onDisappear` et le passage de la scène à inactive appellent `retablirVeille` eux-mêmes.
+  const source = read('ios-native/Jolene/Screens/Etablissement/Pointage/CodePointageScreen.swift')
+    .split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
+  const bloc = (debut) => {
+    const i = source.indexOf(debut);
+    assert.ok(i >= 0, `${debut} absent de CodePointageScreen.swift`);
+    return source.slice(i, source.indexOf('\n        .', i + debut.length));
+  };
+  assert.match(bloc('.onDisappear {'), /libererVeille\(\)/, 'onDisappear : libération explicite de la veille');
+  assert.match(bloc('.onChange(of: sceneActive)'), /else \{ libererVeille\(\) \}/, 'scène inactive : libération explicite');
+  assert.match(source, /private func libererVeille\(\) \{\s*VeilleEcran\.controleur\.retablirVeille\(demandeur: demandeurVeille\)\s*\}/,
+    'libererVeille : retablirVeille du contrôleur unique, pour le demandeur de cet écran');
 });
 
 test('textes du lot 5 jamais affichés avant la validation de Gabrielle (HARD STOP n°4, m4)', () => {

@@ -118,19 +118,23 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
     'src/components/BandeauHorsLigne.tsx', // T4b : bandeau hors ligne de la page Présences
     'src/components/BandeauOubliDepart.tsx', // T5a : action du bandeau d'oubli de départ (Accueil)
     'src/components/BandeauSansGPS.tsx',
+    'src/components/CarteProposition.tsx', // L1-T6b : réponse à une proposition (revue B8 m7)
     'src/components/CertificatSignature.tsx',
+    'src/components/ChoixContratDialog.tsx', // L1-T6b : choix du contrat (revue B8 m7)
     'src/components/ConsentementGPS.tsx',
     'src/components/Countdown72hSignature.tsx',
     'src/components/NotationRapide.tsx', // T5a : feuille de notation rapide
     'src/components/PanneauContestation.tsx',
     'src/components/SignerContratOtp.tsx',
     'src/components/WidgetAllerPointer.tsx', // T5a : widget « Aller pointer » (Accueil)
+    'src/components/planning/RecapitulatifCandidatureDialog.tsx', // L1-T6b : récapitulatif et phrases d'engagement (HARD STOP)
     // T4a : motifs du bloc de pointage, titres « Mes documents » et « Mes contrats » (section « Mon espace »).
     'src/components/pointage/BlocPointageMission.tsx',
     // T4b : zone de pointage (état, consigne, saisie, QR, action, segments, retours) ; T5a : titre de la feuille de
     // notation.
     'src/components/pointage/PointageRotatifSoignant.tsx',
     'src/components/profil-soignant/SectionPreferences.tsx',
+    'src/components/soignant/ModaleAnnulationCandidature.tsx', // L1-T7 : annulation d'une candidature retenue
     'src/pages/CertificatSignaturePage.tsx',
     'src/pages/ContratMission.tsx',
     'src/pages/DetailMissionSoignant.tsx', // T5a : points d'entrée du détail d'une mission
@@ -147,6 +151,11 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
 // blueprint, relues dans le dépôt le 2 novembre 2026, restent en commentaire) : un décalage de
 // lignes du web ne touche pas cette table. Tous sont dans TextesWeb.swift (HARD STOP).
 const EXIGES = {
+  // Confirmation de présence J-1 (lot 1, T6c, LOT1_PLAN §3 T6c, HARD STOP n°4) : DetailMissionSoignant.tsx l.1426-1438.
+  'src/pages/DetailMissionSoignant.tsx': [
+    'ConfirmationPresence.bouton', 'ConfirmationPresence.confirmation', 'ConfirmationPresence.etatConfirme',
+    'ConfirmationPresence.repliRefus',
+  ],
   // Consentement GPS : ConsentementGPS.tsx l.25-65 (titre, description, deux listes, l.50, boutons).
   'src/components/ConsentementGPS.tsx': [
     'ConsentementGps.titre', 'ConsentementGps.description', 'ConsentementGps.ceQueNousFaisonsTitre',

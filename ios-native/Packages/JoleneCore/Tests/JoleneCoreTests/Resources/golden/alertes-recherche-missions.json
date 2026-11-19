@@ -1,0 +1,4487 @@
+[
+  {
+    "name": "cleComparaison/cles-hors-criteres",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "a": 1,
+        "b_c": 2,
+        "z": 3,
+        "ville": "Paris"
+      }
+    },
+    "expected": "{\"a\":1,\"b_c\":2,\"ville\":\"Paris\",\"z\":3}"
+  },
+  {
+    "name": "cleComparaison/criteres",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    },
+    "expected": "{\"horaire\":\"NUIT\",\"profession\":\"\",\"rayonKm\":25,\"tauxMin\":30,\"typeContrat\":\"CDD\",\"urgentesOnly\":true,\"villeRecherche\":\"Paris\"}"
+  },
+  {
+    "name": "cleComparaison/imbrique-une-cle",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "horaire": {
+          "valeur": "NUIT"
+        },
+        "rayonKm": 25
+      }
+    },
+    "expected": "{\"horaire\":{\"valeur\":\"NUIT\"},\"rayonKm\":25}"
+  },
+  {
+    "name": "cleComparaison/nombre/1-5e-10",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 1.5e-10
+      }
+    },
+    "expected": "{\"rayonKm\":1.5e-10}"
+  },
+  {
+    "name": "cleComparaison/nombre/123e-20",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 1.23e-18
+      }
+    },
+    "expected": "{\"rayonKm\":1.23e-18}"
+  },
+  {
+    "name": "cleComparaison/nombre/1e-6",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 0.000001
+      }
+    },
+    "expected": "{\"rayonKm\":0.000001}"
+  },
+  {
+    "name": "cleComparaison/nombre/1e-7",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 1e-7
+      }
+    },
+    "expected": "{\"rayonKm\":1e-7}"
+  },
+  {
+    "name": "cleComparaison/nombre/1e20",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 100000000000000000000
+      }
+    },
+    "expected": "{\"rayonKm\":100000000000000000000}"
+  },
+  {
+    "name": "cleComparaison/nombre/1e21",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 1e+21
+      }
+    },
+    "expected": "{\"rayonKm\":1e+21}"
+  },
+  {
+    "name": "cleComparaison/nombre/1e300",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 1e+300
+      }
+    },
+    "expected": "{\"rayonKm\":1e+300}"
+  },
+  {
+    "name": "cleComparaison/nombre/2-puissance-53",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 9007199254740992
+      }
+    },
+    "expected": "{\"rayonKm\":9007199254740992}"
+  },
+  {
+    "name": "cleComparaison/nombre/2-puissance-53-plus-2",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 9007199254740994
+      }
+    },
+    "expected": "{\"rayonKm\":9007199254740994}"
+  },
+  {
+    "name": "cleComparaison/nombre/cent",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 100
+      }
+    },
+    "expected": "{\"rayonKm\":100}"
+  },
+  {
+    "name": "cleComparaison/nombre/decimal",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 30.5
+      }
+    },
+    "expected": "{\"rayonKm\":30.5}"
+  },
+  {
+    "name": "cleComparaison/nombre/dixieme",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 0.1
+      }
+    },
+    "expected": "{\"rayonKm\":0.1}"
+  },
+  {
+    "name": "cleComparaison/nombre/grand-arrondi",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 123456789012345680000
+      }
+    },
+    "expected": "{\"rayonKm\":123456789012345680000}"
+  },
+  {
+    "name": "cleComparaison/nombre/max",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 1.7976931348623157e+308
+      }
+    },
+    "expected": "{\"rayonKm\":1.7976931348623157e+308}"
+  },
+  {
+    "name": "cleComparaison/nombre/min-positif",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 5e-324
+      }
+    },
+    "expected": "{\"rayonKm\":5e-324}"
+  },
+  {
+    "name": "cleComparaison/nombre/negatif",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": -3.25
+      }
+    },
+    "expected": "{\"rayonKm\":-3.25}"
+  },
+  {
+    "name": "cleComparaison/nombre/negatif-petit",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": -1e-7
+      }
+    },
+    "expected": "{\"rayonKm\":-1e-7}"
+  },
+  {
+    "name": "cleComparaison/nombre/somme-flottante",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 0.30000000000000004
+      }
+    },
+    "expected": "{\"rayonKm\":0.30000000000000004}"
+  },
+  {
+    "name": "cleComparaison/nombre/tiers",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 0.3333333333333333
+      }
+    },
+    "expected": "{\"rayonKm\":0.3333333333333333}"
+  },
+  {
+    "name": "cleComparaison/nombre/un",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 1
+      }
+    },
+    "expected": "{\"rayonKm\":1}"
+  },
+  {
+    "name": "cleComparaison/nombre/vingt-cinq",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 25
+      }
+    },
+    "expected": "{\"rayonKm\":25}"
+  },
+  {
+    "name": "cleComparaison/nombre/zero",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "rayonKm": 0
+      }
+    },
+    "expected": "{\"rayonKm\":0}"
+  },
+  {
+    "name": "cleComparaison/tableau-valeur",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "horaire": [
+          "NUIT",
+          "JOUR",
+          3,
+          null,
+          true
+        ]
+      }
+    },
+    "expected": "{\"horaire\":[\"NUIT\",\"JOUR\",3,null,true]}"
+  },
+  {
+    "name": "cleComparaison/texte/accent",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "accent",
+        "villeRecherche": "é"
+      }
+    },
+    "expected": "{\"profession\":\"accent\",\"villeRecherche\":\"é\"}"
+  },
+  {
+    "name": "cleComparaison/texte/barre",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "barre",
+        "villeRecherche": "a/b"
+      }
+    },
+    "expected": "{\"profession\":\"barre\",\"villeRecherche\":\"a/b\"}"
+  },
+  {
+    "name": "cleComparaison/texte/barre-inverse",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "barre-inverse",
+        "villeRecherche": "\\"
+      }
+    },
+    "expected": "{\"profession\":\"barre-inverse\",\"villeRecherche\":\"\\\\\"}"
+  },
+  {
+    "name": "cleComparaison/texte/bom",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "bom",
+        "villeRecherche": "﻿"
+      }
+    },
+    "expected": "{\"profession\":\"bom\",\"villeRecherche\":\"﻿\"}"
+  },
+  {
+    "name": "cleComparaison/texte/chevrons",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "chevrons",
+        "villeRecherche": "<script>"
+      }
+    },
+    "expected": "{\"profession\":\"chevrons\",\"villeRecherche\":\"<script>\"}"
+  },
+  {
+    "name": "cleComparaison/texte/controle-10",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "controle-10",
+        "villeRecherche": "\u0010"
+      }
+    },
+    "expected": "{\"profession\":\"controle-10\",\"villeRecherche\":\"\\u0010\"}"
+  },
+  {
+    "name": "cleComparaison/texte/controle-1f",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "controle-1f",
+        "villeRecherche": "\u001f"
+      }
+    },
+    "expected": "{\"profession\":\"controle-1f\",\"villeRecherche\":\"\\u001f\"}"
+  },
+  {
+    "name": "cleComparaison/texte/decompose",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "decompose",
+        "villeRecherche": "é"
+      }
+    },
+    "expected": "{\"profession\":\"decompose\",\"villeRecherche\":\"é\"}"
+  },
+  {
+    "name": "cleComparaison/texte/emoji",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "emoji",
+        "villeRecherche": "😀"
+      }
+    },
+    "expected": "{\"profession\":\"emoji\",\"villeRecherche\":\"😀\"}"
+  },
+  {
+    "name": "cleComparaison/texte/guillemet",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "guillemet",
+        "villeRecherche": "\""
+      }
+    },
+    "expected": "{\"profession\":\"guillemet\",\"villeRecherche\":\"\\\"\"}"
+  },
+  {
+    "name": "cleComparaison/texte/insecable",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "insecable",
+        "villeRecherche": " "
+      }
+    },
+    "expected": "{\"profession\":\"insecable\",\"villeRecherche\":\" \"}"
+  },
+  {
+    "name": "cleComparaison/texte/nul",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "nul",
+        "villeRecherche": "\u0000"
+      }
+    },
+    "expected": "{\"profession\":\"nul\",\"villeRecherche\":\"\\u0000\"}"
+  },
+  {
+    "name": "cleComparaison/texte/retour-arriere",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "retour-arriere",
+        "villeRecherche": "\b"
+      }
+    },
+    "expected": "{\"profession\":\"retour-arriere\",\"villeRecherche\":\"\\b\"}"
+  },
+  {
+    "name": "cleComparaison/texte/retour-chariot",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "retour-chariot",
+        "villeRecherche": "\r"
+      }
+    },
+    "expected": "{\"profession\":\"retour-chariot\",\"villeRecherche\":\"\\r\"}"
+  },
+  {
+    "name": "cleComparaison/texte/saut",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "saut",
+        "villeRecherche": "\n"
+      }
+    },
+    "expected": "{\"profession\":\"saut\",\"villeRecherche\":\"\\n\"}"
+  },
+  {
+    "name": "cleComparaison/texte/saut-page",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "saut-page",
+        "villeRecherche": "\f"
+      }
+    },
+    "expected": "{\"profession\":\"saut-page\",\"villeRecherche\":\"\\f\"}"
+  },
+  {
+    "name": "cleComparaison/texte/separateur-ligne",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "separateur-ligne",
+        "villeRecherche": " "
+      }
+    },
+    "expected": "{\"profession\":\"separateur-ligne\",\"villeRecherche\":\" \"}"
+  },
+  {
+    "name": "cleComparaison/texte/separateur-paragraphe",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "separateur-paragraphe",
+        "villeRecherche": " "
+      }
+    },
+    "expected": "{\"profession\":\"separateur-paragraphe\",\"villeRecherche\":\" \"}"
+  },
+  {
+    "name": "cleComparaison/texte/simple",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "simple",
+        "villeRecherche": "Paris"
+      }
+    },
+    "expected": "{\"profession\":\"simple\",\"villeRecherche\":\"Paris\"}"
+  },
+  {
+    "name": "cleComparaison/texte/suppr",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "suppr",
+        "villeRecherche": ""
+      }
+    },
+    "expected": "{\"profession\":\"suppr\",\"villeRecherche\":\"\"}"
+  },
+  {
+    "name": "cleComparaison/texte/tabulation",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "tabulation",
+        "villeRecherche": "\t"
+      }
+    },
+    "expected": "{\"profession\":\"tabulation\",\"villeRecherche\":\"\\t\"}"
+  },
+  {
+    "name": "cleComparaison/texte/vide",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "profession": "vide",
+        "villeRecherche": ""
+      }
+    },
+    "expected": "{\"profession\":\"vide\",\"villeRecherche\":\"\"}"
+  },
+  {
+    "name": "cleComparaison/valeur/faux",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "urgentesOnly": false
+      }
+    },
+    "expected": "{\"urgentesOnly\":false}"
+  },
+  {
+    "name": "cleComparaison/valeur/null",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "urgentesOnly": null
+      }
+    },
+    "expected": "{\"urgentesOnly\":null}"
+  },
+  {
+    "name": "cleComparaison/valeur/vrai",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {
+        "urgentesOnly": true
+      }
+    },
+    "expected": "{\"urgentesOnly\":true}"
+  },
+  {
+    "name": "cleComparaison/vide",
+    "input": {
+      "fonction": "cleComparaison",
+      "valeur": {}
+    },
+    "expected": "{}"
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/contrat-liberal/base",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "LIBERAL",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "contrat-liberal-base",
+          "nom": "Recherche contrat-liberal-base",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "LIBERAL",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/contrat-liberal/meme",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "LIBERAL",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "contrat-liberal-meme",
+          "nom": "Recherche contrat-liberal-meme",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "LIBERAL",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "contrat-liberal-meme",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "LIBERAL",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/contrat-tous/base",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "TOUS",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "contrat-tous-base",
+          "nom": "Recherche contrat-tous-base",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "TOUS",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/contrat-tous/meme",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "TOUS",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "contrat-tous-meme",
+          "nom": "Recherche contrat-tous-meme",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "TOUS",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "contrat-tous-meme",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "TOUS",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/horaire-tous/base",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "TOUS",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "horaire-tous-base",
+          "nom": "Recherche horaire-tous-base",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "TOUS",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/horaire-tous/meme",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "TOUS",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "horaire-tous-meme",
+          "nom": "Recherche horaire-tous-meme",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "TOUS",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "horaire-tous-meme",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "TOUS",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/profession-ide/base",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "IDE",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "profession-ide-base",
+          "nom": "Recherche profession-ide-base",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "IDE",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/profession-ide/meme",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "IDE",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "profession-ide-meme",
+          "nom": "Recherche profession-ide-meme",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "profession-ide-meme",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "IDE",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/rayon-grand/base",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 200,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "rayon-grand-base",
+          "nom": "Recherche rayon-grand-base",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 200,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/rayon-grand/meme",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 200,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "rayon-grand-meme",
+          "nom": "Recherche rayon-grand-meme",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 200,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "rayon-grand-meme",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 200,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/rayon-zero/base",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 0,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "rayon-zero-base",
+          "nom": "Recherche rayon-zero-base",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 0,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/rayon-zero/meme",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 0,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "rayon-zero-meme",
+          "nom": "Recherche rayon-zero-meme",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 0,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "rayon-zero-meme",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 0,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/taux-decimal/base",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 32.5,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "taux-decimal-base",
+          "nom": "Recherche taux-decimal-base",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 32.5,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/taux-decimal/meme",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 32.5,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "taux-decimal-meme",
+          "nom": "Recherche taux-decimal-meme",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 32.5,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "taux-decimal-meme",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 32.5,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/taux-zero/base",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 0,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "taux-zero-base",
+          "nom": "Recherche taux-zero-base",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 0,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/taux-zero/meme",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 0,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "taux-zero-meme",
+          "nom": "Recherche taux-zero-meme",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 0,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "taux-zero-meme",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 0,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/urgentes-non/base",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": false,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "urgentes-non-base",
+          "nom": "Recherche urgentes-non-base",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": false,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/urgentes-non/meme",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": false,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "urgentes-non-meme",
+          "nom": "Recherche urgentes-non-meme",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": false,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "urgentes-non-meme",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": false,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/ville-vide/base",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": ""
+      },
+      "recherches": [
+        {
+          "id": "ville-vide-base",
+          "nom": "Recherche ville-vide-base",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": ""
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/criteres/ville-vide/meme",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": ""
+      },
+      "recherches": [
+        {
+          "id": "ville-vide-meme",
+          "nom": "Recherche ville-vide-meme",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": ""
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "ville-vide-meme",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": ""
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/cle-en-plus-null/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-cle-en-plus-null-true",
+          "nom": "Recherche r-cle-en-plus-null-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris",
+            "etablissementId": null
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/cle-en-plus-null/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-cle-en-plus-null-false",
+          "nom": "Recherche r-cle-en-plus-null-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris",
+            "etablissementId": null
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/cle-en-plus-ville/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-cle-en-plus-ville-true",
+          "nom": "Recherche r-cle-en-plus-ville-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris",
+            "ville": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/cle-en-plus-ville/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-cle-en-plus-ville-false",
+          "nom": "Recherche r-cle-en-plus-ville-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris",
+            "ville": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/cle-manquante/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-cle-manquante-true",
+          "nom": "Recherche r-cle-manquante-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/cle-manquante/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-cle-manquante-false",
+          "nom": "Recherche r-cle-manquante-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/decimaux",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 0,
+        "tauxMin": 0.30000000000000004,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "dec",
+          "nom": "Recherche dec",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 0,
+            "tauxMin": 0.30000000000000004,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "dec",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 0,
+        "tauxMin": 0.30000000000000004,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/decimaux-arrondis",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 0,
+        "tauxMin": 0.30000000000000004,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "arrondi",
+          "nom": "Recherche arrondi",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 0,
+            "tauxMin": 0.3,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 0,
+        "tauxMin": 0.30000000000000004,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/echappements",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "IDE",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "L'Haÿ-les-Roses \"centre\"\\\n 😀"
+      },
+      "recherches": [
+        {
+          "id": "echappements",
+          "nom": "Recherche echappements",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "L'Haÿ-les-Roses \"centre\"\\\n 😀"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "echappements",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "IDE",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "L'Haÿ-les-Roses \"centre\"\\\n 😀"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/filtres-absents",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "sans-filtres",
+          "nom": "Sans filtres",
+          "alerte_active": false
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/horaire-imbrique/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-horaire-imbrique-true",
+          "nom": "Recherche r-horaire-imbrique-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": {
+              "valeur": "NUIT"
+            },
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/horaire-imbrique/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-horaire-imbrique-false",
+          "nom": "Recherche r-horaire-imbrique-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": {
+              "valeur": "NUIT"
+            },
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/horaire-tableau/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-horaire-tableau-true",
+          "nom": "Recherche r-horaire-tableau-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": [
+              "NUIT"
+            ],
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/horaire-tableau/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-horaire-tableau-false",
+          "nom": "Recherche r-horaire-tableau-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": [
+              "NUIT"
+            ],
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/identique/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-identique-true",
+          "nom": "Recherche r-identique-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "r-identique-true",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/identique/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-identique-false",
+          "nom": "Recherche r-identique-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "r-identique-false",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/nom-different-meme-filtres",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "renommee",
+          "nom": "Autre nom",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "renommee",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/nombre/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-nombre-true",
+          "nom": "Recherche r-nombre-true",
+          "alerte_active": true,
+          "filtres": 25
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/nombre/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-nombre-false",
+          "nom": "Recherche r-nombre-false",
+          "alerte_active": false,
+          "filtres": 25
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/null/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-null-true",
+          "nom": "Recherche r-null-true",
+          "alerte_active": true,
+          "filtres": null
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/null/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-null-false",
+          "nom": "Recherche r-null-false",
+          "alerte_active": false,
+          "filtres": null
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/ordre-inverse/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-ordre-inverse-true",
+          "nom": "Recherche r-ordre-inverse-true",
+          "alerte_active": true,
+          "filtres": {
+            "villeRecherche": "Paris",
+            "horaire": "NUIT",
+            "urgentesOnly": true,
+            "typeContrat": "CDD",
+            "tauxMin": 30,
+            "rayonKm": 25,
+            "profession": ""
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "r-ordre-inverse-true",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/ordre-inverse/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-ordre-inverse-false",
+          "nom": "Recherche r-ordre-inverse-false",
+          "alerte_active": false,
+          "filtres": {
+            "villeRecherche": "Paris",
+            "horaire": "NUIT",
+            "urgentesOnly": true,
+            "typeContrat": "CDD",
+            "tauxMin": 30,
+            "rayonKm": 25,
+            "profession": ""
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "r-ordre-inverse-false",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/ordre-jsonb/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-ordre-jsonb-true",
+          "nom": "Recherche r-ordre-jsonb-true",
+          "alerte_active": true,
+          "filtres": {
+            "horaire": "NUIT",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "profession": "",
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "r-ordre-jsonb-true",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/ordre-jsonb/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-ordre-jsonb-false",
+          "nom": "Recherche r-ordre-jsonb-false",
+          "alerte_active": false,
+          "filtres": {
+            "horaire": "NUIT",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "profession": "",
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "r-ordre-jsonb-false",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/premiere-retenue",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "autre",
+          "nom": "Recherche autre",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 50,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        },
+        {
+          "id": "premiere",
+          "nom": "Recherche premiere",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        },
+        {
+          "id": "seconde",
+          "nom": "Recherche seconde",
+          "alerte_active": false,
+          "filtres": {
+            "horaire": "NUIT",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "profession": "",
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "premiere",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/profession-null/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-profession-null-true",
+          "nom": "Recherche r-profession-null-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": null,
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/profession-null/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-profession-null-false",
+          "nom": "Recherche r-profession-null-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": null,
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/rayon-texte/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-rayon-texte-true",
+          "nom": "Recherche r-rayon-texte-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": "25",
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/rayon-texte/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-rayon-texte-false",
+          "nom": "Recherche r-rayon-texte-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": "25",
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/tableau/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-tableau-true",
+          "nom": "Recherche r-tableau-true",
+          "alerte_active": true,
+          "filtres": [
+            1,
+            2
+          ]
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/tableau/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-tableau-false",
+          "nom": "Recherche r-tableau-false",
+          "alerte_active": false,
+          "filtres": [
+            1,
+            2
+          ]
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/taux-proche/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-taux-proche-true",
+          "nom": "Recherche r-taux-proche-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30.000000000000004,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/taux-proche/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-taux-proche-false",
+          "nom": "Recherche r-taux-proche-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30.000000000000004,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/taux-texte/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-taux-texte-true",
+          "nom": "Recherche r-taux-texte-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": "30",
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/taux-texte/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-taux-texte-false",
+          "nom": "Recherche r-taux-texte-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": "30",
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/texte/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-texte-true",
+          "nom": "Recherche r-texte-true",
+          "alerte_active": true,
+          "filtres": "Paris"
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/texte/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-texte-false",
+          "nom": "Recherche r-texte-false",
+          "alerte_active": false,
+          "filtres": "Paris"
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/urgentes-nombre/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-urgentes-nombre-true",
+          "nom": "Recherche r-urgentes-nombre-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": 1,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/urgentes-nombre/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-urgentes-nombre-false",
+          "nom": "Recherche r-urgentes-nombre-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": 1,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/urgentes-texte/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-urgentes-texte-true",
+          "nom": "Recherche r-urgentes-texte-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": "true",
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/urgentes-texte/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-urgentes-texte-false",
+          "nom": "Recherche r-urgentes-texte-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": "true",
+            "horaire": "NUIT",
+            "villeRecherche": "Paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/vide/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-vide-true",
+          "nom": "Recherche r-vide-true",
+          "alerte_active": true,
+          "filtres": {}
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/vide/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-vide-false",
+          "nom": "Recherche r-vide-false",
+          "alerte_active": false,
+          "filtres": {}
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/ville-casse/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-ville-casse-true",
+          "nom": "Recherche r-ville-casse-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/ville-casse/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-ville-casse-false",
+          "nom": "Recherche r-ville-casse-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "paris"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/ville-composee",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Saint-Étienne"
+      },
+      "recherches": [
+        {
+          "id": "nfc",
+          "nom": "Recherche nfc",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Saint-Étienne"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "nfc",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Saint-Étienne"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/ville-decomposee",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Saint-Étienne"
+      },
+      "recherches": [
+        {
+          "id": "nfd",
+          "nom": "Recherche nfd",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Saint-Étienne"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Saint-Étienne"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/ville-espace-final/active",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-ville-espace-final-true",
+          "nom": "Recherche r-ville-espace-final-true",
+          "alerte_active": true,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris "
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/equivalence/ville-espace-final/inactive",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "r-ville-espace-final-false",
+          "nom": "Recherche r-ville-espace-final-false",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "",
+            "rayonKm": 25,
+            "tauxMin": 30,
+            "typeContrat": "CDD",
+            "urgentesOnly": true,
+            "horaire": "NUIT",
+            "villeRecherche": "Paris "
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/91-unites",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [],
+      "nomBase": "ÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉx"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "ÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉ",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/casse",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "n0",
+          "nom": "alerte missions",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/compose-pris",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "n0",
+          "nom": "Café du soir",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": "Café du soir"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Café du soir (2)",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/decompose-vs-compose",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "nfd",
+          "nom": "Café du soir",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": "Café du soir"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Café du soir",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/emoji-apres-limite",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [],
+      "nomBase": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/emoji-avant-limite",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "n0",
+          "nom": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀😀",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀😀"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀😀 (2)",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/espace-final",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "n0",
+          "nom": "Alerte missions ",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/exactement-90",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "n0",
+          "nom": "ÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉ",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": "ÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉ"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "ÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉÉ (2)",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/libre",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "n0",
+          "nom": "Autre",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/long-95-complet-pris",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "n0",
+          "nom": "Alerte missions IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE ID",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/long-95-libre",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [],
+      "nomBase": "Alerte missions IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE ID",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/long-95-tronque-pris",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "n0",
+          "nom": "Alerte missions IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE ID",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE IDE ID (2)",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/pris",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "n0",
+          "nom": "Alerte missions",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions (2)",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/seulement-suffixe",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "n0",
+          "nom": "Alerte missions (2)",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/suite-longue",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "n0",
+          "nom": "Alerte missions",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        },
+        {
+          "id": "n1",
+          "nom": "Alerte missions (2)",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        },
+        {
+          "id": "n2",
+          "nom": "Alerte missions (3)",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        },
+        {
+          "id": "n3",
+          "nom": "Alerte missions (4)",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions (5)",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/trou-dans-la-suite",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "n0",
+          "nom": "Alerte missions",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        },
+        {
+          "id": "n1",
+          "nom": "Alerte missions (3)",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions (2)",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/vide",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "n0",
+          "nom": "",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE"
+          }
+        }
+      ],
+      "nomBase": ""
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": " (2)",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/nom/vide-libre",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [],
+      "nomBase": ""
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/vitest-equivalente-autre-ordre",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "exacte",
+          "nom": "Ma recherche",
+          "alerte_active": false,
+          "filtres": {
+            "villeRecherche": "Paris",
+            "horaire": "NUIT",
+            "urgentesOnly": true,
+            "typeContrat": "CDD",
+            "tauxMin": 30,
+            "rayonKm": 25,
+            "profession": ""
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": "exacte",
+      "nom": "Alerte missions",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/vitest-meme-nom-autre-rayon",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [
+        {
+          "id": "a",
+          "nom": "Alerte missions",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE",
+            "rayonKm": 100
+          }
+        },
+        {
+          "id": "b",
+          "nom": "Alerte missions (2)",
+          "alerte_active": false,
+          "filtres": {
+            "profession": "IDE",
+            "rayonKm": 100
+          }
+        }
+      ],
+      "nomBase": "Alerte missions"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions (3)",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  },
+  {
+    "name": "preparerAlerteMissions/vitest-sept-filtres",
+    "input": {
+      "fonction": "preparerAlerteMissions",
+      "criteres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      },
+      "recherches": [],
+      "nomBase": "Alerte missions IADE"
+    },
+    "expected": {
+      "dejaId": null,
+      "nom": "Alerte missions IADE",
+      "filtres": {
+        "profession": "",
+        "rayonKm": 25,
+        "tauxMin": 30,
+        "typeContrat": "CDD",
+        "urgentesOnly": true,
+        "horaire": "NUIT",
+        "villeRecherche": "Paris"
+      }
+    }
+  }
+]

@@ -24,12 +24,17 @@ public enum DemoEspace: Equatable, Sendable {
 /// Arguments de lancement DEBUG de l'espace démo (`-JOLENE_DEMO_ESPACE etablissement`,
 /// `-JOLENE_DEMO_ROLE_ETAB <rôle>`, `-JOLENE_DEMO_LEGACY 1`, `-JOLENE_DEMO_BLOCAGE 1`), lus par
 /// `AppContainer` en mode démo seulement. Une valeur absente ou illisible garde l'espace du lot 0 ; les
-/// variantes sont ignorées sans `-JOLENE_DEMO_ESPACE etablissement`. `-JOLENE_POLL_INTERVAL` appartient à T7.
+/// variantes sont ignorées sans `-JOLENE_DEMO_ESPACE etablissement`.
+/// T6 : `-JOLENE_DEMO_PLANNING_MODIFIE 1` (première acceptation répondue `PLANNING_MODIFIE_RECONFIRMER`).
+/// T7 : `-JOLENE_POLL_INTERVAL <s>` (cadence de relecture du code de pointage, au moins `CodeRotatifModel.cadenceMinimale`,
+/// au plus la cadence nominale : une valeur illisible, plus lente ou non finie garde la cadence nominale).
 public enum DemoEspaceLancement {
     public static let argumentEspace = "-JOLENE_DEMO_ESPACE"
     public static let argumentRole = "-JOLENE_DEMO_ROLE_ETAB"
     public static let argumentLegacy = "-JOLENE_DEMO_LEGACY"
     public static let argumentBlocage = "-JOLENE_DEMO_BLOCAGE"
+    public static let argumentPlanningModifie = "-JOLENE_DEMO_PLANNING_MODIFIE"
+    public static let argumentCadencePointage = "-JOLENE_POLL_INTERVAL"
 
     public static func espace(arguments: [String]) -> DemoEspace {
         guard valeur(argumentEspace, dans: arguments)?.lowercased() == "etablissement" else { return .soignant }
@@ -39,6 +44,11 @@ public enum DemoEspaceLancement {
         }
         configuration.legacy = valeur(argumentLegacy, dans: arguments) == "1"
         configuration.blocage = valeur(argumentBlocage, dans: arguments) == "1"
+        configuration.planningModifie = valeur(argumentPlanningModifie, dans: arguments) == "1"
+        if let cadence = valeur(argumentCadencePointage, dans: arguments).flatMap(TimeInterval.init), cadence.isFinite,
+           cadence >= CodeRotatifModel.cadenceMinimale, cadence < CodeRotatifModel.cadenceNominale {
+            configuration.cadencePointage = cadence
+        }
         return .etablissement(configuration)
     }
 
@@ -76,8 +86,11 @@ public extension DemoWorld {
     /// Ports du monde démo pour l'espace demandé (surcharge additive ; `gateways()` et
     /// `gateways(drapeaux:)` du lot 0 et du lot 1 sont inchangés). Dans l'espace établissement, auth,
     /// rôle et ports établissement partagent la même session démo (une seule identité, comme un JWT).
-    static func gateways(espace: DemoEspace, drapeaux: [String: Bool] = [:]) -> Gateways {
-        var gateways = DemoWorld.gateways(drapeaux: drapeaux)
+    /// Intégration de la vague B (lot 1, T6b) : `varianteProfil` (`JOLENE_DEMO_PROFIL`) est transmise au monde
+    /// soignant (`DemoWorld.gateways(drapeaux:varianteProfil:)`), nil par défaut.
+    static func gateways(espace: DemoEspace, drapeaux: [String: Bool] = [:],
+                         varianteProfil: VarianteProfilDemo? = nil) -> Gateways {
+        var gateways = DemoWorld.gateways(drapeaux: drapeaux, varianteProfil: varianteProfil)
         guard case let .etablissement(configuration) = espace else { return gateways }
         let auth = DemoAuthGateway(compte: { email in try DemoEspace.compte(email: email, configuration: configuration) })
         let identite: @Sendable () async -> String? = { try? await auth.restoreSession()?.id }

@@ -34,7 +34,12 @@ final class LinksRouterLot4Tests: XCTestCase {
         for (chemin, ecran) in cas {
             let d = try lien(chemin)
             XCTAssertEqual(d.route, .secondaire(ecran), chemin)
-            XCTAssertFalse(DestinationLien.ecranNatifLivre(d.route), "\(chemin) : aucun écran du lot 4 livré par T1")
+            XCTAssertEqual(DestinationLien.ecranNatifLivre(d.route), SecondairesLot4Tests.livres.contains(ecran),
+                           "\(chemin) : seuls les écrans des tranches livrées")
+            if SecondairesLot4Tests.livres.contains(ecran) {
+                XCTAssertEqual(d.destination, .secondaire(ecran), chemin)
+                continue
+            }
             switch ecran {
             case .swipe: XCTAssertEqual(d.destination, .explorer, chemin)
             case .score: XCTAssertEqual(d.destination, .monCompte, chemin)

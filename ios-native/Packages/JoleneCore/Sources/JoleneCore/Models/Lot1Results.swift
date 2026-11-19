@@ -49,6 +49,12 @@ public enum CandidatureOutcome: Equatable, Sendable {
     case refusee(code: String?, message: String, documentsRequisPour: String?)
     /// Le planning a changé : relire la mission et redemander une confirmation, jamais renvoyer.
     case planningAReconfirmer(code: String, message: String)
+    /// Mission sortie de l'état `OUVERTE` entre l'affichage et l'action (course réelle, revue B8 de T6a,
+    /// m1) : refus « Cette mission n'est plus disponible. » de `fn_confirmer_action_planning_v1` (verrou
+    /// `FOR UPDATE`, forme 3), sa variante sans point des délégués, ou « Cette mission vient d'être
+    /// attribuée. » de `fn_finaliser_attribution_mission` (`CandidatureRules.messagesMissionDejaAttribuee`).
+    /// Message serveur conservé verbatim ; l'écran relit la mission et ne renvoie jamais l'action.
+    case missionDejaAttribuee(message: String)
 
     /// Code posé par le client sur un refus du Code du travail levé en exception par un trigger
     /// de `missions` (`dec_verifier_plafond_48h`, `dec_verifier_repos_11h`,
@@ -56,6 +62,23 @@ public enum CandidatureOutcome: Equatable, Sendable {
     /// ou 23514, sans code métier. Distinct de tout code jsonb du serveur, il permet à l'écran
     /// d'afficher le texte légal à part (le web ouvre une modale, `estBlocageCodeTravail`).
     public static let codeRefusCodeDuTravail = "CODE_DU_TRAVAIL"
+}
+
+/// Parcours de candidature non porté en natif, refusé **avant tout envoi** (« un gap connu reste
+/// verrouillé », CLAUDE.md) : l'écran renvoie vers jolene.app. Aucun texte juridique ici.
+public enum CandidatureVerrou: Error, Equatable, Sendable, LocalizedError {
+    /// Acceptation d'une proposition dont le contrat n'est pas `LIBERAL` : le web fait d'abord compléter
+    /// l'attestation hebdomadaire des heures (`CarteProposition.tsx` l.154-256), non portée au lot 1
+    /// (`docs/mobile-swift/LOT1_PLAN.md` §3 T6b et §7 décision 2 amendée). `chemin` : page web de la proposition.
+    case renvoiWeb(chemin: String)
+
+    /// Page web où la proposition s'accepte (carte de l'Accueil, `DashboardSoignant.tsx`).
+    public static let cheminProposition = "/soignant/tableau-de-bord"
+    /// Message de l'erreur, pour les journaux et les tests (référence au plan exigée par « un gap connu reste verrouillé »).
+    /// Jamais affiché tel quel : l'écran montre `LibellesCandidature.propositionWeb` (revue B8 delta de #1150, m2).
+    public static let messageRenvoiWeb = "Pour accepter cette proposition, continuez sur jolene.app : cette étape n'est pas encore disponible dans l'application (docs/mobile-swift/LOT1_PLAN.md, T6b)."
+
+    public var errorDescription: String? { Self.messageRenvoiWeb }
 }
 
 /// Ligne `candidatures` relue sous RLS. Seuls `id` et `mission_id` conditionnent une action.
@@ -66,6 +89,10 @@ public struct CandidatureRecord: Codable, Equatable, Sendable, Identifiable {
     public var message: String?
     public var typeContratChoisi: String?
     public var creeLe: String?
+    /// Mission de la candidature relue sous RLS et enrichie (`MissionBusiness.enrich`) par Mes missions
+    /// (T5, `MesMissionsPort.candidatures`) ; `nil` hors de cette lecture. Hors `CodingKeys` : jamais
+    /// encodée ni décodée avec la ligne `candidatures`.
+    public var mission: Mission? = nil
 
     public init(id: String, missionId: String, statut: String?, message: String?, typeContratChoisi: String?, creeLe: String?) {
         self.id = id; self.missionId = missionId; self.statut = statut; self.message = message
@@ -92,6 +119,10 @@ public enum PresenceOutcome: Equatable, Sendable {
     /// `presence_confirmee_le` relu non nul (valeur serveur, jamais posée localement).
     case confirmee(presenceConfirmeeLe: String)
     case refusee(message: String)
+    /// Revue B8 delta de #1157 (M1), intégration de la vague B : `{success:true}` reçu, mais la relecture n'a pas montré
+    /// `presence_confirmee_le` (relecture vide, d'un autre soignant, ou en échec). Issue INCERTAINE, jamais un refus : la
+    /// RPC n'est pas idempotente, rien n'est renvoyé avant qu'une relecture ait conclu (PRINCIPES §4).
+    case envoyeeNonRelue(message: String)
 }
 
 // MARK: - Tableau de bord (T3)
@@ -102,56 +133,25 @@ public enum PresenceOutcome: Equatable, Sendable {
 
 // MARK: - Favoris (T4b)
 
-/// Ligne `missions_sauvegardees` (RLS `soignant_id = auth.uid()`).
-public struct MissionSauvegardee: Codable, Equatable, Sendable, Identifiable {
-    public var id: String
-    public var missionId: String
-    public var creeLe: String?
-
-    public init(id: String, missionId: String, creeLe: String?) { self.id = id; self.missionId = missionId; self.creeLe = creeLe }
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case missionId = "mission_id"
-        case creeLe = "cree_le"
-    }
-}
-
-/// Élément de `fn_mes_favoris_etablissements`. Seul `etablissement_id` conditionne une action.
-public struct EtablissementFavori: Codable, Equatable, Sendable, Identifiable {
-    public var id: String
-    public var nom: String?
-    public var ville: String?
-    public var logoUrl: String?
-    public var typeEtablissement: String?
-    public var nbMissionsOuvertes: Int?
-    public var creeLe: String?
-
-    public init(id: String, nom: String?, ville: String?, logoUrl: String?, typeEtablissement: String?,
-                nbMissionsOuvertes: Int?, creeLe: String?) {
-        self.id = id; self.nom = nom; self.ville = ville; self.logoUrl = logoUrl
-        self.typeEtablissement = typeEtablissement; self.nbMissionsOuvertes = nbMissionsOuvertes; self.creeLe = creeLe
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id = "etablissement_id"
-        case nom, ville
-        case logoUrl = "logo_url"
-        case typeEtablissement = "type_etablissement"
-        case nbMissionsOuvertes = "nb_missions_ouvertes"
-        case creeLe = "cree_le"
-    }
-}
+// `MissionSauvegardee` (avec la mission jointe) et `EtablissementFavori` : `Models/Favoris.swift`
+// (déplacés par T4b avec leur décodage tolérant ; les inits de T1 sont conservés).
 
 // MARK: - Mes missions (T5)
 
 public struct MissionsPage: Equatable, Sendable {
-    /// Pagination de `MissionsSoignant.tsx` (pages de 50).
+    /// Pagination de `MissionsSoignant.tsx` (pages de 50, lues de façon cumulative).
     public static let taille = 50
 
+    /// Missions des pages 0…`page`, ordre serveur (lecture cumulative du web, « M1 »).
     public var missions: [Mission]
+    /// Dernière page incluse.
     public var page: Int
+    /// Lecture pleine : « Charger plus de missions » est proposé (web l.623).
     public var aSuivre: Bool
+    /// Colonnes financières relues avec les missions passées (T5 : `net_estime`, `type_contrat_applique`,
+    /// `total_brut`, `net_a_payer`), par id de mission ; vide pour « À venir ». Valeurs serveur affichées
+    /// par `MesMissionsPresentation.montantPassee`, jamais recalculées.
+    public var finances: [String: MissionGainLigne] = [:]
 
     public init(missions: [Mission], page: Int, aSuivre: Bool) { self.missions = missions; self.page = page; self.aSuivre = aSuivre }
 }
@@ -192,6 +192,9 @@ public enum AuditAction: String, CaseIterable, Sendable {
     /// Lot 2 (T5b, revue B8 m5) : contestation d'une présence (parité `PanneauContestation.tsx` l.134-139), détails
     /// minimisés (longueur du motif, litige ; décision m2 de `DECISIONS_LOT2.md`).
     case presenceContestation = "PRESENCE_CONTESTATION"
+    /// Lot 1, T7 : annulation sans candidature (`fn_annuler_mission_soignant`), comme le web (`DetailMissionSoignant.tsx`
+    /// l.903-914) ; valeur du CHECK `journaux_audit_action_check`.
+    case missionAnnulation = "MISSION_ANNULATION"
 }
 
 /// Issue d'une écriture d'audit best-effort. `nonEnregistre` (`{success:false}`) n'est pas une

@@ -40,15 +40,15 @@ public enum SupabaseGateways {
             missions: SupabaseMissionsGateway(client: client, clock: clock, enrich: enrich),
             clock: clock,
             dashboard: SupabaseDashboardGateway(client: client, clock: clock),
-            candidature: UnwiredCandidaturePort(),      // T6a, T7
-            presence: UnwiredPresencePort(),            // T6c
-            favoris: UnwiredFavorisPort(),              // T4b
-            mesMissions: UnwiredMesMissionsPort(),      // T5
+            candidature: SupabaseCandidatureGateway(client: client), // T6a (annulations : T7)
+            presence: SupabasePresenceGateway(client: client), // T6c
+            favoris: SupabaseFavorisGateway(client: client),
+            mesMissions: SupabaseMesMissionsGateway(client: client, clock: clock, enrich: enrich),
             compte: SupabaseAccountGateway(client: client),
             audit: SupabaseAuditGateway(client: client),
             flags: SupabaseFlagsGateway(client: client),
             recovery: UnwiredRecoveryPort(),            // T10
-            justificatifs: UnwiredJustificatifStoragePort() // T7
+            justificatifs: SupabaseJustificatifStorage(client: client) // T7
         )
         câblerLot2(&gateways, client: client, clock: clock)
         câblerLot3(&gateways, client: client)

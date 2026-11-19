@@ -31,7 +31,14 @@ const LOT0 = ['fn_get_my_role', 'fn_etablissements_safe'];
 // Ordre et contenu attendus pour le lot 1 (blueprint §3 T0 + décision 5 : audit via
 // fn_audit_connexion / fn_maj_activite_soignant, et fn_ecrire_audit_safe pour MISSION_ASSIGNATION).
 // Chaque tranche qui câble une gateway passe sa RPC en `consommee` et l'ajoute à LOT1_CONSOMMEES.
-const LOT1_CONSOMMEES = ['fn_dashboard_soignant_complet']; // T3
+const LOT1_CONSOMMEES = [
+  'fn_dashboard_soignant_complet', // T3
+  'fn_toggle_favori_etablissement', 'fn_mes_favoris_etablissements', // T4b
+  'fn_modifier_favori_inscription', // T4b, décision 8 amendée le 18/11/2026 (revue B8, M2)
+  'fn_confirmer_action_planning_v1', 'fn_repondre_proposition', // T6a
+  'fn_confirmer_presence_mission', // T6c
+  'fn_annuler_candidature_soignant', 'fn_annuler_mission_soignant', 'fn_ecrire_audit_safe', // T7
+];
 // `fn_suggestions_missions_pour_soignant` en est sortie (revue B8 de T3) : reclassée lot 4.
 const LOT1 = [
   'fn_dashboard_soignant_complet',
@@ -41,6 +48,7 @@ const LOT1 = [
   'fn_repondre_proposition',
   'fn_toggle_favori_etablissement',
   'fn_mes_favoris_etablissements',
+  'fn_modifier_favori_inscription',
   'fn_audit_connexion',
   'fn_maj_activite_soignant',
   'fn_ecrire_audit_safe',
@@ -225,14 +233,25 @@ test('LOT1_PLAN.md versionné : §7 = décisions du 02/11/2026, plus aucune ques
   assert.ok(!plan.includes('## 7. Questions ouvertes'), 'la section « Questions ouvertes » subsiste');
   const decisions = decisionsDu(plan);
   assert.ok(!decisions.includes('\n## '), 'le §7 doit rester la dernière section du plan');
-  // Les 19 questions ouvertes du blueprint v2 + la question 20 (exception PRINCIPES §2), dans l'ordre.
+  // Les 19 questions ouvertes du blueprint v2 + la question 20 (exception PRINCIPES §2), dans l'ordre. Règle des ajouts
+  // postérieurs (intégration de la vague B, revue B8 delta de #1156) : une seule convention, l'amendement daté sous la
+  // décision qu'il précise ; aucun numéro nouveau.
   let from = 0;
   for (let i = 1; i <= 20; i++) {
     const at = decisions.slice(from).search(new RegExp(`\\n${i}\\. \\*\\*`));
     assert.ok(at >= 0, `décision ${i} absente du §7 (ou hors ordre)`);
     from += at + 1;
   }
-  assert.ok(!/\n21\. \*\*/.test(decisions), 'décision 21 inattendue');
+  assert.ok(!/\n21\. \*\*/.test(decisions), 'décision 21 inattendue : une précision est un amendement daté de sa décision mère');
+  // Les précisions du 18/11/2026 (T6a, T7, T4b) sont des amendements datés sous leur décision mère (2, 4 et 8).
+  const amendements = [...decisions.matchAll(/\n {4}- \*\*Amendement([^*]*)\*\*/g)].map(m => m[1]);
+  assert.ok(amendements.length >= 3, 'amendements des décisions 2, 4 et 8 attendus');
+  for (const a of amendements) assert.match(a, /^ du \d{2}\/\d{2}\/\d{4} — \S/, `amendement non daté au format « du JJ/MM/AAAA — objet » : ${a}`);
+  const sous = n => decisions.slice(decisions.search(new RegExp(`\\n${n}\\. \\*\\*`)), decisions.search(new RegExp(`\\n${n + 1}\\. \\*\\*`)));
+  assert.match(sous(2), /\*\*Amendement du 18\/11\/2026 — proposition non libérale\*\*/, 'amendement T6a sous la décision 2');
+  assert.match(sous(4), /\*\*Amendement du 18\/11\/2026 — motif « 🏥 Urgence médicale » non proposé en natif\*\*/,
+    'amendement T7 sous la décision 4 (annulation)');
+  assert.match(sous(8), /\*\*Amendement du 18\/11\/2026 — deux magasins de missions favorites\*\*/, 'amendement T4b sous la décision 8');
 });
 
 test('LOT1_PLAN.md : la recherche des décisions est bornée au §7 (le §6 numérote aussi 1. à 10.)', () => {

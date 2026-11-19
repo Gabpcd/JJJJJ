@@ -1,0 +1,422 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "etablissement_id": "demo-etab-1",
+  "missions": [
+    {
+      "id": "demo-etab-m10",
+      "etablissement_id": "demo-etab-1",
+      "intitule": "Démonstration · Médecin de garde",
+      "description": "Mission entièrement fictive de l’établissement de démonstration. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Urgences",
+      "profession_requise": "MEDECIN",
+      "debut_le": "2026-11-12T06:00:00.000Z",
+      "fin_le": "2026-11-12T18:00:00.000Z",
+      "nb_creneaux": 1,
+      "statut": "OUVERTE",
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "soignant_assigne_id": null,
+      "mode_attribution": "CANDIDATURE",
+      "type_contrat_recherche": "SALARIE",
+      "cree_le": "2026-11-01T08:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m09",
+      "etablissement_id": "demo-etab-1",
+      "intitule": "Démonstration · Tous profils",
+      "description": "Mission entièrement fictive de l’établissement de démonstration. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Consultations",
+      "profession_requise": "IDE",
+      "debut_le": "2026-11-11T06:00:00.000Z",
+      "fin_le": "2026-11-11T14:00:00.000Z",
+      "nb_creneaux": 1,
+      "statut": "OUVERTE",
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "soignant_assigne_id": null,
+      "mode_attribution": "CANDIDATURE",
+      "type_contrat_recherche": "TOUS",
+      "cree_le": "2026-10-31T08:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m03",
+      "etablissement_id": "demo-etab-1",
+      "intitule": "Démonstration · Planning à compléter",
+      "description": "Mission entièrement fictive de l’établissement de démonstration. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Médecine polyvalente",
+      "profession_requise": "IDE",
+      "debut_le": "2026-11-09T06:00:00.000Z",
+      "fin_le": "2026-11-09T14:00:00.000Z",
+      "nb_creneaux": 2,
+      "statut": "OUVERTE",
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "soignant_assigne_id": null,
+      "mode_attribution": "CANDIDATURE",
+      "type_contrat_recherche": "SALARIE",
+      "cree_le": "2026-10-31T08:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m02",
+      "etablissement_id": "demo-etab-1",
+      "intitule": "Démonstration · Renfort urgent",
+      "description": "Mission entièrement fictive de l’établissement de démonstration. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Soins de suite",
+      "profession_requise": "AS",
+      "debut_le": "2026-11-07T06:00:00.000Z",
+      "fin_le": "2026-11-07T14:00:00.000Z",
+      "nb_creneaux": 1,
+      "statut": "OUVERTE",
+      "est_urgente": true,
+      "niveau_urgence": 2,
+      "soignant_assigne_id": null,
+      "mode_attribution": "PREMIER_ARRIVE",
+      "type_contrat_recherche": "SALARIE",
+      "cree_le": "2026-11-01T08:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m01",
+      "etablissement_id": "demo-etab-1",
+      "intitule": "Démonstration · Candidatures à examiner",
+      "description": "Mission entièrement fictive de l’établissement de démonstration. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Médecine polyvalente",
+      "profession_requise": "IDE",
+      "debut_le": "2026-11-05T06:00:00.000Z",
+      "fin_le": "2026-11-05T18:00:00.000Z",
+      "nb_creneaux": 1,
+      "statut": "OUVERTE",
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "soignant_assigne_id": null,
+      "mode_attribution": "CANDIDATURE",
+      "type_contrat_recherche": "SALARIE",
+      "cree_le": "2026-10-30T08:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m05",
+      "etablissement_id": "demo-etab-1",
+      "intitule": "Démonstration · Contrat à signer",
+      "description": "Mission entièrement fictive de l’établissement de démonstration. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Soins de suite",
+      "profession_requise": "AS",
+      "debut_le": "2026-11-04T06:00:00.000Z",
+      "fin_le": "2026-11-04T14:00:00.000Z",
+      "nb_creneaux": 1,
+      "statut": "ASSIGNEE",
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "soignant_assigne_id": "demo-soignant-etab-2",
+      "mode_attribution": "CANDIDATURE",
+      "type_contrat_recherche": "SALARIE",
+      "cree_le": "2026-10-27T08:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m04",
+      "etablissement_id": "demo-etab-1",
+      "intitule": "Démonstration · Nuit en cours",
+      "description": "Mission entièrement fictive de l’établissement de démonstration. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Médecine polyvalente",
+      "profession_requise": "IDE",
+      "debut_le": "2026-11-01T23:00:00.000Z",
+      "fin_le": "2026-11-02T07:00:00.000Z",
+      "nb_creneaux": 1,
+      "statut": "ASSIGNEE",
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "soignant_assigne_id": "demo-soignant",
+      "mode_attribution": "CANDIDATURE",
+      "type_contrat_recherche": "SALARIE",
+      "cree_le": "2026-10-24T08:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m06",
+      "etablissement_id": "demo-etab-1",
+      "intitule": "Démonstration · Mission active",
+      "description": "Mission entièrement fictive de l’établissement de démonstration. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Soins de suite",
+      "profession_requise": "IDE",
+      "debut_le": "2026-11-01T06:00:00.000Z",
+      "fin_le": "2026-11-03T14:00:00.000Z",
+      "nb_creneaux": 2,
+      "statut": "EN_COURS",
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "soignant_assigne_id": "demo-soignant",
+      "mode_attribution": "CANDIDATURE",
+      "type_contrat_recherche": "SALARIE",
+      "cree_le": "2026-10-21T08:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m07",
+      "etablissement_id": "demo-etab-1",
+      "intitule": "Démonstration · Présence à valider",
+      "description": "Mission entièrement fictive de l’établissement de démonstration. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Médecine polyvalente",
+      "profession_requise": "IDE",
+      "debut_le": "2026-10-31T06:00:00.000Z",
+      "fin_le": "2026-10-31T14:00:00.000Z",
+      "nb_creneaux": 1,
+      "statut": "TERMINEE",
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "soignant_assigne_id": "demo-soignant",
+      "mode_attribution": "CANDIDATURE",
+      "type_contrat_recherche": "SALARIE",
+      "cree_le": "2026-10-19T08:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m08",
+      "etablissement_id": "demo-etab-1",
+      "intitule": "Démonstration · Présence hors zone",
+      "description": "Mission entièrement fictive de l’établissement de démonstration. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Soins de suite",
+      "profession_requise": "AS",
+      "debut_le": "2026-10-30T06:00:00.000Z",
+      "fin_le": "2026-10-30T14:00:00.000Z",
+      "nb_creneaux": 1,
+      "statut": "TERMINEE",
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "soignant_assigne_id": "demo-soignant-etab-2",
+      "mode_attribution": "CANDIDATURE",
+      "type_contrat_recherche": "SALARIE",
+      "cree_le": "2026-10-18T08:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m11",
+      "etablissement_id": "demo-etab-1",
+      "intitule": "Démonstration · Terminée sans pointage",
+      "description": "Mission entièrement fictive de l’établissement de démonstration. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Médecine polyvalente",
+      "profession_requise": "IDE",
+      "debut_le": "2026-10-27T06:00:00.000Z",
+      "fin_le": "2026-10-27T14:00:00.000Z",
+      "nb_creneaux": 1,
+      "statut": "TERMINEE",
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "soignant_assigne_id": "demo-soignant-etab-2",
+      "mode_attribution": "CANDIDATURE",
+      "type_contrat_recherche": "SALARIE",
+      "cree_le": "2026-10-13T08:00:00.000Z"
+    }
+  ],
+  "creneaux": [
+    {
+      "id": "demo-etab-m01-slot-1",
+      "mission_id": "demo-etab-m01",
+      "debut": "2026-11-05T06:00:00.000Z",
+      "fin": "2026-11-05T18:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-etab-m02-slot-1",
+      "mission_id": "demo-etab-m02",
+      "debut": "2026-11-07T06:00:00.000Z",
+      "fin": "2026-11-07T14:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-etab-m03-slot-1",
+      "mission_id": "demo-etab-m03",
+      "debut": "2026-11-09T06:00:00.000Z",
+      "fin": "2026-11-09T14:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-etab-m04-slot-1",
+      "mission_id": "demo-etab-m04",
+      "debut": "2026-11-01T23:00:00.000Z",
+      "fin": "2026-11-02T07:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-etab-m05-slot-1",
+      "mission_id": "demo-etab-m05",
+      "debut": "2026-11-04T06:00:00.000Z",
+      "fin": "2026-11-04T14:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-etab-m06-slot-1",
+      "mission_id": "demo-etab-m06",
+      "debut": "2026-11-01T06:00:00.000Z",
+      "fin": "2026-11-01T14:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-etab-m06-slot-2",
+      "mission_id": "demo-etab-m06",
+      "debut": "2026-11-03T06:00:00.000Z",
+      "fin": "2026-11-03T14:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-etab-m07-slot-1",
+      "mission_id": "demo-etab-m07",
+      "debut": "2026-10-31T06:00:00.000Z",
+      "fin": "2026-10-31T14:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-etab-m08-slot-1",
+      "mission_id": "demo-etab-m08",
+      "debut": "2026-10-30T06:00:00.000Z",
+      "fin": "2026-10-30T14:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-etab-m09-slot-1",
+      "mission_id": "demo-etab-m09",
+      "debut": "2026-11-11T06:00:00.000Z",
+      "fin": "2026-11-11T14:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-etab-m10-slot-1",
+      "mission_id": "demo-etab-m10",
+      "debut": "2026-11-12T06:00:00.000Z",
+      "fin": "2026-11-12T18:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    },
+    {
+      "id": "demo-etab-m11-slot-1",
+      "mission_id": "demo-etab-m11",
+      "debut": "2026-10-27T06:00:00.000Z",
+      "fin": "2026-10-27T14:00:00.000Z",
+      "est_pause": false,
+      "type_creneau": "PREVISIONNEL"
+    }
+  ],
+  "candidatures": [
+    {
+      "id": "demo-etab-m01-cand-1",
+      "mission_id": "demo-etab-m01",
+      "soignant_id": "demo-soignant",
+      "message": "Disponible sur l’ensemble du créneau, message fictif de démonstration.",
+      "statut": "EN_ATTENTE",
+      "cree_le": "2026-10-31T18:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m01-cand-2",
+      "mission_id": "demo-etab-m01",
+      "soignant_id": "demo-soignant-etab-2",
+      "message": null,
+      "statut": "EN_ATTENTE",
+      "cree_le": "2026-11-01T04:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m01-cand-3",
+      "mission_id": "demo-etab-m01",
+      "soignant_id": "demo-soignant-etab-3",
+      "message": null,
+      "statut": "EN_ATTENTE",
+      "cree_le": "2026-11-01T19:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m03-cand-1",
+      "mission_id": "demo-etab-m03",
+      "soignant_id": "demo-soignant-etab-2",
+      "message": null,
+      "statut": "EN_ATTENTE",
+      "cree_le": "2026-11-01T12:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m09-cand-1",
+      "mission_id": "demo-etab-m09",
+      "soignant_id": "demo-soignant",
+      "message": null,
+      "statut": "EN_ATTENTE",
+      "cree_le": "2026-11-01T15:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-m10-cand-1",
+      "mission_id": "demo-etab-m10",
+      "soignant_id": "demo-soignant-etab-2",
+      "message": null,
+      "statut": "EN_ATTENTE",
+      "cree_le": "2026-11-01T20:00:00.000Z"
+    }
+  ],
+  "soignants": [
+    {
+      "id": "demo-soignant",
+      "prenom": "Camille",
+      "nom": "Démo",
+      "nom_anonymise": false,
+      "profession": "IDE",
+      "telephone": null,
+      "numero_rpps": null,
+      "score_fiabilite": null,
+      "total_missions_terminees": 1
+    },
+    {
+      "id": "demo-soignant-etab-2",
+      "prenom": "Alex",
+      "nom": "Fictif",
+      "nom_anonymise": false,
+      "profession": "AS",
+      "telephone": null,
+      "numero_rpps": null,
+      "score_fiabilite": 74,
+      "total_missions_terminees": 6
+    },
+    {
+      "id": "demo-soignant-etab-3",
+      "prenom": "Lou",
+      "nom": "Exemple",
+      "nom_anonymise": false,
+      "profession": "AS",
+      "telephone": null,
+      "numero_rpps": null,
+      "score_fiabilite": null,
+      "total_missions_terminees": 0
+    }
+  ],
+  "candidats": [
+    {
+      "id": "demo-soignant",
+      "prenom": "Camille",
+      "nom": "D.",
+      "nom_anonymise": true,
+      "profession": "IDE",
+      "est_etudiant": false,
+      "score_fiabilite": null,
+      "total_missions_terminees": 1,
+      "tous_documents_valides": true
+    },
+    {
+      "id": "demo-soignant-etab-2",
+      "prenom": "Alex",
+      "nom": "F.",
+      "nom_anonymise": true,
+      "profession": "AS",
+      "est_etudiant": false,
+      "score_fiabilite": 74,
+      "total_missions_terminees": 6,
+      "tous_documents_valides": true
+    },
+    {
+      "id": "demo-soignant-etab-3",
+      "prenom": "Lou",
+      "nom": "E.",
+      "nom_anonymise": true,
+      "profession": "AS",
+      "est_etudiant": true,
+      "score_fiabilite": null,
+      "total_missions_terminees": 0,
+      "tous_documents_valides": false
+    }
+  ]
+}

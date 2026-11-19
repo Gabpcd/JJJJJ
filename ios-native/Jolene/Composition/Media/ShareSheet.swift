@@ -5,13 +5,23 @@ import UIKit
 /// sauvegarde). Présentée par UIKit au-dessus de la scène active (popover ancré au centre de la fenêtre sur iPad) ;
 /// `aLaFermeture` est appelé une seule fois, quand la feuille se ferme (partage fait ou annulé), pour effacer la
 /// copie. Jamais d'URL signée : seul le fichier local est partagé.
+///
+/// Lot 4, T1c (revue B8 de #1159, M1) : seule feuille de partage de l'app, réutilisée par T6 (lien et message de
+/// parrainage, `presenter(elements:)`) et T10 (copie de bulletin, `presenter(fichier:)`), qui y ajoutent leur double
+/// démo s'il leur faut ; `presenter(fichier:)` garde son comportement du lot 2.
 @MainActor
 enum ShareSheet {
     /// Présente la feuille pour `fichier` ; faux (et `aLaFermeture` non appelé) si aucune fenêtre ne peut la porter.
     @discardableResult
     static func presenter(fichier: URL, aLaFermeture: @escaping @MainActor @Sendable () -> Void) -> Bool {
+        presenter(elements: [fichier], aLaFermeture: aLaFermeture)
+    }
+
+    /// Présente la feuille pour `elements` (texte, lien, fichier local) ; mêmes règles que `presenter(fichier:)`.
+    @discardableResult
+    static func presenter(elements: [Any], aLaFermeture: @escaping @MainActor @Sendable () -> Void) -> Bool {
         guard let presentateur = presentateurCourant() else { return false }
-        let feuille = UIActivityViewController(activityItems: [fichier], applicationActivities: nil)
+        let feuille = UIActivityViewController(activityItems: elements, applicationActivities: nil)
         let fermeture = Fermeture()
         feuille.completionWithItemsHandler = { _, _, _, _ in
             MainActor.assumeIsolated {

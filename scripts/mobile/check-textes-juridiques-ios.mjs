@@ -138,6 +138,12 @@ export const DOSSIERS_LOT2 = [
   'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/RPC/RPCResponse+Etablissement.swift',
   'ios-native/Jolene/Screens/Etablissement',
   'ios-native/Jolene/Composition/EtabFeatureFlags.swift',
+  // Lot 1, T7 (revue B8 de #1156, m6) : fichiers de l'annulation, nommés un à un (textes vouvoyés et opérationnels
+  // hors LibellesWeb.swift ; écrans de la modale et de la confirmation). Les autres fichiers du lot 1 restent hors garde.
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Candidature/AnnulationRules.swift',
+  'ios-native/Packages/JoleneCore/Sources/JoleneCore/Candidature/AnnulationModel.swift',
+  'ios-native/Jolene/Screens/Candidature/AnnulationSection.swift',
+  'ios-native/Jolene/Screens/Candidature/AnnulationSheet.swift',
 ];
 
 /**

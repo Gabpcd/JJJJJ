@@ -101,8 +101,9 @@ final class EtabRouteTests: XCTestCase {
 
     func testOngletsPresentesEcransEmpilesNonLivresEnRenvoiWeb() throws {
         let canonique = URL(string: "https://jolene.app/etablissement/missions/m-1?source=push#candidatures")!
-        XCTAssertEqual(EtabRoute.missionDetail(id: "m-1").presentation(canonique: canonique), .renvoiWeb(canonique),
-                       "T5 non livrée : renvoi web, query et fragment conservés")
+        XCTAssertEqual(EtabRoute.missionDetail(id: "m-1").presentation(canonique: canonique),
+                       .naviguer(CibleEtablissement(onglet: .missions, destination: .detailMission(id: "m-1"))),
+                       "T5 livrée : le détail de mission est empilé sur l'onglet Missions")
         let onglets: [(EtabRoute, CibleEtablissement.Onglet)] = [
             (.accueil, .accueil), (.missions(statut: nil, periode: nil), .missions), (.presences(onglet: nil), .presences),
             (.messagerie(conversation: nil), .messages), (.monCompte, .compte),
@@ -128,9 +129,12 @@ final class EtabRouteTests: XCTestCase {
         XCTAssertEqual(EtabRoute.messagerie(conversation: "k").cible,
                        CibleEtablissement(onglet: .messages, destination: .conversation(id: "k")))
         XCTAssertNil(EtabRoute.contrats(statut: nil).cible, "point d'ancrage de la liste choisi par T10")
-        // Aucune destination livrée avant sa tranche (une ligne par tranche dans `EtabDestination.ecranLivre`).
-        for destination: EtabDestination in [.detailMission(id: "m"), .candidatures(missionId: "m"), .pointage(missionId: "m"),
-                                             .presencesMission(missionId: "m"), .publication, .contrat(id: "c"),
+        // Aucune destination livrée avant sa tranche (une ligne par tranche dans `EtabDestination.ecranLivre`) : T5 a
+        // livré le détail de mission.
+        XCTAssertTrue(EtabDestination.detailMission(id: "m").ecranLivre, "T5")
+        XCTAssertTrue(EtabDestination.candidatures(missionId: "m").ecranLivre, "T6")
+        XCTAssertTrue(EtabDestination.pointage(missionId: "m").ecranLivre, "T7")
+        for destination: EtabDestination in [.presencesMission(missionId: "m"), .publication, .contrat(id: "c"),
                                              .conversation(id: "k")] {
             XCTAssertFalse(destination.ecranLivre, destination.tranche)
         }

@@ -160,7 +160,9 @@ final class CodeRotatifRulesTests: XCTestCase {
                 XCTAssertNil(resultat.codeAffiche)
             }
         }
-        XCTAssertEqual(Regles.messageReservePointage, "Code réservé aux membres habilités au pointage")
+        // T7 : le web filtre désormais par permission (l.102-114) ; son texte remplace le texte natif du blueprint.
+        XCTAssertEqual(Regles.messageReservePointage,
+                       "Le code de pointage est réservé aux membres disposant du droit de pointage pour cet établissement.")
     }
 
     func testMissionHorsAssigneeEtEnCoursNAfficheRien() throws {
@@ -264,6 +266,10 @@ final class CodeRotatifRulesTests: XCTestCase {
             Regles.detailAucunCreneau,
             Regles.detailTousTermines,
             Regles.titreSegments,
+            Regles.messageReservePointage,
+            Regles.titreCodePointage,
+            Regles.messageChargement,
+            Regles.libelleReessayer,
             "`Le code sera affiché ${FENETRE_OUVERTURE_POINTAGE_MINUTES} minutes avant le créneau ${indexProchainCreneau + 1}/${planifies.length}, le ${formatParis(disponibilite.prochainCreneau.debut, 'EEEE d MMMM yyyy à HH:mm')}.`",
             "'EEEE d MMMM yyyy à HH:mm'",
             "\"dd/MM/yyyy HH'h'mm\"",

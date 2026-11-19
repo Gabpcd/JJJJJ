@@ -1,0 +1,61 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "contrats_signes": [
+    "demo-etab-m04",
+    "demo-etab-m06"
+  ],
+  "scenarios": [
+    {
+      "mission_id": "demo-etab-m04",
+      "etats": [
+        {
+          "lectures": 2,
+          "etat": {
+            "statut": "ASSIGNEE",
+            "prochain_type_scan": "OUVERTURE",
+            "segment_ouvert": false,
+            "segments": [],
+            "code_pointage_actif": "123456"
+          }
+        },
+        {
+          "lectures": null,
+          "etat": {
+            "statut": "EN_COURS",
+            "prochain_type_scan": "FERMETURE",
+            "segment_ouvert": true,
+            "segments": [
+              {
+                "id": "demo-etab-m04-seg-1",
+                "debut": "2026-11-01T23:58:00.000Z",
+                "fin": null
+              }
+            ],
+            "code_pointage_actif": "100002"
+          }
+        }
+      ]
+    },
+    {
+      "mission_id": "demo-etab-m06",
+      "etats": [
+        {
+          "lectures": null,
+          "etat": {
+            "statut": "EN_COURS",
+            "prochain_type_scan": "OUVERTURE",
+            "segment_ouvert": false,
+            "segments": [
+              {
+                "id": "demo-etab-m06-seg-1",
+                "debut": "2026-11-01T06:02:00.000Z",
+                "fin": "2026-11-01T14:01:00.000Z"
+              }
+            ],
+            "code_pointage_actif": "654321"
+          }
+        }
+      ]
+    }
+  ]
+}

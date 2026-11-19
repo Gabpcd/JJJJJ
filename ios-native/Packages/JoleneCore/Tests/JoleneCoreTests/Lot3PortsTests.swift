@@ -113,7 +113,8 @@ final class Lot3PortsTests: XCTestCase {
         XCTAssertEqual(AuditAction.allCases.map(\.rawValue),
                        ["MISSION_ASSIGNATION", "RGPD_CONSENTEMENT_DONNE",
                         "DONNEES_PERSO_CONSULTATION", "DONNEES_PERSO_MODIFICATION", "RGPD_EXPORT_DONNEES",
-                        "PRESENCE_CONTESTATION"]) // L2-T5b (revue B8, m5)
+                        "PRESENCE_CONTESTATION", // L2-T5b (revue B8, m5)
+                        "MISSION_ANNULATION"]) // lot 1, T7
         XCTAssertEqual(AuditAction.donneesPersoConsultation.rawValue, "DONNEES_PERSO_CONSULTATION")
         XCTAssertEqual(AuditAction.donneesPersoModification.rawValue, "DONNEES_PERSO_MODIFICATION")
         XCTAssertEqual(AuditAction.rgpdExportDonnees.rawValue, "RGPD_EXPORT_DONNEES")

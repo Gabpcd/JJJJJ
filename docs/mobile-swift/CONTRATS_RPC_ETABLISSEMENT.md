@@ -44,11 +44,11 @@ Règles de l'espace établissement (`LOT5_PLAN.md` §2.2-§2.8) :
 |---|---|---|---|---|---|---|
 | `fn_mes_permissions_etab` | consommée (T1) | 5 (T1, T2) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | aucune |
 | `fn_mon_etablissement_complet` | consommée (T1) | 5 (T1, T2, T12) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | aucune |
-| `fn_stats_dashboard_etablissement` | à venir | 5 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | aucune |
-| `fn_soignant_pour_etablissement` | à venir | 5 (T5) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | aucune |
-| `fn_lire_candidatures_mission_habilitee` | à venir | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée | `42501` |
-| `fn_traiter_candidature_planning_v1` | à venir | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente | `P0001` ×3, `42501` ×3 (RBAC) |
-| `fn_contrat_signe_pour_pointage` | à venir | 5 (T7) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | absente | `42501` |
+| `fn_stats_dashboard_etablissement` | consommée (T4) | 5 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | aucune |
+| `fn_soignant_pour_etablissement` | consommée (T5) | 5 (T5) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | aucune |
+| `fn_lire_candidatures_mission_habilitee` | consommée (T6) | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée | `42501` |
+| `fn_traiter_candidature_planning_v1` | consommée (T6) | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente | `P0001` ×3, `42501` ×3 (RBAC) |
+| `fn_contrat_signe_pour_pointage` | consommée (T7) | 5 (T7) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | absente | `42501` |
 | `fn_valider_presence` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501`, `23503`, `P0001` ×4 |
 | `fn_valider_presences_lot` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501`, `23503`, `P0001` ×4 |
 | `fn_contester_presence` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501` |
@@ -58,7 +58,7 @@ Règles de l'espace établissement (`LOT5_PLAN.md` §2.2-§2.8) :
 | `fn_obtenir_conversation` | à venir | 5 (T11, port du lot 4) — partagée si le lot 4 la suit | MIXTE_TENANT_ADMIN | authenticated | déclarée | `28000`, `22023`, `42501` |
 | `fn_get_my_role` | consommée lot 0 — aussi établissement | 0 (lot 5 T2) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | — (fiche soignant) |
 | `fn_audit_connexion` | à venir — aussi établissement | 1 (lot 5 T2) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | — (fiche soignant) |
-| `fn_ecrire_audit_safe` | à venir — aussi établissement | 1 (lot 5 T4) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | — (fiche soignant) |
+| `fn_ecrire_audit_safe` | consommée lot 1 — aussi établissement (T4) | 1 (lot 5 T4) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | — (fiche soignant) |
 | `fn_param_bool` | à venir — aussi établissement | 1 (lot 5 T2) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente | — (fiche soignant) |
 | `fn_etat_pointage_mission` | à venir — aussi établissement | 2 (lot 5 T7, T8) | MIXTE_TENANT_ADMIN | authenticated, service_role | absente | — (fiche soignant) |
 | `fn_envoyer_otp_signature` | à venir — aussi établissement | 2 (lot 5 T10) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | — (fiche soignant) |
@@ -160,8 +160,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_mon_etablissement_complet"() RETURNS "js
 
 ## fn_stats_dashboard_etablissement
 
-- **Statut natif** : à venir (lot 5, T4 Accueil, actions prioritaires).
-- **Usage** : compteurs de l'Accueil, sans graphique ni montant (D15).
+- **Statut natif** : consommée (lot 5, T4 : `SupabaseEtabDashboardGateway.stats`, port `EtabDashboardPort` ; Accueil,
+  actions prioritaires).
+- **Usage** : compteurs de l'Accueil, sans graphique ni montant (D15). Le planning à venir de l'Accueil est lu à côté
+  en PostgREST (`missions` OUVERTE/ASSIGNEE/EN_COURS sur 31 jours, colonnes sans montant ni soignant, puis
+  `mission_creneaux` PREVISIONNEL hors pause par `MissionSlotPager`) ; son échec rend l'Accueil partiel, jamais en
+  échec.
 - **Signature SQL** (`supabase/schema/public.sql` l.57610) :
 
 ```sql
@@ -178,19 +182,22 @@ CREATE OR REPLACE FUNCTION "public"."fn_stats_dashboard_etablissement"() RETURNS
   `missions_en_cours`, `missions_terminees`, `missions_terminees_ce_mois`, `soignants_ce_mois`,
   `commissions_cumulees`, `commissions_impayees`, `nb_factures_impayees`, `pool_urgence_count`, `messages_non_lus`,
   `missions_a_payer`, `litiges_ouverts`, `candidatures_en_attente`, `candidatures_recentes`,
-  `missions_assignees_detail`. Décodées par T4 (tolérantes, NULL toléré) : `candidatures_en_attente`,
-  `missions_assignees_detail[]` (`mission_id`, `intitule`, `debut_le`, `fin_le`, `soignant_nom` de la mission
-  assignée), `messages_non_lus`, `litiges_ouverts`, `nb_factures_impayees` (compteur seul, sous `lecture_paiement` ∨
-  `paiement`), `pool_urgence_count`, `a_deja_publie`. **Jamais décodées** : `commissions_cumulees`,
-  `commissions_impayees` (montants) et `candidatures_recentes` (noms complets servis à POINTAGE_ONLY, correction 4) ;
-  « présences à valider » et « évaluations » n'ont pas de clé (correction 20).
+  `missions_assignees_detail`. Décodées par T4 (`EtabDashboardStats.clesDecodees`, tolérantes : absente, nulle, négative ou
+  d'un autre type → nil) : `candidatures_en_attente`, `messages_non_lus`, `litiges_ouverts`, `nb_factures_impayees`
+  (compteur seul, sous `lecture_paiement` ∨ `paiement`), `a_deja_publie`. **Jamais décodées** : `commissions_cumulees`,
+  `commissions_impayees` (montants), `candidatures_recentes` et `missions_assignees_detail` (noms complets de
+  soignants, correction 4), et les compteurs que l'Accueil n'affiche pas (`pool_urgence_count`, `missions_*`,
+  `soignants_ce_mois`, `total_missions`) ; « présences à valider » et « évaluations » n'ont pas de clé (correction 20).
 - **Exceptions** : aucune levée par le corps (liste blanche vide).
 - **Relecture** : lecture seule ; rechargée si le dernier chargement date de plus de 60 s (parité `staleTime` web).
 
 ## fn_soignant_pour_etablissement
 
-- **Statut natif** : à venir (lot 5, T5 détail mission, soignant assigné).
+- **Statut natif** : consommée (lot 5, T5 : `SupabaseEtabMissionsGateway.soignant`, soignant assigné du détail de
+  mission ; uuid canonique exigé avant réseau, identifiant relu comparé à la demande).
 - **Usage** : profil d'un soignant vu par l'établissement courant, noms à l'initiale hors relation contractuelle.
+  Clés décodées (`SoignantPourEtab.clesDecodees`) : `id`, `prenom`, `nom`, `nom_anonymise`, `profession`, `telephone`,
+  `numero_rpps`, `score_fiabilite`, `total_missions_terminees`.
 - **Signature SQL** (`supabase/schema/public.sql` l.57155) :
 
 ```sql
@@ -213,7 +220,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_soignant_pour_etablissement"("p_soignant
 
 ## fn_lire_candidatures_mission_habilitee
 
-- **Statut natif** : à venir (lot 5, T6).
+- **Statut natif** : consommée (lot 5, T6 : `SupabaseEtabCandidaturesGateway.lecture`, uuid canonique exigé avant
+  réseau ; mission relue comparée à la demande et à l'établissement confirmé ; 42501 de la liste blanche →
+  `RefusAccesEtablissement`, jamais « session expirée » ; décodage tolérant
+  `LectureCandidaturesHabilitee+Decodage.swift`, jamais `note_moyenne`, `nb_evaluations`, `internat`, `type_exercice`,
+  `etudiant_details`, `specialite_medicale`).
 - **Usage** : lecture habilitée des candidatures d'une mission (un appel, cohorte TEST filtrée, adhésion
   vérifiée, noms à l'initiale) ; écart assumé et plus strict que le web monté (`DetailMission.tsx` →
   `ListeCandidatures` en PostgREST, correction 15), consigné dans `PARITE_ETABLISSEMENT.md`.
@@ -244,7 +255,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_lire_candidatures_mission_habilitee"("p_
 
 ## fn_traiter_candidature_planning_v1
 
-- **Statut natif** : à venir (lot 5, T6 ; hors B9 sous condition D25).
+- **Statut natif** : consommée (lot 5, T6 : `SupabaseEtabCandidaturesGateway.accepter` / `.refuser` ; hors B9 sous
+  condition D25). Avant toute acceptation, la candidature puis sa mission (`id, etablissement_id,
+  type_contrat_recherche, profession_requise`, établissement confirmé) sont relues sous RLS : hors `SALARIE` ou
+  `MEDECIN` → `.renvoiWeb`, aucun appel RPC ; ligne illisible → aucun envoi (fail-closed). Issue jamais tenue pour
+  confirmée : `CandidaturesEtabModel` relit la lecture habilitée (`ACCEPTEE` + `ASSIGNEE`, ou `REFUSEE`).
 - **Usage** : acceptation (missions `SALARIE` hors `MEDECIN` seulement, refus local avant réseau sinon, D25) et
   refus d'une candidature. Acceptation : `p_decision 'ACCEPTEE'`, `p_creneaux_confirmes` = **chaînes `debut`/`fin`
   relues telles quelles** (D26), `p_motif` NULL. Refus : `p_decision 'REFUSEE'`, `p_creneaux_confirmes` NULL,
@@ -301,7 +316,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_cand
 
 ## fn_contrat_signe_pour_pointage
 
-- **Statut natif** : à venir (lot 5, T7 code rotatif).
+- **Statut natif** : consommée (lot 5, T7 : `SupabaseEtabPointageGateway.contratSigne`, uuid canonique exigé avant
+  réseau ; réponse booléenne exigée, toute autre forme → « État de signature indisponible. » comme le web l.158 ;
+  appelée seulement avec la permission `pointage`, relue avec le planning à l'ouverture puis toutes les 60 s).
 - **Usage** : savoir si le contrat de la mission est `SIGNE_COMPLET` sans accès au contrat (POINTAGE_ONLY) ; relu
   toutes les 60 s par l'écran de pointage.
 - **Signature SQL** (`supabase/schema/public.sql` l.25865) :
@@ -549,7 +566,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_conversation"("p_autre_id" "uuid
 - **Usage établissement** (T4, D19) : `DONNEES_PERSO_CONSULTATION` à l'ouverture de l'Accueil comme le web
   (`p_type_acteur 'ADMIN_ETABLISSEMENT'`, `p_type_ressource 'etablissement'`, `p_id_ressource = user.id`,
   `p_details {page}`), best-effort, par un port dédié (`EtabAuditPort`) ; aucun doublon des audits déjà écrits par le
-  serveur (`PRESENCE_VALIDATION`, `PRESENCE_CONTESTATION`, `PRESENCE_VALIDATION_LOT`).
+  serveur (`PRESENCE_VALIDATION`, `PRESENCE_CONTESTATION`, `PRESENCE_VALIDATION_LOT`). Câblé en T4 : écrit par
+  `EtabAccueilModel` après chaque lecture réussie de l'Accueil (`SupabaseEtabAuditGateway` de T1, `DemoEtabAuditGateway`
+  en démo), jamais attendu par l'écran ni affiché.
 
 ## fn_param_bool
 
@@ -561,9 +580,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_conversation"("p_autre_id" "uuid
 
 - **Fiche principale** : `CONTRATS_RPC_SOIGNANT.md` (lot 2).
 - **Usage établissement** (T7 polling 5 s écran visible et scène active, D23 ; T8 relecture `segment_ouvert`) :
-  `code_pointage_actif` est servi à **tout** membre (`v_is_etab`, l.35165, l.35188, correction 4) : il n'est affiché
-  que si `permissions.pointage` ; `{error:'Mission introuvable'|'Accès interdit'}` → erreur. B5b (B9) propose de
-  le restreindre côté serveur.
+  consommée par `SupabaseEtabPointageGateway.etat` (T7). Le dump re-baseliné ne sert plus `code_pointage_actif`
+  qu'aux membres habilités au pointage (`v_peut_voir_code`, l.35609-35612 : la restriction B5b est en place côté
+  serveur) ; le natif garde en plus le filtre `permissions.pointage` (aucune lecture sans elle, comme le web
+  l.102-115). `{error:'Mission introuvable'|'Accès interdit'}` (l.35596, l.35605) → bloc « Code de pointage
+  indisponible » avec le message serveur verbatim, aucune autre clé retenue ; décodage en liste blanche
+  (`CodeRotatifRules.Etat`), aucune clé de la réponse du scanner lue.
 
 ## fn_envoyer_otp_signature
 

@@ -24,6 +24,8 @@ public enum JoleneRoute: Equatable, Sendable {
     case accueil
     case explorer
     case missions
+    /// `/soignant/mes-favoris` (lot 1, T4b) : écran « Mes favoris », poussé dans l'onglet Explorer.
+    case favoris
     case missionDetail(id: String)
     case serieDetail(id: String)
     /// Onglet Revenus (`/soignant/mes-gains` et ses alias) ; section issue de `?tab=` ou de l'alias.

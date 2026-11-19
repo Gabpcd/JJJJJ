@@ -32,6 +32,7 @@ jeton, mot de passe ni identifiant de compte réel n'est collé ici (empreinte `
 | Écran laissé 10 min en plein écran, sans toucher | l'écran ne se met pas en veille | — |
 | Retour à l'accueil iOS puis reprise | veille rétablie en arrière-plan ; polling 5 s arrêté puis repris au retour | — |
 | Fermeture du plein écran | veille rétablie (`IdleTimerController` à compteur) | — |
+| Feuille posée par-dessus l'écran du code (tap sur une notification push qui ouvre un renvoi web), laissée ouverte 10 min | **écart connu** (`DECISIONS_LOT5.md`, intégration de la vague C, précision 8) : la veille reste coupée tant que la feuille couvre le code, car `onDisappear` n'est pas appelé ; elle est rétablie à la fermeture de l'écran, en arrière-plan ou quand le code est masqué. Consigner le comportement observé | — |
 | Membre LECTURE_SEULE sur la même mission | `etab-pointage-reserve`, aucun code affiché | — |
 
 ## 2. Liens (T2b)

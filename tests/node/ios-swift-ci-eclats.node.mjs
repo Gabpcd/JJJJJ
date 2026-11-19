@@ -20,14 +20,15 @@ const WORKFLOW = '.github/workflows/ios-swift-ci.yml';
 const DOSSIER_UI = 'ios-native/JoleneUITests';
 const yml = read(WORKFLOW);
 
-/** Corps du job `ui:` (jusqu'au job suivant, indentation de deux espaces). */
-function jobUi() {
-  const debut = yml.indexOf('\n  ui:\n');
-  assert.ok(debut >= 0, `job ui absent de ${WORKFLOW}`);
+/** Corps d'un job (jusqu'au job suivant, indentation de deux espaces) : `ui`, ou `ui-lot1` depuis la vague B du lot 1. */
+function jobNomme(nom) {
+  const debut = yml.indexOf(`\n  ${nom}:\n`);
+  assert.ok(debut >= 0, `job ${nom} absent de ${WORKFLOW}`);
   const suite = yml.slice(debut + 1);
-  const fin = suite.slice(5).search(/\n {2}[A-Za-z0-9_-]+:\n/);
-  return fin < 0 ? suite : suite.slice(0, fin + 5);
+  const fin = suite.slice(nom.length + 4).search(/\n {2}[A-Za-z0-9_-]+:\n/);
+  return fin < 0 ? suite : suite.slice(0, fin + nom.length + 4);
 }
+const jobUi = () => jobNomme('ui');
 
 /** Étapes du job `ui` : nom, identifiant, condition, délai et corps (texte brut de l'étape). */
 function etapes(job) {
@@ -96,6 +97,18 @@ const classes = classesUi();
 const socle = parEtape.find(e => e.nom === 'socle');
 const domaines = parEtape.filter(e => e.nom !== 'socle');
 const classesDe = e => e.seulement.map(c => c.replace(/^JoleneUITests\//, ''));
+// Intégration de la vague B du lot 1 (18/11/2026) : job `ui-lot1` (« UI lot 1 — <format> »), même mécanique que `ui`,
+// pour les XCUITest du lot 1 ; le socle du job `ui` les saute.
+const jobLot1 = jobNomme('ui-lot1');
+const listeLot1 = etapes(jobLot1);
+const parEtapeLot1 = eclatsDesEtapes(listeLot1);
+const parResumeLot1 = eclatsDuResume(jobLot1);
+const ECLATS_LOT1 = new Map([
+  ['lot1-missions', ['DemoMesMissionsTests', 'DemoCandidatureTests', 'DemoConfirmationPresenceTests', 'DemoAnnulationTests']],
+  ['lot1-accueil-explorer', ['DemoAccueilTests', 'DemoExplorerTests', 'DemoFavorisTests']],
+  // Lot 4 (L4-T4) : première tranche du lot 4 à livrer un XCUITest ; ses classes démo rejoignent cet éclat du job (D19).
+  ['lot4', ['DemoFiltresTests']],
+]);
 
 // À l'intégration du 9 novembre 2026, l'éclat « lot2 » n'existe plus : L2-T4b l'a découpé par domaine (« presences »,
 // « pointage », « documents », « contrats »). La garde exige donc que les deux classes des contrats ne tournent dans
@@ -116,7 +129,13 @@ test('décision 22 : un éclat « contrats » porte DemoContratsTests et DemoSig
 // Revue B8 de #1147 (m5) : les dix XCUITest de l'espace établissement (lot 5) ne tournent pas dans le socle (14 / 17 /
 // 22 min au run 44204757942) ; plafond de onze éclats atteint, ils sont répartis dans deux éclats légers.
 test('lot 5 : session et liens établissement hors du socle, chacun dans son éclat léger', () => {
-  const attendus = new Map([['DemoEtabSessionTests', 'lot3-profil-photo'], ['DemoEtabLiensTests', 'presences']]);
+  // T4 : l'Accueil établissement rejoint l'éclat de la session établissement (aucun douzième éclat).
+  // L5-T5 : DemoEtabMissionsTests rejoint « presences » (place laissée par DemoFavorisTests, aucun douzième éclat).
+  // L5-T6 : DemoEtabCandidaturesTests (deux tests) rejoint aussi « presences ».
+  // L5-T7 : DemoEtabPointageTests (deux tests) rejoint « lot3-profil-photo », avec la session établissement.
+  const attendus = new Map([['DemoEtabSessionTests', 'lot3-profil-photo'], ['DemoEtabLiensTests', 'presences'],
+    ['DemoEtabAccueilTests', 'lot3-profil-photo'], ['DemoEtabMissionsTests', 'presences'],
+    ['DemoEtabCandidaturesTests', 'presences'], ['DemoEtabPointageTests', 'lot3-profil-photo']]);
   for (const [classe, eclat] of attendus) {
     assert.ok(classes.includes(classe), `${classe} n est pas reconnue comme classe XCUITest`);
     const ou = domaines.filter(e => classesDe(e).includes(classe)).map(e => e.nom);
@@ -266,9 +285,12 @@ test('décision 22 : chaque XCUITest tourne dans un seul éclat, les classes STA
   const staging = classes.filter(c => c.startsWith('Staging'));
   assert.ok(staging.includes('StagingConnexionTests'), 'StagingConnexionTests attendue');
   const vues = new Map();
-  for (const e of domaines) {
+  // Vague B du lot 1 : les éclats du job `ui-lot1` comptent aussi (une classe ne tourne qu'une fois dans tout le workflow).
+  const resumes = [...parResume, ...parResumeLot1];
+  assert.equal(new Set(resumes.map(r => r.nom)).size, resumes.length, 'nom d éclat en double entre les jobs ui et ui-lot1');
+  for (const e of [...domaines, ...parEtapeLot1]) {
     assert.ok(e.seulement.length >= 1 && e.sauf.length === 0, `éclat ${e.nom} : -only-testing seulement`);
-    const resume = parResume.find(r => r.nom === e.nom);
+    const resume = resumes.find(r => r.nom === e.nom);
     assert.deepEqual([...resume.classes].sort(), [...classesDe(e)].sort(), `éclat ${e.nom} : classes exigées par le résumé ≠ -only-testing`);
     for (const c of e.seulement) {
       assert.match(c, /^JoleneUITests\/Demo\w+Tests$/, `éclat ${e.nom} : ${c} n est pas une classe démo`);
@@ -281,6 +303,96 @@ test('décision 22 : chaque XCUITest tourne dans un seul éclat, les classes STA
   const attendu = [...staging, ...vues.keys()].map(c => `JoleneUITests/${c}`).sort();
   assert.deepEqual([...socle.sauf].sort(), attendu, 'le socle doit exclure les classes STAGING et celles des autres éclats, rien d autre');
   assert.deepEqual(parResume.find(r => r.nom === 'socle').classes, [], 'le socle n exige aucune classe nommée');
+});
+
+// Intégration de la vague B du lot 1 (18/11/2026) : le job `ui` a atteint son plafond de onze éclats et son socle frôlait
+// 20 min (22,4 min en iPad paysage au run 44204757942). Les XCUITest du lot 1 (Accueil, Explorer, favoris, Mes missions,
+// candidature, confirmation de présence, annulation) tournent dans un job par format, `ui-lot1`, jamais dans le socle.
+test('lot 1 : job « UI lot 1 — <format> », ses XCUITest dans leurs éclats, sautés par le socle et absents du job ui', () => {
+  assert.match(jobLot1, /\n {4}name: UI lot 1 — \$\{\{ matrix\.format \}\}\n/, 'nom du job ui-lot1');
+  const matrice = j => /\n {6}matrix:\n([\s\S]*?)\n {4}env:\n/.exec(j)?.[1];
+  assert.ok(matrice(jobLot1), 'matrice du job ui-lot1 absente');
+  assert.equal(matrice(jobLot1), matrice(job), 'mêmes formats que le job ui (iphone, ipad-portrait, ipad-landscape)');
+  assert.deepEqual(parEtapeLot1.map(e => e.nom), [...ECLATS_LOT1.keys()], 'éclats du job ui-lot1');
+  for (const [eclat, attendues] of ECLATS_LOT1) {
+    const e = parEtapeLot1.find(x => x.nom === eclat);
+    assert.deepEqual(classesDe(e), attendues, `éclat ${eclat} : classes -only-testing`);
+    for (const classe of attendues) {
+      assert.ok(classes.includes(classe), `${classe} n est pas reconnue comme classe XCUITest`);
+      assert.ok(socle.sauf.includes(`JoleneUITests/${classe}`), `${classe} : non sautée par le socle du job ui`);
+      assert.equal(domaines.filter(d => classesDe(d).includes(classe)).length, 0, `${classe} : aussi dans un éclat du job ui`);
+      assert.equal(yml.split(`-only-testing:JoleneUITests/${classe} \\`).length - 1, 1, `${classe} : un seul -only-testing du workflow`);
+    }
+  }
+  // Aucun JoleneCoreTests ni JoleneDesignTests ici : ils restent dans le socle du job ui.
+  for (const e of parEtapeLot1) assert.ok(e.seulement.every(c => /^JoleneUITests\/Demo\w+Tests$/.test(c)), `éclat ${e.nom} : classes démo seulement`);
+});
+
+test('décision 22 (job ui-lot1) : chaque éclat est déclaré par son étape, le résumé, la boucle xcresult, le relevé et l artefact', () => {
+  const noms = parEtapeLot1.map(e => e.nom);
+  assert.deepEqual(parResumeLot1.map(e => e.nom), noms, 'tableau `eclats` du résumé ≠ étapes');
+  for (const [eclat, attendues] of ECLATS_LOT1) {
+    assert.deepEqual(parResumeLot1.find(r => r.nom === eclat).classes, attendues, `éclat ${eclat} : classes exigées par le résumé`);
+  }
+  const boucle = /for eclat in ([a-z0-9 -]+); do/.exec(jobLot1)?.[1].trim().split(/\s+/);
+  assert.deepEqual(boucle, noms, 'boucle xcresult du résumé ≠ étapes');
+  const releve = /\n {10}ECLATS: ([a-z0-9 -]+)\n/.exec(jobLot1)?.[1].split(' ');
+  assert.deepEqual(releve, noms, 'relevé des attentes bloquées ≠ étapes');
+  const resume = listeLot1.find(e => e.nom.startsWith('Résumé xcresult'));
+  const artefact = listeLot1.find(e => e.nom.startsWith('Conserver xcresult'));
+  assert.ok(resume && artefact, 'résumé ou artefact absent du job ui-lot1');
+  for (const e of parEtapeLot1) {
+    assert.equal(e.resultat, e.nom, `éclat ${e.nom} : bundle xcresult mal nommé`);
+    assert.equal(e.journal, e.nom, `éclat ${e.nom} : journal mal nommé`);
+    assert.ok(e.id, `éclat ${e.nom} : étape sans id`);
+    assert.equal(e.delai, 30, `éclat ${e.nom} : délai de l étape ≠ 30 min`);
+    assert.equal(e.si, "always() && steps.build.outcome == 'success'", `éclat ${e.nom} : doit tourner même si une étape précédente échoue`);
+    const code = parResumeLot1.find(r => r.nom === e.nom).code;
+    assert.ok(resume.texte.includes(`${code}: \${{ steps.${e.id}.outputs.code }}`), `éclat ${e.nom} : ${code} non relié à steps.${e.id}`);
+    assert.ok(artefact.texte.includes(`ui-\${{ matrix.format }}-${e.nom}.xcresult`), `éclat ${e.nom} : xcresult non conservé`);
+  }
+  // Résumé : aucun succès fabriqué, chaque éclat vert, chaque classe démarrée, captures dans l'orientation attendue.
+  for (const extrait of ['e.code === "0" && s.result === "Passed" && t >= 1 && f === 0 && k === 0 && p === t && absentes.length === 0',
+    'const ok = eclatsKo.length === 0 && total >= 1 && failed === 0 && skipped === 0 && passed === total && mauvaises.length === 0 && manquantes.length === 0;',
+    'const attendus = ["JoleneUITests"];', 'readPngDimensions']) {
+    assert.ok(resume.texte.includes(extrait), `résumé du job ui-lot1 : « ${extrait} » absent`);
+  }
+  // Noms d'artefacts propres au job : un nom d'artefact est unique dans un run (upload-artifact v4).
+  assert.match(artefact.texte, /\n {10}name: ios-swift-ui-lot1-\$\{\{ matrix\.format \}\}-/, 'artefact du job ui-lot1 nommé ios-swift-ui-lot1-<format>-<sha>');
+  assert.match(jobLot1, /\n {6}JOLENE_UI_OUTPUT: \$\{\{ github\.workspace \}\}\/ios-native\/test-results\/lot1-\$\{\{ matrix\.format \}\}\n/,
+    'sortie du job ui-lot1 dans test-results/lot1-<format>');
+  assert.ok(artefact.texte.includes('            ios-native/test-results/lot1-${{ matrix.format }}/\n'), 'sortie du job ui-lot1 conservée');
+  assert.match(jobLot1, /\n {10}name: package-resolved-lot1-\$\{\{ matrix\.format \}\}-/, 'diagnostic Package.resolved du job ui-lot1 nommé à part');
+});
+
+test('job ui-lot1 : même préparation que ui (simulateur, build-for-testing une fois, Package.resolved vérifié), plafond tenu', () => {
+  const etape = (l, debut) => l.find(e => e.nom.startsWith(debut));
+  for (const debut of ['Sélectionner Xcode 26.4.1 sans repli', 'Choisir le simulateur iOS 26.2', 'Cache des paquets SPM clonés par xcodebuild',
+    'build-for-testing (scheme Jolene, sans signature) — une fois par job']) {
+    const a = etape(liste, debut), b = etape(listeLot1, debut);
+    assert.ok(a && b, `étape « ${debut} » absente d un des deux jobs`);
+    assert.equal(b.texte, a.texte, `étape « ${debut} » : le job ui-lot1 reprend celle du job ui à l identique`);
+  }
+  assert.equal(listeLot1.filter(e => e.texte.includes('xcodebuild build-for-testing')).length, 1, 'un seul build-for-testing par job');
+  const iBuild = listeLot1.findIndex(e => e.id === 'build');
+  assert.equal(listeLot1[iBuild + 1]?.id, 'package_resolved', 'la vérification du Package.resolved suit le build');
+  assert.ok(listeLot1[iBuild + 1].texte.includes(`fichier=${PACKAGE_RESOLVED_APP}\n`) && /\n {12}exit 1\n {10}fi/.test(listeLot1[iBuild + 1].texte),
+    'vérification du Package.resolved reprise (échec toujours)');
+  assert.equal(listeLot1[iBuild + 2]?.si, "failure() && steps.package_resolved.outcome == 'failure'", 'diagnostic publié sur échec seulement');
+  assert.match(listeLot1[iBuild + 3]?.nom ?? '', /^test-without-building — éclat lot1-missions /, 'le premier éclat suit le diagnostic');
+  const plafond = Number(/^ {4}timeout-minutes: (\d+)$/m.exec(jobLot1)?.[1]);
+  const somme = listeLot1.filter(e => Number.isFinite(e.delai)).reduce((total, e) => total + e.delai, 0);
+  assert.equal(somme, 25 + 1 + 1 + 30 * ECLATS_LOT1.size, 'build, vérification, diagnostic et éclats bornés');
+  assert.ok(plafond >= somme + 15 && plafond <= 360, `plafond du job ui-lot1 : ${plafond} min pour ${somme} min bornées`);
+  // Gel iPhone : le second éclat relance le simulateur si le premier a gelé ; le premier suit le build (aucun précédent).
+  const [premier, second] = parEtapeLot1;
+  const texte = id => listeLot1.find(x => x.id === id).texte;
+  assert.ok(!texte(premier.id).includes('relancer-si-gel') && !texte(premier.id).includes('ECLAT_PRECEDENT'), 'le premier éclat suit le build');
+  assert.ok(texte(second.id).includes(`\n          ECLAT_PRECEDENT: ${premier.nom}\n`), 'ECLAT_PRECEDENT du second éclat');
+  assert.ok(texte(second.id).includes(`\n          ECLAT_PRECEDENT_ISSUE: \${{ steps.${premier.id}.outcome }}\n`), 'issue du premier éclat transmise');
+  assert.ok(texte(second.id).includes(`\n          ECLAT_PRECEDENT_CODE: \${{ steps.${premier.id}.outputs.code }}\n`), 'code du premier éclat transmis');
+  const appel = texte(second.id).indexOf(`\n          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel ${second.nom} || `);
+  assert.ok(appel >= 0 && appel < texte(second.id).indexOf('xcodebuild test-without-building'), 'contrôle du gel avant xcodebuild');
 });
 
 // Gel iPhone CI — 16/11/2026 (docs/mobile-swift/DECISIONS_LOT2.md, section du même nom ; run 43889328109) : le fil

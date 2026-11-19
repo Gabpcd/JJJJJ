@@ -83,6 +83,9 @@ public enum CibleNotification: Equatable, Sendable {
     case explorer
     /// Onglet Mes missions (`/soignant/missions`).
     case missions
+    /// « Mes favoris » (`/soignant/mes-favoris`, L1-T4b), empilé sur l'onglet Explorer remis à sa racine, comme
+    /// l'étoile de la barre d'Explorer (`explorer-favoris-ouvrir`).
+    case favoris
     /// Onglet Revenus et sa section (`?tab=`) : la racine (`.apercu`) et, depuis T13, « Paiements à confirmer »
     /// (`.paiementsAConfirmer`, push `PAIEMENT_RECU`, correction 15 : l'onglet s'ouvre sur la section
     /// `revenus-paiements-declares`) ; les autres sections restent des renvois web (D4) et ne sont jamais réduites en
@@ -117,6 +120,12 @@ public enum CibleNotification: Equatable, Sendable {
     /// empilé sur l'onglet Profil remis à sa racine ; le retour de Stripe (`?success=true`, `?refresh=true`) le relit
     /// avec `force=true` (correction 17), jamais un succès en soi.
     case stripeConnect(retour: RetourConnect?)
+    /// Lot 4, T1c — écran secondaire **livré** (`EcranSecondaire.estLivre`, ligne de `DestinationLien.ecranNatifLivre`
+    /// passée à `true` par sa tranche) : empilé sur l'onglet Profil remis à sa racine (`SecondaryRouter`), sauf le swipe,
+    /// vue de l'onglet Explorer (jamais un écran poussé, `LOT4_PLAN.md` §2.5). La série (`.serieDetail(id:)`, décision 11
+    /// du lot 1) y mène aussi (`.serie(id:)`, T12). Tant que la tranche n'a pas livré, la destination est un `.safari` et
+    /// cette cible n'est jamais construite : l'écran garde son renvoi web actuel.
+    case secondaire(EcranSecondaire)
     /// Renvoi web (`.safari` ou `.etablissement`), présenté par le présentateur de renvoi web s'il est injecté
     /// (coordinateur des liens, L3-T3b) ; reset `token_hash`/implicit compris, tant que son écran natif n'est pas
     /// livré.
@@ -133,11 +142,18 @@ public enum CibleNotification: Equatable, Sendable {
             self = .aucune
             return
         }
-        let destination = lien.destination
+        self.init(destination: lien.destination, canonique: lien.canonique)
+    }
+
+    /// Cible d'une destination effective (`DestinationLien.destination`) ; `canonique` sert le repli web d'une route native
+    /// sans cible. Interne : les tests de L4-T1c y passent une destination d'écran secondaire livré, qu'aucune ligne de
+    /// `ecranNatifLivre` ne rend encore.
+    init(destination: JoleneRoute, canonique: URL) {
         switch destination {
         case .accueil: self = .accueil
         case .explorer: self = .explorer
         case .missions: self = .missions
+        case .favoris: self = .favoris // L1-T4b
         case .revenus(let section): self = .revenus(section: section)
         case .monCompte: self = .monCompte
         case .missionDetail(let id): self = .mission(id: id)
@@ -158,11 +174,13 @@ public enum CibleNotification: Equatable, Sendable {
             // (écran de connexion, aiguillage d'onboarding, `BoiteLiensInscription`), comme la connexion ; une page
             // non livrée serait déjà un `.safari` (`destination`) et n'arriverait pas ici.
             self = .aucune
-        case .serieDetail, .secondaire:
-            // Atteint seulement quand la ligne de `ecranNatifLivre` de l'écran est passée à `true` sans que sa
-            // tranche ait ajouté sa cible (sinon `destination` est déjà un `.safari`) : repli sur le renvoi web
-            // canonique, jamais un tap sans effet ; la garde de `CentreNotificationsTests` le signale.
-            self = .web(.safari(lien.canonique))
+        case .serieDetail(let id):
+            // Lot 4, T1c : atteint seulement quand T12 passe la ligne `.serieDetail` de `ecranNatifLivre` à `true`
+            // (sinon `destination` est déjà un `.safari`) : écran de série du lot 4 (`SerieDetailScreen`).
+            self = .secondaire(.serie(id: id))
+        case .secondaire(let ecran):
+            // Lot 4, T1c : atteint seulement quand la tranche de l'écran passe sa ligne de `ecranNatifLivre` à `true`.
+            self = .secondaire(ecran)
         }
     }
 
@@ -172,10 +190,13 @@ public enum CibleNotification: Equatable, Sendable {
         case .accueil, .mission, .centre: return .accueil
         case .explorer: return .explorer
         case .missions: return .missions
+        case .favoris: return .explorer // L1-T4b
         case .revenus: return .revenus
         case .monCompte, .preferences, .profil: return .profil
         case .presences, .detailPresences, .documents, .contrat, .certificat: return .profil // « Mon espace » (L2-T10)
         case .stripeConnect: return .profil // T14a : entrée du hub
+        case .secondaire(.swipe): return .explorer // L4-T1c : vue Swipe d'Explorer (T3b)
+        case .secondaire: return .profil // L4-T1c : écrans secondaires empilés sur le Profil (`SecondaryRouter`)
         case .web, .aucune: return nil
         }
     }
@@ -190,6 +211,10 @@ public enum CibleNotification: Equatable, Sendable {
         // L2-T10 : écrans du lot 2 ; leur coupe-circuit (D-FLAGS) est lu par l'écran, qui devient alors un renvoi web.
         case .presences, .detailPresences, .documents, .contrat, .certificat: return true
         case .stripeConnect: return true // T14a
+        // L4-T1c : écran secondaire livré ; son coupe-circuit `ios_natif_<ecran>_actif` est lu par `SecondaryRouter`, qui
+        // sert alors le renvoi web de l'écran (`RenvoiWebScreen`).
+        case .secondaire: return true
+        case .favoris: return true // L1-T4b : `MesFavorisScreen`
         case .revenus(let section): return section == .apercu || section == .paiementsAConfirmer
         case .centre: return !depuisCentre
         case .web: return renvoiWebDisponible

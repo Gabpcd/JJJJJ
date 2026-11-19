@@ -44,6 +44,10 @@ enum MonEspaceRoute: Hashable {
         case .accueil, .explorer, .missions, .revenus, .monCompte, .mission, .centre, .preferences, .profil, .stripeConnect,
              .web, .aucune:
             return nil
+        case .favoris: // L1-T4b : onglet Explorer
+            return nil
+        case .secondaire: // L4-T1c : écrans secondaires (`SecondaireRoute`)
+            return nil
         }
     }
 }

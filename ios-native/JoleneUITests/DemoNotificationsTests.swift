@@ -100,7 +100,9 @@ final class DemoNotificationsTests: JoleneUITestCase {
         let seconde = element("notification-demo-notification-002")
         degager(seconde, dans: centre)
         seconde.tap()
-        require("L'onglet Mes missions est ouvert", timeout: 30) { self.visible(self.element("placeholder-missions")) }
+        require("L'onglet Mes missions est ouvert", timeout: 30) {
+            self.containerVisible(self.element("mes-missions-screen")) && self.visible(self.element("missions-tab-avenir"))
+        }
         record("\(proofPrefix)-notifications-onglet")
 
         tabButton("tab-profil", label: "Profil").tap()

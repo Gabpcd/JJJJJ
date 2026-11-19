@@ -125,7 +125,7 @@
     },
     {
       "name": "fn_confirmer_action_planning_v1",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": null,
       "sql": [
@@ -175,7 +175,7 @@
     },
     {
       "name": "fn_annuler_candidature_soignant",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "{ p_candidature_id: string; p_justificatif_storage_path?: string; p_motif_categorie: string; p_texte_libre: string }",
@@ -204,7 +204,7 @@
     },
     {
       "name": "fn_annuler_mission_soignant",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "{ p_mission_id: string; p_motif?: string }",
@@ -233,7 +233,7 @@
     },
     {
       "name": "fn_repondre_proposition",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "{ p_accepter: boolean; p_candidature_id: string }",
@@ -262,7 +262,7 @@
     },
     {
       "name": "fn_toggle_favori_etablissement",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "{ p_actif: boolean; p_etablissement_id: string }",
@@ -291,7 +291,7 @@
     },
     {
       "name": "fn_mes_favoris_etablissements",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "never",
@@ -317,6 +317,27 @@
           "category": "RPC_UTILISATEUR_AUTH_INTERNE"
         }
       ]
+    },
+    {
+      "name": "fn_modifier_favori_inscription",
+      "statut": "consommee",
+      "lot": 1,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_modifier_favori_inscription(\"p_mission_id\" \"uuid\", \"p_actif\" boolean)",
+          "returns": "\"void\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'pg_catalog', 'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": null
     },
     {
       "name": "fn_audit_connexion",
@@ -379,7 +400,7 @@
     },
     {
       "name": "fn_ecrire_audit_safe",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "{ p_acteur_id: string; p_action: string; p_cle_s3?: string; p_details?: Json; p_id_ressource: string; p_ip?: unknown; p_navigateur?: string; p_type_acteur: string; p_type_ressource: string }",
@@ -465,7 +486,7 @@
     },
     {
       "name": "fn_confirmer_presence_mission",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "{ p_mission_id: string }",
@@ -1348,7 +1369,7 @@
     },
     {
       "name": "fn_obtenir_missions_swipe",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_limit?: number }",
@@ -1377,7 +1398,7 @@
     },
     {
       "name": "fn_enregistrer_swipe",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_direction: string; p_mission_id: string }",
@@ -1406,7 +1427,7 @@
     },
     {
       "name": "fn_retirer_candidature",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": null,
       "sql": [
@@ -1432,7 +1453,7 @@
     },
     {
       "name": "fn_initialiser_preferences_matching",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": null,
       "sql": [
@@ -1458,7 +1479,7 @@
     },
     {
       "name": "fn_lister_mes_filtres_sauvegardes",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_audience?: Database[\"public\"][\"Enums\"][\"filtre_audience\"] }",
@@ -1487,7 +1508,7 @@
     },
     {
       "name": "fn_creer_filtre_sauvegarde",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_alerte_active?: boolean; p_audience: Database[\"public\"][\"Enums\"][\"filtre_audience\"]; p_filtres: Json; p_frequence_alerte?: Database[\"public\"][\"Enums\"][\"filtre_frequence_alerte\"]; p_nom: string }",
@@ -1516,7 +1537,7 @@
     },
     {
       "name": "fn_modifier_filtre_sauvegarde",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_alerte_active?: boolean; p_frequence_alerte?: Database[\"public\"][\"Enums\"][\"filtre_frequence_alerte\"]; p_id: string; p_nom?: string }",
@@ -1545,7 +1566,7 @@
     },
     {
       "name": "fn_supprimer_filtre_sauvegarde",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_id: string }",
@@ -2568,7 +2589,7 @@
     },
     {
       "name": "fn_stats_dashboard_etablissement",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": {
         "args": "never",
@@ -2598,7 +2619,7 @@
     },
     {
       "name": "fn_soignant_pour_etablissement",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": {
         "args": "{ p_soignant_id: string }",
@@ -2628,7 +2649,7 @@
     },
     {
       "name": "fn_lire_candidatures_mission_habilitee",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": {
         "args": "{ p_mission_id: string }",
@@ -2658,7 +2679,7 @@
     },
     {
       "name": "fn_traiter_candidature_planning_v1",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": null,
       "sql": [
@@ -2716,7 +2737,7 @@
     },
     {
       "name": "fn_contrat_signe_pour_pointage",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": null,
       "sql": [

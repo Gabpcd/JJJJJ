@@ -12,12 +12,15 @@ struct MissionDetailScreen: View {
     private let snapshot: SessionSnapshot
     private let ouvrirOnglet: ((MainTabView.Tab) -> Void)?
     @State private var horloge: (any ClockPort)?
+    /// Lot 1 (T4b) : modèle des favoris d'Explorer (étoile du détail) ; `nil` hors Explorer (Accueil).
+    private let favoris: FavorisModel?
 
     init(route: MissionRoute, initial: Mission?, session: SessionStore, snapshot: SessionSnapshot,
-         ouvrirOnglet: ((MainTabView.Tab) -> Void)? = nil) {
+         ouvrirOnglet: ((MainTabView.Tab) -> Void)? = nil, favoris: FavorisModel? = nil) {
         self.session = session
         self.snapshot = snapshot
         self.ouvrirOnglet = ouvrirOnglet
+        self.favoris = favoris
         _model = StateObject(wrappedValue: MissionDetailModel(missionId: route.id, initial: initial,
                                                               controller: session.controller, snapshot: snapshot))
     }
@@ -61,7 +64,17 @@ struct MissionDetailScreen: View {
                     .accessibilityIdentifier("mission-detail-title")
                 Spacer(minLength: JoleneSpacing.sm)
                 if mission.record.estUrgente { JoleneBadge("Urgente", tone: .warning) }
+                if let favoris { BoutonFavoriMission(favoris: favoris, missionId: mission.id, contexte: .detail(missionId: mission.id)) }
             }
+            if let favoris {
+                AvisFavoris(favoris: favoris, contexte: .detail(missionId: mission.id), identifier: "mission-detail-favoris-erreur") {
+                    await favoris.verifierSession(session, contexte: .detail(missionId: mission.id))
+                }
+                AvisLectureEtoiles(favoris: favoris, session: session, contexte: .detail(missionId: mission.id),
+                                   identifier: "mission-detail-favoris-lecture")
+            }
+            // Lot 1, T6c : confirmation de présence J-1, en haut du détail (cible du push `RAPPEL_MISSION`, revue B8 m1).
+            ConfirmationPresenceBloc(mission: mission, session: session, snapshot: snapshot) { await model.load() }
             card {
                 detailRow("Établissement", value: mission.etablissement?.nom ?? "Établissement", identifier: "mission-detail-etablissement")
                 if let lieu = lieu(mission) { detailRow("Adresse", value: lieu, identifier: "mission-detail-lieu") }
@@ -73,6 +86,9 @@ struct MissionDetailScreen: View {
                 if let service = mission.record.service { detailRow("Service", value: service, identifier: "mission-detail-service") }
                 if let contrat = mission.record.typeContratRecherche { detailRow("Contrat recherché", value: contrat, identifier: "mission-detail-contrat") }
                 detailRow("Profession requise", value: mission.record.professionRequise, identifier: "mission-detail-profession")
+                // L4-T1c : « Ne plus travailler ensemble » puis « Signaler », au bas du bloc de l'établissement comme le web
+                // (`DetailMissionSoignant.tsx` l.1160-1183, T11 et T7b) ; rien avant leurs tranches.
+                ActionsEtablissementMission(mission: mission)
             }
             // Lot 1 (T4a) : carte en lecture seule, sur les coordonnées serveur de l'établissement.
             if let point = CarteMission.point(pour: mission) { MissionMapView(point: point) }
@@ -98,17 +114,23 @@ struct MissionDetailScreen: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("mission-detail-creneaux")
-            entreePresences(mission)
             if let description = mission.record.description, !description.isEmpty {
                 card {
                     Text("Description").font(JoleneFont.headline).foregroundStyle(JoleneColor.midnight)
                     Text(description).font(JoleneFont.body).foregroundStyle(JoleneColor.midnight)
                 }
             }
-            Text("Candidature disponible au lot 1.")
-                .font(JoleneFont.caption)
-                .foregroundStyle(JoleneColor.bubblegum)
-                .accessibilityIdentifier("placeholder-candidature")
+            // Bloc « Actions » dans l'ordre du web (`DetailMissionSoignant.tsx`, intégration de la vague B du lot 1) :
+            // candidature ou « ✅ Vous êtes assigné(e) » (l.1408-1410), puis « Présences et pointage » (l.1477-1494),
+            // puis « Annuler ma participation » (l.1516-1523). La confirmation de présence du web (l.1412-1439) est
+            // remontée en haut du détail (T6c, revue B8 m1, ci-dessus).
+            // Lot 1, T6b : candidature (POSTULER, ACCEPTER, proposition), état relu côté serveur.
+            CandidatureSection(mission: mission, session: session, snapshot: snapshot) { await model.load() }
+            entreePresences(mission)
+            AnnulationSection(mission: mission, session: session, snapshot: snapshot) { await model.load() } // L1-T7
+            // L4-T1c : fil de discussion avec l'établissement après « Annuler ma participation », comme le web
+            // (`DetailMissionSoignant.tsx` l.1550-1558, T7b) ; rien avant sa tranche.
+            MissionContactButton(mission: mission)
         }
         .padding(JoleneSpacing.lg)
         .frame(maxWidth: 640)

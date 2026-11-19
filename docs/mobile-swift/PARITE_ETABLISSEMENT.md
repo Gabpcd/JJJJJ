@@ -23,8 +23,28 @@ preuves des tranches).
   l'initiale), plus strict que `ListeCandidatures` en PostgREST (LECTURE_SEULE n'y accède pas). Surfaces du même
   écran non reprises, renvoyées au web : alerte « Risque de requalification en CDI au-delà de 150 jours » (D27),
   « Terminer la mission », litige, booster, garantie, soignants recommandés.
-- Accueil : « présences à valider » sans compteur jusqu'à T8, « évaluations à faire » en lien web sans compteur
-  (aucune source serveur, correction 20) ; aucun graphique ni montant (D15).
+- `/etablissement/missions` et `/etablissement/missions/:id` (T5) : ni montant (taux, net estimé, commission, Rist),
+  ni regroupement par série, ni recherche par intitulé, ni tri « candidatures d'abord », ni filtre `?periode=mois`,
+  ni pastille « Litige » lue dans `litiges`, ni nom du soignant sur la carte (`fn_mes_soignants_etablissement` non
+  appelée ; nom lu au détail par `fn_soignant_pour_etablissement`) ; pastille de candidatures réservée à la permission
+  `candidatures` ; planning non exact « à confirmer » sur la carte (le web y affiche un repli ponctuel). Republier,
+  dupliquer, modifier, annuler, terminer, évaluer : sur jolene.app.
+- Candidatures de `/etablissement/missions/:id` (T6, destination `.candidatures`) : ni badge « hors profession »,
+  ni statut d'internat, ni régime d'exercice du profil, ni note moyenne, ni détail d'étudiant, ni popover du score
+  (D8, D10) ; pas de case du cadre étudiant (étudiant aide-soignant → « Accepter sur jolene.app ») ; mention CGV art. 8
+  **non affichée** tant que Gabrielle ne l'a pas validée (HARD STOP n°4) : un lien de navigation neutre vers la page
+  des CGV la remplace ; refus de paiement (`fn_trg_gate_assignation_paiement`) verbatim avec un renvoi vers la
+  facturation web ; succès annoncé seulement après relecture (`ACCEPTEE` + mission `ASSIGNEE`, ou `REFUSEE`).
+- Code de pointage de `/etablissement/presences/mission/:id` (T7, destination `.pointage`, ouverte depuis le détail de
+  la mission ; la route web reste celle des présences, T8) : code et QR relus au serveur toutes les 5 s, écran visible et
+  scène active seulement, plein écran natif (code en grand, QR au plus grand) et écran maintenu allumé pendant
+  l'affichage du code, absents du web ; « Le soignant n'a pas pu scanner sa sortie ? Clôturer le segment » (fin
+  rétroactive, `fn_declarer_fin_retroactive`) **non porté** : présences, T8 (B9). Une valeur servie qui n'est pas six
+  chiffres n'est jamais présentée (le web l'afficherait).
+- Accueil : « Valider les présences » sans compteur jusqu'à T8, « Évaluer vos soignants » en lien web sans compteur
+  (aucune source serveur, correction 20 ; libellés neutres, le web affiche des compteurs) ; aucun graphique ni montant
+  (D15). « Planning à confirmer » suit `CompletudePlanning` comme la liste des missions, et non le critère local du
+  web (`DashboardEtablissement.tsx` l.354-363) : intégration de la vague C, `DECISIONS_LOT5.md`.
 - Acceptation native limitée aux missions `SALARIE` hors `MEDECIN` (D25) ; étudiant aide-soignant (cadre étudiant),
   mission `TOUS`/`LIBERAL` ou `MEDECIN` : « Accepter sur jolene.app » ; le refus reste natif.
 - Membre de plusieurs établissements : servi sur l'établissement choisi par `mon_etablissement_id()`, comme le web ;

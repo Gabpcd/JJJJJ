@@ -118,7 +118,8 @@ final class Lot2PortsTests: XCTestCase {
         XCTAssertEqual(Array(AuditAction.allCases.map(\.rawValue).prefix(2)), ["MISSION_ASSIGNATION", "RGPD_CONSENTEMENT_DONNE"])
         XCTAssertEqual(AuditAction.allCases.map(\.rawValue), ["MISSION_ASSIGNATION", "RGPD_CONSENTEMENT_DONNE",
                                                              "DONNEES_PERSO_CONSULTATION", "DONNEES_PERSO_MODIFICATION",
-                                                             "RGPD_EXPORT_DONNEES", "PRESENCE_CONTESTATION"])
+                                                             "RGPD_EXPORT_DONNEES", "PRESENCE_CONTESTATION",
+                                                             "MISSION_ANNULATION"]) // lot 1, T7
         XCTAssertFalse(AuditAction.allCases.contains { $0.rawValue.hasPrefix("GPS_CONSENTEMENT") })
     }
 

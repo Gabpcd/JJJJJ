@@ -46,6 +46,10 @@ import JoleneSupabase
 /// Lot 5 (T2a, D20) : DEBUG, démo seulement, `-JOLENE_DEMO_ESPACE etablissement` (+ `-JOLENE_DEMO_ROLE_ETAB`,
 /// `-JOLENE_DEMO_LEGACY 1`, `-JOLENE_DEMO_BLOCAGE 1`, `DemoEspaceLancement`) ouvre l'espace établissement fictif ;
 /// `-JOLENE_FLAG_<cle>` surcharge aussi les drapeaux `ios_natif_etab_*` (`DemoEtabSessionTests`).
+///
+/// Lot 1, T5 : recette des états de Mes missions démo, `JOLENE_FORCE_MES_MISSIONS_ECHEC=1|session`,
+/// `JOLENE_FORCE_MES_MISSIONS_VIDE=1` et `JOLENE_DEMO_MES_MISSIONS_PAGE=<1…50>` (`DemoMesMissionsSurcharges`,
+/// JoleneCore) ; `JOLENE_FORCE_CALENDRIER_REFUS=1` : accès au calendrier démo refusé (`calendrierRefusDemo`).
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -62,6 +66,9 @@ final class AppContainer: ObservableObject {
     let tapsPush: BoiteTapsPush
     /// Lot 3, T3b : coordinateur des liens universels et des taps push (`DeepLinkCoordinator`).
     let liens: DeepLinkCoordinator
+    /// Lot 4, T1c : cycle de vie Realtime de la messagerie, appelé par `JoleneApp` à chaque phase de scène (stub
+    /// verrouillé jusqu'à T7a, `RealtimeLifecycle`).
+    private(set) lazy var realtime: RealtimeLifecycle = RealtimeLifecycle(session: self.session)
     /// Lot 3, T5 : contexte du pré-prompt pour ce lancement (nil si l'environnement est refusé).
     private(set) var prePrompt: ContextePrePromptPush?
     /// Lot 1, T8 : avis de fin de compte partagé entre l'écran de suppression et la racine.
@@ -80,6 +87,9 @@ final class AppContainer: ObservableObject {
     /// consommés hors de l'espace prêt ; alimentés par le coordinateur des liens (T3b, intégration du lot 3), lus par
     /// `RootView`.
     let liensInscription: BoiteLiensInscription
+    /// Lot 4, T4 : « Aller à la recherche » — recherche déposée par `RecherchesScreen` (Profil), appliquée par Explorer
+    /// (`AlerteRapideExplorer`), remise à son seul auteur.
+    let rechercheExplorer = BoiteRechercheExplorer()
     /// Lot 3, T11 : thème de l'app (D16), appliqué à la racine (`ThemeRacine`) ; par appareil (`UserDefaults`,
     /// clé `jolene.theme`) en staging et production, mémoire vive en démo (chaque lancement démo part de Système).
     let theme: PreferenceThemeModel
@@ -92,6 +102,9 @@ final class AppContainer: ObservableObject {
     /// Lot 3, T14a : flux hébergé de l'onboarding Stripe Connect — démo : `DemoExternalFlow` (retour simulé, sans feuille
     /// ni réseau) ; staging/production : `ExternalFlowPresenter` (ASWebAuthenticationSession ≥ 17.4, renvoi web sinon).
     let fluxExterne: ExternalFlowPort
+    /// Lot 1, T5 : refus simulé de l'accès au calendrier démo (surcharge DEBUG
+    /// `JOLENE_FORCE_CALENDRIER_REFUS`), toujours faux en Release et hors démo.
+    let calendrierRefusDemo: Bool
     #if DEBUG
     let networkSentinel: NetworkSentinel.Monitor?
     #endif
@@ -109,6 +122,11 @@ final class AppContainer: ObservableObject {
         let environment = Self.environnementDeLancement(arguments: arguments, processEnvironment: processEnvironment,
                                                         info: info)
         self.environment = environment
+        #if DEBUG
+        calendrierRefusDemo = environment.mode == .demo && processEnvironment[CalendrierAppareilDemo.variableRefus] == "1"
+        #else
+        calendrierRefusDemo = false
+        #endif
         let boite = NotificationCenterDelegate.shared.boite
         tapsPush = boite
         // Revue B8 de T3b, M1 : le coordinateur est aussi le port `FinIdentiteWebPort` de la session (fermeture du renvoi
@@ -116,9 +134,14 @@ final class AppContainer: ObservableObject {
         // d'inscription dans `liensInscription`, que `RootView` présente hors de l'espace.
         let inscription = BoiteLiensInscription()
         liensInscription = inscription
+        // Lot 4, T1c : capture du parrainage (stub verrouillé jusqu'à T6) ; stockage par appareil hors démo, mémoire
+        // vive en démo (chaque lancement démo part sans capture).
+        let parrainage = ParrainageApplicateur(stockage: environment.mode == .demo ? MemoireStockageAppareil()
+                                                                                   : UserDefaultsStockageAppareil())
         let liens = DeepLinkCoordinator(taps: boite, inscription: inscription, estDemo: environment.mode == .demo,
                                         effaceur: environment.mode == .demo ? nil : EffaceurDonneesSafari(),
-                                        espaceEtablissement: .pour(mode: environment.mode)) // lot 5, T2b
+                                        espaceEtablissement: .pour(mode: environment.mode), // lot 5, T2b
+                                        parrainage: parrainage)
         self.liens = liens
         if environment.mode == .demo {
             fluxExterne = DemoExternalFlow()
@@ -181,6 +204,7 @@ final class AppContainer: ObservableObject {
             clock = gateways.clock
             // Lot 5 : espace établissement ouvert en démo seulement (`OuvertureEspaceEtablissement`).
             let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: .demo))
+            parrainage.controleur = controller // lot 4, T1c
             let permission = DemoPushPermission(etat: Self.autorisationPushDemo(arguments: arguments))
             let coordinator = PushCoordinator(controller: controller, permission: permission,
                                               registrar: DemoPushRegistrar(), memoire: MemoirePushTokenStore())
@@ -203,6 +227,7 @@ final class AppContainer: ObservableObject {
                 clock = gateways.clock
                 // Lot 5 : espace établissement fermé jusqu'à la clôture du lot (`OuvertureEspaceEtablissement`).
                 let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: environment.mode))
+                parrainage.controleur = controller // lot 4, T1c
                 let (permission, registrar) = Self.appareilPush(mode: environment.mode, arguments: arguments)
                 let coordinator = PushCoordinator(controller: controller, permission: permission,
                                                   registrar: registrar, memoire: KeychainPushTokenStore())
@@ -282,12 +307,18 @@ final class AppContainer: ObservableObject {
     /// `DemoPaiementsTests.testRefusServeurVerbatimJamaisUnSucces`) ; lot 3, T14b : `JOLENE_DEMO_IBAN=<scenario>`
     /// (`DemoIbanGateway.Scenario` : `rib-requis`, `non-verifie`, `DemoIbanTests`) ; lot 3, T14a :
     /// `-JOLENE_DEMO_STRIPE <variante>` (`DemoStripeConnectGateway.Scenario`, `DemoStripeTests`).
+    /// Lot 1, T5 : surcharges de Mes missions (`DemoMesMissionsSurcharges`) : échec forcé, session expirée, listes vides
+    /// ou taille de page réduite (`DemoMesMissionsTests`).
     /// Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
         // Lot 5 (T2a) : espace démo choisi au lancement (soignant par défaut, `DemoEspaceLancement`).
+        // Lot 1, T6b : la variante du profil démo (`JOLENE_DEMO_PROFIL`) vaut aussi pour le soft-gate de la candidature
+        // (projection du lot 1) ; `candidat` rend le profil fictif candidat (`DemoCandidatureTests`).
+        let varianteProfil = processEnvironment[VarianteProfilDemo.variableEnvironnement].flatMap(VarianteProfilDemo.init(rawValue:))
         var gateways = DemoWorld.gateways(espace: DemoEspaceLancement.espace(arguments: arguments),
-                                          drapeaux: DemoFlagsGateway.surcharges(arguments: arguments))
+                                          drapeaux: DemoFlagsGateway.surcharges(arguments: arguments),
+                                          varianteProfil: varianteProfil)
         // Lot 2 T4b : `-JOLENE_DEMO_SCENARIO scan-incertain` (premier scan appliqué, réponse perdue, réconciliation) ;
         // seconde revue fraîche (m2) : `session-expiree-scan`, `session-expiree-consentement` (pointage et authentification
         // démo liés : « Vérifier ma session » revalide), `consentement-echec`.
@@ -325,10 +356,8 @@ final class AppContainer: ObservableObject {
         if processEnvironment["JOLENE_FORCE_PREFERENCES_ECHEC"] == "1" {
             gateways.preferences = DemoPreferencesEchecGateway() // lot 3, T6
         }
-        if let variante = processEnvironment[VarianteProfilDemo.variableEnvironnement].flatMap(VarianteProfilDemo.init(rawValue:)) {
-            gateways.profil = DemoProfilGateway(variante: variante) // lot 3, T9
-            gateways.avatar = DemoWorld.avatar(profil: gateways.profil) // lot 3, T10 : même ligne que la variante
-        }
+        // Lot 3, T9 et T10 : la variante du profil (`varianteProfil`) est posée par `DemoWorld.gateways` sur la ligne démo
+        // unique (`gateways.profil`, avatar et projection du lot 1 compris, T6b revue B8 M1).
         if let scenario = ScenarioAvatarDemo(arguments: arguments) {
             gateways.avatar = DemoWorld.avatar(profil: gateways.profil, scenario: scenario) // lot 3, T10
         }
@@ -354,6 +383,10 @@ final class AppContainer: ObservableObject {
         }
         // Lot 3, T14a : `-JOLENE_DEMO_STRIPE <statut|TEST|SALARIE>` (`DemoStripeTests`).
         gateways.stripeConnect = DemoStripeConnectGateway(scenario: DemoStripeConnectGateway.Scenario(arguments: arguments))
+        // Lot 1, T5 : échec forcé, session expirée, listes vides ou taille de page réduite (`DemoMesMissionsTests`).
+        if let mesMissions = DemoMesMissionsSurcharges.port(environment: processEnvironment, clock: gateways.clock) {
+            gateways.mesMissions = mesMissions
+        }
         return gateways
         #else
         return DemoWorld.gateways()

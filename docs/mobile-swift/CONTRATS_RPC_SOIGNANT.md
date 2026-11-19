@@ -94,19 +94,20 @@ d'audit écrites par l'app au lot 3 (`DONNEES_PERSO_CONSULTATION`, `DONNEES_PERS
 | `fn_etablissements_safe` | consommée lot 0 | 0 | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_mon_profil_soignant_complet` | consommée lot 3 (T9) | 3 (T9 ; reclassée, lot 1 v2 n°4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_dashboard_soignant_complet` | consommée lot 1 (T3) | 1 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_confirmer_action_planning_v1` | à venir | 1 (T6a) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (décision 6) | authenticated, service_role | absente |
+| `fn_confirmer_action_planning_v1` | consommée lot 1 (T6a) | 1 (T6a) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (décision 6) | authenticated, service_role | absente |
 | `fn_suggestions_missions_pour_soignant` | à venir | 4 (reclassée, revue B8 de T3 : non consommée par l'Accueil) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_annuler_candidature_soignant` | à venir | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_annuler_mission_soignant` | à venir | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_repondre_proposition` | à venir | 1 (T6a, refus seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_toggle_favori_etablissement` | à venir | 1 (T4b, retrait seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mes_favoris_etablissements` | à venir | 1 (T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_annuler_candidature_soignant` | consommée lot 1 (T7) | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_annuler_mission_soignant` | consommée lot 1 (T7) | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_repondre_proposition` | consommée lot 1 (T6a, refus seulement) | 1 (T6a, refus seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_toggle_favori_etablissement` | consommée lot 1 (T4b, retrait seulement) | 1 (T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mes_favoris_etablissements` | consommée lot 1 (T4b) | 1 (T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_modifier_favori_inscription` | consommée lot 1 (T4b, retrait seulement, décision 8 amendée) | 1 (T4b) | hors manifeste (SECURITY DEFINER, contrôle interne `auth.uid()` + `fn_compte_auth_actif`) | authenticated, service_role | absente |
 | `fn_audit_connexion` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_maj_activite_soignant` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_ecrire_audit_safe` | à venir | 1 (T1/T6a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_ecrire_audit_safe` | consommée lot 1 (T1 gateway, T6a, T7) | 1 (T1/T6a/T7) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_supprimer_compte_rate_limited` | à venir | 1 (T8, via edge `delete-account`) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_param_bool` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_confirmer_presence_mission` | à venir | 1 (T6c) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_confirmer_presence_mission` | consommée lot 1 (T6c) | 1 (T6c) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_scanner_code_pointage` | consommée lot 2 (T3) | 2 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_etat_pointage_mission` | consommée lot 2 (T3) | 2 (T3) | MIXTE_TENANT_ADMIN | authenticated, service_role | absente |
 | `fn_envoyer_otp_signature` | consommée lot 2 (T8) | 2 (T8 gateway, T9b écran `SignatureOtpView`) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -191,6 +192,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_get_my_role"() RETURNS "jsonb"
 
 - **Statut natif** : consommée dès le lot 0.
 - **Usage prévu** : Projection sûre des établissements affichés sur les cartes mission (liste Explorer, détail). Appelée avec les `etablissement_id` des missions chargées, jamais pour tout le référentiel.
+- **Mes missions (lot 1, T5, `SupabaseMesMissionsGateway`)** : seule source du nom sur les trois onglets. Les lectures PostgREST de `MissionsSoignant.tsx` (`candidatures` avec `missions(...)` embarquée, `missions` à venir et passées) sont reprises **sans** l'embed `etablissements(...)` du web (`pol_etab_select`) ; la RPC rend la ligne d'une mission assignée au soignant (tout statut, donc les passées) ou OUVERTE de l'établissement (les candidatures en attente), même cohorte (l.35477-35530). En échec, repli « Établissement » comme `fetchEtablissementsSafe` du web, qui ignore l'erreur ; une session expirée est propagée.
 - **Signature SQL** (`supabase/schema/public.sql` l.35044) :
 
 ```sql
@@ -289,7 +291,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_dashboard_soignant_complet"() RETURNS "j
 
 ## fn_confirmer_action_planning_v1
 
-- **Statut natif** : à venir (lot 1, T6a).
+- **Statut natif** : consommée lot 1 (T6a) — `SupabaseCandidatureGateway.confirmer` (POSTULER, ACCEPTER, PROPOSITION ;
+  une forme de réponse ci-dessous = un test de `SupabaseCandidatureGatewayTests`). Écran : T6b.
 - **Usage prévu** : Candidature (`POSTULER`, mode `CANDIDATURE`), acceptation directe (`ACCEPTER`, mode
   `PREMIER_ARRIVE`) et acceptation d'une proposition (`PROPOSITION`, `p_candidature_id` renseigné), avec
   `p_creneaux_confirmes` strictement égal au planning live (sérialisation ISO 8601 UTC `Z` sans fraction,
@@ -297,78 +300,84 @@ CREATE OR REPLACE FUNCTION "public"."fn_dashboard_soignant_complet"() RETURNS "j
   `mission(id:)` (`ASSIGNEE`, `soignant_assigne_id == userId`) pour ACCEPTER/PROPOSITION. L'annulation
   **ne passe pas** par cette RPC (voir `fn_annuler_candidature_soignant` / `fn_annuler_mission_soignant`).
 - **Formes de réponse** (HTTP 200) à décoder par `RPCResponse`, une forme = un test dans T6a. Valeurs JSON
-  réelles (apostrophes simples, pas l'échappement `''` du littéral SQL), relues dans le corps l.24141-24318.
+  réelles (apostrophes simples, pas l'échappement `''` du littéral SQL), relues dans le corps l.24525-24702.
   - **Refus propres à cette RPC** : toujours `success:false, ok:false, error` ; les refus de planning portent
     en plus la clé `code` (jamais `error_code` : ni ce corps ni `fn_conflit_planning_soignant` ne la posent, le
     décodeur lit `code` et ne se rabat pas sur `error_code`).
-    1. `{success:false, ok:false, error:'Accès réservé aux soignants authentifiés.'}` — l.24153-24157 :
+    1. `{success:false, ok:false, error:'Accès réservé aux soignants authentifiés.'}` — l.24537-24541 :
        `auth.uid()` nul ou `est_soignant()` faux.
-    2. `{success:false, ok:false, error:'Action de candidature invalide.'}` — l.24162-24168 : `p_action` hors
+    2. `{success:false, ok:false, error:'Action de candidature invalide.'}` — l.24546-24552 : `p_action` hors
        `POSTULER, ACCEPTER, SWIPE_LIKE, URGENCE, PROPOSITION`.
-    3. `{success:false, ok:false, error:"Cette mission n'est plus disponible."}` — l.24177-24181 : mission absente
-       ou statut ≠ `OUVERTE`.
+    3. `{success:false, ok:false, error:"Cette mission n'est plus disponible."}` — l.24561-24565 : mission absente
+       ou statut ≠ `OUVERTE` (course réelle sous `FOR UPDATE`) → `.missionDejaAttribuee(message:)` (revue B8 de T6a, m1 ;
+       égalité exacte, `CandidatureRules.messagesMissionDejaAttribuee`).
     4. `{success:false, ok:false, code:'PLANNING_A_RECONFIRMER', error:"Le planning confirmé n'est pas exploitable. Rechargez la mission avant de continuer."}`
-       — l.24195-24200 : `fn_valider_creneaux_mission_json` refuse `p_creneaux_confirmes` → relire la mission et
+       — l.24579-24584 : `fn_valider_creneaux_mission_json` refuse `p_creneaux_confirmes` → relire la mission et
        reconstruire `CreneauxConfirmes`, jamais renvoyer la même charge.
     5. `{success:false, ok:false, code:'PLANNING_MODIFIE_RECONFIRMER', error:'Le planning a changé depuis son affichage. Vérifiez à nouveau toutes les dates et tous les horaires.'}`
-       — l.24237-24248 : nombre ou contenu des créneaux différent du planning live → relire et redemander,
+       — l.24621-24632 : nombre ou contenu des créneaux différent du planning live → relire et redemander,
        jamais renvoyer.
-    6. Conflit avec une mission déjà confirmée — l.24256-24264 :
+    6. Conflit avec une mission déjà confirmée — l.24640-24648 :
        `{success:false, ok:false, code: COALESCE(v_conflit->>'code', 'CONFLIT_PLANNING'), error: COALESCE(v_conflit->>'message', 'Ce planning entre en conflit avec une mission déjà confirmée.')}`.
-       `code` vaut `'PLANNING_DETAILLE_INDISPONIBLE'` (l.24787), `'PLANNING_EXISTANT_INDISPONIBLE'` (l.24828),
-       `'REPOS_11H'` (l.24923) ou, sans code dans `fn_conflit_planning_soignant` (chevauchement, l.24859),
+       `code` vaut `'PLANNING_DETAILLE_INDISPONIBLE'` (l.25171), `'PLANNING_EXISTANT_INDISPONIBLE'` (l.25212),
+       `'REPOS_11H'` (l.25307) ou, sans code dans `fn_conflit_planning_soignant` (chevauchement, l.25243),
        `'CONFLIT_PLANNING'`. Le message vient du serveur (tutoiement « Tu es déjà confirmé(e) sur … » pour le
        chevauchement) et s'affiche verbatim (HARD STOP n°4).
-    7. `{success:false, ok:false, error:'Proposition introuvable.'}` — l.24295-24306 : `PROPOSITION` sans
+    7. `{success:false, ok:false, error:'Proposition introuvable.'}` — l.24679-24690 : `PROPOSITION` sans
        `p_candidature_id`, ou candidature qui n'est pas `PROPOSEE`, au soignant et pour cette mission.
   - **Réponses des délégués**, renvoyées telles quelles une fois les contrôles passés : `POSTULER` →
-    `fn_postuler_mission_rate_limited` (l.48080) → `fn_postuler_mission` (l.47889) ; `ACCEPTER` →
-    `fn_accepter_mission` (l.5120) → `fn_finaliser_attribution_mission` (l.36703) ; `PROPOSITION` →
-    `fn_repondre_proposition(p_candidature_id, true)` (l.53577) → `fn_finaliser_attribution_mission`. Hors
+    `fn_postuler_mission_rate_limited` (l.48538) → `fn_postuler_mission` (l.48347) ; `ACCEPTER` →
+    `fn_accepter_mission` (l.5297) → `fn_finaliser_attribution_mission` (l.37145) ; `PROPOSITION` →
+    `fn_repondre_proposition(p_candidature_id, true)` (l.54035) → `fn_finaliser_attribution_mission`. Hors
     succès, **aucune ne porte de clé `success`** : le décodeur les discrimine par clés, dans l'ordre normatif
     du `LOT1_PLAN.md` §2.4 (`choix_requis` → `code` → `documents_requis_pour` avec `error` → `success:true` →
     `error` seul → sinon `.contract`).
     8. Succès POSTULER : `{success:true, candidature_id, choix_contrat, profession_requise, docs_a_completer, documents_requis_pour}`
-       — l.48061-48068. `documents_requis_pour` y vaut le contrat retenu (`v_choix`) et `docs_a_completer`
+       — l.48519-48526. `documents_requis_pour` y vaut le contrat retenu (`v_choix`) et `docs_a_completer`
        signale des documents encore à valider : sans `error`, ce n'est **pas** un refus. Relecture `candidatures`.
     9. Succès ACCEPTER : `{success:true, contrat_id, contrat_numero, choix_applique, profession_requise, type_paiement, mode_paiement}`
-       — l.36902-36910 ; PROPOSITION : la même réponse + `message:'Proposition acceptée'` (l.53670). Relecture
+       — l.37344-37352 ; PROPOSITION : la même réponse + `message:'Proposition acceptée'` (l.54128). Relecture
        `mission(id:)`.
-    10. Choix de contrat, sans clé `success` (`v_resolution - 'ok'`, l.47970 et l.36753 ; réponse de
-        `fn_resoudre_contrat_mission` l.54551-54565) :
+    10. Choix de contrat, sans clé `success` (`v_resolution - 'ok'`, l.48428 et l.37195 ; réponse de
+        `fn_resoudre_contrat_mission` l.55009-55023) :
         `{choix_requis:true, error:'Choisissez votre mode de contrat.', options:[{value:'SALARIE', label:'Salarié (CDD / bulletin de paie)'}, {value:'LIBERAL', label:"Libéral (note d'honoraires)"}]}`
         → sheet de choix de contrat, action rejouée avec `p_choix_contrat` (le rate-limit a déjà compté l'appel).
     11. Documents manquants, sans clé `success` → `.refusee(documentsRequisPour:)`, renvoi web vers les
         documents au lot 1 : POSTULER libéral
         `{error:'Les documents requis pour candidater en libéral sont manquants ou expirés.', documents_requis_pour:'LIBERAL', lien_documents:'/soignant/mes-documents'}`
-        (l.47991-47996) ; ACCEPTER / PROPOSITION
+        (l.48449-48454) ; ACCEPTER / PROPOSITION
         `{error:'Les documents requis pour une mission <salarie|liberal> ne sont pas encore validés.', documents_requis_pour:<contrat retenu>, lien_documents:'/soignant/mes-documents'}`
-        (l.36758-36763, `lower(v_choix)` dans le message).
+        (l.37200-37205, `lower(v_choix)` dans le message).
     12. Plafond hebdomadaire (ACCEPTER / PROPOSITION), sans clé `success` → `.refusee(code:, message verbatim)`
         (HARD STOP n°4) :
         `{error:'Planning hebdomadaire incomplet : impossible de vérifier le plafond de 48 h.', code:'PLANNING_HEBDOMADAIRE_INDISPONIBLE', creneaux_valides, creneaux_attendus}`
-        (l.36788-36793) ;
+        (l.37230-37235) ;
         `{error:'Dépassement du plafond de 48 h pour la semaine du <JJ/MM/AAAA> (… h déjà planifiées + … h pour cette mission + … h ailleurs).', code:'PLAFOND_48H_HEBDO', semaine_du, heures_existantes, heures_mission, heures_externes, total}`
-        (l.36812-36824).
+        (l.37254-37266).
     13. `{error}` seul → `JoleneError` (`.unauthorized` pour « Non authentifié », sinon `.unknown`, message
         verbatim) : rate-limit `{error:'Trop de candidatures en peu de temps. Réessayez plus tard.'}` renvoyé en
-        **HTTP 200**, pas en 429 (l.48092 ; 20 candidatures/h, consommé même en `choix_requis`) ;
-        `'Vous avez déjà postulé à cette mission'` (l.47982) ; profession incompatible ; exclusion
-        (`'Accès refusé.'`, `'Accès refusé pour cette mission.'`) ; `"Cette mission n'est plus disponible"` et
-        `'Cette mission nécessite une candidature'` (`fn_accepter_mission`) ; `"Cette mission vient d'être attribuée."`
-        (l.36851) ; refus de `fn_resoudre_contrat_mission` hors `choix_requis` ; refus de `fn_repondre_proposition`
+        **HTTP 200**, pas en 429 (l.48550 ; 20 candidatures/h, consommé même en `choix_requis`) ;
+        `'Vous avez déjà postulé à cette mission'` (l.48440) ; profession incompatible ; exclusion
+        (`'Accès refusé.'`, `'Accès refusé pour cette mission.'`) ; `'Cette mission nécessite une candidature'`
+        (`fn_accepter_mission`) ; `"Cette mission n'est plus disponible"` (sans point, l.5308 et l.37171) et
+        `"Cette mission vient d'être attribuée."` (l.37293), seules exceptions à cette règle : `.missionDejaAttribuee(message:)` ; refus de `fn_resoudre_contrat_mission` hors `choix_requis` ; refus de `fn_repondre_proposition`
         (`'Cette proposition a expiré'`, `'Cette proposition n’est plus en attente'`, …).
     14. Exceptions PostgREST, lues sur `PostgrestError.message` **avant** `SupabaseErrorMapping.map` (qui ne
         garde pas le message) : `[CODE DU TRAVAIL] …` (triggers `dec_verifier_plafond_48h`, `dec_verifier_repos_11h`,
         `dec_verifier_moyenne_44h_12_semaines`, `dec_verifier_repos_hebdo_35h`, levés par l'`UPDATE missions` de
         `fn_finaliser_attribution_mission`) → `.refusee(code: 'CODE_DU_TRAVAIL', message verbatim)` (HARD STOP n°4 :
-        aucun texte juridique reformulé ni avalé) ; `0 rows` / `déjà prise` → issue « mission déjà attribuée »
-        avec relecture, sans message technique (modale « mission perdue » du web, l.804-810) ; toute autre
-        exception → `SupabaseErrorMapping`.
+        aucun texte juridique reformulé ni avalé) ; toute autre exception → `SupabaseErrorMapping` (message générique ;
+        par exemple « Cette mission est déjà assignée à un autre soignant. » de `dec_anti_double_assignation`). La branche
+        `0 rows` / `déjà prise` du web (l.804-810) n'est pas reprise (revue B8 de T6a, m1) : aucune fonction live n'émet ces
+        textes (PGRST116 porte « 0 rows » dans `details`), et `contains("0 rows")` reconnaissait « 10 rows ».
+    15. **Verrou natif (revue B8 de T6a, M1, décision 2 amendée de `LOT1_PLAN.md`)** : `PROPOSITION` dont le contrat n'est pas
+        `LIBERAL` → `CandidatureVerrou.renvoiWeb` **avant tout appel** (attestation hebdomadaire des heures du web non
+        portée, `LOT1_PLAN.md` §3 T6b) ; contrat déclaré libéral → relu (`candidatures`, `missions.type_contrat_recherche`)
+        avant l'envoi, `p_choix_contrat` à null comme le web.
 - **Classement manuel (décision 6, `LOT1_PLAN.md` §7)** : `RPC_UTILISATEUR_AUTH_INTERNE` — SECURITY DEFINER,
-  `search_path` vide, GRANT `authenticated`, identité lue via `auth.uid()` dans le corps (l.24141-24318 du dump) ;
+  `search_path` vide, GRANT `authenticated`, identité lue via `auth.uid()` dans le corps (l.24525-24702 du dump) ;
   manifeste non régénéré, `rpc-contracts.json` garde `manifeste: null`.
-- **Signature SQL** (`supabase/schema/public.sql` l.24141) :
+- **Signature SQL** (`supabase/schema/public.sql` l.24525) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_confirmer_action_planning_v1"("p_mission_id" "uuid", "p_action" "text", "p_creneaux_confirmes" "jsonb", "p_message" "text" DEFAULT NULL::"text", "p_choix_contrat" "text" DEFAULT NULL::"text", "p_candidature_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
@@ -1023,11 +1032,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_upsert_token_push"("p_token" "text", "p_
 
 ## fn_annuler_candidature_soignant
 
-- **Statut natif** : à venir (lot 1, T7).
+- **Statut natif** : consommée (lot 1, T7 : `SupabaseCandidatureGateway.annulerCandidature`, `AnnulationModel`, `AnnulationSheet`).
 - **Usage prévu** : Annulation d'une candidature `ACCEPTEE` ou `EN_ATTENTE` avec motif, texte libre et
   justificatif optionnel (bucket Storage `justificatifs`, chemin `<uid>/annulations-candidature/<candidatureId>/<ts>_<nom>`,
   précédé d'un reçu Keychain `prepared → started → …`, PRINCIPES §4). Relecture : candidature (`ANNULEE`)
   puis mission. Web : `src/components/soignant/ModaleAnnulationCandidature.tsx`.
+- **Livré (T7)** : relecture de la candidature seule (`ANNULEE`, posée dans la même transaction que la remise en ligne
+  de la mission) ; seule une candidature `ACCEPTEE` ouvre la modale, comme le web (`candidatureRec`, l.486-504) : le
+  retrait d'une candidature `EN_ATTENTE` est servi par la gateway (`{libre:true, points:0}`) mais n'a aucun point d'entrée
+  natif (le web n'en a pas sur le détail). Justificatif : reçu `RecuJustificatif` (domaine `justificatif`, `prepared →
+  started → stored → rattache | non_rattache`, `not_sent`), dépôt `SupabaseJustificatifStorage` (`upsert: false`), dépôt
+  incertain réconcilié par HEAD, reçu `stored` repris sans second dépôt. Revue B8 de #1156 : `STATUT_INVALIDE` déclenche
+  une relecture de la candidature avant tout message (`ANNULEE` relue = annulation relue après une réponse perdue) ;
+  `URGENCE_MEDICALE` n'est jamais envoyé par l'app (décision 4 amendée de `LOT1_PLAN.md` §7), bien que le serveur l'admette
+  et le stocke (`candidatures.motif_refus`, `evenements_score_soignant.details`, `journaux_audit`).
 - **Signature SQL** (`supabase/schema/public.sql` l.17541) :
 
 ```sql
@@ -1052,7 +1070,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_annuler_candidature_soignant"("p_candida
 
 ## fn_annuler_mission_soignant
 
-- **Statut natif** : à venir (lot 1, T7).
+- **Statut natif** : consommée (lot 1, T7 : `SupabaseCandidatureGateway.annulerMission`, confirmation de `AnnulationSection`).
 - **Usage prévu** : Annulation d'une mission `ASSIGNEE` au soignant **sans ligne `candidatures`** (attribution
   directe) ; motif texte optionnel. Relecture `mission(id:)` (statut `OUVERTE`, `soignant_assigne_id` nul).
   Web : `DetailMissionSoignant.tsx` l.890-918 (suivi d'un `fn_ecrire_audit_safe` `MISSION_ANNULATION`
@@ -1072,16 +1090,21 @@ CREATE OR REPLACE FUNCTION "public"."fn_annuler_mission_soignant"("p_mission_id"
   `{error:'Annulation impossible dans cet état. Si la mission est en cours, ouvrez un litige.'}` (statut ≠ `ASSIGNEE`) ;
   succès `{success:true, annulation_tardive:boolean, penalite_score: -8 | 0}` (tardive = `debut_le - now() < 24 h`).
   Effets serveur : mission remise `OUVERTE`, notification étab `SYSTEM`, audit `MISSION_ANNULEE_PAR_SOIGNANT`,
-  recalcul score si `est_urgente`. Messages `{error}` affichés verbatim.
+  recalcul score si `est_urgente`. Messages `{error}` affichés verbatim, après relecture de la mission (revue B8
+  delta de #1156, m1, intégration de la vague B) : après une réponse perdue, le nouvel essai est refusé (« Annulation
+  impossible dans cet état… », mission déjà remise en ligne) ; `AnnulationModel.annulerMission` relit alors
+  `mission(id:)` et annonce l'annulation si la mission relue n'est plus attribuée au soignant, comme `STATUT_INVALIDE`
+  côté candidature ; si cette relecture échoue, le refus du serveur s'affiche tel quel (revue B8 de #1158, m4).
 - **Exemple de réponse STAGING** : à enregistrer en T11, corps JSON anonymisé.
 
 ## fn_repondre_proposition
 
-- **Statut natif** : à venir (lot 1, T6a — **refus uniquement**).
+- **Statut natif** : consommée lot 1 (T6a — **refus uniquement**) — `SupabaseCandidatureGateway.refuserProposition`,
+  relecture `REFUSEE` ; `{error}` (expirée, plus en attente) levé verbatim. Écran : T6b.
 - **Usage prévu** : Refus d'une proposition `PROPOSEE` depuis l'Accueil (`p_accepter = false`). L'acceptation
   passe par `fn_confirmer_action_planning_v1` (`PROPOSITION`, comme le web `CarteProposition.tsx` l.268-279) ;
   `p_accepter = true` n'est pas appelé par l'app au lot 1. Relecture : candidature (`REFUSEE`).
-- **Signature SQL** (`supabase/schema/public.sql` l.53577) :
+- **Signature SQL** (`supabase/schema/public.sql` l.54035) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_accepter" boolean) RETURNS "jsonb"
@@ -1100,12 +1123,21 @@ CREATE OR REPLACE FUNCTION "public"."fn_repondre_proposition"("p_candidature_id"
 
 ## fn_toggle_favori_etablissement
 
-- **Statut natif** : à venir (lot 1, T4b — **retrait uniquement**, `p_actif = false`).
-- **Usage prévu** : Retrait d'un établissement favori depuis `/soignant/mes-favoris`. L'ajout (`p_actif = true`)
-  n'est exposé nulle part sur le web (`BoutonFavoriEtab` non monté) et n'est pas porté (décision 8).
-  Relecture : `fn_mes_favoris_etablissements`. Les favoris **mission** passent par PostgREST direct sur
-  `missions_sauvegardees` (RLS `soignant_id = auth.uid()`), pas par une RPC.
-- **Signature SQL** (`supabase/schema/public.sql` l.61480) :
+- **Statut natif** : consommée (lot 1, T4b — **retrait uniquement**, `p_actif = false`) par
+  `JoleneSupabase/Favoris/SupabaseFavorisGateway.swift` (`FavorisPort.basculerEtablissement`), modèle
+  `JoleneCore/Favoris/FavorisModel.swift` borné à `resolutionTimeout` (15 s).
+- **Usage** : « Retirer » d'un établissement suivi dans « Mes favoris » (`/soignant/mes-favoris`, poussé dans
+  l'onglet Explorer), après une feuille de confirmation. L'ajout (`p_actif = true`) n'est exposé nulle part
+  sur le web (`BoutonFavoriEtab` non monté) et n'est pas porté (décision 8) : **verrou** dans les deux mondes,
+  `actif = true` refusé avant tout appel (`.contract`, `FavorisRegles.ajoutEtablissementNonPropose`, tests
+  `SupabaseFavorisGatewayTests.testAjoutRefuseAvantToutAppel`, `DemoFavorisGatewayTests`). Paramètres
+  envoyés : `{p_etablissement_id, p_actif: false}` ; relecture par `fn_mes_favoris_etablissements` (la
+  gateway rend la liste relue, le modèle n'annonce le retrait que si l'établissement en est absent). Les
+  favoris **mission** passent par PostgREST direct sur `missions_sauvegardees` (fiche suivante).
+- **Interprétation** (`RPCResponse`) : « Non authentifié » (avec `success:false`) → `.unauthorized` ; autre
+  refus `{success:false, error}` → `.unknown`, message verbatim, aucune relecture par la gateway (le modèle
+  relit) ; corps sans `success:true` → `.contract` ; erreur PostgREST (uuid invalide…) → message générique.
+- **Signature SQL** (`supabase/schema/public.sql` l.61945) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_toggle_favori_etablissement"("p_etablissement_id" "uuid", "p_actif" boolean) RETURNS "jsonb"
@@ -1122,11 +1154,19 @@ CREATE OR REPLACE FUNCTION "public"."fn_toggle_favori_etablissement"("p_etabliss
 
 ## fn_mes_favoris_etablissements
 
-- **Statut natif** : à venir (lot 1, T4b).
-- **Usage prévu** : Liste des établissements favoris (écran Favoris, onglet Établissements) ; lecture seule,
-  `STABLE`. Chaque élément porte `nb_missions_ouvertes` (valeur serveur, affichée telle quelle) et un bouton
-  « Voir missions ouvertes » → Explorer filtré `etablissementId`.
-- **Signature SQL** (`supabase/schema/public.sql` l.41835) :
+- **Statut natif** : consommée (lot 1, T4b) par `JoleneSupabase/Favoris/SupabaseFavorisGateway.swift`
+  (`FavorisPort.etablissementsFavoris`), appel sans paramètre, JWT du soignant.
+- **Usage** : section « Établissements suivis » de « Mes favoris » ; lecture seule, `STABLE`. Chaque élément
+  porte `nb_missions_ouvertes` (valeur serveur, affichée telle quelle en badge « N mission(s) ») et, s'il est
+  positif, « Voir les missions ouvertes » → Explorer filtré `etablissementId` (filtres initiaux du profil,
+  comme `/soignant/recherche-missions?etablissement=`), avec un bandeau retirable.
+- **Interprétation** : tableau → éléments décodés un à un (élément sans `etablissement_id` écarté seul,
+  champ d'un autre type ignoré seul) ; `{error:'Non authentifié'}` → `.unauthorized` ; autre `{error}` →
+  `.unknown` verbatim ; tout autre corps (`{}`) → `.contract` ; `PGRST202` → `.contract` sans renvoi. Puis
+  **noms** par `fn_etablissements_safe(p_ids)` (règle ci-dessous) : en échec de transport, de serveur ou de
+  contrat, le nom de la RPC reste (lecture complémentaire) ; session expirée et annulation propagées.
+  Tests : `SupabaseFavorisGatewayTests`.
+- **Signature SQL** (`supabase/schema/public.sql` l.42281) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "jsonb"
@@ -1140,11 +1180,65 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "j
 - **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` **ou** un tableau (pas d'objet enveloppe) :
   `[{etablissement_id, nom, ville, logo_url, type_etablissement, nb_missions_ouvertes, cree_le}]` trié par
   `cree_le DESC`, `[]` si aucun favori. Le décodeur doit accepter les deux formes (objet d'erreur / tableau).
-  Note : la RPC fait un **JOIN interne** sur `etablissements` (l.41859), sans filtre de cohorte TEST ni de
+  Note : la RPC fait un **JOIN interne** sur `etablissements` (l.42305), sans filtre de cohorte TEST ni de
   `supprime_le` : un favori dont l'établissement n'existe plus est absent du tableau (jamais présent avec
   un `nom` nul). Le nom affiché reste celui de `fn_etablissements_safe` quand la ligne existe (règle « nom
   d'établissement », `LOT1_PLAN.md` §2.6).
 - **Exemple de réponse STAGING** : à enregistrer en T11.
+
+### Favoris mission : PostgREST direct sur `missions_sauvegardees` (hors RPC)
+
+- **Statut natif** : consommé (lot 1, T4b) par `SupabaseFavorisGateway` (`missionsSauvegardees`,
+  `sauvegarder`, `retirer`), comme `BoutonSauvegarderMission.tsx` et `MesFavorisSoignant.tsx`.
+- **Lecture** : `GET /rest/v1/missions_sauvegardees?select=id,mission_id,cree_le,missions(id,intitule,debut_le,fin_le,duree_heures,nb_creneaux,statut)&soignant_id=eq.<uid>&order=cree_le.desc`
+  (RLS `missions_sauvegardees_select`, l.78591 ; restrictive `pol_compte_auth_actif_restrictive`, l.79193).
+  Jointure `missions` nulle (RLS des missions) : la ligne garde l'étoile allumée, la mission n'est pas
+  listée. « Mes favoris » ne liste que les missions `OUVERTE` à début futur (filtre du web,
+  `FavorisRegles.missionsAffichees`) ; montants non lus (non affichés par le web).
+- **Sauvegarde** : `POST` `{mission_id, soignant_id: <uid>}` avec `Prefer: return=minimal`, puis relecture ;
+  conflit UNIQUE `23505` (`missions_sauvegardees_soignant_id_mission_id_key`, l.73531) = déjà sauvegardée,
+  la relecture fait foi, sans erreur ; `42501` (RLS / compte non actif) → `.unauthorized` ; clé étrangère
+  `23503` → message générique, aucun détail technique.
+- **Retrait** : `DELETE …?mission_id=eq.<id>&soignant_id=eq.<uid>` avec `Prefer: return=minimal`, puis relecture.
+- **Second magasin (décision 8 du lot 1 amendée le 18/11/2026, revue B8 de T4b, M2)** : chaque lecture relit aussi
+  `GET /rest/v1/parcours_inscription?select=missionsSauvegardees:donnees->missionsSauvegardees&user_id=eq.<uid>&limit=1` (RLS `parcours_inscription_proprietaire`,
+  l.78669 : propriétaire et compte actif ; `GRANT SELECT` l.86801) et ne lit que `donnees->missionsSauvegardees` (pas le brouillon
+  entier ; chaînes seulement, comme `chargerFavorisInscription`) ; les missions absentes de la table sont relues par
+  `GET /rest/v1/missions?select=id,intitule,debut_le,fin_le,duree_heures,nb_creneaux,statut&id=in.(…)` (RLS des missions,
+  lots de 50, UUID seulement). Fusion sans doublon comme `MesFavorisSoignant.tsx` l.43-53 (`FavorisRegles.fusion`) ;
+  l'étoile est allumée si l'un des deux magasins contient la mission (`BoutonSauvegarderMission.tsx` l.36-44). Le
+  retrait appelle d'abord `fn_modifier_favori_inscription(p_actif := false)` si la mission figure dans ce magasin
+  (fiche suivante), puis supprime la ligne de la table. L'ajout n'écrit que la table, comme le web. Seules les missions
+  `OUVERTE` à début futur sont listées. **Écart de filtre, à signer** (revue B8 delta de #1149, m1) : le web lit ces aperçus par `fn_explorer_missions_inscription` (`public.sql` l.36471, SECURITY DEFINER, hors RLS : mission `OUVERTE`, à début futur, non assignée, `fn_mission_publique` non nul l.43178 — établissement non supprimé, hors compte test, `VERIFIE`, autorisé à publier, autre qu'une officine, intitulé hors « [ »), le natif dans `missions` sous RLS (`pol_mission_select` l.79805 : `OUVERTE` et `NOT fn_est_exclu` ; restrictives `missions_internat_restrictive` l.78572, `missions_masquer_etabs_test` l.78576, compte actif l.79189), comme la jointure de la table et l'Explorer natif. Les filtres diffèrent dans les deux sens : **le web liste, le natif masque** une mission dont l'établissement a exclu la soignante (`fn_est_exclu`) ou incompatible avec un interne ou un médecin à spécialité confirmée (`fn_mission_visible_internat`) — l'étoile reste allumée, la mission n'est pas listée et ne peut pas être retirée en natif, alors que le web la liste avec « Retirer » ; **le natif liste, le web masque** un favori d'inscription dont l'établissement a depuis été supprimé, n'est plus vérifié ou ne peut plus publier. Aucun cas ne donne accès à une ligne non autorisée par la RLS ; écart à signer
+  (`PARITE_SOIGNANT.md`, écart (6) de `/soignant/mes-favoris`).
+
+## fn_modifier_favori_inscription
+
+- **Statut natif** : consommée (lot 1, T4b, décision 8 amendée le 18/11/2026 — **retrait uniquement**, `p_actif = false`) par
+  `JoleneSupabase/Favoris/SupabaseFavorisGateway.swift` (`FavorisPort.retirer`), comme `BoutonSauvegarderMission.tsx`
+  l.61-64 et `MesFavorisSoignant.tsx` (`retirerMission`) : appelée seulement si la mission figure dans
+  `parcours_inscription.donnees.missionsSauvegardees`, avant la suppression de la ligne `missions_sauvegardees`.
+  L'ajout (`p_actif = true`) n'est utilisé par le web que pendant l'inscription progressive (hors espace natif) : non
+  porté.
+- **Signature SQL** (`supabase/schema/public.sql` l.43500) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_modifier_favori_inscription"("p_mission_id" "uuid", "p_actif" boolean) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+```
+
+- **Classe d'authentification** : hors manifeste ; contrôle interne `auth.uid() IS NULL OR NOT fn_compte_auth_actif()` →
+  `42501` « Session invalide. », parcours `SOIGNANT` absent → `42501` « Espace soignant requis. » (les deux →
+  `.unauthorized`, session à vérifier).
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"` (l.84070-84072).
+- **Signature TypeScript** : absente de `types.ts` (appel `as any` côté web) ; contrat tenu par `public.sql`.
+- **Contrat de réponse** : `RETURNS void` (PostgREST sans corps, `RPCResponse.appelerSansCorps`) ; `22023`
+  (« Favori invalide. ») restitué verbatim, `.unknown` ; toute autre erreur → message générique du retrait. Une seule
+  requête, aucun renvoi : le modèle relit.
+- **Exemple de réponse STAGING** : à enregistrer en T11.
+- **Règles** : une seule requête par mutation, aucun renvoi ; le modèle n'annonce un succès que si la liste
+  relue le confirme, relit après un délai dépassé ou une coupure (`FavorisModelTests`).
 
 ## fn_audit_connexion
 
@@ -1192,7 +1286,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_maj_activite_soignant"() RETURNS "jsonb"
 
 ## fn_ecrire_audit_safe
 
-- **Statut natif** : à venir (lot 1, T1 gateway, T6a câblage ; décision 5).
+- **Statut natif** : consommée (lot 1 : T1 gateway `SupabaseAuditGateway`, T6a `MISSION_ASSIGNATION`, T7 `MISSION_ANNULATION` ; décision 5).
 - **Usage prévu** : `MISSION_ASSIGNATION` après `ACCEPTER` / `PROPOSITION` réussis et relus (parité web
   `DetailMissionSoignant.tsx` l.824-836 : `p_type_ressource = 'mission'`, `p_id_ressource = missionId`,
   `p_details = {intitule, etablissement, debut, fin}`) ; `MISSION_ANNULATION` après `fn_annuler_mission_soignant`
@@ -1277,13 +1371,15 @@ CREATE OR REPLACE FUNCTION "public"."fn_param_bool"("p_cle" "text", "p_defaut" b
 
 ## fn_confirmer_presence_mission
 
-- **Statut natif** : à venir (lot 1, T6c ; décision 16).
+- **Statut natif** : consommée lot 1 (T6c ; décision 16) — `SupabasePresenceGateway.confirmerPresence` (une forme de
+  réponse ci-dessous = un test de `SupabasePresenceGatewayTests`), relecture `missions.presence_confirmee_le` ;
+  règle d'affichage `PresenceRules.bloc` ; écran `ConfirmationPresenceBloc` du détail ; démo `DemoPresenceGateway`.
 - **Usage prévu** : Bloc « Confirme ta présence » d'une mission `ASSIGNEE` au soignant dont le début est à
-  moins de 48 h (`PresenceRules.blocDu(mission:, now:)`, seuil 48 h en dur comme le web
+  moins de 48 h (`PresenceRules.bloc(_:userId:maintenant:)`, seuil 48 h en dur comme le web
   `DetailMissionSoignant.tsx` l.1414-1417, alors que le cron lit `confirmation_j1_max_h` = 36 h : écart
   consigné hors lot). Cible du push `RAPPEL_MISSION` (`/soignant/missions/{id}`, `?relance=1` ignoré).
   Relecture obligatoire `mission(id:)` → `presence_confirmee_le` non nul ; **jamais de date posée localement**.
-- **Signature SQL** (`supabase/schema/public.sql` l.24608) :
+- **Signature SQL** (`supabase/schema/public.sql` l.24992) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_id" "uuid") RETURNS "jsonb"
@@ -1296,21 +1392,39 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
 - **Signature TypeScript** : `Args: { p_mission_id: string }` ; `Returns: Json`.
 - **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}` (inexistante ou non assignée au
   soignant) ; `{error:"Cette mission n'est plus active."}` (statut ∉ `ASSIGNEE, EN_COURS`) ; `{success:true}`.
-  Valeurs JSON réelles, à copier telles quelles dans les vecteurs Swift : le littéral SQL de la l.24617 double
+  Valeurs JSON réelles, à copier telles quelles dans les vecteurs Swift : le littéral SQL de la l.25001 double
   l'apostrophe (échappement SQL `''`), ce doublement n'existe pas dans la réponse.
   **Aucune idempotence ni fenêtre serveur** : chaque appel réécrit `presence_confirmee_le = NOW()` et insère
   une notification étab `SYSTEM` « Présence confirmée ✓ » → bouton désactivé pendant l'appel, masqué après
   relecture ; bloc limité à `ASSIGNEE` côté app (la RPC accepte aussi `EN_COURS`).
+  **Issue incertaine** (revue B8 delta de #1157, M1, intégration de la vague B) : `{success:true}` suivi d'une
+  relecture vide, sans la date, d'un autre soignant ou en échec rend `PresenceOutcome.envoyeeNonRelue` (jamais une
+  erreur) ; un délai dépassé de `bounded` est traité de même par `ConfirmationPresenceModel`. L'écran affiche
+  « Votre confirmation a été envoyée mais n'a pas pu être relue. Actualisez pour la vérifier. » (texte
+  opérationnel, sans équivalent web : le web n'a ni relecture ni délai) et remplace le bouton par « Actualiser »,
+  qui relit `mission(id:)`. Date relue → confirmée. Mission relue sans la date (revue B8 de #1158, M1) : **après
+  l'accusé `{success:true}`**, l'issue reste incertaine — la RPC écrit `presence_confirmee_le = NOW()` sans condition
+  avant de répondre (l.25003-25010) et rien ne la remet à NULL, une lecture sans la date ne prouve donc pas la
+  non-réception (PRINCIPES §4) ; seule la réouverture de la mission recrée le bloc ; **après un délai dépassé sans
+  accusé** (revue B8 delta de #1158, m7) : `bounded` annule la tâche locale, pas la requête déjà partie, et la RPC peut
+  encore valider côté PostgREST ; une relecture sans la date ne conclut « non enregistrée » que si elle a lieu **au moins
+  30 s après le début de l'appel expiré** (`ConfirmationPresenceModel.delaiAvantConclusion`, horloge des gateways) ;
+  avant, l'issue reste incertaine (« Actualiser »). Conclue, l'écran affiche le constat neutre « Votre confirmation n'a
+  pas été enregistrée. » (m8, hors HARD STOP) et l'envoi redevient possible. Mission relue qui n'est plus attribuée au
+  soignant : plus rien à confirmer ; après l'accusé, le verrou d'envoi reste posé jusqu'à la relecture de l'écran (m6).
+  Relecture en échec → l'issue reste incertaine. Aucun nouvel appel tant qu'une relecture n'a pas conclu. Risque résiduel
+  accepté : une RPC encore en vol plus de 30 s après son départ ; une erreur de transport autre qu'un délai reste
+  « Confirmation impossible. », comme le web.
 - **Preuve STAGING** : `missions.presence_confirmee_le` relu + `notifications` étab `SYSTEM` « Présence
   confirmée ✓ » relue (T11).
 - **Chaînes d'écran** (reprises à l'identique du web, `DetailMissionSoignant.tsx` l.1419-1438 ; cibles des
   assertions XCUITest et de la recette) : bouton « ✓ Je confirme ma présence » ; confirmation après relecture
   « Présence confirmée — l'établissement est prévenu. ✓ » (toast web) ; état confirmé
   « ✓ Présence confirmée — l'établissement est prévenu » ; refus : `error` serveur verbatim, sinon
-  « Confirmation impossible. ». Titre et description du bloc, tutoyés sur le web, passent au vouvoiement
+  « Confirmation impossible. » (refus sans message et erreur d'envoi seulement, jamais après un succès serveur). Titre et description du bloc, tutoyés sur le web, passent au vouvoiement
   (décision 9, `LOT1_PLAN.md` §3 T6c).
 - **Titre du push** (pas un texte d'écran) : « Ta mission demain — Je serai là ✓ » est le titre du push
-  serveur `RAPPEL_MISSION` (`fn_demander_confirmations_presence` l.29924/29934) ; aucune assertion d'écran ne le cherche.
+  serveur `RAPPEL_MISSION` (`fn_demander_confirmations_presence` l.30357/30367) ; aucune assertion d'écran ne le cherche.
 
 ## fn_desactiver_mon_token_push
 
@@ -2061,7 +2175,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_paiements_escrow"() RETURNS "jsonb"
   « Établissement » conservé, mais toute assertion STAGING porte sur l'**égalité** avec le nom de fixture.
   `fn_dashboard_soignant_complet.mes_missions.etab_nom` (LEFT JOIN sans filtre cohorte, l.27970 : nom nul si
   l'établissement manque) et `fn_mes_favoris_etablissements.nom` (JOIN interne sans filtre cohorte ni
-  `supprime_le`, l.41859 : un favori dont l'établissement n'existe plus disparaît de la liste au lieu d'y
+  `supprime_le`, l.42305 : un favori dont l'établissement n'existe plus disparaît de la liste au lieu d'y
   figurer avec un nom nul) ne servent que si la ligne safe manque ; une divergence est un bug de fixture.
 - **Garde** : `tests/node/check-rpc-contracts.node.mjs` échoue si `fn_etablissement_public` entre dans
   `RPC_SUIVIES` ; ce test tourne sur toute PR (étape « Garde de livraison mobile » de
@@ -2361,9 +2475,10 @@ T10 bulletins, T11 pool urgence et exclusions), et une RPC partagée avec le lot
 `fn_ouvrir_litige_rate_limited` (`RPC_PARTAGEES_LOT4`, précision 10 des décisions) : une seule entrée dans
 `RPC_SUIVIES`, celle du T0 du lot 2 (`lot: 2`) quand il est fusionné, `a_venir`, `lot: 4` à défaut ; une
 seule fiche, dont la sous-section « Usage du lot 4 » porte l'usage `AUTRE`. Le décompte de l'en-tête
-(vingt-sept RPC) couvre les lots 0 et 1 ; ces quarante-deux s'y ajoutent. Écart assumé à la règle
-« statut passé en `consommee` par la PR qui câble la gateway » : les statuts du lot 4 passent en `consommee`
-**en une fois par T15** (onze tranches parallèles ne modifient jamais le même tableau). Fiches propres au lot :
+(vingt-sept RPC) couvre les lots 0 et 1 ; ces quarante-deux s'y ajoutent. Règle « statut passé en `consommee`
+par la PR qui câble la gateway » appliquée au lot 4 depuis L4-T3a (consigne du 18/11/2026 ; le T0 prévoyait un
+passage en une fois par T15) : chaque tranche met à jour sa ligne ci-dessous et sa fiche, liste tenue par
+`LOT4_CONSOMMEES` (`tests/node/check-rpc-contracts-lot4.node.mjs`). Fiches propres au lot :
 « lecture des exceptions », actions `SWIPE_LIKE` / `URGENCE`, edges `messagerie-validate` et
 `copies-bulletins`, Realtime, double-aveugle et surcharges du litige, en fin de section.
 
@@ -2402,14 +2517,14 @@ concernée à jour **dans la même PR**.
 
 | RPC | Statut natif | Lot | Classe manifeste | GRANT | types.ts |
 |---|---|---|---|---|---|
-| `fn_obtenir_missions_swipe` | à venir | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_enregistrer_swipe` | à venir | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_retirer_candidature` | à venir | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_initialiser_preferences_matching` | à venir | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_lister_mes_filtres_sauvegardes` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_creer_filtre_sauvegarde` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_modifier_filtre_sauvegarde` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_supprimer_filtre_sauvegarde` | à venir | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_obtenir_missions_swipe` | consommée lot 4 (T3a) | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_enregistrer_swipe` | consommée lot 4 (T3a) | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_retirer_candidature` | consommée lot 4 (T3a) | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_initialiser_preferences_matching` | consommée lot 4 (T3a) | 4 (T3a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_lister_mes_filtres_sauvegardes` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_creer_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_modifier_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_supprimer_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_definir_disponibilite` | à venir | 4 (T5) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_obtenir_mes_parrainages` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_appliquer_parrainage` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -2489,7 +2604,8 @@ tableau.
   `ActionPlanning` reçoit `.swipeLike = "SWIPE_LIKE"` et `.urgence = "URGENCE"` en T1 (D2), avec
   `p_creneaux_confirmes` exact (`CreneauxConfirmes.pourAction`, golden du lot 1 T2). Les refus propres à la
   RPC (planning à reconfirmer, conflit, repos de 11 h) précèdent la délégation et sont décrits dans sa fiche.
-- **`SWIPE_LIKE`** (❤️, T3a) : délègue à `fn_enregistrer_swipe(p_mission_id, 'LIKE', p_choix_contrat)` ; la
+- **`SWIPE_LIKE`** (❤️, T3a, **consommée** : verrou levé dans `SupabaseCandidatureGateway` et `DemoCandidatureGateway`,
+  `URGENCE` reste verrouillée jusqu'à T11) : délègue à `fn_enregistrer_swipe(p_mission_id, 'LIKE', p_choix_contrat)` ; la
   réponse est celle de `fn_enregistrer_swipe` — `{ok:true, …, candidature_id, choix_contrat}`,
   **pas de `success`** — et ses refus `{ok:false, …}` (fiche `fn_enregistrer_swipe`). `choix_requis` →
   `ChoixContratSheet` → nouvel appel `SWIPE_LIKE` avec `p_choix_contrat` ; planning à reconfirmer → relecture
@@ -2511,7 +2627,7 @@ tableau.
 
 ## fn_obtenir_missions_swipe
 
-- **Statut natif** : à venir (lot 4, T3a).
+- **Statut natif** : consommée (lot 4, T3a) par `JoleneSupabase/Swipe/SupabaseSwipeGateway.swift` — `SupabaseSwipeGateway.paquet`.
 - **Usage prévu** : Paquet de la vue Swipe d'Explorer (`p_limit = 20`, borné 1-100 côté serveur) : missions `OUVERTE` à venir, éligibles (`fn_soignant_eligible_mission`), au taux minimum du soignant, jamais déjà swipées (`NOT EXISTS swipes`, l.46095-46096), cohorte TEST respectée (`est_compte_test`, l.46090) ; puis créneaux PREVISIONNEL hors pauses par `MissionSlotPager` (lot 0) et filtre du paquet (port de `VueSwipeMissions.tsx` l.373-392, golden T2). Relu à l'apparition et à la reprise après 60 s.
 - **Signature SQL** (`supabase/schema/public.sql` l.46023) :
 
@@ -2524,12 +2640,13 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_missions_swipe"("p_limit" intege
 - **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_obtenir_missions_swipe(integer)` — RPC utilisateur : identité `auth.uid()` lue en interne, appel avec le JWT du soignant.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: { p_limit?: number }` ; `Returns: Json`.
-- **Contrat de réponse** : succès `{missions:[{mission_id, intitule, profession_requise, etablissement_id, etablissement_nom, etablissement_ville, etablissement_code_postal, etablissement_logo_url, etablissement_score, taux_horaire_base, duree_heures, debut_le, fin_le, est_urgente, service, type_contrat_applique, type_contrat_recherche, nb_creneaux, total_brut, net_a_payer, net_estime, montant_ifm, montant_icp, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, score, breakdown, paiement_rapide, distance_km}]}` (l.46040-46084, l.46102) — **pas de `success`**. Non authentifié : `{missions:[], error:'auth_required'}` (l.46033, HTTP 200) → `.unauthorized`. Ordre `score + random()*13` (l.46039) : aucune assertion d'ordre, démo déterministe. `score` vaut `COALESCE(ms.score_global, 0)` (l.46067) : une mission sans ligne `matching_scores` affiche 0 aujourd'hui (correction 13) ; décodé `Int?` en prévision de B1 (B9, D5), valeur serveur affichée telle quelle. `breakdown` vaut `{}` par défaut (raisons « Pourquoi N ? », golden T2). Montants affichés tels quels ; `etablissement_nom` vient du payload, sans appel à `fn_etablissements_safe`.
+- **Contrat de réponse** : succès `{missions:[{mission_id, intitule, profession_requise, etablissement_id, etablissement_nom, etablissement_ville, etablissement_code_postal, etablissement_logo_url, etablissement_score, taux_horaire_base, duree_heures, debut_le, fin_le, est_urgente, service, type_contrat_applique, type_contrat_recherche, nb_creneaux, total_brut, net_a_payer, net_estime, montant_ifm, montant_icp, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, score, breakdown, paiement_rapide, distance_km}]}` (l.46040-46084, l.46102) — **pas de `success`**. Non authentifié : `{missions:[], error:'auth_required'}` (l.46033, HTTP 200) → `.unauthorized`. Ordre `score + random()*13` (l.46039) : aucune assertion d'ordre, démo déterministe. `score` vaut `ms.score_global` dans le dump re-baseliné (migration `20261102204820_score_matching_inconnu_null.sql`, B1, PR #1114 ; le tri garde `COALESCE(ms.score_global, 0)`) : `null` sans ligne `matching_scores` ; décodé `Int?` (D5), valeur serveur affichée telle quelle, `0` compris si le serveur le sert. `breakdown` vaut `{}` par défaut et porte des `null` et des textes (`distance_km`, `taux_median`, `error`, `filtre_dur_ko` de `fn_calculer_score_matching`) : décodage tolérant, raisons « Pourquoi N ? » par `RaisonsScore.raisons(json:)` sur le JSON brut (golden T2, revue B8 de #1161 m1). Le filtre du paquet lit `distance_km` du payload (arrondi serveur), jamais une distance recalculée (m2). Montants affichés tels quels ; `etablissement_nom` vient du payload, sans appel à `fn_etablissements_safe`.
 - **Exemple de réponse STAGING** : recommandé dans le run T14 (paquet non vide sur la fixture D4, égalité de `etablissement_nom` avec le nom de fixture), corps anonymisé.
 
 ## fn_enregistrer_swipe
 
-- **Statut natif** : à venir (lot 4, T3a).
+- **Statut natif** : consommée (lot 4, T3a) par `JoleneSupabase/Swipe/SupabaseSwipeGateway.swift` — `SupabaseSwipeGateway.enregistrer` (✕ / ⭐), et `LIKE` par
+  `SupabaseCandidatureGateway` (`SWIPE_LIKE`).
 - **Usage prévu** : ✕ (`DISLIKE`) et ⭐ (`FAVORI`) appelés directement ; ❤️ passe par `fn_confirmer_action_planning_v1(…, 'SWIPE_LIKE', …)`, qui délègue ici avec `'LIKE'` (fiche « Lot 4 — actions `SWIPE_LIKE` et `URGENCE` »). Jamais de `SUPER_LIKE` (réécrit en `FAVORI`, l.32771, D3). Une carte n'est retirée du paquet qu'après `ok:true`.
 - **Signature SQL** (`supabase/schema/public.sql` l.32753) :
 
@@ -2547,7 +2664,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_enregistrer_swipe"("p_mission_id" "uuid"
 
 ## fn_retirer_candidature
 
-- **Statut natif** : à venir (lot 4, T3a).
+- **Statut natif** : consommée (lot 4, T3a) par `JoleneSupabase/Swipe/SupabaseSwipeGateway.swift` — `SupabaseSwipeGateway.retirer`.
 - **Usage prévu** : « Annuler » du toast de 5 s qui suit un ❤️ (D4) : supprime la candidature `EN_ATTENTE`. La ligne `swipes` reste (immuable) : la carte n'est **jamais** remise dans le paquet, un nouveau `LIKE` répondrait `mission_deja_swipee` (correction 12). Seule RPC « pas avant le lot 4 » (`RPC_PAS_AVANT_LOT4`), suivie ici avec `lot: 4`.
 - **Signature SQL** (`supabase/schema/public.sql` l.54817) :
 
@@ -2565,7 +2682,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_retirer_candidature"("p_candidature_id" 
 
 ## fn_initialiser_preferences_matching
 
-- **Statut natif** : à venir (lot 4, T3a).
+- **Statut natif** : consommée (lot 4, T3a) par `JoleneSupabase/Swipe/SupabaseSwipeGateway.swift` — `SupabaseSwipeGateway.initialiserPreferences` (`PreferencesMatching`
+  nuit / jour / week-end / semaine, amorçage `depuisQuiz` du web).
 - **Usage prévu** : Quiz de préférences au premier contact (D6 : marqueur local par userId absent **et** aucun swipe en base), sans la question « dispo urgence » (D26, remplacée par un lien vers Pool urgence). Quatre préférences dans [0, 1].
 - **Signature SQL** (`supabase/schema/public.sql` l.38646) :
 
@@ -2583,7 +2701,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_initialiser_preferences_matching"("p_pre
 
 ## fn_lister_mes_filtres_sauvegardes
 
-- **Statut natif** : à venir (lot 4, T4).
+- **Statut natif** : consommée (lot 4, T4) par `JoleneSupabase/Filtres/SupabaseFiltresGateway.swift`, appelée par `FiltresModel` (liste, relecture après chaque mutation) et `AlerteRapideModel` (JoleneCore).
 - **Usage prévu** : Liste de `/soignant/parametres/recherches-sauvegardees` et relecture après chaque mutation ; toujours `p_audience = 'SOIGNANT_RECHERCHE_MISSIONS'`.
 - **Signature SQL** (`supabase/schema/public.sql` l.39947) :
 
@@ -2601,7 +2719,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_lister_mes_filtres_sauvegardes"("p_audie
 
 ## fn_creer_filtre_sauvegarde
 
-- **Statut natif** : à venir (lot 4, T4).
+- **Statut natif** : consommée (lot 4, T4) par `JoleneSupabase/Filtres/SupabaseFiltresGateway.swift`, appelée par `AlerteRapideModel` (JoleneCore, alerte rapide d'Explorer).
 - **Usage prévu** : Sauvegarde d'une recherche et « Créer une alerte » 1-tap depuis Explorer. `p_audience` est obligatoire (aucun défaut) : toujours `'SOIGNANT_RECHERCHE_MISSIONS'`. `p_filtres` en **camelCase**, les sept clés `profession, rayonKm, tauxMin, typeContrat, urgentesOnly, horaire, villeRecherche` toujours présentes avec les valeurs par défaut du web (forme `CriteresAlerteMissions`, `src/lib/alertes-recherche-missions.ts` l.1-9 ; validateur `private.fn_filtres_recherche_missions_valides`, migration `20260925093121`) : `MissionFilters.ville` → `villeRecherche`, `etablissementId` retiré, nombres entiers écrits sans `.0`, `typeContrat ∈ {TOUS, CDD, LIBERAL}`, `horaire ∈ {TOUS, JOUR, NUIT, WEEKEND}`. Avant création, une recherche strictement identique (clé `JSON.stringify` triée, `AlerteRecherche`, golden T2) est réactivée plutôt que dupliquée.
 - **Signature SQL** (`supabase/schema/public.sql` l.26466) :
 
@@ -2619,7 +2737,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_creer_filtre_sauvegarde"("p_nom" "text",
 
 ## fn_modifier_filtre_sauvegarde
 
-- **Statut natif** : à venir (lot 4, T4).
+- **Statut natif** : consommée (lot 4, T4) par `JoleneSupabase/Filtres/SupabaseFiltresGateway.swift`, appelée par `FiltresModel` (cloche, « Modifier ») et `AlerteRapideModel` (réactivation d'une recherche identique), JoleneCore.
 - **Usage prévu** : Renommage, bascule de l'alerte et fréquence (`IMMEDIATE`, `QUOTIDIENNE`, `HEBDOMADAIRE`) ; `filtres` n'est pas modifiable (absent de la signature). Un paramètre `NULL` laisse la valeur inchangée (`COALESCE`).
 - **Signature SQL** (`supabase/schema/public.sql` l.43089) :
 
@@ -2637,7 +2755,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_modifier_filtre_sauvegarde"("p_id" "uuid
 
 ## fn_supprimer_filtre_sauvegarde
 
-- **Statut natif** : à venir (lot 4, T4).
+- **Statut natif** : consommée (lot 4, T4) par `JoleneSupabase/Filtres/SupabaseFiltresGateway.swift`, appelée par `FiltresModel` (JoleneCore).
 - **Usage prévu** : Suppression d’une recherche sauvegardée.
 - **Signature SQL** (`supabase/schema/public.sql` l.59994) :
 

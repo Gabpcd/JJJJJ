@@ -6,7 +6,7 @@ import Foundation
 /// parallèles ne modifient jamais ce fichier, seulement le leur.
 enum DemoLot4 {
     static func cabler(_ gateways: inout Gateways) {
-        gateways.swipe = swipe()
+        gateways.swipe = swipe(gateways)
         gateways.filtres = filtres()
         gateways.disponibilites = disponibilites()
         gateways.parrainage = parrainage()

@@ -73,6 +73,12 @@ final class TextesWebTests: XCTestCase {
             "TextesWeb.StripeConnect.nonDemandeTitre",
             "TextesWeb.StripeConnect.nonDemandeTexte",
             "TextesWeb.StripeConnect.supprimeTexte",
+            // L1-T6b (revue B8 P2) : phrases d'engagement de la candidature, reprises à l'identique (HARD STOP n°4).
+            "TextesWeb.Candidature.engagementCandidature",
+            "TextesWeb.Candidature.engagementAcceptation",
+            "TextesWeb.Candidature.mentionAccepter",
+            // L1-T7 : confirmation de l'annulation sans candidature (`DetailMissionSoignant.tsx` l.916).
+            "TextesWeb.Annulation.participationAnnulee",
         ]
         let marques: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
         for entree in Self.tousLesTextes {
@@ -270,5 +276,21 @@ final class TextesWebTests: XCTestCase {
     /// L3-T14a : troisième étape du mode salarié (`PageStripeConnect.tsx` l.228), texte puis « Mes gains » en gras.
     func testEtapeConfirmationStripeCommeLeRenduWeb() {
         XCTAssertEqual(TextesWeb.StripeConnect.salarieEtapeConfirmation, "Tu confirmes la réception dans Mes gains")
+    }
+
+    /// Annulation (lot 1, T7 ; `ModaleAnnulationCandidature.tsx` l.129-132) : « Score impacté » seulement pour des points
+    /// serveur négatifs ; 0 ou absent (`Number(result?.points ?? 0)`) → « Candidature annulée. ».
+    func testAnnulationCommeLeRenduWeb() {
+        let annulation = TextesWeb.Annulation.self
+        XCTAssertEqual(annulation.succesCandidature(points: -5), "Candidature annulée. Score impacté : -5 pts.")
+        XCTAssertEqual(annulation.succesCandidature(points: -30), "Candidature annulée. Score impacté : -30 pts.")
+        XCTAssertEqual(annulation.succesCandidature(points: 0), "Candidature annulée.")
+        XCTAssertEqual(annulation.succesCandidature(points: nil), annulation.candidatureAnnulee)
+        XCTAssertEqual(annulation.participationAnnulee, "Participation annulée. Ton score sera mis à jour.")
+        for cle in ["justificatifLibelle", "avertissementDonneesSante", "confirmationConsequences", "notificationEtablissement",
+                    "confirmerAnnulation", "scoreImpacteDebut", "scoreImpacteFin", "candidatureAnnulee",
+                    "participationAnnulee", "ouiAnnuler"] {
+            XCTAssertTrue(catalogue.contains { $0.cle == "Annulation." + cle }, cle)
+        }
     }
 }

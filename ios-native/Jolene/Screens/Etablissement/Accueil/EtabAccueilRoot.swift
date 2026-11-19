@@ -1,16 +1,15 @@
 import SwiftUI
 import JoleneCore
 
-/// Racine de l'onglet Accueil de l'espace établissement, posée par T2a avec un contenu provisoire ;
-/// remplie par T4 seule (actions prioritaires, `EtabAccueilScreen`). Identifiant provisoire :
-/// `placeholder-etab-accueil` (T4 migre les assertions de `DemoEtabSessionTests`).
+/// Racine de l'onglet Accueil de l'espace établissement, posée par T2a, remplie par T4 : actions prioritaires
+/// (`EtabAccueilScreen`). `ouvrir` sélectionne un onglet de la coquille et y empile l'écran livré éventuel, comme
+/// une demande du coordinateur des liens (`EtablissementTabView.ouvrir`).
 struct EtabAccueilRoot: View {
     @ObservedObject var session: SessionStore
     let snapshot: EtablissementSessionSnapshot
+    let ouvrir: (CibleEtablissement) -> Void
 
     var body: some View {
-        PlaceholderScreen(titre: "Accueil", identifier: "placeholder-etab-accueil",
-                          description: "Les actions prioritaires de votre établissement arrivent dans une prochaine version de l'application.",
-                          etat: "Disponible au lot 5")
+        EtabAccueilScreen(session: session, snapshot: snapshot, ouvrir: ouvrir)
     }
 }

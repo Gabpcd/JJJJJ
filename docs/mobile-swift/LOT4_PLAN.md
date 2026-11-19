@@ -59,6 +59,103 @@
 >     est déplacée (précision 10). `fn_suggestions_missions_pour_soignant` reste `a_venir`, `lot: 4`, à statuer en T15.
 > 11. **Numéros de ligne** : le dump `supabase/schema/public.sql` a été re-baseliné depuis le 01/11 ; les « l.N » du
 >     blueprint sont décalés. Les gardes confrontent les contenus (messages, SQLSTATE), pas les lignes, et passent.
+> 12. **T1c livrée sur `integration/ios-vague-b` (18/11)**, avec pour règle « un écran non livré garde son renvoi web
+>     actuel » : rien de visible ne change avant la tranche de l'écran. Une tranche d'écran passe sa ligne de
+>     `DestinationLien.ecranNatifLivre` (une ligne `case .secondaire(.<ecran>)` par écran, revue B8 de #1159, m4),
+>     remplace son stub et retire son port de `portsEnAttenteLot4`, sans toucher de fichier partagé. Écarts au §3 T1c :
+>     - **Aiguillage** : `CibleNotification.secondaire(EcranSecondaire)` (JoleneCore) est construite pour un écran livré
+>       seulement. `MainTabView.presenter` l'empile sur le Profil (`SecondaireRoute`, `SecondaryRouter`), sauf le swipe,
+>       qui ouvre Explorer et fait avancer le jeton `demandesVueSwipe` du contexte (intention « vue Swipe », lue par T3b ;
+>       m1). `.serieDetail` y mène par `.secondaire(.serie(id:))` quand T12 passe sa ligne. `SecondaryRouter` est une
+>       porte à trois états (`PorteEcranNatif`, motif de L2-T10 ; M2) : rien de l'écran n'est construit avant la réponse
+>       du coupe-circuit, fail-open (D18), et `RenvoiWebScreen` s'il est coupé (texte neutre du §3 T1c). Onze stubs
+>       `Screens/Secondaires/<Ecran>/` ; le swipe n'en a pas, c'est une vue d'Explorer.
+>     - **Emplacements invisibles** jusqu'à la livraison : bouton Messages (`boutonMessages()`, posé sur la racine des
+>       cinq onglets, donc cinq lignes et non une), actions du détail de mission dans l'ordre du web (m2 :
+>       `ActionsEtablissementMission` au bas du bloc de l'établissement, exclusion puis signalement, `DetailMissionSoignant.tsx`
+>       l.1160-1183 ; `MissionContactButton` après l'annulation, l.1550-1558 ; un fichier par bouton), Explorer
+>       (`vueSwipe(model:)` pour T3b, `alerteRapide(model:)` pour T4).
+>       Explorer n'a aujourd'hui aucune commande Liste · Carte : T3b pose la commande Swipe · Liste · Carte dans son
+>       emplacement. Contexte `contexteSecondaire` injecté au-dessus des onglets.
+>     - **Hub** : `ActiviteSoignantSection` rend `EntreesHubLot4`, c'est-à-dire les sections du hub web
+>       (`MonCompteSoignant.tsx` l.92-110 : Recherches sauvegardées, Établissements exclus, Parrainage, Litiges &
+>       contestations), écrans livrés seulement. Le regroupement « Activité / Missions » du §3 T1c vient de la barre
+>       latérale web et n'est pas repris. Score, évaluations, pool urgence et disponibilités n'ont pas d'entrée dans le
+>       hub web : ils sont atteints par lien, push ou centre, et leur point d'entrée reste à poser (revue B8 de #1159,
+>       m3, laissé à l'intégration : emplacement « disponibilités » d'Explorer, `RechercheMissions.tsx` l.311, ou garde
+>       « écran livré ⇒ point d'entrée ou exemption listée » ; sinon T15).
+>       `RenvoisWebHubSection` (stub) reçoit « Documents & protection » en T13.
+>     - **Partage** (M1) : la feuille du lot 2 (`Composition/Media/ShareSheet.swift`, popover iPad, fermeture unique)
+>       reste la seule ; T1c lui ajoute `presenter(elements:)` pour T6, T10 garde `presenter(fichier:)`, et chacune pose
+>       son double démo si elle en a besoin. Aucun nom de fichier Swift en double dans la cible.
+>     - **Sans objet** : `SafariHandoff` (écart n°1 : `RenvoiWebScreen` passe par `presentateurRenvoiWeb`) ; insertion dans `RevenusScreen.swift` (l'entrée `revenus-bulletins-web`
+>       résout son lien par `DestinationLien` puis `CibleNotification` : T10 ne change que `DestinationLien`) ;
+>       `JoleneUITests/UITestSupport.swift` inchangé.
+>     - **m6** (revue B8 de #1146) : `ParrainageApplicateur` (appelé par `DeepLinkCoordinator` sur tout lien et à
+>       l'ouverture de l'espace) et `RealtimeLifecycle` (appelé par `JoleneApp`) ne passent que par `VerrousLot4`.
+>       `SecondairesLot4Tests`, `SupabaseGatewaysTests.testAbonnementRealtimeVerrouilleAvantT7a` et la garde node
+>       « m6 » de `check-rpc-contracts-lot4.node.mjs` échouent si une capture, un appel `fn_appliquer_parrainage` ou un
+>       canal Realtime (`realtimeV2`, `.channel(`, `.subscribe(`, présence, diffusion) apparaît tant que le port reste
+>       dans `portsEnAttenteLot4`. Code de parrainage perdu avant T6 : écart consigné (`DECISIONS_LOT4.md`, précision 12).
+>     - **Fixtures** : `scripts/mobile/demo-fixtures/` contient treize modules vides, un par domaine, plus `lot4.mjs`
+>       (collision et nom hors motif refusés). Les fixtures des lots 0 à 3 ne sont pas redécoupées.
+>     - **CI** : filtres de chemins de `ios-swift-ci.yml` (modules de fixtures, quatre règles W0 ; m9, fait à
+>       l'intégration de la vague C : une seule occurrence par motif, celle du bloc de T2, garde node « une occurrence par
+>       motif et par filtre »). Ni éclat UI du lot 4
+>       ni `-skip-testing:JoleneUITests/StagingLot4Tests` : aucune classe n'existe encore, et la garde des éclats exige
+>       des classes réelles. La première tranche qui livre un XCUITest crée l'éclat (job `ui-lot1` ou job du lot 4,
+>       D19). T1c n'ajoute pas de XCUITest (`DemoNavigationSecondaireTests` reporté : rien n'est navigable avant le
+>       premier écran livré), et ses preuves sont les tests JoleneCore.
+> 13. **T3a (swipe Core + Supabase, 18/11)** : le dump porte déjà `'score', ms.score_global` (migration
+>     `20261102204820_score_matching_inconnu_null.sql`, #1114) ; T3a n'en dépend pas : `score: Int?`, valeur servie
+>     affichée telle quelle (`0` compris si le serveur le sert). Les quatre RPC du swipe passent en `consommee` dans la
+>     PR qui câble leur gateway (consigne du 18/11, `LOT4_CONSOMMEES` du test node), et non plus en une fois par T15.
+>     `PreferencesMatching` est corrigé (nuit / jour / week-end / semaine, paramètres réels de
+>     `fn_initialiser_preferences_matching`, et non quatre poids de scoring). SWIPE_LIKE est déverrouillé dans
+>     `SupabaseCandidatureGateway` et `DemoCandidatureGateway` (le serveur sert l'action, relecture de la candidature) ;
+>     URGENCE reste verrouillée (T11). Fixture `demo-swipe.json` produite par le module de domaine
+>     `scripts/mobile/demo-fixtures/swipe.mjs` (découpage de T1c ; T3a, livré sur une base sans ce découpage, l'écrivait
+>     dans `export-demo-fixtures.mjs`, déplacé à l'intégration de la vague C) ; `DemoLot4.cabler` reçoit une ligne
+>     (`swipe(gateways)`) pour partager favoris et candidature du monde démo. Pas de carte démo « choix de contrat » ni « déjà swipée »
+>     (aucune mission `TOUS` dans `demo-missions.json`) : à ajouter par T3b si l'XCUITest l'exige. Revue B8 de #1165 :
+>     - **m1** : `acces_refuse` et `profession_incompatible` écartent la carte pour la session (`SwipeRefus.horsPaquet`,
+>       `SwipeModel`), jamais remise en tête : `fn_enregistrer_swipe` les refuse avant d'écrire la ligne `swipes` et
+>       `fn_obtenir_missions_swipe` resservirait la carte. **Suivi backend B9** (go de Gabrielle, redéfinition depuis la
+>       définition LIVE) : filtrer `fn_est_exclu` dans le paquet (`fn_soignant_eligible_mission` ne l'appelle pas ;
+>       même défaut côté web, latent tant que `exclusions` est vide, atteignable dès une exclusion, natif en T11).
+>     - **m3, à porter par T3b avant d'exposer le ❤️** (aucun code de l'app n'appelle `SwipeModel` aujourd'hui) :
+>       la feuille « première candidature » (HARD STOP n°4, texte verbatim de `VueSwipeMissions.tsx`) rendue
+>       obligatoire avant le premier `SwipeModel.candidater` par userId ; le `warning` de planning du ❤️ affiché comme
+>       le web (`VueSwipeMissions.tsx`, `toast.warning(result.warning)`) et `docs_a_completer`, que
+>       `CandidatureOutcome` (lot 1) ne porte pas aujourd'hui.
+>     - **m4** : la branche `auth_required` de SWIPE_LIKE (`SupabaseCandidatureGateway`) est défensive, inatteignable
+>       avec le wrapper live (« Accès réservé aux soignants authentifiés. », restitué verbatim) ; documentée et testée.
+>     - **m2, fait à l'intégration de la vague C** (`integration/ios-vague-c`) : `buildDemoSwipe` est dans
+>       `scripts/mobile/demo-fixtures/swipe.mjs` (module vide posé par T1c, règle « jamais `export-demo-fixtures.mjs` »),
+>       sortie identique (`export-demo-fixtures.mjs --check`) ; écart renuméroté n°13 (le n°12 est celui de T1c, le n°14
+>       celui de T4).
+> 14. **T4 livrée (18/11, #1167 ; le n°13 revient à T3a, #1165)** : `/soignant/parametres/recherches-sauvegardees` natif,
+>     ses quatre RPC passées en `consommee` (`LOT4_CONSOMMEES`). Écarts au web, tranchés par la revue B8 de #1167 :
+>     - **Alerte rapide toujours visible** : bouton « Me prévenir des prochaines missions » de la barre d'Explorer
+>       (`AlerteRapideButton.swift`, emplacement `alerteRapide(model:)` de T1c ; à gauche de la barre sur tous les
+>       formats depuis l'intégration de la vague C : à droite, la barre d'onglets du haut de l'iPad la reléguait dans le
+>       menu « Plus », et la droite reste à « Filtres »), sous le coupe-circuit
+>       `ios_natif_recherches_actif`, chaque écriture après confirmation et relecture. Le web ne l'offre que dans l'état
+>       vide d'Explorer, la fin du paquet de swipe et `?alerte=1` ; `?alerte=1` n'est pas routé (`LinkRouter` mène
+>       `/soignant/recherche-missions` à `.explorer` sans requête). L'état vide et la fin du paquet restent à brancher
+>       (T3b pour le swipe ; l'état vide est dans `MissionsListScreen`, hors tranche).
+>     - **Alerte existante jamais réécrite** (M1) : recherche identique déjà en alerte, quelle que soit sa fréquence →
+>       aucune écriture, message exact « Une alerte existe déjà pour cette recherche (toutes les heures / chaque jour /
+>       chaque semaine). » (le web annonce « toutes les heures » même pour une alerte quotidienne). Recherche identique
+>       sans alerte → `p_alerte_active` seul, fréquence conservée (le web envoie aussi `IMMEDIATE`, qui écraserait le choix
+>       enregistré). Création : `IMMEDIATE`, comme le web.
+>     - **Cloche de la liste** (m2) : `p_alerte_active` seul, comme le web (`fn_modifier_filtre_sauvegarde` garde nom et
+>       fréquence par `COALESCE`) ; `FiltresSauvegardesPort.modifier` prend `nom` et `frequence` facultatifs (port de T1).
+>     - **Filtre établissement** (m1) : le validateur serveur refuse la clé `etablissementId` ; l'alerte ne le reprend pas
+>       (comme le web) et la confirmation le dit (`FiltresTextes.etablissementNonRepris`).
+>     - **Avis de succès refermables** à la place des toasts du web ; aucun ne disparaît sur minuterie.
+>     - **XCUITest** : `DemoFiltresTests` ouvre l'éclat `lot4` du job `ui-lot1` (D19) ; le paragraphe « CI » du n°12 ne
+>       vaut plus pour T4.
 >
 > **§6 mis à jour au 18/11** : B0-bis fait (point 2) ; prérequis du point 1 complétés par le reliquat du lot 1
 > ci-dessus (T6a, T4b, T5, T6b, T6c) ; B1 toujours B9, non fait ; les autres points sont inchangés.

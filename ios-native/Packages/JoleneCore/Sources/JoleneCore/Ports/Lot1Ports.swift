@@ -22,7 +22,9 @@ public protocol DashboardPort: Sendable {
 public protocol CandidaturePort: Sendable {
     /// POSTULER / ACCEPTER / PROPOSITION. `creneaux` est le planning exact confirmé à l'écran
     /// (`p_creneaux_confirmes`) ; un planning modifié depuis l'affichage est un refus
-    /// `planningAReconfirmer`, jamais un renvoi.
+    /// `planningAReconfirmer`, jamais un renvoi. PROPOSITION : `choixContrat` porte le contrat de la
+    /// proposition relu par l'écran (`CandidatureRules.contratProposition`) ; hors `LIBERAL`, l'appel lève
+    /// `CandidatureVerrou.renvoiWeb` sans rien envoyer (attestation hebdomadaire non portée, `LOT1_PLAN.md` §3 T6b).
     func confirmer(action: ActionPlanning, missionId: String, creneaux: [CreneauConfirmePayload], message: String?,
                    choixContrat: String?, candidatureId: String?, context: MissionReadContext) async throws -> CandidatureOutcome
     func refuserProposition(candidatureId: String, context: MissionReadContext) async throws
@@ -47,7 +49,10 @@ public protocol FavorisPort: Sendable {
     func basculerEtablissement(id: String, actif: Bool, context: MissionReadContext) async throws -> [EtablissementFavori]
 }
 
-/// Mes missions : candidatures, à venir, passées (pages de `MissionsPage.taille`) — tranche T5.
+/// Mes missions : candidatures, à venir, passées — tranche T5. `aVenir` et `passees` lisent de façon
+/// **cumulative**, comme le web (« M1 », `range(0, (page + 1) * MissionsPage.taille - 1)`) : la page
+/// `page` rend les lignes des pages 0…`page` d'un seul tenant, et `aSuivre` vaut vrai si la lecture
+/// est pleine (`(page + 1) * taille` lignes).
 public protocol MesMissionsPort: Sendable {
     func candidatures(context: MissionReadContext) async throws -> [CandidatureRecord]
     func aVenir(context: MissionReadContext, page: Int) async throws -> MissionsPage
@@ -114,10 +119,25 @@ public protocol RecoveryPort: Sendable {
     func signOutAfterRecovery() async throws
 }
 
-/// Justificatif d'annulation (bucket `justificatifs`) — tranche T7. Rend le chemin Storage
-/// (`<uid>/annulations-candidature/<candidatureId>/<ts>_<nom>`), précédé d'un reçu Keychain.
+/// Justificatif d'annulation (bucket `justificatifs`) — tranche T7. Le chemin Storage
+/// (`<uid>/annulations-candidature/<candidatureId>/<ms>_<nom>`) est celui du reçu `RecuJustificatif`, journalisé
+/// AVANT le dépôt (PRINCIPES §4) : le port dépose sous ce chemin (`upsert: false`) et relit sa présence (HEAD) pour
+/// réconcilier un dépôt incertain, sans jamais redéposer.
 public protocol JustificatifStoragePort: Sendable {
-    func upload(data: Data, fileName: String, candidatureId: String, userId: String) async throws -> String
+    func deposer(chemin: String, octets: Data, mime: MimeDocument, context: MissionReadContext) async throws -> IssueDepotJustificatif
+    func existe(chemin: String, context: MissionReadContext) async throws -> Bool
+}
+
+/// Issue d'un dépôt de justificatif. Session refusée : `JoleneError(.unauthorized)` levée.
+public enum IssueDepotJustificatif: Equatable, Sendable {
+    /// Objet déposé (réponse 2xx).
+    case depose
+    /// La requête n'est jamais partie (hôte injoignable) : rien n'est déposé.
+    case nonEnvoye
+    /// Refus certain du stockage (4xx hors 401 et 409) : rien n'est déposé.
+    case refuse(statut: Int)
+    /// Réponse perdue ou ambiguë (409 compris) : réconciliation par `existe(chemin:context:)`.
+    case incertain
 }
 
 // MARK: - Ports « non câblés »
@@ -231,7 +251,10 @@ public struct UnwiredRecoveryPort: RecoveryPort, UnwiredPort {
 
 public struct UnwiredJustificatifStoragePort: JustificatifStoragePort, UnwiredPort {
     public init() {}
-    public func upload(data: Data, fileName: String, candidatureId: String, userId: String) async throws -> String {
+    public func deposer(chemin: String, octets: Data, mime: MimeDocument, context: MissionReadContext) async throws -> IssueDepotJustificatif {
+        throw UnwiredPorts.erreur(port: "justificatifs", tranche: "T7")
+    }
+    public func existe(chemin: String, context: MissionReadContext) async throws -> Bool {
         throw UnwiredPorts.erreur(port: "justificatifs", tranche: "T7")
     }
 }
