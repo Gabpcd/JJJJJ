@@ -45,6 +45,9 @@ final class DeepLinkIntentTests: XCTestCase {
             ("https://jolene.app/soignant/mes-gains", .revenus(section: .apercu)),
             ("https://jolene.app/soignant/mes-gains?tab=inconnu", .revenus(section: .apercu)),
             ("https://jolene.app/soignant/mes-gains?tab=paiements", .revenus(section: .paiementsAConfirmer)), // T13
+            ("https://jolene.app/soignant/stripe-connect", .stripeConnect(retour: nil)),                     // T14a
+            ("https://jolene.app/soignant/stripe-connect?success=true", .stripeConnect(retour: .succes)),     // T14a
+            ("https://jolene.app/soignant/stripe-connect?refresh=true", .stripeConnect(retour: .rafraichir)), // T14a
             ("https://jolene.app/soignant/mon-compte", .monCompte),
             ("https://jolene.app/soignant/parametres", .monCompte),
             ("https://jolene.app/soignant/profil", .profil),
@@ -83,8 +86,6 @@ final class DeepLinkIntentTests: XCTestCase {
             "https://jolene.app/soignant/mes-gains?tab=bulletins&annee=2026",          // lot 4 (D4)
             "https://jolene.app/soignant/mes-gains?tab=avances",                      // lot 4 (D4)
             "https://jolene.app/soignant/mes-factures-honoraires",                    // alias, lot 4
-            "https://jolene.app/soignant/stripe-connect?success=true",                // T14a
-            "https://jolene.app/soignant/stripe-connect?refresh=true",                // T14a
             "https://jolene.app/soignant/missions/serie/s1",                          // lot 4 (décision 11 du lot 1)
             "https://jolene.app/soignant/litiges#l1",
             // T7 (confirmation, `soignant`, `reprendre`) et T8 (`completer`) : présentées hors de l'espace
@@ -246,6 +247,8 @@ final class DeepLinkIntentTests: XCTestCase {
                 renvois += 1
             case .refusReinitialisation?:
                 XCTAssertEqual(intention, .reinitialisationRefusee, chemin)
+            case .naviguerEtablissement?:
+                XCTFail("\(chemin) : navigation établissement dans l'espace soignant (lot 5, T2b)")
             case .inscription(let destination)?:
                 XCTAssertEqual(intention, .horsEspace(destination), "\(chemin) : présenté hors de l'espace (T7)")
             case nil:
@@ -349,10 +352,11 @@ final class DeepLinkIntentTests: XCTestCase {
     /// sans session, et jamais mémorisé pour un espace à venir.
     func testRenvoiWebPresenteAussitotSansSessionEtJamaisMemorise() {
         let aiguillage = AiguillageLiens(taps: BoiteTapsPush())
-        let stripe = url("https://jolene.app/soignant/stripe-connect?success=true")
-        XCTAssertEqual(aiguillage.recevoir(url: stripe), .renvoiWeb(.safari(stripe)))
+        // Série de missions : renvoi web assumé (décision 11 du lot 1) ; Stripe Connect est natif depuis T14a.
+        let serie = url("https://jolene.app/soignant/missions/serie/s1")
+        XCTAssertEqual(aiguillage.recevoir(url: serie), .renvoiWeb(.safari(serie)))
         XCTAssertFalse(aiguillage.aUnLienEnAttente)
-        aiguillage.renvoiWebPresente(.safari(stripe))
+        aiguillage.renvoiWebPresente(.safari(serie))
         aiguillage.renvoiWebFerme()
         XCTAssertNil(aiguillage.ouvrirEspace(snapshot(epoch: 1)), "déjà présenté : rien à rejouer")
         let etab = url("https://jolene.app/etablissement/missions/abc")

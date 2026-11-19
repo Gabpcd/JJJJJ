@@ -10,6 +10,11 @@ import JoleneDesign
 /// - lot 2, T4a (décision 24 du lot 2) : « Mon espace » (`EspaceSoignantSection` : Mes présences, Mes documents,
 ///   Mes contrats, consentement GPS), juste après « Application », comme au lot 2 ;
 /// - lot 3, T9 : « Mon profil » (`ProfilEntreeSection`, `profil-ouvrir`) ;
+/// - lot 3, T14a et T14b : une seule section « Paiements & facturation » (`PaiementsFacturationSection`,
+///   `MonCompteSoignant.tsx` l.64-77), juste après « Mon profil » comme le web ; lignes dans l'ordre du web :
+///   « Compte de paiement (Stripe) » (`StripeConnectEntreeLigne`, `profile-stripe-connect`, montée seulement si la règle
+///   web `estLiberal` est vraie à la lecture de l'exercice ; `StripeConnectRoute` enregistrée par `MainTabView`), puis
+///   « Coordonnées bancaires » (`IbanEntreeLigne`, `iban-ouvrir`, `IbanRoute` enregistrée ici) ;
 /// - « Réglages » : « Notifications » (T6, préférences, `profile-preferences-notifications`, hôte de la carte
 ///   d'autorisation de T4 : aucune seconde carte ici) et le thème Système / Clair / Sombre (T11, D16) ;
 /// - T11 : « Connexion & sécurité » (« Changer mon mot de passe », `compte-mdp-ouvrir` ; issue d'une demande dont
@@ -20,9 +25,8 @@ import JoleneDesign
 /// Entrées natives en liens par valeur (`ProfilEditionRoute`, `PreferencesNotificationsRoute` enregistrées par
 /// `MainTabView` ; `MotDePasseRoute` enregistrée ici, sur la liste et non dans ses lignes) ; celles de « Mon espace »
 /// (lot 2) en liens à destination. Entrées web : `JoleneRoute` puis `DestinationLien.destination`. Points d'extension
-/// (sans entrée tant que l'écran ou le présentateur manque) : paiements et Stripe (T14a), coordonnées bancaires
-/// (T14b), biométrie (L1-T9), centre de notifications (ouvert depuis l'Accueil, le hub web n'en a pas). Identifiant de
-/// la liste : `profile-list`.
+/// (sans entrée tant que l'écran ou le présentateur manque) : biométrie (L1-T9), centre de notifications (ouvert depuis
+/// l'Accueil, le hub web n'en a pas). Identifiant de la liste : `profile-list`.
 struct ProfileScreen: View {
     let container: AppContainer
     @ObservedObject var session: SessionStore
@@ -37,6 +41,8 @@ struct ProfileScreen: View {
     /// demande ne perde pas l'issue (annoncée ici, `compte-mdp-issue-hub`).
     @StateObject private var motDePasse: MotDePasseModel
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
+    /// Lot 3, T14a : entrée « Compte de paiement (Stripe) », montrée selon l'exercice lu (`StripeConnectEntreeLigne`).
+    @State private var entreeStripe = false
 
     init(container: AppContainer, session: SessionStore, snapshot: SessionSnapshot,
          ouvrirOnglet: @escaping (MainTabView.Tab) -> Void = { _ in }) {
@@ -82,6 +88,10 @@ struct ProfileScreen: View {
             // Une ligne par tranche (T4a présences, T7 documents, T9a contrats ; T4b consentement GPS).
             EspaceSoignantSection(session: session, snapshot: snapshot) // L2-T10 : liens par valeur (`MonEspaceRoute`)
             ProfilEntreeSection() // lot 3, T9 : « Mon profil » (`MonCompteSoignant.tsx` l.59)
+            // Lot 3, T14a et T14b : une seule section « Paiements & facturation » (l.64-77), Stripe (l.67-68, libéral) puis
+            // « Coordonnées bancaires » (l.73). Toujours présente ; la ligne Stripe, montée une fois l'exercice lu, décale
+            // d'une ligne ce qui la suit.
+            PaiementsFacturationSection(entreeStripe: entreeStripe)
             Section(HubCompte.titreReglages) {
                 // Lot 3, T6 : « Notifications » (l.115) vers les préférences ; lien par valeur, `MainTabView` enregistre
                 // la destination et pousse le même écran par programme (ligne du centre, tap push).
@@ -120,6 +130,11 @@ struct ProfileScreen: View {
         .navigationDestination(for: MotDePasseRoute.self) { _ in
             MotDePasseScreen(model: motDePasse)
         }
+        .navigationDestination(for: IbanRoute.self) { _ in
+            IbanScreen(session: session, snapshot: snapshot) // lot 3, T14b
+        }
+        // Lot 3, T14a : exercice relu à chaque apparition du hub (entrée Stripe selon la règle web `estLiberal`).
+        .task { entreeStripe = await StripeConnectEntreeLigne.estVisible(session: session, snapshot: snapshot) }
         // Export RGPD (revue B8, M1 et m3) : la feuille n'est présentée que hub à l'écran, une seule fois, par
         // UIKit (`FeuillePartageExport`, fin unique `completionWithItemsHandler`) ; un export abouti pendant qu'un
         // autre onglet ou un écran empilé est affiché attend le retour du hub.
@@ -132,10 +147,25 @@ struct ProfileScreen: View {
     }
 }
 
+/// Section « Paiements & facturation » du hub (`MonCompteSoignant.tsx` l.64-77), unique (intégration de T14a et T14b,
+/// revue B8 de #1144) : « Compte de paiement (Stripe) » (l.67-68) seulement pour un exercice libéral lu
+/// (`entreeStripe`), puis « Coordonnées bancaires » (l.73), toujours. « Mandat de facturation » (l.69-70) n'est pas
+/// porté (renvoi web, lot 4 ; `DECISIONS_LOT3.md`, section T14a). Titre unique : `StripeConnectTextes.sectionHub`.
+struct PaiementsFacturationSection: View {
+    let entreeStripe: Bool
+
+    var body: some View {
+        Section(StripeConnectTextes.sectionHub) {
+            if entreeStripe { StripeConnectEntreeLigne() } // lot 3, T14a
+            IbanEntreeLigne() // lot 3, T14b
+        }
+    }
+}
+
 #if DEBUG
 /// Preuve « aucune requête réseau en démo » : libellé `network-sentinel` (« 0 requête »).
-/// DEBUG seulement, comme `NetworkSentinel`.
-private struct NetworkSentinelRow: View {
+/// DEBUG seulement, comme `NetworkSentinel`. Interne (lot 5, T2a) : partagé avec le compte établissement.
+struct NetworkSentinelRow: View {
     @ObservedObject var monitor: NetworkSentinel.Monitor
 
     var body: some View {

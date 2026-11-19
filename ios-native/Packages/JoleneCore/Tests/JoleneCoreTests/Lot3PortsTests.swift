@@ -18,7 +18,7 @@ final class Lot3PortsTests: XCTestCase {
     func testInitDuLot0LaisseLesPortsDuLot3NonCablesApresCeuxDuLot1() {
         let g = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
         // Fusion des lots 2 et 3 : le bloc du lot 2 (`Lot2PortsTests`) précède celui du lot 3.
-        XCTAssertEqual(g.unwiredPorts, Lot1PortsTests.portsLot1 + Lot2PortsTests.portsLot2 + Self.portsLot3,
+        XCTAssertEqual(g.unwiredPorts, Lot1PortsTests.portsLot1 + Lot2PortsTests.portsLot2 + Self.portsLot3 + Lot4PortsTests.portsLot4,
                        "lot 1 (puis lot 2) puis lot 3, ordre de déclaration")
         XCTAssertTrue(g.push is UnwiredPushRegistrationPort)
         XCTAssertTrue(g.notifications is UnwiredNotificationsCenterPort)
@@ -37,7 +37,7 @@ final class Lot3PortsTests: XCTestCase {
 
     func testLeSecondInitDuLot1NeTouchePasAuBlocLot3() {
         let g = Lot1Fakes.gateways(clock: FixedClock(Date(timeIntervalSince1970: 1)))
-        XCTAssertEqual(g.unwiredPorts, Lot2PortsTests.portsLot2 + Self.portsLot3,
+        XCTAssertEqual(g.unwiredPorts, Lot2PortsTests.portsLot2 + Self.portsLot3 + Lot4PortsTests.portsLot4,
                        "le second init câble tout le lot 1, le lot 2 puis le lot 3 s'assignent après")
     }
 
@@ -45,7 +45,7 @@ final class Lot3PortsTests: XCTestCase {
         var g = Lot1Fakes.gateways(clock: SystemClock())
         g.push = FakePushRegistration()
         g.stripeConnect = FakeStripeConnect()
-        XCTAssertEqual(g.unwiredPorts, Lot2PortsTests.portsLot2 + Self.portsLot3.filter { $0 != "push" && $0 != "stripeConnect" })
+        XCTAssertEqual(g.unwiredPorts, Lot2PortsTests.portsLot2 + Self.portsLot3.filter { $0 != "push" && $0 != "stripeConnect" } + Lot4PortsTests.portsLot4)
         XCTAssertTrue(g.push is FakePushRegistration)
     }
 
@@ -92,6 +92,7 @@ final class Lot3PortsTests: XCTestCase {
         await refuse("T13") { _ = try await g.paiements.contester(id: "p-1", motif: "Montant erroné", context: c) }
         await refuse("T14b") { _ = try await g.iban.consulter(context: c) }
         await refuse("T14b") { _ = try await g.iban.enregistrer(iban: "FR7630006000011234567890189", titulaire: "A B", context: c) }
+        await refuse("T14a") { _ = try await g.stripeConnect.exercice(context: c) }
         await refuse("T14a") { _ = try await g.stripeConnect.statut(force: true, context: c) }
         await refuse("T14a") { _ = try await g.stripeConnect.lienOnboarding(context: c) }
     }
@@ -111,7 +112,8 @@ final class Lot3PortsTests: XCTestCase {
         // Fusion des lots 2 et 3 : l'action du lot 2 (`RGPD_CONSENTEMENT_DONNE`, `Lot2PortsTests`) précède celles du lot 3.
         XCTAssertEqual(AuditAction.allCases.map(\.rawValue),
                        ["MISSION_ASSIGNATION", "RGPD_CONSENTEMENT_DONNE",
-                        "DONNEES_PERSO_CONSULTATION", "DONNEES_PERSO_MODIFICATION", "RGPD_EXPORT_DONNEES"])
+                        "DONNEES_PERSO_CONSULTATION", "DONNEES_PERSO_MODIFICATION", "RGPD_EXPORT_DONNEES",
+                        "PRESENCE_CONTESTATION"]) // L2-T5b (revue B8, m5)
         XCTAssertEqual(AuditAction.donneesPersoConsultation.rawValue, "DONNEES_PERSO_CONSULTATION")
         XCTAssertEqual(AuditAction.donneesPersoModification.rawValue, "DONNEES_PERSO_MODIFICATION")
         XCTAssertEqual(AuditAction.rgpdExportDonnees.rawValue, "RGPD_EXPORT_DONNEES")
@@ -235,6 +237,7 @@ struct FakePushRegistration: PushRegistrationPort {
 }
 
 struct FakeStripeConnect: StripeConnectPort {
+    func exercice(context: MissionReadContext) async throws -> ExerciceConnect { ExerciceConnect(typeExercice: "LIBERAL") }
     func statut(force: Bool, context: MissionReadContext) async throws -> StatutConnect {
         StatutConnect(statut: .nonDemande, onboardingComplete: false, chargesEnabled: false, payoutsEnabled: false)
     }

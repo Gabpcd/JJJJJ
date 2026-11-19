@@ -62,6 +62,8 @@ const LOT3_CONSOMMEES = new Map([
   ['fn_mes_paiements_escrow', ['T12', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Revenus/SupabaseRevenusGateway.swift']],
   ['fn_confirmer_paiement_soignant', ['T13', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Revenus/SupabasePaiementsGateway.swift']],
   ['fn_contester_paiement_soignant', ['T13', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Revenus/SupabasePaiementsGateway.swift']],
+  ['fn_consulter_mon_iban', ['T14b', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Revenus/SupabaseIbanGateway.swift']],
+  ['fn_enregistrer_mon_iban', ['T14b', 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Revenus/SupabaseIbanGateway.swift']],
 ]);
 // Hors manifeste (capture du 2026-07-29) : classement manuel documentaire (correction 13).
 const HORS_MANIFESTE = ['fn_demarrer_inscription', 'fn_enregistrer_parcours_inscription'];
@@ -810,9 +812,10 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
     ['lot3-push', ['DemoPushTests']],
     ['lot3-notifications', ['DemoNotificationsTests', 'DemoPreferencesTests', 'DemoProfilTests']],
     ['lot3-inscription', ['DemoInscriptionTests', 'DemoCompletionInscriptionTests', 'DemoLiensLot2Tests']],
-    ['lot3-profil-photo', ['DemoPhotoPositionTests']],
+    // Lot 5 (revue B8 de #1147, m5) : la session établissement rejoint cet éclat léger, sans douzième éclat.
+    ['lot3-profil-photo', ['DemoPhotoPositionTests', 'DemoEtabSessionTests']],
     // L3-T13 : les paiements déclarés rejoignent l'éclat de l'onglet Revenus (domaine T12-T14b), sans nouvel éclat.
-    ['lot3-revenus', ['DemoRevenusTests', 'DemoPaiementsTests']],
+    ['lot3-revenus', ['DemoRevenusTests', 'DemoPaiementsTests', 'DemoIbanTests', 'DemoStripeTests']], // L3-T14b : IBAN ; L3-T14a : Stripe Connect
   ]);
   // Fusion des lots 2 et 3 : les éclats du lot 2 (`ios-swift-ci-eclats.node.mjs`, DECISIONS_LOT2 décision 22) suivent le
   // socle et précèdent ceux du lot 3, dans les étapes, la boucle des xcresult et la liste ECLATS du relevé.
@@ -869,7 +872,7 @@ test('PARITE_SOIGNANT.md : lignes du lot 3 (profil, revenus, notifications, Stri
     assert.ok(ligne(alias).includes("renvoi web assumé jusqu'au lot 4"), `${alias} : renvoi web assumé jusqu'au lot 4 attendu`);
   }
   for (const needle of [
-    '`/soignant/mes-gains` › Paiements à confirmer', '`/soignant/mes-gains` › IBAN', '`/soignant/mes-gains` › Missions terminées',
+    '`/soignant/mes-gains` › Paiements à confirmer', '`/soignant/mon-compte` › Coordonnées bancaires', '`/soignant/mes-gains` › Missions terminées',
     '`/soignant/mon-compte` › Mot de passe', '`/soignant/mon-compte` › Thème', '`/soignant/mon-compte` › Export RGPD',
     '`/soignant/profil` › Type d\'exercice', 'L1222-5',
   ]) assert.ok(parite.includes(needle), `PARITE : « ${needle} » absent`);

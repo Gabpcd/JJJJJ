@@ -33,8 +33,9 @@ public enum DemoWorld {
     /// câblé ici dans la même PR que sa tranche ; un port encore stub y est nommé explicitement
     /// (`DemoWorldTests.testAucunPortNonCable`).
     public static func gateways(drapeaux: [String: Bool]) -> Gateways {
+        let auth = DemoAuthGateway()
         var gateways = Gateways(
-            auth: DemoAuthGateway(),
+            auth: auth,
             role: DemoRoleGateway(),
             missions: DemoMissionsGateway(),
             clock: FixedClock(fixedNow),
@@ -51,6 +52,10 @@ public enum DemoWorld {
         )
         câblerLot2(&gateways)
         câblerLot3(&gateways)
+        DemoLot4.cabler(&gateways) // lot 4 : une fabrique par domaine (`Demo/Lot4/`)
+        // Lot 5 (T1) : ports établissement ; l'identité est celle de la session démo courante, si bien
+        // que le compte soignant fictif y est refusé (`.demoOnly`).
+        gateways.etablissement = DemoEtablissementWorld.gateways(identite: { try? await auth.restoreSession()?.id })
         return gateways
     }
 
@@ -61,7 +66,7 @@ public enum DemoWorld {
     /// backend : `Appareil.demo(gps:reseau:)`, injecté par `AppContainer` (T4b).
     static func câblerLot2(_ gateways: inout Gateways) {
         gateways.pointage = DemoPointageGateway(clock: FixedClock(fixedNow)) // T3
-        gateways.contestation = UnwiredContestationPort()          // T5b
+        gateways.contestation = DemoContestationGateway()          // T5b
         gateways.notation = DemoNotationGateway()                  // T5a
         gateways.documents = DemoDocumentsGateway()                // T6 (scénario démo : `-JOLENE_DEMO_SCENARIO`, T7)
         gateways.contrats = DemoContratsGateway(clock: FixedClock(fixedNow)) // T8
@@ -86,8 +91,8 @@ public enum DemoWorld {
         let paiements = DemoPaiementsGateway()
         gateways.revenus = DemoRevenusGateway(paiementsDeclares: paiements)
         gateways.paiements = paiements                                     // T13
-        gateways.iban = UnwiredIbanPort()                                  // T14b
-        gateways.stripeConnect = UnwiredStripeConnectPort()                // T14a
+        gateways.iban = DemoIbanGateway()                                  // T14b
+        gateways.stripeConnect = DemoStripeConnectGateway()                // T14a
     }
 }
 
@@ -110,9 +115,20 @@ public struct DemoAuthGateway: AuthPort {
     let store = DemoSessionStore()
     let comptes = DemoComptesInscription()
     private let expiration: ExpirationSessionDemo?
+    /// Compte fictif ouvert pour l'email saisi (déjà débarrassé de ses espaces), si aucun compte n'a été créé
+    /// pendant ce lancement pour cette adresse : toujours le soignant fictif hors lot 5 ; choisi par email dans le
+    /// monde à deux espaces du lot 5 (`DemoWorld.gateways(espace:)`).
+    private let compte: @Sendable (String) throws -> AuthenticatedUser
 
     public init(expiration: ExpirationSessionDemo? = nil) {
         self.expiration = expiration
+        self.compte = { _ in DemoWorld.user }
+    }
+
+    /// Lot 5 (T2a) : compte fictif choisi selon l'email saisi.
+    public init(expiration: ExpirationSessionDemo? = nil, compte: @escaping @Sendable (String) throws -> AuthenticatedUser) {
+        self.expiration = expiration
+        self.compte = compte
     }
 
     public func restoreSession() async throws -> AuthenticatedUser? {
@@ -126,7 +142,9 @@ public struct DemoAuthGateway: AuthPort {
         guard !emailSaisi.isEmpty, !password.isEmpty else {
             throw JoleneError(.invalidCredentials, "Saisissez votre email et votre mot de passe.")
         }
-        await store.set(await comptes.utilisateur(email: emailSaisi) ?? DemoWorld.user)
+        let cree = await comptes.utilisateur(email: emailSaisi)
+        let ouvert = try cree ?? compte(emailSaisi)
+        await store.set(ouvert)
         // Relecture après mutation : aucun succès fabriqué.
         guard let user = await store.current() else {
             throw JoleneError(.unknown, "La session de démonstration n'a pas pu être ouverte.")

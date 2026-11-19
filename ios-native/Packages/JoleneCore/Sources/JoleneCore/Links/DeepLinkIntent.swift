@@ -51,7 +51,7 @@ public enum DeepLinkIntent: Equatable, Sendable, CustomStringConvertible, Custom
             self = .horsEspace(lien)
         case .accueil, .explorer, .missions, .missionDetail, .serieDetail, .revenus, .monCompte, .profil,
              .notifications, .parametresNotifications, .stripeConnect, .safari, .etablissement,
-             .presences, .presencesMission, .documents, .contrat, .contratCertificat:
+             .presences, .presencesMission, .documents, .contrat, .contratCertificat, .secondaire:
             self = .espace(lien)
         }
     }
@@ -139,6 +139,12 @@ public enum DeepLinkIntent: Equatable, Sendable, CustomStringConvertible, Custom
 ///   décide : une identité ouverte n'a pas d'inscription à faire, la confirmation est présentée au-dessus de tout
 ///   état) ; `.reinitialisationRefusee` : refus, jamais mémorisé.
 ///
+/// Lot 5, T2b (choix par espace) : dans l'espace établissement ouvert (`ouvrirEspaceEtablissement`), tout lien passe par
+/// `LinkRouter.etablissementDestination` — onglet ou écran livré de cet espace, sinon renvoi web ; un lien soignant y
+/// est un renvoi web, jamais un écran soignant ; `/contrat/{id}` y est le contrat de l'espace établissement. Dans l'espace
+/// soignant, un lien établissement reste un renvoi web (inchangé). Sans espace, un lien établissement n'est mémorisé que
+/// si l'espace établissement est ouvrable dans ce lancement (`OuvertureEspaceEtablissement`, démo jusqu'à T14).
+///
 /// Écart consigné (comme les taps, revue L3-T5 m12) : un lien reçu sur l'écran de connexion après une déconnexion
 /// est rejoué pour l'identité qui se connecte ensuite, comme le web ; la destination est relue sous sa RLS.
 @MainActor
@@ -148,6 +154,9 @@ public final class AiguillageLiens {
         /// Navigation dans l'espace prêt de cet epoch vers une cible présentable (`CibleNotification`) ; `route` est la
         /// destination effective (libellé DEBUG `deeplink-route`).
         case naviguer(CibleNotification, route: JoleneRoute, epoch: Int)
+        /// Lot 5, T2b : navigation dans l'espace établissement ouvert de cet epoch (onglet, écran empilé livré) ;
+        /// `route` donne le libellé DEBUG `deeplink-route` (`EtabRoute.libelleDebug`).
+        case naviguerEtablissement(CibleEtablissement, route: EtabRoute, epoch: Int)
         /// Renvoi web (`.safari` ou `.etablissement`) par le présentateur `.safari`, jamais `openURL`.
         case renvoiWeb(JoleneRoute)
         /// Lien de réinitialisation PKCE refusé (option B) : `DeepLinkIntent.Textes.reinitialisationRefusee`.
@@ -159,6 +168,7 @@ public final class AiguillageLiens {
         public var description: String {
             switch self {
             case .naviguer(_, let route, let epoch): return "Action.naviguer(\(route), epoch: \(epoch))"
+            case .naviguerEtablissement(_, let route, let epoch): return "Action.naviguerEtablissement(\(route), epoch: \(epoch))"
             case .renvoiWeb(let route): return "Action.renvoiWeb(\(route))"
             case .refusReinitialisation: return "Action.refusReinitialisation"
             case .inscription(let lien): return "Action.inscription(\(lien))"
@@ -173,6 +183,11 @@ public final class AiguillageLiens {
     private let taps: BoiteTapsPush
     /// Espace prêt ouvert (epoch et rôle) ; nil sans espace.
     private var espace: SessionSnapshot?
+    /// Lot 5, T2b : espace établissement ouvert ; jamais en même temps que `espace`.
+    private var espaceEtablissement: EtablissementSessionSnapshot?
+    /// Lot 5, T2b : espace établissement ouvrable dans ce lancement (`OuvertureEspaceEtablissement.pour(mode:)`). Fermé,
+    /// un lien établissement reçu sans espace reste un renvoi web présenté aussitôt, comme avant le lot 5.
+    private let ouvertureEtablissement: OuvertureEspaceEtablissement
     /// Dernier lien de l'espace reçu sans espace ouvert.
     private var lienEnAttente: DestinationLien?
     /// `taps.tapsRecus` à la mémorisation du lien : un tap en attente reçu après lui l'emporte.
@@ -180,8 +195,9 @@ public final class AiguillageLiens {
     /// URL du renvoi web affiché (anti-boucle).
     private var renvoiAffiche: URL?
 
-    public init(taps: BoiteTapsPush) {
+    public init(taps: BoiteTapsPush, espaceEtablissement: OuvertureEspaceEtablissement = .ferme) {
         self.taps = taps
+        self.ouvertureEtablissement = espaceEtablissement
     }
 
     /// Vrai si un lien attend l'ouverture d'un espace (preuve des tests).
@@ -204,19 +220,36 @@ public final class AiguillageLiens {
             }
         case .renvoiWeb(let lien):
             if let affiche = renvoiAffiche, affiche == lien.destination.externalURL { return nil }
+            // Lot 5, T2b : dans l'espace établissement, un lien établissement peut mener à un écran natif.
+            if let espaceEtablissement { return actionEtablissement(pour: lien, dans: espaceEtablissement) }
+            // Espace établissement ouvrable : un lien établissement à route NATIVE reçu sans espace attend l'espace qui
+            // s'ouvre (dans l'espace soignant, il redevient le renvoi web de toujours). Un lien sans cible native
+            // (`/etab/invitation/{token}`, routes en renvoi web assumé) reste présenté aussitôt, jamais mémorisé
+            // (règle du lot 3 ; revue B8 de #1147, m1) : un invité sans compte, ou un compte bloqué, le voit.
+            if espace == nil, ouvertureEtablissement == .ouvert, case .etablissement = lien.route,
+               LinkRouter.etablissementDestination(link: lien.canonique.absoluteString)?.route.isNative == true {
+                memoriser(lien)
+                return nil
+            }
             return .renvoiWeb(lien.destination)
         case .espace(let lien):
+            if let espaceEtablissement { return actionEtablissement(pour: lien, dans: espaceEtablissement) }
             if let espace { return action(pour: lien, dans: espace) }
-            lienEnAttente = lien
-            tapsAuLien = taps.tapsRecus
+            memoriser(lien)
             return nil
         }
+    }
+
+    private func memoriser(_ lien: DestinationLien) {
+        lienEnAttente = lien
+        tapsAuLien = taps.tapsRecus
     }
 
     /// Ouverture de l'espace prêt (apparition de `MainTabView`) : ouvre aussi la boîte des taps pour cet epoch, puis
     /// rend l'action de l'intention en attente la plus récente (lien ou tap), une seule fois.
     public func ouvrirEspace(_ snapshot: SessionSnapshot) -> Action? {
         espace = snapshot
+        espaceEtablissement = nil
         let tapPlusRecent = taps.aUnTapEnAttente && (lienEnAttente == nil || taps.tapsRecus > tapsAuLien)
         let tap = taps.prendre(pour: snapshot)
         let lien = lienEnAttente
@@ -233,9 +266,24 @@ public final class AiguillageLiens {
         return action(pour: lien, dans: espace)
     }
 
+    /// Lot 5, T2b : ouverture de l'espace établissement (apparition d'`EtablissementTabView`) : rend l'action du lien en
+    /// attente dans cet espace, une seule fois. Les taps push restent dans leur boîte (espace soignant, règle de L3-T5) :
+    /// le push établissement n'est pas servi au lot 5 avant sa tranche.
+    public func ouvrirEspaceEtablissement(_ snapshot: EtablissementSessionSnapshot) -> Action? {
+        // Défense en profondeur (revue B8 de #1147, m3) : espace fermé dans ce lancement, aucune ouverture n'est suivie
+        // (la session ne publie alors jamais `.readyEtablissement`) ; le lien en attente reste à l'espace soignant.
+        guard ouvertureEtablissement == .ouvert else { return nil }
+        espaceEtablissement = snapshot
+        espace = nil
+        guard let lien = lienEnAttente else { return nil }
+        lienEnAttente = nil
+        return actionEtablissement(pour: lien, dans: snapshot)
+    }
+
     /// Disparition de l'espace de cet epoch ; sans effet si un autre espace s'est déjà ouvert.
     public func fermerEspace(epoch: Int) {
         if espace?.epoch == epoch { espace = nil }
+        if espaceEtablissement?.epoch == epoch { espaceEtablissement = nil }
         taps.fermerEspace(epoch: epoch)
     }
 
@@ -265,6 +313,27 @@ public final class AiguillageLiens {
             if case .web(let route) = cible { return .renvoiWeb(route) }
             guard cible.estPresentable(renvoiWebDisponible: true) else { return .renvoiWeb(.safari(lien.canonique)) }
             return .naviguer(cible, route: lien.destination, epoch: espace.epoch)
+        }
+    }
+
+    /// Lot 5, T2b : action d'un lien dans l'espace établissement ouvert. Table `LinkRouter.etablissementDestination`
+    /// (jamais celle de l'espace soignant : `/contrat/{id}` y est le contrat de l'espace établissement, un lien soignant
+    /// y est un renvoi web) ; écran non livré → renvoi web de l'URL canonique, ignoré si c'est le renvoi affiché.
+    private func actionEtablissement(pour lien: DestinationLien, dans espace: EtablissementSessionSnapshot) -> Action? {
+        switch DeepLinkIntent(lien) {
+        case .reinitialisationRefusee: return .refusReinitialisation
+        case .horsEspace: return nil
+        case .espace, .renvoiWeb: break
+        }
+        guard let resultat = LinkRouter.etablissementDestination(link: lien.canonique.absoluteString) else {
+            return .renvoiWeb(.safari(lien.canonique))
+        }
+        switch resultat.route.presentation(canonique: resultat.canonique) {
+        case let .naviguer(cible):
+            return .naviguerEtablissement(cible, route: resultat.route, epoch: espace.epoch)
+        case let .renvoiWeb(url):
+            if let affiche = renvoiAffiche, affiche == url { return nil }
+            return .renvoiWeb(lien.route.externalURL != nil ? lien.route : .safari(url))
         }
     }
 }

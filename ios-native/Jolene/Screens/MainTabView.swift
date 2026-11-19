@@ -33,6 +33,8 @@ import JoleneDesign
 /// - (lot 3, T12) onglet Revenus natif (`RevenusScreen`, pile `cheminRevenus`), à la place du placeholder du lot 0 ;
 ///   ses renvois web et l'état vide passent par `presenter` (cible de l'espace), la surcouche du pré-prompt est gardée ;
 /// - (lot 3, T13) section « Paiements à confirmer » de Revenus, cible du push `PAIEMENT_RECU` (`sectionRevenus`) ;
+/// - (lot 3, T14a) écran Stripe Connect (`StripeConnectScreen`, route `StripeConnectRoute`) empilé sur le Profil : entrée
+///   du hub, lien `/soignant/stripe-connect` (retour de Stripe compris), tap push et ligne du centre ;
 /// - (lot 2, T10) écrans de « Mon espace » (présences, détail des présences d'une mission, Mes documents, contrat,
 ///   certificat) : routes par valeur `MonEspaceRoute`, enregistrées sur les piles de l'Accueil (widget « Aller pointer »,
 ///   oubli de départ) et du Profil (entrées de « Mon espace ») ; une cible de lien, de tap push, du centre ou de la ligne
@@ -141,6 +143,15 @@ struct MainTabView: View {
                     }
                     // L2-T10 : « Mon espace » (présences, documents, contrats) — entrées du hub, liens, taps et centre.
                     .destinationsMonEspace(container: container, session: session, snapshot: snapshot) { selection = $0 }
+                    // Lot 3, T14a : Stripe Connect — entrée du hub (route nue) ; lien, tap ou centre (route jetonnée,
+                    // identité de l'écran liée au jeton : un même lien reçu deux fois relit le statut).
+                    .navigationDestination(for: StripeConnectRoute.self) { route in
+                        stripeConnect(route)
+                    }
+                    .navigationDestination(for: PresentationJetonnee<StripeConnectRoute>.self) { presentation in
+                        stripeConnect(presentation.route)
+                            .id(presentation.jeton)
+                    }
             }
             .tabItem { Label("Profil", systemImage: "person") }
             .tag(Tab.profil)
@@ -247,10 +258,31 @@ struct MainTabView: View {
             selection = .profil
             cheminProfil = NavigationPath()
             cheminProfil.append(jetonsMonEspace.presenter(route))
+        case .stripeConnect:
+            // Lot 3, T14a : empilé sur le Profil remis à sa racine, comme les entrées de « Mon espace ». Revue B8 de #1144,
+            // m2 : relecture `force=true` quel que soit le chemin (lien, tap push, ligne du centre, retour de Stripe ou
+            // non) — un flux hébergé encore ouvert est fermé par le coordinateur, et l'écran retiré emporte sa relecture
+            // forcée : celui qui est affiché doit la refaire (cache serveur de 5 min contourné, un `accounts.retrieve`).
+            selection = .profil
+            cheminProfil = NavigationPath()
+            cheminProfil.append(jetonsMonEspace.presenter(StripeConnectRoute(force: true)))
         case .web(let route):
             presentateurRenvoiWeb?.presenter(route)
         case .aucune:
             return
+        }
+    }
+
+    /// Lot 3, T14a : écran Stripe Connect. Revue B8 de #1144, m3 : ses raccourcis vers « Mon espace » (Mes présences, Mes
+    /// contrats) s'empilent au-dessus de lui, sans remettre le Profil à sa racine — « Retour » ramène à l'écran Stripe,
+    /// comme le retour du navigateur après un `<Link>` du web ; les autres (Mes gains, renvois web) passent par `presenter`.
+    private func stripeConnect(_ route: StripeConnectRoute) -> some View {
+        StripeConnectScreen(session: session, snapshot: snapshot, flux: container.fluxExterne, force: route.force) { cible in
+            if let monEspace = MonEspaceRoute(cible) {
+                cheminProfil.append(jetonsMonEspace.presenter(monEspace))
+            } else {
+                presenter(cible, depuisCentre: false)
+            }
         }
     }
 }

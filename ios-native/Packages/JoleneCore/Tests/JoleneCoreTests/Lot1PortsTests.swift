@@ -16,7 +16,7 @@ final class Lot1PortsTests: XCTestCase {
         let gateways = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
         // Lots 2 et 3 (T1) : le bloc « Lot 2 » (`Lot2PortsTests`), puis le bloc « Lot 3 » (`Lot3PortsTests`), suivent le
         // lot 1 dans `unwiredPorts`.
-        XCTAssertEqual(gateways.unwiredPorts, Self.portsLot1 + Lot2PortsTests.portsLot2 + Lot3PortsTests.portsLot3)
+        XCTAssertEqual(gateways.unwiredPorts, Self.portsLot1 + Lot2PortsTests.portsLot2 + Lot3PortsTests.portsLot3 + Lot4PortsTests.portsLot4)
         XCTAssertTrue(gateways.dashboard is UnwiredDashboardPort)
         XCTAssertTrue(gateways.candidature is UnwiredCandidaturePort)
         XCTAssertTrue(gateways.presence is UnwiredPresencePort)
@@ -33,7 +33,7 @@ final class Lot1PortsTests: XCTestCase {
     func testSecondInitCompletNeLaisseAucunPortDuLot1NonCable() {
         let horloge = FixedClock(Date(timeIntervalSince1970: 1))
         let gateways = Lot1Fakes.gateways(clock: horloge)
-        XCTAssertEqual(gateways.unwiredPorts, Lot2PortsTests.portsLot2 + Lot3PortsTests.portsLot3,
+        XCTAssertEqual(gateways.unwiredPorts, Lot2PortsTests.portsLot2 + Lot3PortsTests.portsLot3 + Lot4PortsTests.portsLot4,
                        "seuls les ports des lots 2 et 3 restent à assigner")
         XCTAssertTrue(gateways.audit is FakeAudit)
         XCTAssertTrue(gateways.flags is FakeFlags)
@@ -46,7 +46,7 @@ final class Lot1PortsTests: XCTestCase {
         gateways.audit = FakeAudit()
         gateways.flags = FakeFlags()
         XCTAssertEqual(gateways.unwiredPorts, Self.portsLot1.filter { $0 != "audit" && $0 != "flags" }
-                       + Lot2PortsTests.portsLot2 + Lot3PortsTests.portsLot3)
+                       + Lot2PortsTests.portsLot2 + Lot3PortsTests.portsLot3 + Lot4PortsTests.portsLot4)
     }
 
     func testChaquePortNonCableRefuseExplicitementEnCitantSaTranche() async {
@@ -113,7 +113,8 @@ final class Lot1PortsTests: XCTestCase {
     }
 
     func testActionsDuLot1() {
-        XCTAssertEqual(ActionPlanning.allCases.map(\.rawValue), ["POSTULER", "ACCEPTER", "PROPOSITION"])
+        // Lot 4, T1 (décision D2) : SWIPE_LIKE et URGENCE ajoutées au même enum, jamais un second.
+        XCTAssertEqual(ActionPlanning.allCases.map(\.rawValue), ["POSTULER", "ACCEPTER", "PROPOSITION", "SWIPE_LIKE", "URGENCE"])
         // L'action du lot 1 ouvre la liste ; celles des lots 2 et 3 : `Lot2PortsTests.testActionDAuditDuLot2ApresCelleDuLot1`,
         // `Lot3PortsTests.testActionsAuditDuLot3`.
         XCTAssertEqual(Array(AuditAction.allCases.map(\.rawValue).prefix(1)), ["MISSION_ASSIGNATION"])

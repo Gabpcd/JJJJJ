@@ -42,6 +42,10 @@ import JoleneSupabase
 /// Lot 3, T15 : rapport de crash (`CrashReporting`, démarré par `JoleneApp` avant le conteneur sur la même lecture de
 /// l'environnement, `environnementDeLancement`) remis à la session en staging et en production seulement (identifiant
 /// utilisateur) ; jamais en démo.
+///
+/// Lot 5 (T2a, D20) : DEBUG, démo seulement, `-JOLENE_DEMO_ESPACE etablissement` (+ `-JOLENE_DEMO_ROLE_ETAB`,
+/// `-JOLENE_DEMO_LEGACY 1`, `-JOLENE_DEMO_BLOCAGE 1`, `DemoEspaceLancement`) ouvre l'espace établissement fictif ;
+/// `-JOLENE_FLAG_<cle>` surcharge aussi les drapeaux `ios_natif_etab_*` (`DemoEtabSessionTests`).
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -85,6 +89,9 @@ final class AppContainer: ObservableObject {
     /// ou lecture impossible avec `-JOLENE_DEMO_AVATAR illisible`, DEBUG) ; nil en staging et en production (feuilles
     /// système réelles).
     let selectionAvatarDemo: SelectionPhotoAvatar?
+    /// Lot 3, T14a : flux hébergé de l'onboarding Stripe Connect — démo : `DemoExternalFlow` (retour simulé, sans feuille
+    /// ni réseau) ; staging/production : `ExternalFlowPresenter` (ASWebAuthenticationSession ≥ 17.4, renvoi web sinon).
+    let fluxExterne: ExternalFlowPort
     #if DEBUG
     let networkSentinel: NetworkSentinel.Monitor?
     #endif
@@ -110,8 +117,16 @@ final class AppContainer: ObservableObject {
         let inscription = BoiteLiensInscription()
         liensInscription = inscription
         let liens = DeepLinkCoordinator(taps: boite, inscription: inscription, estDemo: environment.mode == .demo,
-                                        effaceur: environment.mode == .demo ? nil : EffaceurDonneesSafari())
+                                        effaceur: environment.mode == .demo ? nil : EffaceurDonneesSafari(),
+                                        espaceEtablissement: .pour(mode: environment.mode)) // lot 5, T2b
         self.liens = liens
+        if environment.mode == .demo {
+            fluxExterne = DemoExternalFlow()
+        } else {
+            let presentateur = ExternalFlowPresenter(coordinateur: liens)
+            liens.fermerFluxExterne = { [weak presentateur] in presentateur?.fermer() }
+            fluxExterne = presentateur
+        }
         theme = PreferenceThemeModel(stockage: environment.mode == .demo ? MemoireStockageAppareil() : UserDefaultsStockageAppareil())
         selectionAvatarDemo = environment.mode == .demo
             ? DemoFixtures.selectionAvatarDemo(scenario: Self.scenarioAvatarDemo(arguments: arguments)) : nil
@@ -164,7 +179,8 @@ final class AppContainer: ObservableObject {
             mediaDemo = DemoMediaPicker(source: .png)
             #endif
             clock = gateways.clock
-            let controller = SessionController(gateways: gateways)
+            // Lot 5 : espace établissement ouvert en démo seulement (`OuvertureEspaceEtablissement`).
+            let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: .demo))
             let permission = DemoPushPermission(etat: Self.autorisationPushDemo(arguments: arguments))
             let coordinator = PushCoordinator(controller: controller, permission: permission,
                                               registrar: DemoPushRegistrar(), memoire: MemoirePushTokenStore())
@@ -185,7 +201,8 @@ final class AppContainer: ObservableObject {
             do {
                 let gateways = try SupabaseGateways.make(environment: environment)
                 clock = gateways.clock
-                let controller = SessionController(gateways: gateways)
+                // Lot 5 : espace établissement fermé jusqu'à la clôture du lot (`OuvertureEspaceEtablissement`).
+                let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: environment.mode))
                 let (permission, registrar) = Self.appareilPush(mode: environment.mode, arguments: arguments)
                 let coordinator = PushCoordinator(controller: controller, permission: permission,
                                                   registrar: registrar, memoire: KeychainPushTokenStore())
@@ -262,11 +279,15 @@ final class AppContainer: ObservableObject {
     /// lot 3, T12 : `JOLENE_FORCE_REVENUS_ECHEC=1` fait échouer la première lecture des missions terminées
     /// (`DemoRevenusEchecGateway`, `DemoRevenusTests.testErreurPuisReprise`) ; lot 3, T13 : `JOLENE_DEMO_PAIEMENTS=refus`
     /// rejoue les refus serveur des paiements déclarés (`DemoPaiementsGateway.Scenario.refus`,
-    /// `DemoPaiementsTests.testRefusServeurVerbatimJamaisUnSucces`).
+    /// `DemoPaiementsTests.testRefusServeurVerbatimJamaisUnSucces`) ; lot 3, T14b : `JOLENE_DEMO_IBAN=<scenario>`
+    /// (`DemoIbanGateway.Scenario` : `rib-requis`, `non-verifie`, `DemoIbanTests`) ; lot 3, T14a :
+    /// `-JOLENE_DEMO_STRIPE <variante>` (`DemoStripeConnectGateway.Scenario`, `DemoStripeTests`).
     /// Jamais compilé en Release.
     private static func demoGateways(arguments: [String], processEnvironment: [String: String]) -> Gateways {
         #if DEBUG
-        var gateways = DemoWorld.gateways(drapeaux: DemoFlagsGateway.surcharges(arguments: arguments))
+        // Lot 5 (T2a) : espace démo choisi au lancement (soignant par défaut, `DemoEspaceLancement`).
+        var gateways = DemoWorld.gateways(espace: DemoEspaceLancement.espace(arguments: arguments),
+                                          drapeaux: DemoFlagsGateway.surcharges(arguments: arguments))
         // Lot 2 T4b : `-JOLENE_DEMO_SCENARIO scan-incertain` (premier scan appliqué, réponse perdue, réconciliation) ;
         // seconde revue fraîche (m2) : `session-expiree-scan`, `session-expiree-consentement` (pointage et authentification
         // démo liés : « Vérifier ma session » revalide), `consentement-echec`.
@@ -327,6 +348,12 @@ final class AppContainer: ObservableObject {
             gateways.paiements = paiements
             gateways.revenus = DemoRevenusGateway(paiementsDeclares: paiements)
         }
+        if let scenario = processEnvironment[DemoIbanGateway.variableEnvironnement].flatMap(DemoIbanGateway.Scenario.init),
+           scenario != .normal {
+            gateways.iban = DemoIbanGateway(scenario: scenario) // lot 3, T14b
+        }
+        // Lot 3, T14a : `-JOLENE_DEMO_STRIPE <statut|TEST|SALARIE>` (`DemoStripeTests`).
+        gateways.stripeConnect = DemoStripeConnectGateway(scenario: DemoStripeConnectGateway.Scenario(arguments: arguments))
         return gateways
         #else
         return DemoWorld.gateways()

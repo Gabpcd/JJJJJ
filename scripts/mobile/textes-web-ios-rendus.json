@@ -477,6 +477,28 @@
         "? `✅ Signé${contrat.signature_soignant_le ? ` le ${format(new Date(contrat.signature_soignant_le), \"dd/MM/yyyy 'à' HH:mm\", { locale: fr })}` : ''}`",
         ": '⏳ En attente'}"
       ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.CandidaturesEtablissement.cgvMention"
+      ],
+      "source": "src/components/ListeCandidatures.tsx:393-397",
+      "code": [
+        "Avant d’accepter un candidat, consultez les conditions de{' '}",
+        "<a href=\"/cgv#art8\" target=\"_blank\" rel=\"noopener noreferrer\" className=\"underline underline-offset-2 hover:text-primary\">",
+        "non-contournement et de recrutement direct — CGV art. 8",
+        "</a>",
+        ". Elles précisent les situations concernées, les durées applicables et le calcul des frais de recrutement."
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.StripeConnect.salarieEtapeConfirmation"
+      ],
+      "source": "src/pages/PageStripeConnect.tsx:228",
+      "code": [
+        "<span>Tu confirmes la réception dans <strong>Mes gains</strong></span>"
+      ]
     }
   ],
   "rendus": [
@@ -859,6 +881,16 @@
       "fonction": "LibellesWeb.Contrat.renduRefuse",
       "appel": "renduRefuse(messageServeur: \"Contrat introuvable.\")",
       "rendu": "Le document contractuel final n’a pas pu être préparé. Contrat introuvable. Réessayez avant de signer."
+    },
+    {
+      "fonction": "TextesWeb.CandidaturesEtablissement.cgvMention",
+      "appel": "cgvMention",
+      "rendu": "Avant d’accepter un candidat, consultez les conditions de non-contournement et de recrutement direct — CGV art. 8. Elles précisent les situations concernées, les durées applicables et le calcul des frais de recrutement."
+    },
+    {
+      "fonction": "TextesWeb.StripeConnect.salarieEtapeConfirmation",
+      "appel": "salarieEtapeConfirmation",
+      "rendu": "Tu confirmes la réception dans Mes gains"
     }
   ]
 }

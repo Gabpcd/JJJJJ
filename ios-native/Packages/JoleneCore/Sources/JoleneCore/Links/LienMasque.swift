@@ -26,6 +26,9 @@ public enum LienMasque {
         "presences", "contrats", "facturation",
         // Lot 2, T10 : alias et pages web de « Mes documents » (`src/App.tsx` l.325, l.388, l.405).
         "documents", "dpae", "conformite",
+        // Lot 4, T1 : écrans secondaires (`EcranSecondaire`). Le segment de `/soignant/evaluations` reste masqué :
+        // aucun littéral Swift ne vaut exactement le nom d'une table de notations (garde-fou 18).
+        "disponibilites", "parrainage", "messagerie", "pool-urgence", "exclusions", "recherches-sauvegardees",
     ]
 
     /// Gabarit d'une URL : chemin masqué, puis `?‹masqué›` et `#‹masqué›` si la query ou le fragment
@@ -85,6 +88,17 @@ extension JoleneRoute: CustomStringConvertible, CustomDebugStringConvertible {
             return "documents(\(ongletMontre))"
         case .contrat: return "contrat(id masqué)"
         case .contratCertificat: return "contratCertificat(id masqué)"
+        case .secondaire(let ecran):
+            // Lot 4 : nom de l'écran et onglet du vocabulaire fermé ; identifiants (litige, conversation, copie,
+            // série) jamais montrés.
+            switch ecran {
+            case .litiges(let onglet, let litigeId):
+                return "secondaire(litiges, \(onglet?.rawValue ?? "sans onglet"), \(litigeId == nil ? "sans id" : "id masqué"))"
+            case .messagerie(let id): return "secondaire(messagerie, \(id == nil ? "sans id" : "id masqué"))"
+            case .bulletins(let id): return "secondaire(bulletins, \(id == nil ? "sans id" : "id masqué"))"
+            case .serie: return "secondaire(serie, id masqué)"
+            default: return "secondaire(\(ecran.nom.rawValue))"
+            }
         case .safari(let url): return "safari(\(LienMasque.gabarit(url)))"
         case .etablissement(let url): return "etablissement(\(LienMasque.gabarit(url)))"
         }

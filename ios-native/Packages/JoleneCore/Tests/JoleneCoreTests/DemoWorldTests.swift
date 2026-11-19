@@ -211,25 +211,49 @@ final class DemoWorldTests: XCTestCase {
     /// T8 contrats) câble son port dans `câblerLot2(_:)` des deux mondes (`DemoWorld`, `SupabaseGateways`)
     /// et le retire d'ici dans la même PR ; `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux
     /// mondes. Liste vide à la clôture du lot 2 (T12).
-    static let portsEnAttenteLot2 = ["contestation"] // T3 : pointage câblé ; T5a : notation câblée ; T6 : documents câblé ; T8 : contrats câblés
+    static let portsEnAttenteLot2: [String] = [] // T3 : pointage câblé ; T5a : notation câblée ; T5b : contestation câblée ; T6 : documents câblé ; T8 : contrats câblés
 
     /// Lot 3 (T1) — ports du lot 3 que leur tranche n'a pas encore câblés : SOURCE UNIQUE de la liste (blueprint
     /// lot 3 §2.2). Chaque tranche câble son port dans `câblerLot3(_:)` des deux mondes
     /// (`DemoWorld`, `SupabaseGateways`) et le retire d'ici dans la même PR ;
     /// `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes. Liste vide à la
     /// clôture du lot 3.
-    static let portsEnAttenteLot3 = [// T9 : `profil` câblé ; T7 : `inscription` câblé, complété par T8 ; T11 : `motDePasse`, `exportRGPD` ; T10 : `avatar`, `geocodage`
-                                     "iban",
-                                     "stripeConnect"] // T4 : `push` câblé (DemoPushGateway) ; T5 : `notifications` ; T6 : `preferences` câblé (DemoPreferencesGateway) ; T12 : `revenus` (DemoRevenusGateway) ; T13 : `paiements` (DemoPaiementsGateway)
+    // T9 : `profil` câblé ; T7 : `inscription` câblé, complété par T8 ; T11 : `motDePasse`, `exportRGPD` ; T10 : `avatar`,
+    // `geocodage` ; T4 : `push` câblé (DemoPushGateway) ; T5 : `notifications` ; T6 : `preferences` câblé
+    // (DemoPreferencesGateway) ; T12 : `revenus` (DemoRevenusGateway) ; T13 : `paiements` (DemoPaiementsGateway) ;
+    // T14b : `iban` (DemoIbanGateway) ; T14a : `stripeConnect` câblé (DemoStripeConnectGateway). Type explicite : un `[]`
+    // sans type ne compile pas.
+    static let portsEnAttenteLot3: [String] = []
+
+    /// Lot 4 (T1) — ports du lot 4 que leur tranche n'a pas encore câblés : SOURCE UNIQUE de la liste (blueprint
+    /// lot 4 §2.2, décision D1). Chaque tranche remplace le corps de SA fabrique dans les deux mondes
+    /// (`Demo/Lot4/Demo<Domaine>Gateway.swift`, `Lot4/Supabase<Domaine>Factory.swift`) et retire SA ligne d'ici dans
+    /// la même PR ; `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes. Vide en T15.
+    static let portsEnAttenteLot4 = [
+        "swipe",             // T3a
+        "filtres",           // T4
+        "disponibilites",    // T5
+        "parrainage",        // T6
+        "litiges",           // T8
+        "reclamations",      // T8
+        "messagerie",        // T7a
+        "realtime",          // T7a
+        "bulletins",         // T10
+        "evaluationsRecues", // T9
+        "poolUrgence",       // T11
+        "score",             // T9
+        "exclusions",        // T11
+    ]
 
     func testAucunPortNonCable() {
         let gateways = DemoWorld.gateways()
-        XCTAssertEqual(gateways.unwiredPorts, Self.portsEnAttenteLot1 + Self.portsEnAttenteLot2 + Self.portsEnAttenteLot3,
+        XCTAssertEqual(gateways.unwiredPorts, Self.portsEnAttenteLot1 + Self.portsEnAttenteLot2 + Self.portsEnAttenteLot3 + Self.portsEnAttenteLot4,
                        "tout port livré doit être câblé dans DemoWorld.gateways() dans la même PR")
         // Forme du critère de clôture de chaque lot : ses seuls noms, filtrés dans `unwiredPorts` (vide à T12 pour le lot 1).
         XCTAssertEqual(gateways.unwiredPorts.filter(Lot1PortsTests.portsLot1.contains), Self.portsEnAttenteLot1)
         XCTAssertEqual(gateways.unwiredPorts.filter(Lot2PortsTests.portsLot2.contains), Self.portsEnAttenteLot2)
         XCTAssertEqual(gateways.unwiredPorts.filter(Lot3PortsTests.portsLot3.contains), Self.portsEnAttenteLot3)
+        XCTAssertEqual(gateways.unwiredPorts.filter(Lot4PortsTests.portsLot4.contains), Self.portsEnAttenteLot4)
         XCTAssertTrue(gateways.audit is DemoAuditGateway)
         XCTAssertTrue(gateways.flags is DemoFlagsGateway)
         XCTAssertTrue(gateways.dashboard is DemoDashboardGateway, "T3 câble le tableau de bord")
@@ -237,7 +261,7 @@ final class DemoWorldTests: XCTestCase {
         XCTAssertTrue(gateways.pointage is DemoPointageGateway, "lot 2 T3 câble le pointage")
         XCTAssertTrue(gateways.preferences is DemoPreferencesGateway, "lot 3, T6 câble les préférences de notifications")
         XCTAssertEqual(DemoWorld.gateways(drapeaux: [:]).unwiredPorts,
-                       Self.portsEnAttenteLot1 + Self.portsEnAttenteLot2 + Self.portsEnAttenteLot3)
+                       Self.portsEnAttenteLot1 + Self.portsEnAttenteLot2 + Self.portsEnAttenteLot3 + Self.portsEnAttenteLot4)
         XCTAssertEqual(gateways.clock.now(), DemoWorld.fixedNow)
     }
 
@@ -251,15 +275,15 @@ final class DemoWorldTests: XCTestCase {
         gateways.notation = temoin
         gateways.documents = temoin
         gateways.contrats = temoin
-        XCTAssertEqual(gateways.unwiredPorts, Lot1PortsTests.portsLot1 + Lot3PortsTests.portsLot3,
+        XCTAssertEqual(gateways.unwiredPorts, Lot1PortsTests.portsLot1 + Lot3PortsTests.portsLot3 + Lot4PortsTests.portsLot4,
                        "témoin posé dans les cinq champs du lot 2 (le bloc du lot 3 reste en stubs)")
         DemoWorld.câblerLot2(&gateways)
         XCTAssertTrue(gateways.pointage is DemoPointageGateway, "T3 câble le pointage démo")
-        XCTAssertTrue(gateways.contestation is UnwiredContestationPort)
+        XCTAssertTrue(gateways.contestation is DemoContestationGateway, "T5b câble la contestation démo")
         XCTAssertTrue(gateways.notation is DemoNotationGateway, "T5a câble la notation démo")
         XCTAssertTrue(gateways.documents is DemoDocumentsGateway, "T6 câble les justificatifs")
         XCTAssertTrue(gateways.contrats is DemoContratsGateway, "T8 câble les contrats démo")
-        XCTAssertEqual(gateways.unwiredPorts, Lot1PortsTests.portsLot1 + Self.portsEnAttenteLot2 + Lot3PortsTests.portsLot3,
+        XCTAssertEqual(gateways.unwiredPorts, Lot1PortsTests.portsLot1 + Self.portsEnAttenteLot2 + Lot3PortsTests.portsLot3 + Lot4PortsTests.portsLot4,
                        "câblerLot2 n'assigne que le bloc du lot 2")
         let monde = DemoWorld.gateways()
         XCTAssertTrue(monde.audit is DemoAuditGateway, "le câblage du lot 1 reste celui de l'init")
@@ -271,12 +295,33 @@ final class DemoWorldTests: XCTestCase {
         gateways.push = FakePushRegistration()
         DemoWorld.câblerLot3(&gateways)
         XCTAssertTrue(gateways.push is DemoPushGateway, "T4 câble le push : le double est remplacé par la gateway démo")
-        XCTAssertTrue(gateways.stripeConnect is UnwiredStripeConnectPort, "T14a n'est pas livrée : stub nommé explicitement")
-        XCTAssertEqual(gateways.unwiredPorts, Lot1PortsTests.portsLot1 + Lot2PortsTests.portsLot2 + Self.portsEnAttenteLot3,
+        XCTAssertTrue(gateways.iban is DemoIbanGateway, "T14b câble l'IBAN démo")
+        XCTAssertTrue(gateways.stripeConnect is DemoStripeConnectGateway, "T14a câble Stripe Connect démo")
+        XCTAssertEqual(gateways.unwiredPorts, Lot1PortsTests.portsLot1 + Lot2PortsTests.portsLot2 + Self.portsEnAttenteLot3 + Lot4PortsTests.portsLot4,
                        "câblerLot3 n'assigne que le bloc du lot 3")
         let monde = DemoWorld.gateways()
         XCTAssertTrue(monde.audit is DemoAuditGateway, "le câblage du lot 1 reste celui de l'init")
         XCTAssertTrue(monde.compte is DemoAccountGateway)
+    }
+
+    // MARK: - Lot 5 (T1)
+
+    /// Ports de l'espace établissement que leur tranche n'a pas encore câblés : SOURCE UNIQUE de la
+    /// liste (`docs/mobile-swift/LOT5_PLAN.md` §2.3), comme `portsEnAttenteLot1`. Chaque PR qui câble un
+    /// port le câble dans les deux mondes et le retire d'ici ; `SupabaseGatewaysTests` compare
+    /// `SupabaseGateways.make(client:).etablissement` au monde démo. Vide à T14.
+    static let portsEnAttenteLot5 = ["etablissement.dashboard", "etablissement.missions", "etablissement.candidatures",
+                                     "etablissement.pointage", "etablissement.presences", "etablissement.publication"]
+
+    func testPortsEtabEnAttente() {
+        let gateways = DemoWorld.gateways()
+        XCTAssertEqual(gateways.etablissement.unwiredPorts, Self.portsEnAttenteLot5,
+                       "tout port établissement livré doit être câblé dans DemoWorld.gateways() dans la même PR")
+        XCTAssertTrue(gateways.etablissement.session is DemoEtabSessionGateway, "T1 câble la session établissement")
+        XCTAssertTrue(gateways.etablissement.audit is DemoEtabAuditGateway, "T1 câble l'audit de consultation")
+        XCTAssertEqual(DemoWorld.gateways(drapeaux: [:]).etablissement.unwiredPorts, Self.portsEnAttenteLot5)
+        XCTAssertEqual(gateways.unwiredPorts, Self.portsEnAttenteLot1 + Self.portsEnAttenteLot2 + Self.portsEnAttenteLot3
+                       + Self.portsEnAttenteLot4, "le champ établissement n'altère pas la liste des lots 1 à 4")
     }
 
     func testAuditDemoJournaliseEnMemoireSansReseau() async throws {

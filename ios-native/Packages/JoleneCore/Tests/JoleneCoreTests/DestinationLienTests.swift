@@ -15,22 +15,22 @@ final class DestinationLienTests: XCTestCase {
 
     private func url(_ s: String) -> URL { URL(string: s)! }
 
-    // MARK: Écrans du lot 3 pas encore livrés
+    // MARK: Écrans du lot 3 livrés depuis T13
 
-    func testRoutesLot3SansEcranRenvoyeesVersSafariCanonique() throws {
-        let cas: [(lien: String, route: JoleneRoute, canonique: String)] = [
-            ("https://jolene.app/soignant/stripe-connect?success=true", .stripeConnect(retour: .succes),
-             "https://jolene.app/soignant/stripe-connect?success=true"),                                            // T14a
-            ("https://jolene.app/soignant/stripe-connect?refresh=true", .stripeConnect(retour: .rafraichir),
-             "https://jolene.app/soignant/stripe-connect?refresh=true"),                                            // T14a
+    /// T14a : Stripe Connect est livré (`StripeConnectScreen`, empilé sur le Profil) ; le retour de Stripe
+    /// (`?success=true`, `?refresh=true`) mène à l'écran natif, jamais un renvoi web.
+    func testStripeConnectLivreEnNatif() throws {
+        let cas: [(lien: String, route: JoleneRoute)] = [
+            ("https://jolene.app/soignant/stripe-connect", .stripeConnect(retour: nil)),
+            ("https://jolene.app/soignant/stripe-connect?success=true", .stripeConnect(retour: .succes)),
+            ("https://www.jolene.app/soignant/stripe-connect?refresh=true", .stripeConnect(retour: .rafraichir)),
         ]
         for c in cas {
             let d = try XCTUnwrap(lien(c.lien), c.lien)
             XCTAssertEqual(d.route, c.route, c.lien)
-            XCTAssertTrue(d.route.isNative, "\(c.lien) : la route reste native dans la table")
-            XCTAssertFalse(DestinationLien.ecranNatifLivre(d.route), c.lien)
-            XCTAssertEqual(d.destination, .safari(url(c.canonique)), c.lien)
-            XCTAssertEqual(d.canonique, url(c.canonique), c.lien)
+            XCTAssertTrue(DestinationLien.ecranNatifLivre(d.route), c.lien)
+            XCTAssertEqual(d.destination, c.route, c.lien)
+            XCTAssertNil(d.destination.externalURL, c.lien)
         }
     }
 
@@ -145,7 +145,6 @@ final class DestinationLienTests: XCTestCase {
             ("/soignant/mes-gains?tab=inconnu", .revenus(section: .apercu)),
             ("/soignant/mon-compte", .monCompte),
             ("/soignant/parametres", .monCompte),
-            ("/soignant/score", .monCompte),
             ("/soignant/notifications?utm_source=push#haut", .notifications),                    // lot 3, T5
             ("/soignant/profil?tab=principal", .profil),          // lot 3, T9 : édition du profil livrée
             ("/soignant/reputation", .profil),                    // lot 3, T9 : alias du profil
@@ -160,9 +159,11 @@ final class DestinationLienTests: XCTestCase {
     }
 
     func testRenvoisWebEtEspaceEtablissementInchanges() throws {
+        // L4-T1 : la page litiges a sa route (`.secondaire(.litiges)`, fragment = litige ciblé), servie par le web
+        // tant que T8 ne l'a pas livrée.
         let litiges = try XCTUnwrap(lien("https://www.jolene.app/soignant/litiges#l%201"))
-        XCTAssertEqual(litiges.route, .safari(url("https://jolene.app/soignant/litiges#l%201")))
-        XCTAssertEqual(litiges.destination, litiges.route)
+        XCTAssertEqual(litiges.route, .secondaire(.litiges(onglet: nil, litigeId: "l 1")))
+        XCTAssertEqual(litiges.destination, .safari(url("https://jolene.app/soignant/litiges#l%201")))
         let etab = try XCTUnwrap(lien("https://jolene.app/etablissement/missions/abc"))
         XCTAssertEqual(etab.destination, .etablissement(url("https://jolene.app/etablissement/missions/abc")))
         let horsAASA = try XCTUnwrap(lien("https://jolene.app/aide/pro-sante-connect?x=1"))
@@ -223,6 +224,8 @@ final class DestinationLienTests: XCTestCase {
         case .documents: return "documents"                   // L2-T10
         case .contrat: return "contrat"                       // L2-T10
         case .contratCertificat: return "contratCertificat"   // L2-T10
+        case .secondaire(.litiges): return "secondaire(litiges)"           // L4-T1 (onglet litiges ou réclamations)
+        case .secondaire(let ecran): return "secondaire(\(ecran.nom.rawValue))" // L4-T1
         case .safari: return "safari"
         case .etablissement: return "etablissement"
         default: return "autre : \(route)"
@@ -258,10 +261,10 @@ final class DestinationLienTests: XCTestCase {
             "/soignant/recherche-missions": ("explorer", "explorer", 24),
             "/soignant/notifications": ("notifications", "notifications", 6),                // T5
             "/soignant/profil": ("profil", "profil", 7),                                     // T9 (livrée)
-            "/soignant/stripe-connect": ("stripeConnect", "safari", 6),                      // T14a
+            "/soignant/stripe-connect": ("stripeConnect", "stripeConnect", 6),               // T14a (livrée)
             "/soignant/mes-gains?tab=paiements": ("revenus(paiements)", "revenus(paiements)", 32), // T13 (livrée)
             "/soignant/mes-gains?tab=factures": ("revenus(factures)", "safari", 21),         // lot 4 (D4)
-            "/soignant/litiges": ("safari", "safari", 46),
+            "/soignant/litiges": ("secondaire(litiges)", "safari", 46),                    // lot 4, T8
             "/soignant/mes-documents": ("documents", "documents", 30),                       // L2-T10 (contrats, dpae)
             "/etablissement/*": ("etablissement", "etablissement", 125),
             "/admin/*": ("safari", "safari", 47),
@@ -294,9 +297,9 @@ final class DestinationLienTests: XCTestCase {
             }
         }
         XCTAssertEqual(decomptes, attendus.mapValues { $0.nombre }, "décomptes par famille")
-        XCTAssertEqual(natifs, 620, "destinations natives (T5 : +6, centre de notifications ; T9 : +7, profil ; "
-                       + "T13 : +32, paiements à confirmer ; L2-T10 : +127, contrats et Mes documents)")
-        XCTAssertEqual(renvois, 270, "renvois web (T13 : −32 ; L2-T10 : −127)")
+        XCTAssertEqual(natifs, 626, "destinations natives (T5 : +6, centre de notifications ; T9 : +7, profil ; "
+                       + "T13 : +32, paiements à confirmer ; L2-T10 : +127, contrats et Mes documents ; T14a : +6, Stripe Connect)")
+        XCTAssertEqual(renvois, 264, "renvois web (T13 : −32 ; L2-T10 : −127 ; T14a : −6)")
     }
 
     // MARK: Description masquée (PRINCIPES §7 : ni identifiant ni jeton dans les logs)
@@ -463,8 +466,8 @@ final class DestinationLienTests: XCTestCase {
             (.inscription(EtapeInscription(page: .completer, query: nil)), true, "T8 : CompletionProfilScreen, hors espace"),
             (.profil, true, "T9 : ProfilEditionScreen"),
             (.revenus(section: .paiementsAConfirmer), true, "T13 : section de RevenusScreen"),
-            (.stripeConnect(retour: nil), false, "T14a"),
-            (.stripeConnect(retour: .succes), false, "T14a"),
+            (.stripeConnect(retour: nil), true, "T14a : StripeConnectScreen, empilé sur le Profil"),
+            (.stripeConnect(retour: .succes), true, "T14a : retour de Stripe, statut relu avec force=true"),
             (.revenus(section: .factures), false, "lot 4"),
             (.revenus(section: .bulletins), false, "lot 4"),
             (.revenus(section: .avances), false, "lot 4"),

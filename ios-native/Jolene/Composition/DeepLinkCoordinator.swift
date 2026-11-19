@@ -22,6 +22,9 @@ import JoleneDesign
 ///   dans l'app par lien universel) ;
 /// - refus d'un lien de réinitialisation PKCE (option B, décision 7 du lot 1) : alerte au texte décidé, présentée
 ///   après la fermeture d'un renvoi affiché, un item numéroté par refus (revue B8 de T3b, m1) ;
+/// - (lot 3, T14a) flux hébergé Stripe Connect (`ExternalFlowPresenter`) : fermé par une navigation et par une fin
+///   d'identité (`fermerFluxExterne`), comme le renvoi web ; le retour `/soignant/stripe-connect?success=true` est une
+///   navigation comme une autre vers l'écran natif, qui relit le statut avec `force=true` (jamais une preuve) ;
 /// - (intégration de T7) confirmation d'inscription et pages `/inscription/soignant` / `reprendre` : déposées dans
 ///   `BoiteLiensInscription`, présentées hors de l'espace par `RootView` (confirmation au-dessus de tout état, compte
 ///   rapide sur l'écran de connexion une fois la session résolue) ;
@@ -29,6 +32,10 @@ import JoleneDesign
 ///   est fermé, puis, hors démo, le magasin de données du navigateur intégré est effacé
 ///   (`SFSafariViewController.DataStore.default.clearWebsiteData`, iOS 16) ; un renvoi demandé pendant l'effacement
 ///   est différé jusqu'à sa fin. En démo, aucun effacement (le double n'a ni réseau ni données).
+///
+/// Lot 5, T2b (choix par espace, `AiguillageLiens`) : dans l'espace établissement, `demandeEtablissement` (onglet de la
+/// coquille, écran empilé livré) est exécutée par `EtablissementTabView` de son epoch ; un lien soignant ou un écran
+/// établissement non livré y est un renvoi web ; dans l'espace soignant, un lien établissement reste un renvoi web.
 ///
 /// L'anti-boucle (« un `.safari` issu de l'app n'est jamais rejoué comme lien universel ») et le libellé DEBUG
 /// `deeplink-route` ne sont posés qu'à la présentation effective (revue B8 de T3b, m1 et m7) : apparition du contenu
@@ -53,7 +60,17 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
         let route: JoleneRoute
     }
 
+    /// Lot 5, T2b : navigation demandée à l'espace établissement de `epoch` (onglet, écran empilé livré).
+    struct DemandeNavigationEtablissement: Equatable {
+        let numero: Int
+        let epoch: Int
+        let cible: CibleEtablissement
+        /// Route de l'espace établissement (libellé DEBUG `deeplink-route`, posé quand l'espace exécute la demande).
+        let route: EtabRoute
+    }
+
     @Published private(set) var demande: DemandeNavigation?
+    @Published private(set) var demandeEtablissement: DemandeNavigationEtablissement?
     /// Feuille du renvoi web et alerte du refus (`PresentationsRacine`, niveau 1).
     @Published private(set) var presentations = PresentationsRacine()
     /// Libellé DEBUG de la dernière route présentée (`deeplink-route`), démo seulement.
@@ -71,12 +88,18 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
     /// Lien reçu au lancement, avant que la racine ne soit affichée (`-JOLENE_OPEN_URL`, lu par `AppContainer.init`).
     private var lienAuLancement: URL?
     private var racineAffichee = false
+    /// Lot 3, T14a : fermeture du flux hébergé affiché (`ExternalFlowPresenter.fermer`, posé par `AppContainer`) ; une
+    /// navigation (retour `/soignant/stripe-connect?success=true` compris) ou une fin d'identité le ferme d'abord, comme
+    /// le renvoi web : l'écran relit alors le statut (`force=true`).
+    var fermerFluxExterne: (@MainActor () -> Void)?
 
-    init(taps: BoiteTapsPush, inscription: BoiteLiensInscription, estDemo: Bool, effaceur: EffaceurDonneesWeb?) {
+    /// `espaceEtablissement` (lot 5, T2b) : même ouverture que la session (`OuvertureEspaceEtablissement.pour(mode:)`).
+    init(taps: BoiteTapsPush, inscription: BoiteLiensInscription, estDemo: Bool, effaceur: EffaceurDonneesWeb?,
+         espaceEtablissement: OuvertureEspaceEtablissement = .ferme) {
         self.estDemo = estDemo
         self.inscription = inscription
         self.effaceur = estDemo ? nil : effaceur
-        aiguillage = AiguillageLiens(taps: taps)
+        aiguillage = AiguillageLiens(taps: taps, espaceEtablissement: espaceEtablissement)
     }
 
     // MARK: Points d'entrée
@@ -123,10 +146,16 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
         executer(aiguillage.ouvrirEspace(snapshot))
     }
 
+    /// Lot 5, T2b : apparition de l'espace établissement (`EtablissementTabView`) : rejoue le lien en attente.
+    func espaceEtablissementOuvert(_ snapshot: EtablissementSessionSnapshot) {
+        executer(aiguillage.ouvrirEspaceEtablissement(snapshot))
+    }
+
     /// Disparition de l'espace de cet epoch : une demande non exécutée est abandonnée.
     func espaceFerme(epoch: Int) {
         aiguillage.fermerEspace(epoch: epoch)
         if demande?.epoch == epoch { demande = nil }
+        if demandeEtablissement?.epoch == epoch { demandeEtablissement = nil }
     }
 
     /// La demande a été exécutée par l'espace (une seule fois) : sa route est alors effectivement présentée.
@@ -134,6 +163,15 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
         guard demande == traitee else { return }
         demande = nil
         noter(traitee.route)
+    }
+
+    /// Lot 5, T2b : la demande a été exécutée par l'espace établissement (une seule fois).
+    func demandeEtablissementTraitee(_ traitee: DemandeNavigationEtablissement) {
+        guard demandeEtablissement == traitee else { return }
+        demandeEtablissement = nil
+        #if DEBUG
+        if estDemo { derniereRoute = traitee.route.libelleDebug }
+        #endif
     }
 
     // MARK: Présentateur `.safari`
@@ -172,6 +210,7 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
     // MARK: Fin d'identité (revue B8 de T3b, M1)
 
     func identiteTerminee() {
+        fermerFluxExterne?()
         fermerRenvoiWeb()
         guard let effaceur else { return }
         presentations.debutEffacement()
@@ -185,9 +224,18 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
     private func executer(_ action: AiguillageLiens.Action?) {
         switch action {
         case let .naviguer(cible, route, epoch)?:
+            fermerFluxExterne?()
             fermerRenvoiWeb()
             numero += 1
             demande = DemandeNavigation(numero: numero, epoch: epoch, cible: cible, route: route)
+        case let .naviguerEtablissement(cible, route, epoch)?:
+            // Lot 5, T2b : exécutée par `EtablissementTabView` de cet epoch (onglet, pile remise à sa racine). Le flux
+            // hébergé Stripe (T14a, espace soignant) est fermé comme pour `.naviguer` (revue B8 de #1154, m4) : sans effet
+            // aujourd'hui (un changement d'espace passe par `identiteTerminee`), mais toute navigation le ferme.
+            fermerFluxExterne?()
+            fermerRenvoiWeb()
+            numero += 1
+            demandeEtablissement = DemandeNavigationEtablissement(numero: numero, epoch: epoch, cible: cible, route: route)
         case .renvoiWeb(let route)?:
             presenter(route)
         case .refusReinitialisation?:

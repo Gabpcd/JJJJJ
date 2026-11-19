@@ -68,6 +68,27 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   `Appareil.localisation` (`LocalisationProfilAppareil`, JoleneCore), et l'implémentation isolée
   `LocalisationProfilProvisoire` est supprimée (garde `FusionLocalisationLot2Tests`) : un seul service de
   localisation dans l'app (`LocationService`).
+- Lot 4 (T1, `docs/mobile-swift/LOT4_PLAN.md` §2.2, décision D1) : treize champs additifs dans un bloc « Lot 4 »
+  du corps de `Gateways` (stubs de `Ports/Lot4Ports.swift`, même message `UnwiredPorts.erreur(port:tranche:lot:)`),
+  entrées ajoutées à `unwiredPorts` et liste attendue unique `DemoWorldTests.portsEnAttenteLot4` ; câblage par
+  fabriques de domaine, un fichier par domaine et par monde (`Demo/Lot4/Demo<Domaine>Gateway.swift`,
+  `Lot4/Supabase<Domaine>Factory.swift`), appelées une seule fois par `DemoLot4.cabler` et `SupabaseLot4.cabler` :
+  chaque tranche ne touche que sa fabrique et sa ligne de `portsEnAttenteLot4`. Le port des évaluations reçues est le
+  champ `evaluationsRecues` (aucun littéral Swift ne vaut exactement le nom d'une table de notations, garde-fou 18).
+- Lot 5 (T1) : un **seul** champ additif de plus, `Gateways.etablissement`
+  (`Ports/EtablissementGateways.swift`), qui regroupe les ports de l'espace établissement, non
+  câblés par défaut (`Ports/Lot5Ports.swift`). Même règle de preuve, liste à part :
+  `DemoWorldTests.portsEnAttenteLot5`, comparée au monde Supabase par `SupabaseGatewaysTests`,
+  vide à la clôture du lot 5 (T14). Les refus 42501 de droit sont interceptés avant
+  `SupabaseErrorMapping` par listes blanches exactes (`RPC/RPCInterception.swift`), le mapping du
+  lot 0 reste inchangé.
+- Lot 5 (T2a, D3) : **seule exception** au gel de `Mission.swift`, `UserRole.isNativelyServed`
+  rend `true` pour `adminEtablissement` et `etablissementLegacy` (une API figée à `false` aurait été
+  un piège silencieux) ; aucune autre signature ne change. `MobileAccess.validate` (`Account.swift`)
+  reste tel quel : le contrôleur de session appelle désormais `EspaceResolution.espace`
+  (`Session/EspaceResolution.swift`). `SessionState` reçoit un cas additif `readyEtablissement`
+  (D1) : aucun `SoignantProfile` fabriqué, `SessionSnapshot` inchangé ; le périmètre est celui que
+  confirme `fn_mes_permissions_etab(NULL)`, jamais `user.id` (§3).
 
 ## 3. Aucun succès fabriqué
 

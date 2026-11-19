@@ -52,6 +52,9 @@ public enum SupabaseGateways {
         )
         câblerLot2(&gateways, client: client, clock: clock)
         câblerLot3(&gateways, client: client)
+        SupabaseLot4.cabler(&gateways, client: client) // lot 4 : une fabrique par domaine (`Lot4/`)
+        // Lot 5 (T1) : ports de l'espace établissement, assignés après l'init (signature inchangée).
+        gateways.etablissement = SupabaseEtablissementGateways.make(client: client)
         return gateways
     }
 
@@ -61,7 +64,7 @@ public enum SupabaseGateways {
     /// `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes.
     static func câblerLot2(_ gateways: inout Gateways, client: SupabaseClient, clock: any ClockPort = SystemClock()) {
         gateways.pointage = SupabasePointageGateway(client: client, clock: gateways.clock) // T3
-        gateways.contestation = UnwiredContestationPort()          // T5b
+        gateways.contestation = SupabaseContestationGateway(client: client) // T5b
         gateways.notation = SupabaseNotationGateway(client: client) // T5a
         gateways.documents = SupabaseDocumentsGateway(client: client, clock: clock) // T6
         gateways.contrats = SupabaseContratsGateway(client: client, clock: gateways.clock) // T8
@@ -85,8 +88,8 @@ public enum SupabaseGateways {
         gateways.exportRGPD = SupabaseExportGateway(client: client)        // T11
         gateways.revenus = SupabaseRevenusGateway(client: client)          // T12
         gateways.paiements = SupabasePaiementsGateway(client: client)      // T13
-        gateways.iban = UnwiredIbanPort()                                  // T14b
-        gateways.stripeConnect = UnwiredStripeConnectPort()                // T14a
+        gateways.iban = SupabaseIbanGateway(client: client)                // T14b
+        gateways.stripeConnect = SupabaseStripeConnectGateway(client: client) // T14a
     }
 
     /// Construction du client : options vérifiées dans `SupabaseClientOptions` de 2.55.5

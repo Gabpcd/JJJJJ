@@ -12,16 +12,19 @@ import JoleneDesign
 /// forcée web (`PresencesRenvois.recapitulatifFinancier`), rendu seulement avec le présentateur de T10 (jamais un bouton
 /// sans effet). Échec de lecture : titres du lot 1 et repli lisible (`LibellesDetailPresences.Echec`).
 ///
-/// Point d'extension T5b : le panneau de contestation d'une présence validée se monte sous la section des contrôles
-/// (`ContestationSheet`), après le go HARD STOP n°4 (Q9) ; rien n'est rendu ici d'ici là.
+/// T5b : le panneau de contestation de la présence relue (`DetailPresencesModel.presence`, `id` et `valide_le`) se monte
+/// sous la section des contrôles (`ContestationPanneau`) ; bouton décidé par le serveur, aucun texte de délai (HARD STOP
+/// n°4, Q9, D12).
 struct DetailPresencesScreen: View {
     @StateObject private var model: DetailPresencesModel
     @ObservedObject private var session: SessionStore
+    private let snapshot: SessionSnapshot
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
     @Environment(\.scenePhase) private var scenePhase
 
     init(missionId: String, session: SessionStore, snapshot: SessionSnapshot) {
         self.session = session
+        self.snapshot = snapshot
         _model = StateObject(wrappedValue: DetailPresencesModel(missionId: missionId, controller: session.controller, snapshot: snapshot))
     }
 
@@ -84,6 +87,11 @@ struct DetailPresencesScreen: View {
         if let synthese = p.synthese { carteSynthese(synthese) }
         segments(p)
         if let controles = p.controles { carteControles(controles) }
+        if let presence = model.presence {
+            ContestationPanneau(presenceId: presence.id, missionId: model.missionId, valideLe: presence.valideLe,
+                                session: session, snapshot: snapshot)
+                .id(presence.id + (presence.valideLe ?? ""))
+        }
         if p.relanceProposee { relance }
         recapitulatifFinancier
     }

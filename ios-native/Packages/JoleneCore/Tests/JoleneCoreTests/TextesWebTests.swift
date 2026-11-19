@@ -65,6 +65,14 @@ final class TextesWebTests: XCTestCase {
             "TextesWeb.Justificatifs.rcpObligatoire",
             "TextesWeb.Justificatifs.accesScolarite",
             "TextesWeb.Justificatifs.accesLicence",
+            // L3-T14a (revue B8 de #1144, m1) : cartes à portée contractuelle de `PageStripeConnect.tsx`.
+            "TextesWeb.StripeConnect.salarieTexte",
+            "TextesWeb.StripeConnect.salarieEtapeMission",
+            "TextesWeb.StripeConnect.salarieEtapeValidation",
+            "TextesWeb.StripeConnect.salarieEtapeConfirmationDebut",
+            "TextesWeb.StripeConnect.nonDemandeTitre",
+            "TextesWeb.StripeConnect.nonDemandeTexte",
+            "TextesWeb.StripeConnect.supprimeTexte",
         ]
         let marques: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
         for entree in Self.tousLesTextes {
@@ -251,5 +259,16 @@ final class TextesWebTests: XCTestCase {
         XCTAssertEqual(certificat.explicationEmpreinte(storagePath: nil), "SHA-256 du contrat figé au moment de la signature. Si vous recalculez le hash du contenu HTML stocké (storage_path : —), vous devez retrouver cette empreinte — c'est la preuve que le document n'a pas été modifié depuis la signature.")
         XCTAssertEqual(certificat.explicationEmpreinte(storagePath: ""), certificat.explicationEmpreinte(storagePath: nil))
         XCTAssertTrue(certificat.mentionPage.hasPrefix("Conforme art. 1366-1367 Code civil — "))
+    }
+
+    /// Lot 5 (T0, D10) : mention CGV art. 8 de la revue des candidatures (`ListeCandidatures.tsx`
+    /// l.393-397) : texte, `{' '}`, lien, puis la suite collée au lien.
+    func testMentionCgvCandidaturesCommeLeRenduWeb() {
+        XCTAssertEqual(TextesWeb.CandidaturesEtablissement.cgvMention, "Avant d’accepter un candidat, consultez les conditions de non-contournement et de recrutement direct — CGV art. 8. Elles précisent les situations concernées, les durées applicables et le calcul des frais de recrutement.")
+    }
+
+    /// L3-T14a : troisième étape du mode salarié (`PageStripeConnect.tsx` l.228), texte puis « Mes gains » en gras.
+    func testEtapeConfirmationStripeCommeLeRenduWeb() {
+        XCTAssertEqual(TextesWeb.StripeConnect.salarieEtapeConfirmation, "Tu confirmes la réception dans Mes gains")
     }
 }

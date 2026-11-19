@@ -60,6 +60,9 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
     /// quelle, sinon `.safari(canonique)`.
     public var destination: JoleneRoute {
         guard route.isNative, !Self.ecranNatifLivre(route) else { return route }
+        // Lot 4 (L4-T1) : swipe et score gardent l'écran natif qu'ils ouvraient avant d'avoir leur route
+        // (Explorer, hub du compte) jusqu'à la livraison de leur tranche.
+        if case .secondaire(let ecran) = route, let repli = ecran.repliAvantLivraison { return repli }
         return .safari(canonique)
     }
 
@@ -97,7 +100,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .revenus(section: .paiementsAConfirmer):
             return true                                  // T13 — section « Paiements à confirmer » de RevenusScreen
         case .stripeConnect:
-            return false                                 // T14a — Stripe Connect
+            return true                                  // T14a — `StripeConnectScreen`, empilé sur l'onglet Profil (retour de Stripe compris)
         case .revenus(section: .factures), .revenus(section: .bulletins), .revenus(section: .avances):
             return false                                 // renvoi web assumé jusqu'au lot 4 (D4)
         case .presences, .presencesMission:
@@ -106,6 +109,8 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
             return true                                  // L2-T10 — `MesDocumentsScreen` (T7), onglet Contrats natif (T9a), DPAE en renvoi dans l'onglet
         case .contrat, .contratCertificat:
             return true                                  // L2-T10 — `ContratScreen`, `CertificatRoute` (T9a), drapeau `ios_natif_contrats_actif`
+        case .secondaire:
+            return false                                 // lot 4 — une ligne par écran, passée à `true` par sa tranche (T3b…T12)
         case .safari, .etablissement:
             return false
         }

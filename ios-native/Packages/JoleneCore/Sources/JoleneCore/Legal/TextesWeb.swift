@@ -686,6 +686,124 @@ public enum TextesWeb {
         }
     }
 
+    // MARK: - Lot 5 — espace établissement (LOT5_PLAN §2.9, tranche T0, D30)
+    //
+    // Repris verbatim du web pour les écrans T4, T6 et T9 ; chaque écran exige la validation de
+    // Gabrielle (HARD STOP n°4, LOT5_PLAN §6.4). La mention de l'écran de signature OTP
+    // établissement (« Conforme art. 1366-1367 Code civil », T10) est `Contrat.otpDescription`.
+
+    /// Revue des candidatures (`ListeCandidatures.tsx` l.386-398, T6, D10) : rappel des conditions
+    /// de non-contournement avant l'acceptation, lien vers l'article 8 des CGV ouvert dans Safari.
+    public enum CandidaturesEtablissement {
+        // source: src/components/ListeCandidatures.tsx:393 [fragment]
+        public static let cgvAvantLien = "Avant d’accepter un candidat, consultez les conditions de"
+
+        // source: src/components/ListeCandidatures.tsx:394 [libellé]
+        public static let cgvCheminLien = "/cgv#art8"
+
+        // source: src/components/ListeCandidatures.tsx:395 [fragment]
+        public static let cgvLien = "non-contournement et de recrutement direct — CGV art. 8"
+
+        // source: src/components/ListeCandidatures.tsx:397 [fragment]
+        public static let cgvApresLien = ". Elles précisent les situations concernées, les durées applicables et le calcul des frais de recrutement."
+
+        /// Mention rendue par React : texte, `{' '}`, lien, puis la suite collée au lien.
+        public static var cgvMention: String { cgvAvantLien + " " + cgvLien + cgvApresLien }
+    }
+
+    /// Blocages de publication de l'Accueil (T4) : titre du bandeau de suspension automatique
+    /// (`BandeauBlocageAuto.tsx` l.60-62, montants non portés) et bandeau de vérification
+    /// (`DashboardEtablissement.tsx` l.564-565, `peut_publier_missions == false`).
+    public enum BlocageEtablissement {
+        // source: src/components/BandeauBlocageAuto.tsx:61 [juridique]
+        public static let publicationSuspendue = "Publication de missions suspendue"
+
+        // source: src/pages/DashboardEtablissement.tsx:564 [libellé]
+        public static let verificationEnCoursTitre = "Votre compte est en cours de vérification"
+
+        // source: src/pages/DashboardEtablissement.tsx:565 [libellé]
+        public static let verificationEnCoursDetail = "Vérifiez votre établissement (FINESS + rattachement du représentant) pour pouvoir publier des missions. À défaut, l'équipe Jolene valide votre dossier."
+    }
+
+    /// Récapitulatif de publication (T9, D8) : seule l'option « Salarié » est publiée en natif ;
+    /// sa description est celle du web (`FormulaireMission.tsx` l.766).
+    public enum PublicationEtablissement {
+        // source: src/components/FormulaireMission.tsx:766 [libellé]
+        public static let optionSalarieLibelle = "Salarié"
+
+        // source: src/components/FormulaireMission.tsx:766 [juridique]
+        public static let optionSalarieDescription = "Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine"
+    }
+
+    /// Lot 3, T14a (revue B8 de #1144, m1 ; décision « T14a-J1 » de `DECISIONS_LOT3.md`) : les cinq cartes à portée
+    /// contractuelle de `/soignant/stripe-connect` (`PageStripeConnect.tsx`) — mode salarié et son encadré (qui verse,
+    /// rôle du bulletin, restriction du mode d'exercice), NON_DEMANDE (cycle de règlement, sécurité, frais), compte de
+    /// test, compte supprimé (droit de recevoir des paiements Connect). Verbatim, tutoiement compris.
+    public enum StripeConnect {
+        // source: src/pages/PageStripeConnect.tsx:208 [juridique]
+        public static let salarieTitre = "Mode salarié"
+
+        // source: src/pages/PageStripeConnect.tsx:210 [juridique]
+        public static let salarieTexte = "En tant que salarié(e), ton salaire est versé directement par l'établissement employeur. Le bulletin de paie détaille le montant dû ; il ne prouve pas que le virement a été reçu."
+
+        // source: src/pages/PageStripeConnect.tsx:216 [juridique]
+        public static let salarieEtapesTitre = "Comment ça fonctionne :"
+
+        // source: src/pages/PageStripeConnect.tsx:220 [juridique]
+        public static let salarieEtapeMission = "Tu effectues ta mission et pointes tes présences"
+
+        // source: src/pages/PageStripeConnect.tsx:224 [juridique]
+        public static let salarieEtapeValidation = "L'établissement valide tes heures et déclare le paiement"
+
+        /// Troisième étape (l.228) : voir `salarieEtapeConfirmation`.
+        // source: src/pages/PageStripeConnect.tsx:228 [fragment]
+        public static let salarieEtapeConfirmationDebut = "Tu confirmes la réception dans"
+
+        // source: src/pages/PageStripeConnect.tsx:228 [fragment]
+        public static let salarieEtapeConfirmationLien = "Mes gains"
+
+        // source: src/pages/PageStripeConnect.tsx:232 [juridique]
+        public static let salarieEtapeBulletin = "Le bulletin de paie est généré par l'établissement"
+
+        // source: src/pages/PageStripeConnect.tsx:289 [juridique]
+        public static let salarieInfoTitre = "Paiement direct via Stripe Connect"
+
+        // source: src/pages/PageStripeConnect.tsx:291-292 [juridique]
+        public static let salarieInfoTexte = "Les soignants en exercice libéral peuvent recevoir leurs honoraires directement sur leur compte bancaire via Stripe Connect. Passe en libéral pour débloquer cette fonctionnalité."
+
+        // source: src/pages/PageStripeConnect.tsx:307 [juridique]
+        public static let compteTestTitre = "Stripe désactivé sur ce compte de test"
+
+        // source: src/pages/PageStripeConnect.tsx:309 [juridique]
+        public static let compteTestTexte = "Aucun compte bancaire ni paiement réel ne sera créé depuis les données de démonstration. Le parcours Stripe se vérifie en environnement de recette avec Stripe en mode test."
+
+        // source: src/pages/PageStripeConnect.tsx:328 [juridique]
+        public static let nonDemandeTitre = "Reçois tes honoraires directement"
+
+        // source: src/pages/PageStripeConnect.tsx:330 [juridique]
+        public static let nonDemandeTexte = "Connecte ton compte bancaire via Stripe pour recevoir les règlements de tes missions selon le cycle indiqué sur chacune d'elles."
+
+        // source: src/pages/PageStripeConnect.tsx:333 [juridique]
+        public static let nonDemandeVirements = "Virements automatiques pour les périodes facturées"
+
+        // source: src/pages/PageStripeConnect.tsx:334 [juridique]
+        public static let nonDemandeSecurite = "Sécurisé par Stripe (certifié PCI DSS)"
+
+        // source: src/pages/PageStripeConnect.tsx:335 [juridique]
+        public static let nonDemandeFrais = "Aucun frais pour le soignant"
+
+        // source: src/pages/PageStripeConnect.tsx:466 [juridique]
+        public static let supprimeTitre = "Compte Stripe supprimé"
+
+        // source: src/pages/PageStripeConnect.tsx:468-470 [juridique]
+        public static let supprimeTexte = "Ton compte Stripe Connect a été supprimé (clôture manuelle, fraude détectée par Stripe, ou décision admin plateforme). Tu ne peux plus recevoir de paiements Connect jusqu'à la création d'un nouveau compte."
+
+        /// Troisième étape du mode salarié (l.228) : texte puis lien en gras « Mes gains », séparés par l'espace du JSX.
+        public static var salarieEtapeConfirmation: String {
+            salarieEtapeConfirmationDebut + " " + salarieEtapeConfirmationLien
+        }
+    }
+
     /// Tous les textes, pour les tests (la garde Node vérifie que la liste est complète et exacte).
     public static let catalogue: [EntreeTexteWeb] = [
         .init(cle: "ConsentementGps.titre", texte: ConsentementGps.titre),
@@ -810,5 +928,33 @@ public enum TextesWeb {
         .init(cle: "Certificat.empreinteStorageAbsent", texte: Certificat.empreinteStorageAbsent),
         .init(cle: "Certificat.empreinteExplicationFin", texte: Certificat.empreinteExplicationFin),
         .init(cle: "Certificat.mentionPage", texte: Certificat.mentionPage),
+        .init(cle: "CandidaturesEtablissement.cgvAvantLien", texte: CandidaturesEtablissement.cgvAvantLien),
+        .init(cle: "CandidaturesEtablissement.cgvCheminLien", texte: CandidaturesEtablissement.cgvCheminLien),
+        .init(cle: "CandidaturesEtablissement.cgvLien", texte: CandidaturesEtablissement.cgvLien),
+        .init(cle: "CandidaturesEtablissement.cgvApresLien", texte: CandidaturesEtablissement.cgvApresLien),
+        .init(cle: "BlocageEtablissement.publicationSuspendue", texte: BlocageEtablissement.publicationSuspendue),
+        .init(cle: "BlocageEtablissement.verificationEnCoursTitre", texte: BlocageEtablissement.verificationEnCoursTitre),
+        .init(cle: "BlocageEtablissement.verificationEnCoursDetail", texte: BlocageEtablissement.verificationEnCoursDetail),
+        .init(cle: "PublicationEtablissement.optionSalarieLibelle", texte: PublicationEtablissement.optionSalarieLibelle),
+        .init(cle: "PublicationEtablissement.optionSalarieDescription", texte: PublicationEtablissement.optionSalarieDescription),
+        .init(cle: "StripeConnect.salarieTitre", texte: StripeConnect.salarieTitre),
+        .init(cle: "StripeConnect.salarieTexte", texte: StripeConnect.salarieTexte),
+        .init(cle: "StripeConnect.salarieEtapesTitre", texte: StripeConnect.salarieEtapesTitre),
+        .init(cle: "StripeConnect.salarieEtapeMission", texte: StripeConnect.salarieEtapeMission),
+        .init(cle: "StripeConnect.salarieEtapeValidation", texte: StripeConnect.salarieEtapeValidation),
+        .init(cle: "StripeConnect.salarieEtapeConfirmationDebut", texte: StripeConnect.salarieEtapeConfirmationDebut),
+        .init(cle: "StripeConnect.salarieEtapeConfirmationLien", texte: StripeConnect.salarieEtapeConfirmationLien),
+        .init(cle: "StripeConnect.salarieEtapeBulletin", texte: StripeConnect.salarieEtapeBulletin),
+        .init(cle: "StripeConnect.salarieInfoTitre", texte: StripeConnect.salarieInfoTitre),
+        .init(cle: "StripeConnect.salarieInfoTexte", texte: StripeConnect.salarieInfoTexte),
+        .init(cle: "StripeConnect.compteTestTitre", texte: StripeConnect.compteTestTitre),
+        .init(cle: "StripeConnect.compteTestTexte", texte: StripeConnect.compteTestTexte),
+        .init(cle: "StripeConnect.nonDemandeTitre", texte: StripeConnect.nonDemandeTitre),
+        .init(cle: "StripeConnect.nonDemandeTexte", texte: StripeConnect.nonDemandeTexte),
+        .init(cle: "StripeConnect.nonDemandeVirements", texte: StripeConnect.nonDemandeVirements),
+        .init(cle: "StripeConnect.nonDemandeSecurite", texte: StripeConnect.nonDemandeSecurite),
+        .init(cle: "StripeConnect.nonDemandeFrais", texte: StripeConnect.nonDemandeFrais),
+        .init(cle: "StripeConnect.supprimeTitre", texte: StripeConnect.supprimeTitre),
+        .init(cle: "StripeConnect.supprimeTexte", texte: StripeConnect.supprimeTexte),
     ]
 }

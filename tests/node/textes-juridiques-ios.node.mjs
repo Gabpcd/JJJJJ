@@ -110,6 +110,9 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
   assert.ok(hardStop.length >= 60, `au moins 60 textes HARD STOP attendus, ${hardStop.length} lus`);
   assert.ok(constantes.length > hardStop.length, 'LibellesWeb.swift ne porte aucun libellé');
   const fichiers = new Set(constantes.map(c => c.source.fichier));
+  // Lot 5, tranche T0 (LOT5_PLAN §2.9, D30) : textes de l'espace établissement, même mécanisme.
+  const lot5 = ['src/components/BandeauBlocageAuto.tsx', 'src/components/FormulaireMission.tsx',
+    'src/components/ListeCandidatures.tsx', 'src/pages/DashboardEtablissement.tsx'];
   assert.deepEqual([...fichiers].sort(), [
     'src/components/AccesEtablissement.tsx', // T9a : erreur de chargement de la liste des contrats
     'src/components/BandeauHorsLigne.tsx', // T4b : bandeau hors ligne de la page Présences
@@ -135,8 +138,9 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
     'src/pages/DocumentsSoignant.tsx',
     'src/pages/ListeContrats.tsx', // T4a (titre « Mes contrats ») et T9a (liste des contrats)
     'src/pages/MesDocuments.tsx',
+    'src/pages/PageStripeConnect.tsx', // L3-T14a (revue B8 de #1144, m1) : cartes contractuelles de Stripe Connect
     'src/pages/PresencesSoignant.tsx',
-  ]);
+  ].concat(lot5).sort());
 });
 
 // Textes exigés par LOT2_PLAN v2 §3 « TL », item par item, par NOM de constante (les lignes du
@@ -203,6 +207,20 @@ const EXIGES = {
   'src/components/CertificatSignature.tsx': ['Certificat.mention'],
   // CertificatSignaturePage.tsx l.214 (texte l.214-215 de la page /contrat/:id/certificat).
   'src/pages/CertificatSignaturePage.tsx': ['Certificat.mentionPage'],
+  // Lot 5, T0 (LOT5_PLAN §2.9, D30) : mention CGV art. 8 de la revue des candidatures (l.393-397,
+  // lien l.394), titre de suspension (l.61), bandeau de vérification (l.564-565), option « Salarié »
+  // du récapitulatif de publication (l.766).
+  'src/components/ListeCandidatures.tsx': [
+    'CandidaturesEtablissement.cgvAvantLien', 'CandidaturesEtablissement.cgvCheminLien',
+    'CandidaturesEtablissement.cgvLien', 'CandidaturesEtablissement.cgvApresLien',
+  ],
+  'src/components/BandeauBlocageAuto.tsx': ['BlocageEtablissement.publicationSuspendue'],
+  'src/pages/DashboardEtablissement.tsx': [
+    'BlocageEtablissement.verificationEnCoursTitre', 'BlocageEtablissement.verificationEnCoursDetail',
+  ],
+  'src/components/FormulaireMission.tsx': [
+    'PublicationEtablissement.optionSalarieLibelle', 'PublicationEtablissement.optionSalarieDescription',
+  ],
 };
 
 // Libellés et textes repris en plus du blueprint (revues fraîches de TL), pour que les écrans du
@@ -871,4 +889,28 @@ test('validate-pr.yml : l’étape « Garde de livraison mobile » (check requis
   assert.ok(run && run.includes('node --test') && run.includes('tests/node/textes-juridiques-ios.node.mjs'),
     `run: n'exécute pas la garde TL : ${run}`);
   assert.ok(!/^\s+if: /m.test(bloc) && !bloc.includes('continue-on-error'), 'étape conditionnelle ou non bloquante');
+});
+
+// Revue B8 de #1147 (m4) : les dossiers du lot 5 (espace établissement) suivent la règle du lot 2 — aucun texte
+// juridique en dur hors TextesWeb.swift ; le plafond légal de 48 h (option « Salarié ») est une marque juridique.
+test('lot 5 : dossiers établissement sous la garde « aucun texte juridique en dur », plafond 48 h marqué', () => {
+  for (const chemin of [
+    'ios-native/Jolene/Screens/Etablissement/Accueil/EtabAccueilRoot.swift',
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Etablissement/EtabDestination.swift',
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Planning/PlanningDerive.swift',
+    'ios-native/Packages/JoleneCore/Sources/JoleneCore/Links/EtabRoute.swift',
+    'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Etablissement/SupabaseEtabSessionGateway.swift',
+  ]) {
+    assert.ok(DOSSIERS_LOT2.some(d => chemin === d || chemin.startsWith(`${d}/`)), `${chemin} hors de la garde`);
+    assert.ok(existsSync(join(ROOT, chemin)), `${chemin} absent du dépôt`);
+  }
+  const fautes = textesJuridiquesHorsTL([
+    { chemin: 'ios-native/Jolene/Screens/Etablissement/Publication/Recap.swift',
+      contenu: 'Text("Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine")' },
+    { chemin: 'ios-native/Packages/JoleneCore/Sources/JoleneCore/Planning/Regles.swift', contenu: 'let m = "Maximum légal : 48 h par semaine"' },
+    { chemin: 'ios-native/Jolene/Screens/Etablissement/Accueil/Bandeau.swift',
+      contenu: 'Text(TextesWeb.PublicationEtablissement.optionSalarieDescription)' },
+  ]);
+  assert.equal(fautes.length, 2, JSON.stringify(fautes));
+  assert.deepEqual(textesJuridiquesHorsTLSurDisque(), [], 'dépôt conforme');
 });

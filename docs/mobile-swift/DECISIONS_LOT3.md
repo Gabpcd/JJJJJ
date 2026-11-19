@@ -1709,6 +1709,85 @@ sont reportés dans les puces ci-dessus. Les autres :
   barres de navigation) : la section, déjà proche du haut, était visible même sans défilement. Sur iPad, l'assertion
   reste la visibilité de la première carte.
 
+## T14b — IBAN du soignant (branche `lot3/l3-t14b`, 18/11/2026 ; B9, jamais mergée sans go)
+
+- **Livré.** Écran « Coordonnées bancaires » (`Jolene/Screens/Revenus/IbanScreen.swift`, `iban-screen`), empilé depuis
+  le hub (section « Paiements & facturation » › « Coordonnées bancaires », `MonCompteSoignant.tsx` l.65 et l.73,
+  `iban-ouvrir`, `IbanRoute` enregistrée par `ProfileScreen` ; aucune route ni lien universel). Cœur :
+  `Revenus/IbanRules.swift` (contrôle du web `validateIbanChecksum` l.212-225, l.248-249, l.337, l.366 ; textes ;
+  refus ; règle de relecture `IbanRelecture`), `Revenus/IbanModel.swift` ; démo `Demo/DemoIbanGateway.swift` (serveur
+  simulé : refus de `fn_enregistrer_mon_iban` et `fn_lier_iban_verifie_document` dans leur ordre, RIB démo portant le
+  seul IBAN d'exemple ISO 13616 ; variante `JOLENE_DEMO_IBAN=rib-requis|non-verifie`) ; Supabase
+  `Revenus/SupabaseIbanGateway.swift`. Aucune migration, aucun appel de `fn_lier_iban_verifie_document`
+  (service_role). RPC passées en `consommee` : `fn_consulter_mon_iban`, `fn_enregistrer_mon_iban`.
+- **Règles (D20, TJ6).** Succès strict : `success == true` puis relecture `fn_consulter_mon_iban` avec IBAN renseigné,
+  `iban_verifie == true` et les quatre derniers caractères de l'IBAN envoyé, sinon « Une erreur est survenue. Veuillez
+  réessayer. », jamais « IBAN enregistré » ; `success:false` → refus traduit par code (sous-section ci-dessous) ;
+  `NON_AUTHENTIFIE` → session expirée (« Session à vérifier », « Vérifier ma session ») ; `PROFIL_INTROUVABLE` → erreur
+  de contrat au message générique. Une demande à la fois ; une lecture en vol pendant l'envoi est invalidée ; état relu
+  après tout refus ou toute erreur (un délai dépassé ne prouve rien) ; jamais de renvoi. IBAN vidé du champ dès l'envoi,
+  quelle que soit l'issue ; jamais journalisé (aucun `print`, aucun journal) ni persisté (aucun stockage) ; champ
+  `privacySensitive` (masqué sous la rédaction `.privacy` : widgets, écran verrouillé ; ni l'instantané du sélecteur
+  d'apps ni les captures d'écran), clavier ASCII en majuscules sans autocorrection ni suggestion (`JoleneInputKind.iban`). `CrashScrubber` (T15) masque déjà les IBAN (compacts, groupés, espaces
+  insécables, tirets) et les clés `iban` / `p_iban` : aucun motif à ajouter.
+- **Définition live.** Contrat relu sur le dump `supabase/schema/public.sql` (re-baseline #1121) : `fn_consulter_mon_iban`
+  l.25923-25969, `fn_enregistrer_mon_iban` l.32684-32741, `fn_lier_iban_verifie_document` l.39848-39965, GRANT
+  `authenticated` l.82619 et l.83050. **Définition live relue le 18/11/2026** par la revue fraîche B8 n°1 de #1142
+  (production, lecture seule : `pg_get_functiondef`, `prosrc`, `proacl` ; aucune écriture, aucun appel depuis la
+  tranche) : corps identiques au dump pour `fn_consulter_mon_iban`, `fn_enregistrer_mon_iban`,
+  `fn_lier_iban_verifie_document` et `fn_iban_est_valide` (`md5(prosrc)` `a3434f6e…`, `11c12178…`, `f6d6f787…`,
+  `13f70432…`) ; `SECURITY DEFINER`, `search_path = pg_catalog, public`, propriétaire `postgres` ; `EXECUTE` à
+  `authenticated` et `service_role` sur les deux RPC, refusé à `anon` ; les deux dépendances réservées à `service_role`.
+- **Écarts au web (non juridiques).**
+  1. Pas de faux succès : le web annonce « IBAN enregistré » quand le refus ne porte que `error_code` (l.259-262, D20).
+  2. Le web ne vide le champ IBAN qu'au succès (l.270) ; le natif le vide à chaque envoi (blueprint §3 T14b).
+  3. Échec de la première lecture : erreur et « Réessayer » ; le web affiche alors le formulaire sans état (l.243).
+  4. Le contrôle local est celui du web (14 caractères au moins) ; le serveur en exige 15 (`fn_iban_est_valide`) : un
+     IBAN de 14 caractères part et revient `IBAN_INVALIDE` (« IBAN invalide »).
+  5. Écran empilé depuis le hub ; le web fait défiler le hub jusqu'à `SectionPaiements` (l.74, l.160-169).
+- **Non portés (TJ6, TJ8 : un texte du web inexact n'est ni affiché ni reformulé).** l.280 (destinataires, TJ6) ; l.308
+  « L'ancien IBAN est conservé dans ton historique, mais aucun nouveau versement ne peut l'utiliser sans un RIB courant
+  vérifié portant exactement le même IBAN et ton identité. », instruit contre `fn_consulter_mon_iban` comme TJ6 le
+  demande : l'état `iban_renseigne && !iban_verifie` ne garde pas l'IBAN « dans un historique » mais dans la colonne
+  courante `soignants.iban_virement` (l.25961), et il ne désigne pas toujours un « ancien » IBAN (un IBAN renseigné avant
+  la liaison au RIB vérifié l'est aussi) ; inexact, donc non porté. L'état garde son titre « RIB vérifié requis »
+  (l.306) et son action « Téléverser mon RIB » (l.316). PR web HARD STOP à préparer hors lot (avec l.280).
+- **CI UI.** `DemoIbanTests` rangé dans l'éclat `lot3-revenus` (domaine T12-T14b), sauté par le socle.
+
+### T14b — textes des refus IBAN (non juridiques)
+
+Règle TJ6 appliquée code par code (`IbanPresentation.refus`, épinglé par
+`IbanTests.testChaqueCodeAffichePasseParSaRegleJamaisIbanEnregistre`) :
+
+- `TITULAIRE_NON_CONCORDANT`, `RIB_VERIFIE_REQUIS` : `error` serveur verbatim (règle 1) ; `RIB_VERIFIE_REQUIS` sous le
+  titre « RIB vérifié requis » avec « Téléverser mon RIB ».
+- `IBAN_INVALIDE` : « IBAN invalide » (`SectionPaiements.tsx` l.339).
+- `RIB_COURANT_REQUIS`, `RIB_NON_CONCORDANT` : « Téléversez puis faites vérifier le RIB correspondant. » (`public.sql`
+  l.32735), titre « RIB vérifié requis » (l.306), action « Téléverser mon RIB » (l.316) vers les documents du lot 2.
+- `PROFIL_INTROUVABLE`, code inconnu : « Une erreur est survenue. Veuillez réessayer. » (`src/lib/erreurs.ts` l.532).
+- `NON_AUTHENTIFIE` : parcours de session du lot 1 (« Vérifier ma session »).
+- Textes nouveaux (règle 3 ; vouvoiement, une phrase, la seule condition vérifiée par le serveur et l'action de l'app,
+  action « Mes documents ») :
+  - `IDENTITE_VERIFIEE_REQUISE` (`identite_verifiee` et `coherence_identite = 'COHERENT'`, `public.sql`
+    l.39884-39889) : « Faites d'abord vérifier votre identité, cohérente avec votre profil, depuis Mes documents. »
+  - `IDENTITE_COURANTE_REQUISE` (pièce d'identité `VERIFIE` dont les noms extraits concordent, l.39891-39907) :
+    « Une pièce d'identité vérifiée à vos nom et prénom est requise : téléversez-la depuis Mes documents. »
+- Aucun texte juridique ajouté ; aucune décision juridique n'a été nécessaire.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
+
+### T14b — corrections de la revue fraîche B8 n°1 (verdict A_CORRIGER, 18/11/2026)
+
+- **M1** — avertissements de concurrence stricte (CI Swift 6.2) : le port scripté d'`IbanTests` ne prend plus son
+  verrou à travers un contexte `async` (`withLock` dans des fonctions synchrones).
+- **m2** — état `iban_renseigne && !iban_verifie` couvert au niveau du modèle, sur la variante démo `non-verifie`.
+- **m4** — `enregistrer()` invalide toute lecture en vol (`generation`, en tête et au retour du port) ; test de la course.
+- **m5** — identifiants distincts : `iban-rib-requis-documents` (état non vérifié), `iban-refus-documents` (refus).
+- **m6** — portée de `privacySensitive` précisée (commentaire seulement).
+- **m7** — titre « Session à vérifier » sur l'erreur de session expirée (TJ6, règle 2).
+- **m8** — parité, définition live et nom de l'étape CI mis à jour.
+- **Suivis non traités ici** : m1 (aucun test de changement d'epoch pendant une lecture ou un envoi : la phrase de
+  `DemoIbanTests` ne le revendique plus) ; m3 (le champ vidé n'est constaté qu'après l'appel, pas pendant).
+
 ## T15 — Sentry Cocoa (branche `lot3/l3-t15-v3`, 16/11/2026)
 
 Mise en œuvre de D21. Mode d'emploi, réglages et recette : `docs/mobile-swift/SENTRY_IOS.md`. T15 n'est pas B9
@@ -1799,6 +1878,105 @@ Tests d'abord : commit `test(ios-native): L3-T15 — tests de la revue B8 n°1 (
   région : Gabrielle confirme d'abord la région de données de l'organisation `jolene-z6`, la région UE étant
   recommandée pour des données de santé (§6.5, `SENTRY_IOS.md` §5 et §7). La restriction suivra.
 
+## T14a — Stripe Connect (branche `lot3/l3-t14a`, 18/11/2026 ; B9, jamais mergée sans go)
+
+- **Livré.** Écran `/soignant/stripe-connect` natif (`Jolene/Screens/Revenus/StripeConnectScreen.swift`, port de
+  `src/pages/PageStripeConnect.tsx`), empilé sur l'onglet Profil : entrée « Paiements & facturation › Compte de paiement
+  (Stripe) » du hub (`StripeConnectEntreeLigne` depuis l'intégration vague A, écart 5 ; règle web `estLiberal` de
+  `MonCompteSoignant.tsx` l.45-48 : `LIBERAL`,
+  `MIXTE` ou `statut_liberal = 'ACTIF'`), lien `/soignant/stripe-connect` (retour `?success=true` / `?refresh=true`
+  compris), tap push et ligne du centre. Cœur : `Revenus/StripeConnect.swift` (`ExerciceConnect`, `StatutConnect.lire`,
+  textes, raccourcis), `Revenus/StripeConnectModel.swift` ; port `StripeConnectPort` complété de `exercice(context:)` ;
+  démo `Demo/DemoStripeConnectGateway.swift` (+ `DemoExternalFlow`) ; Supabase
+  `Revenus/SupabaseStripeConnectGateway.swift` (edges existantes `stripe-connect-status` et `stripe-connect-onboard`,
+  aucune nouvelle edge, aucune migration) ; flux hébergé `Jolene/Composition/ExternalFlowPresenter.swift` (port système
+  `ExternalFlowPort`, une ligne d'`AppContainer`).
+- **Règles.** Exercice (`soignants.type_exercice, statut_liberal, est_compte_test`) lu avant tout appel d'edge : salarié
+  → mode salarié, compte de test → « Stripe désactivé sur ce compte de test », **sans appel d'edge** ; lecture en échec →
+  « Profil de paiement indisponible » + « Réessayer ». Statut : `POST stripe-connect-status`, `?force=true` au retour de
+  Stripe, sur « Actualiser » et après **toute** issue du flux hébergé (correction 17) ; six statuts du CHECK, `COMPLET`
+  admis seulement avec `onboarding_complete`, `charges_enabled` et `payouts_enabled` à `true`, sinon « Statut de paiement
+  indisponible ». Onboarding : `POST stripe-connect-onboard` avec `Origin: https://jolene.app` (D6) ; 200 `{success:true,
+  url}` (https) → flux hébergé ; `ORIGINE_NON_AUTORISEE` → erreur de contrat ; `TEST_ACCOUNT_PAYMENT_DISABLED` → écran du
+  compte de test ; refus « libéral » → avis du web l.143 ; autre refus → texte serveur. Une action à la fois ; jamais un
+  nouveau lien sans tap (`?refresh=true` compris). Flux (D7) : `ASWebAuthenticationSession` éphémère à rappel
+  `.https(host: "jolene.app", path: "/soignant/stripe-connect")` dès iOS 17.4, renvoi `.safari` du coordinateur des liens
+  en dessous (fermeture de la feuille = issue) ; une navigation par lien ou par tap et une fin d'identité ferment le flux
+  affiché (`DeepLinkCoordinator.fermerFluxExterne`).
+- **Routes.** `DestinationLien.ecranNatifLivre(.stripeConnect)` passe à `true` ; `CibleNotification.stripeConnect(retour:)`
+  (onglet Profil, présentable) ; `MainTabView.presenter` remet le Profil à sa racine et empile `StripeConnectRoute`
+  jetonnée, toujours avec `force` vrai (revue B8 de #1144, m2 : un lien, un tap ou une ligne du centre qui ferme le flux
+  hébergé retire l'écran qui faisait la relecture forcée ; l'écran affiché la refait, quel que soit le chemin) ; l'entrée
+  du hub lit sans `force` (cache serveur, comme le web hors retour). Raccourcis « Mes présences » et « Mes contrats »
+  (revue B8 de #1144, m3) : empilés au-dessus de l'écran Stripe, sans remise à zéro du Profil — « Retour » y ramène,
+  comme le retour du navigateur après un `<Link>` du web. Les 6 vecteurs push de la famille `/soignant/stripe-connect` passent au natif :
+  626 natifs, 264 renvois. `DemoLiensLot3Tests` (route non livrée, renvoi puis refus de réinitialisation) prend la série
+  de missions (`/soignant/missions/serie/:id`, renvoi web jusqu'au lot 4) à la place de Stripe Connect.
+- **Écarts (non juridiques, consignés).**
+  1. Blueprint §3 T14a : « `COMPLET` sans les trois drapeaux → `EN_COURS` ». Le web live (l.53-56) lève une erreur ; le
+     natif le suit (statut indisponible).
+  2. Cartes des revenus d'un compte connecté et leur note (l.387-417) non portées : l'onglet Revenus les sert déjà (mêmes
+     totaux serveur, T12) ; raccourci « Mes gains » vers l'onglet.
+  3. « Derniers versements Stripe » (`SuiviVersementsConnect`, l.418) non porté (écart 9 de T12 reste ouvert).
+  4. « Contacter le support » (l.478-485, l.512-515) et « Besoin d'aide ? » (l.190-196) non portés : modale web
+     `ModalContacterJolene` sans équivalent natif (même manque que T11).
+  5. ~~Section « Paiements & facturation » du hub placée après « Mes données (RGPD) » (le web la place sous « Mon profil »)~~.
+     **Levé à l'intégration vague A** (T14a + T14b, recette de la revue B8 de #1144) : une seule section
+     (`PaiementsFacturationSection` de `ProfileScreen`), juste après « Mon profil » comme le web l.64-77, lignes dans
+     l'ordre du web : « Compte de paiement (Stripe) » (`StripeConnectEntreeLigne`, ex-`PaiementsEntreeSection`, montée une
+     fois l'exercice lu) puis « Coordonnées bancaires » (`IbanEntreeLigne`, ex-`IbanEntreeSection` de T14b). La section
+     est toujours présente ; la ligne Stripe, qui arrive après la lecture, décale d'une ligne ce qui la suit (XCUITest du
+     hub à relire sur les trois formats). Titre unique : `StripeConnectTextes.sectionHub` (`IbanTextes.sectionHub` retiré).
+  6. Compte de test : le web appelle quand même `stripe-connect-status` puis masque tout (l.106-111, l.302) ; le natif ne
+     l'appelle pas (blueprint).
+  7. Refus serveur de l'onboarding affiché verbatim ; le web affiche toujours « Erreur lors de la connexion à Stripe.
+     Veuillez réessayer. » (l.146), qui reste le repli du natif.
+  8. `?refresh=true` : relecture forcée (le web relit sans `force`) ; aucun lien demandé sans tap.
+  9. Pas de fixture `demo-stripe-status.json` exportée (blueprint §2.7) : les variantes démo (`-JOLENE_DEMO_STRIPE
+     NON_DEMANDE|EN_COURS|COMPLET|SUSPENDU|REJETE|SUPPRIME|TEST|SALARIE`) sont construites par la même règle
+     `StatutConnect.lire` ; le serveur simulé ne rend `COMPLET` après l'onboarding qu'à une lecture forcée (cache de 5 min).
+  10. (revue B8 de #1144, m5) « Mandat de facturation » (même section « Paiements & facturation » du hub web, pour un
+      libéral, `MonCompteSoignant.tsx` l.69) n'est pas porté : aucune entrée au hub natif, la page reste web
+      (`/soignant/mandat-facturation`, lot 4, renvoi web, `PARITE_SOIGNANT.md`).
+- **Tests.** Niveau 1 : `StripeConnectTests` (statut, compte de test et salarié sans appel d'edge,
+  `TEST_ACCOUNT_PAYMENT_DISABLED`, toute issue du flux → `force=true`, textes verbatim) et
+  `SupabaseStripeConnectGatewayTests` (`Origin`, `POST`, `?force=true`, 403 `ORIGINE_NON_AUTORISEE` et
+  `TEST_ACCOUNT_PAYMENT_DISABLED`, refus « libéral », `COMPLET` sans drapeaux ; revue B8 de #1144, m4 : lecture de
+  l'exercice `soignants(type_exercice, statut_liberal, est_compte_test)` sans aucun appel d'edge, ligne absente en erreur,
+  401 de l'onboarding en session expirée, 503 `TEST_ACCOUNT_CLASSIFICATION_UNAVAILABLE` au repli du web) ; gardes ajustées (`DestinationLienTests`,
+  `DeepLinkIntentTests`, `CentreNotificationsTests`, `DemoWorldTests`, `Lot3PortsTests`). Niveau 2 : `DemoStripeTests`
+  (deux tests, éclat `lot3-revenus`, vérifié par la CI seulement). STAGING (compte test, D5-R) et appareil iOS ≥ 17.4 :
+  T16, T17.
+
+### T14a-J1 — Textes de `/soignant/stripe-connect` (HARD STOP n°4, TJ8)
+
+- **Règle par carte.** Une carte qui porte un texte à portée contractuelle — qui verse (mode salarié, l.210 et étapes
+  l.220-232), quand et à quel coût (« Connecte ton compte bancaire… selon le cycle indiqué » l.330, avantages l.333-335),
+  restriction du mode d'exercice (l.289-292), droit de recevoir des paiements Connect (compte supprimé, l.468-470), compte
+  de test (l.307-309) — est reprise **verbatim**, tutoiement compris, en entier. Les autres textes (en-tête l.187,
+  chargement en échec l.65 et l.172, étapes de l'inscription Stripe l.352, l.450, l.499-501, sous-titres des raccourcis
+  l.247 et l.280) passent au vouvoiement (décision 9 du lot 1). Titres et libellés de boutons : verbatim.
+- **Garde des cinq cartes contractuelles** (revue B8 de #1144, m1 ; décision prise par délégation, transmise par le
+  coordinateur) : leurs textes — mode salarié (l.208-232) et son encadré (l.289-292), NON_DEMANDE (l.328-335), compte de
+  test (l.307-309), compte supprimé (l.466-470) — sont dans `Legal/TextesWeb.swift` (`TextesWeb.StripeConnect`, nature
+  `[juridique]`, l.228 en deux fragments assemblés par `salarieEtapeConfirmation`, zone de rendu ancrée dans
+  `scripts/mobile/textes-web-ios-rendus.json`), sous la garde requise `check-textes-juridiques-ios` (étape « Garde de
+  livraison mobile » du check « Typecheck + build ») : égalité au caractère près avec le web, comme les autres textes
+  HARD STOP. `StripeConnectTextes` y renvoie. Les autres textes repris du web (titres, boutons, avis, raccourcis) sont
+  épinglés par `StripeConnectTests.testTextesVerbatimASaLigneWeb` à l'**égalité** avec un texte affiché de leur ligne
+  (plus une simple inclusion). La justification antérieure « garde absente de la base du lot 3 » ne vaut plus depuis
+  #1131 pour les textes de cette tranche.
+- **« Aucun frais pour le soignant » (l.335)**, relu contre la définition du dépôt d'`escrow-debit-echeance` : destination
+  charge, `amount` = honoraires + commission, `application_fee_amount: commissionCents` (index.ts l.343-352 ;
+  `docs/flux-monetaire-escrow.md` l.13-22) ; la commission s'ajoute au débit de l'établissement, les honoraires arrivent
+  entiers sur le compte connecté du soignant. Exact ; verbatim maintenu (le test épingle `application_fee_amount`).
+- « Virements automatiques pour les périodes facturées » (l.333) : description du produit (versement déclenché par le
+  système, `payouts.schedule = manual` côté Stripe) ; « Sécurisé par Stripe (certifié PCI DSS) » (l.334) : affirmation du
+  web reprise telle quelle. Aucun texte inexact au sens de TJ8 ; aucun texte nouveau juridique ; aucune règle de mode
+  d'exercice en dur (l'éligibilité reste celle du serveur, l'écran ne fait que choisir sa carte).
+- Force des sources : choix de conformité Jolene (web de production, edge du dépôt). Aucun arrêt ni avis cité.
+- décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026 ; le **go B9 au merge** reste requis.
+
 ## B9 — PR préparées et poussées, jamais mergées sans go explicite de Gabrielle
 
 Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + revue fraîche » ne remplace pas le go.
@@ -1816,8 +1994,10 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 - **T13** — paiements déclarés (confirmation ; contestation ouverte après B3) ; branche `lot3/l3-t13-v3` poussée
   (section T13 ci-dessus), revue fraîche B8 n°1 CLÔTURABLE (mineurs traités), définitions live relues le 16/11/2026 ;
   go humain requis avant merge.
-- **T14a** — Stripe Connect.
-- **T14b** — IBAN (données bancaires).
+- **T14a** — Stripe Connect ; branche `lot3/l3-t14a` poussée (section T14a ci-dessus), textes tranchés (T14a-J1) ;
+  go humain requis avant merge.
+- **T14b** — IBAN (données bancaires) ; branche `lot3/l3-t14b` poussée (section T14b ci-dessus), revue fraîche B8 n°1
+  traitée, définition live relue le 18/11/2026 ; go humain requis avant merge.
 - **T16** — dispatch STAGING (secrets STAGING, suppression des comptes jetables, bascule transactionnelle de la
   cohorte D5-R).
 - **PR web « destinataire du géocodage inverse » (légal exposé ; À PRÉPARER, hors du chantier iOS)** — suite de la
@@ -1856,7 +2036,7 @@ Pour chacune : branche poussée, tests verts, corps de PR prêt ; « CI verte + 
 - Tranchés par leur tranche selon TJ8 (intégration du lot 3, 9 novembre 2026) : avertissement d'exclusivité et libellés
   de mode d'exercice (T8, T8-J2 et T8-J3), libellés escrow et note « net estimé » (T12, « T12 — textes de l'onglet
   Revenus »). À trancher par leur tranche, selon les règles TJ6 à TJ8 : textes de la contestation de paiement (T13,
-  TJ7 : verrou caduc depuis B3), textes Stripe (T14a), messages des sept `error_code` IBAN qui arrivent sans `error`
+  TJ7 : verrou caduc depuis B3), textes Stripe (T14a, tranchés : « T14a-J1 »), messages des sept `error_code` IBAN qui arrivent sans `error`
   (T14b, TJ6).
 - Non portés, renvoi web libellé : type d'exercice et attestation de cumul d'activité (art. L1222-5,
   `ProfilSoignant.tsx` l.252-256, l.274-278, correction 8).
