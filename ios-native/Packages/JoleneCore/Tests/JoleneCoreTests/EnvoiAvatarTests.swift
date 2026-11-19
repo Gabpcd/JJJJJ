@@ -190,10 +190,12 @@ final class EnvoiAvatarTests: XCTestCase {
         let jpeg = jpeg
         let tache = Task { try await envoi.televerser(jpeg: jpeg, context: contexte) }
         var recu: RecuAvatar?
-        for _ in 0..<200 {
+        // Attente bornée (2 s au plus) : 200 `Task.yield()` seuls ne suffisaient pas sur un simulateur chargé.
+        for _ in 0..<2_000 {
             recu = try await m.recus.lire(userId: "u-1")
             if recu?.phase == .started { break }
             await Task.yield()
+            try? await Task.sleep(nanoseconds: 1_000_000)
         }
         XCTAssertEqual(recu?.phase, .started, "reçu durable écrit avant que la requête parte")
         XCTAssertEqual(recu?.chemin, chemin)
@@ -405,10 +407,11 @@ final class EnvoiAvatarTests: XCTestCase {
         let contexte = contexte
         let premiere = Task { try await envoi.reconcilier(context: contexte) }
         var lectures = 0
-        for _ in 0..<500 {
+        for _ in 0..<2_000 {
             lectures = await m.profil.lectures
             if lectures == 1 { break }
             await Task.yield()
+            try? await Task.sleep(nanoseconds: 1_000_000)
         }
         XCTAssertEqual(lectures, 1, "première réconciliation en relecture")
         let seconde = try await envoi.reconcilier(context: contexte)
