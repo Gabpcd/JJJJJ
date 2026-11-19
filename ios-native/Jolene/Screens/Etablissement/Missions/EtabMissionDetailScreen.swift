@@ -182,10 +182,18 @@ struct EtabMissionDetailScreen: View {
                         .accessibilityIdentifier("etab-mission-soignant-retry")
                 case let .charge(soignant):
                     let fiche = EtabMissionsPresentation.fiche(soignant, statutMission: detail.mission.statut)
-                    Label(fiche.nom, systemImage: "person")
-                        .font(JoleneFont.headline)
-                        .foregroundStyle(JoleneColor.midnight)
-                        .accessibilityIdentifier("etab-mission-soignant-nom")
+                    // Identifiant sur le nom seul : posé sur le `Label`, il est repris par l'icône ET le texte, et
+                    // `etab-mission-soignant-nom` désignait d'abord l'image, libellée « person » (iPad portrait, iOS 18.6).
+                    // L'icône, décorative, n'est pas annoncée : le nom qui la suit suffit.
+                    Label {
+                        Text(fiche.nom)
+                            .accessibilityIdentifier("etab-mission-soignant-nom")
+                    } icon: {
+                        Image(systemName: "person")
+                            .accessibilityHidden(true)
+                    }
+                    .font(JoleneFont.headline)
+                    .foregroundStyle(JoleneColor.midnight)
                     let ligne = [fiche.profession, fiche.fiabilite].compactMap { $0 }.joined(separator: " · ")
                     if !ligne.isEmpty {
                         Text(ligne).font(JoleneFont.callout).foregroundStyle(JoleneColor.bubblegum)

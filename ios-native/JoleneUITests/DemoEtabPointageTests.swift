@@ -32,11 +32,11 @@ final class DemoEtabPointageTests: JoleneUITestCase {
         XCTAssertFalse(element("placeholder-etab-pointage").exists, "écran de T7, jamais le provisoire")
         record("\(proofPrefix)-etab-pointage-code")
 
-        scrollTo(element("etab-pointage-plein-ecran"), in: element("etab-pointage-scroll"))
+        scrollTo(element("etab-pointage-plein-ecran"), in: defilementPointage)
         tap("etab-pointage-plein-ecran")
         let vue = element("etab-pointage-plein-ecran-vue")
         require("Le code est présenté en plein écran") { vue.exists && self.element("etab-pointage-plein-ecran-qr").exists }
-        XCTAssertFalse(element("etab-pointage-scroll").exists, "le plein écran remplace l'écran du code")
+        XCTAssertFalse(defilementPointage.exists, "le plein écran remplace l'écran du code")
         let codePleinEcran = element("etab-pointage-plein-ecran-code")
         let affiche = codePleinEcran.label
         let lu = try XCTUnwrap(decoderQR(element("etab-pointage-plein-ecran-qr")), "QR du plein écran illisible")
@@ -58,7 +58,7 @@ final class DemoEtabPointageTests: JoleneUITestCase {
         XCTAssertTrue(element("etab-pointage-prochain").label.hasSuffix("Prochain pointage attendu : Départ ou pause."),
                       element("etab-pointage-prochain").label)
         let segment = element("etab-pointage-segment-0")
-        scrollTo(segment, in: element("etab-pointage-scroll"))
+        scrollTo(segment, in: defilementPointage)
         XCTAssertTrue(segment.label.contains("Segment 1 · 02/11/2026 00h58 → en cours"), segment.label)
         record("\(proofPrefix)-etab-pointage-segment-ouvert")
     }
@@ -83,12 +83,21 @@ final class DemoEtabPointageTests: JoleneUITestCase {
                        "Le code sera affiché 15 minutes avant le créneau 2/2, le mardi 3 novembre 2026 à 07:00.")
         XCTAssertFalse(element("etab-pointage-qr").exists)
         let segment = element("etab-pointage-segment-0")
-        scrollTo(segment, in: element("etab-pointage-scroll"))
+        scrollTo(segment, in: defilementPointage)
         XCTAssertTrue(segment.label.contains("Segment 1 · 01/11/2026 07h02 → 01/11/2026 15h01"), segment.label)
         record("\(proofPrefix)-etab-pointage-hors-creneau")
     }
 
     // MARK: Étapes
+
+    /// Défilement de l'écran du code : la `ScrollView` qui porte `etab-pointage-screen` (ou `etab-pointage-scroll`).
+    /// `CodePointageScreen` pose le conteneur `etab-pointage-screen` sur ce défilement : SwiftUI fond un conteneur avec
+    /// son seul enfant accessible, qui garde l'identifiant du conteneur (`ScrollView, identifier: 'etab-pointage-screen'`
+    /// en iPad portrait sous iOS 18.6, aucun `etab-pointage-scroll`). Même règle que `defilement(_:)` de DemoFiltresTests
+    /// et DemoExplorerTests ; l'autre identifiant reste accepté si SwiftUI cesse de fondre les deux.
+    private var defilementPointage: XCUIElement {
+        app.scrollViews.matching(NSPredicate(format: "identifier IN %@", ["etab-pointage-scroll", "etab-pointage-screen"])).firstMatch
+    }
 
     private func ouvrirPointage(mission id: String, filtre: String, intitule: String) {
         if !containerVisible(element("etab-missions-screen")) { tabButton("tab-etab-missions", label: "Missions").tap() }

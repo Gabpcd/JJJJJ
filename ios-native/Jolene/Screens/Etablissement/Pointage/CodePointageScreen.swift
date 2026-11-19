@@ -10,7 +10,8 @@ import JoleneDesign
 /// (`VeilleEcran.controleur`), et la veille est rétablie à la disparition, en arrière-plan et dès que le code est masqué.
 /// La clôture d'un segment par l'établissement (fin rétroactive) relève des présences (T8, B9) : non portée ici.
 ///
-/// Identifiants : `etab-pointage-screen`, `-scroll`, `-loading`, `-reserve`, `-indisponible` (+ `-reessayer`), `-aucun`,
+/// Identifiants : `etab-pointage-screen` (le défilement de l'écran, hors plein écran ; `-scroll` y est effacé par SwiftUI,
+/// voir `body`), `-loading`, `-reserve`, `-indisponible` (+ `-reessayer`), `-aucun`,
 /// `-masque` (+ `-titre`, `-motif`), `-momentanement`, `-creneau`, `-prochain`, `-rotation`, `-code`, `-qr`,
 /// `-segment-en-cours`, `-plein-ecran` (bouton), `-plein-ecran-vue` (+ `-code`, `-qr`), `-fermer`, `-segments`,
 /// `etab-pointage-segment-{index}`.
@@ -46,13 +47,18 @@ struct CodePointageScreen: View {
                                         qr: "etab-pointage-plein-ecran-qr", fermer: "etab-pointage-fermer"),
                     onClose: { pleinEcran = false })
             } else {
+                // Conteneur de l'écran posé sur le défilement lui-même, jamais sur le `ZStack` : ce dernier n'a qu'un enfant
+                // accessible (le défilement OU le plein écran), et SwiftUI fond un conteneur à enfant unique avec cet
+                // enfant, qui prend l'identifiant du conteneur. Sur le `ZStack`, `etab-pointage-screen` effaçait donc
+                // `etab-pointage-plein-ecran-vue` en plein écran (arbre en iPad portrait sous iOS 18.6). Ici, le
+                // défilement porte `etab-pointage-screen` (et non `etab-pointage-scroll`, effacé de la même façon).
                 ScrollView { contenu }
                     .background(JoleneColor.lavender.ignoresSafeArea())
                     .accessibilityIdentifier("etab-pointage-scroll")
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("etab-pointage-screen")
             }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("etab-pointage-screen")
         .navigationTitle(R.titreCodePointage)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(pleinEcran ? .hidden : .automatic, for: .navigationBar)
