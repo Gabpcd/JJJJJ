@@ -479,7 +479,13 @@ class JoleneUITestCase: XCTestCase {
 
     /// Onglet de la barre : l'identifiant `tab-*`, puis le symbole SF correspondant, puis le
     /// libellé en dernier repli.
+    /// L'onglet est d'abord amené dans la page affichée de la barre haute de l'iPad (`amenerOngletDansLaPage`).
     func tabButton(_ identifier: String, label: String) -> XCUIElement {
+        amenerOngletDansLaPage(identifier, label: label)
+        return boutonOnglet(identifier, label: label)
+    }
+
+    private func boutonOnglet(_ identifier: String, label: String) -> XCUIElement {
         let buttons = tabButtons
         let byIdentifier = buttons.matching(identifier: identifier).firstMatch
         if byIdentifier.exists { return byIdentifier }
@@ -488,6 +494,72 @@ class JoleneUITestCase: XCTestCase {
             if bySymbol.exists { return bySymbol }
         }
         return buttons[label]
+    }
+
+    static let pageSuivante = "Page suivante"
+    static let pagePrecedente = "Page précédente"
+
+    /// Barre d'onglets haute de l'iPad (iPadOS 18 et suivants) trop large pour la fenêtre : le système n'en montre qu'une
+    /// page et ajoute « Page suivante » / « Page précédente ». Les cinq libellés de l'espace établissement (D13 :
+    /// 509 pt) dépassent la largeur que la barre reçoit en iPad portrait (820 pt), contrairement à ceux du soignant
+    /// (495 pt) : « Compte » reste caché derrière « Page suivante », et le toucher de son bouton ne sélectionne rien
+    /// (runs 44398503180 sous iOS 26.2 et local sous iOS 18.6). Comme un utilisateur, on tourne la page avant de toucher
+    /// l'onglet : il est caché derrière l'un des deux boutons, ou absent de la page affichée (la seconde page commence à
+    /// « Missions », sans « Accueil »). Chaque décision est lue dans UN instantané (`lirePageDeLaBarre`) : pendant
+    /// l'animation, « Page suivante » disparaît, et lire son cadre par une requête échouait (« Failed to get matching
+    /// snapshot »). Sans pagination (iPhone, iPad paysage, espace soignant), rien n'est lu ni touché.
+    private func amenerOngletDansLaPage(_ identifier: String, label: String) {
+        guard !app.tabBars.firstMatch.exists else { return }
+        let suivante = app.buttons.matching(NSPredicate(format: "label == %@", Self.pageSuivante)).firstMatch
+        let precedente = app.buttons.matching(NSPredicate(format: "label == %@", Self.pagePrecedente)).firstMatch
+        guard suivante.exists || precedente.exists else { return }
+        // Onglet absent de la page affichée : une seule direction de recherche (jamais d'aller-retour), d'abord l'arrière.
+        var recherche: XCUIElement?
+        for _ in 0..<4 {
+            guard let page = lirePageDeLaBarre(identifier, label: label), !page.ongletDansLaPage else { return }
+            let bouton: XCUIElement
+            if let onglet = page.onglet {
+                if let cadre = page.suivante, onglet.maxX > cadre.minX + 1 {
+                    bouton = suivante
+                } else if let cadre = page.precedente, onglet.minX < cadre.maxX - 1 {
+                    bouton = precedente
+                } else {
+                    return
+                }
+            } else {
+                if recherche == nil { recherche = page.precedente != nil ? precedente : (page.suivante != nil ? suivante : nil) }
+                guard let sens = recherche else { return }
+                bouton = sens
+            }
+            guard bouton.exists else { return }
+            bouton.tap()
+            _ = attendreSansEchec("L'onglet \(label) entre dans la page affichée de la barre", timeout: 3) {
+                self.lirePageDeLaBarre(identifier, label: label)?.ongletDansLaPage ?? false
+            }
+        }
+    }
+
+    /// Cadres de l'onglet et des deux boutons de page, lus dans un même instantané de l'app.
+    private func lirePageDeLaBarre(_ identifier: String, label: String) -> PageDeBarreOnglets? {
+        guard let racine = try? app.snapshot() else { return nil }
+        let symbole = Self.tabSymbols[identifier]
+        let symboles = Set(Self.tabSymbols.keys).union(Self.tabSymbols.values)
+        var page = PageDeBarreOnglets()
+        func parcourir(_ element: XCUIElementSnapshot) {
+            if element.elementType == .button {
+                if element.label == Self.pageSuivante {
+                    page.suivante = page.suivante ?? element.frame
+                } else if element.label == Self.pagePrecedente {
+                    page.precedente = page.precedente ?? element.frame
+                } else if page.onglet == nil, element.identifier == identifier || element.identifier == symbole
+                            || (element.label == label && symboles.contains(element.identifier)) {
+                    page.onglet = element.frame
+                }
+            }
+            element.children.forEach(parcourir)
+        }
+        parcourir(racine)
+        return page
     }
 
     /// Glissement entre deux coordonnées du viewport visible (hors clavier) : un glissement, pas une
@@ -651,5 +723,20 @@ class JoleneUITestCase: XCTestCase {
         screenshot.lifetime = .keepAlways
         add(screenshot)
         attachText(app.debugDescription, name: "\(name)-accessibilite.txt")
+    }
+}
+
+/// Page affichée de la barre d'onglets haute de l'iPad : cadres lus dans un même instantané (`lirePageDeLaBarre`).
+struct PageDeBarreOnglets {
+    var onglet: CGRect?
+    var suivante: CGRect?
+    var precedente: CGRect?
+
+    /// L'onglet est présent et n'est recouvert par aucun des deux boutons de page.
+    var ongletDansLaPage: Bool {
+        guard let onglet else { return false }
+        if let suivante, onglet.maxX > suivante.minX + 1 { return false }
+        if let precedente, onglet.minX < precedente.maxX - 1 { return false }
+        return true
     }
 }
