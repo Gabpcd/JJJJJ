@@ -383,7 +383,8 @@ describe('HTML statique et sitemap', () => {
     // Si app.html manquait, toutes les routes de l'application répondraient 404 sur Vercel.
     expect(readFileSync(path.join(RACINE_DEPOT, 'vite.config.ts'), 'utf8')).toMatch(/pagesStatiquesJolene\(\{ dist: path\.resolve\(__dirname, 'dist'\) \}\)/);
     const scripts = JSON.parse(readFileSync(path.join(RACINE_DEPOT, 'package.json'), 'utf8')).scripts as Record<string, string>;
-    expect(scripts.build).toBe('vite build && node scripts/seo/generer-pages-statiques.mjs');
+    // Le contrôle du premier chargement vient en dernier : il lit le dist complet, pages statiques comprises.
+    expect(scripts.build).toBe('vite build && node scripts/seo/generer-pages-statiques.mjs && node scripts/ci/verifier-premier-chargement.mjs');
   });
 
   it('est rejouable : un second passage repart du shell, pas de l\'accueil déjà prérendu', async () => {

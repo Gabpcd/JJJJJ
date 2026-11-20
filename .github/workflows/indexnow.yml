@@ -1,0 +1,53 @@
+name: Signalement des pages publiques (IndexNow)
+
+# Après un déploiement de production qui modifie les pages publiques, signale les URL du sitemap
+# en ligne aux moteurs qui suivent IndexNow (Bing, Yandex, Seznam, Naver). Google ne le suit pas.
+#
+# Ne s'exécute que sur main, et seulement quand le contenu SEO change. Aucun secret : la clé du
+# protocole est publique par construction (public/jolene-sante-indexnow-2026.txt). Ce qui part :
+# l'hôte, la clé et les URL du sitemap. Détail : scripts/seo/indexnow.mjs.
+#
+# Une panne du service ne rend jamais ce workflow rouge (avertissement) ; seul un refus de notre
+# fait (fichier de clé non servi) échoue, car il demande une correction.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/seo*'
+      - 'src/lib/seo-contenu/**'
+      - 'scripts/seo/**'
+      - 'public/sitemap.xml'
+      - 'public/robots.txt'
+  workflow_dispatch: # Déclenchement manuel : soumet le sitemap en ligne tel qu'il est.
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+concurrency:
+  group: indexnow
+  cancel-in-progress: true
+
+jobs:
+  signaler:
+    name: Signaler le sitemap en ligne
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      deployments: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Attendre le déploiement de production, puis signaler
+        if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/seo/indexnow.mjs --attendre
+
+      - name: Signaler (déclenchement manuel)
+        if: github.event_name == 'workflow_dispatch'
+        run: node scripts/seo/indexnow.mjs

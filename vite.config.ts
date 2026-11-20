@@ -116,6 +116,12 @@ export default defineConfig(({ mode }) => ({
         },
         codeSplitting: {
           groups: [
+            // Petits modules utilisés par toute l'application. Un groupe capture aussi les
+            // dépendances de ses modules : sans celui-ci, prioritaire, `clsx` partait avec
+            // recharts (qui l'importe) et l'assistant de préchargement de Vite avec jsPDF
+            // (qui fait des imports dynamiques). Chaque page, accueil compris, chargeait alors
+            // recharts et jsPDF. Gardé par tests/node/chunks-premier-chargement.node.mjs.
+            { name: 'vendor-commun', priority: 10, test: /vite[\\/]preload-helper|node_modules[\\/](?:clsx|class-variance-authority|tailwind-merge|@babel[\\/]runtime)[\\/]/ },
             { name: 'vendor-react', test: /node_modules\/(?:react|react-dom|react-router|react-router-dom)\// },
             { name: 'vendor-query', test: /node_modules\/@tanstack\/react-query\// },
             { name: 'vendor-charts', test: /node_modules\/(?:recharts|d3-[^/]+)\// },

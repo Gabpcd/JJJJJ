@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "prebuild": "node scripts/prepare-well-known.mjs",
-    "build": "vite build && node scripts/seo/generer-pages-statiques.mjs",
+    "build": "vite build && node scripts/seo/generer-pages-statiques.mjs && node scripts/ci/verifier-premier-chargement.mjs",
     "seo:donnees": "node scripts/seo/extraire-bmo.mjs && node scripts/seo/extraire-finess.mjs",
     "seo:donnees:verifier": "node scripts/seo/extraire-bmo.mjs --verifier && node scripts/seo/extraire-finess.mjs --verifier",
     "build:dev": "vite build --mode development",

@@ -187,6 +187,23 @@ vouvoiement, aucune promesse de volume ni de délai, aucune généralité (« so
 aucun lien interne cassé, chaque chiffre clé du baromètre recalculé depuis son tableau, pas plus de
 40 % de texte commun entre deux pages par type d'établissement.
 
+## 5 bis. Lot 3 — premier chargement, guides, signalement aux moteurs, kit hors site
+
+| # | Chantier | Effet |
+|---|---|---|
+| 1 | **Premier chargement divisé par deux.** Toutes les pages, accueil compris, chargeaient jsPDF et recharts avant de s'afficher : 461 Ko compressés, dont 255 inutiles hors des écrans de factures et de graphiques. Cause : un groupe de découpage emporte aussi les dépendances de ses modules ; `clsx` était parti avec recharts, l'assistant de préchargement de Vite avec jsPDF. Le groupe `vendor-commun` (`vite.config.ts`) les en sort : 204 Ko. | Pages plus rapides sur mobile, pour les visiteurs comme pour l'application |
+| 2 | Garde au build : `scripts/ci/verifier-premier-chargement.mjs` échoue si une de ces bibliothèques revient dans la chaîne de l'entrée ou si le premier chargement dépasse 250 Ko compressés | Le défaut, invisible en recette, ne peut pas revenir en silence |
+| 3 | Quatre guides : un pour les infirmiers, trois pour les établissements (rédiger une annonce, accueillir un remplaçant, anticiper les congés) | Les établissements, qui paient la commission, ont désormais autant de guides que les soignants |
+| 4 | Signalement IndexNow (`scripts/seo/indexnow.mjs`, workflow `indexnow.yml`) : après un déploiement de production qui modifie les pages publiques, les URL du sitemap en ligne sont signalées à Bing, Yandex, Seznam et Naver | Découverte en heures plutôt qu'en semaines sur Bing, qui alimente aussi Copilot, DuckDuckGo et la recherche de ChatGPT. Google ne suit pas ce protocole |
+| 5 | `docs/SEO_KIT_HORS_SITE.md` : textes prêts à l'emploi pour la fiche Google, les annuaires de logiciels, LinkedIn, et trois messages types (presse, sites du secteur, instituts de formation) | Brouillons seulement : rien n'a été publié ni envoyé |
+
+Ce qui est envoyé à IndexNow : l'hôte, la clé et les URL du sitemap. La clé est publique par
+construction (`public/jolene-sante-indexnow-2026.txt`) ; ce n'est pas un secret. Pour arrêter le
+signalement : désactiver le workflow dans GitHub, ou supprimer le fichier de clé.
+
+Mesures (build du 20/11/2026, scripts de module chargés avant affichage, gzip) : 460 739 octets
+avant, 204 224 après. La variante mobile du build donne le même résultat.
+
 ## 6. Lots suivants (non faits dans cette vague)
 
 1. **Simulateur de coût d'un remplacement** (page outil pour les établissements).
@@ -210,14 +227,17 @@ aucun lien interne cassé, chaque chiffre clé du baromètre recalculé depuis s
    vérifiables et datés (publicité comparative).
 6. **Pages par département** si le baromètre obtient du trafic.
 7. **Mesure d'audience sans cookie** (à décider : touche au consentement).
-8. **Calcul BMO de l'outil interne non corrigé.** `supabase/functions/_shared/bmo-acquisition.ts`
-   garde l'ancienne méthode et alimente `acquisition_territoires.bmo_difficulte_pct`, lu par le radar
-   d'acquisition de l'administration et par le score des brouillons de prospection. Les pages
-   publiques n'en dépendent plus (elles lisent `seo-bmo-2026.json`) ; l'outil interne reste à aligner.
+8. **Calcul BMO de l'outil interne : corrigé dans le code (PR #1171), données à relancer.** L'import
+   n'enregistre plus la part « jugés difficiles » dès qu'un bassin est masqué. Reste à la main de
+   Gabrielle : relancer l'import (Admin → Acquisition → « Synchroniser BMO + BOAMP »), après avoir
+   décidé du score de tension du radar, qui lit une part vide comme 0 % (correction en B9).
 9. **Vérification des données hors CI.** `npm run seo:donnees:verifier` compare les deux JSON aux
    fichiers officiels ; il interroge le réseau et se lance à la main, pas dans la CI.
-10. **Poids du module `seo-routes`** : chargé par l'accueil, il embarque désormais guides et données
-   (environ 30 Ko compressés). À scinder si la performance de l'accueil s'en ressent.
+10. **Poids du module `seo-routes`** : environ 26 Ko compressés, chargés par l'accueil. Laissé tel
+   quel : le gain serait dix fois moindre que celui du lot 3 (§5 bis), pour un découpage risqué.
+11. **Score de tension du radar d'acquisition** (`fn_admin_acquisition_cibles`,
+   `fn_admin_acquisition_radar_externe`) : distinguer « part non publiée » de « part nulle ».
+   Fonctions SECURITY DEFINER, donc accord explicite de Gabrielle (B9).
 
 ## 7. Mesure
 
@@ -230,6 +250,8 @@ aucun lien interne cassé, chaque chiffre clé du baromètre recalculé depuis s
   sur les requêtes locales en 2 à 4 mois, effet des guides en 3 à 6 mois.
 
 ## 8. Ce qui reste à la main de Gabrielle
+
+Textes prêts à copier pour chacune de ces actions : `docs/SEO_KIT_HORS_SITE.md`.
 
 Ces actions engagent la marque à l'extérieur ou demandent ses identifiants :
 
