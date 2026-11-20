@@ -581,9 +581,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_conversation"("p_autre_id" "uuid
 - **Fiche principale** : `CONTRATS_RPC_SOIGNANT.md` (lot 2).
 - **Usage établissement** (T7 polling 5 s écran visible et scène active, D23 ; T8 relecture `segment_ouvert`) :
   consommée par `SupabaseEtabPointageGateway.etat` (T7). Le dump re-baseliné ne sert plus `code_pointage_actif`
-  qu'aux membres habilités au pointage (`v_peut_voir_code`, l.35609-35612 : la restriction B5b est en place côté
+  qu'aux membres habilités au pointage (`v_peut_voir_code`, l.35617-35620 : la restriction B5b est en place côté
   serveur) ; le natif garde en plus le filtre `permissions.pointage` (aucune lecture sans elle, comme le web
-  l.102-115). `{error:'Mission introuvable'|'Accès interdit'}` (l.35596, l.35605) → bloc « Code de pointage
+  l.102-115). `{error:'Mission introuvable'|'Accès interdit'}` (l.35604, l.35613) → bloc « Code de pointage
   indisponible » avec le message serveur verbatim, aucune autre clé retenue ; décodage en liste blanche
   (`CodeRotatifRules.Etat`), aucune clé de la réponse du scanner lue.
 
