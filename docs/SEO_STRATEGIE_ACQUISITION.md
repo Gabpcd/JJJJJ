@@ -191,8 +191,8 @@ aucun lien interne cassé, chaque chiffre clé du baromètre recalculé depuis s
 
 | # | Chantier | Effet |
 |---|---|---|
-| 1 | **Premier chargement divisé par deux.** Toutes les pages, accueil compris, chargeaient jsPDF et recharts avant de s'afficher : 461 Ko compressés, dont 255 inutiles hors des écrans de factures et de graphiques. Cause : un groupe de découpage emporte aussi les dépendances de ses modules ; `clsx` était parti avec recharts, l'assistant de préchargement de Vite avec jsPDF. Le groupe `vendor-commun` (`vite.config.ts`) les en sort : 204 Ko. | Pages plus rapides sur mobile, pour les visiteurs comme pour l'application |
-| 2 | Garde au build : `scripts/ci/verifier-premier-chargement.mjs` échoue si une de ces bibliothèques revient dans la chaîne de l'entrée ou si le premier chargement dépasse 250 Ko compressés | Le défaut, invisible en recette, ne peut pas revenir en silence |
+| 1 | **Premier chargement presque divisé par deux.** Toutes les pages, accueil compris, chargeaient jsPDF et recharts avant de s'afficher : 560 Ko compressés en production, dont 257 inutiles hors des écrans de factures et de graphiques. Cause : un groupe de découpage emporte aussi les dépendances de ses modules ; `clsx` était parti avec recharts, l'assistant de préchargement de Vite avec jsPDF. Le groupe `vendor-commun` (`vite.config.ts`) les en sort : 296 Ko. | Pages plus rapides sur mobile, pour les visiteurs comme pour l'application |
+| 2 | Garde au build : `scripts/ci/verifier-premier-chargement.mjs` échoue si une de ces bibliothèques revient dans la chaîne de l'entrée ou si le premier chargement dépasse 340 Ko compressés | Le défaut, invisible en recette, ne peut pas revenir en silence |
 | 3 | Quatre guides : un pour les infirmiers, trois pour les établissements (rédiger une annonce, accueillir un remplaçant, anticiper les congés) | Les établissements, qui paient la commission, ont désormais autant de guides que les soignants |
 | 4 | Signalement IndexNow (`scripts/seo/indexnow.mjs`, workflow `indexnow.yml`) : après un déploiement de production qui modifie les pages publiques, les URL du sitemap en ligne sont signalées à Bing, Yandex, Seznam et Naver | Découverte en heures plutôt qu'en semaines sur Bing, qui alimente aussi Copilot, DuckDuckGo et la recherche de ChatGPT. Google ne suit pas ce protocole |
 | 5 | `docs/SEO_KIT_HORS_SITE.md` : textes prêts à l'emploi pour la fiche Google, les annuaires de logiciels, LinkedIn, et trois messages types (presse, sites du secteur, instituts de formation) | Brouillons seulement : rien n'a été publié ni envoyé |
@@ -201,8 +201,16 @@ Ce qui est envoyé à IndexNow : l'hôte, la clé et les URL du sitemap. La clé
 construction (`public/jolene-sante-indexnow-2026.txt`) ; ce n'est pas un secret. Pour arrêter le
 signalement : désactiver le workflow dans GitHub, ou supprimer le fichier de clé.
 
-Mesures (build du 20/11/2026, scripts de module chargés avant affichage, gzip) : 460 739 octets
-avant, 204 224 après. La variante mobile du build donne le même résultat.
+Mesures du 20/11/2026, scripts de module chargés avant affichage, compressés en gzip niveau 6 :
+
+| Build | Avant | Après |
+|---|---|---|
+| Production (Vercel, suivi d'erreurs embarqué) | 559 969 octets, 45 fichiers (lu sur `jolene.app`) | 296 401 octets (journal du build de prévisualisation) |
+| Local, simulation de la CI, variante mobile | 460 739 octets, 26 fichiers | 204 224 octets, 24 fichiers |
+
+Piste non traitée : en production, l'entrée pèse 99 Ko contre 34 en local, parce que le suivi
+d'erreurs y est chargé d'emblée. Le charger à la demande ferait encore gagner du poids, mais
+change le moment où les erreurs commencent à être captées : à décider à part.
 
 ## 6. Lots suivants (non faits dans cette vague)
 

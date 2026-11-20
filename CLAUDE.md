@@ -319,11 +319,13 @@ Stratégie, architecture et lots : `docs/SEO_STRATEGIE_ACQUISITION.md`. Règles 
 8. **Premier chargement gardé au build.** `npm run build` se termine par
    `scripts/ci/verifier-premier-chargement.mjs` : il échoue si jsPDF ou recharts (`vendor-pdf`,
    `vendor-charts`) entrent dans la chaîne des imports statiques de l'entrée, ou si celle-ci dépasse
-   250 Ko compressés. Un groupe de `codeSplitting` emporte aussi les dépendances de ses modules :
+   340 Ko compressés. Un groupe de `codeSplitting` emporte aussi les dépendances de ses modules :
    un petit module partagé (`clsx`, l'assistant de préchargement de Vite) part avec la première
-   bibliothèque lourde qui l'importe, et toutes les pages la chargent alors (461 Ko au lieu de 204
-   jusqu'au 20/11/2026). Remède : ajouter le module au groupe prioritaire `vendor-commun` de
-   `vite.config.ts`, pas relever le budget.
+   bibliothèque lourde qui l'importe, et toutes les pages la chargent alors (560 Ko en production
+   au lieu de 296 jusqu'au 20/11/2026). Remède : ajouter le module au groupe prioritaire
+   `vendor-commun` de `vite.config.ts`, pas relever le budget. Le poids dépend de l'environnement :
+   le build Vercel embarque le suivi d'erreurs dans l'entrée (296 Ko), un build local non (204 Ko) ;
+   un budget se cale sur le build Vercel, visible dans le journal de la prévisualisation de la PR.
 9. **Signalement IndexNow** (`scripts/seo/indexnow.mjs`, `.github/workflows/indexnow.yml`) : part de
    main seulement, après un déploiement de production qui touche le contenu SEO, et n'envoie que les
    URL du sitemap en ligne. La clé (`public/jolene-sante-indexnow-2026.txt`) est publique par

@@ -22,8 +22,16 @@ import { gzipSync } from 'node:zlib';
 
 /** Bibliothèques qui ne doivent être chargées que par les écrans qui s'en servent. */
 export const BLOCS_INTERDITS = ['vendor-pdf', 'vendor-charts'];
-/** Budget du premier chargement, en octets compressés (gzip). Mesuré à 204 518 le 20/11/2026. */
-export const BUDGET_GZIP = 250_000;
+/**
+ * Budget du premier chargement, en octets compressés (gzip).
+ *
+ * Le poids dépend de l'environnement du build. Mesures du 20/11/2026, après correctif :
+ *  - build local ou de simulation (sans DSN Sentry) : 204 224 ;
+ *  - build Vercel (suivi d'erreurs embarqué dans l'entrée) : 296 401.
+ * Le budget est calé sur le build Vercel, celui que les visiteurs reçoivent, avec 15 % de marge.
+ * Avant correctif, le même build Vercel pesait environ 550 000 octets.
+ */
+export const BUDGET_GZIP = 340_000;
 /** Bloc que toute page charge : s'il manque à la chaîne, c'est la lecture des imports qui est cassée. */
 const TEMOIN = 'vendor-react';
 
