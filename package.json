@@ -9,6 +9,7 @@
     "build": "vite build && node scripts/seo/generer-pages-statiques.mjs && node scripts/ci/verifier-premier-chargement.mjs",
     "seo:donnees": "node scripts/seo/extraire-bmo.mjs && node scripts/seo/extraire-finess.mjs",
     "seo:donnees:verifier": "node scripts/seo/extraire-bmo.mjs --verifier && node scripts/seo/extraire-finess.mjs --verifier",
+    "seo:empreintes": "vitest run src/lib/seo-empreintes.test.ts -u",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",

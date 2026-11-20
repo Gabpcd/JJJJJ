@@ -43,9 +43,9 @@ Pages à inspecter en priorité, dans cet ordre :
 9. `https://jolene.app/guides`
 10. `https://jolene.app/devenir-soignant`
 
-Bing, Yandex, Seznam et Naver sont prévenus automatiquement à chaque mise en ligne qui modifie les
-pages publiques (`scripts/seo/indexnow.mjs`). Google ne suit pas ce protocole : la Search Console
-reste nécessaire.
+Bing, Yandex, Seznam et Naver sont prévenus automatiquement des pages ajoutées ou modifiées à
+chaque mise en ligne (`scripts/seo/indexnow.mjs`). Google ne suit pas ce protocole : la Search
+Console reste nécessaire.
 
 ## 2. Fiche d'établissement Google
 

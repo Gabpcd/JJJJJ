@@ -194,12 +194,16 @@ aucun lien interne cassé, chaque chiffre clé du baromètre recalculé depuis s
 | 1 | **Premier chargement presque divisé par deux.** Toutes les pages, accueil compris, chargeaient jsPDF et recharts avant de s'afficher : 560 Ko compressés en production, dont 257 inutiles hors des écrans de factures et de graphiques. Cause : un groupe de découpage emporte aussi les dépendances de ses modules ; `clsx` était parti avec recharts, l'assistant de préchargement de Vite avec jsPDF. Le groupe `vendor-commun` (`vite.config.ts`) les en sort : 296 Ko. | Pages plus rapides sur mobile, pour les visiteurs comme pour l'application |
 | 2 | Garde au build : `scripts/ci/verifier-premier-chargement.mjs` échoue si une de ces bibliothèques revient dans la chaîne de l'entrée ou si le premier chargement dépasse 340 Ko compressés | Le défaut, invisible en recette, ne peut pas revenir en silence |
 | 3 | Quatre guides : un pour les infirmiers, trois pour les établissements (rédiger une annonce, accueillir un remplaçant, anticiper les congés) | Les établissements, qui paient la commission, ont désormais autant de guides que les soignants |
-| 4 | Signalement IndexNow (`scripts/seo/indexnow.mjs`, workflow `indexnow.yml`) : après un déploiement de production qui modifie les pages publiques, les URL du sitemap en ligne sont signalées à Bing, Yandex, Seznam et Naver | Découverte en heures plutôt qu'en semaines sur Bing, qui alimente aussi Copilot, DuckDuckGo et la recherche de ChatGPT. Google ne suit pas ce protocole |
+| 4 | Signalement IndexNow (`scripts/seo/indexnow.mjs`, workflow `indexnow.yml`) : après un déploiement de production, les pages ajoutées, modifiées ou supprimées sont signalées à Bing, Yandex, Seznam et Naver. Le changement se lit dans `src/lib/seo-empreintes.json` (une empreinte du contenu par page, `npm run seo:empreintes`) | Découverte en heures plutôt qu'en semaines sur Bing, qui alimente aussi Copilot, DuckDuckGo et la recherche de ChatGPT. Google ne suit pas ce protocole |
 | 5 | `docs/SEO_KIT_HORS_SITE.md` : textes prêts à l'emploi pour la fiche Google, les annuaires de logiciels, LinkedIn, et trois messages types (presse, sites du secteur, instituts de formation) | Brouillons seulement : rien n'a été publié ni envoyé |
 
-Ce qui est envoyé à IndexNow : l'hôte, la clé et les URL du sitemap. La clé est publique par
-construction (`public/jolene-sante-indexnow-2026.txt`) ; ce n'est pas un secret. Pour arrêter le
-signalement : désactiver le workflow dans GitHub, ou supprimer le fichier de clé.
+Ce qui est envoyé à IndexNow : l'hôte, la clé et les adresses des pages changées. La clé est
+publique par construction (`public/jolene-sante-indexnow-2026.txt`) ; ce n'est pas un secret. Le
+protocole demande de ne signaler que ce qui change (indexnow.org/faq : « Submit only when content
+has changed ») : seules les adresses dont l'empreinte diffère du commit précédent partent. Le
+premier signalement, faute de point de comparaison, porte sur toutes les pages : c'est le cas que
+le protocole admet après une refonte, et les lots 1 à 3 en sont une. Pour arrêter le signalement :
+désactiver le workflow dans GitHub, ou supprimer le fichier de clé.
 
 Mesures du 20/11/2026, scripts de module chargés avant affichage, compressés en gzip niveau 6 :
 

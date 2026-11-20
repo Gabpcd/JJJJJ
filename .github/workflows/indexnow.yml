@@ -1,11 +1,16 @@
 name: Signalement des pages publiques (IndexNow)
 
-# Après un déploiement de production qui modifie les pages publiques, signale les URL du sitemap
-# en ligne aux moteurs qui suivent IndexNow (Bing, Yandex, Seznam, Naver). Google ne le suit pas.
+# Après un déploiement de production qui change le contenu d'une page publique, signale les pages
+# ajoutées, modifiées ou supprimées aux moteurs qui suivent IndexNow (Bing, Yandex, Seznam, Naver).
+# Google ne le suit pas.
 #
-# Ne s'exécute que sur main, et seulement quand le contenu SEO change. Aucun secret : la clé du
-# protocole est publique par construction (public/jolene-sante-indexnow-2026.txt). Ce qui part :
-# l'hôte, la clé et les URL du sitemap. Détail : scripts/seo/indexnow.mjs.
+# Déclencheur : src/lib/seo-empreintes.json, qui ne change que si le contenu d'une page change
+# (test src/lib/seo-empreintes.test.ts). Seules les adresses dont l'empreinte diffère du commit
+# précédent partent : le protocole demande de ne pas resignaler une page inchangée.
+#
+# Aucun secret : la clé du protocole est publique par construction
+# (public/jolene-sante-indexnow-2026.txt). Ce qui part : l'hôte, la clé et ces adresses.
+# Détail : scripts/seo/indexnow.mjs.
 #
 # Une panne du service ne rend jamais ce workflow rouge (avertissement) ; seul un refus de notre
 # fait (fichier de clé non servi) échoue, car il demande une correction.
@@ -14,12 +19,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/lib/seo*'
-      - 'src/lib/seo-contenu/**'
-      - 'scripts/seo/**'
-      - 'public/sitemap.xml'
-      - 'public/robots.txt'
-  workflow_dispatch: # Déclenchement manuel : soumet le sitemap en ligne tel qu'il est.
+      - 'src/lib/seo-empreintes.json'
+  workflow_dispatch: # À la main, après une refonte ou une migration : signale tout le sitemap en ligne.
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -30,7 +31,7 @@ concurrency:
 
 jobs:
   signaler:
-    name: Signaler le sitemap en ligne
+    name: Signaler les pages changées
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -38,16 +39,18 @@ jobs:
       deployments: read
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2 # le commit précédent sert de point de comparaison
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
 
-      - name: Attendre le déploiement de production, puis signaler
+      - name: Attendre le déploiement de production, puis signaler les pages changées
         if: github.event_name == 'push'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/seo/indexnow.mjs --attendre
+        run: node scripts/seo/indexnow.mjs --changements --attendre
 
-      - name: Signaler (déclenchement manuel)
+      - name: Signaler tout le sitemap (déclenchement manuel)
         if: github.event_name == 'workflow_dispatch'
-        run: node scripts/seo/indexnow.mjs
+        run: node scripts/seo/indexnow.mjs --tout

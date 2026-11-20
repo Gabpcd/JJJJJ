@@ -327,10 +327,14 @@ Stratégie, architecture et lots : `docs/SEO_STRATEGIE_ACQUISITION.md`. Règles 
    le build Vercel embarque le suivi d'erreurs dans l'entrée (296 Ko), un build local non (204 Ko) ;
    un budget se cale sur le build Vercel, visible dans le journal de la prévisualisation de la PR.
 9. **Signalement IndexNow** (`scripts/seo/indexnow.mjs`, `.github/workflows/indexnow.yml`) : part de
-   main seulement, après un déploiement de production qui touche le contenu SEO, et n'envoie que les
-   URL du sitemap en ligne. La clé (`public/jolene-sante-indexnow-2026.txt`) est publique par
-   construction : ne pas la traiter comme un secret, ne pas la remplacer par une chaîne aléatoire
-   (faux positifs des détecteurs de secrets). Google ne suit pas ce protocole.
+   main seulement, après le déploiement de production, et ne signale que les pages ajoutées,
+   modifiées ou supprimées (le protocole interdit de resignaler une page inchangée). Le changement
+   se lit dans `src/lib/seo-empreintes.json`, une empreinte du contenu par page indexable : **après
+   toute modification du contenu d'une page publique, lancer `npm run seo:empreintes`** (le test
+   `src/lib/seo-empreintes.test.ts` échoue sinon) ; le diff du fichier montre les pages touchées.
+   La clé (`public/jolene-sante-indexnow-2026.txt`) est publique par construction : ne pas la
+   traiter comme un secret, ne pas la remplacer par une chaîne aléatoire (faux positifs des
+   détecteurs de secrets). Google ne suit pas ce protocole.
 
 ## Règle de rémunération / facturation — heures facturées
 
