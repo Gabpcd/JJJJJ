@@ -113,7 +113,7 @@ public enum IbanTextes {
     public static let enregistrer = "Enregistrer l'IBAN"
     /// Message générique du web (`src/lib/erreurs.ts` l.532) : `PROFIL_INTROUVABLE`, code inconnu, succès non relu.
     public static let erreurGenerique = "Une erreur est survenue. Veuillez réessayer."
-    /// Refus `RIB_VERIFIE_REQUIS` du serveur (`public.sql` l.32735), repris pour `RIB_COURANT_REQUIS` et
+    /// Refus `RIB_VERIFIE_REQUIS` du serveur (`public.sql` l.32743), repris pour `RIB_COURANT_REQUIS` et
     /// `RIB_NON_CONCORDANT` qui n'ont pas d'`error` (TJ6, règle 2).
     public static let ribCorrespondant = "Téléversez puis faites vérifier le RIB correspondant."
     /// Texte nouveau (TJ6, règle 3) : `IDENTITE_VERIFIEE_REQUISE` (`identite_verifiee` et `coherence_identite =
