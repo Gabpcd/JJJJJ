@@ -149,8 +149,12 @@ Deno.test("BMO agrege par departement et ne fabrique pas de ratio sur des valeur
   const as = rows.find((row) => row.profession === "AS");
   assert(as, "ligne AS manquante");
   assertEquals(as.bmo_projets_recrutement, 10, "projets AS connus");
-  assertEquals(as.bmo_difficulte_pct, 50, "difficulte AS");
-  assertEquals(as.bmo_saisonnier_pct, 20, "saisonnier AS");
+  assertEquals(as.bmo_difficulte_pct, null, "difficulte AS non calculable");
+  assertEquals(as.bmo_saisonnier_pct, null, "saisonnier AS non calculable");
+  const ide = rows.find((row) => row.profession === "IDE");
+  assert(ide, "ligne IDE manquante");
+  assertEquals(ide.bmo_difficulte_pct, 40, "difficulte IDE sans masque");
+  assertEquals(ide.bmo_saisonnier_pct, 20, "saisonnier IDE sans masque");
 
   const ideSf = rows.filter((row) => row.bmo_code === "V1X80");
   assertEquals(
