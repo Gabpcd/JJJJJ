@@ -316,9 +316,9 @@ export function aggregateBmoRecords(
     current.projects += record.projects || 0;
     // Une part n'a de sens que sur le departement entier. Des qu'un bassin
     // masque ses projets ou sa part ("*"), elle n'est plus calculable : la
-    // calculer sur les seuls bassins publies la surestimait (les cellules
-    // masquees sont les petits effectifs). Meme regle que les pages publiques
-    // (scripts/seo/extraire-bmo.mjs).
+    // calculer sur les seuls bassins publies donnait un pourcentage que la
+    // source ne permet pas d'etablir. Meme regle que les pages publiques
+    // (scripts/seo/extraire-bmo.mjs, PR #1170).
     if (record.projects === null || record.difficult === null) {
       current.difficultMasked = true;
     } else {

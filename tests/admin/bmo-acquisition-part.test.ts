@@ -47,6 +47,21 @@ describe('import BMO — part des projets jugés difficiles', () => {
     expect(r?.bmo_saisonnier_pct).toBeNull();
   });
 
+  it('ne publie aucune part quand les projets sont masqués alors que la part difficile est publiée', () => {
+    // Sans ce cas, la part vaudrait 30 / 50 = 60 % : les 5 projets difficiles du bassin masqué
+    // seraient rapportés à un total qui ne compte pas ce bassin.
+    const r = as([ligne('22', 50, 25, 5), ligne('22', null, 5, 1)], '22');
+    expect(r?.bmo_projets_recrutement).toBe(50);
+    expect(r?.bmo_difficulte_pct).toBeNull();
+    expect(r?.bmo_saisonnier_pct).toBeNull();
+  });
+
+  it('un bassin masqué dans un département ne retire pas la part du département voisin', () => {
+    const records = [ligne('56', 100, 74), ligne('56', 871, null), ligne('35', 200, 100), ligne('35', 200, 60)];
+    expect(as(records, '56')?.bmo_difficulte_pct).toBeNull();
+    expect(as(records, '35')?.bmo_difficulte_pct).toBe(40);
+  });
+
   it('traite la part saisonnière indépendamment de la part difficile', () => {
     const r = as([ligne('35', 200, 100, null), ligne('35', 200, 60, 10)], '35');
     expect(r?.bmo_difficulte_pct).toBe(40);

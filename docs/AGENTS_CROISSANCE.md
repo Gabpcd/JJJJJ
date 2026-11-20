@@ -124,10 +124,15 @@ Détail de l'agent de prospection :
   « jugés difficiles » existe en base (`bmo_difficulte_pct IS NOT NULL`). Depuis le 20/11/2026,
   l'import n'enregistre cette part que si aucun bassin d'emploi du département ne masque ses chiffres
   (« * » dans le classeur France Travail) ; sinon elle reste vide et l'agent ne cite rien. L'ancien
-  calcul la prenait sur les seuls bassins publiés, ce qui la surestimait (exemple : 74 % affichés pour
-  les aides-soignants du Morbihan, part en réalité non calculable). Même règle que les pages publiques
-  (`scripts/seo/extraire-bmo.mjs`). Les valeurs en base restent celles de l'ancien calcul tant que
-  l'import n'a pas été relancé : Admin → Acquisition → Priorités externes → « Synchroniser BMO + BOAMP ».
+  calcul la prenait sur les seuls bassins publiés et donnait donc un pourcentage que la source ne
+  permet pas d'établir (exemple : 74 % affichés pour les aides-soignants du Morbihan, part en réalité
+  non calculable). Même règle que les pages publiques (`scripts/seo/extraire-bmo.mjs`, PR #1170).
+  Les valeurs en base restent celles de l'ancien calcul tant que l'import n'a pas été relancé :
+  Admin → Acquisition → Priorités externes → « Synchroniser BMO + BOAMP ». Deux effets de cette
+  relance : les brouillons déjà en file gardent leur texte (ils expirent au bout de sept jours), et
+  le score de tension du radar interne lit une part vide comme 0 % (`fn_admin_acquisition_cibles`,
+  `fn_admin_acquisition_radar_externe`) : les départements sans part publiée y descendent. Corriger
+  ce score demande une migration sur des fonctions SECURITY DEFINER, donc un accord explicite.
 - Exclusions : STOP, PERDU, OPPOSITION, adresse déjà en séquence.
 - Adresses MSSanté exclues (domaine `mssante.fr` et ses sous-domaines, `20261116143942`) : premiers contacts, relances, et revalidation par le prédicat unique (§5). Une seule règle, `private.fn_growth_email_mssante`. Les brouillons MSSanté encore en file (`BROUILLON` ou `VALIDE`) ont expiré au déploiement, avec un motif visible dans l'historique, et ne comptent pas dans le quota du jour. MSSanté est un espace de confiance fermé, une boîte MSSanté n'échange qu'avec les messageries MSSanté de la liste blanche de l'ANS, donc un email envoyé depuis Gmail est rejeté (ANS : [doctrine MSSanté](https://esante.gouv.fr/doctrine/mssante), [« Basiques de la MSSanté », 08/2026](https://esante.gouv.fr/sites/default/files/media/document/Pr%C3%A9sentation%20-%20Basiques%20de%20la%20MSSant%C3%A9%20-%20082026.pdf)).
 - Adresses Apicrypt exclues aussi (domaine `apicrypt.org` et ses sous-domaines, `20261117060000`), par la même règle, donc par les mêmes premiers contacts, relances, revalidation, expiration et quota. Constat du 17/11 : le premier passage après `20261116143942` a préparé 7 brouillons, tous vers une adresse `@interop-mssante.apicrypt.org` ; 554 prospects ont une telle adresse. Ce sont les adresses MSSanté des utilisateurs d'Apicrypt, publiées dans l'annuaire national ([FAQ Apicrypt](https://www.apicrypt.org/files/FAQ_mars2019_BD.pdf)) : même espace fermé. Force des sources : la FAQ fonde `interop-mssante.apicrypt.org` ; le reste d'`apicrypt.org` (messagerie chiffrée entre apicrypteurs) est un **choix de conformité Jolene**, prudent, sans adresse concernée au 17/11. `gmsi-mssante.fr` (1 adresse) n'est pas exclu, faute de source primaire. La migration verrouille par empreinte la règle et les quatre fonctions qui l'appliquent, puis vérifie le prédicat et la file après l'expiration.
