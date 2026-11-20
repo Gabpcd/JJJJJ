@@ -305,7 +305,13 @@ Stratégie, architecture et lots : `docs/SEO_STRATEGIE_ACQUISITION.md`. Règles 
    « Jolene est-elle une agence d'intérim ? », dont la réponse commence par « Non ».
 5. **Page ville × métier indexée seulement avec une donnée BMO propre à son métier** (aides-soignants,
    médecins, infirmiers). Les comptes FINESS seuls ne suffisent pas (risque de pages satellites).
-6. **Données publiques : script reproductible, jamais de transcription.** BMO :
+6. **Une nouvelle route publique de contenu se déclare dans `src/pages/RoutesPubliques.tsx`**, monté
+   par la route « * » d'`App.tsx`, jamais dans `App.tsx` : `docs/mobile-swift/PARITE_ETABLISSEMENT.md`
+   cite le numéro de ligne de chaque route établissement d'`App.tsx` (garde
+   `tests/node/contrats-etablissement-ios.node.mjs`, étape « Garde de livraison mobile » de
+   validate-pr, non lancée par `npm test`). Avant de pousser une PR web : lancer aussi les étapes
+   `node --test` de `validate-pr.yml`.
+7. **Données publiques : script reproductible, jamais de transcription.** BMO :
    `scripts/seo/extraire-bmo.mjs` (l'enquête est publiée par bassin ; un total départemental est
    « au moins » dès qu'une valeur est masquée, et la part difficile n'est donnée que si aucune ne
    l'est). FINESS : `scripts/seo/extraire-finess.mjs` (villes reconnues par code commune ; les

@@ -50,10 +50,6 @@ const InscriptionSoignantCompletion = lazy(() => import("./pages/InscriptionSoig
 const Tarifs = lazy(() => import("./pages/Tarifs"));
 const DevenirSoignant = lazy(() => import("./pages/DevenirSoignant"));
 const RecruterSoignants = lazy(() => import("./pages/RecruterSoignants"));
-const RecruterTypeLanding = lazy(() => import("./pages/RecruterTypeLanding"));
-const GuidesIndex = lazy(() => import("./pages/GuidesIndex"));
-const GuideArticle = lazy(() => import("./pages/GuideArticle"));
-const BarometreRecrutement = lazy(() => import("./pages/BarometreRecrutement"));
 const InfirmiereLiberal = lazy(() => import("./pages/InfirmiereLiberal"));
 const VilleLanding = lazy(() => import("./pages/VilleLanding"));
 const ProfessionLanding = lazy(() => import("./pages/ProfessionLanding"));
@@ -73,7 +69,7 @@ const PageAideProSanteConnect = lazy(() => import("./pages/PageAideProSanteConne
 const PageParametresNotifications = lazy(() => import("./pages/PageParametresNotifications"));
 const PageRecherchesSauvegardees = lazy(() => import("./pages/PageRecherchesSauvegardees"));
 const PageInscriptionSucces = lazy(() => import("./pages/PageInscriptionSucces"));
-const NotFound = lazy(() => import("./pages/NotFound"));
+const RoutesPubliques = lazy(() => import("./pages/RoutesPubliques")); // guides, baromètre, pages par type d'établissement, puis 404
 const WidgetRecrutement = lazy(() => import("./pages/WidgetRecrutement"));
 const Telecharger = lazy(() => import("./pages/Telecharger"));
 
@@ -277,10 +273,6 @@ function AppRoutes() {
           <Route path="/tarifs" element={<Tarifs />} />
           <Route path="/devenir-soignant" element={<DevenirSoignant />} />
           <Route path="/recruter-soignants" element={<RecruterSoignants />} />
-          <Route path="/recruter-soignants/:type" element={<RecruterTypeLanding />} />
-          <Route path="/guides" element={<GuidesIndex />} />
-          <Route path="/guides/:slug" element={<GuideArticle />} />
-          <Route path="/barometre-recrutement-soignants-2026" element={<BarometreRecrutement />} />
           <Route path="/infirmiere-liberale" element={<InfirmiereLiberal />} />
           <Route path="/emploi-soignant/:ville" element={<VilleLanding />} />
           <Route path="/emploi-soignant/:ville/:profession" element={<VilleProfessionLanding />} />
@@ -514,7 +506,7 @@ function AppRoutes() {
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />
 
-          <Route path="*" element={<NotFound />} />
+          <Route path="*" element={<RoutesPubliques />} />
         </Routes>
         <NativeUpdateReady />
       </Suspense>
