@@ -19,6 +19,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
       // Exécuter le parseur de production Edge sous Vitest, sans le dupliquer.
       "npm:pdf-lib@1.17.1": path.resolve(__dirname, "./node_modules/pdf-lib"),
+      "npm:fflate@0.8.2": path.resolve(__dirname, "./node_modules/fflate"),
     },
   },
 });

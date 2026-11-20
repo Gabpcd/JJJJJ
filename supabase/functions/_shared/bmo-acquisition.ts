@@ -293,9 +293,9 @@ export function aggregateBmoRecords(
     departement: string;
     projects: number;
     difficult: number;
-    difficultBase: number;
+    difficultMasked: boolean;
     seasonal: number;
-    seasonalBase: number;
+    seasonalMasked: boolean;
   };
 
   const aggregates = new Map<string, Aggregate>();
@@ -309,17 +309,24 @@ export function aggregateBmoRecords(
       departement: record.departement,
       projects: 0,
       difficult: 0,
-      difficultBase: 0,
+      difficultMasked: false,
       seasonal: 0,
-      seasonalBase: 0,
+      seasonalMasked: false,
     };
     current.projects += record.projects || 0;
-    if (record.projects !== null && record.difficult !== null) {
-      current.difficultBase += record.projects;
+    // Une part n'a de sens que sur le departement entier. Des qu'un bassin
+    // masque ses projets ou sa part ("*"), elle n'est plus calculable : la
+    // calculer sur les seuls bassins publies la surestimait (les cellules
+    // masquees sont les petits effectifs). Meme regle que les pages publiques
+    // (scripts/seo/extraire-bmo.mjs).
+    if (record.projects === null || record.difficult === null) {
+      current.difficultMasked = true;
+    } else {
       current.difficult += record.difficult;
     }
-    if (record.projects !== null && record.seasonal !== null) {
-      current.seasonalBase += record.projects;
+    if (record.projects === null || record.seasonal === null) {
+      current.seasonalMasked = true;
+    } else {
       current.seasonal += record.seasonal;
     }
     aggregates.set(key, current);
@@ -333,14 +340,12 @@ export function aggregateBmoRecords(
         profession: mapping.profession,
         bmo_annee: aggregate.year,
         bmo_projets_recrutement: Math.round(aggregate.projects),
-        bmo_difficulte_pct: percentage(
-          aggregate.difficult,
-          aggregate.difficultBase,
-        ),
-        bmo_saisonnier_pct: percentage(
-          aggregate.seasonal,
-          aggregate.seasonalBase,
-        ),
+        bmo_difficulte_pct: aggregate.difficultMasked
+          ? null
+          : percentage(aggregate.difficult, aggregate.projects),
+        bmo_saisonnier_pct: aggregate.seasonalMasked
+          ? null
+          : percentage(aggregate.seasonal, aggregate.projects),
         bmo_code: aggregate.code,
         bmo_libelle: aggregate.label,
         precision: mapping.precision,
