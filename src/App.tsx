@@ -50,6 +50,10 @@ const InscriptionSoignantCompletion = lazy(() => import("./pages/InscriptionSoig
 const Tarifs = lazy(() => import("./pages/Tarifs"));
 const DevenirSoignant = lazy(() => import("./pages/DevenirSoignant"));
 const RecruterSoignants = lazy(() => import("./pages/RecruterSoignants"));
+const RecruterTypeLanding = lazy(() => import("./pages/RecruterTypeLanding"));
+const GuidesIndex = lazy(() => import("./pages/GuidesIndex"));
+const GuideArticle = lazy(() => import("./pages/GuideArticle"));
+const BarometreRecrutement = lazy(() => import("./pages/BarometreRecrutement"));
 const InfirmiereLiberal = lazy(() => import("./pages/InfirmiereLiberal"));
 const VilleLanding = lazy(() => import("./pages/VilleLanding"));
 const ProfessionLanding = lazy(() => import("./pages/ProfessionLanding"));
@@ -273,6 +277,10 @@ function AppRoutes() {
           <Route path="/tarifs" element={<Tarifs />} />
           <Route path="/devenir-soignant" element={<DevenirSoignant />} />
           <Route path="/recruter-soignants" element={<RecruterSoignants />} />
+          <Route path="/recruter-soignants/:type" element={<RecruterTypeLanding />} />
+          <Route path="/guides" element={<GuidesIndex />} />
+          <Route path="/guides/:slug" element={<GuideArticle />} />
+          <Route path="/barometre-recrutement-soignants-2026" element={<BarometreRecrutement />} />
           <Route path="/infirmiere-liberale" element={<InfirmiereLiberal />} />
           <Route path="/emploi-soignant/:ville" element={<VilleLanding />} />
           <Route path="/emploi-soignant/:ville/:profession" element={<VilleProfessionLanding />} />

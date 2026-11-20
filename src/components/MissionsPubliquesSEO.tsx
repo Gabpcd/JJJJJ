@@ -28,6 +28,7 @@ export function MissionsPubliquesSEO({ profession, ville, campagne, utm }: Props
     navigate(lienInscriptionRecherche({ profession, ville }, utm ?? campagne));
   };
 
+  const aucune = !loading && !erreur && missions?.length === 0;
   return (
     <section className="py-12 md:py-16">
       <div className="max-w-5xl mx-auto px-4">
@@ -44,8 +45,10 @@ export function MissionsPubliquesSEO({ profession, ville, campagne, utm }: Props
             <button type="button" onClick={() => void rechercher(profession, ville)} className="btn-secondary mt-3 min-h-[44px]">Réessayer</button>
           </div>
         )}
-        {!loading && !erreur && missions?.length === 0 && (
-          <p className="mt-4 text-muted-foreground">Aucune mission ne correspond à ces critères pour le moment.</p>
+        {aucune && (
+          <p className="mt-4 text-muted-foreground">
+            Aucune mission ne correspond à ces critères pour le moment. Créez votre compte pour retrouver cette recherche et postuler dès qu’un établissement publie une mission.
+          </p>
         )}
         {!!missions?.length && <>
         <p className="text-muted-foreground mt-3 mb-6">{loading || erreur ? 'Résultats de la recherche précédente.' : 'Missions réelles publiées par des établissements vérifiés.'}</p>
@@ -78,7 +81,7 @@ export function MissionsPubliquesSEO({ profession, ville, campagne, utm }: Props
             onClick={ouvrirInscription}
             className="btn-primary inline-flex items-center gap-2 px-6 py-3 text-base"
           >
-            Voir toutes les missions et postuler <ArrowRight className="h-4 w-4" />
+            {aucune ? 'Créer mon compte et retrouver ma recherche' : 'Voir toutes les missions et postuler'} <ArrowRight className="h-4 w-4" />
           </button>
           <p className="text-xs text-muted-foreground mt-2">Inscription gratuite · sans engagement</p>
         </div>

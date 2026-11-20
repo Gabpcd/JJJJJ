@@ -114,6 +114,14 @@ describe('gardes de source', () => {
     }
   });
 
+  it('aucune promesse de disponibilité ni marge d\'agence chiffrée sans source sur l\'accueil et /recruter-soignants', () => {
+    const accueil = lire('src/pages/PageAccueil.tsx');
+    const recruter = lire('src/pages/RecruterSoignants.tsx');
+    expect(accueil).not.toMatch(/dès aujourd'hui/);
+    expect(recruter).not.toMatch(/\d+\s?-\s?\d+\s?% de marge/);
+    expect(recruter).not.toMatch(/dès la publication/);
+  });
+
   it('public/sitemap.xml ne liste aucune route que l\'application rend en noindex', () => {
     const app = lire('src/App.tsx');
     const prefixes = /const ROUTES_NOINDEX = \[([\s\S]*?)\];/.exec(app)![1].match(/'[^']+'/g)!.map((p) => p.slice(1, -1));

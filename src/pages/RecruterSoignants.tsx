@@ -42,7 +42,7 @@ export default function RecruterSoignants() {
               <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-6">
                 <h3 className="font-semibold text-destructive mb-3">😤 Le problème</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>• Agences de remplacement coûteuses (20-30% de marge)</li>
+                  <li>• Agences de remplacement coûteuses</li>
                   <li>• Délais de recrutement de plusieurs jours</li>
                   <li>• Paperasse administrative chronophage</li>
                   <li>• Aucune garantie sur les qualifications</li>
@@ -52,7 +52,7 @@ export default function RecruterSoignants() {
                 <h3 className="font-semibold text-primary mb-3">✅ La solution Jolene</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li>• Commission de 15 % HT (18 % TTC), sans abonnement</li>
-                  <li>• Candidatures de soignants vérifiés dès la publication</li>
+                  <li>• Candidatures de soignants vérifiés</li>
                   <li>• Contrats et pointage automatisés</li>
                   <li>• Soignants RPPS vérifiés</li>
                 </ul>

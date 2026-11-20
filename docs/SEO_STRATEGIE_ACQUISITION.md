@@ -109,26 +109,47 @@ Source de vérité unique : `src/lib/seo-routes.ts` (titres, descriptions, H1, c
 indexabilité, données structurées), lue par les composants React et par
 `scripts/seo/generer-pages-statiques.mjs`.
 
-## 4. Lot 1 — fondations techniques
+## 4. Lot 1 — fondations techniques (fait, PR #1169)
 
 | # | Chantier | Effet attendu |
 |---|---|---|
-| 1 | Squelette neutre `app.html` (sans canonical) pour les routes de l'application ; `vercel.json` y renvoie | Plus aucun canonical faux |
+| 1 | Squelette neutre `app.html` (sans canonical) pour les routes de l'application, écrit par le build Vite ; `vercel.json` y renvoie | Plus aucun canonical faux |
 | 2 | Accueil, `/tarifs`, `/a-propos`, `/infirmiere-liberale`, `/telecharger`, `/aide` en HTML statique avec leur propre `<head>` | Pages lisibles sans JavaScript, canonical correct |
 | 3 | Données structurées dans le HTML statique : `WebSite`, `BreadcrumbList`, `FAQPage` | Compréhension de la structure du site, réponses reprises par les assistants IA |
 | 4 | Titres des pages métier raccourcis | Titres non tronqués |
 | 5 | `robots.txt` nettoyé, `llms.txt` généré | Signal clair pour les robots, y compris IA |
+| 6 | Titre rendu de l'accueil et de `/tarifs` (il devenait « Jolene — Jolene » après chargement), 404 en `noindex`, `/inscription/*` hors sitemap | Titres corrects dans les résultats, pas de page d'erreur indexée |
 
-## 5. Lot 2 — pages et contenus
+## 5. Lot 2 — pages et contenus (fait)
 
 | # | Chantier | Cible |
 |---|---|---|
-| 1 | Chiffres FINESS par ville (EHPAD, sites hospitaliers publics, SSIAD, HAD, MAS/FAM, IME, centres de santé) sur les pages ville et ville × métier | Soignants, requêtes locales |
-| 2 | Donnée BMO « Infirmiers et sages-femmes » sur les pages infirmier, qui deviennent indexables | Soignants, requêtes infirmier × ville |
-| 3 | 5 pages par type d'établissement | Directions d'établissement, cadres de santé |
-| 4 | Baromètre 2026 par département | Presse locale, blogs du secteur (liens) |
-| 5 | Premiers guides (soignants et établissements) | Requêtes en question, assistants IA |
-| 6 | État vide des listes de missions : invitation à s'inscrire pour être prévenu | Conversion des visites tant que l'offre est faible |
+| 1 | Chiffres FINESS par ville (EHPAD, sites hospitaliers publics, SSIAD, HAD, MAS/FAM, IME, centres de santé) sur les 100 pages ville et les 180 pages ville × métier | Soignants, requêtes locales |
+| 2 | Donnée BMO « Infirmiers et sages-femmes » sur les 30 pages infirmier, qui deviennent indexables (90 pages ville × métier indexées au lieu de 60) | Soignants, requêtes infirmier × ville |
+| 3 | 5 pages par type d'établissement : `/recruter-soignants/{ehpad,clinique,hopital,soins-a-domicile,handicap}` | Directions d'établissement, cadres de santé |
+| 4 | Baromètre 2026 par département : `/barometre-recrutement-soignants-2026` | Presse locale, blogs du secteur (liens) |
+| 5 | 6 guides sous `/guides` (3 soignants, 3 établissements) | Requêtes en question, assistants IA |
+| 6 | État vide des listes de missions : invitation à créer un compte pour retrouver la recherche | Conversion des visites tant que l'offre est faible |
+| 7 | Promesses non vérifiables retirées de l'accueil et de `/recruter-soignants` (« première mission possible dès aujourd'hui », « 20-30 % de marge », « dès la publication ») | Cohérence avec la réalité de l'offre |
+
+Où cela vit dans le code :
+
+| Quoi | Fichier |
+|---|---|
+| Pages par type d'établissement (textes) | `src/lib/seo-contenu/etablissements.ts` |
+| Guides (textes, sources officielles) | `src/lib/seo-contenu/guides.ts` |
+| Comptes FINESS (données) | `src/lib/seo-finess.json`, produit par `node scripts/seo/extraire-finess.mjs` |
+| Données BMO (données) | `src/lib/seo-bmo-2026.json` (AS et MEDECIN : catégories exactes ; IDE : agrégat « Infirmiers et sages-femmes ») |
+| Titres, descriptions, structure, indexabilité, données structurées | `src/lib/seo-routes.ts` |
+| Rendu commun (page affichée) | `src/components/ContenuSEO.tsx` |
+| Rendu commun (HTML statique), sitemap, llms.txt | `scripts/seo/generer-pages-statiques.mjs` |
+
+Ajouter un guide : une entrée dans `GUIDES_SEO`, rien d'autre. La route, le HTML statique, le
+sitemap (avec `lastmod` = date de révision), le sommaire `/guides` et les liens des piliers suivent.
+
+Rafraîchir les chiffres FINESS : `node scripts/seo/extraire-finess.mjs` (lit le fichier officiel en
+flux, n'écrit que le JSON). La réexposition data.gouv.fr utilisée est archivée : au prochain
+rafraîchissement, brancher le script sur l'extraction officielle du même jeu de données.
 
 Règles éditoriales des guides :
 
@@ -139,7 +160,14 @@ Règles éditoriales des guides :
   contrats, le guide décrit le fonctionnement de la plateforme et renvoie vers la fiche officielle
   (service-public.fr, URSSAF, Ordre) ;
 - les seules affirmations sur le produit sont celles déjà publiées sur le site (commission,
-  vérifications, contrats, pointage, DPAE transmise par l'établissement).
+  vérifications, contrats, pointage, DPAE transmise par l'établissement) ;
+- le mot « intérim » n'apparaît que dans les quatre guides qui comparent les solutions de
+  remplacement, et chacun rappelle que Jolene n'est pas une agence d'intérim.
+
+Ces règles sont gardées par des tests (`src/lib/seo-contenus.test.ts`, `src/lib/seo-routes.test.ts`) :
+aucun pourcentage hors 15 %, 18 % et 20 % sur les pages établissement, sources officielles en
+`service-public.gouv.fr` ou `data.gouv.fr` seulement, vouvoiement, aucune promesse de volume,
+aucun lien interne cassé, chiffres clés du baromètre confirmés par son tableau.
 
 ## 6. Lots suivants (non faits dans cette vague)
 

@@ -109,7 +109,8 @@ it('met fin au chargement après le délai réseau et propose un réessai', asyn
 it('transmet métier, ville et campagne SEO à l’inscription, sans créer d’alerte', async () => {
   ouvrir('seo');
   await screen.findByText(/Aucune mission ne correspond/);
-  fireEvent.click(screen.getByRole('button', { name: /Voir toutes les missions et postuler/ }));
+  // Sans mission, le bouton ne promet plus des missions à voir : il propose de créer un compte.
+  fireEvent.click(screen.getByRole('button', { name: /Créer mon compte et retrouver ma recherche/ }));
   const url = new URL(m.navigate.mock.calls[0][0], 'https://jolene.app');
   expect(Object.fromEntries(url.searchParams)).toEqual({ profession: 'IDE', ville: 'Paris', utm_source: 'seo', utm_medium: 'landing', utm_campaign: 'seo-paris' });
   expect(JSON.parse(sessionStorage.getItem('jolene.filtres_a_appliquer')!)).toEqual({ audience: 'SOIGNANT_RECHERCHE_MISSIONS', filtres: { profession: 'IDE', villeRecherche: 'Paris' } });

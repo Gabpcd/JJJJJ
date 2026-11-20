@@ -5,7 +5,8 @@ import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { PROFESSIONS_SEO, getVilleBySlug, VILLES_SEO } from '@/lib/seo-data';
 import { MissionsPubliquesSEO } from '@/components/MissionsPubliquesSEO';
 import { PageSEOIntrouvable } from '@/components/PageSEOIntrouvable';
-import { metaVille, urlAbsolue, estVilleVilleMetier, PROFESSIONS_SEO_VILLE_METIER, cheminVilleMetier, jsonLdPage } from '@/lib/seo-routes';
+import { metaVille, urlAbsolue, estVilleVilleMetier, PROFESSIONS_SEO_VILLE_METIER, cheminVilleMetier, jsonLdPage, phraseFiness, aVille, SOURCES_LOCALES, CHEMIN_BAROMETRE } from '@/lib/seo-routes';
+import { Sources } from '@/components/ContenuSEO';
 import { MapPin, ArrowRight, Activity } from 'lucide-react';
 
 const etapes = [
@@ -26,6 +27,9 @@ export default function VilleLanding() {
 
   const villeNom = ville.nom;
   const meta = metaVille(ville);
+  const ou = aVille(ville);
+  // Même phrase que le HTML statique (deuxième paragraphe d'introduction de `metaVille`).
+  const finess = phraseFiness(ville);
 
   return (
     <>
@@ -41,11 +45,25 @@ export default function VilleLanding() {
         ctaText="Voir les missions disponibles"
         ctaHref="/inscription/soignant"
       >
+        {finess && (
+          <section className="pt-12 md:pt-16">
+            <div className="max-w-3xl mx-auto px-4">
+              <aside className="rounded-xl border border-border bg-card p-4 space-y-3" aria-label={`Établissements recensés ${ou}`}>
+                <p className="text-foreground leading-relaxed">{finess}</p>
+                <Sources sources={[SOURCES_LOCALES[1]]} />
+                <p className="text-sm">
+                  <a href={CHEMIN_BAROMETRE} className="text-primary underline underline-offset-4 hover:text-primary/80">Voir le baromètre 2026 du recrutement de soignants par département</a>
+                </p>
+              </aside>
+            </div>
+          </section>
+        )}
+
         {estVilleVilleMetier(ville.slug) && (
           <section className="py-12 md:py-16">
             <div className="max-w-5xl mx-auto px-4">
               <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-6">
-                Missions par métier à {villeNom}
+                Missions par métier {ou}
               </h2>
               <div className="flex flex-wrap justify-center gap-3">
                 {PROFESSIONS_SEO_VILLE_METIER.map((p) => (
@@ -54,7 +72,7 @@ export default function VilleLanding() {
                     href={cheminVilleMetier(ville.slug, p.slug)}
                     className="inline-flex items-center gap-1.5 bg-card border border-border rounded-lg px-4 py-2 text-sm font-medium text-foreground hover:border-primary/40 hover:text-primary transition-colors"
                   >
-                    {p.label} à {villeNom}
+                    {p.label} {ou}
                   </a>
                 ))}
               </div>
@@ -66,7 +84,7 @@ export default function VilleLanding() {
         <section className="py-16 md:py-20">
           <div className="max-w-6xl mx-auto px-4">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-4">
-              Professions recherchées à {villeNom}
+              Professions recherchées {ou}
             </h2>
             <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-12">
               Les établissements de santé de {villeNom} recrutent activement des professionnels qualifiés dans toutes les spécialités.
@@ -127,6 +145,12 @@ export default function VilleLanding() {
               ))}
             </div>
           </div>
+        </section>
+        <section className="py-10">
+          <p className="max-w-3xl mx-auto px-4 text-center text-muted-foreground">
+            Vous dirigez un établissement {ou} ?{' '}
+            <a href="/recruter-soignants" className="text-primary font-semibold underline underline-offset-4 hover:text-primary/80">Publier une mission</a>
+          </p>
         </section>
         <MissionsPubliquesSEO ville={villeNom} campagne={`seo-ville-${ville.slug}`} />
       </SEOPageLayout>
