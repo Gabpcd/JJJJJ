@@ -17,7 +17,7 @@ const garanties = [
 ];
 
 const etapes = [
-  { num: '1', titre: 'Créez votre espace', desc: 'Inscription gratuite avec SIRET et FINESS. Votre espace est opérationnel en 10 minutes.' },
+  { num: '1', titre: 'Créez votre espace', desc: 'Inscription gratuite avec SIRET et FINESS.' },
   { num: '2', titre: 'Publiez une mission', desc: 'Renseignez la profession, les dates, les horaires et le taux horaire. La mission est visible immédiatement.' },
   { num: '3', titre: 'Recevez des candidatures', desc: 'Les soignants vérifiés postulent. Vous validez, le contrat est généré et signé électroniquement.' },
 ];
@@ -42,17 +42,17 @@ export default function RecruterSoignants() {
               <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-6">
                 <h3 className="font-semibold text-destructive mb-3">😤 Le problème</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>• Agences de remplacement coûteuses (20-30% de marge)</li>
-                  <li>• Délais de recrutement de plusieurs jours</li>
-                  <li>• Paperasse administrative chronophage</li>
-                  <li>• Aucune garantie sur les qualifications</li>
+                  <li>• Des heures passées au téléphone pour trouver un remplaçant</li>
+                  <li>• Un contrat à préparer pour chaque mission</li>
+                  <li>• Des justificatifs à vérifier un par un</li>
+                  <li>• Un coût difficile à anticiper</li>
                 </ul>
               </div>
               <div className="bg-primary/5 border border-primary/20 rounded-xl p-6">
                 <h3 className="font-semibold text-primary mb-3">✅ La solution Jolene</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li>• Commission de 15 % HT (18 % TTC), sans abonnement</li>
-                  <li>• Candidatures de soignants vérifiés dès la publication</li>
+                  <li>• Candidatures de soignants vérifiés</li>
                   <li>• Contrats et pointage automatisés</li>
                   <li>• Soignants RPPS vérifiés</li>
                 </ul>

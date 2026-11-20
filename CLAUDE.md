@@ -283,6 +283,40 @@ async function getVaultCronSecret(sb: any): Promise<string> {
 - **Pas de `scrollIntoView({behavior:'smooth'})` au focus input** : Safari iOS scroll nativement vers le champ focusé. Le JS smooth + setTimeout crée un saut. Valable uniquement pour scroll vers section/message (FilDiscussionLitige, DashboardRH, etc.), PAS au focus champ.
 - **Note Capacitor (Sprint 18)** : `@capacitor/keyboard` déjà préparé dans `lib/platform.ts:170-175` (resize mode + listener `keyboardWillShow`). Ajouter `user-scalable=no` dans viewport meta WKWebView pour bloquer le zoom au cas où. Cf. docs/HOTFIX_UX_SAFARI_MOBILE.md.
 
+## Pages publiques et SEO (20/11/2026)
+
+Stratégie, architecture et lots : `docs/SEO_STRATEGIE_ACQUISITION.md`. Règles à tenir :
+
+1. **Une seule copie des textes.** Titre, description, H1, contenu, FAQ et données structurées d'une
+   page publique vivent dans `src/lib/seo-routes.ts` et `src/lib/seo-contenu/`. Le composant React
+   et le HTML statique (`scripts/seo/generer-pages-statiques.mjs`) lisent le même objet. Une page
+   qui a son HTML statique ne redéfinit ni titre ni texte dans son composant, et n'appelle pas
+   `usePageTitle` (il remplaçait le titre de `SEOHead` après montage).
+2. **`dist/app.html`** est le shell des routes sans page statique (application connectée, pages
+   légales, `/mission/:id`) : écrit par le build Vite (`scripts/seo/vite-pages-statiques.mjs`),
+   cible de la réécriture de `vercel.json`. `dist/index.html` est la page d'accueil prérendue.
+   Tout script qui prépare ou sert le build doit traiter les deux fichiers.
+3. **Aucun chiffre sans source nommée**, aucune promesse de volume ou de délai, aucune règle de
+   droit affirmée par Jolene dans un contenu éditorial : renvoyer vers la fiche officielle. Un texte
+   juridique propre à Jolene reste un HARD STOP n°4.
+4. **Jamais sous l'angle de l'intérim.** Aucune page ni aucun guide n'en parle, ne compare Jolene à
+   un autre type de prestataire, ni ne donne d'exemple de prix : ces sujets (droit du travail,
+   assiette de la commission) passent par le HARD STOP n°4. Seule mention admise : la question
+   « Jolene est-elle une agence d'intérim ? », dont la réponse commence par « Non ».
+5. **Page ville × métier indexée seulement avec une donnée BMO propre à son métier** (aides-soignants,
+   médecins, infirmiers). Les comptes FINESS seuls ne suffisent pas (risque de pages satellites).
+6. **Une nouvelle route publique de contenu se déclare dans `src/pages/RoutesPubliques.tsx`**, monté
+   par la route « * » d'`App.tsx`, jamais dans `App.tsx` : `docs/mobile-swift/PARITE_ETABLISSEMENT.md`
+   cite le numéro de ligne de chaque route établissement d'`App.tsx` (garde
+   `tests/node/contrats-etablissement-ios.node.mjs`, étape « Garde de livraison mobile » de
+   validate-pr, non lancée par `npm test`). Avant de pousser une PR web : lancer aussi les étapes
+   `node --test` de `validate-pr.yml`.
+7. **Données publiques : script reproductible, jamais de transcription.** BMO :
+   `scripts/seo/extraire-bmo.mjs` (l'enquête est publiée par bassin ; un total départemental est
+   « au moins » dès qu'une valeur est masquée, et la part difficile n'est donnée que si aucune ne
+   l'est). FINESS : `scripts/seo/extraire-finess.mjs` (villes reconnues par code commune ; les
+   hôpitaux ne sont pas comptés, la catégorie ne correspond pas au mot).
+
 ## Règle de rémunération / facturation — heures facturées
 
 > **GLOSSAIRE ESCROW — RÈGLE #11 (plancher inviolable).** À connaître d'office

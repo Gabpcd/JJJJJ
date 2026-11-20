@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { VILLES_SEO, PROFESSIONS_SEO } from './seo-data';
 import {
+  BMO_2026,
   toutesLesRoutesSeo,
   jsonLdPage,
   metaAccueil,
@@ -25,6 +26,8 @@ import {
   VILLES_VILLE_METIER,
   type TableBmo,
 } from './seo-routes';
+import { TYPES_ETABLISSEMENT_SEO } from './seo-contenu/etablissements';
+import { GUIDES_SEO } from './seo-contenu/guides';
 import { genererPagesStatiques, genererHtml, entreesSitemapConservees, scriptJsonLd, squeletteApplication } from '../../scripts/seo/generer-pages-statiques.mjs';
 import { cibleStatique, ecrireSquelette, estRequeteDePage, pagesStatiquesJolene } from '../../scripts/seo/vite-pages-statiques.mjs';
 import { TITRE_ACCUEIL } from './seo-contenu/accueil';
@@ -63,7 +66,7 @@ const SITEMAP_SOURCE = `<?xml version="1.0" encoding="UTF-8"?>
 describe('routes SEO', () => {
   const pages = toutesLesRoutesSeo();
 
-  it('génère le bon nombre de routes (accueil + institutionnelles + 2 piliers + villes + métiers + 30 villes × 6 métiers)', () => {
+  it('génère le bon nombre de routes (accueil, institutionnelles, piliers, villes, métiers, ville × métier, types d\'établissement, baromètre, guides)', () => {
     const vm = pages.filter((p) => p.type === 'ville-metier');
     expect(NB_VILLES_VILLE_METIER).toBe(30);
     expect(PROFESSIONS_SEO_VILLE_METIER).toHaveLength(PROFESSIONS_VILLE_METIER.length);
@@ -72,7 +75,11 @@ describe('routes SEO', () => {
     expect(pages.filter((p) => p.type === 'metier')).toHaveLength(PROFESSIONS_SEO.length);
     expect(pages.filter((p) => p.type === 'accueil')).toHaveLength(1);
     expect(pages.filter((p) => p.type === 'institutionnel')).toHaveLength(CLES_INSTITUTIONNELLES.length);
-    expect(pages).toHaveLength(1 + CLES_INSTITUTIONNELLES.length + 2 + VILLES_SEO.length + PROFESSIONS_SEO.length + 180);
+    expect(pages.filter((p) => p.type === 'etablissement')).toHaveLength(TYPES_ETABLISSEMENT_SEO.length);
+    expect(pages.filter((p) => p.type === 'guide')).toHaveLength(GUIDES_SEO.length);
+    expect(pages.filter((p) => p.type === 'barometre' || p.type === 'guides')).toHaveLength(2);
+    expect(pages).toHaveLength(1 + CLES_INSTITUTIONNELLES.length + 2 + VILLES_SEO.length + PROFESSIONS_SEO.length + 180
+      + TYPES_ETABLISSEMENT_SEO.length + 2 + GUIDES_SEO.length);
   });
 
   it('garde les titres des pages métier sous la longueur que Google affiche', () => {
@@ -156,9 +163,28 @@ describe('données BMO 2026', () => {
     expect(phrase).toContain('Enquête BMO 2026, France Travail');
   });
 
-  it('n’affiche rien quand le pourcentage est null', () => {
-    expect(phraseBmo('18', 'MEDECIN', table)).toBeNull();
-    expect(phraseBmo('18', 'AS', table)).not.toBeNull();
+  it('donne les projets sans la part quand elle n\'est pas calculable', () => {
+    const phrase = phraseBmo('18', 'MEDECIN', table)!;
+    expect(phrase).toBe('Dans le département 18, les employeurs déclarent 12 projets de recrutement de médecins en 2026 (Enquête BMO 2026, France Travail).');
+    expect(phraseBmo('18', 'AS', table)).toContain('dont 47 % jugés difficiles');
+  });
+
+  it('dit « au moins » quand le total du département est un minimum (valeur de bassin masquée)', () => {
+    const partielle: TableBmo = { '69': { AS: [1471, null, 1] }, '03': { MEDECIN: [0, null, 1] } };
+    expect(phraseBmo('69', 'AS', partielle)).toMatch(/déclarent au moins 1\s471 projets de recrutement d’aides-soignants en 2026 \(Enquête BMO 2026, France Travail\)\.$/);
+    // Aucun projet publié et valeur masquée : on ne sait rien, donc on ne dit rien.
+    expect(phraseBmo('03', 'MEDECIN', partielle)).toBeNull();
+  });
+
+  it('le fichier de données ne porte une part que pour un total exact', () => {
+    for (const [dept, metiers] of Object.entries(BMO_2026)) {
+      for (const [metier, e] of Object.entries(metiers)) {
+        if (!e) continue;
+        expect(e, `${dept} ${metier}`).toHaveLength(3);
+        if (e[2]) expect(e[1], `${dept} ${metier} : part publiée sur un total partiel`).toBeNull();
+        if (e[1] !== null) { expect(e[1]).toBeGreaterThanOrEqual(0); expect(e[1]).toBeLessThanOrEqual(100); }
+      }
+    }
   });
 
   it('n’affiche rien quand les projets valent 0, quand le département est absent ou pour un autre métier', () => {
@@ -168,15 +194,28 @@ describe('données BMO 2026', () => {
     expect(phraseBmo('75', 'KINE', table)).toBeNull();
   });
 
-  it('n’injecte du BMO que sur les pages AS et MEDECIN, avec la donnée réelle', () => {
+  it('n’injecte du BMO que sur les pages aide-soignant, médecin et infirmier, avec la donnée réelle', () => {
     for (const p of toutesLesRoutesSeo().filter((x) => x.type === 'ville-metier')) {
       const texte = p.intro.join(' ');
-      if (p.path.endsWith('/infirmier-ide') || p.path.endsWith('/kinesitherapeute') || p.path.endsWith('/sage-femme') || p.path.endsWith('/accompagnant-educatif-social')) {
+      // Kinésithérapeute et AES : agrégats trop larges. Sage-femme : l'agrégat « Infirmiers et sages-femmes » serait trompeur.
+      if (p.path.endsWith('/kinesitherapeute') || p.path.endsWith('/sage-femme') || p.path.endsWith('/accompagnant-educatif-social')) {
         expect(texte, p.path).not.toContain('BMO');
       }
     }
     const paris = resoudreVilleMetier('paris', 'aide-soignant')!;
     expect(metaVilleMetier(paris.ville, paris.profession).intro.join(' ')).toContain('Enquête BMO 2026, France Travail');
+  });
+
+  it('page infirmier : l\'agrégat de l\'enquête est nommé tel qu\'il est publié', () => {
+    const paris = resoudreVilleMetier('paris', 'infirmier-ide')!;
+    const texte = metaVilleMetier(paris.ville, paris.profession).intro.join(' ');
+    expect(texte).toMatch(/1\s680 projets de recrutement d’infirmiers et de sages-femmes en 2026, dont 38 % jugés difficiles \(Enquête BMO 2026, France Travail\)/);
+    // Lyon : une valeur de bassin est masquée → total minimal, aucune part.
+    const lyon = resoudreVilleMetier('lyon', 'infirmier-ide')!;
+    const texteLyon = metaVilleMetier(lyon.ville, lyon.profession).intro.join(' ');
+    expect(texteLyon).toMatch(/au moins 1\s218 projets de recrutement d’infirmiers et de sages-femmes en 2026 \(Enquête BMO/);
+    expect(texteLyon).not.toMatch(/jugés difficiles/);
+    expect(phraseBmo('75', 'SAGE_FEMME')).toBeNull();
   });
 });
 
@@ -190,16 +229,23 @@ describe('indexation des pages ville × métier', () => {
     }
   });
 
-  it('n\'indexe que des pages aide-soignant ou médecin', () => {
+  it('n\'indexe que des pages aide-soignant, médecin ou infirmier', () => {
     const indexees = villeMetier.filter((p) => p.indexable);
-    expect(indexees.length).toBeGreaterThan(0);
-    for (const p of indexees) expect(p.path).toMatch(/\/(aide-soignant|medecin)$/);
+    expect(indexees.length).toBeGreaterThan(60);
+    for (const p of indexees) expect(p.path).toMatch(/\/(aide-soignant|medecin|infirmier-ide)$/);
   });
 
-  it('aucun texte SEO ne présente Jolene ou un métier sous l\'angle de l\'intérim', () => {
+  it('les comptes FINESS seuls ne rendent pas une page indexable', () => {
+    const lyon = resoudreVilleMetier('lyon', 'kinesitherapeute')!;
+    const meta = metaVilleMetier(lyon.ville, lyon.profession);
+    expect(meta.intro.join(' ')).toContain('le répertoire FINESS recense');
+    expect(meta.indexable).toBe(false);
+  });
+
+  it('aucun texte SEO ne parle d\'intérim, libellés de liens compris', () => {
     for (const p of toutesLesRoutesSeo()) {
-      const sections = (p.sections ?? []).flatMap((x) => [x.titre, ...(x.paragraphes ?? []), ...(x.liste ?? [])]);
-      expect([p.title, p.description, p.h1, ...p.intro, ...sections].join(' '), p.path).not.toMatch(/intérim/i);
+      const liens = [...p.liens, ...(p.filAriane ?? []), ...(p.sections ?? []).flatMap((x) => x.liens ?? [])].map((l) => l.label);
+      expect([...textesDePage(p), ...liens].join(' '), p.path).not.toMatch(/intérim/i);
       // Seule mention admise : la question « Jolene est-elle une agence d'intérim ? », dont la réponse commence par « Non ».
       for (const f of p.faq ?? []) {
         if (/intérim/i.test(`${f.q} ${f.r}`)) expect(f.r, `${p.path} : ${f.q}`).toMatch(/^Non\./);
@@ -207,6 +253,16 @@ describe('indexation des pages ville × métier', () => {
     }
   });
 });
+
+/** Tous les textes d'une page : title, description, H1, introduction, puis sections (titres, paragraphes, points, listes, tableaux). FAQ exclue. */
+function textesDePage(p: ReturnType<typeof toutesLesRoutesSeo>[number]): string[] {
+  const sections = (p.sections ?? []).flatMap((x) => [
+    x.titre, ...(x.paragraphes ?? []), ...(x.liste ?? []),
+    ...(x.points ?? []).flatMap((pt) => [pt.titre, pt.texte]),
+    ...(x.tableau ? [x.tableau.legende, ...x.tableau.entetes, ...x.tableau.lignes.flat()] : []),
+  ]);
+  return [p.title, p.description, p.h1, '', ...p.intro, ...sections];
+}
 
 describe('données structurées', () => {
   const types = (p: Parameters<typeof jsonLdPage>[0]) => jsonLdPage(p).map((b) => b['@type']);
@@ -248,7 +304,7 @@ describe('données structurées', () => {
 
   it('chaque composant d\'une page à HTML statique lit ses données structurées dans seo-routes', () => {
     // Sans cela, le script du HTML statique serait retiré au montage (SEOHead sans jsonLd).
-    const composants = ['PageAccueil', 'Tarifs', 'APropos', 'InfirmiereLiberal', 'Telecharger', 'PageContact', 'DevenirSoignant', 'RecruterSoignants', 'VilleLanding', 'ProfessionLanding', 'VilleProfessionLanding'];
+    const composants = ['PageAccueil', 'Tarifs', 'APropos', 'InfirmiereLiberal', 'Telecharger', 'PageContact', 'DevenirSoignant', 'RecruterSoignants', 'VilleLanding', 'ProfessionLanding', 'VilleProfessionLanding', 'RecruterTypeLanding', 'GuidesIndex', 'GuideArticle', 'BarometreRecrutement'];
     for (const c of composants) {
       expect(readFileSync(path.join(RACINE_DEPOT, 'src/pages', `${c}.tsx`), 'utf8'), c).toContain('jsonLd={jsonLdPage(meta)}');
     }
@@ -284,9 +340,12 @@ describe('HTML statique et sitemap', () => {
     expect(html).toContain('<meta property="og:url" content="https://jolene.app/emploi-soignant/lyon/infirmier-ide" />');
     expect(html).toContain('href="/emploi-soignant/lyon"');
     expect(html).toContain('href="/metier/infirmier-ide"');
-    // IDE : aucune donnée BMO départementale → page en ligne mais non indexée.
-    expect(html).toContain('<meta name="robots" content="noindex, nofollow" />');
+    // Infirmier : donnée BMO départementale (agrégat « Infirmiers et sages-femmes ») → page indexée.
+    expect(html).toContain('<meta name="robots" content="index, follow" />');
     expect(html).toContain('/assets/index-abc.js');
+    // Kinésithérapeute : aucune donnée BMO propre → en ligne, non indexée.
+    const kine = await readFile(path.join(dist, 'emploi-soignant', 'lyon', 'kinesitherapeute', 'index.html'), 'utf8');
+    expect(kine).toContain('<meta name="robots" content="noindex, nofollow" />');
   });
 
   it('ne duplique aucune balise du head et unifie les canonicals', async () => {
@@ -385,8 +444,52 @@ describe('HTML statique et sitemap', () => {
     expect(txt).toContain(`> ${metaAccueil().description}`);
     expect(txt).toContain('](https://jolene.app/tarifs)');
     expect(txt).toContain('](https://jolene.app/emploi-soignant/paris)');
-    expect(txt).not.toContain('/emploi-soignant/lyon/infirmier-ide');
+    expect(txt).not.toContain('/emploi-soignant/lyon/');
+    expect(txt).toContain('](https://jolene.app/recruter-soignants/ehpad)');
+    expect(txt).toContain('](https://jolene.app/guides/vacations-etablissement-de-sante)');
     expect(txt).toContain('https://jolene.app/sitemap.xml');
+  });
+
+  it('écrit une page par type d\'établissement : situations, liens métier, étapes, FAQ propre au type', async () => {
+    const html = await readFile(path.join(dist, 'recruter-soignants', 'ehpad', 'index.html'), 'utf8');
+    expect(html).toContain('<h1>Remplacer un soignant en EHPAD</h1>');
+    expect(html).toContain('<link rel="canonical" href="https://jolene.app/recruter-soignants/ehpad" />');
+    expect(html).toContain('<h3>L’absence imprévue</h3>');
+    expect(html).toContain('<h2>Les professions recherchées</h2><ul><li><a href="/metier/aide-soignant">Aide-soignant</a></li>');
+    expect(html).toMatch(/<h2>Publier une mission en trois étapes<\/h2><ol><li>[^<]+<\/li><li>[^<]+<\/li><li>[^<]+<\/li><\/ol><\/section>/);
+    expect(html).toMatch(/<h2>Vérification, contrat, facturation et tarif<\/h2><p>[^<]+<\/p><ul><li><a href="\/recruter-soignants">Recruter des soignants<\/a><\/li><li><a href="\/tarifs">Tarifs<\/a><\/li><\/ul>/);
+    expect(html).toContain('<h3>Peut-on publier une mission de nuit ou de week-end en EHPAD ?</h3>');
+    expect(html).toContain('"@type":"FAQPage"');
+    // Ce qui est commun à tous les établissements n'est pas recopié sur chaque page.
+    expect(html).not.toContain('Combien coûte le service ?');
+  });
+
+  it('écrit les guides : sources officielles en liens sortants, liste numérotée, date de révision', async () => {
+    const guide = await readFile(path.join(dist, 'guides', 'vacations-etablissement-de-sante', 'index.html'), 'utf8');
+    expect(guide).toContain('<p>Sources : <a href="https://www.service-public.gouv.fr/particuliers/vosdroits/F1648" target="_blank" rel="noopener noreferrer">');
+    expect(guide).toMatch(/<h2>Comment cela se passe sur Jolene<\/h2><ol><li>/);
+    expect(guide).toContain('<p>Guide mis à jour le 20 novembre 2026.</p>');
+    expect(guide).toContain('"@type":"Article"');
+    expect(guide).toContain('"datePublished":"2026-11-20"');
+    const sommaire = await readFile(path.join(dist, 'guides', 'index.html'), 'utf8');
+    expect(sommaire).toContain('<h3><a href="/guides/absence-derniere-minute-remplacer-soignant">');
+  });
+
+  it('écrit le baromètre : une ligne par département, deux sources', async () => {
+    const html = await readFile(path.join(dist, 'barometre-recrutement-soignants-2026', 'index.html'), 'utf8');
+    expect(html.match(/<tr><th scope="row">/g)).toHaveLength(101);
+    expect(html).toContain('<th scope="row">Paris (75)</th>');
+    // Lyon : totaux minimaux (« ≥ »), parts non calculées (« n.c. »).
+    expect(html).toMatch(/<th scope="row">Rhône \(69\)<\/th><td>≥ 1\s471<\/td><td>n\.c\.<\/td>/);
+    expect(html).toContain('<th scope="col">Infirmiers et sages-femmes : part difficile</th>');
+    expect(html).toContain('"@type":"Dataset"');
+    expect(html).toMatch(/<p>Sources : <a href="https:\/\/www\.data\.gouv\.fr\/datasets\/enquete-besoins-en-main-doeuvre-bmo"[^>]*>[^<]+<\/a> ; <a href="https:\/\/www\.data\.gouv\.fr\/datasets\/finess-extraction-du-fichier-des-etablissements"/);
+  });
+
+  it('écrit les comptes FINESS de la ville dans la page ville', async () => {
+    const html = await readFile(path.join(dist, 'emploi-soignant', 'lyon', 'index.html'), 'utf8');
+    expect(html).toMatch(/<p>À Lyon, le répertoire FINESS recense 44 EHPAD, [^<]+\(extraction du 4 mai 2026\)\.<\/p>/);
+    expect(html).not.toMatch(/hospitalier/);
   });
 
   it('génère aussi les pages ville, métier et /devenir-soignant', async () => {
@@ -404,7 +507,11 @@ describe('HTML statique et sitemap', () => {
     expect(xml).toContain('<loc>https://jolene.app/tarifs</loc><changefreq>');
     expect(xml).toContain('<loc>https://jolene.app/cgu</loc><lastmod>2026-06-15</lastmod>');
     expect(xml).toContain('<loc>https://jolene.app/emploi-soignant/paris/aide-soignant</loc><changefreq>');
-    expect(xml).not.toContain('/emploi-soignant/lyon/infirmier-ide<');
+    expect(xml).toContain('/emploi-soignant/lyon/infirmier-ide<');
+    expect(xml).not.toContain('/emploi-soignant/lyon/kinesitherapeute<');
+    // Guides et baromètre : lastmod = date de révision éditoriale, pas la date du build.
+    expect(xml).toContain('<loc>https://jolene.app/guides/vacations-etablissement-de-sante</loc><lastmod>2026-11-20</lastmod>');
+    expect(xml).toContain('<loc>https://jolene.app/recruter-soignants/ehpad</loc><changefreq>');
     const villeMetier = toutesLesRoutesSeo().filter((p) => p.type === 'ville-metier');
     for (const p of villeMetier) expect(xml.includes(`<loc>https://jolene.app${p.path}</loc>`)).toBe(p.indexable);
     expect(xml).toContain('<loc>https://jolene.app/devenir-soignant</loc><changefreq>');
@@ -438,17 +545,19 @@ describe('plugin Vite des pages statiques (scripts/seo/vite-pages-statiques.mjs)
   afterAll(async () => { await rm(dist, { recursive: true, force: true }); });
 
   const plugin = (options: { natif?: boolean } = {}) => pagesStatiquesJolene({ dist, ...options }) as unknown as {
-    configResolved: (c: { command: string }) => void; closeBundle: () => void;
+    configResolved: (c: { command: string }) => void; writeBundle: () => void; closeBundle?: unknown;
     configurePreviewServer: (s: { middlewares: { use: (f: (req: { method: string; url: string; headers: Record<string, string> }, res: unknown, next: () => void) => void) => void } }) => void;
   };
 
   it('n\'écrit app.html qu\'après un build web', async () => {
     const lire = () => readFile(path.join(dist, 'app.html'), 'utf8');
-    const dev = plugin(); dev.configResolved({ command: 'serve' }); dev.closeBundle();
+    const dev = plugin(); dev.configResolved({ command: 'serve' }); dev.writeBundle();
     await expect(lire()).rejects.toThrow();
-    const natif = plugin({ natif: true }); natif.configResolved({ command: 'build' }); natif.closeBundle();
+    const natif = plugin({ natif: true }); natif.configResolved({ command: 'build' }); natif.writeBundle();
     await expect(lire()).rejects.toThrow();
-    const web = plugin(); web.configResolved({ command: 'build' }); web.closeBundle();
+    // Pas de hook `closeBundle` : il s'exécuterait aussi après un build en échec et masquerait l'erreur réelle.
+    expect(plugin().closeBundle).toBeUndefined();
+    const web = plugin(); web.configResolved({ command: 'build' }); web.writeBundle();
     expect(await lire()).toBe(squeletteApplication(SHELL));
     expect(await lire()).not.toMatch(/rel="canonical"/);
   });
@@ -460,13 +569,14 @@ describe('plugin Vite des pages statiques (scripts/seo/vite-pages-statiques.mjs)
     await rm(autre, { recursive: true, force: true });
   });
 
-  it('sert, comme Vercel, le fichier, la page statique de la route ou le shell', () => {
+  it('sert le fichier, la page statique de la route ou le shell (comme Vercel, sauf pour un asset absent)', () => {
     expect(cibleStatique(dist, '/assets/index-abc.js')).toBeNull();
     expect(cibleStatique(dist, '/')).toBe('/index.html');
     expect(cibleStatique(dist, '/tarifs')).toBe('/tarifs/index.html');
     expect(cibleStatique(dist, '/tarifs/?utm_source=x')).toBe('/tarifs/index.html');
     expect(cibleStatique(dist, '/connexion')).toBe('/app.html');
     expect(cibleStatique(dist, '/metier')).toBe('/app.html');
+    // Seul écart avec Vercel (qui répond 404) : c'est déjà le comportement du repli SPA de Vite.
     expect(cibleStatique(dist, '/assets/absent.js')).toBe('/app.html');
     // Jamais hors de dist, jamais d'exception sur une URL mal formée.
     expect(cibleStatique(dist, '/../../etc/passwd')).toBe('/app.html');

@@ -69,7 +69,7 @@ const PageAideProSanteConnect = lazy(() => import("./pages/PageAideProSanteConne
 const PageParametresNotifications = lazy(() => import("./pages/PageParametresNotifications"));
 const PageRecherchesSauvegardees = lazy(() => import("./pages/PageRecherchesSauvegardees"));
 const PageInscriptionSucces = lazy(() => import("./pages/PageInscriptionSucces"));
-const NotFound = lazy(() => import("./pages/NotFound"));
+const RoutesPubliques = lazy(() => import("./pages/RoutesPubliques")); // guides, baromètre, pages par type d'établissement, puis 404
 const WidgetRecrutement = lazy(() => import("./pages/WidgetRecrutement"));
 const Telecharger = lazy(() => import("./pages/Telecharger"));
 
@@ -506,7 +506,7 @@ function AppRoutes() {
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />
 
-          <Route path="*" element={<NotFound />} />
+          <Route path="*" element={<RoutesPubliques />} />
         </Routes>
         <NativeUpdateReady />
       </Suspense>

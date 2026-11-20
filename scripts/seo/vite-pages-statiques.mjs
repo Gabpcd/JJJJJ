@@ -4,7 +4,7 @@
  * `vercel.json` renvoie toute route sans fichier statique vers `/app.html`. Ce fichier doit
  * donc exister dans TOUT build web, y compris si le générateur de pages SEO ne tourne pas
  * (`vite build` seul, `npm run build:dev`) : sans lui, connexion, espaces et pages mission
- * répondraient 404. Il est écrit ici, par le build Vite lui-même (`closeBundle`), et non par
+ * répondraient 404. Il est écrit ici, par le build Vite lui-même (`writeBundle`), et non par
  * `scripts/seo/generer-pages-statiques.mjs`, qui ne fait que le relire.
  *
  * Module sans dépendance (Node seul) : importé par `vite.config.ts`, par le générateur et par les tests.
@@ -41,10 +41,12 @@ export function estRequeteDePage(methode, accept) {
 }
 
 /**
- * Ce que Vercel sert pour `url`, exprimé en chemin de fichier sous `dist` :
+ * Ce que `vite preview` doit servir pour `url`, exprimé en chemin de fichier sous `dist` :
  *  - null si un fichier existe à ce chemin (servi tel quel) ;
  *  - `<route>/index.html` si la route a sa page statique ;
  *  - `/app.html` sinon (y compris URL mal encodée ou hors de `dist`).
+ * Identique à Vercel pour les routes de l'application. Seul écart, déjà celui du repli SPA de Vite :
+ * un fichier d'asset absent (`/assets/x.js`) reçoit le shell ici, et un 404 sur Vercel.
  */
 export function cibleStatique(dist, url) {
   let chemin = null;
@@ -67,8 +69,9 @@ export function pagesStatiquesJolene({ dist, natif = process.env.VITE_NATIVE_BUI
   return {
     name: 'jolene-pages-statiques',
     configResolved(config) { commande = config.command; },
-    closeBundle() {
-      // `closeBundle` est aussi appelé à l'arrêt de `vite dev` : n'écrire qu'après un vrai build.
+    // `writeBundle`, pas `closeBundle` : ce dernier s'exécute aussi après un build en échec, où il
+    // relirait un ancien dist/index.html déjà prérendu et masquerait l'erreur réelle par la sienne.
+    writeBundle() {
       if (commande !== 'build' || natif) return;
       if (fs.existsSync(path.join(dist, 'index.html'))) ecrireSquelette(dist);
     },

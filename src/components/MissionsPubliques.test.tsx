@@ -43,7 +43,7 @@ for (const surface of ['accueil', 'seo'] as const) {
       m.responses = [{ data: null, error: { message: 'Service unavailable', status: 503 } }, reponse([mission()])];
       ouvrir(surface);
       expect(await screen.findByRole('alert')).toHaveTextContent('Recherche indisponible');
-      expect(screen.queryByText(/Pas de mission pour le moment|Aucune mission ne correspond/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Pas de mission pour le moment|Aucune mission publiée ici/)).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
       expect(await screen.findByText('Mission infirmière Paris')).toBeInTheDocument();
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -51,7 +51,7 @@ for (const surface of ['accueil', 'seo'] as const) {
 
     it('affiche l’état vide seulement pour une réponse réussie sans mission', async () => {
       ouvrir(surface);
-      expect(await screen.findByText(/Pas de mission pour le moment|Aucune mission ne correspond/)).toBeInTheDocument();
+      expect(await screen.findByText(/Pas de mission pour le moment|Aucune mission publiée ici/)).toBeInTheDocument();
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 
@@ -59,7 +59,7 @@ for (const surface of ['accueil', 'seo'] as const) {
       m.responses = [reponse([null])];
       ouvrir(surface);
       expect(await screen.findByRole('alert')).toHaveTextContent('Recherche indisponible');
-      expect(screen.queryByText(/Pas de mission pour le moment|Aucune mission ne correspond/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Pas de mission pour le moment|Aucune mission publiée ici/)).not.toBeInTheDocument();
     });
 
     it('traite un rejet réseau et une réponse mal formée comme erreurs, pas comme zéro offre', async () => {
@@ -69,7 +69,7 @@ for (const surface of ['accueil', 'seo'] as const) {
       fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
       await waitFor(() => expect(m.rpc).toHaveBeenCalledTimes(2));
       expect(await screen.findByRole('alert')).toHaveTextContent('Recherche indisponible');
-      expect(screen.queryByText(/Pas de mission pour le moment|Aucune mission ne correspond/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Pas de mission pour le moment|Aucune mission publiée ici/)).not.toBeInTheDocument();
     });
   });
 }
@@ -93,7 +93,7 @@ it('conserve les anciens résultats en les signalant quand la requête suivante 
   expect(await screen.findByRole('alert')).toBeInTheDocument();
   expect(screen.getByText('Mission infirmière Paris')).toBeInTheDocument();
   expect(screen.getByText('Résultats de la recherche précédente.')).toBeInTheDocument();
-  expect(screen.queryByText(/Aucune mission ne correspond/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Aucune mission publiée ici/)).not.toBeInTheDocument();
 });
 
 it('met fin au chargement après le délai réseau et propose un réessai', async () => {
@@ -108,8 +108,9 @@ it('met fin au chargement après le délai réseau et propose un réessai', asyn
 
 it('transmet métier, ville et campagne SEO à l’inscription, sans créer d’alerte', async () => {
   ouvrir('seo');
-  await screen.findByText(/Aucune mission ne correspond/);
-  fireEvent.click(screen.getByRole('button', { name: /Voir toutes les missions et postuler/ }));
+  await screen.findByText(/Aucune mission publiée ici/);
+  // Sans mission, le bouton ne promet plus des missions à voir : il propose de créer un compte.
+  fireEvent.click(screen.getByRole('button', { name: /Créer mon compte et retrouver ma recherche/ }));
   const url = new URL(m.navigate.mock.calls[0][0], 'https://jolene.app');
   expect(Object.fromEntries(url.searchParams)).toEqual({ profession: 'IDE', ville: 'Paris', utm_source: 'seo', utm_medium: 'landing', utm_campaign: 'seo-paris' });
   expect(JSON.parse(sessionStorage.getItem('jolene.filtres_a_appliquer')!)).toEqual({ audience: 'SOIGNANT_RECHERCHE_MISSIONS', filtres: { profession: 'IDE', villeRecherche: 'Paris' } });

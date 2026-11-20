@@ -13,14 +13,17 @@ import {
   cheminMetier,
   contenuUtmVilleMetier,
   UTM_VILLE_METIER,
-  SOURCE_BMO,
   phraseBmo,
   PROFESSIONS_SEO_VILLE_METIER,
   VILLES_VILLE_METIER,
   cheminVilleMetier,
   estVilleVilleMetier,
   jsonLdPage,
+  phraseFiness,
+  aVille,
+  SOURCES_LOCALES,
 } from '@/lib/seo-routes';
+import { Sources } from '@/components/ContenuSEO';
 
 /**
  * /emploi-soignant/:ville/:profession — périmètre restreint (grandes villes ×
@@ -36,9 +39,9 @@ export default function VilleProfessionLanding() {
     // vers elle et vers les pages métier, jamais vers d'autres pages non référencées.
     const liens = villeConnue
       ? [
-          { href: cheminVille(villeConnue.slug), label: `Missions soignants à ${villeConnue.nom}` },
+          { href: cheminVille(villeConnue.slug), label: `Missions soignants ${aVille(villeConnue)}` },
           ...PROFESSIONS_SEO_VILLE_METIER.map((p) => (estVilleVilleMetier(villeConnue.slug)
-            ? { href: cheminVilleMetier(villeConnue.slug, p.slug), label: `${p.label} à ${villeConnue.nom}` }
+            ? { href: cheminVilleMetier(villeConnue.slug, p.slug), label: `${p.label} ${aVille(villeConnue)}` }
             : { href: cheminMetier(p.slug), label: `Missions ${p.label}` })),
         ]
       : VILLES_VILLE_METIER.map((v) => ({ href: cheminVille(v.slug), label: v.nom }));
@@ -48,10 +51,12 @@ export default function VilleProfessionLanding() {
   const { ville, profession } = resolu;
   const meta = metaVilleMetier(ville, profession);
   const bmo = phraseBmo(ville.departement, profession.valeur);
+  const finess = phraseFiness(ville, profession.valeur);
+  const reperes = [bmo, finess].filter((p): p is string => !!p);
   const utm = { ...UTM_VILLE_METIER, content: contenuUtmVilleMetier(ville.slug, profession.slug) };
   const lienInscription = lienInscriptionRecherche({ profession: profession.valeur, ville: ville.nom }, utm);
-  // Paragraphes d'intro hors phrase BMO (affichée à part, avec sa source).
-  const paragraphes = meta.intro.filter((p) => p !== bmo);
+  // Paragraphes d'intro hors repères chiffrés (affichés à part, avec leurs sources).
+  const paragraphes = meta.intro.filter((p) => !reperes.includes(p));
 
   return (
     <>
@@ -67,10 +72,10 @@ export default function VilleProfessionLanding() {
             {paragraphes.slice(1).map((p) => (
               <p key={p} className="text-muted-foreground leading-relaxed">{p}</p>
             ))}
-            {bmo && (
-              <aside className="rounded-xl border border-border bg-card p-4" aria-label="Tension du marché dans le département">
-                <p className="text-foreground leading-relaxed">{bmo}</p>
-                <p className="text-xs text-muted-foreground mt-2">Source : {SOURCE_BMO} (données ouvertes, Licence Ouverte).</p>
+            {reperes.length > 0 && (
+              <aside className="rounded-xl border border-border bg-card p-4 space-y-3" aria-label={`Repères locaux ${aVille(ville)}`}>
+                {reperes.map((p) => <p key={p} className="text-foreground leading-relaxed">{p}</p>)}
+                <Sources sources={[...(bmo ? [SOURCES_LOCALES[0]] : []), ...(finess ? [SOURCES_LOCALES[1]] : [])]} />
               </aside>
             )}
           </div>

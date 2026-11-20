@@ -14,7 +14,12 @@ describe('cohérence financière des interfaces', () => {
     const contrat = read('src/constantes/contratServiceEtablissement.ts');
     // Titres, descriptions, H1 et accroches de ces pages vivent dans seo-routes.ts (HTML statique, llms.txt).
     const routes = read('src/lib/seo-routes.ts');
-    const textes = `${accueil}\n${tarifs}\n${recrutement}\n${cgv}\n${contrat}\n${routes}`;
+    // Pages par type d'établissement et guides : elles citent la commission, donc mêmes règles.
+    const contenus = read('src/lib/seo-contenu/etablissements.ts') + read('src/lib/seo-contenu/guides.ts');
+    const textes = `${accueil}\n${tarifs}\n${recrutement}\n${cgv}\n${contrat}\n${routes}\n${contenus}`;
+    // Toute mention de la commission y donne le taux HT ; aucun autre taux de commission n'y figure.
+    expect(contenus).toContain('15 % HT');
+    expect(contenus).not.toMatch(/commission de (?!15 % HT)\d/i);
 
     expect(textes).not.toContain('commission tout compris');
     for (const contenu of [accueil, tarifs, recrutement, cgv, contrat]) {

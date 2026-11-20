@@ -24,6 +24,10 @@
  * Source de vérité : src/lib/seo-routes.ts (même module que les composants React),
  * compilé à la volée avec esbuild.
  *
+ * Le contenu statique suit le modèle `PageSEO` : H1, introduction, sections (paragraphes,
+ * points titrés, liste, tableau, liens, sources), questions fréquentes, liens. Le composant
+ * React `ContenuSEO` rend la même structure à partir du même objet.
+ *
  * Usage : node scripts/seo/generer-pages-statiques.mjs [--dist dist]
  */
 import { build } from 'esbuild';
@@ -77,7 +81,7 @@ function nettoyerHead(html) {
     .replace(/<meta\s+name="twitter:(?:title|description)"[^>]*>\s*/gi, '');
 }
 
-export const STYLE_PRERENDU = '<style>main[data-prerender]{max-width:48rem;margin:0 auto;padding:24px 16px;font-family:system-ui,-apple-system,sans-serif;line-height:1.5;color:#1f1a2e}main[data-prerender] h1{font-size:1.75rem;line-height:1.2;font-weight:700;margin:0 0 16px}main[data-prerender] h2{font-size:1.25rem;line-height:1.3;font-weight:700;margin:24px 0 8px}main[data-prerender] h3{font-size:1rem;font-weight:600;margin:16px 0 4px}main[data-prerender] p{margin:0 0 12px}main[data-prerender] ul{padding-left:20px}main[data-prerender] a{color:inherit;text-decoration:underline}</style>';
+export const STYLE_PRERENDU = '<style>main[data-prerender]{max-width:48rem;margin:0 auto;padding:24px 16px;font-family:system-ui,-apple-system,sans-serif;line-height:1.5;color:#1f1a2e}main[data-prerender] h1{font-size:1.75rem;line-height:1.2;font-weight:700;margin:0 0 16px}main[data-prerender] h2{font-size:1.25rem;line-height:1.3;font-weight:700;margin:24px 0 8px}main[data-prerender] h3{font-size:1rem;font-weight:600;margin:16px 0 4px}main[data-prerender] p{margin:0 0 12px}main[data-prerender] ul,main[data-prerender] ol{padding-left:20px}main[data-prerender] a{color:inherit;text-decoration:underline}main[data-prerender] .tableau{overflow-x:auto}main[data-prerender] table{border-collapse:collapse;font-size:.875rem}main[data-prerender] th,main[data-prerender] td{border:1px solid #d9d4e3;padding:4px 8px;text-align:left}</style>';
 
 /** Script JSON-LD de la page. `<` est échappé : aucun texte ne peut fermer la balise script. */
 export function scriptJsonLd(blocs) {
@@ -105,11 +109,34 @@ export function blocHead(page, siteUrl, jsonLd = []) {
 }
 
 const paragraphesHtml = (liste = []) => liste.map((p) => `<p>${echapper(p)}</p>`).join('');
-const listeHtml = (liste = []) => (liste.length ? `<ul>${liste.map((e) => `<li>${echapper(e)}</li>`).join('')}</ul>` : '');
+const listeHtml = (liste = [], ordonnee = false) => {
+  const balise = ordonnee ? 'ol' : 'ul';
+  return liste.length ? `<${balise}>${liste.map((e) => `<li>${echapper(e)}</li>`).join('')}</${balise}>` : '';
+};
+const pointsHtml = (points = []) => points.map((p) => {
+  const titre = p.href ? `<a href="${echapper(p.href)}">${echapper(p.titre)}</a>` : echapper(p.titre);
+  return `<h3>${titre}</h3><p>${echapper(p.texte)}</p>`;
+}).join('');
+const tableauHtml = (t) => {
+  if (!t) return '';
+  const entetes = t.entetes.map((e) => `<th scope="col">${echapper(e)}</th>`).join('');
+  const lignes = t.lignes.map((l) => `<tr>${l.map((c, i) => (i === 0 ? `<th scope="row">${echapper(c)}</th>` : `<td>${echapper(c)}</td>`)).join('')}</tr>`).join('');
+  return `<div class="tableau"><table><caption>${echapper(t.legende)}</caption><thead><tr>${entetes}</tr></thead><tbody>${lignes}</tbody></table></div>`;
+};
+// Liens sortants vers les sources officielles : mêmes attributs que le composant React (`Sources`).
+const sourcesHtml = (sources = []) => (sources.length
+  ? `<p>${sources.length > 1 ? 'Sources' : 'Source'} : ${sources.map((x) => `<a href="${echapper(x.href)}" target="_blank" rel="noopener noreferrer">${echapper(x.label)}</a>`).join(' ; ')}.</p>`
+  : '');
+
+const liensHtml = (liens = []) => (liens.length ? `<ul>${liens.map((l) => `<li><a href="${echapper(l.href)}">${echapper(l.label)}</a></li>`).join('')}</ul>` : '');
+
+/** Une section : titre, puis paragraphes, points, liste, tableau, liens, sources — le même ordre que `ContenuSEO`. */
+export function sectionHtml(s) {
+  return `<section><h2>${echapper(s.titre)}</h2>${paragraphesHtml(s.paragraphes)}${pointsHtml(s.points)}${listeHtml(s.liste, s.ordonnee)}${tableauHtml(s.tableau)}${liensHtml(s.liens)}${sourcesHtml(s.sources)}</section>`;
+}
 
 export function contenuRacine(page) {
-  const sections = (page.sections ?? [])
-    .map((s) => `<section><h2>${echapper(s.titre)}</h2>${paragraphesHtml(s.paragraphes)}${listeHtml(s.liste)}</section>`).join('');
+  const sections = (page.sections ?? []).map(sectionHtml).join('');
   const faq = page.faq?.length
     ? `<section><h2>Questions fréquentes</h2>${page.faq.map((f) => `<h3>${echapper(f.q)}</h3><p>${echapper(f.r)}</p>`).join('')}</section>`
     : '';
@@ -143,7 +170,8 @@ export function entreesSitemapConservees(sitemapSource, cheminsGeneres, siteUrl)
 
 export function genererSitemap({ pages: toutes, conservees, siteUrl }) {
   const pages = toutes.filter((p) => p.indexable); // une page noindex n'a rien à faire dans le sitemap
-  const url = (p) => `  <url><loc>${echapper(siteUrl + p.path)}</loc><changefreq>${p.frequence}</changefreq><priority>${p.priorite}</priority></url>`;
+  // lastmod seulement pour les pages qui portent une date de révision éditoriale (guides, baromètre).
+  const url = (p) => `  <url><loc>${echapper(siteUrl + p.path)}</loc>${p.lastmod ? `<lastmod>${p.lastmod}</lastmod>` : ''}<changefreq>${p.frequence}</changefreq><priority>${p.priorite}</priority></url>`;
   const section = (titre, liste) => liste.length ? [`  <!-- ${titre} -->`, ...liste.map(url), ''] : [];
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -154,6 +182,8 @@ export function genererSitemap({ pages: toutes, conservees, siteUrl }) {
     '',
     ...section('Pages principales', pages.filter((p) => p.type === 'accueil' || p.type === 'institutionnel')),
     ...section('Pages SEO soignants / établissements', pages.filter((p) => p.type === 'devenir' || p.type === 'recruter')),
+    ...section('Recruter par type d\'établissement', pages.filter((p) => p.type === 'etablissement')),
+    ...section('Baromètre et guides', pages.filter((p) => p.type === 'barometre' || p.type === 'guides' || p.type === 'guide')),
     ...section('Landing pages par ville', pages.filter((p) => p.type === 'ville')),
     ...section('Landing pages par profession', pages.filter((p) => p.type === 'metier')),
     ...section('Landing pages ville × métier', pages.filter((p) => p.type === 'ville-metier')),
@@ -178,6 +208,8 @@ export function genererLlmsTxt({ pages, siteUrl }) {
     '',
     ...(accueil?.faq?.length ? ['## Questions fréquentes', '', ...accueil.faq.flatMap((f) => [`### ${f.q}`, '', f.r, '']) ] : []),
     ...bloc('Pages principales', indexables.filter((p) => ['institutionnel', 'devenir', 'recruter'].includes(p.type))),
+    ...bloc('Recruter par type d\'établissement', indexables.filter((p) => p.type === 'etablissement')),
+    ...bloc('Guides et données', indexables.filter((p) => ['guides', 'guide', 'barometre'].includes(p.type))),
     ...bloc('Missions par métier', indexables.filter((p) => p.type === 'metier')),
     ...bloc('Missions par ville', indexables.filter((p) => p.type === 'ville')),
     '## Plan du site',

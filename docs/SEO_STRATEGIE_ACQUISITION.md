@@ -109,26 +109,62 @@ Source de vérité unique : `src/lib/seo-routes.ts` (titres, descriptions, H1, c
 indexabilité, données structurées), lue par les composants React et par
 `scripts/seo/generer-pages-statiques.mjs`.
 
-## 4. Lot 1 — fondations techniques
+## 4. Lot 1 — fondations techniques (fait, PR #1169)
 
 | # | Chantier | Effet attendu |
 |---|---|---|
-| 1 | Squelette neutre `app.html` (sans canonical) pour les routes de l'application ; `vercel.json` y renvoie | Plus aucun canonical faux |
+| 1 | Squelette neutre `app.html` (sans canonical) pour les routes de l'application, écrit par le build Vite ; `vercel.json` y renvoie | Plus aucun canonical faux |
 | 2 | Accueil, `/tarifs`, `/a-propos`, `/infirmiere-liberale`, `/telecharger`, `/aide` en HTML statique avec leur propre `<head>` | Pages lisibles sans JavaScript, canonical correct |
 | 3 | Données structurées dans le HTML statique : `WebSite`, `BreadcrumbList`, `FAQPage` | Compréhension de la structure du site, réponses reprises par les assistants IA |
 | 4 | Titres des pages métier raccourcis | Titres non tronqués |
 | 5 | `robots.txt` nettoyé, `llms.txt` généré | Signal clair pour les robots, y compris IA |
+| 6 | Titre rendu de l'accueil et de `/tarifs` (il devenait « Jolene — Jolene » après chargement), 404 en `noindex`, `/inscription/*` hors sitemap | Titres corrects dans les résultats, pas de page d'erreur indexée |
 
-## 5. Lot 2 — pages et contenus
+## 5. Lot 2 — pages et contenus (fait)
 
 | # | Chantier | Cible |
 |---|---|---|
-| 1 | Chiffres FINESS par ville (EHPAD, sites hospitaliers publics, SSIAD, HAD, MAS/FAM, IME, centres de santé) sur les pages ville et ville × métier | Soignants, requêtes locales |
-| 2 | Donnée BMO « Infirmiers et sages-femmes » sur les pages infirmier, qui deviennent indexables | Soignants, requêtes infirmier × ville |
-| 3 | 5 pages par type d'établissement | Directions d'établissement, cadres de santé |
-| 4 | Baromètre 2026 par département | Presse locale, blogs du secteur (liens) |
-| 5 | Premiers guides (soignants et établissements) | Requêtes en question, assistants IA |
-| 6 | État vide des listes de missions : invitation à s'inscrire pour être prévenu | Conversion des visites tant que l'offre est faible |
+| 1 | Chiffres FINESS par ville (EHPAD, SSIAD, MAS/FAM, IME, centres de santé) sur les 100 pages ville et les 180 pages ville × métier | Soignants, requêtes locales |
+| 2 | Donnée BMO « Infirmiers et sages-femmes » sur les 30 pages infirmier, qui deviennent indexables (90 pages ville × métier indexées au lieu de 60) ; parts « jugées difficiles » recalculées pour tous les métiers (voir plus bas) | Soignants, requêtes infirmier × ville |
+| 3 | 5 pages par type d'établissement : `/recruter-soignants/{ehpad,clinique,hopital,soins-a-domicile,handicap}` | Directions d'établissement, cadres de santé |
+| 4 | Baromètre 2026 par département : `/barometre-recrutement-soignants-2026` | Presse locale, blogs du secteur (liens) |
+| 5 | 4 guides sous `/guides` (3 soignants, 1 établissement) | Requêtes en question, assistants IA |
+| 6 | État vide des listes de missions : invitation à créer un compte pour retrouver la recherche | Conversion des visites tant que l'offre est faible |
+| 7 | Promesses et jugements sans source retirés de l'accueil et de `/recruter-soignants` (« première mission possible dès aujourd'hui », « 20-30 % de marge », « opérationnel en 10 minutes », « aucune garantie sur les qualifications ») | Cohérence avec la réalité de l'offre |
+
+**Deux corrections de fond issues de la revue B8 de #1170**
+
+1. **Parts BMO fausses, en ligne depuis #1115.** L'enquête est publiée par bassin d'emploi, et le
+   fichier masque certaines valeurs par un astérisque. L'ancien calcul retirait ces bassins du
+   dénominateur tout en gardant leurs projets dans le total : la part « jugée difficile » affichée
+   pouvait dépasser toute valeur possible (Reims, infirmiers : 83 % affichés pour 71 à 73 %
+   possibles). Désormais `scripts/seo/extraire-bmo.mjs` relit le classeur officiel : le total est
+   dit « au moins » quand une valeur est masquée, et la part n'est donnée que si aucune ne l'est
+   (53 départements pour les aides-soignants, 43 pour les infirmiers et sages-femmes, 29 pour les
+   médecins). Ailleurs la page donne le nombre de projets, sans part.
+2. **Hôpitaux retirés des comptes FINESS.** La catégorie « centres hospitaliers » compte aussi des
+   hôpitaux de jour, des CMP et des centres de dépistage, et pas la psychiatrie spécialisée :
+   « N sites hospitaliers » aurait été lu comme un nombre d'hôpitaux. Les villes sont maintenant
+   reconnues par leur code commune (un CEDEX porte le nom de la grande ville voisine).
+
+Où cela vit dans le code :
+
+| Quoi | Fichier |
+|---|---|
+| Pages par type d'établissement (textes) | `src/lib/seo-contenu/etablissements.ts` |
+| Guides (textes, sources officielles) | `src/lib/seo-contenu/guides.ts` |
+| Comptes FINESS (données) | `src/lib/seo-finess.json`, produit par `node scripts/seo/extraire-finess.mjs` |
+| Données BMO (données) | `src/lib/seo-bmo-2026.json`, produit par `node scripts/seo/extraire-bmo.mjs` (AS et MEDECIN : catégories exactes ; IDE : agrégat « Infirmiers et sages-femmes ») |
+| Titres, descriptions, structure, indexabilité, données structurées | `src/lib/seo-routes.ts` |
+| Rendu commun (page affichée) | `src/components/ContenuSEO.tsx` |
+| Rendu commun (HTML statique), sitemap, llms.txt | `scripts/seo/generer-pages-statiques.mjs` |
+
+Ajouter un guide : une entrée dans `GUIDES_SEO`, rien d'autre. La route, le HTML statique, le
+sitemap (avec `lastmod` = date de révision), le sommaire `/guides` et les liens des piliers suivent.
+
+Rafraîchir les chiffres FINESS : `node scripts/seo/extraire-finess.mjs` (lit le fichier officiel en
+flux, n'écrit que le JSON). La réexposition data.gouv.fr utilisée est archivée : au prochain
+rafraîchissement, brancher le script sur l'extraction officielle du même jeu de données.
 
 Règles éditoriales des guides :
 
@@ -139,20 +175,49 @@ Règles éditoriales des guides :
   contrats, le guide décrit le fonctionnement de la plateforme et renvoie vers la fiche officielle
   (service-public.fr, URSSAF, Ordre) ;
 - les seules affirmations sur le produit sont celles déjà publiées sur le site (commission,
-  vérifications, contrats, pointage, DPAE transmise par l'établissement).
+  vérifications, contrats, pointage, DPAE transmise par l'établissement) ;
+- des conseils, pas des constats sur le secteur (« les besoins sont fréquents ») ;
+- rien sur l'intérim, aucune comparaison de Jolene avec un autre type de prestataire, aucun
+  exemple de prix : ces sujets attendent la validation de Gabrielle (voir §6).
+
+Ces règles sont gardées par des tests (`src/lib/seo-contenus.test.ts`, `src/lib/seo-routes.test.ts`) :
+aucun chiffre dans un guide hors tarif publié, aucun pourcentage hors 15 %, 18 % et 20 % sur les
+pages établissement, sources officielles en `service-public.gouv.fr` ou `data.gouv.fr` seulement,
+vouvoiement, aucune promesse de volume ni de délai, aucune généralité (« souvent », « nombreux »),
+aucun lien interne cassé, chaque chiffre clé du baromètre recalculé depuis son tableau, pas plus de
+40 % de texte commun entre deux pages par type d'établissement.
 
 ## 6. Lots suivants (non faits dans cette vague)
 
 1. **Simulateur de coût d'un remplacement** (page outil pour les établissements).
 2. **Pages mission servies en HTML statique** (fonction edge) pour Google for Jobs, dès que des
    missions sont publiées régulièrement.
-3. **Guides juridiques** (cumul d'activités, CDD de remplacement, exercice libéral en
+3. **Deux guides établissement écrits puis retirés du lot 2**, à valider par Gabrielle avant
+   publication (HARD STOP n°4) :
+   - « Vivier interne, agence d'intérim, plateforme : comparer les solutions » : il décrit le
+     cadre légal de l'intérim et compare Jolene à des tiers ;
+   - « Combien coûte le remplacement d'un soignant ? » : son exemple chiffré appliquait 15 % à
+     « heures × taux », alors que la plateforme calcule la commission sur le brut total (base +
+     indemnité de fin de contrat + congés payés). **Écart à trancher** : le contrat de service
+     §4.3 (`src/constantes/contratServiceEtablissement.ts`) dit « heures travaillées multipliées
+     par le taux horaire, majorations incluses », la FAQ de l'accueil dit « majorations et
+     indemnités incluses », l'écran de décomposition affiche « base + IFM + ICP ».
+4. **Guides juridiques** (cumul d'activités, CDD de remplacement, exercice libéral en
    établissement) : chaque texte part en PR avec ses sources primaires et attend la validation de
-   Gabrielle (HARD STOP n°4).
-4. **Pages comparatives nommant des concurrents** : seulement après validation, avec des faits
+   Gabrielle (HARD STOP n°4). La FAQ de `/devenir-soignant` répond « Oui » à « Puis-je cumuler
+   avec mon emploi actuel ? » : à relire dans le même mouvement.
+5. **Pages comparatives nommant des concurrents** : seulement après validation, avec des faits
    vérifiables et datés (publicité comparative).
-5. **Pages par département** si le baromètre obtient du trafic.
-6. **Mesure d'audience sans cookie** (à décider : touche au consentement).
+6. **Pages par département** si le baromètre obtient du trafic.
+7. **Mesure d'audience sans cookie** (à décider : touche au consentement).
+8. **Calcul BMO de l'outil interne non corrigé.** `supabase/functions/_shared/bmo-acquisition.ts`
+   garde l'ancienne méthode et alimente `acquisition_territoires.bmo_difficulte_pct`, lu par le radar
+   d'acquisition de l'administration et par le score des brouillons de prospection. Les pages
+   publiques n'en dépendent plus (elles lisent `seo-bmo-2026.json`) ; l'outil interne reste à aligner.
+9. **Vérification des données hors CI.** `npm run seo:donnees:verifier` compare les deux JSON aux
+   fichiers officiels ; il interroge le réseau et se lance à la main, pas dans la CI.
+10. **Poids du module `seo-routes`** : chargé par l'accueil, il embarque désormais guides et données
+   (environ 30 Ko compressés). À scinder si la performance de l'accueil s'en ressent.
 
 ## 7. Mesure
 

@@ -10,7 +10,8 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useMissionsPubliques } from '@/hooks/useMissionsPubliques';
 import { lienInscriptionRecherche, memoriserRecherchePublique } from '@/lib/recherchePubliqueInscription';
 import { ACCROCHE_ACCUEIL, ATOUTS_ETABLISSEMENTS, ATOUTS_SOIGNANTS, ETAPES_ACCUEIL, FAQ_ACCUEIL, TITRE_ACCUEIL } from '@/lib/seo-contenu/accueil';
-import { jsonLdPage, metaAccueil, urlAbsolue } from '@/lib/seo-routes';
+import { CHEMIN_BAROMETRE, CHEMIN_GUIDES, cheminEtablissement, jsonLdPage, metaAccueil, urlAbsolue } from '@/lib/seo-routes';
+import { TYPES_ETABLISSEMENT_SEO } from '@/lib/seo-contenu/etablissements';
 /* ─── Animated counter ─── */
 function CompteurAnime({ cible, suffixe, prefix }: { cible: number; suffixe?: string; prefix?: string }) {
   const [valeur, setValeur] = useState(0);
@@ -453,7 +454,7 @@ export default function PageAccueil() {
         <div className="relative max-w-3xl mx-auto px-4 text-center">
           <RevealOnScroll>
             <h2 className="text-2xl md:text-4xl font-bold mb-4">Prêt à simplifier vos remplacements ? 🎉</h2>
-            <p className="text-muted-foreground mb-10 max-w-lg mx-auto">Inscription gratuite en 2 minutes — première mission possible dès aujourd'hui 🩷</p>
+            <p className="text-muted-foreground mb-10 max-w-lg mx-auto">Inscription gratuite en 2 minutes, sans engagement 🩷</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 onClick={() => navigate('/inscription/soignant')}
@@ -480,7 +481,7 @@ export default function PageAccueil() {
       {/* ═══ Footer ═══ */}
       <footer className="border-t border-border bg-card py-12 md:py-16">
         <div className="max-w-6xl mx-auto px-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-8 md:gap-12">
             {/* Col 1 */}
             <div className="col-span-2 md:col-span-1">
               <LogoJolene
@@ -508,9 +509,20 @@ export default function PageAccueil() {
                 <li><a href="/devenir-soignant" className="hover:text-foreground transition-colors">Devenir soignant</a></li>
                 <li><a href="/recruter-soignants" className="hover:text-foreground transition-colors">Recruter des soignants</a></li>
                 <li><a href="/infirmiere-liberale" className="hover:text-foreground transition-colors">Passer en libéral</a></li>
+                <li><a href={CHEMIN_GUIDES} className="hover:text-foreground transition-colors">Guides</a></li>
+                <li><a href={CHEMIN_BAROMETRE} className="hover:text-foreground transition-colors">Baromètre 2026</a></li>
               </ul>
             </div>
-            {/* Col 4 */}
+            {/* Col 4 — Établissements : une page par type */}
+            <div>
+              <h4 className="font-semibold text-foreground text-sm mb-3">Établissements</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                {TYPES_ETABLISSEMENT_SEO.map((t) => (
+                  <li key={t.slug}><a href={cheminEtablissement(t.slug)} className="hover:text-foreground transition-colors">{t.nom}</a></li>
+                ))}
+              </ul>
+            </div>
+            {/* Col 5 */}
             <div>
               <h4 className="font-semibold text-foreground text-sm mb-3">Légal</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">

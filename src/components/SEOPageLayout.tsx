@@ -4,6 +4,8 @@ import { ArrowRight } from 'lucide-react';
 import { FooterLegal } from '@/components/FooterLegal';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { LogoJolene } from '@/components/LogoJolene';
+import { TYPES_ETABLISSEMENT_SEO } from '@/lib/seo-contenu/etablissements';
+import { CHEMIN_BAROMETRE, CHEMIN_GUIDES, cheminEtablissement } from '@/lib/seo-routes';
 
 interface SEOPageLayoutProps {
   children: React.ReactNode;
@@ -77,7 +79,7 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
       {/* Footer */}
       <footer className="border-t border-border bg-card py-12">
         <div className="max-w-6xl mx-auto px-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
             <div className="col-span-2 md:col-span-1">
               <LogoJolene
                 className="mb-3"
@@ -103,6 +105,16 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
                 <li><a href="/devenir-soignant" className="hover:text-foreground transition-colors">Devenir soignant</a></li>
                 <li><a href="/recruter-soignants" className="hover:text-foreground transition-colors">Recruter des soignants</a></li>
                 <li><a href="/infirmiere-liberale" className="hover:text-foreground transition-colors">Passer en libéral</a></li>
+                <li><a href={CHEMIN_GUIDES} className="hover:text-foreground transition-colors">Guides</a></li>
+                <li><a href={CHEMIN_BAROMETRE} className="hover:text-foreground transition-colors">Baromètre 2026</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold text-foreground text-sm mb-3">Établissements</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                {TYPES_ETABLISSEMENT_SEO.map((t) => (
+                  <li key={t.slug}><a href={cheminEtablissement(t.slug)} className="hover:text-foreground transition-colors">{t.nom}</a></li>
+                ))}
               </ul>
             </div>
             <div>
