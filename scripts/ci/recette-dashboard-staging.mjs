@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { demarrerPreview } from './dashboard-ui-preview.mjs';
@@ -6,6 +6,19 @@ import { creerDiagnosticUI, bilanCleanupUI } from './dashboard-ui-diagnostic.mjs
 import { STAGING_REF, STAGING_URL } from './prepare-load-fixtures.mjs';
 import { dashboardFixtureValide } from '../../tests/load/helpers/contrats.js';
 import { configurationUI, ORIGINE_UI, projectionEtatUI, requeteUIAutorisee, sqlEtatUI, sqlGardeUI, verifierEtatUI, verifierGardeUI } from './dashboard-ui-contract.mjs';
+
+/**
+ * HTML servis par `vite preview` aux navigations de la recette : dist/index.html (accueil) et
+ * dist/app.html (shell de /connexion et des espaces connectés, cf. scripts/seo/vite-pages-statiques.mjs).
+ * Les deux doivent être nettoyés, sinon le shell demanderait Google Fonts et ouvrirait des preconnect.
+ */
+export const HTML_PREVIEW = ['index.html', 'app.html'];
+export function preparerDistPreview(dist = resolve('dist')) {
+  for (const nom of HTML_PREVIEW) {
+    const fichier = resolve(dist, nom);
+    if (existsSync(fichier)) writeFileSync(fichier, preparerHtmlPreview(readFileSync(fichier, 'utf8')));
+  }
+}
 
 const dossier = resolve('tests/load/results/dashboard-ui');
 const sauver = (nom, valeur) => { mkdirSync(dossier, { recursive: true }); writeFileSync(`${dossier}/${nom}.json`, JSON.stringify(valeur, null, 2) + '\n'); };
@@ -126,8 +139,7 @@ export async function executerRecetteDashboard({ action = 'run', env = process.e
     const avant = await lireSQL(sqlEtatUI(membres), env); verifierEtatUI(avant); sauver('avant', projectionEtatUI(avant));
     diagnostic.phase('preview');
     // Seul le build éphémère de recette utilise la police système de secours.
-    const index = resolve('dist/index.html');
-    writeFileSync(index, preparerHtmlPreview(readFileSync(index, 'utf8')));
+    preparerDistPreview();
     const { webkit, devices, expect } = await import('@playwright/test');
     preview = await demarrerPreview({ env, observer: etat => sauver('preview', etat) });
     diagnostic.phase('browser');

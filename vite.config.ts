@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import path from "path";
 import { pdfjsLocalAssets } from './scripts/pdfjs-local-assets.mjs';
+import { pagesStatiquesJolene } from './scripts/seo/vite-pages-statiques.mjs';
 
 // Upload des source maps Sentry. Activé UNIQUEMENT quand le projet Sentry
 // est confirmé créé (env SENTRY_UPLOAD_ENABLED=true) ET que le token est
@@ -44,6 +45,9 @@ export default defineConfig(({ mode }) => ({
       augmentChunkHash: () => 'jolene-native-dynamic-import-v1',
     },
     pdfjsLocalAssets(),
+    // Écrit dist/app.html (shell des routes sans page statique, cible de vercel.json) et fait
+    // servir par `vite preview` le même HTML que Vercel. Détail : scripts/seo/vite-pages-statiques.mjs.
+    pagesStatiquesJolene({ dist: path.resolve(__dirname, 'dist') }),
     {
       name: 'native-system-fonts',
       transformIndexHtml: (html: string) => process.env.VITE_NATIVE_BUILD === 'true'

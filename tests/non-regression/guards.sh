@@ -203,7 +203,8 @@ if grep -niE "certif(icat)? médical" \
   echo "   une modale propose à nouveau un certificat médical"
   LEGAL_CLAIMS_FAIL=1
 fi
-if grep -ni "0 donnée de santé" src/pages/APropos.tsx; then
+# Le H1 et les textes d'ouverture d'À propos vivent dans seo-routes.ts (HTML statique compris).
+if grep -rni "0 donnée de santé" src/pages/APropos.tsx src/lib/seo-routes.ts src/lib/seo-contenu; then
   echo "   la page À propos promet à nouveau zéro donnée de santé"
   LEGAL_CLAIMS_FAIL=1
 fi

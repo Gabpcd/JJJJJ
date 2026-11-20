@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "npm ci",
   "rewrites": [
-    { "source": "/((?!assets|icons|.*\\.(?:png|jpg|svg|ico|xml|json|txt|webmanifest|js|css|woff2?)).*)", "destination": "/index.html" }
+    { "source": "/((?!assets|icons|.*\\.(?:png|jpg|svg|ico|xml|json|txt|webmanifest|js|css|woff2?)).*)", "destination": "/app.html" }
   ],
   "headers": [
     {

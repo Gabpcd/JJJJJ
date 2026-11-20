@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
+import { jsonLdPage, metaInstitutionnelle, urlAbsolue } from '@/lib/seo-routes';
 import { Zap, FileText, MapPin, Bell, ArrowRight, Smartphone } from 'lucide-react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -56,19 +57,18 @@ const features = [
   { icon: Bell, titre: 'Notifications push', desc: 'Soyez alerté des nouvelles missions et des messages en temps réel.' },
 ];
 
+/** Titre, description, H1 et accroche : mêmes valeurs que le HTML statique (`seo-routes`). */
+const meta = metaInstitutionnelle('telecharger');
+
 export default function Telecharger() {
   const navigate = useNavigate();
 
   return (
     <>
-      <SEOHead
-        title="Télécharger Jolene | App iOS et Android"
-        description="Téléchargez Jolene sur iPhone et Android. Trouvez des missions, signez vos contrats et pointez votre arrivée depuis votre téléphone."
-        url="https://jolene.app/telecharger"
-      />
+      <SEOHead title={meta.title} description={meta.description} url={urlAbsolue(meta.path)} jsonLd={jsonLdPage(meta)} />
       <SEOPageLayout
-        heroTitle="Jolene dans votre poche"
-        heroSubtitle="Trouvez des missions, signez vos contrats et pointez votre arrivée — tout depuis votre téléphone."
+        heroTitle={meta.h1}
+        heroSubtitle={meta.intro[0]}
         ctaText="Créer mon compte gratuitement"
         ctaHref="/inscription/soignant"
       >

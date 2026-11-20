@@ -4,25 +4,11 @@ import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Euro, ShieldCheck, TrendingUp, UserPlus, ClipboardList, Rocket } from 'lucide-react';
 import { PROFESSIONS } from '@/lib/constantes';
+import { FAQ_DEVENIR_SOIGNANT } from '@/lib/seo-contenu/devenir-soignant';
+import { jsonLdPage, metaDevenirSoignant, urlAbsolue } from '@/lib/seo-routes';
 
-const FAQ = [
-  { q: "L'inscription est-elle vraiment gratuite ?", r: "Oui, l'inscription est entièrement gratuite pour les soignants, sans aucune commission prélevée sur votre rémunération." },
-  { q: "Comment suis-je payé ?", r: "En libéral, l'établissement règle vos honoraires selon le délai indiqué sur la mission ; un paiement accéléré n'est proposé que lorsqu'il est explicitement affiché. En salarié, le salaire est versé par l'établissement employeur." },
-  { q: "Quelles professions peuvent s'inscrire ?", r: "Infirmiers, aides-soignants, AES, kinésithérapeutes, pharmaciens, préparateurs en pharmacie, sages-femmes et d'autres professions de santé." },
-  { q: "Quels documents dois-je fournir ?", r: "Selon votre profession : pièce d'identité, diplôme, et le cas échéant numéro RPPS et assurance. Tout est vérifié pour rassurer les établissements." },
-  { q: "Suis-je obligé d'accepter des missions ?", r: "Non. Vous choisissez librement vos missions, vos dates et votre taux horaire, sans aucune obligation." },
-  { q: "Puis-je cumuler avec mon emploi actuel ?", r: "Oui, de nombreux soignants complètent leur planning avec des missions ponctuelles selon leurs disponibilités." },
-];
-
-const faqJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  mainEntity: FAQ.map((f) => ({
-    "@type": "Question",
-    name: f.q,
-    acceptedAnswer: { "@type": "Answer", text: f.r },
-  })),
-};
+/** Titre, description, H1, accroche et FAQ : mêmes valeurs que le HTML statique (`seo-routes`). */
+const meta = metaDevenirSoignant();
 
 const avantages = [
   { icon: Euro, titre: 'Rémunération transparente', desc: 'Taux horaire affiché avant de postuler, zéro frais cachés pour le soignant.' },
@@ -44,15 +30,10 @@ const professions = PROFESSIONS.map((p) => p.label);
 export default function DevenirSoignant() {
   return (
     <>
-      <SEOHead
-        title="Devenir soignant remplaçant | Jolene Santé"
-        description="Missions de remplacement santé pour infirmiers, aides-soignants et professionnels de santé. Inscription gratuite, rémunération transparente et contrat indiqué avant candidature."
-        url="https://jolene.app/devenir-soignant"
-        jsonLd={faqJsonLd}
-      />
+      <SEOHead title={meta.title} description={meta.description} url={urlAbsolue(meta.path)} jsonLd={jsonLdPage(meta)} />
       <SEOPageLayout
-        heroTitle="Devenir soignant sur Jolene"
-        heroSubtitle="Accédez à des centaines de missions de remplacement en santé, choisissez vos horaires et construisez votre parcours professionnel."
+        heroTitle={meta.h1}
+        heroSubtitle={meta.intro[0]}
         ctaText="Créer mon compte gratuitement"
         ctaHref="/inscription/soignant"
       >
@@ -110,7 +91,7 @@ export default function DevenirSoignant() {
           <div className="max-w-3xl mx-auto px-4">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-10">Questions fréquentes</h2>
             <div className="space-y-4">
-              {FAQ.map((item, i) => (
+              {FAQ_DEVENIR_SOIGNANT.map((item, i) => (
                 <details key={i} className="group rounded-xl border border-border bg-background p-5">
                   <summary className="cursor-pointer list-none font-semibold text-foreground flex items-center justify-between gap-2">
                     {item.q}
