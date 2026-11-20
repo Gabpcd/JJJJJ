@@ -19,7 +19,7 @@
  * jsPDF. Le groupe `vendor-commun` de `vite.config.ts` corrige cela ; ce script empêche le retour
  * du défaut, qui ne casse rien de visible et ne se voit donc pas en recette.
  *
- * Mesures du 20/11/2026 après correctif, gzip niveau 6 : 204 224 octets pour un build sans DSN
+ * Mesures du 20/11/2026 après correctif, gzip niveau 6 : environ 204 600 octets pour un build sans DSN
  * Sentry (local, CI), 296 401 pour le build de prévisualisation Vercel ; la production ajoute
  * environ 8 600 octets d'identifiants de débogage.
  *

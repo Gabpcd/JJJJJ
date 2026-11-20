@@ -68,18 +68,23 @@ export function urlsChangees(avant, apres, hote = HOTE) {
 
 /**
  * Empreintes telles qu'elles étaient au commit `depuis`, ou `null` si le fichier n'y existait pas
- * (premier signalement). Toute autre erreur git est levée : la confondre avec un premier
- * signalement ferait partir toutes les pages.
+ * (premier signalement).
+ *
+ * Le commit doit exister dans le dépôt local, sinon la fonction échoue : pour un SHA inconnu, git
+ * répond par le même message que pour un fichier absent, et confondre les deux ferait partir
+ * toutes les pages. La présence du fichier se lit donc dans l'arbre du commit, pas dans un
+ * message d'erreur.
  */
-export function empreintesAuCommit(depuis = 'HEAD~1', executer = execFileSync) {
+export function empreintesAuCommit(depuis = 'HEAD~1', { executer = execFileSync, cwd } = {}) {
   if (!/^[0-9a-f]{7,40}$|^HEAD~1$/.test(depuis)) throw new Error(`IndexNow : point de comparaison invalide « ${depuis} »`);
+  const git = (...args) => executer('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, LC_ALL: 'C' } });
   try {
-    return JSON.parse(executer('git', ['show', `${depuis}:${FICHIER_EMPREINTES}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
-  } catch (e) {
-    const message = `${e?.stderr ?? ''} ${e?.message ?? ''}`;
-    if (/does not exist in|exists on disk, but not in/.test(message)) return null;
-    throw new Error(`IndexNow : lecture de ${FICHIER_EMPREINTES} au commit ${depuis} impossible (${message.trim().split('\n')[0]})`);
+    git('cat-file', '-e', `${depuis}^{commit}`);
+  } catch {
+    throw new Error(`IndexNow : commit ${depuis} introuvable dans le dépôt local (étape git fetch manquante ?)`);
   }
+  if (!git('ls-tree', '--name-only', depuis, '--', FICHIER_EMPREINTES).trim()) return null;
+  return JSON.parse(git('show', `${depuis}:${FICHIER_EMPREINTES}`));
 }
 
 export function corpsIndexNow(urls, { hote = HOTE, cle = CLE_INDEXNOW } = {}) {
@@ -158,6 +163,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const arguments_ = process.argv.slice(2);
   const iDepuis = arguments_.indexOf('--depuis');
   const depuis = iDepuis === -1 ? 'HEAD~1' : arguments_[iDepuis + 1];
+  if (!depuis || depuis.startsWith('--')) {
+    console.error('[indexnow] --depuis attend un identifiant de commit');
+    process.exit(2);
+  }
   const urls = options.has('--tout')
     ? undefined
     : urlsChangees(empreintesAuCommit(depuis), JSON.parse(readFileSync(FICHIER_EMPREINTES, 'utf8')));

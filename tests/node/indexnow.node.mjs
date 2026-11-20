@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { attendreDeploiement, CLE_INDEXNOW, corpsIndexNow, empreintesAuCommit, FICHIER_EMPREINTES, HOTE, lireReponse, POINT_INDEXNOW, soumettre, URL_CLE, URL_SITEMAP, urlsChangees, urlsDuSitemap } from '../../scripts/seo/indexnow.mjs';
 
@@ -41,18 +44,31 @@ test('seules les pages ajoutées, modifiées ou supprimées sont signalées', ()
   assert.deepEqual(urlsChangees(null, { '/': 'aaa', '/guides': 'bbb' }), ['https://jolene.app/', 'https://jolene.app/guides'], 'premier signalement : toutes les pages');
 });
 
-test('le point de comparaison est le commit indiqué ; seul un fichier absent vaut premier signalement', () => {
-  const appels = [];
-  const lu = empreintesAuCommit('0123abc', (commande, args) => { appels.push([commande, ...args]); return '{"/":"aaa"}'; });
-  assert.deepEqual(lu, { '/': 'aaa' });
-  assert.deepEqual(appels, [['git', 'show', `0123abc:${FICHIER_EMPREINTES}`]]);
-  const erreurGit = (stderr) => () => { throw Object.assign(new Error('Command failed'), { stderr }); };
-  assert.equal(empreintesAuCommit('HEAD~1', erreurGit(`fatal: path '${FICHIER_EMPREINTES}' does not exist in 'HEAD~1'`)), null);
-  assert.equal(empreintesAuCommit('HEAD~1', erreurGit(`fatal: path '${FICHIER_EMPREINTES}' exists on disk, but not in 'HEAD~1'`)), null);
-  // Un commit introuvable n'est pas un premier signalement : sinon les 228 pages partiraient.
-  assert.throws(() => empreintesAuCommit('0123abc', erreurGit('fatal: invalid object name 0123abc')), /impossible/);
-  assert.throws(() => empreintesAuCommit('main; rm -rf /'), /invalide/);
-  assert.throws(() => empreintesAuCommit('0000000000000000000000000000000000000000', erreurGit('fatal: bad object 0000000')), /impossible/);
+test('le point de comparaison se lit dans un vrai dépôt git ; un commit inconnu échoue au lieu de tout signaler', () => {
+  // Vrai git, pas de messages imités : c'est le comportement réel de git qui compte ici.
+  const depot = mkdtempSync(path.join(tmpdir(), 'indexnow-git-'));
+  const git = (...args) => execFileSync('git', args, { cwd: depot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  try {
+    git('init', '-q');
+    git('config', 'user.email', 'test@jolene.test'); git('config', 'user.name', 'Test'); git('config', 'commit.gpgsign', 'false');
+    writeFileSync(path.join(depot, 'LISEZMOI'), 'un');
+    git('add', '-A'); git('commit', '-q', '-m', 'sans empreintes');
+    const sans = git('rev-parse', 'HEAD');
+    mkdirSync(path.join(depot, path.dirname(FICHIER_EMPREINTES)), { recursive: true });
+    writeFileSync(path.join(depot, FICHIER_EMPREINTES), '{"/":"aaa","/guides":"bbb"}');
+    git('add', '-A'); git('commit', '-q', '-m', 'avec empreintes');
+    const avec = git('rev-parse', 'HEAD');
+
+    assert.equal(empreintesAuCommit(sans, { cwd: depot }), null, 'fichier absent du commit : premier signalement');
+    assert.deepEqual(empreintesAuCommit(avec, { cwd: depot }), { '/': 'aaa', '/guides': 'bbb' });
+    assert.equal(empreintesAuCommit('HEAD~1', { cwd: depot }), null, 'par défaut : le commit précédent');
+    // Commit inconnu du dépôt (valeur de github.event.before quand la branche vient d'être créée, ou fetch oublié).
+    assert.throws(() => empreintesAuCommit('0000000000000000000000000000000000000000', { cwd: depot }), /introuvable/);
+    assert.throws(() => empreintesAuCommit('0123456789abcdef0123456789abcdef01234567', { cwd: depot }), /introuvable/);
+    assert.throws(() => empreintesAuCommit('main; rm -rf /', { cwd: depot }), /invalide/);
+  } finally {
+    rmSync(depot, { recursive: true, force: true });
+  }
 });
 
 test('le fichier d\'empreintes versionné ne liste que des chemins du site', () => {

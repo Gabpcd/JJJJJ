@@ -188,7 +188,7 @@ jobs:
 
       # Le build lui-même refuse jsPDF et recharts dans le premier chargement. Le budget de poids
       # se contrôle ici, hors du chemin de déploiement : ce build n'embarque pas le suivi d'erreurs
-      # (204 577 octets le 20/11/2026 ; budget = cette mesure + 15 %).
+      # (environ 204 600 octets le 20/11/2026 ; budget = cette mesure + 15 %).
       - name: Budget du premier chargement
         run: node scripts/ci/verifier-premier-chargement.mjs --budget 235000
 
