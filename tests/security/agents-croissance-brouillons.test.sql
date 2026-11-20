@@ -116,6 +116,14 @@ BEGIN
    WHERE cle = 'prospection_mention_opposition';
 
   -- 4. Posts : 2 professions × 1 département + 1 LinkedIn de la semaine, idempotents.
+  -- Donnée BMO du marché fictif : part exacte pour les aides-soignants, catégorie agrégée
+  -- (commune avec les sages-femmes) pour les infirmiers.
+  INSERT INTO public.acquisition_territoires
+    (departement, profession, bmo_annee, bmo_projets_recrutement, bmo_difficulte_pct, bmo_precision)
+  VALUES ('ZZ', 'AS', 2026, 120, 40, 'EXACT'), ('ZZ', 'IDE', 2026, 80, 50, 'AGREGAT')
+  ON CONFLICT (departement, profession) DO UPDATE
+    SET bmo_annee = EXCLUDED.bmo_annee, bmo_projets_recrutement = EXCLUDED.bmo_projets_recrutement,
+        bmo_difficulte_pct = EXCLUDED.bmo_difficulte_pct, bmo_precision = EXCLUDED.bmo_precision;
   v_res := private.fn_growth_agent_posts();
   v_res := private.fn_growth_agent_posts();
   SELECT count(*) INTO v_n FROM public.growth_brouillons WHERE agent = 'POST_SOCIAL' AND departement = 'ZZ';
@@ -125,6 +133,17 @@ BEGIN
   IF (SELECT count(*) FROM public.growth_brouillons
       WHERE idempotence_key = 'posts:' || to_char(now() AT TIME ZONE 'Europe/Paris', 'IYYY-"S"IW') || ':linkedin') <> 1 THEN
     RAISE EXCEPTION 'Posts : un seul LinkedIn attendu pour la semaine courante';
+  END IF;
+  -- Phrase BMO : préposition élidée (20261120150000), et jamais de catégorie agrégée.
+  SELECT corps INTO v_corps FROM public.growth_brouillons
+   WHERE agent = 'POST_SOCIAL' AND departement = 'ZZ' AND profession = 'AS';
+  IF position('France Travail recense 120 projets de recrutement d''aides-soignants dans le ZZ en 2026, dont 40 % jugés difficiles par les employeurs (enquête BMO).' IN v_corps) = 0 THEN
+    RAISE EXCEPTION 'Post aides-soignants : phrase BMO absente ou mal accordée — %', v_corps;
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.growth_brouillons
+             WHERE agent = 'POST_SOCIAL' AND departement = 'ZZ' AND profession = 'IDE'
+               AND position('France Travail' IN corps) > 0) THEN
+    RAISE EXCEPTION 'Post infirmiers : une catégorie BMO agrégée ne doit pas être citée';
   END IF;
 
   -- 4 bis. Un brouillon expiré libère la cible : elle est reproposée.
