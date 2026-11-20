@@ -3,7 +3,7 @@ import type { SectionSEO, SourceSEO } from '@/lib/seo-contenu/types';
 
 /**
  * Rend le contenu d'une page décrite dans `src/lib/seo-routes.ts` : paragraphes d'ouverture,
- * sections (paragraphes, points titrés, liste, tableau, sources), questions fréquentes et
+ * sections (paragraphes, points titrés, liste, tableau, liens, sources), questions fréquentes et
  * liens internes. Le HTML statique (`contenuRacine` du générateur) rend la même structure à
  * partir du même objet : la page lue par un robot sans JavaScript et la page affichée
  * portent donc le même texte, par construction.
@@ -139,6 +139,18 @@ function SectionContenu({ section, alterne }: { section: SectionSEO; alterne: bo
               </tbody>
             </table>
           </div>
+        )}
+
+        {!!section.liens?.length && (
+          <ul className="flex flex-wrap gap-3 mb-4">
+            {section.liens.map((l) => (
+              <li key={l.href}>
+                <a href={l.href} className="inline-flex items-center min-h-[44px] bg-card border border-border rounded-lg px-4 py-2 text-sm font-medium text-foreground hover:border-primary/40 hover:text-primary transition-colors">
+                  {l.label}
+                </a>
+              </li>
+            ))}
+          </ul>
         )}
 
         {!!section.sources?.length && <Sources sources={section.sources} />}

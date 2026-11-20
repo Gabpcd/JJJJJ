@@ -22,7 +22,7 @@ test('pages publiques : contenu, retours, liens légaux et absence de débordeme
     ['/accessibilite', 'Engagement accessibilité'], ['/aide/pro-sante-connect', 'Aide Pro Santé Connect'],
     // Stratégie SEO, lot 2 : pages par type d'établissement, guides, baromètre, pages locales enrichies.
     ['/recruter-soignants/ehpad', 'Remplacer un soignant en EHPAD'], ['/recruter-soignants/hopital', 'Renforcer vos équipes soignantes à l’hôpital public'],
-    ['/guides', 'Guides du remplacement en santé'], ['/guides/comparer-solutions-remplacement-soignants', /comparer les solutions de remplacement/],
+    ['/guides', 'Guides du remplacement en santé'], ['/guides/absence-derniere-minute-remplacer-soignant', /Absence de dernière minute/],
     ['/guides/vacations-etablissement-de-sante', /Vacations en établissement de santé/],
     ['/barometre-recrutement-soignants-2026', /Baromètre 2026 du recrutement de soignants/],
     ['/emploi-soignant/le-havre', 'Missions soignants au Havre'], ['/emploi-soignant/lyon/infirmier-ide', 'Infirmier (IDE) : missions à Lyon'],

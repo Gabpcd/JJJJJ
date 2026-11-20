@@ -12,10 +12,13 @@ afterEach(cleanup);
 const ouvrir = () => render(<MemoryRouter><MissionsPubliquesSEO ville="Lyon" profession="AS" campagne="seo-ville-lyon" /></MemoryRouter>);
 
 describe('MissionsPubliquesSEO', () => {
-  it('sans mission : invite à créer un compte, sans promettre de missions à voir', () => {
+  it('sans mission : le titre le dit, et la page invite à créer un compte', () => {
     Object.assign(etat, { missions: [], total: 0, loading: false, erreur: null });
     ouvrir();
-    expect(screen.getByText(/Aucune mission ne correspond à ces critères pour le moment\. Créez votre compte pour retrouver cette recherche/)).toBeInTheDocument();
+    // Ni « missions disponibles » ni « découvrez » quand il n'y en a aucune.
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Aucune mission publiée ici pour le moment');
+    expect(screen.queryByText(/disponible|Découvrez/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Créez votre compte pour retrouver cette recherche et postuler dès qu’un établissement publie une mission\./)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Créer mon compte et retrouver ma recherche/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Voir toutes les missions/ })).not.toBeInTheDocument();
   });
@@ -28,14 +31,15 @@ describe('MissionsPubliquesSEO', () => {
     ouvrir();
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('1 mission disponible en ce moment');
     expect(screen.getByRole('button', { name: /Voir toutes les missions et postuler/ })).toBeInTheDocument();
-    expect(screen.queryByText(/Aucune mission ne correspond/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Aucune mission publiée/)).not.toBeInTheDocument();
   });
 
-  it('pendant le chargement : ni message d\'absence ni libellé de création de compte', () => {
+  it('pendant le chargement : titre neutre, ni message d\'absence ni libellé de création de compte', () => {
     Object.assign(etat, { missions: null, total: 0, loading: true, erreur: null });
     ouvrir();
     expect(screen.getByRole('status')).toHaveTextContent('Recherche des missions…');
-    expect(screen.queryByText(/Aucune mission ne correspond/)).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Missions publiées par les établissements');
+    expect(screen.queryByText(/Aucune mission publiée/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Voir toutes les missions et postuler/ })).toBeInTheDocument();
   });
 });

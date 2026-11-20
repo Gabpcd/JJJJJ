@@ -299,10 +299,17 @@ Stratégie, architecture et lots : `docs/SEO_STRATEGIE_ACQUISITION.md`. Règles 
 3. **Aucun chiffre sans source nommée**, aucune promesse de volume ou de délai, aucune règle de
    droit affirmée par Jolene dans un contenu éditorial : renvoyer vers la fiche officielle. Un texte
    juridique propre à Jolene reste un HARD STOP n°4.
-4. **Jamais sous l'angle de l'intérim.** Le mot n'apparaît que dans les guides listés dans
-   `GUIDES_CITANT_INTERIM`, qui rappellent que Jolene n'en est pas une agence.
+4. **Jamais sous l'angle de l'intérim.** Aucune page ni aucun guide n'en parle, ne compare Jolene à
+   un autre type de prestataire, ni ne donne d'exemple de prix : ces sujets (droit du travail,
+   assiette de la commission) passent par le HARD STOP n°4. Seule mention admise : la question
+   « Jolene est-elle une agence d'intérim ? », dont la réponse commence par « Non ».
 5. **Page ville × métier indexée seulement avec une donnée BMO propre à son métier** (aides-soignants,
    médecins, infirmiers). Les comptes FINESS seuls ne suffisent pas (risque de pages satellites).
+6. **Données publiques : script reproductible, jamais de transcription.** BMO :
+   `scripts/seo/extraire-bmo.mjs` (l'enquête est publiée par bassin ; un total départemental est
+   « au moins » dès qu'une valeur est masquée, et la part difficile n'est donnée que si aucune ne
+   l'est). FINESS : `scripts/seo/extraire-finess.mjs` (villes reconnues par code commune ; les
+   hôpitaux ne sont pas comptés, la catégorie ne correspond pas au mot).
 
 ## Règle de rémunération / facturation — heures facturées
 

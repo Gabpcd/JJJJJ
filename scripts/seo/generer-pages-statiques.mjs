@@ -25,7 +25,7 @@
  * compilé à la volée avec esbuild.
  *
  * Le contenu statique suit le modèle `PageSEO` : H1, introduction, sections (paragraphes,
- * points titrés, liste, tableau, sources), questions fréquentes, liens. Le composant
+ * points titrés, liste, tableau, liens, sources), questions fréquentes, liens. Le composant
  * React `ContenuSEO` rend la même structure à partir du même objet.
  *
  * Usage : node scripts/seo/generer-pages-statiques.mjs [--dist dist]
@@ -128,9 +128,11 @@ const sourcesHtml = (sources = []) => (sources.length
   ? `<p>${sources.length > 1 ? 'Sources' : 'Source'} : ${sources.map((x) => `<a href="${echapper(x.href)}" target="_blank" rel="noopener noreferrer">${echapper(x.label)}</a>`).join(' ; ')}.</p>`
   : '');
 
-/** Une section : titre, puis paragraphes, points, liste, tableau, sources — le même ordre que `ContenuSEO`. */
+const liensHtml = (liens = []) => (liens.length ? `<ul>${liens.map((l) => `<li><a href="${echapper(l.href)}">${echapper(l.label)}</a></li>`).join('')}</ul>` : '');
+
+/** Une section : titre, puis paragraphes, points, liste, tableau, liens, sources — le même ordre que `ContenuSEO`. */
 export function sectionHtml(s) {
-  return `<section><h2>${echapper(s.titre)}</h2>${paragraphesHtml(s.paragraphes)}${pointsHtml(s.points)}${listeHtml(s.liste, s.ordonnee)}${tableauHtml(s.tableau)}${sourcesHtml(s.sources)}</section>`;
+  return `<section><h2>${echapper(s.titre)}</h2>${paragraphesHtml(s.paragraphes)}${pointsHtml(s.points)}${listeHtml(s.liste, s.ordonnee)}${tableauHtml(s.tableau)}${liensHtml(s.liens)}${sourcesHtml(s.sources)}</section>`;
 }
 
 export function contenuRacine(page) {

@@ -30,6 +30,8 @@ export default function VilleLanding() {
   const ou = aVille(ville);
   // Même phrase que le HTML statique (deuxième paragraphe d'introduction de `metaVille`).
   const finess = phraseFiness(ville);
+  /** Libellé d'un lien tel que le HTML statique l'écrit (`meta.liens`). */
+  const libelleLien = (href: string) => meta.liens.find((l) => l.href === href)?.label ?? '';
 
   return (
     <>
@@ -52,7 +54,7 @@ export default function VilleLanding() {
                 <p className="text-foreground leading-relaxed">{finess}</p>
                 <Sources sources={[SOURCES_LOCALES[1]]} />
                 <p className="text-sm">
-                  <a href={CHEMIN_BAROMETRE} className="text-primary underline underline-offset-4 hover:text-primary/80">Voir le baromètre 2026 du recrutement de soignants par département</a>
+                  <a href={CHEMIN_BAROMETRE} className="text-primary underline underline-offset-4 hover:text-primary/80">{libelleLien(CHEMIN_BAROMETRE)}</a>
                 </p>
               </aside>
             </div>
@@ -87,7 +89,7 @@ export default function VilleLanding() {
               Professions recherchées {ou}
             </h2>
             <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-12">
-              Les établissements de santé de {villeNom} recrutent activement des professionnels qualifiés dans toutes les spécialités.
+              Choisissez votre profession pour créer votre compte et retrouver les missions publiées {ou}.
             </p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {PROFESSIONS_SEO.map((p) => (
@@ -148,8 +150,7 @@ export default function VilleLanding() {
         </section>
         <section className="py-10">
           <p className="max-w-3xl mx-auto px-4 text-center text-muted-foreground">
-            Vous dirigez un établissement {ou} ?{' '}
-            <a href="/recruter-soignants" className="text-primary font-semibold underline underline-offset-4 hover:text-primary/80">Publier une mission</a>
+            <a href="/recruter-soignants" className="text-primary font-semibold underline underline-offset-4 hover:text-primary/80">{libelleLien('/recruter-soignants')}</a>
           </p>
         </section>
         <MissionsPubliquesSEO ville={villeNom} campagne={`seo-ville-${ville.slug}`} />

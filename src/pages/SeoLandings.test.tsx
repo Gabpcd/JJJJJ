@@ -130,8 +130,14 @@ describe('pages SEO connues', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Missions soignants au Havre');
     const recenses = screen.getByRole('complementary', { name: 'Établissements recensés au Havre' });
     expect(recenses).toHaveTextContent(normaliser(metaVille(getVilleBySlug('le-havre')!).intro[1]));
-    expect(within(recenses).getByRole('link', { name: /baromètre 2026/i })).toHaveAttribute('href', '/barometre-recrutement-soignants-2026');
-    expect(screen.getByRole('link', { name: 'Publier une mission' })).toHaveAttribute('href', '/recruter-soignants');
+    // Mêmes libellés que les liens du HTML statique (`meta.liens`).
+    const liens = metaVille(getVilleBySlug('le-havre')!).liens;
+    const libelle = (href: string) => liens.find((l) => l.href === href)!.label;
+    expect(within(recenses).getByRole('link', { name: libelle('/barometre-recrutement-soignants-2026') })).toHaveAttribute('href', '/barometre-recrutement-soignants-2026');
+    expect(screen.getByRole('link', { name: 'Vous recrutez au Havre ? Publier une mission' })).toHaveAttribute('href', '/recruter-soignants');
+    expect(libelle('/recruter-soignants')).toBe('Vous recrutez au Havre ? Publier une mission');
+    // Plus de promesse d'activité (« recrutent activement ») ni de « de Le Havre ».
+    expect(document.body.textContent).not.toMatch(/recrutent activement|de Le Havre|à Le Havre/);
   });
 });
 
@@ -150,7 +156,7 @@ describe('pages par type d\'établissement, guides et baromètre', () => {
   const attendreTextes = (page: PageSEO) => {
     const textes = [
       ...page.intro.slice(1),
-      ...(page.sections ?? []).flatMap((s) => [s.titre, ...(s.paragraphes ?? []), ...(s.liste ?? []), ...(s.points ?? []).flatMap((p) => [p.titre, p.texte])]),
+      ...(page.sections ?? []).flatMap((s) => [s.titre, ...(s.paragraphes ?? []), ...(s.liste ?? []), ...(s.points ?? []).flatMap((p) => [p.titre, p.texte]), ...(s.liens ?? []).map((l) => l.label)]),
       ...(page.faq ?? []).flatMap((f) => [f.q, f.r]),
       ...page.liens.map((l) => l.label),
     ];

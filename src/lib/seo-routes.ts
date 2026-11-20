@@ -28,7 +28,7 @@ import { ACCROCHE_ACCUEIL, ATOUTS_ETABLISSEMENTS, ATOUTS_SOIGNANTS, ETAPES_ACCUE
 import { FAQ_DEVENIR_SOIGNANT } from './seo-contenu/devenir-soignant';
 import { FAQ_RECRUTER_SOIGNANTS } from './seo-contenu/recruter-soignants';
 import { INCLUS_TARIFS, TAUX_HT, TAUX_TTC, TITRE_COMMISSION } from './seo-contenu/tarifs';
-import { ETAPES_PUBLICATION, PRISE_EN_CHARGE, TYPES_ETABLISSEMENT_SEO, type CleFiness, type TypeEtablissementSEO } from './seo-contenu/etablissements';
+import { ETAPES_PUBLICATION, RENVOI_COMMUN, TYPES_ETABLISSEMENT_SEO, type CleFiness, type TypeEtablissementSEO } from './seo-contenu/etablissements';
 import { GUIDES_SEO, type GuideSEO } from './seo-contenu/guides';
 import type { QuestionSEO, SectionSEO, SourceSEO } from './seo-contenu/types';
 import { CODES_DEPARTEMENTS, DEPARTEMENTS } from './seo-departements';
@@ -140,13 +140,17 @@ export function villesVoisines(ville: VilleSEO, max = 5): VilleSEO[] {
 }
 
 // ─── Données BMO 2026 ────────────────────────────────────────────────────────
+// Écrites par `scripts/seo/extraire-bmo.mjs` à partir du classeur officiel, publié par bassin
+// d'emploi. Le total départemental est une somme faite par Jolene ; il est dit « au moins »
+// quand une valeur de bassin est masquée, et la part difficile n'est donnée que si aucune
+// valeur du département n'est masquée (sinon elle serait fausse, revue B8 de #1170).
 // AS et MEDECIN : catégories exactes de l'enquête. IDE : l'enquête ne publie qu'un agrégat
 // « Infirmiers et sages-femmes » (code V1X80) ; la phrase le dit tel quel, et la page
 // sage-femme ne l'affiche pas (les infirmiers y pèsent l'essentiel). Les autres métiers
 // n'ont que des agrégats trop larges (« Autres professionnels para-médicaux ») : rien n'est affiché.
 export type MetierBmo = 'AS' | 'MEDECIN' | 'IDE';
-/** [projets de recrutement, % jugés difficiles (null = non communiqué)] */
-export type EntreeBmo = [number, number | null];
+/** [projets de recrutement publiés, % jugés difficiles (null = non calculable), 1 si le total est un minimum] */
+export type EntreeBmo = [projets: number, part: number | null, partiel?: 0 | 1];
 export type TableBmo = Record<string, Partial<Record<MetierBmo, EntreeBmo | null>>>;
 export const BMO_2026: TableBmo = bmoBrut as unknown as TableBmo;
 
@@ -154,21 +158,25 @@ export const SOURCE_BMO = 'Enquête BMO 2026, France Travail';
 export const URL_BMO = 'https://www.data.gouv.fr/datasets/enquete-besoins-en-main-doeuvre-bmo';
 const LIBELLE_BMO: Record<MetierBmo, string> = { AS: 'd’aides-soignants', MEDECIN: 'de médecins', IDE: 'd’infirmiers et de sages-femmes' };
 const estMetierBmo = (valeur: string): valeur is MetierBmo => valeur in LIBELLE_BMO;
+const partConnue = (part: number | null | undefined): part is number => typeof part === 'number' && Number.isFinite(part);
 
 function espaceMilliers(n: number): string {
   return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 
-/** Phrase de tension du département, ou null si la donnée est absente, nulle ou sans pourcentage. */
+/**
+ * Phrase des projets de recrutement du département, ou null si aucun projet n'est publié.
+ * « au moins » quand le total est un minimum ; la part difficile seulement quand elle est calculable.
+ */
 export function phraseBmo(departement: string, professionValeur: string, table: TableBmo = BMO_2026): string | null {
   if (!estMetierBmo(professionValeur)) return null;
   const e = table[departement]?.[professionValeur];
   if (!e) return null;
-  const [projets, pct] = e;
+  const [projets, part, partiel] = e;
   if (typeof projets !== 'number' || !(projets > 0)) return null;
-  if (typeof pct !== 'number' || !Number.isFinite(pct)) return null;
-  const nb = `${espaceMilliers(projets)} projet${projets > 1 ? 's' : ''}`;
-  return `Dans le département ${departement}, les employeurs déclarent ${nb} de recrutement ${LIBELLE_BMO[professionValeur]} en 2026, dont ${Math.round(pct)} % jugés difficiles (${SOURCE_BMO}).`;
+  const nb = `${partiel ? 'au moins ' : ''}${espaceMilliers(projets)} projet${projets > 1 ? 's' : ''}`;
+  const difficiles = partConnue(part) ? `, dont ${Math.round(part)} % jugés difficiles` : '';
+  return `Dans le département ${departement}, les employeurs déclarent ${nb} de recrutement ${LIBELLE_BMO[professionValeur]} en 2026${difficiles} (${SOURCE_BMO}).`;
 }
 
 // ─── Données FINESS (établissements recensés par ville, par département, en France) ───
@@ -198,11 +206,11 @@ export const SOURCES_LOCALES: SourceSEO[] = [
   { href: URL_FINESS, label: 'Répertoire FINESS, extraction du fichier des établissements (data.gouv.fr)' },
 ];
 
+// Les hôpitaux ne sont pas cités : la catégorie FINESS des centres hospitaliers compte aussi des hôpitaux
+// de jour, des CMP et des centres de dépistage, et pas la psychiatrie spécialisée (cf. extraire-finess.mjs).
 const LIBELLES_FINESS: Record<CleFiness, [singulier: string, pluriel: string]> = {
   ehpad: ['EHPAD', 'EHPAD'],
-  hopital: ['site hospitalier public', 'sites hospitaliers publics'],
   ssiad: ['service de soins infirmiers à domicile (SSIAD)', 'services de soins infirmiers à domicile (SSIAD)'],
-  had: ['structure d’hospitalisation à domicile (HAD)', 'structures d’hospitalisation à domicile (HAD)'],
   masfam: ['maison d’accueil spécialisée ou foyer d’accueil médicalisé', 'maisons d’accueil spécialisées et foyers d’accueil médicalisés'],
   ime: ['institut médico-éducatif (IME)', 'instituts médico-éducatifs (IME)'],
   centreSante: ['centre de santé', 'centres de santé'],
@@ -210,12 +218,12 @@ const LIBELLES_FINESS: Record<CleFiness, [singulier: string, pluriel: string]> =
 
 /** Catégories citées sur une page ville × métier : les structures où ce métier exerce le plus souvent (choix éditorial). */
 const FINESS_PAR_METIER: Record<string, CleFiness[]> = {
-  IDE: ['ehpad', 'hopital', 'ssiad', 'had', 'masfam', 'centreSante'],
-  AS: ['ehpad', 'hopital', 'ssiad', 'had', 'masfam', 'ime'],
+  IDE: ['ehpad', 'ssiad', 'masfam', 'centreSante'],
+  AS: ['ehpad', 'ssiad', 'masfam', 'ime'],
   AES: ['ehpad', 'masfam', 'ime'],
-  MEDECIN: ['hopital', 'ehpad', 'centreSante', 'had'],
-  KINE: ['hopital', 'ehpad', 'masfam', 'ime'],
-  SAGE_FEMME: ['hopital', 'centreSante'],
+  MEDECIN: ['ehpad', 'centreSante'],
+  KINE: ['ehpad', 'masfam', 'ime'],
+  SAGE_FEMME: ['centreSante'],
 };
 
 /** « a », « a et b », « a, b et c ». */
@@ -438,7 +446,8 @@ export function metaRecruterSoignants(): PageSEO {
     title: 'Recruter des soignants qualifiés | Jolene Santé',
     description: 'Recrutez infirmiers, aides-soignants et professionnels de santé vérifiés pour vos remplacements. Commission 15 % HT (18 % TTC), contrats et facturation automatiques.',
     h1: 'Recrutez des soignants qualifiés, sans intermédiaire',
-    intro: ['Fini les agences de remplacement coûteuses. Publiez vos missions et recevez des candidatures de professionnels vérifiés, en toute conformité.'],
+    // « Fini les agences de remplacement coûteuses. » retiré : jugement sans source sur des tiers.
+    intro: ['Publiez vos missions et recevez des candidatures de professionnels vérifiés, en toute conformité.'],
     faq: FAQ_RECRUTER_SOIGNANTS,
     liens: [
       { href: '/inscription/etablissement', label: 'Créer un compte établissement' },
@@ -553,21 +562,31 @@ export function metaEtablissement(t: TypeEtablissementSEO): PageSEO {
   const metiers = t.professions
     .map((valeur) => PROFESSIONS_SEO.find((p) => p.valeur === valeur))
     .filter((p): p is ProfessionSEO => !!p);
+  const nomMetier = (p: ProfessionSEO) => NOMS_METIER[p.valeur]?.court ?? p.label;
   return {
     type: 'etablissement', path: cheminEtablissement(t.slug),
     title: t.title, description: t.description, h1: t.h1,
-    intro: [t.accroche, ...t.contexte, ...(finess ? [finess] : [])],
+    intro: [t.accroche, t.contexte, ...(finess ? [finess] : [])],
+    // Seul ce qui est propre au type est développé ici ; le reste renvoie au pilier et aux tarifs
+    // (cinq pages au texte commun seraient des pages satellites).
     sections: [
-      { titre: 'Les situations les plus fréquentes', points: t.situations },
-      { titre: 'Ce que Jolene prend en charge', points: PRISE_EN_CHARGE },
-      { titre: 'Publier une mission en trois étapes', liste: ETAPES_PUBLICATION, ordonnee: true },
-      { titre: 'Les professions les plus demandées', points: metiers.map((p) => ({ titre: NOMS_METIER[p.valeur]?.court ?? p.label, texte: p.description, href: cheminMetier(p.slug) })) },
+      { titre: 'Les situations couvertes', points: t.situations },
+      { titre: 'Les professions recherchées', liens: metiers.map((p) => ({ href: cheminMetier(p.slug), label: nomMetier(p) })) },
+      {
+        titre: 'Publier une mission en trois étapes',
+        liste: ETAPES_PUBLICATION,
+        ordonnee: true,
+        paragraphes: [RENVOI_COMMUN],
+        liens: [FIL_RECRUTER, { href: '/tarifs', label: 'Tarifs' }],
+      },
     ],
-    faq: t.faq,
+    faq: [
+      t.question,
+      { q: 'Quelles professions peut-on rechercher ?', r: `Notamment : ${enumerer(metiers.map((p) => NOMS_METIER[p.valeur]?.phrase ?? p.label))}. La profession se choisit au moment de publier la mission.` },
+    ],
     filAriane: [FIL_RECRUTER],
     liens: [
       { href: '/inscription/etablissement', label: 'Créer mon espace établissement' },
-      { href: '/tarifs', label: 'Tarifs' },
       ...TYPES_ETABLISSEMENT_SEO.filter((x) => x.slug !== t.slug).map((x) => ({ href: cheminEtablissement(x.slug), label: x.h1 })),
       ...GUIDES_SEO.filter((g) => g.public === 'etablissement').map((g) => ({ href: cheminGuide(g.slug), label: g.titre })),
       { href: CHEMIN_BAROMETRE, label: 'Baromètre 2026 du recrutement de soignants' },
@@ -582,20 +601,17 @@ export function resoudreEtablissement(slug?: string): TypeEtablissementSEO | nul
 
 // ─── Guides ──────────────────────────────────────────────────────────────────
 const FIL_GUIDES: LienSEO = { href: CHEMIN_GUIDES, label: 'Guides' };
+/** Date de dernière révision du baromètre (données et texte) : `lastmod` du sitemap. */
+export const DATE_BAROMETRE = '2026-11-20';
 // Sans logo : le garde-fou 12 réserve toute référence au logo au composant LogoJolene (l'entité Organization d'index.html le porte déjà).
 const ORGANISATION = { '@type': 'Organization', name: 'Jolene Santé', url: SITE_URL };
-
-/** Somme nationale des projets de recrutement d'un métier (tous les départements de la table). */
-export function totalBmo(metier: MetierBmo, table: TableBmo = BMO_2026): number {
-  return Object.values(table).reduce((somme, d) => somme + (d[metier]?.[0] ?? 0), 0);
-}
 
 function sectionChiffres(guide: GuideSEO): SectionSEO | null {
   const phrases: string[] = [];
   const sources: SourceSEO[] = [];
   for (const c of guide.chiffres ?? []) {
     if (c === 'bmo-as-national') {
-      phrases.push(`Les employeurs déclarent ${espaceMilliers(totalBmo('AS'))} projets de recrutement d’aides-soignants pour 2026, en additionnant les départements (${SOURCE_BMO}).`);
+      phrases.push(`Les employeurs déclarent ${totalEnToutesLettres(totalBmo('AS'))} projets de recrutement d’aides-soignants pour 2026, en additionnant les valeurs publiées par bassin d’emploi (${SOURCE_BMO}).`);
       sources.push(SOURCES_LOCALES[0]);
     }
     if (c === 'finess-ehpad-national') {
@@ -622,7 +638,7 @@ export function metaGuide(g: GuideSEO): PageSEO {
       headline: g.titre,
       description: g.description,
       inLanguage: 'fr-FR',
-      datePublished: g.maj,
+      datePublished: g.publie,
       dateModified: g.maj,
       author: ORGANISATION,
       publisher: ORGANISATION,
@@ -667,10 +683,26 @@ export function metaGuides(): PageSEO {
 }
 
 // ─── Baromètre par département (BMO + FINESS) ────────────────────────────────
-/** Seuil de projets en dessous duquel un département n'entre pas dans les classements (petits effectifs). */
+/** Seuil de projets en dessous duquel un département n'entre pas dans le classement (petits effectifs). */
 export const SEUIL_CLASSEMENT_BMO = 200;
-const pourcent = (p: number | null | undefined) => (typeof p === 'number' && Number.isFinite(p) ? `${Math.round(p)} %` : 'n.c.');
+/** Part à partir de laquelle un département est compté parmi les plus tendus. */
+export const SEUIL_PART_DIFFICILE = 80;
+export const NON_COMMUNIQUE = 'n.c.';
+const METIERS_BAROMETRE: { metier: MetierBmo; nom: string }[] = [
+  { metier: 'AS', nom: 'Aides-soignants' },
+  { metier: 'IDE', nom: 'Infirmiers et sages-femmes' },
+  { metier: 'MEDECIN', nom: 'Médecins' },
+];
 const nomDepartement = (code: string) => `${DEPARTEMENTS[code]} (${code})`;
+/** Part telle que le tableau l'affiche : c'est sur cette valeur arrondie que portent les chiffres clés. */
+const partAffichee = (e: EntreeBmo | null | undefined): number | null => (e && e[0] > 0 && partConnue(e[1]) ? Math.round(e[1]) : null);
+
+/** Total national des projets publiés d'un métier, et s'il est un minimum (au moins une valeur masquée). */
+export function totalBmo(metier: MetierBmo, table: TableBmo = BMO_2026): { projets: number; partiel: boolean } {
+  const entrees = Object.values(table).map((d) => d[metier]).filter((e): e is EntreeBmo => !!e);
+  return { projets: entrees.reduce((somme, e) => somme + e[0], 0), partiel: entrees.some((e) => !!e[2]) };
+}
+const totalEnToutesLettres = (t: { projets: number; partiel: boolean }) => `${t.partiel ? 'au moins ' : ''}${espaceMilliers(t.projets)}`;
 
 export function metaBarometre(table: TableBmo = BMO_2026, finess: DonneesFiness = FINESS): PageSEO {
   const codes = CODES_DEPARTEMENTS.filter((c) => table[c]);
@@ -678,48 +710,55 @@ export function metaBarometre(table: TableBmo = BMO_2026, finess: DonneesFiness 
   const ehpad = (c: string) => finess.departements[c]?.[iEhpad] ?? 0;
   const cellules = (c: string, m: MetierBmo) => {
     const e = table[c]?.[m];
-    return e ? [espaceMilliers(e[0]), e[0] > 0 ? pourcent(e[1]) : 'n.c.'] : ['n.c.', 'n.c.'];
+    if (!e) return [NON_COMMUNIQUE, NON_COMMUNIQUE];
+    // « ≥ » : total minimal, une valeur de bassin est masquée. Zéro publié et valeur masquée : on ne sait pas.
+    const projets = e[2] ? (e[0] > 0 ? `≥ ${espaceMilliers(e[0])}` : NON_COMMUNIQUE) : espaceMilliers(e[0]);
+    const part = partAffichee(e);
+    return [projets, part === null ? NON_COMMUNIQUE : `${part} %`];
   };
-  const avecPart = codes.filter((c) => typeof table[c]?.AS?.[1] === 'number' && (table[c]?.AS?.[0] ?? 0) > 0);
-  // Sur la valeur arrondie, celle que le tableau affiche : la phrase et le tableau ne peuvent pas se contredire.
-  const tendus = avecPart.filter((c) => Math.round(table[c]!.AS![1] as number) >= 80);
-  const classement = avecPart
-    .filter((c) => (table[c]!.AS![0]) >= SEUIL_CLASSEMENT_BMO)
-    .sort((a, b) => (table[b]!.AS![1] as number) - (table[a]!.AS![1] as number))
+  const partAs = (c: string) => partAffichee(table[c]?.AS);
+  const calculables = codes.filter((c) => partAs(c) !== null);
+  const tendus = calculables.filter((c) => (partAs(c) as number) >= SEUIL_PART_DIFFICILE);
+  const classement = calculables
+    .filter((c) => table[c]!.AS![0] >= SEUIL_CLASSEMENT_BMO)
+    .sort((a, b) => (partAs(b) as number) - (partAs(a) as number) || table[b]!.AS![0] - table[a]!.AS![0])
     .slice(0, 5);
   const plusEhpad = [...codes].sort((a, b) => ehpad(b) - ehpad(a)).slice(0, 3);
+  const totalEhpad = codes.reduce((somme, c) => somme + ehpad(c), 0);
+  const [as, ide, medecin] = METIERS_BAROMETRE.map((m) => totalBmo(m.metier, table));
   return {
     type: 'barometre', path: CHEMIN_BAROMETRE,
     title: 'Recrutement de soignants : baromètre 2026 par département',
-    description: 'Projets de recrutement d’aides-soignants, d’infirmiers et de médecins déclarés pour 2026, part jugée difficile et nombre d’EHPAD, département par département.',
+    description: 'Projets de recrutement d’aides-soignants, d’infirmiers et sages-femmes et de médecins déclarés pour 2026, part jugée difficile et nombre d’EHPAD, par département.',
     h1: 'Baromètre 2026 du recrutement de soignants, département par département',
     intro: [
       'Où les employeurs prévoient-ils de recruter des soignants en 2026, et où disent-ils avoir le plus de mal à y parvenir ? Ce baromètre réunit, pour chaque département, les intentions d’embauche déclarées à France Travail et le nombre d’EHPAD recensés.',
-      'Jolene n’a produit aucun de ces chiffres : ils viennent de deux sources publiques, citées en bas de page.',
+      'Les chiffres viennent de deux sources publiques, citées en bas de page. Jolene les a seulement additionnés par département, selon la méthode décrite sous le tableau.',
     ],
     sections: [
       {
         titre: 'Les chiffres clés',
         liste: [
-          `${espaceMilliers(totalBmo('AS', table))} projets de recrutement d’aides-soignants déclarés pour 2026 dans les ${codes.length} départements du tableau, ${espaceMilliers(totalBmo('IDE', table))} pour les infirmiers et sages-femmes et ${espaceMilliers(totalBmo('MEDECIN', table))} pour les médecins.`,
-          `Dans ${tendus.length} départements sur ${avecPart.length}, au moins 80 % des projets de recrutement d’aides-soignants sont jugés difficiles par les employeurs.`,
-          `Parmi les départements qui comptent au moins ${SEUIL_CLASSEMENT_BMO} projets, ceux où le recrutement d’aides-soignants est jugé le plus difficile : ${enumerer(classement.map((c) => `${nomDepartement(c)}, ${pourcent(table[c]!.AS![1])}`))}.`,
-          `Le répertoire FINESS recense ${espaceMilliers(finess.national[iEhpad])} EHPAD en France ; les départements qui en comptent le plus sont ${enumerer(plusEhpad.map((c) => `${nomDepartement(c)}, ${espaceMilliers(ehpad(c))}`))}.`,
+          `Dans les ${codes.length} départements du tableau, les employeurs déclarent ${totalEnToutesLettres(as)} projets de recrutement d’aides-soignants pour 2026, ${totalEnToutesLettres(ide)} pour les infirmiers et sages-femmes et ${totalEnToutesLettres(medecin)} pour les médecins.`,
+          `Dans ${tendus.length} des ${calculables.length} départements où cette part peut être calculée, au moins ${SEUIL_PART_DIFFICILE} % des projets de recrutement d’aides-soignants sont jugés difficiles par les employeurs.`,
+          `Parmi ces départements, ceux qui comptent au moins ${SEUIL_CLASSEMENT_BMO} projets et où le recrutement d’aides-soignants est jugé le plus difficile : ${enumerer(classement.map((c) => `${nomDepartement(c)}, ${partAs(c)} %`))}.`,
+          `Le répertoire FINESS recense ${espaceMilliers(totalEhpad)} EHPAD dans ces ${codes.length} départements ; ceux qui en comptent le plus sont ${enumerer(plusEhpad.map((c) => `${nomDepartement(c)}, ${espaceMilliers(ehpad(c))}`))}.`,
         ],
       },
       {
         titre: 'Le tableau par département',
         tableau: {
           legende: 'Projets de recrutement déclarés pour 2026 et part jugée difficile, par département, et nombre d’EHPAD',
-          entetes: ['Département', 'Aides-soignants : projets', 'Part difficile', 'Infirmiers et sages-femmes : projets', 'Part difficile', 'Médecins : projets', 'Part difficile', 'EHPAD'],
-          lignes: codes.map((c) => [nomDepartement(c), ...cellules(c, 'AS'), ...cellules(c, 'IDE'), ...cellules(c, 'MEDECIN'), espaceMilliers(ehpad(c))]),
+          entetes: ['Département', ...METIERS_BAROMETRE.flatMap((m) => [`${m.nom} : projets`, `${m.nom} : part difficile`]), 'EHPAD'],
+          lignes: codes.map((c) => [nomDepartement(c), ...METIERS_BAROMETRE.flatMap((m) => cellules(c, m.metier)), espaceMilliers(ehpad(c))]),
         },
       },
       {
         titre: 'Comment lire ces chiffres',
         paragraphes: [
           'L’enquête Besoins en main-d’œuvre (BMO) de France Travail interroge chaque année les employeurs sur leurs intentions d’embauche pour l’année à venir. Un projet de recrutement est une intention déclarée, pas une embauche réalisée. Il est dit difficile quand l’employeur s’attend à avoir du mal à le pourvoir.',
-          'L’enquête publie les infirmiers et les sages-femmes dans une seule catégorie : le tableau ne peut pas les distinguer. La mention « n.c. » signale une part non communiquée.',
+          'L’enquête est publiée par bassin d’emploi. Pour chaque département, Jolene a additionné les projets publiés de ses bassins. Le fichier remplace certaines valeurs par un astérisque : dans ce cas, le total du département est un minimum, noté « ≥ », et la part difficile n’est pas calculée, notée « n.c. ». Une part n’est donnée que lorsque toutes les valeurs du département sont publiées.',
+          'L’enquête range les infirmiers et les sages-femmes dans une seule catégorie : le tableau ne peut pas les distinguer.',
           `Le nombre d’EHPAD est celui des établissements d’hébergement pour personnes âgées dépendantes inscrits au répertoire FINESS (extraction du ${dateLongue(finess.extractionDu)}).`,
         ],
         sources: SOURCES_LOCALES,
@@ -727,7 +766,7 @@ export function metaBarometre(table: TableBmo = BMO_2026, finess: DonneesFiness 
       {
         titre: 'Ce que ces chiffres changent pour vous',
         paragraphes: [
-          'Vous dirigez un établissement : dans un département où plus de huit projets sur dix sont jugés difficiles, un remplacement ne se trouve pas la veille. Anticipez les absences prévisibles et ne comptez pas sur un seul canal.',
+          'Vous dirigez un établissement : là où la plupart des projets sont jugés difficiles, mieux vaut anticiper les absences prévisibles et ne pas compter sur un seul canal de remplacement.',
           'Vous êtes soignant : ces chiffres indiquent où les employeurs disent avoir le plus de mal à recruter. Ils ne garantissent ni un volume de missions ni un niveau de rémunération.',
         ],
       },
@@ -736,7 +775,7 @@ export function metaBarometre(table: TableBmo = BMO_2026, finess: DonneesFiness 
       '@context': 'https://schema.org',
       '@type': 'Dataset',
       name: 'Baromètre 2026 du recrutement de soignants par département',
-      description: 'Projets de recrutement d’aides-soignants, d’infirmiers et sages-femmes et de médecins déclarés pour 2026 (enquête BMO, France Travail), part jugée difficile et nombre d’EHPAD (répertoire FINESS), par département.',
+      description: 'Projets de recrutement d’aides-soignants, d’infirmiers et sages-femmes et de médecins déclarés pour 2026 (enquête BMO de France Travail, publiée par bassin d’emploi et additionnée par département), part jugée difficile lorsqu’elle est calculable, et nombre d’EHPAD (répertoire FINESS).',
       url: urlAbsolue(CHEMIN_BAROMETRE),
       inLanguage: 'fr-FR',
       temporalCoverage: '2026',
@@ -750,8 +789,7 @@ export function metaBarometre(table: TableBmo = BMO_2026, finess: DonneesFiness 
       { href: CHEMIN_GUIDES, label: 'Guides du remplacement en santé' },
       ...VILLES_VILLE_METIER.slice(0, 12).map((v) => ({ href: cheminVille(v.slug), label: `Missions soignants ${aVille(v)}` })),
     ],
-    indexable: true, priorite: '0.7', frequence: 'yearly',
-    lastmod: finess.fichierPublieLe > '2026-11-20' ? finess.fichierPublieLe : '2026-11-20',
+    indexable: true, priorite: '0.7', frequence: 'yearly', lastmod: DATE_BAROMETRE,
   };
 }
 

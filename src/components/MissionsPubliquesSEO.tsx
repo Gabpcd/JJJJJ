@@ -35,7 +35,7 @@ export function MissionsPubliquesSEO({ profession, ville, campagne, utm }: Props
         <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
           {!loading && !erreur && missions && missions.length > 0
             ? `${total} mission${total > 1 ? 's' : ''} disponible${total > 1 ? 's' : ''} en ce moment`
-            : 'Découvrez les missions disponibles'}
+            : aucune ? 'Aucune mission publiée ici pour le moment' : 'Missions publiées par les établissements'}
         </h2>
         {loading && <p role="status" className="text-muted-foreground mt-4">Recherche des missions…</p>}
         {erreur && (
@@ -47,7 +47,7 @@ export function MissionsPubliquesSEO({ profession, ville, campagne, utm }: Props
         )}
         {aucune && (
           <p className="mt-4 text-muted-foreground">
-            Aucune mission ne correspond à ces critères pour le moment. Créez votre compte pour retrouver cette recherche et postuler dès qu’un établissement publie une mission.
+            Créez votre compte pour retrouver cette recherche et postuler dès qu’un établissement publie une mission.
           </p>
         )}
         {!!missions?.length && <>
