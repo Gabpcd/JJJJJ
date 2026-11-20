@@ -8,7 +8,7 @@
  */
 import type { QuestionSEO } from './types';
 
-/** H1 de l'accueil. PageAccueil compose le même texte en deux morceaux (dégradé sur la fin). */
+/** H1 de l'accueil. PageAccueil le coupe à la virgule pour mettre la fin en dégradé : garder une seule virgule. */
 export const TITRE_ACCUEIL = 'Le remplacement santé, enfin simple.';
 
 export const ACCROCHE_ACCUEIL = 'Établissements et soignants connectés en direct. Contrat signé en ligne, pointage GPS, paiement suivi — zéro paperasse.';

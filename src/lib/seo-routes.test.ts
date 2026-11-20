@@ -26,6 +26,8 @@ import {
   type TableBmo,
 } from './seo-routes';
 import { genererPagesStatiques, genererHtml, entreesSitemapConservees, scriptJsonLd, squeletteApplication } from '../../scripts/seo/generer-pages-statiques.mjs';
+import { cibleStatique, ecrireSquelette, estRequeteDePage, pagesStatiquesJolene } from '../../scripts/seo/vite-pages-statiques.mjs';
+import { TITRE_ACCUEIL } from './seo-contenu/accueil';
 
 const RACINE_DEPOT = path.resolve(__dirname, '../..');
 
@@ -311,9 +313,34 @@ describe('HTML statique et sitemap', () => {
   });
 
   it('vercel.json sert ce shell, et non l\'accueil, aux routes sans fichier statique', () => {
-    const vercel = JSON.parse(readFileSync(path.join(RACINE_DEPOT, 'vercel.json'), 'utf8')) as { rewrites: { source: string; destination: string }[] };
+    const vercel = JSON.parse(readFileSync(path.join(RACINE_DEPOT, 'vercel.json'), 'utf8')) as { rewrites: { source: string; destination: string }[]; buildCommand?: string };
     expect(vercel.rewrites).toHaveLength(1);
     expect(vercel.rewrites[0].destination).toBe('/app.html');
+    // Aucune commande de build propre à Vercel : c'est le script `build` du dépôt qui tourne.
+    expect(vercel.buildCommand).toBeUndefined();
+  });
+
+  it('le shell est écrit par le build Vite lui-même, pas seulement par le générateur', () => {
+    // Si app.html manquait, toutes les routes de l'application répondraient 404 sur Vercel.
+    expect(readFileSync(path.join(RACINE_DEPOT, 'vite.config.ts'), 'utf8')).toMatch(/pagesStatiquesJolene\(\{ dist: path\.resolve\(__dirname, 'dist'\) \}\)/);
+    const scripts = JSON.parse(readFileSync(path.join(RACINE_DEPOT, 'package.json'), 'utf8')).scripts as Record<string, string>;
+    expect(scripts.build).toBe('vite build && node scripts/seo/generer-pages-statiques.mjs');
+  });
+
+  it('est rejouable : un second passage repart du shell, pas de l\'accueil déjà prérendu', async () => {
+    const avant = await readFile(path.join(dist, 'tarifs', 'index.html'), 'utf8');
+    const second = await genererPagesStatiques({ racine: RACINE_DEPOT, dist, date: '2026-11-09', sitemapSource: path.join(racine, 'sitemap-source.xml') });
+    expect(second.pages).toBe(resultat.pages);
+    const apres = await readFile(path.join(dist, 'tarifs', 'index.html'), 'utf8');
+    expect(apres).toBe(avant);
+    expect(apres.match(/data-prerender="seo"/g)).toHaveLength(1);
+    expect(apres.match(/<h1>/g)).toHaveLength(1);
+    expect(await readFile(path.join(dist, 'app.html'), 'utf8')).toContain('<div id="root"></div>');
+  });
+
+  it('/tarifs : le prix figure dans le corps statique, sous l\'intitulé affiché par la page', async () => {
+    const html = await readFile(path.join(dist, 'tarifs', 'index.html'), 'utf8');
+    expect(html).toContain('<h2>Commission Jolene</h2><p>15 % HT</p><p>soit 18 % TTC avec TVA à 20 %</p><ul>');
   });
 
   it('remplace dist/index.html par l\'accueil : H1, canonical, FAQ et données structurées', async () => {
@@ -394,5 +421,94 @@ describe('HTML statique et sitemap', () => {
   it('entreesSitemapConservees ignore les routes générées', () => {
     const gardees = entreesSitemapConservees(SITEMAP_SOURCE, new Set(['/devenir-soignant']), 'https://jolene.app');
     expect(gardees).toHaveLength(2);
+  });
+});
+
+describe('plugin Vite des pages statiques (scripts/seo/vite-pages-statiques.mjs)', () => {
+  let dist: string;
+  beforeAll(async () => {
+    dist = await mkdtemp(path.join(tmpdir(), 'jolene-vite-seo-'));
+    await writeFile(path.join(dist, 'index.html'), SHELL);
+    await mkdir(path.join(dist, 'tarifs'), { recursive: true });
+    await writeFile(path.join(dist, 'tarifs', 'index.html'), '<html></html>');
+    await mkdir(path.join(dist, 'assets'), { recursive: true });
+    await writeFile(path.join(dist, 'assets', 'index-abc.js'), '');
+    await mkdir(path.join(dist, 'metier'), { recursive: true }); // dossier sans index.html
+  });
+  afterAll(async () => { await rm(dist, { recursive: true, force: true }); });
+
+  const plugin = (options: { natif?: boolean } = {}) => pagesStatiquesJolene({ dist, ...options }) as unknown as {
+    configResolved: (c: { command: string }) => void; closeBundle: () => void;
+    configurePreviewServer: (s: { middlewares: { use: (f: (req: { method: string; url: string; headers: Record<string, string> }, res: unknown, next: () => void) => void) => void } }) => void;
+  };
+
+  it('n\'écrit app.html qu\'après un build web', async () => {
+    const lire = () => readFile(path.join(dist, 'app.html'), 'utf8');
+    const dev = plugin(); dev.configResolved({ command: 'serve' }); dev.closeBundle();
+    await expect(lire()).rejects.toThrow();
+    const natif = plugin({ natif: true }); natif.configResolved({ command: 'build' }); natif.closeBundle();
+    await expect(lire()).rejects.toThrow();
+    const web = plugin(); web.configResolved({ command: 'build' }); web.closeBundle();
+    expect(await lire()).toBe(squeletteApplication(SHELL));
+    expect(await lire()).not.toMatch(/rel="canonical"/);
+  });
+
+  it('refuse d\'écrire le shell à partir d\'une page déjà prérendue', async () => {
+    const autre = await mkdtemp(path.join(tmpdir(), 'jolene-vite-seo-'));
+    await writeFile(path.join(autre, 'index.html'), SHELL.replace('<div id="root"></div>', '<div id="root"><main>accueil</main></div>'));
+    expect(() => ecrireSquelette(autre)).toThrow(/root/);
+    await rm(autre, { recursive: true, force: true });
+  });
+
+  it('sert, comme Vercel, le fichier, la page statique de la route ou le shell', () => {
+    expect(cibleStatique(dist, '/assets/index-abc.js')).toBeNull();
+    expect(cibleStatique(dist, '/')).toBe('/index.html');
+    expect(cibleStatique(dist, '/tarifs')).toBe('/tarifs/index.html');
+    expect(cibleStatique(dist, '/tarifs/?utm_source=x')).toBe('/tarifs/index.html');
+    expect(cibleStatique(dist, '/connexion')).toBe('/app.html');
+    expect(cibleStatique(dist, '/metier')).toBe('/app.html');
+    expect(cibleStatique(dist, '/assets/absent.js')).toBe('/app.html');
+    // Jamais hors de dist, jamais d'exception sur une URL mal formée.
+    expect(cibleStatique(dist, '/../../etc/passwd')).toBe('/app.html');
+    expect(cibleStatique(dist, '/..%2f..%2fetc/passwd')).toBe('/app.html');
+    expect(cibleStatique(dist, '/%E0%A4%A')).toBe('/app.html');
+    expect(cibleStatique(dist, '/a%00b')).toBe('/app.html');
+    expect(cibleStatique(dist, undefined)).toBe('/index.html');
+  });
+
+  it('applique la condition du repli SPA de Vite (GET ou HEAD, type HTML, générique ou absent)', () => {
+    expect(estRequeteDePage('GET', 'text/html,application/xhtml+xml')).toBe(true);
+    expect(estRequeteDePage('HEAD', '*/*')).toBe(true);
+    expect(estRequeteDePage('GET', undefined)).toBe(true);
+    expect(estRequeteDePage('GET', '')).toBe(true);
+    expect(estRequeteDePage('GET', 'application/json')).toBe(false);
+    expect(estRequeteDePage('POST', 'text/html')).toBe(false);
+  });
+
+  it('en preview, réécrit l\'URL des navigations et laisse passer le reste', () => {
+    const p = plugin();
+    let intergiciel: Parameters<Parameters<ReturnType<typeof plugin>['configurePreviewServer']>[0]['middlewares']['use']>[0] | undefined;
+    p.configurePreviewServer({ middlewares: { use: (f) => { intergiciel = f; } } });
+    const passer = (method: string, url: string, accept?: string) => {
+      const req = { method, url, headers: accept === undefined ? {} : { accept } };
+      let suite = false;
+      intergiciel!(req, {}, () => { suite = true; });
+      expect(suite).toBe(true);
+      return req.url;
+    };
+    expect(passer('GET', '/connexion', 'text/html')).toBe('/app.html');
+    expect(passer('GET', '/connexion')).toBe('/app.html'); // curl sans en-tête : même réponse que Vercel
+    expect(passer('GET', '/tarifs', 'text/html')).toBe('/tarifs/index.html');
+    expect(passer('GET', '/assets/index-abc.js', '*/*')).toBe('/assets/index-abc.js');
+    expect(passer('GET', '/rest/v1/missions', 'application/json')).toBe('/rest/v1/missions');
+    expect(passer('POST', '/connexion', 'text/html')).toBe('/connexion');
+  });
+});
+
+describe('titre de l\'accueil', () => {
+  it('se coupe en deux à sa seule virgule (PageAccueil met la fin en dégradé)', () => {
+    expect(TITRE_ACCUEIL.split(', ')).toEqual(['Le remplacement santé', 'enfin simple.']);
+    expect(metaAccueil().h1).toBe(TITRE_ACCUEIL);
+    expect(readFileSync(path.join(RACINE_DEPOT, 'src/pages/PageAccueil.tsx'), 'utf8')).toContain("const [TITRE_DEBUT, TITRE_FIN] = TITRE_ACCUEIL.split(', ');");
   });
 });

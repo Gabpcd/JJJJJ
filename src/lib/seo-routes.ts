@@ -27,7 +27,7 @@ import bmoBrut from './seo-bmo-2026.json';
 import { ACCROCHE_ACCUEIL, ATOUTS_ETABLISSEMENTS, ATOUTS_SOIGNANTS, ETAPES_ACCUEIL, FAQ_ACCUEIL, TITRE_ACCUEIL } from './seo-contenu/accueil';
 import { FAQ_DEVENIR_SOIGNANT } from './seo-contenu/devenir-soignant';
 import { FAQ_RECRUTER_SOIGNANTS } from './seo-contenu/recruter-soignants';
-import { INCLUS_TARIFS } from './seo-contenu/tarifs';
+import { INCLUS_TARIFS, TAUX_HT, TAUX_TTC, TITRE_COMMISSION } from './seo-contenu/tarifs';
 import type { QuestionSEO, SectionSEO } from './seo-contenu/types';
 
 export const SITE_URL = 'https://jolene.app';
@@ -259,7 +259,7 @@ const PAGES_INSTITUTIONNELLES: Record<CleInstitutionnelle, Omit<PageSEO, 'type' 
       'Une commission unique sur la base financière validée de la mission. Pas d\'abonnement.',
       'Aucun frais pour les soignants, quel que soit le contrat.',
     ],
-    sections: [{ titre: 'Ce que la commission comprend', liste: INCLUS_TARIFS }],
+    sections: [{ titre: TITRE_COMMISSION, paragraphes: [TAUX_HT, TAUX_TTC], liste: INCLUS_TARIFS }],
     liens: [{ href: '/inscription/etablissement', label: 'S’inscrire gratuitement' }, { href: '/recruter-soignants', label: 'Recruter des soignants' }, { href: '/contact', label: 'Nous contacter' }],
     priorite: '0.8',
   },

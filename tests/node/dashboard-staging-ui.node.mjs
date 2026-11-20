@@ -4,7 +4,10 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { configurationUI, contratEcritures, ORIGINE_UI, projectionEtatUI, requeteUIAutorisee, sqlEtatUI, sqlGardeUI, verifierEtatUI, verifierGardeUI } from '../../scripts/ci/dashboard-ui-contract.mjs';
 import { creerDiagnosticUI, bilanCleanupUI } from '../../scripts/ci/dashboard-ui-diagnostic.mjs';
-import { dashboardUIValide, preparerHtmlPreview, creerCoupuresDashboard } from '../../scripts/ci/recette-dashboard-staging.mjs';
+import { dashboardUIValide, preparerHtmlPreview, preparerDistPreview, HTML_PREVIEW, creerCoupuresDashboard } from '../../scripts/ci/recette-dashboard-staging.mjs';
+import { mkdtempSync, rmSync, writeFileSync as ecrireFichier } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { manifestePoolDashboard } from '../../scripts/ci/prepare-dashboard-pool.mjs';
 import { STAGING_REF, STAGING_URL } from '../../scripts/ci/prepare-load-fixtures.mjs';
 const membres = manifestePoolDashboard('ui-123-1').membres.map(m => ({ slot:m.slot,userId:m.userId,email:m.email,runId:m.runId,password:`Aa1!canari-UI-prive-${m.slot}-aucun-artifact` }));
@@ -22,6 +25,29 @@ const env = { STAGING_SUPABASE_PROJECT_REF:STAGING_REF, STAGING_SUPABASE_URL:STA
 const avant = [0,1].map(slot => ({ slot,auth:1,profils:1,preferences:1,preferences_off:1,sessions:1,identites:1,
   profil_empreinte:'a'.repeat(32),activite:null,notifications:0,presences:0,audits:0,audits_connexion:0 }));
 const apres = avant.map(r => ({ ...r,sessions:2,activite:'2026-09-30T10:00:00Z',audits:1,audits_connexion:1 }));
+
+test('le build de recette nettoie l’accueil ET le shell des routes de l’application', () => {
+  // vite preview sert dist/app.html sur /connexion et les espaces connectés : s'il gardait Google Fonts
+  // et les preconnect, la recette échouerait sur une requête refusée par requeteUIAutorisee.
+  assert.deepEqual(HTML_PREVIEW,['index.html','app.html']);
+  const dist=mkdtempSync(join(tmpdir(),'jolene-recette-dist-'));
+  try {
+    const html=readFileSync(new URL('../../index.html',import.meta.url),'utf8');
+    for(const nom of HTML_PREVIEW) ecrireFichier(join(dist,nom),html);
+    ecrireFichier(join(dist,'autre.html'),html);
+    preparerDistPreview(dist);
+    for(const nom of HTML_PREVIEW) {
+      const recette=readFileSync(join(dist,nom),'utf8');
+      assert.doesNotMatch(recette,/<link\b[^>]*(?:fonts\.googleapis\.com|preconnect|dns-prefetch)[^>]*>/i,nom);
+      assert.ok(recette.includes('<div id="root"></div>'),nom);
+    }
+    assert.equal(readFileSync(join(dist,'autre.html'),'utf8'),html);
+  } finally { rmSync(dist,{recursive:true,force:true}); }
+  // Build natif ou ancien dist sans app.html : aucune erreur.
+  const seul=mkdtempSync(join(tmpdir(),'jolene-recette-dist-'));
+  try { ecrireFichier(join(seul,'index.html'),'<link rel="preconnect" href="https://x.invalid"><p>ok</p>'); preparerDistPreview(seul); assert.equal(readFileSync(join(seul,'index.html'),'utf8'),'<p>ok</p>'); }
+  finally { rmSync(seul,{recursive:true,force:true}); }
+});
 
 test('HTML de recette retire Google Fonts, conserve assets et erreurs externes sans élargir le routage', () => {
   const html=readFileSync(new URL('../../index.html',import.meta.url),'utf8');

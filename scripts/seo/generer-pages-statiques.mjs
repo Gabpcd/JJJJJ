@@ -3,11 +3,12 @@
  * Prérendu léger des pages SEO (sans navigateur headless), exécuté après `vite build`.
  *
  *  - lit dist/index.html (shell SPA produit par Vite) ;
- *  - écrit dist/app.html : le même shell SANS canonical ni og:url. C'est lui que
- *    vercel.json sert pour toute route sans fichier statique (espaces connectés,
- *    pages légales, /mission/:id, URL inconnues). Avant, ces routes recevaient le
- *    shell de l'accueil et déclaraient donc `canonical = https://jolene.app/` dans
- *    leur HTML brut ;
+ *  - relit dist/app.html : le shell SANS canonical ni og:url que le build Vite écrit
+ *    (plugin `scripts/seo/vite-pages-statiques.mjs`) et que vercel.json sert pour toute
+ *    route sans fichier statique (espaces connectés, pages légales, /mission/:id, URL
+ *    inconnues). Avant, ces routes recevaient le shell de l'accueil et déclaraient donc
+ *    `canonical = https://jolene.app/` dans leur HTML brut. S'il manque (dist produit sans
+ *    le plugin), il est dérivé de dist/index.html ;
  *  - écrit dist/<route>/index.html pour chaque route SEO (l'accueil remplace
  *    dist/index.html), avec <title>, meta description, canonical, og:/twitter: et
  *    données structurées dans le <head>, et un contenu HTML sémantique (H1, intro,
@@ -30,6 +31,9 @@ import { mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { FICHIER_SQUELETTE, squeletteApplication } from './vite-pages-statiques.mjs';
+
+export { squeletteApplication };
 
 const RACINE_DEFAUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -113,20 +117,6 @@ export function contenuRacine(page) {
   return `<main data-prerender="seo"><h1>${echapper(page.h1)}</h1>${paragraphesHtml(page.intro)}${sections}${faq}${liens ? `<nav aria-label="Pages liées"><ul>${liens}</ul></nav>` : ''}</main>`;
 }
 
-/**
- * Shell des routes sans page statique (application connectée, pages légales, /mission/:id,
- * URL inconnues) : celui de Vite, sans le canonical ni l'og:url de l'accueil. La page
- * rendue pose les siens (SEOHead) ; mieux vaut aucun canonical qu'un canonical faux.
- */
-export function squeletteApplication(shell) {
-  if (!/<div id="root"><\/div>/.test(shell)) {
-    throw new Error('dist/index.html : <div id="root"></div> introuvable (shell modifié ?)');
-  }
-  return shell
-    .replace(/[ \t]*<link\s+rel="canonical"[^>]*>\s*\n?/gi, '')
-    .replace(/[ \t]*<meta\s+property="og:url"[^>]*>\s*\n?/gi, '');
-}
-
 export function genererHtml(shell, page, siteUrl, jsonLd = []) {
   if (!/<div id="root"><\/div>/.test(shell)) {
     throw new Error('dist/index.html : <div id="root"></div> introuvable (shell modifié ?)');
@@ -202,9 +192,16 @@ export async function genererPagesStatiques({ racine = RACINE_DEFAUT, dist = pat
   const siteUrl = routes.SITE_URL;
   const pages = routes.toutesLesRoutesSeo();
 
-  // Le shell est lu AVANT toute écriture : la page d'accueil remplace dist/index.html.
-  const shell = await readFile(path.join(dist, 'index.html'), 'utf8');
-  await writeFile(path.join(dist, 'app.html'), squeletteApplication(shell));
+  // Shell = dist/app.html (écrit par le build Vite). La page d'accueil remplace dist/index.html :
+  // partir d'app.html rend le générateur rejouable sur un dist déjà traité.
+  const cheminSquelette = path.join(dist, FICHIER_SQUELETTE);
+  let shell;
+  try {
+    shell = await readFile(cheminSquelette, 'utf8');
+  } catch {
+    shell = squeletteApplication(await readFile(path.join(dist, 'index.html'), 'utf8'));
+    await writeFile(cheminSquelette, shell);
+  }
   const canonicals = new Set();
   for (const page of pages) {
     const canonical = `${siteUrl}${page.path}`;
@@ -232,7 +229,8 @@ export async function genererPagesStatiques({ racine = RACINE_DEFAUT, dist = pat
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.env.VITE_NATIVE_BUILD === 'true') {
     // Le bundle Capacitor n'est pas indexé : inutile d'embarquer ~300 pages statiques dans l'app.
-    // dist/index.html y reste le shell de Vite (pas de app.html : aucune réécriture Vercel en natif).
+    // dist/index.html y reste le shell de Vite (pas de app.html : aucune réécriture Vercel en natif,
+    // le plugin `pagesStatiquesJolene` ne l'écrit pas non plus pour ce build).
     console.log('[seo] build natif (VITE_NATIVE_BUILD=true) : pages statiques ignorées');
     process.exit(0);
   }

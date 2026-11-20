@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { render, screen, cleanup } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import NotFound from './NotFound';
 import Tarifs from './Tarifs';
@@ -32,6 +32,30 @@ describe('page introuvable', () => {
     expect(screen.getByRole('heading', { level: 1, name: '404' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Retour à l'accueil/ })).toHaveAttribute('href', '/');
   });
+
+  it('reste en noindex d\'une URL inconnue à une autre, sans rechargement', () => {
+    // Même mécanique que RouteMeta (src/App.tsx) : à chaque changement de chemin, robots repasse à « index, follow ».
+    function RemiseAZero() {
+      const { pathname } = useLocation();
+      useEffect(() => {
+        let meta = document.querySelector('meta[name="robots"]');
+        if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'robots'); document.head.appendChild(meta); }
+        meta.setAttribute('content', 'index, follow');
+      }, [pathname]);
+      return null;
+    }
+    render(
+      <MemoryRouter initialEntries={['/inconnue-1']}>
+        <RemiseAZero />
+        <Link to="/inconnue-2">suivante</Link>
+        <Routes><Route path="*" element={<NotFound />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(robots()).toBe('noindex, nofollow');
+    fireEvent.click(screen.getByRole('link', { name: 'suivante' }));
+    expect(robots()).toBe('noindex, nofollow');
+    expect(canonical()).toBe('https://jolene.app/inconnue-2');
+  });
 });
 
 describe('pages publiques : la page rendue et le HTML statique disent la même chose', () => {
@@ -43,7 +67,10 @@ describe('pages publiques : la page rendue et le HTML statique disent la même c
     expect(robots()).toBe('index, follow');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(meta.h1);
     for (const texte of meta.intro) expect(screen.getByText(texte)).toBeInTheDocument();
-    for (const ligne of meta.sections![0].liste!) expect(screen.getByText(ligne)).toBeInTheDocument();
+    // Carte de prix : intitulé, taux HT, taux TTC et lignes « inclus » du HTML statique, tous affichés.
+    expect(meta.sections![0].titre).toBe('Commission Jolene');
+    expect(meta.sections![0].paragraphes).toEqual(['15 % HT', 'soit 18 % TTC avec TVA à 20 %']);
+    for (const texte of [meta.sections![0].titre, ...meta.sections![0].paragraphes!, ...meta.sections![0].liste!]) expect(screen.getByText(texte)).toBeInTheDocument();
     expect(donneesStructurees()).toEqual(JSON.parse(JSON.stringify(jsonLdPage(meta))));
   });
 

@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check } from 'lucide-react';
 import { SEOHead } from '@/components/SEOHead';
-import { INCLUS_TARIFS } from '@/lib/seo-contenu/tarifs';
+import { INCLUS_TARIFS, TAUX_HT, TAUX_TTC, TITRE_COMMISSION } from '@/lib/seo-contenu/tarifs';
 import { jsonLdPage, metaInstitutionnelle, urlAbsolue } from '@/lib/seo-routes';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
@@ -37,9 +37,9 @@ export default function Tarifs() {
           </div>
 
           <div className="card-base text-center p-8 md:p-10">
-            <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-2">Commission Jolene</p>
-            <p className="text-6xl font-black text-primary mb-1">15 % HT</p>
-            <p className="text-base font-semibold text-foreground mb-2">soit 18 % TTC avec TVA à 20 %</p>
+            <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-2">{TITRE_COMMISSION}</p>
+            <p className="text-6xl font-black text-primary mb-1">{TAUX_HT}</p>
+            <p className="text-base font-semibold text-foreground mb-2">{TAUX_TTC}</p>
             <p className="text-sm text-muted-foreground mb-8">
               Commission ajoutée aux honoraires HT d'une mission libérale ou à la rémunération brute contractuelle d'une mission salariée, et facturée à l'établissement ; elle ne réduit ni les honoraires ni la base salariale du soignant.
               <br />Taux HT négocié possible pour les groupes — <a href="mailto:support@jolene.app" className="text-primary underline">contactez-nous</a>.

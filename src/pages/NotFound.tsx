@@ -1,13 +1,16 @@
 import { SEOHead } from '@/components/SEOHead';
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Home } from "lucide-react";
 import { LogoJolene } from '@/components/LogoJolene';
 
 const NotFound = () => {
+  // `url` change avec le chemin : l'effet de SEOHead se rejoue à chaque URL inconnue, après celui de
+  // RouteMeta (qui remet « index, follow »), même quand ce composant n'est pas remonté.
+  const { pathname } = useLocation();
   return (
     <>
     {/* URL inconnue : jamais indexable (RouteMeta poserait « index, follow » par défaut). */}
-    <SEOHead title="Page introuvable — Jolene" description="Cette page n'existe pas ou a été déplacée." noIndex />
+    <SEOHead title="Page introuvable — Jolene" description="Cette page n'existe pas ou a été déplacée." url={`https://jolene.app${pathname}`} noIndex />
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
       <div className="text-center max-w-md">
         <LogoJolene

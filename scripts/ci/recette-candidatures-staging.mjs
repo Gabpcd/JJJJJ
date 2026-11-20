@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { demarrerPreview } from './dashboard-ui-preview.mjs';
-import { preparerHtmlPreview } from './recette-dashboard-staging.mjs';
+import { preparerDistPreview } from './recette-dashboard-staging.mjs';
 import { executerD } from './prepare-candidatures-fixture.mjs';
 import { utilisateurDValide, validerEtatD } from './candidatures-fixture-contract.mjs';
 import { sqlCompterD } from './candidatures-fixture-sql.mjs';
@@ -232,7 +232,7 @@ export async function installerReseauD(context,a,m,diagnostic,{budget=budgetEcri
   });
   return {budget,candidatures,fermer(){ferme=true;},async drainer(){while(enCours.size)await Promise.allSettled([...enCours]);},enCours:()=>enCours.size};
 }
-export async function parcourirFrontendD({m,identites,env,diagnostic,chargerPlaywright=()=>import('@playwright/test'),previewFn=demarrerPreview,lireAssets=()=>new Set(readdirSync(resolve('dist/assets'),{withFileTypes:true}).filter(f=>f.isFile()&&/^[A-Za-z0-9_-]+\.js$/.test(f.name)).map(f=>`/assets/${f.name}`)),preparerBuild=()=>{const index=resolve('dist/index.html');writeFileSync(index,preparerHtmlPreview(readFileSync(index,'utf8')));}}={}) {
+export async function parcourirFrontendD({m,identites,env,diagnostic,chargerPlaywright=()=>import('@playwright/test'),previewFn=demarrerPreview,lireAssets=()=>new Set(readdirSync(resolve('dist/assets'),{withFileTypes:true}).filter(f=>f.isFile()&&/^[A-Za-z0-9_-]+\.js$/.test(f.name)).map(f=>`/assets/${f.name}`)),preparerBuild=preparerDistPreview}={}) {
   let browser,preview;const contextes=new Set(),reseaux=new Set(),preuves=[],candidatures=[],concurrence=concurrenceCandidaturesD();
   try {
     diagnostic.phase('preview');diagnostic.action('preview_html');preparerBuild();diagnostic.action('preview_assets');const assetsConnus=lireAssets();

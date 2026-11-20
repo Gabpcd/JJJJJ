@@ -2,8 +2,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import path from "path";
-import fs from "fs";
 import { pdfjsLocalAssets } from './scripts/pdfjs-local-assets.mjs';
+import { pagesStatiquesJolene } from './scripts/seo/vite-pages-statiques.mjs';
 
 // Upload des source maps Sentry. Activé UNIQUEMENT quand le projet Sentry
 // est confirmé créé (env SENTRY_UPLOAD_ENABLED=true) ET que le token est
@@ -45,34 +45,9 @@ export default defineConfig(({ mode }) => ({
       augmentChunkHash: () => 'jolene-native-dynamic-import-v1',
     },
     pdfjsLocalAssets(),
-    {
-      // Mêmes règles que Vercel en production, pour que `vite preview` (Lighthouse CI,
-      // simulations Playwright, recette locale) serve le même HTML :
-      //  - une route qui a sa page statique (dist/<route>/index.html) la reçoit ;
-      //  - une route sans fichier statique reçoit app.html (shell neutre écrit par
-      //    scripts/seo/generer-pages-statiques.mjs), pas dist/index.html qui est
-      //    désormais la page d'accueil prérendue.
-      name: 'jolene-pages-statiques-preview',
-      configurePreviewServer(server: any) {
-        const dist = path.resolve(__dirname, 'dist');
-        if (!fs.existsSync(path.join(dist, 'app.html'))) return; // build sans prérendu (natif, build:dev)
-        server.middlewares.use((req: any, _res: any, next: () => void) => {
-          const accepte = String(req.headers?.accept || '');
-          if (req.method === 'GET' && accepte.includes('text/html')) {
-            let chemin: string | null = null;
-            try { chemin = decodeURIComponent(String(req.url || '/').split('?')[0]); } catch { /* URL mal encodée : shell */ }
-            const cible = chemin === null || chemin.includes('\0') ? null : path.join(dist, chemin);
-            const dansDist = cible !== null && (cible === dist || cible.startsWith(dist + path.sep));
-            const estFichier = dansDist && fs.existsSync(cible!) && fs.statSync(cible!).isFile();
-            if (!estFichier) {
-              const pageStatique = dansDist && fs.existsSync(path.join(cible!, 'index.html'));
-              req.url = pageStatique ? `${chemin!.replace(/\/+$/, '')}/index.html` : '/app.html';
-            }
-          }
-          next();
-        });
-      },
-    },
+    // Écrit dist/app.html (shell des routes sans page statique, cible de vercel.json) et fait
+    // servir par `vite preview` le même HTML que Vercel. Détail : scripts/seo/vite-pages-statiques.mjs.
+    pagesStatiquesJolene({ dist: path.resolve(__dirname, 'dist') }),
     {
       name: 'native-system-fonts',
       transformIndexHtml: (html: string) => process.env.VITE_NATIVE_BUILD === 'true'

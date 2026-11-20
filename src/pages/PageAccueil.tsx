@@ -9,7 +9,7 @@ import { LogoJolene } from '@/components/LogoJolene';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useMissionsPubliques } from '@/hooks/useMissionsPubliques';
 import { lienInscriptionRecherche, memoriserRecherchePublique } from '@/lib/recherchePubliqueInscription';
-import { ACCROCHE_ACCUEIL, ATOUTS_ETABLISSEMENTS, ATOUTS_SOIGNANTS, ETAPES_ACCUEIL, FAQ_ACCUEIL } from '@/lib/seo-contenu/accueil';
+import { ACCROCHE_ACCUEIL, ATOUTS_ETABLISSEMENTS, ATOUTS_SOIGNANTS, ETAPES_ACCUEIL, FAQ_ACCUEIL, TITRE_ACCUEIL } from '@/lib/seo-contenu/accueil';
 import { jsonLdPage, metaAccueil, urlAbsolue } from '@/lib/seo-routes';
 /* ─── Animated counter ─── */
 function CompteurAnime({ cible, suffixe, prefix }: { cible: number; suffixe?: string; prefix?: string }) {
@@ -206,6 +206,8 @@ export function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<t
 
 /** Métadonnées et données structurées de l'accueil : mêmes valeurs que le HTML statique. */
 const meta = metaAccueil();
+/** Le H1 est le titre partagé, coupé à la virgule pour mettre la fin en dégradé. */
+const [TITRE_DEBUT, TITRE_FIN] = TITRE_ACCUEIL.split(', ');
 
 export default function PageAccueil() {
   const navigate = useNavigate();
@@ -264,9 +266,9 @@ export default function PageAccueil() {
             ✨ Missions, contrats, paie : tout-en-un
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold leading-[1.1] tracking-tight mb-6">
-            Le remplacement santé,{' '}
+            {TITRE_DEBUT},{' '}
             <span className="text-gradient-hero">
-              enfin simple.
+              {TITRE_FIN}
             </span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed">
