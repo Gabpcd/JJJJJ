@@ -456,7 +456,8 @@ describe('HTML statique et sitemap', () => {
     expect(html).toContain('<link rel="canonical" href="https://jolene.app/recruter-soignants/ehpad" />');
     expect(html).toContain('<h3>L’absence imprévue</h3>');
     expect(html).toContain('<h2>Les professions recherchées</h2><ul><li><a href="/metier/aide-soignant">Aide-soignant</a></li>');
-    expect(html).toMatch(/<h2>Publier une mission en trois étapes<\/h2><p>[^<]+<\/p><ol><li>[^<]+<\/li><li>[^<]+<\/li><li>[^<]+<\/li><\/ol><ul><li><a href="\/recruter-soignants">Recruter des soignants<\/a><\/li><li><a href="\/tarifs">Tarifs<\/a><\/li><\/ul>/);
+    expect(html).toMatch(/<h2>Publier une mission en trois étapes<\/h2><ol><li>[^<]+<\/li><li>[^<]+<\/li><li>[^<]+<\/li><\/ol><\/section>/);
+    expect(html).toMatch(/<h2>Vérification, contrat, facturation et tarif<\/h2><p>[^<]+<\/p><ul><li><a href="\/recruter-soignants">Recruter des soignants<\/a><\/li><li><a href="\/tarifs">Tarifs<\/a><\/li><\/ul>/);
     expect(html).toContain('<h3>Peut-on publier une mission de nuit ou de week-end en EHPAD ?</h3>');
     expect(html).toContain('"@type":"FAQPage"');
     // Ce qui est commun à tous les établissements n'est pas recopié sur chaque page.

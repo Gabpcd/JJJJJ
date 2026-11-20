@@ -12,7 +12,7 @@ import { MapPin, ArrowRight, Activity } from 'lucide-react';
 const etapes = [
   { num: '1', titre: 'Inscrivez-vous gratuitement', desc: 'Créez votre compte en 2 minutes. Renseignez votre profession et votre zone géographique.' },
   { num: '2', titre: 'Validez votre profil', desc: 'Téléversez votre diplôme, votre RPPS lorsqu’il existe et les pièces requises par le contrat (dont la RCP pour le libéral).' },
-  { num: '3', titre: 'Acceptez vos missions', desc: 'Recevez des propositions de missions près de chez vous et postulez en un clic.' },
+  { num: '3', titre: 'Acceptez vos missions', desc: 'Postulez en un clic aux missions publiées par les établissements.' },
 ];
 
 export default function VilleLanding() {
@@ -44,7 +44,7 @@ export default function VilleLanding() {
       <SEOPageLayout
         heroTitle={meta.h1}
         heroSubtitle={meta.intro[0]}
-        ctaText="Voir les missions disponibles"
+        ctaText="M'inscrire gratuitement"
         ctaHref="/inscription/soignant"
       >
         {finess && (
@@ -89,7 +89,7 @@ export default function VilleLanding() {
               Professions recherchées {ou}
             </h2>
             <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-12">
-              Choisissez votre profession pour créer votre compte et retrouver les missions publiées {ou}.
+              Choisissez votre profession pour créer votre compte.
             </p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {PROFESSIONS_SEO.map((p) => (

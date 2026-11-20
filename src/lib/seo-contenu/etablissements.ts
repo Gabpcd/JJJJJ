@@ -73,7 +73,7 @@ export const TYPES_ETABLISSEMENT_SEO: TypeEtablissementSEO[] = [
     slug: 'clinique',
     nom: 'Clinique',
     title: 'Renfort de soignants en clinique | Jolene Santé',
-    description: 'Infirmiers, infirmiers de bloc, anesthésistes, aides-soignants : publiez vos besoins de renfort en clinique et contractualisez directement. Commission de 15 % HT.',
+    description: 'Infirmiers, infirmiers de bloc, infirmiers anesthésistes, aides-soignants : publiez vos besoins de renfort en clinique. Commission de 15 % HT, sans abonnement.',
     h1: 'Renforcer vos équipes soignantes en clinique',
     accroche: 'Bloc opératoire, hospitalisation, maternité, soins de suite : publiez le poste à pourvoir et recevez les candidatures de professionnels dont les qualifications ont été vérifiées.',
     contexte: 'Jolene s’adresse aux cliniques privées comme aux établissements de santé privés d’intérêt collectif. Vous précisez la profession recherchée, les horaires et le taux horaire, et vous décrivez le service et la spécialité dans la mission.',

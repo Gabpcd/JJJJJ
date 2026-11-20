@@ -572,13 +572,8 @@ export function metaEtablissement(t: TypeEtablissementSEO): PageSEO {
     sections: [
       { titre: 'Les situations couvertes', points: t.situations },
       { titre: 'Les professions recherchées', liens: metiers.map((p) => ({ href: cheminMetier(p.slug), label: nomMetier(p) })) },
-      {
-        titre: 'Publier une mission en trois étapes',
-        liste: ETAPES_PUBLICATION,
-        ordonnee: true,
-        paragraphes: [RENVOI_COMMUN],
-        liens: [FIL_RECRUTER, { href: '/tarifs', label: 'Tarifs' }],
-      },
+      { titre: 'Publier une mission en trois étapes', liste: ETAPES_PUBLICATION, ordonnee: true },
+      { titre: 'Vérification, contrat, facturation et tarif', paragraphes: [RENVOI_COMMUN], liens: [FIL_RECRUTER, { href: '/tarifs', label: 'Tarifs' }] },
     ],
     faq: [
       t.question,
@@ -665,7 +660,7 @@ export function metaGuides(): PageSEO {
   return {
     type: 'guides', path: CHEMIN_GUIDES,
     title: 'Guides pour soignants et établissements | Jolene Santé',
-    description: 'Guides pratiques sur le remplacement en santé : trouver des vacations, préparer une première mission, remplacer un soignant absent, comparer les solutions.',
+    description: 'Guides pratiques sur le remplacement en santé : chercher des vacations, préparer une première mission, remplacer un aide-soignant en EHPAD, faire face à une absence.',
     h1: 'Guides du remplacement en santé',
     intro: ['Des guides pratiques, écrits pour être utiles le jour où l’on en a besoin. Les questions de droit renvoient vers les fiches officielles ; les chiffres cités viennent de sources publiques nommées.'],
     sections: [
@@ -757,7 +752,8 @@ export function metaBarometre(table: TableBmo = BMO_2026, finess: DonneesFiness 
         titre: 'Comment lire ces chiffres',
         paragraphes: [
           'L’enquête Besoins en main-d’œuvre (BMO) de France Travail interroge chaque année les employeurs sur leurs intentions d’embauche pour l’année à venir. Un projet de recrutement est une intention déclarée, pas une embauche réalisée. Il est dit difficile quand l’employeur s’attend à avoir du mal à le pourvoir.',
-          'L’enquête est publiée par bassin d’emploi. Pour chaque département, Jolene a additionné les projets publiés de ses bassins. Le fichier remplace certaines valeurs par un astérisque : dans ce cas, le total du département est un minimum, noté « ≥ », et la part difficile n’est pas calculée, notée « n.c. ». Une part n’est donnée que lorsque toutes les valeurs du département sont publiées.',
+          'L’enquête est publiée par bassin d’emploi. Pour chaque département, Jolene a additionné les projets publiés de ses bassins ; un bassin qui n’a pas de ligne pour un métier est compté pour zéro.',
+          'Le fichier remplace certaines valeurs par un astérisque. Quand c’est un nombre de projets, le total du département est un minimum, noté « ≥ ». Quand c’est un nombre de projets difficiles, le total reste exact mais la part n’est pas calculée, notée « n.c. ». Une part n’est donnée que lorsque toutes les valeurs du département sont publiées.',
           'L’enquête range les infirmiers et les sages-femmes dans une seule catégorie : le tableau ne peut pas les distinguer.',
           `Le nombre d’EHPAD est celui des établissements d’hébergement pour personnes âgées dépendantes inscrits au répertoire FINESS (extraction du ${dateLongue(finess.extractionDu)}).`,
         ],

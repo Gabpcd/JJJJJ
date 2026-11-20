@@ -210,7 +210,13 @@ aucun lien interne cassé, chaque chiffre clé du baromètre recalculé depuis s
    vérifiables et datés (publicité comparative).
 6. **Pages par département** si le baromètre obtient du trafic.
 7. **Mesure d'audience sans cookie** (à décider : touche au consentement).
-8. **Poids du module `seo-routes`** : chargé par l'accueil, il embarque désormais guides et données
+8. **Calcul BMO de l'outil interne non corrigé.** `supabase/functions/_shared/bmo-acquisition.ts`
+   garde l'ancienne méthode et alimente `acquisition_territoires.bmo_difficulte_pct`, lu par le radar
+   d'acquisition de l'administration et par le score des brouillons de prospection. Les pages
+   publiques n'en dépendent plus (elles lisent `seo-bmo-2026.json`) ; l'outil interne reste à aligner.
+9. **Vérification des données hors CI.** `npm run seo:donnees:verifier` compare les deux JSON aux
+   fichiers officiels ; il interroge le réseau et se lance à la main, pas dans la CI.
+10. **Poids du module `seo-routes`** : chargé par l'accueil, il embarque désormais guides et données
    (environ 30 Ko compressés). À scinder si la performance de l'accueil s'en ressent.
 
 ## 7. Mesure

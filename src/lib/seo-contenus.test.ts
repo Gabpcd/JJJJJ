@@ -234,11 +234,21 @@ describe('extraction BMO (scripts/seo/extraire-bmo.mjs)', () => {
     expect(r['01'].AS).toEqual([10, 50, 0]);
   });
 
-  it('l\'ancienne méthode aurait surestimé la part (bassins masqués retirés du seul dénominateur)', () => {
-    // 100 projets dont 80 difficiles + 40 projets à la part masquée (0 à 4) : la part réelle est entre 57 % et 60 %.
-    const ancienne = Math.round((80 / 100) * 100);
+  it('ne reproduit pas l\'ancienne méthode, qui sortait de l\'intervalle possible', () => {
+    // Ancienne méthode (supabase/functions/_shared/bmo-acquisition.ts) : projets = tous les bassins,
+    // part = difficiles / projets des seuls bassins où « difficiles » est publié.
+    const lignes = [bassin('69', 100, 80), bassin('69', 40, '*')];
+    const publies = lignes.filter((l) => typeof l.difficiles === 'number');
+    const ancienne = (publies.reduce((s, l) => s + Number(l.difficiles), 0) / publies.reduce((s, l) => s + Number(l.projets), 0)) * 100;
+    // Un astérisque cache une valeur de 0 à 4 : la part réelle du département est entre 80/140 et 84/140.
+    const total = lignes.reduce((s, l) => s + Number(l.projets), 0);
+    const [min, max] = [(80 / total) * 100, (84 / total) * 100];
     expect(ancienne).toBe(80);
-    expect(agreger([bassin('69', 100, 80), bassin('69', 40, '*')])['69'].AS[1]).toBeNull();
+    expect(ancienne).toBeGreaterThan(max);
+    expect(Math.round(min)).toBe(57);
+    expect(Math.round(max)).toBe(60);
+    // Nouvelle méthode : total exact (aucun nombre de projets masqué), part non calculée.
+    expect(agreger(lignes)['69'].AS).toEqual([140, null, 0]);
   });
 
   it('ignore les autres métiers et refuse un code dont le libellé a changé', () => {
@@ -322,6 +332,8 @@ describe('baromètre par département', () => {
     expect(texte).toContain('Jolene les a seulement additionnés par département');
     expect(texte).toContain('L’enquête est publiée par bassin d’emploi');
     expect(texte).toContain('le total du département est un minimum, noté « ≥ »');
+    expect(texte).toContain('le total reste exact mais la part n’est pas calculée');
+    expect(texte).toContain('un bassin qui n’a pas de ligne pour un métier est compté pour zéro');
     expect(page.description).toContain('d’infirmiers et sages-femmes');
   });
 
@@ -377,7 +389,7 @@ describe('pages par type d\'établissement', () => {
   });
 
   it('ne partage entre deux pages que les étapes et le renvoi communs (pas de pages satellites)', () => {
-    const communs = new Set([...ETAPES_PUBLICATION, RENVOI_COMMUN, 'Les situations couvertes', 'Les professions recherchées', 'Publier une mission en trois étapes', 'Quelles professions peut-on rechercher ?']);
+    const communs = new Set([...ETAPES_PUBLICATION, RENVOI_COMMUN, 'Les situations couvertes', 'Les professions recherchées', 'Publier une mission en trois étapes', 'Vérification, contrat, facturation et tarif', 'Quelles professions peut-on rechercher ?']);
     const vus = new Map<string, string>();
     for (const p of pages) {
       const propres = [p.title, p.description, p.h1, ...p.intro, ...p.sections!.flatMap((s) => [...(s.paragraphes ?? []), ...(s.liste ?? []), ...(s.points ?? []).flatMap((pt) => [pt.texte])]), ...p.faq!.flatMap((f) => [f.q, f.r])]
@@ -442,7 +454,7 @@ describe('guides', () => {
   it('ne parlent ni d\'intérim ni de prix d\'exemple, et ne comparent Jolene à aucun autre prestataire', () => {
     for (const p of [...pages, metaGuides()]) {
       const texte = textes(p).join(' ');
-      expect(texte, p.path).not.toMatch(/intérim|agence|travail temporaire|€/i);
+      expect(texte, p.path).not.toMatch(/intérim|agence|travail temporaire|€|compar/i);
     }
   });
 

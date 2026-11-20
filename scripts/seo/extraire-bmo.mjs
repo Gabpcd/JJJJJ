@@ -13,6 +13,13 @@
  *     minimum (`partiel` = 1 → affiché « au moins N »).
  *  2. Part jugée difficile : calculée seulement si AUCUNE valeur (projets ou projets
  *     difficiles) n'est masquée dans le département pour ce métier. Sinon `null` (« n.c. »).
+ *     Un total peut donc être exact avec une part inconnue (seuls des projets difficiles masqués).
+ *
+ * Hypothèse, dite sur la page : un bassin qui n'a AUCUNE ligne pour un métier compte pour zéro.
+ * Le classeur ne contient aucune ligne à zéro, garde les petites valeurs sous forme de lignes
+ * « * », et les unités sans ligne sont de petites unités (revue B8 de #1170, seconde passe).
+ * France Travail rattache le bassin de Monaco aux Alpes-Maritimes (06) : il est inclus dans ce
+ * département, comme dans le classeur.
  *     L'ancienne méthode retirait du dénominateur les bassins masqués tout en gardant leurs
  *     projets dans le total : la part affichée pouvait dépasser toute valeur possible
  *     (revue B8 de #1170 : Reims infirmiers 83 % affichés pour 71 à 73 % possibles).
