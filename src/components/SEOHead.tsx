@@ -5,13 +5,19 @@ interface SEOHeadProps {
   description: string;
   url?: string;
   image?: string;
-  jsonLd?: Record<string, any> | Record<string, any>[];
+  jsonLd?: Record<string, unknown> | Record<string, unknown>[];
   noIndex?: boolean;
 }
 
 const DEFAULT_OG_IMAGE = 'https://jolene.app/og-default.png';
 
+/** Sélecteur du script de données structurées de la page (posé par le HTML statique ou par ce composant). */
+const SELECTEUR_LD = 'script[data-jolene-ld]';
+
 export function SEOHead({ title, description, url, image, jsonLd, noIndex = false }: SEOHeadProps) {
+  // Sérialisé hors de l'effet : un objet recréé à chaque rendu ne relance pas l'effet si son contenu est le même.
+  const ld = jsonLd && (!Array.isArray(jsonLd) || jsonLd.length > 0) ? JSON.stringify(jsonLd) : null;
+
   useEffect(() => {
     document.title = title;
 
@@ -47,24 +53,27 @@ export function SEOHead({ title, description, url, image, jsonLd, noIndex = fals
     }
     canonical.href = url || `https://jolene.app${window.location.pathname}`;
 
-    // JSON-LD structured data
-    let ldScript: HTMLScriptElement | null = null;
-    if (jsonLd) {
-      ldScript = document.querySelector('script[data-jolene-ld]') as HTMLScriptElement | null;
+    // Données structurées : un seul script par page. Celui du HTML statique (même attribut)
+    // est repris tel quel ; une page sans données structurées retire celui de la page précédente.
+    let ldScript = document.querySelector(SELECTEUR_LD) as HTMLScriptElement | null;
+    if (ld) {
       if (!ldScript) {
         ldScript = document.createElement('script');
         ldScript.type = 'application/ld+json';
         ldScript.setAttribute('data-jolene-ld', 'true');
         document.head.appendChild(ldScript);
       }
-      ldScript.textContent = JSON.stringify(jsonLd);
+      ldScript.textContent = ld;
+    } else if (ldScript) {
+      ldScript.remove();
+      ldScript = null;
     }
 
     return () => {
       document.title = 'Jolene Santé — Missions soignants & remplacements vérifiés';
-      if (ldScript) ldScript.remove();
+      document.querySelector(SELECTEUR_LD)?.remove();
     };
-  }, [title, description, url, image, jsonLd, noIndex]);
+  }, [title, description, url, image, ld, noIndex]);
 
   return null;
 }

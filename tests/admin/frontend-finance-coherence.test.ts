@@ -5,9 +5,11 @@ const read = (path: string) => readFileSync(path, 'utf8');
 
 describe('cohérence financière des interfaces', () => {
   it('présente sans ambiguïté le taux de commission HT et son équivalent TTC', () => {
-    const accueil = read('src/pages/PageAccueil.tsx');
-    const tarifs = read('src/pages/Tarifs.tsx');
-    const recrutement = read('src/pages/RecruterSoignants.tsx');
+    // Chaque page est relue avec ses propres textes partagés (src/lib/seo-contenu/<page>.ts),
+    // que le composant ET le HTML statique affichent.
+    const accueil = read('src/pages/PageAccueil.tsx') + read('src/lib/seo-contenu/accueil.ts');
+    const tarifs = read('src/pages/Tarifs.tsx') + read('src/lib/seo-contenu/tarifs.ts');
+    const recrutement = read('src/pages/RecruterSoignants.tsx') + read('src/lib/seo-contenu/recruter-soignants.ts');
     const cgv = read('src/pages/PageCGV.tsx');
     const contrat = read('src/constantes/contratServiceEtablissement.ts');
     const textes = `${accueil}\n${tarifs}\n${recrutement}\n${cgv}\n${contrat}`;
@@ -40,7 +42,7 @@ describe('cohérence financière des interfaces', () => {
 
   it('ne promet pas un paiement accéléré en dehors d une mission éligible', () => {
     const checklist = read('src/components/dashboard/ChecklistActivation.tsx');
-    const devenirSoignant = read('src/pages/DevenirSoignant.tsx');
+    const devenirSoignant = read('src/pages/DevenirSoignant.tsx') + read('src/lib/seo-contenu/devenir-soignant.ts');
     const relanceMandat = read('src/pages/admin/AdminMandatsFacturation.tsx');
     expect(checklist).not.toContain('Stripe (paiement 24-48 h)');
     expect(devenirSoignant).toContain("un paiement accéléré n'est proposé que lorsqu'il est explicitement affiché");

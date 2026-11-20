@@ -1,6 +1,7 @@
 import React from 'react';
 import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
+import { jsonLdPage, metaInstitutionnelle, urlAbsolue } from '@/lib/seo-routes';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { CheckCircle, Gift } from 'lucide-react';
 
@@ -31,17 +32,16 @@ const faq = [
   { q: "Jolene m'accompagne-t-il après l'installation ?", a: "Oui. Une fois installé·e en libéral, vous continuez d'accéder aux missions Jolene ouvertes à l'exercice libéral, avec la facturation de vos honoraires gérée par la plateforme." },
 ];
 
+/** Titre, description, H1 et accroche : mêmes valeurs que le HTML statique (`seo-routes`). */
+const meta = metaInstitutionnelle('infirmiere-liberale');
+
 export default function InfirmiereLiberal() {
   return (
     <>
-      <SEOHead
-        title="Devenir infirmière libérale | Jolene Santé"
-        description="Passez infirmière libérale avec Jolene Santé : parcours 3 200 h suivi heure par heure, missions de remplacement, étapes installation CPAM, Ordre, URSSAF."
-        url="https://jolene.app/infirmiere-liberale"
-      />
+      <SEOHead title={meta.title} description={meta.description} url={urlAbsolue(meta.path)} jsonLd={jsonLdPage(meta)} />
       <SEOPageLayout
-        heroTitle="Passer infirmière libérale avec Jolene"
-        heroSubtitle="Cumulez vos 3 200 heures, suivez votre progression heure par heure et installez-vous en libéral en toute sérénité."
+        heroTitle={meta.h1}
+        heroSubtitle={meta.intro[0]}
         ctaText="Commencer mon parcours"
         ctaHref="/inscription/soignant"
       >

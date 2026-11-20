@@ -6,7 +6,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { getProfessionBySlug, PROFESSIONS_SEO } from '@/lib/seo-data';
 import { MissionsPubliquesSEO } from '@/components/MissionsPubliquesSEO';
 import { PageSEOIntrouvable } from '@/components/PageSEOIntrouvable';
-import { metaMetier, urlAbsolue, estProfessionVilleMetier, VILLES_VILLE_METIER, cheminVilleMetier } from '@/lib/seo-routes';
+import { metaMetier, urlAbsolue, estProfessionVilleMetier, VILLES_VILLE_METIER, cheminVilleMetier, jsonLdPage } from '@/lib/seo-routes';
 import { Euro, Clock, ShieldCheck, TrendingUp, Stethoscope, ArrowRight } from 'lucide-react';
 
 const avantages = [
@@ -65,6 +65,7 @@ export default function ProfessionLanding() {
         title={meta.title}
         description={meta.description}
         url={urlAbsolue(meta.path)}
+        jsonLd={jsonLdPage(meta)}
       />
       <SEOPageLayout
         heroTitle={meta.h1}

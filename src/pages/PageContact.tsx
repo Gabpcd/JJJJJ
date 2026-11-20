@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { usePageTitle } from '@/hooks/usePageTitle';
 import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
+import { jsonLdPage, metaInstitutionnelle, urlAbsolue } from '@/lib/seo-routes';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,8 +12,10 @@ import { toast } from 'sonner';
 import { Mail, Send, CheckCircle } from 'lucide-react';
 import { CaptchaTurnstile, TURNSTILE_REQUIRED } from '@/components/CaptchaTurnstile';
 
+/** Titre, description, H1 et accroche : mêmes valeurs que le HTML statique (`seo-routes`). */
+const meta = metaInstitutionnelle('contact');
+
 export default function PageContact() {
-  usePageTitle('Contact');
   const [form, setForm] = useState({ nom: '', email: '', sujet: '', message: '', hp: '' });
   const [envoi, setEnvoi] = useState(false);
   const [envoye, setEnvoye] = useState(false);
@@ -48,14 +50,10 @@ export default function PageContact() {
 
   return (
     <>
-      <SEOHead
-        title="Contact | Jolene Santé"
-        description="Une question sur Jolene Santé ? Contactez l'équipe directement via le formulaire ou par email à support@jolene.app."
-        url="https://jolene.app/contact"
-      />
+      <SEOHead title={meta.title} description={meta.description} url={urlAbsolue(meta.path)} jsonLd={jsonLdPage(meta)} />
       <SEOPageLayout
-        heroTitle="Une question ? Écrivez-nous."
-        heroSubtitle="L'équipe Jolene Santé vous répond rapidement — établissements, soignants, presse ou partenariats."
+        heroTitle={meta.h1}
+        heroSubtitle={meta.intro[0]}
         ctaText="Retour à l'accueil"
         ctaHref="/"
       >

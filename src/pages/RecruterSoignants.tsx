@@ -3,25 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { ShieldCheck, Scale, PercentCircle, Receipt, PlusCircle, UserCheck, FileText, ArrowRight } from 'lucide-react';
+import { FAQ_RECRUTER_SOIGNANTS } from '@/lib/seo-contenu/recruter-soignants';
+import { jsonLdPage, metaRecruterSoignants, urlAbsolue } from '@/lib/seo-routes';
 
-const FAQ = [
-  { q: "Jolene Santé est-elle une agence d'intérim ?", r: "Non. Jolene Santé est une plateforme de mise en relation directe : vous publiez votre besoin, des soignants vérifiés candidatent, et vous contractualisez directement avec eux. Pas de marge d'agence." },
-  { q: "Combien coûte le service ?", r: "15 % HT de commission sur le montant de la mission, soit 18 % TTC avec la TVA de 20 %, sans abonnement ni frais d'entrée. Vous ne payez que lorsque vous recrutez." },
-  { q: "Comment les soignants sont-ils vérifiés ?", r: "L'identité et les qualifications professionnelles sont contrôlées pour tous les soignants, notamment via le RPPS lorsqu'il existe. Les justificatifs propres au libéral, comme la RCP, ne sont demandés que pour les missions libérales." },
-  { q: "Quels types de contrats sont possibles ?", r: "Selon la mission : CDD, y compris CDD court, ou exercice libéral lorsqu'il est explicitement proposé. Les contrats sont générés automatiquement et les démarches administratives facilitées." },
-  { q: "Quelles professions puis-je recruter ?", r: "Infirmiers (IDE), aides-soignants (AS et AES), kinésithérapeutes, pharmaciens, préparateurs en pharmacie, sages-femmes et d'autres professions de santé." },
-  { q: "Suis-je engagé sur la durée ?", r: "Non, aucun engagement ni abonnement. Vous publiez un besoin uniquement lorsque vous en avez un." },
-];
-
-const faqJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  mainEntity: FAQ.map((f) => ({
-    "@type": "Question",
-    name: f.q,
-    acceptedAnswer: { "@type": "Answer", text: f.r },
-  })),
-};
+/** Titre, description, H1, accroche et FAQ : mêmes valeurs que le HTML statique (`seo-routes`). */
+const meta = metaRecruterSoignants();
 
 const garanties = [
   { icon: ShieldCheck, titre: 'Profil vérifié', desc: 'Identité professionnelle, diplôme, RPPS lorsqu’il existe et pièces requises par le contrat sont contrôlés.' },
@@ -41,15 +27,10 @@ export default function RecruterSoignants() {
 
   return (
     <>
-      <SEOHead
-        title="Recruter des soignants qualifiés | Jolene Santé"
-        description="Recrutez infirmiers, aides-soignants et professionnels de santé vérifiés pour vos remplacements. Commission 15 % HT (18 % TTC), contrats et facturation automatiques."
-        url="https://jolene.app/recruter-soignants"
-        jsonLd={faqJsonLd}
-      />
+      <SEOHead title={meta.title} description={meta.description} url={urlAbsolue(meta.path)} jsonLd={jsonLdPage(meta)} />
       <SEOPageLayout
-        heroTitle="Recrutez des soignants qualifiés, sans intermédiaire"
-        heroSubtitle="Fini les agences de remplacement coûteuses. Publiez vos missions et recevez des candidatures de professionnels vérifiés, en toute conformité."
+        heroTitle={meta.h1}
+        heroSubtitle={meta.intro[0]}
         ctaText="Créer mon espace établissement"
         ctaHref="/inscription/etablissement"
       >
@@ -137,7 +118,7 @@ export default function RecruterSoignants() {
           <div className="max-w-3xl mx-auto px-4">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-10">Questions fréquentes</h2>
             <div className="space-y-4">
-              {FAQ.map((item, i) => (
+              {FAQ_RECRUTER_SOIGNANTS.map((item, i) => (
                 <details key={i} className="group rounded-xl border border-border bg-background p-5">
                   <summary className="cursor-pointer list-none font-semibold text-foreground flex items-center justify-between gap-2">
                     {item.q}

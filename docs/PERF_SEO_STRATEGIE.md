@@ -1,6 +1,9 @@
 # Stratégie Performance & SEO — Jolene
 
 > Audit honnête + roadmap priorisée. Mis à jour 2026-06-15.
+>
+> **SEO : la feuille de route à jour est `docs/SEO_STRATEGIE_ACQUISITION.md` (20/11/2026).** Le prérendu annoncé
+> en Wave 2 ci-dessous est fait (#1115 puis lot 1 de la stratégie) ; ce document reste la référence pour la performance.
 
 ## Constat : la fondation est déjà solide
 

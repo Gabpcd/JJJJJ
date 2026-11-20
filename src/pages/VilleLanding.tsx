@@ -5,7 +5,7 @@ import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { PROFESSIONS_SEO, getVilleBySlug, VILLES_SEO } from '@/lib/seo-data';
 import { MissionsPubliquesSEO } from '@/components/MissionsPubliquesSEO';
 import { PageSEOIntrouvable } from '@/components/PageSEOIntrouvable';
-import { metaVille, urlAbsolue, estVilleVilleMetier, PROFESSIONS_SEO_VILLE_METIER, cheminVilleMetier } from '@/lib/seo-routes';
+import { metaVille, urlAbsolue, estVilleVilleMetier, PROFESSIONS_SEO_VILLE_METIER, cheminVilleMetier, jsonLdPage } from '@/lib/seo-routes';
 import { MapPin, ArrowRight, Activity } from 'lucide-react';
 
 const etapes = [
@@ -33,6 +33,7 @@ export default function VilleLanding() {
         title={meta.title}
         description={meta.description}
         url={urlAbsolue(meta.path)}
+        jsonLd={jsonLdPage(meta)}
       />
       <SEOPageLayout
         heroTitle={meta.h1}

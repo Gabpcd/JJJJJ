@@ -1,8 +1,8 @@
-import { usePageTitle } from '@/hooks/usePageTitle';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
+import { jsonLdPage, metaInstitutionnelle, urlAbsolue } from '@/lib/seo-routes';
 import { Download, ShieldCheck, Stethoscope, Scale, DatabaseZap } from 'lucide-react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
@@ -13,20 +13,18 @@ const chiffres = [
   { icon: DatabaseZap, label: 'Données sensibles limitées', sub: 'déclarations professionnelles protégées' },
 ];
 
+/** Titre, description, H1 et textes d'ouverture : mêmes valeurs que le HTML statique (`seo-routes`). */
+const meta = metaInstitutionnelle('a-propos');
+
 export default function APropos() {
-  usePageTitle('À propos');
   const navigate = useNavigate();
 
   return (
     <>
-      <SEOHead
-        title="À propos de Jolene | Staffing médical digital"
-        description="Découvrez la mission de Jolene : simplifier le staffing médical en connectant établissements de santé et soignants qualifiés, en toute conformité."
-        url="https://jolene.app/a-propos"
-      />
+      <SEOHead title={meta.title} description={meta.description} url={urlAbsolue(meta.path)} jsonLd={jsonLdPage(meta)} />
       <SEOPageLayout
-        heroTitle="Simplifier le staffing médical. Pour de bon."
-        heroSubtitle="Jolene est née d'un constat simple : trouver un soignant remplaçant ne devrait pas prendre des heures d'appels téléphoniques."
+        heroTitle={meta.h1}
+        heroSubtitle={meta.intro[0]}
         ctaText="Rejoindre Jolene"
         ctaHref="/inscription/soignant"
       >
@@ -35,7 +33,7 @@ export default function APropos() {
           <div className="max-w-3xl mx-auto px-4 text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-6">Notre mission</h2>
             <p className="text-muted-foreground leading-relaxed text-lg">
-              Nous connectons les établissements de santé avec des soignants qualifiés et vérifiés, en automatisant tout ce qui peut l'être : contrats, conformité, pointage, facturation. Notre objectif : que chaque établissement trouve le bon soignant, sans passer des heures au téléphone.
+              {meta.intro[1]}
             </p>
           </div>
         </section>

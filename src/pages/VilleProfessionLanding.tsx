@@ -19,6 +19,7 @@ import {
   VILLES_VILLE_METIER,
   cheminVilleMetier,
   estVilleVilleMetier,
+  jsonLdPage,
 } from '@/lib/seo-routes';
 
 /**
@@ -54,7 +55,7 @@ export default function VilleProfessionLanding() {
 
   return (
     <>
-      <SEOHead title={meta.title} description={meta.description} url={urlAbsolue(meta.path)} noIndex={!meta.indexable} />
+      <SEOHead title={meta.title} description={meta.description} url={urlAbsolue(meta.path)} noIndex={!meta.indexable} jsonLd={jsonLdPage(meta)} />
       <SEOPageLayout
         heroTitle={meta.h1}
         heroSubtitle={paragraphes[0]}

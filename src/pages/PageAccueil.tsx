@@ -1,4 +1,3 @@
-import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
@@ -10,6 +9,8 @@ import { LogoJolene } from '@/components/LogoJolene';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useMissionsPubliques } from '@/hooks/useMissionsPubliques';
 import { lienInscriptionRecherche, memoriserRecherchePublique } from '@/lib/recherchePubliqueInscription';
+import { ACCROCHE_ACCUEIL, ATOUTS_ETABLISSEMENTS, ATOUTS_SOIGNANTS, ETAPES_ACCUEIL, FAQ_ACCUEIL } from '@/lib/seo-contenu/accueil';
+import { jsonLdPage, metaAccueil, urlAbsolue } from '@/lib/seo-routes';
 /* ─── Animated counter ─── */
 function CompteurAnime({ cible, suffixe, prefix }: { cible: number; suffixe?: string; prefix?: string }) {
   const [valeur, setValeur] = useState(0);
@@ -86,16 +87,6 @@ function RevealOnScroll({ children, className = '', delay = 0 }: { children: Rea
     </div>
   );
 }
-
-/* ─── FAQ data ─── */
-const faqData = [
-  { q: 'Comment fonctionne la commission ?', a: 'Jolene facture à l\'établissement une commission de 15 % HT sur la base financière validée : honoraires HT pour une mission libérale ou rémunération brute contractuelle pour une mission salariée, majorations et indemnités incluses lorsqu’elles entrent dans cette base. Avec une TVA de 20 %, la commission représente 18 % TTC. Aucun frais pour le soignant.' },
-  { q: 'Jolene est-il une agence d\'intérim ?', a: 'Non. Jolene est une plateforme de mise en relation. Le contrat est signé directement entre l\'établissement et le soignant. Nous ne sommes pas employeur.' },
-  { q: 'Comment sont vérifiés les soignants ?', a: 'Le numéro RPPS, lorsqu’il existe, est rapproché de l’Annuaire Santé officiel. Les pièces requises selon la profession et le contrat sont ensuite contrôlées automatiquement ou, pour les situations réglementaires sensibles, en revue humaine. L’assurance RCP est demandée pour les missions libérales.' },
-  { q: 'Quels types de contrats sont générés ?', a: 'La plateforme génère automatiquement des CDD, y compris des CDD courts, signés électroniquement par les deux parties. Le libéral n’est proposé que pour les missions explicitement ouvertes par la matrice profession × établissement.' },
-  { q: 'Comment fonctionne le pointage ?', a: 'Le soignant pointe son arrivée et son départ via l\'application mobile avec géolocalisation GPS. Le périmètre est vérifié automatiquement par rapport à l\'adresse de l\'établissement.' },
-  { q: 'Puis-je passer en libéral via Jolene ?', a: 'Jolene peut suivre et expliquer les conditions propres à votre profession. Le repère de 3 200 heures ne concerne que certaines professions infirmières lorsqu’il est applicable ; aucun compteur ne remplace les autorisations, inscriptions ou justificatifs réglementaires.' },
-];
 
 /* ─── Public mission search section ─── */
 export function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof useNavigate> }) {
@@ -213,8 +204,10 @@ export function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<t
   );
 }
 
+/** Métadonnées et données structurées de l'accueil : mêmes valeurs que le HTML statique. */
+const meta = metaAccueil();
+
 export default function PageAccueil() {
-  usePageTitle('Jolene');
   const navigate = useNavigate();
   // prefers-reduced-motion : le hero est visible immédiatement (pas de fondu
   // d'opacité 1 s). Sinon, sous ce réglage, le sous-titre et les badges en
@@ -234,22 +227,7 @@ export default function PageAccueil() {
 
   return (
     <>
-      <SEOHead
-        title="Jolene Santé — Missions soignants & remplacements vérifiés"
-        description="Jolene Santé connecte établissements de santé et soignants vérifiés (diplôme, RPPS, assurance) pour des missions et remplacements ponctuels. Inscription gratuite, contrats automatisés."
-        url="https://jolene.app/"
-        jsonLd={{
-          "@context": "https://schema.org",
-          "@type": "WebApplication",
-          "name": "Jolene",
-          "url": "https://jolene.app",
-          "description": "Plateforme de staffing médical pour établissements de santé et soignants qualifiés en France.",
-          "applicationCategory": "HealthApplication",
-          "operatingSystem": "Web, iOS, Android",
-          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR", "description": "Inscription gratuite pour les soignants" },
-          "creator": { "@type": "Organization", "name": "Jolene SASU", "url": "https://jolene.app", "address": { "@type": "PostalAddress", "streetAddress": "103 rue de Vaugirard", "addressLocality": "Paris", "postalCode": "75006", "addressCountry": "FR" } }
-        }}
-      />
+      <SEOHead title={meta.title} description={meta.description} url={urlAbsolue(meta.path)} jsonLd={jsonLdPage(meta)} />
     <div className="min-h-[100dvh] bg-background text-foreground overflow-x-hidden">
       {/* ═══ Header ═══ */}
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
@@ -292,8 +270,7 @@ export default function PageAccueil() {
             </span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed">
-            Établissements et soignants connectés en direct. Contrat signé
-            en ligne, pointage GPS, paiement suivi — zéro paperasse.
+            {ACCROCHE_ACCUEIL}
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
@@ -339,12 +316,7 @@ export default function PageAccueil() {
               <div className="rounded-2xl p-8 md:p-10 h-full border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(330 85% 60% / 0.08), hsl(270 60% 50% / 0.05))' }}>
                 <h3 className="text-xl font-bold text-foreground mb-6">🩺 Pour les soignants</h3>
                 <ul className="space-y-4">
-                  {[
-                    { emoji: '📍', text: 'Missions près de chez vous, en liste ou en swipe' },
-                    { emoji: '💶', text: 'Rémunération affichée avant de postuler, paiement suivi' },
-                    { emoji: '📄', text: 'Contrats générés et signés en ligne' },
-                    { emoji: '🚀', text: 'Parcours vers le libéral adapté à votre profession' },
-                  ].map((item, i) => (
+                  {ATOUTS_SOIGNANTS.map((item, i) => (
                     <li key={i} className="flex items-start gap-3">
                       <span className="text-xl mt-0.5">{item.emoji}</span>
                       <span className="text-foreground font-medium">{item.text}</span>
@@ -366,12 +338,7 @@ export default function PageAccueil() {
               <div className="rounded-2xl p-8 md:p-10 h-full border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(215 80% 55% / 0.08), hsl(174 72% 48% / 0.05))' }}>
                 <h3 className="text-xl font-bold text-foreground mb-6">🏥 Pour les établissements</h3>
                 <ul className="space-y-4">
-                  {[
-                    { emoji: '✅', text: 'Identité professionnelle et pièces adaptées à la mission vérifiées' },
-                    { emoji: '⚡', text: 'Plan de secours activé en cas de désistement ou non-présentation' },
-                    { emoji: '⚖️', text: 'DPAE préparée, plafonds et contrôles de conformité visibles' },
-                    { emoji: '🧾', text: 'Documents de facturation par période et suivi Chorus Pro' },
-                  ].map((item, i) => (
+                  {ATOUTS_ETABLISSEMENTS.map((item, i) => (
                     <li key={i} className="flex items-start gap-3">
                       <span className="text-xl mt-0.5">{item.emoji}</span>
                       <span className="text-foreground font-medium">{item.text}</span>
@@ -399,11 +366,7 @@ export default function PageAccueil() {
             <p className="text-muted-foreground text-center mb-14 max-w-lg mx-auto">Trois étapes, côté soignant comme côté établissement</p>
           </RevealOnScroll>
           <div className="grid md:grid-cols-3 gap-8 md:gap-12">
-            {[
-              { icon: ClipboardList, num: '1', emoji: '📝', titre: 'Publiez ou postulez', desc: 'L\'établissement publie sa mission avec horaires et taux. Le soignant postule ou accepte en 1 clic.' },
-              { icon: Users, num: '2', emoji: '✍️', titre: 'Le contrat se signe en ligne', desc: 'Contrat prérempli à partir de la mission, puis signé électroniquement par les deux parties, dans l’ordre de leur choix.' },
-              { icon: CheckCircle, num: '3', emoji: '🎉', titre: 'Le suivi est centralisé', desc: 'Pointage, facturation et paiement sont suivis au même endroit. Pour une mission salariée, l’établissement transmet lui-même la DPAE à l’URSSAF.' },
-            ].map((step, i) => (
+            {ETAPES_ACCUEIL.map((step, i) => (
               <RevealOnScroll key={i} delay={i * 150}>
                 <div className="flex flex-col items-center text-center group">
                   <div className="w-20 h-20 rounded-2xl flex items-center justify-center mb-5 shadow-lg group-hover:scale-105 transition-transform duration-300" style={{ background: i === 0 ? 'linear-gradient(135deg, hsl(330 85% 60% / 0.15), hsl(330 85% 60% / 0.05))' : i === 1 ? 'linear-gradient(135deg, hsl(270 60% 50% / 0.15), hsl(270 60% 50% / 0.05))' : 'linear-gradient(135deg, hsl(174 72% 48% / 0.15), hsl(174 72% 48% / 0.05))' }}>
@@ -467,13 +430,13 @@ export default function PageAccueil() {
           </RevealOnScroll>
           <RevealOnScroll delay={100}>
             <Accordion type="single" collapsible className="space-y-2">
-              {faqData.map((faq, i) => (
+              {FAQ_ACCUEIL.map((faq, i) => (
                 <AccordionItem key={i} value={`faq-${i}`} className="border border-border rounded-xl px-5 data-[state=open]:bg-muted/50 transition-colors">
                   <AccordionTrigger className="text-left text-[15px] font-semibold hover:no-underline py-5">
                     {faq.q}
                   </AccordionTrigger>
                   <AccordionContent className="text-muted-foreground leading-relaxed pb-5">
-                    {faq.a}
+                    {faq.r}
                   </AccordionContent>
                 </AccordionItem>
               ))}

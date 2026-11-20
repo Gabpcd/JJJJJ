@@ -1,11 +1,13 @@
-import { usePageTitle } from '@/hooks/usePageTitle';
+import { SEOHead } from '@/components/SEOHead';
 import { Link } from "react-router-dom";
 import { Home } from "lucide-react";
 import { LogoJolene } from '@/components/LogoJolene';
 
 const NotFound = () => {
-  usePageTitle('Page introuvable');
   return (
+    <>
+    {/* URL inconnue : jamais indexable (RouteMeta poserait « index, follow » par défaut). */}
+    <SEOHead title="Page introuvable — Jolene" description="Cette page n'existe pas ou a été déplacée." noIndex />
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
       <div className="text-center max-w-md">
         <LogoJolene
@@ -30,6 +32,7 @@ const NotFound = () => {
         <p className="mt-8 text-xs text-muted-foreground">© 2026 Jolene SASU</p>
       </div>
     </div>
+    </>
   );
 };
 
