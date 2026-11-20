@@ -3,6 +3,7 @@ import {
   aggregateBmoRecords,
   type BmoRecord,
 } from '../../supabase/functions/_shared/bmo-acquisition.ts';
+import { agreger, METIERS_BMO } from '../../scripts/seo/extraire-bmo.mjs';
 
 /**
  * Le module Edge est exécuté tel quel (alias `npm:fflate@0.8.2` dans vitest.config.ts) :
@@ -81,5 +82,53 @@ describe('import BMO — part des projets jugés difficiles', () => {
     ]);
     expect(rows.map((r) => r.profession).sort()).toEqual(['IDE', 'SAGE_FEMME']);
     expect(rows.every((r) => r.bmo_projets_recrutement === 200 && r.bmo_difficulte_pct === null)).toBe(true);
+  });
+});
+
+describe('import BMO — même règle que les pages publiques', () => {
+  // Générateur déterministe : le test rejoue les mêmes tirages à chaque exécution.
+  const tirage = (graine: number) => () => {
+    graine = (graine * 1664525 + 1013904223) % 4294967296;
+    return graine / 4294967296;
+  };
+
+  it('donne les mêmes projets et la même part que scripts/seo/extraire-bmo.mjs sur des bassins tirés au hasard', () => {
+    const alea = tirage(20261120);
+    const departements = ['01', '13', '2A', '35', '56', '75', '92', '974'];
+    const metiers = Object.entries(METIERS_BMO) as [string, { code: string }][];
+    const libelles: Record<string, string> = { AS: 'Aides-soignants', IDE: 'Infirmiers et sages-femmes', MEDECIN: 'Médecins' };
+    const internes: BmoRecord[] = [];
+    const publics: { code: string; libelle: string; departement: string; projets: number | string; difficiles: number | string }[] = [];
+    for (const departement of departements) {
+      for (const [metier, { code }] of metiers) {
+        const bassins = 1 + Math.floor(alea() * 5);
+        for (let b = 0; b < bassins; b += 1) {
+          // Un bassin sur cinq masque ses projets, un sur quatre sa part : les deux cas se croisent.
+          const projets = alea() < 0.2 ? null : Math.floor(alea() * 400);
+          const difficiles = alea() < 0.25 ? null : Math.floor(alea() * ((projets ?? 400) + 1));
+          internes.push({ year: 2026, code, label: libelles[metier], departement, projects: projets, difficult: difficiles, seasonal: 0 });
+          publics.push({ code, libelle: libelles[metier], departement, projets: projets ?? '*', difficiles: difficiles ?? '*' });
+        }
+      }
+    }
+    const attendu = agreger(publics) as Record<string, Record<string, [number, number | null, 0 | 1]>>;
+    const obtenu = aggregateBmoRecords(internes);
+    let compares = 0;
+    let sansPart = 0;
+    for (const departement of departements) {
+      for (const [metier] of metiers) {
+        const [projets, part] = attendu[departement][metier];
+        const ligne = obtenu.find((r) => r.departement === departement && r.profession === metier);
+        expect(ligne?.bmo_projets_recrutement, `${departement} ${metier} projets`).toBe(projets);
+        // Sans projet, les pages publiques n'affichent pas de part ; l'import non plus.
+        expect(ligne?.bmo_difficulte_pct ?? null, `${departement} ${metier} part`).toBe(projets > 0 ? part : null);
+        compares += 1;
+        if (part === null) sansPart += 1;
+      }
+    }
+    // Le jeu couvre bien les deux situations, sinon la comparaison ne prouverait rien.
+    expect(compares).toBe(departements.length * metiers.length);
+    expect(sansPart).toBeGreaterThan(3);
+    expect(compares - sansPart).toBeGreaterThan(3);
   });
 });
