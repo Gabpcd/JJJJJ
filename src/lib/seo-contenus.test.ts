@@ -553,6 +553,11 @@ describe('kit hors site (docs/SEO_KIT_HORS_SITE.md)', () => {
 
   it('ne dit de Jolene que ce que le site publie déjà, sans intérim ni volume d\'activité', () => {
     expect(kit).not.toMatch(/intérim|travail temporaire|centaines|milliers/i);
+    // Assiette de la commission et modes d'exercice : le kit ne les reformule pas. La formule
+    // publiée est « vous ne payez que lorsque vous recrutez » ; les contrats possibles dépendent
+    // de la mission et ne s'énumèrent pas dans une fiche (revue B8 de #1172).
+    expect(kit).not.toMatch(/missions pourvues|sur le montant|mission(s)? libérale|CDD|vacation(s)? libérale/i);
+    expect(kit).toMatch(/ne paie(nt)? que lorsqu'ils? recrute(nt)?|ne payez que lorsque vous recrutez/);
     // Toute mention de la commission porte le taux publié (src/lib/seo-contenu/tarifs.ts).
     for (const m of kit.matchAll(/commission de (\d+ % HT)/g)) expect(m[1]).toBe(TAUX_HT);
     // Aucun brouillon n'est adressé : les destinataires restent des crochets à remplir.

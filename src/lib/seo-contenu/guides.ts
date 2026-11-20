@@ -344,7 +344,7 @@ export const GUIDES_SEO: GuideSEO[] = [
       },
       {
         titre: 'Choisir un service que l’on peut tenir',
-        paragraphes: ['Un remplacement se fait sans période d’adaptation. Avant de postuler, vérifiez que le poste correspond à votre expérience :'],
+        paragraphes: ['Avant de postuler, vérifiez que le poste correspond à votre expérience :'],
         liste: [
           'la spécialité du service et les gestes attendus ;',
           'le nombre de patients ou de résidents à votre charge, et la présence d’un autre infirmier ;',
@@ -504,7 +504,7 @@ export const GUIDES_SEO: GuideSEO[] = [
       },
       {
         titre: 'Ce qui doit être écrit',
-        paragraphes: ['Un remplaçant ne peut pas retenir à l’oral l’organisation d’un service entier. Rassemblez dans un document court, affiché ou remis à l’arrivée :'],
+        paragraphes: ['Rassemblez dans un document court, affiché ou remis à l’arrivée, ce que le remplaçant aura besoin de retrouver pendant le poste :'],
         liste: [
           'le déroulé de la journée ;',
           'les protocoles propres au service et l’endroit où les consulter ;',
@@ -559,7 +559,7 @@ export const GUIDES_SEO: GuideSEO[] = [
       {
         titre: 'Recenser les absences prévisibles',
         liste: [
-          'Arrêtez le planning des congés le plus tôt possible, avec une date limite pour les demandes.',
+          'Partez du planning des congés dès qu’il est arrêté.',
           'Ajoutez les absences déjà connues : formations, congés de maternité, départs annoncés.',
           'Reportez le tout sur un calendrier par service et par profession.',
           'Repérez les postes qui ne peuvent pas rester découverts : nuits, week-ends, postes isolés.',
@@ -575,17 +575,17 @@ export const GUIDES_SEO: GuideSEO[] = [
         ],
       },
       {
-        titre: 'Publier tôt, et par blocs',
+        titre: 'Publier tôt',
         liste: [
           'Publiez les besoins dès que le planning est arrêté, sans attendre l’approche de la période.',
-          'Regroupez les jours qui se suivent dans une même mission quand c’est possible : plusieurs jours laissent au remplaçant le temps de connaître le service.',
+          'Quand une même absence dure plusieurs jours, publiez-la comme une seule mission plutôt que jour par jour : le remplaçant aura le temps de connaître le service.',
           'Donnez pour chaque mission les horaires du poste, le taux horaire et le service.',
           'Proposez d’abord les périodes aux remplaçants qui connaissent déjà l’établissement.',
         ],
       },
       {
         titre: 'Préparer l’accueil une fois pour toutes',
-        paragraphes: ['Une période de congés amène plusieurs remplaçants à la suite. Préparez un accueil qui ne dépende pas de la personne présente ce jour-là :'],
+        paragraphes: ['Si plusieurs remplaçants se succèdent pendant la période, préparez un accueil qui ne dépende pas de la personne présente ce jour-là :'],
         liste: [
           'une fiche par poste, à jour ;',
           'des accès prêts à être attribués ;',

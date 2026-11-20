@@ -57,7 +57,7 @@ Console reste nécessaire.
 - **Description** (moins de 750 caractères) :
 
 <!-- texte:fiche-google:750 -->
-> Jolene Santé met en relation les établissements de santé et les soignants pour des missions de remplacement : vacations, CDD courts, missions libérales. L'établissement publie son besoin, des soignants dont l'identité et les qualifications ont été vérifiées postulent, et le contrat est généré et signé en ligne. Le soignant pointe son arrivée et son départ depuis l'application. L'inscription est gratuite pour les soignants. Pour les établissements : une commission de 15 % HT sur les missions pourvues, sans abonnement ni frais d'entrée.
+> Jolene Santé met en relation les établissements de santé et les soignants pour des missions de remplacement. L'établissement publie son besoin, des soignants dont l'identité et les qualifications ont été vérifiées postulent, et le contrat est généré et signé en ligne. Le soignant pointe son arrivée et son départ depuis l'application. L'inscription est gratuite pour les soignants. Pour les établissements : une commission de 15 % HT, sans abonnement ni frais d'entrée.
 
 ## 3. Annuaires de logiciels (Appvizer, Capterra, GetApp)
 
@@ -71,7 +71,7 @@ Console reste nécessaire.
 - **Description courte** (moins de 300 caractères) :
 
 <!-- texte:description-courte:300 -->
-> Jolene Santé met en relation directe les établissements de santé et les soignants pour des remplacements. Profils vérifiés, contrat généré et signé en ligne, pointage depuis l'application. Commission de 15 % HT sur les missions pourvues, sans abonnement.
+> Jolene Santé met en relation directe les établissements de santé et les soignants pour des remplacements. Profils vérifiés, contrat généré et signé en ligne, pointage depuis l'application. Commission de 15 % HT, sans abonnement : vous ne payez que lorsque vous recrutez.
 
 - **Description longue** :
 
@@ -88,13 +88,14 @@ Console reste nécessaire.
 > valide les heures.
 >
 > L'inscription est gratuite pour les soignants, sans commission prélevée sur leur rémunération.
-> Pour les établissements, la commission est de 15 % HT sur les missions pourvues, sans abonnement
-> ni engagement.
+> Pour les établissements, la commission est de 15 % HT, sans abonnement ni engagement : ils ne
+> paient que lorsqu'ils recrutent.
 
 - **Fonctionnalités à cocher ou à saisir** : publication de missions, vérification des profils,
   génération et signature électronique des contrats, pointage, validation des heures, facturation,
   application mobile.
-- **Tarif** : commission de 15 % HT (18 % TTC) sur les missions pourvues. Pas d'abonnement.
+- **Tarif** : commission de 15 % HT, soit 18 % TTC avec la TVA de 20 %. Pas d'abonnement ni de frais
+  d'entrée : l'établissement ne paie que lorsqu'il recrute.
 - **Lien** : `https://jolene.app/recruter-soignants`
 
 ## 4. Page LinkedIn de l'entreprise
@@ -177,7 +178,7 @@ supprimer la mention de la part.
 > - Ce que c'est : une plateforme de mise en relation directe entre établissements de santé et
 >   soignants (infirmiers, aides-soignants, AES, kinésithérapeutes, sages-femmes et d'autres
 >   professions).
-> - Pour les établissements : commission de 15 % HT sur les missions pourvues, sans abonnement.
+> - Pour les établissements : commission de 15 % HT, sans abonnement.
 > - Pour les soignants : inscription gratuite, sans commission sur la rémunération.
 > - Contrat généré et signé en ligne, pointage depuis l'application.
 > - Présentation : https://jolene.app/recruter-soignants ; tarifs : https://jolene.app/tarifs

@@ -25,9 +25,8 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
-concurrency:
-  group: indexnow
-  cancel-in-progress: true
+# Pas de groupe de concurrence : deux mises en ligne rapprochées signalent chacune leurs propres
+# changements (chacune compare son commit à celui qui le précédait sur main).
 
 jobs:
   signaler:
@@ -39,17 +38,24 @@ jobs:
       deployments: read
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 2 # le commit précédent sert de point de comparaison
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
+
+      # Le point de comparaison est l'état de main avant ce push (github.event.before), pas HEAD~1 :
+      # un push de plusieurs commits serait sinon comparé à son avant-dernier commit.
+      - name: Récupérer l'état de main avant ce push
+        if: github.event_name == 'push'
+        env:
+          AVANT: ${{ github.event.before }}
+        run: git fetch --no-tags --depth=1 origin "$AVANT"
 
       - name: Attendre le déploiement de production, puis signaler les pages changées
         if: github.event_name == 'push'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/seo/indexnow.mjs --changements --attendre
+          AVANT: ${{ github.event.before }}
+        run: node scripts/seo/indexnow.mjs --changements --depuis "$AVANT" --attendre
 
       - name: Signaler tout le sitemap (déclenchement manuel)
         if: github.event_name == 'workflow_dispatch'

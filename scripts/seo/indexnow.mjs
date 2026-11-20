@@ -19,8 +19,14 @@
  * `src/lib/seo-empreintes.json` (une empreinte du contenu par page, tenue à jour par
  * `npm run seo:empreintes`), comparé entre le commit courant et le précédent.
  *
+ * Limite connue : si le déploiement n'est pas confirmé, si le service répond 429 ou 5xx, ou si le
+ * réseau tombe, l'exécution se termine en avertissement et rien ne rattrape l'envoi ensuite (la
+ * mise en ligne suivante ne signale que ses propres changements). Le remède est de relancer
+ * l'exécution dans GitHub Actions. Sans conséquence durable : le sitemap reste la référence.
+ *
  * Usage :
  *   node scripts/seo/indexnow.mjs --changements   signale les pages changées depuis le commit précédent
+ *   ... --depuis <sha>                            point de comparaison (sur main : github.event.before)
  *   node scripts/seo/indexnow.mjs --tout          signale tout le sitemap en ligne (refonte, migration)
  *   ... --simuler                                 n'envoie rien, affiche ce qui partirait
  *   ... --attendre                                attend d'abord le déploiement de production du
@@ -60,12 +66,19 @@ export function urlsChangees(avant, apres, hote = HOTE) {
   return [...chemins].sort().map((chemin) => `https://${hote}${chemin}`);
 }
 
-/** Empreintes du commit précédent, ou `null` si le fichier n'y existait pas. */
-export function empreintesDuCommitPrecedent(executer = execFileSync) {
+/**
+ * Empreintes telles qu'elles étaient au commit `depuis`, ou `null` si le fichier n'y existait pas
+ * (premier signalement). Toute autre erreur git est levée : la confondre avec un premier
+ * signalement ferait partir toutes les pages.
+ */
+export function empreintesAuCommit(depuis = 'HEAD~1', executer = execFileSync) {
+  if (!/^[0-9a-f]{7,40}$|^HEAD~1$/.test(depuis)) throw new Error(`IndexNow : point de comparaison invalide « ${depuis} »`);
   try {
-    return JSON.parse(executer('git', ['show', `HEAD~1:${FICHIER_EMPREINTES}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
-  } catch {
-    return null;
+    return JSON.parse(executer('git', ['show', `${depuis}:${FICHIER_EMPREINTES}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+  } catch (e) {
+    const message = `${e?.stderr ?? ''} ${e?.message ?? ''}`;
+    if (/does not exist in|exists on disk, but not in/.test(message)) return null;
+    throw new Error(`IndexNow : lecture de ${FICHIER_EMPREINTES} au commit ${depuis} impossible (${message.trim().split('\n')[0]})`);
   }
 }
 
@@ -139,14 +152,17 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 
   // Ce qui ne dépend pas du réseau se calcule d'abord, et échoue franchement en cas d'erreur.
   if (options.has('--tout') === options.has('--changements')) {
-    console.error('[indexnow] préciser --changements (pages changées depuis le commit précédent) ou --tout (sitemap en ligne)');
+    console.error('[indexnow] préciser --changements (pages changées, avec --depuis <sha> sur main) ou --tout (sitemap en ligne)');
     process.exit(2);
   }
+  const arguments_ = process.argv.slice(2);
+  const iDepuis = arguments_.indexOf('--depuis');
+  const depuis = iDepuis === -1 ? 'HEAD~1' : arguments_[iDepuis + 1];
   const urls = options.has('--tout')
     ? undefined
-    : urlsChangees(empreintesDuCommitPrecedent(), JSON.parse(readFileSync(FICHIER_EMPREINTES, 'utf8')));
+    : urlsChangees(empreintesAuCommit(depuis), JSON.parse(readFileSync(FICHIER_EMPREINTES, 'utf8')));
   if (urls && urls.length === 0) {
-    console.log('[indexnow] aucune page changée depuis le commit précédent : rien à signaler');
+    console.log(`[indexnow] aucune page changée depuis ${depuis} : rien à signaler`);
     process.exit(0);
   }
 
