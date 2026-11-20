@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RoutesPubliques from './RoutesPubliques';
@@ -35,14 +35,15 @@ describe('routes publiques montées sous « * »', () => {
   ])('%s affiche sa page, indexable', async (chemin, h1) => {
     ouvrir(chemin);
     expect(await screen.findByRole('heading', { level: 1, name: h1 })).toBeInTheDocument();
-    expect(robots()).toBe('index, follow');
-    expect(document.querySelector('link[rel="canonical"]')).toHaveAttribute('href', `https://jolene.app${chemin}`);
+    // SEOHead écrit ces balises dans un effet : le titre peut être affiché avant qu'elles soient posées.
+    await waitFor(() => expect(robots()).toBe('index, follow'));
+    await waitFor(() => expect(document.querySelector('link[rel="canonical"]')).toHaveAttribute('href', `https://jolene.app${chemin}`));
   });
 
   it('une URL inconnue affiche la page 404, en noindex', async () => {
     ouvrir('/adresse-inconnue/sous-chemin');
     expect(await screen.findByRole('heading', { level: 1, name: '404' })).toBeInTheDocument();
-    expect(robots()).toBe('noindex, nofollow');
+    await waitFor(() => expect(robots()).toBe('noindex, nofollow'));
   });
 
   it('une route déclarée dans App.tsx reste prioritaire', async () => {

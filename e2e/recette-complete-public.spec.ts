@@ -25,6 +25,9 @@ test('pages publiques : contenu, retours, liens légaux et absence de débordeme
     ['/guides', 'Guides du remplacement en santé'], ['/guides/absence-derniere-minute-remplacer-soignant', /Absence de dernière minute/],
     ['/guides/vacations-etablissement-de-sante', /Vacations en établissement de santé/],
     ['/barometre-recrutement-soignants-2026', /Baromètre 2026 du recrutement de soignants/],
+    // Lot 3 : guides pour les établissements et pour les infirmiers.
+    ['/guides/rediger-annonce-remplacement-soignant', /Annonce de remplacement/], ['/guides/accueillir-soignant-remplacant', /Accueillir un soignant remplaçant/],
+    ['/guides/anticiper-remplacements-conges', /anticiper les remplacements/], ['/guides/remplacement-infirmier-etablissement', /Infirmier : trouver des remplacements/],
     ['/emploi-soignant/le-havre', 'Missions soignants au Havre'], ['/emploi-soignant/lyon/infirmier-ide', 'Infirmier (IDE) : missions à Lyon'],
     ['/recruter-soignants/type-inconnu', 'Page non référencée'], ['/guides/guide-inconnu', 'Guide introuvable'],
     ['/adresse-inexistante-recette', '404'],

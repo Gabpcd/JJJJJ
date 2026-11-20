@@ -1,8 +1,11 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { VILLES_SEO, PROFESSIONS_SEO } from './seo-data';
 import { ETAPES_PUBLICATION, RENVOI_COMMUN, TYPES_ETABLISSEMENT_SEO } from './seo-contenu/etablissements';
 import { GUIDES_SEO } from './seo-contenu/guides';
+import { TAUX_HT } from './seo-contenu/tarifs';
 import { CODES_DEPARTEMENTS, DEPARTEMENTS } from './seo-departements';
 import {
   BMO_2026,
@@ -414,7 +417,10 @@ describe('guides', () => {
   const pages = GUIDES_SEO.map(metaGuide);
 
   it('ont au moins quatre sections, trois questions et des dates de publication et de révision', () => {
-    expect(GUIDES_SEO).toHaveLength(4);
+    expect(GUIDES_SEO).toHaveLength(8);
+    expect(new Set(GUIDES_SEO.map((g) => g.slug)).size).toBe(8);
+    // Les établissements paient la commission : ils ont au moins autant de guides que les soignants.
+    expect(GUIDES_SEO.filter((g) => g.public === 'etablissement').length).toBeGreaterThanOrEqual(GUIDES_SEO.filter((g) => g.public === 'soignant').length);
     for (const g of GUIDES_SEO) {
       expect(g.sections.length, g.slug).toBeGreaterThanOrEqual(4);
       expect(g.faq.length, g.slug).toBeGreaterThanOrEqual(3);
@@ -441,6 +447,17 @@ describe('guides', () => {
     expect(page.sections![1].paragraphes!.join(' ')).toMatch(/7\s399 EHPAD en France/);
     expect(page.sections![1].sources).toHaveLength(2);
     expect(metaGuide(resoudreGuide('premiere-mission-de-remplacement')!).sections!.some((s) => s.titre === 'En chiffres')).toBe(false);
+  });
+
+  it('nomment la catégorie BMO telle que France Travail la publie pour les infirmiers', () => {
+    const chiffres = metaGuide(resoudreGuide('remplacement-infirmier-etablissement')!).sections![1];
+    expect(chiffres.titre).toBe('En chiffres');
+    const texte = chiffres.paragraphes!.join(' ');
+    // Le total vient du fichier versionné, jamais d'un nombre recopié dans le guide.
+    expect(texte).toContain(`${totalBmo('IDE').partiel ? 'au moins ' : ''}${new Intl.NumberFormat('fr-FR').format(totalBmo('IDE').projets).replace(/\s/g, '\u202f')} projets de recrutement d’infirmiers et de sages-femmes pour 2026`);
+    expect(texte).toContain('France Travail publie ces deux professions dans une même catégorie');
+    expect(texte).not.toMatch(/projets de recrutement d’infirmiers pour/);
+    expect(chiffres.sources).toHaveLength(1);
   });
 
   it('n\'écrivent aucun chiffre hors tarif publié : les seuls chiffres viennent des données sourcées', () => {
@@ -513,5 +530,37 @@ describe('nouvelles pages : titres, descriptions et liens', () => {
   it('chaque nouvelle page est liée depuis l\'accueil ou un pilier', () => {
     const depuis = new Set(toutes.filter((p) => ['accueil', 'recruter', 'devenir', 'guides'].includes(p.type)).flatMap((p) => [...p.liens.map((l) => l.href), ...(p.sections ?? []).flatMap((s) => (s.points ?? []).map((pt) => pt.href))]));
     for (const p of nouvelles) expect(depuis.has(p.path), p.path).toBe(true);
+  });
+});
+
+describe('kit hors site (docs/SEO_KIT_HORS_SITE.md)', () => {
+  const kit = readFileSync(path.resolve(process.cwd(), 'docs/SEO_KIT_HORS_SITE.md'), 'utf-8');
+  const plat = (t: string) => t.replace(/\s+/g, ' ').trim();
+
+  it('reprend les chiffres clés du baromètre mot pour mot', () => {
+    const bloc = kit.split('<!-- chiffres-barometre:debut -->')[1].split('<!-- chiffres-barometre:fin -->')[0];
+    const lignes = bloc.split('\n').filter((l) => l.startsWith('- ')).map((l) => plat(l.slice(2)));
+    const cles = metaBarometre().sections!.find((x) => x.titre === 'Les chiffres clés')!;
+    expect(lignes.length).toBeGreaterThanOrEqual(3);
+    expect(lignes).toEqual((cles.liste ?? []).map(plat));
+  });
+
+  it('respecte la longueur imposée par chaque canal', () => {
+    const textes = [...kit.matchAll(/<!-- texte:([a-z-]+):(\d+) -->\n> (.*)\n/g)];
+    expect(textes.map((m) => m[1])).toEqual(['fiche-google', 'accroche-annuaire', 'description-courte', 'slogan-linkedin']);
+    for (const [, nom, max, texte] of textes) expect(texte.length, nom).toBeLessThanOrEqual(Number(max));
+  });
+
+  it('ne dit de Jolene que ce que le site publie déjà, sans intérim ni volume d\'activité', () => {
+    expect(kit).not.toMatch(/intérim|travail temporaire|centaines|milliers/i);
+    // Assiette de la commission et modes d'exercice : le kit ne les reformule pas. La formule
+    // publiée est « vous ne payez que lorsque vous recrutez » ; les contrats possibles dépendent
+    // de la mission et ne s'énumèrent pas dans une fiche (revue B8 de #1172).
+    expect(kit).not.toMatch(/missions pourvues|sur le montant|mission(s)? libérale|CDD|vacation(s)? libérale/i);
+    expect(kit).toMatch(/ne paie(nt)? que lorsqu'ils? recrute(nt)?|ne payez que lorsque vous recrutez/);
+    // Toute mention de la commission porte le taux publié (src/lib/seo-contenu/tarifs.ts).
+    for (const m of kit.matchAll(/commission de (\d+ % HT)/g)) expect(m[1]).toBe(TAUX_HT);
+    // Aucun brouillon n'est adressé : les destinataires restent des crochets à remplir.
+    expect(kit).not.toMatch(/[\w.+-]+@[\w-]+\.[a-z]{2,}/i);
   });
 });

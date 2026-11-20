@@ -316,6 +316,30 @@ Stratégie, architecture et lots : `docs/SEO_STRATEGIE_ACQUISITION.md`. Règles 
    « au moins » dès qu'une valeur est masquée, et la part difficile n'est donnée que si aucune ne
    l'est). FINESS : `scripts/seo/extraire-finess.mjs` (villes reconnues par code commune ; les
    hôpitaux ne sont pas comptés, la catégorie ne correspond pas au mot).
+8. **Premier chargement gardé.** `npm run build` se termine par
+   `scripts/ci/verifier-premier-chargement.mjs` : il échoue si jsPDF ou recharts (`vendor-pdf`,
+   `vendor-charts`) entrent dans la chaîne des imports statiques de l'entrée ou du cadre des
+   espaces connectés (`LayoutApp`). Un groupe de `codeSplitting` emporte aussi les dépendances de
+   ses modules : un petit module partagé (`clsx`, `prop-types`, l'assistant de préchargement de
+   Vite, les assistants de compilation `@oxc-project+runtime`) part avec la première bibliothèque
+   lourde qui l'importe, et toutes les pages la chargent alors (560 Ko en production jusqu'au
+   20/11/2026, environ 305 ensuite). Remède : ajouter le module au groupe prioritaire
+   `vendor-commun` de `vite.config.ts`. Le budget de poids (235 Ko sur le build sans suivi
+   d'erreurs) se contrôle dans `validate-pr`, pas dans le build : le poids dépend de
+   l'environnement, et un budget dans le chemin de déploiement pourrait bloquer une mise en
+   production pour quelques kilo-octets.
+9. **Signalement IndexNow** (`scripts/seo/indexnow.mjs`, `.github/workflows/indexnow.yml`) : part de
+   main seulement, après le déploiement de production, et ne signale que les pages ajoutées,
+   modifiées ou supprimées (le protocole interdit de resignaler une page inchangée). Le changement
+   se lit dans `src/lib/seo-empreintes.json`, une empreinte du contenu par page indexable : **après
+   toute modification du contenu d'une page publique, lancer `npm run seo:empreintes`** (le test
+   `src/lib/seo-empreintes.test.ts` échoue sinon) ; le diff du fichier montre les pages touchées.
+   **Conflit sur ce fichier : ne pas garder les deux côtés** (exception à la règle par défaut, les
+   clés seraient en double) ; prendre un côté puis relancer `npm run seo:empreintes`. Un envoi
+   manqué (déploiement non confirmé, service indisponible) n'est pas rattrapé : relancer
+   l'exécution dans GitHub Actions. La clé (`public/jolene-sante-indexnow-2026.txt`) est publique
+   par construction : ne pas la traiter comme un secret, ne pas la remplacer par une chaîne
+   aléatoire (faux positifs des détecteurs de secrets). Google ne suit pas ce protocole.
 
 ## Règle de rémunération / facturation — heures facturées
 

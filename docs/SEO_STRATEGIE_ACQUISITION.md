@@ -187,6 +187,37 @@ vouvoiement, aucune promesse de volume ni de délai, aucune généralité (« so
 aucun lien interne cassé, chaque chiffre clé du baromètre recalculé depuis son tableau, pas plus de
 40 % de texte commun entre deux pages par type d'établissement.
 
+## 5 bis. Lot 3 — premier chargement, guides, signalement aux moteurs, kit hors site
+
+| # | Chantier | Effet |
+|---|---|---|
+| 1 | **Premier chargement presque divisé par deux.** Toutes les pages, accueil compris, chargeaient jsPDF et recharts avant de s'afficher : 560 Ko compressés en production, dont 257 inutiles hors des écrans de factures et de graphiques. Cause : un groupe de découpage emporte aussi les dépendances de ses modules ; `clsx` et `prop-types` étaient partis avec recharts, l'assistant de préchargement de Vite et les assistants de compilation avec jsPDF. Le groupe `vendor-commun` (`vite.config.ts`) les en sort : environ 305 Ko attendus en production. Les espaces connectés y gagnent aussi : jsPDF n'est plus importé que par les quatre écrans qui produisent un PDF ; le cadre commun `LayoutApp`, donc tous les écrans connectés, l'importait pour une seule fonction utilitaire. | Pages plus rapides sur mobile, pour les visiteurs comme pour l'application |
+| 2 | Garde : à la fin de `npm run build`, `scripts/ci/verifier-premier-chargement.mjs` échoue si une de ces bibliothèques revient dans la chaîne de l'entrée ou de `LayoutApp` ; dans `validate-pr`, il contrôle en plus un budget de 235 Ko compressés | Le défaut, invisible en recette, ne peut pas revenir en silence |
+| 3 | Quatre guides : un pour les infirmiers, trois pour les établissements (rédiger une annonce, accueillir un remplaçant, anticiper les congés) | Les établissements, qui paient la commission, ont désormais autant de guides que les soignants |
+| 4 | Signalement IndexNow (`scripts/seo/indexnow.mjs`, workflow `indexnow.yml`) : après un déploiement de production, les pages ajoutées, modifiées ou supprimées sont signalées à Bing, Yandex, Seznam et Naver. Le changement se lit dans `src/lib/seo-empreintes.json` (une empreinte du contenu par page, `npm run seo:empreintes`) | Découverte en heures plutôt qu'en semaines sur Bing, qui alimente aussi Copilot, DuckDuckGo et la recherche de ChatGPT. Google ne suit pas ce protocole |
+| 5 | `docs/SEO_KIT_HORS_SITE.md` : textes prêts à l'emploi pour la fiche Google, les annuaires de logiciels, LinkedIn, et trois messages types (presse, sites du secteur, instituts de formation) | Brouillons seulement : rien n'a été publié ni envoyé |
+
+Ce qui est envoyé à IndexNow : l'hôte, la clé et les adresses des pages changées. La clé est
+publique par construction (`public/jolene-sante-indexnow-2026.txt`) ; ce n'est pas un secret. Le
+protocole demande de ne signaler que ce qui change (indexnow.org/faq : « Submit only when content
+has changed ») : seules les adresses dont l'empreinte diffère du commit précédent partent. Le
+premier signalement, faute de point de comparaison, porte sur toutes les pages : c'est le cas que
+le protocole admet après une refonte, et les lots 1 à 3 en sont une. Un envoi manqué (déploiement
+non confirmé, service indisponible) n'est pas rattrapé par la mise en ligne suivante : il faut
+relancer l'exécution dans GitHub Actions. Pour arrêter le signalement : désactiver le workflow dans
+GitHub, ou supprimer le fichier de clé.
+
+Mesures du 20/11/2026, scripts de module chargés avant affichage, compressés en gzip niveau 6 :
+
+| Build | Avant | Après |
+|---|---|---|
+| Production (Vercel, suivi d'erreurs embarqué) | 559 969 octets, 45 fichiers (lu sur `jolene.app`) | 296 401 octets sur le build de prévisualisation ; environ 305 000 attendus en production, qui ajoute des identifiants de débogage (à relire sur `jolene.app` après mise en ligne) |
+| Local, simulation de la CI, variante mobile | 460 739 octets, 26 fichiers | environ 204 600 octets, 24 fichiers |
+
+Piste non traitée : en production, l'entrée pèse 99 Ko contre 34 en local, parce que le suivi
+d'erreurs y est chargé d'emblée. Le charger à la demande ferait encore gagner du poids, mais
+change le moment où les erreurs commencent à être captées : à décider à part.
+
 ## 6. Lots suivants (non faits dans cette vague)
 
 1. **Simulateur de coût d'un remplacement** (page outil pour les établissements).
@@ -210,14 +241,17 @@ aucun lien interne cassé, chaque chiffre clé du baromètre recalculé depuis s
    vérifiables et datés (publicité comparative).
 6. **Pages par département** si le baromètre obtient du trafic.
 7. **Mesure d'audience sans cookie** (à décider : touche au consentement).
-8. **Calcul BMO de l'outil interne non corrigé.** `supabase/functions/_shared/bmo-acquisition.ts`
-   garde l'ancienne méthode et alimente `acquisition_territoires.bmo_difficulte_pct`, lu par le radar
-   d'acquisition de l'administration et par le score des brouillons de prospection. Les pages
-   publiques n'en dépendent plus (elles lisent `seo-bmo-2026.json`) ; l'outil interne reste à aligner.
+8. **Calcul BMO de l'outil interne : corrigé dans le code (PR #1171), données à relancer.** L'import
+   n'enregistre plus la part « jugés difficiles » dès qu'un bassin est masqué. Reste à la main de
+   Gabrielle : relancer l'import (Admin → Acquisition → « Synchroniser BMO + BOAMP »), après avoir
+   décidé du score de tension du radar, qui lit une part vide comme 0 % (correction en B9).
 9. **Vérification des données hors CI.** `npm run seo:donnees:verifier` compare les deux JSON aux
    fichiers officiels ; il interroge le réseau et se lance à la main, pas dans la CI.
-10. **Poids du module `seo-routes`** : chargé par l'accueil, il embarque désormais guides et données
-   (environ 30 Ko compressés). À scinder si la performance de l'accueil s'en ressent.
+10. **Poids du module `seo-routes`** : environ 26 Ko compressés, chargés par l'accueil. Laissé tel
+   quel : le gain serait dix fois moindre que celui du lot 3 (§5 bis), pour un découpage risqué.
+11. **Score de tension du radar d'acquisition** (`fn_admin_acquisition_cibles`,
+   `fn_admin_acquisition_radar_externe`) : distinguer « part non publiée » de « part nulle ».
+   Fonctions SECURITY DEFINER, donc accord explicite de Gabrielle (B9).
 
 ## 7. Mesure
 
@@ -230,6 +264,8 @@ aucun lien interne cassé, chaque chiffre clé du baromètre recalculé depuis s
   sur les requêtes locales en 2 à 4 mois, effet des guides en 3 à 6 mois.
 
 ## 8. Ce qui reste à la main de Gabrielle
+
+Textes prêts à copier pour chacune de ces actions : `docs/SEO_KIT_HORS_SITE.md`.
 
 Ces actions engagent la marque à l'extérieur ou demandent ses identifiants :
 

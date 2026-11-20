@@ -609,6 +609,11 @@ function sectionChiffres(guide: GuideSEO): SectionSEO | null {
       phrases.push(`Les employeurs déclarent ${totalEnToutesLettres(totalBmo('AS'))} projets de recrutement d’aides-soignants pour 2026, en additionnant les valeurs publiées par bassin d’emploi (${SOURCE_BMO}).`);
       sources.push(SOURCES_LOCALES[0]);
     }
+    if (c === 'bmo-ide-national') {
+      // France Travail ne publie pas les infirmiers seuls : la catégorie est nommée telle quelle.
+      phrases.push(`Les employeurs déclarent ${totalEnToutesLettres(totalBmo('IDE'))} projets de recrutement d’infirmiers et de sages-femmes pour 2026, en additionnant les valeurs publiées par bassin d’emploi (${SOURCE_BMO}). France Travail publie ces deux professions dans une même catégorie.`);
+      sources.push(SOURCES_LOCALES[0]);
+    }
     if (c === 'finess-ehpad-national') {
       const phrase = phraseFinessNationale(['ehpad']);
       if (phrase) { phrases.push(phrase); sources.push(SOURCES_LOCALES[1]); }
@@ -660,7 +665,7 @@ export function metaGuides(): PageSEO {
   return {
     type: 'guides', path: CHEMIN_GUIDES,
     title: 'Guides pour soignants et établissements | Jolene Santé',
-    description: 'Guides pratiques sur le remplacement en santé : chercher des vacations, préparer une première mission, remplacer un aide-soignant en EHPAD, faire face à une absence.',
+    description: 'Guides pratiques sur le remplacement en santé, pour les soignants et pour les établissements : chercher des missions, rédiger une annonce, accueillir un remplaçant.',
     h1: 'Guides du remplacement en santé',
     intro: ['Des guides pratiques, écrits pour être utiles le jour où l’on en a besoin. Les questions de droit renvoient vers les fiches officielles ; les chiffres cités viennent de sources publiques nommées.'],
     sections: [
