@@ -3,7 +3,7 @@ import Foundation
 /// Coordonnées bancaires du soignant (lot 3, T14b, B9 ; D20, TJ6, TJ8), port de `SectionIbanPrime`
 /// (`src/components/profil-soignant/SectionPaiements.tsx` l.212-376). L'IBAN confirmé est celui du RIB vérifié
 /// (règle serveur : `fn_enregistrer_mon_iban`, puis `fn_lier_iban_verifie_document`, dump `supabase/schema/public.sql`
-/// l.32684-32743 et l.39848-39967) ; le contrôle local ne fait qu'éviter un envoi voué à l'échec.
+/// l.32692-32751 et l.39856-39975) ; le contrôle local ne fait qu'éviter un envoi voué à l'échec.
 ///
 /// L'IBAN saisi n'est jamais journalisé ni persisté : il ne vit que dans le champ, vidé dès l'envoi (`IbanModel`).
 public enum IbanRules {
@@ -70,7 +70,7 @@ public enum IbanRules {
         "•••• •••• •••• •••• •••• \(last4)"
     }
 
-    /// Quatre derniers caractères de l'IBAN envoyé (`right(v_iban, 4)` du serveur, l.39933, sur la même valeur nettoyée).
+    /// Quatre derniers caractères de l'IBAN envoyé (`right(v_iban, 4)` du serveur, l.39941, sur la même valeur nettoyée).
     public static func quatreDerniers(_ iban: String) -> String {
         String(nettoyer(iban).suffix(4))
     }
@@ -117,11 +117,11 @@ public enum IbanTextes {
     /// `RIB_NON_CONCORDANT` qui n'ont pas d'`error` (TJ6, règle 2).
     public static let ribCorrespondant = "Téléversez puis faites vérifier le RIB correspondant."
     /// Texte nouveau (TJ6, règle 3) : `IDENTITE_VERIFIEE_REQUISE` (`identite_verifiee` et `coherence_identite =
-    /// 'COHERENT'`, `public.sql` l.39884-39889).
+    /// 'COHERENT'`, `public.sql` l.39892-39897).
     public static let identiteVerifieeRequise =
         "Faites d'abord vérifier votre identité, cohérente avec votre profil, depuis Mes documents."
     /// Texte nouveau (TJ6, règle 3) : `IDENTITE_COURANTE_REQUISE` (pièce d'identité `VERIFIE` dont les noms extraits
-    /// concordent avec le profil, `public.sql` l.39891-39907).
+    /// concordent avec le profil, `public.sql` l.39899-39915).
     public static let identiteCouranteRequise =
         "Une pièce d'identité vérifiée à vos nom et prénom est requise : téléversez-la depuis Mes documents."
     /// Libellé de la page web « Mes documents » (`LibellesWeb.EspaceSoignant.mesDocuments`), action des refus d'identité.

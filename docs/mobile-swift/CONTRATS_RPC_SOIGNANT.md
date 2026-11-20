@@ -377,7 +377,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_dashboard_soignant_complet"() RETURNS "j
 - **Classement manuel (décision 6, `LOT1_PLAN.md` §7)** : `RPC_UTILISATEUR_AUTH_INTERNE` — SECURITY DEFINER,
   `search_path` vide, GRANT `authenticated`, identité lue via `auth.uid()` dans le corps (l.24525-24702 du dump) ;
   manifeste non régénéré, `rpc-contracts.json` garde `manifeste: null`.
-- **Signature SQL** (`supabase/schema/public.sql` l.24525) :
+- **Signature SQL** (`supabase/schema/public.sql` l.24533) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_confirmer_action_planning_v1"("p_mission_id" "uuid", "p_action" "text", "p_creneaux_confirmes" "jsonb", "p_message" "text" DEFAULT NULL::"text", "p_choix_contrat" "text" DEFAULT NULL::"text", "p_candidature_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
@@ -1104,7 +1104,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_annuler_mission_soignant"("p_mission_id"
 - **Usage prévu** : Refus d'une proposition `PROPOSEE` depuis l'Accueil (`p_accepter = false`). L'acceptation
   passe par `fn_confirmer_action_planning_v1` (`PROPOSITION`, comme le web `CarteProposition.tsx` l.268-279) ;
   `p_accepter = true` n'est pas appelé par l'app au lot 1. Relecture : candidature (`REFUSEE`).
-- **Signature SQL** (`supabase/schema/public.sql` l.54035) :
+- **Signature SQL** (`supabase/schema/public.sql` l.54043) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_accepter" boolean) RETURNS "jsonb"
@@ -1137,7 +1137,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_repondre_proposition"("p_candidature_id"
 - **Interprétation** (`RPCResponse`) : « Non authentifié » (avec `success:false`) → `.unauthorized` ; autre
   refus `{success:false, error}` → `.unknown`, message verbatim, aucune relecture par la gateway (le modèle
   relit) ; corps sans `success:true` → `.contract` ; erreur PostgREST (uuid invalide…) → message générique.
-- **Signature SQL** (`supabase/schema/public.sql` l.61945) :
+- **Signature SQL** (`supabase/schema/public.sql` l.61953) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_toggle_favori_etablissement"("p_etablissement_id" "uuid", "p_actif" boolean) RETURNS "jsonb"
@@ -1166,7 +1166,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_toggle_favori_etablissement"("p_etabliss
   **noms** par `fn_etablissements_safe(p_ids)` (règle ci-dessous) : en échec de transport, de serveur ou de
   contrat, le nom de la RPC reste (lecture complémentaire) ; session expirée et annulation propagées.
   Tests : `SupabaseFavorisGatewayTests`.
-- **Signature SQL** (`supabase/schema/public.sql` l.42281) :
+- **Signature SQL** (`supabase/schema/public.sql` l.42289) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "jsonb"
@@ -1220,7 +1220,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "j
   `parcours_inscription.donnees.missionsSauvegardees`, avant la suppression de la ligne `missions_sauvegardees`.
   L'ajout (`p_actif = true`) n'est utilisé par le web que pendant l'inscription progressive (hors espace natif) : non
   porté.
-- **Signature SQL** (`supabase/schema/public.sql` l.43500) :
+- **Signature SQL** (`supabase/schema/public.sql` l.43508) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_modifier_favori_inscription"("p_mission_id" "uuid", "p_actif" boolean) RETURNS "void"
@@ -1379,7 +1379,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_param_bool"("p_cle" "text", "p_defaut" b
   `DetailMissionSoignant.tsx` l.1414-1417, alors que le cron lit `confirmation_j1_max_h` = 36 h : écart
   consigné hors lot). Cible du push `RAPPEL_MISSION` (`/soignant/missions/{id}`, `?relance=1` ignoré).
   Relecture obligatoire `mission(id:)` → `presence_confirmee_le` non nul ; **jamais de date posée localement**.
-- **Signature SQL** (`supabase/schema/public.sql` l.24992) :
+- **Signature SQL** (`supabase/schema/public.sql` l.25000) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_id" "uuid") RETURNS "jsonb"

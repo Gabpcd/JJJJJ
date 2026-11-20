@@ -1763,7 +1763,7 @@ Règle TJ6 appliquée code par code (`IbanPresentation.refus`, épinglé par
   titre « RIB vérifié requis » avec « Téléverser mon RIB ».
 - `IBAN_INVALIDE` : « IBAN invalide » (`SectionPaiements.tsx` l.339).
 - `RIB_COURANT_REQUIS`, `RIB_NON_CONCORDANT` : « Téléversez puis faites vérifier le RIB correspondant. » (`public.sql`
-  l.32735), titre « RIB vérifié requis » (l.306), action « Téléverser mon RIB » (l.316) vers les documents du lot 2.
+  l.32743), titre « RIB vérifié requis » (l.306), action « Téléverser mon RIB » (l.316) vers les documents du lot 2.
 - `PROFIL_INTROUVABLE`, code inconnu : « Une erreur est survenue. Veuillez réessayer. » (`src/lib/erreurs.ts` l.532).
 - `NON_AUTHENTIFIE` : parcours de session du lot 1 (« Vérifier ma session »).
 - Textes nouveaux (règle 3 ; vouvoiement, une phrase, la seule condition vérifiée par le serveur et l'action de l'app,
