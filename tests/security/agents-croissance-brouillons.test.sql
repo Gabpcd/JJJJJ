@@ -137,7 +137,7 @@ BEGIN
   -- Phrase BMO : préposition élidée (20261120150000), et jamais de catégorie agrégée.
   SELECT corps INTO v_corps FROM public.growth_brouillons
    WHERE agent = 'POST_SOCIAL' AND departement = 'ZZ' AND profession = 'AS';
-  IF position('France Travail recense 120 projets de recrutement d''aides-soignants dans le ZZ en 2026, dont 40 % jugés difficiles par les employeurs (enquête BMO).' IN v_corps) = 0 THEN
+  IF COALESCE(position('France Travail recense 120 projets de recrutement d''aides-soignants dans le ZZ en 2026, dont 40 % jugés difficiles par les employeurs (enquête BMO).' IN v_corps), 0) = 0 THEN
     RAISE EXCEPTION 'Post aides-soignants : phrase BMO absente ou mal accordée — %', v_corps;
   END IF;
   IF EXISTS (SELECT 1 FROM public.growth_brouillons
