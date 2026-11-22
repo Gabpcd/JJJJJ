@@ -20324,10 +20324,12 @@ BEGIN
     IF v_presence.heures_reelles IS NULL
        OR v_presence.heures_reelles = 0 THEN
       v_type_litige := 'ABSENCE_SOIGNANT';
-      v_motif :=
-        'Auto-création : soignant marqué absent sans contestation dans les 48h';
+      v_motif := format(
+        'Auto-création : absence signalée par l''établissement ; présence validée depuis plus de %sh',
+        v_delai_pointage_h
+      );
       v_notif_corps :=
-        'Votre établissement a signalé une absence. Répondez sous 72h pour éviter l''escalade automatique.';
+        'Votre établissement a signalé une absence.';
     ELSIF v_presence.duree_heures IS NOT NULL
       AND v_presence.duree_heures > 0
       AND v_presence.heures_reelles < v_presence.duree_heures * 0.80
@@ -20342,7 +20344,7 @@ BEGIN
         )
       );
       v_notif_corps :=
-        'Votre établissement a signalé un départ anticipé. Répondez sous 72h pour éviter l''escalade automatique.';
+        'Votre établissement a signalé un départ anticipé.';
     ELSE
       CONTINUE;
     END IF;
@@ -20402,9 +20404,15 @@ BEGIN
         'duree_heures_prevues', v_presence.duree_heures,
         'raison', CASE v_type_litige
           WHEN 'ABSENCE_SOIGNANT' THEN
-            'Absence non contestée dans les 48h post-validation présence'
+            format(
+              'Absence signalée, présence validée depuis plus de %sh',
+              v_delai_pointage_h
+            )
           WHEN 'DEPART_ANTICIPE' THEN
-            'Départ anticipé (< 80 % heures prévues) non contesté dans les 48h'
+            format(
+              'Départ anticipé (< 80 %% heures prévues), présence validée depuis plus de %sh',
+              v_delai_pointage_h
+            )
         END
       ),
       NULL,
@@ -20444,7 +20452,7 @@ $$;
 ALTER FUNCTION "public"."fn_auto_creation_litiges_presence"() OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."fn_auto_creation_litiges_presence"() IS 'Cron : crée automatiquement des litiges ABSENCE_SOIGNANT (heures_reelles=0/NULL) et DEPART_ANTICIPE (< 80 % des heures prévues) pour les présences non contestées dans les 48h post-validation étab. Anti-boucle via presences.litige_auto_cree_le. initie_par=SYSTEME. Retourne { litiges_crees, absence_soignant, depart_anticipe }. Cas DESACCORD_HEURES_POINTAGE non auto-détectable (schéma presences mono-colonne) — reste manuel via fn_ouvrir_litige_rate_limited.';
+COMMENT ON FUNCTION "public"."fn_auto_creation_litiges_presence"() IS 'Cron : crée automatiquement des litiges ABSENCE_SOIGNANT (heures_reelles=0/NULL) et DEPART_ANTICIPE (< 80 % des heures prévues) pour les présences validées par l''étab depuis plus de parametres_litiges.delai_contestation_pointage_h heures (sans vérifier une contestation ouverte d''un autre type). Anti-boucle via presences.litige_auto_cree_le. initie_par=SYSTEME. Retourne { litiges_crees, absence_soignant, depart_anticipe }. Cas DESACCORD_HEURES_POINTAGE non auto-détectable (schéma presences mono-colonne) — reste manuel via fn_ouvrir_litige_rate_limited.';
 
 
 
@@ -41122,7 +41130,7 @@ BEGIN
     WHEN 'LITIGE_OUVERTURE' THEN
       'un litige '
         || COALESCE(p_email_data ->> 'type_litige', '')
-        || ' a été ouvert sur votre mission. Répondez sous 72h.'
+        || ' a été ouvert sur votre mission.'
     WHEN 'REMBOURSEMENT_CONFIRME' THEN
       'remboursement de '
         || COALESCE(p_email_data ->> 'montant', '?')
@@ -41130,7 +41138,7 @@ BEGIN
         || COALESCE(p_email_data ->> 'numero_avoir', '')
         || '). Délai bancaire 2-5j.'
     WHEN 'LITIGE_RAPPEL_J1' THEN
-      'litige en attente depuis 1j. Répondez sous 24h pour éviter l''escalade.'
+      'litige en attente depuis 1j. Répondez pour éviter l''escalade.'
     WHEN 'LITIGE_RAPPEL_J3' THEN
       'litige en attente depuis 3j. Réponse urgente requise.'
     WHEN 'LITIGE_RAPPEL_J5' THEN
