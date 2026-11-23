@@ -108,29 +108,66 @@ final class StubRegistry: @unchecked Sendable {
         requests.filter { $0.path == path }
     }
 
-    func resolve(_ request: RecordedRequest) -> StubResponse? {
+    /// Issue de la résolution d'une requête arrivée au transport.
+    enum Resolution {
+        /// La tâche URLSession était déjà annulée : la requête n'est ni enregistrée ni servie.
+        case annulee
+        case sansStub
+        case reponse(StubResponse)
+    }
+
+    /// `annulee` est évalué SOUS le verrou du registre. Une lecture lancée par `async let` puis annulée (l'appel
+    /// principal a levé) peut n'atteindre le transport qu'après le retour de la passerelle, donc après le `reset()`
+    /// suivant du test : enregistrée, elle fausse un « aucune requête » (échec intermittent du 23/11/2026, run CI
+    /// 45200687105, `SupabaseEtabDashboardGatewayTests`). Sous le verrou, il n'y a que deux ordres possibles : soit
+    /// l'annulation précède ce contrôle et la requête est ignorée, soit l'enregistrement précède le `reset()` qui suit
+    /// le retour de l'appel, et il est effacé. L'argument est complet pour une lecture attendue avant le retour
+    /// (`async let`) ; pour un perdant annulé sans être attendu (`bounded`), il repose sur le fait que
+    /// `URLSessionTask.cancel()` marque la tâche avant de rendre la main. Une requête tardive NON annulée (tâche non
+    /// structurée) reste enregistrée : ces tests attendent déjà leurs requêtes.
+    func resolve(_ request: RecordedRequest, annulee: () -> Bool = { false }) -> Resolution {
         lock.lock(); defer { lock.unlock() }
+        if annulee() { return .annulee }
         recorded.append(request)
         let match = stubs.first { stub in
             stub.method == request.method && stub.path == request.path && (stub.predicate?(request) ?? true)
         }
-        if match == nil { unmatchedRequests.append(request) }
-        return match?.response
+        guard let match else {
+            unmatchedRequests.append(request)
+            return .sansStub
+        }
+        return .reponse(match.response)
     }
 }
 
 /// Transport injecté via `URLSessionConfiguration.protocolClasses` (plan §4.1 : transports
 /// injectés). Toute requête non stubée échoue avec `URLError.unsupportedURL` et est listée
-/// dans `StubRegistry.unmatched` pour que le test l'affirme.
+/// dans `StubRegistry.unmatched` pour que le test l'affirme. Seule exception : une requête dont la
+/// tâche est déjà annulée à son arrivée n'est ni enregistrée ni listée (voir `StubRegistry.resolve`).
 final class StubURLProtocol: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
+    /// Vrai pour une tâche annulée, qu'elle soit encore en cours d'annulation ou déjà terminée : une tâche annulée
+    /// avant d'atteindre le transport y arrive le plus souvent à l'état `.completed`. Sans tâche (`nil`), la requête
+    /// est tenue pour vivante.
+    static func tacheAnnulee(_ tache: URLSessionTask?) -> Bool {
+        tache?.state == .canceling || tache?.state == .completed
+    }
+
     override func startLoading() {
         let recorded = RecordedRequest(request)
-        guard let stub = StubRegistry.shared.resolve(recorded) else {
+        let tache = task
+        let stub: StubResponse
+        switch StubRegistry.shared.resolve(recorded, annulee: { Self.tacheAnnulee(tache) }) {
+        case .annulee:
+            client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+            return
+        case .sansStub:
             client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL))
             return
+        case .reponse(let reponse):
+            stub = reponse
         }
         if let failure = stub.failure {
             client?.urlProtocol(self, didFailWithError: failure)
