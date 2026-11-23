@@ -37,6 +37,33 @@ struct PasDeDefilement: Sendable, Equatable {
         return PasDeDefilement(versLaSuite: cible.midY > conteneur.midY, amplitude: amplitudeRecentrage)
     }
 
+    /// Glissements sans élan consécutifs restés sans effet avant de passer à un glissement avec élan (`scrollTo`).
+    static let seuilSansEffet = 2
+
+    /// Vrai si un glissement n'a rien déplacé : la cible avait un cadre et le garde, et le conteneur garde le sien.
+    /// Une cible sans cadre (ligne pas encore créée par une liste paresseuse) ne prouve rien : faux.
+    ///
+    /// Défaut relevé au run 44797977486 (UI — ipad-portrait, `DemoEtabCandidaturesTests`, récapitulatif d'acceptation) :
+    /// dans une feuille à crans (`presentationDetents([.medium, .large])`) dont le contenu est en haut, un glissement
+    /// tenu à l'arrivée (relâché sans vitesse) étire la feuille, qui revient à son cran au relâché ; le contenu ne
+    /// défile pas. Quarante glissements identiques (410 ; 791,2 → 664,8) ont laissé `etab-recap-confirm` à
+    /// (154 ; 899 ; 512 × 48) sous un conteneur resté à (120 ; 546 ; 580 × 364). Le même écran avait demandé douze
+    /// glissements identiques en paysage au même run, et 266 s en portrait au run 44475153698 (test réussi).
+    static func sansEffet(cibleAvant: CGRect?, cibleApres: CGRect?, conteneurAvant: CGRect, conteneurApres: CGRect) -> Bool {
+        guard let avant = cibleAvant, let apres = cibleApres, !avant.isEmpty, !apres.isEmpty else { return false }
+        return memeCadre(avant, apres) && memeCadre(conteneurAvant, conteneurApres)
+    }
+
+    /// Un glissement avec élan remplace le glissement sans élan dès que `seuilSansEffet` glissements de suite n'ont
+    /// rien déplacé : le relâché en vitesse fait passer la feuille au cran suivant, ou défiler son contenu.
+    static func elanRequis(glissementsSansEffet: Int) -> Bool { glissementsSansEffet >= seuilSansEffet }
+
+    /// Deux cadres confondus au demi-point près (les cadres relus par XCUITest sont arrondis au demi-point).
+    static func memeCadre(_ a: CGRect, _ b: CGRect) -> Bool {
+        abs(a.minX - b.minX) < 0.5 && abs(a.minY - b.minY) < 0.5
+            && abs(a.width - b.width) < 0.5 && abs(a.height - b.height) < 0.5
+    }
+
     /// Champ recouvert, même en partie, par l'une des `barres` (cadres des barres de navigation
     /// atteignables, celles de l'écran au premier plan) ; un cadre vide ne recouvre rien.
     static func recouvertParUneBarre(_ champ: CGRect, barres: [CGRect]) -> Bool {

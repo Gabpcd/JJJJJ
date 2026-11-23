@@ -564,7 +564,9 @@ class JoleneUITestCase: XCTestCase {
 
     /// Glissement entre deux coordonnées du viewport visible (hors clavier) : un glissement, pas une
     /// activation. L'un des deux glissements du socle, avec `dragSliderPastMinimum(_:)`.
-    func drag(_ container: XCUIElement, fromY: CGFloat, toY: CGFloat) {
+    /// `avecElan` : relâché en vitesse, sans tenue à l'arrivée. Réservé à `scrollTo`, après des glissements sans élan
+    /// restés sans effet (`PasDeDefilement.elanRequis`).
+    func drag(_ container: XCUIElement, fromY: CGFloat, toY: CGFloat, avecElan: Bool = false) {
         var viewport = container.frame.intersection(app.frame)
         if app.keyboards.firstMatch.exists {
             let bottom = min(viewport.maxY, app.keyboards.firstMatch.frame.minY)
@@ -586,7 +588,9 @@ class JoleneUITestCase: XCTestCase {
         // l'atteignabilité) tombait sur une liste en mouvement : le toucher arrêtait le défilement au lieu d'activer
         // le contrôle (runs 42664161349 et 43276693380 : interrupteur de complétion, « Se connecter » de
         // l'inscription, curseur du rayon, « Activation point invalid » d'un interrupteur des préférences).
-        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .default, thenHoldForDuration: 0.3)
+        // Avec élan (`avecElan`) : aucun maintien, le relâché garde sa vitesse ; `scrollTo` attend ensuite l'arrêt.
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: avecElan ? .fast : .default,
+                    thenHoldForDuration: avecElan ? 0 : 0.3)
     }
 
     /// Amène un curseur (`Slider`) à sa borne basse par un glissement qui part du pouce et finit
@@ -660,9 +664,12 @@ class JoleneUITestCase: XCTestCase {
         return target.frame.minY >= bas - 1
     }
 
-    func scrollTo(_ target: XCUIElement, in container: XCUIElement, downward: Bool = true) {
+    func scrollTo(_ target: XCUIElement, in container: XCUIElement, downward: Bool = true,
+                  file: StaticString = #filePath, line: UInt = #line) {
         require("Le conteneur de défilement attendu est visible") { self.containerVisible(container) }
         var scrolls = 0
+        // Glissements sans élan de suite qui n'ont déplacé ni la cible ni le conteneur (`PasDeDefilement.sansEffet`).
+        var sansEffet = 0
         // 40 pas au plus : sans élan (`drag`), un pas défile au plus 55 % du conteneur ; la boucle s'arrête dès que la
         // cible est entièrement visible.
         while !visibleSousLesBarres(target, inside: container) && scrolls < 40 {
@@ -679,9 +686,34 @@ class JoleneUITestCase: XCTestCase {
             }
             let pas = PasDeDefilement.suivant(cible: target.exists ? target.frame : nil, conteneur: cadreUtile,
                                               versLaSuiteParDefaut: downward)
-            let distance = pas.versLaSuite ? pas.amplitude : -pas.amplitude
-            drag(container, fromY: 0.5 + distance / 2, toY: 0.5 - distance / 2)
+            let cibleAvant = target.exists ? target.frame : nil
+            let conteneurAvant = container.frame
+            if PasDeDefilement.elanRequis(glissementsSansEffet: sansEffet) {
+                // Feuille à crans dont le contenu est en haut (run 44797977486, UI — ipad-portrait, récapitulatif
+                // d'acceptation) : le glissement tenu à l'arrivée étire la feuille, qui revient à son cran ; quarante
+                // glissements identiques n'y ont rien déplacé. Un glissement relâché en vitesse la fait passer au cran
+                // suivant, ou fait défiler son contenu. Le geste est consigné, et l'arrêt du mouvement attendu avant
+                // toute relecture : aucune action ne tombe sur un contenu en mouvement.
+                let sens: CGFloat = pas.versLaSuite ? 1 : -1
+                let elan = PasDeDefilement.amplitudeRecherche * sens
+                consignerRejeu("Le contrôle demandé est entièrement visible après un défilement borné",
+                               issue: "\(sansEffet) glissements sans élan sans effet sur \(container.identifier) : "
+                                   + "glissement avec élan", file: file, line: line)
+                drag(container, fromY: 0.5 + elan / 2, toY: 0.5 - elan / 2, avecElan: true)
+                var dernierCadre: CGRect?
+                _ = attendreSansEchec("Le défilement avec élan est arrêté", timeout: 5, file: file, line: line) {
+                    let cadre = target.exists ? target.frame : .null
+                    defer { dernierCadre = cadre }
+                    return dernierCadre.map { $0 == cadre || PasDeDefilement.memeCadre($0, cadre) } ?? false
+                }
+            } else {
+                let distance = pas.versLaSuite ? pas.amplitude : -pas.amplitude
+                drag(container, fromY: 0.5 + distance / 2, toY: 0.5 - distance / 2)
+            }
             scrolls += 1
+            let effetNul = PasDeDefilement.sansEffet(cibleAvant: cibleAvant, cibleApres: target.exists ? target.frame : nil,
+                                                     conteneurAvant: conteneurAvant, conteneurApres: container.frame)
+            sansEffet = effetNul ? sansEffet + 1 : 0
         }
         require("Le contrôle demandé est entièrement visible après un défilement borné") {
             self.visibleSousLesBarres(target, inside: container)
