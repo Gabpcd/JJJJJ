@@ -810,7 +810,9 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
   const eclats = new Map([
     ['lot3-compte', ['DemoLiensLot3Tests', 'DemoCompteLot3Tests']],
     ['lot3-push', ['DemoPushTests']],
-    ['lot3-notifications', ['DemoNotificationsTests', 'DemoPreferencesTests', 'DemoProfilTests']],
+    // Stabilité de la CI (23/11/2026) : `DemoProfilTests` sort de cet éclat (23 à 30 min mesurées) vers l'éclat
+    // « lot3-profil » du job `ui-lot1`, vérifié plus bas et par `ios-swift-ci-eclats.node.mjs`.
+    ['lot3-notifications', ['DemoNotificationsTests', 'DemoPreferencesTests']],
     ['lot3-inscription', ['DemoInscriptionTests', 'DemoCompletionInscriptionTests', 'DemoLiensLot2Tests']],
     // Lot 5 (revue B8 de #1147, m5) : la session établissement rejoint cet éclat léger, sans douzième éclat.
     // Lot 5, T4 : l'Accueil établissement suit la session établissement dans cet éclat ; L5-T7 : le code de pointage
@@ -855,6 +857,14 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
   for (const classe of toutes) {
     assert.equal(wf.split(`-only-testing:JoleneUITests/${classe} \\`).length - 1, 1, `${classe} : un seul éclat`);
   }
+  // `DemoProfilTests` (lot 3, T9) : toujours sautée par le socle et lancée une seule fois, dans « lot3-profil ».
+  const profil = etape('lot3-profil');
+  assert.ok(profil, 'éclat lot3-profil absent');
+  assert.deepEqual([...profil.matchAll(/-only-testing:JoleneUITests\/(\w+) \\/g)].map(m => m[1]), ['DemoProfilTests']);
+  assert.ok(socle.includes('-skip-testing:JoleneUITests/DemoProfilTests \\'), 'éclat socle : DemoProfilTests non sauté');
+  assert.equal(wf.split('-only-testing:JoleneUITests/DemoProfilTests \\').length - 1, 1, 'DemoProfilTests : un seul éclat');
+  assert.ok(wf.includes('{ nom: "lot3-profil", code: process.env.CODE_LOT3_PROFIL, classes: ["DemoProfilTests"] }'),
+    'résumé : éclat lot3-profil et sa classe attendus');
   // Plafond du job au-dessus de la somme des éclats (socle compris, 30 min chacun) et du build.
   const plafond = Number(wf.match(/\n {2}ui:\n[\s\S]*?\n {4}timeout-minutes: (\d+)/)[1]);
   assert.ok(plafond >= 30 * (eclatsLot2.length + eclats.size + 1) + 20, `plafond du job UI trop bas : ${plafond} min`);

@@ -62,6 +62,61 @@ final class PasDeDefilementTests: XCTestCase {
                        PasDeDefilement(versLaSuite: true, amplitude: PasDeDefilement.amplitudeRecherche))
     }
 
+    // MARK: Glissement sans effet (feuille à crans, run 44797977486, UI — ipad-portrait)
+
+    /// Cadres relus avant le premier glissement et après le quarantième : récapitulatif d'acceptation à mi-hauteur.
+    private let feuille = CGRect(x: 120, y: 546, width: 580, height: 364)
+    private let confirmer = CGRect(x: 154, y: 899, width: 512, height: 48)
+
+    func testFeuilleACransLePasCalculeEstCeluiDesQuaranteGlissementsIdentiques() {
+        // Cible sous le conteneur (947 > 910) : la page monte de (364 − 48) × 0,4 = 126,4 pt, de 791,2 à 664,8.
+        let pas = PasDeDefilement.suivant(cible: confirmer, conteneur: feuille, versLaSuiteParDefaut: true)
+        XCTAssertTrue(pas.versLaSuite)
+        XCTAssertEqual(pas.amplitude * feuille.height, 126.4, accuracy: 0.01)
+        XCTAssertEqual(feuille.minY + feuille.height * (0.5 + pas.amplitude / 2), 791.2, accuracy: 0.01)
+        XCTAssertEqual(feuille.minY + feuille.height * (0.5 - pas.amplitude / 2), 664.8, accuracy: 0.01)
+    }
+
+    func testGlissementSansEffetCibleEtConteneurInchanges() {
+        XCTAssertTrue(PasDeDefilement.sansEffet(cibleAvant: confirmer, cibleApres: confirmer,
+                                                conteneurAvant: feuille, conteneurApres: feuille))
+        // Arrondi au demi-point d'une relecture : toujours le même cadre.
+        XCTAssertTrue(PasDeDefilement.sansEffet(cibleAvant: confirmer, cibleApres: confirmer.offsetBy(dx: 0, dy: 0.25),
+                                                conteneurAvant: feuille, conteneurApres: feuille))
+    }
+
+    func testGlissementQuiDeplaceLaCibleOuLaFeuilleALEffetAttendu() {
+        // Le contenu a défilé : la cible est remontée.
+        XCTAssertFalse(PasDeDefilement.sansEffet(cibleAvant: confirmer, cibleApres: confirmer.offsetBy(dx: 0, dy: -126.4),
+                                                 conteneurAvant: feuille, conteneurApres: feuille))
+        // La feuille est passée au cran haut : le conteneur a grandi, même si la cible n'a pas bougé.
+        let cranHaut = CGRect(x: 120, y: 80, width: 580, height: 1020)
+        XCTAssertFalse(PasDeDefilement.sansEffet(cibleAvant: confirmer, cibleApres: confirmer,
+                                                 conteneurAvant: feuille, conteneurApres: cranHaut))
+    }
+
+    func testCibleSansCadreNEstJamaisUnGlissementSansEffet() {
+        // Ligne pas encore créée par une liste paresseuse : le défilement de recherche continue, sans élan.
+        XCTAssertFalse(PasDeDefilement.sansEffet(cibleAvant: nil, cibleApres: nil, conteneurAvant: feuille, conteneurApres: feuille))
+        XCTAssertFalse(PasDeDefilement.sansEffet(cibleAvant: .zero, cibleApres: .zero, conteneurAvant: feuille, conteneurApres: feuille))
+        XCTAssertFalse(PasDeDefilement.sansEffet(cibleAvant: nil, cibleApres: confirmer, conteneurAvant: feuille, conteneurApres: feuille))
+    }
+
+    func testElanSeulementApresDeuxGlissementsSansEffetDeSuite() {
+        XCTAssertEqual(PasDeDefilement.seuilSansEffet, 2)
+        XCTAssertFalse(PasDeDefilement.elanRequis(glissementsSansEffet: 0, versLaSuite: true))
+        XCTAssertFalse(PasDeDefilement.elanRequis(glissementsSansEffet: 1, versLaSuite: true),
+                       "un glissement perdu se rejoue d'abord sans élan")
+        XCTAssertTrue(PasDeDefilement.elanRequis(glissementsSansEffet: 2, versLaSuite: true))
+        XCTAssertTrue(PasDeDefilement.elanRequis(glissementsSansEffet: 39, versLaSuite: true))
+    }
+
+    func testJamaisDElanVersLeHautDeLaPage() {
+        // Doigt qui descend : un élan en haut d'une page fermerait une feuille ou déclencherait un rafraîchissement.
+        XCTAssertFalse(PasDeDefilement.elanRequis(glissementsSansEffet: 2, versLaSuite: false))
+        XCTAssertFalse(PasDeDefilement.elanRequis(glissementsSansEffet: 39, versLaSuite: false))
+    }
+
     func testChampRecouvertParUneBarreDeNavigation() {
         let barre = CGRect(x: 0, y: 32, width: 1180, height: 108)
         // `profil-ville-recherche` relevé sous la barre : touché sur la bande visible de 4 pt, sans focus.

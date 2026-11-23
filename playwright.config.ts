@@ -40,8 +40,21 @@ export default defineConfig({
   ],
   globalSetup: './e2e/global-setup.ts',
   globalTeardown: './e2e/global-teardown.ts',
-  timeout: 30_000,
-  expect: { timeout: 10_000 },
+  // Budgets d'attente en CI. La suite y parle à un vrai backend : sous sa propre
+  // charge (environ 25 000 requêtes par heure contre 600 au repos, journaux de
+  // la passerelle du 20/11/2026), une requête sans rapport avec le test en
+  // cours met 4 à 13 s environ toutes les treize minutes (27 s au pire), alors
+  // que la médiane reste sous 200 ms. Avec 10 s par assertion et 30 s par test,
+  // une seule de ces pauses suffisait : 34 des 47 premiers essais en échec puis
+  // réussis, du 26/10 au 20/11/2026, sont des attentes dépassées sans défaut du
+  // produit (redirection après connexion 12, assertion 11, délai d'un test ou
+  // de sa préparation 11). Une attente rend la main dès que sa condition est
+  // vraie : ces bornes ne ralentissent aucun test qui passe et ne retirent
+  // aucune assertion. Un test encore instable fait toujours échouer le job
+  // (failOnFlakyTests ci-dessous). Les temps de chargement se mesurent
+  // ailleurs (Lighthouse).
+  timeout: IS_CI ? 60_000 : 30_000,
+  expect: { timeout: IS_CI ? 20_000 : 10_000 },
   fullyParallel: true,
   forbidOnly: IS_CI,
   retries: IS_CI ? 2 : 0,

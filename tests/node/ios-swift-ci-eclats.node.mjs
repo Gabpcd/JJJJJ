@@ -108,6 +108,11 @@ const ECLATS_LOT1 = new Map([
   ['lot1-accueil-explorer', ['DemoAccueilTests', 'DemoExplorerTests', 'DemoFavorisTests']],
   // Lot 4 (L4-T4) : première tranche du lot 4 à livrer un XCUITest ; ses classes démo rejoignent cet éclat du job (D19).
   ['lot4', ['DemoFiltresTests']],
+  // Stabilité de la CI (23/11/2026) : deux éclats du job `ui` atteignaient leurs 30 min (« presences » : 27 à 30 min sur
+  // iPad ; « lot3-notifications » : 23 à 30 min, runs 44475153698, 44555091967 et 44797977486). Les classes qui les
+  // faisaient déborder tournent ici, le job `ui` étant à son plafond de onze éclats.
+  ['lot5-etablissement', ['DemoEtabLiensTests', 'DemoEtabMissionsTests', 'DemoEtabCandidaturesTests']],
+  ['lot3-profil', ['DemoProfilTests']],
 ]);
 
 // À l'intégration du 9 novembre 2026, l'éclat « lot2 » n'existe plus : L2-T4b l'a découpé par domaine (« presences »,
@@ -133,18 +138,40 @@ test('lot 5 : session et liens établissement hors du socle, chacun dans son éc
   // L5-T5 : DemoEtabMissionsTests rejoint « presences » (place laissée par DemoFavorisTests, aucun douzième éclat).
   // L5-T6 : DemoEtabCandidaturesTests (deux tests) rejoint aussi « presences ».
   // L5-T7 : DemoEtabPointageTests (deux tests) rejoint « lot3-profil-photo », avec la session établissement.
-  const attendus = new Map([['DemoEtabSessionTests', 'lot3-profil-photo'], ['DemoEtabLiensTests', 'presences'],
-    ['DemoEtabAccueilTests', 'lot3-profil-photo'], ['DemoEtabMissionsTests', 'presences'],
-    ['DemoEtabCandidaturesTests', 'presences'], ['DemoEtabPointageTests', 'lot3-profil-photo']]);
+  // Stabilité de la CI (23/11/2026) : liens, missions et candidatures établissement sortent de « presences » (27 à
+  // 30 min sur iPad) vers l'éclat « lot5-etablissement » du job `ui-lot1`.
+  const attendus = new Map([['DemoEtabSessionTests', 'lot3-profil-photo'], ['DemoEtabLiensTests', 'lot5-etablissement'],
+    ['DemoEtabAccueilTests', 'lot3-profil-photo'], ['DemoEtabMissionsTests', 'lot5-etablissement'],
+    ['DemoEtabCandidaturesTests', 'lot5-etablissement'], ['DemoEtabPointageTests', 'lot3-profil-photo']]);
   for (const [classe, eclat] of attendus) {
     assert.ok(classes.includes(classe), `${classe} n est pas reconnue comme classe XCUITest`);
-    const ou = domaines.filter(e => classesDe(e).includes(classe)).map(e => e.nom);
+    const ou = [...domaines, ...parEtapeLot1].filter(e => classesDe(e).includes(classe)).map(e => e.nom);
     assert.deepEqual(ou, [eclat], `${classe} : éclat attendu ${eclat}`);
     assert.ok(socle.sauf.includes(`JoleneUITests/${classe}`), `${classe} : non sauté par le socle`);
   }
   for (const c of classes.filter(n => n.startsWith('DemoEtab'))) {
     assert.ok(attendus.has(c), `${c} : classe XCUITest du lot 5 sans éclat décidé (socle à 30 min)`);
   }
+});
+
+// Stabilité de la CI (23/11/2026). Durées d'étape relevées sur les trois exécutions complètes depuis #1168 (iphone /
+// ipad-portrait / ipad-landscape) : « presences » 21, 20, 15 / 27, 29, 15 / 28, 28, 30 min (délai atteint, dix-sept tests
+// réussis) ; « lot3-notifications » 29,9, 19 min et un gel / 17, 23, 23 / 27, 24, 24 min. Les deux éclats ne gardent que
+// les classes de leur domaine : une classe qui y reviendrait les ramènerait au-dessus des 20 min de la décision 22.
+test('stabilité : « presences » et « lot3-notifications » ne portent plus que les classes de leur domaine', () => {
+  const de = nom => classesDe(parEtape.find(e => e.nom === nom));
+  assert.deepEqual(de('presences'), ['DemoPresencesTests', 'DemoPointageEtatsTests']);
+  assert.deepEqual(de('lot3-notifications'), ['DemoNotificationsTests', 'DemoPreferencesTests']);
+  // Les classes sorties tournent toujours, une fois, dans le job `ui-lot1`, et le socle les saute toujours.
+  for (const [eclat, attendues] of [['lot5-etablissement', ECLATS_LOT1.get('lot5-etablissement')], ['lot3-profil', ECLATS_LOT1.get('lot3-profil')]]) {
+    assert.deepEqual(classesDe(parEtapeLot1.find(e => e.nom === eclat)), attendues, `éclat ${eclat} du job ui-lot1`);
+    for (const classe of attendues) {
+      assert.ok(socle.sauf.includes(`JoleneUITests/${classe}`), `${classe} : non sautée par le socle`);
+      assert.equal(yml.split(`-only-testing:JoleneUITests/${classe} \\`).length - 1, 1, `${classe} : un seul -only-testing du workflow`);
+    }
+  }
+  // Le job `ui` reste à onze éclats (plafond de 360 min) : le découpage n'y ajoute rien.
+  assert.equal(parEtape.length, 11, `job ui : ${parEtape.length} éclats`);
 });
 
 test('décision 22 : les XCUITest du pointage (classe de base intermédiaire) sont reconnus et rangés dans un éclat', () => {
@@ -393,6 +420,18 @@ test('job ui-lot1 : même préparation que ui (simulateur, build-for-testing une
   assert.ok(texte(second.id).includes(`\n          ECLAT_PRECEDENT_CODE: \${{ steps.${premier.id}.outputs.code }}\n`), 'code du premier éclat transmis');
   const appel = texte(second.id).indexOf(`\n          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel ${second.nom} || `);
   assert.ok(appel >= 0 && appel < texte(second.id).indexOf('xcodebuild test-without-building'), 'contrôle du gel avant xcodebuild');
+  // Revue B8 de #1175 (mineur 4) : même chaînage pour chaque éclat suivant du job (cinq éclats depuis le 23/11/2026).
+  for (let i = 1; i < parEtapeLot1.length; i += 1) {
+    const e = parEtapeLot1[i];
+    const precedent = parEtapeLot1[i - 1];
+    const t = texte(e.id);
+    assert.ok(t.includes(`\n          ECLAT_PRECEDENT: ${precedent.nom}\n`), `éclat ${e.nom} : ECLAT_PRECEDENT ≠ ${precedent.nom}`);
+    assert.ok(t.includes(`\n          ECLAT_PRECEDENT_ISSUE: \${{ steps.${precedent.id}.outcome }}\n`), `éclat ${e.nom} : issue de steps.${precedent.id} non transmise`);
+    assert.ok(t.includes(`\n          ECLAT_PRECEDENT_CODE: \${{ steps.${precedent.id}.outputs.code }}\n`), `éclat ${e.nom} : code de steps.${precedent.id} non transmis`);
+    const controle = t.indexOf(`\n          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel ${e.nom} || `);
+    assert.ok(controle >= 0 && controle < t.indexOf('xcodebuild test-without-building'), `éclat ${e.nom} : contrôle du gel avant xcodebuild`);
+    assert.equal(t.split('relancer-si-gel').length - 1, 1, `éclat ${e.nom} : un seul contrôle du gel`);
+  }
 });
 
 // Gel iPhone CI — 16/11/2026 (docs/mobile-swift/DECISIONS_LOT2.md, section du même nom ; run 43889328109) : le fil

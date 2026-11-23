@@ -51,7 +51,12 @@ let missionSlot = 0;
 // Les tests de ce fichier partagent une fixture soignante et comparent des
 // deltas financiers. Ils doivent donc rester séquentiels, y compris quand un
 // développeur lance Playwright localement avec plusieurs workers.
-test.describe.configure({ mode: 'default', timeout: 120_000 });
+// Budget : le premier test enchaîne huit cycles complets (mission, candidature,
+// acceptation, contrat signé, escrow). Sur 283 exécutions réussies du 26/10 au
+// 20/11/2026 : médiane 67 s, 95e centile 88 s, maximum 118,6 s, et deux
+// dépassements des 120 s précédents sans échec d'assertion. 240 s laissent à
+// ces écritures réelles la marge qu'elles n'avaient pas.
+test.describe.configure({ mode: 'default', timeout: 240_000 });
 
 function requireCaregiver(): EphemeralVerifiedCaregiver {
   if (!caregiver) throw new Error('seed: fixture soignante éphémère absente');
@@ -254,7 +259,7 @@ async function purgeMissionsBounded(ids: Iterable<string>): Promise<void> {
 }
 
 test.beforeAll(async () => {
-  // Les hooks beforeAll conservent le timeout Playwright global de 30 s : la
+  // Les hooks beforeAll conservent le timeout Playwright global (30 s, 60 s en CI) : la
   // purge bornée des résidus encore purgeables peut le dépasser sur la DB CI.
   test.setTimeout(120_000);
   const admin = adminClient();

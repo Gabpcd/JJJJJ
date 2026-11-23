@@ -9,6 +9,10 @@ import {
   seedMission,
   type EphemeralVerifiedCaregiver,
 } from '../helpers/seed';
+import {
+  delaiAvantFenetreCron,
+  FENETRE_AUTO_TRANSITIONS_MISSIONS,
+} from '../../scripts/lib/playwright-fenetre-cron.mjs';
 
 /**
  * Lot 13 — auto-validation des présences à 72 h (job cron
@@ -88,6 +92,27 @@ test('fn_valider_presences_72h_auto — présence départ >72h → validée (aud
   expect(mission, 'seedMission').toBeTruthy();
   if (!mission) throw new Error('Mission auto-validation non créée');
   seededMissionIds.push(mission.id);
+
+  // Course mesurée avec le cron « auto-transitions-missions » (toutes les dix
+  // minutes) : dès que le créneau est daté dans le passé, son passage expire la
+  // mission encore OUVERTE, ou termine la mission ASSIGNEE avant la signature de
+  // l'établissement (« Le code de pointage ne peut être généré qu'après
+  // affectation », 23514). Quatre premiers essais en échec du 16 au 18/11/2026 ;
+  // les trois refus de signature lus dans les journaux Postgres suivent de 6 à
+  // 17 s un multiple de dix minutes (16/11 à 18:00:09 et 21:30:06 ; 18/11 :
+  // acceptation à 23:49:59, cron à 23:50:00, refus à 23:50:17). L'insertion
+  // de la présence exige elle aussi une mission ASSIGNEE ou EN_COURS
+  // (fn_exiger_conformite_demarrage_mission). Toute la section, de la datation
+  // à l'insertion de la présence, doit donc tenir entre deux passages : 45 s
+  // lui sont réservées (test entier, 283 exécutions du 26/10 au 20/11/2026 :
+  // médiane 10,8 s, 95e centile 27,8 s) ;
+  // l'attente éventuelle (55 s au plus, environ une exécution sur onze)
+  // s'ajoute au budget du test.
+  const attenteCron = delaiAvantFenetreCron(Date.now(), FENETRE_AUTO_TRANSITIONS_MISSIONS);
+  if (attenteCron > 0) {
+    test.setTimeout(test.info().timeout + attenteCron);
+    await new Promise((resolve) => setTimeout(resolve, attenteCron));
+  }
 
   // Le seed doit d'abord publier au futur. Avant de créer la candidature (qui
   // gèle le planning), on date le créneau exact quatre jours dans le passé.

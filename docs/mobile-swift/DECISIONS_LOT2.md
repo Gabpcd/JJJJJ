@@ -168,6 +168,17 @@
     `DemoAnnulationTests`) et « lot1-accueil-explorer » (`DemoAccueilTests`, `DemoExplorerTests`, `DemoFavorisTests`,
     sortie de « presences »). Le socle, qui mesurait 14,6 / 17,3 / 22,4 min au run 44204757942, les saute tous : environ
     5 / 5 / 8 min attendues, plus `DemoContestationTests`. Durées des éclats du lot 1 à reporter au premier run vert.
+    Stabilité de la CI (23 novembre 2026) : sur les trois exécutions complètes depuis #1168 (runs 44475153698,
+    44555091967 et 44797977486 ; iphone / ipad-portrait / ipad-landscape), « presences » a pris 21, 20, 15 / 27, 29,
+    15 / 28, 28 puis 30 min (délai atteint, ses dix-sept tests réussis en 28,7 min) et « lot3-notifications » 29,9, 19 min
+    puis un gel / 17, 23, 23 / 27, 24, 24 min. Le job `ui` étant à son plafond de onze éclats, les classes qui font
+    déborder ces deux éclats tournent dans le job `ui-lot1` : « lot5-etablissement » (`DemoEtabLiensTests`,
+    `DemoEtabMissionsTests`, `DemoEtabCandidaturesTests` : 6,2 à 13,3 min de tests) et « lot3-profil »
+    (`DemoProfilTests` : 7,3 à 13,9 min). « presences » garde 6,1 à 15,5 min de tests et « lot3-notifications » 8,7 à
+    14,7 min. Plafond du job `ui-lot1` porté de 135 à 195 min (25 + 1 + 1 + 5 × 30 + 15 = 192) ; il durait 43 à 53 min.
+    Éclats encore au-dessus de 20 min en iPad paysage, à surveiller : « pointage » (20 à 27 min, une seule classe),
+    « lot3-compte » (21 à 24), « lot3-revenus » (20 à 25), « documents » (21 à 22), « lot3-profil-photo » (19 à 22),
+    « lot3-push » (19 à 21).
 23. **Journal de reçus : celui du lot 1 T7 est réutilisé** ; si T1 du lot 2 démarrait avant son intégration, T1
     livrerait le journal générique et T7 le consommerait sans changer son API. Ordonnancement retenu : T1 attendait
     l'intégration de T7 et démarrait dans la vague 1 du lot 2, pas dans la vague 0.

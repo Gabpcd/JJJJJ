@@ -61,7 +61,12 @@ export async function loginAs(
         ? /\/etablissement\/tableau-de-bord/
         : /\/soignant\/tableau-de-bord/;
 
-  await expect(page).toHaveURL(expectedUrl, { timeout: 15_000 });
+  // La redirection suit une chaîne de requêtes réelles (jeton, rôle, module du
+  // tableau de bord). Douze premiers essais ont échoué ici après 15 s puis
+  // réussi du 26/10 au 20/11/2026 ; le 17/11 à 13:12 UTC, le jeton seul a mis
+  // 7,2 s et la lecture du rôle 6 s. En CI, la borne suit celle des tests
+  // (playwright.config.ts) ; elle rend la main dès que l'URL est atteinte.
+  await expect(page).toHaveURL(expectedUrl, { timeout: process.env.CI ? 30_000 : 15_000 });
 }
 
 /** Logout via le menu utilisateur (vérifie que la redirection est OK). */
