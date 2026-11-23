@@ -9,8 +9,8 @@ import XCTest
 /// (curseur amené à sa borne basse), qui emploient `press(forDuration:thenDragTo:…)` entre deux
 /// coordonnées calculées : c'est l'unique API XCUITest de glissement à point de départ contrôlé,
 /// et elle n'active rien. Le défilement tient le doigt immobile à l'arrivée : aucun élan après le geste, sauf le
-/// glissement de secours de `scrollTo` après deux glissements restés sans effet (feuille à crans), consigné et suivi
-/// d'une attente de l'arrêt du mouvement. Aucune attente arbitraire : toutes passent par `require` (prédicat
+/// glissement de secours de `scrollTo` après deux glissements restés sans effet (feuille à crans), suivi d'une attente
+/// de l'arrêt du mouvement ; le premier de chaque appel est consigné. Aucune attente arbitraire : toutes passent par `require` (prédicat
 /// borné, délai fonctionnel et budget de blocage distincts) ou, pour décider de rejouer un geste perdu, par
 /// `attendreSansEchec` (même décompte, mêmes budgets et même trace, sans échec sur condition fausse ; chaque rejeu est
 /// consigné par `consignerRejeu`). `require` ne borne que l'évaluation
@@ -712,7 +712,7 @@ class JoleneUITestCase: XCTestCase {
                 }
                 scrolls += 1
                 // Les deux pas suivants repartent sans élan, que l'élan ait agi ou non : un élan sur trois pas au plus,
-                // et jamais moins de glissements sans élan qu'il n'en fallait avant ce secours pour atteindre la cible.
+                // soit au moins 27 glissements sans élan sur les 40 pas (40 avant ce secours).
                 sansEffet = 0
                 continue
             }

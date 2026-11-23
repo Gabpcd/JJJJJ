@@ -104,7 +104,8 @@ test('fn_valider_presences_72h_auto — présence départ >72h → validée (aud
   // de la présence exige elle aussi une mission ASSIGNEE ou EN_COURS
   // (fn_exiger_conformite_demarrage_mission). Toute la section, de la datation
   // à l'insertion de la présence, doit donc tenir entre deux passages : 45 s
-  // lui sont réservées (test entier : médiane 10,8 s, 95e centile 27,8 s) ;
+  // lui sont réservées (test entier, 283 exécutions du 26/10 au 20/11/2026 :
+  // médiane 10,8 s, 95e centile 27,8 s) ;
   // l'attente éventuelle (55 s au plus, environ une exécution sur onze)
   // s'ajoute au budget du test.
   const attenteCron = delaiAvantFenetreCron(Date.now(), FENETRE_AUTO_TRANSITIONS_MISSIONS);

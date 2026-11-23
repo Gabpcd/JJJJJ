@@ -77,5 +77,5 @@ test('le test daté dans le passé attend hors du passage du cron avant de dater
   assert.ok(datation > attente, 'la mission est datée dans le passé avant l’attente');
   assert.ok(signature > datation, 'la signature précède la datation');
   // Dernière écriture que le cron peut casser : la présence exige une mission encore ASSIGNEE ou EN_COURS.
-  assert.ok(presence > signature, 'la présence est insérée avant la signature');
+  assert.ok(presence > signature, 'insertion de la présence absente, ou placée avant la signature');
 });
