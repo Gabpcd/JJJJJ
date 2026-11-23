@@ -72,7 +72,10 @@ test('le test daté dans le passé attend hors du passage du cron avant de dater
   const attente = source.indexOf('delaiAvantFenetreCron(Date.now(), FENETRE_AUTO_TRANSITIONS_MISSIONS)');
   const datation = source.indexOf(".update({ debut: debut.toISOString(), fin: fin.toISOString() })");
   const signature = source.indexOf('await seedContratMissionSigne(');
+  const presence = source.indexOf(".from('presences').insert(");
   assert.ok(attente > 0, 'attente absente');
   assert.ok(datation > attente, 'la mission est datée dans le passé avant l’attente');
   assert.ok(signature > datation, 'la signature précède la datation');
+  // Dernière écriture que le cron peut casser : la présence exige une mission encore ASSIGNEE ou EN_COURS.
+  assert.ok(presence > signature, 'la présence est insérée avant la signature');
 });

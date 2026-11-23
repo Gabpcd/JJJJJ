@@ -100,10 +100,13 @@ test('fn_valider_presences_72h_auto — présence départ >72h → validée (aud
   // affectation », 23514). Quatre premiers essais en échec du 16 au 18/11/2026 ;
   // les trois refus de signature lus dans les journaux Postgres suivent de 6 à
   // 17 s un multiple de dix minutes (16/11 à 18:00:09 et 21:30:06 ; 18/11 :
-  // acceptation à 23:49:59, cron à 23:50:00, refus à 23:50:17). Toute la
-  // section, de la datation à la lecture qui suit la signature, se joue donc
-  // entre deux passages ; l'attente éventuelle (55 s au plus, environ une
-  // exécution sur onze) s'ajoute au budget du test.
+  // acceptation à 23:49:59, cron à 23:50:00, refus à 23:50:17). L'insertion
+  // de la présence exige elle aussi une mission ASSIGNEE ou EN_COURS
+  // (fn_exiger_conformite_demarrage_mission). Toute la section, de la datation
+  // à l'insertion de la présence, doit donc tenir entre deux passages : 45 s
+  // lui sont réservées (test entier : médiane 10,8 s, 95e centile 27,8 s) ;
+  // l'attente éventuelle (55 s au plus, environ une exécution sur onze)
+  // s'ajoute au budget du test.
   const attenteCron = delaiAvantFenetreCron(Date.now(), FENETRE_AUTO_TRANSITIONS_MISSIONS);
   if (attenteCron > 0) {
     test.setTimeout(test.info().timeout + attenteCron);

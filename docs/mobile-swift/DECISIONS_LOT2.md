@@ -177,7 +177,8 @@
     (`DemoProfilTests` : 7,3 à 13,9 min). « presences » garde 6,1 à 15,5 min de tests et « lot3-notifications » 8,7 à
     14,7 min. Plafond du job `ui-lot1` porté de 135 à 195 min (25 + 1 + 1 + 5 × 30 + 15 = 192) ; il durait 43 à 53 min.
     Éclats encore au-dessus de 20 min en iPad paysage, à surveiller : « pointage » (20 à 27 min, une seule classe),
-    « lot3-compte » (21 à 24), « lot3-revenus » (20 à 25), « documents » (21 à 22), « lot3-profil-photo » (19 à 22).
+    « lot3-compte » (21 à 24), « lot3-revenus » (20 à 25), « documents » (21 à 22), « lot3-profil-photo » (19 à 22),
+    « lot3-push » (19 à 21).
 23. **Journal de reçus : celui du lot 1 T7 est réutilisé** ; si T1 du lot 2 démarrait avant son intégration, T1
     livrerait le journal générique et T7 le consommerait sans changer son API. Ordonnancement retenu : T1 attendait
     l'intégration de T7 et démarrait dans la vague 1 du lot 2, pas dans la vague 0.

@@ -1466,7 +1466,7 @@ jobs:
         # suivante dans l'artefact « package-resolved-lot1-<format>-<sha> », lisible pendant que les éclats tournent.
         # **Correctif : committer tel quel le Package.resolved de cet artefact** (ou corriger project.yml si une version a
         # changé), puis relancer la CI. Délai de 1 min, plus 1 min pour l'artefact, hors éclats : le plafond du job reste
-        # tenu (25 + 1 + 1 + 2 × 30 = 87 ≤ 120 pour ce job). Garde : tests/node/ios-swift-ci-eclats.node.mjs.
+        # tenu (25 + 1 + 1 + 5 × 30 = 177 ≤ 195 pour ce job). Garde : tests/node/ios-swift-ci-eclats.node.mjs.
         timeout-minutes: 1
         run: |
           fichier=ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved

@@ -8,7 +8,9 @@ import XCTest
 /// sont `drag(_:fromY:toY:)` (défilement borné de `scrollTo`) et `dragSliderPastMinimum(_:)`
 /// (curseur amené à sa borne basse), qui emploient `press(forDuration:thenDragTo:…)` entre deux
 /// coordonnées calculées : c'est l'unique API XCUITest de glissement à point de départ contrôlé,
-/// et elle n'active rien. Le défilement tient le doigt immobile à l'arrivée : aucun élan après le geste. Aucune attente arbitraire : toutes passent par `require` (prédicat
+/// et elle n'active rien. Le défilement tient le doigt immobile à l'arrivée : aucun élan après le geste, sauf le
+/// glissement de secours de `scrollTo` après deux glissements restés sans effet (feuille à crans), consigné et suivi
+/// d'une attente de l'arrêt du mouvement. Aucune attente arbitraire : toutes passent par `require` (prédicat
 /// borné, délai fonctionnel et budget de blocage distincts) ou, pour décider de rejouer un geste perdu, par
 /// `attendreSansEchec` (même décompte, mêmes budgets et même trace, sans échec sur condition fausse ; chaque rejeu est
 /// consigné par `consignerRejeu`). `require` ne borne que l'évaluation
@@ -670,8 +672,9 @@ class JoleneUITestCase: XCTestCase {
         var scrolls = 0
         // Glissements sans élan de suite qui n'ont déplacé ni la cible ni le conteneur (`PasDeDefilement.sansEffet`).
         var sansEffet = 0
-        // 40 pas au plus : sans élan (`drag`), un pas défile au plus 55 % du conteneur ; la boucle s'arrête dès que la
-        // cible est entièrement visible.
+        var elanConsigne = false
+        // 40 pas au plus, glissements avec élan compris : sans élan (`drag`), un pas défile au plus 55 % du conteneur ;
+        // la boucle s'arrête dès que la cible est entièrement visible.
         while !visibleSousLesBarres(target, inside: container) && scrolls < 40 {
             // Direction et amplitude : `PasDeDefilement` (testé par `PasDeDefilementTests`), calculées sur la partie du
             // conteneur hors des barres de navigation qui en recouvrent le haut (fusion des lots 2 et 3 : les deux lots
@@ -680,25 +683,26 @@ class JoleneUITestCase: XCTestCase {
             // glissements en alternance) ; une cible sous la barre translucide est ramenée vers le bas au lieu d'être
             // poussée plus haut à chaque glissement (lot 2, run 42559541711, iPad paysage,
             // `DemoPointageTests.testHorsLigneDesactiveLePointageSansAucunEnvoi`).
-            var cadreUtile = container.frame
+            let conteneurAvant = container.frame
+            var cadreUtile = conteneurAvant
             if let bas = basDesBarresDeNavigation(sur: container), bas > cadreUtile.minY {
                 cadreUtile = CGRect(x: cadreUtile.minX, y: bas, width: cadreUtile.width, height: max(0, cadreUtile.maxY - bas))
             }
-            let pas = PasDeDefilement.suivant(cible: target.exists ? target.frame : nil, conteneur: cadreUtile,
-                                              versLaSuiteParDefaut: downward)
             let cibleAvant = target.exists ? target.frame : nil
-            let conteneurAvant = container.frame
-            if PasDeDefilement.elanRequis(glissementsSansEffet: sansEffet) {
+            let pas = PasDeDefilement.suivant(cible: cibleAvant, conteneur: cadreUtile, versLaSuiteParDefaut: downward)
+            if PasDeDefilement.elanRequis(glissementsSansEffet: sansEffet, versLaSuite: pas.versLaSuite) {
                 // Feuille à crans dont le contenu est en haut (run 44797977486, UI — ipad-portrait, récapitulatif
                 // d'acceptation) : le glissement tenu à l'arrivée étire la feuille, qui revient à son cran ; quarante
                 // glissements identiques n'y ont rien déplacé. Un glissement relâché en vitesse la fait passer au cran
-                // suivant, ou fait défiler son contenu. Le geste est consigné, et l'arrêt du mouvement attendu avant
+                // suivant, ou fait défiler son contenu. Le premier est consigné, et l'arrêt du mouvement attendu avant
                 // toute relecture : aucune action ne tombe sur un contenu en mouvement.
-                let sens: CGFloat = pas.versLaSuite ? 1 : -1
-                let elan = PasDeDefilement.amplitudeRecherche * sens
-                consignerRejeu("Le contrôle demandé est entièrement visible après un défilement borné",
-                               issue: "\(sansEffet) glissements sans élan sans effet sur \(container.identifier) : "
-                                   + "glissement avec élan", file: file, line: line)
+                if !elanConsigne {
+                    consignerRejeu("Le contrôle demandé est entièrement visible après un défilement borné",
+                                   issue: "\(sansEffet) glissements de suite sans effet sur \(container.identifier) : "
+                                       + "glissement avec élan", file: file, line: line)
+                    elanConsigne = true
+                }
+                let elan = PasDeDefilement.amplitudeRecherche
                 drag(container, fromY: 0.5 + elan / 2, toY: 0.5 - elan / 2, avecElan: true)
                 var dernierCadre: CGRect?
                 _ = attendreSansEchec("Le défilement avec élan est arrêté", timeout: 5, file: file, line: line) {
@@ -706,10 +710,14 @@ class JoleneUITestCase: XCTestCase {
                     defer { dernierCadre = cadre }
                     return dernierCadre.map { $0 == cadre || PasDeDefilement.memeCadre($0, cadre) } ?? false
                 }
-            } else {
-                let distance = pas.versLaSuite ? pas.amplitude : -pas.amplitude
-                drag(container, fromY: 0.5 + distance / 2, toY: 0.5 - distance / 2)
+                scrolls += 1
+                // Les deux pas suivants repartent sans élan, que l'élan ait agi ou non : un élan sur trois pas au plus,
+                // et jamais moins de glissements sans élan qu'il n'en fallait avant ce secours pour atteindre la cible.
+                sansEffet = 0
+                continue
             }
+            let distance = pas.versLaSuite ? pas.amplitude : -pas.amplitude
+            drag(container, fromY: 0.5 + distance / 2, toY: 0.5 - distance / 2)
             scrolls += 1
             let effetNul = PasDeDefilement.sansEffet(cibleAvant: cibleAvant, cibleApres: target.exists ? target.frame : nil,
                                                      conteneurAvant: conteneurAvant, conteneurApres: container.frame)

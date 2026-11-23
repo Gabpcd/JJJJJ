@@ -51,8 +51,8 @@ export default defineConfig({
   // de sa préparation 11). Une attente rend la main dès que sa condition est
   // vraie : ces bornes ne ralentissent aucun test qui passe et ne retirent
   // aucune assertion. Un test encore instable fait toujours échouer le job
-  // (failOnFlakyTests ci-dessous). Les temps de chargement se contrôlent
-  // ailleurs (e2e/playwright.fluidite.config.ts, Lighthouse).
+  // (failOnFlakyTests ci-dessous). Les temps de chargement se mesurent
+  // ailleurs (Lighthouse).
   timeout: IS_CI ? 60_000 : 30_000,
   expect: { timeout: IS_CI ? 20_000 : 10_000 },
   fullyParallel: true,

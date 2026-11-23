@@ -104,10 +104,17 @@ final class PasDeDefilementTests: XCTestCase {
 
     func testElanSeulementApresDeuxGlissementsSansEffetDeSuite() {
         XCTAssertEqual(PasDeDefilement.seuilSansEffet, 2)
-        XCTAssertFalse(PasDeDefilement.elanRequis(glissementsSansEffet: 0))
-        XCTAssertFalse(PasDeDefilement.elanRequis(glissementsSansEffet: 1), "un glissement perdu se rejoue d'abord sans élan")
-        XCTAssertTrue(PasDeDefilement.elanRequis(glissementsSansEffet: 2))
-        XCTAssertTrue(PasDeDefilement.elanRequis(glissementsSansEffet: 39))
+        XCTAssertFalse(PasDeDefilement.elanRequis(glissementsSansEffet: 0, versLaSuite: true))
+        XCTAssertFalse(PasDeDefilement.elanRequis(glissementsSansEffet: 1, versLaSuite: true),
+                       "un glissement perdu se rejoue d'abord sans élan")
+        XCTAssertTrue(PasDeDefilement.elanRequis(glissementsSansEffet: 2, versLaSuite: true))
+        XCTAssertTrue(PasDeDefilement.elanRequis(glissementsSansEffet: 39, versLaSuite: true))
+    }
+
+    func testJamaisDElanVersLeHautDeLaPage() {
+        // Doigt qui descend : un élan en haut d'une page fermerait une feuille ou déclencherait un rafraîchissement.
+        XCTAssertFalse(PasDeDefilement.elanRequis(glissementsSansEffet: 2, versLaSuite: false))
+        XCTAssertFalse(PasDeDefilement.elanRequis(glissementsSansEffet: 39, versLaSuite: false))
     }
 
     func testChampRecouvertParUneBarreDeNavigation() {

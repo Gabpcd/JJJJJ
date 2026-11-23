@@ -420,6 +420,18 @@ test('job ui-lot1 : même préparation que ui (simulateur, build-for-testing une
   assert.ok(texte(second.id).includes(`\n          ECLAT_PRECEDENT_CODE: \${{ steps.${premier.id}.outputs.code }}\n`), 'code du premier éclat transmis');
   const appel = texte(second.id).indexOf(`\n          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel ${second.nom} || `);
   assert.ok(appel >= 0 && appel < texte(second.id).indexOf('xcodebuild test-without-building'), 'contrôle du gel avant xcodebuild');
+  // Revue B8 de #1175 (mineur 4) : même chaînage pour chaque éclat suivant du job (cinq éclats depuis le 23/11/2026).
+  for (let i = 1; i < parEtapeLot1.length; i += 1) {
+    const e = parEtapeLot1[i];
+    const precedent = parEtapeLot1[i - 1];
+    const t = texte(e.id);
+    assert.ok(t.includes(`\n          ECLAT_PRECEDENT: ${precedent.nom}\n`), `éclat ${e.nom} : ECLAT_PRECEDENT ≠ ${precedent.nom}`);
+    assert.ok(t.includes(`\n          ECLAT_PRECEDENT_ISSUE: \${{ steps.${precedent.id}.outcome }}\n`), `éclat ${e.nom} : issue de steps.${precedent.id} non transmise`);
+    assert.ok(t.includes(`\n          ECLAT_PRECEDENT_CODE: \${{ steps.${precedent.id}.outputs.code }}\n`), `éclat ${e.nom} : code de steps.${precedent.id} non transmis`);
+    const controle = t.indexOf(`\n          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel ${e.nom} || `);
+    assert.ok(controle >= 0 && controle < t.indexOf('xcodebuild test-without-building'), `éclat ${e.nom} : contrôle du gel avant xcodebuild`);
+    assert.equal(t.split('relancer-si-gel').length - 1, 1, `éclat ${e.nom} : un seul contrôle du gel`);
+  }
 });
 
 // Gel iPhone CI — 16/11/2026 (docs/mobile-swift/DECISIONS_LOT2.md, section du même nom ; run 43889328109) : le fil

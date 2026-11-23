@@ -259,7 +259,7 @@ async function purgeMissionsBounded(ids: Iterable<string>): Promise<void> {
 }
 
 test.beforeAll(async () => {
-  // Les hooks beforeAll conservent le timeout Playwright global de 30 s : la
+  // Les hooks beforeAll conservent le timeout Playwright global (30 s, 60 s en CI) : la
   // purge bornée des résidus encore purgeables peut le dépasser sur la DB CI.
   test.setTimeout(120_000);
   const admin = adminClient();

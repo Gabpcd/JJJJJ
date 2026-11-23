@@ -56,7 +56,11 @@ struct PasDeDefilement: Sendable, Equatable {
 
     /// Un glissement avec élan remplace le glissement sans élan dès que `seuilSansEffet` glissements de suite n'ont
     /// rien déplacé : le relâché en vitesse fait passer la feuille au cran suivant, ou défiler son contenu.
-    static func elanRequis(glissementsSansEffet: Int) -> Bool { glissementsSansEffet >= seuilSansEffet }
+    /// Seulement vers la suite de la page (doigt qui remonte) : dans l'autre sens, un élan en haut d'une page fermerait
+    /// une feuille ou déclencherait un rafraîchissement.
+    static func elanRequis(glissementsSansEffet: Int, versLaSuite: Bool) -> Bool {
+        versLaSuite && glissementsSansEffet >= seuilSansEffet
+    }
 
     /// Deux cadres confondus au demi-point près (les cadres relus par XCUITest sont arrondis au demi-point).
     static func memeCadre(_ a: CGRect, _ b: CGRect) -> Bool {
