@@ -41,8 +41,11 @@ test.describe('Flow candidature soignant → étab', () => {
 
     await loginAs(page, 'soignant');
 
-    await page.goto(`/soignant/missions/${mission!.id}`);
-    await page.waitForLoadState('networkidle');
+    // L'application conserve des connexions Supabase actives (Realtime,
+    // rafraîchissements) : « networkidle » n'est pas un signal fiable et a fait
+    // échouer ce test au premier essai après 15 s (run du 18/11/2026, même
+    // cause que pool-urgence, #1103). Le titre ci-dessous est le contrat attendu.
+    await page.goto(`/soignant/missions/${mission!.id}`, { waitUntil: 'domcontentloaded' });
 
     // La page charge (heading visible — soft sur structure UI variable selon
     // matching profession soignant vs mission).
