@@ -2,7 +2,7 @@ import Foundation
 
 /// `IbanPort` du monde démo (lot 3, T14b), sans réseau : serveur simulé en mémoire (un acteur par lancement) qui
 /// applique, dans leur ordre, les refus de `fn_enregistrer_mon_iban` et de `fn_lier_iban_verifie_document`
-/// (`supabase/schema/public.sql` l.32684-32743, l.39848-39967), puis la même règle de relecture que le monde Supabase
+/// (`supabase/schema/public.sql` l.32692-32751, l.39856-39975), puis la même règle de relecture que le monde Supabase
 /// (`IbanRelecture`) : aucun succès fabriqué. Le RIB vérifié de la démo porte le seul IBAN d'exemple ISO 13616
 /// (`FR7630006000011234567890189`, blueprint §2.7) ; le titulaire attendu est le prénom et le nom du profil fictif
 /// (`demo-profil-complet.json`). Refuse tout contexte qui n'est pas celui du profil fictif (`.demoOnly`).
@@ -20,7 +20,7 @@ public actor DemoIbanGateway: IbanPort {
     /// IBAN du RIB vérifié de la démo (exemple ISO 13616).
     public static let ibanRibDemo = "FR7630006000011234567890189"
     /// Refus du serveur portant un `error`, verbatim.
-    static let titulaireNonConcordant = "Le titulaire doit correspondre exactement à votre identité vérifiée." // source: public.sql:32719
+    static let titulaireNonConcordant = "Le titulaire doit correspondre exactement à votre identité vérifiée." // source: public.sql:32727
 
     private let scenario: Scenario
     private var etat: ConsultationIban

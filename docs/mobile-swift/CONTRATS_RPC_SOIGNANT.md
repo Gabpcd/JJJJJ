@@ -377,7 +377,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_dashboard_soignant_complet"() RETURNS "j
 - **Classement manuel (décision 6, `LOT1_PLAN.md` §7)** : `RPC_UTILISATEUR_AUTH_INTERNE` — SECURITY DEFINER,
   `search_path` vide, GRANT `authenticated`, identité lue via `auth.uid()` dans le corps (l.24525-24702 du dump) ;
   manifeste non régénéré, `rpc-contracts.json` garde `manifeste: null`.
-- **Signature SQL** (`supabase/schema/public.sql` l.24525) :
+- **Signature SQL** (`supabase/schema/public.sql` l.24533) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_confirmer_action_planning_v1"("p_mission_id" "uuid", "p_action" "text", "p_creneaux_confirmes" "jsonb", "p_message" "text" DEFAULT NULL::"text", "p_choix_contrat" "text" DEFAULT NULL::"text", "p_candidature_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
@@ -518,7 +518,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", 
 - **Statut natif** : consommée lot 2 (T3 : `SupabasePointageGateway.etat` ; `{error}` lu avant le décodage et levé en `JoleneError(.unknown, <message serveur verbatim>)`, « Non authentifié » → `.unauthorized`).
 - **Usage prévu** : état du pointage d'une mission, relu toutes les 15 s quand le bloc est visible
   (`PointageRotatifSoignant.tsx` l.64-72) et après chaque scan (règle « aucun succès fabriqué »).
-- **Signature SQL** (`supabase/schema/public.sql` l.35578) :
+- **Signature SQL** (`supabase/schema/public.sql` l.35586) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_etat_pointage_mission"("p_mission_id" "uuid") RETURNS "jsonb"
@@ -529,29 +529,29 @@ CREATE OR REPLACE FUNCTION "public"."fn_etat_pointage_mission"("p_mission_id" "u
 - **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_etat_pointage_mission(uuid)` — Mixte tenant / admin : la fonction distingue en interne soignant, établissement et admin ; appel avec le JWT utilisateur.
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : absente (types.ts en retard sur le schéma).
-- **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}` (l.35596) ; `{error:'Accès interdit'}`
-  (l.35605) ; succès `{statut, intitule, prochain_type_scan, nb_scans, segment_ouvert, segments, code_pointage_actif, est_etab}`
-  (l.35622-35632) : `statut`, `intitule`, `prochain_type_scan` (`OUVERTURE`/`FERMETURE`), `nb_scans`,
+- **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}` (l.35604) ; `{error:'Accès interdit'}`
+  (l.35613) ; succès `{statut, intitule, prochain_type_scan, nb_scans, segment_ouvert, segments, code_pointage_actif, est_etab}`
+  (l.35630-35640) : `statut`, `intitule`, `prochain_type_scan` (`OUVERTURE`/`FERMETURE`), `nb_scans`,
   `segment_ouvert` (`COALESCE(…, false)`, jamais nul), `segments` (`[{id, debut, fin}]`, créneaux `EFFECTIF` triés
   par début), `code_pointage_actif` (non nul seulement pour un membre de l'établissement de la mission habilité au
-  pointage, l.35630 ; voir ci-dessous), `est_etab`. Décodeur en liste blanche : **`code_pointage_actif` jamais
+  pointage, l.35638 ; voir ci-dessous), `est_etab`. Décodeur en liste blanche : **`code_pointage_actif` jamais
   décodé** côté soignant, même présent. `{error}` → refus verbatim (parité `PointageRotatifSoignant.tsx` l.81-92).
 - **Visibilité du code par permission (B5b, #1119, déployée le 8 novembre 2026, dump re-baseliné #1121).**
-  `v_peut_voir_code` vaut `false` par défaut (l.35586) et n'est levé, quand `v_is_etab IS TRUE`, que par
+  `v_peut_voir_code` vaut `false` par défaut (l.35594) et n'est levé, quand `v_is_etab IS TRUE`, que par
   `v_peut_voir_code := public.fn_a_permission_etablissement('pointage', v_mission.etablissement_id) IS TRUE`
-  (l.35610-35612) ; la règle `pointage` de `fn_a_permission_etablissement` (l.5101) couvre PROPRIETAIRE,
+  (l.35618-35620) ; la règle `pointage` de `fn_a_permission_etablissement` (l.5101) couvre PROPRIETAIRE,
   ADMIN_GROUPE, RH et POINTAGE_ONLY (administrateur plateforme : `true`), pas LECTURE_SEULE, qui garde l'état sans
   le code. Garde `tests/node/check-rpc-contracts.node.mjs` (aucun retour à `CASE WHEN v_is_etab`).
 - **est_etab vaut null pour tout compte sans établissement (soignant assigné compris), jamais false ; non décodé côté soignant.**
-  `v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id()` (l.35599) : `est_admin()` rend
+  `v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id()` (l.35607) : `est_admin()` rend
   un booléen non nul (`est_admin_valide`, `COALESCE(EXISTS …)`, l.5029), `mon_etablissement_id()` vaut NULL hors
-  établissement (l.67572), donc `false OR NULL` = NULL, renvoyé tel quel (`'est_etab', v_is_etab`, l.35631) : JSON
+  établissement (l.67580), donc `false OR NULL` = NULL, renvoyé tel quel (`'est_etab', v_is_etab`, l.35639) : JSON
   `null`. Depuis B5b, un compte d'un **autre** établissement est refusé (« Accès interdit ») sauf s'il est
   lui-même le soignant assigné. `est_etab` n'est jamais décodé côté soignant (à défaut, `Bool?` ignoré) : un
   décodage en `Bool` non optionnel échouerait sur toutes les réponses réelles, alors qu'un stub `false` passerait.
   Stubs et fixtures de T3 : `est_etab: null` (`DECISIONS_LOT2.md`, « Consignes aux tranches suivantes ») ; garde
-  `tests/node/check-rpc-contracts.node.mjs` sur l.35599 et l.35631, et aucune fixture `est_etab: false`.
-- **Écart clos par B5b (#1119)** : la garde d'accès (l.35599-35606) était en logique ternaire
+  `tests/node/check-rpc-contracts.node.mjs` sur l.35607 et l.35639, et aucune fixture `est_etab: false`.
+- **Écart clos par B5b (#1119)** : la garde d'accès (l.35607-35614) était en logique ternaire
   (`NOT v_is_etab AND NOT v_is_soignant` valait NULL pour un compte sans établissement non assigné, qui lisait
   statut, intitulé et segments ; constat sur le dump #1097). Elle est désormais
   `IF NOT COALESCE(v_is_etab, false) AND NOT COALESCE(v_is_soignant, false)` : un NULL vaut refus. Le natif
@@ -1104,7 +1104,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_annuler_mission_soignant"("p_mission_id"
 - **Usage prévu** : Refus d'une proposition `PROPOSEE` depuis l'Accueil (`p_accepter = false`). L'acceptation
   passe par `fn_confirmer_action_planning_v1` (`PROPOSITION`, comme le web `CarteProposition.tsx` l.268-279) ;
   `p_accepter = true` n'est pas appelé par l'app au lot 1. Relecture : candidature (`REFUSEE`).
-- **Signature SQL** (`supabase/schema/public.sql` l.54035) :
+- **Signature SQL** (`supabase/schema/public.sql` l.54043) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_accepter" boolean) RETURNS "jsonb"
@@ -1137,7 +1137,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_repondre_proposition"("p_candidature_id"
 - **Interprétation** (`RPCResponse`) : « Non authentifié » (avec `success:false`) → `.unauthorized` ; autre
   refus `{success:false, error}` → `.unknown`, message verbatim, aucune relecture par la gateway (le modèle
   relit) ; corps sans `success:true` → `.contract` ; erreur PostgREST (uuid invalide…) → message générique.
-- **Signature SQL** (`supabase/schema/public.sql` l.61945) :
+- **Signature SQL** (`supabase/schema/public.sql` l.61953) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_toggle_favori_etablissement"("p_etablissement_id" "uuid", "p_actif" boolean) RETURNS "jsonb"
@@ -1166,7 +1166,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_toggle_favori_etablissement"("p_etabliss
   **noms** par `fn_etablissements_safe(p_ids)` (règle ci-dessous) : en échec de transport, de serveur ou de
   contrat, le nom de la RPC reste (lecture complémentaire) ; session expirée et annulation propagées.
   Tests : `SupabaseFavorisGatewayTests`.
-- **Signature SQL** (`supabase/schema/public.sql` l.42281) :
+- **Signature SQL** (`supabase/schema/public.sql` l.42289) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "jsonb"
@@ -1220,7 +1220,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "j
   `parcours_inscription.donnees.missionsSauvegardees`, avant la suppression de la ligne `missions_sauvegardees`.
   L'ajout (`p_actif = true`) n'est utilisé par le web que pendant l'inscription progressive (hors espace natif) : non
   porté.
-- **Signature SQL** (`supabase/schema/public.sql` l.43500) :
+- **Signature SQL** (`supabase/schema/public.sql` l.43508) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_modifier_favori_inscription"("p_mission_id" "uuid", "p_actif" boolean) RETURNS "void"
@@ -1379,7 +1379,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_param_bool"("p_cle" "text", "p_defaut" b
   `DetailMissionSoignant.tsx` l.1414-1417, alors que le cron lit `confirmation_j1_max_h` = 36 h : écart
   consigné hors lot). Cible du push `RAPPEL_MISSION` (`/soignant/missions/{id}`, `?relance=1` ignoré).
   Relecture obligatoire `mission(id:)` → `presence_confirmee_le` non nul ; **jamais de date posée localement**.
-- **Signature SQL** (`supabase/schema/public.sql` l.24992) :
+- **Signature SQL** (`supabase/schema/public.sql` l.25000) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_id" "uuid") RETURNS "jsonb"
