@@ -90,6 +90,9 @@ on:
       - '.github/workflows/ios-swift-ci.yml'
       - 'tests/node/ios-swift-ci-eclats.node.mjs'
       - 'scripts/mobile/ios-ci-gel-simulateur.sh'
+      # Relevé des tests échoués et des durées par éclat (étape « Résumé xcresult » des jobs ui et ui-lot1).
+      - 'scripts/mobile/ios-ci-resume-tests.mjs'
+      - 'scripts/mobile/ios-ci-resume-tests.test.mjs'
       # Scripts exécutés par ce workflow (sélection du simulateur, contrôle des captures).
       - 'mobile-native/scripts/ios-ci-toolchain.mjs'
       - 'mobile-native/scripts/png-dimensions.mjs'
@@ -227,6 +230,9 @@ on:
       - '.github/workflows/ios-swift-ci.yml'
       - 'tests/node/ios-swift-ci-eclats.node.mjs'
       - 'scripts/mobile/ios-ci-gel-simulateur.sh'
+      # Relevé des tests échoués et des durées par éclat (étape « Résumé xcresult » des jobs ui et ui-lot1).
+      - 'scripts/mobile/ios-ci-resume-tests.mjs'
+      - 'scripts/mobile/ios-ci-resume-tests.test.mjs'
       # Scripts exécutés par ce workflow (sélection du simulateur, contrôle des captures).
       - 'mobile-native/scripts/ios-ci-toolchain.mjs'
       - 'mobile-native/scripts/png-dimensions.mjs'
@@ -344,6 +350,8 @@ jobs:
         run: node scripts/mobile/check-rpc-contracts.mjs
       - name: Éclats des tests UI cohérents (DECISIONS_LOT2 décision 22)
         run: node --test tests/node/ios-swift-ci-eclats.node.mjs
+      - name: Relevé des tests échoués et des durées par éclat — tests du script
+        run: node --test scripts/mobile/ios-ci-resume-tests.test.mjs
       # Lot 5, T0 (LOT5_PLAN §2.9) : aucun littéral juridique dans le Swift livré — valeurs des CHECK
       # de matrice_modes_exercice (public.sql), sources de la matrice (migrations), noms interdits,
       # « Code du travail », « Légifrance », articles numérotés ; seules exceptions : TextesWeb.swift
@@ -1157,6 +1165,12 @@ jobs:
           CODE_LOT3_PROFIL_PHOTO: ${{ steps.tests_lot3_profil_photo.outputs.code }}
           CODE_LOT3_REVENUS: ${{ steps.tests_lot3_revenus.outputs.code }}
         run: |
+          # Tests échoués (nom, durée, premier message d'échec), trois tests les plus longs et temps passé de chaque éclat :
+          # relevé de scripts/mobile/ios-ci-resume-tests.mjs, écrit dans le résumé du job, au journal et en annotation. Il
+          # est lancé à la SORTIE de l'étape (trap EXIT), quelle que soit son issue : bundle xcresult absent, tests en
+          # échec, éclat coupé à ses 30 min, dont le grep n'a alors rien imprimé (run 45239724447, tentative 2). Il ne
+          # change jamais le code de sortie de l'étape : le script rend toujours 0, et son échec n'est qu'un avertissement.
+          trap 'node scripts/mobile/ios-ci-resume-tests.mjs socle presences pointage documents contrats lot3-compte lot3-push lot3-notifications lot3-inscription lot3-profil-photo lot3-revenus || echo "::warning::Relevé des tests par éclat non lancé (scripts/mobile/ios-ci-resume-tests.mjs)."' EXIT
           mkdir -p "$JOLENE_UI_OUTPUT/attachments"
           for eclat in socle presences pointage documents contrats lot3-compte lot3-push lot3-notifications lot3-inscription lot3-profil-photo lot3-revenus; do
             xcresult="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$eclat.xcresult"
@@ -1349,6 +1363,26 @@ jobs:
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-profil-photo.xcresult
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-revenus.xcresult
             ios-native/test-results/${{ matrix.format }}/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Conserver les journaux et relevés légers (lisibles sans les xcresult)
+        # Journaux xcodebuild des éclats, relevés du veilleur (gel-*), redémarrages du simulateur, résumés xcresult et durée
+        # de chaque test (xctest-summary-* et xctest-tests-*), manifestes des pièces jointes, Spindump de XCTest
+        # (diagnostic/, copiés par ios-ci-resume-tests.mjs) : quelques Mo, quand l'artefact complet en pèse 300 à 1 000.
+        # Au run 45239724447, le journal de l'éclat coupé et les relevés du veilleur n'étaient lisibles que dans un
+        # artefact de 832 Mo. Relevé d'information : il ne décide jamais du statut du job (continue-on-error).
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-swift-journaux-ui-${{ matrix.format }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ios-native/test-results/${{ matrix.format }}/test-without-building-*.log
+            ios-native/test-results/${{ matrix.format }}/gel-*
+            ios-native/test-results/${{ matrix.format }}/relance-simulateur-*.txt
+            ios-native/test-results/${{ matrix.format }}/xctest-*.json
+            ios-native/test-results/${{ matrix.format }}/attachments/*/manifest.json
+            ios-native/test-results/${{ matrix.format }}/diagnostic/
           retention-days: 7
           if-no-files-found: warn
       - name: Éteindre le simulateur
@@ -1724,6 +1758,12 @@ jobs:
           CODE_LOT5_ETABLISSEMENT: ${{ steps.tests_lot5_etablissement.outputs.code }}
           CODE_LOT3_PROFIL: ${{ steps.tests_lot3_profil.outputs.code }}
         run: |
+          # Tests échoués (nom, durée, premier message d'échec), trois tests les plus longs et temps passé de chaque éclat :
+          # relevé de scripts/mobile/ios-ci-resume-tests.mjs, écrit dans le résumé du job, au journal et en annotation. Il
+          # est lancé à la SORTIE de l'étape (trap EXIT), quelle que soit son issue : bundle xcresult absent, tests en
+          # échec, éclat coupé à ses 30 min, dont le grep n'a alors rien imprimé (run 45239724447, tentative 2). Il ne
+          # change jamais le code de sortie de l'étape : le script rend toujours 0, et son échec n'est qu'un avertissement.
+          trap 'node scripts/mobile/ios-ci-resume-tests.mjs lot1-missions lot1-accueil-explorer lot4 lot5-etablissement lot3-profil || echo "::warning::Relevé des tests par éclat non lancé (scripts/mobile/ios-ci-resume-tests.mjs)."' EXIT
           mkdir -p "$JOLENE_UI_OUTPUT/attachments"
           for eclat in lot1-missions lot1-accueil-explorer lot4 lot5-etablissement lot3-profil; do
             xcresult="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$eclat.xcresult"
@@ -1903,6 +1943,26 @@ jobs:
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot5-etablissement.xcresult
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-profil.xcresult
             ios-native/test-results/lot1-${{ matrix.format }}/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Conserver les journaux et relevés légers (lisibles sans les xcresult)
+        # Journaux xcodebuild des éclats, relevés du veilleur (gel-*), redémarrages du simulateur, résumés xcresult et durée
+        # de chaque test (xctest-summary-* et xctest-tests-*), manifestes des pièces jointes, Spindump de XCTest
+        # (diagnostic/, copiés par ios-ci-resume-tests.mjs) : quelques Mo, quand l'artefact complet en pèse 300 à 1 000.
+        # Au run 45239724447, le journal de l'éclat coupé et les relevés du veilleur n'étaient lisibles que dans un
+        # artefact de 832 Mo. Relevé d'information : il ne décide jamais du statut du job (continue-on-error).
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-swift-journaux-ui-lot1-${{ matrix.format }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ios-native/test-results/lot1-${{ matrix.format }}/test-without-building-*.log
+            ios-native/test-results/lot1-${{ matrix.format }}/gel-*
+            ios-native/test-results/lot1-${{ matrix.format }}/relance-simulateur-*.txt
+            ios-native/test-results/lot1-${{ matrix.format }}/xctest-*.json
+            ios-native/test-results/lot1-${{ matrix.format }}/attachments/*/manifest.json
+            ios-native/test-results/lot1-${{ matrix.format }}/diagnostic/
           retention-days: 7
           if-no-files-found: warn
       - name: Éteindre le simulateur

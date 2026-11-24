@@ -702,3 +702,98 @@ test('pointage : le toucher de relecture des compteurs est rejoué trois fois au
   assert.ok(iPreuve > iBoucle, 'le require final reste la preuve, après la boucle');
   assert.ok(!/XCTSkip|continueAfterFailure/.test(corps), 'aucun test relancé ni échec toléré');
 });
+
+// Relevé des tests échoués et des durées (scripts/mobile/ios-ci-resume-tests.mjs). À la tentative 2, le résumé disait
+// seulement « 8 réussis, 2 échoués » : l'étape de l'éclat ayant été coupée, son `grep … | tail -n 60` n'a rien imprimé.
+const SCRIPT_RESUME = 'scripts/mobile/ios-ci-resume-tests.mjs';
+
+test('relevé des tests : script et tests dans les filtres de chemins, tests lancés par le job « Cœur »', () => {
+  for (const fichier of [SCRIPT_RESUME, 'scripts/mobile/ios-ci-resume-tests.test.mjs']) {
+    assert.ok(existsSync(join(root, fichier)), `${fichier} absent`);
+    assert.equal(yml.split(`\n      - '${fichier}'\n`).length - 1, 2, `${fichier} absent des filtres de chemins pull_request et push`);
+  }
+  assert.ok(jobNomme('coeur').includes('\n        run: node --test scripts/mobile/ios-ci-resume-tests.test.mjs\n'), 'tests du script non lancés par le job « Cœur »');
+});
+
+/** Commandes du bloc `run: |` d'une étape (sans indentation ni commentaire). */
+const commandes = etape => etape.texte.slice(etape.texte.indexOf('\n        run: |\n') + 16).split('\n')
+  .map(l => l.replace(/^ {10}/, '')).filter(l => l.trim() && !l.startsWith('#'));
+
+test('relevé des tests : lancé à la sortie de l étape « Résumé xcresult » de chaque job, pour chacun de ses éclats', () => {
+  for (const [nomJob, etapesDuJob, eclats] of [['ui', liste, parEtape], ['ui-lot1', listeLot1, parEtapeLot1]]) {
+    const resume = etapesDuJob.find(e => e.nom.startsWith('Résumé xcresult'));
+    assert.ok(resume, `job ${nomJob} : étape de résumé absente`);
+    const attendu = `trap 'node ${SCRIPT_RESUME} ${eclats.map(e => e.nom).join(' ')} || echo "::warning::Relevé des tests par éclat non lancé (${SCRIPT_RESUME})."' EXIT`;
+    // Première commande de l'étape : le relevé est armé avant la boucle qui sort sur un bundle absent.
+    assert.equal(commandes(resume)[0], attendu, `job ${nomJob} : relevé des tests absent, incomplet ou précédé d une autre commande`);
+    assert.equal(resume.texte.split(SCRIPT_RESUME).length - 1, 3, `job ${nomJob} : un seul lancement (deux mentions dans le trap, une en commentaire)`);
+    // Ce qui décide du statut est inchangé : mêmes conditions, même sortie en échec.
+    assert.ok(resume.texte.includes('e.code === "0" && s.result === "Passed" && t >= 1 && f === 0 && k === 0 && p === t && absentes.length === 0'));
+    assert.match(resume.texte, /\n {12}if \(!ok\) \{ console\.error\("::error::Tests simulateur [^"]*non concluants [^"]*"\); process\.exit\(1\); \}\n {10}'$/,
+      `job ${nomJob} : la sortie en échec reste la dernière commande de l étape`);
+    assert.doesNotMatch(resume.texte, /^ {8}continue-on-error:/m, `job ${nomJob} : l étape de résumé décide toujours du statut`);
+  }
+});
+
+test('relevé des tests : le trap ne change jamais le code de sortie de l étape, même si le relevé échoue', () => {
+  const resume = liste.find(e => e.nom.startsWith('Résumé xcresult'));
+  const piege = commandes(resume)[0];
+  const dir = mkdtempSync(join(tmpdir(), 'jolene-trap-'));
+  try {
+    const bin = join(dir, 'bin');
+    mkdirSync(bin);
+    const appels = join(dir, 'appels.log');
+    // `node` simulé : journalise ses arguments, sort avec le code demandé.
+    writeFileSync(join(bin, 'node'), `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> '${appels}'\nexit "\${FAUX_NODE_CODE:-0}"\n`);
+    chmodSync(join(bin, 'node'), 0o755);
+    // Même interpréteur et mêmes options que GitHub Actions (« shell: /bin/bash --noprofile --norc -e -o pipefail {0} »).
+    const bash = existsSync('/bin/bash') ? '/bin/bash' : 'bash';
+    const lancer = (corps, codeNode) => {
+      const fichier = join(dir, 'etape.sh');
+      writeFileSync(fichier, `${piege}\n${corps}\necho "fin de l étape"\n`);
+      rmSync(appels, { force: true });
+      const r = spawnSync(bash, ['--noprofile', '--norc', '-e', '-o', 'pipefail', fichier],
+        { encoding: 'utf8', timeout: 30_000, env: { PATH: `${bin}:${process.env.PATH}`, FAUX_NODE_CODE: String(codeNode) } });
+      return { ...r, appels: existsSync(appels) ? readFileSync(appels, 'utf8').trim().split('\n') : [] };
+    };
+    const lancement = `${SCRIPT_RESUME} ${parEtape.map(e => e.nom).join(' ')}`;
+    // Issues de l'étape : succès, `exit 1` du bloc Node (tests en échec), sortie de la boucle (bundle absent), commande
+    // en échec sous `-e`, commande introuvable. Le relevé tourne une fois dans chaque cas, le code est celui de l'étape.
+    for (const [corps, code] of [['true', 0], ['exit 1', 1], ['for e in a b; do [ -d /absent ] || { echo absent; exit 1; }; done', 1],
+      ['false', 1], ['exit 7', 7], ['commande_absente_du_runner', 127]]) {
+      for (const codeNode of [0, 3]) {
+        const r = lancer(corps, codeNode);
+        assert.equal(r.status, code, `« ${corps} », relevé en code ${codeNode} : code de l étape ${r.status} (${r.stderr})`);
+        assert.deepEqual(r.appels, [lancement], `« ${corps} » : le relevé tourne une fois, à la sortie`);
+        assert.equal(r.stdout.includes('::warning::Relevé des tests par éclat non lancé'), codeNode !== 0, 'avertissement si et seulement si le relevé échoue');
+        assert.equal(r.stdout.includes('fin de l étape'), corps === 'true', 'le relevé ne fait pas continuer une étape en échec');
+      }
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('journaux légers : chaque job publie journaux et relevés sans les xcresult, sans jamais décider du statut', () => {
+  for (const [nomJob, etapesDuJob, prefixe, dossier] of [['ui', liste, 'ios-swift-journaux-ui', '${{ matrix.format }}'],
+    ['ui-lot1', listeLot1, 'ios-swift-journaux-ui-lot1', 'lot1-${{ matrix.format }}']]) {
+    const iComplet = etapesDuJob.findIndex(e => e.nom.startsWith('Conserver xcresult'));
+    const leger = etapesDuJob[iComplet + 1];
+    assert.equal(leger?.nom, 'Conserver les journaux et relevés légers (lisibles sans les xcresult)', `job ${nomJob} : artefact léger après l artefact complet`);
+    assert.equal(leger.si, 'always()', `job ${nomJob} : publié quelle que soit l issue`);
+    assert.match(leger.texte, /\n {8}continue-on-error: true\n/, `job ${nomJob} : une publication en échec ne décide pas du statut`);
+    assert.match(leger.texte, /\n {8}uses: actions\/upload-artifact@[0-9a-f]{40} # v4\n/);
+    assert.ok(leger.texte.includes(`\n          name: ${prefixe}-\${{ matrix.format }}-\${{ github.event.pull_request.head.sha || github.sha }}\n`), `job ${nomJob} : nom de l artefact léger`);
+    const chemins = /\n {10}path: \|\n((?: {12}.+\n)+)/.exec(leger.texte)?.[1].trim().split('\n').map(l => l.trim());
+    assert.deepEqual(chemins, ['test-without-building-*.log', 'gel-*', 'relance-simulateur-*.txt', 'xctest-*.json', 'attachments/*/manifest.json', 'diagnostic/']
+      .map(c => `ios-native/test-results/${dossier}/${c}`), `job ${nomJob} : contenu de l artefact léger`);
+    assert.ok(!leger.texte.includes('.xcresult\n'), `job ${nomJob} : aucun bundle xcresult dans l artefact léger`);
+    assert.ok(!Number.isFinite(leger.delai), 'aucun délai ajouté au plafond du job');
+    // Les résumés xcresult que l'artefact publie sont ceux qu'écrit l'étape de résumé du même job.
+    assert.ok(etapesDuJob.find(e => e.nom.startsWith('Résumé xcresult')).texte.includes('> "$JOLENE_UI_OUTPUT/xctest-summary-$eclat.json"'));
+  }
+  // Les autres fichiers publiés sont ceux qu'écrivent le veilleur, le redémarrage du simulateur et le relevé.
+  const script = read(SCRIPT_GEL);
+  assert.ok(script.includes('local prefixe="${JOLENE_UI_OUTPUT:-.}/gel-$eclat"') && script.includes('local trace="$sortie/relance-simulateur-avant-$eclat.txt"'));
+  const releve = read(SCRIPT_RESUME);
+  assert.ok(releve.includes('`diagnostic/spindump-${eclat}-${spindumps.length + 1}.txt`'), 'Spindump copiés dans diagnostic/');
+  assert.ok(releve.includes('join(sortie, `xctest-tests-${nom}.json`)'), 'durée de chaque test gardée dans xctest-tests-<éclat>.json');
+});
