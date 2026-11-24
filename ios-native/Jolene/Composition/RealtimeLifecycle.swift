@@ -26,7 +26,11 @@ final class RealtimeLifecycle {
 
     init(session: SessionStore?) {
         self.session = session
-        self.cycle = session.map { CycleRealtime(session: $0) }
+        if let session {
+            self.cycle = CycleRealtime(session: session)
+        } else {
+            self.cycle = nil
+        }
     }
 
     /// Dernière phase transmise : les phases sont appliquées une à une, dans l'ordre reçu.

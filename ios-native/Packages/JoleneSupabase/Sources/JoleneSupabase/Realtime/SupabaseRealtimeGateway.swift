@@ -124,6 +124,9 @@ public final class SupabaseRealtimeGateway: RealtimePort, @unchecked Sendable {
     private var abonnements: [String: Abonnement] = [:]
     private var etats: [String: DiffusionEtat<EtatCanal>] = [:]
     private var etatsGlobaux = DiffusionEvenements<EtatCanal>()
+    /// Retrait en cours du dernier canal d'un sujet : un canal neuf du même sujet l'attend (le client range ses
+    /// canaux par sujet, un retrait tardif emporterait le canal neuf).
+    private var retraits: [String: Task<Void, Never>] = [:]
 
     public convenience init(client: SupabaseClient) {
         self.init(transport: TransportRealtimeSDK(client: client))
@@ -185,14 +188,16 @@ public final class SupabaseRealtimeGateway: RealtimePort, @unchecked Sendable {
     }
 
     public func fermerTout() async {
-        let (anciens, etatsFermes, globaux) = verrou.withLock {
-            let tout = (Array(abonnements.values), Array(etats.values), etatsGlobaux)
+        let (anciens, etatsFermes, globaux, retraitsEnCours) = verrou.withLock {
+            let tout = (Array(abonnements.values), Array(etats.values), etatsGlobaux, Array(retraits.values))
             abonnements = [:]
             etats = [:]
             etatsGlobaux = DiffusionEvenements()
+            retraits = [:]
             return tout
         }
         for ancien in anciens { tache(ancien)?.cancel() }
+        for retrait in retraitsEnCours { await retrait.value }
         await transport.retirerTout()
         for ancien in anciens { ancien.changements.terminer() }
         for etat in etatsFermes {
@@ -263,9 +268,18 @@ public final class SupabaseRealtimeGateway: RealtimePort, @unchecked Sendable {
         publier(.ferme, abonnement)
         if let canal {
             let transport = self.transport
-            Task { await transport.retirer(canal) }
+            let sujet = abonnement.sujet
+            verrou.withLock {
+                let precedent = retraits[sujet]
+                retraits[sujet] = Task {
+                    await precedent?.value
+                    await transport.retirer(canal)
+                }
+            }
         }
     }
+
+    private func retraitEnCours(_ sujet: String) -> Task<Void, Never>? { verrou.withLock { retraits[sujet] } }
 
     private func tache(_ abonnement: Abonnement) -> Task<Void, Never>? { verrou.withLock { abonnement.tache } }
 
@@ -286,6 +300,8 @@ public final class SupabaseRealtimeGateway: RealtimePort, @unchecked Sendable {
     private func tenir(_ abonnement: Abonnement) async {
         var echecs = 0
         while actif(abonnement) {
+            await retraitEnCours(abonnement.sujet)?.value
+            guard actif(abonnement) else { break }
             let canal = transport.canal(abonnement.sujet)
             verrou.withLock { abonnement.canal = canal }
             let sources = abonnement.flux.map { canal.declarer($0) } // avant `abonner()`
@@ -293,9 +309,9 @@ public final class SupabaseRealtimeGateway: RealtimePort, @unchecked Sendable {
             do {
                 try await canal.abonner()
             } catch {
+                await transport.retirer(canal) // jamais un canal à demi abonné laissé au client
                 guard actif(abonnement) else { break }
                 publier(.coupe, abonnement)
-                await transport.retirer(canal)
                 await Self.attendre(reglages.reprises.isEmpty ? 0 : reglages.reprises[min(echecs, reglages.reprises.count - 1)])
                 echecs += 1
                 continue
@@ -310,6 +326,7 @@ public final class SupabaseRealtimeGateway: RealtimePort, @unchecked Sendable {
             let perdu = await relayer(sources, canal, abonnement)
             guard perdu, actif(abonnement) else { break }
             // Fermé par le serveur ou resté désabonné : ce canal ne rejoindra plus, un canal neuf le remplace.
+            publier(.coupe, abonnement)
             await transport.retirer(canal)
         }
     }
@@ -318,7 +335,9 @@ public final class SupabaseRealtimeGateway: RealtimePort, @unchecked Sendable {
 
     /// Relaie les changements et suit le statut du canal. Vrai : le canal est perdu et doit être remplacé.
     private func relayer(_ sources: [AsyncStream<ChangementRealtime>], _ canal: any CanalRealtime, _ abonnement: Abonnement) async -> Bool {
-        await withTaskGroup(of: Fin.self) { groupe in
+        let reglages = self.reglages
+        let transport = self.transport
+        return await withTaskGroup(of: Fin.self) { groupe in
             for source in sources {
                 groupe.addTask {
                     for await changement in source { abonnement.changements.emettre(changement) }
@@ -343,7 +362,7 @@ public final class SupabaseRealtimeGateway: RealtimePort, @unchecked Sendable {
                 return .fluxTermine
             }
             // Surveillance : le SDK ne signale pas qu'un canal fermé par le serveur ne rejoindra plus.
-            groupe.addTask { [reglages, transport] in
+            groupe.addTask {
                 var desabonneDepuis: TimeInterval = 0
                 while !Task.isCancelled {
                     await Self.attendre(reglages.surveillance)
@@ -449,6 +468,11 @@ struct TransportRealtimeSDK: TransportRealtime {
 
     func retirer(_ canal: any CanalRealtime) async {
         guard let sdk = canal as? CanalRealtimeSDK else { return }
+        // Le client range ses canaux par sujet : `removeChannel` retirerait un canal plus récent du même sujet.
+        guard estEnregistre(canal) else {
+            await sdk.canal.unsubscribe()
+            return
+        }
         await client.realtimeV2.removeChannel(sdk.canal)
     }
 

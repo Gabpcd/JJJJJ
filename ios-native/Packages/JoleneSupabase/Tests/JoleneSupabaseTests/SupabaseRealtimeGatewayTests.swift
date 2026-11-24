@@ -380,6 +380,24 @@ final class SupabaseRealtimeGatewayTests: XCTestCase {
         await attendre { await etats.valeurs.last == .rejoint }
     }
 
+    /// Le client du SDK range ses canaux par sujet : le canal neuf d'un fil rouvert aussitôt n'est créé qu'après le
+    /// retrait du précédent, sinon ce retrait l'emporterait.
+    func testFilRouvertAussitotAttendLeRetraitDuCanalPrecedent() async throws {
+        let (passerelle, transport) = banc()
+        let sujet = "chat-conv-\(conversation)"
+        let (_, premier) = collecter(passerelle.messagesEntrants(conversationId: conversation))
+        await attendre { transport.journal.nombre("abonner \(sujet)") == 1 }
+        premier.cancel() // le lecteur attendait le flux : son départ est traité avant le retour de `cancel()`
+        let (_, second) = collecter(passerelle.messagesEntrants(conversationId: conversation))
+        defer { second.cancel() }
+        await attendre { transport.journal.nombre("abonner \(sujet)") == 2 }
+        let appels = transport.journal.appels
+        let retrait = try XCTUnwrap(appels.firstIndex(of: "retirer \(sujet)"))
+        let neuf = try XCTUnwrap(appels.lastIndex(of: "canal \(sujet)"))
+        XCTAssertLessThan(retrait, neuf, "retrait de l'ancien canal avant la création du canal neuf")
+        XCTAssertEqual(transport.journal.nombre("retirer \(sujet)"), 1)
+    }
+
     func testFermerToutRetireToutEtTermineLesFlux() async throws {
         let (passerelle, transport) = banc()
         let (messages, ecoute) = collecter(passerelle.messagesEntrants(conversationId: conversation))

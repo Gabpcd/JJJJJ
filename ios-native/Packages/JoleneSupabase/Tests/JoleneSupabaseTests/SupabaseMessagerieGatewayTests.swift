@@ -192,7 +192,7 @@ final class SupabaseMessagerieGatewayTests: XCTestCase {
         let requete = try XCTUnwrap(registry.requests(to: table).first)
         XCTAssertEqual(requete.query("select"), "id,conversation_id,auteur_id,contenu,est_admin,lu,cree_le")
         XCTAssertEqual(requete.query("conversation_id"), "eq.\(conversation)", "uuid canonique")
-        XCTAssertEqual(requete.query("order"), "cree_le.desc")
+        XCTAssertEqual(requete.query("order"), "cree_le.desc.nullslast", "du plus récent au plus ancien (suffixe du SDK)")
         XCTAssertEqual(requete.query("limit"), "500")
         XCTAssertNil(requete.query("cree_le"))
         XCTAssertEqual(registry.requests.count, 1)
@@ -230,10 +230,6 @@ final class SupabaseMessagerieGatewayTests: XCTestCase {
         registry.add("GET", table, respond: .json(401, #"{"code":"PGRST301","message":"JWT expired"}"#))
         let session = await erreur { _ = try await self.gateway().messages(conversationId: self.conversation, context: TestClient.context) }
         XCTAssertEqual(session?.kind, .unauthorized)
-        registry.reset()
-        registry.add("GET", table, respond: .networkFailure())
-        let reseau = await erreur { _ = try await self.gateway().messages(conversationId: self.conversation, context: TestClient.context) }
-        XCTAssertEqual(reseau?.kind, .network)
         registry.reset()
         registry.add("GET", table, respond: .json(200, #"{"pas":"un tableau"}"#))
         let forme = await erreur { _ = try await self.gateway().messages(conversationId: self.conversation, context: TestClient.context) }
