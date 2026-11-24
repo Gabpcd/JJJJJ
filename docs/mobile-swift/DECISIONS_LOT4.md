@@ -182,6 +182,19 @@ les règles générales.
    est relu à chaque « rejoint », premier abonnement compris (le web laisse un trou entre sa lecture et
    l'abonnement).
 
+14. **T7b — messagerie, écrans** (décisions de tranche, 24 novembre). (a) **Textes** : tous repris du web, source à
+   la ligne dans `JoleneCore/Messagerie/MessagerieTextes.swift`, prouvés par `MessagerieVerbatimTests` (qui relit les
+   fichiers web, ajoutés aux filtres de `ios-swift-ci.yml`) ; anti-fuite, blocage et signalement sous HARD STOP n°4, à
+   relire par Gabrielle. Deux libellés sans équivalent web, non contractuels : « Écrire à l'établissement » (D25 ; le web
+   incruste le fil dans le détail) et « Envoi non confirmé » (mention déjà portée par `ChatBubble`, T1b). (b)
+   **Signalement depuis le fil** : le fil web ne propose que le blocage ; le natif y ajoute « Signaler » (composant et
+   textes du web, cible de l'établissement et mission) pour l'exigence Apple 1.2, comme le plan. (c) **Refus d'envoi** :
+   libellés par code du web (`InputMessage.tsx` l.110-124), message serveur jamais affiché, comme le web. (d) **Repli
+   « Autres actions »** du détail d'une mission ouverte non assignée posé dans `ActionsEtablissementMission` (partagé avec
+   T11), commun aux deux boutons. (e) **Écarts au web assumés** : navigation empilée liste → fil sur tous les formats (pas
+   de vue scindée sur iPad) ; avatars par initiales, sans image distante ; ouverture « Écrire à l'établissement »
+   refusée → « Impossible d'ouvrir la conversation. » quel que soit le refus serveur, comme le web.
+
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 4 », l.202-210)
 
 - **Périmètre (l.204)** : « soit par Safari, soit par la WebView bornée » devient : renvois par

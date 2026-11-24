@@ -59,3 +59,9 @@ final class RealtimeLifecycle {
         }
     }
 }
+
+extension AppContainer {
+    /// Cycle de la messagerie pour ses écrans (T7b : badge, liste, fil), seul accès hors de ce fichier : les écrans ne
+    /// lisent jamais le port Realtime (garde node « m6 »).
+    var cycleMessagerie: CycleRealtime? { realtime.cycle }
+}

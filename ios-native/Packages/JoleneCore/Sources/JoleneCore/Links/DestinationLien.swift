@@ -121,7 +121,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .secondaire(.parrainage):
             return false                                 // T6 — parrainage
         case .secondaire(.messagerie):
-            return false                                 // T7b — messagerie
+            return true                                  // T7b — `MessagerieScreen` (bouton Messages de la barre, fil d'une mission)
         case .secondaire(.litiges):
             return false                                 // T8 — litiges et réclamations (deux onglets, deux coupe-circuits)
         case .secondaire(.evaluations):

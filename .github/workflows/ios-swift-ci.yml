@@ -141,6 +141,12 @@ on:
       - 'src/pages/MesDisponibilites.tsx'
       - 'src/pages/PageMessagerie.tsx'
       - 'src/pages/PageParrainage.tsx'
+      # Lot 4, T7b : sources relues par MessagerieVerbatimTests (textes de la messagerie native, incident #1137).
+      - 'src/components/messagerie/ModaleEducativeAntiLeak.tsx'
+      - 'src/components/BloquerUtilisateur.tsx'
+      - 'src/components/SignalerUtilisateur.tsx'
+      - 'src/components/BarreNavigation.tsx'
+      - 'src/hooks/useOuvrirConversation.ts'
       - 'supabase/functions/register-soignant/index.ts'
       - 'supabase/functions/escrow-debit-echeance/index.ts'
       - 'supabase/functions/stripe-connect-onboard/index.ts'
@@ -278,6 +284,12 @@ on:
       - 'src/pages/MesDisponibilites.tsx'
       - 'src/pages/PageMessagerie.tsx'
       - 'src/pages/PageParrainage.tsx'
+      # Lot 4, T7b : sources relues par MessagerieVerbatimTests (textes de la messagerie native, incident #1137).
+      - 'src/components/messagerie/ModaleEducativeAntiLeak.tsx'
+      - 'src/components/BloquerUtilisateur.tsx'
+      - 'src/components/SignalerUtilisateur.tsx'
+      - 'src/components/BarreNavigation.tsx'
+      - 'src/hooks/useOuvrirConversation.ts'
       - 'supabase/functions/register-soignant/index.ts'
       - 'supabase/functions/escrow-debit-echeance/index.ts'
       - 'supabase/functions/stripe-connect-onboard/index.ts'
@@ -704,6 +716,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoExplorerTests \
             -skip-testing:JoleneUITests/DemoFavorisTests \
             -skip-testing:JoleneUITests/DemoFiltresTests \
+            -skip-testing:JoleneUITests/DemoMessagerieTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1583,9 +1596,9 @@ jobs:
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot1-accueil-explorer) : code $code"
       # « lot4 » : écrans secondaires du lot 4 (L4-T4 : recherches sauvegardées et alerte rapide d'Explorer, deux méthodes,
-      # estimées à 3-6 min au prorata de DemoFavorisTests) ; chaque tranche du lot 4 y range sa classe démo tant que l'éclat
+      # estimées à 3-6 min au prorata de DemoFavorisTests ; L4-T7b : messagerie, trois méthodes, estimées à 5-9 min) ; chaque tranche du lot 4 y range sa classe démo tant que l'éclat
       # reste estimé sous 20 min (décision 22), sinon ouvre un éclat voisin dans ce job.
-      - name: test-without-building — éclat lot4 (XCUITest des écrans secondaires du lot 4 — recherches sauvegardées) (${{ matrix.format }})
+      - name: test-without-building — éclat lot4 (XCUITest des écrans secondaires du lot 4 — recherches sauvegardées, messagerie) (${{ matrix.format }})
         id: tests_lot4
         # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
         if: always() && steps.build.outcome == 'success'
@@ -1613,6 +1626,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/derived" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoFiltresTests \
+            -only-testing:JoleneUITests/DemoMessagerieTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1742,7 +1756,7 @@ jobs:
             const eclats = [
               { nom: "lot1-missions", code: process.env.CODE_LOT1_MISSIONS, classes: ["DemoMesMissionsTests", "DemoCandidatureTests", "DemoConfirmationPresenceTests", "DemoAnnulationTests"] },
               { nom: "lot1-accueil-explorer", code: process.env.CODE_LOT1_ACCUEIL_EXPLORER, classes: ["DemoAccueilTests", "DemoExplorerTests", "DemoFavorisTests"] },
-              { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests"] },
+              { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests", "DemoMessagerieTests"] },
               { nom: "lot5-etablissement", code: process.env.CODE_LOT5_ETABLISSEMENT, classes: ["DemoEtabLiensTests", "DemoEtabMissionsTests", "DemoEtabCandidaturesTests"] },
               { nom: "lot3-profil", code: process.env.CODE_LOT3_PROFIL, classes: ["DemoProfilTests"] },
             ];
