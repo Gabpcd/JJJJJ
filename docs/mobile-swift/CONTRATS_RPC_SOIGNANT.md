@@ -2531,13 +2531,13 @@ concernée à jour **dans la même PR**.
 | `fn_ouvrir_litige_rate_limited` | à venir | partagée : lot 2 (T5b) si son T0 est fusionné, sinon 4 ; usage lot 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE (2 et 3 arguments ; la 4 arguments est hors manifeste) | authenticated, service_role | union de surcharges (lue `null`) |
 | `fn_ajouter_message_litige` | à venir | 4 (T8) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_soumettre_reclamation` | à venir | 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mon_breakdown_actuel` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mes_evenements_score` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_evolution_score_soignant` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_lister_notations_recues` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_creer_reclamation_score` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mes_notations_recues_avec_stats` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_signaler_notation` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mon_breakdown_actuel` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mes_evenements_score` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_evolution_score_soignant` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_lister_notations_recues` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_creer_reclamation_score` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mes_notations_recues_avec_stats` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_signaler_notation` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_lister_conversations_messagerie` | à venir | 4 (T7a) | MIXTE_TENANT_ADMIN | authenticated | absente |
 | `fn_interlocuteurs_conversations` | à venir | 4 (T7a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée |
 | `fn_marquer_messages_lus` | à venir | 4 (T7a) | MIXTE_TENANT_ADMIN | authenticated | déclarée |
@@ -2863,7 +2863,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_soumettre_reclamation"("p_categorie" "te
 
 ## fn_mon_breakdown_actuel
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Score/SupabaseScoreGateway.swift`.
 - **Usage prévu** : Page « Mon score » : dernier calcul `scoring_breakdown` du soignant.
 - **Signature SQL** (`supabase/schema/public.sql` l.44525) :
 
@@ -2881,7 +2881,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mon_breakdown_actuel"() RETURNS "jsonb"
 
 ## fn_mes_evenements_score
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Score/SupabaseScoreGateway.swift`.
 - **Usage prévu** : Événements de score des 12 derniers mois (`p_limit = 20` comme le web) ; base de la contestation (`fn_creer_reclamation_score`).
 - **Signature SQL** (`supabase/schema/public.sql` l.41672) :
 
@@ -2899,7 +2899,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_evenements_score"("p_limit" integer 
 
 ## fn_evolution_score_soignant
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Score/SupabaseScoreGateway.swift`.
 - **Usage prévu** : Graphique d’évolution de « Mon score » (`GraphiqueEvolutionScore`, `PageScoreSoignant.tsx` l.166), `p_limit = 6` comme le web (`GraphiqueEvolutionScore.tsx` l.27).
 - **Signature SQL** (`supabase/schema/public.sql` l.35523) :
 
@@ -2917,7 +2917,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_evolution_score_soignant"("p_limit" inte
 
 ## fn_lister_notations_recues
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Score/SupabaseScoreGateway.swift`.
 - **Usage prévu** : Notations reçues affichées sur « Mon score » ; lecture double-aveugle (fiche « Jamais `notations_missions` … »).
 - **Signature SQL** (`supabase/schema/public.sql` l.40284) :
 
@@ -2935,7 +2935,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_lister_notations_recues"("p_limit" integ
 
 ## fn_creer_reclamation_score
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Score/SupabaseScoreGateway.swift`.
 - **Usage prévu** : Contestation d'un événement `contestable` : `p_evenement_type = 'SOIGNANT'`, motif parmi `URGENCE_MEDICALE`, `DEUIL`, `FORCE_MAJEURE`, `ERREUR_JOLENE`, `CONTEXTE_PARTICULIER`, `AUTRE`, texte de 20 caractères au moins ; **`p_justificatif_storage_path` n'est jamais envoyé** (D10 : données de santé, `docs/CONFORMITE.md` §1.2, garde-fou 8 ; sous-ligne « justificatif : renvoi web assumé »).
 - **Signature SQL** (`supabase/schema/public.sql` l.27482) :
 
@@ -2953,7 +2953,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_creer_reclamation_score"("p_evenement_id
 
 ## fn_mes_notations_recues_avec_stats
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Evaluations/SupabaseEvaluationsGateway.swift`.
 - **Usage prévu** : Écran Évaluations : statistiques globales, évolution sur 6 mois (Swift Charts), filtres période (`TOUT`, `3M`, `6M`, `12M`), note minimale et établissement, pagination de 20 (`p_limit = 20`, `p_offset`), lecture seule (édition non portée, D11) ; lecture double-aveugle (fiche dédiée).
 - **Signature SQL** (`supabase/schema/public.sql` l.42039) :
 
@@ -2971,7 +2971,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_notations_recues_avec_stats"("p_peri
 
 ## fn_signaler_notation
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Evaluations/SupabaseEvaluationsGateway.swift`.
 - **Usage prévu** : Signalement d'une notation reçue, motif de 10 caractères au moins côté app (web `EvaluationsSoignant.tsx` l.458).
 - **Signature SQL** (`supabase/schema/public.sql` l.56216) :
 

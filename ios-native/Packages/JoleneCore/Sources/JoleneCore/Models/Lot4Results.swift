@@ -211,86 +211,9 @@ public enum IssueReclamation: Equatable, Sendable {
 
 // MARK: - Score et évaluations (T9)
 
-/// `fn_mon_breakdown_actuel` : composantes telles que servies.
-public struct BreakdownScore: Equatable, Sendable {
-    public var score: Double?
-    public var niveau: String?
-    public var composantes: [String: Double]
-
-    public init(score: Double?, niveau: String?, composantes: [String: Double]) {
-        self.score = score; self.niveau = niveau; self.composantes = composantes
-    }
-}
-
-/// Point de `fn_evolution_score_soignant(int)` (`{mois, score, niveau, cree_le}`).
-public struct PointEvolutionScore: Equatable, Sendable {
-    public var mois: String
-    public var score: Double?
-    public var niveau: String?
-
-    public init(mois: String, score: Double?, niveau: String?) { self.mois = mois; self.score = score; self.niveau = niveau }
-}
-
-/// Événement de `fn_mes_evenements_score` (clé **`events`**, correction 16) ; `contestable` calculé serveur.
-public struct EvenementScore: Equatable, Sendable, Identifiable {
-    public var id: String
-    public var typeEvenement: String
-    public var points: Double?
-    public var motif: String?
-    public var contestable: Bool
-    public var creeLe: Date?
-
-    public init(id: String, typeEvenement: String, points: Double?, motif: String?, contestable: Bool, creeLe: Date?) {
-        self.id = id; self.typeEvenement = typeEvenement; self.points = points; self.motif = motif
-        self.contestable = contestable; self.creeLe = creeLe
-    }
-}
-
-/// Notation reçue et PUBLIÉE, lue seulement par `fn_lister_notations_recues` ou
-/// `fn_mes_notations_recues_avec_stats` (filtre de visibilité centralisé, garde-fou 18).
-public struct NotationRecue: Equatable, Sendable, Identifiable {
-    public var id: String
-    public var note: Double?
-    public var commentaire: String?
-    public var etablissementNom: String?
-    public var signale: Bool
-    public var publieLe: Date?
-
-    public init(id: String, note: Double?, commentaire: String?, etablissementNom: String?, signale: Bool, publieLe: Date?) {
-        self.id = id; self.note = note; self.commentaire = commentaire; self.etablissementNom = etablissementNom
-        self.signale = signale; self.publieLe = publieLe
-    }
-}
-
-/// Issue de `fn_creer_reclamation_score` (`p_justificatif_storage_path` jamais envoyé, D10).
-public enum ReclamationScoreOutcome: Equatable, Sendable {
-    case enregistree(reclamationId: String)
-    /// `error_code` serveur (`TEXTE_REQUIS`, `NON_CONTESTABLE`…) et message verbatim.
-    case refusee(code: String?, message: String)
-}
-
-/// Filtres de la page Évaluations (`fn_mes_notations_recues_avec_stats(text, int, uuid, int, int)`).
-public struct FiltreEvaluations: Equatable, Sendable {
-    public var periode: String?
-    public var noteMin: Int?
-    public var etablissementId: String?
-
-    public init(periode: String? = nil, noteMin: Int? = nil, etablissementId: String? = nil) {
-        self.periode = periode; self.noteMin = noteMin; self.etablissementId = etablissementId
-    }
-}
-
-/// Page de 20 notations publiées, statistiques et évolution serveur (aucune moyenne recalculée).
-public struct PageEvaluations: Equatable, Sendable {
-    public var total: Int
-    public var notations: [NotationRecue]
-    public var noteMoyenne: Double?
-    public var evolution: [PointEvolutionScore]
-
-    public init(total: Int, notations: [NotationRecue], noteMoyenne: Double?, evolution: [PointEvolutionScore]) {
-        self.total = total; self.notations = notations; self.noteMoyenne = noteMoyenne; self.evolution = evolution
-    }
-}
+// `BreakdownScore`, `PointEvolutionScore`, `EvenementScore`, `MotifContestationScore` et `ReclamationScoreOutcome` :
+// `Models/Score.swift` ; `NotationRecue`, `FiltreEvaluations` et `PageEvaluations` : `Models/Evaluations.swift`
+// (déplacés par T9 avec leur décodage tolérant, comme `Models/Swipe.swift`).
 
 /// Issue d'un signalement (notation, utilisateur) : relu, ou refus verbatim.
 public enum IssueSignalement: Equatable, Sendable {

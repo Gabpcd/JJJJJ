@@ -111,6 +111,8 @@ const LOT4_RECLASSEES = ['fn_suggestions_missions_pour_soignant'];
 // quatre RPC du swipe de T3a.
 const GATEWAY_SWIPE = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Swipe/SupabaseSwipeGateway.swift';
 const GATEWAY_FILTRES = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Filtres/SupabaseFiltresGateway.swift';
+const GATEWAY_EVALUATIONS = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Evaluations/SupabaseEvaluationsGateway.swift';
+const GATEWAY_SCORE = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Score/SupabaseScoreGateway.swift';
 const LOT4_CONSOMMEES = new Map([
   ['fn_obtenir_missions_swipe', ['T3a', GATEWAY_SWIPE]],
   ['fn_enregistrer_swipe', ['T3a', GATEWAY_SWIPE]],
@@ -120,6 +122,13 @@ const LOT4_CONSOMMEES = new Map([
   ['fn_creer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
   ['fn_modifier_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
   ['fn_supprimer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
+  ['fn_mon_breakdown_actuel', ['T9', GATEWAY_SCORE]],
+  ['fn_mes_evenements_score', ['T9', GATEWAY_SCORE]],
+  ['fn_evolution_score_soignant', ['T9', GATEWAY_SCORE]],
+  ['fn_lister_notations_recues', ['T9', GATEWAY_SCORE]],
+  ['fn_creer_reclamation_score', ['T9', GATEWAY_SCORE]],
+  ['fn_mes_notations_recues_avec_stats', ['T9', GATEWAY_EVALUATIONS]],
+  ['fn_signaler_notation', ['T9', GATEWAY_EVALUATIONS]],
 ]);
 /** RPC suivies en `lot: 4` qui ne sont ni partagées ni reclassées : les 41 propres au lot. */
 const propresLot4 = rpcs => rpcs.filter(r => r.lot === 4 && !LOT4_PARTAGEES.includes(r.name) && !LOT4_RECLASSEES.includes(r.name));

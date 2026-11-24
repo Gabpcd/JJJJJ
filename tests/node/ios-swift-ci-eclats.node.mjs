@@ -107,7 +107,7 @@ const ECLATS_LOT1 = new Map([
   ['lot1-missions', ['DemoMesMissionsTests', 'DemoCandidatureTests', 'DemoConfirmationPresenceTests', 'DemoAnnulationTests']],
   ['lot1-accueil-explorer', ['DemoAccueilTests', 'DemoExplorerTests', 'DemoFavorisTests']],
   // Lot 4 (L4-T4) : première tranche du lot 4 à livrer un XCUITest ; ses classes démo rejoignent cet éclat du job (D19).
-  ['lot4', ['DemoFiltresTests']],
+  ['lot4', ['DemoFiltresTests', 'DemoEvaluationsScoreTests']], // L4-T9 : évaluations reçues et score
   // Stabilité de la CI (23/11/2026) : deux éclats du job `ui` atteignaient leurs 30 min (« presences » : 27 à 30 min sur
   // iPad ; « lot3-notifications » : 23 à 30 min, runs 44475153698, 44555091967 et 44797977486). Les classes qui les
   // faisaient déborder tournent ici, le job `ui` étant à son plafond de onze éclats.

@@ -141,13 +141,13 @@ export const RPC_SUIVIES = [
   { name: 'fn_ajouter_message_litige', statut: 'a_venir', lot: 4 },
   { name: 'fn_soumettre_reclamation', statut: 'a_venir', lot: 4 },
   // T9 — score, contestation et évaluations
-  { name: 'fn_mon_breakdown_actuel', statut: 'a_venir', lot: 4 },
-  { name: 'fn_mes_evenements_score', statut: 'a_venir', lot: 4 },
-  { name: 'fn_evolution_score_soignant', statut: 'a_venir', lot: 4 },
-  { name: 'fn_lister_notations_recues', statut: 'a_venir', lot: 4 },
-  { name: 'fn_creer_reclamation_score', statut: 'a_venir', lot: 4 },
-  { name: 'fn_mes_notations_recues_avec_stats', statut: 'a_venir', lot: 4 },
-  { name: 'fn_signaler_notation', statut: 'a_venir', lot: 4 },
+  { name: 'fn_mon_breakdown_actuel', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseScoreGateway
+  { name: 'fn_mes_evenements_score', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseScoreGateway (clé events)
+  { name: 'fn_evolution_score_soignant', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseScoreGateway
+  { name: 'fn_lister_notations_recues', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseScoreGateway
+  { name: 'fn_creer_reclamation_score', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseScoreGateway (sans justificatif, D10)
+  { name: 'fn_mes_notations_recues_avec_stats', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseEvaluationsGateway
+  { name: 'fn_signaler_notation', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseEvaluationsGateway
   // T7a/T7b — messagerie, blocage, signalement, fil de mission (correction 20)
   { name: 'fn_lister_conversations_messagerie', statut: 'a_venir', lot: 4 },
   { name: 'fn_interlocuteurs_conversations', statut: 'a_venir', lot: 4 },

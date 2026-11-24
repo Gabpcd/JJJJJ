@@ -237,9 +237,7 @@ final class DemoWorldTests: XCTestCase {
         "messagerie",        // T7a
         "realtime",          // T7a
         "bulletins",         // T10
-        "evaluationsRecues", // T9
         "poolUrgence",       // T11
-        "score",             // T9
         "exclusions",        // T11
     ]
 

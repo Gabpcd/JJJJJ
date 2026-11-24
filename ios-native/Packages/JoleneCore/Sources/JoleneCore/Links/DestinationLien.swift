@@ -125,9 +125,9 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .secondaire(.litiges):
             return false                                 // T8 — litiges et réclamations (deux onglets, deux coupe-circuits)
         case .secondaire(.evaluations):
-            return false                                 // T9 — évaluations reçues
+            return true                                  // T9 — `EvaluationsScreen` (évaluations reçues, signalement)
         case .secondaire(.score):
-            return false                                 // T9 — mon score (repli `.monCompte` jusque-là)
+            return true                                  // T9 — `ScoreScreen` (mon score, contestation d'un événement)
         case .secondaire(.bulletins):
             return false                                 // T10 — copies officielles (avec la destination de `.revenus(.bulletins)`)
         case .secondaire(.poolUrgence):

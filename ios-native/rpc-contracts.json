@@ -1737,7 +1737,7 @@
     },
     {
       "name": "fn_mon_breakdown_actuel",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "never",
@@ -1766,7 +1766,7 @@
     },
     {
       "name": "fn_mes_evenements_score",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_limit?: number }",
@@ -1795,7 +1795,7 @@
     },
     {
       "name": "fn_evolution_score_soignant",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_limit?: number }",
@@ -1824,7 +1824,7 @@
     },
     {
       "name": "fn_lister_notations_recues",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_limit?: number }",
@@ -1853,7 +1853,7 @@
     },
     {
       "name": "fn_creer_reclamation_score",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_evenement_id: string; p_evenement_type: string; p_justificatif_storage_path?: string; p_motif_categorie: string; p_texte_libre: string }",
@@ -1882,7 +1882,7 @@
     },
     {
       "name": "fn_mes_notations_recues_avec_stats",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_etablissement_id?: string; p_limit?: number; p_note_min?: number; p_offset?: number; p_periode?: string }",
@@ -1911,7 +1911,7 @@
     },
     {
       "name": "fn_signaler_notation",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_motif?: string; p_notation_id: string }",

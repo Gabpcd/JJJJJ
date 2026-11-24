@@ -67,7 +67,7 @@ final class LinksRouterLot4Tests: XCTestCase {
         let swipe = try lien("/soignant/swipe-missions")
         XCTAssertEqual(DeepLinkIntent(swipe), .espace(swipe))
         XCTAssertEqual(CibleNotification(swipe), .explorer, "repli natif : Explorer, comme avant L4-T1")
-        XCTAssertEqual(CibleNotification(try lien("/soignant/score")), .monCompte)
+        XCTAssertEqual(CibleNotification(try lien("/soignant/score")), .secondaire(.score), "T9 : écran natif livré")
     }
 
     func testDescriptionMasqueLesIdentifiants() throws {

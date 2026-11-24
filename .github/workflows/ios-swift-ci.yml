@@ -141,6 +141,14 @@ on:
       - 'src/pages/MesDisponibilites.tsx'
       - 'src/pages/PageMessagerie.tsx'
       - 'src/pages/PageParrainage.tsx'
+      # Lot 4, T9 : sources relues par EvaluationsScoreVerbatimTests (textes des évaluations, du score et de la
+      # contestation d'un événement de score, incident #1137) ; EvaluationsSoignant.tsx figure déjà ci-dessus.
+      - 'src/components/BadgeNiveauV2.tsx'
+      - 'src/components/BreakdownScore.tsx'
+      - 'src/components/GraphiqueEvolutionScore.tsx'
+      - 'src/components/NotationsRecues.tsx'
+      - 'src/components/score/ModaleReclamationScore.tsx'
+      - 'src/pages/PageScoreSoignant.tsx'
       - 'supabase/functions/register-soignant/index.ts'
       - 'supabase/functions/escrow-debit-echeance/index.ts'
       - 'supabase/functions/stripe-connect-onboard/index.ts'
@@ -278,6 +286,14 @@ on:
       - 'src/pages/MesDisponibilites.tsx'
       - 'src/pages/PageMessagerie.tsx'
       - 'src/pages/PageParrainage.tsx'
+      # Lot 4, T9 : sources relues par EvaluationsScoreVerbatimTests (textes des évaluations, du score et de la
+      # contestation d'un événement de score, incident #1137) ; EvaluationsSoignant.tsx figure déjà ci-dessus.
+      - 'src/components/BadgeNiveauV2.tsx'
+      - 'src/components/BreakdownScore.tsx'
+      - 'src/components/GraphiqueEvolutionScore.tsx'
+      - 'src/components/NotationsRecues.tsx'
+      - 'src/components/score/ModaleReclamationScore.tsx'
+      - 'src/pages/PageScoreSoignant.tsx'
       - 'supabase/functions/register-soignant/index.ts'
       - 'supabase/functions/escrow-debit-echeance/index.ts'
       - 'supabase/functions/stripe-connect-onboard/index.ts'
@@ -704,6 +720,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoExplorerTests \
             -skip-testing:JoleneUITests/DemoFavorisTests \
             -skip-testing:JoleneUITests/DemoFiltresTests \
+            -skip-testing:JoleneUITests/DemoEvaluationsScoreTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1584,8 +1601,10 @@ jobs:
           echo "xcodebuild test-without-building (éclat lot1-accueil-explorer) : code $code"
       # « lot4 » : écrans secondaires du lot 4 (L4-T4 : recherches sauvegardées et alerte rapide d'Explorer, deux méthodes,
       # estimées à 3-6 min au prorata de DemoFavorisTests) ; chaque tranche du lot 4 y range sa classe démo tant que l'éclat
-      # reste estimé sous 20 min (décision 22), sinon ouvre un éclat voisin dans ce job.
-      - name: test-without-building — éclat lot4 (XCUITest des écrans secondaires du lot 4 — recherches sauvegardées) (${{ matrix.format }})
+      # reste estimé sous 20 min (décision 22), sinon ouvre un éclat voisin dans ce job. L4-T9 : DemoEvaluationsScoreTests
+      # (évaluations reçues et score, deux méthodes de même gabarit : connexion, un écran, une feuille), soit 6 à 12 min
+      # estimées pour l'éclat.
+      - name: test-without-building — éclat lot4 (XCUITest des écrans secondaires du lot 4 — recherches sauvegardées, évaluations et score) (${{ matrix.format }})
         id: tests_lot4
         # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
         if: always() && steps.build.outcome == 'success'
@@ -1613,6 +1632,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/derived" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoFiltresTests \
+            -only-testing:JoleneUITests/DemoEvaluationsScoreTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1742,7 +1762,7 @@ jobs:
             const eclats = [
               { nom: "lot1-missions", code: process.env.CODE_LOT1_MISSIONS, classes: ["DemoMesMissionsTests", "DemoCandidatureTests", "DemoConfirmationPresenceTests", "DemoAnnulationTests"] },
               { nom: "lot1-accueil-explorer", code: process.env.CODE_LOT1_ACCUEIL_EXPLORER, classes: ["DemoAccueilTests", "DemoExplorerTests", "DemoFavorisTests"] },
-              { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests"] },
+              { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests", "DemoEvaluationsScoreTests"] },
               { nom: "lot5-etablissement", code: process.env.CODE_LOT5_ETABLISSEMENT, classes: ["DemoEtabLiensTests", "DemoEtabMissionsTests", "DemoEtabCandidaturesTests"] },
               { nom: "lot3-profil", code: process.env.CODE_LOT3_PROFIL, classes: ["DemoProfilTests"] },
             ];
