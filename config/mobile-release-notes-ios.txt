@@ -1,0 +1,3 @@
+Jolene a été entièrement réécrite pour iPhone et iPad : une application native, plus rapide et plus fluide. Le tableau de bord, la recherche de missions, les candidatures, le pointage, les documents, les contrats et les revenus ont été repensés pour iOS.
+
+Après la mise à jour, vous devrez vous reconnecter une fois avec votre e-mail et votre mot de passe, puis réactiver Face ID dans votre compte. Vos missions, vos documents et vos données sont conservés.

@@ -814,7 +814,7 @@ test('mobile-delivery.yml ne construit ni ne soumet plus rien pour iOS', () => {
   for (const appel of ['release-state.mjs reserve android', 'release-state.mjs check android', 'release-state.mjs record android']) {
     assert.ok(actif.includes(appel), appel);
   }
-  assert.deepEqual([...actif.matchAll(/\bfastlane\s+(\S+\s+\S+)/g)].map(m => m[1]), ['android submit']);
+  assert.deepEqual([...actif.matchAll(/\bfastlane[^\S\n]+(\S+[^\S\n]+\S+)/g)].map(m => m[1]), ['android submit']);
   const native = actif.slice(actif.indexOf('\n  native:'));
   assert.ok(native.indexOf('fastlane android submit') < native.indexOf('release-state.mjs record android'), 'le tag ne se pose qu\'après la soumission');
 });

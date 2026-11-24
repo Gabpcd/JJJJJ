@@ -2,7 +2,8 @@ name: iOS Swift — TestFlight interne
 
 # Livraison TestFlight de l'app Swift (ios-native/), testeurs internes uniquement.
 # Jamais de soumission à la revue Apple, jamais de testeurs externes, jamais de mise en vente.
-# La coquille Capacitor (ios/, 1.0.x) reste livrée par mobile-delivery.yml, inchangé.
+# La soumission à la revue d'un build envoyé ici passe par ios-native-app-store.yml (lot 6) ;
+# la coquille Capacitor iOS (ios/, 1.0.7) est gelée et mobile-delivery.yml ne livre plus qu'Android.
 # Mode d'emploi, numérotation et gardes : docs/mobile-swift/TESTFLIGHT.md.
 
 on:

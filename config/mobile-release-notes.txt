@@ -1,1 +1,0 @@
-Amélioration de la navigation et des formulaires sur téléphone et tablette. Clarification des modes d’exercice à l’inscription. Corrections du suivi des factures et remboursements, de l’accès aux documents et des messages d’erreur. Amélioration de la stabilité Android et de la reprise de session.
