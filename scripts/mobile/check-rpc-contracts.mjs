@@ -135,8 +135,8 @@ export const RPC_SUIVIES = [
   // T5 — disponibilités
   { name: 'fn_definir_disponibilite', statut: 'a_venir', lot: 4 },
   // T6 — parrainage
-  { name: 'fn_obtenir_mes_parrainages', statut: 'a_venir', lot: 4 },
-  { name: 'fn_appliquer_parrainage', statut: 'a_venir', lot: 4 },
+  { name: 'fn_obtenir_mes_parrainages', statut: 'consommee', lot: 4 }, // L4-T6 : SupabaseParrainageGateway.etat
+  { name: 'fn_appliquer_parrainage', statut: 'consommee', lot: 4 }, // L4-T6 : SupabaseParrainageGateway.appliquer (code capté par lien)
   // T8 — litiges et réclamations générales (`fn_ouvrir_litige_rate_limited` : RPC_PARTAGEES_LOT4)
   { name: 'fn_ajouter_message_litige', statut: 'a_venir', lot: 4 },
   { name: 'fn_soumettre_reclamation', statut: 'a_venir', lot: 4 },

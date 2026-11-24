@@ -2526,8 +2526,8 @@ concernée à jour **dans la même PR**.
 | `fn_modifier_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_supprimer_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_definir_disponibilite` | à venir | 4 (T5) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_obtenir_mes_parrainages` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_appliquer_parrainage` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_obtenir_mes_parrainages` | consommée lot 4 (T6) | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_appliquer_parrainage` | consommée lot 4 (T6) | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_ouvrir_litige_rate_limited` | à venir | partagée : lot 2 (T5b) si son T0 est fusionné, sinon 4 ; usage lot 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE (2 et 3 arguments ; la 4 arguments est hors manifeste) | authenticated, service_role | union de surcharges (lue `null`) |
 | `fn_ajouter_message_litige` | à venir | 4 (T8) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_soumettre_reclamation` | à venir | 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -2791,7 +2791,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_definir_disponibilite"("p_jour" "date", 
 
 ## fn_obtenir_mes_parrainages
 
-- **Statut natif** : à venir (lot 4, T6).
+- **Statut natif** : consommée (lot 4, T6) par `JoleneSupabase/Parrainage/SupabaseParrainageGateway.swift`, appelée par `ParrainageModel` (JoleneCore, écran Parrainage) ; relue après chaque application acceptée (`mon_parrain` non nul). Montants et seuil serveur lus, jamais affichés (T6-HS).
 - **Usage prévu** : Écran Parrainage : filleuls et progression, gains, prime et seuil **serveur** (`fn_param_num('prime_parrainage_eur', 25)`, `fn_param_num('seuil_gmv_parrainage_eur', 500)`, l.45954-45955), `mon_parrain`. Code et `badge_ambassadeur` lus par PostgREST `soignants`.
 - **Signature SQL** (`supabase/schema/public.sql` l.45947) :
 
@@ -2809,7 +2809,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_mes_parrainages"() RETURNS "json
 
 ## fn_appliquer_parrainage
 
-- **Statut natif** : à venir (lot 4, T6).
+- **Statut natif** : consommée (lot 4, T6) par `JoleneSupabase/Parrainage/SupabaseParrainageGateway.swift`, appelée par `ParrainageApplication` (JoleneCore) depuis `ParrainageApplicateur` (premier `.ready` qui suit la capture) ; `p_code` toujours à la forme du web, message serveur de succès jamais affiché.
 - **Usage prévu** : Application d'un code capté par Universal Link (`?ref=` / `?parrain=`, fenêtre de 30 jours, codes `ETB-` ignorés) au premier `.ready` qui suit la capture (D14), une seule fois par userId et code.
 - **Signature SQL** (`supabase/schema/public.sql` l.19059) :
 

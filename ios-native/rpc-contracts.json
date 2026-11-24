@@ -1621,7 +1621,7 @@
     },
     {
       "name": "fn_obtenir_mes_parrainages",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "never",
@@ -1650,7 +1650,7 @@
     },
     {
       "name": "fn_appliquer_parrainage",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_code: string }",
