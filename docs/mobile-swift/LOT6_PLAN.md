@@ -118,12 +118,37 @@ Courtes, dans l'ordre. T1 à T4 sont sur cette branche.
 | T2 | Scission : configuration, tags, planificateur, OTA Android seul, alignement des versions, `mobile-delivery.yml` Android seul | fait | `tests/node/mobile-delivery-plan.node.mjs` |
 | T3 | Soumission App Store : `ios-native-app-store.yml`, gardes, lane `submit_native`, notes de version | fait | `tests/node/ios-native-app-store.node.mjs` ; provenance et source rejouées à blanc sur le build 31 |
 | T4 | Documentation de livraison à jour (`MOBILE_DELIVERY.md`, `TESTFLIGHT.md`, `APP_STORE.md`, renvois du plan général) | fait | — |
-| T5 | Captures App Store depuis l'app Swift en mode démo : un test XCUITest dédié, hors des éclats de `ios-swift-ci.yml`, dans un job à part lancé à la main ; iPhone 1320×2868 et iPad 2064×2752 (A2) | à faire | PNG contrôlés en dimensions |
+| T5 | Captures App Store depuis l'app Swift en mode démo (détail ci-dessous) | à faire | PNG contrôlés en dimensions |
 | T6 | Écran d'accueil après la mise à jour (reconnexion, Face ID), sans texte juridique nouveau | à faire | XCUITest démo |
 | T7 | Retour arrière iOS : procédure ci-dessous, à tester une fois ou à abandonner | écrit, non testé | — |
 | T8 | Clôture des lots 4 et 5, envoi TestFlight du build à soumettre, recette sur iPhone (liens universels, push de production) | dépend des lots 4 et 5 | `RECETTE_DEVICE_LOT4.md`, `RECETTE_DEVICE_LOT5.md` |
 | T9 | Soumission (geste de la fondatrice), puis suivi de la publication progressive | après T8 et §3 | tag `mobile-native-ios-N`, `mobile-store-status.yml` |
 | T10 | PR de release Android 1.0.8 (25), puis livraison native (§5) | indépendant d'iOS | tag `mobile-native-android-25` |
+
+### T5 — Captures App Store (à faire)
+
+Non livré par cette branche : un test XCUITest ne se compile ni ne s'exécute sans `xcodebuild`, et le
+job ne peut pas être lancé tant que son workflow n'est pas sur `main`. Le livrer sans l'avoir vu tourner
+aurait été une promesse, pas une preuve. Ce qu'il faut faire :
+
+- **Une cible de test à part** (par exemple `JoleneCapturesUITests`, avec son scheme), déclarée dans
+  `ios-native/project.yml`. Pas une classe de plus dans `JoleneUITests` : l'éclat « socle » de
+  `ios-swift-ci.yml` exécute toute classe qu'il n'exclut pas nommément, et la garde
+  `tests/node/ios-swift-ci-eclats.node.mjs` refuse toute exclusion autre que les classes STAGING et
+  celles des autres éclats. Une cible séparée ne touche ni ce workflow ni cette garde.
+- **Un workflow lancé à la main** (`workflow_dispatch`), qui lance l'app avec `-JOLENE_MODE demo` et
+  enregistre les captures en pièces jointes du résultat de test.
+- **Deux simulateurs** aux dimensions acceptées (A2) : un iPhone à grand écran avec Dynamic Island pour
+  du 1320 × 2868 (par exemple iPhone 17 Pro Max) et un iPad 13 pouces pour du 2064 × 2752. La chaîne de
+  CI n'utilise aujourd'hui que « iPhone 17 » et « iPad (A16) » : le second n'est pas un 13 pouces, et
+  l'acceptation du format du premier n'a pas été vérifiée. La présence des deux autres simulateurs sur
+  le runner est à vérifier.
+- **Un contrôle des dimensions** des PNG (`mobile-native/scripts/png-dimensions.mjs`, déjà repris par la
+  CI) avant de les proposer au téléversement.
+- **Des écrans qui montrent l'app en usage** (A1, 2.3.3) : tableau de bord, recherche, détail d'une
+  mission, Mes missions, pointage, revenus ; pas l'écran de connexion.
+
+Le téléversement des captures reste une saisie de la fondatrice dans App Store Connect (§3, action 6).
 
 ### T7 — Retour arrière iOS (écrit, non testé)
 

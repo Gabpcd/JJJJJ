@@ -154,7 +154,9 @@ ports en attente), aucun refus `apple-4.2` ni `ota`.
 
 Les scripts existants (`scripts/capture-google-play.mjs`) photographient le site web : ils ne valent pas
 pour l'app Swift (source A1, 2.3.3). La production des captures depuis l'app Swift en mode démo n'est pas
-livrée par cette branche : voir `LOT6_PLAN.md`, tranche T5.
+livrée par cette branche : un XCUITest ne peut être ni compilé ni exécuté sans `xcodebuild`, et son job
+ne peut pas tourner avant d'être sur `main`. La marche à suivre est écrite dans `LOT6_PLAN.md`, tranche
+T5 : cible de test à part, hors des éclats de `ios-swift-ci.yml`, job lancé à la main.
 
 ## D10 — Version Android
 
@@ -183,7 +185,7 @@ résumé automatique et non relu mot à mot. « Non vérifié » : la page ne s'
 | # | Exigence | Page officielle | État |
 |---|---|---|---|
 | A1 | Règles de revue : 2.1(a) compte de démonstration et backend actif ; 2.3.1(a) nouveautés décrites dans les notes pour la revue ; 2.3.3 captures montrant l'app en usage ; 2.5.2 pas de code téléchargé qui change l'app ; 4.2 plus qu'un site réemballé ; 5.1.1(i) politique de confidentialité dans la fiche et dans l'app ; 5.1.1(v) suppression de compte dans l'app | https://developer.apple.com/app-store/review/guidelines/ | vérifié (5.1.1(i) : résumé) |
-| A2 | Captures : iPhone 1260×2736, 1290×2796 ou 1320×2868 ; iPad 13 pouces 2064×2752 ou 2048×2732, exigé si l'app tourne sur iPad ; 1 à 10 par format | https://developer.apple.com/help/app-store-connect/reference/screenshot-specifications/ | vérifié |
+| A2 | Captures : iPhone à grand écran avec Dynamic Island 1260×2736, 1290×2796 ou 1320×2868 ; iPad 13 pouces 2064×2752 ou 2048×2732, exigé si l'app tourne sur iPad ; 1 à 10 par format | https://developer.apple.com/help/app-store-connect/reference/screenshot-specifications/ | vérifié pour les dimensions ; **non vérifié** : lequel des formats iPhone (grand ou moyen écran) est obligatoire |
 | A3 | Publication progressive : 7 jours, 1 %, 2 %, 5 %, 10 %, 20 %, 50 %, 100 % ; pause jusqu'à 30 jours ; mise à jour manuelle toujours possible | https://developer.apple.com/help/app-store-connect/update-your-app/release-a-version-update-in-phases/ | vérifié (résumé) |
 | A4 | Confidentialité de l'app : réponses exigées pour soumettre une app ou une mise à jour, à tenir exactes | https://developer.apple.com/app-store/app-privacy-details/ | vérifié |
 | A5 | Classification : 4+, 9+, 13+, 16+, 18+ ; une app non classée ne peut pas être publiée | https://developer.apple.com/help/app-store-connect/reference/age-ratings-values-and-definitions/ | vérifié (résumé) |
