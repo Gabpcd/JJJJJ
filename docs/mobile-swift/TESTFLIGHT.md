@@ -15,8 +15,9 @@ limite à `upload_to_testflight` avec `skip_submission: true` et `distribute_ext
 node échoue si le workflow ou la lane mentionnent `upload_to_app_store`, `submit_for_review`,
 `deliver`, `distribute_external: true` ou des groupes de testeurs.
 
-La coquille Capacitor (`ios/`, 1.0.x) et Android restent livrées par `mobile-delivery.yml`, que ce
-workflow ne touche pas.
+Depuis le lot 6, `mobile-delivery.yml` ne livre plus qu'Android ; la coquille Capacitor iOS (`ios/`,
+1.0.7) est gelée et n'est plus livrée. La soumission à la revue Apple d'un build envoyé ici passe par
+`ios-native-app-store.yml` (`docs/mobile-swift/APP_STORE.md`).
 
 ## Lancer un envoi
 
@@ -44,7 +45,8 @@ L'IPA et les journaux `xcodebuild` sont conservés 14 jours dans l'artefact
 
 - **Version** : `MARKETING_VERSION` de `ios-native/Config/Base.xcconfig`, aujourd'hui `2.0.0`
   (décision du plan, lot 6). Le workflow ne la surcharge pas. La garde `identite` exige au moins
-  2.0.0 et une version supérieure à celle de la coquille Capacitor (`config/mobile-release.json`).
+  2.0.0, une version supérieure à celle de la coquille Capacitor (1.0.7) et l'égalité avec
+  `ios.marketingVersion` de `config/mobile-release.json`.
 - **Build** : `CFBundleVersion`, injecté par `xcodebuild CURRENT_PROJECT_VERSION=<N>`. La valeur
   `CURRENT_PROJECT_VERSION = 25` de `Base.xcconfig` n'est qu'un défaut pour les builds locaux.
   - Champ vide : `N = max(dernier build App Store Connect de l'app 6774672845, plancher) + 1`,
@@ -54,19 +56,17 @@ L'IPA et les journaux `xcodebuild` sont conservés 14 jours dans l'artefact
     au plancher, s'il dépasse le dernier build connu de plus de 50, ou s'il existe déjà dans App Store
     Connect. La borne haute protège d'une faute de frappe (3100 pour 31) qui relèverait définitivement
     le plancher de tous les builds suivants.
-  - **Plancher** : `max(24, buildNumber de config/mobile-release.json)`. 24 est le dernier build
-    Capacitor publié (1.0.7) ; si la coquille réserve un numéro plus haut pour une 1.0.8, TestFlight
-    ne peut pas le prendre.
+  - **Plancher** : `max(24, ios.minimumBuildNumber − 1)`. 24 est le dernier build Capacitor publié
+    (1.0.7) ; `ios.minimumBuildNumber` de `config/mobile-release.json` vaut 32 depuis le lot 6, parce
+    que les builds 25 à 31 existent déjà et précèdent la clôture des lots 4 et 5. Le premier numéro
+    calculé est donc 32.
   - Le numéro est relu dans App Store Connect juste avant l'envoi (`verify-free`).
-- **`config/mobile-release.json` n'est pas scindé** : il reste la source des versions Capacitor
-  (iOS 1.0.x et Android), lu tel quel par `delivery-plan.mjs`, `release-state.mjs`,
-  `check-mobile-build-alignment.mjs` et `fastlane/Fastfile`. Pour l'app Swift, la version vient du
-  xcconfig et le build est dérivé d'App Store Connect : un second champ dans le JSON pourrait
-  diverger. La scission par plateforme reste prévue au lot 6, avec la bascule de
-  `mobile-delivery.yml`.
-- **Retour arrière Capacitor** : une 1.0.8 de secours doit prendre un `buildNumber` supérieur au
-  dernier build TestFlight Swift (lisible dans App Store Connect ou dans le résumé du job
-  `preparer`).
+- **`config/mobile-release.json` est scindé par plateforme** depuis le lot 6
+  (`DECISIONS_LOT6.md`, D3) : la section `ios` porte la version de l'app Swift et son build minimal,
+  la section `android` la version de la coquille. Le numéro de build iOS n'y est pas figé : il reste
+  dérivé d'App Store Connect.
+- **Retour arrière Capacitor** : non testé depuis la scission ; procédure et limites dans
+  `LOT6_PLAN.md` (tranche T7).
 
 ## Les gardes
 
@@ -116,8 +116,9 @@ d'échec. Le script n'affiche jamais une valeur secrète : il signe localement u
    Apple). La recette device (connexion de production, push de production, Universal Links,
    Face ID) reste à conduire sur l'iPhone et à consigner selon `docs/mobile-swift/RECETTE_DEVICE_LOT1.md`.
    CLAUDE.md distingue toujours simulation, environnement de test, production et appareil physique.
-5. **Revue Apple et mise en vente** : hors périmètre. Elles passeront par la bascule du lot 6
-   (`mobile-delivery.yml`), jamais par ce workflow.
+5. **Revue Apple et mise en vente** : hors périmètre de ce workflow. Elles passent par
+   `ios-native-app-store.yml`, lancé à la main avec le numéro d'un build envoyé ici
+   (`docs/mobile-swift/APP_STORE.md`).
 
 ## Vérification locale sans signature
 

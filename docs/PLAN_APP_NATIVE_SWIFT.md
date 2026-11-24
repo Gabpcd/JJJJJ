@@ -197,7 +197,7 @@ Critères de sortie :
 - Inscription STAGING complète de bout en bout par Universal Link : email reçu, PKCE échangé, profil créé.
 - Onboarding Connect STAGING ouvert et retour dans l'app par Universal Link.
 - Sentry reçoit un crash de test taggé release 2.0.0 (25).
-- TestFlight externe ouvert à une cohorte de soignants pilotes.
+- TestFlight externe ouvert à une cohorte de soignants pilotes. *(Abandonné le 2026-11-24, décision D1 de `docs/mobile-swift/DECISIONS_LOT6.md` : pas de bêta externe.)*
 
 ### Lot 4 : parité soignant, bêta externe et parcours secondaires (environ 3 semaines)
 
@@ -205,9 +205,9 @@ Périmètre : swipe natif, filtres sauvegardés, disponibilités, parrainage par
 
 Critères de sortie :
 - 100 % des lignes de la matrice de parité statuées (natif / renvoi web assumé / abandonné), zéro ligne « abandonné » sur les onze parcours cœur, matrice signée par vous.
-- Crash-free sessions supérieur ou égal à 99,5 % sur 14 jours de bêta.
+- Crash-free sessions supérieur ou égal à 99,5 % sur 14 jours de bêta. *(Abandonné le 2026-11-24, décision D1 de `docs/mobile-swift/DECISIONS_LOT6.md` : la soumission se fait dès que les lots 4 et 5 sont sur `main`.)*
 - STAGING : message envoyé et reçu en Realtime entre deux comptes TEST, litige ouvert et relu.
-- Aucun retour bêta bloquant ouvert.
+- Aucun retour bêta bloquant ouvert. *(Abandonné le 2026-11-24, même décision.)*
 
 ### Lot 5 : établissement terrain et renvoi web pour le reste (environ 5 semaines)
 
@@ -222,7 +222,7 @@ Critères de sortie :
 
 ### Lot 6 : bascule App Store, remplacement de 1.0.7 par 2.0.0 (environ 2 semaines, plus délai de revue Apple)
 
-Périmètre : `config/mobile-release.json` scindé par plateforme (iOS 2.0.0 / 25 ou plus, Android 1.0.x) ; `mobile-delivery.yml` avec job iOS en `xcodebuild archive` du projet Swift et `exportArchive` via `ios/ExportOptions-AppStore.plist` ; `scripts/check-mobile-build-alignment.mjs` pointé vers le nouveau projet ; `scripts/mobile/delivery-plan.mjs` avec `ios-native` dans les chemins natifs et interdiction de tout diff `ios-native` en mode ota ; `scripts/mobile/release-state.mjs` avec tags scindés `mobile-native-ios-N` / `mobile-native-android-N` sans exiger les deux ; captures iPhone et iPad refaites depuis l'app Swift (les scripts de captures existants photographient le site web) ; App Privacy recalculée ; notes de review et notes de version annonçant la reconnexion et le ré-enrôlement Face ID ; écran d'accueil post-mise à jour ; déploiement progressif sur 7 jours ; suivi par `mobile-store-status.yml`.
+Périmètre : `config/mobile-release.json` scindé par plateforme (iOS 2.0.0 / 25 ou plus, Android 1.0.x) ; `mobile-delivery.yml` avec job iOS en `xcodebuild archive` du projet Swift et `exportArchive` via `ios/ExportOptions-AppStore.plist` ; `scripts/check-mobile-build-alignment.mjs` pointé vers le nouveau projet ; `scripts/mobile/delivery-plan.mjs` avec `ios-native` dans les chemins natifs et interdiction de tout diff `ios-native` en mode ota ; `scripts/mobile/release-state.mjs` avec tags scindés `mobile-native-ios-N` / `mobile-native-android-N` sans exiger les deux ; captures iPhone et iPad refaites depuis l'app Swift (les scripts de captures existants photographient le site web) ; App Privacy recalculée ; notes de review et notes de version annonçant la reconnexion et le ré-enrôlement Face ID ; écran d'accueil post-mise à jour ; déploiement progressif sur 7 jours ; suivi par `mobile-store-status.yml`. *(Amendé le 2026-11-24, `docs/mobile-swift/DECISIONS_LOT6.md` : D2, `mobile-delivery.yml` ne livre plus qu'Android, l'archive Swift reste dans `ios-native-testflight.yml` et la soumission d'un build TestFlight déjà traité passe par `ios-native-app-store.yml` ; D3, build iOS minimal 32 ; D5, OTA Android seul. État de chaque élément : `docs/mobile-swift/LOT6_PLAN.md` §2.)*
 
 Critères de sortie :
 - Garde Apple 4.2 écrite et respectée : aucune soumission sans pointage, tableau de bord et missions natifs.
@@ -230,7 +230,7 @@ Critères de sortie :
 - AASA inchangée, Universal Links vérifiés sur le build de production (reset, invitation, PSC, Stripe Connect).
 - Push de production reçu sur un token enregistré par 2.0.0.
 - Phased release non interrompue, crash-free supérieur ou égal à 99,5 %, taux de reconnexion suivi via `fn_audit_connexion`.
-- Plan de retour arrière écrit et testé une fois : `ios/` Capacitor reste buildable et une 1.0.8 (26) peut être soumise sous 24 h.
+- Plan de retour arrière écrit et testé une fois : `ios/` Capacitor reste buildable et une 1.0.8 (26) peut être soumise sous 24 h. *(Amendé le 2026-11-24, décision D6 de `docs/mobile-swift/DECISIONS_LOT6.md` : la coquille iOS n'est plus livrée par aucun workflow ; la procédure de retour arrière est écrite dans `LOT6_PLAN.md` (T7), non testée, et « 1.0.8 (26) » n'est plus un numéro possible.)*
 - Aucune soumission automatique.
 
 ### Lot 7 : nettoyage (environ 1 semaine, après un cycle de production stable de 2.x)
