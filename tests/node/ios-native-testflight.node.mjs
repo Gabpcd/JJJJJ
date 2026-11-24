@@ -512,4 +512,10 @@ test('la configuration de livraison est scindée (lot 6) : le plancher TestFligh
   assert.ok(buildFloor(release) >= APP.buildFloor);
   // Premier numéro calculé quand App Store Connect ne connaît rien au-dessus du plancher.
   assert.equal(resolveBuildNumber({ requested: '', existing: ['24', '25'], floor: buildFloor(release) }), release.ios.minimumBuildNumber);
+  // Revue m6 de #1177 : le plancher 31 n'est pas « le dernier build de la coquille » (24), et la
+  // description du workflow ne cite plus 24 comme plancher.
+  assert.throws(() => resolveBuildNumber({ requested: String(buildFloor(release)), existing: [], floor: buildFloor(release) }),
+    (error) => /plancher de numérotation/.test(error.failures[0]) && !/doit dépasser \d+, dernier build de la coquille/.test(error.failures[0]));
+  const description = /build_number:\n {8}description: '([^']+)'/.exec(readFileSync(join(root, '.github/workflows/ios-native-testflight.yml'), 'utf8'))?.[1];
+  assert.ok(description?.includes('plancher') && !description.includes(', 24)'), description);
 });

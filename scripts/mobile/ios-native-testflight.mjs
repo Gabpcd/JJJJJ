@@ -402,7 +402,7 @@ export function resolveBuildNumber({ requested, existing, floor }) {
   if (!raw) return latest + 1;
   if (!/^[1-9]\d{0,8}$/.test(raw)) throw new GuardFailure([`[numerotation] numéro de build « ${raw} » invalide : entier positif exigé (voir ${DOC}, garde « numerotation »)`]);
   const number = Number(raw);
-  if (number <= floor) throw new GuardFailure([`[numerotation] build ${number} refusé : il doit dépasser ${floor}, dernier build de la coquille Capacitor (voir ${DOC}, garde « numerotation »)`]);
+  if (number <= floor) throw new GuardFailure([`[numerotation] build ${number} refusé : il doit dépasser ${floor}, plancher de numérotation (le plus grand de ${APP.buildFloor}, dernier build de la coquille Capacitor, et de ios.minimumBuildNumber − 1 de config/mobile-release.json) (voir ${DOC}, garde « numerotation »)`]);
   if (number > latest + MARGE_BUILD) {
     throw new GuardFailure([`[numerotation] build ${number} refusé : au plus ${latest + MARGE_BUILD} (dernier build ${latest} + ${MARGE_BUILD}). Un numéro trop haut relèverait définitivement le plancher de tous les builds suivants (voir ${DOC}, garde « numerotation »)`]);
   }
