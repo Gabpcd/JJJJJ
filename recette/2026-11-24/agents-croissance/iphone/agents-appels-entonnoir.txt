@@ -53,14 +53,14 @@
     - heading "Rapports hebdomadaires" [level=3]
     - table:
       - rowgroup:
-        - row "Semaine du Soignants Établissements Missions publiées Pourvues Emails envoyés Appels notés Adresses utilisables":
+        - row "Semaine du Soignants Établissements Missions publiées Pourvues Emails envoyés Fiches d’appel notées Adresses utilisables":
           - columnheader "Semaine du"
           - columnheader "Soignants"
           - columnheader "Établissements"
           - columnheader "Missions publiées"
           - columnheader "Pourvues"
           - columnheader "Emails envoyés"
-          - columnheader "Appels notés"
+          - columnheader "Fiches d’appel notées"
           - columnheader "Adresses utilisables"
       - rowgroup:
         - row "16/11/2026 0 0 0 0 0 2 0":

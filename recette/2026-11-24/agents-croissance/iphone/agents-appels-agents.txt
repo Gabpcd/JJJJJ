@@ -28,9 +28,10 @@
     - paragraph: "Dernier passage : 24/11/2026 06:50 (automatique) · 0 brouillon(s)"
     - paragraph: "Cibles : 2 318 établissements ciblés · 0 adresse utilisable · 656 en messagerie fermée · 2 017 téléphones"
     - heading "Appels établissements" [level=3]
-    - text: Brouillons seulement
+    - text: Liste épuisée
     - paragraph: Chaque semaine, jusqu’à 30 fiches d’appel pour les établissements des marchés pilotes qui ont un téléphone, classées par potentiel, oppositions exclues. Vous appelez vous-même, puis vous notez le résultat.
-    - paragraph: "Dernier passage : 24/11/2026 06:50 (automatique) · 3 brouillon(s)"
+    - paragraph: "Dernier passage : 24/11/2026 06:50 (automatique) · 5 brouillon(s)"
+    - paragraph: 30 places restaient sur 30 cette semaine · 2 cibles écartées pour opposition · 1 numéro déjà proposé · 25 places sans cible appelable
     - heading "Posts sociaux" [level=3]
     - text: Brouillons seulement
     - paragraph: Chaque semaine, un post par département et par métier pour les groupes Facebook, et un post LinkedIn pour les directions d’établissement.

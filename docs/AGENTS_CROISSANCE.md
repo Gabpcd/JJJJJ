@@ -148,10 +148,21 @@ erreur ni message.
 
 **Un seul univers ciblé.** `private.fn_growth_prospects_cibles()` lit une fois les départements et les
 types ciblés et dit, pour chaque établissement : adresse fermée, adresse utilisable, téléphone
-utilisable (9 chiffres au moins), cible disponible (jamais contactée, hors CRM, ni ignorée ni en
-opposition, sans brouillon vivant), et les points du score (type, signal BOAMP de moins de 90 jours,
-tension BMO exacte). L'agent email, l'agent d'appels et le décompte lisent cette fonction : aucun ne
-re-décide le ciblage.
+utilisable (un numéro français complet), cible disponible, et les points du score (type, signal BOAMP
+de moins de 90 jours, tension BMO exacte). L'agent email, l'agent d'appels et le décompte lisent cette
+fonction : aucun ne re-décide le ciblage.
+
+Une cible est **disponible** si elle n'a jamais été contactée, n'est pas au CRM (date d'ajout sur le
+prospect, ou contact CRM au même FINESS), n'est pas déjà inscrite sur la plateforme, n'est ni ignorée ni
+en opposition, et n'a aucun brouillon vivant. Deux décisions à connaître :
+- une cible n'a qu'un canal à la fois, et un brouillon **rejeté**, ou **validé puis expiré**, ferme la
+  cible aux deux canaux. « Ne pas appeler » sur une fiche prive donc aussi l'établissement d'un email
+  futur. C'est voulu : vous avez écarté cet établissement, ou vous avez pu le contacter sans le noter.
+  Seul un brouillon jamais validé qui expire libère sa cible ;
+- un numéro se compare sous sa forme nationale : `01 23 45 67 89`, `+33 1 23 45 67 89` et
+  `0033 1 23 45 67 89` désignent le même numéro (`private.fn_growth_telephone_national`), pour le
+  dédoublonnage comme pour le STOP. Un champ qui contient deux numéros, ou un numéro incomplet, n'est
+  pas utilisable.
 
 **Zéro visible.** `private.fn_growth_cibles_prospection()` compte l'univers : établissements ciblés,
 adresses fermées, adresses utilisables, adresses restant à contacter, téléphones utilisables, téléphones
@@ -174,18 +185,43 @@ L'agent ne lève pas d'erreur : une exception annulerait aussi les relances pré
   dialyse, écoles) ;
 - mêmes interdits que l'email, par le prédicat unique `fn_growth_destinataire_bloque` (STOP, opposition,
   contact perdu, comparés par FINESS, adresse et numéro), moins le motif `MSSANTE` qui ne dit rien d'un
-  appel : `private.fn_growth_appel_bloque`. Un même numéro (standard partagé) n'est proposé qu'une fois ;
-- une cible n'a qu'un canal à la fois : un établissement qui a un brouillon d'email n'a pas de fiche
-  d'appel, et inversement ;
+  appel : `private.fn_growth_appel_bloque`. Un même numéro (standard partagé) n'est proposé qu'une fois,
+  fiche rejetée comprise ;
+- la sélection n'est pas bornée avant ces contrôles : des cibles écartées en tête de classement ne
+  tarissent pas la liste (c'était un défaut de l'agent email, corrigé pour les deux agents). Quand des
+  places restent vides, l'agent le dit (`places_non_pourvues`) et sa carte affiche « Liste épuisée » ;
 - une fiche non traitée expire au bout de 14 jours ; jamais validée, elle libère sa cible.
 
-**Sur l'écran.** La fiche montre le nom, le numéro, les raisons du classement et le script, modifiable.
-« Valider la fiche » revérifie les interdits ; le numéro devient alors un lien d'appel que la fondatrice
-touche elle-même (rien n'est composé à sa place). Après l'appel, elle note le résultat : A répondu, Sans
-réponse, Intéressé, À rappeler, Pas intéressé ou STOP. Le décideur crée la fiche CRM silencieuse
-(`fn_admin_sourcing_ajouter_crm`) et traite le résultat par la logique CRM existante
-(`fn_admin_crm_effectuer_action`) : les rappels arrivent dans Prospects → « Actions du jour » ; « Pas
-intéressé » et « STOP » ferment tout contact ultérieur, email compris.
+**Sur l'écran.** La fiche montre le nom, le numéro et son origine, les raisons du classement et le
+script, modifiable.
+1. « Valider la fiche » revérifie les interdits. Rien n'est composé.
+2. « Appeler le … » revérifie la fiche **à chaque fois**, côté serveur, puis ouvre le composeur du
+   téléphone : une opposition, un passage au CRM ou une inscription arrivés depuis la validation sont
+   vus avant l'appel, pas après, et un numéro modifié dans l'annuaire est celui qui est composé. C'est
+   vous qui confirmez l'appel sur votre téléphone. Un lien « composer le … » reste affiché deux minutes
+   si le composeur ne s'est pas ouvert.
+3. Après l'appel, vous notez le résultat : A répondu, Sans réponse, Intéressé, À rappeler, Pas intéressé
+   ou STOP. Le décideur crée la fiche CRM silencieuse (`fn_admin_sourcing_ajouter_crm`) et traite le
+   résultat par la logique CRM existante (`fn_admin_crm_effectuer_action`) : les rappels arrivent dans
+   Prospects → « Actions du jour » ; « Pas intéressé » et « STOP » ferment tout contact ultérieur, email
+   compris.
+
+Si une opposition arrive pendant l'appel lui-même : un refus entendu (STOP, Pas intéressé) est toujours
+enregistré ; tout autre résultat n'entre pas au CRM (« appel non enregistré au CRM ») mais reste lisible
+sur la fiche.
+
+Le rapport hebdomadaire compte les **fiches d'appel notées** de la semaine. Les rappels suivants se
+suivent dans le CRM.
+
+Limites connues, non traitées dans ce lot :
+- l'avertissement lit le dernier passage de l'agent email : il apparaît après le premier passage qui
+  suit le déploiement (06 h 50, ou « Préparer maintenant ») ;
+- un contact CRM créé pour ce FINESS dans les secondes qui séparent « Appeler » du résultat noté est
+  fusionné par la logique CRM existante ;
+- dans le CRM, un second « À rappeler » sur un contact resté à l'étape 0 ne crée pas de tâche
+  (`fn_crm_generer_taches`, clé déjà utilisée) : défaut antérieur à ce lot, à corriger à part ;
+- `fn_sales_outreach_est_interdit` compare les numéros tels qu'ils sont saisis. La liste d'appels
+  présente donc chaque numéro sous ses trois écritures ; les autres écrans du CRM ne le font pas.
 
 **Script d'appel** (`private.fn_growth_script_appel`). Il ne reprend que des phrases déjà publiées :
 

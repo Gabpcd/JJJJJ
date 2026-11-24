@@ -16,9 +16,13 @@ import {
   lienGmail,
   lienTel,
   lireCibles,
+  lirePassage,
   raisonsCible,
+  resumeAppels,
   resumeCibles,
+  sourceFiche,
   telephoneFiche,
+  telephoneNational,
   type EntonnoirCroissance,
 } from './agentsCroissance';
 
@@ -128,15 +132,42 @@ describe('agents de croissance — fiches d’appel', () => {
     expect(libelleStatut({ canal: 'EMAIL', statut: 'ENVOYE' })).toBe('Envoyé');
   });
 
-  it('construit un lien tel: seulement pour un numéro que le serveur sait comparer', () => {
+  it('construit un lien tel: seulement pour un numéro français complet, sous sa forme nationale', () => {
     expect(telephoneFiche({ telephone: ' 01 00 00 10 01 ' })).toBe('01 00 00 10 01');
     expect(telephoneFiche({ telephone: '' })).toBeNull();
     expect(telephoneFiche({})).toBeNull();
-    expect(lienTel('01 00 00 10 01')).toBe('tel:0100001001');
-    expect(lienTel('01.00.00.10.01')).toBe('tel:0100001001');
-    expect(lienTel('+33 1 00 00 10 01')).toBe('tel:+33100001001');
-    expect(lienTel('12345')).toBeNull();
-    expect(lienTel(null)).toBeNull();
+    // Mêmes cas que private.fn_growth_telephone_national (suite SQL, section 11.a).
+    for (const saisi of ['01 00 00 10 01', '01.00.00.10.01', '+33 1 00 00 10 01', '0033 1 00 00 10 01', '33100001001']) {
+      expect(telephoneNational(saisi)).toBe('0100001001');
+      expect(lienTel(saisi)).toBe('tel:0100001001');
+    }
+    for (const saisi of ['100001001', '12345', '01 00 00 10 01 / 01 00 00 10 02', '', null, undefined]) {
+      expect(telephoneNational(saisi)).toBeNull();
+      expect(lienTel(saisi)).toBeNull();
+    }
+  });
+
+  it('donne l’origine du numéro quand la fiche la porte', () => {
+    expect(sourceFiche({ source: ' Annuaires publics (FINESS) ' })).toBe('Annuaires publics (FINESS)');
+    expect(sourceFiche({ source: '' })).toBeNull();
+    expect(sourceFiche({})).toBeNull();
+  });
+
+  it('explique le dernier passage de l’agent d’appels, liste épuisée comprise', () => {
+    expect(resumeAppels({ places_de_la_semaine: 30, quota_semaine: 30, exclus_stop: 2, numeros_deja_en_file: 1, places_non_pourvues: 25 })).toEqual({
+      texte: '30 places restaient sur 30 cette semaine · 2 cibles écartées pour opposition · 1 numéro déjà proposé · 25 places sans cible appelable',
+      epuisee: true,
+    });
+    expect(resumeAppels({ places_de_la_semaine: 0, quota_semaine: 30, exclus_stop: 0, numeros_deja_en_file: 0, places_non_pourvues: 0 })).toEqual({
+      texte: 'Liste de la semaine complète (30 fiches) : la prochaine arrive lundi',
+      epuisee: false,
+    });
+    expect(resumeAppels({ places_de_la_semaine: 1, quota_semaine: 30, exclus_stop: 1, places_non_pourvues: 0 })).toEqual({
+      texte: '1 place restait sur 30 cette semaine · 1 cible écartée pour opposition',
+      epuisee: false,
+    });
+    expect(resumeAppels({ fiches_appel: 3 })).toBeNull();
+    expect(resumeAppels(null)).toBeNull();
   });
 
   it('propose les résultats du CRM, dont deux définitifs', () => {
@@ -212,7 +243,22 @@ describe('agents de croissance — un zéro n’est plus muet', () => {
 
   it('se tait tant qu’il reste une adresse à contacter, ou sans décompte', () => {
     expect(alerteCibles({ ...constat, adresses_utilisables: 12, adresses_restantes: 5 })).toBeNull();
+    expect(alerteCibles({ ...constat, adresses_utilisables: 12, adresses_restantes: 5 }, { premiers_contacts: 3, places_non_pourvues: 17 })).toBeNull();
+    expect(alerteCibles({ ...constat, adresses_utilisables: 12, adresses_restantes: 5 }, { premiers_contacts: 0, places_non_pourvues: 0 })).toBeNull();
     expect(alerteCibles(null)).toBeNull();
+  });
+
+  it('dit quand les adresses restantes ont toutes été écartées au dernier passage', () => {
+    expect(lirePassage({ premiers_contacts: 0, places_non_pourvues: 20, places_du_jour: 20 })).toEqual({ premiers_contacts: 0, places_non_pourvues: 20 });
+    expect(lirePassage({ premiers_contacts: 0 })).toBeNull();
+    expect(lirePassage(null)).toBeNull();
+    const a = alerteCibles({ ...constat, adresses_utilisables: 12, adresses_restantes: 5 }, { premiers_contacts: 0, places_non_pourvues: 20 });
+    expect(a?.niveau).toBe('info');
+    expect(a?.titre).toBe('Aucun nouvel email préparé');
+    expect(lisible(a?.texte)).toBe(
+      'Il reste 5 adresses utilisables non contactées, mais elles ont toutes été écartées au dernier passage (opposition, ou adresse déjà en séquence). '
+      + '2 017 ont un téléphone : les fiches d’appel de la semaine sont dans « Appels établissements ».',
+    );
   });
 
   it('signale un ciblage vide', () => {

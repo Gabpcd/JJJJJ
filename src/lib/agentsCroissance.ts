@@ -125,12 +125,56 @@ export function telephoneFiche(contexte: Record<string, unknown>): string | null
   return typeof brut === 'string' && brut.trim() ? brut.trim() : null;
 }
 
-/** Lien `tel:` (chiffres seuls, « + » initial conservé). Null sous 9 chiffres, comme la règle STOP du serveur. */
-export function lienTel(numero: string | null): string | null {
-  const brut = (numero ?? '').trim();
-  const chiffres = brut.replace(/\D/g, '');
-  if (chiffres.length < 9) return null;
-  return `tel:${brut.startsWith('+') ? '+' : ''}${chiffres}`;
+/**
+ * Forme nationale d'un numéro français (dix chiffres commençant par 0), ou null si le champ n'en
+ * contient pas exactement un. Miroir de private.fn_growth_telephone_national : « 01 23… »,
+ * « +33 1 23… » et « 0033 1 23… » désignent le même numéro.
+ */
+export function telephoneNational(numero: string | null | undefined): string | null {
+  const chiffres = (numero ?? '').replace(/\D/g, '');
+  if (/^0[1-9]\d{8}$/.test(chiffres)) return chiffres;
+  if (/^33[1-9]\d{8}$/.test(chiffres)) return `0${chiffres.slice(2)}`;
+  if (/^0033[1-9]\d{8}$/.test(chiffres)) return `0${chiffres.slice(4)}`;
+  return null;
+}
+
+/** Lien `tel:` sur la forme nationale. Null si le numéro n'est pas un numéro français complet. */
+export function lienTel(numero: string | null | undefined): string | null {
+  const national = telephoneNational(numero);
+  return national ? `tel:${national}` : null;
+}
+
+/** Origine du numéro d'une fiche d'appel, pour répondre à « où avez-vous eu ce numéro ? ». */
+export function sourceFiche(contexte: Record<string, unknown>): string | null {
+  const brut = contexte?.source;
+  return typeof brut === 'string' && brut.trim() ? brut.trim() : null;
+}
+
+export interface ResumeAppels {
+  texte: string;
+  /** Des places de la semaine sont restées vides : plus aucune cible appelable. */
+  epuisee: boolean;
+}
+
+/** Ce que l'agent d'appels a fait à son dernier passage, pour que « 0 fiche » s'explique. */
+export function resumeAppels(details: unknown): ResumeAppels | null {
+  if (typeof details !== 'object' || details === null) return null;
+  const d = details as Record<string, unknown>;
+  const n = (cle: string) => (typeof d[cle] === 'number' && Number.isFinite(d[cle]) ? (d[cle] as number) : null);
+  const places = n('places_de_la_semaine');
+  const quota = n('quota_semaine');
+  if (places === null || quota === null) return null;
+  const vides = n('places_non_pourvues') ?? 0;
+  const morceaux: string[] = [];
+  morceaux.push(places === 0
+    ? `Liste de la semaine complète (${quota} ${quota > 1 ? 'fiches' : 'fiche'}) : la prochaine arrive lundi`
+    : `${places} ${places > 1 ? 'places restaient' : 'place restait'} sur ${quota} cette semaine`);
+  const stop = n('exclus_stop') ?? 0;
+  if (stop > 0) morceaux.push(`${stop} ${stop > 1 ? 'cibles écartées' : 'cible écartée'} pour opposition`);
+  const numeros = n('numeros_deja_en_file') ?? 0;
+  if (numeros > 0) morceaux.push(`${numeros} ${numeros > 1 ? 'numéros déjà proposés' : 'numéro déjà proposé'}`);
+  if (vides > 0) morceaux.push(`${vides} ${vides > 1 ? 'places sans cible appelable' : 'place sans cible appelable'}`);
+  return { texte: morceaux.join(' · '), epuisee: vides > 0 };
 }
 
 /** Actions proposées pour un statut donné (miroir des règles SQL). */
@@ -247,8 +291,21 @@ export interface AlerteCibles {
 const fr = (n: number) => n.toLocaleString('fr-FR');
 const pluriel = (n: number, un: string, plusieurs: string) => (n > 1 ? plusieurs : un);
 
+/** Ce que l'agent email dit de son dernier passage (résultat de private.fn_growth_agent_prospection). */
+export interface PassageProspection {
+  premiers_contacts: number;
+  places_non_pourvues: number;
+}
+
+export function lirePassage(details: unknown): PassageProspection | null {
+  if (typeof details !== 'object' || details === null) return null;
+  const d = details as Record<string, unknown>;
+  if (typeof d.premiers_contacts !== 'number' || typeof d.places_non_pourvues !== 'number') return null;
+  return { premiers_contacts: d.premiers_contacts, places_non_pourvues: d.places_non_pourvues };
+}
+
 /** Avertissement à afficher quand l'agent email ne peut plus rien préparer, sinon null. */
-export function alerteCibles(c: CiblesProspection | null): AlerteCibles | null {
+export function alerteCibles(c: CiblesProspection | null, passage: PassageProspection | null = null): AlerteCibles | null {
   if (!c) return null;
   const marches = c.departements.length > 0 ? ` (${c.departements.join(', ')})` : '';
   if (c.etablissements_cibles === 0) {
@@ -276,6 +333,15 @@ export function alerteCibles(c: CiblesProspection | null): AlerteCibles | null {
       niveau: 'info',
       titre: 'Plus aucune adresse à contacter par email',
       texte: `${pluriel(c.adresses_utilisables, 'La seule adresse utilisable', `Les ${fr(c.adresses_utilisables)} adresses utilisables`)} des ${fr(c.etablissements_cibles)} établissements ciblés${marches} ${pluriel(c.adresses_utilisables, 'est déjà contactée, au CRM ou en file', 'sont déjà contactées, au CRM ou en file')}.${telephones}`,
+    };
+  }
+  // Il reste des adresses, mais le passage n'en a retenu aucune alors qu'il avait de la place :
+  // elles ont toutes été écartées cible par cible (opposition, adresse déjà en séquence).
+  if (passage && passage.premiers_contacts === 0 && passage.places_non_pourvues > 0) {
+    return {
+      niveau: 'info',
+      titre: 'Aucun nouvel email préparé',
+      texte: `${pluriel(c.adresses_restantes, 'Il reste 1 adresse utilisable non contactée, mais elle a été écartée', `Il reste ${fr(c.adresses_restantes)} adresses utilisables non contactées, mais elles ont toutes été écartées`)} au dernier passage (opposition, ou adresse déjà en séquence).${telephones}`,
     };
   }
   return null;

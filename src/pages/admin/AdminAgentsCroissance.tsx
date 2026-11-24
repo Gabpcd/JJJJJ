@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Bot, Copy, ExternalLink, Filter, Mail, Phone, PlayCircle, RefreshCw, Send, ShieldCheck, TrendingUp, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -32,13 +32,17 @@ import {
   lienGmail,
   lienTel,
   lireCibles,
+  lirePassage,
   raisonsCible,
+  resumeAppels,
   resumeCibles,
+  sourceFiche,
   telephoneFiche,
   type ActionBrouillon,
   type AgentCroissance,
   type BrouillonCroissance,
   type CiblesProspection,
+  type PassageProspection,
   type EntonnoirCroissance,
   type EtapeEntonnoir,
   type ResultatAppel,
@@ -54,12 +58,17 @@ interface Execution {
   debut_le: string;
   brouillons_crees: number;
   erreur: string | null;
+  details?: Record<string, unknown> | null;
 }
 
 interface RapportCibles {
   le: string;
   cibles: CiblesProspection;
+  passage: PassageProspection | null;
 }
+
+/** Durée pendant laquelle le lien d'appel direct reste affiché après une revérification réussie. */
+const FENETRE_APPEL_MS = 2 * 60 * 1000;
 
 interface Planification {
   actif: boolean;
@@ -85,13 +94,22 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
   const [corps, setCorps] = useState(b.corps);
   const [enCours, setEnCours] = useState<ActionBrouillon | null>(null);
   const [resultatEnCours, setResultatEnCours] = useState<ResultatAppel | null>(null);
+  // Numéro que le serveur vient de revérifier : le lien d'appel direct n'existe que pendant deux minutes.
+  const [numeroVerifie, setNumeroVerifie] = useState<string | null>(null);
+  const [verification, setVerification] = useState(false);
+  const derniereReponse = useRef<{ telephone?: string | null } | null>(null);
+  useEffect(() => {
+    if (!numeroVerifie) return undefined;
+    const minuterie = window.setTimeout(() => setNumeroVerifie(null), FENETRE_APPEL_MS);
+    return () => window.clearTimeout(minuterie);
+  }, [numeroVerifie]);
   const modifie = sujet !== (b.sujet ?? '') || corps !== b.corps;
   const actions = actionsPossibles(b.statut);
   const raisons = raisonsCible(b);
   const groupes = groupesSuggeres(b.contexte);
   const appel = estAppel(b);
   const numero = appel ? telephoneFiche(b.contexte) : null;
-  const tel = lienTel(numero);
+  const source = appel ? sourceFiche(b.contexte) : null;
   const resultatNote = appel ? libelleResultatAppel(b.contexte?.resultat_appel) : null;
 
   const decider = async (action: ActionBrouillon, motif?: string) => {
@@ -113,8 +131,24 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
       onChange();
       return false;
     }
+    derniereReponse.current = data ?? null;
     onChange();
     return true;
+  };
+
+  // Demande d'appel : la fiche est revérifiée côté serveur (opposition, cible passée au CRM,
+  // numéro modifié) juste avant, puis le composeur s'ouvre sur le numéro que le serveur renvoie.
+  // Rien n'est composé à la place de la fondatrice : elle confirme l'appel sur son téléphone.
+  const appeler = async () => {
+    setVerification(true);
+    const ok = await decider('VALIDER');
+    setVerification(false);
+    if (!ok) { setNumeroVerifie(null); return; }
+    const verifie = derniereReponse.current?.telephone ?? numero;
+    const lien = lienTel(verifie);
+    if (!lien) { toast.error('Numéro incomplet : appel impossible depuis cette fiche.'); return; }
+    setNumeroVerifie(verifie ?? null);
+    window.open(lien, '_self');
   };
 
   const validerEtOuvrir = async () => {
@@ -197,6 +231,7 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
               Téléphone : <span className="font-medium tabular-nums text-foreground">{numero}</span>
             </p>
           ) : null}
+          {source ? <p className="text-xs text-muted-foreground">Source du numéro : {source}</p> : null}
           {raisons.length > 0 ? (
             <p className="mt-1 text-xs text-muted-foreground">Pourquoi : {raisons.join(' · ')}</p>
           ) : null}
@@ -262,14 +297,19 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
               </BoutonY2K>
             ) : appel ? (
               <div className="w-full space-y-2">
-                {tel ? (
-                  <a
-                    href={tel}
-                    className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                  >
-                    <Phone className="h-4 w-4" aria-hidden="true" /> Appeler le {numero}
-                  </a>
-                ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  <BoutonY2K size="sm" onClick={appeler} loading={verification} iconeGauche={<Phone className="h-4 w-4" />}>
+                    Appeler le {numero}
+                  </BoutonY2K>
+                  {numeroVerifie && lienTel(numeroVerifie) ? (
+                    <span className="text-xs text-muted-foreground">
+                      Fiche revérifiée à l’instant. Si l’appel ne s’est pas lancé :{' '}
+                      <a href={lienTel(numeroVerifie) ?? undefined} className="font-medium text-primary underline underline-offset-2">
+                        composer le {numeroVerifie}
+                      </a>
+                    </span>
+                  ) : null}
+                </div>
                 <div role="group" aria-label="Résultat de l’appel" className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-medium text-muted-foreground">Après l’appel :</span>
                   {RESULTATS_APPEL.map((r) => (
@@ -388,7 +428,7 @@ export default function AdminAgentsCroissance() {
   const chargerExecutions = useCallback(async () => {
     const [exec, plan] = await Promise.all([
       db.from('growth_agent_executions')
-        .select('id, agent, declencheur, debut_le, brouillons_crees, erreur')
+        .select('id, agent, declencheur, debut_le, brouillons_crees, erreur, details')
         .order('debut_le', { ascending: false }).limit(40),
       db.rpc('fn_admin_growth_planification', { p_actif: null }),
     ]);
@@ -405,10 +445,10 @@ export default function AdminAgentsCroissance() {
       .is('erreur', null)
       .order('debut_le', { ascending: false })
       .limit(1);
-    if (error) return;
+    if (error) { setErreur(`Décompte des cibles illisible : ${error.message}`); return; }
     const dernier = ((data ?? []) as Array<{ debut_le: string; details: Record<string, unknown> | null }>)[0];
     const cibles = lireCibles(dernier?.details?.cibles);
-    setRapportCibles(dernier && cibles ? { le: dernier.debut_le, cibles } : null);
+    setRapportCibles(dernier && cibles ? { le: dernier.debut_le, cibles, passage: lirePassage(dernier.details) } : null);
   }, []);
 
   const basculerPlanification = async (actif: boolean) => {
@@ -446,7 +486,7 @@ export default function AdminAgentsCroissance() {
     void chargerCibles();
   };
 
-  const alerte = alerteCibles(rapportCibles?.cibles ?? null);
+  const alerte = alerteCibles(rapportCibles?.cibles ?? null, rapportCibles?.passage ?? null);
   const voirFichesAppel = () => {
     setHistorique(false);
     setFiltre('APPEL_ETABLISSEMENT');
@@ -592,7 +632,7 @@ export default function AdminAgentsCroissance() {
                               <th className="py-1 pr-3 font-medium">Missions publiées</th>
                               <th className="py-1 pr-3 font-medium">Pourvues</th>
                               <th className="py-1 pr-3 font-medium">Emails envoyés</th>
-                              <th className="py-1 pr-3 font-medium">Appels notés</th>
+                              <th className="py-1 pr-3 font-medium">Fiches d’appel notées</th>
                               <th className="py-1 pr-3 font-medium">Adresses utilisables</th>
                             </tr>
                           </thead>
@@ -605,7 +645,7 @@ export default function AdminAgentsCroissance() {
                                 <td className="py-1 pr-3">{r.donnees?.missions?.publiees_periode ?? 0}</td>
                                 <td className="py-1 pr-3">{r.donnees?.missions?.pourvues_periode ?? 0}</td>
                                 <td className="py-1 pr-3">{Number(r.donnees?.prospection?.emails_journalises_periode ?? 0)}</td>
-                                <td className="py-1 pr-3">{Number(r.donnees?.prospection?.appels_journalises_periode ?? 0)}</td>
+                                <td className="py-1 pr-3">{Number(r.donnees?.prospection?.fiches_appel_notees_periode ?? 0)}</td>
                                 <td className="py-1 pr-3">{lireCibles(r.donnees?.prospection?.cibles_agent)?.adresses_utilisables.toLocaleString('fr-FR') ?? '—'}</td>
                               </tr>
                             ))}
@@ -651,6 +691,7 @@ export default function AdminAgentsCroissance() {
               {(Object.keys(AGENTS) as AgentCroissance[]).map((a) => {
                 const derniere = derniereParAgent.get(a);
                 const sansCible = a === 'PROSPECTION_ETABLISSEMENT' && alerte?.niveau === 'alerte';
+                const appels = a === 'APPEL_ETABLISSEMENT' && !derniere?.erreur ? resumeAppels(derniere?.details) : null;
                 return (
                   <CardY2K key={a} hoverLift={false}>
                     <CardY2KContent className="space-y-2">
@@ -660,13 +701,16 @@ export default function AdminAgentsCroissance() {
                           ? <BadgeY2K variant="error" size="sm">Erreur</BadgeY2K>
                           : sansCible
                             ? <BadgeY2K variant="warning" size="sm">Aucune cible joignable</BadgeY2K>
-                            : <BadgeY2K variant="success" size="sm">Brouillons seulement</BadgeY2K>}
+                            : appels?.epuisee
+                              ? <BadgeY2K variant="warning" size="sm">Liste épuisée</BadgeY2K>
+                              : <BadgeY2K variant="success" size="sm">Brouillons seulement</BadgeY2K>}
                       </div>
                       <p className="text-sm text-muted-foreground">{AGENTS[a].description}</p>
                       <p className="text-xs text-muted-foreground">
                         Dernier passage : {derniere ? `${fmtDate(derniere.debut_le)} (${derniere.declencheur === 'CRON' ? 'automatique' : 'manuel'}) · ${derniere.brouillons_crees} brouillon(s)` : 'aucun pour l’instant'}
                       </p>
                       {derniere?.erreur ? <p className="text-xs text-destructive break-words">{derniere.erreur}</p> : null}
+                      {appels ? <p className="text-xs text-muted-foreground" data-testid="passage-appels">{appels.texte}</p> : null}
                       {a === 'PROSPECTION_ETABLISSEMENT' && rapportCibles ? (
                         <p className="text-xs text-muted-foreground" data-testid="cibles-prospection">Cibles : {resumeCibles(rapportCibles.cibles)}</p>
                       ) : null}
