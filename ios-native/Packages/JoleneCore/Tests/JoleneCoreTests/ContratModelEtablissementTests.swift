@@ -17,8 +17,8 @@ import XCTest
 final class ContratModelEtablissementTests: XCTestCase {
     private struct PanneTest: Error {}
 
-    private static let html = "<p>Contrat</p>"
-    private static let empreinte = VerificationOriginal.empreinte(html)
+    nonisolated private static let html = "<p>Contrat</p>"
+    nonisolated private static let empreinte = VerificationOriginal.empreinte(html)
 
     /// Port scripté : seules les méthodes établissement répondent ; un appel soignant échoue et s'inscrit au journal.
     private final class Script: ContratsPort, @unchecked Sendable {
