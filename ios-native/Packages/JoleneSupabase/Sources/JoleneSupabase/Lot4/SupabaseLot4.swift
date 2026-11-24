@@ -21,5 +21,7 @@ enum SupabaseLot4 {
         gateways.poolUrgence = poolUrgence(client: client)
         gateways.score = score(client: client)
         gateways.exclusions = exclusions(client: client)
+        // T12 : quatorzième port (précision 13 de `DECISIONS_LOT4.md`) ; l'acceptation réutilise la candidature du lot 1.
+        gateways.serie = serie(client: client, candidature: gateways.candidature, clock: gateways.clock)
     }
 }

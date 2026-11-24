@@ -19,5 +19,6 @@ enum DemoLot4 {
         gateways.poolUrgence = poolUrgence()
         gateways.score = score()
         gateways.exclusions = exclusions()
+        gateways.serie = serie(gateways) // T12 : quatorzième port (précision 13 de `DECISIONS_LOT4.md`)
     }
 }

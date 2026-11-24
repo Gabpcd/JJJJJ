@@ -83,7 +83,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .favoris:
             return true                                  // L1-T4b — `MesFavorisScreen`, empilé sur l'onglet Explorer
         case .serieDetail:
-            return false                                 // renvoi web assumé (décision 11 du lot 1) ; natif au lot 4
+            return true                                  // L4-T12 — `SerieDetailScreen` (report de la décision 11 du lot 1), drapeau `ios_natif_serie_actif`
         case .revenus(section: .apercu):
             return true                                  // T12 — RevenusScreen (onglet Revenus)
         case .monCompte:

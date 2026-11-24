@@ -155,6 +155,46 @@ les règles générales.
    reconnexion dans l'app) pour couvrir un manque que T6 ferme ; la tranche parallèle T6 lève l'écart. Le filleul
    n'est pas bloqué : il s'inscrit, et le parrainage ne lui est pas rattaché. Ce cas reste à vérifier sur appareil
    en T15 (`RECETTE_DEVICE_LOT4.md`, lien ouvert depuis Messages et WhatsApp), après T6.
+13. **T12 — détail de série : quatorzième port, écarts assumés, constat sur la route web** (L4-T12, 24 novembre ;
+   décision sur mandat).
+   - **Port `serie`.** Le blueprint §2.2 compte treize ports et aucun ne lit les missions d'une série. T12 ajoute un
+     quatorzième champ additif, `Gateways.serie` (`Ports/SeriePort.swift`, stub `UnwiredSeriePort`), câblé dans les
+     deux mondes par sa fabrique dans la même PR : il n'entre jamais dans `portsEnAttenteLot4`. L'acceptation passe
+     par ce port (`accepter`), qui rend l'issue du lot 1 (`CandidatureOutcome`) : le monde Supabase délègue à
+     `CandidaturePort.confirmer(action: .accepter)` (RPC, relecture, audit du lot 1, aucun code dupliqué) ; le monde
+     démo rejoue d'abord les réponses scriptées de `demo-serie.json`, au format du serveur.
+   - **Conformité (décision 2 du lot 1).** Le bloc « Vérification de compatibilité » du web
+     (`DetailSerieSoignant.tsx` l.376-428 : repos et durées calculés côté client, articles de loi) et la modale
+     d'explication d'un article ne sont pas portés ; aucune règle de durée du travail n'est écrite en Swift. Une
+     mission n'est « en conflit » pour la sélection que si le serveur vient de la refuser par un refus structuré
+     (`code`) ou par l'exception d'un trigger ; ce refus s'affiche tel que servi.
+   - **Arrêts de la boucle.** Comme le web, arrêt sur le refus `[CODE DU TRAVAIL]`. En plus du web (qui poursuit) :
+     arrêt sur une session expirée et sur une réponse perdue (délai, réseau, relecture), l'état du serveur étant
+     alors inconnu ; la série est relue et une mission relue attribuée au soignant est rangée acceptée, jamais
+     renvoyée (PRINCIPES §4).
+   - **Audit.** Un `MISSION_ASSIGNATION` par mission acceptée, écrit par la gateway de candidature du lot 1 avec ses
+     détails (`intitule`, `etablissement`, `debut`, `fin`) ; les détails `type: 'acceptation_serie'` et `serie_id` du
+     web (l.330) ne sont pas repris (`SupabaseCandidatureGateway.swift` n'est pas modifié par une tranche du lot 4).
+   - **Non portés.** Totaux par régime et leurs mentions (l.499-509 : aucun montant additionné côté client),
+     redirection automatique vers les contrats (le bilan reste affiché, bouton « Voir mes contrats »), lien « Voir
+     dans mon planning ».
+   - **Textes.** Textes du web à leur ligne (`SerieVerbatimTests`), ceux que le web tutoie vouvoyés comme le
+     récapitulatif de candidature du lot 1 (décision 9 du lot 1, D24) : « Décochez les missions en conflit pour
+     continuer », « Vérifiez tous vos engagements », « Confirmez uniquement si vous pouvez assurer chacun des créneaux
+     exacts sélectionnés. », « Corrigez la sélection : aucune mission en conflit ou au planning incomplet ne sera
+     omise automatiquement. », « La mission "…" accepte salarié ou libéral : ouvrez son détail pour choisir votre
+     mode de contrat avant d'accepter. ». Textes natifs sans équivalent web, opérationnels et non juridiques (D24), à
+     relire : « Non envoyée », « L’acceptation s’est arrêtée sur ce refus. Les missions suivantes n’ont pas été
+     envoyées. », « Ouvrir le détail de la mission », « Voir mes contrats », « L’acceptation de cette mission n’a pas
+     pu être confirmée. Vérifiez Mes missions avant de réessayer. ». Aucun texte juridique n'est écrit en Swift : les
+     refus affichés sont ceux du serveur, mot pour mot.
+   - **Constat hors lot, à arbitrer par Gabrielle.** Plus rien n'écrit le marqueur `[SERIE_ID:…]` dans
+     `missions.description` : la migration CP3 (`db/migrations_archive/20260416140000_cp3_migrate_data_creneaux.sql`)
+     l'a retiré au profit de `missions.serie_id` et `mission_series`, et `FormulaireMission.tsx` (l.415, l.519) le
+     retire encore. La page web lit toujours le marqueur (l.95) : elle affiche « Pack introuvable » pour toute
+     mission créée depuis, et aucun lien du web n'y mène plus (`CarteSerie.tsx` l.68-72 exige le marqueur). L'écran
+     natif, à parité de requête, rend le même résultat. Porter la lecture sur `missions.serie_id` (identifiant uuid,
+     autre contrat de route) ou retirer la route est une décision web et produit, hors chantier iOS.
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 4 », l.202-210)
 

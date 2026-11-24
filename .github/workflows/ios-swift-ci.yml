@@ -102,6 +102,8 @@ on:
       - 'public/.well-known/apple-app-site-association'
       - 'src/components/AvatarUpload.tsx'
       - 'src/components/BandeauPaiementDeclare.tsx'
+      # L4-T12 : forme de l'identifiant de série relue par SupabaseSerieGatewayTests.
+      - 'src/components/CarteSerie.tsx'
       - 'src/components/ChoixModesExercice.tsx'
       - 'src/components/DemandePermissionPush.tsx'
       - 'src/components/ModalTeleversement.tsx'
@@ -120,6 +122,8 @@ on:
       - 'src/lib/geocodage.ts'
       - 'src/pages/ConfirmationInscription.tsx'
       - 'src/pages/DetailMissionSoignant.tsx'
+      # L4-T12 : textes et règles du détail de série relus à leur ligne par SerieVerbatimTests.
+      - 'src/pages/DetailSerieSoignant.tsx'
       - 'src/pages/DocumentsSoignant.tsx'
       - 'src/pages/InscriptionRapide.tsx'
       - 'src/pages/MesDocuments.tsx'
@@ -239,6 +243,8 @@ on:
       - 'public/.well-known/apple-app-site-association'
       - 'src/components/AvatarUpload.tsx'
       - 'src/components/BandeauPaiementDeclare.tsx'
+      # L4-T12 : forme de l'identifiant de série relue par SupabaseSerieGatewayTests.
+      - 'src/components/CarteSerie.tsx'
       - 'src/components/ChoixModesExercice.tsx'
       - 'src/components/DemandePermissionPush.tsx'
       - 'src/components/ModalTeleversement.tsx'
@@ -257,6 +263,8 @@ on:
       - 'src/lib/geocodage.ts'
       - 'src/pages/ConfirmationInscription.tsx'
       - 'src/pages/DetailMissionSoignant.tsx'
+      # L4-T12 : textes et règles du détail de série relus à leur ligne par SerieVerbatimTests.
+      - 'src/pages/DetailSerieSoignant.tsx'
       - 'src/pages/DocumentsSoignant.tsx'
       - 'src/pages/InscriptionRapide.tsx'
       - 'src/pages/MesDocuments.tsx'
@@ -704,6 +712,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoExplorerTests \
             -skip-testing:JoleneUITests/DemoFavorisTests \
             -skip-testing:JoleneUITests/DemoFiltresTests \
+            -skip-testing:JoleneUITests/DemoSerieTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1584,8 +1593,9 @@ jobs:
           echo "xcodebuild test-without-building (éclat lot1-accueil-explorer) : code $code"
       # « lot4 » : écrans secondaires du lot 4 (L4-T4 : recherches sauvegardées et alerte rapide d'Explorer, deux méthodes,
       # estimées à 3-6 min au prorata de DemoFavorisTests) ; chaque tranche du lot 4 y range sa classe démo tant que l'éclat
-      # reste estimé sous 20 min (décision 22), sinon ouvre un éclat voisin dans ce job.
-      - name: test-without-building — éclat lot4 (XCUITest des écrans secondaires du lot 4 — recherches sauvegardées) (${{ matrix.format }})
+      # reste estimé sous 20 min (décision 22), sinon ouvre un éclat voisin dans ce job. L4-T12 : DemoSerieTests (détail de
+      # série, quatre méthodes, estimées à 6-10 min au prorata de DemoCandidatureTests).
+      - name: test-without-building — éclat lot4 (XCUITest des écrans secondaires du lot 4 — recherches sauvegardées, détail de série) (${{ matrix.format }})
         id: tests_lot4
         # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
         if: always() && steps.build.outcome == 'success'
@@ -1613,6 +1623,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/derived" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoFiltresTests \
+            -only-testing:JoleneUITests/DemoSerieTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1742,7 +1753,7 @@ jobs:
             const eclats = [
               { nom: "lot1-missions", code: process.env.CODE_LOT1_MISSIONS, classes: ["DemoMesMissionsTests", "DemoCandidatureTests", "DemoConfirmationPresenceTests", "DemoAnnulationTests"] },
               { nom: "lot1-accueil-explorer", code: process.env.CODE_LOT1_ACCUEIL_EXPLORER, classes: ["DemoAccueilTests", "DemoExplorerTests", "DemoFavorisTests"] },
-              { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests"] },
+              { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests", "DemoSerieTests"] },
               { nom: "lot5-etablissement", code: process.env.CODE_LOT5_ETABLISSEMENT, classes: ["DemoEtabLiensTests", "DemoEtabMissionsTests", "DemoEtabCandidaturesTests"] },
               { nom: "lot3-profil", code: process.env.CODE_LOT3_PROFIL, classes: ["DemoProfilTests"] },
             ];

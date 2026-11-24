@@ -1,0 +1,71 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "series": [
+    {
+      "serie_id": "SERIE_1793577600000_demo01",
+      "missions": [
+        {
+          "mission_id": "demo-mission-001"
+        },
+        {
+          "mission_id": "demo-mission-010"
+        },
+        {
+          "mission_id": "demo-mission-013",
+          "reponse": {
+            "success": false,
+            "ok": false,
+            "code": "CONFLIT_PLANNING",
+            "error": "Tu es déjà confirmé(e) sur « Démonstration · Mission assignée 4 » le 15/11 08h00–15/11 16h00. Ce créneau chevauche la mission."
+          }
+        },
+        {
+          "mission_id": "demo-mission-025"
+        },
+        {
+          "mission_id": "demo-mission-028"
+        }
+      ]
+    },
+    {
+      "serie_id": "SERIE_1793577600000_demo02",
+      "missions": [
+        {
+          "mission_id": "demo-mission-002",
+          "reponse": {
+            "choix_requis": true,
+            "error": "Choisissez votre mode de contrat.",
+            "options": [
+              {
+                "value": "SALARIE",
+                "label": "Salarié (CDD / bulletin de paie)"
+              },
+              {
+                "value": "LIBERAL",
+                "label": "Libéral (note d'honoraires)"
+              }
+            ]
+          }
+        },
+        {
+          "mission_id": "demo-mission-005"
+        },
+        {
+          "mission_id": "demo-mission-008",
+          "reponse": {
+            "success": false,
+            "ok": false,
+            "code": "CODE_DU_TRAVAIL",
+            "error": "[CODE DU TRAVAIL] Repos insuffisant avant mission : 5.0 heures au lieu de 11h minimum (Art. L3131-1). Assignation bloquée."
+          }
+        },
+        {
+          "mission_id": "demo-assignee-004"
+        },
+        {
+          "mission_id": "demo-mission-023"
+        }
+      ]
+    }
+  ]
+}
