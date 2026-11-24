@@ -352,7 +352,8 @@
     {
       "fonctions": [
         "LibellesWeb.Contrats.titreVide",
-        "LibellesWeb.Contrats.descriptionVide"
+        "LibellesWeb.Contrats.descriptionVide",
+        "LibellesWeb.Contrats.descriptionVideEtablissement"
       ],
       "source": "src/pages/ListeContrats.tsx:128-145",
       "code": [
@@ -828,6 +829,16 @@
       "fonction": "LibellesWeb.Contrats.descriptionVide",
       "appel": "descriptionVide(.annule)",
       "rendu": "Aucun contrat annulé."
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.descriptionVideEtablissement",
+      "appel": "descriptionVideEtablissement(.tous)",
+      "rendu": "Les contrats apparaîtront ici après qu'un soignant ait accepté une de vos missions."
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.descriptionVideEtablissement",
+      "appel": "descriptionVideEtablissement(.enAttenteSignatures)",
+      "rendu": "Aucun contrat en attente de signature. Les contrats apparaîtront ici quand un soignant acceptera une mission."
     },
     {
       "fonction": "LibellesWeb.Contrats.numero",

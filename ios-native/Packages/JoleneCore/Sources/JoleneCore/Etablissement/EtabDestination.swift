@@ -19,6 +19,9 @@ public enum EtabDestination: Hashable, Sendable {
     case presencesMission(missionId: String)
     /// Contrat et signature OTP établissement (T10).
     case contrat(id: String)
+    /// Liste des contrats de l'établissement (T10), filtre initial `?statut=` porté brut (`ListeContrats.tsx` l.55).
+    /// Poussée depuis l'onglet Missions : aucun onglet « Contrats » dans la barre (D13).
+    case contrats(statut: String?)
     /// Fil de messagerie (T11).
     case conversation(id: String)
     /// Publication d'une mission simple ou urgente (T9).
@@ -30,7 +33,7 @@ public enum EtabDestination: Hashable, Sendable {
         case .detailMission, .presencesMission, .conversation: return .lecture
         case .candidatures: return .candidatures
         case .pointage: return .pointage
-        case .contrat: return .contrats
+        case .contrat, .contrats: return .contrats
         case .publication: return .missions
         }
     }
@@ -39,7 +42,7 @@ public enum EtabDestination: Hashable, Sendable {
     /// mission et suit le drapeau `missions`.
     public var drapeau: EcranNatifEtablissement {
         switch self {
-        case .detailMission, .candidatures, .contrat: return .missions
+        case .detailMission, .candidatures, .contrat, .contrats: return .missions
         case .pointage: return .pointage
         case .presencesMission: return .presences
         case .conversation: return .messages
@@ -54,7 +57,7 @@ public enum EtabDestination: Hashable, Sendable {
         case .candidatures: return "T6"
         case .pointage: return "T7"
         case .presencesMission: return "T8"
-        case .contrat: return "T10"
+        case .contrat, .contrats: return "T10"
         case .conversation: return "T11"
         case .publication: return "T9"
         }
@@ -68,6 +71,7 @@ public enum EtabDestination: Hashable, Sendable {
         case .pointage: return "pointage"
         case .presencesMission: return "presences-mission"
         case .contrat: return "contrat"
+        case .contrats: return "contrats"
         case .conversation: return "conversation"
         case .publication: return "publication"
         }
@@ -84,6 +88,8 @@ public enum EtabDestination: Hashable, Sendable {
         case let .detailMission(id), let .candidatures(id): return "/etablissement/missions/\(Self.segment(id))"
         case let .pointage(id), let .presencesMission(id): return "/etablissement/presences/mission/\(Self.segment(id))"
         case let .contrat(id): return "/contrat/\(Self.segment(id))"
+        case let .contrats(statut):
+            return "/etablissement/contrats" + (statut.map { "?statut=\(Self.segment($0))" } ?? "")
         case .conversation: return "/etablissement/messagerie"
         case .publication: return "/etablissement/missions/creer"
         }

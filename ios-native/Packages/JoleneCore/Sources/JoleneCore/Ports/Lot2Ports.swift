@@ -154,6 +154,23 @@ public protocol ContratsPort: Sendable {
     func certificat(contratId: String, context: MissionReadContext) async throws -> [SignatureCertificat]
     /// Fichier HTML original contrôlé, à partager ou imprimer (dossier temporaire protégé).
     func fichierOriginal(contrat: OriginalContrat, context: MissionReadContext) async throws -> URL
+
+    // Espace établissement (lot 5, T10 ; `LOT5_PLAN.md` §2.3, D18) : mêmes opérations, sous le contexte confirmé de
+    // l'établissement (`fn_mes_permissions_etab`, permission `contrats`). Additif : les conformances antérieures
+    // reçoivent un refus « non câblé » par défaut (`Contrats/ContratsEtablissement.swift`).
+    /// `contrats_mission` de l'établissement confirmé (`ListeContrats.tsx` l.65-71), sous RLS `pol_contrat_select`.
+    func contratsEtablissement(context: EtablissementReadContext) async throws -> [ContratResume]
+    func contrat(id: String, etab: EtablissementReadContext) async throws -> ContratDetail
+    /// Même triple contrôle que le soignant (§2.5 du lot 2) ; un CDD sans original n'est jamais rendu ici.
+    func original(contrat: ContratDetail, etab: EtablissementReadContext) async throws -> OriginalContrat
+    func admissionRecette(contratId: String, etab: EtablissementReadContext) async throws -> AdmissionSignatureRecette?
+    /// L'original est relu par le triple contrôle avant tout envoi : sans original identique à `empreinte`, aucun SMS.
+    /// Le SMS part au `telephone_contact` de l'établissement (serveur) ; seul le numéro masqué servi revient.
+    func envoyerOtp(contratId: String, empreinte: String, etab: EtablissementReadContext) async throws -> IssueEnvoiOtp
+    /// Triple contrôle relu avant l'appel, puis succès seulement après relecture de `signature_etablissement_le` non nul.
+    func signer(contratId: String, code: String, empreinte: String, etab: EtablissementReadContext) async throws -> IssueSignature
+    func certificat(contratId: String, etab: EtablissementReadContext) async throws -> [SignatureCertificat]
+    func fichierOriginal(contrat: OriginalContrat, etab: EtablissementReadContext) async throws -> URL
 }
 
 // MARK: - Ports « non câblés »

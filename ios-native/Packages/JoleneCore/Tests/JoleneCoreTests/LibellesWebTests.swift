@@ -113,6 +113,15 @@ final class LibellesWebTests: XCTestCase {
         XCTAssertEqual(liste.descriptionVide(.annule), "Aucun contrat annulé.")
         XCTAssertEqual(liste.descriptionVide(.enAttenteSignatures), "Aucun contrat en attente de signature pour le moment.")
         XCTAssertEqual(liste.descriptionVide(.signeComplet), "Aucun contrat signé pour le moment.")
+        // Lot 5, T10 : branche établissement du même composant (titre l.103, états vides `isEtab` l.132-143).
+        XCTAssertEqual(liste.titreEtablissement, "Contrats")
+        XCTAssertEqual(liste.descriptionVideEtablissement(.tous),
+                       "Les contrats apparaîtront ici après qu'un soignant ait accepté une de vos missions.")
+        XCTAssertEqual(liste.descriptionVideEtablissement(.enAttenteSignatures),
+                       "Aucun contrat en attente de signature. Les contrats apparaîtront ici quand un soignant acceptera une mission.")
+        XCTAssertEqual(liste.descriptionVideEtablissement(.signeComplet),
+                       "Aucun contrat finalisé pour le moment. Les contrats signés par vos soignants s'afficheront ici.")
+        XCTAssertEqual(liste.descriptionVideEtablissement(.annule), liste.videAnnules)
         XCTAssertEqual(liste.numero(nil), "—")
         XCTAssertEqual(liste.numero(""), "—")
         XCTAssertEqual(liste.numero("DEMO-0002"), "DEMO-0002")

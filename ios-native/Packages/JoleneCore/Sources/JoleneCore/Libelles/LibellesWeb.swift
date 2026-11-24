@@ -526,6 +526,20 @@ public enum LibellesWeb {
         // source: src/pages/ListeContrats.tsx:144
         public static let videTous = "Vos contrats apparaîtront ici après avoir accepté une mission."
 
+        /// Liste de l'établissement (lot 5, T10 ; branche `ADMIN_ETABLISSEMENT` du même composant) : titre de la page
+        /// (l.103) et états vides (branches `isEtab`, l.132-143) : voir `descriptionVideEtablissement(_:)`.
+        // source: src/pages/ListeContrats.tsx:103
+        public static let titreEtablissement = "Contrats"
+
+        // source: src/pages/ListeContrats.tsx:133
+        public static let videEnAttenteEtablissement = "Aucun contrat en attente de signature. Les contrats apparaîtront ici quand un soignant acceptera une mission."
+
+        // source: src/pages/ListeContrats.tsx:137
+        public static let videSignesEtablissement = "Aucun contrat finalisé pour le moment. Les contrats signés par vos soignants s'afficheront ici."
+
+        // source: src/pages/ListeContrats.tsx:143
+        public static let videTousEtablissement = "Les contrats apparaîtront ici après qu'un soignant ait accepté une de vos missions."
+
         /// Carte mobile (l.205-226) : voir `numero(_:)`, `mission(intitule:)`, `typeEtDate(type:dateFormatee:)`,
         /// `action(aSigner:)`.
         // source: src/pages/ListeContrats.tsx:210
@@ -591,6 +605,17 @@ public enum LibellesWeb {
             case .signeComplet: return videSignes
             case .annule: return videAnnules
             case .tous: return videTous
+            }
+        }
+
+        /// Description de l'état vide de l'établissement (l.130-145, branches `isEtab` ; lot 5, T10) ; « Aucun contrat
+        /// annulé. » est commun aux deux rôles (l.140).
+        public static func descriptionVideEtablissement(_ filtre: FiltreContrat) -> String {
+            switch filtre {
+            case .enAttenteSignatures: return videEnAttenteEtablissement
+            case .signeComplet: return videSignesEtablissement
+            case .annule: return videAnnules
+            case .tous: return videTousEtablissement
             }
         }
 
@@ -1371,6 +1396,10 @@ public enum LibellesWeb {
         .init(cle: "Contrats.videSignes", texte: Contrats.videSignes),
         .init(cle: "Contrats.videAnnules", texte: Contrats.videAnnules),
         .init(cle: "Contrats.videTous", texte: Contrats.videTous),
+        .init(cle: "Contrats.titreEtablissement", texte: Contrats.titreEtablissement),
+        .init(cle: "Contrats.videEnAttenteEtablissement", texte: Contrats.videEnAttenteEtablissement),
+        .init(cle: "Contrats.videSignesEtablissement", texte: Contrats.videSignesEtablissement),
+        .init(cle: "Contrats.videTousEtablissement", texte: Contrats.videTousEtablissement),
         .init(cle: "Contrats.sansValeur", texte: Contrats.sansValeur),
         .init(cle: "Contrats.pictoMission", texte: Contrats.pictoMission),
         .init(cle: "Contrats.creeLe", texte: Contrats.creeLe),

@@ -10,6 +10,7 @@ final class EtabDestinationTests: XCTestCase {
     private let toutes: [EtabDestination] = [
         .detailMission(id: "m-1"), .candidatures(missionId: "m-1"), .pointage(missionId: "m-1"),
         .presencesMission(missionId: "m-1"), .contrat(id: "c-1"), .conversation(id: "conv-1"), .publication,
+        .contrats(statut: nil), // T10 : liste des contrats, empilée sur l'onglet Missions
     ]
 
     func testPermissionExigeeParDestinationCommeLeTableau27() {
@@ -18,15 +19,18 @@ final class EtabDestinationTests: XCTestCase {
         XCTAssertEqual(EtabDestination.pointage(missionId: "m").permissionRequise, .pointage)
         XCTAssertEqual(EtabDestination.presencesMission(missionId: "m").permissionRequise, .lecture)
         XCTAssertEqual(EtabDestination.contrat(id: "c").permissionRequise, .contrats)
+        XCTAssertEqual(EtabDestination.contrats(statut: nil).permissionRequise, .contrats, "liste, lecture et signature : `contrats`")
         XCTAssertEqual(EtabDestination.conversation(id: "c").permissionRequise, .lecture)
         XCTAssertEqual(EtabDestination.publication.permissionRequise, .missions)
     }
 
     func testDrapeauEtTrancheParDestination() {
-        XCTAssertEqual(toutes.map(\.drapeau), [.missions, .missions, .pointage, .presences, .missions, .messages, .publier])
-        XCTAssertEqual(toutes.map(\.tranche), ["T5", "T6", "T7", "T8", "T10", "T11", "T9"])
+        XCTAssertEqual(toutes.map(\.drapeau),
+                       [.missions, .missions, .pointage, .presences, .missions, .messages, .publier, .missions])
+        XCTAssertEqual(toutes.map(\.tranche), ["T5", "T6", "T7", "T8", "T10", "T11", "T9", "T10"])
         XCTAssertEqual(toutes.map(\.identifiant),
-                       ["detail-mission", "candidatures", "pointage", "presences-mission", "contrat", "conversation", "publication"])
+                       ["detail-mission", "candidatures", "pointage", "presences-mission", "contrat", "conversation", "publication",
+                        "contrats"])
         XCTAssertEqual(Set(toutes.map(\.identifiant)).count, toutes.count, "identifiants distincts")
     }
 
@@ -39,7 +43,7 @@ final class EtabDestinationTests: XCTestCase {
         XCTAssertEqual(try accessibles(.proprietaire), toutes.map(\.identifiant))
         XCTAssertEqual(try accessibles(.rh), toutes.map(\.identifiant))
         XCTAssertEqual(try accessibles(.pointageOnly), ["detail-mission", "pointage", "presences-mission", "conversation"],
-                       "POINTAGE_ONLY : ni candidatures, ni contrat, ni publication")
+                       "POINTAGE_ONLY : ni candidatures, ni contrat, ni liste des contrats, ni publication")
         XCTAssertEqual(try accessibles(.lectureSeule), ["detail-mission", "presences-mission", "conversation"],
                        "LECTURE_SEULE : lecture seulement, aucune action")
         XCTAssertTrue(toutes.allSatisfy { !$0.accessible(avec: .aucune) }, "aucune permission : tout refusé")
@@ -51,6 +55,9 @@ final class EtabDestinationTests: XCTestCase {
         XCTAssertEqual(EtabDestination.pointage(missionId: "m-1").cheminWeb, "/etablissement/presences/mission/m-1")
         XCTAssertEqual(EtabDestination.presencesMission(missionId: "m-1").cheminWeb, "/etablissement/presences/mission/m-1")
         XCTAssertEqual(EtabDestination.contrat(id: "c-1").cheminWeb, "/contrat/c-1")
+        XCTAssertEqual(EtabDestination.contrats(statut: nil).cheminWeb, "/etablissement/contrats")
+        XCTAssertEqual(EtabDestination.contrats(statut: "EN_ATTENTE_SIGNATURES").cheminWeb,
+                       "/etablissement/contrats?statut=EN_ATTENTE_SIGNATURES")
         XCTAssertEqual(EtabDestination.conversation(id: "conv-1").cheminWeb, "/etablissement/messagerie")
         XCTAssertEqual(EtabDestination.publication.cheminWeb, "/etablissement/missions/creer")
         for destination in toutes {

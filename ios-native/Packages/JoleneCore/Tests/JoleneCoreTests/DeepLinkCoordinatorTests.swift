@@ -88,21 +88,30 @@ final class DeepLinkCoordinatorTests: XCTestCase {
     func testContratDansLEspaceEtablissementNOuvreJamaisLeContratSoignant() {
         let aiguillage = AiguillageLiens(taps: BoiteTapsPush(), espaceEtablissement: .ouvert)
         _ = aiguillage.ouvrirEspaceEtablissement(etablissement(epoch: 7))
+        // T10 livrée : `/contrat/{id}` ouvre le contrat de l'espace établissement (destination du registre, contexte
+        // établissement), jamais la route soignant `.contrat` de `MonEspaceRoute` ; la liste est empilée sur Missions.
         let contrat = url("https://jolene.app/contrat/c-1")
-        XCTAssertEqual(aiguillage.recevoir(url: contrat), .renvoiWeb(.safari(contrat)),
-                       "contrat de l'espace établissement (T10) non livré : renvoi web, jamais `ContratScreen` soignant")
-        XCTAssertEqual(LinkRouter.etablissementDestination(link: contrat.absoluteString)?.route.cible?.destination,
-                       .contrat(id: "c-1"))
+        XCTAssertEqual(aiguillage.recevoir(url: contrat),
+                       .naviguerEtablissement(CibleEtablissement(onglet: .missions, destination: .contrat(id: "c-1")),
+                                              route: .contrat(id: "c-1"), epoch: 7))
+        let liste = url("https://jolene.app/etablissement/contrats?statut=EN_ATTENTE_SIGNATURES")
+        XCTAssertEqual(aiguillage.recevoir(url: liste),
+                       .naviguerEtablissement(CibleEtablissement(onglet: .missions,
+                                                                 destination: .contrats(statut: "EN_ATTENTE_SIGNATURES")),
+                                              route: .contrats(statut: "EN_ATTENTE_SIGNATURES"), epoch: 7))
+        // La page du certificat reste servie par le web (§1.2).
+        let certificat = url("https://jolene.app/contrat/c-1/certificat")
+        XCTAssertEqual(aiguillage.recevoir(url: certificat), .renvoiWeb(.safari(certificat)))
     }
 
     func testRenvoiAfficheIgnoreLeMemeLienDansLEspaceEtablissement() {
         let aiguillage = AiguillageLiens(taps: BoiteTapsPush(), espaceEtablissement: .ouvert)
         _ = aiguillage.ouvrirEspaceEtablissement(etablissement(epoch: 7))
-        let contrat = url("https://jolene.app/contrat/c-1")
-        aiguillage.renvoiWebPresente(.safari(contrat))
-        XCTAssertNil(aiguillage.recevoir(url: contrat), "le renvoi affiché n'est jamais rejoué comme lien universel")
+        let certificat = url("https://jolene.app/contrat/c-1/certificat")
+        aiguillage.renvoiWebPresente(.safari(certificat))
+        XCTAssertNil(aiguillage.recevoir(url: certificat), "le renvoi affiché n'est jamais rejoué comme lien universel")
         aiguillage.renvoiWebFerme()
-        XCTAssertEqual(aiguillage.recevoir(url: contrat), .renvoiWeb(.safari(contrat)))
+        XCTAssertEqual(aiguillage.recevoir(url: certificat), .renvoiWeb(.safari(certificat)))
     }
 
     // MARK: - Lien reçu sans espace

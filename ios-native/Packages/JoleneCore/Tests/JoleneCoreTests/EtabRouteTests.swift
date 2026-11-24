@@ -113,10 +113,14 @@ final class EtabRouteTests: XCTestCase {
             XCTAssertEqual(cible.onglet, onglet)
             XCTAssertNil(cible.destination)
         }
-        for route: EtabRoute in [.publierMission, .presencesMission(id: "m"), .contrat(id: "c"), .contrats(statut: nil),
-                                 .messagerie(conversation: "conv")] {
+        for route: EtabRoute in [.publierMission, .presencesMission(id: "m"), .messagerie(conversation: "conv")] {
             XCTAssertEqual(route.presentation(canonique: canonique), .renvoiWeb(canonique), "\(route)")
         }
+        // T10 livrée : le contrat et la liste des contrats sont empilés sur l'onglet Missions.
+        XCTAssertEqual(EtabRoute.contrat(id: "c").presentation(canonique: canonique),
+                       .naviguer(CibleEtablissement(onglet: .missions, destination: .contrat(id: "c"))))
+        XCTAssertEqual(EtabRoute.contrats(statut: "SIGNE_COMPLET").presentation(canonique: canonique),
+                       .naviguer(CibleEtablissement(onglet: .missions, destination: .contrats(statut: "SIGNE_COMPLET"))))
     }
 
     func testCiblesDesEcransEmpiles() {
@@ -128,14 +132,19 @@ final class EtabRouteTests: XCTestCase {
                        "/contrat/{id} : le contrat de l'espace établissement (T10), jamais l'écran soignant")
         XCTAssertEqual(EtabRoute.messagerie(conversation: "k").cible,
                        CibleEtablissement(onglet: .messages, destination: .conversation(id: "k")))
-        XCTAssertNil(EtabRoute.contrats(statut: nil).cible, "point d'ancrage de la liste choisi par T10")
+        XCTAssertEqual(EtabRoute.contrats(statut: nil).cible,
+                       CibleEtablissement(onglet: .missions, destination: .contrats(statut: nil)),
+                       "T10 : la liste des contrats est empilée sur l'onglet Missions (aucun onglet « Contrats », D13)")
+        XCTAssertEqual(EtabRoute.contrats(statut: "ANNULE").cible?.destination, .contrats(statut: "ANNULE"),
+                       "?statut= porté brut jusqu'à l'écran")
         // Aucune destination livrée avant sa tranche (une ligne par tranche dans `EtabDestination.ecranLivre`) : T5 a
         // livré le détail de mission.
         XCTAssertTrue(EtabDestination.detailMission(id: "m").ecranLivre, "T5")
         XCTAssertTrue(EtabDestination.candidatures(missionId: "m").ecranLivre, "T6")
         XCTAssertTrue(EtabDestination.pointage(missionId: "m").ecranLivre, "T7")
-        for destination: EtabDestination in [.presencesMission(missionId: "m"), .publication, .contrat(id: "c"),
-                                             .conversation(id: "k")] {
+        XCTAssertTrue(EtabDestination.contrat(id: "c").ecranLivre, "T10")
+        XCTAssertTrue(EtabDestination.contrats(statut: nil).ecranLivre, "T10")
+        for destination: EtabDestination in [.presencesMission(missionId: "m"), .publication, .conversation(id: "k")] {
             XCTAssertFalse(destination.ecranLivre, destination.tranche)
         }
     }

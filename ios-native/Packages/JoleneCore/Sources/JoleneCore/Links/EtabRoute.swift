@@ -43,8 +43,8 @@ public enum EtabRoute: Equatable, Sendable, CustomStringConvertible {
         return true
     }
 
-    /// Onglet et écran empilé dans l'espace établissement ; nil pour un renvoi web, et pour la liste des contrats
-    /// tant que T10 n'a pas choisi son point d'ancrage dans la coquille (aucun onglet « Contrats », D13).
+    /// Onglet et écran empilé dans l'espace établissement ; nil pour un renvoi web. La liste des contrats (T10) est
+    /// empilée sur l'onglet Missions, d'où s'ouvrent les contrats (aucun onglet « Contrats » dans la barre, D13).
     public var cible: CibleEtablissement? {
         switch self {
         case .accueil: return CibleEtablissement(onglet: .accueil)
@@ -53,7 +53,7 @@ public enum EtabRoute: Equatable, Sendable, CustomStringConvertible {
         case let .missionDetail(id): return CibleEtablissement(onglet: .missions, destination: .detailMission(id: id))
         case let .presences(onglet): return CibleEtablissement(onglet: .presences, ongletPresences: onglet)
         case let .presencesMission(id): return CibleEtablissement(onglet: .presences, destination: .presencesMission(missionId: id))
-        case .contrats: return nil                                                              // T10
+        case let .contrats(statut): return CibleEtablissement(onglet: .missions, destination: .contrats(statut: statut)) // T10
         case let .contrat(id): return CibleEtablissement(onglet: .missions, destination: .contrat(id: id))
         case let .messagerie(conversation):
             return CibleEtablissement(onglet: .messages, destination: conversation.map { .conversation(id: $0) })
@@ -149,7 +149,7 @@ extension EtabDestination {
         case .pointage: return true              // T7
         case .presencesMission: return false     // T8
         case .publication: return false          // T9
-        case .contrat: return false              // T10
+        case .contrat, .contrats: return true    // T10
         case .conversation: return false         // T11
         }
     }

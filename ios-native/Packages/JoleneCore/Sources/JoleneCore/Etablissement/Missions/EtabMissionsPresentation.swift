@@ -10,7 +10,8 @@ import Foundation
 ///
 /// Liens du détail (registre de T2a) : chaque lien vise une `EtabDestination` ; tant que sa tranche n'a pas livré
 /// l'écran (`EtabDestination.ecranLivre`), il ouvre la page web équivalente (renvoi Safari, D16), jamais un écran
-/// provisoire. Contrat (T10) et message (T11) n'ont pas encore d'identifiant lu : renvoi web de leur liste.
+/// provisoire. Contrat (T10) : liste native des contrats de l'établissement (l'identifiant du contrat n'est pas lu
+/// depuis la mission). Message (T11) : pas encore d'identifiant lu, renvoi web de la messagerie.
 /// Chaque lien est soumis à sa permission servie (§2.7, fail-closed).
 public enum EtabMissionsPresentation {
     public typealias Badge = MesMissionsPresentation.Badge
@@ -284,9 +285,9 @@ public enum EtabMissionsPresentation {
             liens.append(lien(.presences, "Présences", destination: .presencesMission(missionId: mission.id)))
         }
         if assigne, permissions.contrats {
-            // T10 : le contrat de la mission sera relu par sa tranche ; d'ici là, liste web des contrats.
-            liens.append(Lien(cle: .contrat, titre: "Contrat sur jolene.app", detail: nil,
-                              cible: .web(urlWeb("/etablissement/contrats"))))
+            // T10 : liste native des contrats de l'établissement (même cible que le lien web d'avant la tranche,
+            // `/etablissement/contrats`) ; le contrat s'y ouvre et s'y signe.
+            liens.append(lien(.contrat, "Contrats", destination: .contrats(statut: nil)))
         }
         if assigne, statutsAvecSoignant.contains(statut), permissions.lecture {
             // T11 : la conversation sera ouverte par `fn_obtenir_conversation` ; d'ici là, messagerie web.

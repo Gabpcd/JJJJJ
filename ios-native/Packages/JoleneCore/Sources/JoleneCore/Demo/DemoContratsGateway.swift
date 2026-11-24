@@ -8,6 +8,9 @@ public enum ScenarioDemoContrats: Equatable, Sendable {
     /// Le soignant démo est un compte TEST (`soignants.est_compte_test`), sans admission de recette (aucune en démo,
     /// comme en production) : la signature est un renvoi web (décision 18, T9b).
     case compteTest
+    /// Lot 5, T10 (espace établissement seulement) : le contrat à signer de l'établissement démo est servi sans
+    /// original (CDD à préparer par l'employeur : renvoi web). Sans effet sur les contrats du soignant démo.
+    case cddAPreparer
 
     public static let argument = "-JOLENE_DEMO_SCENARIO"
 
@@ -15,6 +18,7 @@ public enum ScenarioDemoContrats: Equatable, Sendable {
         switch argument {
         case "otp-expire": self = .otpExpire
         case "compte-test": self = .compteTest
+        case "cdd-a-preparer": self = .cddAPreparer
         default: self = .nominal
         }
     }
@@ -43,11 +47,18 @@ public struct DemoContratsGateway: ContratsPort {
 
     private let etat: EtatDemoContrats
     private let clock: any ClockPort
+    /// Lot 5, T10 : contrats vus par l'établissement démo (`Demo/Etablissement/DemoEtabContratsGateway.swift`), servis
+    /// par ce même port sous un `EtablissementReadContext`.
+    let etablissement: DemoEtabContratsGateway
 
+    /// `etablissement` : contrats de l'établissement démo (lot 5, T10) ; par défaut ceux de `demo-etab-contrats.json`,
+    /// avec la même horloge et le même scénario.
     public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow), scenario: ScenarioDemoContrats = .nominal,
-                fixtures: @escaping @Sendable () throws -> DemoFixtures.ContratsFile = { try DemoFixtures.loadContrats() }) {
+                fixtures: @escaping @Sendable () throws -> DemoFixtures.ContratsFile = { try DemoFixtures.loadContrats() },
+                etablissement: DemoEtabContratsGateway? = nil) {
         self.clock = clock
         self.etat = EtatDemoContrats(scenario: scenario, charger: fixtures)
+        self.etablissement = etablissement ?? DemoEtabContratsGateway(clock: clock, scenario: scenario)
     }
 
     public func contrats(context: MissionReadContext) async throws -> [ContratResume] {

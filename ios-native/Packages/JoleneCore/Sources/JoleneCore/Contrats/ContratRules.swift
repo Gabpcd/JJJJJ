@@ -65,12 +65,26 @@ public enum ContratRules {
 
     /// `dejaSigneParMoi` du soignant (l.533 : `contrat.signature_soignant`).
     public static func dejaSigneParMoi(_ contrat: ContratDetail) -> Bool {
-        contrat.signatureSoignant == true
+        dejaSigneParMoi(contrat, partie: .soignant)
+    }
+
+    /// `dejaSigneParMoi` de la partie qui regarde (l.533-534 : `isSoignant ? signature_soignant :
+    /// signature_etablissement` ; lot 5, T10).
+    public static func dejaSigneParMoi(_ contrat: ContratDetail, partie: PartieContrat) -> Bool {
+        switch partie {
+        case .soignant: return contrat.signatureSoignant == true
+        case .etablissement: return contrat.signatureEtablissement == true
+        }
     }
 
     /// Bandeaux (l.552-576) : statut annulé, expiré, refusé ; « L'autre partie a déjà signé » quand une seule
     /// partie, pas moi, a signé un contrat encore ouvert.
     public static func bandeaux(_ contrat: ContratDetail) -> [BandeauContrat] {
+        bandeaux(contrat, partie: .soignant)
+    }
+
+    /// Bandeaux pour la partie qui regarde (lot 5, T10 : mêmes conditions, `dejaSigneParMoi` de cette partie).
+    public static func bandeaux(_ contrat: ContratDetail, partie: PartieContrat) -> [BandeauContrat] {
         var bandeaux: [BandeauContrat] = []
         switch contrat.statut {
         case "ANNULE": bandeaux.append(.annule)
@@ -78,7 +92,7 @@ public enum ContratRules {
         case "REFUSE": bandeaux.append(.refuse)
         default: break
         }
-        if !dejaSigneParMoi(contrat), contrat.signatureSoignant == true || contrat.signatureEtablissement == true,
+        if !dejaSigneParMoi(contrat, partie: partie), contrat.signatureSoignant == true || contrat.signatureEtablissement == true,
            contrat.statut != "SIGNE_COMPLET", !statutsTerminaux.contains(contrat.statut) {
             bandeaux.append(.autrePartieASigne)
         }
@@ -108,7 +122,17 @@ public enum ContratRules {
     /// Appel à signer d'une carte de la liste (`aSigner`, `ListeContrats.tsx` l.156-159, branche soignant) : contrat
     /// non annulé que le soignant n'a pas signé. N'annonce qu'une action ; le serveur décide de toute signature.
     public static func aSignerParMoi(_ contrat: ContratResume) -> Bool {
-        contrat.statut != "ANNULE" && contrat.signatureSoignant != true
+        aSignerParMoi(contrat, partie: .soignant)
+    }
+
+    /// `aSigner` (l.156-159) pour la partie qui regarde : contrat non annulé que cette partie n'a pas signé (lot 5,
+    /// T10 ; branche `ADMIN_ETABLISSEMENT` : `!c.signature_etablissement`).
+    public static func aSignerParMoi(_ contrat: ContratResume, partie: PartieContrat) -> Bool {
+        guard contrat.statut != "ANNULE" else { return false }
+        switch partie {
+        case .soignant: return contrat.signatureSoignant != true
+        case .etablissement: return contrat.signatureEtablissement != true
+        }
     }
 
     /// `texteEmployeur` (l.535-537) : CDD dont l'original porte le cadre « texte de l'employeur ».
@@ -143,7 +167,12 @@ public enum ContratRules {
 
     /// Zone « Votre signature » (l.709) : ni CDD à préparer, ni déjà signé par moi, ni signé, annulé ou expiré.
     public static func zoneSignatureVisible(_ contrat: ContratDetail) -> Bool {
-        !cddSansOriginal(contrat) && !dejaSigneParMoi(contrat)
+        zoneSignatureVisible(contrat, partie: .soignant)
+    }
+
+    /// Zone « Votre signature » (l.709) pour la partie qui regarde (lot 5, T10).
+    public static func zoneSignatureVisible(_ contrat: ContratDetail, partie: PartieContrat) -> Bool {
+        !cddSansOriginal(contrat) && !dejaSigneParMoi(contrat, partie: partie)
             && !["SIGNE_COMPLET", "ANNULE", "EXPIRE"].contains(contrat.statut)
     }
 
