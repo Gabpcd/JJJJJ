@@ -87,6 +87,11 @@ Deno.serve(async (req) => {
       .not("email", "is", null).neq("email", "")
       .is("email_envoye_le", null)
       .limit(max);
+    // Verrou (docs/AGENTS_CROISSANCE.md §4 ter) : une adresse d'établissement dont l'origine est
+    // enregistrée (annuaire public, saisie manuelle) ne part jamais par cet envoi groupé. Son
+    // message doit dire d'où vient l'adresse (private.fn_growth_mention_opposition) et le corps
+    // unique d'un lot ne le peut pas : ces adresses passent par les brouillons relus un par un.
+    if (cible === "ETABLISSEMENT") q = q.is("email_provenance", null);
     if (departement) q = q.eq("departement", String(departement).toUpperCase());
     const { data: prospects, error: qErr } = await q;
     if (qErr) return new Response(JSON.stringify({ error: qErr.message }), { status: 500, headers: corsHeaders(req) });

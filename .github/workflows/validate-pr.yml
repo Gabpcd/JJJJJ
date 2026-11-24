@@ -163,6 +163,9 @@ jobs:
       - name: Zéro visible et liste d'appels (B9) — préflight, corps d'origine, univers unique et script sourcé sans réseau
         run: node --test tests/node/prospection-liste-appels.node.mjs
 
+      - name: Adresses publiques de l'annuaire des établissements pour personnes âgées — tri sans adresse nominative, bloc de données, mention par origine, sans réseau
+        run: node --test tests/node/prospection-adresses-publiques.node.mjs
+
       - name: Litiges auto-créés (B9, HARD STOP n°4) — textes de délai dérivés, corps LIVE et empreintes sans réseau
         run: node --test tests/node/litiges-auto-textes-delais.node.mjs
 
